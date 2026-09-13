@@ -7,6 +7,34 @@ import { describe, expect, it, vi } from "vitest";
 import { SessionRunExecutor } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it("records a selected plugin preparation failure before submitting to the model", async () => {
+    const store = createStore();
+    Object.assign(store.getRun(), { metadata: { pluginId: "selected", retained: "yes" } });
+    let modelCalls = 0;
+    const executor = new SessionRunExecutor({
+      store: store as any,
+      agentPool: { configured: true, acquireSession: async () => ({
+        setModel: () => {},
+        createRunCapabilityView: (pluginId?: string) => createRunCapabilityView({
+          toolRegistry: new ToolRegistry(), pluginIds: new Set(["selected"]),
+          pluginPreparationErrors: new Map([["selected", ["Native Tools: registration exploded"]]]),
+        }, pluginId),
+        submitMessage: () => { modelCalls++; return completedHandle(); },
+      }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(modelCalls).toBe(0);
+    expect(store.getRun()).toMatchObject({
+      status: "failed", error: expect.stringContaining("registration exploded"),
+      metadata: { pluginId: "selected", retained: "yes", pluginPreparation: {
+        status: "failed", pluginId: "selected", error: expect.stringContaining("registration exploded"),
+      } },
+    });
+  });
   it("materializes a plugin-agent-only input using the captured View description, never its body", async () => {
     const store = createStore();
     store.getInput.mockReturnValue({ ...store.getInput(), items: [{ type: "capability", kind: "plugin_agent", pluginId: "selected", agentId: "selected:review", displayName: "Spoofed label" }], content: "@Spoofed label" } as any);

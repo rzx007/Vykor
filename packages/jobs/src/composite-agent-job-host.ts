@@ -40,8 +40,10 @@ export class CompositeAgentJobHost implements AgentJobHost {
     return await (await this.resolveOwner(input.sessionId, input.jobId)).wait(input);
   }
 
-  async send(input: JobSendRequest): Promise<void> {
-    await (await this.resolveOwner(input.sessionId, input.jobId)).send(input);
+  async send(input: JobSendRequest, authorization?: Parameters<AgentJobHost["send"]>[1]): Promise<void> {
+    const owner = await this.resolveOwner(input.sessionId, input.jobId);
+    if (authorization) await owner.send(input, authorization);
+    else await owner.send(input);
   }
 
   async cancel(input: JobCancelRequest): Promise<JobSnapshot> {

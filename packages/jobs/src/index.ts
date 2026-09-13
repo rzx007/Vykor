@@ -59,7 +59,8 @@ export interface AgentJobHost {
   list(input: JobListRequest): Promise<JobSnapshot[]>;
   read(input: JobReadRequest): Promise<JobReadResult>;
   wait(input: JobWaitRequest): Promise<JobWaitResult>;
-  send(input: JobSendRequest): Promise<void>;
+  /** Authorization comes from the current host Run, never from model-provided input. */
+  send(input: JobSendRequest, authorization?: { readonly pluginId?: string }): Promise<void>;
   cancel(input: JobCancelRequest): Promise<JobSnapshot>;
 }
 

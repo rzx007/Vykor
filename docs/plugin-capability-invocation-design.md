@@ -47,7 +47,7 @@ WorkBuddy 将插件拆成 Skill、MCP、Hook、Agent 和 Rule。Skill 提供说�
 
 Runtime 创建时会连接适用的 MCP、激活插件 Native Tool 和 Hook，并装配 Agent Definition。当前 `$Skill` 采用结构化输入；服务端 `materializeSessionInput()` 重新校验 Skill，要求模型调用原生 `Skill` 工具，完整 `SKILL.md` 由该工具读取并作为 tool result 返回。详细流程见 [Skill Prompt Flow](./skill-prompt-flow.md)。
 
-当前 `@/+` 只有文件、目标、计划模式和历史对话，没有插件引用。已启用插件能力主要在会话 Runtime 级装配，所以实现 `@插件` 的重点是按 Run 控制模型可见性和调用权限。
+实现前，`@/+` 只有文件、目标、计划模式和历史对话，插件能力主要在会话 Runtime 级装配。当前已支持结构化插件引用，并按 Run 控制模型可见性和调用权限。
 
 ## 4. `@插件` 语义
 
@@ -127,6 +127,8 @@ type RunCapabilityView = {
 
 View 是内存对象，不写数据库。Run 从当前会话暖 Runtime 已连接的 MCP、已激活 Native Tool、Skill Registry 和 Agent Definitions 解析本 Run 的 binding。Map、definition 和 owner 信息创建后使用只读封装及冻结副本，在这个 Run 中不再从全局 Registry 重新解析。
 
+创建 View 前还会检查当前 Runtime 的真实准备结果。选中插件的 Native Tool 启动失败、运行宿主已退出或 MCP 连接/工具发现失败时，不能仅凭发现目录把插件视为可用：durable Run 在调用模型前失败，并保存具体的插件准备错误。未连接的 MCP 不进入 server binding，因此不能满足 Child 的 requiredMcpServers。其他插件失败不会阻止普通 Run 或健康插件运行。
+
 插件管理页面完成安装、更新、启用或禁用后，应沿用现有 Runtime invalidation 机制关闭相关暖 Runtime。linked plugin 被外部直接修改时不做每 Run 内容检测，需要显式重载、应用重启或新会话后生效。
 
 过滤公式：
@@ -180,6 +182,8 @@ PluginAgentRef
 ```
 
 用户单独选择 PluginAgentRef 时，服务端从 Agent owner 推导 pluginId。Child View 为父 View 与 Agent Definition tools/requiredMcpServers 的交集；requiredMcpServers 先按唯一 server identity 校验，再限制对应 Tool。Child 改 cwd 后也不能重新发现并扩大范围。Child 创建或执行失败记录在 Child Run，并作为失败 Tool result 返回 root。附件不自动继承。
+
+Child 作为 idle Job 保留后，每次续发都重新检查发起方当前 Run 的 pluginId。插件 P 的 Child 只能由同样选择 P 的 Run 继续使用；普通 Run 或插件 Q 的 Run 不能借助历史 jobId 复用 P。JobSend 把可信 ToolContext 中的 View 经 Jobs Host 传到 Child 入口，输入正文和 metadata 不能代替授权；没有当前 Run 授权的直接续发入口也会拒绝插件 Child。非插件 Child 保持原有续发方式。
 
 ### 7.5 Hook 和 Rule
 
@@ -325,3 +329,5 @@ Composer 和历史消息显示插件名称，隐藏绝对路径、凭证和内�
 通过的脚本：`pnpm check-types`（61/61 tasks）、`pnpm --dir packages/agent-runtime test:pack`、`pnpm --dir apps/desktop build` 和 `node scripts/check-docs.mjs`（207 Markdown）。本机通过现有 pnpm 的 Node 入口调用上述脚本，未更改依赖。Desktop build 同时完成 node/web 类型检查及 main/preload/renderer 构建。
 
 首次 Desktop 全量有三个并发负载下的超时，限制为 2 workers 后全量通过，未放宽超时。SDK/test:pack 的 node-pty 清理子进程打印 `AttachConsole failed`，测试和打包命令仍退出 0，对应工具运行、取消及清理断言均通过。构建仍有既有动态导入和测试文件路由提示。真实 Electron 手动步骤未执行。
+
+最终审查后又修复了旧 Child 跨 Run 复用授权和实际插件初始化检查。对应全量回归为 core 166、agent-runtime 245、server 597、Tools 205、Jobs 27、MCP 30 项，全部通过。新增用例覆盖 P→普通/Q→P 的真实 JobSend 链、直接续发和幂等绕过、Native 注册失败/宿主退出、MCP 部分连接失败/目录错误/连接关闭及资源专用服务成功；准备失败在模型调用前写入 Run。

@@ -436,7 +436,8 @@ export interface AgentChildHandle {
   readonly sessionId: string;
   readonly state: "starting" | "running" | "idle" | "suspended" | "closing" | "closed";
   readonly result: Promise<AgentChildResult>;
-  send(input: AgentChildInput): Promise<AgentInputReceipt>;
+  /** Host-owned current Run selection, separate from user input and metadata. */
+  send(input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt>;
   interrupt(reason?: string): Promise<void>;
   close(): Promise<void>;
 }

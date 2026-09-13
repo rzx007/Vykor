@@ -64,6 +64,8 @@ export interface McpConnection {
   tools: McpToolInfo[];
   resources: McpResourceInfo[];
   error?: Error;
+  /** Non-fatal transport-wise; selected plugins must still surface failed tool discovery. */
+  toolError?: Error;
   /** Non-fatal error from listing resources (server connected but resources failed). */
   resourceError?: Error;
 }
@@ -125,10 +127,25 @@ export class McpClientManager {
         { name: "openharness", version: "0.1.0" },
         { capabilities: {} }
       );
+      client.onclose = () => {
+        if (this.clients.get(name) !== client) return;
+        connection.status = "disconnected";
+        connection.error = new Error(`MCP connection closed: ${name}`);
+        connection.tools = [];
+        connection.resources = [];
+        this.clients.delete(name);
+        this.transports.delete(name);
+      };
       await client.connect(transport);
       this.clients.set(name, client);
 
-      const toolsResult = await client.listTools().catch(() => ({ tools: [] }));
+      const toolsResult = await client.listTools().catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!/Method not found/i.test(message) || client.getServerCapabilities?.()?.tools) {
+          connection.toolError = err instanceof Error ? err : new Error(message);
+        }
+        return { tools: [] };
+      });
       const resourcesResult = await client.listResources().catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         // "Method not found" => server simply does not support resources.
@@ -158,6 +175,7 @@ export class McpClientManager {
         })
       );
 
+      if (this.clients.get(name) !== client) throw connection.error ?? new Error(`MCP connection closed: ${name}`);
       connection.tools = tools;
       connection.resources = resources;
       connection.status = "connected";

@@ -218,7 +218,7 @@ export class AgentChildManager implements AgentChildDirectory {
     return {
       hasChildAgent: (childId) => this.find(childId) !== undefined,
       spawnChildAgent: (input) => this.spawn(parentScope, input, parentView),
-      sendChildInput: (childId, input) => this.send(childId, input),
+      sendChildInput: (childId, input) => this.send(childId, input, parentView),
       interruptChildAgent: (childId, reason) => this.interrupt(childId, reason),
       awaitChildAgent: (childId) => this.awaitResult(childId),
     };
@@ -369,9 +369,13 @@ export class AgentChildManager implements AgentChildDirectory {
     }
   }
 
-  async send(childId: string, input: AgentChildInput): Promise<AgentInputReceipt> {
+  async send(childId: string, input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt> {
     const record = this.require(childId);
     if (isChildUnavailable(record)) throw new Error(`Child agent is closing or closed: ${childId}`);
+    const pluginId = record.capabilityView?.pluginId;
+    if (pluginId !== undefined && pluginId !== authorization?.pluginId) {
+      throw new Error(`Child plugin ${pluginId} is not authorized for this Run.`);
+    }
     if (input.id) {
       const existing = record.requests.get(input.id);
       if (existing) {
@@ -700,7 +704,9 @@ class ChildHandle implements AgentChildHandle {
   get sessionId(): string { return this.record().sessionId; }
   get state(): AgentChildHandle["state"] { return this.record().state; }
   get result(): Promise<AgentChildResult> { return this.record().result; }
-  send(input: AgentChildInput): Promise<AgentInputReceipt> { return this.manager.send(this.id, input); }
+  send(input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt> {
+    return this.manager.send(this.id, input, authorization);
+  }
   interrupt(reason?: string): Promise<void> { return this.manager.interrupt(this.id, reason); }
   close(): Promise<void> { return this.manager.close(this.id); }
 }

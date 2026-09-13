@@ -3,15 +3,25 @@ import type { IToolRegistry, RunAgentBinding, RunCapabilityView, RunMcpServerBin
 export interface RunCapabilitySources {
   toolRegistry: IToolRegistry;
   pluginIds?: ReadonlySet<string>;
+  pluginPreparationErrors?: ReadonlyMap<string, readonly string[]>;
   skills?: readonly RunSkillBinding[];
   agents?: readonly RunAgentBinding[];
   mcpServers?: readonly RunMcpServerBinding[];
+}
+
+export class PluginPreparationError extends Error {
+  constructor(readonly pluginId: string, readonly reasons: readonly string[]) {
+    super(`Plugin ${pluginId} is not ready: ${reasons.join("; ")}`);
+    this.name = "PluginPreparationError";
+  }
 }
 
 export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?: string): RunCapabilityView {
   if (pluginId !== undefined && !sources.pluginIds?.has(pluginId)) {
     throw new Error(`Plugin is not available in this runtime: ${pluginId}`);
   }
+  const preparationErrors = pluginId === undefined ? undefined : sources.pluginPreparationErrors?.get(pluginId);
+  if (preparationErrors?.length) throw new PluginPreparationError(pluginId!, preparationErrors);
   const visible = (binding: { ownerPluginId?: string }) =>
     binding.ownerPluginId === undefined || binding.ownerPluginId === pluginId;
   const visibleDefinition = (binding: RunSkillBinding | RunAgentBinding) =>
@@ -26,6 +36,7 @@ export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?
   for (const definition of sources.toolRegistry.getAll()) {
     const source = sources.toolRegistry.inspect(definition.name)?.source;
     const server = source?.kind === "mcp" && source.id ? byServerName.get(source.id) : undefined;
+    if (source?.kind === "mcp" && !server) continue;
     const ownerPluginId = source?.kind === "plugin" ? source.id : server?.ownerPluginId;
     // A plugin registration without its owner cannot become a baseline capability.
     if (source?.kind === "plugin" && !ownerPluginId) continue;

@@ -153,7 +153,10 @@ export const jobSendTool: ToolDefinition = {
     if ("content" in host) return host;
     try {
       const jobId = requiredString(input.jobId, "jobId");
-      await host.jobs.send({ sessionId: host.sessionId, jobId, data: String(input.data ?? "") });
+      const request = { sessionId: host.sessionId, jobId, data: String(input.data ?? "") };
+      const authorization = context.capabilityView ?? context.agent?.capabilityView;
+      if (authorization) await host.jobs.send(request, authorization);
+      else await host.jobs.send(request);
       return result("send", { jobId });
     } catch (error) {
       return failed(error);

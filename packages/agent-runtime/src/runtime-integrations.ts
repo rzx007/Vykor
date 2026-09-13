@@ -44,7 +44,7 @@ export async function installRuntimeIntegrations(
     }
     pluginServerNames.add(serverName);
   }
-  await configureDiscoveredExtensions(options.discovery, {
+  const toolActivations = await configureDiscoveredExtensions(options.discovery, {
     cwd: options.cwd,
     environmentKind: options.executionEnvironment?.info.kind,
     toolRegistry: runtime.toolRegistry,
@@ -166,11 +166,35 @@ export async function installRuntimeIntegrations(
       ownerPluginId: !hostOwned ? pluginServer?.pluginId : undefined,
     };
   });
-  runtime.createRunCapabilityView = (pluginId) => createRunCapabilityView({
-    toolRegistry: runtime.toolRegistry,
-    pluginIds: new Set(inventory.plugins.keys()),
-    skills, agents, mcpServers: servers,
-  }, pluginId);
+  runtime.createRunCapabilityView = (pluginId) => {
+    const errors: string[] = [];
+    if (pluginId !== undefined) {
+      const plugin = options.discovery.plugins.find((item) => item.manifest.id === pluginId);
+      errors.push(...(plugin?.diagnostics.filter((item) => item.severity === "error").map((item) => item.message) ?? []));
+      const activation = toolActivations.find((item) => item.pluginId === pluginId);
+      if (inventory.plugins.get(pluginId)?.nativeToolEntries.length &&
+          (!activation || (activation.host?.state ?? activation.state) !== "active")) {
+        errors.push(`Native Tools: ${activation?.diagnostics.map((item) => item.message).join("; ") || "host is not active"}`);
+      }
+      for (const { pluginId: owner, serverName } of inventory.mcpServers.values()) {
+        if (owner !== pluginId) continue;
+        const connection = mcpManager.getConnection(serverName);
+        if (connection?.status !== "connected") {
+          errors.push(`MCP ${serverName}: ${connection?.error?.message ?? "server is not connected in this environment"}`);
+        } else {
+          for (const error of [connection.toolError, connection.resourceError]) {
+            if (error) errors.push(`MCP ${serverName}: ${error.message}`);
+          }
+        }
+      }
+    }
+    return createRunCapabilityView({
+      toolRegistry: runtime.toolRegistry,
+      pluginIds: new Set(inventory.plugins.keys()),
+      pluginPreparationErrors: pluginId === undefined ? undefined : new Map([[pluginId, errors]]),
+      skills, agents, mcpServers: servers.filter((server) => mcpManager.getConnection(server.serverName)?.status === "connected"),
+    }, pluginId);
+  };
 
   return () => mcpManager.getConnections();
 }

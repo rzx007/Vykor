@@ -197,14 +197,15 @@ export class LocalAgentJobHost implements AgentJobHost, AgentBackgroundShellHost
     return { ...current, timedOut: true };
   }
 
-  async send(input: { sessionId: string; jobId: string; data: string }): Promise<void> {
+  async send(input: { sessionId: string; jobId: string; data: string }, authorization?: Parameters<AgentJobHost["send"]>[1]): Promise<void> {
     this.assertOwner(input.sessionId);
     const source = this.resolve(input.jobId);
     if (source.kind === "child") {
       if (!source.value.handle || source.value.handle.state === "closing" || source.value.handle.state === "closed") {
         throw new Error(`Job ${input.jobId} does not accept input.`);
       }
-      await source.value.handle.send({ content: input.data });
+      if (authorization) await source.value.handle.send({ content: input.data }, authorization);
+      else await source.value.handle.send({ content: input.data });
       this.observeChild(source.value.handle);
       return;
     }

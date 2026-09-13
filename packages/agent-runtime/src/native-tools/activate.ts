@@ -47,6 +47,7 @@ export async function activateNativePluginTools(
     };
   }
   const toolNames: string[] = [];
+  const result: NativeToolActivationResult = { pluginId: plugin.manifest.id, state: "starting", toolNames: [], diagnostics: [] };
   const runtimeStatus = beginNativeToolRuntimeStatus(plugin.manifest.id, plugin.root);
   const guard = new NativeToolCallGuard({
     pluginId: plugin.manifest.id,
@@ -67,6 +68,10 @@ export async function activateNativePluginTools(
     onLog: (event) => context.onLog?.(`[native-tool:${event.level}] ${event.message}`),
     onCrash: (error) => {
       unregisterAll();
+      result.state = "error";
+      result.toolNames = [];
+      result.diagnostics = [{ severity: "error", phase: "activate", code: error.code, message: error.message,
+        pluginId: plugin.manifest.id, component: "tools" }];
       runtimeStatus.update({ state: "error", toolNames: [], lastError: error.message });
       context.onLog?.(`[native-tool:error] ${plugin.manifest.id}: ${error.message}`);
     },
@@ -112,7 +117,7 @@ export async function activateNativePluginTools(
       toolNames.push(definition.name);
     }
     runtimeStatus.update({ state: "active", toolNames: [...toolNames] });
-    return { pluginId: plugin.manifest.id, state: host.state, toolNames: [...toolNames], diagnostics: [], host };
+    return Object.assign(result, { state: host.state, toolNames: [...toolNames], host });
   } catch (error) {
     unregisterAll();
     await host.stop().catch(() => undefined);

@@ -8,6 +8,31 @@ import { createRunCapabilityView } from "./run-capability-view.js";
 import { ToolRegistry } from "@openharness/core";
 
 describe("AgentChildManager", () => {
+  it("rejects plugin Child follow-ups from another Run before idempotency or metadata can bypass authorization", async () => {
+    const submitted: string[] = [];
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent((content: string) => {
+      submitted.push(content);
+      return completedRun("done");
+    }));
+    const view = (pluginId?: string) => createRunCapabilityView({
+      toolRegistry: new ToolRegistry(), pluginIds: new Set(["P", "Q"]),
+    }, pluginId);
+    const first = manager.createController(parentScope(), view("P"));
+    try {
+      const child = await first.spawnChildAgent({ description: "d", prompt: "initial", agent: "worker", cwd: "/repo" });
+      await child.result;
+      const input = { id: "followup", content: "continue", metadata: { pluginId: "P" } };
+      await first.sendChildInput(child.id, input);
+      for (const pluginId of [undefined, "Q"]) {
+        const later = manager.createController({ ...parentScope(), runId: "later" }, view(pluginId));
+        await expect(later.sendChildInput(child.id, input)).rejects.toThrow("not authorized for this Run");
+      }
+      await expect(manager.get(child.id)!.send(input)).rejects.toThrow("not authorized for this Run");
+      await expect(manager.send(child.id, input)).rejects.toThrow("not authorized for this Run");
+      expect(submitted).toEqual(["initial", "continue"]);
+    } finally { await manager.closeAll(); }
+  });
+
   it("announces a failed child when its environment cannot be created", async () => {
     const events: any[] = [];
     const bus = new AgentEventBus((event) => { events.push(event); });

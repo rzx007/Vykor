@@ -1,5 +1,6 @@
 import { readSessionRuntimeConfig, type SessionRecord } from "@openharness/protocol";
 import type { ProviderInputCapabilities } from "@openharness/api";
+import { PluginPreparationError } from "@openharness/agent-runtime";
 import type { ContentBlock, ModelInputCapabilities } from "@openharness/core";
 import type { SessionStore } from "@openharness/services";
 
@@ -330,6 +331,11 @@ export class SessionRunExecutor {
         this.context.store.updateRun(runId, {
           status: interrupted ? "interrupted" : "failed",
           error: message,
+          ...(error instanceof PluginPreparationError ? {
+            metadata: { ...current?.metadata, pluginPreparation: {
+              status: "failed", pluginId: error.pluginId, error: message,
+            } },
+          } : {}),
           ...(routingError
             ? {
                 metadata: {
