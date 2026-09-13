@@ -29,6 +29,7 @@ import { HeaderIconButton, PickerMenuItem, StartPickerButton } from "../composer
 import { ScopedOperationError } from "./scoped-operation-errors"
 import type { LoadStatus, StartPicker } from "../types"
 import { resolveModelLabel } from "../utils"
+import { pluginMentionsEnabled as defaultPluginMentionsEnabled } from "../composer/plugin-mentions-feature"
 
 export function NewConversationStart({
   draft,
@@ -48,7 +49,7 @@ export function NewConversationStart({
   operationError,
   skills,
   plugins = [],
-  pluginMentionsEnabled = false,
+  pluginMentionsEnabled = defaultPluginMentionsEnabled,
   commands,
   onCommand,
   goalMode = false,

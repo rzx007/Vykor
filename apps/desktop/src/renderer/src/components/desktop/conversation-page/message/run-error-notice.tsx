@@ -1,4 +1,5 @@
 import { AlertCircle, ChevronRight } from "lucide-react"
+import { useState } from "react"
 
 const leadingHttpReasonPhrases: Partial<Record<number, readonly string[]>> = {
   400: ["bad request"],
@@ -24,7 +25,9 @@ const leadingHttpReasonPhrases: Partial<Record<number, readonly string[]>> = {
   511: ["network authentication required"],
 }
 
-export function RunErrorNotice({ error }: { error?: string }): React.JSX.Element {
+export function RunErrorNotice({ error }: { error?: string }): React.JSX.Element | null {
+  const [dismissed, setDismissed] = useState<{ error?: string } | null>(null)
+  if (dismissed?.error === error && dismissed !== null) return null
   const detail = error?.trim()
   const statusMessage = detail
     ? (runFailureGuidance(detail) ?? "这次请求没有完成")
@@ -49,7 +52,7 @@ export function RunErrorNotice({ error }: { error?: string }): React.JSX.Element
     <section
       data-run-error-notice
       aria-label="请求未完成"
-      className="max-w-xl text-xs text-foreground/80"
+      className="flex max-w-xl items-start gap-2 text-xs text-foreground/80"
     >
       {detail ? (
         <details className="group">
@@ -75,6 +78,14 @@ export function RunErrorNotice({ error }: { error?: string }): React.JSX.Element
           {statusRow}
         </div>
       )}
+      <button
+        type="button"
+        aria-label="关闭运行错误"
+        className="shrink-0 rounded py-1.5 leading-5 text-ui-muted underline hover:text-foreground"
+        onClick={() => setDismissed({ error })}
+      >
+        关闭
+      </button>
     </section>
   )
 }

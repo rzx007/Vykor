@@ -24,21 +24,39 @@ describe("AgentChildManager", () => {
     const emitted: any[] = [];
     bus.subscribe((event) => { emitted.push(event); });
     const submitted: any[] = [];
-    const manager = createManager(bus, async () => fakeAgent((content: unknown, options: unknown) => {
-      submitted.push({ content, options });
+    const manager = createManager(bus, async (childOptions) => fakeAgent((content: unknown, options: unknown) => {
+      submitted.push({ content, options, cwd: childOptions.cwd });
       return completedRun("done");
     }));
-    const parent = createRunCapabilityView({ toolRegistry: new ToolRegistry() });
+    const pluginId = "dev.quality";
+    const toolRegistry = new ToolRegistry();
+    for (const name of ["Selected", "NarrowedOut", "OtherPlugin"]) {
+      toolRegistry.register({
+        name, description: name, inputSchema: { type: "object" },
+        execute: async (_input, context) => ({ content: [{ type: "text", text: `${name}:${context.cwd}` }] }),
+      }, { kind: "plugin", id: name === "OtherPlugin" ? "dev.other" : pluginId });
+    }
+    const parent = createRunCapabilityView({ toolRegistry, pluginIds: new Set([pluginId, "dev.other"]) }, pluginId);
     const controller = manager.createController(parentScope(), parent);
-    const child = await controller.spawnChildAgent({ description: "d", prompt: "task only", agent: "worker", cwd: "/other" });
+    const child = await controller.spawnChildAgent({
+      description: "d", prompt: "task only", agent: "worker", cwd: "/other",
+      allowedTools: ["Selected", "OtherPlugin"],
+    });
     await child.result;
     await controller.sendChildInput(child.id, { content: "follow up" });
     expect(submitted.map(({ content }) => content)).toEqual(["task only", "follow up"]);
-    for (const { options } of submitted) {
-      expect(options.capabilityView?.tools.size).toBe(0);
+    for (const { options, cwd } of submitted) {
+      expect(cwd).toBe("/other");
+      expect(options.capabilityView?.pluginId).toBe(pluginId);
+      expect([...options.capabilityView.tools.keys()]).toEqual(["Selected"]);
+      expect(options.capabilityView.tools.get("Selected")).toBe(parent.tools.get("Selected"));
+      await expect(options.capabilityView.tools.get("Selected").invoke({}, { cwd })).resolves.toEqual({
+        content: [{ type: "text", text: "Selected:/other" }],
+      });
       expect(options.capabilityView?.agents.size).toBe(0);
       expect(options.inputItems).toBeUndefined();
     }
+    expect([...parent.tools.keys()]).toEqual(["Selected", "NarrowedOut"]);
     expect(emitted.find((event) => event.type === "child.created").data.spawn.capabilityView).toBeUndefined();
     await manager.closeAll();
   });

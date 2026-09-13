@@ -378,7 +378,7 @@ describe("SessionGoalService durable lifecycle", () => {
     expect(await service.action("s1", created.id, command)).toEqual(stopped);
   });
 
-  it("automatically completes after a continuation with real checks from the current run", async () => {
+  it.each([false, true])("automatically completes after a verified continuation (plugin=%s)", async (withPlugin) => {
     let turns = 0;
     const { service, store, engine } = harness(async (store, runId) => {
       const message = store.createMessage({
@@ -418,11 +418,17 @@ describe("SessionGoalService durable lifecycle", () => {
       requestId: "verified",
       objective: "通过两项实际检查",
       maxAutoTurns: 1,
+      ...(withPlugin ? { items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] } : {}),
     });
     await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("completed"));
     await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
     expect(store.listRuns("s1")).toHaveLength(2);
     expect(store.getGoal(goal.id)?.autoTurnsUsed).toBe(1);
+    expect(store.getGoal(goal.id)?.pluginId).toBe(withPlugin ? pluginId : undefined);
+    for (const run of store.listRuns("s1")) {
+      expect(run.metadata.pluginId).toBe(withPlugin ? pluginId : undefined);
+      expect(store.getInput(run.inputId!)?.metadata.pluginId).toBe(withPlugin ? pluginId : undefined);
+    }
   });
 
   it("lets a queued user run assess the goal before any automatic continuation", async () => {

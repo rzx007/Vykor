@@ -4,6 +4,12 @@
 
 ## 运行流程
 
+Desktop 默认支持 `@/+` 选择插件；协议 3 的服务通过 `pluginCapabilities: 1` 声明完整支持。安装并启用表示可被发现，用户在当前输入中选定 pluginId 才会把该插件的 Skill、MCP、Native Tool、Agent 加入本轮能力范围。具体流程见[插件能力召唤与运行](./plugin-capability-invocation-design.md)。
+
+Run 从暖 Runtime 的已加载状态生成冻结的内存 View，固定工具定义及调用对象，不创建新的持久化快照。插件更新使后续 Runtime 重建；已开始的 Run 不切换绑定。linked 目录外部修改在显式 `/reload-plugins`、重启或新会话后生效。
+
+Plugin Agent 由 root 的 Agent 工具创建 Child，继承所选插件的父 View 并按工具和 MCP server identity 取交集；换目录不能增加插件。普通 Coordinator 的 Child 可按自身角色重建非插件基线，宿主上限、禁用项和权限检查仍然有效。新增插件权限未获批准时不能激活；Goal 每轮沿用 pluginId，失效时暂停并说明原因。
+
 ```text
 手写 Native Plugin
 或 Claude Code / Codex Source -> Converter -> Native Plugin

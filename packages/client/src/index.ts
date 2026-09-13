@@ -24,6 +24,7 @@ export type {
 } from "@openharness/protocol";
 export {
   checkProtocolCompatibility,
+  CURRENT_PROTOCOL_VERSION,
   supportsFeature,
 } from "@openharness/protocol";
 export {

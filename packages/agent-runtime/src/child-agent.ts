@@ -333,7 +333,12 @@ export class AgentChildManager implements AgentChildDirectory {
       });
       announced = true;
       if (environmentFailure) throw environmentFailure.error;
-      record.capabilityView = deriveChildCapabilityView(parentView, input);
+      // A normal Coordinator role is not the host ceiling for its workers.
+      // Normal children rebuild their non-plugin baseline under their own role;
+      // a selected plugin keeps the parent's captured bindings and cannot widen.
+      record.capabilityView = parentView?.pluginId
+        ? deriveChildCapabilityView(parentView, input)
+        : undefined;
       await this.ensureAgent(record, false);
       const parentAbortHandler = () => {
         void this.interrupt(childId, "Parent run interrupted").catch(() => {});

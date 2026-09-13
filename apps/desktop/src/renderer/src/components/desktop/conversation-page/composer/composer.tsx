@@ -24,6 +24,7 @@ import type { ComposerSkill } from "./rich-prompt-input"
 import type { ComposerPickerCommand, ComposerPickerItem } from "./composer-picker"
 import type { ContextPickerItem } from "./context-picker"
 import { resolvePermissionModeLabel } from "../utils"
+import { pluginMentionsEnabled as defaultPluginMentionsEnabled } from "./plugin-mentions-feature"
 
 export function Composer({
   id,
@@ -37,7 +38,7 @@ export function Composer({
   permissionMode,
   skills = [],
   plugins = [],
-  pluginMentionsEnabled = false,
+  pluginMentionsEnabled = defaultPluginMentionsEnabled,
   commands = [],
   conversations = [],
   activeSessionId = null,

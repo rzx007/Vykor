@@ -584,7 +584,7 @@ describe("OpenHarnessClient", () => {
       fetch: vi.fn(async () =>
         jsonResponse({
           serverVersion: "0.4.0",
-          protocol: { version: 2 },
+          protocol: { version: 3 },
           features: {},
           agentEnvironments: { native: true, wsl: true },
         }),
@@ -594,6 +594,14 @@ describe("OpenHarnessClient", () => {
     await expect(client.capabilities()).resolves.toMatchObject({
       agentEnvironments: { native: true, wsl: true },
     });
+  });
+
+  it("rejects the previous protocol by default instead of silently hiding plugin inputs", async () => {
+    const client = new OpenHarnessClient({
+      baseUrl: "http://127.0.0.1:3456",
+      fetch: (async () => jsonResponse({ serverVersion: "old", protocol: { version: 2 }, features: {} })) as typeof fetch,
+    });
+    await expect(client.capabilities()).rejects.toBeInstanceOf(IncompatibleProtocolError);
   });
 
   it("lists commands without a command execution endpoint", async () => {

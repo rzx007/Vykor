@@ -81,6 +81,7 @@ import type {
   SessionGoal,
 } from "../../../shared/session-types"
 import { resolveDesktopAttachmentSupport } from "../../../shared/attachment-types"
+import { requireDesktopPluginCapabilities } from "../../../shared/plugin-capabilities"
 import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
 import { parseDesktopContextUsageSnapshot } from "../../../shared/parse-context-usage-snapshot"
 import {
@@ -124,6 +125,7 @@ export class DesktopSessionService {
       client.listProjects(),
       client.capabilities(),
     ])
+    requireDesktopPluginCapabilities(capabilities)
     const sessions = allSessions
       .filter((session) => session.status !== "archived")
       .map(toDesktopSessionRecord)

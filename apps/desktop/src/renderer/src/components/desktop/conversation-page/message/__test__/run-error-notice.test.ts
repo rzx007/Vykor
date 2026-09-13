@@ -26,6 +26,21 @@ describe("RunErrorNotice", () => {
       .IS_REACT_ACT_ENVIRONMENT
   })
 
+  it("dismisses only the displayed notice and restores a different error or remounted history", () => {
+    const durableRun = Object.freeze({ status: "failed", error: "plugin_initialization_failed" })
+    act(() => root.render(createElement(RunErrorNotice, { error: durableRun.error })))
+    const dismiss = container.querySelector<HTMLButtonElement>('button[aria-label="关闭运行错误"]')
+    expect(dismiss).not.toBeNull()
+    act(() => dismiss!.click())
+    expect(container.querySelector("[data-run-error-notice]")).toBeNull()
+    expect(durableRun).toEqual({ status: "failed", error: "plugin_initialization_failed" })
+    act(() => root.render(createElement(RunErrorNotice, { error: "plugin_permission_required" })))
+    expect(container.querySelector("pre")?.textContent).toBe("plugin_permission_required")
+    act(() => root.render(null))
+    act(() => root.render(createElement(RunErrorNotice, { error: durableRun.error })))
+    expect(container.querySelector("pre")?.textContent).toBe("plugin_initialization_failed")
+  })
+
   it("keeps the raw error collapsed behind a calm inline status", () => {
     act(() => root.render(createElement(RunErrorNotice, { error: "413 status code (no body)" })))
 

@@ -97,6 +97,7 @@ import type {
 } from "@openharness/protocol";
 import {
   checkProtocolCompatibility,
+  CURRENT_PROTOCOL_VERSION,
   decodeJobReadResult,
   decodeJobSnapshot,
   decodeJobWaitResult,
@@ -219,7 +220,7 @@ export class OpenHarnessClient {
     const capabilities = parseServerCapabilities(value);
     const compatibility = checkProtocolCompatibility(
       capabilities,
-      options.support ?? { version: 2 },
+      options.support ?? { version: CURRENT_PROTOCOL_VERSION },
     );
     if (!compatibility.compatible) {
       throw new IncompatibleProtocolError(

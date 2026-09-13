@@ -11,6 +11,10 @@ Skill 选择和 Skill 执行是两件事：
 - 客户端提交 Skill 的名称、当前 command catalog 给出的 `SKILL.md` 路径和展示快照，不提交 `SKILL.md` 正文。
 - daemon 重新按 session cwd 发现 Skill，并验证客户端引用；真正的正文只由模型调用原生 `Skill` 工具时读取。
 
+插件能力默认启用后，执行器从已加载的暖 Runtime 为每个 Run 创建内存 View（保存该轮可使用的具体能力）。`$插件Skill` 在准入时按服务端所有权目录推导 pluginId；与同插件的 `@` 或 Agent 引用合并，与其他插件组合则拒绝。
+
+带 View 的 Run 在准备输入和执行 Skill 工具时都读取该 View 中捕获的 name/path/owner 与正文，不重新到全局目录寻找同名赢家。下面关于刷新目录的步骤仅适用于没有 View 的独立 Skill 调用。暖 Runtime 的文件变化需要插件管理失效、显式重载、重启或新会话才生效。
+
 Slash 的三层分流和未知命令处理见 [Slash Command Flow](./slash-commands-flow.md)，输入框选择行为见 [输入框能力需求](./composer-capabilities-requirements.md)。
 
 ## 从发送到结束
@@ -138,6 +142,8 @@ $archify 画一下系统架构
 | 客户端断线 | durable run 继续；客户端从最后 cursor 重连并回放 SSE |
 
 ## 代码入口
+
+普通 Run 的系统提示只列非插件 Skill；选定插件后只加入该插件的 Skill 摘要，完整正文仍通过 `Skill` 的 tool result 进入上下文，MCP/Native Tool schema 只通过模型 tools 字段提供。Context Usage 使用最近实际发出的基础提示，避免把插件轮错误地统计为普通轮。`systemPromptForRun` 在有 View 时优先于 `setSystemPrompt()`；清空会话会清除最近 Run 的统计来源。
 
 | 位置 | 职责 |
 | --- | --- |

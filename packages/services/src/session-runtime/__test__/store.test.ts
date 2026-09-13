@@ -76,7 +76,7 @@ function createReadyAttachment(
 }
 
 describe("SessionStore", () => {
-  it("persists structured input items and rejects legacy input rows", () => {
+  it("persists structured plugin input items and failed runs across disk reopen, rejecting legacy input rows", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-structured-input-"));
     const path = join(directory, "store.db");
     try {
@@ -90,20 +90,36 @@ describe("SessionStore", () => {
         items: [
           { type: "text", text: "use " },
           { type: "skill", name: "review", path: "/repo/review/SKILL.md" },
+          { type: "text", text: " " },
+          { type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" },
+          { type: "text", text: " " },
+          { type: "capability", kind: "plugin_agent", pluginId: "dev.quality", agentId: "dev.quality:reviewer", displayName: "Reviewer" },
         ],
+        metadata: { pluginId: "dev.quality" },
       });
 
       expect(admitted.items).toEqual([
         { type: "text", text: "use " },
         { type: "skill", name: "review", path: "/repo/review/SKILL.md" },
+        { type: "text", text: " " },
+        { type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" },
+        { type: "text", text: " " },
+        { type: "capability", kind: "plugin_agent", pluginId: "dev.quality", agentId: "dev.quality:reviewer", displayName: "Reviewer" },
       ]);
-      expect(admitted.content).toBe("use $review");
+      expect(admitted.content).toBe("use $review @Quality @Reviewer");
+      store.createRun({ id: "r1", sessionId: "s1", inputId: admitted.id, metadata: { pluginId: "dev.quality" } });
+      store.updateRun("r1", { status: "failed", error: "Plugin tool permission denied" });
       store.close();
 
       const reloaded = new SessionStore({ path });
       expect(reloaded.getInput("i1")).toMatchObject({
         items: admitted.items,
-        content: "use $review",
+        content: "use $review @Quality @Reviewer",
+        metadata: { pluginId: "dev.quality" },
+      });
+      expect(reloaded.getRun("r1")).toMatchObject({
+        inputId: "i1", status: "failed", error: "Plugin tool permission denied",
+        metadata: { pluginId: "dev.quality" },
       });
       reloaded.close();
 

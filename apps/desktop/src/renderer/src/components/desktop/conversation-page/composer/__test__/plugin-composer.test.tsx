@@ -35,8 +35,13 @@ async function render(draft: ComposerDocument = { version: 1, items: [] }, enabl
 const editor = () => getNearestEditorFromDOMNode(container.querySelector('[role="textbox"]')!)!
 const plus = () => container.querySelector<HTMLButtonElement>('button[aria-label="添加上下文"]')!
 const pluginOption = () => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) => node.textContent?.includes("Quality"))
-it("keeps plugin entries hidden by default", async () => {
+it("shows plugin selection in a default build", async () => {
   await render()
+  await act(async () => plus().click())
+  expect(pluginOption()?.textContent).toContain("检查代码质量")
+})
+it("keeps plugin entries hidden when the flag is disabled", async () => {
+  await render(undefined, false)
   await act(async () => plus().click())
   expect(pluginOption()).toBeUndefined()
 })

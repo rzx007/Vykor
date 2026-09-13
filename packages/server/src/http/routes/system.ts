@@ -20,6 +20,7 @@ import type { DaemonControlService } from "../../application/control/index.js";
 import type { ApplicationRetentionService } from "../../application/retention/application-retention-service.js";
 import {
   DEFAULT_ATTACHMENT_LIMITS,
+  CURRENT_PROTOCOL_VERSION,
   type AttachmentLimits,
   type ServerCapabilities,
 } from "@openharness/protocol";
@@ -55,7 +56,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         context.capabilities ??
           ({
             serverVersion: context.version ?? "0.1.0",
-            protocol: { version: 2 },
+            protocol: { version: CURRENT_PROTOCOL_VERSION },
             features: {
               steer: 1,
               runAttempts: 1,
@@ -67,6 +68,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               backup: 1,
               retention: 1,
               attachments: 1,
+              pluginCapabilities: 1,
             },
             attachments: {
               limits: context.attachmentLimits ?? DEFAULT_ATTACHMENT_LIMITS,

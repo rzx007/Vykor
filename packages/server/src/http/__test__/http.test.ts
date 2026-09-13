@@ -617,8 +617,8 @@ describe("OpenHarnessHttpServer", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       serverVersion: "0.4.0",
-      protocol: { version: 2 },
-      features: { jobs: 2, workflow: 2 },
+      protocol: { version: 3 },
+      features: { jobs: 2, workflow: 2, pluginCapabilities: 1 },
     });
     await server.close();
     rmSync(dir, { recursive: true, force: true });

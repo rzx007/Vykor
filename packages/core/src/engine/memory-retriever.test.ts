@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
-import type { StreamEvent } from "../index.js";
+import type { AgentExecutionContext, StreamEvent } from "../index.js";
 
 /**
  * Mock streaming client that records every `streamMessage` request so tests can
@@ -35,6 +35,37 @@ const SIMPLE_RESPONSE: StreamEvent[] = [
 ];
 
 describe("QueryEngine per-turn memory retriever", () => {
+  it("reports the latest Run prompt and keeps the callback ahead of the session default", async () => {
+    const { client, requests } = createRecordingClient(SIMPLE_RESPONSE);
+    const engine = new QueryEngine(client, new ToolRegistry(), createMockPermissionChecker(), createMockHookExecutor(), {
+      systemPrompt: "SESSION",
+      systemPromptForRun: async (view) => view.pluginId ? "PLUGIN SUMMARY" : "BASELINE SUMMARY",
+      memoryRetriever: async () => "MEMORY",
+    });
+    engine.setSystemPrompt("UPDATED SESSION");
+    expect(engine.getContextUsagePromptSource().systemPrompt).toBe("UPDATED SESSION");
+    for (const pluginId of [undefined, "one", undefined]) {
+      const execution = {
+        capabilityView: { pluginId, tools: new Map(), skills: new Map(), agents: new Map(), mcpServers: new Map() },
+        emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {},
+      } as unknown as AgentExecutionContext;
+      for await (const _ of engine.submitMessage("go", { execution })) {}
+      expect(engine.getContextUsagePromptSource()).toEqual({
+        systemPrompt: pluginId ? "PLUGIN SUMMARY" : "BASELINE SUMMARY",
+        memoryReminderText: "<system-reminder>\nMEMORY\n</system-reminder>",
+      });
+    }
+    expect(requests.map((request) => request.system)).toEqual([
+      "BASELINE SUMMARY\n\n<system-reminder>\nMEMORY\n</system-reminder>",
+      "PLUGIN SUMMARY\n\n<system-reminder>\nMEMORY\n</system-reminder>",
+      "BASELINE SUMMARY\n\n<system-reminder>\nMEMORY\n</system-reminder>",
+    ]);
+    for await (const _ of engine.submitMessage("no view")) {}
+    expect(engine.getContextUsagePromptSource().systemPrompt).toBe("UPDATED SESSION");
+    engine.clear();
+    expect(engine.getContextUsagePromptSource()).toEqual({ systemPrompt: "UPDATED SESSION" });
+  });
+
   it("calls retriever with the current user input on each submitMessage", async () => {
     const { client } = createRecordingClient(SIMPLE_RESPONSE);
     const retriever = vi.fn(async () => null);

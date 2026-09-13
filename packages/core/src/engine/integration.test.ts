@@ -1407,9 +1407,11 @@ describe("Integration: Permission Prompt (ask mode)", () => {
     expect(toolEnd.result.isError).toBeFalsy();
   });
 
-  it("denies when user rejects", async () => {
+  it.each([false, true])("denies before executing when user rejects (plugin=%s)", async (withPlugin) => {
     const registry = new ToolRegistry();
-    registry.register(makeTool("Bash"));
+    let invocations = 0;
+    const tool = { ...makeTool("Bash"), execute: async () => { invocations++; return { content: [] }; } };
+    registry.register(tool, withPlugin ? { kind: "plugin", id: "quality" } : undefined);
 
     const { client } = createMockStreamClient([
       [
@@ -1425,13 +1427,30 @@ describe("Integration: Permission Prompt (ask mode)", () => {
     const askMode = { checkTool: async () => ({ action: "ask" as const, reason: "confirm?" }) };
     const engine = new QueryEngine(client, registry, askMode, noopHooks());
     const events: StreamEvent[] = [];
+    const permissionEvents: unknown[] = [];
+    const execution: AgentExecutionContext = {
+      ...createExecutionContext({
+        requestPermission: async () => ({ status: "denied" }),
+        emit: async (event) => { permissionEvents.push(event); },
+      }),
+      ...(withPlugin ? { capabilityView: {
+        pluginId: "quality",
+        tools: new Map([["Bash", { definition: tool, invoke: tool.execute, ownerPluginId: "quality" }]]),
+        skills: new Map(), mcpServers: new Map(), agents: new Map(),
+      } } : {}),
+    };
     for await (const e of engine.submitMessage("run", {
-      execution: createExecutionContext({ requestPermission: async () => ({ status: "denied" }) }),
+      execution,
     })) { events.push(e); }
 
     const toolEnd = events.find((e) => e.type === "tool_use_end") as any;
     expect(toolEnd.result.isError).toBe(true);
     expect(toolEnd.result.content[0].text).toContain("denied by user");
+    expect(invocations).toBe(0);
+    expect(permissionEvents).toEqual([
+      expect.objectContaining({ type: "permission.requested", data: expect.objectContaining({ request: expect.objectContaining({ toolName: "Bash" }) }) }),
+      expect.objectContaining({ type: "permission.resolved", data: expect.objectContaining({ decision: { status: "denied" } }) }),
+    ]);
   });
 });
 

@@ -123,6 +123,7 @@
 - [Native Plugin 后续工作交接](./native-plugin-next-stage-handoff.md)：当前阶段之后建议先做 Runtime 运行诊断和插件页管理收口；Agent 对话安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
 - [Native Plugin v1 与 Claude Code Converter 实施计划](./superpowers/plans/2026-08-25-native-plugin-and-claude-converter.md)：按 Native schema、安装激活、格式硬切、Converter core 和 Claude 转换闭环拆分的可执行任务。
 - [Native Plugin 当前实现](./plugins-contributions-design.md)：当前 Native Plugin 的 manifest、安装快照、外部转换、Runtime 激活和安全边界。
+- [插件能力召唤与运行设计](./plugin-capability-invocation-design.md)：`@插件` 选择后，Skill、MCP、Native Tool 和 Agent 怎样按当前 Run 装配、执行和继承权限。
 - [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、参考插件、五类组件写法、安装调试与当前能力边界。
 - [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：用固定 commit 的真实 Claude Code 插件样本验证 detect、convert、install 和 Runtime discover 全链路。
 - [Slash Commands](./slash-commands.md) 与 [Slash Command Flow](./slash-commands-flow.md)：当前命令清单、三层分流和执行入口。

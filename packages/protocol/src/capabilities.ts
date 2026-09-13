@@ -1,5 +1,7 @@
 import { parseAttachmentLimits, type AttachmentLimits } from "./attachment.js";
 
+export const CURRENT_PROTOCOL_VERSION = 3;
+
 export interface ProtocolVersion {
   version: number;
 }

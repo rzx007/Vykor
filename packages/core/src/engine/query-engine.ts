@@ -158,6 +158,7 @@ export class QueryEngine implements IQueryEngine {
   private compactService: CompactService;
   private costTracker: CostTracker;
   private systemPrompt: string | undefined;
+  private lastRunPrompt: { systemPrompt: string | undefined } | undefined;
   private lastMemoryReminderText: string | undefined;
   private model: string;
   private maxTurns: number;
@@ -295,6 +296,7 @@ export class QueryEngine implements IQueryEngine {
     const runSystemPrompt = options.execution?.capabilityView && this.options.systemPromptForRun
       ? await this.options.systemPromptForRun(options.execution.capabilityView)
       : this.systemPrompt;
+    this.lastRunPrompt = { systemPrompt: runSystemPrompt };
     const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, runSystemPrompt);
     const contribution = options.execution?.contribution;
     const turnSystemPrompt = contribution?.systemGuidance
@@ -535,8 +537,9 @@ export class QueryEngine implements IQueryEngine {
     systemPrompt?: string;
     memoryReminderText?: string;
   } {
+    const systemPrompt = this.lastRunPrompt ? this.lastRunPrompt.systemPrompt : this.systemPrompt;
     return {
-      ...(this.systemPrompt ? { systemPrompt: this.systemPrompt } : {}),
+      ...(systemPrompt ? { systemPrompt } : {}),
       ...(this.lastMemoryReminderText ? { memoryReminderText: this.lastMemoryReminderText } : {}),
     };
   }
@@ -556,6 +559,7 @@ export class QueryEngine implements IQueryEngine {
   clear(): void {
     this.messages = [];
     this.costTracker.reset();
+    this.lastRunPrompt = undefined;
     this.lastMemoryReminderText = undefined;
   }
 

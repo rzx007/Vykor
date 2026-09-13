@@ -9,9 +9,9 @@ import { agentTool } from "../../tools/src/agent/agent-tools.js";
 it.each([false, true])("keeps plugin delegation in the root run and lets it finish after child failure=%s", async (fail) => {
   const events: any[] = [];
   const bus = new AgentEventBus((event) => { events.push(event); });
-  const view = createRunCapabilityView({ toolRegistry: new ToolRegistry(), agents: [{ definition: {
+  const view = createRunCapabilityView({ toolRegistry: new ToolRegistry(), pluginIds: new Set(["plugin"]), agents: [{ ownerPluginId: "plugin", definition: {
     name: "plugin:review", description: "Review", systemPrompt: "Only the child sees these instructions", tools: [],
-  } }] });
+  } }] }, "plugin");
   const runtime = { queryEngine: { getTotalUsage: () => ({ inputTokens: 0, outputTokens: 0 }) } } as any;
   let childPrompt: string | undefined;
   let childView: any;
@@ -57,7 +57,10 @@ it.each([false, true])("keeps plugin delegation in the root run and lets it fini
   try {
     expect((await run.result).output).toBe(fail ? "root handled: child startup failed" : "root final: child findings");
     expect(childPrompt).toBe("Only the child sees these instructions");
-    if (!fail) expect(childView.tools.size).toBe(0);
+    if (!fail) {
+      expect(childView.tools.size).toBe(0);
+      expect(childView.pluginId).toBe("plugin");
+    }
     expect(events.find((event) => event.type === "input.accepted" && event.context.sessionId === "root-session").data.inputItems[0].kind).toBe("plugin_agent");
     expect(events.filter((event) => event.type === "run.completed" && event.context.sessionId === "root-session")).toHaveLength(1);
     expect(events.filter((event) => event.type === "run.failed" && event.context.sessionId === "root-session")).toHaveLength(0);
