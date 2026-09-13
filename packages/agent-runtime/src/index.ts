@@ -45,6 +45,7 @@ export { discoverOpenHarnessExtensions } from "./extensions.js";
 export {
   createPluginCapabilityInventory,
   pluginMcpServerId,
+  pluginNativeToolEntryId,
   selectPluginInstallationWinners,
   type LoadedPluginInstallation,
   type PluginCapabilityInventory,

@@ -110,7 +110,7 @@ describe("plugin capability inventory", () => {
       origin: "converted",
       skillNames: ["workspace-review"],
       mcpServerIds: ["plugin:dev.openharness.quality:mcp:github"],
-      nativeToolEntries: ["./tools/index.mjs"],
+      nativeToolEntries: ["plugin:dev.openharness.quality:tool:./tools/index.mjs"],
       agentNames: ["dev.openharness.quality:reviewer"],
     });
     expect(inventory.skills.get("workspace-review")).toEqual({
@@ -121,7 +121,7 @@ describe("plugin capability inventory", () => {
       pluginId: "dev.openharness.quality",
       serverName: "github",
     });
-    expect(inventory.nativeToolEntries.get("./tools/index.mjs")).toEqual({
+    expect(inventory.nativeToolEntries.get("plugin:dev.openharness.quality:tool:./tools/index.mjs")).toEqual({
       pluginId: "dev.openharness.quality",
     });
     expect(inventory.agents.get("dev.openharness.quality:reviewer")).toEqual({
@@ -190,5 +190,36 @@ describe("plugin capability inventory", () => {
         pluginIds: ["dev.openharness.first", "dev.openharness.second"],
       },
     }]);
+  });
+
+  it("keeps identical plugin-relative Native Tool entries under distinct owner identities", () => {
+    const firstRecord = record("dev.openharness.first", "user", { origin: "native" });
+    const secondRecord = record("dev.openharness.second", "user", { origin: "native" });
+    const tools = {
+      status: "loaded" as const,
+      value: [{
+        declaredEntry: "./tools/index.mjs",
+        entryPath: "/plugin/tools/index.mjs",
+        runtime: "node" as const,
+        requestedPermissions: [],
+        effectivePermissions: {},
+      }],
+      diagnostics: [],
+    };
+
+    const inventory = createPluginCapabilityInventory([
+      loaded(firstRecord, { tools }),
+      loaded(secondRecord, { tools }),
+    ]);
+
+    expect([...inventory.plugins.keys()]).toEqual([
+      "dev.openharness.first",
+      "dev.openharness.second",
+    ]);
+    expect([...inventory.nativeToolEntries.entries()]).toEqual([
+      ["plugin:dev.openharness.first:tool:./tools/index.mjs", { pluginId: firstRecord.id }],
+      ["plugin:dev.openharness.second:tool:./tools/index.mjs", { pluginId: secondRecord.id }],
+    ]);
+    expect(inventory.diagnostics).toEqual([]);
   });
 });

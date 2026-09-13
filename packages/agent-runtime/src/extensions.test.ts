@@ -111,6 +111,43 @@ function writeProjectToolPlugin(cwd: string): void {
   }));
 }
 
+function writeProjectMcpPlugin(cwd: string): void {
+  const pluginDir = join(tempRoot, "cache", "runtime-mcp");
+  mkdirSync(join(pluginDir, ".openharness-plugin"), { recursive: true });
+  mkdirSync(join(pluginDir, "mcp"), { recursive: true });
+  writeFileSync(join(pluginDir, ".openharness-plugin", "plugin.json"), JSON.stringify({
+    schemaVersion: 1,
+    id: "dev.openharness.runtime-mcp",
+    name: "runtime-mcp",
+    version: "1.0.0",
+    components: { mcpServers: ["./mcp/servers.json"] },
+  }));
+  writeFileSync(join(pluginDir, "mcp", "servers.json"), JSON.stringify({
+    servers: { github: { type: "http", url: "https://mcp.example.test" } },
+  }));
+  const storePath = join(tempRoot, "config", "plugins", "installed.json");
+  mkdirSync(join(storePath, ".."), { recursive: true });
+  writeFileSync(storePath, JSON.stringify({
+    schemaVersion: 1,
+    revision: 1,
+    plugins: {
+      "user::dev.openharness.runtime-mcp": {
+        id: "dev.openharness.runtime-mcp",
+        scope: "user",
+        enabled: true,
+        currentVersion: "1.0.0",
+        cachePath: pluginDir,
+        origin: "native",
+        requestedPermissions: [],
+        approvedPermissions: [],
+        linkedSourcePath: pluginDir,
+        installedAt: "now",
+        updatedAt: "now",
+      },
+    },
+  }));
+}
+
 function createExecutionContext(
   cwd: string,
   calls: Parameters<AgentChildController["spawnChildAgent"]>[0][],
@@ -257,26 +294,19 @@ describe("extension agent definition scoping", () => {
 });
 
 describe("installed Native Tool activation", () => {
-  it("reserves plugin MCP server identities for discovered plugin owners", async () => {
-    const serverId = "plugin:dev.openharness.fake:mcp:github";
+  it("keeps compound MCP ownership identity out of the Runtime server key", async () => {
+    const cwd = join(tempRoot, "mcp-identity-workspace");
+    writeProjectMcpPlugin(cwd);
 
-    const discovery = await discoverOpenHarnessExtensions(tempRoot, {
-      ...BASE_SETTINGS,
-      mcpServers: { [serverId]: { type: "http", url: "https://spoofed.example.test" } },
+    const discovery = await discoverOpenHarnessExtensions(cwd, BASE_SETTINGS);
+
+    expect(discovery.pluginCapabilityInventory.mcpServers.get(
+      "plugin:dev.openharness.runtime-mcp:mcp:github",
+    )).toEqual({ pluginId: "dev.openharness.runtime-mcp", serverName: "github" });
+    expect(discovery.mcpServers).toEqual({
+      github: { type: "http", url: "https://mcp.example.test" },
     });
-
-    expect(discovery.mcpServers).toEqual({});
-    expect(discovery.pluginCapabilityInventory.diagnostics).toEqual([{
-      severity: "error",
-      phase: "discover",
-      code: "plugin_mcp_server_identity_reserved",
-      message: `Settings MCP server '${serverId}' uses the reserved plugin server identity namespace`,
-      component: "mcpServers",
-      details: { serverId },
-    }]);
-    expect(discovery.warnings).toContain(
-      `Settings MCP server '${serverId}' uses the reserved plugin server identity namespace`,
-    );
+    expect(discovery.warnings).toEqual([]);
   });
 
   it("keeps an ambiguous installation out of the discovery inventory with a diagnostic", async () => {
@@ -528,9 +558,11 @@ describe("installed Native Tool activation", () => {
         version: "1.0.0",
         scope: "user",
         origin: "native",
-        nativeToolEntries: ["./tools/index.mjs"],
+        nativeToolEntries: ["plugin:dev.openharness.runtime-tool:tool:./tools/index.mjs"],
       });
-    expect(discovery.pluginCapabilityInventory.nativeToolEntries.get("./tools/index.mjs"))
+    expect(discovery.pluginCapabilityInventory.nativeToolEntries.get(
+      "plugin:dev.openharness.runtime-tool:tool:./tools/index.mjs",
+    ))
       .toEqual({ pluginId: "dev.openharness.runtime-tool" });
     const runtime = await createOpenHarnessRuntime({
       settings: BASE_SETTINGS,

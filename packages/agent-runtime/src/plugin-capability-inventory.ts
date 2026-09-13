@@ -35,6 +35,10 @@ export function pluginMcpServerId(pluginId: string, serverName: string): string 
   return `plugin:${pluginId}:mcp:${serverName}`;
 }
 
+export function pluginNativeToolEntryId(pluginId: string, declaredEntry: string): string {
+  return `plugin:${pluginId}:tool:${declaredEntry}`;
+}
+
 export function selectPluginInstallationWinners(
   records: readonly InstalledPluginRecord[],
 ): { winners: InstalledPluginRecord[]; diagnostics: PluginDiagnostic[] } {
@@ -86,9 +90,8 @@ export function createPluginCapabilityInventory(
     const skillNames = unique(plugin.components.skills?.value?.map((skill) => skill.name) ?? []);
     const mcpServerIds = Object.keys(plugin.components.mcpServers?.value ?? {})
       .map((serverName) => pluginMcpServerId(pluginId, serverName));
-    const toolEntries = unique(
-      plugin.components.tools?.value?.map((tool) => tool.declaredEntry) ?? [],
-    );
+    const toolEntries = unique(plugin.components.tools?.value?.map((tool) =>
+      pluginNativeToolEntryId(pluginId, tool.declaredEntry)) ?? []);
     const agentNames = unique(plugin.components.agents?.value?.map((agent) => agent.name) ?? []);
 
     plugins.set(pluginId, {
@@ -124,8 +127,6 @@ function findComponentConflicts(
   const componentNames = [
     ["skills", (item: LoadedPluginInstallation) =>
       item.plugin.components.skills?.value?.map((skill) => skill.name) ?? []],
-    ["tools", (item: LoadedPluginInstallation) =>
-      item.plugin.components.tools?.value?.map((tool) => tool.declaredEntry) ?? []],
     ["agents", (item: LoadedPluginInstallation) =>
       item.plugin.components.agents?.value?.map((agent) => agent.name) ?? []],
   ] as const;
