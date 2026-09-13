@@ -141,6 +141,13 @@
       "when": 1789171200000,
       "tag": "0019_session_goal_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "1",
+      "when": 1789257600000,
+      "tag": "0020_session_goal_plugin",
+      "breakpoints": true
     }
   ]
 }

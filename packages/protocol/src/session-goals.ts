@@ -41,6 +41,7 @@ export interface SessionGoal {
   id: string;
   sessionId: string;
   objective: string;
+  pluginId?: string;
   revision: number;
   status: GoalStatus;
   maxAutoTurns: number;

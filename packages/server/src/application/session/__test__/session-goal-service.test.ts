@@ -6,6 +6,9 @@ import { SessionStore } from "@openharness/services";
 import { SessionGoalService } from "../session-goal-service.js";
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 import { SessionRunEngine } from "../session-run-engine.js";
+import { SessionRunExecutor } from "../session-run-executor.js";
+import { createRunCapabilityView } from "@openharness/agent-runtime";
+import { ToolRegistry, type RunCapabilityView } from "@openharness/core";
 
 const pluginId = "dev.openharness.quality";
 const pluginSkill = {
@@ -23,10 +26,11 @@ function harness(
   waitVerifier?: {
     check: () => { state: "running"; checkedAt: number } | { state: "completed" };
   },
+  createView?: (pluginId?: string) => RunCapabilityView,
 ) {
   const directory = mkdtempSync(join(tmpdir(), "ohs-goal-lifecycle-"));
   const store = new SessionStore({ path: join(directory, "store.db") });
-  store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+  store.createSession({ id: "s1", cwd: process.cwd(), model: "m", metadata: { runtime: { model: "m" } } });
   cleanup.push(() => {
     store.close();
     rmSync(directory, { recursive: true, force: true });
@@ -41,7 +45,21 @@ function harness(
     agentPool: { configured: true } as any,
     events,
     settleGoalRun: (sessionId, runId) => service.settleRun(sessionId, runId),
-    runExecutor: {
+    runExecutor: createView ? new SessionRunExecutor({
+      store, events,
+      agentPool: {
+        configured: true,
+        acquireSession: async () => ({
+          setModel: () => {}, createRunCapabilityView: createView,
+          submitMessage: (_content: unknown, options: any) => ({
+            result: execute!(store, options.ids.runId, options.signal),
+          }),
+        }),
+        close: async () => {}, closeIfStale: async () => {},
+      } as any,
+      transcriptProjection: { finalizeRunParts: () => {}, projectAttachmentTransformations: () => {} },
+      traceIdForRun: () => "goal-test", log: () => {},
+    }) : {
       execute: async ({ runId }, context) => {
         store.updateRun(runId, { status: "running" });
         if (execute) await execute(store, runId, context.signal);
@@ -57,8 +75,8 @@ function harness(
     waitVerifier,
     pluginCapabilities: new SessionPluginCapabilityService({
       resolveInventory: async () => ({
-        plugins: new Map([[pluginId, {
-          pluginId,
+        plugins: new Map([pluginId, "dev.openharness.research"].map((id) => [id, {
+          pluginId: id,
           displayName: "Quality",
           description: "",
           version: "1.0.0",
@@ -68,7 +86,7 @@ function harness(
           mcpServerIds: [],
           nativeToolEntries: [],
           agentNames: [],
-        }]]),
+        }])),
         skills: new Map([[pluginSkill.name, { pluginId, path: pluginSkill.path }]]),
         mcpServers: new Map(),
         nativeToolEntries: new Map(),
@@ -107,10 +125,23 @@ function assessment(store: SessionStore, runId: string, value: Record<string, un
 }
 
 describe("SessionGoalService durable lifecycle", () => {
-  it("rejects plugin capability items before creating a Goal, Input, or Run", async () => {
-    const { service, store } = harness();
+  it("carries an admitted plugin through initial and continuation runs", async () => {
+    let turns = 0;
+    const views: RunCapabilityView[] = [];
+    let runtimeTools = new ToolRegistry();
+    runtimeTools.register({ name: "BeforeUpdate", description: "before", inputSchema: {}, execute: async () => ({ content: [] }) }, { kind: "plugin", id: pluginId });
+    const { service, store } = harness(async (store, runId) => {
+      assessment(store, runId, ++turns === 1 ? {} : { decision: "waiting_user", question: "确认结果？" });
+      // A management invalidation replaces the runtime before the next acquisition.
+      runtimeTools = new ToolRegistry();
+      runtimeTools.register({ name: "AfterUpdate", description: "after", inputSchema: {}, execute: async () => ({ content: [] }) }, { kind: "plugin", id: pluginId });
+    }, undefined, (selected) => {
+      const view = createRunCapabilityView({ toolRegistry: runtimeTools, pluginIds: new Set([pluginId]) }, selected);
+      views.push(view);
+      return view;
+    });
 
-    await expect(service.create("s1", {
+    const goal = await service.create("s1", {
       requestId: "plugin-goal-create",
       objective: "use plugin",
       items: [{
@@ -119,15 +150,46 @@ describe("SessionGoalService durable lifecycle", () => {
         pluginId: "dev.openharness.quality",
         displayName: "Quality",
       }],
-    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
-
-    expect(store.getCurrentGoal("s1")).toBeUndefined();
-    expect(store.getInput("plugin-goal-create")).toBeUndefined();
-    expect(store.getGoalRequest("plugin-goal-create")).toBeUndefined();
-    expect(store.listRuns("s1")).toEqual([]);
+    });
+    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status, store.getGoal(goal.id)?.reason).toBe("waiting_user"));
+    expect(goal).toMatchObject({ pluginId });
+    const runs = store.listRuns("s1");
+    expect(runs).toHaveLength(2);
+    expect(runs.map((run) => run.metadata.goalRunKind)).toEqual(["initial", "continuation"]);
+    for (const run of runs) {
+      expect(run.metadata.pluginId).toBe(pluginId);
+      expect(store.getInput(run.inputId!)?.metadata.pluginId).toBe(pluginId);
+    }
+    expect(store.getGoal(goal.id)).not.toHaveProperty("snapshot");
+    expect(views.map((view) => [...view.tools.keys()])).toEqual([["BeforeUpdate"], ["AfterUpdate"]]);
+    expect(views[0]).not.toBe(views[1]);
   });
 
-  it("rejects plugin capability items before updating a Goal", async () => {
+  it("pauses and preserves audit records when the rebuilt runtime excludes the selected plugin", async () => {
+    let available = true;
+    let submitted = 0;
+    const { service, store } = harness(async (store, runId) => {
+      submitted++;
+      assessment(store, runId, {});
+      available = false;
+    }, undefined, (selected) => createRunCapabilityView({
+      toolRegistry: new ToolRegistry(), pluginIds: new Set(available ? [pluginId] : []),
+    }, selected));
+    const goal = await service.create("s1", {
+      requestId: "plugin-becomes-unavailable", objective: "review",
+      items: [{ type: "capability", kind: "plugin", pluginId, displayName: "Quality" }],
+    });
+    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("paused"));
+    const runs = store.listRuns("s1");
+    expect(submitted, store.getGoal(goal.id)?.reason).toBe(1);
+    expect(runs).toHaveLength(2);
+    expect(runs[1]).toMatchObject({ status: "failed", metadata: { pluginId } });
+    expect(store.getGoal(goal.id)).toMatchObject({ pluginId, reason: runs[1]!.error });
+    expect(runs[1]!.error).toContain(pluginId);
+    expect(store.getInput(runs[1]!.inputId!)?.metadata.pluginId).toBe(pluginId);
+  });
+
+  it("rejects an unavailable plugin Agent before updating a Goal", async () => {
     const { service, store, engine } = harness();
     const created = await service.create("s1", {
       requestId: "ordinary-goal-create",
@@ -147,7 +209,7 @@ describe("SessionGoalService durable lifecycle", () => {
         agentId: "dev.openharness.quality:reviewer",
         displayName: "Reviewer",
       }],
-    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
+    })).rejects.toThrow("session_plugin_capability_unavailable");
 
     expect(store.getGoal(created.id)).toMatchObject({
       objective: "ordinary goal",
@@ -157,21 +219,20 @@ describe("SessionGoalService durable lifecycle", () => {
     expect(store.getGoalRequest("plugin-goal-update")).toBeUndefined();
   });
 
-  it("rejects a plugin Skill with forged user source before creating a Goal", async () => {
-    const { service, store } = harness();
+  it("uses trusted Skill ownership even when its source claims user", async () => {
+    const { service, store, engine } = harness();
 
-    await expect(service.create("s1", {
+    const goal = await service.create("s1", {
       requestId: "forged-plugin-skill-create",
       objective: "use plugin skill",
       items: [{ type: "skill", source: "user", ...pluginSkill }],
-    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
-
-    expect(store.getCurrentGoal("s1")).toBeUndefined();
-    expect(store.getInput("forged-plugin-skill-create")).toBeUndefined();
-    expect(store.getGoalRequest("forged-plugin-skill-create")).toBeUndefined();
+    });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    expect(goal).toMatchObject({ pluginId });
+    expect(store.getInput("forged-plugin-skill-create")?.metadata.pluginId).toBe(pluginId);
   });
 
-  it("rejects a plugin Skill without source before updating a Goal", async () => {
+  it("changes plugin selection on explicit edit and retains it on text edit and resume", async () => {
     const { service, store, engine } = harness();
     const created = await service.create("s1", {
       requestId: "ordinary-goal-for-skill-update",
@@ -180,16 +241,44 @@ describe("SessionGoalService durable lifecycle", () => {
     await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
     const beforeUpdate = store.getGoal(created.id)!;
 
-    await expect(service.update("s1", created.id, {
+    const edited = await service.update("s1", created.id, {
       requestId: "implicit-plugin-skill-update",
       expectedRevision: beforeUpdate.revision,
       objective: "use plugin skill",
       items: [{ type: "skill", ...pluginSkill }],
-    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
-
-    expect(store.getGoal(created.id)).toEqual(beforeUpdate);
-    expect(store.getInput("implicit-plugin-skill-update")).toBeUndefined();
-    expect(store.getGoalRequest("implicit-plugin-skill-update")).toBeUndefined();
+    });
+    expect(edited).toMatchObject({ pluginId });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const textEdited = await service.update("s1", created.id, {
+      requestId: "text-edit", expectedRevision: store.getGoal(created.id)!.revision,
+      objective: "clarified objective", items: [{ type: "text", text: "clarified" }],
+    });
+    expect(textEdited).toMatchObject({ pluginId });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const resumed = await service.action("s1", created.id, {
+      requestId: "resume-plugin", expectedRevision: store.getGoal(created.id)!.revision,
+      action: "resume",
+    });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    expect(resumed).toMatchObject({ pluginId });
+    for (const id of ["implicit-plugin-skill-update", "text-edit", "resume-plugin"]) {
+      expect(store.getInput(id)?.metadata.pluginId).toBe(pluginId);
+      expect(store.findRunByInput(id)?.metadata.pluginId).toBe(pluginId);
+    }
+    const switched = await service.update("s1", created.id, {
+      requestId: "switch-plugin", expectedRevision: store.getGoal(created.id)!.revision,
+      objective: "research instead",
+      items: [{ type: "capability", kind: "plugin", pluginId: "dev.openharness.research", displayName: "Research" }],
+    });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    expect(switched).toMatchObject({ pluginId: "dev.openharness.research" });
+    expect(store.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
+    await service.action("s1", created.id, {
+      requestId: "cancel-plugin", expectedRevision: store.getGoal(created.id)!.revision, action: "cancel",
+    });
+    expect(store.getGoal(created.id)?.status).toBe("cancelled");
+    expect(store.getInput("resume-plugin")?.metadata.pluginId).toBe(pluginId);
+    expect(store.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
   });
 
   it("keeps a pause request pending until cleanup finishes and shares concurrent retries", async () => {

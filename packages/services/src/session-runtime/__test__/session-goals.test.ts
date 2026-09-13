@@ -5,6 +5,21 @@ import { describe, expect, it } from "vitest"
 import { SessionStore } from "../store.js"
 
 describe("SessionStore goals", () => {
+  it("persists plugin selection across revisions and database reopen", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-plugin-"))
+    const path = join(directory, "store.db")
+    let store = new SessionStore({ path })
+    try {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" })
+      const goal = store.createGoal({ sessionId: "s1", objective: "review", maxAutoTurns: 2, pluginId: "quality" })
+      expect(goal).toMatchObject({ pluginId: "quality" })
+      expect(store.updateGoal(goal.id, { expectedRevision: 0, objective: "review again" })).toMatchObject({ pluginId: "quality" })
+      store.updateGoal(goal.id, { expectedRevision: 1, pluginId: "research", status: "paused" })
+      store.close()
+      store = new SessionStore({ path })
+      expect(store.getGoal(goal.id)).toMatchObject({ revision: 2, pluginId: "research", status: "paused" })
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
+  })
   it("counts a started automatic run once and preserves waiting/blocked goals during restart recovery", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-goal-recovery-"))
     const store = new SessionStore({ path: join(directory, "store.db") })

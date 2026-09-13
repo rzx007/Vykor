@@ -196,12 +196,14 @@ export interface CreateSessionGoalStoreInput {
   id?: string;
   sessionId: string;
   objective: string;
+  pluginId?: string;
   maxAutoTurns: number;
 }
 
 export interface UpdateSessionGoalStoreInput {
   expectedRevision: number;
   objective?: string;
+  pluginId?: string;
   status?: GoalStatus;
   maxAutoTurns?: number;
   autoTurnsUsed?: number;
@@ -256,6 +258,7 @@ function sessionGoalFromRow(row: Record<string, unknown>): SessionGoal {
     id: String(row.id),
     sessionId: String(row.session_id),
     objective: String(row.objective),
+    ...(typeof row.plugin_id === "string" ? { pluginId: row.plugin_id } : {}),
     revision: Number(row.revision),
     status: String(row.status) as GoalStatus,
     maxAutoTurns: Number(row.max_auto_turns),
@@ -3256,15 +3259,16 @@ export class SessionStore {
         .prepare(
           `
         INSERT INTO session_goal (
-          id, session_id, objective, revision, status, max_auto_turns,
+          id, session_id, objective, plugin_id, revision, status, max_auto_turns,
           auto_turns_used, no_progress_count, evidence_json, created_at, updated_at
-        ) VALUES (?, ?, ?, 0, 'active', ?, 0, 0, '[]', ?, ?)
+        ) VALUES (?, ?, ?, ?, 0, 'active', ?, 0, 0, '[]', ?, ?)
       `,
         )
         .run(
           id,
           input.sessionId,
           input.objective,
+          input.pluginId ?? null,
           input.maxAutoTurns,
           timestamp,
           timestamp,
@@ -3561,6 +3565,7 @@ export class SessionStore {
     const timestamp = now();
     const next = {
       objective: input.objective ?? current.objective,
+      pluginId: input.pluginId ?? current.pluginId,
       status: input.status ?? current.status,
       maxAutoTurns: input.maxAutoTurns ?? current.maxAutoTurns,
       autoTurnsUsed: input.autoTurnsUsed ?? current.autoTurnsUsed,
@@ -3587,7 +3592,7 @@ export class SessionStore {
     const result = this.database
       .prepare(
         `
-      UPDATE session_goal SET objective = ?, revision = ?, status = ?, max_auto_turns = ?,
+      UPDATE session_goal SET objective = ?, plugin_id = ?, revision = ?, status = ?, max_auto_turns = ?,
         auto_turns_used = ?, no_progress_count = ?, blocker_key = ?, current_run_id = ?, reason = ?,
         wait_json = ?, evidence_json = ?, last_assessment_json = ?, updated_at = ?
       WHERE id = ? AND revision = ?
@@ -3595,6 +3600,7 @@ export class SessionStore {
       )
       .run(
         next.objective,
+        next.pluginId ?? null,
         nextRevision,
         next.status,
         next.maxAutoTurns,

@@ -251,6 +251,7 @@ export const sessionGoals = sqliteTable(
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
     objective: text("objective").notNull(),
+    pluginId: text("plugin_id"),
     revision: integer("revision").notNull(),
     status: text("status").notNull(),
     maxAutoTurns: integer("max_auto_turns").notNull(),
