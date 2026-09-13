@@ -6,14 +6,7 @@ import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { classifyGoalCompletion, verifiedGoalEvidence } from "./goal-assessment-policy.js";
 import type { GoalWaitVerifier } from "./goal-wait-verifier.js";
-
-function hasGoalPluginCapability(
-  items: AdmitPromptInput["items"] | undefined,
-): boolean {
-  return items?.some((item) =>
-    item.type === "capability" || (item.type === "skill" && item.source === "plugin")
-  ) ?? false;
-}
+import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
 
 export class SessionGoalService {
   private readonly requests = new Map<string, { fingerprint: string; promise: Promise<SessionGoal> }>();
@@ -24,6 +17,7 @@ export class SessionGoalService {
       runEngine: Pick<SessionRunEngine, "persistGoalRun" | "dispatchPersistedRun" | "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
       events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
       waitVerifier?: Pick<GoalWaitVerifier, "check">;
+      pluginCapabilities: Pick<SessionPluginCapabilityService, "admit">;
     },
   ) {}
   private readonly waitTimers = new Map<string, { attempt: number; timer: ReturnType<typeof setTimeout> }>();
@@ -39,11 +33,6 @@ export class SessionGoalService {
     return request;
   }
   create(sessionId: string, input: CreateSessionGoalInput): Promise<SessionGoal> {
-    if (hasGoalPluginCapability(input.items)) {
-      return Promise.reject(
-        new SessionApplicationError(409, "session_goal_plugin_capability_unsupported"),
-      );
-    }
     return this.command(sessionId, input.requestId, { operation: "create", ...input }, async () => {
       const replay = await this.replay(input.requestId);
       if (replay) return replay;
@@ -57,14 +46,9 @@ export class SessionGoalService {
         return created;
       });
       return this.finishDispatch(input.requestId, goal);
-    });
+    }, () => this.assertGoalPluginCapabilityUnsupported(sessionId, input.items));
   }
   update(sessionId: string, goalId: string, input: UpdateSessionGoalInput): Promise<SessionGoal> {
-    if (hasGoalPluginCapability(input.items)) {
-      return Promise.reject(
-        new SessionApplicationError(409, "session_goal_plugin_capability_unsupported"),
-      );
-    }
     return this.command(sessionId, input.requestId, { operation: "update", goalId, ...input }, async () => {
       const replay = await this.replay(input.requestId);
       if (replay) return replay;
@@ -105,7 +89,7 @@ export class SessionGoalService {
         return goal;
       });
       return this.finishDispatch(input.requestId, updated);
-    });
+    }, () => this.assertGoalPluginCapabilityUnsupported(sessionId, input.items));
   }
   action(sessionId: string, goalId: string, input: GoalActionInput): Promise<SessionGoal> {
     return this.command(sessionId, input.requestId, { operation: "action", goalId, ...input }, async () => {
@@ -482,7 +466,13 @@ export class SessionGoalService {
     )
       throw new SessionApplicationError(409, "请先处理未决批准请求");
   }
-  private command(sessionId: string, requestId: string, payload: Record<string, unknown>, work: () => Promise<SessionGoal>): Promise<SessionGoal> {
+  private command(
+    sessionId: string,
+    requestId: string,
+    payload: Record<string, unknown>,
+    work: () => Promise<SessionGoal>,
+    preflight?: () => Promise<void>,
+  ): Promise<SessionGoal> {
     const fingerprint = JSON.stringify({ sessionId, ...payload });
     const pending = this.requests.get(requestId);
     if (pending) {
@@ -493,6 +483,7 @@ export class SessionGoalService {
       .withSessionOperation(sessionId, async () => {
         const before = this.context.events.checkpoint();
         try {
+          await preflight?.();
           this.context.store.beginGoalRequest({
             requestId,
             sessionId,
@@ -599,8 +590,26 @@ export class SessionGoalService {
     await this.context.runEngine.waitForRuns(ids);
     if (this.context.store.listRuns(goal.sessionId).some((run) => ids.includes(run.id) && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标尚未停止，请稍后重试");
   }
-  private requireSession(sessionId: string): void {
-    if (!this.context.store.getSession(sessionId)) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
+  private async assertGoalPluginCapabilityUnsupported(
+    sessionId: string,
+    items: AdmitPromptInput["items"] | undefined,
+  ): Promise<void> {
+    if (!items?.length) return;
+    if (items.some((item) => item.type === "capability")) {
+      throw new SessionApplicationError(409, "session_goal_plugin_capability_unsupported");
+    }
+    const admission = await this.context.pluginCapabilities.admit(
+      this.requireSession(sessionId),
+      items,
+    );
+    if (admission.pluginId) {
+      throw new SessionApplicationError(409, "session_goal_plugin_capability_unsupported");
+    }
+  }
+  private requireSession(sessionId: string): NonNullable<ReturnType<SessionStore["getSession"]>> {
+    const session = this.context.store.getSession(sessionId);
+    if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
+    return session;
   }
   private requireGoal(sessionId: string, goalId: string): SessionGoal {
     const goal = this.context.store.getGoal(goalId);

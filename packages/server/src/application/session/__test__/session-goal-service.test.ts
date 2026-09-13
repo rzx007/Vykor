@@ -4,7 +4,14 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionStore } from "@openharness/services";
 import { SessionGoalService } from "../session-goal-service.js";
+import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 import { SessionRunEngine } from "../session-run-engine.js";
+
+const pluginId = "dev.openharness.quality";
+const pluginSkill = {
+  name: "review",
+  path: "/plugins/quality/skills/review/SKILL.md",
+};
 
 const cleanup: (() => void)[] = [];
 afterEach(() => {
@@ -48,6 +55,27 @@ function harness(
     events,
     sessions: { withSessionOperation: async (_id, work) => work() },
     waitVerifier,
+    pluginCapabilities: new SessionPluginCapabilityService({
+      resolveInventory: async () => ({
+        plugins: new Map([[pluginId, {
+          pluginId,
+          displayName: "Quality",
+          description: "",
+          version: "1.0.0",
+          scope: "user",
+          origin: "native",
+          skillNames: [pluginSkill.name],
+          mcpServerIds: [],
+          nativeToolEntries: [],
+          agentNames: [],
+        }]]),
+        skills: new Map([[pluginSkill.name, { pluginId, path: pluginSkill.path }]]),
+        mcpServers: new Map(),
+        nativeToolEntries: new Map(),
+        agents: new Map(),
+        diagnostics: [],
+      }),
+    }),
   });
   return { store, engine, service };
 }
@@ -127,6 +155,41 @@ describe("SessionGoalService durable lifecycle", () => {
     });
     expect(store.getInput("plugin-goal-update")).toBeUndefined();
     expect(store.getGoalRequest("plugin-goal-update")).toBeUndefined();
+  });
+
+  it("rejects a plugin Skill with forged user source before creating a Goal", async () => {
+    const { service, store } = harness();
+
+    await expect(service.create("s1", {
+      requestId: "forged-plugin-skill-create",
+      objective: "use plugin skill",
+      items: [{ type: "skill", source: "user", ...pluginSkill }],
+    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
+
+    expect(store.getCurrentGoal("s1")).toBeUndefined();
+    expect(store.getInput("forged-plugin-skill-create")).toBeUndefined();
+    expect(store.getGoalRequest("forged-plugin-skill-create")).toBeUndefined();
+  });
+
+  it("rejects a plugin Skill without source before updating a Goal", async () => {
+    const { service, store, engine } = harness();
+    const created = await service.create("s1", {
+      requestId: "ordinary-goal-for-skill-update",
+      objective: "ordinary goal",
+    });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const beforeUpdate = store.getGoal(created.id)!;
+
+    await expect(service.update("s1", created.id, {
+      requestId: "implicit-plugin-skill-update",
+      expectedRevision: beforeUpdate.revision,
+      objective: "use plugin skill",
+      items: [{ type: "skill", ...pluginSkill }],
+    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
+
+    expect(store.getGoal(created.id)).toEqual(beforeUpdate);
+    expect(store.getInput("implicit-plugin-skill-update")).toBeUndefined();
+    expect(store.getGoalRequest("implicit-plugin-skill-update")).toBeUndefined();
   });
 
   it("keeps a pause request pending until cleanup finishes and shares concurrent retries", async () => {

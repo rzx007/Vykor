@@ -653,6 +653,14 @@ export class DaemonApplication implements DurableAgentApplication {
        * 3. 与其他服务交互（如控制服务、维护服务）
        * 4. 提供会话相关的查询和操作接口
        */
+      const pluginCapabilities = new SessionPluginCapabilityService({
+        resolveInventory: async (session) => {
+          const settings = await resolveSessionSettings(session.cwd);
+          if (!settings) throw new Error("session_plugin_capability_unavailable");
+          return (await discoverOpenHarnessExtensions(session.cwd, settings))
+            .pluginCapabilityInventory;
+        },
+      });
       this.sessions = new SessionApplicationService({
         store,
         runEngine: this.runEngine,
@@ -667,20 +675,14 @@ export class DaemonApplication implements DurableAgentApplication {
           if (!settings) throw new Error("session_input_skill_catalog_unavailable");
           return (await discoverOpenHarnessExtensions(session.cwd, settings)).skillRegistry;
         },
-        pluginCapabilities: new SessionPluginCapabilityService({
-          resolveInventory: async (session) => {
-            const settings = await resolveSessionSettings(session.cwd);
-            if (!settings) throw new Error("session_plugin_capability_unavailable");
-            return (await discoverOpenHarnessExtensions(session.cwd, settings))
-              .pluginCapabilityInventory;
-          },
-        }),
+        pluginCapabilities,
       });
       this.goals = new SessionGoalService({
         store,
         sessions: this.sessions,
         runEngine: this.runEngine,
         events: this.eventPublisher,
+        pluginCapabilities,
         waitVerifier: new GoalWaitVerifier({
           store,
           liveChildren: this.liveChildren,
