@@ -91,16 +91,23 @@ export async function activateNativePluginTools(
       }
       context.toolRegistry.register({
         ...definition,
-        execute: (input, toolContext) => guard.run(
-          definition.name,
-          definition.inputSchema,
-          input,
-          toolContext,
-          () => host.call(definition.name, input, {
-            cwd: toolContext.cwd || context.cwd,
-            ...(toolContext.sessionId ? { sessionId: toolContext.sessionId } : {}),
-          }, toolContext.abortSignal),
-        ),
+        execute: (input, toolContext) => {
+          const view = toolContext.capabilityView;
+          if (view && (view.pluginId !== plugin.manifest.id ||
+            view.tools.get(definition.name)?.ownerPluginId !== plugin.manifest.id)) {
+            return Promise.resolve({ isError: true, content: [{ type: "text" as const, text: "Native Tool is not available in this Run." }] });
+          }
+          return guard.run(
+            definition.name,
+            definition.inputSchema,
+            input,
+            toolContext,
+            () => host.call(definition.name, input, {
+              cwd: toolContext.cwd || context.cwd,
+              ...(toolContext.sessionId ? { sessionId: toolContext.sessionId } : {}),
+            }, toolContext.abortSignal),
+          );
+        },
       }, { kind: "plugin", id: plugin.manifest.id });
       toolNames.push(definition.name);
     }

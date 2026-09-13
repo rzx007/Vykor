@@ -484,6 +484,8 @@ export interface MemoryRetriever {
 }
 
 export interface QueryEngineOptions {
+  /** Host-provided prompt composed from the capabilities captured for this Run. */
+  systemPromptForRun?: (view: RunCapabilityView) => Promise<string>;
   maxTurns?: number;
   /** Runtime working directory used for all tool execution in this engine. */
   cwd?: string;

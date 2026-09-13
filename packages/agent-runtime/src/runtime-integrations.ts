@@ -140,12 +140,12 @@ export async function installRuntimeIntegrations(
       : undefined,
   );
 
-  const skills = options.discovery.skillRegistry.getAll().map((definition) => {
+  const skills = options.discovery.skillRegistry.getRunCandidates().map((definition) => {
     const owner = inventory.skills.get(definition.name);
     return {
       definition,
       path: definition.path,
-      ownerPluginId: owner?.path === definition.path ? owner.pluginId : undefined,
+      ownerPluginId: definition.source === "plugin" && owner?.path === definition.path ? owner.pluginId : undefined,
     };
   });
   const agents = [

@@ -1,11 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { IToolRegistry, ToolDefinition } from "@openharness/core";
+import { ToolRegistry, type IToolRegistry, type ToolDefinition } from "@openharness/core";
 import { loadNativePlugin, validateNativePlugin } from "@openharness/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { activateNativePluginTools } from "./activate.js";
 import { buildNativeToolHostEnvironment } from "./tool-host.js";
+import { createRunCapabilityView } from "../run-capability-view.js";
 
 const roots: string[] = [];
 
@@ -45,6 +46,25 @@ async function loadPlugin(root: string) {
 }
 
 describe("NativeToolHost", () => {
+  it("rejects a native plugin call outside its captured Run owner", async () => {
+    const plugin = await loadPlugin(writePlugin(`
+      export function registerTools() { return [{ name: "PrivateNative", description: "private native", inputSchema: {},
+        invoke() { return { content: [{ type: "text", text: "native secret" }] }; }
+      }]; }
+    `));
+    const registry = new ToolRegistry();
+    const cleanups: Array<() => Promise<void> | void> = [];
+    await activateNativePluginTools(plugin, { cwd: plugin.root, toolRegistry: registry, addCleanup: cleanup => cleanups.push(cleanup) });
+    try {
+      const sources = { toolRegistry: registry, pluginIds: new Set([plugin.manifest.id]) };
+      const definition = registry.get("PrivateNative")!;
+      const denied = await definition.execute({}, { cwd: plugin.root, capabilityView: createRunCapabilityView(sources) });
+      expect(denied.isError).toBe(true);
+      expect(JSON.stringify(denied)).not.toContain("native secret");
+      const allowed = await definition.execute({}, { cwd: plugin.root, capabilityView: createRunCapabilityView(sources, plugin.manifest.id) });
+      expect(allowed.content).toEqual([{ type: "text", text: "native secret" }]);
+    } finally { for (const cleanup of cleanups.reverse()) await cleanup(); }
+  });
   it("runs forked tool hosts in Node mode when the parent runtime is Electron", () => {
     expect(buildNativeToolHostEnvironment({ PATH: "D:/bin" }, "39.2.6")).toEqual({
       PATH: "D:/bin",

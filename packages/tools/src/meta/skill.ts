@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "@openharness/core";
-import type { SkillDefinition, SkillRegistry } from "@openharness/skills";
+import { SkillRegistry, type SkillDefinition } from "@openharness/skills";
 import { posix, win32 } from "node:path";
 
 type SkillRegistryInstance = InstanceType<typeof SkillRegistry>;
@@ -86,13 +86,19 @@ export const listSkillsTool: ToolDefinition = {
 };
 
 async function resolveSkillRegistry(
-  context: {
-    cwd: string;
-    skillRegistry?: unknown;
-    environment?: { workspace: { hostRoot: string } };
-  },
+  context: Parameters<ToolDefinition["execute"]>[1],
   options: { refreshFilesystem?: boolean } = {},
 ) {
+  if (context.capabilityView) {
+    const registry = new SkillRegistry();
+    for (const [name, binding] of context.capabilityView.skills) {
+      if (binding.definition.name !== name || binding.path !== binding.definition.path) continue;
+      if (binding.ownerPluginId !== undefined && binding.ownerPluginId !== context.capabilityView.pluginId) continue;
+      if (binding.definition.source === "plugin" && !binding.ownerPluginId) continue;
+      registry.register(binding.definition);
+    }
+    return registry;
+  }
   const sharedRegistry = context.skillRegistry as SkillRegistryInstance | undefined;
   if (sharedRegistry && !options.refreshFilesystem) return sharedRegistry;
 

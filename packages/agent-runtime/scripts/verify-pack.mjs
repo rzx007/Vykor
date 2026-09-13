@@ -67,7 +67,9 @@ try {
 
   writeFileSync(
     app,
-    `import {
+    `import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
   createAgentKernel,
   createBasicAgentKernelRuntime,
   createInProcessChildEnvironmentProvider,
@@ -77,6 +79,21 @@ const defaultEntry = await import("@openharness/agent-runtime");
 if (typeof defaultEntry.createDefaultNodeAgent !== "function") {
   throw new Error("packed default Node entry is unavailable");
 }
+
+const nativeEntry = resolve("packed-native-tool.mjs");
+writeFileSync(nativeEntry, 'export function registerTools() { return [{ name: "PackedNative", description: "pack check", inputSchema: {}, invoke() { return { content: [{ type: "text", text: "packed native result" }] }; } }]; }');
+const nativeHost = new defaultEntry.NativeToolHost({
+  manifest: { id: "dev.openharness.packed-test", name: "packed-test", version: "1.0.0" },
+  root: process.cwd(),
+  components: { tools: { value: [{ entryPath: nativeEntry, effectivePermissions: {} }] } },
+});
+try {
+  const definitions = await nativeHost.start();
+  if (!definitions.some((tool) => tool.name === "PackedNative")) throw new Error("packed Native Tool registration missing");
+  const result = await nativeHost.call("PackedNative", {}, { cwd: process.cwd() });
+  if (result.content?.[0]?.text !== "packed native result") throw new Error("packed Native Tool result missing");
+  console.log("packed Native Tool registration + invocation: ok");
+} finally { await nativeHost.stop(); }
 
 const settings = {
   model: "packed-fake-model",

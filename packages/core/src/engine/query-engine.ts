@@ -251,15 +251,15 @@ export class QueryEngine implements IQueryEngine {
    * streamMessage 调用，不写入 this.systemPrompt，也不进入 this.messages。
    * 注入风格参考 Python 的「# Relevant Memories」段（追加在 system 末尾）。
    */
-  private composeTurnSystemPrompt(memoryContext: string | null): string | undefined {
+  private composeTurnSystemPrompt(memoryContext: string | null, systemPrompt = this.systemPrompt): string | undefined {
     if (!memoryContext || !memoryContext.trim()) {
       this.lastMemoryReminderText = undefined;
-      return this.systemPrompt;
+      return systemPrompt;
     }
     const reminder = `<system-reminder>\n${memoryContext.trim()}\n</system-reminder>`;
     this.lastMemoryReminderText = reminder;
-    if (this.systemPrompt && this.systemPrompt.trim()) {
-      return `${this.systemPrompt}\n\n${reminder}`;
+    if (systemPrompt && systemPrompt.trim()) {
+      return `${systemPrompt}\n\n${reminder}`;
     }
     return reminder;
   }
@@ -292,7 +292,10 @@ export class QueryEngine implements IQueryEngine {
         // retriever failure is non-fatal; continue without memory context
       }
     }
-    const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext);
+    const runSystemPrompt = options.execution?.capabilityView && this.options.systemPromptForRun
+      ? await this.options.systemPromptForRun(options.execution.capabilityView)
+      : this.systemPrompt;
+    const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, runSystemPrompt);
     const contribution = options.execution?.contribution;
     const turnSystemPrompt = contribution?.systemGuidance
       ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)

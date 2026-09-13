@@ -63,6 +63,7 @@ export interface CreateSkillRegistrySnapshotOptions {
  */
 export class SkillRegistry {
   private skills = new Map<string, SkillDefinition>();
+  private nonPluginSkills = new Map<string, SkillDefinition>();
 
   /**
    * 注册一个技能定义到注册表中。
@@ -70,6 +71,7 @@ export class SkillRegistry {
    */
   register(skill: SkillDefinition): void {
     this.skills.set(skill.name, skill);
+    if (skill.source !== "plugin") this.nonPluginSkills.set(skill.name, skill);
   }
 
   /**
@@ -124,6 +126,16 @@ export class SkillRegistry {
     return [...this.skills.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /** Keep the ordinary winner even when a plugin overrides its name. */
+  getNonPluginSkills(): readonly SkillDefinition[] {
+    return [...this.nonPluginSkills.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Filter ownership before merging these layers into a Run's name winners. */
+  getRunCandidates(): readonly SkillDefinition[] {
+    return [...this.getNonPluginSkills(), ...this.getAll().filter((skill) => skill.source === "plugin")];
+  }
+
   /**
    * 检查指定名称的技能是否已注册。
    * @param name - 技能的名称。
@@ -139,6 +151,7 @@ export class SkillRegistry {
    */
   unregister(name: string): void {
     this.skills.delete(name);
+    this.nonPluginSkills.delete(name);
   }
 
   /**

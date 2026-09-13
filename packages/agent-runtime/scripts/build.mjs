@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { cp, mkdir } from "node:fs/promises";
+import { cp } from "node:fs/promises";
 
 const shared = {
   bundle: true,
@@ -28,5 +28,5 @@ await Promise.all([
   }),
 ]);
 
-await mkdir("dist/native-tools", { recursive: true });
-await cp("src/native-tools/host-entry.mjs", "dist/native-tools/host-entry.mjs");
+// Bundling moves NativeToolHost's import.meta.url beside dist/index.js.
+await cp("src/native-tools/host-entry.mjs", "dist/host-entry.mjs");

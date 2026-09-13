@@ -1,4 +1,4 @@
-import type { Settings } from "@openharness/core";
+import type { RunCapabilityView, Settings } from "@openharness/core";
 import {
   QueryEngine,
   RuntimeBuilder,
@@ -209,12 +209,9 @@ export async function createOpenHarnessRuntime(
   });
   const runtimeModel = resolveRuntimeModel(settings, configuration);
 
-  // 自定义 prompt（CLI override）优先，跳过默认 prompt 构建。只在走默认 prompt
-  // 时才注入 model 可见的 skills 段，使 print/backend 三模式与 REPL 一致——REPL
-  // 由 refreshSystemPrompt 注入，print/backend 走默认 composition root 由此处注入。
-  const systemPrompt =
-    configuration.systemPrompt ??
-    (await buildRuntimeSystemPrompt({
+  // 自定义 prompt 优先。默认提示仅列普通 Skill；有 Run View 时按该次范围重建摘要。
+  const buildSystemPrompt = (skillsList: Array<{ name: string; description: string }> | undefined) =>
+    buildRuntimeSystemPrompt({
       customPrompt: settings.systemPrompt,
       cwd: hostCwd,
       environmentInfo: options.executionEnvironment?.info,
@@ -225,8 +222,11 @@ export async function createOpenHarnessRuntime(
       passes: settings.passes,
       includeBackgroundShell,
       includeDelegation,
-      skillsList: options.skillRegistry?.modelVisibleList(),
-    }));
+      skillsList,
+    });
+  const systemPrompt = configuration.systemPrompt ?? await buildSystemPrompt(
+    options.skillRegistry?.getNonPluginSkills().filter((skill) => !skill.disableModelInvocation),
+  );
 
   const engineOptions = {
     maxTurns: configuration.maxTurns ?? settings.maxTurns,
@@ -237,6 +237,11 @@ export async function createOpenHarnessRuntime(
     settings,
     executionEnvironment: options.executionEnvironment,
     skillRegistry: options.skillRegistry,
+    ...(configuration.systemPrompt === undefined ? {
+      systemPromptForRun: (view: RunCapabilityView) => buildSystemPrompt(
+        [...view.skills.values()].map((binding) => binding.definition).filter((skill) => !skill.disableModelInvocation),
+      ),
+    } : {}),
   };
 
   const queryEngine = new QueryEngine(
