@@ -132,7 +132,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
       capabilityView: this.options.capabilityView,
       ...(this.options.goal ? { contribution: createGoalRunContribution(this.options.goal) } : {}),
       effects: this.options.effects,
-      children: this.options.children.createController(scope),
+      children: this.options.children.createController(scope, this.options.capabilityView),
       emit: (event) => this.emit(event),
       takeSteeredInputs: (options) => this.takeSteeredInputs(options),
       closeSteering: () => {

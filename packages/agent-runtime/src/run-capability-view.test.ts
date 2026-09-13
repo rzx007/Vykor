@@ -38,7 +38,9 @@ describe("run capability execution boundary", () => {
       name: "runtime-reviewer", description: "review", model: "runtime-model", systemPrompt: "captured role",
     }] }));
     const spawned: unknown[] = [];
-    const view = createRunCapabilityView({ toolRegistry: registry });
+    const view = createRunCapabilityView({ toolRegistry: registry, agents: [{ definition: {
+      name: "runtime-reviewer", description: "review", model: "runtime-model", systemPrompt: "captured role",
+    } }] });
     const events = await executeCapturedTool(registry, view, "Agent",
       { description: "review", prompt: "review", subagentType: "runtime-reviewer" }, {
         spawnChildAgent: async (input: unknown) => {

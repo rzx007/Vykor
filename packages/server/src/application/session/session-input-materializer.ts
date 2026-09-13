@@ -26,6 +26,7 @@ export interface MaterializedSessionInput {
   skills: SessionInputCatalogSkill[];
   instruction: string;
   conversations: Array<{ id: string; title: string; summary: string }>;
+  agents?: string[];
 }
 
 /**
@@ -44,6 +45,7 @@ export function materializeSessionInput(
   const paths = new Set<string>();
   const conversations: Array<{ id: string; title: string; summary: string }> = [];
   const conversationIds = new Set<string>();
+  const agents = [...new Set(items.flatMap((item) => item.type === "capability" && item.kind === "plugin_agent" ? [item.agentId] : []))];
 
   for (const item of items) {
     if (item.type === "context") {
@@ -65,11 +67,12 @@ export function materializeSessionInput(
     skills.push(catalogSkill);
   }
 
-  const prefix = [skillInstructionPrefix(skills), conversationInstructionPrefix(conversations)].filter(Boolean).join("\n\n");
+  const prefix = [skillInstructionPrefix(skills), conversationInstructionPrefix(conversations), agentInstructionPrefix(agents)].filter(Boolean).join("\n\n");
   return {
     text,
     skills,
     conversations,
+    agents,
     instruction: prefix ? `${prefix}\n\n用户输入：\n${text}` : text,
   };
 }
@@ -91,10 +94,11 @@ export function applyMaterializedSessionInput(
   content: string | ContentBlock[],
   materialized: MaterializedSessionInput,
 ): string | ContentBlock[] {
-  if (materialized.skills.length === 0 && materialized.conversations.length === 0) return content;
+  if (materialized.skills.length === 0 && materialized.conversations.length === 0 && !materialized.agents?.length) return content;
   const prefix = [
     skillInstructionPrefix(materialized.skills),
     conversationInstructionPrefix(materialized.conversations),
+    agentInstructionPrefix(materialized.agents ?? []),
   ].filter(Boolean).join("\n\n");
   if (typeof content === "string") return `${prefix}\n\n用户输入：\n${content}`;
   const textIndex = content.findIndex((block) => block.type === "text");
@@ -113,5 +117,13 @@ function skillInstructionPrefix(skills: readonly SessionInputCatalogSkill[]): st
   return [
     "用户显式选择了以下技能，请按出现顺序使用 Skill 工具的 { name, path } 加载并遵循：",
     ...skills.map((skill, index) => `${index + 1}. ${skill.name} (path: ${skill.path})`),
+  ].join("\n");
+}
+
+function agentInstructionPrefix(agents: readonly string[]): string {
+  if (agents.length === 0) return "";
+  return [
+    "用户选择了以下 Agent，请通过 Agent 工具委派用户任务（补充 description 和 prompt），使用 JobWait/JobRead 获取子任务结果后，由你给出最终回复：",
+    ...agents.map((name) => JSON.stringify({ subagentType: name })),
   ].join("\n");
 }

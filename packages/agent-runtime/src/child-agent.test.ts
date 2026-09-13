@@ -4,8 +4,45 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AgentChildManager, AgentChildRegistry } from "./child-agent.js";
 import { AgentEventBus } from "./event-source.js";
+import { createRunCapabilityView } from "./run-capability-view.js";
+import { ToolRegistry } from "@openharness/core";
 
 describe("AgentChildManager", () => {
+  it("announces a failed child when its environment cannot be created", async () => {
+    const events: any[] = [];
+    const bus = new AgentEventBus((event) => { events.push(event); });
+    const manager = createManager(bus, async () => fakeAgent(vi.fn()), undefined, undefined, false, {}, async () => { throw new Error("environment unavailable"); });
+    await expect(manager.createController(parentScope()).spawnChildAgent({ description: "d", prompt: "p", agent: "worker", cwd: "/other" })).rejects.toThrow("environment unavailable");
+    expect(events.map((event) => event.type)).toEqual(["child.created", "child.closed"]);
+    expect(events[1].data.result).toMatchObject({ status: "failed", error: "environment unavailable" });
+    expect(manager.list()).toEqual([]);
+    expect(manager.getBudgetSnapshot().activeChildren).toBe(0);
+  });
+
+  it("submits every child run with its inherited view after changing cwd, without attachments", async () => {
+    const bus = new AgentEventBus();
+    const emitted: any[] = [];
+    bus.subscribe((event) => { emitted.push(event); });
+    const submitted: any[] = [];
+    const manager = createManager(bus, async () => fakeAgent((content: unknown, options: unknown) => {
+      submitted.push({ content, options });
+      return completedRun("done");
+    }));
+    const parent = createRunCapabilityView({ toolRegistry: new ToolRegistry() });
+    const controller = manager.createController(parentScope(), parent);
+    const child = await controller.spawnChildAgent({ description: "d", prompt: "task only", agent: "worker", cwd: "/other" });
+    await child.result;
+    await controller.sendChildInput(child.id, { content: "follow up" });
+    expect(submitted.map(({ content }) => content)).toEqual(["task only", "follow up"]);
+    for (const { options } of submitted) {
+      expect(options.capabilityView?.tools.size).toBe(0);
+      expect(options.capabilityView?.agents.size).toBe(0);
+      expect(options.inputItems).toBeUndefined();
+    }
+    expect(emitted.find((event) => event.type === "child.created").data.spawn.capabilityView).toBeUndefined();
+    await manager.closeAll();
+  });
+
   it("lends the original host overrides and effects to a child session without cleaning them up", async () => {
     const readText = vi.fn(async (_input, context) => ({
       text: context.sessionId,

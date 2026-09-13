@@ -109,6 +109,7 @@ export interface AgentChildSpawnInput {
   systemPrompt?: string;
   permissionMode?: "default" | "plan" | "full_auto";
   allowedTools?: string[];
+  requiredMcpServers?: string[];
   disallowedTools?: string[];
   maxTurns?: number;
   effort?: string;

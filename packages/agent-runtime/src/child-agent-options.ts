@@ -1,4 +1,5 @@
-import type { AgentChildSpawnInput, Settings } from "@openharness/core";
+import type { AgentChildSpawnInput, RunCapabilityView, Settings } from "@openharness/core";
+import { readonlyMap } from "./run-capability-view.js";
 
 import type { OpenHarnessAgentOptions } from "./agent.js";
 import type {
@@ -63,4 +64,28 @@ function mergeToolLists(
 ): string[] | undefined {
   const merged = [...(inherited ?? []), ...(child ?? [])];
   return merged.length > 0 ? [...new Set(merged)] : undefined;
+}
+
+/** Keep the parent's captured bindings, even when the child discovers a different cwd. */
+export function deriveChildCapabilityView(
+  parent: RunCapabilityView | undefined,
+  child: AgentChildSpawnInput,
+): RunCapabilityView | undefined {
+  if (!parent) return undefined;
+  const serverIds = new Set<string>();
+  for (const required of child.requiredMcpServers ?? []) {
+    const matches = [...parent.mcpServers.values()].filter((server) => server.serverId === required || server.serverName === required);
+    if (matches.length !== 1) throw new Error(`MCP dependency is ${matches.length ? "ambiguous" : "outside parent run"}: ${required}`);
+    serverIds.add(matches[0]!.serverId);
+  }
+  const permits = (name: string) =>
+    (!child.allowedTools || child.allowedTools.includes("*") || child.allowedTools.includes(name)) &&
+    !child.disallowedTools?.includes("*") && !child.disallowedTools?.includes(name);
+  const mcpServers = child.requiredMcpServers === undefined ? parent.mcpServers
+    : readonlyMap([...parent.mcpServers].filter(([id]) => serverIds.has(id)));
+  return Object.freeze({
+    ...parent,
+    tools: readonlyMap([...parent.tools].filter(([name, binding]) => permits(name) && (!binding.serverId || mcpServers.has(binding.serverId)))),
+    mcpServers,
+  });
 }

@@ -56,7 +56,13 @@ export const agentTool: ToolDefinition = {
     }
 
     const subagentType = (input.subagentType as string | undefined) ?? "worker";
-    const agentDef = getAgentDefinition(subagentType, scopedAgentDefinitions.get(this));
+    const view = context.capabilityView ?? context.agent?.capabilityView;
+    const agentDef = view
+      ? view.agents.get(subagentType)?.definition
+      : getAgentDefinition(subagentType, scopedAgentDefinitions.get(this));
+    if (view && !agentDef) {
+      return { content: [{ type: "text", text: `Agent is not available in this run: ${subagentType}` }], isError: true };
+    }
     const team = (input.team as string) ?? "default";
 
     try {
@@ -73,6 +79,7 @@ export const agentTool: ToolDefinition = {
         permissionMode: (permissionMode ?? agentDef?.permissionMode) as "default" | "plan" | "full_auto" | undefined,
         isolate: input.isolate === true,
         allowedTools: agentDef?.tools,
+        requiredMcpServers: agentDef?.requiredMcpServers,
         disallowedTools: agentDef?.disallowedTools,
         maxTurns: agentDef?.maxTurns,
         effort: agentDef?.effort != null ? String(agentDef.effort) : undefined,

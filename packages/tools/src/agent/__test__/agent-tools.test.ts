@@ -52,6 +52,22 @@ function createAgentContext(
 }
 
 describe("agentTool framework child controller", () => {
+  it("uses only the run-bound agent definition and ignores model supplied capabilities", async () => {
+    const { agent, calls } = createAgentContext();
+    const capabilityView = {
+      agents: new Map([["plugin:review", { ownerPluginId: "plugin", definition: {
+        name: "plugin:review", description: "Review", systemPrompt: "Child-only instructions",
+        tools: ["Read"], requiredMcpServers: ["plugin:docs"],
+      } }]]), tools: new Map(), skills: new Map(), mcpServers: new Map(),
+    };
+    const result = await agentTool.execute({ description: "review", prompt: "inspect", subagentType: "plugin:review", capabilityView: {} }, { cwd: "/work", agent, capabilityView });
+    expect(result.isError).not.toBe(true);
+    expect(calls[0]).toMatchObject({ systemPrompt: "Child-only instructions", allowedTools: ["Read"], requiredMcpServers: ["plugin:docs"] });
+    const denied = await agentTool.execute({ description: "d", prompt: "p", subagentType: "worker" }, { cwd: "/work", agent, capabilityView });
+    expect(denied.isError).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
   it("declares isolate in inputSchema", () => {
     const props = (agentTool.inputSchema as { properties: Record<string, unknown> }).properties;
     expect(props.isolate).toBeDefined();

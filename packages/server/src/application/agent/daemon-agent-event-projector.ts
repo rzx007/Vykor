@@ -30,6 +30,9 @@ interface ChildProjectionState {
   childId: string;
   sessionId: string;
   parentSessionId: string;
+  parentRunId?: string;
+  prompt: string;
+  runId?: string;
   taskId: string;
   bridge: SessionChildExecutionBridge;
 }
@@ -249,7 +252,7 @@ export class DaemonAgentEventProjector {
       if (registered.id !== taskId) throw new Error(`Child task identity conflict: ${registered.id}/${taskId}`);
     }
     this.context.liveChildren.register(sessionId, childId, this.context.rootAgent);
-    this.children.set(childId, { childId, sessionId, parentSessionId: parent.id, taskId, bridge });
+    this.children.set(childId, { childId, sessionId, parentSessionId: parent.id, parentRunId: event.context.runId, prompt: spawn.prompt, taskId, bridge });
   }
 
   private async projectChildClosed(event: Extract<AgentEvent, { type: "child.closed" }>): Promise<void> {
@@ -410,7 +413,10 @@ export class DaemonAgentEventProjector {
   private async bindChildTaskRun(event: AgentEvent, runId: string): Promise<void> {
     if (!event.context.childId) return;
     const child = this.children.get(event.context.childId);
-    if (child) await child.bridge.bindChildExecutionRun(child.taskId, runId);
+    if (child) {
+      child.runId = runId;
+      await child.bridge.bindChildExecutionRun(child.taskId, runId);
+    }
   }
 
   private projectStream(event: AgentEvent, stream: StreamEvent): void {
@@ -762,6 +768,25 @@ export class DaemonAgentEventProjector {
   ): Promise<void> {
     this.context.liveChildren.unregister(event.data.sessionId, event.data.childId);
     if (state) {
+      if (!state.runId && event.data.result.status === "failed") {
+        const inputId = `input_startup_${state.childId}`;
+        const runId = `run_startup_${state.childId}`;
+        const before = this.context.events.checkpoint();
+        this.context.store.transaction(() => {
+          if (!this.context.store.getInput(inputId)) this.context.store.admitPrompt({
+            id: inputId, sessionId: state.sessionId, delivery: "queue",
+            items: [{ type: "text", text: state.prompt }],
+          });
+          if (!this.context.store.getRun(runId)) this.context.store.createRun({
+            id: runId, sessionId: state.sessionId, inputId,
+            metadata: { parentRunId: state.parentRunId },
+          });
+          this.context.store.updateRun(runId, { status: "failed", error: event.data.result.error ?? event.data.result.output });
+        });
+        this.context.events.publishSince(before);
+        await state.bridge.bindChildExecutionRun(state.taskId, runId);
+        state.runId = runId;
+      }
       const task = this.context.store.getSessionTask(state.taskId);
       if (task && (task.status === "pending" || task.status === "running")) {
         await state.bridge.completeChildExecution(state.taskId, event.data.result);

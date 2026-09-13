@@ -54,7 +54,7 @@ function frozenCopy<T>(value: T): T {
 }
 
 /** Object.freeze(Map) still permits set/delete; expose only read operations. */
-function readonlyMap<T>(entries: Iterable<readonly [string, T]>): ReadonlyMap<string, T> {
+export function readonlyMap<T>(entries: Iterable<readonly [string, T]>): ReadonlyMap<string, T> {
   const inner = new Map(entries);
   const view: ReadonlyMap<string, T> = Object.freeze({
     size: inner.size,

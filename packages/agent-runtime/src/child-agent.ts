@@ -14,6 +14,7 @@ import type {
   AgentInputReceipt,
   AgentRunHandle,
   AgentRunScope,
+  RunCapabilityView,
   Settings,
 } from "@openharness/core";
 import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@openharness/core";
@@ -30,7 +31,7 @@ import {
   type AgentChildEnvironmentProvider,
 } from "./child-environment.js";
 import type { AgentEventBus } from "./event-source.js";
-import { deriveChildAgentOptions } from "./child-agent-options.js";
+import { deriveChildAgentOptions, deriveChildCapabilityView } from "./child-agent-options.js";
 
 export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./child-environment.js";
 
@@ -40,6 +41,7 @@ interface ChildRecord {
   cwd: string;
   spawn: AgentChildSpawnInput;
   parentScope: AgentRunScope;
+  capabilityView?: RunCapabilityView;
   lease: AgentChildEnvironmentLease;
   createAgent(): Promise<OpenHarnessAgent>;
   agent?: OpenHarnessAgent;
@@ -212,10 +214,10 @@ export class AgentChildManager implements AgentChildDirectory {
     return this.options.cwd;
   }
 
-  createController(parentScope: AgentRunScope): AgentChildController {
+  createController(parentScope: AgentRunScope, parentView?: RunCapabilityView): AgentChildController {
     return {
       hasChildAgent: (childId) => this.find(childId) !== undefined,
-      spawnChildAgent: (input) => this.spawn(parentScope, input),
+      spawnChildAgent: (input) => this.spawn(parentScope, input, parentView),
       sendChildInput: (childId, input) => this.send(childId, input),
       interruptChildAgent: (childId, reason) => this.interrupt(childId, reason),
       awaitChildAgent: (childId) => this.awaitResult(childId),
@@ -254,7 +256,7 @@ export class AgentChildManager implements AgentChildDirectory {
     throwFailures(failures, "Child agent cleanup failed");
   }
 
-  private async spawn(parentScope: AgentRunScope, input: AgentChildSpawnInput): Promise<AgentChildInvocation> {
+  private async spawn(parentScope: AgentRunScope, input: AgentChildSpawnInput, parentView?: RunCapabilityView): Promise<AgentChildInvocation> {
     const childId = `child_${randomUUID()}`;
     const sessionId = input.sessionId ?? `agent_session_${randomUUID()}`;
     if (this.directory.getBySessionId(sessionId)) {
@@ -277,11 +279,13 @@ export class AgentChildManager implements AgentChildDirectory {
       throw error;
     }
     let lease: AgentChildEnvironmentLease;
+    let environmentFailure: { error: unknown } | undefined;
     try {
       lease = await this.environment.acquire(input, childId);
     } catch (error) {
-      budgetReservation.rollback();
-      throw error;
+      environmentFailure = { error };
+      // Announce the failed attempt so the host can persist a failed Child Run.
+      lease = { cwd: input.cwd, release: async () => {} };
     }
     const record = {} as ChildRecord;
     const handle = new ChildHandle(this, () => record);
@@ -328,6 +332,8 @@ export class AgentChildManager implements AgentChildDirectory {
         },
       });
       announced = true;
+      if (environmentFailure) throw environmentFailure.error;
+      record.capabilityView = deriveChildCapabilityView(parentView, input);
       await this.ensureAgent(record, false);
       const parentAbortHandler = () => {
         void this.interrupt(childId, "Parent run interrupted").catch(() => {});
@@ -453,6 +459,7 @@ export class AgentChildManager implements AgentChildDirectory {
       traceId: input.traceId ?? randomUUID(),
     };
     const run = agent.submitMessage(input.content, {
+      capabilityView: record.capabilityView,
       ids,
       inputItems: input.inputItems,
       signal: controller.signal,

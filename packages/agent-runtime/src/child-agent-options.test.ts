@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveChildAgentOptions } from "./child-agent-options.js";
+import { deriveChildAgentOptions, deriveChildCapabilityView } from "./child-agent-options.js";
+import { ToolRegistry } from "@openharness/core";
+import { createRunCapabilityView } from "./run-capability-view.js";
 
 const addedTool = {
   name: "BusinessSearch",
@@ -16,6 +18,25 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it("intersects tools and MCP dependencies with the parent view without rediscovery", () => {
+    const registry = new ToolRegistry();
+    for (const name of ["Read", "Write", "mcp__docs__search", "mcp__other__search"]) {
+      registry.register({ ...addedTool, name }, name.startsWith("mcp__") ? { kind: "mcp", id: name.includes("other") ? "other" : "docs" } : undefined);
+    }
+    const parent = createRunCapabilityView({ toolRegistry: registry, mcpServers: [
+      { serverId: "plugin:docs", serverName: "docs", definition: { command: "docs" } },
+      { serverId: "baseline:other", serverName: "other", definition: { command: "other" } },
+    ] });
+    const child = { description: "d", prompt: "p", agent: "review", cwd: "/other", allowedTools: ["Read", "mcp__docs__search", "mcp__other__search", "NewTool"], requiredMcpServers: ["docs"] };
+    const view = deriveChildCapabilityView(parent, child)!;
+    expect([...view.tools.keys()]).toEqual(["Read", "mcp__docs__search"]);
+    expect([...view.mcpServers.keys()]).toEqual(["plugin:docs"]);
+    expect(view.tools.get("Read")).toBe(parent.tools.get("Read"));
+    expect((view.tools as any).set).toBeUndefined();
+    expect(() => deriveChildCapabilityView(parent, { ...child, requiredMcpServers: ["outside"] })).toThrow(/outside/);
+    const ambiguous = { ...parent, mcpServers: new Map([...parent.mcpServers, ["another:docs", { serverId: "another:docs", serverName: "docs", definition: { command: "x" } }]]) };
+    expect(() => deriveChildCapabilityView(ambiguous, child)).toThrow(/ambiguous/i);
+  });
   it("preserves the host boundary while applying child role overrides", () => {
     const settings = { model: "settings-model" } as any;
     const capabilityOverrides = { memory: false } as const;

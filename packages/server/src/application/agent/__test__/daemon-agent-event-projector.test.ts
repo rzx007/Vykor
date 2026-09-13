@@ -4,6 +4,48 @@ import { describe, expect, it, vi } from "vitest";
 import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
 
 describe("DaemonAgentEventProjector", () => {
+  it("records a failed child startup run without ending the root run", async () => {
+    const sessions = new Map<string, any>([["parent", { id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } } }]]);
+    const inputs = new Map<string, any>();
+    const runs = new Map<string, any>([["root-run", { id: "root-run", sessionId: "parent", status: "running" }]]);
+    let task: any;
+    const projector = new DaemonAgentEventProjector({
+      store: {
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+        getSessionTask: () => task,
+        getInput: (id: string) => inputs.get(id),
+        admitPrompt: (input: any) => { const row = { ...input, content: input.items.map((item: any) => item.text).join("") }; inputs.set(input.id, row); return row; },
+        getRun: (id: string) => runs.get(id),
+        createRun: (input: any) => { runs.set(input.id, input); return input; },
+        updateRun: (id: string, patch: any) => Object.assign(runs.get(id), patch),
+        appendEvent: () => {},
+        transaction: (work: () => unknown) => work(),
+      } as any,
+      rootAgent: {} as any, transcriptProjection: {} as any,
+      executionProjector: { createBridge: () => ({
+        registerChildExecution: (input: any) => { task = { ...input, status: "pending" }; return task; },
+        bindChildExecutionRun: async (_id: string, runId: string) => { task.runId = runId; },
+        completeChildExecution: async (_id: string, result: any) => Object.assign(task, result),
+      }) } as any,
+      liveChildren: { register: () => {}, unregister: () => {} },
+      events: { checkpoint: () => 0, publish: () => {}, publishSince: () => {} }, log: () => {},
+    });
+    await projector.apply(event("child.created", {
+      childId: "child", sessionId: "child-session", cwd: "/repo",
+      spawn: { description: "review", prompt: "inspect", agent: "plugin:review", cwd: "/repo" },
+    }, { sessionId: "parent", runId: "root-run", childId: "child" }));
+    await projector.apply(event("child.closed", {
+      childId: "child", sessionId: "child-session", result: { status: "failed", output: "creation failed", error: "creation failed" },
+    }, { sessionId: "parent", runId: "root-run", childId: "child" }));
+    expect([...runs.values()].filter((run) => run.sessionId === "child-session")).toEqual([
+      expect.objectContaining({ status: "failed", error: "creation failed", metadata: expect.objectContaining({ parentRunId: "root-run" }) }),
+    ]);
+    expect([...inputs.values()]).toEqual([expect.objectContaining({ sessionId: "child-session", content: "inspect" })]);
+    expect(runs.get("root-run").status).toBe("running");
+    expect(task.status).toBe("failed");
+  });
+
   it("accepts only assessments bound to the current nonterminal session run", async () => {
     const run = {
       id: "r1",

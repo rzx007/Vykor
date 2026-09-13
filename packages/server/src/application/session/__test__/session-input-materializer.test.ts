@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   materializeSessionInput,
+  applyMaterializedSessionInput,
   type SessionInputSkillCatalog,
 } from "../session-input-materializer.js";
 
@@ -15,6 +16,18 @@ const catalog: SessionInputSkillCatalog = {
 };
 
 describe("materializeSessionInput", () => {
+  it("routes a selected plugin agent through the root Agent tool and preserves attachments", () => {
+    const materialized = materializeSessionInput([
+      { type: "capability", kind: "plugin_agent", pluginId: "plugin", agentId: "plugin:review", displayName: "Review" },
+      { type: "text", text: "Review this" },
+    ], catalog);
+    expect(materialized.instruction).toContain('"subagentType":"plugin:review"');
+    expect(materialized.instruction).toContain("Agent");
+    expect(materialized.instruction).toContain("JobWait");
+    const image = { type: "image" as const, source: { type: "base64" as const, media_type: "image/png", data: "a" } };
+    const applied = applyMaterializedSessionInput([image], materialized);
+    expect(applied).toEqual([{ type: "text", text: expect.stringContaining("Agent") }, image]);
+  });
   it("does not wrap ordinary input in a Skill instruction", () => {
     expect(materializeSessionInput([{ type: "text", text: "plain follow up" }], catalog).instruction)
       .toBe("plain follow up");
