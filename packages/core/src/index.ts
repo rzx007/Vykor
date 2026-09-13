@@ -86,6 +86,11 @@ export type { UsageSnapshot, CostTracker as ICostTracker } from "./types/usage";
 
 export type {
   QueryEngine as IQueryEngine,
+  RunCapabilityView,
+  RunToolBinding,
+  RunSkillBinding,
+  RunMcpServerBinding,
+  RunAgentBinding,
   QueryEngineOptions,
   MemoryRetriever,
   AgentChildController,

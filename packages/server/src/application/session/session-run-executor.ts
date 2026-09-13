@@ -147,6 +147,9 @@ export class SessionRunExecutor {
       agentTouched = true;
       const agent = await this.context.agentPool.acquireSession(sessionId);
       agent.setModel(readSessionRuntimeConfig(session).model);
+      const pluginId = typeof storedRun?.metadata?.pluginId === "string" ? storedRun.metadata.pluginId : undefined;
+      const capabilityView = agent.createRunCapabilityView?.(pluginId);
+      if (pluginId && !capabilityView) throw new Error("Plugin capability view is unavailable");
 
       let submittedContent: string | ContentBlock[] = materialized?.text ?? admitted.content;
       if (admitted.attachments.length > 0) {
@@ -211,6 +214,7 @@ export class SessionRunExecutor {
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
       const run = agent.submitMessage(submittedContent, {
+        ...(capabilityView ? { capabilityView } : {}),
         ...(goalBinding ? { goal: goalBinding } : {}),
         inputItems: admitted.items,
         signal: workContext.signal,

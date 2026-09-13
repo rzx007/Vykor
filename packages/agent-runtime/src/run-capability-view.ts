@@ -1,0 +1,65 @@
+import type { IToolRegistry, RunAgentBinding, RunCapabilityView, RunMcpServerBinding, RunSkillBinding, RunToolBinding } from "@openharness/core";
+
+export interface RunCapabilitySources {
+  toolRegistry: IToolRegistry;
+  pluginIds?: ReadonlySet<string>;
+  skills?: readonly RunSkillBinding[];
+  agents?: readonly RunAgentBinding[];
+  mcpServers?: readonly RunMcpServerBinding[];
+}
+
+export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?: string): RunCapabilityView {
+  if (pluginId !== undefined && !sources.pluginIds?.has(pluginId)) {
+    throw new Error(`Plugin is not available in this runtime: ${pluginId}`);
+  }
+  const visible = (binding: { ownerPluginId?: string }) =>
+    binding.ownerPluginId === undefined || binding.ownerPluginId === pluginId;
+  const visibleDefinition = (binding: RunSkillBinding | RunAgentBinding) =>
+    !(binding.definition.source === "plugin" && !binding.ownerPluginId) && visible(binding);
+  const servers = sources.mcpServers ?? [];
+  const byServerName = new Map(servers.map((server) => [server.serverName, server]));
+  const tools: Array<[string, RunToolBinding]> = [];
+  for (const definition of sources.toolRegistry.getAll()) {
+    const source = sources.toolRegistry.inspect(definition.name)?.source;
+    const server = source?.kind === "mcp" && source.id ? byServerName.get(source.id) : undefined;
+    const ownerPluginId = source?.kind === "plugin" ? source.id : server?.ownerPluginId;
+    // A plugin registration without its owner cannot become a baseline capability.
+    if (source?.kind === "plugin" && !ownerPluginId) continue;
+    if (!visible({ ownerPluginId })) continue;
+    tools.push([definition.name, frozenCopy({
+      ownerPluginId, definition, source, serverId: server?.serverId, invoke: definition.execute,
+    })]);
+  }
+  return Object.freeze({
+    pluginId,
+    tools: readonlyMap(tools),
+    skills: readonlyMap((sources.skills ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
+    agents: readonlyMap((sources.agents ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
+    mcpServers: readonlyMap(servers.filter(visible).map((binding) => [binding.serverId, frozenCopy(binding)])),
+  });
+}
+
+function frozenCopy<T>(value: T): T {
+  if (Array.isArray(value)) return Object.freeze(value.map(frozenCopy)) as T;
+  if (value && typeof value === "object") {
+    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [key, frozenCopy(item)]))) as T;
+  }
+  return value;
+}
+
+/** Object.freeze(Map) still permits set/delete; expose only read operations. */
+function readonlyMap<T>(entries: Iterable<readonly [string, T]>): ReadonlyMap<string, T> {
+  const inner = new Map(entries);
+  const view: ReadonlyMap<string, T> = Object.freeze({
+    size: inner.size,
+    get: (key: string) => inner.get(key),
+    has: (key: string) => inner.has(key),
+    keys: () => inner.keys(),
+    values: () => inner.values(),
+    entries: () => inner.entries(),
+    [Symbol.iterator]: () => inner[Symbol.iterator](),
+    forEach: (callback: (value: T, key: string, map: ReadonlyMap<string, T>) => void, thisArg?: unknown) =>
+      inner.forEach((value, key) => callback.call(thisArg, value, key, view)),
+  });
+  return view;
+}

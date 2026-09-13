@@ -9,6 +9,7 @@ import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
 import { createGoalRunContribution } from "./goal-extension.js";
 
 interface FrameworkAgentRunOptions {
+  capabilityView?: AgentExecutionContext["capabilityView"];
   goal?: { goalId: string; revision: number; objective?: string };
   agentId: string;
   session: AgentSession;
@@ -128,6 +129,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
     };
     const execution: AgentExecutionContext = {
       scope,
+      capabilityView: this.options.capabilityView,
       ...(this.options.goal ? { contribution: createGoalRunContribution(this.options.goal) } : {}),
       effects: this.options.effects,
       children: this.options.children.createController(scope),

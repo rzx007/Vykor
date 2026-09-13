@@ -10,6 +10,7 @@ export {
   type OpenHarnessAgentSubmitOptions,
 } from "./agent.js";
 export { createDefaultNodeAgent } from "./default-agent.js";
+export { createRunCapabilityView, type RunCapabilitySources } from "./run-capability-view.js";
 export { createCompactContextProvider, type CompactContextSources } from "./compact-context.js";
 export type {
   AgentCapabilityOverrides,

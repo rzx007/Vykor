@@ -297,7 +297,7 @@ export class QueryEngine implements IQueryEngine {
     const turnSystemPrompt = contribution?.systemGuidance
       ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
       : baseSystemPrompt;
-    const runToolRegistry = this.runToolRegistry(contribution);
+    const runToolRegistry = this.runToolRegistry(contribution, options.execution?.capabilityView);
     const internalTools = new Set(
       contribution?.tools
         ?.filter((item) => item.permission === "host-internal")
@@ -813,6 +813,7 @@ export class QueryEngine implements IQueryEngine {
             runAbortSignal: signal,
             settings: this.options.settings,
             toolRegistry: this.toolRegistryView(toolRegistry),
+            capabilityView: execution?.capabilityView,
             skillRegistry: this.skillRegistry,
             mcpManager: this.mcpManager,
             mcpAuth: this.mcpAuth,
@@ -968,8 +969,24 @@ export class QueryEngine implements IQueryEngine {
     };
   }
 
-  private runToolRegistry(contribution: AgentExecutionContext["contribution"]): IToolRegistry {
-    const base = this.visibleToolRegistry();
+  private runToolRegistry(
+    contribution: AgentExecutionContext["contribution"],
+    view?: AgentExecutionContext["capabilityView"],
+  ): IToolRegistry {
+    const captured = view && new Map([...view.tools].map(([name, binding]) => [
+      name, { ...binding.definition, execute: binding.invoke },
+    ]));
+    const base: IToolRegistry = captured ? {
+      register: () => { throw new Error("Run capability view is immutable"); },
+      override: () => { throw new Error("Run capability view is immutable"); },
+      get: (name) => captured.get(name),
+      getAll: () => [...captured.values()],
+      has: (name) => captured.has(name),
+      inspect: (name) => {
+        const binding = view!.tools.get(name);
+        return binding ? { name, source: binding.source ?? { kind: "runtime" } } : undefined;
+      },
+    } : this.visibleToolRegistry();
     const contributed = contribution?.tools ?? [];
     if (contributed.length === 0) return base;
     const additions = new Map<string, ToolDefinition>();

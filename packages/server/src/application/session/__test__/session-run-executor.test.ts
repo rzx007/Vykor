@@ -1,10 +1,42 @@
 import type { AgentRunHandle } from "@openharness/core";
 import type { AgentCapabilitySnapshot } from "@openharness/agent-runtime";
+import { createRunCapabilityView } from "@openharness/agent-runtime";
+import { ToolRegistry } from "@openharness/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { SessionRunExecutor } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it("builds from the warm runtime using the durable Run owner and passes its captured bindings", async () => {
+    const store = createStore({ metadata: { pluginId: "forged-input-owner" } });
+    Object.assign(store.getRun(), { metadata: { pluginId: "selected" } });
+    const registry = new ToolRegistry();
+    registry.register({ name: "Selected", description: "selected", inputSchema: {}, execute: async () => ({ content: [] }) },
+      { kind: "plugin", id: "selected" });
+    const observed: string[][] = [];
+    const executor = new SessionRunExecutor({
+      store: store as any,
+      agentPool: {
+        configured: true,
+        acquireSession: async () => ({
+          setModel: () => {},
+          createRunCapabilityView: (pluginId?: string) => createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["selected"]) }, pluginId),
+          submitMessage: (_content: unknown, options: any) => {
+            observed.push([options.capabilityView?.pluginId, ...options.capabilityView?.tools.keys() ?? []]);
+            return completedHandle();
+          },
+        }),
+        close: async () => {}, closeIfStale: async () => {},
+      } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(observed).toEqual([["selected", "Selected"]]);
+  });
+
   it("submits admitted identities and registers the live run handle", async () => {
     const handle = completedHandle();
     const submitMessage = vi.fn(() => handle);

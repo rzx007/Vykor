@@ -1,5 +1,6 @@
 import type { McpServerConfig, RuntimeBundle, Settings } from "@openharness/core";
 import { McpClientManager } from "@openharness/mcp";
+import { getAllAgentDefinitions } from "@openharness/coordinator";
 import { appendUserProfileUpdate } from "@openharness/prompts";
 import type { ExecutionEnvironmentHandle } from "@openharness/environment";
 
@@ -15,6 +16,7 @@ import type { AgentMemoryRuntime } from "./memory-runtime.js";
 import { createMcpAuthHost } from "./mcp-auth.js";
 import { createRememberTool } from "./remember-tool.js";
 import { getInternalToolRegistry } from "./default-runtime.js";
+import { createRunCapabilityView } from "./run-capability-view.js";
 
 export interface InstallRuntimeIntegrationsOptions {
   cwd: string;
@@ -129,6 +131,39 @@ export async function installRuntimeIntegrations(
       ? (userInput) => memory.retrieve(userInput)
       : undefined,
   );
+
+  const inventory = options.discovery.pluginCapabilityInventory;
+  const skills = options.discovery.skillRegistry.getAll().map((definition) => {
+    const owner = inventory.skills.get(definition.name);
+    return {
+      definition,
+      path: definition.path,
+      ownerPluginId: owner?.path === definition.path ? owner.pluginId : undefined,
+    };
+  });
+  const agents = [
+    ...getAllAgentDefinitions([]).map((definition) => ({ definition })),
+    ...options.discovery.agentDefinitions.map((definition) => ({
+      definition,
+      ownerPluginId: inventory.agents.get(definition.name)?.pluginId,
+    })),
+  ];
+  const serverOwners = new Map([...inventory.mcpServers].map(([id, owner]) => [owner.serverName, { id, ...owner }]));
+  const servers = Object.entries(mcpServers).map(([serverName, definition]) => {
+    const pluginServer = serverOwners.get(serverName);
+    // Explicit host configuration wins over a plugin server with the same name.
+    const hostOwned = options.mcpServers !== undefined || options.settings.mcpServers?.[serverName] !== undefined;
+    return {
+      definition, serverName,
+      serverId: !hostOwned && pluginServer ? pluginServer.id : `mcp:${serverName}`,
+      ownerPluginId: !hostOwned ? pluginServer?.pluginId : undefined,
+    };
+  });
+  runtime.createRunCapabilityView = (pluginId) => createRunCapabilityView({
+    toolRegistry: runtime.toolRegistry,
+    pluginIds: new Set(inventory.plugins.keys()),
+    skills, agents, mcpServers: servers,
+  }, pluginId);
 
   return () => mcpManager.getConnections();
 }

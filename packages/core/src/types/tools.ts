@@ -39,6 +39,8 @@ export interface AgentBackgroundShellHost {
 
 export interface ToolContext {
   cwd: string;
+  /** Complete frozen capability selection for the owning Run. */
+  capabilityView?: import("./runtime").RunCapabilityView;
   /** Effective execution environment. Runtime-owned contexts always provide it. */
   environment?: ExecutionEnvironmentHandle;
   sessionId?: string;

@@ -323,9 +323,84 @@ export interface AgentRunContribution {
   readonly tools?: readonly AgentRunToolContribution[];
 }
 
+/** Objects captured from the host's already-filtered runtime for one Run. */
+export interface RunToolBinding {
+  readonly ownerPluginId?: string;
+  readonly definition: import("./tools").ToolDefinition;
+  readonly source?: import("./tools").ToolRegistrationSource;
+  readonly serverId?: string;
+  readonly invoke: import("./tools").ToolDefinition["execute"];
+}
+
+export interface RunSkillBinding {
+  readonly ownerPluginId?: string;
+  readonly path: string;
+  readonly definition: {
+    readonly name: string;
+    readonly description: string;
+    readonly content: string;
+    readonly path: string;
+    readonly source?: "bundled" | "user" | "project" | "plugin";
+    readonly metadata?: Record<string, unknown>;
+    readonly userInvocable: boolean;
+    readonly disableModelInvocation: boolean;
+    readonly model?: string;
+    readonly argumentHint?: string;
+    readonly commandName?: string;
+    readonly displayName?: string;
+  };
+}
+
+export interface RunAgentBinding {
+  readonly ownerPluginId?: string;
+  readonly definition: {
+    name: string;
+    description: string;
+    systemPrompt?: string;
+    tools?: string[];
+    disallowedTools?: string[];
+    model?: string;
+    effort?: string | number;
+    permissionMode?: string;
+    maxTurns?: number;
+    skills?: string[];
+    mcpServers?: unknown[];
+    hooks?: Record<string, unknown>;
+    color?: string;
+    background?: boolean;
+    initialPrompt?: string;
+    memory?: string;
+    isolation?: string;
+    omitClaudeMd?: boolean;
+    criticalSystemReminder?: string;
+    requiredMcpServers?: string[];
+    filename?: string;
+    baseDir?: string;
+    source?: "builtin" | "user" | "plugin";
+    subagentType?: string;
+    permissions?: string[];
+  };
+}
+
+export interface RunMcpServerBinding {
+  readonly ownerPluginId?: string;
+  readonly serverId: string;
+  readonly serverName: string;
+  readonly definition: import("./settings").McpServerConfig;
+}
+
+export interface RunCapabilityView {
+  readonly pluginId?: string;
+  readonly tools: ReadonlyMap<string, RunToolBinding>;
+  readonly skills: ReadonlyMap<string, RunSkillBinding>;
+  readonly mcpServers: ReadonlyMap<string, RunMcpServerBinding>;
+  readonly agents: ReadonlyMap<string, RunAgentBinding>;
+}
+
 /** Framework-internal execution capabilities shared with tool packages. */
 export interface AgentExecutionContext {
   readonly scope: AgentRunScope;
+  readonly capabilityView?: RunCapabilityView;
   /** Trusted, run-scoped capabilities supplied by the host. */
   readonly contribution?: AgentRunContribution;
   readonly effects: AgentEffects;
@@ -448,6 +523,8 @@ export class RuntimeBundle {
   private cleanupCallbacks: Array<() => Promise<void> | void> = [];
   private syncCleanupCallbacks: Array<() => void> = [];
   sandboxStatus?: RuntimeSandboxStatus;
+  /** Factory installed by the runtime host; never reloads components from disk. */
+  createRunCapabilityView?: (pluginId?: string) => RunCapabilityView;
 
   constructor(
     public settings: Settings,

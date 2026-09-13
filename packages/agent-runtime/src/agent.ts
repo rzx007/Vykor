@@ -14,6 +14,7 @@ import type {
   HookDefinition,
   Message,
   RuntimeBundle,
+  RunCapabilityView,
   Settings,
   ToolDescriptor,
   ToolRegistrationSource,
@@ -22,6 +23,7 @@ import type {
 import type { McpConnection } from "@openharness/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
+import { createRunCapabilityView } from "./run-capability-view.js";
 import {
   AgentOperationConflictError,
   type OpenHarnessAgentState,
@@ -72,6 +74,7 @@ export interface OpenHarnessAgentOptions extends OpenHarnessAgentConfiguration {
 }
 
 export interface OpenHarnessAgentSubmitOptions {
+  capabilityView?: RunCapabilityView;
   goal?: { goalId: string; revision: number; objective?: string };
   signal?: AbortSignal;
   inputItems?: readonly unknown[];
@@ -125,6 +128,7 @@ export interface OpenHarnessAgent {
   readonly id: string;
   readonly state: OpenHarnessAgentState;
   readonly children: AgentChildDirectory;
+  createRunCapabilityView(pluginId?: string): RunCapabilityView;
   /** Subscribe to ordered observations. Observer failures never fail agent execution. */
   subscribe(listener: AgentEventListener): AgentEventSubscription;
   submitMessage(
@@ -217,6 +221,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
       delivery: options.delivery ?? "queue",
       metadata: options.metadata,
       goal: options.goal,
+      capabilityView: options.capabilityView ?? this.createRunCapabilityView(),
       onSettled: (result, toolActivity) => {
         if (this.activeRun !== run) return;
         if (result && toolActivity)
@@ -228,6 +233,11 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
     this.activeRun = run;
     this.lifecycleState = "running";
     return run;
+  }
+
+  createRunCapabilityView(pluginId?: string): RunCapabilityView {
+    return this.runtime.createRunCapabilityView?.(pluginId)
+      ?? createRunCapabilityView({ toolRegistry: this.runtime.toolRegistry }, pluginId);
   }
 
   async runMessage(
