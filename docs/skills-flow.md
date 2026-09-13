@@ -1,149 +1,159 @@
-# 归档：Skills 加载与调用流程（E.5）
+# Skills 加载与调用流程
 
-> 状态：历史设计记录。本文描述 daemon 化之前的 REPL/BackendHost skills 接线；REPL 行为可作参考，但不能据此推导 TUI/Web/Desktop 的 session API。当前跨端状态同步见 [client-sync-flow.md](./client-sync-flow.md)。
+> 状态：当前 Skill 发现、可见性、用户显式选择和模型按需调用的总览。结构化 Skill prompt 的执行细节见 [Skill Prompt Flow](./skill-prompt-flow.md)，斜杠命令分流见 [Slash Command Flow](./slash-commands-flow.md)。
 
-skill 是一段带 frontmatter 的 Markdown「方法论/提示词」。它有**两条调用路径**：
-**用户**输入 `/<skill>` 斜杠命令触发，或 **模型**通过 `Skill` 工具按需拉取。本文讲
-skill 从哪加载、怎么进 system prompt、两条路径分别怎么跑。
+Skill 是带 frontmatter 的 Markdown 方法论或提示词。运行时先把多来源 Skill 合并进一个 `SkillRegistry`，再提供给两类消费者：
 
-## 涉及的模块
+1. 用户从 `/` 或 `$` 菜单显式选择有文件路径的 Skill，客户端提交结构化 Skill item；
+2. 模型根据 system prompt 中的可用清单，自行调用 `Skill` 工具按需读取。
+
+两条路径最终都由原生 `Skill` 工具读取正文；客户端、command catalog 和 system prompt 都不展开 `SKILL.md`。
+
+## 涉及模块
 
 | 组件 | 文件 | 职责 |
-|------|------|------|
-| `SkillRegistry` / `SkillLoader` | `packages/skills/src/index.ts` | 注册表、`parseSkillMarkdown`（frontmatter）、`registerBundled` / `loadFromDirectory`、`modelVisibleList()` |
-| `BUNDLED_SKILLS` | `packages/skills/src/bundled.ts` | 内置 skill（commit/review/test/plan/debug/create-skill，TS 内嵌） |
-| 三源加载 | `apps/cli/src/commands/main.ts` `loadSkillsThreeSources` | bundled → user → project，同名覆盖 |
-| `/<skill>` 拦截 | `apps/cli/src/commands/main.ts` `matchUserInvocableSkill` / `buildSkillPrompt` | 用户斜杠路径：匹配 user-invocable skill → 注入内容跑一轮 |
-| 命令目录 | `apps/cli/src/commands/main.ts` `buildSlashCommandList` | 当时将 user-invocable skill 显示为 `/<name>` |
-| model 可见性 | `runtime.ts`（bootstrap）+ `main.ts`（refreshSystemPrompt） | `modelVisibleList()` → system prompt 的 skills 段 |
-| `Skill` 工具 | `packages/tools/src/meta/skill.ts` | 模型路径：按名取 skill 内容 |
-| system prompt | `packages/prompts/src/index.ts` `buildRuntimeSystemPrompt(skillsList)` | 把 model 可见 skill 列给模型 |
+| --- | --- | --- |
+| 输入协议 | `packages/protocol/src/session-input-items.ts` | 定义、校验和规范化 text/skill/mention/context items |
+| Skill registry 与标准目录 | `packages/skills/src/index.ts` | frontmatter 解析、标准目录、按名称/路径解析、可见性和覆盖关系 |
+| 扩展发现 | `packages/agent-runtime/src/extensions.ts` | 发现 bundled、用户、项目和 plugin 扩展，组装 registry |
+| Command catalog | `packages/server/src/commands/default-command-catalog.ts` | 把 `userInvocable` Skill 暴露为 `kind="template"` |
+| Desktop picker | `apps/desktop/src/renderer/src/components/desktop/conversation-page/composer/` | `/`、`$` 过滤与结构化 Skill 引用 |
+| TUI template 提交 | `apps/frontend/src/hooks/useServerSync.ts` | 把 `/<skill> args` 转成 Skill + text items |
+| 输入 materializer | `packages/server/src/application/session/session-input-materializer.ts` | 校验 catalog 引用并生成本轮 Skill 工具调用要求 |
+| 原生工具 | `packages/tools/src/meta/skill.ts` | `Skill` 精确加载和 `ListSkills` 列举 |
+| Runtime prompt | `packages/prompts/src/index.ts` | 向模型列出可见 Skill 的名称与描述 |
 
-## 整体模型（三来源 → 一注册表 → 两消费者）
+## 整体模型
 
-```
-┌──────────────── 加载（三来源，bundled < user < project，同名覆盖） ────────────────────────────────────────┐
-│  registerBundled()      loadFromDirectory(getSkillsDir())   findProjectSkillDirs(cwd)                      │
-│  内置 bundled(TS 内嵌) <  ~/.openharness-ts/skills(用户)   <  git-root→cwd 每层 .openharness-ts/skills          │
-│  source:"bundled"       source:"user"                        + .claude/skills（cwd 层最高优先）             │
-└───────────────────────────────────────────────────┬──────────────────────────────────────────────────────┘
-                                        ▼
-                              ┌────────────────────┐
-                              │   SkillRegistry    │  每个 SkillDefinition:
-                              │  (name → 定义)     │  name/description/content +
-                              └─────────┬──────────┘  userInvocable/disableModelInvocation/
-                                        │             model/argumentHint
-                        ┌───────────────┴────────────────┐
-                        ▼                                ▼
-        ┌──────────────────────────┐      ┌──────────────────────────────────┐
-        │ 用户路径（斜杠命令）      │      │ 模型路径（Skill 工具）            │
-        │                          │      │                                  │
-        │ /<skill> [args]          │      │ system prompt 列出               │
-        │  → matchUserInvocableSkill│      │  modelVisibleList()（排除         │
-        │  → buildSkillPrompt       │      │  disableModelInvocation）         │
-        │  → submitMessage 跑一轮   │      │  → 模型调 Skill{name} 取 content  │
-        └──────────────────────────┘      └──────────────────────────────────┘
-        条件：userInvocable=true            条件：disableModelInvocation=false
-              且不撞内置命令                       （否则模型看不到名字）
-```
+```mermaid
+flowchart TD
+  bundled[BundledSkills]
+  global[StandardGlobalDirs]
+  user[OpenHarnessUserDir]
+  project[ProjectDirs]
+  plugin[NativePlugins]
+  registry[SkillRegistry]
+  catalog[CommandCatalog]
+  picker[Desktop或TUI]
+  items[StructuredItems]
+  materializer[SessionInputMaterializer]
+  modelList[AvailableSkillsPrompt]
+  agent[Agent]
+  skillTool[SkillTool]
 
-**两个开关的语义**（frontmatter）：
-
-| `userInvocable` | `disableModelInvocation` | 谁能调 |
-|---|---|---|
-| true（默认） | false（默认） | 用户 `/<skill>` + 模型 `Skill` 工具 |
-| true | **true** | 只有用户 `/<skill>`（模型看不到，"我的手动按钮"）|
-| false | — | 不做斜杠命令（内部/纯模型用）|
-
-## 调用方式速查（`/skills` 是「看」，`/<skill>` 是「用」）
-
-| 命令 | 动作 | 说明 |
-|------|------|------|
-| `/skills` | **列出**所有 skill | 已有命令 |
-| `/skills <name>` | **查看**某 skill 的内容（只读，**不跑**） | 已有命令 |
-| `/<skill> [args]` | **执行** skill（注入内容**跑一轮**） | E.5 新增；仅 `userInvocable` 且不撞内置命令的可用 |
-| `/commit`、`/plan` | 走**内置命令**（git-commit / plan-mode），**不是** skill | 撞名 → 内置优先 |
-
-- 内置 5 个里：`/review`、`/test`、`/debug` 可直接 `/<skill>` 执行；`/commit`、`/plan`
-  被同名内置命令遮蔽（用户入口走内置，模型仍可经 `Skill` 工具用这两个 skill）。
-- 模型不输入斜杠——它走的是下面「模型路径」，按需调 `Skill` 工具。
-
-## 用户路径：`/<skill>` 跑一轮
-
-```
-用户输入：/review src/foo.ts
-         │
-         ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 1 · 拦截（在内置命令之前）                            │
-│ REPL processLine / backend submit_line：                  │
-│   matchUserInvocableSkill("/review src/foo.ts", registry, │
-│                           isBuiltinCommand)               │
-│   ├─ cmdName="/review" 是内置命令? → 是则放回内置(优先)    │
-│   ├─ "review" 命中 userInvocable skill? → 命中            │
-│   └─ 返回 { skill, args:"src/foo.ts" }                     │
-└──────────────────────────┬───────────────────────────────┘
-                           │ 命中
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 2 · 构造 prompt                                      │
-│ buildSkillPrompt(skill, args) =                           │
-│   skill.content + "\n\n## Arguments\nsrc/foo.ts"          │
-└──────────────────────────┬───────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 3 · 跑一轮（与普通输入同路径）                       │
-│ queryEngine.submitMessage(prompt) → 流式渲染              │
-│   REPL：EventRenderer 渲染到 stdout                       │
-│   backend：processLineForHost emit 事件(transcript/delta) │
-│   busy 标志/错误处理与普通消息一致                        │
-└──────────────────────────────────────────────────────────┘
+  bundled --> registry
+  global --> registry
+  user --> registry
+  project --> registry
+  plugin --> registry
+  registry --> catalog --> picker --> items --> materializer --> agent
+  registry --> modelList --> agent
+  agent --> skillTool --> registry
 ```
 
-**未命中**（不是 user-invocable skill、或撞了内置命令）→ 落回原斜杠命令路由
-（command registry），不会吞命令。
+同名 Skill 由 registry 的加载顺序决定当前赢家；项目中越接近 cwd 的目录优先级越高。Native Plugin 的 Skill 也进入同一个 registry，不建立第二套加载器。按 `path` 解析时只允许命中当前 registry 中的赢家。
 
-## 模型路径：`Skill` 工具
+## Frontmatter 与可见性
 
+常用字段：
+
+| 字段 | 默认值 | 作用 |
+| --- | ---: | --- |
+| `name` | 必填 | 稳定 Skill 名称，也是模型按名称加载的键 |
+| `description` | 必填 | 菜单和 Available Skills 清单中的说明 |
+| `user-invocable` | `true` | 是否进入用户 `/`、`$` Skill 目录 |
+| `disable-model-invocation` | `false` | 是否从模型可见清单中排除 |
+| `command-name` | `name` | 用户斜杠菜单中的命令名 |
+| `display-name` | 派生名称 | UI 展示快照 |
+| `argument-hint` | 无 | 菜单中的参数提示 |
+
+两个开关相互独立：
+
+| `userInvocable` | `disableModelInvocation` | 用户菜单 | 模型可见清单 |
+| --- | --- | --- | --- |
+| `true` | `false` | 有 | 有 |
+| `true` | `true` | 有 | 无 |
+| `false` | `false` | 无 | 有 |
+| `false` | `true` | 无 | 无 |
+
+`disableModelInvocation` 控制主动发现，不把 Skill 正文注入 system prompt。用户显式选中的 Skill 即使对模型隐藏，仍通过结构化 item 明确要求模型调用工具。
+
+内嵌 bundled Skill 当前没有文件 path。Desktop 会过滤这类 template，TUI 即使提交也无法通过执行前的 path 校验，因此 bundled 当前只应视为模型按名称调用的能力；`userInvocable` 元数据不等于它已经具备可用的结构化用户入口。
+
+## 用户显式选择路径
+
+### Desktop
+
+1. Desktop 用当前项目 cwd 请求 `GET /commands?cwd=...`。
+2. `kind="template"` 的条目进入 Skill picker；条目包含 `skillName`、catalog `path`、说明和来源。
+3. 用户从 `/` 或 `$` 选择后，编辑器插入 `SkillMentionNode`，不立即发送。
+4. 发送时，composer document 按原顺序序列化为 `SessionUserInputItem[]`。
+5. `sendPrompt({ items })` 进入普通 session prompt API。
+
+同一个 Skill 可以出现多次；编辑器保留每次出现和原始顺序。服务端生成加载列表时按规范化路径去重。
+
+### TUI
+
+1. `parseSlashLine()` 解析 `/<skill> [args]`。
+2. 本地 UI 和 shared session command 均未处理后，查 command catalog。
+3. 命中 `kind="template"` 时，立即提交一个 Skill item，参数作为后续 text item。
+4. 未知 slash 失败关闭，不作为普通 prompt 发送。
+
+Builtin session command 与 Skill command 重名时，builtin 胜出。例如 `/commit` 走 git session 命令，不作为 template；模型仍可通过 `Skill` 工具加载同名 Skill。
+
+### 服务端执行
+
+daemon 持久化 items，并在 run 执行前用当前 session cwd 的 registry 校验每个 `{ name, path }`。materializer 只生成工具调用要求，不读取正文。模型随后调用：
+
+```ts
+Skill({ name: "archify", path: "D:/skills/archify/SKILL.md" })
 ```
-bootstrap / refreshSystemPrompt
-   │  skillsList = skillRegistry.modelVisibleList()
-   │  （排除 disableModelInvocation 的）
-   ▼
-system prompt 的 "Available Skills" 段（REPL / print / backend 三模式一致）
-   │
-   ▼
-模型看到 skill 列表 → 需要时调 Skill{ name:"debug" }
-   │
-   ▼
-Skill 工具返回 skill.content → 模型据此行事
+
+完整 admission、校验、附件组合、transcript 和终态见 [Skill Prompt Flow](./skill-prompt-flow.md)。
+
+## 模型按需调用路径
+
+Runtime system prompt 只列出允许模型发现的 Skill 名称与描述。模型认为某项 Skill 适用时，可以只按名称调用：
+
+```ts
+Skill({ name: "debug" })
 ```
 
-> 注：之前 skills **从未进 system prompt**（参数存在但无人传）；E.5 把
-> `modelVisibleList()` 接进三模式，模型才第一次「知道有哪些 skill」。
+原生工具在调用时刷新文件系统 registry。没有 `path` 时按名称取得当前赢家；有 `path` 时，该路径必须解析到同一个按名称赢家，否则返回 `Skill not found`。
 
-## 关键点
+成功结果包含：
 
-- **三源优先级**：`bundled < user < project`，按加载顺序 `register` 覆盖（后者赢）。project 层内部，`git-root` 层 < `cwd` 层（`findProjectSkillDirs` 以 root→cwd 顺序返回，cwd 最后加载故最高优先）。
-- **内置命令优先**：`/<skill>` 撞内置斜杠命令时内置赢——内置 `commit`/`plan` 因此遮蔽了
-  同名 bundled skill 的**用户**入口（仍可被模型经 Skill 工具使用）；`review`/`test`/`debug`
-  不撞名、可正常 `/<skill>` 调用。与 Python 一致。
-- **两开关正交**：`userInvocable`（管用户斜杠）与 `disableModelInvocation`（管模型可见）独立。
-- **model 可见性三模式一致**：REPL 走 refreshSystemPrompt，print/backend 走 bootstrap，
-  都用 `modelVisibleList()`。
-- **bundled 用 TS 内嵌**而非 .md 文件：避免 bun-built 后运行时找文件路径的脆弱；
-  user/project skills 仍是 `SKILL.md` 文件（经 `parseSkillMarkdown`）。
+```text
+Skill: archify
+Skill file: D:/skills/archify/SKILL.md
+Skill root: D:/skills/archify
 
-## 留待后续
+Resolve relative paths mentioned by this skill against Skill root.
 
-- **每命令 model 覆盖**（frontmatter `model` 暂未让 `/<skill>` 切模型）。
-- `command_name`/`display_name` 完整路由；skill-creator / diagnose 等重工作流 skill。
+<skill-content>
+...
+</skill-content>
+```
 
-## 已完成的增强（E.5 尾巴）
+Skill 引用的 `scripts/`、`references/`、`assets/` 等相对路径以 `Skill root` 为基准。执行环境无法挂载该路径时，工具会明确提示 supporting files unavailable，而不是把宿主路径当作可直接读取的运行时路径。
 
-- ✅ **git-root 向上逐级遍历**：`findProjectSkillDirs(cwd)` 从 cwd 走到 `.git` 根，每层收
-  `.openharness-ts/skills` 和 `.claude/skills`，以 root→cwd 顺序返回（cwd 层优先级最高）。
-  `loadSkillsThreeSources` 已改用此函数，替代原来只加载 `join(cwd, ...)` 单层的实现。
-- ✅ **路径穿越防护**：`discoverMarkdownFiles` 对每个 entry 用 `path.resolve + path.sep`
-  校验绝对路径必须位于 `dirPath` 之内，防止 symlink 或含 `..` 的文件名逃逸到目录外。
+## `/skills`、`ListSkills` 与 `Skill`
+
+| 入口 | 做什么 | 是否读取正文 |
+| --- | --- | --- |
+| `/skills` | 共享 session 命令，列出或查看 Skill | 查看单项时可以读取 |
+| `ListSkills` 工具 | 按 `model`、`user` 或 `all` 可见性列目录 | 否 |
+| `Skill` 工具 | 按 name 和可选 path 加载当前定义 | 是 |
+| `/<skill> args` | 用户显式提交结构化 Skill prompt | catalog 不读；工具执行时读 |
+
+## 安全与一致性
+
+- 客户端路径是 catalog 引用，不是文件读取授权；daemon 和 `Skill` 工具都会重新验证。
+- catalog、materializer 和工具使用同一套 registry 发现规则，避免选择与执行解析到不同定义。
+- 用户消息保存 `metadata.items` 作为展示依据，但 UI 不显示绝对路径和 Skill 正文。
+- Skill 正文不进入 command catalog、用户 prompt 存储或 system prompt，只存在于原生工具结果。
+- 文件系统 Skill 在工具调用时刷新，因此执行使用当前内容，不承诺选择时的历史快照。
+
+## 历史演进
+
+daemon 化前，REPL 曾在匹配 `/<skill>` 后把 `skill.content` 直接拼进 prompt。2026-08-31 的中间版本改用单数 metadata；2026-09-10 起统一为可保序、可包含多个 Skill 的 `SessionUserInputItem[]`。旧 REPL/BackendHost 和单数 metadata 均不是当前协议。

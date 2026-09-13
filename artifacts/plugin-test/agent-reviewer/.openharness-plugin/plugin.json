@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "example.agent-reviewer",
+  "name": "agent-reviewer",
+  "displayName": "Agent Reviewer Test",
+  "version": "1.0.0",
+  "description": "A minimal Native Plugin that contributes one delegatable reviewer agent.",
+  "components": {
+    "agents": ["./agents"]
+  },
+  "permissions": {},
+  "runtime": {
+    "engine": "node",
+    "isolation": "process"
+  }
+}

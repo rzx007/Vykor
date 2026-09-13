@@ -10,7 +10,7 @@
 
 1. 先命中 **client-local UI**（会话切换、主题、权限弹层等）。
 2. 再命中 **session/resource 命令**（catalog + HTTP 资源 API，呈现文案由共享模块生成）。
-3. 再命中 **template/skill**（普通 prompt + `metadata.skillInvocation` → 正常 admit/run → 原生 Skill 工具加载）。
+3. 再命中 **template/skill**（普通 prompt 的结构化 `items` → 正常 admit/run → 原生 Skill 工具加载）。
 4. 未知 `/...` **失败关闭**，不得当普通用户消息发给模型。
 
 长期约束：
@@ -40,8 +40,8 @@
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  OpenHarnessClient.admitPrompt                                   │
-│  · content 只放用户任务                                           │
-│  · metadata.skillInvocation 标记指定的 Skill                      │
+│  · items 保留 Skill 引用与用户任务的原始顺序                       │
+│  · Skill item 携带 catalog 的 name/path，不携带正文                │
 │  → run executor 生成显式调用要求 → Agent 原生 Skill 工具加载       │
 └────────────────────────────┬────────────────────────────────────┘
                              │
@@ -60,11 +60,11 @@
 ## 涉及模块
 
 | 组件 | 路径 | 职责 |
-|------|------|------|
+| --- | --- | --- |
 | Builtin catalog | `packages/server/src/commands/commands.ts` | `BUILTIN_SESSION_COMMANDS` + `mergeCommandCatalog` |
 | HTTP routes | `packages/server/src/http/server.ts` | `/commands` 发现接口、Session prompt、Jobs/后台 shell 等资源 API |
 | Default catalog | `packages/server/src/commands/default-command-catalog.ts` | cwd 下 skill/plugin templates 与 builtin catalog |
-| Skill invocation bridge | `packages/server/src/application/session/session-input-materializer.ts` | 校验结构化 Skill 输入，并在执行前生成“先调用 Skill 工具”的 Agent 输入 |
+| Skill input materializer | `packages/server/src/application/session/session-input-materializer.ts` | 校验结构化 Skill 输入，并在执行前生成“先调用 Skill 工具”的 Agent 输入 |
 | Native Skill tool | `packages/tools/src/meta/skill.ts` | 按注册表读取实际 `SKILL.md`，返回 Skill 文件、根目录和正文 |
 | Application services | `packages/server/src/application/default-application-services.ts` | settings/memory/git/plugins 等命令依赖 |
 | Shared dispatch | `packages/client/src/commands/session-commands.ts` | 呈现层 + 资源 API 调用 |
@@ -100,8 +100,10 @@
 
   catalogEntry.kind === "template"
       → client.admitPrompt(sessionId, {
-          content: args,
-          metadata: { skillInvocation: { name, commandName, displayName, source, invocationSource: "slash" } }
+          items: [
+            { type: "skill", name: skillName, path, displayName?, source? },
+            ...(args ? [{ type: "text", text: ` ${args}` }] : [])
+          ]
         })
       → setSubmittedRun
 
@@ -110,10 +112,10 @@
       → 不 admitPrompt
 
   普通文本
-      → client.admitPrompt(sessionId, { content: line })
+      → client.admitPrompt(sessionId, { items: [{ type: "text", text: line }] })
 ```
 
-Web/Desktop 应复用同一语义：session 命令仍由宿主或共享 dispatcher 处理；Skill 则统一提交普通 prompt 和结构化 metadata。Desktop 消息列表根据 metadata 显示 Skill 胶囊，不显示 `SKILL.md` 正文。
+Web/Desktop 应复用同一语义：session 命令仍由宿主或共享 dispatcher 处理；Skill 则统一提交普通 prompt 和结构化 items。Desktop 中从 `/` 或 `$` 菜单选中 Skill 时只插入行内 Skill 引用，不立即发送；用户发送后才调用 `admitPrompt`。消息列表根据 text part 的 `metadata.items` 显示 Skill 名称，不显示绝对路径或 `SKILL.md` 正文。
 
 ## SessionCommandHost（共享契约）
 
@@ -142,10 +144,10 @@ type SessionCommandOutcome = "handled" | "unhandled" | "local_ui";
 ## 命令归属速查
 
 | 层 | 代表命令 | 执行位置 |
-|---|---|---|
+| --- | --- | --- |
 | Client-local UI | `/new` `/sessions` `/resume` `/models` `/theme` `/permissions`，以及无参数 `/jobs`、`/workflow(s)` | 宿主 App；后三者打开同一个 Jobs Panel；`/resume` 调用专用恢复 API，catalog 可不列或仅 autocomplete |
-| Shared session（资源 API） | `/config` `/provider` `/mcp` `/jobs list|show|cancel` `/background` `/memory` `/auth` `/context` `/stats` `/agents` `/compact` `/rewind` `/remember` `/dream` `/profile` `/doctor` `/effort` `/fast` `/turns` `/usage` `/cost` `/export` `/output-style` `/init` `/plugin` `/reload-plugins` `/hooks` `/subagents` `/diff` `/branch` `/commit` `/help` `/status` `/version` `/skills` | `dispatchSessionCommand` |
-| Template | project/user/plugin/bundled 的 user-invocable skills | 普通 `admitPrompt` + `metadata.skillInvocation`；运行时交给原生 Skill 工具 |
+| Shared session（资源 API） | `/config` `/provider` `/mcp` `/jobs list\|show\|cancel` `/background` `/memory` `/auth` `/context` `/stats` `/agents` `/compact` `/rewind` `/remember` `/dream` `/profile` `/doctor` `/effort` `/fast` `/turns` `/usage` `/cost` `/export` `/output-style` `/init` `/plugin` `/reload-plugins` `/hooks` `/subagents` `/diff` `/branch` `/commit` `/help` `/status` `/version` `/skills` | `dispatchSessionCommand` |
+| Template | 带可校验文件 path 的 project/user/plugin user-invocable skills | 普通 `admitPrompt` + 结构化 Skill/text items；运行时交给原生 Skill 工具。内嵌 bundled Skill 当前不能通过这条用户路径执行 |
 | 禁止 | 通用 `runCommand`、未知 slash 当 prompt | — |
 
 `/plan`：App 无参 toggle 会改写成 `/plan on|off`；共享层只处理 on/off 并 `patchStatus`。
@@ -162,21 +164,29 @@ GET /commands?cwd=
   → 客户端 mergeCommandDetails(+ LOCAL_COMMAND_DETAILS) 做 /help 与 autocomplete
 
 POST /sessions/:id/prompts
-  { content: "用户任务", metadata: { skillInvocation: { name, ..., invocationSource: "slash" } } }
+  {
+    items: [
+      { type: "skill", name: "archify", path: ".../archify/SKILL.md" },
+      { type: "text", text: " 用户任务" }
+    ]
+  }
   → 与普通 prompt 同一 input/run 队列
-  → run executor 将 metadata 转成显式的 Skill 工具调用要求
+  → run executor 用当前 cwd catalog 校验 name/path
+  → materializer 生成显式的 Skill 工具调用要求
   → Agent 调用原生 Skill 工具
-  → Skill 工具从注册表解析实际路径，并返回 Skill file、Skill root 与内容
+  → Skill 工具再次按 name/path 解析当前赢家，并返回 Skill file、Skill root 与内容
 ```
 
-客户端不发送 Skill 路径或 `SKILL.md` 内容。catalog 只用于发现与展示；真正加载发生在 Agent 调用原生 Skill 工具时，因此 Skill 内部相对路径始终以工具返回的 `Skill root` 为准。
+客户端发送 command catalog 给出的 Skill 路径作为待校验引用，但不发送 `SKILL.md` 内容。daemon 执行前用当前 cwd catalog 重新验证路径和名称；真正加载发生在 Agent 调用原生 Skill 工具时，因此 Skill 内部相对路径始终以工具返回的 `Skill root` 为准。完整执行和失败边界见 [Skill Prompt Flow](./skill-prompt-flow.md)。
 
 Builtin session 名与 skill 重名时 **builtin 胜出**（例如 `/commit` 是 git 资源命令，不再当 template）。
+
+内嵌 bundled Skill 的 catalog path 为空：Desktop 会过滤，TUI 提交后也无法通过执行前 catalog 校验。当前可靠入口是模型按 name 调用 `Skill` 工具，不属于可成功执行的 template 用户路径。
 
 ## 失败关闭
 
 | 情况 | 行为 |
-|---|---|
+| --- | --- |
 | 未知 `/foo` | 系统消息 `Unknown command: /foo`；**不**调用 admitPrompt |
 | session 命令缺 `sessionId`（需会话的） | 静默 `handled`（与 TUI 现状一致） |
 | 资源 API 4xx/5xx | 由宿主 `sendRequest` 外层 error 路径处理（adapter 不吞） |
@@ -184,7 +194,7 @@ Builtin session 名与 skill 重名时 **builtin 胜出**（例如 `/commit` 是
 ## 与旧 REPL 的边界
 
 | 旧（已拆除） | 现 |
-|---|---|
+| --- | --- |
 | `registerBuiltinCommandsOnRegistry` | 无；catalog + `dispatchSessionCommand` |
 | 进程内 `QueryEngine` 上改历史 | store `replaceTranscript` + `closeRuntime`（如 `/rewind` `/compact`） |
 | print 斜杠 | **不支持**完整 slash 面；print 是一次性 prompt |
@@ -195,7 +205,7 @@ print 走 daemon Session API，不走本 flow。旧 `--task-worker` 入口已退
 
 1. 用 `@openharness/client`：`OpenHarnessClient` + `hydrateState`/`syncEvents`。
 2. 拉取 `listCommands({ cwd })`，与 `LOCAL_COMMAND_DETAILS` 合并做 autocomplete。
-3. 提交行：本地 UI → `dispatchSessionCommand` → Skill 则 `admitPrompt(content + metadata.skillInvocation)` → unknown 拦截 → 普通文本 `admitPrompt`。
+3. 提交行：本地 UI → `dispatchSessionCommand` → Skill 则 `admitPrompt({ items: [skill, text] })` → unknown 拦截 → 普通文本 `admitPrompt`。
 4. 实现 `emit`（transcript / toast）与可选 `patchStatus`。
 5. `/new` `/sessions` 等会话生命周期由宿主自己接 HTTP；`/resume` 必须调用专用恢复 API，不能把旧 prompt 当普通文本悄悄重新发送（与 TUI `useServerSync` 对齐即可）。
 
@@ -204,5 +214,6 @@ print 走 daemon Session API，不走本 flow。旧 `--task-worker` 入口已退
 - [slash-commands.md](./slash-commands.md) — 命令清单（参考）
 - [client-sync-flow.md](./client-sync-flow.md) — snapshot + SSE
 - [daemon-application-architecture.md](./daemon-application-architecture.md) — HTTP API 与 slash 边界
-- [skills-flow.md](./skills-flow.md) — Skill 发现、注册表与原生工具加载
+- [skills-flow.md](./skills-flow.md) — Skill 发现、注册表与两条调用路径
+- [skill-prompt-flow.md](./skill-prompt-flow.md) — 结构化 Skill 输入从发送到 Run 收尾
 - [tui-flow.md](./tui-flow.md) — TUI 启动与 attach

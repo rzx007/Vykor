@@ -63,7 +63,7 @@ sequenceDiagram
 ## 代码入口
 
 | 关注点 | 文件 |
-|---|---|
+| --- | --- |
 | CLI 模式选择与 frontend spawn | `apps/cli/src/commands/main.ts` |
 | daemon 启动/registry | `apps/cli/src/commands/daemon.ts` |
 | OpenTUI 根组件 | `apps/frontend/src/App.tsx` |
@@ -72,3 +72,4 @@ sequenceDiagram
 | prompt/run 应用链 | `packages/server/src/application/session/session-application-service.ts` |
 | durable event reducer | `packages/server/src/application/agent/daemon-agent-event-projector.ts` |
 | server 权威流程 | `docs/daemon-application-architecture.md` |
+| 结构化 Skill prompt | `docs/skill-prompt-flow.md` |

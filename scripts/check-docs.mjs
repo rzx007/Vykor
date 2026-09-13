@@ -66,6 +66,18 @@ for (const [fileName, forbidden] of [
   ["mcp-http-transport-design.md", "向后兼容"],
   ["daemon-application-architecture.md", "SessionTaskBridge"],
   ["slash-commands.md", "packages/server/src/commands.ts"],
+  ["slash-commands-flow.md", "skillInvocation"],
+  ["skill-prompt-flow.md", "skillInvocation"],
+  ["skills-flow.md", "skillInvocation"],
+  ["daemon-application-architecture.md", "skillInvocation"],
+  ["tui-flow.md", "skillInvocation"],
+  ["composer-capabilities-requirements.md", "skillInvocation"],
+  ["desktop-agent-message-rendering.md", "skillInvocation"],
+  ["README.md", "skillInvocation"],
+  ["skill-prompt-flow.md", "客户端不发送 Skill 路径"],
+  ["skills-flow.md", "客户端不发送 Skill 路径"],
+  ["skill-prompt-flow.md", "buildSkillPrompt"],
+  ["skills-flow.md", "buildSkillPrompt"],
 ]) {
   const path = join(docsRoot, fileName);
   if (readFileSync(path, "utf-8").includes(forbidden)) {

@@ -1,5 +1,7 @@
 # 结构化输入框与多能力引用设计
 
+> 状态：历史设计来源，已落地；本文已补齐当前 context item 和 Skill materializer 契约。当前执行流程见 [Skill Prompt Flow](../../skill-prompt-flow.md)。
+
 ## 目标
 
 让 OpenHarness Desktop 的输入框对齐当前 Codex 桌面体验：用户可以输入 `/` 打开随位置变化的动态菜单，或输入 `$` 打开能力菜单，将一个或多个 Skill 作为无胶囊的行内引用插入正文；发送、排队、重试、编辑、历史恢复和会话投影都保留这些引用的结构与顺序。
@@ -113,6 +115,7 @@ type SessionUserInputItem =
   | { type: "text"; text: string }
   | { type: "skill"; name: string; path: string; displayName?: string; source?: SkillSource }
   | { type: "mention"; name: string; path: string; displayName?: string }
+  | { type: "context"; kind: "conversation"; id: string; displayName: string }
 ```
 
 `SendDesktopPromptInput`、`EditLatestDesktopPromptInput` 和创建 Session 的第一条输入改为接收 `items`。`attachments` 继续作为独立并行字段。原有 `content` 和单数 `skillInvocation` 直接从新接口删除，不提供双写兼容期。
@@ -135,16 +138,18 @@ type SessionUserInputItem =
 6. 当前 agent adapter 如果暂时只接受文本，则由单一兼容适配器生成一次集中加载指令；兼容逻辑不能散落在 Desktop、Session service 和各 provider 中。
 7. 附件沿用现有流程展开成 `ContentBlock`，不与 composer items 混合排序。
 
-兼容适配器的临时文本形态为：
+当前 materializer 的文本形态为：
 
 ```text
-用户显式选择了以下技能，请按出现顺序加载并遵循：
+用户显式选择了以下技能，请按出现顺序使用 Skill 工具的 { name, path } 加载并遵循：
 1. using-superpowers (path: <SKILL.md path>)
 2. writing-plans (path: <SKILL.md path>)
 
 用户输入：
 使用 $using-superpowers 写个计划 $writing-plans
 ```
+
+Desktop 选中 Skill 时只插入结构化节点，不立即发送；TUI 的 `/<skill> args` 在 catalog 命中 template 后立即 admission。两端最终提交相同的 Skill/text items。
 
 ## Lexical 编辑器设计
 

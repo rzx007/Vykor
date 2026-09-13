@@ -126,6 +126,7 @@
 - [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、参考插件、五类组件写法、安装调试与当前能力边界。
 - [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：用固定 commit 的真实 Claude Code 插件样本验证 detect、convert、install 和 Runtime discover 全链路。
 - [Slash Commands](./slash-commands.md) 与 [Slash Command Flow](./slash-commands-flow.md)：当前命令清单、三层分流和执行入口。
+- [Skills Flow](./skills-flow.md) 与 [Skill Prompt Flow](./skill-prompt-flow.md)：Skill 的发现、可见性，以及结构化 Skill 输入从发送到 Run 收尾。
 
 ### 产品界面
 
@@ -142,8 +143,9 @@
 按实际问题找文档：
 
 | 想追踪的流程 | 文档 |
-|---|---|
+| --- | --- |
 | 用户发送 prompt，直到 Run 和 transcript 收尾 | [Daemon Application Architecture：TUI 发送 hi](./daemon-application-architecture.md#tui-发送-hi) |
+| 用户发送带 Skill 的 prompt，直到工具加载和 Run 收尾 | [Skill Prompt Flow](./skill-prompt-flow.md) |
 | child Agent 创建、运行、继续输入和关闭 | [Agent Child Session Flow](./agent-child-session-flow.md) |
 | Tool 请求权限，UI 回复，Run 继续 | [Permission Flow](./permission-flow.md) |
 | Bot 收消息、幂等执行、发送或重试回复 | [Channels Flow](./channels-flow.md) |
@@ -182,7 +184,7 @@
 - `docs/plans/`：阶段实施计划和完成记录，不是当前 API 手册。
 - `docs/superpowers/plans/`、`docs/superpowers/specs/`：更细的历史实施过程。
 - 文件名包含 `review`、`notes` 或明确标为“历史设计”的文档：用于解释过去，不用于决定当前 API。
-- [Output Styles 历史设计](./output-styles-design.md)、[Skills Flow 历史设计](./skills-flow.md)、[Skills Enhancement 历史设计](./skills-enhance-design.md)、[Slash Batch 历史设计](./slash-batch-design.md)：保留迁移前背景，当前入口以各文档状态栏指向的新文档为准。
+- [Output Styles 历史设计](./output-styles-design.md)、[Skills Enhancement 历史设计](./skills-enhance-design.md)、[Slash Batch 历史设计](./slash-batch-design.md)：保留迁移前背景，当前入口以各文档状态栏指向的新文档为准。
 
 当前文档、ADR、计划和历史发生冲突时，优先级是：
 

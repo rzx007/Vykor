@@ -179,6 +179,14 @@ packages/core/src/engine/query-engine.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts
 ```
 
+## 带结构化 Skill 的 prompt
+
+带 Skill 的 prompt 不建立第二条 Run 链。客户端仍调用 `admitPrompt`，区别只是 input 的 `items` 中含 `{ type: "skill", name, path }`。
+
+`SessionRunExecutor` 在 `submitMessage` 前按 session cwd 重新取得 Skill registry，用当前 catalog 校验每个 name/path，再由 `session-input-materializer.ts` 生成明确的 Skill 工具调用要求。materializer 不读取 `SKILL.md`；模型调用原生 `Skill { name, path }` 后才取得 Skill file、Skill root 和正文。此后 AgentEvent、durable projection、SSE 和 terminal settlement 与上面的普通 prompt 完全相同。
+
+完整时序、附件组合和失败边界见 [Skill Prompt Flow](./skill-prompt-flow.md)。
+
 ## AgentPool 与实例归属
 
 `AgentPool` 缓存一个带代际所有权的 entry：

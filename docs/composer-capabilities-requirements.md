@@ -55,8 +55,8 @@
 
 - `$` 用于唤起 Skill 面板。
 - 支持首字符和正文中间触发。
-- 选择 Skill 后插入结构化 Skill mention，不把本机绝对路径暴露给客户端。
-- 服务端通过稳定的 Skill 引用解析真实能力。
+- 选择 Skill 后插入结构化 Skill mention；item 携带当前 catalog 的绝对 `SKILL.md` 路径，供 daemon 执行前重新校验。
+- 路径不在消息列表或胶囊中展示，也不构成任意文件读取授权；服务端通过当前 cwd Skill registry 解析并校验真实能力。
 
 ## 4. 现有能力盘点
 
