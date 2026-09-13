@@ -266,18 +266,28 @@ export class McpClientManager {
 
   getAsToolDefinitions(): ToolDefinition[] {
     return this.getConnectedTools().map(
-      (t): ToolDefinition => ({
-        name: `mcp__${t.serverName}__${t.name}`,
-        description: `[${t.serverName}] ${t.description}`,
-        inputSchema: t.inputSchema,
-        execute: async (input, context) => {
-          const result = await this.callTool(t.serverName, t.name, input, context.abortSignal);
-          return {
-            content: [{ type: "text" as const, text: result.content }],
-            isError: result.isError,
-          };
-        },
-      })
+      (t): ToolDefinition => {
+        const { serverName, name } = t;
+        const client = this.clients.get(serverName);
+        return {
+          name: `mcp__${serverName}__${name}`,
+          description: `[${serverName}] ${t.description}`,
+          inputSchema: t.inputSchema,
+          execute: async (input, context) => {
+            if (!client || this.clients.get(serverName) !== client) {
+              return {
+                content: [{ type: "text", text: `MCP connection changed or closed: ${serverName}. Start a new Run to use the current connection.` }],
+                isError: true,
+              };
+            }
+            const result = await this.callClientTool(client, name, input, context.abortSignal);
+            return {
+              content: [{ type: "text" as const, text: result.content }],
+              isError: result.isError,
+            };
+          },
+        };
+      }
     );
   }
 
@@ -292,6 +302,15 @@ export class McpClientManager {
       throw new Error(`MCP server not found: ${serverName}`);
     }
 
+    return await this.callClientTool(client, toolName, args, signal);
+  }
+
+  private async callClientTool(
+    client: Client,
+    toolName: string,
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<McpToolCallResult> {
     try {
       const result = await client.callTool(
         { name: toolName, arguments: args },

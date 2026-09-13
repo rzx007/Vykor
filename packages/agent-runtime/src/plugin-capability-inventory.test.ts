@@ -54,6 +54,34 @@ function loaded(
 }
 
 describe("plugin capability inventory", () => {
+  it("rejects every plugin sharing a bare MCP server name instead of choosing a last writer", () => {
+    const component = { status: "loaded" as const, diagnostics: [], value: { shared: { type: "stdio" as const, command: "node" } } };
+    const inventory = createPluginCapabilityInventory([
+      loaded(record("dev.first"), { mcpServers: component }),
+      loaded(record("dev.second"), { mcpServers: component }),
+      loaded(record("dev.unrelated"), {}),
+    ]);
+    expect([...inventory.plugins.keys()]).toEqual(["dev.unrelated"]);
+    expect(inventory.mcpServers.size).toBe(0);
+    expect(inventory.diagnostics).toEqual([expect.objectContaining({
+      component: "mcpServers", code: "plugin_component_name_conflict",
+      details: { name: "shared", pluginIds: ["dev.first", "dev.second"] },
+    })]);
+  });
+
+  it("rejects plugin MCP names already reserved by host settings", () => {
+    const inventory = createPluginCapabilityInventory([
+      loaded(record("dev.first"), { mcpServers: { status: "loaded", diagnostics: [], value: {
+        shared: { type: "stdio", command: "node" },
+      } } }),
+    ], { reservedMcpServerNames: ["shared"] });
+    expect(inventory.plugins.size).toBe(0);
+    expect(inventory.mcpServers.size).toBe(0);
+    expect(inventory.diagnostics).toEqual([expect.objectContaining({
+      pluginId: "dev.first", component: "mcpServers", code: "plugin_mcp_server_name_conflict",
+    })]);
+  });
+
   it("records current installation metadata and static component ownership", () => {
     const installation = record("dev.openharness.quality");
     const inventory = createPluginCapabilityInventory([

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type StreamMessageParams, type ToolDefinition } from "@openharness/core";
 import { createVisibilityToolRegistry } from "./default-runtime-tools.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
+import { createAgentTool } from "../../tools/src/agent/agent-tools.js";
 
 const tool = (name: string, text = name): ToolDefinition => ({
   name, description: text, inputSchema: { type: "object" },
@@ -9,6 +10,45 @@ const tool = (name: string, text = name): ToolDefinition => ({
 });
 
 describe("run capability execution boundary", () => {
+  it("rejects an ambiguous server name before creating any Run binding", () => {
+    const definition = { type: "stdio" as const, command: "node" };
+    expect(() => createRunCapabilityView({ toolRegistry: new ToolRegistry(), mcpServers: [
+      { serverId: "plugin:first:mcp:shared", serverName: "shared", ownerPluginId: "first", definition },
+      { serverId: "plugin:second:mcp:shared", serverName: "shared", ownerPluginId: "second", definition },
+    ] })).toThrow(/ambiguous.*shared/i);
+  });
+  it("invokes with the original Tool receiver after metadata copying", async () => {
+    const registry = new ToolRegistry();
+    const values = new WeakMap<object, string>();
+    const original: ToolDefinition = {
+      ...tool("Identity"),
+      async execute() { return { content: [{ type: "text", text: values.get(this) ?? "lost receiver" }] }; },
+    };
+    values.set(original, "original receiver");
+    registry.register(original);
+    const view = createRunCapabilityView({ toolRegistry: registry });
+    original.execute = tool("replacement").execute;
+    const events = await executeCapturedTool(registry, view, "Identity", {});
+    expect(events[0]?.content).toEqual([{ type: "text", text: "original receiver" }]);
+  });
+
+  it("keeps the real Agent Tool on its runtime definitions instead of the global fallback", async () => {
+    const registry = new ToolRegistry();
+    registry.register(createAgentTool({ agentDefinitions: [{
+      name: "runtime-reviewer", description: "review", model: "runtime-model", systemPrompt: "captured role",
+    }] }));
+    const spawned: unknown[] = [];
+    const view = createRunCapabilityView({ toolRegistry: registry });
+    const events = await executeCapturedTool(registry, view, "Agent",
+      { description: "review", prompt: "review", subagentType: "runtime-reviewer" }, {
+        spawnChildAgent: async (input: unknown) => {
+          spawned.push(input);
+          return { id: "child", sessionId: "child-session", result: Promise.resolve({ status: "completed", output: "ok" }) };
+        },
+      });
+    expect(events[0]?.isError).not.toBe(true);
+    expect(spawned).toEqual([expect.objectContaining({ model: "runtime-model", systemPrompt: "captured role" })]);
+  });
   it("includes loaded baseline agents in the default runtime view", async () => {
     const { createDefaultNodeAgent } = await import("./default-agent.js");
     const agent = await createDefaultNodeAgent({
@@ -123,4 +163,18 @@ function skill(name: string, ownerPluginId?: string) {
     name, description: name, path: `/skills/${name}/SKILL.md`, content: "loaded contents",
     userInvocable: true, disableModelInvocation: false,
   } };
+}
+
+async function executeCapturedTool(registry: ToolRegistry, capabilityView: ReturnType<typeof createRunCapabilityView>, name: string, input: Record<string, unknown>, children?: unknown) {
+  let turn = 0;
+  const engine = new QueryEngine({ streamMessage: async function* () {
+    if (turn++ === 0) {
+      yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "call", name, input } };
+      yield { type: "complete" as const, stopReason: "tool_use" };
+    } else yield { type: "complete" as const, stopReason: "end_turn" };
+  } }, registry, { checkTool: async () => ({ action: "allow" }) }, { execute: async () => ({ blocked: false }) } as IHookExecutor);
+  const execution = { capabilityView, children, emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {} } as unknown as AgentExecutionContext;
+  const results = [];
+  for await (const event of engine.submitMessage("go", { execution })) if (event.type === "tool_use_end") results.push(event.result);
+  return results;
 }

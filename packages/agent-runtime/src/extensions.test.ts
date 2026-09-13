@@ -309,6 +309,19 @@ describe("installed Native Tool activation", () => {
     expect(discovery.warnings).toEqual([]);
   });
 
+  it("rejects an injected host MCP config that reuses an installed plugin server name", async () => {
+    const cwd = join(tempRoot, "mcp-host-collision");
+    mkdirSync(cwd, { recursive: true });
+    writeProjectMcpPlugin(cwd);
+    const { createDefaultNodeAgent } = await import("./default-agent.js");
+    await expect(createDefaultNodeAgent({
+      cwd, settings: BASE_SETTINGS, systemPrompt: "test",
+      client: { streamMessage: async function* () { yield { type: "complete" as const, stopReason: "end_turn" }; } },
+      capabilityOverrides: { terminal: false, memory: false },
+      mcpServers: { github: { type: "stdio", command: process.execPath, args: ["-e", "process.exit(0)"] } },
+    }).then((agent) => agent.close())).rejects.toThrow(/MCP server name.*github.*conflict/i);
+  });
+
   it("keeps an ambiguous installation out of the discovery inventory with a diagnostic", async () => {
     const cwd = join(tempRoot, "ambiguous-installation-workspace");
     const storePath = join(tempRoot, "config", "plugins", "installed.json");

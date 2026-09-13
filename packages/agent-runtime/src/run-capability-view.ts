@@ -18,6 +18,10 @@ export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?
     !(binding.definition.source === "plugin" && !binding.ownerPluginId) && visible(binding);
   const servers = sources.mcpServers ?? [];
   const byServerName = new Map(servers.map((server) => [server.serverName, server]));
+  if (byServerName.size !== servers.length) {
+    const ambiguous = servers.find((server, index) => servers.findIndex((other) => other.serverName === server.serverName) !== index)!;
+    throw new Error(`Ambiguous MCP server name: ${ambiguous.serverName}`);
+  }
   const tools: Array<[string, RunToolBinding]> = [];
   for (const definition of sources.toolRegistry.getAll()) {
     const source = sources.toolRegistry.inspect(definition.name)?.source;
@@ -27,7 +31,9 @@ export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?
     if (source?.kind === "plugin" && !ownerPluginId) continue;
     if (!visible({ ownerPluginId })) continue;
     tools.push([definition.name, frozenCopy({
-      ownerPluginId, definition, source, serverId: server?.serverId, invoke: definition.execute,
+      ownerPluginId, definition, source, serverId: server?.serverId,
+      // Capture both the function and its original receiver (some tools use WeakMap identity).
+      invoke: definition.execute.bind(definition),
     })]);
   }
   return Object.freeze({

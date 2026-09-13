@@ -75,9 +75,23 @@ export function selectPluginInstallationWinners(
 
 export function createPluginCapabilityInventory(
   installations: readonly LoadedPluginInstallation[],
+  options: { reservedMcpServerNames?: readonly string[] } = {},
 ): PluginCapabilityInventory {
   const diagnostics: PluginDiagnostic[] = [];
   const excludedPluginIds = findComponentConflicts(installations, diagnostics);
+  const reservedServerNames = new Set(options.reservedMcpServerNames);
+  for (const { record, plugin } of installations) {
+    for (const name of Object.keys(plugin.components.mcpServers?.value ?? {})) {
+      if (!reservedServerNames.has(name)) continue;
+      excludedPluginIds.add(record.id);
+      diagnostics.push({
+        severity: "error", phase: "discover", code: "plugin_mcp_server_name_conflict",
+        pluginId: record.id, component: "mcpServers",
+        message: `Plugin MCP server '${name}' conflicts with a host server; independent bindings are required`,
+        details: { name },
+      });
+    }
+  }
   const active = installations.filter(({ record }) => !excludedPluginIds.has(record.id));
   const plugins = new Map<string, PluginCapabilityOwner>();
   const skills = new Map<string, { pluginId: string; path: string }>();
@@ -129,6 +143,8 @@ function findComponentConflicts(
       item.plugin.components.skills?.value?.map((skill) => skill.name) ?? []],
     ["agents", (item: LoadedPluginInstallation) =>
       item.plugin.components.agents?.value?.map((agent) => agent.name) ?? []],
+    ["mcpServers", (item: LoadedPluginInstallation) =>
+      Object.keys(item.plugin.components.mcpServers?.value ?? {})],
   ] as const;
 
   for (const [component, getNames] of componentNames) {

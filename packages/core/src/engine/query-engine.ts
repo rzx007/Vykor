@@ -815,8 +815,10 @@ export class QueryEngine implements IQueryEngine {
             toolRegistry: this.toolRegistryView(toolRegistry),
             capabilityView: execution?.capabilityView,
             skillRegistry: this.skillRegistry,
-            mcpManager: this.mcpManager,
-            mcpAuth: this.mcpAuth,
+            // Global MCP meta APIs can bypass captured tools by serverName. Until a
+            // scoped resource/auth interface exists, Runs with a View fail closed.
+            mcpManager: execution?.capabilityView ? undefined : this.mcpManager,
+            mcpAuth: execution?.capabilityView ? undefined : this.mcpAuth,
             terminal: this.terminal,
             jobs: this.jobs,
             backgroundShell: this.backgroundShell,

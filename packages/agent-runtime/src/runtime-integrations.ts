@@ -36,6 +36,14 @@ export async function installRuntimeIntegrations(
 ): Promise<() => ReturnType<McpClientManager["getConnections"]>> {
   const { runtime } = options;
   const memory = options.memory;
+  const inventory = options.discovery.pluginCapabilityInventory;
+  const pluginServerNames = new Set<string>();
+  for (const { serverName } of inventory.mcpServers.values()) {
+    if (pluginServerNames.has(serverName) || options.mcpServers?.[serverName] || options.settings.mcpServers?.[serverName]) {
+      throw new Error(`MCP server name '${serverName}' conflicts with another owner; independent bindings are required`);
+    }
+    pluginServerNames.add(serverName);
+  }
   await configureDiscoveredExtensions(options.discovery, {
     cwd: options.cwd,
     environmentKind: options.executionEnvironment?.info.kind,
@@ -132,7 +140,6 @@ export async function installRuntimeIntegrations(
       : undefined,
   );
 
-  const inventory = options.discovery.pluginCapabilityInventory;
   const skills = options.discovery.skillRegistry.getAll().map((definition) => {
     const owner = inventory.skills.get(definition.name);
     return {
@@ -151,7 +158,7 @@ export async function installRuntimeIntegrations(
   const serverOwners = new Map([...inventory.mcpServers].map(([id, owner]) => [owner.serverName, { id, ...owner }]));
   const servers = Object.entries(mcpServers).map(([serverName, definition]) => {
     const pluginServer = serverOwners.get(serverName);
-    // Explicit host configuration wins over a plugin server with the same name.
+    // Name conflicts were rejected before any plugin activation or connection.
     const hostOwned = options.mcpServers !== undefined || options.settings.mcpServers?.[serverName] !== undefined;
     return {
       definition, serverName,

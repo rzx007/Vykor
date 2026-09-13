@@ -76,7 +76,9 @@ export async function discoverOpenHarnessExtensions(
     loadedInstallations.push({ record, plugin: loaded });
     warnings.push(...loaded.diagnostics.map((item) => `${record.id}: ${item.message}`));
   }
-  const componentInventory = createPluginCapabilityInventory(loadedInstallations);
+  const componentInventory = createPluginCapabilityInventory(loadedInstallations, {
+    reservedMcpServerNames: Object.keys(settings.mcpServers ?? {}),
+  });
   const pluginCapabilityInventory: PluginCapabilityInventory = {
     ...componentInventory,
     diagnostics: [...winnerSelection.diagnostics, ...componentInventory.diagnostics],
