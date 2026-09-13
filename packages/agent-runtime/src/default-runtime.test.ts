@@ -13,6 +13,35 @@ import { LOCAL_READ_ONLY_TOOLS, READ_ONLY_TOOLS } from "@openharness/permissions
 import type { Settings, ToolDefinition } from "@openharness/core";
 import type { ExecutionEnvironmentHandle } from "@openharness/environment";
 import { createAgentWorkspaceBinding } from "./agent-composition.js";
+import { createRunCapabilityView } from "./run-capability-view.js";
+
+it.each([undefined, "Custom root instructions"])("lists only the current View Agent names and descriptions with custom prompt=%s", async (systemPrompt) => {
+  const prompts: string[] = [];
+  const runtime = await createOpenHarnessRuntime({
+    settings: { ...BASE_SETTINGS, sandbox: { enabled: false } },
+    configuration: { systemPrompt, client: { async *streamMessage(input) {
+      prompts.push(String(input.system));
+      yield { type: "complete" as const, stopReason: "end_turn" as const };
+    } } },
+  });
+  const sources = { toolRegistry: runtime.toolRegistry, pluginIds: new Set(["selected", "other"]), agents: [
+    { ownerPluginId: "selected", definition: { name: "selected:review", description: "Trusted review description", systemPrompt: "SECRET selected body" } },
+    { ownerPluginId: "other", definition: { name: "other:hidden", description: "Hidden description", systemPrompt: "SECRET other body" } },
+  ] };
+  try {
+    for (const owner of ["selected", undefined]) {
+      const capabilityView = createRunCapabilityView(sources, owner);
+      const execution = { capabilityView, emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {} } as any;
+      for await (const _ of runtime.queryEngine.submitMessage("review", { execution })) { /* consume */ }
+    }
+    expect(prompts[0]).toContain("selected:review");
+    expect(prompts[0]).toContain("Trusted review description");
+    expect(prompts[0]).not.toContain("other:hidden");
+    expect(prompts.join("\n")).not.toContain("SECRET");
+    expect(prompts[1]).not.toContain("selected:review");
+    if (systemPrompt) expect(prompts[0]).toContain(systemPrompt);
+  } finally { await runtime.close(); }
+});
 
 function testTool(name: string): ToolDefinition {
   return {

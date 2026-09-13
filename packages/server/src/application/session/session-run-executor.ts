@@ -95,17 +95,8 @@ export class SessionRunExecutor {
       const storedRun = typeof this.context.store.getRun === "function"
         ? this.context.store.getRun(runId)
         : undefined;
-      const hasStructuredContext = admitted.items.some((item) => item.type === "skill" || item.type === "context");
+      const hasStructuredContext = admitted.items.some((item) => item.type === "skill" || item.type === "context" || (item.type === "capability" && item.kind === "plugin_agent"));
       const hasExplicitSkills = admitted.items.some((item) => item.type === "skill");
-      const materialized = hasStructuredContext
-        ? materializeSessionInput(
-            admitted.items,
-            hasExplicitSkills
-              ? await resolveSkillCatalog(session, this.context.resolveSkillCatalog)
-              : { resolvePath: () => undefined },
-            conversationContextCatalog(this.context.store, sessionId),
-          )
-        : undefined;
 
       if (admitted.attachments.length > 0) {
         const acquiredAt = Date.now();
@@ -150,6 +141,16 @@ export class SessionRunExecutor {
       const pluginId = typeof storedRun?.metadata?.pluginId === "string" ? storedRun.metadata.pluginId : undefined;
       const capabilityView = agent.createRunCapabilityView?.(pluginId);
       if (pluginId && !capabilityView) throw new Error("Plugin capability view is unavailable");
+      const materialized = hasStructuredContext
+        ? materializeSessionInput(
+            admitted.items,
+            hasExplicitSkills
+              ? await resolveSkillCatalog(session, this.context.resolveSkillCatalog)
+              : { resolvePath: () => undefined },
+            conversationContextCatalog(this.context.store, sessionId),
+            capabilityView,
+          )
+        : undefined;
 
       let submittedContent: string | ContentBlock[] = materialized?.text ?? admitted.content;
       if (admitted.attachments.length > 0) {

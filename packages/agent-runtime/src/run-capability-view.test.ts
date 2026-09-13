@@ -3,6 +3,7 @@ import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecut
 import { createVisibilityToolRegistry } from "./default-runtime-tools.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import { createAgentTool } from "../../tools/src/agent/agent-tools.js";
+import { deriveChildCapabilityView } from "./child-agent-options.js";
 
 const tool = (name: string, text = name): ToolDefinition => ({
   name, description: text, inputSchema: { type: "object" },
@@ -10,6 +11,18 @@ const tool = (name: string, text = name): ToolDefinition => ({
 });
 
 describe("run capability execution boundary", () => {
+  it.each([false, true])("enforces normalized Bash restrictions during View invocation: denied=%s", async (denied) => {
+    let invocations = 0;
+    const registry = new ToolRegistry();
+    registry.register({ ...tool("Shell"), execute: async () => { invocations++; return { content: [] }; } });
+    const view = deriveChildCapabilityView(createRunCapabilityView({ toolRegistry: registry }), {
+      description: "d", prompt: "p", agent: "worker", cwd: "/repo",
+      allowedTools: denied ? ["*"] : ["Bash"], disallowedTools: denied ? ["Bash"] : undefined,
+    })!;
+    const results = await executeCapturedTool(registry, view, "Shell", {});
+    expect(invocations).toBe(denied ? 0 : 1);
+    expect(Boolean(results[0]?.isError)).toBe(denied);
+  });
   it("rejects an ambiguous server name before creating any Run binding", () => {
     const definition = { type: "stdio" as const, command: "node" };
     expect(() => createRunCapabilityView({ toolRegistry: new ToolRegistry(), mcpServers: [

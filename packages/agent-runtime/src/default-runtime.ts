@@ -237,11 +237,14 @@ export async function createOpenHarnessRuntime(
     settings,
     executionEnvironment: options.executionEnvironment,
     skillRegistry: options.skillRegistry,
-    ...(configuration.systemPrompt === undefined ? {
-      systemPromptForRun: (view: RunCapabilityView) => buildSystemPrompt(
+    systemPromptForRun: async (view: RunCapabilityView) => {
+      const prompt = configuration.systemPrompt ?? await buildSystemPrompt(
         [...view.skills.values()].map((binding) => binding.definition).filter((skill) => !skill.disableModelInvocation),
-      ),
-    } : {}),
+      );
+      if (view.agents.size === 0) return prompt;
+      const agents = [...view.agents].map(([name, { definition }]) => JSON.stringify({ name, description: definition.description }));
+      return `${prompt}\n\n# Available agents\nUse Agent with subagentType set to one of these names:\n${agents.join("\n")}`;
+    },
   };
 
   const queryEngine = new QueryEngine(

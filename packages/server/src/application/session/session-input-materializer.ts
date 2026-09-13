@@ -1,4 +1,4 @@
-import type { ContentBlock } from "@openharness/core";
+import type { ContentBlock, RunCapabilityView } from "@openharness/core";
 import {
   normalizeSessionUserInputItems,
   sessionUserInputText,
@@ -26,7 +26,7 @@ export interface MaterializedSessionInput {
   skills: SessionInputCatalogSkill[];
   instruction: string;
   conversations: Array<{ id: string; title: string; summary: string }>;
-  agents?: string[];
+  agents?: Array<{ name: string; description?: string }>;
 }
 
 /**
@@ -38,6 +38,7 @@ export function materializeSessionInput(
   input: readonly SessionUserInputItem[],
   catalog: SessionInputSkillCatalog,
   conversationCatalog?: SessionInputConversationCatalog,
+  capabilityView?: Pick<RunCapabilityView, "agents">,
 ): MaterializedSessionInput {
   const items = normalizeSessionUserInputItems(input);
   const text = sessionUserInputText(items);
@@ -45,7 +46,11 @@ export function materializeSessionInput(
   const paths = new Set<string>();
   const conversations: Array<{ id: string; title: string; summary: string }> = [];
   const conversationIds = new Set<string>();
-  const agents = [...new Set(items.flatMap((item) => item.type === "capability" && item.kind === "plugin_agent" ? [item.agentId] : []))];
+  const agents = [...new Set(items.flatMap((item) => item.type === "capability" && item.kind === "plugin_agent" ? [item.agentId] : []))].map((name) => {
+    const definition = capabilityView?.agents.get(name)?.definition;
+    if (capabilityView && !definition) throw new Error("session_input_agent_not_available");
+    return { name, ...(definition ? { description: definition.description } : {}) };
+  });
 
   for (const item of items) {
     if (item.type === "context") {
@@ -120,10 +125,10 @@ function skillInstructionPrefix(skills: readonly SessionInputCatalogSkill[]): st
   ].join("\n");
 }
 
-function agentInstructionPrefix(agents: readonly string[]): string {
+function agentInstructionPrefix(agents: readonly { name: string; description?: string }[]): string {
   if (agents.length === 0) return "";
   return [
     "用户选择了以下 Agent，请通过 Agent 工具委派用户任务（补充 description 和 prompt），使用 JobWait/JobRead 获取子任务结果后，由你给出最终回复：",
-    ...agents.map((name) => JSON.stringify({ subagentType: name })),
+    ...agents.map(({ name, description }) => JSON.stringify({ subagentType: name, description })),
   ].join("\n");
 }

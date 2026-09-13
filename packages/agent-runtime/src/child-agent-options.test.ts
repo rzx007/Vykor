@@ -18,6 +18,16 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it.each([
+    { allowedTools: ["Bash"], disallowedTools: undefined, expected: ["Shell"] },
+    { allowedTools: ["*"], disallowedTools: ["Bash"], expected: [] },
+  ])("normalizes Bash in child allow and deny lists: $expected", ({ allowedTools, disallowedTools, expected }) => {
+    const registry = new ToolRegistry();
+    registry.register({ ...addedTool, name: "Shell" });
+    const parent = createRunCapabilityView({ toolRegistry: registry });
+    const view = deriveChildCapabilityView(parent, { description: "d", prompt: "p", agent: "worker", cwd: "/repo", allowedTools, disallowedTools });
+    expect([...view!.tools.keys()]).toEqual(expected);
+  });
   it("intersects tools and MCP dependencies with the parent view without rediscovery", () => {
     const registry = new ToolRegistry();
     for (const name of ["Read", "Write", "mcp__docs__search", "mcp__other__search"]) {

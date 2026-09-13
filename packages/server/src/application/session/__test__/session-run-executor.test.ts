@@ -7,6 +7,28 @@ import { describe, expect, it, vi } from "vitest";
 import { SessionRunExecutor } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it("materializes a plugin-agent-only input using the captured View description, never its body", async () => {
+    const store = createStore();
+    store.getInput.mockReturnValue({ ...store.getInput(), items: [{ type: "capability", kind: "plugin_agent", pluginId: "selected", agentId: "selected:review", displayName: "Spoofed label" }], content: "@Spoofed label" } as any);
+    Object.assign(store.getRun(), { metadata: { pluginId: "selected" } });
+    const view = createRunCapabilityView({ toolRegistry: new ToolRegistry(), pluginIds: new Set(["selected"]), agents: [{ ownerPluginId: "selected", definition: {
+      name: "selected:review", description: "Trusted review description", systemPrompt: "SECRET child body",
+    } }] }, "selected");
+    let submitted = "";
+    const executor = new SessionRunExecutor({
+      store: store as any,
+      agentPool: { configured: true, acquireSession: async () => ({
+        setModel: () => {}, createRunCapabilityView: () => view,
+        submitMessage: (content: string) => { submitted = content; return completedHandle(); },
+      }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} }, transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" }, { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(submitted).toContain('"subagentType":"selected:review"');
+    expect(submitted).toContain("Trusted review description");
+    expect(submitted).not.toContain("SECRET child body");
+  });
   it("builds from the warm runtime using the durable Run owner and passes its captured bindings", async () => {
     const store = createStore({ metadata: { pluginId: "forged-input-owner" } });
     Object.assign(store.getRun(), { metadata: { pluginId: "selected" } });

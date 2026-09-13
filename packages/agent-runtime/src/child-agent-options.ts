@@ -1,4 +1,5 @@
 import type { AgentChildSpawnInput, RunCapabilityView, Settings } from "@openharness/core";
+import { canonicalToolName, canonicalToolNames } from "@openharness/core";
 import { readonlyMap } from "./run-capability-view.js";
 
 import type { OpenHarnessAgentOptions } from "./agent.js";
@@ -78,9 +79,11 @@ export function deriveChildCapabilityView(
     if (matches.length !== 1) throw new Error(`MCP dependency is ${matches.length ? "ambiguous" : "outside parent run"}: ${required}`);
     serverIds.add(matches[0]!.serverId);
   }
+  const allowed = child.allowedTools && new Set(canonicalToolNames(child.allowedTools));
+  const denied = new Set(canonicalToolNames(child.disallowedTools ?? []));
   const permits = (name: string) =>
-    (!child.allowedTools || child.allowedTools.includes("*") || child.allowedTools.includes(name)) &&
-    !child.disallowedTools?.includes("*") && !child.disallowedTools?.includes(name);
+    (!allowed || allowed.has("*") || allowed.has(canonicalToolName(name))) &&
+    !denied.has("*") && !denied.has(canonicalToolName(name));
   const mcpServers = child.requiredMcpServers === undefined ? parent.mcpServers
     : readonlyMap([...parent.mcpServers].filter(([id]) => serverIds.has(id)));
   return Object.freeze({
