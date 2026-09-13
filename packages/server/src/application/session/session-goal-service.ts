@@ -7,6 +7,14 @@ import { SessionApplicationError } from "./session-application-error.js";
 import { classifyGoalCompletion, verifiedGoalEvidence } from "./goal-assessment-policy.js";
 import type { GoalWaitVerifier } from "./goal-wait-verifier.js";
 
+function hasGoalPluginCapability(
+  items: AdmitPromptInput["items"] | undefined,
+): boolean {
+  return items?.some((item) =>
+    item.type === "capability" || (item.type === "skill" && item.source === "plugin")
+  ) ?? false;
+}
+
 export class SessionGoalService {
   private readonly requests = new Map<string, { fingerprint: string; promise: Promise<SessionGoal> }>();
   constructor(
@@ -31,6 +39,11 @@ export class SessionGoalService {
     return request;
   }
   create(sessionId: string, input: CreateSessionGoalInput): Promise<SessionGoal> {
+    if (hasGoalPluginCapability(input.items)) {
+      return Promise.reject(
+        new SessionApplicationError(409, "session_goal_plugin_capability_unsupported"),
+      );
+    }
     return this.command(sessionId, input.requestId, { operation: "create", ...input }, async () => {
       const replay = await this.replay(input.requestId);
       if (replay) return replay;
@@ -47,6 +60,11 @@ export class SessionGoalService {
     });
   }
   update(sessionId: string, goalId: string, input: UpdateSessionGoalInput): Promise<SessionGoal> {
+    if (hasGoalPluginCapability(input.items)) {
+      return Promise.reject(
+        new SessionApplicationError(409, "session_goal_plugin_capability_unsupported"),
+      );
+    }
     return this.command(sessionId, input.requestId, { operation: "update", goalId, ...input }, async () => {
       const replay = await this.replay(input.requestId);
       if (replay) return replay;

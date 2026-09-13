@@ -7,9 +7,24 @@ import { SessionApplicationService } from "../session-application-service.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
 const pluginId = "dev.openharness.quality";
+const agentId = `${pluginId}:reviewer`;
 const session = { id: "s1", cwd: "/repo" } as SessionRecord;
 
 describe("SessionPluginCapabilityService", () => {
+  it.each(["bundled", "user", "project"] as const)(
+    "returns an empty admission for an ordinary %s Skill",
+    async (source) => {
+      const service = capabilityService(inventory());
+
+      await expect(service.admit(session, [{
+        type: "skill",
+        source,
+        name: "ordinary",
+        path: `/skills/${source}/ordinary/SKILL.md`,
+      }])).resolves.toEqual({});
+    },
+  );
+
   it("merges plugin, plugin Skill and plugin Agent references by inventory identity", async () => {
     const service = capabilityService(inventory());
     const items: SessionUserInputItem[] = [
@@ -30,7 +45,7 @@ describe("SessionPluginCapabilityService", () => {
         type: "capability",
         kind: "plugin_agent",
         pluginId,
-        agentId: "reviewer",
+        agentId,
         displayName: "tampered Agent label",
       },
     ];
@@ -111,7 +126,7 @@ describe("SessionPluginCapabilityService", () => {
         type: "capability",
         kind: "plugin_agent",
         pluginId,
-        agentId: "reviewer",
+        agentId,
         displayName: "Reviewer",
       },
     ];
@@ -397,7 +412,7 @@ function inventory(options: {
     skillNames: id === pluginId ? ["review"] : [],
     mcpServerIds: [],
     nativeToolEntries: [],
-    agentNames: id === pluginId ? ["reviewer"] : [],
+    agentNames: id === pluginId ? [agentId] : [],
   });
   const plugins = new Map([[pluginId, owner(pluginId)]]);
   if (options.extraPluginId) plugins.set(options.extraPluginId, owner(options.extraPluginId));
@@ -409,7 +424,7 @@ function inventory(options: {
     }]]),
     mcpServers: new Map(),
     nativeToolEntries: new Map(),
-    agents: new Map([["reviewer", { pluginId }]]),
+    agents: new Map([[agentId, { pluginId }]]),
     diagnostics: [...(options.diagnostics ?? [])],
   };
 }

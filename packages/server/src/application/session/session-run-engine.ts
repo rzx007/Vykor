@@ -160,6 +160,9 @@ export class SessionRunEngine {
     const input = this.context.store.getInput(inputId);
     const queuedRun = this.context.store.getRun(queuedRunId);
     if (!input || !queuedRun) return undefined;
+    if (typeof input.metadata.pluginId === "string") {
+      throw new Error("session_capability_requires_queued_run");
+    }
     const content = await this.materializeSteerInput(sessionId, input.items);
     const promoted = this.runCoordinator.promoteQueuedRun(
       sessionId,

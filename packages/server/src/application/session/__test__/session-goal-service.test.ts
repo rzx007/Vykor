@@ -79,6 +79,56 @@ function assessment(store: SessionStore, runId: string, value: Record<string, un
 }
 
 describe("SessionGoalService durable lifecycle", () => {
+  it("rejects plugin capability items before creating a Goal, Input, or Run", async () => {
+    const { service, store } = harness();
+
+    await expect(service.create("s1", {
+      requestId: "plugin-goal-create",
+      objective: "use plugin",
+      items: [{
+        type: "capability",
+        kind: "plugin",
+        pluginId: "dev.openharness.quality",
+        displayName: "Quality",
+      }],
+    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
+
+    expect(store.getCurrentGoal("s1")).toBeUndefined();
+    expect(store.getInput("plugin-goal-create")).toBeUndefined();
+    expect(store.getGoalRequest("plugin-goal-create")).toBeUndefined();
+    expect(store.listRuns("s1")).toEqual([]);
+  });
+
+  it("rejects plugin capability items before updating a Goal", async () => {
+    const { service, store, engine } = harness();
+    const created = await service.create("s1", {
+      requestId: "ordinary-goal-create",
+      objective: "ordinary goal",
+    });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const beforeUpdate = store.getGoal(created.id)!;
+
+    await expect(service.update("s1", created.id, {
+      requestId: "plugin-goal-update",
+      expectedRevision: beforeUpdate.revision,
+      objective: "use plugin",
+      items: [{
+        type: "capability",
+        kind: "plugin_agent",
+        pluginId: "dev.openharness.quality",
+        agentId: "dev.openharness.quality:reviewer",
+        displayName: "Reviewer",
+      }],
+    })).rejects.toThrow("session_goal_plugin_capability_unsupported");
+
+    expect(store.getGoal(created.id)).toMatchObject({
+      objective: "ordinary goal",
+      revision: beforeUpdate.revision,
+    });
+    expect(store.getInput("plugin-goal-update")).toBeUndefined();
+    expect(store.getGoalRequest("plugin-goal-update")).toBeUndefined();
+  });
+
   it("keeps a pause request pending until cleanup finishes and shares concurrent retries", async () => {
     let release!: () => void;
     const cleanupGate = new Promise<void>((done) => {

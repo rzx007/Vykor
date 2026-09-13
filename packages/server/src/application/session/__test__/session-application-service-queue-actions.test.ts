@@ -7,6 +7,20 @@ import {
 } from "../session-application-service.js";
 
 describe("SessionApplicationService queued prompt actions", () => {
+  it("rejects promotion for an admitted plugin capability Input", async () => {
+    const context = queueContext({ inputMetadata: { pluginId: "dev.openharness.quality" } });
+    const service = new SessionApplicationService(context as any);
+
+    await expect(
+      service.promoteQueuedPrompt("session-1", "input-queued", {
+        queuedRunId: "run-queued",
+        expectedActiveRunId: "active-visible",
+      }),
+    ).rejects.toThrow("session_capability_requires_queued_run");
+
+    expect(context.runEngine.promoteQueuedRun).not.toHaveBeenCalled();
+  });
+
   it("rejects promotion when the active run changed", async () => {
     const context = queueContext();
     context.runEngine.activeRunId.mockReturnValue("active-new");
@@ -111,6 +125,7 @@ describe("SessionApplicationService queued prompt actions", () => {
 function queueContext(
   options: {
     queuedRun?: Record<string, unknown>;
+    inputMetadata?: Record<string, unknown>;
   } = {},
 ) {
   const input = {
@@ -119,7 +134,7 @@ function queueContext(
     delivery: "queue",
     content: "continue",
     attachments: [],
-    metadata: {},
+    metadata: options.inputMetadata ?? {},
   };
   let queuedRun =
     options.queuedRun ??

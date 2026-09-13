@@ -646,6 +646,9 @@ export class SessionApplicationService {
       if (!input || input.sessionId !== sessionId) {
         throw new SessionApplicationError(404, `Prompt not found: ${inputId}`);
       }
+      if (typeof input.metadata.pluginId === "string") {
+        throw new SessionApplicationError(409, "session_capability_requires_queued_run");
+      }
       if (input.attachments.length > 0) {
         throw new AttachmentError(
           "attachment_structured_steer_unsupported",

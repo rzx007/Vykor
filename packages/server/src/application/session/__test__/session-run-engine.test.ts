@@ -603,6 +603,54 @@ describe("SessionRunEngine", () => {
     await engine.waitForRuns([active.run!.id]);
   });
 
+  it("does not promote a trusted plugin capability Input into the active run", async () => {
+    const store = createStore();
+    const activeDone = deferred<void>();
+    const steer = vi.fn();
+    const handle = runHandle(activeDone.promise, steer);
+    let execution = 0;
+    const runExecutor = {
+      execute: vi.fn(async (_input, context) => {
+        execution += 1;
+        if (execution === 1) {
+          await context.registerHandle(handle);
+          await handle.result;
+        }
+      }),
+    };
+    const engine = new SessionRunEngine({
+      store: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: runExecutor as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+    const active = await engine.admitPromptAndMaybeRun("s1", { content: "active" });
+    const queued = await engine.admitPromptAndMaybeRun("s1", {
+      id: "plugin-queued-input",
+      items: [{
+        type: "capability",
+        kind: "plugin",
+        pluginId: "dev.openharness.quality",
+        displayName: "Quality",
+      }],
+      metadata: { pluginId: "dev.openharness.quality" },
+      runMetadata: { pluginId: "dev.openharness.quality" },
+    });
+    await vi.waitFor(() => expect(runExecutor.execute).toHaveBeenCalledOnce());
+
+    await expect(engine.promoteQueuedRun(
+      "s1",
+      queued.input.id,
+      queued.run!.id,
+      active.run!.id,
+    )).rejects.toThrow("session_capability_requires_queued_run");
+
+    expect(steer).not.toHaveBeenCalled();
+    expect(store.getRun(queued.run!.id)).toMatchObject({ status: "pending" });
+    activeDone.resolve();
+    await engine.waitForRuns([active.run!.id, queued.run!.id]);
+  });
+
   it("queues a durable replacement run when a late steer is rejected", async () => {
     const store = createStore();
     const pending = deferred<void>();

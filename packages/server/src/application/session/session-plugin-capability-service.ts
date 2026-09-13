@@ -52,9 +52,10 @@ export class SessionPluginCapabilityService {
       pluginIds.add(item.pluginId);
     }
 
-    if (pluginIds.size !== 1) {
+    if (pluginIds.size > 1) {
       throw new SessionApplicationError(409, "session_plugin_capability_conflict");
     }
-    return { pluginId: [...pluginIds][0] };
+    const pluginId = [...pluginIds][0];
+    return pluginId ? { pluginId } : {};
   }
 }
