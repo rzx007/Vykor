@@ -585,6 +585,15 @@ export class OpenHarnessClient {
     });
   }
 
+  /** `GET /context/plugins?cwd=` — safe plugin picker metadata. */
+  async listContextPlugins(options: { cwd: string; signal?: AbortSignal }): Promise<import("@openharness/protocol").PluginCatalogEntry[]> {
+    const { signal, ...query } = options;
+    const response = await this.request<{ plugins: import("@openharness/protocol").PluginCatalogEntry[] }>(
+      this.path("/context/plugins", query), { signal },
+    );
+    return response.plugins;
+  }
+
   /** `GET /context?cwd=` */
   async getContextPreview(options: {
     cwd: string;

@@ -25,7 +25,7 @@ export function composerDocument(items: readonly ComposerInputItem[]): ComposerD
 }
 
 export function selectComposerDocumentText(document: ComposerDocument): string {
-  return document.items.map((item) => item.type === "text" ? item.text : item.type === "context" ? `@${item.displayName}` : `$${item.name}`).join("")
+  return document.items.map((item) => item.type === "text" ? item.text : item.type === "context" || item.type === "capability" ? `@${item.displayName}` : `$${item.name}`).join("")
 }
 
 export function sameComposerDocument(left: ComposerDocument, right: ComposerDocument): boolean {

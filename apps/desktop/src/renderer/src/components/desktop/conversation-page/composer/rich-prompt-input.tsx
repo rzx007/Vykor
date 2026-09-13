@@ -16,6 +16,7 @@ import { ComposerSubmitPlugin } from "./composer-submit-plugin"
 import type { ComposerSkill } from "./composer-types"
 import { ResourceMentionNode } from "./resource-mention-node"
 import { SkillMentionNode } from "./skill-mention-node"
+import { PluginMentionNode } from "./plugin-mention-node"
 
 export type { ComposerSkill } from "./composer-types"
 export { composerDocumentFromLexical, restoreComposerDocument } from "./composer-lexical-document"
@@ -42,6 +43,7 @@ export function RichPromptInput({
   contextPickerRequest = 0,
   contextPickerOpen = false,
   onContextAction,
+  onContextPickerOpenChange,
 }: {
   id: string
   value: ComposerDocument
@@ -59,6 +61,7 @@ export function RichPromptInput({
   contextPickerRequest?: number
   contextPickerOpen?: boolean
   onContextAction?: (item: ContextPickerItem) => void
+  onContextPickerOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const [isComposing, setIsComposing] = useState(false)
   const [commandError, setCommandError] = useState<string | null>(null)
@@ -78,13 +81,13 @@ export function RichPromptInput({
       onError(error: Error) {
         console.error(error)
       },
-      nodes: [SkillMentionNode, ResourceMentionNode],
+      nodes: [SkillMentionNode, ResourceMentionNode, PluginMentionNode],
     }),
     [id]
   )
 
   return (
-    <LexicalComposer initialConfig={initialConfig}>
+    <LexicalComposer key={id} initialConfig={initialConfig}>
       <div
         className={cn("relative", disabled && "pointer-events-none opacity-60")}
         onCompositionStart={() => setIsComposing(true)}
@@ -124,6 +127,7 @@ export function RichPromptInput({
           contextPickerRequest={contextPickerRequest}
           contextPickerOpen={contextPickerOpen}
           onContextAction={onContextAction}
+          onContextPickerOpenChange={onContextPickerOpenChange}
           onCommand={onCommand}
           onCommandError={setCommandError}
         />

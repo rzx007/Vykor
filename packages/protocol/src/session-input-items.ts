@@ -8,6 +8,17 @@ export const SESSION_INPUT_LIMITS = {
 
 export type SkillSource = "bundled" | "user" | "project" | "plugin"
 
+/** Safe picker metadata; implementation locations and permissions stay on the server. */
+export interface PluginCatalogEntry {
+  pluginId: string
+  displayName: string
+  version: string
+  scope: "user" | "managed" | "project" | "local"
+  origin: "native" | "converted"
+  description: string
+  capabilities: ("skills" | "tools" | "agents")[]
+}
+
 export type PluginCapabilityRef = {
   type: "capability"
   kind: "plugin"

@@ -1,4 +1,4 @@
-import { Goal, ListChecks, MessageSquare, Paperclip } from "lucide-react"
+import { Goal, ListChecks, MessageSquare, Paperclip, Puzzle } from "lucide-react"
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
@@ -14,6 +14,7 @@ export interface ContextPickerItem {
     | { kind: "files" }
     | { kind: "plan" }
     | { kind: "goal" }
+    | { kind: "plugin"; pluginId: string; displayName: string }
     | { kind: "conversation"; sessionId: string; displayName: string }
 }
 
@@ -53,6 +54,7 @@ export function ContextPicker({ items, query, onSelect, onDismiss }: {
       }
     }
     const handlePointerDown = (event: PointerEvent): void => {
+      if (event.target instanceof Element && event.target.closest('[data-context-picker-toggle]')) return
       if (event.target instanceof Node && !pickerRef.current?.contains(event.target)) onDismiss()
     }
     window.addEventListener("keydown", handleKeyDown, true)
@@ -85,7 +87,7 @@ export function ContextPicker({ items, query, onSelect, onDismiss }: {
               className={cn("flex h-10 w-full justify-start gap-2 rounded-xl px-2 text-left font-normal", index === activeIndex && "bg-muted text-foreground")}
             >
               <span className="grid size-6 shrink-0 place-items-center text-muted-foreground">
-                {item.action.kind === "files" ? <Paperclip className="size-4" /> : item.action.kind === "plan" ? <ListChecks className="size-4" /> : item.action.kind === "goal" ? <Goal className="size-4" /> : <MessageSquare className="size-4" />}
+                {item.action.kind === "plugin" ? <Puzzle className="size-4" /> : item.action.kind === "files" ? <Paperclip className="size-4" /> : item.action.kind === "plan" ? <ListChecks className="size-4" /> : item.action.kind === "goal" ? <Goal className="size-4" /> : <MessageSquare className="size-4" />}
               </span>
               <span className="min-w-0 truncate text-sm font-medium">{item.label}</span>
               <span className="min-w-0 truncate text-sm text-muted-foreground">{item.description}</span>

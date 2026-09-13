@@ -39,6 +39,8 @@ import {
   selectNewConversationSending,
 } from "@renderer/stores/desktop-session/selectors"
 import { Composer } from "./composer/composer"
+import { pluginMentionsEnabled } from "./composer/plugin-mentions-feature"
+import { PluginPreparationStatus } from "./composer/plugin-preparation-status"
 import { GoalBanner } from "./composer/goal-banner"
 import {
   emptyGoalComposer,
@@ -86,6 +88,11 @@ function ConversationPane({
     commands: import("@shared/session-types").DesktopCommandCatalogEntry[]
   } | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [pluginSnapshot, setPluginSnapshot] = useState<{
+    cwd: string
+    plugins: import("@shared/session-types").DesktopPluginCatalogEntry[]
+    error?: string
+  } | null>(null)
   const navigate = useNavigate()
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
@@ -274,6 +281,8 @@ function ConversationPane({
     commandCwd && skillCommandSnapshot?.cwd === commandCwd ? skillCommandSnapshot.commands : []
   const skillCommands: ComposerSkill[] = toComposerSkills(commandCatalog)
   const applicationCommands = toComposerCommands(commandCatalog)
+  const pluginCatalog = pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd ? pluginSnapshot.plugins : []
+  const pluginCatalogError = pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd ? pluginSnapshot.error ?? null : null
   const canSubmit =
     areDesktopAttachmentsSendable(attachments) &&
     Boolean(draftText.trim() || attachments.length > 0)
@@ -341,6 +350,16 @@ function ConversationPane({
     return () => {
       cancelled = true
     }
+  }, [commandCwd, loadStatus])
+
+  useEffect(() => {
+    if (!pluginMentionsEnabled || !commandCwd || loadStatus !== "ready") return
+    let cancelled = false
+    void window.desktop.sessions.listContextPlugins(commandCwd).then(
+      (plugins) => { if (!cancelled) setPluginSnapshot({ cwd: commandCwd, plugins }) },
+      () => { if (!cancelled) setPluginSnapshot({ cwd: commandCwd, plugins: [], error: "插件列表暂时无法加载，请稍后重试。" }) },
+    )
+    return () => { cancelled = true }
   }, [commandCwd, loadStatus])
 
   const executeComposerCommand = useCallback(
@@ -430,6 +449,7 @@ function ConversationPane({
 
       {!hasSession ? (
         <NewConversationStart
+          key={composerScope}
           draft={draft}
           sending={sending}
           loadStatus={loadStatus}
@@ -444,7 +464,7 @@ function ConversationPane({
           selectedModel={selectedModel}
           selectedProvider={selectedProvider}
           selectedPermissionMode={selectedPermissionMode}
-          operationError={composerValidationError ?? newConversationError}
+          operationError={composerValidationError ?? newConversationError ?? pluginCatalogError}
           goalError={goalComposer.error}
           onDismissGoalError={() => dismissGoalError(composerScope)}
           goalMode={goalMode}
@@ -454,6 +474,8 @@ function ConversationPane({
           commands={applicationCommands.filter((item) => item.command?.id !== "compact")}
           onCommand={executeComposerCommand}
           skills={skillCommands}
+          plugins={pluginCatalog}
+          pluginMentionsEnabled={pluginMentionsEnabled}
           attachments={attachments}
           attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
           panelOpen={panelOpen}
@@ -572,7 +594,8 @@ function ConversationPane({
                 error={goalComposer.error}
                 onDismiss={() => dismissGoalError(composerScope)}
               />
-              <ScopedOperationError error={composerValidationError ?? activeSessionError} />
+              <ScopedOperationError key={`error:${composerScope}`} error={composerValidationError ?? activeSessionError ?? pluginCatalogError} />
+              <PluginPreparationStatus activeSessionId={activeSessionId} view={sessionView} />
               <PendingPromptQueue
                 prompts={pendingPrompts}
                 activeRunId={activeRun?.id}
@@ -584,6 +607,7 @@ function ConversationPane({
                 onDismissLocal={dismissPromptSubmission}
               />
               <Composer
+                key={composerScope}
                 id="message-composer"
                 draft={draft}
                 sending={sending}
@@ -594,6 +618,8 @@ function ConversationPane({
                 modelLabel={modelLabel}
                 permissionMode={selectedPermissionMode}
                 skills={skillCommands}
+                plugins={pluginCatalog}
+                pluginMentionsEnabled={pluginMentionsEnabled}
                 commands={applicationCommands.filter(
                   (item) => item.command?.id !== "compact" || !running
                 )}

@@ -51,6 +51,10 @@ export const sessionIpcContribution: IpcContribution = {
         handler: (_event, cwd) => desktopSessionService.listCommands(String(cwd ?? "")),
       },
       {
+        channel: IpcChannels.sessionListContextPlugins,
+        handler: (_event, cwd) => desktopSessionService.listContextPlugins(String(cwd ?? "")),
+      },
+      {
         channel: IpcChannels.sessionCompact,
         handler: (_event, input) =>
           desktopSessionService.compactSession(

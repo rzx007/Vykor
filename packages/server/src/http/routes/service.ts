@@ -38,6 +38,17 @@ export interface ServiceRoutesContext {
 
 export function createServiceRoutes(context: ServiceRoutesContext): Hono {
   return new Hono()
+    .get("/context/plugins", async (c) => {
+      if (!context.contextService?.plugins)
+        return errorResponse(501, "Plugin catalog is not configured");
+      const cwd = c.req.query("cwd");
+      if (!cwd) return errorResponse(400, "cwd is required");
+      try {
+        return jsonResponse(await context.contextService.plugins({ cwd }));
+      } catch {
+        return errorResponse(500, "Plugin catalog could not be loaded");
+      }
+    })
     .get("/context", async (c) => {
       if (!context.contextService)
         return errorResponse(501, "Context service is not configured");

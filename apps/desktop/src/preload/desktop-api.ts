@@ -248,6 +248,7 @@ export const desktopAPI = {
     chooseProject: () => invoke(IpcChannels.sessionChooseProject),
     inspectProject: (path: string) => invoke(IpcChannels.sessionInspectProject, path),
     listCommands: (cwd: string) => invoke(IpcChannels.sessionListCommands, cwd),
+    listContextPlugins: (cwd: string) => invoke(IpcChannels.sessionListContextPlugins, cwd),
     compact: (input: IpcInvokeMap[typeof IpcChannels.sessionCompact]["args"][0]) =>
       invoke(IpcChannels.sessionCompact, input),
     getGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalGet]["args"][0]) => invoke(IpcChannels.sessionGoalGet, input),

@@ -10,6 +10,7 @@ import { Spinner } from "@renderer/components/ui/spinner"
 import type {
   DesktopDaemonStatus,
   DesktopModel,
+  DesktopPluginCatalogEntry,
   DesktopPermissionMode,
   DesktopProject,
   DesktopWorkspaceMode,
@@ -46,6 +47,8 @@ export function NewConversationStart({
   selectedPermissionMode,
   operationError,
   skills,
+  plugins = [],
+  pluginMentionsEnabled = false,
   commands,
   onCommand,
   goalMode = false,
@@ -92,6 +95,8 @@ export function NewConversationStart({
   selectedPermissionMode: DesktopPermissionMode
   operationError: string | null
   skills: readonly ComposerSkill[]
+  plugins?: readonly DesktopPluginCatalogEntry[]
+  pluginMentionsEnabled?: boolean
   commands?: readonly ComposerPickerItem[]
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
   goalMode?: boolean
@@ -426,6 +431,8 @@ export function NewConversationStart({
             modelLabel={modelLabel}
             permissionMode={selectedPermissionMode}
             skills={skills}
+            plugins={plugins}
+            pluginMentionsEnabled={pluginMentionsEnabled}
             commands={commands}
             onCommand={onCommand}
             goalMode={goalMode}

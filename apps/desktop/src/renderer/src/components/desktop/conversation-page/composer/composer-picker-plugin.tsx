@@ -1,5 +1,5 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   $createParagraphNode,
   $createTextNode,
@@ -27,6 +27,7 @@ import {
   textLeaves,
 } from "./composer-lexical-document"
 import { ResourceMentionNode } from "./resource-mention-node"
+import { PluginMentionNode } from "./plugin-mention-node"
 import { $createSkillMentionNode, $isSkillMentionNode } from "./skill-mention-node"
 import type { ComposerSkill } from "./composer-types"
 
@@ -37,6 +38,7 @@ export function ComposerPickerPlugin({
   contextPickerRequest,
   contextPickerOpen,
   onContextAction,
+  onContextPickerOpenChange,
   onCommand,
   onCommandError,
 }: {
@@ -46,6 +48,7 @@ export function ComposerPickerPlugin({
   contextPickerRequest: number
   contextPickerOpen: boolean
   onContextAction?: (item: ContextPickerItem) => void
+  onContextPickerOpenChange?: (open: boolean) => void
   onCommand: (command: ComposerPickerCommand) => Promise<void>
   onCommandError: (message: string | null) => void
 }): React.JSX.Element | null {
@@ -53,19 +56,25 @@ export function ComposerPickerPlugin({
   const [trigger, setTrigger] = useState<ComposerTrigger | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [manualContextOpen, setManualContextOpen] = useState(false)
+  const previousRequest = useRef(contextPickerRequest)
   useEffect(() => {
-    if (contextPickerRequest > 0) setManualContextOpen(contextPickerOpen)
+    if (contextPickerRequest === previousRequest.current) return
+    previousRequest.current = contextPickerRequest
+    setManualContextOpen(contextPickerOpen)
+    if (!contextPickerOpen && trigger) setDismissed(`${trigger.from}:${trigger.to}:${trigger.query}`)
   }, [contextPickerOpen, contextPickerRequest])
   useEffect(
     () =>
       editor.registerUpdateListener(({ editorState }) => {
         const next = editorState.read(triggerFromEditorState)
         setTrigger(next)
-        if (next) setDismissed(null)
+        setDismissed((current) => next && current === `${next.from}:${next.to}:${next.query}` ? current : null)
       }),
     [editor]
   )
   useEffect(() => setTrigger(editor.getEditorState().read(triggerFromEditorState)), [editor])
+  const contextVisible = Boolean(manualContextOpen || (trigger?.sigil === "@" && dismissed !== `${trigger.from}:${trigger.to}:${trigger.query}`))
+  useEffect(() => onContextPickerOpenChange?.(contextVisible), [contextVisible, onContextPickerOpenChange])
 
   const visible =
     manualContextOpen || (trigger && dismissed !== `${trigger.from}:${trigger.to}:${trigger.query}`)
@@ -83,7 +92,7 @@ export function ComposerPickerPlugin({
     return (
       <ContextPicker
         items={contextItems}
-        query={trigger?.query ?? ""}
+        query={manualContextOpen ? "" : trigger?.query ?? ""}
         onDismiss={() => {
           setManualContextOpen(false)
           if (trigger) setDismissed(`${trigger.from}:${trigger.to}:${trigger.query}`)
@@ -92,6 +101,17 @@ export function ComposerPickerPlugin({
           setManualContextOpen(false)
           if (item.action.kind === "conversation") {
             insertContextMention(editor, item.action.sessionId, item.action.displayName, trigger?.sigil === "@" ? trigger : undefined)
+          } else if (item.action.kind === "plugin") {
+            const { pluginId, displayName } = item.action
+            editor.update(() => {
+              const mention = new PluginMentionNode({ type: "capability", kind: "plugin", pluginId, displayName })
+              if (trigger?.sigil === "@") replaceTriggerWithNode(trigger, mention)
+              else {
+                const selection = $getSelection()
+                if ($isRangeSelection(selection)) selection.insertNodes([mention, $createTextNode(" ")])
+                else $getRoot().selectEnd().insertNodes([mention, $createTextNode(" ")])
+              }
+            }, { discrete: true })
           } else {
             if (trigger?.sigil === "@") removeComposerTrigger(editor, trigger)
             onContextAction?.(item)
@@ -218,7 +238,7 @@ export function triggerFromEditorState(): ComposerTrigger | null {
     ? findComposerTrigger(editorText(leaves), leaf.from + selection.anchor.offset, {
         atomicBoundaries: leaves
           .filter(
-            (item) => $isSkillMentionNode(item.node) || item.node instanceof ResourceMentionNode
+            (item) => $isSkillMentionNode(item.node) || item.node instanceof ResourceMentionNode || item.node instanceof PluginMentionNode
           )
           .map((item) => item.to),
       })
@@ -246,7 +266,7 @@ export function insertSkillMention(
 
 function replaceTriggerWithNode(
   trigger: ComposerTrigger,
-  mention: ResourceMentionNode | ReturnType<typeof $createSkillMentionNode>
+  mention: ResourceMentionNode | PluginMentionNode | ReturnType<typeof $createSkillMentionNode>
 ): void {
   const leaf = textLeaves().find(
     (item) => $isTextNode(item.node) && item.from <= trigger.from && item.to >= trigger.to

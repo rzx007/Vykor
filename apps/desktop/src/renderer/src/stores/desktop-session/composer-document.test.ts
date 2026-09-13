@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest"
 import { composerDocument, selectComposerDocumentText } from "./composer-document"
 
 describe("composer document", () => {
+  it("uses plugin display names without losing their structured identity", () => {
+    const document = composerDocument([
+      { type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" },
+      { type: "text", text: " review" },
+    ])
+    expect(selectComposerDocumentText(document)).toBe("@Quality review")
+    expect(document.items[0]).toEqual({ type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" })
+  })
   it("preserves ordered items and derives the readable submission text", () => {
     const document = composerDocument([
       { type: "text", text: "使用 " },

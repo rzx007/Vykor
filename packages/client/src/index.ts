@@ -15,6 +15,7 @@ export {
 } from "./transport/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
 export type {
+  PluginCatalogEntry,
   AgentEnvironmentCapabilities,
   AttachmentAssetRecord,
   ClientProtocolSupport,

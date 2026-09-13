@@ -47,7 +47,7 @@ function selectedComposerDocument(selection: RangeSelection): ComposerDocument {
   const [start, end] = [pointOffset(selection.anchor), pointOffset(selection.focus)].sort((a, b) => a - b)
   let offset = 0
   return composerDocument(composerDocumentFromLexical().items.flatMap((item): ComposerDocument["items"] => {
-    const length = item.type === "text" ? item.text.length : item.type === "context" ? item.displayName.length + 1 : item.name.length + 1
+    const length = item.type === "text" ? item.text.length : item.type === "context" || item.type === "capability" ? item.displayName.length + 1 : item.name.length + 1
     const from = offset
     offset += length
     if (end <= from || start >= offset) return []
@@ -69,6 +69,13 @@ function readStructuredClipboard(raw: string, skills: readonly ComposerSkill[]):
       if (item?.type === "context") {
         if (item.kind !== "conversation" || typeof item.id !== "string" || typeof item.displayName !== "string") return null
         items.push({ type: "context", kind: "conversation", id: item.id, displayName: item.displayName })
+        continue
+      }
+      if (item?.type === "capability") {
+        if (typeof item.pluginId !== "string" || !item.pluginId.trim() || typeof item.displayName !== "string" || !item.displayName.trim()) return null
+        if (item.kind === "plugin") items.push({ type: "capability", kind: "plugin", pluginId: item.pluginId, displayName: item.displayName })
+        else if (item.kind === "plugin_agent" && typeof item.agentId === "string" && item.agentId.trim()) items.push({ type: "capability", kind: "plugin_agent", pluginId: item.pluginId, agentId: item.agentId, displayName: item.displayName })
+        else return null
         continue
       }
       if ((item?.type !== "skill" && item?.type !== "mention") || typeof item.name !== "string" || typeof item.path !== "string" || (item.displayName !== undefined && typeof item.displayName !== "string")) return null
@@ -100,7 +107,7 @@ export function ComposerClipboardPlugin({ onPasteFiles, skills }: { onPasteFiles
       const value = selectedComposerDocument(selection)
       event.preventDefault()
       event.clipboardData.setData(COMPOSER_CLIPBOARD_TYPE, JSON.stringify(value))
-      event.clipboardData.setData("text/plain", value.items.map((item) => item.type === "text" ? item.text : item.type === "context" ? `@${item.displayName}` : `${item.type === "skill" ? "$" : "@"}${item.name}`).join(""))
+      event.clipboardData.setData("text/plain", value.items.map((item) => item.type === "text" ? item.text : item.type === "context" || item.type === "capability" ? `@${item.displayName}` : `${item.type === "skill" ? "$" : "@"}${item.name}`).join(""))
       if (cut) selection.removeText()
       return true
     }

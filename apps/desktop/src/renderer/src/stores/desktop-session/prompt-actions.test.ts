@@ -58,6 +58,32 @@ describe("prompt actions session runtime", () => {
     vi.unstubAllGlobals()
   })
 
+  it("preserves a failed plugin draft and retries the same structured submission", async () => {
+    const received: SendDesktopPromptInput[] = []
+    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: async (input: SendDesktopPromptInput) => {
+      received.push(input)
+      if (received.length === 1) throw new Error("session_plugin_capability_unavailable")
+    } } } })
+    const document = composerDocument([
+      { type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" },
+      { type: "text", text: " review" },
+    ])
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-1",
+      composerDraftsByScope: { "session:session-1": { document, attachments: [] } },
+    })
+    await expect(useDesktopSessionStore.getState().sendMessage("@Quality review", { document })).rejects.toThrow("session_plugin_capability_unavailable")
+    expect(received[0].items).toEqual([
+      { type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" },
+      { type: "text", text: " review" },
+    ])
+    expect(useDesktopSessionStore.getState().composerDraftsByScope["session:session-1"]?.document).toEqual(document)
+    expect(onlyPendingPromptSubmission()).toMatchObject({ content: "@Quality review", phase: "failed", items: document.items })
+    await useDesktopSessionStore.getState().sendMessage("@Quality review", { document })
+    expect(received[1]).toEqual(received[0])
+    expect(useDesktopSessionStore.getState().composerDraftsByScope["session:session-1"]?.document).toEqual(emptyComposerDocument)
+  })
+
   it("keeps the session runtime pending until SSE confirms the submitted input", async () => {
     let resolveSend!: () => void
     const sendPrompt = vi.fn<

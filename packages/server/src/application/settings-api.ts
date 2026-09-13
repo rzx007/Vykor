@@ -156,6 +156,7 @@ export interface AuthService {
 }
 
 export interface ContextService {
+  plugins?(input: { cwd: string }): Promise<{ plugins: import("@openharness/protocol").PluginCatalogEntry[] }>;
   preview(input: {
     cwd: string;
   }): Promise<{ report: string }> | { report: string };

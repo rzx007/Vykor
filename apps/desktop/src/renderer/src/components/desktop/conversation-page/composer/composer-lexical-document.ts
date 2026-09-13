@@ -14,6 +14,7 @@ import {
   type ComposerDocument,
 } from "@renderer/stores/desktop-session/composer-document"
 import { ResourceMentionNode } from "./resource-mention-node"
+import { PluginMentionNode } from "./plugin-mention-node"
 import { $createSkillMentionNode, $isSkillMentionNode } from "./skill-mention-node"
 
 export interface TextLeaf {
@@ -35,7 +36,7 @@ export function composerDocumentFromLexical(): ComposerDocument {
           displayName: node.__displayName,
           ...(isSkillSource(node.__source) ? { source: node.__source } : {}),
         })
-      } else if (node instanceof ResourceMentionNode) {
+      } else if (node instanceof ResourceMentionNode || node instanceof PluginMentionNode) {
         items.push({ ...node.__item })
       } else {
         const text = node.getTextContent()
@@ -69,6 +70,8 @@ export function composerParagraphs(value: ComposerDocument) {
       })
     } else if (item.type === "skill") {
       paragraph.append($createSkillMentionNode(item.name, item.path, item.displayName ?? item.name, item.source ?? ""))
+    } else if (item.type === "capability") {
+      paragraph.append(new PluginMentionNode(item))
     } else {
       paragraph.append(new ResourceMentionNode(item))
     }

@@ -58,6 +58,23 @@ export function createDefaultContextService(
   } = {},
 ): ContextService {
   return {
+    async plugins({ cwd }) {
+      const settings = await readCurrentSettings(ref);
+      const { pluginCapabilityInventory } = await discoverOpenHarnessExtensions(cwd, settings);
+      return { plugins: [...pluginCapabilityInventory.plugins.values()].map((plugin) => ({
+        pluginId: plugin.pluginId,
+        displayName: plugin.displayName,
+        version: plugin.version,
+        scope: plugin.scope,
+        origin: plugin.origin,
+        description: plugin.description,
+        capabilities: [
+          ...(plugin.skillNames.length ? ["skills" as const] : []),
+          ...(plugin.mcpServerIds.length || plugin.nativeToolEntries.length ? ["tools" as const] : []),
+          ...(plugin.agentNames.length ? ["agents" as const] : []),
+        ],
+      })) };
+    },
     async preview({ cwd }) {
       const settings = await readCurrentSettings(ref);
       const { manager } = await openMemoryManager(cwd);

@@ -236,6 +236,10 @@ export class DesktopSessionService {
     })
   }
 
+  async listContextPlugins(cwdInput: string) {
+    return (await this.getClient()).listContextPlugins({ cwd: resolveRequiredPath(cwdInput) })
+  }
+
   async compactSession(input: CompactDesktopSessionInput): Promise<DesktopCompactSessionResult> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const result = await (await this.getClient()).compactSession(sessionId)

@@ -9,6 +9,7 @@ import type { DesktopAttachmentDraft } from "@shared/attachment-types"
 import type { DesktopContextUsageSnapshot } from "@shared/context-usage-types"
 import type {
   DesktopModel,
+  DesktopPluginCatalogEntry,
   DesktopPermissionMode,
   DesktopSessionRecord,
 } from "@shared/session-types"
@@ -35,6 +36,8 @@ export function Composer({
   modelLabel,
   permissionMode,
   skills = [],
+  plugins = [],
+  pluginMentionsEnabled = false,
   commands = [],
   conversations = [],
   activeSessionId = null,
@@ -74,6 +77,8 @@ export function Composer({
   modelLabel: string
   permissionMode: DesktopPermissionMode
   skills?: readonly ComposerSkill[]
+  plugins?: readonly DesktopPluginCatalogEntry[]
+  pluginMentionsEnabled?: boolean
   commands?: readonly ComposerPickerItem[]
   conversations?: readonly DesktopSessionRecord[]
   activeSessionId?: string | null
@@ -147,6 +152,13 @@ export function Composer({
           displayName: session.title.trim() || "未命名对话",
         },
       })),
+    ...(pluginMentionsEnabled ? plugins.map((plugin): ContextPickerItem => ({
+      id: `context:plugin:${plugin.pluginId}`,
+      label: plugin.displayName,
+      description: plugin.description,
+      group: "插件",
+      action: { kind: "plugin", pluginId: plugin.pluginId, displayName: plugin.displayName },
+    })) : []),
   ]
 
   const submit = (): void => {
@@ -188,6 +200,7 @@ export function Composer({
         onRemove={(draftId) => onRemoveAttachment?.(draftId)}
       />
       <RichPromptInput
+        key={id}
         id={id}
         value={draft}
         placeholder={goalMode ? "描述你的目标，定义可衡量的成果，以获得最佳效果" : "随心输入"}
@@ -203,6 +216,7 @@ export function Composer({
         contextItems={contextItems}
         contextPickerRequest={contextPickerRequest}
         contextPickerOpen={contextPickerOpen}
+        onContextPickerOpenChange={setContextPickerOpen}
         onContextAction={(item) => {
           if (item.action.kind === "files") onPickFiles?.()
           if (item.action.kind === "plan") onSelectPermissionMode("plan")
@@ -216,6 +230,9 @@ export function Composer({
           size="icon"
           className="rounded-full"
           aria-label="添加上下文"
+          data-context-picker-toggle
+          aria-expanded={contextPickerOpen}
+          onMouseDown={(event) => event.preventDefault()}
           title="添加上下文"
           disabled={attachDisabled}
           onClick={() => {

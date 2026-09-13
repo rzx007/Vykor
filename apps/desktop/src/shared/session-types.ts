@@ -7,6 +7,7 @@ import type {
 } from "@openharness/client"
 
 export type { SessionUserInputItem, SessionGoal } from "@openharness/client"
+export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@openharness/client"
 
 export interface GetDesktopSessionGoalInput {
   sessionId: string
