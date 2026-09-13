@@ -42,6 +42,14 @@ export type { AgentRememberResult } from "./memory-runtime.js";
 export { createRememberTool, type RememberToolOptions } from "./remember-tool.js";
 export type { OpenHarnessAgentExtension, OpenHarnessExtensionContext } from "./extensions.js";
 export { discoverOpenHarnessExtensions } from "./extensions.js";
+export {
+  createPluginCapabilityInventory,
+  pluginMcpServerId,
+  selectPluginInstallationWinners,
+  type LoadedPluginInstallation,
+  type PluginCapabilityInventory,
+  type PluginCapabilityOwner,
+} from "./plugin-capability-inventory.js";
 export { createGoalRunContribution, type GoalRunBinding } from "./goal-extension.js";
 export {
   activateNativePluginTools,

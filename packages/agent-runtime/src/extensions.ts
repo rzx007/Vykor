@@ -14,6 +14,7 @@ import {
   loadNativePlugin,
   verifyInstalledNativePlugin,
   type LoadedNativePlugin,
+  type PluginDiagnostic,
 } from "@openharness/plugins";
 import {
   createSkillRegistrySnapshot,
@@ -22,6 +23,13 @@ import {
   standardUserSkillDirs,
 } from "@openharness/skills";
 import { activateNativePluginTools, type NativeToolActivationResult } from "./native-tools/activate.js";
+import {
+  createPluginCapabilityInventory,
+  pluginMcpServerId,
+  selectPluginInstallationWinners,
+  type LoadedPluginInstallation,
+  type PluginCapabilityInventory,
+} from "./plugin-capability-inventory.js";
 
 export interface ExtensionToolRegistry {
   register(tool: ToolDefinition): void;
@@ -44,6 +52,7 @@ export interface OpenHarnessExtensionDiscovery {
   agentDefinitions: AgentDefinition[];
   warnings: string[];
   mcpServers: Record<string, McpServerConfig>;
+  pluginCapabilityInventory: PluginCapabilityInventory;
 }
 
 export async function discoverOpenHarnessExtensions(
@@ -51,12 +60,14 @@ export async function discoverOpenHarnessExtensions(
   settings: Settings,
   options: { pluginsEnabled?: boolean } = {},
 ): Promise<OpenHarnessExtensionDiscovery> {
-  const plugins: LoadedNativePlugin[] = [];
+  let plugins: LoadedNativePlugin[] = [];
   const warnings: string[] = [];
   const installedPlugins = (settings.plugins?.enabled ?? true) && (options.pluginsEnabled ?? true)
     ? await discoverInstalledNativePlugins({ cwd, onWarning: (warning) => warnings.push(warning) })
     : [];
-  for (const record of installedPlugins) {
+  const winnerSelection = selectPluginInstallationWinners(installedPlugins);
+  const loadedInstallations: LoadedPluginInstallation[] = [];
+  for (const record of winnerSelection.winners) {
     const verified = await verifyInstalledNativePlugin(record);
     warnings.push(...verified.diagnostics.map((item) => `${record.id}: ${item.message}`));
     if (verified.status !== "valid") {
@@ -64,8 +75,38 @@ export async function discoverOpenHarnessExtensions(
     }
     const loaded = await loadNativePlugin(verified.plugin);
     plugins.push(loaded);
+    loadedInstallations.push({ record, plugin: loaded });
     warnings.push(...loaded.diagnostics.map((item) => `${record.id}: ${item.message}`));
   }
+  const componentInventory = createPluginCapabilityInventory(loadedInstallations);
+  const settingsMcpServers: Record<string, McpServerConfig> = {};
+  const settingsMcpDiagnostics: PluginDiagnostic[] = [];
+  for (const [serverId, server] of Object.entries(settings.mcpServers ?? {})) {
+    if (serverId.startsWith("plugin:")) {
+      settingsMcpDiagnostics.push({
+        severity: "error",
+        phase: "discover",
+        code: "plugin_mcp_server_identity_reserved",
+        message: `Settings MCP server '${serverId}' uses the reserved plugin server identity namespace`,
+        component: "mcpServers",
+        details: { serverId },
+      });
+      continue;
+    }
+    settingsMcpServers[serverId] = server;
+  }
+  const pluginCapabilityInventory: PluginCapabilityInventory = {
+    ...componentInventory,
+    diagnostics: [
+      ...winnerSelection.diagnostics,
+      ...componentInventory.diagnostics,
+      ...settingsMcpDiagnostics,
+    ],
+  };
+  warnings.push(...pluginCapabilityInventory.diagnostics.map((item) => item.message));
+  const activeInstallations = loadedInstallations.filter(({ record }) =>
+    pluginCapabilityInventory.plugins.has(record.id));
+  plugins = activeInstallations.map(({ plugin }) => plugin);
   const skillRegistry = await createSkillRegistrySnapshot({
     plugins: plugins.flatMap((plugin) => plugin.components.skills?.value ?? []),
     userDirs: standardUserSkillDirs(),
@@ -77,7 +118,7 @@ export async function discoverOpenHarnessExtensions(
   for (const plugin of plugins) {
     const compatibilityEnv = buildNativePluginCompatibilityEnvironment({ manifest: plugin.manifest, root: plugin.root, cwd });
     for (const [name, server] of Object.entries(plugin.components.mcpServers?.value ?? {})) {
-      pluginMcpServers[name] = server.type === "stdio" ? { ...server, env: { ...server.env, ...compatibilityEnv } } : server;
+      pluginMcpServers[pluginMcpServerId(plugin.manifest.id, name)] = server.type === "stdio" ? { ...server, env: { ...server.env, ...compatibilityEnv } } : server;
     }
   }
   return {
@@ -85,7 +126,8 @@ export async function discoverOpenHarnessExtensions(
     plugins,
     agentDefinitions,
     warnings,
-    mcpServers: { ...pluginMcpServers, ...(settings.mcpServers ?? {}) },
+    mcpServers: { ...settingsMcpServers, ...pluginMcpServers },
+    pluginCapabilityInventory,
   };
 }
 

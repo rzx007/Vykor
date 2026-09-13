@@ -208,6 +208,8 @@ describe("extension agent definition scoping", () => {
     writeProjectAgentPlugin(cwdB, "plugin-b", "model-b");
 
     const discoveryA = await discoverOpenHarnessExtensions(cwdA, BASE_SETTINGS);
+    expect(discoveryA.pluginCapabilityInventory.agents.get("dev.openharness.plugin-a:reviewer"))
+      .toEqual({ pluginId: "dev.openharness.plugin-a" });
     const runtimeA = await createOpenHarnessRuntime({
       settings: BASE_SETTINGS,
       cwd: cwdA,
@@ -255,6 +257,65 @@ describe("extension agent definition scoping", () => {
 });
 
 describe("installed Native Tool activation", () => {
+  it("reserves plugin MCP server identities for discovered plugin owners", async () => {
+    const serverId = "plugin:dev.openharness.fake:mcp:github";
+
+    const discovery = await discoverOpenHarnessExtensions(tempRoot, {
+      ...BASE_SETTINGS,
+      mcpServers: { [serverId]: { type: "http", url: "https://spoofed.example.test" } },
+    });
+
+    expect(discovery.mcpServers).toEqual({});
+    expect(discovery.pluginCapabilityInventory.diagnostics).toEqual([{
+      severity: "error",
+      phase: "discover",
+      code: "plugin_mcp_server_identity_reserved",
+      message: `Settings MCP server '${serverId}' uses the reserved plugin server identity namespace`,
+      component: "mcpServers",
+      details: { serverId },
+    }]);
+    expect(discovery.warnings).toContain(
+      `Settings MCP server '${serverId}' uses the reserved plugin server identity namespace`,
+    );
+  });
+
+  it("keeps an ambiguous installation out of the discovery inventory with a diagnostic", async () => {
+    const cwd = join(tempRoot, "ambiguous-installation-workspace");
+    const storePath = join(tempRoot, "config", "plugins", "installed.json");
+    mkdirSync(join(storePath, ".."), { recursive: true });
+    const common = {
+      id: "dev.openharness.ambiguous",
+      scope: "user",
+      enabled: true,
+      currentVersion: "1.0.0",
+      origin: "native",
+      requestedPermissions: [],
+      approvedPermissions: [],
+      installedAt: "now",
+      updatedAt: "now",
+    };
+    writeFileSync(storePath, JSON.stringify({
+      schemaVersion: 1,
+      revision: 1,
+      plugins: {
+        "user:first:dev.openharness.ambiguous": { ...common, cachePath: join(tempRoot, "first") },
+        "user:second:dev.openharness.ambiguous": { ...common, cachePath: join(tempRoot, "second") },
+      },
+    }));
+
+    const discovery = await discoverOpenHarnessExtensions(cwd, BASE_SETTINGS);
+
+    expect([...discovery.pluginCapabilityInventory.plugins.keys()]).toEqual([]);
+    expect(discovery.pluginCapabilityInventory.diagnostics).toEqual([{
+      severity: "error",
+      phase: "discover",
+      code: "plugin_installation_ambiguous",
+      message: "Cannot choose one user installation for plugin dev.openharness.ambiguous",
+      pluginId: "dev.openharness.ambiguous",
+      details: { scope: "user", count: 2 },
+    }]);
+  });
+
   it("skips installed plugins when the master switch is disabled", async () => {
     const cwd = join(tempRoot, "disabled-tool-workspace");
     writeProjectToolPlugin(cwd);
@@ -461,6 +522,16 @@ describe("installed Native Tool activation", () => {
     const cwd = join(tempRoot, "tool-workspace");
     writeProjectToolPlugin(cwd);
     const discovery = await discoverOpenHarnessExtensions(cwd, BASE_SETTINGS);
+    expect(discovery.pluginCapabilityInventory.plugins.get("dev.openharness.runtime-tool"))
+      .toMatchObject({
+        pluginId: "dev.openharness.runtime-tool",
+        version: "1.0.0",
+        scope: "user",
+        origin: "native",
+        nativeToolEntries: ["./tools/index.mjs"],
+      });
+    expect(discovery.pluginCapabilityInventory.nativeToolEntries.get("./tools/index.mjs"))
+      .toEqual({ pluginId: "dev.openharness.runtime-tool" });
     const runtime = await createOpenHarnessRuntime({
       settings: BASE_SETTINGS,
       cwd,
