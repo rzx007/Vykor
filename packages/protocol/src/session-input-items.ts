@@ -8,11 +8,28 @@ export const SESSION_INPUT_LIMITS = {
 
 export type SkillSource = "bundled" | "user" | "project" | "plugin"
 
+export type PluginCapabilityRef = {
+  type: "capability"
+  kind: "plugin"
+  pluginId: string
+  displayName: string
+}
+
+export type PluginAgentRef = {
+  type: "capability"
+  kind: "plugin_agent"
+  pluginId: string
+  agentId: string
+  displayName: string
+}
+
 export type SessionUserInputItem =
   | { type: "text"; text: string }
   | { type: "skill"; name: string; path: string; displayName?: string; source?: SkillSource }
   | { type: "mention"; name: string; path: string; displayName?: string }
   | { type: "context"; kind: "conversation"; id: string; displayName: string }
+  | PluginCapabilityRef
+  | PluginAgentRef
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F-\u009F]/
 const TEXT_CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/
@@ -37,6 +54,19 @@ export function validateSessionUserInputItems(
       assertValidString(item.displayName, "displayName")
       assertMaximumLength(item.id, SESSION_INPUT_LIMITS.maxNameChars, "id")
       assertMaximumLength(item.displayName, SESSION_INPUT_LIMITS.maxDisplayNameChars, "displayName")
+      continue
+    }
+
+    if (item.type === "capability") {
+      if (item.kind !== "plugin" && item.kind !== "plugin_agent") throw new Error("invalid_capability_kind")
+      assertValidString(item.pluginId, "pluginId")
+      assertValidString(item.displayName, "displayName")
+      assertMaximumLength(item.pluginId, SESSION_INPUT_LIMITS.maxNameChars, "pluginId")
+      assertMaximumLength(item.displayName, SESSION_INPUT_LIMITS.maxDisplayNameChars, "displayName")
+      if (item.kind === "plugin_agent") {
+        assertValidString(item.agentId, "agentId")
+        assertMaximumLength(item.agentId, SESSION_INPUT_LIMITS.maxNameChars, "agentId")
+      }
       continue
     }
 
@@ -76,7 +106,11 @@ export function normalizeSessionUserInputItems(
 
 export function sessionUserInputText(items: readonly SessionUserInputItem[]): string {
   return normalizeSessionUserInputItems(items)
-    .map((item) => item.type === "text" ? item.text : item.type === "context" ? `@${item.displayName}` : `$${item.name}`)
+    .map((item) => item.type === "text"
+      ? item.text
+      : item.type === "context" || item.type === "capability"
+        ? `@${item.displayName}`
+        : `$${item.name}`)
     .join("")
 }
 

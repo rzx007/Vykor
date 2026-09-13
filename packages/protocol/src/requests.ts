@@ -249,6 +249,33 @@ export function parseSessionInputItems(value: unknown): SessionUserInputItem[] {
       }
       return { type: "context", kind: "conversation", id: item.id, displayName: item.displayName };
     }
+    if (item.type === "capability") {
+      if (
+        (item.kind !== "plugin" && item.kind !== "plugin_agent") ||
+        typeof item.pluginId !== "string" ||
+        typeof item.displayName !== "string" ||
+        (item.kind === "plugin_agent" && typeof item.agentId !== "string")
+      ) {
+        throw new ProtocolValidationError(
+          `${field} requires a valid kind, pluginId, displayName and agentId`,
+          field,
+        );
+      }
+      return item.kind === "plugin"
+        ? {
+            type: "capability",
+            kind: "plugin",
+            pluginId: item.pluginId,
+            displayName: item.displayName,
+          }
+        : {
+            type: "capability",
+            kind: "plugin_agent",
+            pluginId: item.pluginId,
+            agentId: item.agentId as string,
+            displayName: item.displayName,
+          };
+    }
     if (item.type !== "skill" && item.type !== "mention") {
       throw new ProtocolValidationError(`${field}.type is invalid`, `${field}.type`);
     }

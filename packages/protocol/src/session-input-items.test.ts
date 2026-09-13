@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   normalizeSessionUserInputItems,
   sessionUserInputText,
+  type SessionUserInputItem,
   validateSessionUserInputItems,
 } from "./session-input-items.js"
+import { parseSessionInputItems } from "./requests.js"
 
 describe("session input items", () => {
   it("merges adjacent text and preserves skill order", () => {
@@ -35,6 +37,47 @@ describe("session input items", () => {
     const items = [{ type: "context" as const, kind: "conversation" as const, id: "session-2", displayName: "登录问题" }]
     expect(validateSessionUserInputItems(items)).toEqual(items)
     expect(sessionUserInputText(items)).toBe("@登录问题")
+  })
+
+  it("preserves plugin and plugin-agent capability references", () => {
+    const items = [
+      {
+        type: "capability",
+        kind: "plugin",
+        pluginId: "dev.openharness.quality",
+        displayName: "Quality Tools",
+      },
+      {
+        type: "capability",
+        kind: "plugin_agent",
+        pluginId: "dev.openharness.quality",
+        agentId: "reviewer",
+        displayName: "Reviewer",
+      },
+    ] satisfies SessionUserInputItem[]
+
+    expect(validateSessionUserInputItems(items)).toEqual(items)
+    expect(sessionUserInputText(items)).toBe("@Quality Tools@Reviewer")
+  })
+
+  it("parses plugin capability references from request JSON", () => {
+    expect(parseSessionInputItems([
+      {
+        type: "capability",
+        kind: "plugin_agent",
+        pluginId: "dev.openharness.quality",
+        agentId: "reviewer",
+        displayName: "Reviewer",
+      },
+    ])).toEqual([
+      {
+        type: "capability",
+        kind: "plugin_agent",
+        pluginId: "dev.openharness.quality",
+        agentId: "reviewer",
+        displayName: "Reviewer",
+      },
+    ])
   })
 
   it("rejects more than 32 skill items", () => {

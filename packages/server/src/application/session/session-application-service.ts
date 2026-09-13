@@ -33,6 +33,7 @@ import type { ContextUsageCache } from "../context-usage-cache.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "./session-conversation-context.js";
 import type { SessionRunExecutorContext } from "./session-run-executor.js";
+import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
 
 export { SessionApplicationError } from "./session-application-error.js";
 
@@ -48,6 +49,7 @@ export interface SessionApplicationServiceContext {
   /** Optional: invalidate session context-usage cache on model/runtime changes. */
   contextUsageCache?: Pick<ContextUsageCache, "invalidate">;
   resolveSkillCatalog?: SessionRunExecutorContext["resolveSkillCatalog"];
+  pluginCapabilities?: Pick<SessionPluginCapabilityService, "admit">;
 }
 
 export interface UpdateSessionCommand {
@@ -75,6 +77,15 @@ function inputItems(input: {
   content?: string;
 }): SessionUserInputItem[] {
   return input.items ? [...input.items] : [{ type: "text", text: input.content ?? "" }];
+}
+
+function withoutPluginId(
+  metadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!metadata || !Object.hasOwn(metadata, "pluginId")) return metadata;
+  const sanitized = { ...metadata };
+  delete sanitized.pluginId;
+  return sanitized;
 }
 
 export interface ResumeSessionRunCommand {
@@ -217,6 +228,18 @@ export class SessionApplicationService {
         }
         return promptResult(this.context.store, existingInput);
       }
+      const hasPluginCandidates = items.some((item) =>
+        item.type === "capability" || item.type === "skill"
+      );
+      const requiresPluginService = items.some((item) =>
+        item.type === "capability" || (item.type === "skill" && item.source === "plugin")
+      );
+      if (requiresPluginService && !this.context.pluginCapabilities) {
+        throw new Error("session_plugin_capability_unavailable");
+      }
+      const capability = hasPluginCandidates && this.context.pluginCapabilities
+        ? await this.context.pluginCapabilities.admit(session, items)
+        : {};
       if (this.context.runEngine.hasWork(sessionId)) {
         throw new SessionApplicationError(
           409,
@@ -245,12 +268,16 @@ export class SessionApplicationService {
         attachments,
         traceId: input.traceId,
         metadata: {
-          ...(input.metadata ?? {}),
+          ...(withoutPluginId(input.metadata) ?? {}),
+          ...(capability.pluginId ? { pluginId: capability.pluginId } : {}),
           edit: {
             kind: "latest_prompt",
             sourceMessageId: latestUserMessage.id,
           },
         },
+        ...(capability.pluginId
+          ? { runMetadata: { pluginId: capability.pluginId } }
+          : {}),
       });
     } finally {
       lease.release();
@@ -343,16 +370,55 @@ export class SessionApplicationService {
     if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
     const lease = this.enterSessionOperation(session);
     try {
-      return await this.admitPromptWork(sessionId, input);
+      return await this.admitPromptWork(session, input);
     } finally {
       lease.release();
     }
   }
 
   private async admitPromptWork(
-    sessionId: string,
-    input: AdmitPromptInput,
+    session: NonNullable<ReturnType<SessionStore["getSession"]>>,
+    originalInput: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
+    const sessionId = session.id;
+    const items = inputItems(originalInput);
+    const hasPluginCandidates = items.some((item) =>
+      item.type === "capability" || item.type === "skill"
+    );
+    const requiresPluginService = items.some((item) =>
+      item.type === "capability" || (item.type === "skill" && item.source === "plugin")
+    );
+    if (requiresPluginService && !this.context.pluginCapabilities) {
+      throw new Error("session_plugin_capability_unavailable");
+    }
+    const existingPluginId = hasPluginCandidates && originalInput.id
+      ? this.context.store.getInput(originalInput.id)?.metadata.pluginId
+      : undefined;
+    const capability = hasPluginCandidates && this.context.pluginCapabilities
+      ? typeof existingPluginId === "string"
+        ? { pluginId: existingPluginId }
+        : await this.context.pluginCapabilities.admit(session, items)
+      : {};
+    if (capability.pluginId && originalInput.delivery === "steer") {
+      throw new SessionApplicationError(409, "session_capability_requires_queued_run");
+    }
+    const sanitizedInput = {
+      ...originalInput,
+      ...(originalInput.metadata
+        ? { metadata: withoutPluginId(originalInput.metadata) }
+        : {}),
+      ...(originalInput.runMetadata
+        ? { runMetadata: withoutPluginId(originalInput.runMetadata) }
+        : {}),
+    };
+    const input = capability.pluginId
+      ? {
+          ...sanitizedInput,
+          items,
+          metadata: { ...(sanitizedInput.metadata ?? {}), pluginId: capability.pluginId },
+          runMetadata: { ...(sanitizedInput.runMetadata ?? {}), pluginId: capability.pluginId },
+        }
+      : sanitizedInput;
     const delivery = input.delivery ?? "queue";
     const metadata = {
       ...(input.metadata ?? {}),
@@ -373,15 +439,12 @@ export class SessionApplicationService {
         return promptResult(this.context.store, existing);
       }
     }
-    const items = inputItems(input);
     let liveContent = sessionUserInputText(items);
     if (
       !hasAttachments &&
       this.context.liveChildren.has(sessionId) &&
       items.some((item) => item.type === "skill" || item.type === "context")
     ) {
-      const session = this.context.store.getSession(sessionId);
-      if (!session) throw new Error(`Session not found: ${sessionId}`);
       const hasExplicitSkills = items.some((item) => item.type === "skill");
       if (hasExplicitSkills && !this.context.resolveSkillCatalog)
         throw new Error("session_input_skill_catalog_unavailable");
@@ -393,7 +456,7 @@ export class SessionApplicationService {
         conversationContextCatalog(this.context.store, sessionId),
       ).instruction;
     }
-    const live = hasAttachments
+    const live = hasAttachments || capability.pluginId
       ? undefined
       : await this.context.liveChildren.send(sessionId, {
           id: input.id,
@@ -522,9 +585,16 @@ export class SessionApplicationService {
         sourceRunId: sourceRun.id,
         sourceInputId: sourceInput.id,
       };
+      const pluginId = typeof sourceInput.metadata.pluginId === "string"
+        ? sourceInput.metadata.pluginId
+        : undefined;
       const resumed = this.context.runEngine.replayInput(sourceInput.id, {
         id: input.id,
-        metadata: { ...(input.metadata ?? {}), recovery },
+        metadata: {
+          ...(withoutPluginId(input.metadata) ?? {}),
+          ...(pluginId ? { pluginId } : {}),
+          recovery,
+        },
         traceId: input.traceId,
       });
       const before = this.context.events.checkpoint();

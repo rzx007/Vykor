@@ -8,6 +8,45 @@ import { SessionRunEngine } from "../session-run-engine.js";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 
 describe("SessionRunEngine", () => {
+  it("rejects capability steer without delivering it to the active run", async () => {
+    const store = createStore();
+    const pending = deferred<void>();
+    const handle = runHandle(pending.promise, vi.fn());
+    const runExecutor = {
+      execute: vi.fn(async (_input, context) => {
+        await context.registerHandle(handle);
+        await handle.result;
+      }),
+    };
+    const engine = new SessionRunEngine({
+      store: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: runExecutor as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+    await engine.admitPromptAndMaybeRun("s1", { content: "root" });
+    await vi.waitFor(() => expect(runExecutor.execute).toHaveBeenCalledOnce());
+    store.admitPrompt.mockClear();
+    store.createRun.mockClear();
+
+    await expect(engine.admitPromptAndMaybeRun("s1", {
+      id: "capability-steer",
+      delivery: "steer",
+      items: [{
+        type: "capability",
+        kind: "plugin",
+        pluginId: "dev.openharness.quality",
+        displayName: "Quality",
+      }],
+    })).rejects.toThrow("session_capability_requires_queued_run");
+
+    expect(handle.steer).not.toHaveBeenCalled();
+    expect(store.admitPrompt).not.toHaveBeenCalled();
+    expect(store.createRun).not.toHaveBeenCalled();
+    pending.resolve();
+    await engine.waitForRuns(["r1"]);
+  });
+
   it("admits root work and forwards steer directly to the active handle", async () => {
     const store = createStore();
     const pending = deferred<void>();
@@ -214,6 +253,46 @@ describe("SessionRunEngine", () => {
       content: "hello",
     });
     expect(second.input).toBe(first.input);
+  });
+
+  it("uses request id only to reuse an admitted plugin Input and its started Run", async () => {
+    const store = createStore();
+    const pending = deferred<void>();
+    const runExecutor = { execute: vi.fn(async () => await pending.promise) };
+    const engine = new SessionRunEngine({
+      store: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: runExecutor as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+    const items = [{
+      type: "capability" as const,
+      kind: "plugin" as const,
+      pluginId: "dev.openharness.quality",
+      displayName: "Quality",
+    }];
+
+    const first = await engine.admitPromptAndMaybeRun("s1", {
+      id: "plugin-request",
+      items,
+      metadata: { pluginId: "dev.openharness.quality" },
+      runMetadata: { pluginId: "dev.openharness.quality" },
+      traceId: "trace-first",
+    });
+    await vi.waitFor(() => expect(runExecutor.execute).toHaveBeenCalledOnce());
+    const duplicate = await engine.admitPromptAndMaybeRun("s1", {
+      id: "plugin-request",
+      items,
+      metadata: { pluginId: "dev.openharness.quality" },
+      runMetadata: { pluginId: "dev.openharness.quality" },
+      traceId: "trace-retry",
+    });
+
+    expect(duplicate.input).toBe(first.input);
+    expect(duplicate.run).toBe(first.run);
+    expect(runExecutor.execute).toHaveBeenCalledOnce();
+    pending.resolve();
+    await engine.waitForRuns([first.run!.id]);
   });
 
   it("uses the atomic store admission before enqueuing queued work", async () => {

@@ -28,6 +28,12 @@ function inputItems(input: { items?: readonly SessionUserInputItem[]; content?: 
   return input.items ? [...input.items] : [{ type: "text", text: input.content ?? "" }];
 }
 
+function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
+  return items.some((item) =>
+    item.type === "capability" || (item.type === "skill" && item.source === "plugin")
+  );
+}
+
 export type AdmitPromptInput = {
   id?: string;
   delivery?: "queue" | "steer";
@@ -394,6 +400,9 @@ export class SessionRunEngine {
   ): Promise<AdmitPromptResult> {
     if (!this.accepting)
       return Promise.reject(new Error("Session run engine is stopping"));
+    if (input.delivery === "steer" && hasPluginCapability(inputItems(input))) {
+      return Promise.reject(new Error("session_capability_requires_queued_run"));
+    }
     if (!input.runMetadata?.goalId) {
       const goal = this.context.store.getCurrentGoal(sessionId);
       if (goal?.status === "active") this.cancelGoalRuns(sessionId, goal.id, "用户消息优先", true);

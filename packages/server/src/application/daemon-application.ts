@@ -68,6 +68,7 @@ import { SessionQueryService } from "./session/session-query-service.js";
 import { SessionRunEngine } from "./session/session-run-engine.js";
 import { SessionRunExecutor } from "./session/session-run-executor.js";
 import { materializeSessionInput } from "./session/session-input-materializer.js";
+import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
 import { conversationContextCatalog } from "./session/session-conversation-context.js";
 import { SessionPostRunMaintenance } from "./session/session-post-run-maintenance.js";
 import { SessionExecutionProjector } from "./session/session-execution-projector.js";
@@ -666,6 +667,14 @@ export class DaemonApplication implements DurableAgentApplication {
           if (!settings) throw new Error("session_input_skill_catalog_unavailable");
           return (await discoverOpenHarnessExtensions(session.cwd, settings)).skillRegistry;
         },
+        pluginCapabilities: new SessionPluginCapabilityService({
+          resolveInventory: async (session) => {
+            const settings = await resolveSessionSettings(session.cwd);
+            if (!settings) throw new Error("session_plugin_capability_unavailable");
+            return (await discoverOpenHarnessExtensions(session.cwd, settings))
+              .pluginCapabilityInventory;
+          },
+        }),
       });
       this.goals = new SessionGoalService({
         store,
