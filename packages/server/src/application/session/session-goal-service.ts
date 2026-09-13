@@ -60,6 +60,7 @@ export class SessionGoalService {
       const request = this.context.store.getGoalRequest(input.requestId)!;
       let paused: SessionGoal;
       if (request.result?.phase === "stopping") {
+        pluginId = typeof request.result.pluginId === "string" ? request.result.pluginId : undefined;
         paused = this.requireGoal(sessionId, goalId);
         if (paused.revision !== request.result.revision || paused.status !== "paused") throw new SessionApplicationError(409, "目标在停止期间已被修改，请重新提交");
       } else {
@@ -73,7 +74,7 @@ export class SessionGoalService {
           this.context.store.settleGoalRequest(input.requestId, {
             status: "pending",
             goalId,
-            result: { phase: "stopping", revision: changed.revision },
+            result: { phase: "stopping", revision: changed.revision, pluginId: pluginId ?? changed.pluginId },
           });
           return changed;
         });
@@ -491,7 +492,13 @@ export class SessionGoalService {
       .withSessionOperation(sessionId, async () => {
         const before = this.context.events.checkpoint();
         try {
-          await preflight?.();
+          const existing = this.context.store.getGoalRequest(requestId);
+          if (existing && (existing.sessionId !== sessionId || existing.fingerprint !== fingerprint)) {
+            throw new Error("session_goal_request_conflict");
+          }
+          // A durable result already accepted this selection. Only unaccepted attempts
+          // need admission; execution still checks the current runtime for every Run.
+          if (!existing?.result) await preflight?.();
           this.context.store.beginGoalRequest({
             requestId,
             sessionId,

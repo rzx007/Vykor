@@ -40,6 +40,7 @@ function harness(
     publishSince: vi.fn(),
   };
   let service: SessionGoalService;
+  let pluginsAvailable = true;
   const engine = new SessionRunEngine({
     store,
     agentPool: { configured: true } as any,
@@ -75,7 +76,7 @@ function harness(
     waitVerifier,
     pluginCapabilities: new SessionPluginCapabilityService({
       resolveInventory: async () => ({
-        plugins: new Map([pluginId, "dev.openharness.research"].map((id) => [id, {
+        plugins: new Map((pluginsAvailable ? [pluginId, "dev.openharness.research"] : []).map((id) => [id, {
           pluginId: id,
           displayName: "Quality",
           description: "",
@@ -95,7 +96,7 @@ function harness(
       }),
     }),
   });
-  return { store, engine, service };
+  return { store, engine, service, disablePlugins: () => { pluginsAvailable = false; } };
 }
 
 function assessment(store: SessionStore, runId: string, value: Record<string, unknown>, status: "completed" | "failed" = "completed") {
@@ -125,6 +126,64 @@ function assessment(store: SessionStore, runId: string, value: Record<string, un
 }
 
 describe("SessionGoalService durable lifecycle", () => {
+  it.each(["create", "update"] as const)("replays accepted %s after its plugin becomes unavailable", async (operation) => {
+    const { service, store, engine, disablePlugins } = harness();
+    const original = operation === "update"
+      ? await service.create("s1", { requestId: "original", objective: "original" }) : undefined;
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const input = { requestId: "accepted-plugin", objective: "review", items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] };
+    const revision = original ? store.getGoal(original.id)!.revision : 0;
+    const request = (objective = input.objective) => original
+      ? service.update("s1", original.id, { ...input, objective, expectedRevision: revision })
+      : service.create("s1", { ...input, objective });
+    const accepted = await request();
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const runs = store.listRuns("s1");
+    disablePlugins();
+    await expect(request()).resolves.toEqual(accepted);
+    expect(store.listRuns("s1")).toEqual(runs);
+    await expect(request("different request")).rejects.toThrow("session_goal_request_conflict");
+  });
+
+  it.each(["create", "update"] as const)("recovers persisted %s dispatch without readmitting its unavailable plugin", async (operation) => {
+    const { service, store, engine, disablePlugins } = harness();
+    const original = operation === "update"
+      ? await service.create("s1", { requestId: "original", objective: "original" }) : undefined;
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const input = { requestId: "recover-plugin", objective: "review", items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] };
+    const revision = original ? store.getGoal(original.id)!.revision : 0;
+    const request = () => original
+      ? service.update("s1", original.id, { ...input, expectedRevision: revision })
+      : service.create("s1", input);
+    vi.spyOn(engine, "dispatchPersistedRun").mockImplementationOnce(() => { throw new Error("dispatch failed"); });
+    await expect(request()).rejects.toThrow("dispatch failed");
+    const persisted = store.findRunByInput(input.requestId)!;
+    const count = store.listRuns("s1").length;
+    disablePlugins();
+    await expect(request()).resolves.toMatchObject({ pluginId });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    expect(store.listRuns("s1")).toHaveLength(count);
+    expect(store.findRunByInput(input.requestId)).toMatchObject({ id: persisted.id, status: "completed", metadata: { pluginId } });
+    expect(store.getGoalRequest(input.requestId)?.status).toBe("completed");
+  });
+
+  it("retains the admitted replacement plugin when an edit resumes after stopping failed", async () => {
+    const { service, store, engine, disablePlugins } = harness();
+    const original = await service.create("s1", { requestId: "original", objective: "original" });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    const input = {
+      requestId: "recover-stopping", expectedRevision: store.getGoal(original.id)!.revision, objective: "research",
+      items: [{ type: "capability" as const, kind: "plugin" as const, pluginId: "dev.openharness.research", displayName: "Research" }],
+    };
+    vi.spyOn(engine, "waitForRuns").mockRejectedValueOnce(new Error("stop failed"));
+    await expect(service.update("s1", original.id, input)).rejects.toThrow("stop failed");
+    disablePlugins();
+    await expect(service.update("s1", original.id, input)).resolves.toMatchObject({ pluginId: "dev.openharness.research" });
+    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    expect(store.findRunByInput(input.requestId)?.metadata.pluginId).toBe("dev.openharness.research");
+    expect(store.listRuns("s1")).toHaveLength(2);
+  });
+
   it("carries an admitted plugin through initial and continuation runs", async () => {
     let turns = 0;
     const views: RunCapabilityView[] = [];
