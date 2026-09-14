@@ -12,7 +12,12 @@ import { Spinner } from "@renderer/components/ui/spinner"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 import { VirtualizedCodePreview } from "./virtualized-code-preview"
-import { canOpenHtmlInBrowser, shouldOfferHtmlBrowserOpen } from "./file-viewer-model"
+import { FileImagePreview } from "./file-image-preview"
+import {
+  canOpenHtmlInBrowser,
+  shouldOfferHtmlBrowserOpen,
+  type FileViewerType,
+} from "./file-viewer-model"
 
 export type FileViewMode = "preview" | "source"
 
@@ -24,7 +29,7 @@ export interface FileSearchMatch {
 
 export interface FileViewerTab {
   preview: WorkspaceReadFileResult
-  type: "code" | "document" | "markdown"
+  type: FileViewerType
   projectPath?: string | null
 }
 
@@ -91,6 +96,16 @@ export function FileViewer({
             <Spinner />
             正在读取文件...
           </div>
+        ) : activeTab?.type === "image" ? (
+          activeTab.preview.previewBytes && activeTab.preview.mediaType ? (
+            <FileImagePreview
+              bytes={activeTab.preview.previewBytes}
+              mediaType={activeTab.preview.mediaType}
+              name={activeTab.preview.name}
+            />
+          ) : (
+            <DocumentPlaceholder preview={activeTab.preview} />
+          )
         ) : activeTab?.type === "document" ? (
           <DocumentPlaceholder preview={activeTab.preview} />
         ) : activeTab?.type === "markdown" && viewMode === "preview" ? (
@@ -159,11 +174,12 @@ function MarkdownPreview({ preview }: { preview: WorkspaceReadFileResult }): Rea
 }
 
 function DocumentPlaceholder({ preview }: { preview: WorkspaceReadFileResult }): React.JSX.Element {
-  return (
-    <DesktopEmptyState
-      icon={FileText}
-      title={preview.name}
-      description="这类文件的预览后续接入，这里先保留标签页占位。"
-    />
-  )
+  const description =
+    preview.imagePreviewError === "image_too_large"
+      ? "图片超过 50 MB，无法直接预览。"
+      : preview.imagePreviewError === "image_unsupported"
+        ? "无法安全预览这张图片。"
+        : "这类文件的预览后续接入，这里先保留标签页占位。"
+
+  return <DesktopEmptyState icon={FileText} title={preview.name} description={description} />
 }

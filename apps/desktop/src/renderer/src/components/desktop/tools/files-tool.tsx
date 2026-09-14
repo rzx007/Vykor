@@ -36,8 +36,10 @@ import {
   type FileViewMode,
   type FileViewerTab,
 } from "@renderer/components/desktop/tools/file-viewer"
-import { isHtmlPath } from "@renderer/components/desktop/tools/file-viewer-model"
-import { isMarkdownPath } from "@renderer/components/desktop/tools/file-icons"
+import {
+  fileViewerTypeForPreview,
+  isHtmlPath,
+} from "@renderer/components/desktop/tools/file-viewer-model"
 import { Button } from "@renderer/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
@@ -908,23 +910,8 @@ function errorMessage(error: unknown): string {
 function toFileViewerTab(preview: WorkspaceReadFileResult): FileViewerTab {
   return {
     preview,
-    type: isMarkdownPath(preview.path) ? "markdown" : isDocumentFile(preview) ? "document" : "code",
+    type: fileViewerTypeForPreview(preview),
   }
-}
-
-function isDocumentFile(preview: WorkspaceReadFileResult): boolean {
-  const extension = preview.name.split(".").pop()?.toLowerCase()
-  return Boolean(
-    preview.binary ||
-    preview.content === null ||
-    extension === "pdf" ||
-    extension === "doc" ||
-    extension === "docx" ||
-    extension === "xls" ||
-    extension === "xlsx" ||
-    extension === "ppt" ||
-    extension === "pptx"
-  )
 }
 
 function findSearchMatches(content: string, query: string): FileSearchMatch[] {

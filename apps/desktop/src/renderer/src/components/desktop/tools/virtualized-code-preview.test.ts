@@ -52,5 +52,8 @@ function preview(path: string): WorkspaceReadFileResult {
     scope: "project",
     relativePath: path,
     rootLabel: "",
+    previewBytes: null,
+    mediaType: null,
+    imagePreviewError: null,
   }
 }
