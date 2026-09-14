@@ -196,7 +196,7 @@ describe("DesktopPluginService", () => {
     })
     await expect((service as any).confirmArchive({ cwd: "C:/workspace", selectionId: "selection-1" })).resolves.toEqual({
       status: "failed",
-      message: "请重新选择 ZIP 插件包。",
+      message: "请重新选择插件包。",
       details: [{ code: "plugin_archive_selection_invalid" }],
     })
   })
@@ -221,12 +221,12 @@ describe("DesktopPluginService", () => {
     const first = await (service as any).importArchive({} as never, { cwd: "C:/workspace" })
     await expect((service as any).confirmArchive({ cwd: "C:/other", selectionId: first.selectionId })).resolves.toMatchObject({
       status: "failed",
-      message: "请重新选择 ZIP 插件包。",
+      message: "请重新选择插件包。",
     })
     now += 10 * 60 * 1000 + 1
     await expect((service as any).confirmArchive({ cwd: "C:/workspace", selectionId: first.selectionId })).resolves.toMatchObject({
       status: "failed",
-      message: "请重新选择 ZIP 插件包。",
+      message: "请重新选择插件包。",
     })
 
     now = 30_000
@@ -235,21 +235,34 @@ describe("DesktopPluginService", () => {
     )
     await expect((service as any).confirmArchive({ cwd: "C:/workspace", selectionId: selections[0].selectionId })).resolves.toMatchObject({
       status: "failed",
-      message: "请重新选择 ZIP 插件包。",
+      message: "请重新选择插件包。",
     })
     expect((service as any).cancelArchive({ selectionId: selections[8].selectionId })).toBeUndefined()
     await expect((service as any).confirmArchive({ cwd: "C:/workspace", selectionId: selections[8].selectionId })).resolves.toMatchObject({
       status: "failed",
-      message: "请重新选择 ZIP 插件包。",
+      message: "请重新选择插件包。",
     })
   })
 
-  it("rejects a non-ZIP path returned by a picker without leaking its path", async () => {
+  it("accepts a tar.gz plugin archive returned by the picker", async () => {
     const service = new DesktopPluginService({ chooseArchive: async () => "C:/private/plugin.tar.gz" })
+
+    await expect((service as any).importArchive({} as never, { cwd: "C:/workspace" })).resolves.toMatchObject({
+      status: "installed",
+      pluginName: "archive-plugin",
+    })
+    expect(daemon.previewPluginArchive).toHaveBeenCalledWith({
+      cwd: resolve("C:/workspace"),
+      archivePath: "C:/private/plugin.tar.gz",
+    })
+  })
+
+  it("rejects an unsupported archive path returned by a picker without leaking its path", async () => {
+    const service = new DesktopPluginService({ chooseArchive: async () => "C:/private/plugin.rar" })
 
     await expect((service as any).importArchive({} as never, { cwd: "C:/workspace" })).resolves.toEqual({
       status: "failed",
-      message: "请选择 ZIP 格式的插件包。",
+      message: "请选择 ZIP、TAR 或 TAR.GZ 格式的插件包。",
       details: [{ code: "plugin_archive_invalid_extension" }],
     })
     expect(daemon.previewPluginArchive).not.toHaveBeenCalled()
@@ -265,7 +278,7 @@ describe("DesktopPluginService", () => {
     expect(electron.dialog.showOpenDialog).toHaveBeenCalledWith(owner, {
       title: "导入插件",
       properties: ["openFile"],
-      filters: [{ name: "ZIP 插件包", extensions: ["zip"] }],
+      filters: [{ name: "插件包", extensions: ["zip", "tar", "tgz", "tar.gz"] }],
     })
   })
 
@@ -292,7 +305,7 @@ describe("DesktopPluginService", () => {
     const result = await (service as any).importArchive({} as never, { cwd: "C:/workspace" })
     expect(result).toEqual({
       status: "failed",
-      message: "导入 ZIP 插件包失败，请检查插件包后重试。",
+      message: "导入插件包失败，请检查插件包后重试。",
       details: [
         { code: "plugin_archive_invalid" },
         { code: "manifest_invalid", path: "plugins/demo/manifest.json" },
@@ -365,7 +378,7 @@ describe("DesktopPluginService", () => {
     expect(refreshDaemonClient).not.toHaveBeenCalled()
     await expect((service as any).confirmArchive({ cwd: "C:/workspace", selectionId: preview.selectionId })).resolves.toMatchObject({
       status: "failed",
-      message: "请重新选择 ZIP 插件包。",
+      message: "请重新选择插件包。",
     })
   })
 
@@ -377,7 +390,7 @@ describe("DesktopPluginService", () => {
 
     await expect((service as any).importArchive({} as never, { cwd: "C:/workspace" })).resolves.toEqual({
       status: "failed",
-      message: "导入 ZIP 插件包失败，请检查插件包后重试。",
+      message: "导入插件包失败，请检查插件包后重试。",
       details: [{ code: "plugin_archive_permissions_not_approved" }],
     })
   })

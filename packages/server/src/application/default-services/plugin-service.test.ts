@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getInstalledPluginStorePath, getPluginCacheDir } from "@openharness/core";
 import { readInstalledPluginStore, updateInstalledPluginStore } from "@openharness/plugins";
@@ -130,6 +131,51 @@ async function writeNativeArchive(name = "plugin.zip", overrides: Record<string,
   });
 }
 
+async function writeTarArchive(
+  name: string,
+  files: Record<string, string>,
+  gzip = false,
+): Promise<string> {
+  const chunks: Buffer[] = [];
+  for (const [path, source] of Object.entries(files)) {
+    const contents = Buffer.from(source);
+    const header = Buffer.alloc(512);
+    header.write(path, 0, 100, "utf8");
+    header.write("0000644\0", 100, 8, "ascii");
+    header.write("0000000\0", 108, 8, "ascii");
+    header.write("0000000\0", 116, 8, "ascii");
+    header.write(contents.length.toString(8).padStart(11, "0") + "\0", 124, 12, "ascii");
+    header.write("00000000000\0", 136, 12, "ascii");
+    header.fill(0x20, 148, 156);
+    header[156] = "0".charCodeAt(0);
+    header.write("ustar\0", 257, 6, "ascii");
+    header.write("00", 263, 2, "ascii");
+    const checksum = [...header].reduce((sum, byte) => sum + byte, 0);
+    header.write(checksum.toString(8).padStart(6, "0") + "\0 ", 148, 8, "ascii");
+    chunks.push(header, contents);
+    const padding = (512 - (contents.length % 512)) % 512;
+    if (padding) chunks.push(Buffer.alloc(padding));
+  }
+  chunks.push(Buffer.alloc(1024));
+  const archive = join(root, name);
+  const tar = Buffer.concat(chunks);
+  await writeFile(archive, gzip ? gzipSync(tar) : tar);
+  return archive;
+}
+
+async function writeNativeTarArchive(name: string, gzip = false): Promise<string> {
+  return await writeTarArchive(name, {
+    ".openharness-plugin/plugin.json": JSON.stringify({
+      schemaVersion: 1,
+      id: "dev.openharness.archive",
+      name: "archive",
+      version: "1.0.0",
+      components: { tools: ["./tools/not-executed.js"] },
+    }),
+    "tools/not-executed.js": "throw new Error('Tool code must not run during archive preview');",
+  }, gzip);
+}
+
 function permissionManifest(version: string, includeNetwork = false): string {
   return JSON.stringify({
     schemaVersion: 1,
@@ -222,7 +268,7 @@ describe("default plugin service user scope", () => {
       runtimeStatus: {
         state: "failed",
         code: "snapshot_missing",
-        message: "加载失败：插件文件不完整，请重新导入 ZIP。",
+        message: "加载失败：插件文件不完整，请重新导入插件包。",
         action: "reimport",
       },
       diagnostics: [{ code: "plugin_content_digest_missing" }],
@@ -266,7 +312,7 @@ describe("default plugin service user scope", () => {
     expect(listed.plugins[0]?.runtimeStatus).toEqual({
       state: "failed",
       code: "snapshot_tampered",
-      message: "加载失败：插件文件与安装记录不一致，请重新导入 ZIP。",
+      message: "加载失败：插件文件与安装记录不一致，请重新导入插件包。",
       action: "reimport",
     });
   });
@@ -344,6 +390,28 @@ describe("default plugin service archive imports", () => {
       inventory: { tools: 1 },
       diagnostics: [],
     });
+  });
+
+  it.each([
+    ["TAR", "plugin.tar", false],
+    ["TAR.GZ", "plugin.tar.gz", true],
+  ] as const)("previews and installs a real %s archive", async (_label, name, gzip) => {
+    const archive = await writeNativeTarArchive(name, gzip);
+    const plugins = service() as any;
+    const preview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
+
+    expect(preview).toMatchObject({
+      identity: { id: "dev.openharness.archive", name: "archive", version: "1.0.0" },
+      requestedPermissions: [],
+      approvalRequired: false,
+      inventory: { tools: 1 },
+    });
+    await expect(plugins.installArchive({
+      cwd: "C:/workspace",
+      archivePath: archive,
+      expectedArchiveDigest: preview.archiveDigest,
+      approvedPermissions: [],
+    })).resolves.toMatchObject({ message: "Installed plugin 'dev.openharness.archive'." });
   });
 
   it("installs the immutable ZIP snapshot only when preview digest and approvals still match", async () => {

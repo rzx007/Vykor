@@ -5,11 +5,12 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { extract as extractTarArchive, list as listTarArchive, type ReadEntry } from "tar";
 import yauzl from "yauzl";
 
 const MAX_SOURCE_BYTES = 100 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 250 * 1024 * 1024;
-const MAX_FILES = 5_000;
+const MAX_ENTRIES = 5_000;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const MAX_COMPRESSION_RATIO = 200;
 const MAX_PATH_BYTES = 1_024;
@@ -23,10 +24,20 @@ export interface ResolvedLocalPluginZip {
   cleanup(): Promise<void>;
 }
 
+export type ResolvedLocalPluginArchive = ResolvedLocalPluginZip;
+
+type LocalArchiveKind = "zip" | "tar" | "tar.gz";
+
 interface PlannedEntry {
   entry: yauzl.Entry;
   path: string;
   directory: boolean;
+}
+
+interface TarEntry {
+  path: string;
+  directory: boolean;
+  size: number;
 }
 
 class Crc32 {
@@ -45,7 +56,7 @@ class Crc32 {
 }
 
 function archiveError(message: string): Error {
-  return new Error(`Unsafe plugin ZIP: ${message}`);
+  return new Error(`Unsafe plugin archive: ${message}`);
 }
 
 function foldedPath(path: string): string {
@@ -85,9 +96,11 @@ function validateEntries(entries: yauzl.Entry[]): PlannedEntry[] {
   const directories = new Set<string>();
   const planned: PlannedEntry[] = [];
   let totalBytes = 0;
-  let fileCount = 0;
+  let entryCount = 0;
 
   for (const entry of entries) {
+    entryCount += 1;
+    if (entryCount > MAX_ENTRIES) throw archiveError(`archive contains more than ${MAX_ENTRIES.toLocaleString("en-US")} entries`);
     if ((entry.generalPurposeBitFlag & 1) !== 0) throw archiveError(`encrypted entry is not allowed: ${entry.fileName}`);
     const { directory, path } = entryType(entry);
     const segments = validatePath(path);
@@ -99,8 +112,6 @@ function validateEntries(entries: yauzl.Entry[]): PlannedEntry[] {
     aliases.set(folded, { path, direct: true });
 
     if (!directory) {
-      fileCount += 1;
-      if (fileCount > MAX_FILES) throw archiveError(`archive contains more than ${MAX_FILES.toLocaleString("en-US")} files`);
       if (entry.uncompressedSize > MAX_FILE_BYTES) throw archiveError("single file exceeds 100 MiB");
       totalBytes += entry.uncompressedSize;
       if (totalBytes > MAX_EXTRACTED_BYTES) throw archiveError("archive extraction exceeds 250 MiB");
@@ -132,7 +143,7 @@ function validateEntries(entries: yauzl.Entry[]): PlannedEntry[] {
   return planned;
 }
 
-function candidateWrapper(entries: PlannedEntry[]): string | undefined {
+function candidateWrapper(entries: readonly { path: string; directory: boolean }[]): string | undefined {
   const candidates = entries
     .filter((entry) => !entry.directory)
     .flatMap((entry) => {
@@ -181,13 +192,13 @@ function readCentralDirectory(path: string): Promise<yauzl.Entry[]> {
 }
 
 async function copyAndHash(source: string, privateRoot: string): Promise<{ path: string; digest: string }> {
-  const target = join(privateRoot, "source.zip");
+  const target = join(privateRoot, "source.archive");
   const hash = createHash("sha256");
   let copied = 0;
   const counter = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       copied += chunk.length;
-      if (copied > MAX_SOURCE_BYTES) callback(archiveError("source ZIP exceeds 100 MiB"));
+      if (copied > MAX_SOURCE_BYTES) callback(archiveError("source archive exceeds 100 MiB"));
       else { hash.update(chunk); callback(null, chunk); }
     },
   });
@@ -246,23 +257,156 @@ function extractEntries(path: string, destination: string, planned: PlannedEntry
   }));
 }
 
+function localArchiveKind(source: string): LocalArchiveKind {
+  const lower = source.toLowerCase();
+  if (lower.endsWith(".zip")) return "zip";
+  if (lower.endsWith(".tar")) return "tar";
+  if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) return "tar.gz";
+  throw archiveError("supported formats are ZIP, TAR, TAR.GZ, and TGZ");
+}
+
+function tarEntryInfo(entry: ReadEntry): TarEntry {
+  const rawPath = entry.path;
+  if (entry.type === "SymbolicLink" || entry.type === "Link") throw archiveError(`link entry is not allowed: ${rawPath}`);
+  const directory = entry.type === "Directory" || rawPath.endsWith("/");
+  if (entry.type !== "File" && entry.type !== "OldFile" && entry.type !== "Directory") {
+    throw archiveError(`special entry type is not allowed: ${rawPath}`);
+  }
+  if (directory && entry.size > 0) throw archiveError(`directory entry has unexpected content: ${rawPath}`);
+  const path = directory && rawPath.endsWith("/") ? rawPath.slice(0, -1) : rawPath;
+  validatePath(path);
+  return { path, directory, size: entry.size };
+}
+
+async function readTarEntries(path: string, gzip: boolean): Promise<TarEntry[]> {
+  const entries: TarEntry[] = [];
+  let totalBytes = 0;
+  let failure: Error | undefined;
+  await listTarArchive({
+    file: path,
+    gzip,
+    strict: true,
+    preservePaths: true,
+    maxDecompressionRatio: MAX_COMPRESSION_RATIO,
+    onReadEntry(entry) {
+      if (failure) {
+        entry.ignore = true;
+        return;
+      }
+      try {
+        if (entries.length >= MAX_ENTRIES) throw archiveError(`archive contains more than ${MAX_ENTRIES.toLocaleString("en-US")} entries`);
+        const planned = tarEntryInfo(entry);
+        if (!planned.directory) {
+          if (planned.size > MAX_FILE_BYTES) throw archiveError("single file exceeds 100 MiB");
+          totalBytes += planned.size;
+          if (totalBytes > MAX_EXTRACTED_BYTES) throw archiveError("archive extraction exceeds 250 MiB");
+        }
+        entries.push(planned);
+      } catch (error) {
+        failure = error as Error;
+        entry.ignore = true;
+      }
+    },
+  });
+  if (failure) throw failure;
+  return validateTarEntries(entries);
+}
+
+function validateTarEntries(entries: readonly TarEntry[]): TarEntry[] {
+  const aliases = new Map<string, { path: string; direct: boolean }>();
+  const files = new Set<string>();
+  const directories = new Set<string>();
+  for (const entry of entries) {
+    const segments = validatePath(entry.path);
+    const folded = foldedPath(entry.path);
+    const prior = aliases.get(folded);
+    if (prior?.direct || (prior !== undefined && prior.path !== entry.path)) {
+      throw archiveError(`duplicate or NFC/case collision: ${prior.path} and ${entry.path}`);
+    }
+    aliases.set(folded, { path: entry.path, direct: true });
+
+    if (entry.directory) {
+      if (files.has(folded)) throw archiveError(`file-directory conflict at ${entry.path}`);
+      directories.add(folded);
+    } else {
+      if (directories.has(folded)) throw archiveError(`file-directory conflict at ${entry.path}`);
+      files.add(folded);
+    }
+    for (let length = 1; length < segments.length; length += 1) {
+      const parentPath = segments.slice(0, length).join("/");
+      const parent = foldedPath(parentPath);
+      const parentAlias = aliases.get(parent);
+      if (parentAlias !== undefined && parentAlias.path !== parentPath) {
+        throw archiveError(`duplicate or NFC/case collision: ${parentAlias.path} and ${parentPath}`);
+      }
+      if (parentAlias === undefined) aliases.set(parent, { path: parentPath, direct: false });
+      if (files.has(parent)) throw archiveError(`file-directory conflict at ${entry.path}`);
+      directories.add(parent);
+    }
+  }
+  return [...entries];
+}
+
+async function extractTarEntries(path: string, destination: string, gzip: boolean, planned: readonly TarEntry[]): Promise<void> {
+  const plannedByPath = new Map(planned.map((entry) => [entry.path, entry]));
+  let failure: Error | undefined;
+  await extractTarArchive({
+    file: path,
+    cwd: destination,
+    gzip,
+    strict: true,
+    preservePaths: false,
+    keep: true,
+    maxDepth: MAX_DEPTH,
+    maxDecompressionRatio: MAX_COMPRESSION_RATIO,
+    filter(_path, entry) {
+      if (failure) return false;
+      try {
+        const actual = tarEntryInfo(entry as ReadEntry);
+        const expected = plannedByPath.get(actual.path);
+        if (!expected || expected.directory !== actual.directory || expected.size !== actual.size) {
+          throw archiveError("TAR entry list changed during extraction");
+        }
+        return true;
+      } catch (error) {
+        failure = error as Error;
+        return false;
+      }
+    }
+  });
+  if (failure) throw failure;
+}
+
 async function cleanupPrivateRoot(root: string): Promise<void> {
   if (resolve(dirname(root)) !== resolve(tmpdir()) || !root.startsWith(join(tmpdir(), PRIVATE_PREFIX))) throw archiveError("refusing to clean an unknown temporary directory");
   await rm(root, { recursive: true, force: true });
 }
 
 export async function resolveLocalPluginZip(source: string): Promise<ResolvedLocalPluginZip> {
+  return await resolveLocalPluginArchive(source);
+}
+
+export async function resolveLocalPluginArchive(source: string): Promise<ResolvedLocalPluginArchive> {
   const sourceInfo = await lstat(source);
   if (!sourceInfo.isFile() || sourceInfo.isSymbolicLink()) throw archiveError("source must be a regular file, not a link");
-  if (sourceInfo.size > MAX_SOURCE_BYTES) throw archiveError("source ZIP exceeds 100 MiB");
+  if (sourceInfo.size > MAX_SOURCE_BYTES) throw archiveError("source archive exceeds 100 MiB");
+  const kind = localArchiveKind(source);
   const privateRoot = await mkdtemp(join(tmpdir(), PRIVATE_PREFIX));
   try {
     const copied = await copyAndHash(source, privateRoot);
-    const planned = validateEntries(await readCentralDirectory(copied.path));
-    const wrapper = candidateWrapper(planned);
     const extracted = join(privateRoot, "contents");
     await mkdir(extracted);
-    await extractEntries(copied.path, extracted, planned);
+    let wrapper: string | undefined;
+    if (kind === "zip") {
+      const planned = validateEntries(await readCentralDirectory(copied.path));
+      wrapper = candidateWrapper(planned);
+      await extractEntries(copied.path, extracted, planned);
+    } else {
+      const gzip = kind === "tar.gz";
+      const planned = await readTarEntries(copied.path, gzip);
+      wrapper = candidateWrapper(planned);
+      await extractTarEntries(copied.path, extracted, gzip, planned);
+    }
     return {
       archiveDigest: copied.digest,
       candidateRoot: wrapper === undefined ? extracted : join(extracted, wrapper),

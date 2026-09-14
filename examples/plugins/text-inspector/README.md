@@ -47,17 +47,20 @@ node ../../node_modules/vitest/vitest.mjs run src/native-tools/text-inspector.te
 ```powershell
 New-Item -ItemType Directory -Force .\.plugin-dist
 Compress-Archive -LiteralPath .\examples\plugins\text-inspector -DestinationPath .\.plugin-dist\text-inspector.zip -Force
+tar -cf .\.plugin-dist\text-inspector.tar -C .\examples\plugins text-inspector
+tar -czf .\.plugin-dist\text-inspector.tar.gz -C .\examples\plugins text-inspector
+tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 ```
 
-然后到 Desktop 插件页导入 `.\.plugin-dist\text-inspector.zip`。安装成功后开一个新对话，再用 `/text-inspector:check-text` 或自然语言要求模型使用 `TextInspectorCheck`。
+然后到 Desktop 插件页导入生成的 `.zip`、`.tar`、`.tar.gz` 或 `.tgz` 插件包。安装成功后开一个新对话，再用 `/text-inspector:check-text` 或自然语言要求模型使用 `TextInspectorCheck`。
 
 如果要验证插件自己的 Agent，先在本轮选择 `example.text-inspector` 插件，再要求模型使用 `example.text-inspector:reviewer` 检查一段文本。这个 Agent 只在插件被选中时可见，创建后仍只能使用当前 Run 允许的插件能力。
 
-重新打同一个插件 ID 的 ZIP 并再次导入，就是手动更新或修复。这个样例不申请权限，所以正常情况下不会弹权限确认；如果你给 manifest 新增权限，重新导入时需要确认新增权限。
+重新打同一个插件 ID 的包并再次导入，就是手动更新或修复。这个样例不申请权限，所以正常情况下不会弹权限确认；如果你给 manifest 新增权限，重新导入时需要确认新增权限。
 
 常见失败：
 
-- 找不到 manifest：确认 ZIP 内有且只有一个 `.openharness-plugin/plugin.json`。
+- 找不到 manifest：确认插件包内有且只有一个 `.openharness-plugin/plugin.json`。
 - 导入成功但当前对话不能用：开新对话，或在没有运行中任务时执行 `/reload-plugins`。
 - Tool Host 启动失败：检查 `tools/index.mjs` 是否能被 Node 正常 import，不要普通 import `@openharness/plugins/sdk`。
 - 工具输入无效：只传 `{ "text": "..." }`，不要传字符串或额外字段。

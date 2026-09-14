@@ -35,7 +35,7 @@ const populatedSnapshot: DesktopPluginSnapshot = {
       runtimeStatus: {
         state: "failed",
         code: "snapshot_missing",
-        message: "加载失败：插件文件不完整，请重新导入 ZIP。",
+        message: "加载失败：插件文件不完整，请重新导入插件包。",
         action: "reimport",
       },
     }),
@@ -314,14 +314,14 @@ describe("PluginManager archive import", () => {
     await render()
 
     expect(host.textContent).toContain("已启用，下一次对话生效。")
-    expect(host.textContent).toContain("加载失败：插件文件不完整，请重新导入 ZIP。")
+    expect(host.textContent).toContain("加载失败：插件文件不完整，请重新导入插件包。")
 
     await click("查看 Beta 详情")
 
     const dialog = document.querySelector('[role="dialog"]')
     expect(dialog?.textContent).toContain("运行状态")
-    expect(dialog?.textContent).toContain("加载失败：插件文件不完整，请重新导入 ZIP。")
-    expect(dialog?.textContent).toContain("请重新导入 ZIP。")
+    expect(dialog?.textContent).toContain("加载失败：插件文件不完整，请重新导入插件包。")
+    expect(dialog?.textContent).toContain("请重新导入插件包。")
   })
 
   it("disables a user plugin with its project context and updates the list snapshot", async () => {

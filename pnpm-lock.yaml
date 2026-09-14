@@ -821,6 +821,9 @@ importers:
 
   packages/plugin-sources:
     dependencies:
+      tar:
+        specifier: ^7.5.22
+        version: 7.5.22
       yauzl:
         specifier: ^2.10.0
         version: 2.10.0

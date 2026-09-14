@@ -17,14 +17,17 @@ ohs plugin details example.text-inspector
 
 进入使用本地执行环境的 OpenHarness 会话，通过 `/text-inspector:check-text` 提供需要检查的文本，或明确要求模型使用 `TextInspectorCheck`。例如提供第一行 `hello` 后带两个空格、第二行以制表符开头的文本；工具应报告第 1 行 `trailing-whitespace` 和第 2 行 `tab-indentation`。自然语言调用需要正常配置模型；仓库自动验收直接调用注册后的工具，不需要模型服务。
 
-如果只是想在 Desktop 里走一遍真实安装，可以先把样例打成 ZIP：
+如果只是想在 Desktop 里走一遍真实安装，可以先把样例打成插件包。Desktop 当前支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`：
 
 ```powershell
 New-Item -ItemType Directory -Force .\.plugin-dist
 Compress-Archive -LiteralPath .\examples\plugins\text-inspector -DestinationPath .\.plugin-dist\text-inspector.zip -Force
+tar -cf .\.plugin-dist\text-inspector.tar -C .\examples\plugins text-inspector
+tar -czf .\.plugin-dist\text-inspector.tar.gz -C .\examples\plugins text-inspector
+tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 ```
 
-然后打开 Desktop 的插件页，选择 `.\.plugin-dist\text-inspector.zip` 导入。这个 ZIP 内可以带一层 `text-inspector/` 包装目录，只要里面有唯一的 `.openharness-plugin/plugin.json` 即可。导入成功只表示插件已经写入安装记录；它会从下一次对话开始生效。
+然后打开 Desktop 的插件页，选择其中任意一个插件包导入。包内可以带一层 `text-inspector/` 包装目录，只要里面有唯一的 `.openharness-plugin/plugin.json` 即可。导入成功只表示插件已经写入安装记录；它会从下一次对话开始生效。
 
 修改链接目录里的工具实现后，在没有运行中任务的会话执行：
 
@@ -45,21 +48,21 @@ ohs plugin uninstall example.text-inspector
 
 同一个 ID 只有一条用户安装记录。`install-local` 会替代该 ID 之前的 link 记录；再次执行 `link` 则切回开发链接。安装、启停、卸载会使所有相关用户 Runtime 失效；有活动任务时管理操作可能返回冲突，需要等待任务结束。普通卸载移除安装记录、阻止后续加载，保留插件数据；旧快照不会立即全部删除。
 
-## Desktop 本地 ZIP 导入
+## Desktop 本地插件包导入
 
-Desktop 插件页当前只支持选择 **一个本地 Native Plugin ZIP**。系统在后台复制、校验和解压 ZIP；不申请权限的插件会直接安装，申请权限的插件只会出现一次完整权限确认。重新导入同一插件 ID 就是更新或修复：之前的批准能够覆盖本次权限时不重复确认，新增权限时才重新确认；安装成功前保留旧记录，且不会自动启用原本已禁用的插件。页面只反馈成功、失败或无法确认的安装结果；成功后插件在下一次对话中生效。
+Desktop 插件页当前只支持选择 **一个本地 Native Plugin 包**，格式可以是 `.zip`、`.tar`、`.tar.gz` 或 `.tgz`。系统在后台复制、校验和解压插件包；不申请权限的插件会直接安装，申请权限的插件只会出现一次完整权限确认。重新导入同一插件 ID 就是更新或修复：之前的批准能够覆盖本次权限时不重复确认，新增权限时才重新确认；安装成功前保留旧记录，且不会自动启用原本已禁用的插件。页面只反馈成功、失败或无法确认的安装结果；成功后插件在下一次对话中生效。
 
-该入口不支持自动更新、独立 Repair 命令、版本回滚或旧快照垃圾回收界面，也不支持在 Agent 对话中安装、转换 Claude Code/Codex 插件、Git、npm、归档 URL、`.tar`/`.tar.gz` 等其他来源或格式。请使用 CLI 的目录开发/安装流程处理这些场景。旧插件页 localStorage 配置已从页面隐藏，但保留原数据，不迁移也不删除。
+该入口不支持自动更新、独立 Repair 命令、版本回滚或旧快照垃圾回收界面，也不支持在 Agent 对话中安装、转换 Claude Code/Codex 插件、Git、npm、归档 URL 或 Marketplace 等其他来源。请使用 CLI 的目录开发/安装流程处理这些场景。旧插件页 localStorage 配置已从页面隐藏，但保留原数据，不迁移也不删除。
 
-ZIP 导入的作者侧检查很短：
+本地插件包导入的作者侧检查很短：
 
-1. ZIP 里必须只有一个 Native manifest，可以在根目录，也可以在唯一一层包装目录里；
+1. 插件包里必须只有一个 Native manifest，可以在根目录，也可以在唯一一层包装目录里；
 2. manifest 路径必须是 `.openharness-plugin/plugin.json`；
-3. 不要把两个插件目录一起压进同一个 ZIP；
+3. 不要把两个插件目录一起压进同一个包；
 4. 不要压入符号链接、超大文件或需要安装依赖后才存在的文件；
-5. 导入同一个插件 ID 的新 ZIP 就是手动更新或修复，不需要另一套 repair 流程。
+5. 导入同一个插件 ID 的新包就是手动更新或修复，不需要另一套 repair 流程。
 
-导入失败时优先看插件页详情。如果提示文件不完整、摘要不一致或 manifest 不匹配，从可信源重新打 ZIP；如果提示缺少权限，重新导入并确认新增权限；如果提示 Tool Host 启动失败，先在本地确认 `tools/index.mjs` 能被 Node import。
+导入失败时优先看插件页详情。如果提示文件不完整、摘要不一致或 manifest 不匹配，从可信源重新打包；如果提示缺少权限，重新导入并确认新增权限；如果提示 Tool Host 启动失败，先在本地确认 `tools/index.mjs` 能被 Node import。
 
 ## 包结构与 manifest
 

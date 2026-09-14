@@ -2,19 +2,21 @@
 
 > 状态：当前阶段交接。
 > 日期：2026-09-14
-> 适用范围：Native Plugin 安装后诊断、插件管理界面、作者体验、后续来源扩展与明确暂缓项。
+> 适用范围：Native Plugin 安装后诊断、插件管理界面、作者体验、本地插件包格式、后续来源扩展与明确暂缓项。
 
 ## 1. 交接结论
 
 插件系统当前已经走完三个关键阶段：
 
 1. 原生插件可以被开发、校验、安装、启停、加载和调用；
-2. Desktop 插件页可以导入一个本地 Native Plugin ZIP，并支持重新导入同一插件 ID 来完成手动更新或修复；
+2. Desktop 插件页可以导入一个本地 Native Plugin 包，支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`，并支持重新导入同一插件 ID 来完成手动更新或修复；
 3. Plugin Service 和 Desktop 插件页已经能显示简单 Runtime 主状态。
 
 Native Plugin 运行诊断 v1 已完成。安装链路和运行状态现在都能给出清晰反馈：用户不需要理解 cache、digest 或 manifest diff，只看插件页的状态文案和建议动作即可。
 
-作者体验小修也已完成：开发指南和文本检查参考插件 README 已补齐“如何打 ZIP、如何重装验证、如何看诊断、参考插件常见失败”。该阶段没有扩展来源，不做 Marketplace，不做 Agent 对话内安装，也不做自动更新。
+作者体验小修也已完成：开发指南和文本检查参考插件 README 已补齐“如何打包、如何重装验证、如何看诊断、参考插件常见失败”。该阶段没有扩展来源，不做 Marketplace，不做 Agent 对话内安装，也不做自动更新。
+
+本地插件包格式补齐 v1 已完成：Desktop 仍只有一个简单导入入口，用户只看到成功、失败或一次权限确认；后台支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`，TAR 解析使用成熟的 `tar` 包，并继续做安全校验。
 
 Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent，并在用户本轮选择插件后把它们放入 Agent 工具可见范围。本轮补了参考插件的最小 Agent 示例和作者说明，没有增加新的安装来源或复杂 UI。
 
@@ -31,11 +33,12 @@ Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent�
 - CLI 已有本地 Native 安装、link、转换、启停、详情和卸载；
 - 原生插件作者指南、SDK 类型和文本检查参考插件已经存在。
 
-### Desktop 本地 ZIP 导入
+### Desktop 本地插件包导入
 
-- 插件页可以选择一个本地 Native Plugin ZIP；
+- 插件页可以选择一个本地 Native Plugin 包；
+- 当前支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`；
 - Archive Resolver 在后台复制、解压、校验路径、类型、大小、数量、压缩比、CRC 和摘要；
-- Renderer 不拿到 ZIP 绝对路径或内容摘要；
+- Renderer 不拿到插件包绝对路径或内容摘要；
 - 无权限请求的插件直接安装；
 - 有权限请求的插件只显示一次完整权限确认；
 - 重新导入同一插件 ID 时，如果旧批准覆盖本次权限，不重复确认；
@@ -50,7 +53,7 @@ Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent�
 - Plugin Service 根据安装校验、组件加载诊断和 Native Tool Runtime 状态计算主状态；
 - 主状态包含 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`；
 - Desktop 插件列表、快捷入口 tooltip 和详情弹窗会显示主状态；
-- 失败或降级状态只给一条建议动作，例如重新导入 ZIP、重新确认权限、查看详情或先禁用插件；
+- 失败或降级状态只给一条建议动作，例如重新导入插件包、重新确认权限、查看详情或先禁用插件；
 - 原始 `diagnostics` 和 Tool Runtime 统计仍保留在详情里，供作者排查。
 
 ### Converter 当前状态
@@ -77,7 +80,7 @@ Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent�
 ```text
 已安装，下一次对话生效
 已启用，但加载失败：缺少已批准权限
-已启用，但快照损坏：请重新导入 ZIP
+已启用，但快照损坏：请重新导入插件包
 已禁用
 ```
 
@@ -96,7 +99,7 @@ Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent�
 
 不包含：
 
-- Agent 对话内安装 ZIP；
+- Agent 对话内安装本地插件包；
 - 自动修复按钮；
 - 独立 Repair 命令；
 - 自动更新和版本回滚；
@@ -145,9 +148,9 @@ runtimeStatus:
 |---|---|---|
 | `plugin_disabled` | 插件已禁用 | 启用后下次对话生效 |
 | `reload_required` | 已安装或更新，但当前对话未加载 | 开新对话或重载插件 |
-| `snapshot_missing` | 插件文件缺失 | 重新导入 ZIP |
-| `snapshot_tampered` | 插件文件与安装记录不一致 | 重新导入 ZIP |
-| `manifest_mismatch` | manifest ID 或版本与安装记录不一致 | 重新导入 ZIP |
+| `snapshot_missing` | 插件文件缺失 | 重新导入插件包 |
+| `snapshot_tampered` | 插件文件与安装记录不一致 | 重新导入插件包 |
+| `manifest_mismatch` | manifest ID 或版本与安装记录不一致 | 重新导入插件包 |
 | `permission_missing` | 插件请求了未批准权限 | 重新导入并确认权限 |
 | `component_unsupported` | 当前版本不支持该组件类型 | 查看详情，等待后续支持 |
 | `component_invalid` | 某个组件声明无效 | 修正插件后重新导入 |
@@ -207,7 +210,7 @@ runtimeStatus:
 
 ```text
 已安装，下一次对话生效。
-加载失败：插件文件不完整，请重新导入 ZIP。
+加载失败：插件文件不完整，请重新导入插件包。
 加载失败：插件请求了新的权限，请重新导入并确认权限。
 部分能力不可用：当前版本暂不支持该组件。
 ```
@@ -227,18 +230,18 @@ runtimeStatus:
 
 已完成，成本低、收益稳定。
 
-- 补充“如何打 ZIP、如何重装验证、如何看诊断”；
+- 补充“如何打包、如何重装验证、如何看诊断”；
 - 让参考插件 README 覆盖常见失败；
 - 明确 `reload-plugins` 与“下一次对话生效”的区别；
 - 保持 SDK 类型和实际示例同步。
 
 完成结果集中在 [原生插件开发指南](./native-plugin-authoring.md) 和 [文本检查参考插件](../examples/plugins/text-inspector/README.md)。后续如果要继续推进，建议从 P2 或 P3 中重新选一个小范围开规格。
 
-### P2：Agent 对话内安装本地 Native ZIP
+### P2：Agent 对话内安装本地 Native 插件包
 
 等插件页和诊断稳定后再做。
 
-- 对话里接收本地 ZIP；
+- 对话里接收本地插件包；
 - 调用同一条 Archive Resolver 和 Plugin Service；
 - 仍然只反馈成功、失败、权限确认；
 - 不在对话里设计复杂管理界面。
@@ -249,7 +252,7 @@ runtimeStatus:
 
 - 文本检查参考插件包含 `example.text-inspector:reviewer`；
 - 文档说明 `components.agents` 的声明、命名和可见性；
-- 不改变 Agent 对话安装 ZIP；
+- 不改变 Agent 对话安装本地插件包；
 - 不新增复杂 Agent 管理界面。
 
 ### P3：更多 Source Resolver
@@ -258,11 +261,10 @@ runtimeStatus:
 
 建议顺序：
 
-1. 本地 archive 格式补齐，例如 `.tar`、`.tar.gz`；
-2. Git URL + 固定 commit；
-3. npm package + version / integrity；
-4. archive URL + checksum；
-5. Marketplace。
+1. Git URL + 固定 commit；
+2. npm package + version / integrity；
+3. archive URL + checksum；
+4. Marketplace。
 
 每个来源都必须在进入 Installer 前变成 Native Plugin candidate。
 
@@ -296,7 +298,7 @@ runtimeStatus:
 以下内容暂时不要做，除非重新开规格说明：
 
 - `output_styles` 插件贡献；
-- Agent 对话内安装本地 ZIP；
+- Agent 对话内安装本地插件包；
 - 自动更新；
 - 独立 Repair 命令；
 - 版本回滚；
@@ -308,14 +310,14 @@ runtimeStatus:
 - Native LSP 插件贡献；
 - 操作系统级沙箱。
 
-其中“手动更新或修复”已经由“重新导入同一插件 ID 的 ZIP”覆盖。不要再为它新建一套并行流程。
+其中“手动更新或修复”已经由“重新导入同一插件 ID 的插件包”覆盖。不要再为它新建一套并行流程。
 
 ## 9. 接手时的推荐阅读顺序
 
 1. [插件系统最终形态交接](./plugin-system-handoff.md)：完整边界和长期路线；
 2. [Native Plugin 当前实现](./plugins-contributions-design.md)：当前代码已经做到什么；
 3. [原生插件开发指南](./native-plugin-authoring.md)：作者视角和参考插件；
-4. [Desktop 本地 Native Plugin ZIP 导入设计](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)：当前导入入口；
+4. [Desktop 本地 Native Plugin 包导入设计](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)：当前导入入口；
 5. [Native Plugin 重新安装核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)：同 ID 重装、权限复用和旧记录保留；
 6. `packages/plugins/src/installation/`：安装与快照；
 7. `packages/server/src/application/default-services/plugin-service.ts`：统一管理入口；
@@ -326,16 +328,16 @@ runtimeStatus:
 
 ## 10. 下一阶段建议规格标题
 
-如果继续按当前节奏推进，作者体验小修已经不需要再开规格。下一份规格应按实际选择命名，例如：
+如果继续按当前节奏推进，作者体验小修和本地 archive 格式补齐都已经完成。下一份规格应按实际选择命名，例如：
 
 ```text
-docs/superpowers/specs/2026-09-14-agent-native-plugin-zip-install-design.md
+docs/superpowers/specs/2026-09-14-agent-native-plugin-package-install-design.md
 ```
 
 实施计划可以命名为：
 
 ```text
-docs/superpowers/plans/2026-09-14-agent-native-plugin-zip-install.md
+docs/superpowers/plans/2026-09-14-agent-native-plugin-package-install.md
 ```
 
-如果暂时不做 Agent 对话安装，则可以选择本地 archive 格式补齐，例如 `.tar` / `.tar.gz`。不要把来源扩展、自动更新或新 Component 混在同一阶段，这样边界清楚，也不容易把插件系统重新拖回“大而全”的状态。
+如果暂时不做 Agent 对话安装，下一步可以选择 Git、npm 或归档 URL 中的一个来源。不要把来源扩展、自动更新或新 Component 混在同一阶段，这样边界清楚，也不容易把插件系统重新拖回“大而全”的状态。

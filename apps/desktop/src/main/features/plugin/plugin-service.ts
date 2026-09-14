@@ -91,8 +91,8 @@ export class DesktopPluginService {
       return archiveFailureFromError(error)
     }
     if (!archivePath) return { status: "cancelled" }
-    if (!isZipArchive(archivePath)) {
-      return archiveFailure("请选择 ZIP 格式的插件包。", [
+    if (!isSupportedPluginArchive(archivePath)) {
+      return archiveFailure("请选择 ZIP、TAR 或 TAR.GZ 格式的插件包。", [
         { code: "plugin_archive_invalid_extension" },
       ])
     }
@@ -217,12 +217,14 @@ function requirePluginId(value: string): string {
   return pluginId
 }
 
-function isZipArchive(archivePath: string): boolean {
-  return extname(archivePath).toLowerCase() === ".zip"
+function isSupportedPluginArchive(archivePath: string): boolean {
+  const lower = archivePath.toLowerCase()
+  const extension = extname(lower)
+  return extension === ".zip" || extension === ".tar" || extension === ".tgz" || lower.endsWith(".tar.gz")
 }
 
 function selectionFailure(): DesktopPluginArchiveFailedResult {
-  return archiveFailure("请重新选择 ZIP 插件包。", [
+  return archiveFailure("请重新选择插件包。", [
     { code: "plugin_archive_selection_invalid" },
   ])
 }
@@ -232,9 +234,9 @@ function archiveFailureFromError(error: unknown): DesktopPluginArchiveFailedResu
   const code = stringProperty(body, "code") ?? "plugin_archive_failed"
   const details = [{ code }, ...diagnosticDetails(body)]
   if (code === "plugin_archive_changed") {
-    return archiveFailure("请重新选择 ZIP 插件包。", details)
+    return archiveFailure("请重新选择插件包。", details)
   }
-  return archiveFailure("导入 ZIP 插件包失败，请检查插件包后重试。", details)
+  return archiveFailure("导入插件包失败，请检查插件包后重试。", details)
 }
 
 function archiveFailure(
@@ -304,7 +306,7 @@ export async function pickPluginArchive(sender: WebContents): Promise<string | n
   const options: OpenDialogOptions = {
     title: "导入插件",
     properties: ["openFile"],
-    filters: [{ name: "ZIP 插件包", extensions: ["zip"] }],
+    filters: [{ name: "插件包", extensions: ["zip", "tar", "tgz", "tar.gz"] }],
   }
   const result = owner
     ? await dialog.showOpenDialog(owner, options)

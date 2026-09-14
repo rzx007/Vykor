@@ -227,7 +227,7 @@ plugin.runtimeStatus.state === "failed" || plugin.runtimeStatus.state === "degra
 const actionHints = {
   enable: "启用后下次对话生效。",
   reload: "新开对话或重载插件后生效。",
-  reimport: "请重新导入 ZIP。",
+  reimport: "请重新导入插件包。",
   approve: "请重新导入并确认新增权限。",
   disable: "可以先禁用该插件。",
   uninstall: "可以卸载该插件。",

@@ -11,7 +11,7 @@ import {
   type InstalledPluginRecord,
   type InstalledPluginStoreV1,
 } from "@openharness/plugins";
-import { resolveLocalPluginZip, type ResolvedLocalPluginZip } from "@openharness/plugin-sources";
+import { resolveLocalPluginArchive, type ResolvedLocalPluginArchive } from "@openharness/plugin-sources";
 import type { PluginArchiveError, PluginArchivePreview, PluginInfo, PluginService } from "../settings-api.js";
 import type { DaemonSettingsRef } from "./shared.js";
 
@@ -63,7 +63,7 @@ function permissionSetsEqual(left: string[], right: string[]): boolean {
     && normalizedLeft.every((permission, index) => permission === normalizedRight[index]);
 }
 
-async function inspectArchive(resolved: ResolvedLocalPluginZip): Promise<PluginArchivePreview> {
+async function inspectArchive(resolved: ResolvedLocalPluginArchive): Promise<PluginArchivePreview> {
   const validation = await validateNativePlugin(resolved.candidateRoot);
   if (validation.status !== "valid" || !validation.plugin) {
     throw archiveFailure("plugin_archive_invalid", "The plugin archive failed Native validation.", validation.diagnostics);
@@ -98,11 +98,11 @@ async function inspectArchive(resolved: ResolvedLocalPluginZip): Promise<PluginA
 
 async function withArchive<T>(
   archivePath: string,
-  operation: (resolved: ResolvedLocalPluginZip) => Promise<T>,
+  operation: (resolved: ResolvedLocalPluginArchive) => Promise<T>,
 ): Promise<T> {
-  let resolved: ResolvedLocalPluginZip | undefined;
+  let resolved: ResolvedLocalPluginArchive | undefined;
   try {
-    resolved = await resolveLocalPluginZip(archivePath);
+    resolved = await resolveLocalPluginArchive(archivePath);
     return await operation(resolved);
   } catch (error) {
     if (error instanceof PluginArchiveFailure) throw error;
@@ -139,7 +139,7 @@ function diagnosticRuntimeStatus(diagnostic: RuntimeDiagnostic): RuntimeStatus |
       return {
         state: "failed",
         code: "snapshot_missing",
-        message: "加载失败：插件文件不完整，请重新导入 ZIP。",
+        message: "加载失败：插件文件不完整，请重新导入插件包。",
         action: "reimport",
       };
     case "plugin_content_digest_mismatch":
@@ -148,7 +148,7 @@ function diagnosticRuntimeStatus(diagnostic: RuntimeDiagnostic): RuntimeStatus |
       return {
         state: "failed",
         code: "snapshot_tampered",
-        message: "加载失败：插件文件与安装记录不一致，请重新导入 ZIP。",
+        message: "加载失败：插件文件与安装记录不一致，请重新导入插件包。",
         action: "reimport",
       };
     case "plugin_installation_identity_mismatch":
@@ -156,7 +156,7 @@ function diagnosticRuntimeStatus(diagnostic: RuntimeDiagnostic): RuntimeStatus |
       return {
         state: "failed",
         code: "manifest_mismatch",
-        message: "加载失败：插件身份与安装记录不一致，请重新导入 ZIP。",
+        message: "加载失败：插件身份与安装记录不一致，请重新导入插件包。",
         action: "reimport",
       };
     case "plugin_permissions_missing":
@@ -203,7 +203,7 @@ function diagnosticRuntimeStatus(diagnostic: RuntimeDiagnostic): RuntimeStatus |
     return {
       state: "failed",
       code: "component_invalid",
-      message: "加载失败：插件声明无效，请修正后重新导入 ZIP。",
+      message: "加载失败：插件声明无效，请修正后重新导入插件包。",
       action: "reimport",
     };
   }

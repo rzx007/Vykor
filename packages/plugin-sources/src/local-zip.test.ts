@@ -1,9 +1,9 @@
 import { access, copyFile, mkdtemp, readFile, readdir, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import JSZip from "jszip";
+import { gzipSync } from "node:zlib";
 import { afterEach, expect, it } from "vitest";
-import { resolveLocalPluginZip } from "./index.js";
+import { resolveLocalPluginArchive, resolveLocalPluginZip } from "./index.js";
 
 const temporaryRoots: string[] = [];
 const manifest = ".openharness-plugin/plugin.json";
@@ -28,10 +28,39 @@ async function temporaryArchive(name = "plugin.zip"): Promise<string> {
 }
 
 async function writeZip(files: Record<string, string | Buffer>): Promise<string> {
-  const zip = new JSZip();
-  for (const [path, content] of Object.entries(files)) zip.file(path, content);
-  const archive = await temporaryArchive();
-  await writeFile(archive, await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }));
+  return await writeStoredZip(Object.entries(files).map(([name, content]) => ({ name, content, flags: 0x800 })));
+}
+
+async function writeTar(
+  files: Record<string, string | Buffer | { type: "directory" | "symlink" | "fifo"; linkname?: string }>,
+  options: { gzip?: boolean; name?: string } = {},
+): Promise<string> {
+  const chunks: Buffer[] = [];
+  for (const [path, source] of Object.entries(files)) {
+    const special = typeof source === "object" && !Buffer.isBuffer(source) && "type" in source ? source : undefined;
+    const contents = special === undefined ? Buffer.from(source) : Buffer.alloc(0);
+    const header = Buffer.alloc(512);
+    header.write(path, 0, 100, "utf8");
+    header.write("0000644\0", 100, 8, "ascii");
+    header.write("0000000\0", 108, 8, "ascii");
+    header.write("0000000\0", 116, 8, "ascii");
+    header.write(contents.length.toString(8).padStart(11, "0") + "\0", 124, 12, "ascii");
+    header.write("00000000000\0", 136, 12, "ascii");
+    header.fill(0x20, 148, 156);
+    header[156] = (special?.type === "directory" ? "5" : special?.type === "symlink" ? "2" : special?.type === "fifo" ? "6" : "0").charCodeAt(0);
+    if (special?.linkname) header.write(special.linkname, 157, 100, "utf8");
+    header.write("ustar\0", 257, 6, "ascii");
+    header.write("00", 263, 2, "ascii");
+    const checksum = [...header].reduce((sum, byte) => sum + byte, 0);
+    header.write(checksum.toString(8).padStart(6, "0") + "\0 ", 148, 8, "ascii");
+    chunks.push(header, contents);
+    const padding = (512 - (contents.length % 512)) % 512;
+    if (padding) chunks.push(Buffer.alloc(padding));
+  }
+  chunks.push(Buffer.alloc(1024));
+  const archive = await temporaryArchive(options.name ?? (options.gzip ? "plugin.tar.gz" : "plugin.tar"));
+  const tar = Buffer.concat(chunks);
+  await writeFile(archive, options.gzip ? gzipSync(tar) : tar);
   return archive;
 }
 
@@ -94,6 +123,18 @@ it("resolves a root manifest, extracts real bytes, and cleanup removes only its 
   const privateRoot = join(resolved.candidateRoot, "..");
   await resolved.cleanup();
   await expect(access(privateRoot)).rejects.toThrow();
+});
+
+it.each([
+  ["tar", false, "plugin.tar"],
+  ["tar.gz", true, "plugin.tar.gz"],
+  ["tgz", true, "plugin.tgz"],
+] as const)("resolves a local %s archive with the same root manifest rules", async (_label, gzip, name) => {
+  const archive = await writeTar({ [manifest]: '{"id":"example"}', "README.md": "hello" }, { gzip, name });
+  const resolved = await resolveLocalPluginArchive(archive);
+  await expect(readFile(join(resolved.candidateRoot, "README.md"), "utf8")).resolves.toBe("hello");
+  expect(resolved.archiveDigest).toMatch(/^[a-f0-9]{64}$/);
+  await resolved.cleanup();
 });
 
 it("resolves a single wrapper directory only when every archive entry is inside it", async () => {
@@ -165,6 +206,36 @@ it("rejects declared archive limits before extraction", async () => {
   await expectRejected(await writeStoredZip([{ name: manifest, content: "x", declaredSize: 101 * 1024 * 1024 }]), /single file.*100 MiB/i);
   await expectRejected(await writeStoredZip([{ name: manifest, content: "x", declaredSize: 201 }]), /compression ratio/i);
   await expectRejected(await writeStoredZip(Array.from({ length: 5001 }, (_, index) => ({ name: `file-${index}` }))), /5,000/i);
+});
+
+it("rejects archive directory-count bombs before extraction", async () => {
+  await expectRejected(await writeStoredZip([
+    { name: `${manifest}` },
+    ...Array.from({ length: 5001 }, (_, index) => ({ name: `dir-${index}/` })),
+  ]), /5,000/i);
+  await expect(resolveLocalPluginArchive(await writeTar({
+    [manifest]: "{}",
+    ...Object.fromEntries(Array.from({ length: 5001 }, (_, index) => [`dir-${index}/`, { type: "directory" }])),
+  }))).rejects.toThrow(/5,000/i);
+});
+
+it("rejects TAR symlinks and special entry types before extraction", async () => {
+  await expect(resolveLocalPluginArchive(await writeTar({
+    [manifest]: "{}",
+    "link": { type: "symlink", linkname: "README.md" },
+  }))).rejects.toThrow(/link|special/i);
+  await expect(resolveLocalPluginArchive(await writeTar({
+    [manifest]: "{}",
+    "pipe": { type: "fifo" },
+  }))).rejects.toThrow(/special/i);
+});
+
+it.each([
+  ["an absolute path", `/${manifest}`],
+  ["a dot-dot path", ".openharness-plugin/../plugin.json"],
+  ["a trailing-space path", ".openharness-plugin/plugin.json "],
+] as const)("rejects TAR %s before extraction", async (_label, name) => {
+  await expect(resolveLocalPluginArchive(await writeTar({ [manifest]: "{}", [name]: "bad" }))).rejects.toThrow(/unsafe archive entry path/i);
 });
 
 it("rejects archives with zero, multiple, deep, or wrapper-escaping manifests", async () => {

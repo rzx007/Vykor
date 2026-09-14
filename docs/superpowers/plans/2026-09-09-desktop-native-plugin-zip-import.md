@@ -41,7 +41,7 @@
 **文件：** 修改 `apps/desktop/src/shared/plugin-types.ts`、`ipc-channels.ts`、`desktop-api-contract.ts`、`preload/desktop-api.ts`；修改 `main/features/plugin/plugin-service.ts`、`ipc.ts` 及测试；新增 selection store/helper。
 
 - [x] 先写 service/IPC 测试：取消、无权限直接安装、有权限只返回 confirmation、确认、取消、过期、cwd 不同、并发上限和绝对路径不出 IPC 结果。
-- [x] 注入 picker；默认 Electron picker 只允许一个 ZIP，并绑定发起窗口。扩展名大小写不敏感，非 ZIP 即使由测试/系统返回也拒绝。
+- [x] 注入 picker；该阶段的默认 Electron picker 当时只允许一个 ZIP，并绑定发起窗口。扩展名大小写不敏感，非 ZIP 即使由测试/系统返回也拒绝。
 - [x] main 调 daemon preview；无权限立即 install，有权限创建 crypto.randomUUID selection。selection TTL 10 分钟、上限 8，确认或取消后删除。
 - [x] confirm 只提交预览记录中的 archivePath、digest 和完整权限；cwd 必须相同，renderer 不能提供任意 path/digest/permissions。
 - [x] IPC handler 传入 sender 给 picker，preload 只暴露三个高层方法；应用退出清理 selection。
