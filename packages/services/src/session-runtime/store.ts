@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { mkdirSync } from "node:fs";
-import { basename, dirname, relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import Database from "better-sqlite3";
@@ -81,6 +81,7 @@ import {
 } from "../database/mutation-buffer.js";
 import { loadSessionReadModel } from "../database/read-model.js";
 import type { StorageContext } from "../database/storage-context.js";
+import { ProjectRepository } from "../projects/project-repository.js";
 import { formatSessionTitle, isPlaceholderSessionTitle } from "./title.js";
 import {
   defaultDurableEventRegistry,
@@ -307,6 +308,7 @@ export const DEFAULT_RETENTION_POLICY: RetentionPolicy = {
 
 export class SessionStore {
   readonly path: string;
+  readonly projects!: ProjectRepository;
   private storage!: StorageContext;
   private closed = false;
   private transactionDepth = 0;
@@ -347,6 +349,7 @@ export class SessionStore {
         deltaCheckpoint,
         atomic: (work) => this.transaction(work),
       };
+      this.projects = new ProjectRepository(this.storage);
     } catch (error) {
       database.close();
       throw error;
@@ -796,168 +799,38 @@ export class SessionStore {
   }
 
   listProjects(options: { includeArchived?: boolean } = {}): ProjectRecord[] {
-    const where = options.includeArchived ? "" : "WHERE p.archived_at IS NULL";
-    return (
-      this.database
-        .prepare(
-          `SELECT p.*, l.path FROM project p JOIN project_location l ON l.project_id = p.id AND l.status = 'active' ${where} ORDER BY (p.pinned_at IS NULL), p.pinned_at DESC, p.created_at DESC`,
-        )
-        .all() as Array<Record<string, unknown>>
-    ).map(projectFromRow);
+    return this.projects.list(options);
   }
 
   getProject(projectId: string): ProjectRecord | undefined {
-    const row = this.database
-      .prepare(
-        "SELECT p.*, l.path FROM project p JOIN project_location l ON l.project_id = p.id AND l.status = 'active' WHERE p.id = ?",
-      )
-      .get(projectId) as Record<string, unknown> | undefined;
-    return row ? projectFromRow(row) : undefined;
+    return this.projects.get(projectId);
   }
 
   inspectProject(inputPath: string): ProjectRecord {
-    const path = resolve(inputPath);
-    const normalizedPath = normalizeProjectPath(path);
-    const row = this.database
-      .prepare(
-        "SELECT p.*, l.path FROM project p JOIN project_location l ON l.project_id = p.id AND l.status = 'active' WHERE l.normalized_path = ?",
-      )
-      .get(normalizedPath) as Record<string, unknown> | undefined;
-    const timestamp = now();
-    if (row) {
-      this.database
-        .prepare(
-          "UPDATE project SET archived_at = NULL, last_opened_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(timestamp, timestamp, row.id);
-      this.database
-        .prepare(
-          "UPDATE project_location SET last_verified_at = ? WHERE project_id = ? AND status = 'active'",
-        )
-        .run(timestamp, row.id);
-      return this.getProject(row.id as string)!;
-    }
-    const projectId = randomUUID();
-    this.database.transaction(() => {
-      this.database
-        .prepare(
-          "INSERT INTO project (id, name, pinned_at, default_shell, last_opened_at, archived_at, created_at, updated_at) VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)",
-        )
-        .run(projectId, basename(path), timestamp, timestamp, timestamp);
-      this.database
-        .prepare(
-          "INSERT INTO project_location VALUES (?, ?, ?, ?, 'active', ?, ?)",
-        )
-        .run(
-          randomUUID(),
-          projectId,
-          path,
-          normalizedPath,
-          timestamp,
-          timestamp,
-        );
-    })();
-    return this.getProject(projectId)!;
+    return this.projects.inspect(inputPath);
   }
 
   renameProject(projectId: string, name: string): ProjectRecord {
-    const value = name.replace(/\s+/g, " ").trim();
-    if (!value) throw new Error("Project name is required");
-    if (
-      this.database
-        .prepare("UPDATE project SET name = ?, updated_at = ? WHERE id = ?")
-        .run(value, now(), projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.getProject(projectId)!;
+    return this.projects.rename(projectId, name);
   }
 
   setProjectPinned(projectId: string, pinned: boolean): ProjectRecord {
-    if (
-      this.database
-        .prepare(
-          "UPDATE project SET pinned_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(pinned ? now() : null, now(), projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.getProject(projectId)!;
+    return this.projects.setPinned(projectId, pinned);
   }
 
   setProjectDefaultShell(
     projectId: string,
     shell: string | null,
   ): ProjectRecord {
-    const value = shell?.replace(/\s+/g, " ").trim() ?? "";
-    if (
-      this.database
-        .prepare(
-          "UPDATE project SET default_shell = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(value || null, now(), projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.getProject(projectId)!;
+    return this.projects.setDefaultShell(projectId, shell);
   }
 
   archiveProject(projectId: string): ProjectRecord {
-    const timestamp = now();
-    if (
-      this.database
-        .prepare(
-          "UPDATE project SET archived_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(timestamp, timestamp, projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.getProject(projectId)!;
+    return this.projects.archive(projectId);
   }
 
   rebindProject(projectId: string, inputPath: string): ProjectRecord {
-    if (!this.getProject(projectId))
-      throw new Error(`Project not found: ${projectId}`);
-    const path = resolve(inputPath);
-    const normalizedPath = normalizeProjectPath(path);
-    const conflict = this.database
-      .prepare(
-        "SELECT project_id FROM project_location WHERE normalized_path = ? AND status = 'active'",
-      )
-      .get(normalizedPath) as { project_id?: string } | undefined;
-    if (conflict?.project_id && conflict.project_id !== projectId)
-      throw new Error("Project directory is already bound to another project");
-    const timestamp = now();
-    this.database.transaction(() => {
-      this.database
-        .prepare(
-          "UPDATE project_location SET status = 'historical' WHERE project_id = ? AND status = 'active'",
-        )
-        .run(projectId);
-      this.database
-        .prepare(
-          "INSERT INTO project_location VALUES (?, ?, ?, ?, 'active', ?, ?)",
-        )
-        .run(
-          randomUUID(),
-          projectId,
-          path,
-          normalizedPath,
-          timestamp,
-          timestamp,
-        );
-      this.database
-        .prepare(
-          "UPDATE project SET archived_at = NULL, last_opened_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(timestamp, timestamp, projectId);
-      for (const session of Object.values(this.state.sessions)) {
-        if (session.projectId !== projectId) continue;
-        session.cwd = resolve(path, session.cwdRelative ?? "");
-        this.database
-          .prepare("UPDATE session SET cwd = ? WHERE id = ?")
-          .run(session.cwd, session.id);
-      }
-    })();
-    return this.getProject(projectId)!;
+    return this.projects.rebind(projectId, inputPath);
   }
 
   createScheduledTask(input: CreateScheduledTaskInput): ScheduledTaskRecord {
@@ -1259,8 +1132,8 @@ export class SessionStore {
         ? this.state.sessions[input.parentId]?.projectId
         : undefined);
     const project = projectId
-      ? this.getProject(projectId)
-      : this.inspectProject(input.cwd);
+      ? this.projects.get(projectId)
+      : this.projects.inspect(input.cwd);
     if (!project) throw new Error(`Project not found: ${projectId}`);
     const cwd = resolve(input.cwd);
     const session: SessionRecord = {
@@ -5010,20 +4883,6 @@ function applicationOwnerFromRow(
   };
 }
 
-function projectFromRow(row: Record<string, unknown>): ProjectRecord {
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    path: row.path as string,
-    ...(row.pinned_at ? { pinnedAt: row.pinned_at as number } : {}),
-    ...(row.default_shell ? { defaultShell: row.default_shell as string } : {}),
-    lastOpenedAt: row.last_opened_at as number,
-    ...(row.archived_at ? { archivedAt: row.archived_at as number } : {}),
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-  };
-}
-
 function isTerminalAttemptStatus(
   status: SessionRunAttemptRecord["status"],
 ): boolean {
@@ -5054,13 +4913,6 @@ function projectionSettlementFromRow(
       ? { resolvedAt: row.resolved_at as number }
       : {}),
   };
-}
-
-function normalizeProjectPath(path: string): string {
-  const normalized = resolve(path).replace(/\\/g, "/").replace(/\/+$/, "");
-  return process.platform === "win32"
-    ? normalized.toLocaleLowerCase()
-    : normalized;
 }
 
 function metadataWithoutTrace(
