@@ -266,7 +266,7 @@ export class DaemonApplication implements DurableAgentApplication {
       // 先把这些半截状态结掉，再对外服务，免得窗口以为还在跑。
       recoverProjectionSettlements(store);
       store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON);
-      store.pauseActiveGoalsOnStartup();
+      store.goals.pauseActiveGoalsOnStartup();
       store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON);
       store.expirePendingPermissionRequests(DAEMON_RESTART_PERMISSION_REASON);
       store.finalizeClosingSessions();

@@ -1,10 +1,10 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–1、阶段 2A、阶段 2B、阶段 2C1 和阶段 2C2 已完成。
+> 状态：当前。阶段 0–1、阶段 2A、阶段 2B、阶段 2C1、阶段 2C2 和阶段 2D 已完成。
 
 ## 当前阶段
 
-阶段 0–1、阶段 2A、阶段 2B、阶段 2C1 和阶段 2C2 已完成：依赖护栏、Session SQLite 数据库内核、Project、Schedule、Workflow 与 Channel Repository 已经落地。
+阶段 0–1、阶段 2A、阶段 2B、阶段 2C1、阶段 2C2 和阶段 2D 已完成：依赖护栏、Session SQLite 数据库内核、Project、Schedule、Workflow、Channel 与 Goal 边界已经落地。
 
 ## 指标
 
@@ -24,6 +24,8 @@ Workflow Run/Event/Claim SQL 和 row conversion 已迁入 `packages/services/src
 
 External Conversation 与 Channel Delivery SQL 和 row conversion 已迁入 `packages/services/src/channels`。`SessionStore` 保留八个兼容转发方法；Server Channel application service 只通过 `store.channels` 执行 Channel 持久化，Session/Input 查询仍使用窄 Store 能力。
 
+Goal 四组表 SQL 和 row conversion 已迁入 `packages/services/src/goals`，跨 Session、Run 与 durable event 的规则由 `GoalTransactions` 原子执行。`SessionStore` 保留十四个兼容转发方法；Server 的 Goal 调用统一经过 `store.goals`。
+
 ## 下一步
 
-阶段 2D 处理 Goal。后续依次处理 Permission 和 Attachment；每个域单独制定计划并迁移测试、repository、调用方和兼容转发。
+阶段 2E 处理 Permission，随后处理 Attachment；每个域单独制定计划并迁移测试、repository、调用方和兼容转发。
