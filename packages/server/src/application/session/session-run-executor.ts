@@ -30,7 +30,13 @@ const ATTACHMENT_LEASE_TTL_MS = 2 * 60 * 1_000;
 const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
-  store: SessionStore;
+  store: Pick<SessionStore,
+    | "getSession" | "getInput" | "getRun" | "transaction" | "updateRun"
+    | "appendEvent" | "settleActiveRunAttempts" | "listMessageParts" | "listMessages"
+  >;
+  attachments: Pick<SessionStore["attachments"],
+    "acquireAttachmentLeases" | "renewAttachmentLeases" | "releaseAttachmentLeases"
+  >;
   goals: Pick<GoalOperations, "getGoal">;
   agentPool: Pick<
     AgentPool,
@@ -102,7 +108,7 @@ export class SessionRunExecutor {
 
       if (admitted.attachments.length > 0) {
         const acquiredAt = Date.now();
-        this.context.store.acquireAttachmentLeases({
+        this.context.attachments.acquireAttachmentLeases({
           assetIds: admitted.attachments.map((reference) => reference.assetId),
           ownerKind: "session_run",
           ownerId: runId,
@@ -112,7 +118,7 @@ export class SessionRunExecutor {
         const renewTimer = setInterval(() => {
           const timestamp = Date.now();
           try {
-            this.context.store.renewAttachmentLeases({
+            this.context.attachments.renewAttachmentLeases({
               ownerKind: "session_run",
               ownerId: runId,
               timestamp,
@@ -132,7 +138,7 @@ export class SessionRunExecutor {
         renewTimer.unref?.();
         cleanupAttachmentLease = () => {
           clearInterval(renewTimer);
-          this.context.store.releaseAttachmentLeases("session_run", runId);
+          this.context.attachments.releaseAttachmentLeases("session_run", runId);
         };
       }
 

@@ -68,6 +68,7 @@ export async function createApplicationBackup(input: {
   const attachmentConsistency = input.sources?.attachments
     ? summarizeAttachmentIntegrity(await new AttachmentIntegrityService({
         store: input.store,
+        attachments: input.store.attachments,
         blobs: new AttachmentBlobStore({ root: input.sources.attachments }),
       }).scan({ gracePeriodMs: DEFAULT_RETENTION_POLICY.attachmentGracePeriodMs }))
     : { errors: 0, warnings: 0, issueCounts: {} };
@@ -384,10 +385,10 @@ function isDirectoryManifest(value: unknown): value is ApplicationBackupManifest
 }
 
 function validateAttachmentFiles(
-  store: SessionStore,
+  store: Pick<SessionStore, "attachments">,
   attachmentsRoot: string | undefined,
 ): Omit<NonNullable<ApplicationBackupManifest["attachments"]>, "consistency"> {
-  const assets = store.listAttachments({ includeDeleted: true })
+  const assets = store.attachments.listAttachments({ includeDeleted: true })
     .filter((asset) => asset.sha256 && asset.sizeBytes !== undefined);
   const unique = new Map<string, number>();
   for (const asset of assets) unique.set(asset.sha256!, asset.sizeBytes!);

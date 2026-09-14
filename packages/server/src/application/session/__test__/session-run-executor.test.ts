@@ -13,6 +13,7 @@ describe("SessionRunExecutor", () => {
     let modelCalls = 0;
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {},
@@ -46,6 +47,7 @@ describe("SessionRunExecutor", () => {
     let submitted = "";
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {}, createRunCapabilityView: () => view,
@@ -68,6 +70,7 @@ describe("SessionRunExecutor", () => {
     const observed: string[][] = [];
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: {
         configured: true,
@@ -100,6 +103,7 @@ describe("SessionRunExecutor", () => {
     const closeIfStale = vi.fn(async () => {});
     const executorWithMaintenance = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: {
         configured: true,
@@ -143,6 +147,7 @@ describe("SessionRunExecutor", () => {
     });
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: {
         configured: true,
@@ -184,6 +189,7 @@ describe("SessionRunExecutor", () => {
     const finalizeRunParts = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: {
         configured: true,
@@ -213,6 +219,7 @@ describe("SessionRunExecutor", () => {
     const log = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: {
         configured: true,
@@ -254,6 +261,7 @@ describe("SessionRunExecutor", () => {
     }));
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: {
         configured: true,
@@ -311,18 +319,18 @@ describe("SessionRunExecutor", () => {
       runId: "run-1",
     }));
     expect(cleanupResources).toHaveBeenCalledOnce();
-    expect(store.acquireAttachmentLeases).toHaveBeenCalledWith(
+    expect(store.attachments.acquireAttachmentLeases).toHaveBeenCalledWith(
       expect.objectContaining({
         assetIds: ["asset-1"],
         ownerKind: "session_run",
         ownerId: "run-1",
       }),
     );
-    expect(store.releaseAttachmentLeases).toHaveBeenCalledWith(
+    expect(store.attachments.releaseAttachmentLeases).toHaveBeenCalledWith(
       "session_run",
       "run-1",
     );
-    expect(store.acquireAttachmentLeases.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(store.attachments.acquireAttachmentLeases.mock.invocationCallOrder[0]).toBeLessThan(
       submitMessage.mock.invocationCallOrder[0]!,
     );
   });
@@ -337,6 +345,7 @@ describe("SessionRunExecutor", () => {
     const projectAttachmentTransformations = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
       goals: store as any,
       agentPool: { configured: true, acquireSession, close } as any,
       events: { checkpoint: () => 4, publishSince: vi.fn() },
@@ -429,9 +438,11 @@ function createStore(options: {
     getRun: vi.fn(() => run),
     appendEvent: vi.fn(),
     updateRun: vi.fn((id, update) => Object.assign(run, update, { id })),
-    acquireAttachmentLeases: vi.fn(() => []),
-    renewAttachmentLeases: vi.fn(() => 1),
-    releaseAttachmentLeases: vi.fn(() => 1),
+    attachments: {
+      acquireAttachmentLeases: vi.fn(() => []),
+      renewAttachmentLeases: vi.fn(() => 1),
+      releaseAttachmentLeases: vi.fn(() => 1),
+    },
   };
 }
 

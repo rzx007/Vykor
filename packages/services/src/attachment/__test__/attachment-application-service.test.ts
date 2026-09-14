@@ -53,7 +53,7 @@ function createHarness(options: {
   const now = () => options.now ?? 1_000;
   const blobs = new AttachmentBlobStore({ root: join(root, "attachments"), now });
   const service = new AttachmentApplicationService({
-    store,
+    store: store.attachments,
     blobs,
     now,
     id: () => ids.shift() ?? "att_unexpected",

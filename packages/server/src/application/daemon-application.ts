@@ -230,7 +230,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.attachments =
         options.attachments ??
         new AttachmentApplicationService({
-          store,
+          store: store.attachments,
           blobs: attachmentBlobs,
           limits: options.attachmentLimits,
         });
@@ -254,11 +254,11 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         repository: {
           findCompleted: (assetId, cacheKey) =>
-            store.findCompletedAttachmentRepresentation(assetId, "ocr_text", cacheKey),
-          begin: (input) => store.createAttachmentRepresentation(input),
-          complete: (id, output) => store.completeAttachmentRepresentation(id, output),
+            store.attachments.findCompletedAttachmentRepresentation(assetId, "ocr_text", cacheKey),
+          begin: (input) => store.attachments.createAttachmentRepresentation(input),
+          complete: (id, output) => store.attachments.completeAttachmentRepresentation(id, output),
           fail: (id, error) => {
-            store.failAttachmentRepresentation(id, error);
+            store.attachments.failAttachmentRepresentation(id, error);
           },
         },
       });
@@ -285,6 +285,7 @@ export class DaemonApplication implements DurableAgentApplication {
         store,
         new AttachmentIntegrityService({
           store,
+          attachments: store.attachments,
           blobs: attachmentBlobs,
           operationGate: this.attachments.operationGate,
         }),
@@ -558,6 +559,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       const runExecutor = new SessionRunExecutor({
         store,
+        attachments: store.attachments,
         goals: store.goals,
         agentPool: this.agentPool,
         events: this.eventPublisher,

@@ -21,7 +21,7 @@ import type {
   ToolDefinition,
 } from "@openharness/core";
 import type { AgentJobHost } from "@openharness/jobs";
-import { SessionStore } from "@openharness/services";
+import { LightOcrEngine, SessionStore } from "@openharness/services";
 
 import type { CreateDaemonAgent } from "../../daemon/daemon-agent.js";
 import { DaemonApplication } from "../daemon-application.js";
@@ -500,6 +500,74 @@ describe("DaemonApplication", () => {
     } finally {
       await application.close().catch(() => {});
       store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses attachment transactions for daemon imports and cached OCR", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openharness-attachment-boundary-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const recognize = vi.spyOn(LightOcrEngine.prototype, "recognize").mockResolvedValue({
+      lines: [{ text: "invoice 123", confidence: 1, box: [] }],
+      timing: { totalMs: 1 },
+      modelProfile: "small",
+    });
+    const legacyCalls = [
+      "createImportingAttachment", "markAttachmentReady",
+      "listImportingAttachments", "findCompletedAttachmentRepresentation",
+      "createAttachmentRepresentation", "completeAttachmentRepresentation",
+      "failAttachmentRepresentation",
+    ] as const;
+    for (const method of legacyCalls) {
+      vi.spyOn(store, method).mockImplementation(() => {
+        throw new Error(`legacy attachment entry: ${method}`);
+      });
+    }
+    let imageToText: ToolDefinition | undefined;
+    const application = new DaemonApplication({
+      store,
+      createAgent: async (context) => {
+        imageToText = context.options.tools?.find((tool) => tool.name === "ImageToText");
+        return await createEchoAgent(context);
+      },
+      log: () => {},
+    });
+    try {
+      await application.ready();
+      const session = application.sessions.createSession({ cwd: dir, model: "test-model" });
+      const admission = await application.sessions.admitPrompt(session.id, { content: "hello" });
+      await application.sessions.awaitRun(session.id, admission.run!.id);
+      expect(imageToText).toBeDefined();
+      const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
+        "base64",
+      );
+      const asset = await application.attachments.import({
+        displayName: "invoice.png",
+        declaredMediaType: "image/png",
+        content: new Blob([png]).stream(),
+      });
+      store.admitPrompt({ sessionId: session.id, content: "", attachments: [{ assetId: asset.id }] });
+      // Admission still owns its internal compatibility lookup; block it after setup.
+      const legacyGet = vi.spyOn(store, "getAttachment").mockImplementation(() => {
+        throw new Error("legacy attachment entry: getAttachment");
+      });
+      const first = await imageToText!.execute({ attachment_id: asset.id }, { cwd: dir, sessionId: session.id });
+      const cached = await imageToText!.execute({ attachment_id: asset.id }, { cwd: dir, sessionId: session.id });
+      expect(first.isError).not.toBe(true);
+      expect(cached.isError).not.toBe(true);
+      expect(cached.content).toEqual(first.content);
+      expect(cached.metadata).toMatchObject({ attachmentOcr: { cached: true } });
+      expect(recognize).toHaveBeenCalledOnce();
+      expect(store.attachments.listAttachmentRepresentations(asset.id)).toMatchObject([
+        { status: "completed", text: "invoice 123" },
+      ]);
+      for (const method of legacyCalls) expect(store[method]).not.toHaveBeenCalled();
+      expect(legacyGet).not.toHaveBeenCalled();
+    } finally {
+      await application.close();
+      store.close();
+      recognize.mockRestore();
       rmSync(dir, { recursive: true, force: true });
     }
   });

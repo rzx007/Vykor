@@ -56,39 +56,41 @@ describe("buildCompactAttachmentSection", () => {
     ]);
     const store = {
       listSessionInputAttachments: () => references,
-      getAttachment: (assetId: string) => assets.get(assetId),
-      listAttachmentRepresentations: (assetId: string) => assetId === "att-text"
-        ? [
-            {
-              id: "rep-failed",
-              assetId,
-              kind: "plain_text" as const,
-              status: "failed" as const,
-              processor: "safe-text",
-              processorVersion: "0",
-              cacheKey: "failed",
-              mediaType: "text/plain",
-              error: "bad encoding",
-              metadata: {},
-              createdAt: 2,
-              updatedAt: 3,
-            },
-            {
-              id: "rep-complete",
-              assetId,
-              kind: "plain_text" as const,
-              status: "completed" as const,
-              processor: "safe-text",
-              processorVersion: "1",
-              cacheKey: "complete",
-              mediaType: "text/plain",
-              text: "hello from notes",
-              metadata: {},
-              createdAt: 4,
-              updatedAt: 5,
-            },
-          ]
-        : [],
+      attachments: {
+        getAttachment: (assetId: string) => assets.get(assetId),
+        listAttachmentRepresentations: (assetId: string) => assetId === "att-text"
+          ? [
+              {
+                id: "rep-failed",
+                assetId,
+                kind: "plain_text" as const,
+                status: "failed" as const,
+                processor: "safe-text",
+                processorVersion: "0",
+                cacheKey: "failed",
+                mediaType: "text/plain",
+                error: "bad encoding",
+                metadata: {},
+                createdAt: 2,
+                updatedAt: 3,
+              },
+              {
+                id: "rep-complete",
+                assetId,
+                kind: "plain_text" as const,
+                status: "completed" as const,
+                processor: "safe-text",
+                processorVersion: "1",
+                cacheKey: "complete",
+                mediaType: "text/plain",
+                text: "hello from notes",
+                metadata: {},
+                createdAt: 4,
+                updatedAt: 5,
+              },
+            ]
+          : [],
+      },
     };
 
     const section = buildCompactAttachmentSection(store, "session-1");
@@ -120,34 +122,36 @@ describe("buildCompactAttachmentSection", () => {
     }));
     const store = {
       listSessionInputAttachments: () => references,
-      getAttachment: (assetId: string) => assetId === "att-21"
-        ? undefined
-        : {
-            id: assetId,
-            displayName: `${assetId}.txt`,
-            mediaType: "text/plain",
-            sizeBytes: 2000,
-            sha256: "c".repeat(64),
-            status: "ready" as const,
-            createdAt: 1,
-            updatedAt: 1,
-          },
-      listAttachmentRepresentations: (assetId: string) => assetId === "att-20"
-        ? [{
-            id: "rep-long",
-            assetId,
-            kind: "plain_text" as const,
-            status: "completed" as const,
-            processor: "safe-text",
-            processorVersion: "1",
-            cacheKey: "long",
-            mediaType: "text/plain",
-            text: "x".repeat(1500),
-            metadata: {},
-            createdAt: 1,
-            updatedAt: 1,
-          }]
-        : [],
+      attachments: {
+        getAttachment: (assetId: string) => assetId === "att-21"
+          ? undefined
+          : {
+              id: assetId,
+              displayName: `${assetId}.txt`,
+              mediaType: "text/plain",
+              sizeBytes: 2000,
+              sha256: "c".repeat(64),
+              status: "ready" as const,
+              createdAt: 1,
+              updatedAt: 1,
+            },
+        listAttachmentRepresentations: (assetId: string) => assetId === "att-20"
+          ? [{
+              id: "rep-long",
+              assetId,
+              kind: "plain_text" as const,
+              status: "completed" as const,
+              processor: "safe-text",
+              processorVersion: "1",
+              cacheKey: "long",
+              mediaType: "text/plain",
+              text: "x".repeat(1500),
+              metadata: {},
+              createdAt: 1,
+              updatedAt: 1,
+            }]
+          : [],
+      },
     };
 
     const section = buildCompactAttachmentSection(store, "session-1", {
@@ -166,8 +170,10 @@ describe("buildCompactAttachmentSection", () => {
   it("returns undefined when the session has no attachment references", () => {
     expect(buildCompactAttachmentSection({
       listSessionInputAttachments: () => [],
-      getAttachment: () => undefined,
-      listAttachmentRepresentations: () => [],
+      attachments: {
+        getAttachment: () => undefined,
+        listAttachmentRepresentations: () => [],
+      },
     }, "session-1")).toBeUndefined();
   });
 });
