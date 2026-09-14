@@ -40,7 +40,6 @@ export interface SessionStoreOptions {
 
 export const DEFAULT_DELTA_FLUSH_INTERVAL_MS = 150;
 export const DEFAULT_DELTA_FLUSH_BYTES = 8 * 1024;
-export const EVENT_SEQUENCE_BLOCK_SIZE = 1024;
 
 export function now(): number {
   return Date.now();

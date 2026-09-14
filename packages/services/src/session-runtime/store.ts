@@ -72,6 +72,7 @@ import type {
 } from "@openharness/protocol";
 import { AttachmentError } from "../attachment/attachment-errors.js";
 import { SessionDatabase } from "../database/session-database.js";
+import { DurableEventSequence } from "../database/event-sequence.js";
 import {
   cloneMutationBuffer,
   createMutationBuffer,
@@ -120,7 +121,6 @@ export interface AcquireAttachmentLeasesInput {
 import {
   DEFAULT_DELTA_FLUSH_BYTES,
   DEFAULT_DELTA_FLUSH_INTERVAL_MS,
-  EVENT_SEQUENCE_BLOCK_SIZE,
   assertMessage,
   assertMutableSession,
   assertSession,
@@ -316,7 +316,7 @@ export class SessionStore {
   private readonly dirtyDeltaPartIds = new Set<string>();
   private pendingDeltaBytes = 0;
   private deltaFlushTimer?: ReturnType<typeof setTimeout>;
-  private reservedEventSeq = 0;
+  private eventSequence!: DurableEventSequence;
   private mutations = createMutationBuffer();
   private state: SessionState;
   private readonly taskListeners = new Map<string, Set<() => void>>();
@@ -1201,7 +1201,7 @@ export class SessionStore {
     const previousDirtyPartIds = new Set(this.dirtyDeltaPartIds);
     const previousPendingDeltaBytes = this.pendingDeltaBytes;
     const previousSaveRequested = this.saveRequested;
-    const previousReservedEventSeq = this.reservedEventSeq;
+    const previousEventSequence = this.eventSequence.snapshot();
     const previousMutations = cloneMutationBuffer(this.mutations);
     this.transactionDepth += 1;
     if (this.transactionDepth === 1) this.saveRequested = false;
@@ -1224,9 +1224,10 @@ export class SessionStore {
       return result;
     } catch (error) {
       this.state = previous;
+      this.eventSequence = DurableEventSequence.load(this.database, this.state);
       this.restoreDirtyDeltas(previousDirtyPartIds, previousPendingDeltaBytes);
       this.saveRequested = previousSaveRequested;
-      this.reservedEventSeq = previousReservedEventSeq;
+      this.eventSequence.restore(previousEventSequence);
       this.mutations = previousMutations;
       throw error;
     } finally {
@@ -4371,7 +4372,7 @@ export class SessionStore {
     );
     const event: SessionEventRecord = {
       id: input.id ?? randomUUID(),
-      seq: this.allocateEventSequence(),
+      seq: this.eventSequence.allocate(),
       type: input.type,
       schemaVersion: prepared.schemaVersion,
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
@@ -4449,25 +4450,8 @@ export class SessionStore {
 
   private load(): SessionState {
     const loaded = loadSessionReadModel(this.database, this.eventRegistry);
-    this.reservedEventSeq = loaded.reservedEventSeq;
+    this.eventSequence = DurableEventSequence.load(this.database, loaded.state);
     return loaded.state;
-  }
-
-  private allocateEventSequence(): number {
-    if (this.state.nextEventSeq > this.reservedEventSeq) {
-      const reservedThrough =
-        this.state.nextEventSeq + EVENT_SEQUENCE_BLOCK_SIZE - 1;
-      this.database
-        .prepare(
-          `
-        INSERT INTO session_event_sequence (id, reserved_through) VALUES (1, ?)
-        ON CONFLICT(id) DO UPDATE SET reserved_through = excluded.reserved_through
-      `,
-        )
-        .run(reservedThrough);
-      this.reservedEventSeq = reservedThrough;
-    }
-    return this.state.nextEventSeq++;
   }
 
   private save(): void {

@@ -1940,7 +1940,8 @@ describe("SessionStore", () => {
         });
         const internals = store as any;
         const database = internals.database as Database.Database;
-        internals.reservedEventSeq = internals.state.nextEventSeq - 1;
+        internals.eventSequence.reservedThrough =
+          internals.state.nextEventSeq - 1;
         database.exec(`
         CREATE TRIGGER fail_event_sequence_reservation BEFORE UPDATE ON session_event_sequence
         BEGIN
