@@ -84,6 +84,7 @@ import type { StorageContext } from "../database/storage-context.js";
 import { ProjectRepository } from "../projects/project-repository.js";
 import { ScheduleRepository } from "../schedules/schedule-repository.js";
 import { WorkflowRepository } from "../workflows/workflow-repository.js";
+import { ChannelRepository } from "../channels/channel-repository.js";
 import type {
   StoredWorkflowRunInput,
   StoredWorkflowRunRecord,
@@ -292,6 +293,7 @@ export class SessionStore {
   readonly projects!: ProjectRepository;
   readonly schedules!: ScheduleRepository;
   readonly workflows!: WorkflowRepository;
+  readonly channels!: ChannelRepository;
   private storage!: StorageContext;
   private closed = false;
   private transactionDepth = 0;
@@ -336,6 +338,7 @@ export class SessionStore {
       this.projects = new ProjectRepository(this.storage);
       this.schedules = new ScheduleRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);
+      this.channels = new ChannelRepository(this.storage);
     } catch (error) {
       database.close();
       throw error;
@@ -1662,18 +1665,7 @@ export class SessionStore {
     chatId: string;
     threadId?: string;
   }): ExternalConversationRecord | undefined {
-    const row = this.database
-      .prepare(
-        `SELECT * FROM external_conversation
-         WHERE connector = ? AND account_id = ? AND chat_id = ? AND thread_id = ?`,
-      )
-      .get(
-        input.connector,
-        input.accountId,
-        input.chatId,
-        input.threadId ?? "",
-      ) as Record<string, unknown> | undefined;
-    return row ? externalConversationFromRow(row) : undefined;
+    return this.channels.findConversation(input);
   }
 
   upsertExternalConversation(input: {
@@ -1685,53 +1677,13 @@ export class SessionStore {
     threadId?: string;
     sessionId: string;
   }): ExternalConversationRecord {
-    this.assertCurrentOwner();
-    assertSession(this.state, input.sessionId);
-    const existing = this.findExternalConversation(input);
-    const timestamp = now();
-    const id = existing?.id ?? input.id ?? randomUUID();
-    this.database
-      .prepare(
-        `INSERT INTO external_conversation
-          (id, connector, account_id, workspace_id, chat_id, thread_id, session_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(connector, account_id, chat_id, thread_id) DO UPDATE SET
-           workspace_id = excluded.workspace_id,
-           session_id = excluded.session_id,
-           updated_at = excluded.updated_at`,
-      )
-      .run(
-        id,
-        input.connector,
-        input.accountId,
-        input.workspaceId ?? null,
-        input.chatId,
-        input.threadId ?? "",
-        input.sessionId,
-        existing?.createdAt ?? timestamp,
-        timestamp,
-      );
-    return this.findExternalConversation(input)!;
+    return this.channels.upsertConversation(input);
   }
 
   listExternalConversations(
-    options: {
-      connector?: string;
-      limit?: number;
-    } = {},
+    options: { connector?: string; limit?: number } = {},
   ): ExternalConversationRecord[] {
-    const rows = this.database
-      .prepare(
-        `SELECT * FROM external_conversation
-         ${options.connector ? "WHERE connector = ?" : ""}
-         ORDER BY updated_at DESC
-         ${options.limit !== undefined ? "LIMIT ?" : ""}`,
-      )
-      .all(
-        ...(options.connector ? [options.connector] : []),
-        ...(options.limit !== undefined ? [options.limit] : []),
-      ) as Array<Record<string, unknown>>;
-    return rows.map(externalConversationFromRow);
+    return this.channels.listConversations(options);
   }
 
   createChannelDelivery(input: {
@@ -1747,62 +1699,15 @@ export class SessionStore {
     externalMessageId: string;
     content: string;
   }): ChannelDeliveryRecord {
-    this.assertCurrentOwner();
-    const existing = this.findChannelDeliveryByInput(input.inputId);
-    if (existing) {
-      if (
-        existing.sessionId !== input.sessionId ||
-        existing.runId !== input.runId ||
-        existing.content !== input.content
-      ) {
-        throw new Error(
-          `Channel delivery input is already used: ${input.inputId}`,
-        );
-      }
-      return existing;
-    }
-    const timestamp = now();
-    const id = input.id ?? randomUUID();
-    this.database
-      .prepare(
-        `INSERT INTO channel_delivery
-          (id, conversation_id, connector, account_id, chat_id, thread_id,
-           session_id, input_id, run_id, external_message_id, content, status,
-           attempt_count, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)`,
-      )
-      .run(
-        id,
-        input.conversationId,
-        input.connector,
-        input.accountId,
-        input.chatId,
-        input.threadId ?? "",
-        input.sessionId,
-        input.inputId,
-        input.runId,
-        input.externalMessageId,
-        input.content,
-        timestamp,
-        timestamp,
-      );
-    return this.getChannelDelivery(id)!;
+    return this.channels.createDelivery(input);
   }
 
   getChannelDelivery(id: string): ChannelDeliveryRecord | undefined {
-    const row = this.database
-      .prepare("SELECT * FROM channel_delivery WHERE id = ?")
-      .get(id) as Record<string, unknown> | undefined;
-    return row ? channelDeliveryFromRow(row) : undefined;
+    return this.channels.getDelivery(id);
   }
 
-  findChannelDeliveryByInput(
-    inputId: string,
-  ): ChannelDeliveryRecord | undefined {
-    const row = this.database
-      .prepare("SELECT * FROM channel_delivery WHERE input_id = ?")
-      .get(inputId) as Record<string, unknown> | undefined;
-    return row ? channelDeliveryFromRow(row) : undefined;
+  findChannelDeliveryByInput(inputId: string): ChannelDeliveryRecord | undefined {
+    return this.channels.findDeliveryByInput(inputId);
   }
 
   updateChannelDelivery(
@@ -1813,25 +1718,7 @@ export class SessionStore {
       error?: string;
     },
   ): ChannelDeliveryRecord {
-    this.assertCurrentOwner();
-    const existing = this.getChannelDelivery(id);
-    if (!existing) throw new Error(`Channel delivery not found: ${id}`);
-    const timestamp = now();
-    this.database
-      .prepare(
-        `UPDATE channel_delivery SET status = ?, attempt_count = attempt_count + ?,
-          external_delivery_id = ?, error = ?, updated_at = ?, sent_at = ? WHERE id = ?`,
-      )
-      .run(
-        input.status,
-        input.status === "unknown" ? 1 : 0,
-        input.externalDeliveryId ?? existing.externalDeliveryId ?? null,
-        input.error ?? null,
-        timestamp,
-        input.status === "sent" ? timestamp : (existing.sentAt ?? null),
-        id,
-      );
-    return this.getChannelDelivery(id)!;
+    return this.channels.updateDelivery(id, input);
   }
 
   listChannelDeliveries(
@@ -1841,28 +1728,7 @@ export class SessionStore {
       limit?: number;
     } = {},
   ): ChannelDeliveryRecord[] {
-    const clauses: string[] = [];
-    const values: unknown[] = [];
-    if (options.statuses?.length) {
-      clauses.push(`status IN (${options.statuses.map(() => "?").join(", ")})`);
-      values.push(...options.statuses);
-    }
-    if (options.connector) {
-      clauses.push("connector = ?");
-      values.push(options.connector);
-    }
-    const rows = this.database
-      .prepare(
-        `SELECT * FROM channel_delivery
-         ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
-         ORDER BY updated_at DESC
-         ${options.limit !== undefined ? "LIMIT ?" : ""}`,
-      )
-      .all(
-        ...values,
-        ...(options.limit !== undefined ? [options.limit] : []),
-      ) as Array<Record<string, unknown>>;
-    return rows.map(channelDeliveryFromRow);
+    return this.channels.listDeliveries(options);
   }
 
   /** Atomically persists a queued prompt and the one root run that owns it. */
@@ -4458,49 +4324,6 @@ function validateLeaseWindow(timestamp: number, expiresAt: number): void {
   ) {
     throw new Error("Attachment lease expiry must be after its timestamp");
   }
-}
-
-function externalConversationFromRow(
-  row: Record<string, unknown>,
-): ExternalConversationRecord {
-  return {
-    id: row.id as string,
-    connector: row.connector as string,
-    accountId: row.account_id as string,
-    ...(row.workspace_id ? { workspaceId: row.workspace_id as string } : {}),
-    chatId: row.chat_id as string,
-    ...(row.thread_id ? { threadId: row.thread_id as string } : {}),
-    sessionId: row.session_id as string,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-  };
-}
-
-function channelDeliveryFromRow(
-  row: Record<string, unknown>,
-): ChannelDeliveryRecord {
-  return {
-    id: row.id as string,
-    conversationId: row.conversation_id as string,
-    connector: row.connector as string,
-    accountId: row.account_id as string,
-    chatId: row.chat_id as string,
-    ...(row.thread_id ? { threadId: row.thread_id as string } : {}),
-    sessionId: row.session_id as string,
-    inputId: row.input_id as string,
-    runId: row.run_id as string,
-    externalMessageId: row.external_message_id as string,
-    content: row.content as string,
-    status: row.status as ChannelDeliveryStatus,
-    attemptCount: row.attempt_count as number,
-    ...(row.external_delivery_id
-      ? { externalDeliveryId: row.external_delivery_id as string }
-      : {}),
-    ...(row.error ? { error: row.error as string } : {}),
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-    ...(row.sent_at ? { sentAt: row.sent_at as number } : {}),
-  };
 }
 
 function applicationOwnerFromRow(

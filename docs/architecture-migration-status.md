@@ -1,10 +1,10 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–1、阶段 2A、阶段 2B 和阶段 2C1 已完成。
+> 状态：当前。阶段 0–1、阶段 2A、阶段 2B、阶段 2C1 和阶段 2C2 已完成。
 
 ## 当前阶段
 
-阶段 0–1、阶段 2A、阶段 2B 和阶段 2C1 已完成：依赖护栏、Session SQLite 数据库内核、Project、Schedule 与 Workflow Repository 已经落地。
+阶段 0–1、阶段 2A、阶段 2B、阶段 2C1 和阶段 2C2 已完成：依赖护栏、Session SQLite 数据库内核、Project、Schedule、Workflow 与 Channel Repository 已经落地。
 
 ## 指标
 
@@ -22,6 +22,8 @@ Scheduled Task/Run SQL 和 row conversion 已迁入 `packages/services/src/sched
 
 Workflow Run/Event/Claim SQL 和 row conversion 已迁入 `packages/services/src/workflows`，retention 跨域清理 SQL 暂留 Maintenance 路径。Server Workflow adapter 只依赖 Workflow 存储与 session event 窄能力，并使用进程内 change version 防止 event-only wait 注册竞态。
 
+External Conversation 与 Channel Delivery SQL 和 row conversion 已迁入 `packages/services/src/channels`。`SessionStore` 保留八个兼容转发方法；Server Channel application service 只通过 `store.channels` 执行 Channel 持久化，Session/Input 查询仍使用窄 Store 能力。
+
 ## 下一步
 
-阶段 2C2 处理 Channel。后续依次处理 Goal、Permission 和 Attachment；每个域单独制定计划并迁移测试、repository、调用方和兼容转发。
+阶段 2D 处理 Goal。后续依次处理 Permission 和 Attachment；每个域单独制定计划并迁移测试、repository、调用方和兼容转发。

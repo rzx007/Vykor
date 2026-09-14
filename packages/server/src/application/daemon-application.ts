@@ -701,6 +701,7 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       this.channels = new ChannelApplicationService({
         store,
+        channels: store.channels,
         sessions: this.sessions,
         log: options.log,
       });
