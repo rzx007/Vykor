@@ -65,6 +65,9 @@ describe("PluginManager archive import", () => {
           importArchive: vi.fn(),
           confirmArchive: vi.fn(),
           cancelArchive: vi.fn(),
+          importGit: vi.fn(),
+          confirmGit: vi.fn(),
+          cancelGit: vi.fn(),
           enable: vi.fn(),
           disable: vi.fn(),
           uninstall: vi.fn(),
@@ -77,6 +80,7 @@ describe("PluginManager archive import", () => {
     props = {
       query: "",
       addRequest: 0,
+      gitAddRequest: 0,
       refreshRequest: 0,
       projectPath: "D:/project",
       notify: vi.fn(),
@@ -96,6 +100,9 @@ describe("PluginManager archive import", () => {
     importArchive: ReturnType<typeof vi.fn>
     confirmArchive: ReturnType<typeof vi.fn>
     cancelArchive: ReturnType<typeof vi.fn>
+    importGit: ReturnType<typeof vi.fn>
+    confirmGit: ReturnType<typeof vi.fn>
+    cancelGit: ReturnType<typeof vi.fn>
     enable: ReturnType<typeof vi.fn>
     disable: ReturnType<typeof vi.fn>
     uninstall: ReturnType<typeof vi.fn>
@@ -128,14 +135,50 @@ describe("PluginManager archive import", () => {
     await render({ addRequest: props.addRequest + 1 })
   }
 
-  it("keeps archive import on the page add request instead of an in-page button", async () => {
+  async function requestGitImport(): Promise<void> {
+    await render({ gitAddRequest: props.gitAddRequest + 1 })
+  }
+
+  async function typeInto(label: string, value: string): Promise<void> {
+    const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+    expect(input, `input: ${label}`).toBeTruthy()
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+    expect(setValue, "HTMLInputElement value setter").toBeTruthy()
+    await act(async () => {
+      setValue!.call(input, value)
+      input!.dispatchEvent(new Event("input", { bubbles: true }))
+      await Promise.resolve()
+    })
+  }
+
+  it("keeps install actions out of the plugin page body", async () => {
     await render()
 
-    expect(host.textContent).not.toContain("导入插件")
+    expect(host.textContent).not.toContain("安装插件")
+    expect(host.textContent).not.toContain("导入插件包")
+    expect(host.textContent).not.toContain("从 Git 安装")
     expect(host.textContent).not.toContain("添加插件配置")
-    expect(
-      [...host.querySelectorAll("button")].filter((item) => item.textContent?.trim() === "导入插件")
-    ).toHaveLength(0)
+  })
+
+  it("opens a Git install dialog from the top-menu request and installs with cwd", async () => {
+    api().importGit.mockResolvedValue({ status: "installed", pluginName: "Git Plugin", snapshot })
+    await render()
+    await requestGitImport()
+
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain("从 Git 安装插件")
+    expect(dialog?.textContent).toContain("branch、tag 或 commit 可不填")
+
+    await typeInto("Git 插件地址", "https://github.com/acme/plugin.git")
+    await typeInto("Git ref", "v1.0.0")
+    await click("安装")
+
+    expect(api().importGit).toHaveBeenCalledWith({
+      cwd: "D:/project",
+      url: "https://github.com/acme/plugin.git",
+      ref: "v1.0.0",
+    })
+    expect(props.notify).toHaveBeenCalledWith("Git Plugin 已安装或更新，将在下次对话中生效。")
   })
 
   it("runs a top-menu import request after the initial snapshot has finished", async () => {

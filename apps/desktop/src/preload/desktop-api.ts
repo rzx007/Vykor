@@ -235,6 +235,12 @@ export const desktopAPI = {
       invoke(IpcChannels.pluginConfirmArchive, input),
     cancelArchive: (input: IpcInvokeMap[typeof IpcChannels.pluginCancelArchive]["args"][0]) =>
       invoke(IpcChannels.pluginCancelArchive, input),
+    importGit: (input: IpcInvokeMap[typeof IpcChannels.pluginImportGit]["args"][0]) =>
+      invoke(IpcChannels.pluginImportGit, input),
+    confirmGit: (input: IpcInvokeMap[typeof IpcChannels.pluginConfirmGit]["args"][0]) =>
+      invoke(IpcChannels.pluginConfirmGit, input),
+    cancelGit: (input: IpcInvokeMap[typeof IpcChannels.pluginCancelGit]["args"][0]) =>
+      invoke(IpcChannels.pluginCancelGit, input),
   },
   skills: {
     snapshot: (input: IpcInvokeMap[typeof IpcChannels.skillSnapshot]["args"][0]) =>

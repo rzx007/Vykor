@@ -122,9 +122,9 @@ Installed Plugin 是已经完成以下步骤的 Native Plugin：
 
 ### Desktop 当前入口
 
-Desktop 插件页目前只接收一个本地 Native Plugin 包，格式支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`。它在后台静态校验，未申请权限时直接安装，申请权限时只请求一次完整确认；重新导入同一插件 ID 时，既有批准覆盖本次权限便直接安装，只有新增权限才重新确认。重新安装沿用同一条安装链路，成功切换前保留旧记录，并保留插件原来的启停状态。结果返回成功、失败或待刷新确认，成功后的激活从下一次对话开始。绝对插件包路径和摘要不返回 Renderer，安装器收到的仍是已经准备好的目录。
+Desktop 插件页目前支持两个最小安装入口：从本地 Native Plugin 包导入，以及从 Git URL 安装。入口都收在右上角“添加”菜单里，Git 安装只打开一个 URL/ref 弹窗，不在页面主体常驻表单。本地包格式支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`；Git 来源使用系统 `git` 固定到实际 commit，并在安装前移除 `.git`。两条入口都会在后台静态校验，未申请权限时直接安装，申请权限时只请求一次完整确认；重新导入同一插件 ID 时，既有批准覆盖本次权限便直接安装，只有新增权限才重新确认。重新安装沿用同一条安装链路，成功切换前保留旧记录，并保留插件原来的启停状态。结果返回成功、失败或待刷新确认，成功后的激活从下一次对话开始。绝对插件包路径和摘要不返回 Renderer，安装器收到的仍是已经准备好的目录。
 
-这不改变最终多来源架构：Agent 对话安装、Claude Code/Codex 转换、Git、npm、归档 URL 和 Marketplace 还没有进入 Desktop。旧插件页 localStorage 配置仅被隐藏，未迁移或删除。
+这不改变最终多来源架构：Agent 对话安装、Claude Code/Codex 转换、npm、归档 URL 和 Marketplace 还没有进入 Desktop。旧插件页 localStorage 配置仅被隐藏，未迁移或删除。
 
 ## 4. Native Plugin 包结构
 
@@ -495,7 +495,7 @@ Native Tool 在 WSL、远程主机或其他执行环境中必须显式声明可�
 - Marketplace 浏览与安装；
 - managed plugin 的只读状态。
 
-当前 Desktop 已完成列表、搜索、详情、启停、卸载、刷新，以及 Skills/MCP 管理页面。插件页可导入一个本地 Native Plugin 包：支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`，无权限时直接安装，有权限时只显示一次确认。插件列表和详情会显示 Plugin Service 计算出的 Runtime 主状态：已禁用、等待下次对话生效、已加载、部分能力不可用或加载失败。旧“插件配置”和静态模板已从实际页面隐藏，localStorage 原数据仍保留，未迁移或删除。
+当前 Desktop 已完成列表、搜索、详情、启停、卸载、刷新，以及 Skills/MCP 管理页面。插件页可从右上角“添加”菜单导入本地 Native Plugin 包，或打开 Git URL/ref 弹窗从 Git 安装。本地包支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`；Git 来源固定到实际 commit 后进入同一安装链路。无权限时直接安装，有权限时只显示一次确认。插件列表和详情会显示 Plugin Service 计算出的 Runtime 主状态：已禁用、等待下次对话生效、已加载、部分能力不可用或加载失败。旧“插件配置”和静态模板已从实际页面隐藏，localStorage 原数据仍保留，未迁移或删除。
 
 ### CLI
 
@@ -659,6 +659,8 @@ Native Plugin → 在 daemon 主进程注册 Converter
 
 2026-09-14 本地插件包格式补齐 v1 已完成：Desktop 仍只有一个“导入本地插件包”入口，交互不增加复杂度；后台 Source Resolver 在原 ZIP 校验基础上补齐 `.tar`、`.tar.gz` 和 `.tgz`，TAR 解析交给成熟的 `tar` 包，外层继续做路径、类型、大小、数量、压缩比、摘要和临时目录清理校验。Agent 对话安装、Git、npm、归档 URL、Marketplace 和自动更新继续暂缓。
 
+2026-09-14 Git Source Resolver v1 已完成实现，等待最终验收：Git 来源使用系统 `git` 作为成熟工具，不自研 Git 协议；预览和安装都固定到实际 commit，安装前移除 `.git` 元数据，并复用现有 Native 校验、权限确认和不可变快照。Desktop 入口放在右上角“添加”菜单下，通过一个 Git URL/ref 弹窗完成安装，不在插件页主体常驻表单。该阶段只做 Desktop Git URL 安装，不包含自动更新、npm、archive URL、Marketplace 或自动依赖安装。
+
 2026-09-10 补充最小重新安装语义：用户重新导入同一插件 ID 的可信 ZIP，即可手动更新或修复。Server 复用能够覆盖本次请求的既有权限批准，新增权限仍请求一次完整确认；Installer 只在新快照成功后切换记录，并保留原启停状态。自动更新、Repair 命令、版本回滚和垃圾回收仍不在近期范围。详见[核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)和[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)。
 
 2026-09-14 Native Plugin 运行诊断 v1 已完成：`PluginInfo.runtimeStatus` 返回 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`，Plugin Service 根据安装校验、组件诊断和 Native Tool Runtime 状态计算，Desktop 插件页展示主状态和一条建议动作。该阶段不包含自动修复、自动更新、新来源或复杂诊断树。Agent 对话内安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
@@ -676,7 +678,7 @@ Native Plugin → 在 daemon 主进程注册 Converter
 3. **Native Plugin 运行诊断 v1**：已完成。Plugin Service 返回用户可读的运行主状态，Desktop 列表与详情页直接显示下一步建议。
 4. **作者体验小修**：已完成。开发指南和参考插件 README 已补充打包、重装验证、看诊断和常见失败排查说明。
 5. **声明式贡献**：`output_styles` 已决定暂缓；Themes、Monitors、Workflows 等需要重新开规格后再做。
-6. **Source Resolver**：本地 archive 已完成；后续再依次考虑 Git、npm 和归档 URL。每一种都要做完整性和路径安全测试。
+6. **Source Resolver**：本地 archive 已完成，Git 来源已完成实现并待验收；后续再依次考虑 npm 和归档 URL。每一种都要做完整性和路径安全测试。
 7. **Marketplace**：建立在 Source Resolver 和统一安装流程之上，不先做另一套假安装 UI。
 8. **Channels 与 Providers**：分别设计认证、生命周期、冲突和隔离，不能复用普通 Tool 的简单注册方式。
 9. **UI contributions**：最后处理，需要明确可用组件、导航、CSP、数据访问、权限和崩溃隔离。

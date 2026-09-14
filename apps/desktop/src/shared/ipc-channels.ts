@@ -84,6 +84,9 @@ import type {
   DesktopPluginArchiveCancelInput,
   DesktopPluginArchiveConfirmResult,
   DesktopPluginArchiveConfirmInput,
+  DesktopPluginGitConfirmResult,
+  DesktopPluginGitImportInput,
+  DesktopPluginGitImportResult,
   DesktopPluginArchiveImportInput,
   DesktopPluginArchiveImportResult,
   DesktopPluginContextInput,
@@ -251,6 +254,9 @@ export const IpcChannels = {
   pluginImportArchive: "plugin:import-archive",
   pluginConfirmArchive: "plugin:confirm-archive",
   pluginCancelArchive: "plugin:cancel-archive",
+  pluginImportGit: "plugin:import-git",
+  pluginConfirmGit: "plugin:confirm-git",
+  pluginCancelGit: "plugin:cancel-git",
 
   skillSnapshot: "skill:snapshot",
   skillRemove: "skill:remove",
@@ -679,6 +685,18 @@ export interface IpcInvokeMap {
     result: DesktopPluginArchiveConfirmResult
   }
   [IpcChannels.pluginCancelArchive]: {
+    args: [input: DesktopPluginArchiveCancelInput]
+    result: void
+  }
+  [IpcChannels.pluginImportGit]: {
+    args: [input: DesktopPluginGitImportInput]
+    result: DesktopPluginGitImportResult
+  }
+  [IpcChannels.pluginConfirmGit]: {
+    args: [input: DesktopPluginArchiveConfirmInput]
+    result: DesktopPluginGitConfirmResult
+  }
+  [IpcChannels.pluginCancelGit]: {
     args: [input: DesktopPluginArchiveCancelInput]
     result: void
   }

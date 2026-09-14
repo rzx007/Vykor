@@ -12,6 +12,11 @@ export interface DesktopPluginActionInput extends DesktopPluginContextInput {
 
 export type DesktopPluginArchiveImportInput = DesktopPluginContextInput
 
+export interface DesktopPluginGitImportInput extends DesktopPluginContextInput {
+  url: string
+  ref?: string
+}
+
 export interface DesktopPluginArchiveConfirmInput extends DesktopPluginContextInput {
   selectionId: string
 }
@@ -61,6 +66,10 @@ export type DesktopPluginArchiveConfirmResult =
   | DesktopPluginArchiveInstalledResult
   | DesktopPluginArchiveUnknownResult
   | DesktopPluginArchiveFailedResult
+
+export type DesktopPluginGitImportResult = DesktopPluginArchiveImportResult
+
+export type DesktopPluginGitConfirmResult = DesktopPluginArchiveConfirmResult
 
 export interface DesktopPluginSnapshot {
   cwd: string

@@ -5,6 +5,7 @@ import type {
   DesktopPluginActionInput,
   DesktopPluginArchiveCancelInput,
   DesktopPluginArchiveConfirmInput,
+  DesktopPluginGitImportInput,
   DesktopPluginArchiveImportInput,
   DesktopPluginContextInput,
 } from "../../../shared/plugin-types"
@@ -21,6 +22,9 @@ type PluginIpcService = Pick<
   | "importArchive"
   | "confirmArchive"
   | "cancelArchive"
+  | "importGit"
+  | "confirmGit"
+  | "cancelGit"
   | "clearArchiveSelections"
 >
 
@@ -71,6 +75,25 @@ export function createPluginIpcContribution(service: PluginIpcService): IpcContr
           channel: IpcChannels.pluginCancelArchive,
           handler: (_event, input) =>
             service.cancelArchive({ selectionId: (input as DesktopPluginArchiveCancelInput).selectionId }),
+        },
+        {
+          channel: IpcChannels.pluginImportGit,
+          handler: (_event, input) => {
+            const value = input as DesktopPluginGitImportInput
+            return service.importGit({ cwd: value.cwd, url: value.url, ref: value.ref })
+          },
+        },
+        {
+          channel: IpcChannels.pluginConfirmGit,
+          handler: (_event, input) => {
+            const value = input as DesktopPluginArchiveConfirmInput
+            return service.confirmGit({ cwd: value.cwd, selectionId: value.selectionId })
+          },
+        },
+        {
+          channel: IpcChannels.pluginCancelGit,
+          handler: (_event, input) =>
+            service.cancelGit({ selectionId: (input as DesktopPluginArchiveCancelInput).selectionId }),
         },
       ]
     },

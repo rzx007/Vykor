@@ -94,6 +94,9 @@ import type {
   DesktopPluginArchiveConfirmInput,
   DesktopPluginArchiveImportInput,
   DesktopPluginArchiveImportResult,
+  DesktopPluginGitConfirmResult,
+  DesktopPluginGitImportInput,
+  DesktopPluginGitImportResult,
   DesktopPluginContextInput,
   DesktopPluginSnapshot,
 } from "./plugin-types"
@@ -266,6 +269,13 @@ export type DesktopAPI = {
       input: DesktopPluginArchiveConfirmInput
     ) => Promise<DesktopPluginArchiveConfirmResult>
     cancelArchive: (input: DesktopPluginArchiveCancelInput) => Promise<void>
+    importGit: (
+      input: DesktopPluginGitImportInput
+    ) => Promise<DesktopPluginGitImportResult>
+    confirmGit: (
+      input: DesktopPluginArchiveConfirmInput
+    ) => Promise<DesktopPluginGitConfirmResult>
+    cancelGit: (input: DesktopPluginArchiveCancelInput) => Promise<void>
   }
   skills: {
     snapshot: (input: DesktopSkillSnapshotInput) => Promise<DesktopSkillSnapshot>

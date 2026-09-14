@@ -13,6 +13,14 @@ import {
 } from "@renderer/components/ui/alert-dialog"
 import { Button } from "@renderer/components/ui/button"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@renderer/components/ui/dialog"
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -25,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@renderer/components/ui/empty"
+import { Input } from "@renderer/components/ui/input"
 import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Spinner } from "@renderer/components/ui/spinner"
@@ -43,6 +52,7 @@ import { ExtensionIcon } from "./plugin-catalog"
 export interface PluginManagerProps {
   query: string
   addRequest: number
+  gitAddRequest: number
   refreshRequest: number
   projectPath: string
   notify: (message: string) => void
@@ -52,7 +62,9 @@ type ImportFeedback = {
   details?: DesktopPluginArchiveFailureDetail[]
   variant?: "destructive"
 }
-type Approval = Extract<DesktopPluginArchiveImportResult, { status: "approval-required" }>
+type Approval = Extract<DesktopPluginArchiveImportResult, { status: "approval-required" }> & {
+  source: "archive" | "git"
+}
 const permissionLabels: Record<string, string> = {
   filesystem: "文件访问",
   network: "网络访问",
@@ -85,6 +97,7 @@ function groupPermissions(permissions: string[]): Array<{ label: string; values:
 export function PluginManager({
   query,
   addRequest,
+  gitAddRequest,
   refreshRequest,
   projectPath,
   notify,
@@ -98,12 +111,16 @@ export function PluginManager({
   const [detailId, setDetailId] = useState<string | null>(null)
   const [removal, setRemoval] = useState<{ id: string; name: string } | null>(null)
   const [approval, setApproval] = useState<Approval | null>(null)
+  const [gitDialogOpen, setGitDialogOpen] = useState(false)
+  const [gitUrl, setGitUrl] = useState("")
+  const [gitRef, setGitRef] = useState("")
   const [queuedImport, setQueuedImport] = useState(false)
   const lock = useRef(false)
   const mounted = useRef(true)
   const loadId = useRef(0)
   const previousRefresh = useRef(refreshRequest)
   const previousAdd = useRef(0)
+  const previousGitAdd = useRef(0)
   const cancelledSelection = useRef<string | null>(null)
   useEffect(() => {
     mounted.current = true
@@ -136,12 +153,13 @@ export function PluginManager({
     }
   }, [api, projectPath])
   function applyImportResult(
-    result: DesktopPluginArchiveImportResult | DesktopPluginArchiveConfirmResult
+    result: DesktopPluginArchiveImportResult | DesktopPluginArchiveConfirmResult,
+    source: Approval["source"] = "archive"
   ): void {
     if (result.status === "cancelled") return
     if (result.status === "approval-required") {
       cancelledSelection.current = null
-      setApproval(result)
+      setApproval({ ...result, source })
       return
     }
     if (result.status === "installed") {
@@ -184,7 +202,7 @@ export function PluginManager({
     setBusy(true)
     setFeedback(null)
     try {
-      const result = await api.confirmArchive({
+      const result = await (approval.source === "git" ? api.confirmGit : api.confirmArchive)({
         cwd: projectPath,
         selectionId: approval.selectionId,
       })
@@ -203,9 +221,10 @@ export function PluginManager({
     if (!api || !approval || busy || cancelledSelection.current === approval.selectionId) return
     cancelledSelection.current = approval.selectionId
     const selectionId = approval.selectionId
+    const source = approval.source
     setApproval(null)
     try {
-      await api.cancelArchive({ selectionId })
+      await (source === "git" ? api.cancelGit : api.cancelArchive)({ selectionId })
     } catch {
       if (mounted.current)
         setFeedback({ message: "取消导入失败，请重试。", variant: "destructive" })
@@ -225,6 +244,41 @@ export function PluginManager({
     setQueuedImport(false)
     void importArchive()
   }, [busy, queuedImport])
+  useEffect(() => {
+    if (!gitAddRequest || gitAddRequest === previousGitAdd.current) return
+    previousGitAdd.current = gitAddRequest
+    setFeedback(null)
+    setGitDialogOpen(true)
+  }, [gitAddRequest])
+  async function importGit(): Promise<void> {
+    if (!api || lock.current) return
+    const url = gitUrl.trim()
+    const ref = gitRef.trim()
+    if (!url) {
+      setFeedback({ message: "请输入 Git 地址。", variant: "destructive" })
+      return
+    }
+    lock.current = true
+    setBusy(true)
+    setFeedback(null)
+    try {
+      setGitDialogOpen(false)
+      applyImportResult(
+        await api.importGit({
+          cwd: projectPath,
+          url,
+          ...(ref ? { ref } : {}),
+        }),
+        "git"
+      )
+    } catch {
+      if (mounted.current)
+        setFeedback({ message: "从 Git 安装插件失败，请重试。", variant: "destructive" })
+    } finally {
+      lock.current = false
+      if (mounted.current) setBusy(false)
+    }
+  }
   useEffect(() => {
     if (refreshRequest === previousRefresh.current || !api || lock.current) return
     previousRefresh.current = refreshRequest
@@ -432,6 +486,46 @@ export function PluginManager({
           ) : null
         }
       />
+      <Dialog
+        open={gitDialogOpen}
+        onOpenChange={(open) => {
+          if (!busy) setGitDialogOpen(open)
+        }}
+      >
+        <DialogContent className="gap-5 p-6 sm:max-w-lg">
+          <DialogHeader className="pr-8">
+            <DialogTitle>从 Git 安装插件</DialogTitle>
+            <DialogDescription>
+              输入 Native Plugin 仓库地址；branch、tag 或 commit 可不填。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Input
+              value={gitUrl}
+              disabled={busy || !api}
+              placeholder="https://github.com/acme/plugin.git"
+              aria-label="Git 插件地址"
+              onChange={(event) => setGitUrl(event.target.value)}
+            />
+            <Input
+              value={gitRef}
+              disabled={busy || !api}
+              placeholder="branch / tag / commit，可空"
+              aria-label="Git ref"
+              onChange={(event) => setGitRef(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => setGitDialogOpen(false)}>
+              取消
+            </Button>
+            <Button disabled={busy || !api || !gitUrl.trim()} onClick={() => void importGit()}>
+              {busy ? <Spinner data-icon="inline-start" /> : null}
+              安装
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <AlertDialog
         open={Boolean(removal)}
         onOpenChange={(open) => !open && !busy && setRemoval(null)}

@@ -328,7 +328,9 @@ runtimeStatus:
 
 ## 10. 下一阶段建议规格标题
 
-如果继续按当前节奏推进，作者体验小修和本地 archive 格式补齐都已经完成。下一份规格应按实际选择命名，例如：
+2026-09-14 Git Source Resolver v1 已完成实现，等待最终验收：Desktop 插件页右上角“添加”菜单提供“从 Git 安装”，打开弹窗输入 Git URL 和可选 branch/tag/commit。Git 操作使用系统 `git`，不自己实现 clone/fetch/checkout；clone 后固定到实际 commit，移除 `.git`，再走现有 Native 校验、权限确认、不可变快照和 Runtime 诊断链路。本阶段不做自动更新、npm、archive URL、Marketplace 或自动依赖安装。规格见 [Git Source Resolver v1 设计](./superpowers/specs/2026-09-14-git-native-plugin-source-design.md)，计划见 [实现计划](./superpowers/plans/2026-09-14-git-native-plugin-source.md)。
+
+如果继续按当前节奏推进，后续规格应按实际选择命名，例如：
 
 ```text
 docs/superpowers/specs/2026-09-14-agent-native-plugin-package-install-design.md

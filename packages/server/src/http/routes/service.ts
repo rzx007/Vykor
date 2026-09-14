@@ -268,6 +268,54 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
         lease.release();
       }
     })
+    .post("/plugins/git/preview", async (c) => {
+      if (!context.pluginService?.previewGit) return pluginArchiveErrorResponse(501, "plugin_git_not_configured", "Plugin Git preview is not configured");
+      let body: Record<string, unknown>;
+      try {
+        body = await readJson(c);
+      } catch (error) {
+        return pluginArchiveErrorResponse(400, "plugin_git_invalid_request", error instanceof Error ? error.message : String(error));
+      }
+      const cwd = typeof body.cwd === "string" ? body.cwd : undefined;
+      const url = typeof body.url === "string" ? body.url : undefined;
+      const ref = typeof body.ref === "string" && body.ref.trim() ? body.ref : undefined;
+      if (!cwd || !url) return pluginArchiveErrorResponse(400, "plugin_git_invalid_request", "cwd and url are required");
+      try {
+        return jsonResponse(await context.pluginService.previewGit({ cwd, url, ref }));
+      } catch (error) {
+        return pluginArchiveFailureResponse(error);
+      }
+    })
+    .post("/plugins/git/install", async (c) => {
+      if (!context.pluginService?.installGit) return pluginArchiveErrorResponse(501, "plugin_git_not_configured", "Plugin Git installation is not configured");
+      let body: Record<string, unknown>;
+      try {
+        body = await readJson(c);
+      } catch (error) {
+        return pluginArchiveErrorResponse(400, "plugin_git_invalid_request", error instanceof Error ? error.message : String(error));
+      }
+      const cwd = typeof body.cwd === "string" ? body.cwd : undefined;
+      const url = typeof body.url === "string" ? body.url : undefined;
+      const ref = typeof body.ref === "string" && body.ref.trim() ? body.ref : undefined;
+      const expectedSourceDigest = typeof body.expectedSourceDigest === "string" ? body.expectedSourceDigest : undefined;
+      const approvedPermissions = Array.isArray(body.approvedPermissions) && body.approvedPermissions.every((item) => typeof item === "string")
+        ? body.approvedPermissions as string[]
+        : undefined;
+      if (!cwd || !url || !expectedSourceDigest || !approvedPermissions) {
+        return pluginArchiveErrorResponse(400, "plugin_git_invalid_request", "cwd, url, expectedSourceDigest and approvedPermissions are required");
+      }
+      const lease = context.control.acquireGlobalMutation();
+      if (!lease) return pluginArchiveErrorResponse(409, "plugin_git_mutation_blocked", "Cannot install plugins while session runs are active");
+      try {
+        const result = await context.pluginService.installGit({ cwd, url, ref, expectedSourceDigest, approvedPermissions });
+        await context.control.closeAllRuntimes();
+        return jsonResponse(result);
+      } catch (error) {
+        return pluginArchiveFailureResponse(error);
+      } finally {
+        lease.release();
+      }
+    })
     .post("/plugins/:id/enable", async (c) =>
       setPluginEnabled(context, c.req.param("id"), true, await readJson(c)),
     )

@@ -14,10 +14,13 @@ import type {
   DesktopPluginArchiveImportResult,
   DesktopPluginArchiveUnknownResult,
   DesktopPluginContextInput,
+  DesktopPluginGitConfirmResult,
+  DesktopPluginGitImportInput,
+  DesktopPluginGitImportResult,
   DesktopPluginSnapshot,
 } from "../../../shared/plugin-types"
 import { desktopSessionService } from "../session/session-service"
-import { PluginArchiveSelectionStore } from "./selection-store"
+import { PluginArchiveSelectionStore, PluginGitSelectionStore } from "./selection-store"
 
 const SELECTION_TTL_MS = 10 * 60 * 1_000
 
@@ -36,6 +39,7 @@ export class DesktopPluginService {
   private readonly daemonClient: () => Promise<OpenHarnessClient>
   private readonly refreshDaemonClient: () => Promise<OpenHarnessClient>
   private readonly selections: PluginArchiveSelectionStore
+  private readonly gitSelections: PluginGitSelectionStore
 
   constructor(options: DesktopPluginServiceOptions = {}) {
     this.chooseArchive = options.chooseArchive ?? pickPluginArchive
@@ -45,6 +49,7 @@ export class DesktopPluginService {
     this.refreshDaemonClient =
       options.refreshDaemonClient ?? (() => desktopSessionService.refreshDaemonClient())
     this.selections = new PluginArchiveSelectionStore(this.now)
+    this.gitSelections = new PluginGitSelectionStore(this.now)
   }
 
   async snapshot(input: DesktopPluginContextInput): Promise<DesktopPluginSnapshot> {
@@ -162,8 +167,82 @@ export class DesktopPluginService {
     this.selections.cancel(input.selectionId)
   }
 
+  async importGit(input: DesktopPluginGitImportInput): Promise<DesktopPluginGitImportResult> {
+    const cwd = normalizeCwd(input.cwd)
+    const url = input.url.trim()
+    const ref = input.ref?.trim() || undefined
+    if (!url) {
+      return archiveFailure("请输入 Git 地址。", [{ code: "plugin_git_url_required" }])
+    }
+
+    let preview: Awaited<ReturnType<OpenHarnessClient["previewPluginGit"]>>
+    try {
+      preview = await this.withDaemonRetry((client) =>
+        client.previewPluginGit({ cwd, url, ...(ref ? { ref } : {}) })
+      )
+    } catch (error) {
+      return gitFailureFromError(error)
+    }
+
+    const pluginName = preview.identity.displayName ?? preview.identity.name
+    if (!preview.approvalRequired) {
+      try {
+        await this.installGit(cwd, url, ref, preview.sourceDigest, [])
+      } catch (error) {
+        if (isConnectionFailure(error)) return unknownInstallResult(pluginName)
+        return gitFailureFromError(error)
+      }
+      return await this.installedResult(cwd, pluginName)
+    }
+
+    const createdAt = this.now()
+    const selectionId = this.createSelectionId()
+    this.gitSelections.add({
+      id: selectionId,
+      cwd,
+      url,
+      ...(ref ? { ref } : {}),
+      sourceDigest: preview.sourceDigest,
+      pluginName,
+      requestedPermissions: [...preview.requestedPermissions],
+      createdAt,
+      expiresAt: createdAt + SELECTION_TTL_MS,
+    })
+    return {
+      status: "approval-required",
+      selectionId,
+      pluginName,
+      requestedPermissions: [...preview.requestedPermissions],
+    }
+  }
+
+  async confirmGit(input: DesktopPluginArchiveConfirmInput): Promise<DesktopPluginGitConfirmResult> {
+    const cwd = normalizeCwd(input.cwd)
+    const selection = this.gitSelections.consume(input.selectionId)
+    if (!selection || selection.cwd !== cwd) return selectionFailure()
+
+    try {
+      await this.installGit(
+        cwd,
+        selection.url,
+        selection.ref,
+        selection.sourceDigest,
+        selection.requestedPermissions
+      )
+    } catch (error) {
+      if (isConnectionFailure(error)) return unknownInstallResult(selection.pluginName)
+      return gitFailureFromError(error)
+    }
+    return await this.installedResult(cwd, selection.pluginName)
+  }
+
+  cancelGit(input: { selectionId: string }): void {
+    this.gitSelections.cancel(input.selectionId)
+  }
+
   clearArchiveSelections(): void {
     this.selections.clear()
+    this.gitSelections.clear()
   }
 
   private async installedResult(
@@ -187,6 +266,22 @@ export class DesktopPluginService {
       cwd,
       archivePath,
       expectedArchiveDigest,
+      approvedPermissions,
+    })
+  }
+
+  private async installGit(
+    cwd: string,
+    url: string,
+    ref: string | undefined,
+    expectedSourceDigest: string,
+    approvedPermissions: string[]
+  ): Promise<void> {
+    await (await this.daemonClient()).installPluginGit({
+      cwd,
+      url,
+      ...(ref ? { ref } : {}),
+      expectedSourceDigest,
       approvedPermissions,
     })
   }
@@ -237,6 +332,16 @@ function archiveFailureFromError(error: unknown): DesktopPluginArchiveFailedResu
     return archiveFailure("请重新选择插件包。", details)
   }
   return archiveFailure("导入插件包失败，请检查插件包后重试。", details)
+}
+
+function gitFailureFromError(error: unknown): DesktopPluginArchiveFailedResult {
+  const body = error && typeof error === "object" && "body" in error ? error.body : undefined
+  const code = stringProperty(body, "code") ?? "plugin_git_failed"
+  const details = [{ code }, ...diagnosticDetails(body)]
+  if (code === "plugin_git_changed") {
+    return archiveFailure("请重新预览 Git 插件。", details)
+  }
+  return archiveFailure("从 Git 安装插件失败，请检查地址或插件内容后重试。", details)
 }
 
 function archiveFailure(

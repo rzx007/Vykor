@@ -11,8 +11,13 @@ import {
   type InstalledPluginRecord,
   type InstalledPluginStoreV1,
 } from "@openharness/plugins";
-import { resolveLocalPluginArchive, type ResolvedLocalPluginArchive } from "@openharness/plugin-sources";
-import type { PluginArchiveError, PluginArchivePreview, PluginInfo, PluginService } from "../settings-api.js";
+import {
+  resolveGitPluginSource,
+  resolveLocalPluginArchive,
+  type ResolvedGitPluginSource,
+  type ResolvedLocalPluginArchive,
+} from "@openharness/plugin-sources";
+import type { PluginArchiveError, PluginArchivePreview, PluginGitPreview, PluginInfo, PluginService } from "../settings-api.js";
 import type { DaemonSettingsRef } from "./shared.js";
 
 type RuntimeDiagnostic = PluginInfo["diagnostics"][number];
@@ -64,7 +69,26 @@ function permissionSetsEqual(left: string[], right: string[]): boolean {
 }
 
 async function inspectArchive(resolved: ResolvedLocalPluginArchive): Promise<PluginArchivePreview> {
-  const validation = await validateNativePlugin(resolved.candidateRoot);
+  const candidate = await inspectCandidate(resolved.candidateRoot);
+  return {
+    archiveDigest: resolved.archiveDigest,
+    ...candidate,
+  };
+}
+
+async function inspectGitSource(resolved: ResolvedGitPluginSource): Promise<PluginGitPreview> {
+  const candidate = await inspectCandidate(resolved.candidateRoot);
+  return {
+    sourceDigest: resolved.sourceDigest,
+    url: resolved.url,
+    ...(resolved.ref ? { ref: resolved.ref } : {}),
+    commit: resolved.commit,
+    ...candidate,
+  };
+}
+
+async function inspectCandidate(candidateRoot: string): Promise<Omit<PluginArchivePreview, "archiveDigest">> {
+  const validation = await validateNativePlugin(candidateRoot);
   if (validation.status !== "valid" || !validation.plugin) {
     throw archiveFailure("plugin_archive_invalid", "The plugin archive failed Native validation.", validation.diagnostics);
   }
@@ -81,7 +105,6 @@ async function inspectArchive(resolved: ResolvedLocalPluginArchive): Promise<Plu
   const store = await readInstalledPluginStore(getInstalledPluginStorePath());
   const previous = findUserPluginRecord(store, validation.plugin.manifest.id);
   return {
-    archiveDigest: resolved.archiveDigest,
     identity: {
       id: validation.plugin.manifest.id,
       name: validation.plugin.manifest.name,
@@ -108,6 +131,24 @@ async function withArchive<T>(
     if (error instanceof PluginArchiveFailure) throw error;
     throw archiveFailure("plugin_archive_invalid", "The plugin archive could not be read.", [
       archiveDiagnostic("plugin_archive_resolution_failed", error instanceof Error ? error.message : String(error)),
+    ]);
+  } finally {
+    await resolved?.cleanup();
+  }
+}
+
+async function withGitSource<T>(
+  input: { url: string; ref?: string },
+  operation: (resolved: ResolvedGitPluginSource) => Promise<T>,
+): Promise<T> {
+  let resolved: ResolvedGitPluginSource | undefined;
+  try {
+    resolved = await resolveGitPluginSource(input);
+    return await operation(resolved);
+  } catch (error) {
+    if (error instanceof PluginArchiveFailure) throw error;
+    throw archiveFailure("plugin_git_invalid", "The plugin Git source could not be read.", [
+      archiveDiagnostic("plugin_git_resolution_failed", error instanceof Error ? error.message : String(error)),
     ]);
   } finally {
     await resolved?.cleanup();
@@ -392,6 +433,46 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
         }
         if (result.status !== "installed") {
           throw archiveFailure("plugin_archive_install_failed", "The plugin archive could not be installed.", result.diagnostics);
+        }
+        return { message: `Installed plugin '${result.record.id}'.` };
+      });
+    },
+    async previewGit({ url, ref }) {
+      return await withGitSource({ url, ref }, inspectGitSource);
+    },
+    async installGit({ url, ref, expectedSourceDigest, approvedPermissions, cwd }) {
+      return await withGitSource({ url, ref }, async (resolved) => {
+        const preview = await inspectGitSource(resolved);
+        if (preview.sourceDigest !== expectedSourceDigest) {
+          throw archiveFailure("plugin_git_changed", "The plugin Git source changed after preview. Preview it again.");
+        }
+        const store = await readInstalledPluginStore(getInstalledPluginStorePath());
+        if (Object.values(store.plugins).some((record) => record.scope === "managed" && record.id === preview.identity.id)) {
+          throw archiveFailure("plugin_git_managed_conflict", `Managed plugin cannot be replaced: ${preview.identity.id}`);
+        }
+        const previous = findUserPluginRecord(store, preview.identity.id);
+        const submittedPermissions = [...new Set(approvedPermissions)].sort();
+        const explicitlyApproved = permissionSetsEqual(submittedPermissions, preview.requestedPermissions);
+        const reusedApproval = submittedPermissions.length === 0
+          && permissionsCovered(preview.requestedPermissions, previous?.approvedPermissions ?? []);
+        if (!explicitlyApproved && !reusedApproval) {
+          assertExactPermissionSet(preview.requestedPermissions, submittedPermissions);
+        }
+        let result;
+        try {
+          result = await installLocalNativePlugin({
+            cwd,
+            sourcePath: resolved.candidateRoot,
+            scope: "user",
+            approvedPermissions: [...preview.requestedPermissions],
+          });
+        } catch (error) {
+          throw archiveFailure("plugin_git_install_failed", "The plugin Git source could not be installed.", [
+            archiveDiagnostic("plugin_git_install_failed", error instanceof Error ? error.message : String(error)),
+          ]);
+        }
+        if (result.status !== "installed") {
+          throw archiveFailure("plugin_git_install_failed", "The plugin Git source could not be installed.", result.diagnostics);
         }
         return { message: `Installed plugin '${result.record.id}'.` };
       });

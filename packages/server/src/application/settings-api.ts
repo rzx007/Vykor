@@ -270,6 +270,18 @@ export interface PluginArchivePreview {
   diagnostics: PluginInfo["diagnostics"];
 }
 
+export interface PluginGitPreview {
+  sourceDigest: string;
+  url: string;
+  ref?: string;
+  commit: string;
+  identity: { id: string; name: string; version: string; displayName?: string };
+  requestedPermissions: string[];
+  approvalRequired: boolean;
+  inventory: Record<string, number>;
+  diagnostics: PluginInfo["diagnostics"];
+}
+
 export interface PluginArchiveError {
   code: string;
   message: string;
@@ -304,6 +316,18 @@ export interface PluginService {
     cwd: string;
     archivePath: string;
     expectedArchiveDigest: string;
+    approvedPermissions: string[];
+  }): Promise<{ message: string }>;
+  previewGit?(input: {
+    cwd: string;
+    url: string;
+    ref?: string;
+  }): Promise<PluginGitPreview>;
+  installGit?(input: {
+    cwd: string;
+    url: string;
+    ref?: string;
+    expectedSourceDigest: string;
     approvedPermissions: string[];
   }): Promise<{ message: string }>;
   uninstall?(input: {

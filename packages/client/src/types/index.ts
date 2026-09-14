@@ -525,6 +525,18 @@ export interface PluginArchivePreview {
   diagnostics: PluginInfo["diagnostics"];
 }
 
+export interface PluginGitPreview {
+  sourceDigest: string;
+  url: string;
+  ref?: string;
+  commit: string;
+  identity: { id: string; name: string; version: string; displayName?: string };
+  requestedPermissions: string[];
+  approvalRequired: boolean;
+  inventory: Record<string, number>;
+  diagnostics: PluginInfo["diagnostics"];
+}
+
 export interface PluginArchiveError {
   code: string;
   message: string;
