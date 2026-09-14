@@ -2,12 +2,9 @@ import { randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { mkdirSync } from "node:fs";
 import { basename, dirname, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 
 import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import {
   DEFAULT_ATTACHMENT_LIMITS,
   normalizeSessionUserInputItems,
@@ -74,6 +71,7 @@ import type {
   GoalAssessment,
 } from "@openharness/protocol";
 import { AttachmentError } from "../attachment/attachment-errors.js";
+import { SessionDatabase } from "../database/session-database.js";
 import { formatSessionTitle, isPlaceholderSessionTitle } from "./title.js";
 import {
   defaultDurableEventRegistry,
@@ -303,6 +301,7 @@ export const DEFAULT_RETENTION_POLICY: RetentionPolicy = {
 
 export class SessionStore {
   readonly path: string;
+  private readonly databaseKernel: SessionDatabase;
   private readonly database: Database.Database;
   private closed = false;
   private transactionDepth = 0;
@@ -321,7 +320,8 @@ export class SessionStore {
   private activeOwnerLease?: ApplicationOwnerLease;
 
   constructor(options: SessionStoreOptions) {
-    this.path = resolve(options.path);
+    this.databaseKernel = SessionDatabase.open({ path: options.path });
+    this.path = this.databaseKernel.path;
     this.deltaFlushIntervalMs = Math.max(
       1,
       options.deltaFlushIntervalMs ?? DEFAULT_DELTA_FLUSH_INTERVAL_MS,
@@ -335,19 +335,11 @@ export class SessionStore {
       ...DEFAULT_ATTACHMENT_LIMITS,
       ...options.attachmentLimits,
     });
-    mkdirSync(dirname(this.path), { recursive: true });
-    this.database = new Database(this.path);
+    this.database = this.databaseKernel.connection;
     try {
-      this.database.pragma("journal_mode = WAL");
-      this.database.pragma("foreign_keys = ON");
-      this.database.pragma("busy_timeout = 5000");
-      this.database.pragma("synchronous = NORMAL");
-      this.assertCurrentStorageFormatOrEmpty();
-      this.applyMigrations();
-      this.assertCurrentStorageFormat();
       this.state = this.load();
     } catch (error) {
-      this.database.close();
+      this.databaseKernel.close();
       throw error;
     }
   }
@@ -358,7 +350,7 @@ export class SessionStore {
       this.flushMessagePartDeltas();
     } finally {
       this.clearDeltaFlushTimer();
-      this.database.close();
+      this.databaseKernel.close();
       this.closed = true;
     }
   }
@@ -4450,38 +4442,6 @@ export class SessionStore {
     };
     visit(sessionId);
     return result;
-  }
-
-  private applyMigrations(): void {
-    migrate(drizzle(this.database), {
-      migrationsFolder: fileURLToPath(new URL("./migrations", import.meta.url)),
-    });
-  }
-
-  private assertCurrentStorageFormatOrEmpty(): void {
-    const tables = this.database
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
-      )
-      .all() as Array<{ name: string }>;
-    if (tables.length === 0) return;
-    if (!tables.some((table) => table.name === "application_storage_format")) {
-      throw new Error(
-        "Unsupported OpenHarness database format. Existing databases are not upgraded; start with a new database path.",
-      );
-    }
-    this.assertCurrentStorageFormat();
-  }
-
-  private assertCurrentStorageFormat(): void {
-    const row = this.database
-      .prepare("SELECT version FROM application_storage_format WHERE id = 1")
-      .get() as { version?: unknown } | undefined;
-    if (row?.version !== 2) {
-      throw new Error(
-        `Unsupported OpenHarness database format ${String(row?.version)}; expected 2. Move or delete the old database and restart.`,
-      );
-    }
   }
 
   private load(): SessionState {
