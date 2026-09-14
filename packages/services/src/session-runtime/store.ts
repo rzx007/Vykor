@@ -83,6 +83,11 @@ import { loadSessionReadModel } from "../database/read-model.js";
 import type { StorageContext } from "../database/storage-context.js";
 import { ProjectRepository } from "../projects/project-repository.js";
 import { ScheduleRepository } from "../schedules/schedule-repository.js";
+import { WorkflowRepository } from "../workflows/workflow-repository.js";
+import type {
+  StoredWorkflowRunInput,
+  StoredWorkflowRunRecord,
+} from "../workflows/workflow-records.js";
 import { formatSessionTitle, isPlaceholderSessionTitle } from "./title.js";
 import {
   defaultDurableEventRegistry,
@@ -148,30 +153,7 @@ import {
 
 export type { SessionStoreOptions } from "./store-state.js";
 
-export interface StoredWorkflowRunInput {
-  runId: string;
-  ownerSessionId?: string;
-  ownerInputId?: string;
-  ownerRunId?: string;
-  status: string;
-  termination?: string;
-  snapshotJson: string;
-  createdAt: number;
-  updatedAt: number;
-  taskAttempts: Array<{
-    taskId: string;
-    attempt: number;
-    status: string;
-    payloadJson: string;
-    startedAt: number;
-    finishedAt?: number;
-  }>;
-}
-
-export interface StoredWorkflowRunRecord extends Omit<
-  StoredWorkflowRunInput,
-  "taskAttempts"
-> {}
+export type { StoredWorkflowRunInput, StoredWorkflowRunRecord } from "../workflows/workflow-records.js";
 
 export interface ApplicationOwnerLease {
   ownerId: string;
@@ -309,6 +291,7 @@ export class SessionStore {
   readonly path: string;
   readonly projects!: ProjectRepository;
   readonly schedules!: ScheduleRepository;
+  readonly workflows!: WorkflowRepository;
   private storage!: StorageContext;
   private closed = false;
   private transactionDepth = 0;
@@ -352,6 +335,7 @@ export class SessionStore {
       };
       this.projects = new ProjectRepository(this.storage);
       this.schedules = new ScheduleRepository(this.storage);
+      this.workflows = new WorkflowRepository(this.storage);
     } catch (error) {
       database.close();
       throw error;
@@ -1356,85 +1340,17 @@ export class SessionStore {
   }
 
   saveWorkflowRun(input: StoredWorkflowRunInput): void {
-    if (this.activeOwnerLease)
-      this.assertApplicationOwner(this.activeOwnerLease);
-    this.database.transaction(() => {
-      this.database
-        .prepare(
-          `
-        INSERT INTO workflow_run
-          (run_id, owner_session_id, owner_input_id, owner_run_id, status, termination,
-           snapshot_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(run_id) DO UPDATE SET
-          owner_session_id = excluded.owner_session_id,
-          owner_input_id = excluded.owner_input_id,
-          owner_run_id = excluded.owner_run_id,
-          status = excluded.status,
-          termination = excluded.termination,
-          snapshot_json = excluded.snapshot_json,
-          updated_at = excluded.updated_at
-      `,
-        )
-        .run(
-          input.runId,
-          input.ownerSessionId ?? null,
-          input.ownerInputId ?? null,
-          input.ownerRunId ?? null,
-          input.status,
-          input.termination ?? null,
-          input.snapshotJson,
-          input.createdAt,
-          input.updatedAt,
-        );
-      this.database
-        .prepare("DELETE FROM workflow_task_attempt WHERE workflow_run_id = ?")
-        .run(input.runId);
-      const insertAttempt = this.database.prepare(`
-        INSERT INTO workflow_task_attempt
-          (workflow_run_id, task_id, attempt, status, payload_json, started_at, finished_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-      for (const attempt of input.taskAttempts) {
-        insertAttempt.run(
-          input.runId,
-          attempt.taskId,
-          attempt.attempt,
-          attempt.status,
-          attempt.payloadJson,
-          attempt.startedAt,
-          attempt.finishedAt ?? null,
-        );
-      }
-    })();
+    this.workflows.saveRun(input);
   }
 
   loadWorkflowRun(runId: string): StoredWorkflowRunRecord | undefined {
-    const row = this.database
-      .prepare("SELECT * FROM workflow_run WHERE run_id = ?")
-      .get(runId) as Record<string, unknown> | undefined;
-    return row ? storedWorkflowRunFromRow(row) : undefined;
+    return this.workflows.loadRun(runId);
   }
 
   listWorkflowRuns(
     options: { ownerSessionId?: string; status?: string } = {},
   ): StoredWorkflowRunRecord[] {
-    const clauses: string[] = [];
-    const parameters: unknown[] = [];
-    if (options.ownerSessionId) {
-      clauses.push("owner_session_id = ?");
-      parameters.push(options.ownerSessionId);
-    }
-    if (options.status) {
-      clauses.push("status = ?");
-      parameters.push(options.status);
-    }
-    const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-    return (
-      this.database
-        .prepare(`SELECT * FROM workflow_run ${where} ORDER BY updated_at DESC`)
-        .all(...parameters) as Array<Record<string, unknown>>
-    ).map(storedWorkflowRunFromRow);
+    return this.workflows.listRuns(options);
   }
 
   appendWorkflowEvent(input: {
@@ -1444,36 +1360,19 @@ export class SessionStore {
     eventJson: string;
     createdAt: number;
   }): number {
-    if (this.activeOwnerLease)
-      this.assertApplicationOwner(this.activeOwnerLease);
-    const result = this.database
-      .prepare(
-        `
-      INSERT INTO workflow_event (workflow_run_id, type, event_json, created_at)
-      VALUES (?, ?, ?, ?)
-    `,
-      )
-      .run(input.runId, input.type, input.eventJson, input.createdAt);
+    const seq = this.workflows.appendEvent(input);
     if (input.sessionId) {
       this.appendEvent({
         type: `workflow.${input.type}`,
         sessionId: input.sessionId,
-        payload: {
-          event: JSON.parse(input.eventJson) as Record<string, unknown>,
-        },
+        payload: { event: JSON.parse(input.eventJson) as Record<string, unknown> },
       });
     }
-    return Number(result.lastInsertRowid);
+    return seq;
   }
 
   listWorkflowEvents(runId: string): string[] {
-    return (
-      this.database
-        .prepare(
-          "SELECT event_json FROM workflow_event WHERE workflow_run_id = ? ORDER BY seq",
-        )
-        .all(runId) as Array<{ event_json: string }>
-    ).map((row) => row.event_json);
+    return this.workflows.listEvents(runId);
   }
 
   acquireApplicationOwner(input: {
@@ -1750,62 +1649,11 @@ export class SessionStore {
     runId: string,
     ownerId: string,
   ): { ownerId: string; generation: number; claimedAt: number } {
-    if (this.activeOwnerLease)
-      this.assertApplicationOwner(this.activeOwnerLease);
-    return this.database.transaction(() => {
-      const current = this.database
-        .prepare(
-          `
-        SELECT owner_id, generation, status FROM workflow_execution_claim
-        WHERE workflow_run_id = ?
-      `,
-        )
-        .get(runId) as
-        { owner_id: string; generation: number; status: string } | undefined;
-      if (current?.status === "running" && current.owner_id === ownerId) {
-        throw new Error(
-          `Workflow run is already claimed by this Application: ${runId}`,
-        );
-      }
-      const generation = (current?.generation ?? 0) + 1;
-      const claimedAt = Date.now();
-      this.database
-        .prepare(
-          `
-        INSERT INTO workflow_execution_claim
-          (workflow_run_id, owner_id, generation, claimed_at, heartbeat_at, finished_at, status)
-        VALUES (?, ?, ?, ?, ?, NULL, 'running')
-        ON CONFLICT(workflow_run_id) DO UPDATE SET
-          owner_id = excluded.owner_id,
-          generation = excluded.generation,
-          claimed_at = excluded.claimed_at,
-          heartbeat_at = excluded.heartbeat_at,
-          finished_at = NULL,
-          status = 'running'
-      `,
-        )
-        .run(runId, ownerId, generation, claimedAt, claimedAt);
-      return { ownerId, generation, claimedAt };
-    })();
+    return this.workflows.claimRun(runId, ownerId);
   }
 
   finishWorkflowRunClaim(runId: string, ownerId: string, status: string): void {
-    if (this.activeOwnerLease)
-      this.assertApplicationOwner(this.activeOwnerLease);
-    const result = this.database
-      .prepare(
-        `
-      UPDATE workflow_execution_claim
-      SET status = ?, finished_at = ?, heartbeat_at = ?
-      WHERE workflow_run_id = ? AND owner_id = ? AND status = 'running'
-    `,
-      )
-      .run(status, Date.now(), Date.now(), runId, ownerId);
-    if (result.changes !== 1) {
-      throw new Error(
-        `Workflow run claim is not active for this Application: ${runId}`,
-      );
-    }
+    this.workflows.finishClaim(runId, ownerId, status);
   }
 
   findExternalConversation(input: {
@@ -4652,30 +4500,6 @@ function channelDeliveryFromRow(
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
     ...(row.sent_at ? { sentAt: row.sent_at as number } : {}),
-  };
-}
-
-function storedWorkflowRunFromRow(
-  row: Record<string, unknown>,
-): StoredWorkflowRunRecord {
-  return {
-    runId: String(row.run_id),
-    ...(typeof row.owner_session_id === "string"
-      ? { ownerSessionId: row.owner_session_id }
-      : {}),
-    ...(typeof row.owner_input_id === "string"
-      ? { ownerInputId: row.owner_input_id }
-      : {}),
-    ...(typeof row.owner_run_id === "string"
-      ? { ownerRunId: row.owner_run_id }
-      : {}),
-    status: String(row.status),
-    ...(typeof row.termination === "string"
-      ? { termination: row.termination }
-      : {}),
-    snapshotJson: String(row.snapshot_json),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
   };
 }
 
