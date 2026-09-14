@@ -2,7 +2,7 @@ import { readSessionRuntimeConfig, type SessionRecord } from "@openharness/proto
 import type { ProviderInputCapabilities } from "@openharness/api";
 import { PluginPreparationError } from "@openharness/agent-runtime";
 import type { ContentBlock, ModelInputCapabilities } from "@openharness/core";
-import type { SessionStore } from "@openharness/services";
+import type { GoalOperations, SessionStore } from "@openharness/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import { RunInterruptedError, type SessionRunWorkContext } from "../../runtime/run-coordinator.js";
@@ -31,6 +31,7 @@ const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
   store: SessionStore;
+  goals: Pick<GoalOperations, "getGoal">;
   agentPool: Pick<
     AgentPool,
     "configured" | "acquireSession" | "close" | "closeIfStale"
@@ -206,7 +207,7 @@ export class SessionRunExecutor {
       const goalRevision = typeof storedRun?.metadata?.goalRevision === "number" ? storedRun.metadata.goalRevision : undefined;
       let goalBinding: { goalId: string; revision: number; objective: string } | undefined;
       if (goalId && goalRevision !== undefined) {
-        const goal = this.context.store.goals.getGoal(goalId);
+        const goal = this.context.goals.getGoal(goalId);
         if (!goal || goal.sessionId !== sessionId || goal.revision !== goalRevision || goal.status !== "active") {
           throw new Error("session_goal_run_is_stale");
         }

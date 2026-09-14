@@ -101,4 +101,113 @@ describe("GoalTransactions", () => {
       expect(store.goals.getGoal(goal.id)?.currentRunId).toBe(run.id);
     });
   });
+
+  it("rolls back an inner goal creation when the outer transaction fails", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-outer-"));
+    const path = join(directory, "sessions.db");
+    const store = new SessionStore({ path });
+    try {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      expect(() =>
+        store.transaction(() => {
+          store.goals.createGoal({
+            id: "goal-outer",
+            sessionId: "s1",
+            objective: "outer",
+            maxAutoTurns: 2,
+          });
+          throw new Error("outer failed");
+        }),
+      ).toThrow("outer failed");
+      expect(store.goals.getGoal("goal-outer")).toBeUndefined();
+      expect(
+        store
+          .listEvents()
+          .some((event) => event.type.startsWith("session.goal")),
+      ).toBe(false);
+      store.close();
+
+      const reopened = new SessionStore({ path });
+      try {
+        expect(reopened.goals.getGoal("goal-outer")).toBeUndefined();
+        expect(
+          reopened
+            .listEvents()
+            .some((event) => event.type.startsWith("session.goal")),
+        ).toBe(false);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("fences every goal write family after owner takeover", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-owner-"));
+    const path = join(directory, "sessions.db");
+    const first = new SessionStore({ path });
+    const second = new SessionStore({ path });
+    try {
+      first.acquireApplicationOwner({
+        ownerId: "first",
+        pid: 1,
+        staleAfterMs: 100,
+        now: 1_000,
+      });
+      first.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      const goal = first.goals.createGoal({
+        id: "goal-1",
+        sessionId: "s1",
+        objective: "owner",
+        maxAutoTurns: 2,
+      });
+      second.acquireApplicationOwner({
+        ownerId: "second",
+        pid: 2,
+        staleAfterMs: 100,
+        now: 1_101,
+      });
+
+      const writes = [
+        () =>
+          first.goals.updateGoal(goal.id, {
+            expectedRevision: 0,
+            status: "paused",
+          }),
+        () =>
+          first.goals.beginGoalRequest({
+            requestId: "request",
+            sessionId: "s1",
+            fingerprint: "f",
+          }),
+        () =>
+          first.goals.recordGoalAssessment({
+            goalId: goal.id,
+            revision: 0,
+            runId: "run",
+            assessment: {},
+          }),
+        () =>
+          first.goals.recordGoalContinuation({
+            goalId: goal.id,
+            revision: 0,
+            previousRunId: "previous",
+            inputId: "input",
+            runId: "run",
+          }),
+      ];
+      for (const write of writes) expect(write).toThrow();
+      expect(first.goals.getGoal(goal.id)).toMatchObject({
+        revision: 0,
+        status: "active",
+      });
+      expect(first.goals.getGoalRequest("request")).toBeUndefined();
+    } finally {
+      first.close();
+      second.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });

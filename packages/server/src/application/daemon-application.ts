@@ -556,6 +556,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       const runExecutor = new SessionRunExecutor({
         store,
+        goals: store.goals,
         agentPool: this.agentPool,
         events: this.eventPublisher,
         transcriptProjection: this.transcriptProjection,
@@ -602,6 +603,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runEngine = new SessionRunEngine({
         settleGoalRun: (sessionId, runId) => this.goals.settleRun(sessionId, runId),
         store,
+        goals: store.goals,
         attachmentLimits: this.attachments.limits,
         agentPool: this.agentPool,
         runExecutor,
@@ -683,6 +685,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.goals = new SessionGoalService({
         store,
+        goals: store.goals,
         sessions: this.sessions,
         runEngine: this.runEngine,
         events: this.eventPublisher,

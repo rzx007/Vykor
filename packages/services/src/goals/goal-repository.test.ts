@@ -23,6 +23,47 @@ function withRepository(
 }
 
 describe("GoalRepository", () => {
+  it("reloads goal rows, isolates returned values, and rejects malformed JSON", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-reload-"));
+    const path = join(directory, "sessions.db");
+    try {
+      const first = new SessionStore({ path });
+      first.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      const goal = first.goals.createGoal({
+        id: "goal-reload",
+        sessionId: "s1",
+        objective: "reload",
+        maxAutoTurns: 2,
+      });
+      first.goals.updateGoal(goal.id, {
+        expectedRevision: 0,
+        evidence: ["e1"],
+        assessment: { decision: "continue", evidenceRefs: [], reason: "more" },
+      });
+      const returned = first.goals.getGoal(goal.id)!;
+      returned.evidence.push("caller-change");
+      expect(first.goals.getGoal(goal.id)?.evidence).toEqual(["e1"]);
+      first.close();
+
+      const second = new SessionStore({ path });
+      try {
+        expect(second.goals.getGoal(goal.id)).toMatchObject({
+          objective: "reload",
+          revision: 1,
+          evidence: ["e1"],
+        });
+        (second as any).storage.database.connection
+          .prepare("UPDATE session_goal SET evidence_json = ? WHERE id = ?")
+          .run("{broken", goal.id);
+        expect(() => second.goals.getGoal(goal.id)).toThrow(SyntaxError);
+      } finally {
+        second.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("keeps goal requests idempotent by session and fingerprint", () => {
     withRepository((repository) => {
       const request = repository.beginRequest({

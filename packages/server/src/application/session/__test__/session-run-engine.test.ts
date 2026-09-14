@@ -20,6 +20,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -63,6 +64,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -120,6 +122,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -164,6 +167,7 @@ describe("SessionRunEngine", () => {
     const store = createStore();
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: false } as any,
       runExecutor: {} as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -207,6 +211,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -240,6 +245,7 @@ describe("SessionRunEngine", () => {
     const store = createStore();
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: false } as any,
       runExecutor: {} as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -261,6 +267,7 @@ describe("SessionRunEngine", () => {
     const runExecutor = { execute: vi.fn(async () => await pending.promise) };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -300,6 +307,7 @@ describe("SessionRunEngine", () => {
     const runExecutor = { execute: vi.fn(async () => {}) };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -335,6 +343,7 @@ describe("SessionRunEngine", () => {
     const runExecutor = { execute: vi.fn(async () => await runDone.promise) };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -376,6 +385,7 @@ describe("SessionRunEngine", () => {
     const runExecutor = { execute: vi.fn(async () => {}) };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -417,6 +427,7 @@ describe("SessionRunEngine", () => {
     const store = createStore();
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: { execute: vi.fn(async () => {}) } as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -461,6 +472,7 @@ describe("SessionRunEngine", () => {
     });
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: { execute: vi.fn(async () => {}) } as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -504,6 +516,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -553,6 +566,7 @@ describe("SessionRunEngine", () => {
     const events = { checkpoint: vi.fn(() => 1), publishSince: vi.fn() };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events,
@@ -620,6 +634,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -673,6 +688,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
@@ -719,6 +735,7 @@ describe("SessionRunEngine", () => {
     };
     const engine = new SessionRunEngine({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true } as any,
       runExecutor: runExecutor as any,
       events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },

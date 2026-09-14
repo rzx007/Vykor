@@ -13,6 +13,7 @@ describe("SessionRunExecutor", () => {
     let modelCalls = 0;
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {},
         createRunCapabilityView: (pluginId?: string) => createRunCapabilityView({
@@ -45,6 +46,7 @@ describe("SessionRunExecutor", () => {
     let submitted = "";
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {}, createRunCapabilityView: () => view,
         submitMessage: (content: string) => { submitted = content; return completedHandle(); },
@@ -66,6 +68,7 @@ describe("SessionRunExecutor", () => {
     const observed: string[][] = [];
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: async () => ({
@@ -97,6 +100,7 @@ describe("SessionRunExecutor", () => {
     const closeIfStale = vi.fn(async () => {});
     const executorWithMaintenance = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => agent),
@@ -139,6 +143,7 @@ describe("SessionRunExecutor", () => {
     });
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => ({ setModel: vi.fn(), submitMessage })),
@@ -179,6 +184,7 @@ describe("SessionRunExecutor", () => {
     const finalizeRunParts = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
@@ -207,6 +213,7 @@ describe("SessionRunExecutor", () => {
     const log = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
@@ -247,6 +254,7 @@ describe("SessionRunExecutor", () => {
     }));
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => ({
@@ -329,6 +337,7 @@ describe("SessionRunExecutor", () => {
     const projectAttachmentTransformations = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      goals: store as any,
       agentPool: { configured: true, acquireSession, close } as any,
       events: { checkpoint: () => 4, publishSince: vi.fn() },
       transcriptProjection: {
