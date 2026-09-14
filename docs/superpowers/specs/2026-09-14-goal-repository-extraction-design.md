@@ -70,7 +70,6 @@ export class GoalTransactions {
     assertMutableSession(session: SessionRecord): void
     getRun(runId: string): SessionRunRecord | undefined
     appendEvent(input: AppendEventInput): SessionEventRecord
-    assertCurrentOwner(): void
   })
 }
 ```
@@ -85,9 +84,18 @@ export class GoalTransactions {
 - `finishGoalRun()`；
 - `pauseActiveGoalsOnStartup()`。
 
-单表 request、assessment、continuation 操作可以由 Goal facade 直接调用 Repository，但仍在写入前执行 owner fence。
+所有写入口统一使用：
 
-## Goal Facade
+```ts
+storage.atomic(() => {
+  storage.assertWritable()
+  // repository write and optional durable event
+})
+```
+
+owner fence 必须位于 SQLite transaction 内的第一步，不能先在事务外检查再写入。单表 request、assessment、continuation 操作也由 GoalTransactions 包装同一规则。
+
+## GoalOperations
 
 Store 暴露：
 
@@ -95,19 +103,26 @@ Store 暴露：
 readonly goals: GoalOperations
 ```
 
-`GoalOperations` 是一个具体组合对象，对外提供与当前 Store Goal 方法一致的 15 项能力。跨域方法委托 `GoalTransactions`，表内方法委托 `GoalRepository` 并统一执行 owner fence。
+`GoalTransactions` 本身实现 `GoalOperations`，对外提供当前 Store 的 14 项 Goal 能力：
 
-这使 Server 可以依赖 `store.goals`，而 `SessionStore` 原方法只做同名转发。Facade 不拥有 SQL，也不复制状态机。
+- createGoal、getGoal、getCurrentGoal、updateGoal；
+- getGoalRequest、beginGoalRequest、settleGoalRequest；
+- recordGoalAssessment、goalEvidenceSignatures；
+- recordGoalContinuation、markGoalContinuation；
+- startGoalRun、finishGoalRun、pauseActiveGoalsOnStartup。
+
+低级 `insertGoal`、`bindCurrentRun`、`cancelPendingContinuations` 等 Repository 原语不进入 `GoalOperations`。Server 依赖 `store.goals`，`SessionStore` 原方法只做同名转发；不增加单独 Facade 层。
 
 ## 关键流程
 
 ### 创建 Goal
 
-1. owner fence；
-2. 从 read model 取得 Session 并校验可修改；
-3. 在 `storage.atomic()` 中插入 Goal；
-4. 写 `session.goal.created` durable event；
-5. 任一步失败则 Goal 与 event 一起回滚。
+1. 进入 `storage.atomic()`；
+2. 在事务内执行 owner fence；
+3. 从 read model 取得 Session 并校验可修改；
+4. 插入 Goal；
+5. 写 `session.goal.created` durable event；
+6. 任一步失败则 Goal 与 event 一起回滚。
 
 Server 外层仍可把 Goal、首次 input 和 Run 包在同一个 `store.transaction()` 中；嵌套 atomic 继续参与最外层提交。
 
@@ -152,10 +167,11 @@ Server 外层仍可把 Goal、首次 input 和 Run 包在同一个 `store.transa
 - continuation `(goalId, revision, previousRunId)` insert-or-ignore 幂等。
 -启动恢复取消 pending continuation，并保留 waiting_user/blocked/paused/terminal Goal。
 - owner fence 覆盖所有 Goal 写入。
+- owner fence 与对应 SQL 位于同一个 SQLite transaction，接管后的旧 owner 不能继续写。
 
 ## Server 边界
 
-`SessionGoalService`、`SessionRunEngine`、`SessionRunExecutor` 的 context 使用 `GoalOperations` 的窄 Pick，不再通过完整 Store 调用 Goal 方法。它们仍可通过 Store 使用 Session/Run/transaction 等其他尚未迁移的能力。
+`SessionGoalService`、`SessionRunEngine`、`SessionRunExecutor` 的 context 使用 `GoalOperations` 的窄 Pick，不再通过完整 Store 调用 Goal 方法。`DaemonApplication` 启动恢复也改为 `store.goals.pauseActiveGoalsOnStartup()`。这些类仍可通过 Store 使用 Session/Run/transaction 等其他尚未迁移的能力。
 
 Daemon composition 注入同一个 `store.goals`。阶段 2D 不要求一次移除这些类对 Store 的全部依赖，只禁止新增 `store.<goalMethod>()`。
 
@@ -172,19 +188,20 @@ Daemon composition 注入同一个 `store.goals`。阶段 2D 不要求一次移�
 
 ### Transactions
 
-- create/update 的 event 原子回滚；
+- create/update/start/finish 的 event 故障注入原子回滚；finish 清 currentRunId 后 event 失败必须恢复；
 - revision 冲突和 null/undefined patch；
 - start run 的归属、状态、revision、幂等和额度分支；
 - finish run 的无匹配 no-op 与更新事件；
 -启动恢复只暂停 active，并在故障注入时整体回滚；
--嵌入外层 `store.transaction()` 的 Goal + input + Run 提交/回滚。
+-嵌入外层 `store.transaction()` 的 Goal + input + Run 提交/回滚；inner atomic 成功后 outer 抛错时，同时检查当前 Store 实例和重开实例中的 Goal、durable event、event sequence、read model 和 mutation buffer 无泄漏。
+- owner lease 被另一实例接管后，各类 Goal 写入口在事务内 fence 并拒绝写入。
 
 ### Store 与 Server
 
 - Store 原 Goal API 兼容转发；
 -现有 session-goals、Goal service、run engine/executor 测试保持通过；
 -窄 fake 验证 Server 的 Goal 调用；
--真实 Daemon composition 证明使用 `store.goals`，破坏旧 Store Goal 方法后业务仍可读取或执行。
+-真实 Daemon composition 证明使用 `store.goals`；破坏旧 Store 的 `pauseActiveGoalsOnStartup` 后 daemon 构造仍完成启动恢复，破坏其他旧 Goal 方法后业务仍可读取或执行。
 
 ## 实施顺序
 
