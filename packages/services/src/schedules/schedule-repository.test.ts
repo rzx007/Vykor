@@ -22,6 +22,50 @@ function withRepository(
 }
 
 describe("ScheduleRepository", () => {
+  it("reloads persisted task JSON and run state from disk", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-schedule-reload-"));
+    const path = join(directory, "sessions.db");
+    try {
+      const first = new SessionStore({ path });
+      const task = first.schedules.createTask({
+        id: "task-reload",
+        name: "reload",
+        prompt: "reload",
+        recurrence: "RRULE:FREQ=DAILY",
+        recurrenceFormat: "rrule",
+        timezone: "UTC",
+        destination: "standalone",
+        projectPaths: ["C:/repo"],
+        pluginNames: ["plugin"],
+        stopPolicy: { maxRuns: 2 },
+      });
+      first.schedules.createRun({
+        id: "run-reload",
+        taskId: task.id,
+        cause: "scheduled",
+        scheduledFor: 10,
+      });
+      first.close();
+
+      const second = new SessionStore({ path });
+      try {
+        expect(second.schedules.getTask(task.id)).toMatchObject({
+          projectPaths: ["C:/repo"],
+          pluginNames: ["plugin"],
+          stopPolicy: { maxRuns: 2 },
+        });
+        expect(second.schedules.getRun("run-reload")).toMatchObject({
+          taskId: task.id,
+          status: "queued",
+        });
+      } finally {
+        second.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("stores and updates a task and its runs", () => {
     withRepository((repository) => {
       const task = repository.createTask({
@@ -52,8 +96,9 @@ describe("ScheduleRepository", () => {
       repository.updateTask(task.id, { nextRunAt: 200 });
 
       expect(repository.listTasks({ status: "active" })).toHaveLength(1);
-      expect(repository.listRuns({ taskId: task.id, unread: true, limit: 999 }))
-        .toMatchObject([{ id: "run-1", status: "running" }]);
+      expect(
+        repository.listRuns({ taskId: task.id, unread: true, limit: 999 }),
+      ).toMatchObject([{ id: "run-1", status: "running" }]);
       expect(repository.getRun(run.id)?.unread).toBe(true);
     });
   });
@@ -104,10 +149,12 @@ describe("ScheduleRepository", () => {
         destination: "standalone",
       });
       (store as any).storage.database.connection
-        .prepare(`UPDATE scheduled_task SET
+        .prepare(
+          `UPDATE scheduled_task SET
           project_paths_json = ?, skill_names_json = ?,
           plugin_names_json = ?, permission_profile_json = ?, stop_policy_json = ?
-          WHERE id = ?`)
+          WHERE id = ?`,
+        )
         .run("{broken", Buffer.from([1]), "{}", "null", "{broken", task.id);
 
       const loaded = repository.getTask(task.id) as any;
@@ -116,6 +163,107 @@ describe("ScheduleRepository", () => {
       expect(loaded.pluginNames).toEqual({});
       expect(loaded.permissionProfile).toBeNull();
       expect(loaded.stopPolicy).toEqual({});
+    });
+  });
+
+  it("supports null clearing, undefined preservation, and isolated results", () => {
+    withRepository((repository) => {
+      const task = repository.createTask({
+        id: "task-update",
+        name: "original",
+        prompt: "prompt",
+        recurrence: "2030-01-01T00:00:00.000Z",
+        recurrenceFormat: "once",
+        timezone: "UTC",
+        destination: "standalone",
+        nextRunAt: 200,
+      });
+      const returned = repository.updateTask(task.id, {
+        name: undefined,
+        lastRunAt: 100,
+        nextRunAt: null,
+      });
+      returned.name = "caller mutation";
+
+      expect(repository.getTask(task.id)).toMatchObject({
+        name: "original",
+        lastRunAt: 100,
+      });
+      expect(repository.getTask(task.id)?.nextRunAt).toBeUndefined();
+      expect(() => repository.updateTask("missing", {})).toThrow(
+        "Scheduled task not found: missing",
+      );
+      expect(() =>
+        repository.createRun({
+          taskId: "missing",
+          cause: "manual",
+          scheduledFor: 1,
+        }),
+      ).toThrow("Scheduled task not found: missing");
+      expect(() => repository.updateRun("missing", {})).toThrow(
+        "Scheduled run not found: missing",
+      );
+    });
+  });
+
+  it("bounds run lists and interrupts only active runs", () => {
+    withRepository((repository, store) => {
+      const task = repository.createTask({
+        id: "task-runs",
+        name: "runs",
+        prompt: "runs",
+        recurrence: "2030-01-01T00:00:00.000Z",
+        recurrenceFormat: "once",
+        timezone: "UTC",
+        destination: "standalone",
+      });
+      const database = (store as any).storage.database.connection;
+      const insert = database.prepare(
+        "INSERT INTO scheduled_run (id, task_id, cause, status, scheduled_for, unread, created_at, updated_at) VALUES (?, ?, 'manual', ?, ?, 0, ?, ?)",
+      );
+      database.transaction(() => {
+        for (let index = 0; index < 501; index += 1) {
+          const status =
+            index === 0 ? "running" : index === 1 ? "succeeded" : "queued";
+          insert.run(`run-${index}`, task.id, status, index, index, index);
+        }
+      })();
+
+      expect(repository.listRuns()).toHaveLength(50);
+      expect(repository.listRuns({ limit: 0 })).toHaveLength(1);
+      expect(repository.listRuns({ limit: 999 })).toHaveLength(500);
+      expect(repository.interruptActiveRuns("restart")).toBe(500);
+      expect(repository.getRun("run-0")).toMatchObject({
+        status: "interrupted",
+        error: "restart",
+        unread: true,
+      });
+      expect(repository.getRun("run-1")?.status).toBe("succeeded");
+    });
+  });
+
+  it("deletes a task and all of its runs", () => {
+    withRepository((repository) => {
+      const task = repository.createTask({
+        id: "task-delete-success",
+        name: "delete",
+        prompt: "delete",
+        recurrence: "2030-01-01T00:00:00.000Z",
+        recurrenceFormat: "once",
+        timezone: "UTC",
+        destination: "standalone",
+      });
+      const run = repository.createRun({
+        id: "run-delete-success",
+        taskId: task.id,
+        cause: "manual",
+        scheduledFor: 1,
+      });
+
+      expect(repository.deleteTask(task.id)).toBe(true);
+      expect(repository.getTask(task.id)).toBeUndefined();
+      expect(repository.getRun(run.id)).toBeUndefined();
+      expect(repository.deleteTask(task.id)).toBe(false);
     });
   });
 });

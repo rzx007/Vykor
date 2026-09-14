@@ -1149,6 +1149,13 @@ describe("SessionStore", () => {
           unread: true,
         },
       ]);
+      expect(reloaded.listScheduledTasks().map((item) => item.id)).toContain(
+        task.id,
+      );
+      expect(reloaded.getScheduledRun(run.id)?.id).toBe(run.id);
+      expect(reloaded.deleteScheduledTask(task.id)).toBe(true);
+      expect(reloaded.getScheduledTask(task.id)).toBeUndefined();
+      expect(reloaded.getScheduledRun(run.id)).toBeUndefined();
       reloaded.close();
     });
   });
