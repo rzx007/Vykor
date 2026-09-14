@@ -83,7 +83,7 @@ Repository 需要访问：
 
 - `storage.database.connection`：执行 Project 和 session cwd SQL；
 - `storage.state`：更新已加载 session 的 cwd、projectId 和时间；
-- `storage.mutations`：标记受影响 session；
+- `storage.mutations`：联合回滚时保存并恢复事务前已有的脏标记；rebind 已直接写 SQLite，不重复标脏；
 - Store 临时提供的跨 SQLite/read model 原子执行能力。
 
 现有 `StorageContext` 不应反向依赖 `ProjectRepository`。为了在阶段 2A 保持当前 SQLite/read model 联合回滚语义，在 Context 中增加一个临时的原子执行能力：
@@ -126,7 +126,7 @@ Project 不进入 Session read model，查询继续以 SQLite 为权威来源。
 2. resolve 并规范化新路径；
 3. 检查新路径没有绑定给其他 active project；
 4. 将旧 active location 退役并始终插入一条新的 active location；即使重新绑定到历史路径，也不复用旧 location ID；
-5. 根据每个 session 的 `cwdRelative` 更新 SQLite 和内存 read model 中的 cwd；
+5. 根据每个 session 的 `cwdRelative` 更新 SQLite 和内存 read model 中的 cwd；这些行已直接写入 SQLite，不留待 mutation buffer 二次持久化；
 6. 一次提交全部变化。
 
 任何一步失败时，location、session SQLite 行和内存 state 必须一起回滚。

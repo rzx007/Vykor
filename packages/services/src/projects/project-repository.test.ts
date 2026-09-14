@@ -132,4 +132,83 @@ describe("ProjectRepository mutations", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("rebinds successfully, preserves history, and rejects another active project", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-project-rebind-success-"));
+    const originalPath = join(directory, "original");
+    const nextPath = join(directory, "next");
+    const conflictPath = join(directory, "conflict");
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const project = store.inspectProject(originalPath);
+      store.createSession({
+        id: "s1",
+        projectId: project.id,
+        cwd: join(originalPath, "app"),
+        model: "m",
+      });
+      const conflict = store.inspectProject(conflictPath);
+      const storage = (store as any).storage;
+      const repository = new ProjectRepository(storage);
+
+      repository.rebind(project.id, nextPath);
+      repository.rebind(project.id, originalPath);
+
+      expect(repository.get(project.id)?.path).toBe(originalPath);
+      expect(store.getSession("s1")?.cwd).toBe(join(originalPath, "app"));
+      expect(
+        storage.database.connection
+          .prepare(
+            "SELECT id, status FROM project_location WHERE project_id = ? ORDER BY rowid",
+          )
+          .all(project.id),
+      ).toEqual([
+        expect.objectContaining({ status: "historical" }),
+        expect.objectContaining({ status: "historical" }),
+        expect.objectContaining({ status: "active" }),
+      ]);
+      const locationIds = storage.database.connection
+        .prepare(
+          "SELECT id FROM project_location WHERE project_id = ? ORDER BY rowid",
+        )
+        .all(project.id) as Array<{ id: string }>;
+      expect(new Set(locationIds.map((row) => row.id)).size).toBe(3);
+      expect(storage.mutations.sessions.size).toBe(0);
+      expect(() => repository.rebind(project.id, conflictPath)).toThrow(
+        "Project directory is already bound to another project",
+      );
+      expect(repository.get(conflict.id)?.path).toBe(conflictPath);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("participates in an outer store transaction and returns isolated records", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-project-outer-transaction-"));
+    const originalPath = join(directory, "original");
+    const nextPath = join(directory, "next");
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const project = store.inspectProject(originalPath);
+      const repository = store.projects;
+      const returned = repository.get(project.id)!;
+      returned.name = "mutated by caller";
+      expect(repository.get(project.id)?.name).toBe(project.name);
+
+      expect(() =>
+        store.transaction(() => {
+          repository.rebind(project.id, nextPath);
+          throw new Error("rollback outer transaction");
+        }),
+      ).toThrow("rollback outer transaction");
+
+      expect(repository.get(project.id)?.path).toBe(originalPath);
+      store.transaction(() => repository.rebind(project.id, nextPath));
+      expect(repository.get(project.id)?.path).toBe(nextPath);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });

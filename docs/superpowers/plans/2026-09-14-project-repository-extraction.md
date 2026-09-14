@@ -112,7 +112,7 @@ pnpm --filter @openharness/services test -- project-repository
 atomic<T>(work: () => T): T
 ```
 
-Store 组合 Context 时绑定 `atomic: (work) => this.transaction(work)`。Repository 的 inspect 新建和 rebind 使用 `storage.atomic()`；rebind 在事务中始终 INSERT 新 location，更新每个相关 session 的内存 cwd、SQLite cwd，并把 session ID 加入 mutation buffer。简单单条 SQL 更新直接执行并返回 `get()`。
+Store 组合 Context 时绑定 `atomic: (work) => this.transaction(work)`。Repository 的 inspect 新建和 rebind 使用 `storage.atomic()`；rebind 在事务中始终 INSERT 新 location，并更新每个相关 session 的内存 cwd 和 SQLite cwd。由于 SQLite 行已直接写入，不把 session 再加入 mutation buffer；atomic 在失败时恢复事务前已有的脏标记。简单单条 SQL 更新直接执行并返回 `get()`。
 
 - [ ] **步骤 5：验证嵌套事务和完整 Store**
 

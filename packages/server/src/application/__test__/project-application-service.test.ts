@@ -3,12 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { ProjectRecord } from "@openharness/protocol";
+import { SessionStore } from "@openharness/services";
 import { describe, expect, it, vi } from "vitest";
 
 import {
   ProjectApplicationService,
   type ProjectOperations,
 } from "../project-application-service.js";
+import { DaemonApplication } from "../daemon-application.js";
 
 const project: ProjectRecord = {
   id: "p1",
@@ -53,6 +55,37 @@ describe("ProjectApplicationService", () => {
       expect(operations.rebind).toHaveBeenCalledWith("p1", directory);
       expect(operations.archive).toHaveBeenCalledWith("p1");
     } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("is composed with store.projects instead of the legacy Store methods", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-project-composition-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    const project = store.inspectProject(directory);
+    const application = new DaemonApplication({
+      store,
+      settings: {
+        apiFormat: "anthropic",
+        model: "test-model",
+        maxTurns: 1,
+        permission: { mode: "full_auto" },
+        sandbox: { enabled: false },
+        memory: { enabled: false },
+      },
+      log: () => undefined,
+    });
+    try {
+      (store as any).renameProject = () => {
+        throw new Error("legacy method must not be used");
+      };
+
+      expect(application.projects.rename(project.id, "Renamed").name).toBe(
+        "Renamed",
+      );
+    } finally {
+      await application.close();
+      store.close();
       rmSync(directory, { recursive: true, force: true });
     }
   });
