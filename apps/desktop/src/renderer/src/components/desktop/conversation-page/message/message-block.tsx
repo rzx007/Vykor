@@ -302,7 +302,7 @@ function UserMessageBubble({
                 ) : (
                   <span
                     key={index}
-                    className="inline-flex items-center gap-1 align-baseline font-medium !text-primary select-none"
+                    className="inline-flex items-center gap-1 align-middle font-medium !text-primary select-none"
                   >
                     {item.kind !== "plugin" ? <Box className="size-3.5 shrink-0" /> : null}
                     <span>

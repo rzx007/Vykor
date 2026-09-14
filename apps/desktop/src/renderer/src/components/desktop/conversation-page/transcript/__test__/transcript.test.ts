@@ -142,6 +142,7 @@ describe("visibleTranscriptParts", () => {
     expect(html.indexOf("使用 ")).toBeLessThan(html.indexOf("Archify"))
     expect(html.indexOf("Archify")).toBeLessThan(html.indexOf("画一下系统架构"))
     expect(html.indexOf("画一下系统架构")).toBeLessThan(html.indexOf("Writing Plans"))
+    expect(html).toContain("align-middle")
   })
 
   it("keeps ordered text and skill display items for transcript rendering", () => {
