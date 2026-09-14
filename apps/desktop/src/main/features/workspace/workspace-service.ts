@@ -13,6 +13,11 @@ import type {
   WorkspaceReadFileResult,
   WorkspaceRevealPathInput,
 } from "../../../shared/workspace-types"
+import {
+  safeImageMediaTypeFromName,
+  validateSafeImageBytes,
+  type SafeImageMediaType,
+} from "../../../shared/safe-image-preview"
 
 import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
 import {
@@ -33,7 +38,8 @@ const ignoredDirectories = new Set([
   "node_modules",
   "out",
 ])
-const maxFileBytes = 1_250_000
+const maxTextFileBytes = 1_250_000
+export const maxImagePreviewBytes = 50 * 1024 * 1024
 const textDecoder = new TextDecoder("utf-8", { fatal: false })
 
 class WorkspaceService {
@@ -88,7 +94,42 @@ class WorkspaceService {
     const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
     const info = await stat(resolved.absolutePath)
     if (!info.isFile()) throw new Error("只能预览文件。")
-    if (info.size > maxFileBytes) {
+
+    const imageMediaType = safeImageMediaTypeFromName(resolved.absolutePath)
+    if (imageMediaType) {
+      if (info.size > maxImagePreviewBytes) {
+        return toReadResult(resolved.classification, info.size, true, null, {
+          previewBytes: null,
+          mediaType: imageMediaType,
+          imagePreviewError: "image_too_large",
+        })
+      }
+
+      const buffer = await readFile(resolved.absolutePath)
+      if (buffer.byteLength > maxImagePreviewBytes) {
+        return toReadResult(resolved.classification, buffer.byteLength, true, null, {
+          previewBytes: null,
+          mediaType: imageMediaType,
+          imagePreviewError: "image_too_large",
+        })
+      }
+
+      if (!validateSafeImageBytes(buffer, imageMediaType)) {
+        return toReadResult(resolved.classification, buffer.byteLength, true, null, {
+          previewBytes: null,
+          mediaType: null,
+          imagePreviewError: "image_unsupported",
+        })
+      }
+
+      return toReadResult(resolved.classification, buffer.byteLength, true, null, {
+        previewBytes: exactArrayBuffer(buffer),
+        mediaType: imageMediaType,
+        imagePreviewError: null,
+      })
+    }
+
+    if (info.size > maxTextFileBytes) {
       return toReadResult(resolved.classification, info.size, true, null)
     }
 
@@ -193,7 +234,16 @@ function toReadResult(
   classification: WorkspacePathClassification,
   size: number,
   binary: boolean,
-  content: string | null
+  content: string | null,
+  imagePreview: {
+    previewBytes: ArrayBuffer | null
+    mediaType: SafeImageMediaType | null
+    imagePreviewError: WorkspaceReadFileResult["imagePreviewError"]
+  } = {
+    previewBytes: null,
+    mediaType: null,
+    imagePreviewError: null,
+  }
 ): WorkspaceReadFileResult {
   return {
     path: classification.tabPath,
@@ -205,7 +255,14 @@ function toReadResult(
     scope: classification.kind as WorkspaceFileScope,
     relativePath: classification.relativePath,
     rootLabel: classification.rootLabel,
+    ...imagePreview,
   }
+}
+
+function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return copy.buffer
 }
 
 function languageFromPath(path: string): string {

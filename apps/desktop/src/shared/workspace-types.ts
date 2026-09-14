@@ -1,3 +1,5 @@
+import type { SafeImageMediaType } from "./safe-image-preview"
+
 export interface WorkspaceListFilesInput {
   rootPath: string
 }
@@ -19,6 +21,7 @@ export interface WorkspaceReadFileInput {
 }
 
 export type WorkspaceFileScope = "project" | "extra-root"
+export type WorkspaceImagePreviewError = "image_too_large" | "image_unsupported"
 
 export interface WorkspaceReadFileResult {
   path: string
@@ -30,6 +33,9 @@ export interface WorkspaceReadFileResult {
   scope: WorkspaceFileScope
   relativePath: string
   rootLabel: string
+  previewBytes: ArrayBuffer | null
+  mediaType: SafeImageMediaType | null
+  imagePreviewError: WorkspaceImagePreviewError | null
 }
 
 export interface WorkspaceRevealPathInput {

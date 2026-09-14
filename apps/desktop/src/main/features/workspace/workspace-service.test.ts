@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, open, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -9,7 +9,7 @@ vi.mock("electron", () => ({
   shell: { openPath: vi.fn(), showItemInFolder: vi.fn() },
 }))
 
-import { workspaceService } from "./workspace-service"
+import { maxImagePreviewBytes, workspaceService } from "./workspace-service"
 
 const temporaryDirectories: string[] = []
 
@@ -63,6 +63,82 @@ describe("WorkspaceService.listFiles", () => {
   })
 })
 
+describe("WorkspaceService.readFile image preview", () => {
+  it("returns validated PNG bytes for a file tab preview", async () => {
+    const rootPath = await createTemporaryDirectory()
+    await writeFile(join(rootPath, "image.png"), pngBytes())
+
+    const result = await workspaceService.readFile({ rootPath, path: "image.png" })
+
+    expect(result).toMatchObject({
+      binary: true,
+      content: null,
+      mediaType: "image/png",
+      imagePreviewError: null,
+    })
+    expect(bytesOf(result.previewBytes)).toEqual([...pngBytes()])
+  })
+
+  it("rejects active content disguised as PNG", async () => {
+    const rootPath = await createTemporaryDirectory()
+    await writeFile(join(rootPath, "active.png"), '<svg onload="alert(1)"></svg>')
+
+    const result = await workspaceService.readFile({ rootPath, path: "active.png" })
+
+    expect(result).toMatchObject({
+      binary: true,
+      content: null,
+      previewBytes: null,
+      mediaType: null,
+      imagePreviewError: "image_unsupported",
+    })
+  })
+
+  it("keeps SVG in the text preview flow", async () => {
+    const rootPath = await createTemporaryDirectory()
+    const content = '<svg viewBox="0 0 1 1"></svg>'
+    await writeFile(join(rootPath, "vector.svg"), content)
+
+    const result = await workspaceService.readFile({ rootPath, path: "vector.svg" })
+
+    expect(result).toMatchObject({
+      binary: false,
+      content,
+      previewBytes: null,
+      mediaType: null,
+      imagePreviewError: null,
+    })
+  })
+
+  it("does not read image bytes beyond the 50 MB preview limit", async () => {
+    const rootPath = await createTemporaryDirectory()
+    const path = join(rootPath, "huge.png")
+    await createSizedPng(path, maxImagePreviewBytes + 1)
+
+    const result = await workspaceService.readFile({ rootPath, path: "huge.png" })
+
+    expect(result).toMatchObject({
+      binary: true,
+      content: null,
+      previewBytes: null,
+      mediaType: "image/png",
+      imagePreviewError: "image_too_large",
+    })
+  })
+
+  it("allows an image exactly at the 50 MB preview limit", async () => {
+    const rootPath = await createTemporaryDirectory()
+    const path = join(rootPath, "boundary.png")
+    await createSizedPng(path, maxImagePreviewBytes)
+
+    const result = await workspaceService.readFile({ rootPath, path: "boundary.png" })
+
+    expect(result.mediaType).toBe("image/png")
+    expect(result.imagePreviewError).toBeNull()
+    expect(result.previewBytes?.byteLength).toBe(maxImagePreviewBytes)
+  }, 30_000)
+})
+
 describe("WorkspaceService.readFile extra-root", () => {
   it("reads a personal skill from an extra root", async () => {
     const project = await createTemporaryDirectory()
@@ -83,7 +159,33 @@ describe("WorkspaceService.readFile extra-root", () => {
       relativePath: "skills/show-me/SKILL.md",
       rootLabel: "个人配置",
       content: "# skill\n",
+      previewBytes: null,
+      mediaType: null,
+      imagePreviewError: null,
     })
+  })
+
+  it("returns safe image bytes from an extra root", async () => {
+    const project = await createTemporaryDirectory()
+    const configDir = await createTemporaryDirectory()
+    const documentsPath = await createTemporaryDirectory()
+    const imagePath = join(configDir, "skills", "show-me", "preview.png")
+    await mkdir(join(configDir, "skills", "show-me"), { recursive: true })
+    await writeFile(imagePath, pngBytes())
+    workspaceService.configureAllowedRoots({ configDir, documentsPath })
+
+    const result = await workspaceService.readFile({
+      rootPath: project,
+      path: imagePath,
+    })
+
+    expect(result).toMatchObject({
+      scope: "extra-root",
+      relativePath: "skills/show-me/preview.png",
+      mediaType: "image/png",
+      imagePreviewError: null,
+    })
+    expect(bytesOf(result.previewBytes)).toEqual([...pngBytes()])
   })
 
   it("does not follow a symlink that escapes the allowed root", async () => {
@@ -110,7 +212,7 @@ describe("WorkspaceService.readFile extra-root", () => {
   it("does not read credentials.json from the config directory", async () => {
     const project = await createTemporaryDirectory()
     const configDir = await createTemporaryDirectory()
-    await writeFile(join(configDir, "credentials.json"), "{\"token\":\"x\"}")
+    await writeFile(join(configDir, "credentials.json"), '{"token":"x"}')
     workspaceService.configureAllowedRoots({
       configDir,
       documentsPath: await createTemporaryDirectory(),
@@ -129,4 +231,23 @@ async function createTemporaryDirectory(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), "openharness-workspace-"))
   temporaryDirectories.push(path)
   return path
+}
+
+function pngBytes(): Uint8Array {
+  return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+}
+
+function bytesOf(buffer: ArrayBuffer | null): number[] | null {
+  return buffer ? [...new Uint8Array(buffer)] : null
+}
+
+async function createSizedPng(path: string, size: number): Promise<void> {
+  const handle = await open(path, "w")
+  try {
+    const bytes = pngBytes()
+    await handle.write(bytes, 0, bytes.byteLength, 0)
+    await handle.truncate(size)
+  } finally {
+    await handle.close()
+  }
 }
