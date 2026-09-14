@@ -296,7 +296,7 @@ export class DaemonApplication implements DurableAgentApplication {
             : (options.getSettings?.() ?? options.settings ?? failMissingSettings()),
         acquireEnvironment: acquireSessionEnvironment,
       });
-      this.projects = new ProjectApplicationService(store);
+      this.projects = new ProjectApplicationService(store.projects);
       this.permissions = new StorePermissionBroker({
         store,
         onChange: (previousEventSeq) => this.eventPublisher.publishSince(previousEventSeq),

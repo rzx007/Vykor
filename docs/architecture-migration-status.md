@@ -1,10 +1,10 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–1 已完成；阶段 2 尚未开始。
+> 状态：当前。阶段 0–1 和阶段 2A 已完成。
 
 ## 当前阶段
 
-阶段 0–1 已完成：依赖护栏和 Session SQLite 数据库内核已经落地。
+阶段 0–1 和阶段 2A 已完成：依赖护栏、Session SQLite 数据库内核和首个业务 Repository 已经落地。
 
 ## 指标
 
@@ -14,8 +14,10 @@
 
 ## 当前所有权
 
-`SessionStore` 暂时仍拥有全部业务方法和公开兼容接口。SQLite 生命周期、read model、mutation buffer、event sequence 和 delta checkpoint 已迁入 `packages/services/src/database`，并由一个 `StorageContext` 持有。业务域 repository 尚未创建。
+`SessionStore` 暂时仍拥有多数业务方法和公开兼容接口。SQLite 生命周期、read model、mutation buffer、event sequence 和 delta checkpoint 已迁入 `packages/services/src/database`，并由一个 `StorageContext` 持有。
+
+Project SQL、路径规则和写操作已迁入 `packages/services/src/projects`。`SessionStore` 保留八个兼容转发方法，Server 的 `ProjectApplicationService` 只依赖七个 Project 动作的窄 capability。`StorageContext.atomic()` 仍由 Store 的 transaction coordinator 临时提供，在 Store 退场前必须把该协调器迁入 database 内核。
 
 ## 下一步
 
-阶段 2 从低耦合的 project、schedule、workflow、channel、goal、attachment 和 permission 存储域开始。每个域单独制定计划并迁移测试、repository、调用方和兼容转发。
+阶段 2B 迁移 Schedule 存储域。后续依次处理 Workflow、Channel、Goal、Permission 和 Attachment；每个域单独制定计划并迁移测试、repository、调用方和兼容转发。
