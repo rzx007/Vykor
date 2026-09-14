@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { SessionStore, type SessionStoreOptions } from "../store.js";
 import { createDurableEventRegistry } from "../event-registry.js";
+import { PermissionRepository } from "../../permissions/permission-repository.js";
 
 const fixtureEventRegistry = createDurableEventRegistry([
   {
@@ -2494,6 +2495,152 @@ describe("SessionStore", () => {
         decision: "Daemon restarted before the permission was resolved",
       });
       expect(store.getPermissionRequest("resolved")?.status).toBe("approved");
+    });
+  });
+
+  it("exposes permission repository operations while retaining the five Store compatibility entries", () => {
+    withStore((store, path) => {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+
+      const pending = store.permissions.create({
+        id: "repository-pending",
+        sessionId: "s1",
+        toolName: "Write",
+      });
+      const resolved = store.createPermissionRequest({
+        id: "store-resolved",
+        sessionId: "s1",
+        toolName: "Read",
+      });
+
+      expect(store.permissions.get(pending.id)).toMatchObject({
+        id: "repository-pending",
+        status: "pending",
+      });
+      expect(store.getPermissionRequest(pending.id)).toMatchObject({
+        id: "repository-pending",
+      });
+      expect(
+        store.listPermissionRequests({ sessionId: "s1", toolName: "Read" }),
+      ).toMatchObject([{ id: "store-resolved" }]);
+
+      store.permissions.reply({
+        requestId: pending.id,
+        status: "approved",
+        decision: "once",
+      });
+      store.replyPermission({ requestId: resolved.id, status: "denied" });
+      expect(store.expirePendingPermissionRequests("restart")).toBe(0);
+
+      store.close();
+      const reloaded = new SessionStore({ path });
+      expect(reloaded.permissions.list({ sessionId: "s1" })).toMatchObject([
+        { id: "repository-pending", status: "approved" },
+        { id: "store-resolved", status: "denied" },
+      ]);
+      reloaded.close();
+    });
+  });
+
+  it("rolls back the permission read model and mutation buffer when durable append fails", () => {
+    withStore((store, path) => {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      const repository = new PermissionRepository({
+        storage: (store as any).storage,
+        assertSession: (sessionId) => {
+          const session = store.getSession(sessionId);
+          if (!session) throw new Error(`Session not found: ${sessionId}`);
+          return session;
+        },
+        getRun: (runId) => store.getRun(runId),
+        appendEvent: () => {
+          throw new Error("durable append failed");
+        },
+      });
+
+      expect(() =>
+        repository.create({
+          id: "rolled-back",
+          sessionId: "s1",
+          toolName: "Write",
+        }),
+      ).toThrow("durable append failed");
+      expect(store.permissions.get("rolled-back")).toBeUndefined();
+      expect((store as any).storage.mutations.permissions.has("rolled-back")).toBe(
+        false,
+      );
+
+      store.close();
+      const reloaded = new SessionStore({ path });
+      expect(reloaded.permissions.get("rolled-back")).toBeUndefined();
+      reloaded.close();
+    });
+  });
+
+  it("rejects a second repository reply and expires only pending requests after restart", () => {
+    withStore((store, path) => {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      store.permissions.create({ id: "pending", sessionId: "s1", toolName: "Write" });
+      store.permissions.create({ id: "resolved", sessionId: "s1", toolName: "Read" });
+      store.permissions.reply({ requestId: "resolved", status: "approved" });
+      expect(() =>
+        store.permissions.reply({ requestId: "resolved", status: "denied" }),
+      ).toThrow("Permission request already resolved");
+
+      expect(store.permissions.expirePending("daemon restarted")).toBe(1);
+      store.close();
+      const reloaded = new SessionStore({ path });
+      expect(reloaded.permissions.get("pending")).toMatchObject({
+        status: "expired",
+        decision: "daemon restarted",
+      });
+      expect(reloaded.permissions.get("resolved")?.status).toBe("approved");
+      reloaded.close();
+    });
+  });
+
+  it("filters permission repository reads without exposing other requests", () => {
+    withStore((store) => {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      store.createSession({ id: "s2", cwd: process.cwd(), model: "m" });
+      store.permissions.create({ id: "write", sessionId: "s1", toolName: "Write" });
+      store.permissions.create({ id: "read", sessionId: "s1", toolName: "Read" });
+      store.permissions.create({ id: "other", sessionId: "s2", toolName: "Write" });
+      store.permissions.reply({ requestId: "write", status: "approved" });
+
+      expect(
+        store.permissions.list({
+          sessionId: "s1",
+          status: "pending",
+          toolName: "Read",
+          limit: 1,
+        }),
+      ).toMatchObject([{ id: "read" }]);
+      expect(store.permissions.list({ sessionId: "s1" }).map((request) => request.id)).toEqual([
+        "write",
+        "read",
+      ]);
+    });
+  });
+
+  it("enforces the application owner fence before repository writes", () => {
+    withStore((store) => {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      store.acquireApplicationOwner({ ownerId: "owner-1", pid: 1 });
+      (store as any).database
+        .prepare(
+          "UPDATE application_owner SET owner_id = ?, generation = ? WHERE key = 'application'",
+        )
+        .run("owner-2", 2);
+
+      expect(() =>
+        store.permissions.create({
+          id: "fenced",
+          sessionId: "s1",
+          toolName: "Write",
+        }),
+      ).toThrow("Data directory is already owned by owner-2");
+      expect(store.permissions.get("fenced")).toBeUndefined();
     });
   });
 

@@ -82,6 +82,7 @@ import { ProjectRepository } from "../projects/project-repository.js";
 import { ScheduleRepository } from "../schedules/schedule-repository.js";
 import { WorkflowRepository } from "../workflows/workflow-repository.js";
 import { ChannelRepository } from "../channels/channel-repository.js";
+import { PermissionRepository } from "../permissions/permission-repository.js";
 import {
   GoalRepository,
   GoalTransactions,
@@ -233,6 +234,7 @@ export class SessionStore {
   readonly schedules!: ScheduleRepository;
   readonly workflows!: WorkflowRepository;
   readonly channels!: ChannelRepository;
+  readonly permissions!: PermissionRepository;
   readonly goals!: GoalTransactions;
   private storage!: StorageContext;
   private closed = false;
@@ -285,6 +287,12 @@ export class SessionStore {
       this.schedules = new ScheduleRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);
       this.channels = new ChannelRepository(this.storage);
+      this.permissions = new PermissionRepository({
+        storage: this.storage,
+        assertSession: (sessionId) => assertSession(this.state, sessionId),
+        getRun: (runId) => this.getRun(runId),
+        appendEvent: (input) => this.appendEvent(input),
+      });
       const goalRepository = new GoalRepository(this.storage);
       this.goals = new GoalTransactions({
         storage: this.storage,
@@ -3287,17 +3295,7 @@ export class SessionStore {
   expirePendingPermissionRequests(
     reason = "Daemon restarted before the permission was resolved",
   ): number {
-    const pending = Object.values(this.state.permissions).filter(
-      (request) => request.status === "pending",
-    );
-    for (const request of pending) {
-      this.replyPermission({
-        requestId: request.id,
-        status: "expired",
-        decision: reason,
-      });
-    }
-    return pending.length;
+    return this.permissions.expirePending(reason);
   }
 
   /** Complete an archive that was interrupted by a daemon process exit. */
@@ -3319,83 +3317,21 @@ export class SessionStore {
   createPermissionRequest(
     input: CreatePermissionRequestInput,
   ): PermissionRequestRecord {
-    assertSession(this.state, input.sessionId);
-    if (input.runId && !this.state.runs[input.runId])
-      throw new Error(`Session run not found: ${input.runId}`);
-    const id = input.id ?? randomUUID();
-    if (this.state.permissions[id])
-      throw new Error(`Permission request already exists: ${id}`);
-    const timestamp = now();
-    const request: PermissionRequestRecord = {
-      id,
-      sessionId: input.sessionId,
-      ...(input.runId ? { runId: input.runId } : {}),
-      toolName: input.toolName,
-      payload: input.payload ?? {},
-      status: "pending",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.state.permissions[id] = request;
-    this.mutations.permissions.add(id);
-    this.appendEventInMemory({
-      type: "permission.asked",
-      sessionId: input.sessionId,
-      payload: { request },
-    });
-    this.save();
-    return clone(request);
+    return this.permissions.create(input);
   }
 
   replyPermission(input: ReplyPermissionInput): PermissionRequestRecord {
-    const request = this.state.permissions[input.requestId];
-    if (!request)
-      throw new Error(`Permission request not found: ${input.requestId}`);
-    if (request.status !== "pending")
-      throw new Error(
-        `Permission request already resolved: ${input.requestId}`,
-      );
-    const timestamp = now();
-    request.status = input.status;
-    if (input.decision !== undefined) request.decision = input.decision;
-    if (input.clientId !== undefined)
-      request.decidedByClientId = input.clientId;
-    request.updatedAt = timestamp;
-    this.mutations.permissions.add(request.id);
-    this.appendEventInMemory({
-      type: "permission.replied",
-      sessionId: request.sessionId,
-      payload: { request },
-    });
-    this.save();
-    return clone(request);
+    return this.permissions.reply(input);
   }
 
   getPermissionRequest(requestId: string): PermissionRequestRecord | undefined {
-    const request = this.state.permissions[requestId];
-    return request ? clone(request) : undefined;
+    return this.permissions.get(requestId);
   }
 
   listPermissionRequests(
     options: ListPermissionRequestsOptions = {},
   ): PermissionRequestRecord[] {
-    let requests = Object.values(this.state.permissions);
-    if (options.sessionId)
-      requests = requests.filter(
-        (request) => request.sessionId === options.sessionId,
-      );
-    if (options.status)
-      requests = requests.filter(
-        (request) => request.status === options.status,
-      );
-    if (options.toolName)
-      requests = requests.filter(
-        (request) => request.toolName === options.toolName,
-      );
-    requests = requests.sort((a, b) => a.createdAt - b.createdAt);
-    if (options.limit !== undefined)
-      requests = requests.slice(0, options.limit);
-    return clone(requests);
+    return this.permissions.list(options);
   }
 
   /** Read one session and its canonical children at a single event cursor. */
