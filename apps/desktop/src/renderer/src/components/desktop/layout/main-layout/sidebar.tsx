@@ -73,7 +73,7 @@ type SidebarProps = {
 
 const secondaryNavigation = [
   { icon: GitPullRequest, label: "拉取请求" },
-  { icon: Clock3, label: "已安排" },
+  { icon: Clock3, label: "定时任务" },
   { icon: PlugZap, label: "插件" },
 ]
 
@@ -218,7 +218,7 @@ export function Sidebar({
             onClick={() => beginNewConversation()}
           />
           {secondaryNavigation.map(({ icon, label }) => {
-            const isScheduled = label === "已安排"
+            const isScheduled = label === "定时任务"
             const isPlugins = label === "插件"
             return (
               <SidebarNavigationButton
@@ -229,14 +229,14 @@ export function Sidebar({
                 onClick={
                   isScheduled
                     ? () => {
-                        setArchiveMode(false)
-                        onOpenScheduled()
-                      }
+                      setArchiveMode(false)
+                      onOpenScheduled()
+                    }
                     : isPlugins
                       ? () => {
-                          setArchiveMode(false)
-                          onOpenPlugins()
-                        }
+                        setArchiveMode(false)
+                        onOpenPlugins()
+                      }
                       : undefined
                 }
               />
