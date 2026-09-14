@@ -13,6 +13,7 @@ export class SessionGoalService {
   constructor(
     private readonly context: {
       store: SessionStore;
+      permissions: Pick<SessionStore["permissions"], "get" | "list">;
       goals: GoalOperations;
       sessions: Pick<SessionApplicationService, "withSessionOperation">;
       runEngine: Pick<SessionRunEngine, "persistGoalRun" | "dispatchPersistedRun" | "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
@@ -200,7 +201,7 @@ export class SessionGoalService {
           runId,
           assessment: { ...assessment, verifiedSignatures },
         });
-        const permission = this.context.store.listPermissionRequests({
+        const permission = this.context.permissions.list({
           sessionId,
           status: "pending",
         })[0];
@@ -249,7 +250,7 @@ export class SessionGoalService {
               reason: "本轮已经结束，外部任务仍需在恢复后重新检查",
             });
           else if (wait?.kind === "approval") {
-            const actual = this.context.store.getPermissionRequest(wait.permissionRequestId);
+            const actual = this.context.permissions.get(wait.permissionRequestId);
             if (!actual || actual.sessionId !== sessionId || actual.runId !== runId) change({ status: "paused", reason: "评估引用的批准请求无效" });
             else
               change({
@@ -463,13 +464,13 @@ export class SessionGoalService {
     if (goal.status === "waiting_user") {
       if (goal.wait?.kind === "user" && (!input.response?.trim() || goal.wait.questionId !== input.questionId)) throw new SessionApplicationError(409, "请先回答当前目标的问题");
       if (goal.wait?.kind === "approval") {
-        const request = this.context.store.getPermissionRequest(goal.wait.permissionRequestId);
+        const request = this.context.permissions.get(goal.wait.permissionRequestId);
         if (request?.sessionId !== goal.sessionId || request.status !== "approved") throw new SessionApplicationError(409, "批准尚未通过，不能恢复目标");
       }
       if (!goal.wait || goal.wait.kind === "external") throw new SessionApplicationError(409, "等待状态尚未解除");
     }
     if (
-      this.context.store.listPermissionRequests({
+      this.context.permissions.list({
         sessionId: goal.sessionId,
         status: "pending",
       }).length

@@ -14,7 +14,12 @@ function withBroker(
   const dir = mkdtempSync(join(tmpdir(), "ohs-permission-broker-"));
   const store = new SessionStore({ path: join(dir, "store.db") });
   const changes: number[] = [];
-  const broker = new StorePermissionBroker({ store, onChange: (seq) => changes.push(seq) });
+  const broker = new StorePermissionBroker({
+    permissions: store.permissions,
+    getSession: (sessionId) => store.getSession(sessionId),
+    latestEventSeq: () => store.latestEventSeq(),
+    onChange: (seq) => changes.push(seq),
+  });
   store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
   const input = store.admitPrompt({ id: "i1", sessionId: "s1", content: "edit" });
   store.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
@@ -25,6 +30,30 @@ function withBroker(
 }
 
 describe("StorePermissionBroker", () => {
+  it("works with the permission repository and narrow session and event queries", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ohs-permission-broker-narrow-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    try {
+      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      const input = store.admitPrompt({ id: "i1", sessionId: "s1", content: "edit" });
+      store.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
+      const broker = new StorePermissionBroker({
+        permissions: store.permissions,
+        getSession: (sessionId) => store.getSession(sessionId),
+        latestEventSeq: () => store.latestEventSeq(),
+      });
+
+      const allowed = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write" });
+      const request = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({ requestId: request.id, status: "approved", decision: "once" });
+
+      await expect(allowed).resolves.toEqual({ status: "approved", decision: "once" });
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("persists an ask before blocking and resolves when a client replies", async () => {
     await withBroker(async ({ broker, store, changes }) => {
       const allowed = broker.ask({
@@ -35,7 +64,7 @@ describe("StorePermissionBroker", () => {
         input: { path: "README.md" },
       });
 
-      const pending = store.listPermissionRequests({ status: "pending" });
+      const pending = store.permissions.list({ status: "pending" });
       expect(pending).toHaveLength(1);
       expect(pending[0]).toMatchObject({
         sessionId: "s1",
@@ -60,7 +89,7 @@ describe("StorePermissionBroker", () => {
   it("persists session-scoped approvals and reuses them for later matching asks", async () => {
     await withBroker(async ({ broker, store }) => {
       const first = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Bash", input: { command: "pnpm test" } });
-      const firstRequest = store.listPermissionRequests({ status: "pending" })[0]!;
+      const firstRequest = store.permissions.list({ status: "pending" })[0]!;
       broker.reply({ requestId: firstRequest.id, status: "approved", decision: "session" });
       await expect(first).resolves.toEqual({ status: "approved", decision: "session" });
 
@@ -68,7 +97,7 @@ describe("StorePermissionBroker", () => {
         status: "approved",
         decision: "session",
       });
-      const bashRequests = store.listPermissionRequests({ sessionId: "s1", toolName: "Bash" });
+      const bashRequests = store.permissions.list({ sessionId: "s1", toolName: "Bash" });
       expect(bashRequests).toHaveLength(2);
       expect(bashRequests[1]).toMatchObject({
         status: "approved",
@@ -85,7 +114,7 @@ describe("StorePermissionBroker", () => {
       store.createRun({ id: "child-run", sessionId: "child", inputId: childInput.id });
 
       const parentAsk = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write" });
-      const parentRequest = store.listPermissionRequests({ sessionId: "s1", status: "pending" })[0]!;
+      const parentRequest = store.permissions.list({ sessionId: "s1", status: "pending" })[0]!;
       broker.reply({ requestId: parentRequest.id, status: "approved", decision: "session" });
       await expect(parentAsk).resolves.toEqual({ status: "approved", decision: "session" });
 
@@ -97,7 +126,7 @@ describe("StorePermissionBroker", () => {
       });
       await expect(childAsk).resolves.toEqual({ status: "approved", decision: "session" });
 
-      const childRequest = store.listPermissionRequests({ sessionId: "s1", toolName: "Write" }).at(-1);
+      const childRequest = store.permissions.list({ sessionId: "s1", toolName: "Write" }).at(-1);
       expect(childRequest).toMatchObject({
         sessionId: "s1",
         status: "approved",
@@ -109,7 +138,7 @@ describe("StorePermissionBroker", () => {
         },
       });
       expect(childRequest?.runId).toBeUndefined();
-      expect(store.listPermissionRequests({ sessionId: "child" })).toHaveLength(0);
+      expect(store.permissions.list({ sessionId: "child" })).toHaveLength(0);
     });
   });
 
@@ -122,11 +151,11 @@ describe("StorePermissionBroker", () => {
         toolName: "Write",
         signal: controller.signal,
       });
-      const request = store.listPermissionRequests({ status: "pending" })[0]!;
+      const request = store.permissions.list({ status: "pending" })[0]!;
       controller.abort();
 
       await expect(allowed).resolves.toMatchObject({ status: "expired" });
-      expect(store.getPermissionRequest(request.id)).toMatchObject({ status: "expired" });
+      expect(store.permissions.get(request.id)).toMatchObject({ status: "expired" });
     });
   });
 });

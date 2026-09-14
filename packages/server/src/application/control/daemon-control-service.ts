@@ -11,6 +11,7 @@ import { inspectDurableRun, listProjectionDiagnostics } from "./run-inspector.js
 
 export interface DaemonControlServiceContext {
   store: SessionStore;
+  permissions: Pick<SessionStore["permissions"], "list">;
   runEngine: Pick<
     SessionRunEngine,
     "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain"
@@ -47,7 +48,7 @@ export class DaemonControlService {
     const runs = sessions.flatMap((session) => this.context.store.listRuns(session.id));
     const tasks = sessions.flatMap((session) => this.context.store.listSessionTasks(session.id));
     const workflows = this.context.store.workflows.listRuns();
-    const permissions = this.context.store.listPermissionRequests();
+    const permissions = this.context.permissions.list();
     const projectionSettlements = this.context.store.listProjectionSettlements();
     const attempts =
       typeof this.context.store.listRunAttempts === "function"
@@ -102,7 +103,7 @@ export class DaemonControlService {
   }
 
   inspectRun(runId: string, options: { includeContent?: boolean } = {}) {
-    return inspectDurableRun(this.context.store, runId, options.includeContent === true);
+    return inspectDurableRun(this.context.store, this.context.permissions, runId, options.includeContent === true);
   }
 
   listProjectionDiagnostics(options: { includeContent?: boolean } = {}) {

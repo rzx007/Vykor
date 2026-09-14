@@ -268,7 +268,7 @@ export class DaemonApplication implements DurableAgentApplication {
       store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON);
       store.goals.pauseActiveGoalsOnStartup();
       store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON);
-      store.expirePendingPermissionRequests(DAEMON_RESTART_PERMISSION_REASON);
+      store.permissions.expirePending(DAEMON_RESTART_PERMISSION_REASON);
       store.finalizeClosingSessions();
 
       // events：窗口订的 SSE。eventPublisher：各处写完 store 后，把增量广播出去。
@@ -302,7 +302,9 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.projects = new ProjectApplicationService(store.projects);
       this.permissions = new StorePermissionBroker({
-        store,
+        permissions: store.permissions,
+        getSession: (sessionId) => store.getSession(sessionId),
+        latestEventSeq: () => store.latestEventSeq(),
         onChange: (previousEventSeq) => this.eventPublisher.publishSince(previousEventSeq),
         logger: options.log,
       });
@@ -630,6 +632,7 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       this.control = new DaemonControlService({
         store,
+        permissions: store.permissions,
         runEngine: this.runEngine,
         agentPool: this.agentPool,
         operationGate: this.operationGate,
@@ -685,6 +688,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.goals = new SessionGoalService({
         store,
+        permissions: store.permissions,
         goals: store.goals,
         sessions: this.sessions,
         runEngine: this.runEngine,

@@ -71,6 +71,7 @@ function harness(
   });
   service = new SessionGoalService({
     store,
+    permissions: store.permissions,
     goals: store.goals,
     runEngine: engine,
     events,

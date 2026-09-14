@@ -13,7 +13,7 @@ function createControl() {
     listSessions: vi.fn(() => sessions),
     listRuns: vi.fn((sessionId) => sessionId === "s1" ? [{ status: "running" }] : []),
     listSessionTasks: vi.fn(() => []),
-    listPermissionRequests: vi.fn(() => [{ status: "pending" }]),
+    permissions: { list: vi.fn(() => [{ status: "pending" }]) },
     listProjectionSettlements: vi.fn(() => [
       { status: "pending" },
       { status: "resolved" },
@@ -41,6 +41,7 @@ function createControl() {
   const operationGate = new DaemonOperationGate();
   const control = new DaemonControlService({
     store: store as any,
+    permissions: store.permissions,
     runEngine: runEngine as any,
     agentPool: agentPool as any,
     operationGate,
