@@ -54,7 +54,7 @@ export class ProjectRepository {
   inspect(inputPath: string): ProjectRecord
   rename(projectId: string, name: string): ProjectRecord
   setPinned(projectId: string, pinned: boolean): ProjectRecord
-  setDefaultShell(projectId: string, shell: string | undefined): ProjectRecord
+  setDefaultShell(projectId: string, shell: string | null): ProjectRecord
   archive(projectId: string): ProjectRecord
   rebind(projectId: string, inputPath: string): ProjectRecord
 }
@@ -84,16 +84,17 @@ Repository 需要访问：
 - `storage.database.connection`：执行 Project 和 session cwd SQL；
 - `storage.state`：更新已加载 session 的 cwd、projectId 和时间；
 - `storage.mutations`：标记受影响 session；
-- Store 提供的事务提交能力。
+- Store 临时提供的跨 SQLite/read model 原子执行能力。
 
-现有 `StorageContext` 不应反向依赖 `ProjectRepository`。为了让 Repository 触发与 Store 相同的提交/回滚语义，在 Context 中增加最窄的事务能力：
+现有 `StorageContext` 不应反向依赖 `ProjectRepository`。为了在阶段 2A 保持当前 SQLite/read model 联合回滚语义，在 Context 中增加一个临时的原子执行能力：
 
 ```ts
-transaction<T>(work: () => T): T
-save(): void
+atomic<T>(work: () => T): T
 ```
 
-这两个函数由 `SessionStore` 组合时注入，Repository 不持有 Store，也不调用 Store 的公开业务方法。
+`atomic` 由 `SessionStore` 组合时绑定到现有 transaction coordinator。初始化顺序固定为：先构造完整 `StorageContext`，再构造 `ProjectRepository`；Repository 构造器不得执行事务或查询。
+
+这是迁移期边界，不是最终数据库内核 API。它不暴露通用 `save()`，Repository 也不需要记住“事务中再 save”的两阶段约定。后续把 transaction coordinator 从 Store 提入 database 内核时，`atomic` 的调用方保持不变，只替换提供者；`SessionStore` 删除前该临时绑定必须退场。
 
 ## 数据流
 
@@ -124,7 +125,7 @@ Project 不进入 Session read model，查询继续以 SQLite 为权威来源。
 1. 校验 project 存在；
 2. resolve 并规范化新路径；
 3. 检查新路径没有绑定给其他 active project；
-4. 将旧 active location 退役并创建或激活新 location；
+4. 将旧 active location 退役并始终插入一条新的 active location；即使重新绑定到历史路径，也不复用旧 location ID；
 5. 根据每个 session 的 `cwdRelative` 更新 SQLite 和内存 read model 中的 cwd；
 6. 一次提交全部变化。
 
@@ -159,7 +160,7 @@ inspectProject(path) { return this.projects.inspect(path) }
 - 清空默认 shell 后返回 `undefined`，而不是空字符串。
 - archive 后默认列表不可见，`includeArchived` 仍可查询。
 - rebind 保持 session ID 和 `cwdRelative`，只更新绝对 cwd。
-- rebind 的 location 与 session 更新原子提交。
+- rebind 的 location、SQLite session cwd、内存 session cwd 和 mutation buffer 更新原子提交。
 - 所有返回对象继续使用克隆值，调用方不能修改内部状态。
 
 ## 错误处理
@@ -184,16 +185,22 @@ inspectProject(path) { return this.projects.inspect(path) }
 - rename、pin、默认 shell 设置和清除；
 - 未置顶排序；
 - rebind 更新 location 和 session cwd；
-- rebind 冲突与事务回滚；
+- rebind 路径冲突；
+- 在第一个 session 的内存 cwd 已修改、第二个 session SQL 更新时用 SQLite trigger 强制失败，同时验证 active location、SQLite session cwd、`getSession()` 和 mutation buffer 全部恢复；
+- Repository 操作嵌入外层 `store.transaction()` 时的成功提交和失败回滚；
 - 返回对象克隆隔离。
 
 ### Store 兼容测试
 
 保留一组通过 `SessionStore` 旧方法执行的端到端测试，证明公共入口和返回值不变。原有 Project 测试迁入 Repository 测试后，不在两个文件完整重复。
 
+Repository 测试通过 `SessionStore` 创建真实 `StorageContext` 和事务协调器，不使用空的 `atomic` 假实现。
+
 ### Server 接入测试
 
-`ProjectApplicationService` 改为依赖窄的 Project 能力，而不是整个 `SessionStore`。测试证明 list/get/inspect/update 请求只通过新入口执行。
+`ProjectApplicationService` 改为依赖包内定义的窄 Project capability，而不是整个 `SessionStore`。capability 保持 `setDefaultShell(projectId, shell: string | null)`，因此协议中的 `null` 继续表示清空默认 shell，无需改变调用方。
+
+委托测试覆盖现有动作：list、inspect、rename、setPinned、setDefaultShell、rebind、archive。另加 composition 测试证明 daemon 把 `store.projects` 注入该 Service；不新增当前不存在的按 ID get 路由。
 
 ## 实施顺序
 
@@ -201,7 +208,7 @@ inspectProject(path) { return this.projects.inspect(path) }
 2. 提取 project records 和只读查询；
 3. 提取 inspect 与简单更新；
 4. 提取 rebind 及事务回滚；
-5. 给 `StorageContext` 注入最窄事务能力；
+5. 给 `StorageContext` 注入临时的最窄 `atomic` 能力，不暴露 `save()`；
 6. 让 Store 旧方法转发，并迁移 `createSession()`；
 7. 迁移 Server Project service 到窄依赖；
 8. 运行 Services、Server、架构和文档验证；
@@ -213,7 +220,7 @@ inspectProject(path) { return this.projects.inspect(path) }
 - `ProjectRepository` 是 Project 持久化规则的唯一所有者。
 - `SessionStore` 原 Project API 和 `@openharness/services` 根导出不变。
 - `createSession()` 不复制 project 识别规则。
-- Project/location 创建与 rebind 继续原子提交。
+- Project/location 创建与 rebind 原子提交；失败注入证明 SQLite、read model 和 mutation buffer 一起回滚。
 - schema 和 migration 无变化。
 - Project Repository、Store 兼容和 Server 接入测试通过。
 - Services 与 Server 类型检查通过。
