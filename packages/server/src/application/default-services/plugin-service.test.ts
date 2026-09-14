@@ -1,10 +1,23 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getInstalledPluginStorePath, getPluginCacheDir } from "@openharness/core";
 import { readInstalledPluginStore, updateInstalledPluginStore } from "@openharness/plugins";
 import { createDefaultPluginService, PluginArchiveFailure } from "./plugin-service.js";
+
+const { nativeToolRuntimeSnapshot } = vi.hoisted(() => ({
+  nativeToolRuntimeSnapshot: vi.fn(() => ({
+    state: "inactive" as const,
+    hostCount: 0,
+    registeredToolCount: 0,
+    toolNames: [],
+  })),
+}));
+
+vi.mock("@openharness/agent-runtime", () => ({
+  getNativeToolRuntimeSnapshot: nativeToolRuntimeSnapshot,
+}));
 
 let root: string;
 let previousConfigDir: string | undefined;
@@ -13,6 +26,12 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "ohs-plugin-service-"));
   previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
   process.env.OPENHARNESS_CONFIG_DIR = join(root, "config");
+  nativeToolRuntimeSnapshot.mockReturnValue({
+    state: "inactive",
+    hostCount: 0,
+    registeredToolCount: 0,
+    toolNames: [],
+  });
 });
 
 afterEach(async () => {
@@ -135,6 +154,17 @@ async function resolverRoots(): Promise<string[]> {
   return (await readdir(tmpdir())).filter((name) => name.startsWith("oh-plugin-zip-"));
 }
 
+async function installPreviewedArchive(archive: string): Promise<void> {
+  const plugins = service() as any;
+  const preview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
+  await plugins.installArchive({
+    cwd: "C:/workspace",
+    archivePath: archive,
+    expectedArchiveDigest: preview.archiveDigest,
+    approvedPermissions: preview.requestedPermissions,
+  });
+}
+
 describe("default plugin service user scope", () => {
   it("hides legacy project records and reports how to migrate them", async () => {
     await writeLegacyProjectRecord();
@@ -189,7 +219,96 @@ describe("default plugin service user scope", () => {
     expect(listed.plugins[0]).toMatchObject({
       installation: "invalid",
       inventory: {},
+      runtimeStatus: {
+        state: "failed",
+        code: "snapshot_missing",
+        message: "加载失败：插件文件不完整，请重新导入 ZIP。",
+        action: "reimport",
+      },
       diagnostics: [{ code: "plugin_content_digest_missing" }],
+    });
+  });
+
+  it("marks an enabled valid plugin pending reload until a tool runtime is active", async () => {
+    await installPreviewedArchive(await writeNativeArchive("pending.zip"));
+
+    const listed = await service().list({ cwd: "C:/workspace" });
+
+    expect(listed.plugins[0]?.runtimeStatus).toEqual({
+      state: "pending_reload",
+      message: "已启用，下一次对话生效。",
+      action: "reload",
+    });
+  });
+
+  it("marks a disabled plugin disabled even when it is otherwise valid", async () => {
+    await installPreviewedArchive(await writeNativeArchive("disabled.zip"));
+    await updateInstalledPluginStore(getInstalledPluginStorePath(), (store) => {
+      for (const record of Object.values(store.plugins)) record.enabled = false;
+    });
+
+    const listed = await service().list({ cwd: "C:/workspace" });
+
+    expect(listed.plugins[0]?.runtimeStatus).toEqual({
+      state: "disabled",
+      message: "插件已停用。",
+      action: "enable",
+    });
+  });
+
+  it("marks digest drift as a reimportable runtime failure", async () => {
+    await installPreviewedArchive(await writeNativeArchive("digest.zip"));
+    const record = Object.values((await readInstalledPluginStore(getInstalledPluginStorePath())).plugins)[0]!;
+    await writeFile(join(record.cachePath, "tools", "not-executed.js"), "export default 'tampered';");
+
+    const listed = await service().list({ cwd: "C:/workspace" });
+
+    expect(listed.plugins[0]?.runtimeStatus).toEqual({
+      state: "failed",
+      code: "snapshot_tampered",
+      message: "加载失败：插件文件与安装记录不一致，请重新导入 ZIP。",
+      action: "reimport",
+    });
+  });
+
+  it("marks unsupported component warnings as degraded", async () => {
+    await installPreviewedArchive(await writeNativeArchive("warning-list.zip", {
+      ".openharness-plugin/plugin.json": JSON.stringify({
+        schemaVersion: 1,
+        id: "dev.openharness.archive",
+        name: "archive",
+        version: "1.0.0",
+        components: { workflows: ["./workflows/workflow.yml"] },
+      }),
+      "workflows/workflow.yml": "name: unsupported-but-safe\n",
+    }));
+
+    const listed = await service().list({ cwd: "C:/workspace" });
+
+    expect(listed.plugins[0]?.runtimeStatus).toEqual({
+      state: "degraded",
+      code: "component_unsupported",
+      message: "部分能力不可用：当前版本暂不支持该组件。",
+      action: "details",
+    });
+  });
+
+  it("marks a valid plugin loaded when its native tool runtime is active", async () => {
+    nativeToolRuntimeSnapshot.mockReturnValue({
+      state: "active",
+      hostCount: 1,
+      registeredToolCount: 1,
+      toolNames: ["ArchiveTool"],
+      lastStartedAt: "2026-09-14T00:00:00.000Z",
+    });
+    await installPreviewedArchive(await writeNativeArchive("loaded.zip"));
+
+    const listed = await service().list({ cwd: "C:/workspace" });
+
+    expect(listed.plugins[0]?.runtimeStatus).toEqual({
+      state: "loaded",
+      message: "插件已加载。",
+      action: "none",
     });
   });
 });

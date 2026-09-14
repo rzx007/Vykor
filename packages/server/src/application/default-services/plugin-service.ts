@@ -15,6 +15,10 @@ import { resolveLocalPluginZip, type ResolvedLocalPluginZip } from "@openharness
 import type { PluginArchiveError, PluginArchivePreview, PluginInfo, PluginService } from "../settings-api.js";
 import type { DaemonSettingsRef } from "./shared.js";
 
+type RuntimeDiagnostic = PluginInfo["diagnostics"][number];
+type RuntimeToolStatus = NonNullable<PluginInfo["toolRuntime"]>;
+type RuntimeStatus = PluginInfo["runtimeStatus"];
+
 function isGlobalPlugin<T extends { scope: string }>(record: T): record is T & { scope: "user" | "managed" } {
   return record.scope === "user" || record.scope === "managed";
 }
@@ -126,6 +130,142 @@ function assertExactPermissionSet(requested: string[], approvedPermissions: stri
   }
 }
 
+function diagnosticRuntimeStatus(diagnostic: RuntimeDiagnostic): RuntimeStatus | undefined {
+  switch (diagnostic.code) {
+    case "plugin_content_digest_missing":
+    case "plugin_cache_snapshot_invalid":
+    case "plugin_cache_missing":
+    case "native_manifest_missing":
+      return {
+        state: "failed",
+        code: "snapshot_missing",
+        message: "加载失败：插件文件不完整，请重新导入 ZIP。",
+        action: "reimport",
+      };
+    case "plugin_content_digest_mismatch":
+    case "plugin_content_digest_verification_failed":
+    case "plugin_cache_not_regular_directory":
+      return {
+        state: "failed",
+        code: "snapshot_tampered",
+        message: "加载失败：插件文件与安装记录不一致，请重新导入 ZIP。",
+        action: "reimport",
+      };
+    case "plugin_installation_identity_mismatch":
+    case "plugin_identity_mismatch":
+      return {
+        state: "failed",
+        code: "manifest_mismatch",
+        message: "加载失败：插件身份与安装记录不一致，请重新导入 ZIP。",
+        action: "reimport",
+      };
+    case "plugin_permissions_missing":
+    case "plugin_permissions_changed":
+    case "plugin_installation_permissions_mismatch":
+    case "plugin_permissions_not_approved":
+      return {
+        state: "failed",
+        code: "permission_missing",
+        message: "加载失败：插件请求了新的权限，请重新导入并确认。",
+        action: "approve",
+      };
+    case "tool_register_failed":
+    case "tool_host_spawn_failed":
+    case "tool_host_crashed":
+    case "tool_host_unavailable":
+    case "tool_host_unresponsive":
+      return {
+        state: "failed",
+        code: "tool_host_failed",
+        message: "加载失败：插件工具进程启动失败，可以先禁用该插件。",
+        action: "disable",
+      };
+    default:
+      break;
+  }
+
+  if (diagnostic.severity === "warning" && (
+    diagnostic.code.startsWith("native_") && diagnostic.code.endsWith("_not_supported")
+    || diagnostic.code === "native_tool_runtime_unsupported"
+  )) {
+    return {
+      state: "degraded",
+      code: "component_unsupported",
+      message: "部分能力不可用：当前版本暂不支持该组件。",
+      action: "details",
+    };
+  }
+
+  if (
+    diagnostic.code.startsWith("native_")
+    || diagnostic.code.startsWith("component_path_")
+  ) {
+    return {
+      state: "failed",
+      code: "component_invalid",
+      message: "加载失败：插件声明无效，请修正后重新导入 ZIP。",
+      action: "reimport",
+    };
+  }
+
+  return undefined;
+}
+
+function runtimeStatusForPlugin(input: {
+  enabled: boolean;
+  installation: PluginInfo["installation"];
+  diagnostics: PluginInfo["diagnostics"];
+  toolRuntime?: RuntimeToolStatus;
+}): RuntimeStatus {
+  if (!input.enabled) {
+    return { state: "disabled", message: "插件已停用。", action: "enable" };
+  }
+
+  const firstError = input.diagnostics.find((diagnostic) => diagnostic.severity === "error");
+  if (firstError) {
+    return diagnosticRuntimeStatus(firstError) ?? {
+      state: "failed",
+      code: "runtime_failed",
+      message: "加载失败：插件运行状态异常，请查看详情。",
+      action: "disable",
+    };
+  }
+
+  if (input.installation !== "installed") {
+    return {
+      state: "failed",
+      code: "runtime_failed",
+      message: "加载失败：插件运行状态异常，请查看详情。",
+      action: "disable",
+    };
+  }
+
+  if (input.toolRuntime?.state === "error") {
+    return {
+      state: "failed",
+      code: "tool_host_failed",
+      message: "加载失败：插件工具进程启动失败，可以先禁用该插件。",
+      action: "disable",
+    };
+  }
+
+  const firstWarning = input.diagnostics.find((diagnostic) => diagnostic.severity === "warning");
+  if (firstWarning) {
+    return diagnosticRuntimeStatus(firstWarning) ?? {
+      state: "degraded",
+      code: "runtime_degraded",
+      message: "部分能力不可用，请查看详情。",
+      action: "details",
+    };
+  }
+
+  if (input.toolRuntime && input.toolRuntime.state === "active" && input.toolRuntime.hostCount > 0) {
+    return { state: "loaded", message: "插件已加载。", action: "none" };
+  }
+
+  return { state: "pending_reload", message: "已启用，下一次对话生效。", action: "reload" };
+}
+
 export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginService {
   return {
     async list() {
@@ -141,6 +281,19 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
         const manifest = verification.plugin?.manifest;
         const loaded = verification.status === "valid" ? await loadNativePlugin(verification.plugin) : undefined;
         const liveTools = getNativeToolRuntimeSnapshot(verification.plugin?.root ?? record.cachePath);
+        const diagnostics = [...verification.diagnostics, ...(loaded?.diagnostics ?? [])];
+        const installation = verification.status === "valid" ? "installed" : "invalid";
+        const toolRuntime = manifest?.components.tools ? {
+          state: !record.enabled
+            ? "inactive" as const
+            : liveTools.hostCount > 0 ? liveTools.state : "reload-required" as const,
+          declaredEntries: manifest.components.tools.length,
+          activatableEntries: loaded?.components.tools?.value?.length ?? 0,
+          hostCount: liveTools.hostCount,
+          registeredToolCount: liveTools.registeredToolCount,
+          ...(liveTools.lastStartedAt ? { lastStartedAt: liveTools.lastStartedAt } : {}),
+          ...(liveTools.lastError ? { lastError: liveTools.lastError } : {}),
+        } satisfies RuntimeToolStatus : undefined;
         const inventory: Record<string, number> = {};
         if (manifest) for (const [kind, values] of Object.entries(manifest.components)) inventory[kind] = values.length;
         plugins.push({
@@ -154,31 +307,22 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
           ...(record.sourceFormat ? { sourceFormat: record.sourceFormat } : {}),
           scope: record.scope,
           enabled: record.enabled,
-          installation: verification.status === "valid" ? "installed" : "invalid",
+          installation,
           activation: record.enabled ? "reload-required" : "inactive",
-          ...(manifest?.components.tools ? {
-            toolRuntime: {
-              state: !record.enabled
-                ? "inactive" as const
-                : liveTools.hostCount > 0 ? liveTools.state : "reload-required" as const,
-              declaredEntries: manifest.components.tools.length,
-              activatableEntries: loaded?.components.tools?.value?.length ?? 0,
-              hostCount: liveTools.hostCount,
-              registeredToolCount: liveTools.registeredToolCount,
-              ...(liveTools.lastStartedAt ? { lastStartedAt: liveTools.lastStartedAt } : {}),
-              ...(liveTools.lastError ? { lastError: liveTools.lastError } : {}),
-            },
-          } : {}),
-          runtimeStatus: record.enabled
-            ? { state: "pending_reload", message: "插件将在下次运行时重新加载。", action: "reload" }
-            : { state: "disabled", message: "插件已停用。", action: "enable" },
+          ...(toolRuntime ? { toolRuntime } : {}),
+          runtimeStatus: runtimeStatusForPlugin({
+            enabled: record.enabled,
+            installation,
+            diagnostics,
+            ...(toolRuntime ? { toolRuntime } : {}),
+          }),
           inventory,
           permissions: {
             requested: record.requestedPermissions,
             approved: record.approvedPermissions,
             missing: record.requestedPermissions.filter((item) => !record.approvedPermissions.includes(item)),
           },
-          diagnostics: [...verification.diagnostics, ...(loaded?.diagnostics ?? [])],
+          diagnostics,
         });
       }
       return { plugins, warnings };
