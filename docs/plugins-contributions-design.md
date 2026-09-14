@@ -54,6 +54,8 @@ Native Plugin 只支持用户级安装；当前 cwd 只作为插件运行时的�
 
 Desktop 插件页现可选择一个本地 Native Plugin ZIP。Source Resolver 只做安全复制、解压和静态校验；Server 再安装为不可变用户快照。无权限时直接安装，申请权限时 Renderer 只显示一次确认，且不会收到 ZIP 绝对路径或摘要。重新导入同一插件 ID 即执行手动更新或修复：既有批准覆盖本次权限时直接安装，新增权限时才重新确认；新快照成功前不切换旧记录，重新安装保留原启停状态。成功、失败和安装结果暂无法确认均为显式反馈，成功后的 Runtime 激活从下一次对话开始。
 
+Plugin Service 会为每个已安装插件计算 `runtimeStatus`，Desktop 列表和详情直接显示这条主状态。当前状态只分为已禁用、等待下次对话生效、已加载、部分能力不可用和加载失败；失败时只给一个建议动作，例如重新导入 ZIP、重新确认权限或先禁用插件。内部 `diagnostics` 和 Tool Runtime 统计仍保留在详情里，不要求用户理解 cache、digest 或 manifest diff。
+
 Desktop 尚不支持自动更新、独立 Repair 命令、版本回滚、旧快照垃圾回收界面、Agent 对话安装、Claude Code/Codex 转换、Git、npm、归档 URL、tar 格式或 Marketplace。被旧插件页面隐藏的 localStorage 配置仍原样保留，未执行迁移或删除。
 
 ## 外部转换
@@ -98,7 +100,7 @@ Skills 保留原来的包内位置及相对资源路径；Native manifest 逐个
 
 ## 诊断与安全边界
 
-manifest 解析、路径验证、组件加载和安装都返回带 phase/code/message 的诊断。单个组件损坏不会让其他独立组件消失，插件会以 degraded/partial 状态呈现。
+manifest 解析、路径验证、组件加载和安装都返回带 phase/code/message 的诊断。单个组件损坏不会让其他独立组件消失，插件会以 degraded/partial 状态呈现。管理接口另外返回 `runtimeStatus`，把常见内部诊断映射成用户能执行的下一步。
 
 生产 Runtime 中没有 Claude/Codex parser，也没有第三方 Tool 的主进程动态 import。外部格式变化只影响对应 Converter。
 

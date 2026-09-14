@@ -1,19 +1,20 @@
 # Native Plugin 后续工作交接
 
-> 状态：当前实现之后的阶段交接。  
-> 日期：2026-09-10  
+> 状态：Native Plugin 运行诊断 v1 完成后的阶段交接。
+> 日期：2026-09-14
 > 适用范围：Native Plugin 安装后诊断、插件管理界面、作者体验、后续来源扩展与明确暂缓项。
 
 ## 1. 交接结论
 
-插件系统当前已经走完两个关键阶段：
+插件系统当前已经走完三个关键阶段：
 
 1. 原生插件可以被开发、校验、安装、启停、加载和调用；
-2. Desktop 插件页可以导入一个本地 Native Plugin ZIP，并支持重新导入同一插件 ID 来完成手动更新或修复。
+2. Desktop 插件页可以导入一个本地 Native Plugin ZIP，并支持重新导入同一插件 ID 来完成手动更新或修复；
+3. Plugin Service 和 Desktop 插件页已经能显示简单 Runtime 主状态。
 
-下一阶段最合适做 **Native Plugin 运行诊断 v1**。原因是：安装链路已经有了清晰反馈，但“安装成功后 Runtime 为什么没有加载、为什么某个组件不可用、用户应该怎么处理”还没有形成完整闭环。
+Native Plugin 运行诊断 v1 已完成。安装链路和运行状态现在都能给出清晰反馈：用户不需要理解 cache、digest 或 manifest diff，只看插件页的状态文案和建议动作即可。
 
-这个阶段不要扩展来源，不做 Marketplace，不做 Agent 对话内安装，也不做自动更新。先把已安装插件的运行状态讲清楚。
+下一阶段建议做 **作者体验小修**：补齐“如何打 ZIP、如何重装验证、如何看诊断、参考插件常见失败”的文档和示例，不扩展来源，不做 Marketplace，不做 Agent 对话内安装，也不做自动更新。
 
 ## 2. 当前已经完成什么
 
@@ -41,6 +42,15 @@
 - 重装保留原来的启停状态；
 - 成功后的插件从下一次对话开始生效。
 
+### Runtime 诊断 v1
+
+- `PluginInfo.runtimeStatus` 已加入 Server 与 Client 类型；
+- Plugin Service 根据安装校验、组件加载诊断和 Native Tool Runtime 状态计算主状态；
+- 主状态包含 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`；
+- Desktop 插件列表、快捷入口 tooltip 和详情弹窗会显示主状态；
+- 失败或降级状态只给一条建议动作，例如重新导入 ZIP、重新确认权限、查看详情或先禁用插件；
+- 原始 `diagnostics` 和 Tool Runtime 统计仍保留在详情里，供作者排查。
+
 ### Converter 当前状态
 
 - Converter core、Claude Code Converter 和 Codex Converter 首版已经完成；
@@ -48,11 +58,11 @@
 - Converter 本轮开发已经暂停；
 - 后续只有在 Native 运行与管理闭环更稳定后，再考虑重新转换、转换报告展示或更多格式。
 
-## 3. 下一阶段推荐：Native Plugin 运行诊断 v1
+## 3. 已完成：Native Plugin 运行诊断 v1
 
 ### 目标
 
-让用户在插件页能看懂：
+本阶段让用户在插件页能看懂：
 
 - 插件是否已经安装；
 - 插件是否启用；
@@ -71,15 +81,14 @@
 
 不要在 UI 上做复杂诊断树，也不要让用户手动理解 digest、cache path 或 manifest diff。
 
-### 建议范围
+### 实际范围
 
 本阶段只做安装后诊断，不做安装来源扩展。
 
 包含：
 
-- Runtime 激活结果写成结构化诊断；
-- Server 管理接口返回插件最近一次 Runtime 状态；
-- Desktop 插件列表或详情页展示简单状态；
+- Server 管理接口返回插件当前可展示 Runtime 状态；
+- Desktop 插件列表和详情页展示简单状态；
 - 失败状态给出一条用户可执行建议；
 - 文档说明“安装成功”和“运行成功”的区别。
 
@@ -95,9 +104,9 @@
 - UI 插件贡献；
 - 操作系统级沙箱。
 
-### 建议状态模型
+### 当前状态模型
 
-可以先保持很小，不需要新建复杂状态机。
+没有新建持久化状态机。`runtimeStatus` 每次由管理接口根据现有数据派生：
 
 ```text
 installed record
@@ -113,20 +122,22 @@ activation diagnostic
 PluginInfo returned to Desktop / CLI
 ```
 
-建议对管理接口暴露一个面向展示的字段，例如：
+管理接口暴露的字段为：
 
 ```ts
 runtimeStatus:
-  | { state: "not_loaded"; reason: "disabled" | "pending_reload" }
-  | { state: "loaded"; loadedAt: string; components: RuntimeComponentSummary[] }
-  | { state: "failed"; code: string; message: string; action: "reimport" | "disable" | "uninstall" | "approve" }
+  | { state: "disabled"; message: string; action: "enable" }
+  | { state: "pending_reload"; message: string; action: "reload" }
+  | { state: "loaded"; message: string; action: "none" }
+  | { state: "degraded"; code: string; message: string; action: "details" | "reimport" | "approve" | "disable" }
+  | { state: "failed"; code: string; message: string; action: "reimport" | "approve" | "disable" | "uninstall" }
 ```
 
-字段名称可以按现有代码调整，但语义要保持简单：列表页能显示状态，详情页能显示原因和建议动作。
+语义保持简单：列表页显示状态，详情页显示原因和建议动作。
 
-### 错误码建议
+### 错误码映射
 
-第一版只需要覆盖 Runtime 激活前后最常见问题：
+第一版覆盖 Runtime 激活前后最常见问题：
 
 | code | 用户看到的含义 | 建议动作 |
 |---|---|---|
@@ -140,7 +151,7 @@ runtimeStatus:
 | `component_invalid` | 某个组件声明无效 | 修正插件后重新导入 |
 | `tool_host_failed` | Native Tool 子进程启动失败 | 查看详情，修正插件或禁用 |
 
-内部可以保留更细的诊断信息，但 UI 第一版只映射到这几类。
+内部仍保留更细的诊断信息，但 UI 第一版只映射到这几类。
 
 ## 4. 可能需要改的代码入口
 
@@ -203,7 +214,7 @@ runtimeStatus:
 
 ### P0：运行诊断与管理收口
 
-这是下一阶段推荐目标。
+已完成。
 
 - Runtime 诊断返回管理接口；
 - Desktop 插件页展示运行状态；
@@ -212,7 +223,7 @@ runtimeStatus:
 
 ### P1：作者体验小修
 
-在运行诊断之后做，成本低、收益稳定。
+建议下一阶段做，成本低、收益稳定。
 
 - 补充“如何打 ZIP、如何重装验证、如何看诊断”；
 - 让参考插件 README 覆盖常见失败；
@@ -244,7 +255,7 @@ runtimeStatus:
 
 ### P4：声明式组件贡献
 
-优先考虑比动态代码更容易收紧边界的组件：
+需要重新开规格后再做，优先考虑比动态代码更容易收紧边界的组件：
 
 - Themes；
 - Monitors；
@@ -305,13 +316,13 @@ runtimeStatus:
 如果继续按当前节奏推进，下一份规格建议命名为：
 
 ```text
-docs/superpowers/specs/2026-09-10-native-plugin-runtime-diagnostics-v1-design.md
+docs/superpowers/specs/2026-09-14-native-plugin-authoring-polish-v1-design.md
 ```
 
 实施计划可以命名为：
 
 ```text
-docs/superpowers/plans/2026-09-10-native-plugin-runtime-diagnostics-v1.md
+docs/superpowers/plans/2026-09-14-native-plugin-authoring-polish-v1.md
 ```
 
-规格只覆盖诊断闭环，不覆盖来源扩展。这样阶段边界清楚，容易审查，也不容易把插件系统重新拖回“大而全”的状态。
+规格只覆盖作者体验小修：打 ZIP、重装验证、看诊断、参考插件 README 和少量示例。不要覆盖来源扩展、自动更新或新 Component，这样阶段边界清楚，也不容易把插件系统重新拖回“大而全”的状态。

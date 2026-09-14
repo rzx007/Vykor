@@ -199,7 +199,9 @@ MCP 名称不会自动加插件前缀，请使用独特名称，避免与其他�
 
 ## 诊断与验证
 
-`validate` 检查 manifest 和声明路径，不承诺所有组件都能激活。`list --verbose`、`details` 和 `/reload-plugins` 用于查看安装校验、组件诊断和 Tool Host 状态。整体 activation 当前仍是粗粒度值，应结合安装状态、diagnostics 和 toolRuntime 判断。
+`validate` 检查 manifest 和声明路径，不承诺所有组件都能激活。安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `ohs plugin details` 返回的 Runtime 诊断为准。
+
+`PluginInfo.runtimeStatus` 是面向展示的主状态，目前包含 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`。列表页只需要看这一个字段；`diagnostics` 和 `toolRuntime` 保留在详情里，用于作者排查具体原因。`list --verbose`、`details` 和 `/reload-plugins` 用于查看安装校验、组件诊断和 Tool Host 状态。
 
 遇到权限或身份变化，先查看源 manifest，再重新 link/install-local 并明确批准所需权限；遇到快照损坏，从可信源重新安装。组织管理的插件由管理员修复，普通用户不能替换或卸载。
 

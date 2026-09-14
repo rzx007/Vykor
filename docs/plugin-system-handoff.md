@@ -2,7 +2,7 @@
 
 > 状态：当前架构与实现交接。
 
-日期：2026-09-09
+日期：2026-09-14
 
 状态：目标架构与当前实现交接
 
@@ -495,7 +495,7 @@ Native Tool 在 WSL、远程主机或其他执行环境中必须显式声明可�
 - Marketplace 浏览与安装；
 - managed plugin 的只读状态。
 
-当前 Desktop 已完成列表、搜索、详情、启停、卸载、刷新，以及 Skills/MCP 管理页面。插件页可导入一个本地 Native Plugin ZIP：无权限时直接安装，有权限时只显示一次确认。旧“插件配置”和静态模板已从实际页面隐藏，localStorage 原数据仍保留，未迁移或删除。
+当前 Desktop 已完成列表、搜索、详情、启停、卸载、刷新，以及 Skills/MCP 管理页面。插件页可导入一个本地 Native Plugin ZIP：无权限时直接安装，有权限时只显示一次确认。插件列表和详情会显示 Plugin Service 计算出的 Runtime 主状态：已禁用、等待下次对话生效、已加载、部分能力不可用或加载失败。旧“插件配置”和静态模板已从实际页面隐藏，localStorage 原数据仍保留，未迁移或删除。
 
 ### CLI
 
@@ -659,7 +659,7 @@ Native Plugin → 在 daemon 主进程注册 Converter
 
 2026-09-10 补充最小重新安装语义：用户重新导入同一插件 ID 的可信 ZIP，即可手动更新或修复。Server 复用能够覆盖本次请求的既有权限批准，新增权限仍请求一次完整确认；Installer 只在新快照成功后切换记录，并保留原启停状态。自动更新、Repair 命令、版本回滚和垃圾回收仍不在近期范围。详见[核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)和[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)。
 
-2026-09-10 下一阶段交接已单独整理为 [Native Plugin 后续工作交接](./native-plugin-next-stage-handoff.md)。推荐下一阶段做 Native Plugin 运行诊断 v1：把 Runtime 加载结果、失败原因和用户可执行建议返回到 Plugin Service 与 Desktop 插件页。Agent 对话内安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
+2026-09-14 Native Plugin 运行诊断 v1 已完成：`PluginInfo.runtimeStatus` 返回 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`，Plugin Service 根据安装校验、组件诊断和 Native Tool Runtime 状态计算，Desktop 插件页展示主状态和一条建议动作。该阶段不包含自动修复、自动更新、新来源或复杂诊断树。下一步建议做作者体验小修。Agent 对话内安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
 
 2026-09-09 调整：Converter 本轮开发到此结束。原生插件第一阶段已完成：公开开发类型、五类组件指南，以及无外部服务依赖的“文本检查助手”，覆盖安装、加载、调用、真实重载和清理。详见 [开发指南](./native-plugin-authoring.md)、[第一阶段设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)和[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。相关测试共 146 项通过，类型、缓存输入和文档检查通过，独立审查无代码阻断项。验收使用真实插件进程和管理路由，不包含完整 AgentPool、模型会话或桌面 UI。Desktop 本地 Native ZIP 导入也已在本阶段完成；以下长期顺序作为后续路线参考。
 
@@ -667,14 +667,15 @@ Native Plugin → 在 daemon 主进程注册 Converter
 
 1. **Codex Converter**：首版已接入 Converter → Native → Installer，并增加依据真实 manifest 结构独立编写的 fixture；范围和限制见 [Codex 转换器设计](./superpowers/specs/2026-09-09-codex-plugin-converter-design.md)。
 2. **Desktop 本地 Native ZIP 导入**：已完成最简导入、后台校验、权限确认和结构化失败反馈。Agent 对话、Claude/Codex 和远程来源仍延后。
-3. **声明式贡献**：优先实现 Output Styles、Themes，再处理 Monitors；它们比动态代码贡献更容易收紧边界。
-4. **Workflows**：先定义只包含声明数据的贡献格式，再接现有 Workflow Registry。
-5. **Source Resolver**：依次实现本地 archive、Git、npm；每一种都要做完整性和路径安全测试。
-6. **Marketplace**：建立在 Source Resolver 和统一安装流程之上，不先做另一套假安装 UI。
-7. **Channels 与 Providers**：分别设计认证、生命周期、冲突和隔离，不能复用普通 Tool 的简单注册方式。
-8. **UI contributions**：最后处理，需要明确可用组件、导航、CSP、数据访问、权限和崩溃隔离。
-9. **自动依赖安装**：在 Source Resolver 和隔离策略稳定后单独实施。
-10. **第三方 Converter**：最后开放，使用比普通插件更高的信任等级。
+3. **Native Plugin 运行诊断 v1**：已完成。Plugin Service 返回用户可读的运行主状态，Desktop 列表与详情页直接显示下一步建议。
+4. **作者体验小修**：补充打 ZIP、重装验证、看诊断和参考插件排障说明。
+5. **声明式贡献**：`output_styles` 已决定暂缓；Themes、Monitors、Workflows 等需要重新开规格后再做。
+6. **Source Resolver**：依次实现本地 archive、Git、npm；每一种都要做完整性和路径安全测试。
+7. **Marketplace**：建立在 Source Resolver 和统一安装流程之上，不先做另一套假安装 UI。
+8. **Channels 与 Providers**：分别设计认证、生命周期、冲突和隔离，不能复用普通 Tool 的简单注册方式。
+9. **UI contributions**：最后处理，需要明确可用组件、导航、CSP、数据访问、权限和崩溃隔离。
+10. **自动依赖安装**：在 Source Resolver 和隔离策略稳定后单独实施。
+11. **第三方 Converter**：最后开放，使用比普通插件更高的信任等级。
 
 LSP 不进入以上近期顺序。
 
