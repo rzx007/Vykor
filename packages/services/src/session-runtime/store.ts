@@ -348,6 +348,7 @@ export class SessionStore {
         eventSequence: DurableEventSequence.load(database.connection, loaded.state),
         deltaCheckpoint,
         atomic: (work) => this.transaction(work),
+        assertWritable: () => this.assertCurrentOwner(),
       };
       this.projects = new ProjectRepository(this.storage);
       this.schedules = new ScheduleRepository(this.storage);

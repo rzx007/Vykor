@@ -11,4 +11,5 @@ export interface StorageContext {
   eventSequence: DurableEventSequence;
   deltaCheckpoint: DeltaCheckpoint;
   atomic<T>(work: () => T): T;
+  assertWritable(): void;
 }
