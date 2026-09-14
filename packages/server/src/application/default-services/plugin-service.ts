@@ -169,6 +169,9 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
               ...(liveTools.lastError ? { lastError: liveTools.lastError } : {}),
             },
           } : {}),
+          runtimeStatus: record.enabled
+            ? { state: "pending_reload", message: "插件将在下次运行时重新加载。", action: "reload" }
+            : { state: "disabled", message: "插件已停用。", action: "enable" },
           inventory,
           permissions: {
             requested: record.requestedPermissions,

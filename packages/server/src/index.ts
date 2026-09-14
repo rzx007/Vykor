@@ -69,6 +69,7 @@ export type {
   OutputStyleInfo,
   OutputStyleService,
   PluginInfo,
+  PluginRuntimeStatus,
   PluginService,
   ProfileService,
   ProjectInitService,

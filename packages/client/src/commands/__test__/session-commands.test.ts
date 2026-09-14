@@ -10,7 +10,7 @@ import {
   parseSlashLine,
   resolveSessionCwd,
 } from "../session-commands.js";
-import type { CommandCatalogEntry } from "../../types/index.js";
+import type { CommandCatalogEntry, PluginInfo } from "../../types/index.js";
 
 const agentJob: JobSnapshot = {
   id: "agent-1",
@@ -103,18 +103,20 @@ describe("resolveSessionCwd", () => {
 
 describe("dispatchSessionCommand", () => {
   it("shows reload validation failures and permission recovery steps without claiming activation", async () => {
+    const plugin: PluginInfo = {
+      identity: { id: "example.text-inspector", name: "text-inspector", version: "1.0.0" },
+      origin: "native", scope: "user", enabled: true,
+      installation: "invalid", activation: "reload-required", inventory: {},
+      runtimeStatus: { state: "failed", code: "plugin_installation_permissions_mismatch", message: "插件权限需要重新批准。", action: "approve" },
+      permissions: { requested: [], approved: [], missing: [] },
+      diagnostics: [{ severity: "error", phase: "activate", code: "plugin_installation_permissions_mismatch", message: "Actual permissions differ from the installed permission request" }],
+    };
     const { host: h, emitted } = host({ client: fakeClient({
       async reloadPlugins() {
         return {
           message: "Plugins rediscovered; session runtimes will reload on next use.",
           warnings: [],
-          plugins: [{
-            identity: { id: "example.text-inspector", name: "text-inspector", version: "1.0.0" },
-            origin: "native", scope: "user", enabled: true,
-            installation: "invalid", activation: "reload-required", inventory: {},
-            permissions: { requested: [], approved: [], missing: [] },
-            diagnostics: [{ severity: "error", phase: "activate", code: "plugin_installation_permissions_mismatch", message: "Actual permissions differ from the installed permission request" }],
-          }],
+          plugins: [plugin],
         };
       },
     }) });

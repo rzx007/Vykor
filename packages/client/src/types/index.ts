@@ -463,6 +463,23 @@ export interface OutputStyleInfo {
   source: "builtin" | "user";
 }
 
+export type PluginRuntimeStatus =
+  | { state: "disabled"; message: string; action: "enable" }
+  | { state: "pending_reload"; message: string; action: "reload" }
+  | { state: "loaded"; message: string; action: "none" }
+  | {
+      state: "degraded";
+      code: string;
+      message: string;
+      action: "details" | "reimport" | "approve" | "disable";
+    }
+  | {
+      state: "failed";
+      code: string;
+      message: string;
+      action: "reimport" | "approve" | "disable" | "uninstall";
+    };
+
 export interface PluginInfo {
   identity: { id: string; name: string; version: string; displayName?: string };
   origin: "native" | "converted";
@@ -487,6 +504,7 @@ export interface PluginInfo {
     lastStartedAt?: string;
     lastError?: string;
   };
+  runtimeStatus: PluginRuntimeStatus;
   inventory: Record<string, number>;
   permissions: { requested: string[]; approved: string[]; missing: string[] };
   diagnostics: Array<{
