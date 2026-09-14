@@ -274,9 +274,13 @@ export class DaemonApplication implements DurableAgentApplication {
       // events：窗口订的 SSE。eventPublisher：各处写完 store 后，把增量广播出去。
       this.events = new ApplicationEventService(store);
       this.eventPublisher = new SessionEventPublisher(store, this.events);
-      this.workflows = new SessionWorkflowRunRepository(store, (previousEventSeq) =>
-        this.eventPublisher.publishSince(previousEventSeq),
-      );
+      this.workflows = new SessionWorkflowRunRepository({
+        workflows: store.workflows,
+        events: store,
+        path: store.path,
+        onDurableEvent: (previousEventSeq) =>
+          this.eventPublisher.publishSince(previousEventSeq),
+      });
       this.retention = new ApplicationRetentionService(
         store,
         new AttachmentIntegrityService({

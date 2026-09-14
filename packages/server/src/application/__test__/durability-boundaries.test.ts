@@ -28,6 +28,14 @@ import {
 } from "../backup/application-backup.js";
 import { SessionWorkflowRunRepository } from "../workflow/session-workflow-run-repository.js";
 
+function workflowRepository(store: SessionStore): SessionWorkflowRunRepository {
+  return new SessionWorkflowRunRepository({
+    workflows: store.workflows,
+    events: store,
+    path: store.path,
+  });
+}
+
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {
@@ -115,7 +123,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     workflows.save(workflowSnapshot("workflow-1", "session-1", "completed"));
     expect(workflows.load("workflow-1")).toMatchObject({
       ownerSession: "session-1",
@@ -272,7 +280,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     const running = workflowSnapshot("running-1", "session-1", "running");
     running.updatedAt = 1;
     workflows.save(running);
@@ -298,7 +306,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     const running = workflowSnapshot("wait-1", "session-1", "running");
     workflows.save(running);
     const waiting = workflows.waitForChange("wait-1", running.updatedAt, {
@@ -313,7 +321,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     const running = workflowSnapshot("race-1", "session-1", "running");
     running.updatedAt = 100;
     workflows.save(running);
@@ -339,7 +347,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     workflows.save(workflowSnapshot("claimed-1", "session-1", "running"));
     workflows.claim("claimed-1");
     expect(() => workflows.claim("claimed-1")).toThrow("already claimed");
