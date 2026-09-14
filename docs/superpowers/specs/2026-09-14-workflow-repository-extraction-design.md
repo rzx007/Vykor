@@ -86,7 +86,7 @@ assertWritable(): void
 5. 调用 SSE 通知；
 6. 通知本地 wait listener。
 
-本阶段保持当前先后顺序，不声称两张事件表原子提交。跨域原子化需要独立 transaction script 设计，不在 Repository 内注入 session event 回调。
+本阶段保持当前先后顺序，不声称两张事件表原子提交。若 workflow event 已保存、随后 session durable event 写入失败，则 workflow event 保留，错误继续上抛，SSE 回调和本地 waiter 都不通知。不得在 `finally` 中通知或吞掉镜像错误。跨域原子化需要独立 transaction script 设计，不在 Repository 内注入 session event 回调。
 
 ### Claim
 
@@ -105,6 +105,8 @@ assertWritable(): void
 - durable event 通知回调。
 
 它不再依赖完整 `SessionStore`。`repositoryKey` 从显式数据库 path 构造，不通过 Store 取路径。
+
+为解决 event-only 变化发生在 `waitForChange()` 首次读取与 listener 注册之间时的丢唤醒，Server adapter 为每个 run 保存进程内 change version。`save()` 和成功完成全部 event 镜像后递增 version 并 notify；wait 在首次读取前捕获 version，注册 listener 后同时复查 snapshot `updatedAt` 和 version。event 镜像失败不递增 version。该 version 只解决当前进程的注册竞态，不进入 durable schema。
 
 `run-inspector` 和 daemon control 只需要 `listRuns()`；通过局部结构类型接收，不依赖 Workflow 的写方法。
 
@@ -136,14 +138,14 @@ Store 测试覆盖七个旧方法，特别是带 `sessionId` 的兼容 event 镜
 Server 测试覆盖：
 
 - snapshot/event 编解码；
-- wait 注册前后竞态不丢唤醒；
-- event 镜像后通知 SSE；
+- snapshot save 与 event-only 变化在 wait 注册前后都不丢唤醒；
+- event 镜像成功后通知 SSE；session event 写入失败时 workflow event 保留，但 SSE、waiter 不通知且错误上抛；
 -窄 fake 的全部存储调用；
 -真实 DaemonApplication composition 不使用 Store Workflow 平铺方法。
 
 ## 验收标准
 
-- Workflow SQL 和 row conversion 只存在于 `packages/services/src/workflows`。
+- 除明确保留到 Maintenance 阶段的 retention 跨域清理 SQL 外，Workflow CRUD、event 和 claim SQL 只存在于 `packages/services/src/workflows`。
 - Store 七个方法只转发或保留明确标注的 event 镜像兼容编排。
 - Server Workflow adapter 不依赖完整 SessionStore。
 - owner fence、原子保存、claim 和 wait 行为有失败路径测试。
