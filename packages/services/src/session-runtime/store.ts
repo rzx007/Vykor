@@ -8,7 +8,6 @@ import Database from "better-sqlite3";
 import {
   DEFAULT_ATTACHMENT_LIMITS,
   normalizeSessionUserInputItems,
-  parseAttachmentAssetRecord,
   parseAttachmentLimits,
   sessionUserInputText,
 } from "@openharness/protocol";
@@ -67,6 +66,24 @@ import type {
   SessionUserInputItem,
   SessionGoal,
 } from "@openharness/protocol";
+import {
+  AttachmentRepository,
+  AttachmentTransactions,
+  type CreateAttachmentRepresentationInput,
+  type AttachmentLeaseRecord,
+  type AcquireAttachmentLeasesInput,
+  type CreateImportingAttachmentInput,
+  type MarkAttachmentReadyInput,
+  type ImportingAttachmentRecord,
+} from "../attachments/index.js";
+export type {
+  CreateAttachmentRepresentationInput,
+  AttachmentLeaseRecord,
+  AcquireAttachmentLeasesInput,
+  CreateImportingAttachmentInput,
+  MarkAttachmentReadyInput,
+  ImportingAttachmentRecord,
+} from "../attachments/index.js";
 import { AttachmentError } from "../attachment/attachment-errors.js";
 import { SessionDatabase } from "../database/session-database.js";
 import { DurableEventSequence } from "../database/event-sequence.js";
@@ -100,39 +117,10 @@ import {
   type DurableEventRegistry,
 } from "./event-registry.js";
 
-export interface CreateAttachmentRepresentationInput {
-  id: string;
-  assetId: string;
-  kind: AttachmentRepresentationKind;
-  processor: string;
-  processorVersion: string;
-  cacheKey: string;
-  mediaType: string;
-  createdAt?: number;
-}
-
 type StoreAdmitPromptInput = Omit<AdmitPromptInput, "content" | "items"> & {
   content?: string;
   items?: readonly SessionUserInputItem[];
 };
-
-export interface AttachmentLeaseRecord {
-  id: string;
-  assetId: string;
-  ownerKind: "session_run" | "backup";
-  ownerId: string;
-  createdAt: number;
-  renewedAt: number;
-  expiresAt: number;
-}
-
-export interface AcquireAttachmentLeasesInput {
-  assetIds: string[];
-  ownerKind: AttachmentLeaseRecord["ownerKind"];
-  ownerId: string;
-  timestamp: number;
-  expiresAt: number;
-}
 
 import {
   DEFAULT_DELTA_FLUSH_BYTES,
@@ -172,30 +160,11 @@ export interface ApplicationOwnerLease {
   heartbeatAt: number;
 }
 
-export interface CreateImportingAttachmentInput {
-  id: string;
-  displayName: string;
-  declaredMediaType?: string;
-  stagingName: string;
-  createdAt?: number;
-}
-
-export interface MarkAttachmentReadyInput {
-  sha256: string;
-  sizeBytes: number;
-  mediaType: string;
-  updatedAt?: number;
-}
-
 export type {
   CreateSessionGoalStoreInput,
   SessionGoalRequestRecord,
   UpdateSessionGoalStoreInput,
 } from "../goals/index.js";
-
-export interface ImportingAttachmentRecord extends AttachmentAssetRecord {
-  stagingName: string;
-}
 
 export class ApplicationOwnerConflictError extends Error {
   constructor(readonly activeOwner: ApplicationOwnerLease) {
@@ -236,6 +205,7 @@ export class SessionStore {
   readonly channels!: ChannelRepository;
   readonly permissions!: PermissionRepository;
   readonly goals!: GoalTransactions;
+  readonly attachments!: AttachmentTransactions;
   private storage!: StorageContext;
   private closed = false;
   private transactionDepth = 0;
@@ -293,6 +263,14 @@ export class SessionStore {
         getRun: (runId) => this.getRun(runId),
         appendEvent: (input) => this.appendEvent(input),
       });
+      this.attachments = new AttachmentTransactions({
+        storage: this.storage,
+        repository: new AttachmentRepository(this.storage),
+        countAttachmentReferences: (assetId) =>
+          this.countAttachmentReferences(assetId),
+        countInputAttachmentReferences: (assetId) =>
+          this.countInputAttachmentReferences(assetId),
+      });
       const goalRepository = new GoalRepository(this.storage);
       this.goals = new GoalTransactions({
         storage: this.storage,
@@ -322,61 +300,14 @@ export class SessionStore {
   createImportingAttachment(
     input: CreateImportingAttachmentInput,
   ): AttachmentAssetRecord {
-    const timestamp = input.createdAt ?? now();
-    parseAttachmentAssetRecord({
-      id: input.id,
-      displayName: input.displayName,
-      ...(input.declaredMediaType
-        ? { declaredMediaType: input.declaredMediaType }
-        : {}),
-      status: "importing",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-    this.database
-      .prepare(
-        `INSERT INTO attachment_asset (
-          id, display_name, declared_media_type, status, staging_name,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, 'importing', ?, ?, ?)`,
-      )
-      .run(
-        input.id,
-        input.displayName,
-        input.declaredMediaType ?? null,
-        input.stagingName,
-        timestamp,
-        timestamp,
-      );
-    return this.getAttachment(input.id, { includeDeleted: true })!;
+    return this.attachments.createImportingAttachment(input);
   }
 
   markAttachmentReady(
     id: string,
     input: MarkAttachmentReadyInput,
   ): AttachmentAssetRecord {
-    const current = this.attachmentForTransition(id, "importing");
-    const updatedAt = input.updatedAt ?? now();
-    parseAttachmentAssetRecord({
-      ...current,
-      sha256: input.sha256,
-      sizeBytes: input.sizeBytes,
-      mediaType: input.mediaType,
-      status: "ready",
-      updatedAt,
-    });
-    const result = this.database
-      .prepare(
-        `UPDATE attachment_asset
-         SET sha256 = ?, size_bytes = ?, media_type = ?, status = 'ready',
-             staging_name = NULL, failure_code = NULL, updated_at = ?
-         WHERE id = ? AND status = 'importing'`,
-      )
-      .run(input.sha256, input.sizeBytes, input.mediaType, updatedAt, id);
-    if (result.changes !== 1) {
-      throw this.attachmentTransitionError(id, "importing");
-    }
-    return this.getAttachment(id, { includeDeleted: true })!;
+    return this.attachments.markAttachmentReady(id, input);
   }
 
   failAttachmentImport(
@@ -384,170 +315,52 @@ export class SessionStore {
     failureCode: string,
     updatedAt = now(),
   ): AttachmentAssetRecord {
-    const current = this.attachmentForTransition(id, "importing");
-    parseAttachmentAssetRecord({
-      ...current,
-      status: "failed",
-      failureCode,
-      updatedAt,
-    });
-    const result = this.database
-      .prepare(
-        `UPDATE attachment_asset
-         SET status = 'failed', staging_name = NULL, failure_code = ?,
-             updated_at = ?
-         WHERE id = ? AND status = 'importing'`,
-      )
-      .run(failureCode, updatedAt, id);
-    if (result.changes !== 1) {
-      throw this.attachmentTransitionError(id, "importing");
-    }
-    return this.getAttachment(id, { includeDeleted: true })!;
+    return this.attachments.failAttachmentImport(id, failureCode, updatedAt);
   }
 
   getAttachment(
     id: string,
     options: { includeDeleted?: boolean } = {},
   ): AttachmentAssetRecord | undefined {
-    const row = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset WHERE id = ?${options.includeDeleted ? "" : " AND status != 'deleted'"}`,
-      )
-      .get(id) as Record<string, unknown> | undefined;
-    return row ? attachmentAssetFromRow(row) : undefined;
+    return this.attachments.getAttachment(id, options);
   }
 
   findReadyAttachmentByHash(sha256: string): AttachmentAssetRecord | undefined {
-    const row = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset
-         WHERE sha256 = ? AND status = 'ready'
-         ORDER BY created_at, id LIMIT 1`,
-      )
-      .get(sha256) as Record<string, unknown> | undefined;
-    return row ? attachmentAssetFromRow(row) : undefined;
+    return this.attachments.findReadyAttachmentByHash(sha256);
   }
 
   listAttachments(
     options: { includeDeleted?: boolean } = {},
   ): AttachmentAssetRecord[] {
-    const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset${options.includeDeleted ? "" : " WHERE status != 'deleted'"} ORDER BY created_at, id`,
-      )
-      .all() as Array<Record<string, unknown>>;
-    return rows.map(attachmentAssetFromRow);
+    return this.attachments.listAttachments(options);
   }
 
   listImportingAttachments(): ImportingAttachmentRecord[] {
-    const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset
-         WHERE status = 'importing'
-         ORDER BY created_at, id`,
-      )
-      .all() as Array<Record<string, unknown>>;
-    return rows.map((row) => ({
-      ...attachmentAssetFromRow(row),
-      stagingName: String(row.staging_name),
-    }));
+    return this.attachments.listImportingAttachments();
   }
 
   createAttachmentRepresentation(
     input: CreateAttachmentRepresentationInput,
   ): AttachmentRepresentationRecord {
-    const createdAt = input.createdAt ?? now();
-    this.database
-      .prepare(
-        `INSERT INTO attachment_representation (
-        id, asset_id, kind, status, processor, processor_version, cache_key,
-        media_type, metadata_json, created_at, updated_at
-      ) VALUES (?, ?, ?, 'running', ?, ?, ?, ?, '{}', ?, ?)`,
-      )
-      .run(
-        input.id,
-        input.assetId,
-        input.kind,
-        input.processor,
-        input.processorVersion,
-        input.cacheKey,
-        input.mediaType,
-        createdAt,
-        createdAt,
-      );
-    return this.getAttachmentRepresentation(input.id)!;
+    return this.attachments.createAttachmentRepresentation(input);
   }
 
   getAttachmentRepresentation(
     id: string,
   ): AttachmentRepresentationRecord | undefined {
-    const row = this.database
-      .prepare("SELECT * FROM attachment_representation WHERE id = ?")
-      .get(id) as Record<string, unknown> | undefined;
-    return row ? attachmentRepresentationFromRow(row) : undefined;
+    return this.attachments.getAttachmentRepresentation(id);
   }
 
   listAttachmentRepresentations(
     assetId: string,
   ): AttachmentRepresentationRecord[] {
-    const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_representation
-       WHERE asset_id = ?
-       ORDER BY created_at, id`,
-      )
-      .all(assetId) as Array<Record<string, unknown>>;
-    return rows.map(attachmentRepresentationFromRow);
+    return this.attachments.listAttachmentRepresentations(assetId);
   }
 
   acquireAttachmentLeases(
     input: AcquireAttachmentLeasesInput,
   ): AttachmentLeaseRecord[] {
-    validateLeaseWindow(input.timestamp, input.expiresAt);
-    const assetIds = [...new Set(input.assetIds)];
-    if (assetIds.length === 0) return [];
-    return this.database
-      .transaction(() => {
-        for (const assetId of assetIds) {
-          const asset = this.getAttachment(assetId);
-          if (asset?.status !== "ready") {
-            throw new AttachmentError(
-              "attachment_not_ready",
-              `Attachment is not ready: ${assetId}`,
-            );
-          }
-        }
-        const upsert = this.database.prepare(
-          `INSERT INTO attachment_lease (
-          id, asset_id, owner_kind, owner_id, created_at, renewed_at, expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(asset_id, owner_kind, owner_id) DO UPDATE SET
-          renewed_at = excluded.renewed_at,
-          expires_at = excluded.expires_at`,
-        );
-        const find = this.database.prepare(
-          `SELECT * FROM attachment_lease
-         WHERE asset_id = ? AND owner_kind = ? AND owner_id = ?`,
-        );
-        return assetIds.map((assetId) => {
-          upsert.run(
-            randomUUID(),
-            assetId,
-            input.ownerKind,
-            input.ownerId,
-            input.timestamp,
-            input.timestamp,
-            input.expiresAt,
-          );
-          return attachmentLeaseFromRow(
-            find.get(assetId, input.ownerKind, input.ownerId) as Record<
-              string,
-              unknown
-            >,
-          );
-        });
-      })
-      .immediate();
+    return this.attachments.acquireAttachmentLeases(input);
   }
 
   renewAttachmentLeases(input: {
@@ -556,85 +369,33 @@ export class SessionStore {
     timestamp: number;
     expiresAt: number;
   }): number {
-    validateLeaseWindow(input.timestamp, input.expiresAt);
-    return this.database
-      .prepare(
-        `UPDATE attachment_lease
-       SET renewed_at = ?, expires_at = ?
-       WHERE owner_kind = ? AND owner_id = ? AND expires_at > ?`,
-      )
-      .run(
-        input.timestamp,
-        input.expiresAt,
-        input.ownerKind,
-        input.ownerId,
-        input.timestamp,
-      ).changes;
+    return this.attachments.renewAttachmentLeases(input);
   }
 
   releaseAttachmentLeases(
     ownerKind: AttachmentLeaseRecord["ownerKind"],
     ownerId: string,
   ): number {
-    return this.database
-      .prepare(
-        "DELETE FROM attachment_lease WHERE owner_kind = ? AND owner_id = ?",
-      )
-      .run(ownerKind, ownerId).changes;
+    return this.attachments.releaseAttachmentLeases(ownerKind, ownerId);
   }
 
   listActiveAttachmentLeases(timestamp = now()): AttachmentLeaseRecord[] {
-    const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_lease
-       WHERE expires_at > ?
-       ORDER BY asset_id, owner_kind, owner_id`,
-      )
-      .all(timestamp) as Array<Record<string, unknown>>;
-    return rows.map(attachmentLeaseFromRow);
+    return this.attachments.listActiveAttachmentLeases(timestamp);
   }
 
   listAttachmentLeases(): AttachmentLeaseRecord[] {
-    const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_lease
-       ORDER BY asset_id, owner_kind, owner_id`,
-      )
-      .all() as Array<Record<string, unknown>>;
-    return rows.map(attachmentLeaseFromRow);
+    return this.attachments.listAttachmentLeases();
   }
 
   deleteExpiredAttachmentLeases(timestamp = now()): number {
-    return this.database
-      .prepare("DELETE FROM attachment_lease WHERE expires_at <= ?")
-      .run(timestamp).changes;
+    return this.attachments.deleteExpiredAttachmentLeases(timestamp);
   }
 
   purgeDeletedAttachment(
     assetId: string,
     timestamp = now(),
   ): AttachmentAssetRecord | undefined {
-    return this.database
-      .transaction(() => {
-        const asset = this.getAttachment(assetId, { includeDeleted: true });
-        if (asset?.status !== "deleted") return undefined;
-        const references = this.countAttachmentReferences(assetId);
-        if (references > 0) return undefined;
-        const activeLease = this.database
-          .prepare(
-            `SELECT 1 FROM attachment_lease
-         WHERE asset_id = ? AND expires_at > ? LIMIT 1`,
-          )
-          .get(assetId, timestamp);
-        if (activeLease) return undefined;
-        const result = this.database
-          .prepare(
-            "DELETE FROM attachment_asset WHERE id = ? AND status = 'deleted'",
-          )
-          .run(assetId);
-        return result.changes === 1 ? asset : undefined;
-      })
-      .immediate();
+    return this.attachments.purgeDeletedAttachment(assetId, timestamp);
   }
 
   findCompletedAttachmentRepresentation(
@@ -642,14 +403,7 @@ export class SessionStore {
     kind: AttachmentRepresentationKind,
     cacheKey: string,
   ): AttachmentRepresentationRecord | undefined {
-    const row = this.database
-      .prepare(
-        `SELECT * FROM attachment_representation
-       WHERE asset_id = ? AND kind = ? AND cache_key = ? AND status = 'completed'
-       LIMIT 1`,
-      )
-      .get(assetId, kind, cacheKey) as Record<string, unknown> | undefined;
-    return row ? attachmentRepresentationFromRow(row) : undefined;
+    return this.attachments.findCompletedAttachmentRepresentation(assetId, kind, cacheKey);
   }
 
   completeAttachmentRepresentation(
@@ -660,17 +414,7 @@ export class SessionStore {
       updatedAt?: number;
     },
   ): AttachmentRepresentationRecord {
-    const updatedAt = input.updatedAt ?? now();
-    const result = this.database
-      .prepare(
-        `UPDATE attachment_representation
-       SET status = 'completed', text = ?, error = NULL, metadata_json = ?, updated_at = ?
-       WHERE id = ? AND status = 'running'`,
-      )
-      .run(input.text, encode(input.metadata), updatedAt, id);
-    if (result.changes !== 1)
-      throw new Error(`Attachment representation ${id} is not running`);
-    return this.getAttachmentRepresentation(id)!;
+    return this.attachments.completeAttachmentRepresentation(id, input);
   }
 
   failAttachmentRepresentation(
@@ -678,76 +422,18 @@ export class SessionStore {
     error: string,
     updatedAt = now(),
   ): AttachmentRepresentationRecord {
-    const result = this.database
-      .prepare(
-        `UPDATE attachment_representation
-       SET status = 'failed', error = ?, updated_at = ?
-       WHERE id = ? AND status = 'running'`,
-      )
-      .run(error, updatedAt, id);
-    if (result.changes !== 1)
-      throw new Error(`Attachment representation ${id} is not running`);
-    return this.getAttachmentRepresentation(id)!;
+    return this.attachments.failAttachmentRepresentation(id, error, updatedAt);
   }
 
   softDeleteAttachment(id: string, deletedAt = now()): AttachmentAssetRecord {
-    const current = this.attachmentForTransition(id, "ready");
-    parseAttachmentAssetRecord({
-      ...current,
-      status: "deleted",
-      deletedAt,
-      updatedAt: deletedAt,
-    });
-    const result = this.database
-      .prepare(
-        `UPDATE attachment_asset
-         SET status = 'deleted', deleted_at = ?, updated_at = ?
-         WHERE id = ? AND status = 'ready'`,
-      )
-      .run(deletedAt, deletedAt, id);
-    if (result.changes !== 1) {
-      throw this.attachmentTransitionError(id, "ready");
-    }
-    return this.getAttachment(id, { includeDeleted: true })!;
+    return this.attachments.softDeleteAttachment(id, deletedAt);
   }
 
   softDeleteUnreferencedAttachment(
     id: string,
     deletedAt = now(),
   ): AttachmentAssetRecord {
-    return this.database
-      .transaction(() => {
-        if (this.countAttachmentReferences(id) > 0) {
-          throw new AttachmentError(
-            "attachment_in_use",
-            "attachment is referenced by a conversation",
-          );
-        }
-        return this.softDeleteAttachment(id, deletedAt);
-      })
-      .immediate();
-  }
-
-  private attachmentTransitionError(id: string, expected: string): Error {
-    const current = this.getAttachment(id, { includeDeleted: true });
-    return current
-      ? new Error(
-          `Attachment ${id} expected ${expected} status, received ${current.status}`,
-        )
-      : new Error(
-          `Attachment ${id} was not found; expected ${expected} status`,
-        );
-  }
-
-  private attachmentForTransition(
-    id: string,
-    expected: AttachmentAssetRecord["status"],
-  ): AttachmentAssetRecord {
-    const current = this.getAttachment(id, { includeDeleted: true });
-    if (!current || current.status !== expected) {
-      throw this.attachmentTransitionError(id, expected);
-    }
-    return current;
+    return this.attachments.softDeleteUnreferencedAttachment(id, deletedAt);
   }
 
   listProjects(options: { includeArchived?: boolean } = {}): ProjectRecord[] {
@@ -3849,83 +3535,6 @@ function normalizeInputItems(
   return normalizeSessionUserInputItems(
     input.content === undefined ? [] : [{ type: "text", text: input.content }],
   );
-}
-
-function attachmentAssetFromRow(
-  row: Record<string, unknown>,
-): AttachmentAssetRecord {
-  return parseAttachmentAssetRecord({
-    id: row.id,
-    displayName: row.display_name,
-    ...(typeof row.declared_media_type === "string"
-      ? { declaredMediaType: row.declared_media_type }
-      : {}),
-    ...(typeof row.media_type === "string"
-      ? { mediaType: row.media_type }
-      : {}),
-    ...(typeof row.size_bytes === "number"
-      ? { sizeBytes: row.size_bytes }
-      : {}),
-    ...(typeof row.sha256 === "string" ? { sha256: row.sha256 } : {}),
-    status: row.status,
-    ...(typeof row.failure_code === "string"
-      ? { failureCode: row.failure_code }
-      : {}),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    ...(typeof row.deleted_at === "number"
-      ? { deletedAt: row.deleted_at }
-      : {}),
-  });
-}
-
-function attachmentRepresentationFromRow(
-  row: Record<string, unknown>,
-): AttachmentRepresentationRecord {
-  return {
-    id: String(row.id),
-    assetId: String(row.asset_id),
-    kind: String(row.kind) as AttachmentRepresentationRecord["kind"],
-    status: String(row.status) as AttachmentRepresentationRecord["status"],
-    processor: String(row.processor),
-    processorVersion: String(row.processor_version),
-    cacheKey: String(row.cache_key),
-    mediaType: String(row.media_type),
-    ...(row.text !== null && row.text !== undefined
-      ? { text: String(row.text) }
-      : {}),
-    ...(row.error !== null && row.error !== undefined
-      ? { error: String(row.error) }
-      : {}),
-    metadata: decode(String(row.metadata_json)),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function attachmentLeaseFromRow(
-  row: Record<string, unknown>,
-): AttachmentLeaseRecord {
-  return {
-    id: String(row.id),
-    assetId: String(row.asset_id),
-    ownerKind: String(row.owner_kind) as AttachmentLeaseRecord["ownerKind"],
-    ownerId: String(row.owner_id),
-    createdAt: Number(row.created_at),
-    renewedAt: Number(row.renewed_at),
-    expiresAt: Number(row.expires_at),
-  };
-}
-
-function validateLeaseWindow(timestamp: number, expiresAt: number): void {
-  if (
-    !Number.isSafeInteger(timestamp) ||
-    timestamp < 0 ||
-    !Number.isSafeInteger(expiresAt) ||
-    expiresAt <= timestamp
-  ) {
-    throw new Error("Attachment lease expiry must be after its timestamp");
-  }
 }
 
 function applicationOwnerFromRow(
