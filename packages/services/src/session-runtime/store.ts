@@ -77,8 +77,10 @@ import { DeltaCheckpoint } from "../database/delta-checkpoint.js";
 import {
   cloneMutationBuffer,
   createMutationBuffer,
+  type MutationBuffer,
 } from "../database/mutation-buffer.js";
 import { loadSessionReadModel } from "../database/read-model.js";
+import type { StorageContext } from "../database/storage-context.js";
 import { formatSessionTitle, isPlaceholderSessionTitle } from "./title.js";
 import {
   defaultDurableEventRegistry,
@@ -305,23 +307,18 @@ export const DEFAULT_RETENTION_POLICY: RetentionPolicy = {
 
 export class SessionStore {
   readonly path: string;
-  private readonly databaseKernel: SessionDatabase;
-  private readonly database: Database.Database;
+  private storage!: StorageContext;
   private closed = false;
   private transactionDepth = 0;
   private saveRequested = false;
-  private readonly deltaCheckpoint: DeltaCheckpoint;
   private readonly eventRegistry: DurableEventRegistry;
   private readonly attachmentLimits: AttachmentLimits;
-  private eventSequence!: DurableEventSequence;
-  private mutations = createMutationBuffer();
-  private state: SessionState;
   private readonly taskListeners = new Map<string, Set<() => void>>();
   private activeOwnerLease?: ApplicationOwnerLease;
 
   constructor(options: SessionStoreOptions) {
-    this.databaseKernel = SessionDatabase.open({ path: options.path });
-    this.path = this.databaseKernel.path;
+    const database = SessionDatabase.open({ path: options.path });
+    this.path = database.path;
     const deltaFlushIntervalMs = Math.max(
       1,
       options.deltaFlushIntervalMs ?? DEFAULT_DELTA_FLUSH_INTERVAL_MS,
@@ -330,7 +327,7 @@ export class SessionStore {
       1,
       options.deltaFlushBytes ?? DEFAULT_DELTA_FLUSH_BYTES,
     );
-    this.deltaCheckpoint = new DeltaCheckpoint({
+    const deltaCheckpoint = new DeltaCheckpoint({
       intervalMs: deltaFlushIntervalMs,
       bytes: deltaFlushBytes,
       flush: () => this.flushMessagePartDeltas(),
@@ -340,11 +337,17 @@ export class SessionStore {
       ...DEFAULT_ATTACHMENT_LIMITS,
       ...options.attachmentLimits,
     });
-    this.database = this.databaseKernel.connection;
     try {
-      this.state = this.load();
+      const loaded = loadSessionReadModel(database.connection, this.eventRegistry);
+      this.storage = {
+        database,
+        state: loaded.state,
+        mutations: createMutationBuffer(),
+        eventSequence: DurableEventSequence.load(database.connection, loaded.state),
+        deltaCheckpoint,
+      };
     } catch (error) {
-      this.databaseKernel.close();
+      database.close();
       throw error;
     }
   }
@@ -4412,6 +4415,42 @@ export class SessionStore {
     const loaded = loadSessionReadModel(this.database, this.eventRegistry);
     this.eventSequence = DurableEventSequence.load(this.database, loaded.state);
     return loaded.state;
+  }
+
+  private get databaseKernel(): SessionDatabase {
+    return this.storage.database;
+  }
+
+  private get database(): Database.Database {
+    return this.storage.database.connection;
+  }
+
+  private get state(): SessionState {
+    return this.storage.state;
+  }
+
+  private set state(value: SessionState) {
+    this.storage.state = value;
+  }
+
+  private get mutations(): MutationBuffer {
+    return this.storage.mutations;
+  }
+
+  private set mutations(value: MutationBuffer) {
+    this.storage.mutations = value;
+  }
+
+  private get eventSequence(): DurableEventSequence {
+    return this.storage.eventSequence;
+  }
+
+  private set eventSequence(value: DurableEventSequence) {
+    this.storage.eventSequence = value;
+  }
+
+  private get deltaCheckpoint(): DeltaCheckpoint {
+    return this.storage.deltaCheckpoint;
   }
 
   private save(): void {

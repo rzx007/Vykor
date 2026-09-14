@@ -1,8 +1,10 @@
 # 架构重组迁移状态
 
+> 状态：当前。阶段 0–1 已完成；阶段 2 尚未开始。
+
 ## 当前阶段
 
-阶段 0–1：建立依赖护栏并提取 Session SQLite 数据库内核。
+阶段 0–1 已完成：依赖护栏和 Session SQLite 数据库内核已经落地。
 
 ## 指标
 
@@ -12,7 +14,7 @@
 
 ## 当前所有权
 
-`SessionStore` 暂时仍拥有全部业务方法和公开兼容接口。阶段 1 完成后，SQLite 生命周期、read model、mutation buffer、event sequence 和 delta checkpoint 将迁入 `packages/services/src/database`，业务域 repository 仍不在本阶段创建。
+`SessionStore` 暂时仍拥有全部业务方法和公开兼容接口。SQLite 生命周期、read model、mutation buffer、event sequence 和 delta checkpoint 已迁入 `packages/services/src/database`，并由一个 `StorageContext` 持有。业务域 repository 尚未创建。
 
 ## 下一步
 
