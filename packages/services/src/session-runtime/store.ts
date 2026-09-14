@@ -73,6 +73,7 @@ import type {
 import { AttachmentError } from "../attachment/attachment-errors.js";
 import { SessionDatabase } from "../database/session-database.js";
 import { DurableEventSequence } from "../database/event-sequence.js";
+import { DeltaCheckpoint } from "../database/delta-checkpoint.js";
 import {
   cloneMutationBuffer,
   createMutationBuffer,
@@ -309,13 +310,9 @@ export class SessionStore {
   private closed = false;
   private transactionDepth = 0;
   private saveRequested = false;
-  private readonly deltaFlushIntervalMs: number;
-  private readonly deltaFlushBytes: number;
+  private readonly deltaCheckpoint: DeltaCheckpoint;
   private readonly eventRegistry: DurableEventRegistry;
   private readonly attachmentLimits: AttachmentLimits;
-  private readonly dirtyDeltaPartIds = new Set<string>();
-  private pendingDeltaBytes = 0;
-  private deltaFlushTimer?: ReturnType<typeof setTimeout>;
   private eventSequence!: DurableEventSequence;
   private mutations = createMutationBuffer();
   private state: SessionState;
@@ -325,14 +322,19 @@ export class SessionStore {
   constructor(options: SessionStoreOptions) {
     this.databaseKernel = SessionDatabase.open({ path: options.path });
     this.path = this.databaseKernel.path;
-    this.deltaFlushIntervalMs = Math.max(
+    const deltaFlushIntervalMs = Math.max(
       1,
       options.deltaFlushIntervalMs ?? DEFAULT_DELTA_FLUSH_INTERVAL_MS,
     );
-    this.deltaFlushBytes = Math.max(
+    const deltaFlushBytes = Math.max(
       1,
       options.deltaFlushBytes ?? DEFAULT_DELTA_FLUSH_BYTES,
     );
+    this.deltaCheckpoint = new DeltaCheckpoint({
+      intervalMs: deltaFlushIntervalMs,
+      bytes: deltaFlushBytes,
+      flush: () => this.flushMessagePartDeltas(),
+    });
     this.eventRegistry = options.eventRegistry ?? defaultDurableEventRegistry;
     this.attachmentLimits = parseAttachmentLimits({
       ...DEFAULT_ATTACHMENT_LIMITS,
@@ -352,7 +354,7 @@ export class SessionStore {
     try {
       this.flushMessagePartDeltas();
     } finally {
-      this.clearDeltaFlushTimer();
+      this.deltaCheckpoint.close();
       this.databaseKernel.close();
       this.closed = true;
     }
@@ -1198,8 +1200,7 @@ export class SessionStore {
    */
   transaction<T>(work: () => T): T {
     const previous = structuredClone(this.state);
-    const previousDirtyPartIds = new Set(this.dirtyDeltaPartIds);
-    const previousPendingDeltaBytes = this.pendingDeltaBytes;
+    const previousDeltaCheckpoint = this.deltaCheckpoint.snapshot();
     const previousSaveRequested = this.saveRequested;
     const previousEventSequence = this.eventSequence.snapshot();
     const previousMutations = cloneMutationBuffer(this.mutations);
@@ -1217,7 +1218,7 @@ export class SessionStore {
         return value;
       })();
       if (persisted) {
-        this.clearDirtyDeltas();
+        this.deltaCheckpoint.clear();
         this.mutations = createMutationBuffer();
       }
       completed = true;
@@ -1225,7 +1226,7 @@ export class SessionStore {
     } catch (error) {
       this.state = previous;
       this.eventSequence = DurableEventSequence.load(this.database, this.state);
-      this.restoreDirtyDeltas(previousDirtyPartIds, previousPendingDeltaBytes);
+      this.deltaCheckpoint.restore(previousDeltaCheckpoint);
       this.saveRequested = previousSaveRequested;
       this.eventSequence.restore(previousEventSequence);
       this.mutations = previousMutations;
@@ -1234,10 +1235,10 @@ export class SessionStore {
       this.transactionDepth -= 1;
       if (this.transactionDepth === 0) {
         this.saveRequested = previousSaveRequested;
-        if (this.dirtyDeltaPartIds.size > 0) {
-          if (completed && this.pendingDeltaBytes >= this.deltaFlushBytes)
+        if (this.deltaCheckpoint.dirtyPartIds().length > 0) {
+          if (completed && this.deltaCheckpoint.reachedThreshold()) {
             this.flushMessagePartDeltas();
-          else this.scheduleDeltaFlush();
+          } else this.deltaCheckpoint.schedule();
         }
       }
     }
@@ -1393,10 +1394,9 @@ export class SessionStore {
     for (const [id, part] of Object.entries(this.state.parts)) {
       if (sessionIdSet.has(part.sessionId)) {
         delete this.state.parts[id];
-        this.dirtyDeltaPartIds.delete(id);
+        this.deltaCheckpoint.delete(id);
       }
     }
-    if (this.dirtyDeltaPartIds.size === 0) this.pendingDeltaBytes = 0;
     for (const [id, run] of Object.entries(this.state.runs)) {
       if (sessionIdSet.has(run.sessionId)) delete this.state.runs[id];
     }
@@ -2473,7 +2473,7 @@ export class SessionStore {
         delete this.state.parts[id];
         this.mutations.parts.delete(id);
         this.mutations.deletedParts.add(id);
-        this.dirtyDeltaPartIds.delete(id);
+        this.deltaCheckpoint.delete(id);
       }
       for (const message of removedMessages) {
         delete this.state.messages[message.id];
@@ -2779,7 +2779,7 @@ export class SessionStore {
         delete this.state.parts[id];
         this.mutations.parts.delete(id);
         this.mutations.deletedParts.add(id);
-        this.dirtyDeltaPartIds.delete(id);
+        this.deltaCheckpoint.delete(id);
       }
     }
 
@@ -3017,27 +3017,25 @@ export class SessionStore {
     part.updatedAt = timestamp;
     message.updatedAt = timestamp;
     session.updatedAt = timestamp;
-    this.dirtyDeltaPartIds.add(part.id);
-    this.pendingDeltaBytes += Buffer.byteLength(input.delta, "utf8");
+    const reachedFlushThreshold = this.deltaCheckpoint.markDirty(
+      part.id,
+      Buffer.byteLength(input.delta, "utf8"),
+    );
     if (this.transactionDepth === 0) {
-      if (this.pendingDeltaBytes >= this.deltaFlushBytes)
+      if (reachedFlushThreshold)
         this.flushMessagePartDeltas();
-      else this.scheduleDeltaFlush();
+      else this.deltaCheckpoint.schedule();
     }
     return clone(event);
   }
 
   flushMessagePartDeltas(): void {
-    if (this.dirtyDeltaPartIds.size === 0) return;
-    const partIds = [...this.dirtyDeltaPartIds];
+    const partIds = this.deltaCheckpoint.dirtyPartIds();
+    if (partIds.length === 0) return;
     const flush = () => this.persistDeltaPartRows(partIds);
     if (this.transactionDepth > 0) flush();
     else this.database.transaction(flush)();
-    for (const partId of partIds) this.dirtyDeltaPartIds.delete(partId);
-    if (this.dirtyDeltaPartIds.size === 0) {
-      this.pendingDeltaBytes = 0;
-      this.clearDeltaFlushTimer();
-    }
+    for (const partId of partIds) this.deltaCheckpoint.delete(partId);
   }
 
   listMessageParts(
@@ -4386,44 +4384,6 @@ export class SessionStore {
     return event;
   }
 
-  private scheduleDeltaFlush(): void {
-    if (
-      this.deltaFlushTimer ||
-      this.closed ||
-      this.dirtyDeltaPartIds.size === 0
-    )
-      return;
-    this.deltaFlushTimer = setTimeout(() => {
-      this.deltaFlushTimer = undefined;
-      try {
-        this.flushMessagePartDeltas();
-      } catch {
-        this.scheduleDeltaFlush();
-      }
-    }, this.deltaFlushIntervalMs);
-    this.deltaFlushTimer.unref?.();
-  }
-
-  private clearDeltaFlushTimer(): void {
-    if (!this.deltaFlushTimer) return;
-    clearTimeout(this.deltaFlushTimer);
-    this.deltaFlushTimer = undefined;
-  }
-
-  private clearDirtyDeltas(): void {
-    this.dirtyDeltaPartIds.clear();
-    this.pendingDeltaBytes = 0;
-    this.clearDeltaFlushTimer();
-  }
-
-  private restoreDirtyDeltas(partIds: Set<string>, pendingBytes: number): void {
-    this.dirtyDeltaPartIds.clear();
-    for (const partId of partIds) this.dirtyDeltaPartIds.add(partId);
-    this.pendingDeltaBytes = pendingBytes;
-    this.clearDeltaFlushTimer();
-    this.scheduleDeltaFlush();
-  }
-
   private refreshSessionStatus(session: SessionRecord): void {
     if (session.status === "archived" || session.status === "closing") return;
     const hasActiveRun = Object.values(this.state.runs).some(
@@ -4463,11 +4423,11 @@ export class SessionStore {
     }
     try {
       this.database.transaction(() => this.persistChanges())();
-      this.clearDirtyDeltas();
+      this.deltaCheckpoint.clear();
       this.mutations = createMutationBuffer();
     } catch (error) {
       this.state = this.load();
-      this.clearDirtyDeltas();
+      this.deltaCheckpoint.clear();
       this.mutations = createMutationBuffer();
       throw error;
     }
@@ -4488,8 +4448,8 @@ export class SessionStore {
   }
 
   private persistChanges(): void {
-    if (this.dirtyDeltaPartIds.size > 0)
-      this.persistDeltaPartRows([...this.dirtyDeltaPartIds]);
+    const dirtyPartIds = this.deltaCheckpoint.dirtyPartIds();
+    if (dirtyPartIds.length > 0) this.persistDeltaPartRows(dirtyPartIds);
 
     const deleteInputAttachment = this.database.prepare(
       "DELETE FROM session_input_attachment WHERE id = ?",
