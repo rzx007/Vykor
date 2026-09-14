@@ -3197,6 +3197,11 @@ describe("OpenHarnessHttpServer", () => {
               enabled: true,
               installation: "installed",
               activation: "active",
+              runtimeStatus: {
+                state: "loaded",
+                message: "插件已加载。",
+                action: "none",
+              },
               inventory: { skills: 1 },
               permissions: { requested: [], approved: [], missing: [] },
               diagnostics: [],
@@ -3345,6 +3350,11 @@ describe("OpenHarnessHttpServer", () => {
                   enabled: true,
                   installation: "installed",
                   activation: "active",
+                  runtimeStatus: {
+                    state: "loaded",
+                    message: "插件已加载。",
+                    action: "none",
+                  },
                   inventory: { skills: 1 },
                   permissions: { requested: [], approved: [], missing: [] },
                   diagnostics: [],

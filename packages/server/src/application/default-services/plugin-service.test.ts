@@ -311,6 +311,26 @@ describe("default plugin service user scope", () => {
       action: "none",
     });
   });
+
+  it("marks a degraded native tool runtime as degraded instead of pending reload", async () => {
+    nativeToolRuntimeSnapshot.mockReturnValue({
+      state: "degraded",
+      hostCount: 1,
+      registeredToolCount: 0,
+      toolNames: [],
+      lastError: "tool host reported degraded",
+    });
+    await installPreviewedArchive(await writeNativeArchive("tool-runtime-degraded.zip"));
+
+    const listed = await service().list({ cwd: "C:/workspace" });
+
+    expect(listed.plugins[0]?.runtimeStatus).toEqual({
+      state: "degraded",
+      code: "tool_host_degraded",
+      message: "部分能力不可用：插件工具进程状态异常，请查看详情。",
+      action: "details",
+    });
+  });
 });
 
 describe("default plugin service archive imports", () => {

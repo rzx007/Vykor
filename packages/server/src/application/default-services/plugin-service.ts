@@ -198,7 +198,7 @@ function diagnosticRuntimeStatus(diagnostic: RuntimeDiagnostic): RuntimeStatus |
 
   if (
     diagnostic.code.startsWith("native_")
-    || diagnostic.code.startsWith("component_path_")
+    || diagnostic.code.startsWith("component_")
   ) {
     return {
       state: "failed",
@@ -246,6 +246,15 @@ function runtimeStatusForPlugin(input: {
       code: "tool_host_failed",
       message: "加载失败：插件工具进程启动失败，可以先禁用该插件。",
       action: "disable",
+    };
+  }
+
+  if (input.toolRuntime?.state === "degraded") {
+    return {
+      state: "degraded",
+      code: "tool_host_degraded",
+      message: "部分能力不可用：插件工具进程状态异常，请查看详情。",
+      action: "details",
     };
   }
 
