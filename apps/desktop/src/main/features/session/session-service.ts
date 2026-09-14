@@ -1077,6 +1077,31 @@ function requirePromptItems(value: unknown): SessionUserInputItem[] {
       }
     }
     if (
+      record.type === "capability" &&
+      (record.kind === "plugin" || record.kind === "plugin_agent") &&
+      typeof record.pluginId === "string" &&
+      typeof record.displayName === "string"
+    ) {
+      if (record.kind === "plugin_agent") {
+        if (typeof record.agentId !== "string") {
+          throw new Error(`第 ${index + 1} 个消息 item 的 agentId 无效。`)
+        }
+        return {
+          type: "capability",
+          kind: "plugin_agent",
+          pluginId: record.pluginId,
+          agentId: record.agentId,
+          displayName: record.displayName,
+        }
+      }
+      return {
+        type: "capability",
+        kind: "plugin",
+        pluginId: record.pluginId,
+        displayName: record.displayName,
+      }
+    }
+    if (
       record.type === "skill" &&
       typeof record.name === "string" &&
       typeof record.path === "string"

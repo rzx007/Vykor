@@ -104,6 +104,24 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
     expect(admitPrompt).toHaveBeenCalledWith("session-1", expect.objectContaining({ items }))
   })
 
+  it("forwards a structured plugin capability reference", async () => {
+    const admitPrompt = vi.fn(async () => undefined)
+    const service = serviceWithClient({ admitPrompt })
+    const items = [
+      {
+        type: "capability" as const,
+        kind: "plugin" as const,
+        pluginId: "dev.openharness.text-inspector",
+        displayName: "text-inspector",
+      },
+      { type: "text" as const, text: "检查这段内容" },
+    ]
+
+    await service.sendPrompt({ id: "input-plugin", sessionId: "session-1", items, attachments: [] })
+
+    expect(admitPrompt).toHaveBeenCalledWith("session-1", expect.objectContaining({ items }))
+  })
+
   it("forwards ordered structured items without re-parsing a selected skill", async () => {
     const admitPrompt = vi.fn(async () => undefined)
     const service = serviceWithClient({ admitPrompt })
