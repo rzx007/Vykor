@@ -98,4 +98,36 @@ describe("WorkflowRepository", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("reloads replacements and rejects writes after the application owner changes", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-workflow-owner-"));
+    const path = join(directory, "sessions.db");
+    const store = new SessionStore({ path });
+    try {
+      const lease = store.acquireApplicationOwner({ ownerId: "owner-a", pid: 1, staleAfterMs: 1_000, now: 10 });
+      const repository = store.workflows;
+      repository.saveRun({ runId: "owned", status: "running", snapshotJson: '{"v":1}', createdAt: 1, updatedAt: 1, taskAttempts: [] });
+      repository.saveRun({ runId: "owned", status: "completed", snapshotJson: '{"v":2}', createdAt: 1, updatedAt: 2, taskAttempts: [] });
+      const returned = repository.loadRun("owned")!;
+      returned.status = "caller-mutated";
+      expect(repository.loadRun("owned")?.status).toBe("completed");
+
+      (store as any).storage.database.connection.prepare("UPDATE application_owner SET owner_id = 'owner-b' WHERE key = 'application'").run();
+      expect(() => repository.saveRun({ runId: "blocked", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] })).toThrow();
+      expect(() => repository.appendEvent({ runId: "owned", type: "x", eventJson: "{}", createdAt: 1 })).toThrow();
+      expect(() => repository.claimRun("owned", "claim-owner")).toThrow();
+      expect(() => repository.finishClaim("owned", "claim-owner", "failed")).toThrow();
+      void lease;
+    } finally {
+      store.close();
+    }
+
+    const reopened = new SessionStore({ path });
+    try {
+      expect(reopened.workflows.loadRun("owned")).toMatchObject({ status: "completed", snapshotJson: '{"v":2}' });
+    } finally {
+      reopened.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });

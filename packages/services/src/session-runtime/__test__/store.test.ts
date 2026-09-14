@@ -1190,6 +1190,21 @@ describe("SessionStore", () => {
     });
   });
 
+  it("keeps the legacy Workflow methods and mirrors owner-session events", () => {
+    withStore((store) => {
+      store.createSession({ id: "workflow-session", cwd: process.cwd(), model: "m" });
+      store.saveWorkflowRun({ runId: "workflow-legacy", ownerSessionId: "workflow-session", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] });
+      expect(store.loadWorkflowRun("workflow-legacy")?.runId).toBe("workflow-legacy");
+      expect(store.listWorkflowRuns({ ownerSessionId: "workflow-session" })).toHaveLength(1);
+      store.appendWorkflowEvent({ runId: "workflow-legacy", sessionId: "workflow-session", type: "workflow_started", eventJson: '{"type":"workflow_started","runId":"workflow-legacy"}', createdAt: 2 });
+      expect(store.listWorkflowEvents("workflow-legacy")).toEqual(['{"type":"workflow_started","runId":"workflow-legacy"}']);
+      expect(store.listEvents({ sessionId: "workflow-session" }).map((event) => event.type)).toContain("workflow.workflow_started");
+      const claim = store.claimWorkflowRun("workflow-legacy", "owner");
+      expect(claim.generation).toBe(1);
+      store.finishWorkflowRunClaim("workflow-legacy", "owner", "completed");
+    });
+  });
+
   it("lists direct child sessions without mixing descendants or siblings", () => {
     withStore((store) => {
       store.createSession({ id: "parent", cwd: process.cwd(), model: "m" });

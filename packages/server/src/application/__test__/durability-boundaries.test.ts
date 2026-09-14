@@ -343,6 +343,44 @@ describe("durable application long-running boundaries", () => {
     store.close();
   });
 
+  it("wakes a Workflow waiter for an event-only change", async () => {
+    const dir = temporaryDirectory();
+    const store = new SessionStore({ path: join(dir, "sessions.db") });
+    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    const workflows = workflowRepository(store);
+    const running = workflowSnapshot("event-wait-1", "session-1", "running");
+    workflows.save(running);
+    const waiting = workflows.waitForChange("event-wait-1", running.updatedAt, { timeoutMs: 1_000 });
+    workflows.appendEvent({ runId: "event-wait-1", type: "workflow_started", timestamp: Date.now(), status: "running", summary: "started" } as any);
+    await expect(waiting).resolves.toMatchObject({ status: "running", updatedAt: running.updatedAt });
+    store.close();
+  });
+
+  it("keeps a Workflow event but does not notify after session event mirroring fails", async () => {
+    const dir = temporaryDirectory();
+    const store = new SessionStore({ path: join(dir, "sessions.db") });
+    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    const onDurableEvent = vi.fn();
+    const workflows = new SessionWorkflowRunRepository({
+      workflows: store.workflows,
+      path: store.path,
+      events: {
+        latestEventSeq: () => store.latestEventSeq(),
+        appendEvent: () => { throw new Error("mirror failed"); },
+      },
+      onDurableEvent,
+    });
+    const running = workflowSnapshot("mirror-fail-1", "session-1", "running");
+    workflows.save(running);
+    const waiting = workflows.waitForChange("mirror-fail-1", running.updatedAt, { timeoutMs: 1_000 });
+    expect(() => workflows.appendEvent({ runId: "mirror-fail-1", type: "workflow_started", timestamp: Date.now(), status: "running", summary: "started" } as any)).toThrow("mirror failed");
+    expect(store.workflows.listEvents("mirror-fail-1")).toHaveLength(1);
+    expect(onDurableEvent).not.toHaveBeenCalled();
+    workflows.save(workflowSnapshot("mirror-fail-1", "session-1", "completed"));
+    await expect(waiting).resolves.toMatchObject({ status: "completed" });
+    store.close();
+  });
+
   it("rejects a duplicate Workflow claim in the same Application", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
