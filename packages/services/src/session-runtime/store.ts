@@ -345,6 +345,7 @@ export class SessionStore {
         mutations: createMutationBuffer(),
         eventSequence: DurableEventSequence.load(database.connection, loaded.state),
         deltaCheckpoint,
+        atomic: (work) => this.transaction(work),
       };
     } catch (error) {
       database.close();

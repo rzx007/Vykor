@@ -10,4 +10,5 @@ export interface StorageContext {
   mutations: MutationBuffer;
   eventSequence: DurableEventSequence;
   deltaCheckpoint: DeltaCheckpoint;
+  atomic<T>(work: () => T): T;
 }
