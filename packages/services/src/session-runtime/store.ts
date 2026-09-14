@@ -72,6 +72,10 @@ import type {
 } from "@openharness/protocol";
 import { AttachmentError } from "../attachment/attachment-errors.js";
 import { SessionDatabase } from "../database/session-database.js";
+import {
+  cloneMutationBuffer,
+  createMutationBuffer,
+} from "../database/mutation-buffer.js";
 import { formatSessionTitle, isPlaceholderSessionTitle } from "./title.js";
 import {
   defaultDurableEventRegistry,
@@ -120,9 +124,7 @@ import {
   assertMutableSession,
   assertSession,
   clone,
-  cloneMutations,
   decode,
-  emptyMutations,
   emptyState,
   encode,
   isDurableEvent,
@@ -314,7 +316,7 @@ export class SessionStore {
   private pendingDeltaBytes = 0;
   private deltaFlushTimer?: ReturnType<typeof setTimeout>;
   private reservedEventSeq = 0;
-  private mutations = emptyMutations();
+  private mutations = createMutationBuffer();
   private state: SessionState;
   private readonly taskListeners = new Map<string, Set<() => void>>();
   private activeOwnerLease?: ApplicationOwnerLease;
@@ -1199,7 +1201,7 @@ export class SessionStore {
     const previousPendingDeltaBytes = this.pendingDeltaBytes;
     const previousSaveRequested = this.saveRequested;
     const previousReservedEventSeq = this.reservedEventSeq;
-    const previousMutations = cloneMutations(this.mutations);
+    const previousMutations = cloneMutationBuffer(this.mutations);
     this.transactionDepth += 1;
     if (this.transactionDepth === 1) this.saveRequested = false;
     let persisted = false;
@@ -1215,7 +1217,7 @@ export class SessionStore {
       })();
       if (persisted) {
         this.clearDirtyDeltas();
-        this.mutations = emptyMutations();
+        this.mutations = createMutationBuffer();
       }
       completed = true;
       return result;
@@ -1409,7 +1411,7 @@ export class SessionStore {
     this.state.events = this.state.events.filter(
       (event) => !event.sessionId || !sessionIdSet.has(event.sessionId),
     );
-    this.mutations = emptyMutations();
+    this.mutations = createMutationBuffer();
 
     return sessionIds;
   }
@@ -4723,11 +4725,11 @@ export class SessionStore {
     try {
       this.database.transaction(() => this.persistChanges())();
       this.clearDirtyDeltas();
-      this.mutations = emptyMutations();
+      this.mutations = createMutationBuffer();
     } catch (error) {
       this.state = this.load();
       this.clearDirtyDeltas();
-      this.mutations = emptyMutations();
+      this.mutations = createMutationBuffer();
       throw error;
     }
   }
