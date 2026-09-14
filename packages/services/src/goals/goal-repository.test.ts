@@ -23,6 +23,96 @@ function withRepository(
 }
 
 describe("GoalRepository", () => {
+  it("reloads requests, assessments, and continuations from disk", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-related-reload-"));
+    const path = join(directory, "sessions.db");
+    try {
+      const first = new SessionStore({ path });
+      first.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      const goal = first.goals.createGoal({
+        id: "goal-related",
+        sessionId: "s1",
+        objective: "related",
+        maxAutoTurns: 2,
+      });
+      first.goals.updateGoal(goal.id, {
+        expectedRevision: 0,
+        wait: { kind: "user", questionId: "q1", question: "continue?" },
+        assessment: { decision: "continue", evidenceRefs: [], reason: "more" },
+      });
+      first.goals.beginGoalRequest({
+        requestId: "request-related",
+        sessionId: "s1",
+        fingerprint: "fingerprint",
+      });
+      first.goals.settleGoalRequest("request-related", {
+        status: "completed",
+        goalId: goal.id,
+        result: { runId: "run-related" },
+      });
+      first.goals.recordGoalAssessment({
+        goalId: goal.id,
+        revision: 1,
+        runId: "run-related",
+        assessment: { verifiedSignatures: ["signature"] },
+      });
+      first.goals.recordGoalContinuation({
+        goalId: goal.id,
+        revision: 1,
+        previousRunId: "previous-related",
+        inputId: "input-related",
+        runId: "run-related",
+      });
+      first.close();
+
+      const second = new SessionStore({ path });
+      try {
+        expect(second.goals.getGoal(goal.id)).toMatchObject({
+          wait: { questionId: "q1" },
+          assessment: { decision: "continue" },
+        });
+        expect(second.goals.getGoalRequest("request-related")).toMatchObject({
+          result: { runId: "run-related" },
+        });
+        expect(second.goals.goalEvidenceSignatures(goal.id)).toEqual([
+          "signature",
+        ]);
+        const continuation = (second as any).storage.database.connection
+          .prepare(
+            "SELECT status FROM session_goal_continuation WHERE run_id = ?",
+          )
+          .get("run-related");
+        expect(continuation).toEqual({ status: "pending" });
+
+        const database = (second as any).storage.database.connection;
+        database
+          .prepare(
+            "UPDATE session_goal_request SET result_json = ? WHERE request_id = ?",
+          )
+          .run("{broken", "request-related");
+        expect(() => second.goals.getGoalRequest("request-related")).toThrow(
+          SyntaxError,
+        );
+        database
+          .prepare("UPDATE session_goal SET wait_json = ? WHERE id = ?")
+          .run("{broken", goal.id);
+        expect(() => second.goals.getGoal(goal.id)).toThrow(SyntaxError);
+        database
+          .prepare(
+            "UPDATE session_goal_assessment SET assessment_json = ? WHERE goal_id = ?",
+          )
+          .run("{broken", goal.id);
+        expect(() => second.goals.goalEvidenceSignatures(goal.id)).toThrow(
+          SyntaxError,
+        );
+      } finally {
+        second.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("reloads goal rows, isolates returned values, and rejects malformed JSON", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-goal-reload-"));
     const path = join(directory, "sessions.db");

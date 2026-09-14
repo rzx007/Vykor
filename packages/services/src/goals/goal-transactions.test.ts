@@ -108,6 +108,8 @@ describe("GoalTransactions", () => {
     const store = new SessionStore({ path });
     try {
       store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      const internals = (store as any).storage;
+      const beforeSequence = internals.state.nextEventSeq;
       expect(() =>
         store.transaction(() => {
           store.goals.createGoal({
@@ -116,10 +118,23 @@ describe("GoalTransactions", () => {
             objective: "outer",
             maxAutoTurns: 2,
           });
+          store.admitPromptWithRun({
+            prompt: {
+              id: "input-outer",
+              sessionId: "s1",
+              content: "continue",
+            },
+            run: { id: "run-outer", metadata: { goalId: "goal-outer" } },
+          });
           throw new Error("outer failed");
         }),
       ).toThrow("outer failed");
       expect(store.goals.getGoal("goal-outer")).toBeUndefined();
+      expect(store.getInput("input-outer")).toBeUndefined();
+      expect(store.getRun("run-outer")).toBeUndefined();
+      expect(internals.state.nextEventSeq).toBe(beforeSequence);
+      expect(internals.mutations.inputs.size).toBe(0);
+      expect(internals.mutations.runs.size).toBe(0);
       expect(
         store
           .listEvents()
@@ -130,6 +145,8 @@ describe("GoalTransactions", () => {
       const reopened = new SessionStore({ path });
       try {
         expect(reopened.goals.getGoal("goal-outer")).toBeUndefined();
+        expect(reopened.getInput("input-outer")).toBeUndefined();
+        expect(reopened.getRun("run-outer")).toBeUndefined();
         expect(
           reopened
             .listEvents()
