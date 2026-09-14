@@ -14,6 +14,7 @@
     "lint": "turbo lint",
     "check-types": "turbo check-types",
     "check-docs": "node scripts/check-docs.mjs",
+    "check:architecture": "node scripts/architecture-boundaries.mjs",
     "test": "turbo test && node --test scripts/prepare-tag-release.test.mjs scripts/npm-release.test.mjs",
     "test:client-browser": "vite build --config tests/browser-client/vite.config.ts",
     "clean": "turbo clean",
