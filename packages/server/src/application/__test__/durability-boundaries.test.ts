@@ -343,17 +343,40 @@ describe("durable application long-running boundaries", () => {
     store.close();
   });
 
-  it("wakes a Workflow waiter for an event-only change", async () => {
+  it.each(["after registration", "during first load"])("wakes a Workflow waiter for an event-only change %s before timeout", async (timing) => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
     const workflows = workflowRepository(store);
     const running = workflowSnapshot("event-wait-1", "session-1", "running");
     workflows.save(running);
-    const waiting = workflows.waitForChange("event-wait-1", running.updatedAt, { timeoutMs: 1_000 });
-    workflows.appendEvent({ runId: "event-wait-1", type: "workflow_started", timestamp: Date.now(), status: "running", summary: "started" } as any);
-    await expect(waiting).resolves.toMatchObject({ status: "running", updatedAt: running.updatedAt });
-    store.close();
+    const appendEvent = () => workflows.appendEvent({ runId: "event-wait-1", type: "workflow_started", timestamp: Date.now(), status: "running", summary: "started" } as any);
+    const originalLoad = workflows.load.bind(workflows);
+    const load = vi.spyOn(workflows, "load");
+    vi.useFakeTimers();
+    try {
+      if (timing === "during first load") {
+        load.mockImplementationOnce((runId) => {
+          const snapshot = originalLoad(runId);
+          appendEvent(); // No listener exists yet; only the change version can wake this wait.
+          return snapshot;
+        });
+      }
+      let settled = false;
+      const waiting = workflows.waitForChange("event-wait-1", running.updatedAt, { timeoutMs: 1_000 }).then((snapshot) => {
+        settled = true;
+        return snapshot;
+      });
+      if (timing === "after registration") appendEvent();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(true);
+      await expect(waiting).resolves.toMatchObject({ status: "running", updatedAt: running.updatedAt });
+    } finally {
+      load.mockRestore();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      store.close();
+    }
   });
 
   it("keeps a Workflow event but does not notify after session event mirroring fails", async () => {
@@ -372,10 +395,17 @@ describe("durable application long-running boundaries", () => {
     });
     const running = workflowSnapshot("mirror-fail-1", "session-1", "running");
     workflows.save(running);
-    const waiting = workflows.waitForChange("mirror-fail-1", running.updatedAt, { timeoutMs: 1_000 });
+    let settled = false;
+    const waiting = workflows.waitForChange("mirror-fail-1", running.updatedAt, { timeoutMs: 1_000 }).then((snapshot) => {
+      settled = true;
+      return snapshot;
+    });
     expect(() => workflows.appendEvent({ runId: "mirror-fail-1", type: "workflow_started", timestamp: Date.now(), status: "running", summary: "started" } as any)).toThrow("mirror failed");
     expect(store.workflows.listEvents("mirror-fail-1")).toHaveLength(1);
     expect(onDurableEvent).not.toHaveBeenCalled();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
     workflows.save(workflowSnapshot("mirror-fail-1", "session-1", "completed"));
     await expect(waiting).resolves.toMatchObject({ status: "completed" });
     store.close();

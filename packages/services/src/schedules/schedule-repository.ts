@@ -22,40 +22,43 @@ export class ScheduleRepository {
   }
 
   createTask(input: CreateScheduledTaskInput): ScheduledTaskRecord {
-    const timestamp = Date.now(),
-      id = input.id ?? randomUUID();
-    this.database
-      .prepare(
-        `INSERT INTO scheduled_task (id, name, description, prompt, recurrence, recurrence_format, timezone, status, destination, session_id, project_paths_json, execution_mode, model, effort, skill_names_json, plugin_names_json, permission_profile_json, overlap_policy, missed_run_policy, stop_policy_json, created_by, created_from_session_id, last_run_at, next_run_at, run_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, ?)`,
-      )
-      .run(
-        id,
-        input.name,
-        input.description ?? null,
-        input.prompt,
-        input.recurrence,
-        input.recurrenceFormat,
-        input.timezone,
-        input.status ?? "active",
-        input.destination,
-        input.sessionId ?? null,
-        encode(input.projectPaths ?? []),
-        input.executionMode ?? "local",
-        input.model ?? null,
-        input.effort ?? null,
-        encode(input.skillNames ?? []),
-        encode(input.pluginNames ?? []),
-        encode(input.permissionProfile ?? { mode: "workspace_write" }),
-        input.overlapPolicy ?? "skip",
-        input.missedRunPolicy ?? "skip",
-        input.stopPolicy ? encode(input.stopPolicy) : null,
-        input.createdBy ?? "user",
-        input.createdFromSessionId ?? null,
-        input.nextRunAt ?? null,
-        timestamp,
-        timestamp,
-      );
-    return this.getTask(id)!;
+    return this.database.transaction(() => {
+      this.storage.assertWritable();
+      const timestamp = Date.now(),
+        id = input.id ?? randomUUID();
+      this.database
+        .prepare(
+          `INSERT INTO scheduled_task (id, name, description, prompt, recurrence, recurrence_format, timezone, status, destination, session_id, project_paths_json, execution_mode, model, effort, skill_names_json, plugin_names_json, permission_profile_json, overlap_policy, missed_run_policy, stop_policy_json, created_by, created_from_session_id, last_run_at, next_run_at, run_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, ?)`,
+        )
+        .run(
+          id,
+          input.name,
+          input.description ?? null,
+          input.prompt,
+          input.recurrence,
+          input.recurrenceFormat,
+          input.timezone,
+          input.status ?? "active",
+          input.destination,
+          input.sessionId ?? null,
+          encode(input.projectPaths ?? []),
+          input.executionMode ?? "local",
+          input.model ?? null,
+          input.effort ?? null,
+          encode(input.skillNames ?? []),
+          encode(input.pluginNames ?? []),
+          encode(input.permissionProfile ?? { mode: "workspace_write" }),
+          input.overlapPolicy ?? "skip",
+          input.missedRunPolicy ?? "skip",
+          input.stopPolicy ? encode(input.stopPolicy) : null,
+          input.createdBy ?? "user",
+          input.createdFromSessionId ?? null,
+          input.nextRunAt ?? null,
+          timestamp,
+          timestamp,
+        );
+      return this.getTask(id)!;
+    })();
   }
   getTask(id: string): ScheduledTaskRecord | undefined {
     const row = this.database
@@ -78,51 +81,55 @@ export class ScheduleRepository {
     return (rows as Array<Record<string, unknown>>).map(scheduledTaskFromRow);
   }
   updateTask(id: string, patch: UpdateScheduledTaskInput): ScheduledTaskRecord {
-    const current = this.getTask(id);
-    if (!current) throw new Error(`Scheduled task not found: ${id}`);
-    const updated = {
-      ...current,
-      ...withoutUndefined(patch),
-      updatedAt: Date.now(),
-    } as ScheduledTaskRecord;
-    if (patch.lastRunAt === null) delete updated.lastRunAt;
-    if (patch.nextRunAt === null) delete updated.nextRunAt;
-    this.database
-      .prepare(
-        `UPDATE scheduled_task SET name = ?, description = ?, prompt = ?, recurrence = ?, recurrence_format = ?, timezone = ?, status = ?, destination = ?, session_id = ?, project_paths_json = ?, execution_mode = ?, model = ?, effort = ?, skill_names_json = ?, plugin_names_json = ?, permission_profile_json = ?, overlap_policy = ?, missed_run_policy = ?, stop_policy_json = ?, created_by = ?, created_from_session_id = ?, last_run_at = ?, next_run_at = ?, run_count = ?, updated_at = ? WHERE id = ?`,
-      )
-      .run(
-        updated.name,
-        updated.description ?? null,
-        updated.prompt,
-        updated.recurrence,
-        updated.recurrenceFormat,
-        updated.timezone,
-        updated.status,
-        updated.destination,
-        updated.sessionId ?? null,
-        encode(updated.projectPaths),
-        updated.executionMode,
-        updated.model ?? null,
-        updated.effort ?? null,
-        encode(updated.skillNames),
-        encode(updated.pluginNames),
-        encode(updated.permissionProfile),
-        updated.overlapPolicy,
-        updated.missedRunPolicy,
-        updated.stopPolicy ? encode(updated.stopPolicy) : null,
-        updated.createdBy,
-        updated.createdFromSessionId ?? null,
-        updated.lastRunAt ?? null,
-        updated.nextRunAt ?? null,
-        updated.runCount,
-        updated.updatedAt,
-        id,
-      );
-    return this.getTask(id)!;
+    return this.database.transaction(() => {
+      this.storage.assertWritable();
+      const current = this.getTask(id);
+      if (!current) throw new Error(`Scheduled task not found: ${id}`);
+      const updated = {
+        ...current,
+        ...withoutUndefined(patch),
+        updatedAt: Date.now(),
+      } as ScheduledTaskRecord;
+      if (patch.lastRunAt === null) delete updated.lastRunAt;
+      if (patch.nextRunAt === null) delete updated.nextRunAt;
+      this.database
+        .prepare(
+          `UPDATE scheduled_task SET name = ?, description = ?, prompt = ?, recurrence = ?, recurrence_format = ?, timezone = ?, status = ?, destination = ?, session_id = ?, project_paths_json = ?, execution_mode = ?, model = ?, effort = ?, skill_names_json = ?, plugin_names_json = ?, permission_profile_json = ?, overlap_policy = ?, missed_run_policy = ?, stop_policy_json = ?, created_by = ?, created_from_session_id = ?, last_run_at = ?, next_run_at = ?, run_count = ?, updated_at = ? WHERE id = ?`,
+        )
+        .run(
+          updated.name,
+          updated.description ?? null,
+          updated.prompt,
+          updated.recurrence,
+          updated.recurrenceFormat,
+          updated.timezone,
+          updated.status,
+          updated.destination,
+          updated.sessionId ?? null,
+          encode(updated.projectPaths),
+          updated.executionMode,
+          updated.model ?? null,
+          updated.effort ?? null,
+          encode(updated.skillNames),
+          encode(updated.pluginNames),
+          encode(updated.permissionProfile),
+          updated.overlapPolicy,
+          updated.missedRunPolicy,
+          updated.stopPolicy ? encode(updated.stopPolicy) : null,
+          updated.createdBy,
+          updated.createdFromSessionId ?? null,
+          updated.lastRunAt ?? null,
+          updated.nextRunAt ?? null,
+          updated.runCount,
+          updated.updatedAt,
+          id,
+        );
+      return this.getTask(id)!;
+    })();
   }
   deleteTask(id: string): boolean {
     return this.database.transaction(() => {
+      this.storage.assertWritable();
       this.database
         .prepare("DELETE FROM scheduled_run WHERE task_id = ?")
         .run(id);
@@ -133,23 +140,26 @@ export class ScheduleRepository {
     })();
   }
   createRun(input: CreateScheduledRunInput): ScheduledRunRecord {
-    if (!this.getTask(input.taskId))
-      throw new Error(`Scheduled task not found: ${input.taskId}`);
-    const timestamp = Date.now(),
-      id = input.id ?? randomUUID();
-    this.database
-      .prepare(
-        "INSERT INTO scheduled_run (id, task_id, cause, status, scheduled_for, unread, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, 0, ?, ?)",
-      )
-      .run(
-        id,
-        input.taskId,
-        input.cause,
-        input.scheduledFor,
-        timestamp,
-        timestamp,
-      );
-    return this.getRun(id)!;
+    return this.database.transaction(() => {
+      this.storage.assertWritable();
+      if (!this.getTask(input.taskId))
+        throw new Error(`Scheduled task not found: ${input.taskId}`);
+      const timestamp = Date.now(),
+        id = input.id ?? randomUUID();
+      this.database
+        .prepare(
+          "INSERT INTO scheduled_run (id, task_id, cause, status, scheduled_for, unread, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, 0, ?, ?)",
+        )
+        .run(
+          id,
+          input.taskId,
+          input.cause,
+          input.scheduledFor,
+          timestamp,
+          timestamp,
+        );
+      return this.getRun(id)!;
+    })();
   }
   getRun(id: string): ScheduledRunRecord | undefined {
     const row = this.database
@@ -182,37 +192,43 @@ export class ScheduleRepository {
     ).map(scheduledRunFromRow);
   }
   updateRun(id: string, patch: UpdateScheduledRunInput): ScheduledRunRecord {
-    const current = this.getRun(id);
-    if (!current) throw new Error(`Scheduled run not found: ${id}`);
-    const updated = {
-      ...current,
-      ...withoutUndefined(patch),
-      updatedAt: Date.now(),
-    } as ScheduledRunRecord;
-    this.database
-      .prepare(
-        "UPDATE scheduled_run SET status = ?, session_id = ?, run_id = ?, summary = ?, error = ?, unread = ?, attention_reason = ?, started_at = ?, finished_at = ?, updated_at = ? WHERE id = ?",
-      )
-      .run(
-        updated.status,
-        updated.sessionId ?? null,
-        updated.runId ?? null,
-        updated.summary ?? null,
-        updated.error ?? null,
-        updated.unread ? 1 : 0,
-        updated.attentionReason ?? null,
-        updated.startedAt ?? null,
-        updated.finishedAt ?? null,
-        updated.updatedAt,
-        id,
-      );
-    return this.getRun(id)!;
+    return this.database.transaction(() => {
+      this.storage.assertWritable();
+      const current = this.getRun(id);
+      if (!current) throw new Error(`Scheduled run not found: ${id}`);
+      const updated = {
+        ...current,
+        ...withoutUndefined(patch),
+        updatedAt: Date.now(),
+      } as ScheduledRunRecord;
+      this.database
+        .prepare(
+          "UPDATE scheduled_run SET status = ?, session_id = ?, run_id = ?, summary = ?, error = ?, unread = ?, attention_reason = ?, started_at = ?, finished_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(
+          updated.status,
+          updated.sessionId ?? null,
+          updated.runId ?? null,
+          updated.summary ?? null,
+          updated.error ?? null,
+          updated.unread ? 1 : 0,
+          updated.attentionReason ?? null,
+          updated.startedAt ?? null,
+          updated.finishedAt ?? null,
+          updated.updatedAt,
+          id,
+        );
+      return this.getRun(id)!;
+    })();
   }
   interruptActiveRuns(reason: string): number {
-    return this.database
-      .prepare(
-        "UPDATE scheduled_run SET status = 'interrupted', error = ?, unread = 1, finished_at = ?, updated_at = ? WHERE status IN ('queued', 'running')",
-      )
-      .run(reason, Date.now(), Date.now()).changes;
+    return this.database.transaction(() => {
+      this.storage.assertWritable();
+      return this.database
+        .prepare(
+          "UPDATE scheduled_run SET status = 'interrupted', error = ?, unread = 1, finished_at = ?, updated_at = ? WHERE status IN ('queued', 'running')",
+        )
+        .run(reason, Date.now(), Date.now()).changes;
+    })();
   }
 }

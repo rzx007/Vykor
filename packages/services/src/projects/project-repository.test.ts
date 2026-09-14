@@ -4,7 +4,8 @@ import { join, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { SessionStore } from "../session-runtime/store.js";
+import { ApplicationOwnerConflictError, SessionStore } from "../session-runtime/store.js";
+import type { StorageContext } from "../database/storage-context.js";
 import { normalizeProjectPath } from "./project-records.js";
 import { ProjectRepository } from "./project-repository.js";
 
@@ -49,6 +50,62 @@ describe("ProjectRepository queries", () => {
 });
 
 describe("ProjectRepository mutations", () => {
+  const writes: Array<[string, (store: SessionStore, id: string, path: string) => unknown]> = [
+    ["inspect new", (store, _id, path) => store.projects.inspect(`${path}-new`)],
+    ["inspect existing", (store, _id, path) => store.projects.inspect(path)],
+    ["rename", (store, id) => store.projects.rename(id, "changed")],
+    ["setPinned", (store, id) => store.projects.setPinned(id, true)],
+    ["setDefaultShell", (store, id) => store.projects.setDefaultShell(id, "pwsh")],
+    ["archive", (store, id) => store.projects.archive(id)],
+    ["rebind", (store, id, path) => store.projects.rebind(id, `${path}-new`)],
+    ["inspectProject new", (store, _id, path) => store.inspectProject(`${path}-new`)],
+    ["inspectProject existing", (store, _id, path) => store.inspectProject(path)],
+    ["renameProject", (store, id) => store.renameProject(id, "changed")],
+    ["setProjectPinned", (store, id) => store.setProjectPinned(id, true)],
+    ["setProjectDefaultShell", (store, id) => store.setProjectDefaultShell(id, "pwsh")],
+    ["archiveProject", (store, id) => store.archiveProject(id)],
+    ["rebindProject", (store, id, path) => store.rebindProject(id, `${path}-new`)],
+  ];
+
+  describe.each(["before owner check", "after owner check"])("takeover %s", (timing) => {
+    it.each(writes)("rejects %s without changing project or session state", (_name, write) => {
+      const directory = mkdtempSync(join(tmpdir(), "ohs-project-owner-"));
+      const path = join(directory, "sessions.db");
+      const first = new SessionStore({ path });
+      const second = new SessionStore({ path });
+      const storage = (first as unknown as { storage: StorageContext }).storage;
+      const assertWritable = storage.assertWritable;
+      try {
+        first.acquireApplicationOwner({ ownerId: "first", pid: 1, now: 1, staleAfterMs: 1_000 });
+        const projectPath = join(directory, "project");
+        const project = first.projects.inspect(projectPath);
+        first.createSession({ id: "session", cwd: projectPath, projectId: project.id, model: "test" });
+        const before = first.projects.list({ includeArchived: true });
+        const locations = storage.database.connection.prepare("SELECT * FROM project_location").all();
+        const session = first.getSession("session");
+        const takeOver = () => second.acquireApplicationOwner({ ownerId: "second", pid: 2, now: 2_000, staleAfterMs: 1_000 });
+        if (timing === "before owner check") takeOver();
+        else storage.assertWritable = () => {
+          assertWritable();
+          takeOver();
+        };
+
+        expect(() => write(first, project.id, projectPath)).toThrow(
+          timing === "before owner check" ? ApplicationOwnerConflictError : "database is locked",
+        );
+        expect(second.projects.list({ includeArchived: true })).toEqual(before);
+        expect(storage.database.connection.prepare("SELECT * FROM project_location").all()).toEqual(locations);
+        expect(first.getSession("session")).toEqual(session);
+        expect(storage.database.connection.prepare("SELECT cwd FROM session WHERE id = 'session'").get()).toEqual({ cwd: projectPath });
+      } finally {
+        storage.assertWritable = assertWritable;
+        first.close();
+        second.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  });
+
   it("inspects and updates project presentation fields", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-project-mutations-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });

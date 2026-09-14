@@ -635,6 +635,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.control = new DaemonControlService({
         store,
         permissions: store.permissions,
+        workflows: store.workflows,
         runEngine: this.runEngine,
         agentPool: this.agentPool,
         operationGate: this.operationGate,

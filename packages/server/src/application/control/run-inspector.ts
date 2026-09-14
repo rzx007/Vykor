@@ -46,6 +46,7 @@ export interface RunInspection {
 export function inspectDurableRun(
   store: SessionStore,
   permissions: Pick<SessionStore["permissions"], "list">,
+  workflowQueries: Pick<SessionStore["workflows"], "listRuns">,
   runId: string,
   includeContent = false,
 ): RunInspection | undefined {
@@ -58,7 +59,7 @@ export function inspectDurableRun(
   const permissionRequests = permissions.list({ sessionId: run.sessionId }).filter((row) => row.runId === runId);
   const childExecutions = store.listSessionTasks(run.sessionId).filter((row) => row.runId === runId || row.metadata.sourceRunId === runId);
   const attempts = store.listRunAttempts(runId);
-  const workflows = store.workflows
+  const workflows = workflowQueries
     .listRuns()
     .filter((workflow) => workflow.ownerRunId === runId);
   const references = new Set<string>([

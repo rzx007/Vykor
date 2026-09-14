@@ -5,7 +5,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { SessionStore } from "../session-runtime/store.js";
+import { ApplicationOwnerConflictError, SessionStore } from "../session-runtime/store.js";
+import type { StorageContext } from "../database/storage-context.js";
 import { ScheduleRepository } from "./schedule-repository.js";
 
 function withRepository(
@@ -22,6 +23,61 @@ function withRepository(
 }
 
 describe("ScheduleRepository", () => {
+  const taskInput = {
+    name: "original", prompt: "prompt", recurrence: "2030-01-01T00:00:00.000Z",
+    recurrenceFormat: "once" as const, timezone: "UTC", destination: "standalone" as const,
+  };
+  const runInput = { taskId: "task", cause: "manual" as const, scheduledFor: 100 };
+  const writes: Array<[string, (store: SessionStore) => unknown]> = [
+    ["createTask", (store) => store.schedules.createTask({ ...taskInput, id: "new-task" })],
+    ["updateTask", (store) => store.schedules.updateTask("task", { name: "changed" })],
+    ["deleteTask", (store) => store.schedules.deleteTask("task")],
+    ["createRun", (store) => store.schedules.createRun({ ...runInput, id: "new-run" })],
+    ["updateRun", (store) => store.schedules.updateRun("run", { status: "running" })],
+    ["interruptActiveRuns", (store) => store.schedules.interruptActiveRuns("restart")],
+    ["createScheduledTask", (store) => store.createScheduledTask({ ...taskInput, id: "new-task" })],
+    ["updateScheduledTask", (store) => store.updateScheduledTask("task", { name: "changed" })],
+    ["deleteScheduledTask", (store) => store.deleteScheduledTask("task")],
+    ["createScheduledRun", (store) => store.createScheduledRun({ ...runInput, id: "new-run" })],
+    ["updateScheduledRun", (store) => store.updateScheduledRun("run", { status: "running" })],
+    ["interruptActiveScheduledRuns", (store) => store.interruptActiveScheduledRuns("restart")],
+  ];
+
+  describe.each(["before owner check", "after owner check"])("takeover %s", (timing) => {
+    it.each(writes)("rejects %s without changing tasks or runs", (_name, write) => {
+      const directory = mkdtempSync(join(tmpdir(), "ohs-schedule-owner-"));
+      const path = join(directory, "sessions.db");
+      const first = new SessionStore({ path });
+      const second = new SessionStore({ path });
+      const storage = (first as unknown as { storage: StorageContext }).storage;
+      const assertWritable = storage.assertWritable;
+      try {
+        first.acquireApplicationOwner({ ownerId: "first", pid: 1, now: 1, staleAfterMs: 1_000 });
+        first.schedules.createTask({ ...taskInput, id: "task" });
+        first.schedules.createRun({ ...runInput, id: "run" });
+        const tasks = second.schedules.listTasks();
+        const runs = second.schedules.listRuns();
+        const takeOver = () => second.acquireApplicationOwner({ ownerId: "second", pid: 2, now: 2_000, staleAfterMs: 1_000 });
+        if (timing === "before owner check") takeOver();
+        else storage.assertWritable = () => {
+          assertWritable();
+          takeOver();
+        };
+
+        expect(() => write(first)).toThrow(
+          timing === "before owner check" ? ApplicationOwnerConflictError : "database is locked",
+        );
+        expect(second.schedules.listTasks()).toEqual(tasks);
+        expect(second.schedules.listRuns()).toEqual(runs);
+      } finally {
+        storage.assertWritable = assertWritable;
+        first.close();
+        second.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  });
+
   it("reloads persisted task JSON and run state from disk", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-schedule-reload-"));
     const path = join(directory, "sessions.db");

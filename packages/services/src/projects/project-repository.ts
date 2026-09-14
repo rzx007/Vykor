@@ -44,6 +44,7 @@ export class ProjectRepository {
     const timestamp = Date.now();
     if (row) {
       return this.storage.atomic(() => {
+        this.storage.assertWritable();
         this.storage.database.connection
           .prepare(
             "UPDATE project SET archived_at = NULL, last_opened_at = ?, updated_at = ? WHERE id = ?",
@@ -59,6 +60,7 @@ export class ProjectRepository {
     }
     const projectId = randomUUID();
     return this.storage.atomic(() => {
+      this.storage.assertWritable();
       this.storage.database.connection
         .prepare(
           "INSERT INTO project (id, name, pinned_at, default_shell, last_opened_at, archived_at, created_at, updated_at) VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)",
@@ -87,53 +89,65 @@ export class ProjectRepository {
   }
 
   rename(projectId: string, name: string): ProjectRecord {
-    const value = name.replace(/\s+/g, " ").trim();
-    if (!value) throw new Error("Project name is required");
-    if (
-      this.storage.database.connection
-        .prepare("UPDATE project SET name = ?, updated_at = ? WHERE id = ?")
-        .run(value, Date.now(), projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.get(projectId)!;
+    return this.storage.database.connection.transaction(() => {
+      this.storage.assertWritable();
+      const value = name.replace(/\s+/g, " ").trim();
+      if (!value) throw new Error("Project name is required");
+      if (
+        this.storage.database.connection
+          .prepare("UPDATE project SET name = ?, updated_at = ? WHERE id = ?")
+          .run(value, Date.now(), projectId).changes === 0
+      )
+        throw new Error(`Project not found: ${projectId}`);
+      return this.get(projectId)!;
+    })();
   }
 
   setPinned(projectId: string, pinned: boolean): ProjectRecord {
-    if (
-      this.storage.database.connection
-        .prepare(
-          "UPDATE project SET pinned_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(pinned ? Date.now() : null, Date.now(), projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.get(projectId)!;
+    return this.storage.database.connection.transaction(() => {
+      this.storage.assertWritable();
+      if (
+        this.storage.database.connection
+          .prepare(
+            "UPDATE project SET pinned_at = ?, updated_at = ? WHERE id = ?",
+          )
+          .run(pinned ? Date.now() : null, Date.now(), projectId).changes === 0
+      )
+        throw new Error(`Project not found: ${projectId}`);
+      return this.get(projectId)!;
+    })();
   }
 
   setDefaultShell(projectId: string, shell: string | null): ProjectRecord {
-    const value = shell?.replace(/\s+/g, " ").trim() ?? "";
-    if (
-      this.storage.database.connection
-        .prepare(
-          "UPDATE project SET default_shell = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(value || null, Date.now(), projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.get(projectId)!;
+    return this.storage.database.connection.transaction(() => {
+      this.storage.assertWritable();
+      const value = shell?.replace(/\s+/g, " ").trim() ?? "";
+      if (
+        this.storage.database.connection
+          .prepare(
+            "UPDATE project SET default_shell = ?, updated_at = ? WHERE id = ?",
+          )
+          .run(value || null, Date.now(), projectId).changes === 0
+      )
+        throw new Error(`Project not found: ${projectId}`);
+      return this.get(projectId)!;
+    })();
   }
 
   archive(projectId: string): ProjectRecord {
-    const timestamp = Date.now();
-    if (
-      this.storage.database.connection
-        .prepare(
-          "UPDATE project SET archived_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(timestamp, timestamp, projectId).changes === 0
-    )
-      throw new Error(`Project not found: ${projectId}`);
-    return this.get(projectId)!;
+    return this.storage.database.connection.transaction(() => {
+      this.storage.assertWritable();
+      const timestamp = Date.now();
+      if (
+        this.storage.database.connection
+          .prepare(
+            "UPDATE project SET archived_at = ?, updated_at = ? WHERE id = ?",
+          )
+          .run(timestamp, timestamp, projectId).changes === 0
+      )
+        throw new Error(`Project not found: ${projectId}`);
+      return this.get(projectId)!;
+    })();
   }
 
   rebind(projectId: string, inputPath: string): ProjectRecord {
@@ -149,6 +163,7 @@ export class ProjectRepository {
       throw new Error("Project directory is already bound to another project");
     const timestamp = Date.now();
     return this.storage.atomic(() => {
+      this.storage.assertWritable();
       this.storage.database.connection
         .prepare(
           "UPDATE project_location SET status = 'historical' WHERE project_id = ? AND status = 'active'",

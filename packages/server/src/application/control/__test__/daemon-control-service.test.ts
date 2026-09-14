@@ -1,7 +1,13 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SessionStore } from "@openharness/services";
+import { createWorkflowPlan, createWorkflowRunSnapshot } from "@openharness/coordinator";
 import { describe, expect, it, vi } from "vitest";
 
 import { DaemonControlService } from "../daemon-control-service.js";
 import { DaemonOperationGate } from "../daemon-operation-gate.js";
+import { DaemonApplication } from "../../daemon-application.js";
 
 function createControl() {
   const sessions = [
@@ -9,7 +15,6 @@ function createControl() {
     { id: "s2", status: "archived" },
   ];
   const store = {
-    workflows: { listRuns: vi.fn(() => []) },
     listSessions: vi.fn(() => sessions),
     listRuns: vi.fn((sessionId) => sessionId === "s1" ? [{ status: "running" }] : []),
     listSessionTasks: vi.fn(() => []),
@@ -42,6 +47,7 @@ function createControl() {
   const control = new DaemonControlService({
     store: store as any,
     permissions: store.permissions,
+    workflows: { listRuns: () => [{ runId: "workflow-1", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 2 }] },
     runEngine: runEngine as any,
     agentPool: agentPool as any,
     operationGate,
@@ -52,6 +58,41 @@ function createControl() {
 }
 
 describe("DaemonControlService", () => {
+  it("uses the Workflow queries supplied by daemon composition for snapshots and run inspection", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-control-workflows-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    const application = new DaemonApplication({
+      store,
+      settings: {
+        apiFormat: "anthropic", model: "test-model", maxTurns: 1,
+        permission: { mode: "full_auto" }, sandbox: { enabled: false }, memory: { enabled: false },
+      },
+      log: () => undefined,
+    });
+    const workflows = store.workflows;
+    try {
+      store.createSession({ id: "s1", cwd: directory, model: "test" });
+      store.createRun({ id: "r1", sessionId: "s1" });
+      const spec = { mode: "sequential" as const, tasks: [{ id: "one" }] };
+      application.workflows.save(createWorkflowRunSnapshot({
+        runId: "workflow-1", ownerRun: "r1", status: "completed", summary: "done",
+        spec, plan: createWorkflowPlan(spec), results: new Map(), running: new Set(), createdAt: 1,
+      }));
+      Object.defineProperty(store, "workflows", {
+        configurable: true,
+        get: () => { throw new Error("Control must use its injected Workflow queries"); },
+      });
+
+      expect(application.control.runtimeSnapshot().workflows).toEqual({ total: 1, byStatus: { completed: 1 } });
+      expect(application.control.inspectRun("r1")?.workflows).toMatchObject([{ runId: "workflow-1", ownerRunId: "r1" }]);
+    } finally {
+      Object.defineProperty(store, "workflows", { configurable: true, value: workflows });
+      await application.close();
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("builds the daemon runtime snapshot from authoritative owners", () => {
     const { control } = createControl();
 
@@ -60,6 +101,7 @@ describe("DaemonControlService", () => {
     expect(snapshot).toMatchObject({
       sessions: { total: 2, byStatus: { idle: 1, archived: 1 } },
       runs: { total: 1, byStatus: { running: 1 } },
+      workflows: { total: 1, byStatus: { running: 1 } },
       permissions: { total: 1, byStatus: { pending: 1 } },
       projectionSettlements: {
         total: 2,
