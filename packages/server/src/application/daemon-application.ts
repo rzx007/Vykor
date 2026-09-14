@@ -708,7 +708,7 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供定时任务相关的查询和操作接口
        */
       this.schedules = new ScheduledTaskService({
-        store,
+        schedules: store.schedules,
         // 定时任务不是另一套执行器：到期后也是 admitPrompt，走上面同一条 Agent 车道。
         execute: async (task, scheduledRun) => {
           const projectCwd = task.projectPaths[0];

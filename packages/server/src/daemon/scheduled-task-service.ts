@@ -1,12 +1,13 @@
 import {
   computeNextScheduledTime,
   validateScheduledRecurrence,
-  type SessionStore,
 } from "@openharness/services";
 import type {
+  CreateScheduledRunInput,
   CreateScheduledTaskInput,
   ScheduledRunRecord,
   ScheduledTaskRecord,
+  UpdateScheduledRunInput,
   UpdateScheduledTaskInput,
 } from "@openharness/protocol";
 
@@ -20,8 +21,20 @@ export interface ScheduledTaskExecutionResult {
   summary: string;
 }
 
+export interface ScheduleOperations {
+  createTask(input: CreateScheduledTaskInput): ScheduledTaskRecord;
+  getTask(id: string): ScheduledTaskRecord | undefined;
+  listTasks(options?: { status?: ScheduledTaskRecord["status"] }): ScheduledTaskRecord[];
+  updateTask(id: string, patch: UpdateScheduledTaskInput): ScheduledTaskRecord;
+  deleteTask(id: string): boolean;
+  createRun(input: CreateScheduledRunInput): ScheduledRunRecord;
+  listRuns(options?: { taskId?: string; unread?: boolean; limit?: number }): ScheduledRunRecord[];
+  updateRun(id: string, patch: UpdateScheduledRunInput): ScheduledRunRecord;
+  interruptActiveRuns(reason: string): number;
+}
+
 export interface ScheduledTaskServiceOptions {
-  store: SessionStore;
+  schedules: ScheduleOperations;
   execute(
     task: ScheduledTaskRecord,
     run: ScheduledRunRecord,
@@ -34,15 +47,15 @@ export class ScheduledTaskService {
   private shuttingDown = false;
 
   constructor(private readonly options: ScheduledTaskServiceOptions) {
-    options.store.interruptActiveScheduledRuns(DAEMON_RESTART_REASON);
-    for (const task of options.store.listScheduledTasks()) {
+    options.schedules.interruptActiveRuns(DAEMON_RESTART_REASON);
+    for (const task of options.schedules.listTasks()) {
       const missedRun =
         task.status === "active" &&
         task.missedRunPolicy === "run_once" &&
         task.nextRunAt !== undefined &&
         task.nextRunAt <= Date.now();
       const restored = missedRun
-        ? options.store.updateScheduledTask(task.id, { nextRunAt: Date.now() })
+        ? options.schedules.updateTask(task.id, { nextRunAt: Date.now() })
         : task.status === "active"
           ? this.recomputeNext(task)
           : task;
@@ -65,7 +78,7 @@ export class ScheduledTaskService {
       active: tasks.filter((task) => task.status === "active").length,
       paused: tasks.filter((task) => task.status === "paused").length,
       executing: this.active.size,
-      unread: this.options.store.listScheduledRuns({ unread: true, limit: 500 })
+      unread: this.options.schedules.listRuns({ unread: true, limit: 500 })
         .length,
     };
   }
@@ -73,11 +86,11 @@ export class ScheduledTaskService {
   listTasks(
     options: { status?: ScheduledTaskRecord["status"] } = {},
   ): ScheduledTaskRecord[] {
-    return this.options.store.listScheduledTasks(options);
+    return this.options.schedules.listTasks(options);
   }
 
   getTask(id: string): ScheduledTaskRecord {
-    const task = this.options.store.getScheduledTask(id);
+    const task = this.options.schedules.getTask(id);
     if (!task) throw new Error(`Scheduled task not found: ${id}`);
     return task;
   }
@@ -85,7 +98,7 @@ export class ScheduledTaskService {
   listRuns(
     options: { taskId?: string; unread?: boolean; limit?: number } = {},
   ): ScheduledRunRecord[] {
-    return this.options.store.listScheduledRuns(options);
+    return this.options.schedules.listRuns(options);
   }
 
   createTask(input: CreateScheduledTaskInput): ScheduledTaskRecord {
@@ -103,7 +116,7 @@ export class ScheduledTaskService {
               timezone: input.timezone,
             },
           );
-    const task = this.options.store.createScheduledTask({
+    const task = this.options.schedules.createTask({
       ...input,
       nextRunAt,
     });
@@ -139,7 +152,7 @@ export class ScheduledTaskService {
             )
           : current.nextRunAt
         : null;
-    const task = this.options.store.updateScheduledTask(id, {
+    const task = this.options.schedules.updateTask(id, {
       ...patch,
       ...(scheduleChanged ? { nextRunAt } : {}),
     });
@@ -152,7 +165,7 @@ export class ScheduledTaskService {
     if (this.active.has(id))
       throw new Error(`Scheduled task is running: ${id}`);
     this.clearTimer(id);
-    if (!this.options.store.deleteScheduledTask(id)) {
+    if (!this.options.schedules.deleteTask(id)) {
       throw new Error(`Scheduled task not found: ${id}`);
     }
   }
@@ -164,7 +177,7 @@ export class ScheduledTaskService {
   }
 
   markRunRead(id: string, unread = false): ScheduledRunRecord {
-    return this.options.store.updateScheduledRun(id, { unread });
+    return this.options.schedules.updateRun(id, { unread });
   }
 
   async shutdown(): Promise<void> {
@@ -207,7 +220,7 @@ export class ScheduledTaskService {
     if (existing) {
       if (task.overlapPolicy === "queue") {
         return await existing.then(() => {
-          const latest = this.options.store.getScheduledTask(task.id);
+          const latest = this.options.schedules.getTask(task.id);
           if (!latest)
             throw new Error(`Scheduled task not found: ${task.id}`);
           if (this.shuttingDown || latest.status !== "active") {
@@ -230,7 +243,7 @@ export class ScheduledTaskService {
         "Skipped because the previous scheduled run is still active",
       );
     }
-    const run = this.options.store.createScheduledRun({
+    const run = this.options.schedules.createRun({
       taskId: task.id,
       cause,
       scheduledFor,
@@ -241,7 +254,7 @@ export class ScheduledTaskService {
       return await promise;
     } finally {
       this.active.delete(task.id);
-      const latest = this.options.store.getScheduledTask(task.id);
+      const latest = this.options.schedules.getTask(task.id);
       if (latest) this.install(latest);
     }
   }
@@ -250,13 +263,13 @@ export class ScheduledTaskService {
     task: ScheduledTaskRecord,
     run: ScheduledRunRecord,
   ): Promise<ScheduledRunRecord> {
-    this.options.store.updateScheduledRun(run.id, {
+    this.options.schedules.updateRun(run.id, {
       status: "running",
       startedAt: Date.now(),
     });
     try {
       const result = await this.options.execute(task, run);
-      const finished = this.options.store.updateScheduledRun(run.id, {
+      const finished = this.options.schedules.updateRun(run.id, {
         status: "succeeded",
         sessionId: result.sessionId,
         runId: result.runId,
@@ -271,7 +284,7 @@ export class ScheduledTaskService {
       const status = message.includes("requires user attention")
         ? "needs_attention"
         : "failed";
-      const finished = this.options.store.updateScheduledRun(run.id, {
+      const finished = this.options.schedules.updateRun(run.id, {
         status,
         error: message,
         ...(status === "needs_attention" ? { attentionReason: message } : {}),
@@ -288,12 +301,12 @@ export class ScheduledTaskService {
     finishedAt: number,
     succeeded: boolean,
   ): void {
-    const latest = this.options.store.getScheduledTask(taskId);
+    const latest = this.options.schedules.getTask(taskId);
     if (!latest) return;
 
     const runCount = latest.runCount + 1;
     if (latest.status === "paused" || latest.status === "completed") {
-      this.options.store.updateScheduledTask(taskId, {
+      this.options.schedules.updateTask(taskId, {
         runCount,
         lastRunAt: finishedAt,
         nextRunAt: null,
@@ -324,7 +337,7 @@ export class ScheduledTaskService {
         shouldComplete = true;
       }
     }
-    this.options.store.updateScheduledTask(taskId, {
+    this.options.schedules.updateTask(taskId, {
       runCount,
       lastRunAt: finishedAt,
       nextRunAt,
@@ -342,9 +355,9 @@ export class ScheduledTaskService {
           timezone: task.timezone,
         },
       );
-      return this.options.store.updateScheduledTask(task.id, { nextRunAt });
+      return this.options.schedules.updateTask(task.id, { nextRunAt });
     } catch {
-      return this.options.store.updateScheduledTask(task.id, {
+      return this.options.schedules.updateTask(task.id, {
         status: "completed",
         nextRunAt: null,
       });
@@ -357,12 +370,12 @@ export class ScheduledTaskService {
     scheduledFor: number,
     summary: string,
   ): ScheduledRunRecord {
-    const skipped = this.options.store.createScheduledRun({
+    const skipped = this.options.schedules.createRun({
       taskId,
       cause,
       scheduledFor,
     });
-    return this.options.store.updateScheduledRun(skipped.id, {
+    return this.options.schedules.updateRun(skipped.id, {
       status: "skipped",
       summary,
       unread: true,
