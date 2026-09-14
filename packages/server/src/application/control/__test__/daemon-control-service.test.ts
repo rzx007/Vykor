@@ -9,6 +9,7 @@ function createControl() {
     { id: "s2", status: "archived" },
   ];
   const store = {
+    workflows: { listRuns: vi.fn(() => []) },
     listSessions: vi.fn(() => sessions),
     listRuns: vi.fn((sessionId) => sessionId === "s1" ? [{ status: "running" }] : []),
     listSessionTasks: vi.fn(() => []),

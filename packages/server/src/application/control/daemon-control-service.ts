@@ -46,10 +46,7 @@ export class DaemonControlService {
     const sessions = this.context.store.listSessions({ includeArchived: true });
     const runs = sessions.flatMap((session) => this.context.store.listRuns(session.id));
     const tasks = sessions.flatMap((session) => this.context.store.listSessionTasks(session.id));
-    const workflows =
-      typeof this.context.store.listWorkflowRuns === "function"
-        ? this.context.store.listWorkflowRuns()
-        : [];
+    const workflows = this.context.store.workflows.listRuns();
     const permissions = this.context.store.listPermissionRequests();
     const projectionSettlements = this.context.store.listProjectionSettlements();
     const attempts =

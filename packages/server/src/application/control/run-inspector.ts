@@ -53,9 +53,9 @@ export function inspectDurableRun(store: SessionStore, runId: string, includeCon
   const permissions = store.listPermissionRequests({ sessionId: run.sessionId }).filter((row) => row.runId === runId);
   const childExecutions = store.listSessionTasks(run.sessionId).filter((row) => row.runId === runId || row.metadata.sourceRunId === runId);
   const attempts = store.listRunAttempts(runId);
-  const workflows = typeof store.listWorkflowRuns === "function"
-    ? store.listWorkflowRuns().filter((workflow) => workflow.ownerRunId === runId)
-    : [];
+  const workflows = store.workflows
+    .listRuns()
+    .filter((workflow) => workflow.ownerRunId === runId);
   const references = new Set<string>([
     runId,
     ...(run.inputId ? [run.inputId] : []),
