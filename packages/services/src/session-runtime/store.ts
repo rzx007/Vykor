@@ -66,9 +66,6 @@ import type {
   SessionInputAttachmentRecord,
   SessionUserInputItem,
   SessionGoal,
-  GoalStatus,
-  GoalWait,
-  GoalAssessment,
 } from "@openharness/protocol";
 import { AttachmentError } from "../attachment/attachment-errors.js";
 import { SessionDatabase } from "../database/session-database.js";
@@ -85,6 +82,13 @@ import { ProjectRepository } from "../projects/project-repository.js";
 import { ScheduleRepository } from "../schedules/schedule-repository.js";
 import { WorkflowRepository } from "../workflows/workflow-repository.js";
 import { ChannelRepository } from "../channels/channel-repository.js";
+import {
+  GoalRepository,
+  GoalTransactions,
+  type CreateSessionGoalStoreInput,
+  type SessionGoalRequestRecord,
+  type UpdateSessionGoalStoreInput,
+} from "../goals/index.js";
 import type {
   StoredWorkflowRunInput,
   StoredWorkflowRunRecord,
@@ -154,7 +158,10 @@ import {
 
 export type { SessionStoreOptions } from "./store-state.js";
 
-export type { StoredWorkflowRunInput, StoredWorkflowRunRecord } from "../workflows/workflow-records.js";
+export type {
+  StoredWorkflowRunInput,
+  StoredWorkflowRunRecord,
+} from "../workflows/workflow-records.js";
 
 export interface ApplicationOwnerLease {
   ownerId: string;
@@ -179,41 +186,11 @@ export interface MarkAttachmentReadyInput {
   updatedAt?: number;
 }
 
-export interface CreateSessionGoalStoreInput {
-  id?: string;
-  sessionId: string;
-  objective: string;
-  pluginId?: string;
-  maxAutoTurns: number;
-}
-
-export interface UpdateSessionGoalStoreInput {
-  expectedRevision: number;
-  objective?: string;
-  pluginId?: string;
-  status?: GoalStatus;
-  maxAutoTurns?: number;
-  autoTurnsUsed?: number;
-  noProgressCount?: number;
-  blockerKey?: string | null;
-  currentRunId?: string | null;
-  reason?: string | null;
-  wait?: GoalWait | null;
-  evidence?: string[];
-  assessment?: GoalAssessment | null;
-}
-
-export interface SessionGoalRequestRecord {
-  requestId: string;
-  sessionId: string;
-  fingerprint: string;
-  status: "pending" | "completed" | "failed";
-  goalId?: string;
-  result?: Record<string, unknown>;
-  error?: string;
-  createdAt: number;
-  updatedAt: number;
-}
+export type {
+  CreateSessionGoalStoreInput,
+  SessionGoalRequestRecord,
+  UpdateSessionGoalStoreInput,
+} from "../goals/index.js";
 
 export interface ImportingAttachmentRecord extends AttachmentAssetRecord {
   stagingName: string;
@@ -226,44 +203,6 @@ export class ApplicationOwnerConflictError extends Error {
     );
     this.name = "ApplicationOwnerConflictError";
   }
-}
-
-function sessionGoalFromRow(row: Record<string, unknown>): SessionGoal {
-  const wait =
-    typeof row.wait_json === "string"
-      ? (JSON.parse(row.wait_json) as GoalWait)
-      : undefined;
-  const evidence =
-    typeof row.evidence_json === "string"
-      ? (JSON.parse(row.evidence_json) as string[])
-      : [];
-  const assessment =
-    typeof row.last_assessment_json === "string"
-      ? (JSON.parse(row.last_assessment_json) as GoalAssessment)
-      : undefined;
-  return {
-    id: String(row.id),
-    sessionId: String(row.session_id),
-    objective: String(row.objective),
-    ...(typeof row.plugin_id === "string" ? { pluginId: row.plugin_id } : {}),
-    revision: Number(row.revision),
-    status: String(row.status) as GoalStatus,
-    maxAutoTurns: Number(row.max_auto_turns),
-    autoTurnsUsed: Number(row.auto_turns_used),
-    noProgressCount: Number(row.no_progress_count),
-    ...(typeof row.blocker_key === "string"
-      ? { blockerKey: row.blocker_key }
-      : {}),
-    ...(typeof row.current_run_id === "string"
-      ? { currentRunId: row.current_run_id }
-      : {}),
-    ...(typeof row.reason === "string" ? { reason: row.reason } : {}),
-    ...(wait ? { wait } : {}),
-    evidence,
-    ...(assessment ? { assessment } : {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
 }
 
 export interface RetentionPolicy {
@@ -294,6 +233,7 @@ export class SessionStore {
   readonly schedules!: ScheduleRepository;
   readonly workflows!: WorkflowRepository;
   readonly channels!: ChannelRepository;
+  readonly goals!: GoalTransactions;
   private storage!: StorageContext;
   private closed = false;
   private transactionDepth = 0;
@@ -325,12 +265,18 @@ export class SessionStore {
       ...options.attachmentLimits,
     });
     try {
-      const loaded = loadSessionReadModel(database.connection, this.eventRegistry);
+      const loaded = loadSessionReadModel(
+        database.connection,
+        this.eventRegistry,
+      );
       this.storage = {
         database,
         state: loaded.state,
         mutations: createMutationBuffer(),
-        eventSequence: DurableEventSequence.load(database.connection, loaded.state),
+        eventSequence: DurableEventSequence.load(
+          database.connection,
+          loaded.state,
+        ),
         deltaCheckpoint,
         atomic: (work) => this.transaction(work),
         assertWritable: () => this.assertCurrentOwner(),
@@ -339,6 +285,15 @@ export class SessionStore {
       this.schedules = new ScheduleRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);
       this.channels = new ChannelRepository(this.storage);
+      const goalRepository = new GoalRepository(this.storage);
+      this.goals = new GoalTransactions({
+        storage: this.storage,
+        repository: goalRepository,
+        assertSession: (sessionId) => assertSession(this.state, sessionId),
+        assertMutableSession,
+        getRun: (runId) => this.getRun(runId),
+        appendEvent: (input) => this.appendEvent(input),
+      });
     } catch (error) {
       database.close();
       throw error;
@@ -1368,7 +1323,9 @@ export class SessionStore {
       this.appendEvent({
         type: `workflow.${input.type}`,
         sessionId: input.sessionId,
-        payload: { event: JSON.parse(input.eventJson) as Record<string, unknown> },
+        payload: {
+          event: JSON.parse(input.eventJson) as Record<string, unknown>,
+        },
       });
     }
     return seq;
@@ -2427,8 +2384,7 @@ export class SessionStore {
       Buffer.byteLength(input.delta, "utf8"),
     );
     if (this.transactionDepth === 0) {
-      if (reachedFlushThreshold)
-        this.flushMessagePartDeltas();
+      if (reachedFlushThreshold) this.flushMessagePartDeltas();
       else this.deltaCheckpoint.schedule();
     }
     return clone(event);
@@ -2498,7 +2454,8 @@ export class SessionStore {
     `,
       )
       .get(input.projector, input.rootSessionId, input.eventSequence) as
-      Record<string, unknown> | undefined;
+      | Record<string, unknown>
+      | undefined;
     if (existing) {
       const record = projectionSettlementFromRow(existing);
       if (
@@ -2648,63 +2605,11 @@ export class SessionStore {
   }
 
   createGoal(input: CreateSessionGoalStoreInput): SessionGoal {
-    this.assertCurrentOwner();
-    const session = assertSession(this.state, input.sessionId);
-    assertMutableSession(session);
-    const id = input.id ?? randomUUID();
-    const timestamp = now();
-    try {
-      this.database
-        .prepare(
-          `
-        INSERT INTO session_goal (
-          id, session_id, objective, plugin_id, revision, status, max_auto_turns,
-          auto_turns_used, no_progress_count, evidence_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 0, 'active', ?, 0, 0, '[]', ?, ?)
-      `,
-        )
-        .run(
-          id,
-          input.sessionId,
-          input.objective,
-          input.pluginId ?? null,
-          input.maxAutoTurns,
-          timestamp,
-          timestamp,
-        );
-    } catch (error) {
-      if (String(error).includes("session_goal_session_open_unique")) {
-        throw new Error(`Session already has an open goal: ${input.sessionId}`);
-      }
-      throw error;
-    }
-    const goal = this.getGoal(id)!;
-    this.appendEvent({
-      type: "session.goal.created",
-      sessionId: input.sessionId,
-      payload: { goal },
-    });
-    return goal;
+    return this.goals.createGoal(input);
   }
 
   getGoalRequest(requestId: string): SessionGoalRequestRecord | undefined {
-    const row = this.database
-      .prepare(`SELECT * FROM session_goal_request WHERE request_id = ?`)
-      .get(requestId) as Record<string, unknown> | undefined;
-    if (!row) return undefined;
-    return {
-      requestId: String(row.request_id),
-      sessionId: String(row.session_id),
-      fingerprint: String(row.fingerprint),
-      status: String(row.status) as SessionGoalRequestRecord["status"],
-      ...(typeof row.goal_id === "string" ? { goalId: row.goal_id } : {}),
-      ...(typeof row.result_json === "string"
-        ? { result: JSON.parse(row.result_json) as Record<string, unknown> }
-        : {}),
-      ...(typeof row.error === "string" ? { error: row.error } : {}),
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
-    };
+    return this.goals.getGoalRequest(requestId);
   }
 
   beginGoalRequest(input: {
@@ -2712,29 +2617,7 @@ export class SessionStore {
     sessionId: string;
     fingerprint: string;
   }): SessionGoalRequestRecord {
-    this.assertCurrentOwner();
-    const existing = this.getGoalRequest(input.requestId);
-    if (existing) {
-      if (
-        existing.sessionId !== input.sessionId ||
-        existing.fingerprint !== input.fingerprint
-      )
-        throw new Error("session_goal_request_conflict");
-      return existing;
-    }
-    const timestamp = now();
-    this.database
-      .prepare(
-        `INSERT INTO session_goal_request (request_id, session_id, fingerprint, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)`,
-      )
-      .run(
-        input.requestId,
-        input.sessionId,
-        input.fingerprint,
-        timestamp,
-        timestamp,
-      );
-    return this.getGoalRequest(input.requestId)!;
+    return this.goals.beginGoalRequest(input);
   }
 
   settleGoalRequest(
@@ -2746,23 +2629,7 @@ export class SessionStore {
       error?: string;
     },
   ): SessionGoalRequestRecord {
-    this.assertCurrentOwner();
-    const timestamp = now();
-    const result = this.database
-      .prepare(
-        `UPDATE session_goal_request SET status = ?, goal_id = ?, result_json = ?, error = ?, updated_at = ? WHERE request_id = ?`,
-      )
-      .run(
-        input.status,
-        input.goalId ?? null,
-        input.result ? JSON.stringify(input.result) : null,
-        input.error ?? null,
-        timestamp,
-        requestId,
-      );
-    if (result.changes !== 1)
-      throw new Error(`Session goal request not found: ${requestId}`);
-    return this.getGoalRequest(requestId)!;
+    return this.goals.settleGoalRequest(requestId, input);
   }
 
   recordGoalAssessment(input: {
@@ -2771,37 +2638,11 @@ export class SessionStore {
     runId: string;
     assessment: Record<string, unknown>;
   }): void {
-    this.assertCurrentOwner();
-    this.database
-      .prepare(
-        `
-      INSERT INTO session_goal_assessment (id, goal_id, revision, run_id, assessment_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(goal_id, revision, run_id) DO UPDATE SET assessment_json = excluded.assessment_json
-    `,
-      )
-      .run(
-        randomUUID(),
-        input.goalId,
-        input.revision,
-        input.runId,
-        JSON.stringify(input.assessment),
-        now(),
-      );
+    this.goals.recordGoalAssessment(input);
   }
 
   goalEvidenceSignatures(goalId: string): string[] {
-    const rows = this.database
-      .prepare(
-        `SELECT assessment_json FROM session_goal_assessment WHERE goal_id = ?`,
-      )
-      .all(goalId) as { assessment_json: string }[];
-    return rows.flatMap((row) => {
-      const value = JSON.parse(row.assessment_json) as {
-        verifiedSignatures?: string[];
-      };
-      return value.verifiedSignatures ?? [];
-    });
+    return this.goals.goalEvidenceSignatures(goalId);
   }
 
   recordGoalContinuation(input: {
@@ -2811,82 +2652,22 @@ export class SessionStore {
     inputId: string;
     runId: string;
   }): boolean {
-    this.assertCurrentOwner();
-    const timestamp = now();
-    const result = this.database
-      .prepare(
-        `
-      INSERT OR IGNORE INTO session_goal_continuation
-        (id, goal_id, revision, previous_run_id, input_id, run_id, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-    `,
-      )
-      .run(
-        randomUUID(),
-        input.goalId,
-        input.revision,
-        input.previousRunId,
-        input.inputId,
-        input.runId,
-        timestamp,
-        timestamp,
-      );
-    return result.changes === 1;
+    return this.goals.recordGoalContinuation(input);
   }
 
   pauseActiveGoalsOnStartup(): number {
-    this.assertCurrentOwner();
-    return this.transaction(() => {
-      const rows = this.database
-        .prepare(`SELECT id FROM session_goal WHERE status = 'active'`)
-        .all() as { id: string }[];
-      for (const { id } of rows) {
-        const goal = this.getGoal(id)!;
-        this.updateGoal(id, {
-          expectedRevision: goal.revision,
-          status: "paused",
-          currentRunId: null,
-          reason: "应用重启后需要手动继续",
-        });
-      }
-      this.database
-        .prepare(
-          `UPDATE session_goal_continuation SET status = 'cancelled', updated_at = ? WHERE status = 'pending'`,
-        )
-        .run(now());
-      return rows.length;
-    });
+    return this.goals.pauseActiveGoalsOnStartup();
   }
 
   markGoalContinuation(
     runId: string,
     status: "dispatched" | "cancelled",
   ): void {
-    this.assertCurrentOwner();
-    this.database
-      .prepare(
-        `UPDATE session_goal_continuation SET status = ?, updated_at = ? WHERE run_id = ?`,
-      )
-      .run(status, now(), runId);
+    this.goals.markGoalContinuation(runId, status);
   }
 
   finishGoalRun(runId: string): void {
-    this.assertCurrentOwner();
-    const row = this.database
-      .prepare(`SELECT id FROM session_goal WHERE current_run_id = ?`)
-      .get(runId) as { id: string } | undefined;
-    if (!row) return;
-    this.database
-      .prepare(
-        `UPDATE session_goal SET current_run_id = NULL, updated_at = ? WHERE id = ?`,
-      )
-      .run(now(), row.id);
-    const goal = this.getGoal(row.id)!;
-    this.appendEvent({
-      type: "session.goal.updated",
-      sessionId: goal.sessionId,
-      payload: { goal },
-    });
+    this.goals.finishGoalRun(runId);
   }
 
   startGoalRun(
@@ -2895,134 +2676,19 @@ export class SessionStore {
     runId: string,
     automatic: boolean,
   ): boolean {
-    this.assertCurrentOwner();
-    return this.transaction(() => {
-      const goal = this.getGoal(goalId);
-      if (!goal || goal.status !== "active" || goal.revision !== revision)
-        return false;
-      const run = this.getRun(runId);
-      if (
-        !run ||
-        run.sessionId !== goal.sessionId ||
-        (run.status !== "pending" && run.status !== "running")
-      )
-        return false;
-      if (goal.currentRunId === runId) return true;
-      if (automatic && goal.autoTurnsUsed >= goal.maxAutoTurns) {
-        this.updateGoal(goalId, {
-          expectedRevision: revision,
-          status: "paused",
-          reason: "目标自动续跑额度已用完",
-          currentRunId: null,
-        });
-        return false;
-      }
-      // Starting a run changes accounting, not the objective revision the run is bound to.
-      this.database
-        .prepare(
-          `UPDATE session_goal SET current_run_id = ?, auto_turns_used = auto_turns_used + ?, updated_at = ? WHERE id = ? AND revision = ?`,
-        )
-        .run(runId, automatic ? 1 : 0, now(), goalId, revision);
-      this.appendEvent({
-        type: "session.goal.updated",
-        sessionId: goal.sessionId,
-        payload: { goal: this.getGoal(goalId)! },
-      });
-      return true;
-    });
+    return this.goals.startGoalRun(goalId, revision, runId, automatic);
   }
 
   getGoal(id: string): SessionGoal | undefined {
-    const row = this.database
-      .prepare(`SELECT * FROM session_goal WHERE id = ?`)
-      .get(id);
-    return row ? sessionGoalFromRow(row as Record<string, unknown>) : undefined;
+    return this.goals.getGoal(id);
   }
 
   getCurrentGoal(sessionId: string): SessionGoal | undefined {
-    const row = this.database
-      .prepare(
-        `
-      SELECT * FROM session_goal
-      WHERE session_id = ?
-      ORDER BY CASE WHEN status IN ('active','waiting_user','blocked','paused') THEN 0 ELSE 1 END,
-               updated_at DESC
-      LIMIT 1
-    `,
-      )
-      .get(sessionId);
-    return row ? sessionGoalFromRow(row as Record<string, unknown>) : undefined;
+    return this.goals.getCurrentGoal(sessionId);
   }
 
   updateGoal(id: string, input: UpdateSessionGoalStoreInput): SessionGoal {
-    this.assertCurrentOwner();
-    const current = this.getGoal(id);
-    if (!current) throw new Error(`Session goal not found: ${id}`);
-    if (current.revision !== input.expectedRevision)
-      throw new Error("session_goal_revision_conflict");
-    const nextRevision = current.revision + 1;
-    const timestamp = now();
-    const next = {
-      objective: input.objective ?? current.objective,
-      pluginId: input.pluginId ?? current.pluginId,
-      status: input.status ?? current.status,
-      maxAutoTurns: input.maxAutoTurns ?? current.maxAutoTurns,
-      autoTurnsUsed: input.autoTurnsUsed ?? current.autoTurnsUsed,
-      noProgressCount: input.noProgressCount ?? current.noProgressCount,
-      blockerKey:
-        input.blockerKey === undefined
-          ? current.blockerKey
-          : (input.blockerKey ?? undefined),
-      currentRunId:
-        input.currentRunId === undefined
-          ? current.currentRunId
-          : (input.currentRunId ?? undefined),
-      reason:
-        input.reason === undefined
-          ? current.reason
-          : (input.reason ?? undefined),
-      wait: input.wait === undefined ? current.wait : (input.wait ?? undefined),
-      evidence: input.evidence ?? current.evidence,
-      assessment:
-        input.assessment === undefined
-          ? current.assessment
-          : (input.assessment ?? undefined),
-    };
-    const result = this.database
-      .prepare(
-        `
-      UPDATE session_goal SET objective = ?, plugin_id = ?, revision = ?, status = ?, max_auto_turns = ?,
-        auto_turns_used = ?, no_progress_count = ?, blocker_key = ?, current_run_id = ?, reason = ?,
-        wait_json = ?, evidence_json = ?, last_assessment_json = ?, updated_at = ?
-      WHERE id = ? AND revision = ?
-    `,
-      )
-      .run(
-        next.objective,
-        next.pluginId ?? null,
-        nextRevision,
-        next.status,
-        next.maxAutoTurns,
-        next.autoTurnsUsed,
-        next.noProgressCount,
-        next.blockerKey ?? null,
-        next.currentRunId ?? null,
-        next.reason ?? null,
-        next.wait ? JSON.stringify(next.wait) : null,
-        JSON.stringify(next.evidence),
-        next.assessment ? JSON.stringify(next.assessment) : null,
-        timestamp,
-        id,
-        input.expectedRevision,
-      );
-    if (result.changes !== 1) throw new Error("session_goal_revision_conflict");
-    const goal = this.getGoal(id)!;
-    this.appendEvent({
-      type: "session.goal.updated",
-      sessionId: goal.sessionId,
-      payload: { goal },
-    });
-    return goal;
+    return this.goals.updateGoal(id, input);
   }
 
   createRun(input: CreateRunInput): SessionRunRecord {
