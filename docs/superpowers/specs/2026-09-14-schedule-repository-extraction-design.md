@@ -10,7 +10,7 @@
 
 - 建立唯一的 `ScheduleRepository` 存储入口。
 - 从 `SessionStore` 移出 Scheduled Task/Run SQL 和 row conversion。
-- 保留 Store 原有九个方法作为兼容转发。
+- 保留 Store 原有十个方法作为兼容转发。
 - 让 `ScheduledTaskService` 依赖窄 `ScheduleOperations`。
 - 保持 schema、migration、协议、排序、默认值和恢复行为不变。
 
@@ -65,15 +65,15 @@ Repository 直接使用 `storage.database.connection`。该域不修改 read mod
 - 容错 JSON 解析；
 - patch 合并时过滤 `undefined`。
 
-默认 JSON 值保持现状：project/skill/plugin 数组为空，permission profile 为 `{ mode: "workspace_write" }`。无效历史 JSON 继续使用默认值，不在本阶段改变为读取失败。
+JSON 兼容精确保持现状：SQL NULL、其他非字符串值和语法错误 JSON 使用 fallback；合法但类型不符的 JSON（例如 `null` 或 `{}` 出现在数组列）继续按当前宽松转换透传，不新增 shape 校验。project/skill/plugin 的 fallback 是空数组，permission profile 的 fallback 是 `{ mode: "workspace_write" }`。`stop_policy_json` 为 SQL NULL 时省略字段；非空但语法错误时保留 `stopPolicy: {}`。
 
 ## 数据与事务规则
 
 - Task 创建保留当前默认状态、execution mode、overlap/missed-run policy 和 createdBy。
 - Task update 中 `undefined` 表示不修改，`lastRunAt/nextRunAt: null` 表示清空。
-- 删除 Task 与其所有 Scheduled Run 在一个 SQLite transaction 中完成。
+- 删除 Task 与其所有 Scheduled Run 在一个 SQLite transaction 中完成；测试用 trigger 阻止第二条 Task DELETE，证明第一条 Runs DELETE 也会回滚。
 - 创建 Run 前检查 Task 存在；不存在时保持当前错误。
-- Run list 的 limit 规范化到 1–500，默认 50。
+- Run list 保持现有 limit 行为：默认 50，零或负数变为 1，大于 500 变为 500；本阶段不新增整数、`NaN` 或 `Infinity` 校验。
 - `interruptActiveRuns()` 只更新 queued/running，设置 interrupted、error、unread、finishedAt 和 updatedAt。
 - 所有读结果均由 row conversion 新建，调用方修改返回对象不会影响后续读取。
 
@@ -85,7 +85,7 @@ Store 增加：
 readonly schedules: ScheduleRepository
 ```
 
-原有方法只转发到 Repository。Store 中删除 Scheduled Task/Run SQL、row conversion 和仅为 Schedule patch 使用的 `withoutUndefined()`。
+原有十个方法只转发到 Repository。Store 中删除 Scheduled Task/Run SQL、row conversion 和仅为 Schedule patch 使用的 `withoutUndefined()`。
 
 ## Server 边界
 
@@ -93,39 +93,38 @@ readonly schedules: ScheduleRepository
 
 ```ts
 interface ScheduleOperations {
-  createTask(...): ScheduledTaskRecord
-  getTask(...): ScheduledTaskRecord | undefined
-  listTasks(...): ScheduledTaskRecord[]
-  updateTask(...): ScheduledTaskRecord
-  deleteTask(...): boolean
-  createRun(...): ScheduledRunRecord
-  getRun(...): ScheduledRunRecord | undefined
-  listRuns(...): ScheduledRunRecord[]
-  updateRun(...): ScheduledRunRecord
-  interruptActiveRuns(...): number
+  createTask(input: CreateScheduledTaskInput): ScheduledTaskRecord
+  getTask(id: string): ScheduledTaskRecord | undefined
+  listTasks(options?: { status?: ScheduledTaskRecord["status"] }): ScheduledTaskRecord[]
+  updateTask(id: string, patch: UpdateScheduledTaskInput): ScheduledTaskRecord
+  deleteTask(id: string): boolean
+  createRun(input: CreateScheduledRunInput): ScheduledRunRecord
+  listRuns(options?: { taskId?: string; unread?: boolean; limit?: number }): ScheduledRunRecord[]
+  updateRun(id: string, patch: UpdateScheduledRunInput): ScheduledRunRecord
+  interruptActiveRuns(reason: string): number
 }
 ```
 
-Daemon composition 注入 `store.schedules`。计时器安装、trigger、execute、skip、finish 和 shutdown 逻辑不移动。
+Daemon composition 注入 `store.schedules`。Server capability 不包含 Service 未使用的 `getRun()`；Repository 和 Store 仍保留该方法作为存储与兼容 API。计时器安装、trigger、execute、skip、finish 和 shutdown 逻辑不移动。
 
 ## 测试
 
 Repository 使用真实 SQLite，覆盖：
 
-- Task 默认值、JSON 字段和磁盘重载；
+- Task 默认值、JSON 字段和磁盘重载，包括非字符串/语法错误 fallback、合法错误类型透传和坏 stop policy 得到 `{}`；
 - status 过滤、排序、update 的 undefined/null；
 - Task/Run 不存在错误；
 - Run 创建、过滤、unread 和 limit；
-- Task 删除连同 Runs 的原子性；
-- queued/running 启动恢复中断；
+- Task 删除连同 Runs 的成功路径，以及用 trigger 阻止 Task DELETE 后两类记录均保留的失败路径；
+- `interruptActiveRuns()` 将 queued/running 持久化为 interrupted 且不改终态；
 - 返回对象隔离。
 
-Store 保留一组旧 API 兼容测试。Server 测试用窄 fake 验证全部调用，并用真实 DaemonApplication 证明 composition 使用 `store.schedules` 而不是 Store 平铺方法。
+Store 保留一组旧 API 兼容测试。Server 测试用窄 fake 验证全部九个实际调用，并用真实 DaemonApplication 证明 composition 使用 `store.schedules` 而不是 Store 平铺方法。另用有序调用记录证明 `ScheduledTaskService` 构造时先调用 `interruptActiveRuns()`，再调用 `listTasks()` 和安装 timer；启动恢复顺序不由 Repository 测试代替。
 
 ## 验收标准
 
 - `ScheduleRepository` 是 Scheduled Task/Run SQL 的唯一所有者。
-- Store 九个 Schedule 方法只转发。
+- Store 十个 Schedule 方法只转发。
 - `ScheduledTaskService` 不依赖完整 SessionStore。
 - 删除、恢复、JSON、limit、null 清空行为有自动测试。
 - schema、migration、HTTP/SSE 和根公共导出不变。
