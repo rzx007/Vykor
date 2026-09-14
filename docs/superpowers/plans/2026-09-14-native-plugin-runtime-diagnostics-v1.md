@@ -12,34 +12,34 @@
 
 ## 文件结构
 
-- 修改：`packages/client/src/types/index.ts`  
+- 修改：`packages/client/src/types/index.ts`
   增加 `PluginRuntimeStatus` 类型，并把 `runtimeStatus` 加到 `PluginInfo`。
 
-- 修改：`packages/server/src/application/settings-api.ts`  
+- 修改：`packages/server/src/application/settings-api.ts`
   同步服务端接口类型，保证 Server 与 Client 结构一致。
 
-- 修改：`packages/server/src/application/default-services/plugin-service.ts`  
+- 修改：`packages/server/src/application/default-services/plugin-service.ts`
   增加状态映射函数，根据 enabled、verification、loaded diagnostics 和 toolRuntime 计算 `runtimeStatus`。
 
-- 修改：`packages/server/src/application/default-services/plugin-service.test.ts`  
+- 修改：`packages/server/src/application/default-services/plugin-service.test.ts`
   覆盖 disabled、pending_reload、failed、degraded 和 loaded 映射。
 
-- 修改：`packages/client/src/transport/__test__/http-client.test.ts`  
+- 修改：`packages/client/src/transport/__test__/http-client.test.ts`
   更新 PluginInfo fixture，保证客户端类型和 HTTP 传输测试包含 `runtimeStatus`。
 
-- 修改：`packages/server/src/http/routes/service.test.ts`  
+- 修改：`packages/server/src/http/routes/service.test.ts`
   更新服务路由测试 fixture。
 
-- 修改：`apps/desktop/src/main/features/plugin/plugin-service.test.ts`  
+- 修改：`apps/desktop/src/main/features/plugin/plugin-service.test.ts`
   更新 Desktop 主进程测试中的插件 fixture。
 
-- 修改：`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx`  
+- 修改：`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx`
   列表和详情使用 `runtimeStatus` 展示主状态。
 
-- 修改：`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx`  
+- 修改：`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx`
   覆盖至少一个失败状态和一个等待生效状态。
 
-- 修改：`docs/native-plugin-authoring.md`、`docs/plugins-contributions-design.md`、`docs/plugin-system-handoff.md`、`docs/native-plugin-next-stage-handoff.md`、`docs/README.md`  
+- 修改：`docs/native-plugin-authoring.md`、`docs/plugins-contributions-design.md`、`docs/plugin-system-handoff.md`、`docs/native-plugin-next-stage-handoff.md`、`docs/README.md`
   记录 Runtime 诊断 v1 的完成边界和阅读入口。
 
 ## 任务 1：定义 Runtime 状态类型

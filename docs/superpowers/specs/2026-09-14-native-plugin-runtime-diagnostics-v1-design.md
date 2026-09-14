@@ -1,7 +1,7 @@
 # Native Plugin Runtime 诊断 v1 设计
 
-> 状态：已批准范围的阶段设计。  
-> 日期：2026-09-14  
+> 状态：已批准范围的阶段设计。
+> 日期：2026-09-14
 > 适用范围：Native Plugin 安装后的 Runtime 状态、Plugin Service 返回结构、Desktop 插件页展示和作者排障文档。
 
 ## 1. 目标
