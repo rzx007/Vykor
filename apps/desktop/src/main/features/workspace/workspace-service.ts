@@ -15,9 +15,9 @@ import type {
 } from "../../../shared/workspace-types"
 import {
   safeImageMediaTypeFromName,
-  validateSafeImageBytes,
   type SafeImageMediaType,
 } from "../../../shared/safe-image-preview"
+import { evaluateInspectedImagePreview } from "../image-preview/inspect-safe-image-layout"
 
 import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
 import {
@@ -114,17 +114,18 @@ class WorkspaceService {
         })
       }
 
-      if (!validateSafeImageBytes(buffer, imageMediaType)) {
+      const decision = await evaluateInspectedImagePreview(buffer, imageMediaType)
+      if (!decision.ok) {
         return toReadResult(resolved.classification, buffer.byteLength, true, null, {
           previewBytes: null,
-          mediaType: null,
-          imagePreviewError: "image_unsupported",
+          mediaType: decision.error === "image_too_large" ? imageMediaType : null,
+          imagePreviewError: decision.error,
         })
       }
 
       return toReadResult(resolved.classification, buffer.byteLength, true, null, {
         previewBytes: exactArrayBuffer(buffer),
-        mediaType: imageMediaType,
+        mediaType: decision.mediaType,
         imagePreviewError: null,
       })
     }

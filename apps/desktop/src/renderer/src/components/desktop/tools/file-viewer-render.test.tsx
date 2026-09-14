@@ -61,7 +61,7 @@ describe("FileViewer image rendering", () => {
   })
 
   it.each([
-    ["image_too_large", "图片超过 50 MB，无法直接预览。"],
+    ["image_too_large", "图片太大，无法直接预览。"],
     ["image_unsupported", "无法安全预览这张图片。"],
   ] as const)("shows the %s document placeholder", async (imagePreviewError, message) => {
     await render(

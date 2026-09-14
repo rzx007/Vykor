@@ -176,7 +176,7 @@ function MarkdownPreview({ preview }: { preview: WorkspaceReadFileResult }): Rea
 function DocumentPlaceholder({ preview }: { preview: WorkspaceReadFileResult }): React.JSX.Element {
   const description =
     preview.imagePreviewError === "image_too_large"
-      ? "图片超过 50 MB，无法直接预览。"
+      ? "图片太大，无法直接预览。"
       : preview.imagePreviewError === "image_unsupported"
         ? "无法安全预览这张图片。"
         : "这类文件的预览后续接入，这里先保留标签页占位。"

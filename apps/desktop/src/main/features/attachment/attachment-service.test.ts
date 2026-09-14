@@ -3,7 +3,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import type { AttachmentAssetRecord, UploadAttachmentInput } from "@openharness/client"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+
+import { createSolidPng } from "../image-preview/safe-image-test-bytes"
 
 import type { DesktopAttachmentUploadEvent } from "../../../shared/attachment-types"
 import {
@@ -13,6 +15,13 @@ import {
 } from "./attachment-service"
 
 const temporaryDirectories: string[] = []
+let pngFixture: Uint8Array<ArrayBuffer>
+
+beforeAll(async () => {
+  const bytes = await createSolidPng(1, 1)
+  pngFixture = new Uint8Array(new ArrayBuffer(bytes.byteLength))
+  pngFixture.set(bytes)
+})
 
 afterEach(async () => {
   await Promise.all(
@@ -537,9 +546,7 @@ async function consumeBytes(body: UploadAttachmentInput["body"]): Promise<Uint8A
 }
 
 function pngBytes(): Uint8Array<ArrayBuffer> {
-  const bytes = new Uint8Array(new ArrayBuffer(8))
-  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-  return bytes
+  return pngFixture
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

@@ -16,8 +16,9 @@ import type {
   DesktopAttachmentCandidate,
   DesktopAttachmentError,
   DesktopAttachmentUploadEvent,
-} from "../../../shared/attachment-types"
-import { validateSafeImageBytes, type SafeImageMediaType } from "../../../shared/safe-image-preview"
+} from "@shared/attachment-types"
+import type { SafeImageMediaType } from "@shared/safe-image-preview"
+import { evaluateInspectedImagePreview } from "../image-preview/inspect-safe-image-layout"
 
 interface AttachmentClient {
   uploadAttachment(input: UploadAttachmentInput): Promise<AttachmentAssetRecord>
@@ -25,7 +26,9 @@ interface AttachmentClient {
   downloadAttachment(id: string, options?: DownloadAttachmentOptions): Promise<Response>
   deleteAttachment(id: string, options?: { signal?: AbortSignal }): Promise<AttachmentAssetRecord>
   scanAttachmentStorage(options?: { signal?: AbortSignal }): Promise<AttachmentStorageReport>
-  repairAttachmentStorage(options?: { signal?: AbortSignal }): Promise<AttachmentStorageRepairResult>
+  repairAttachmentStorage(options?: {
+    signal?: AbortSignal
+  }): Promise<AttachmentStorageRepairResult>
   gcAttachmentStorage(options?: { signal?: AbortSignal }): Promise<AttachmentStorageGcResult>
 }
 
@@ -95,12 +98,12 @@ export interface StartAttachmentUploadInput {
 type UploadTaskEvent =
   | { type: "progress"; bytesRead: number; totalBytes: number }
   | {
-      type: "success"
-      assetId: string
-      displayName: string
-      mediaType: string
-      sizeBytes: number
-    }
+    type: "success"
+    assetId: string
+    displayName: string
+    mediaType: string
+    sizeBytes: number
+  }
   | { type: "failed"; error: DesktopAttachmentError }
   | { type: "cancelled" }
 
@@ -251,8 +254,13 @@ export class DesktopAttachmentService {
     if ((asset.sizeBytes ?? 0) > previewLimit) throw serviceError("attachment_preview_too_large")
     const response = await client.downloadAttachment(assetId)
     const bytes = await readResponseBytes(response, previewLimit)
-    if (!validateSafeImageBytes(bytes, mediaType as SafeImageMediaType)) {
-      throw serviceError("attachment_preview_unsupported")
+    const decision = await evaluateInspectedImagePreview(bytes, mediaType as SafeImageMediaType)
+    if (!decision.ok) {
+      throw serviceError(
+        decision.error === "image_too_large"
+          ? "attachment_preview_too_large"
+          : "attachment_preview_unsupported"
+      )
     }
     return { bytes: exactArrayBuffer(bytes), mediaType }
   }
@@ -560,7 +568,7 @@ async function readResponseBytes(response: Response, maxBytes: number): Promise<
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
   let totalBytes = 0
-  for (;;) {
+  for (; ;) {
     const result = await reader.read()
     if (result.done) break
     totalBytes += result.value.byteLength

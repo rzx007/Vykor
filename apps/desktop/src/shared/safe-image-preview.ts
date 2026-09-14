@@ -1,6 +1,20 @@
 export type SafeImageMediaType =
   "image/avif" | "image/bmp" | "image/gif" | "image/jpeg" | "image/png" | "image/webp"
 
+export type SafeImageLayout = {
+  width: number
+  height: number
+  frames: number
+}
+
+export type SafeImagePreviewDecision =
+  | { ok: true; mediaType: SafeImageMediaType }
+  | { ok: false; error: "image_too_large" | "image_unsupported" }
+
+export const maxImagePreviewDimension = 8192
+export const maxImagePreviewPixels = 16_777_216
+export const maxImagePreviewFrames = 64
+
 const mediaTypeByExtension: Readonly<Record<string, SafeImageMediaType>> = {
   ".avif": "image/avif",
   ".bmp": "image/bmp",
@@ -37,6 +51,26 @@ export function validateSafeImageBytes(
                 (asciiAt(bytes, 8, "avif") || asciiAt(bytes, 8, "avis"))
 
   return valid ? expectedMediaType : null
+}
+
+export function isSafeImagePreviewLayout(layout: SafeImageLayout): boolean {
+  const { width, height, frames } = layout
+  if (!Number.isInteger(width) || !Number.isInteger(height) || !Number.isInteger(frames)) {
+    return false
+  }
+  if (width < 1 || height < 1 || frames < 1) return false
+  if (width > maxImagePreviewDimension || height > maxImagePreviewDimension) return false
+  if (frames > maxImagePreviewFrames) return false
+  return BigInt(width) * BigInt(height) * BigInt(frames) <= BigInt(maxImagePreviewPixels)
+}
+
+export function evaluateSafeImagePreview(
+  expectedMediaType: SafeImageMediaType,
+  layout: SafeImageLayout | null
+): SafeImagePreviewDecision {
+  if (!layout) return { ok: false, error: "image_unsupported" }
+  if (!isSafeImagePreviewLayout(layout)) return { ok: false, error: "image_too_large" }
+  return { ok: true, mediaType: expectedMediaType }
 }
 
 function startsWithBytes(bytes: Uint8Array, expected: readonly number[]): boolean {

@@ -9,6 +9,16 @@ vi.mock("electron", () => ({
   shell: { openPath: vi.fn(), showItemInFolder: vi.fn() },
 }))
 
+import {
+  createAnimatedGif,
+  createAvifDeclaringSize,
+  createBmpDeclaringSize,
+  createGifDeclaringSize,
+  createJpegDeclaringSize,
+  createPngDeclaringSize,
+  createSolidPng,
+  createWebpDeclaringSize,
+} from "../image-preview/safe-image-test-bytes"
 import { maxImagePreviewBytes, workspaceService } from "./workspace-service"
 
 const temporaryDirectories: string[] = []
@@ -66,7 +76,8 @@ describe("WorkspaceService.listFiles", () => {
 describe("WorkspaceService.readFile image preview", () => {
   it("returns validated PNG bytes for a file tab preview", async () => {
     const rootPath = await createTemporaryDirectory()
-    await writeFile(join(rootPath, "image.png"), pngBytes())
+    const bytes = await createSolidPng(1, 1)
+    await writeFile(join(rootPath, "image.png"), bytes)
 
     const result = await workspaceService.readFile({ rootPath, path: "image.png" })
 
@@ -76,7 +87,7 @@ describe("WorkspaceService.readFile image preview", () => {
       mediaType: "image/png",
       imagePreviewError: null,
     })
-    expect(bytesOf(result.previewBytes)).toEqual([...pngBytes()])
+    expect(bytesOf(result.previewBytes)).toEqual([...bytes])
   })
 
   it("rejects active content disguised as PNG", async () => {
@@ -137,6 +148,65 @@ describe("WorkspaceService.readFile image preview", () => {
     expect(result.imagePreviewError).toBeNull()
     expect(result.previewBytes?.byteLength).toBe(maxImagePreviewBytes)
   }, 30_000)
+
+  it.each([
+    ["png", "image.png", () => createPngDeclaringSize(32_768, 32_768)],
+    ["jpeg", "image.jpg", () => createJpegDeclaringSize(32_768, 32_768)],
+    ["gif", "image.gif", async () => createGifDeclaringSize(32_768, 32_768, 1)],
+    ["webp", "image.webp", () => createWebpDeclaringSize(16_383, 16_383)],
+    ["bmp", "image.bmp", async () => createBmpDeclaringSize(32_768, 32_768)],
+    ["avif", "image.avif", () => createAvifDeclaringSize(32_768, 32_768)],
+  ] as const)(
+    "rejects a compact %s pixel bomb before returning preview bytes",
+    async (_format, name, bytes) => {
+      const rootPath = await createTemporaryDirectory()
+      const payload = await bytes()
+      await writeFile(join(rootPath, name), payload)
+
+      const result = await workspaceService.readFile({ rootPath, path: name })
+
+      expect(payload.byteLength).toBeLessThan(4_096)
+      expect(result).toMatchObject({
+        binary: true,
+        content: null,
+        previewBytes: null,
+        imagePreviewError: "image_too_large",
+      })
+    }
+  )
+
+  it("rejects an animated GIF that exceeds the frame budget", async () => {
+    const rootPath = await createTemporaryDirectory()
+    const payload = createAnimatedGif(65)
+    await writeFile(join(rootPath, "frames.gif"), payload)
+
+    const result = await workspaceService.readFile({ rootPath, path: "frames.gif" })
+
+    expect(payload.byteLength).toBeLessThan(4_096)
+    expect(result).toMatchObject({
+      previewBytes: null,
+      mediaType: "image/gif",
+      imagePreviewError: "image_too_large",
+    })
+  })
+
+  it("rejects a signature-only PNG that has no readable image layout", async () => {
+    const rootPath = await createTemporaryDirectory()
+    await writeFile(
+      join(rootPath, "header-only.png"),
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    )
+
+    const result = await workspaceService.readFile({ rootPath, path: "header-only.png" })
+
+    expect(result).toMatchObject({
+      binary: true,
+      content: null,
+      previewBytes: null,
+      mediaType: null,
+      imagePreviewError: "image_unsupported",
+    })
+  })
 })
 
 describe("WorkspaceService.readFile extra-root", () => {
@@ -171,7 +241,8 @@ describe("WorkspaceService.readFile extra-root", () => {
     const documentsPath = await createTemporaryDirectory()
     const imagePath = join(configDir, "skills", "show-me", "preview.png")
     await mkdir(join(configDir, "skills", "show-me"), { recursive: true })
-    await writeFile(imagePath, pngBytes())
+    const bytes = await createSolidPng(1, 1)
+    await writeFile(imagePath, bytes)
     workspaceService.configureAllowedRoots({ configDir, documentsPath })
 
     const result = await workspaceService.readFile({
@@ -185,7 +256,7 @@ describe("WorkspaceService.readFile extra-root", () => {
       mediaType: "image/png",
       imagePreviewError: null,
     })
-    expect(bytesOf(result.previewBytes)).toEqual([...pngBytes()])
+    expect(bytesOf(result.previewBytes)).toEqual([...bytes])
   })
 
   it("does not follow a symlink that escapes the allowed root", async () => {
@@ -233,10 +304,6 @@ async function createTemporaryDirectory(): Promise<string> {
   return path
 }
 
-function pngBytes(): Uint8Array {
-  return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-}
-
 function bytesOf(buffer: ArrayBuffer | null): number[] | null {
   return buffer ? [...new Uint8Array(buffer)] : null
 }
@@ -244,7 +311,7 @@ function bytesOf(buffer: ArrayBuffer | null): number[] | null {
 async function createSizedPng(path: string, size: number): Promise<void> {
   const handle = await open(path, "w")
   try {
-    const bytes = pngBytes()
+    const bytes = await createSolidPng(1, 1)
     await handle.write(bytes, 0, bytes.byteLength, 0)
     await handle.truncate(size)
   } finally {

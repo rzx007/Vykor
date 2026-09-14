@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  evaluateSafeImagePreview,
+  isSafeImagePreviewLayout,
+  maxImagePreviewDimension,
+  maxImagePreviewFrames,
+  maxImagePreviewPixels,
   safeImageMediaTypeFromName,
   validateSafeImageBytes,
   type SafeImageMediaType,
@@ -59,6 +64,48 @@ describe("safe image preview", () => {
     for (const mediaType of mediaTypes) {
       expect(validateSafeImageBytes(new Uint8Array(), mediaType)).toBeNull()
     }
+  })
+
+  it("rejects compressed pixel bombs before decode", () => {
+    expect(isSafeImagePreviewLayout({ width: 32_768, height: 32_768, frames: 1 })).toBe(false)
+    expect(isSafeImagePreviewLayout({ width: 32, height: 24, frames: 1 })).toBe(true)
+    expect(
+      isSafeImagePreviewLayout({
+        width: maxImagePreviewDimension,
+        height: Math.floor(maxImagePreviewPixels / maxImagePreviewDimension),
+        frames: 1,
+      })
+    ).toBe(true)
+    expect(
+      isSafeImagePreviewLayout({
+        width: maxImagePreviewDimension,
+        height: Math.floor(maxImagePreviewPixels / maxImagePreviewDimension) + 1,
+        frames: 1,
+      })
+    ).toBe(false)
+    expect(isSafeImagePreviewLayout({ width: 64, height: 64, frames: maxImagePreviewFrames })).toBe(
+      true
+    )
+    expect(
+      isSafeImagePreviewLayout({ width: 64, height: 64, frames: maxImagePreviewFrames + 1 })
+    ).toBe(false)
+  })
+
+  it("maps missing or oversized layouts to preview decisions", () => {
+    expect(evaluateSafeImagePreview("image/png", null)).toEqual({
+      ok: false,
+      error: "image_unsupported",
+    })
+    expect(
+      evaluateSafeImagePreview("image/png", { width: 32_768, height: 32_768, frames: 1 })
+    ).toEqual({
+      ok: false,
+      error: "image_too_large",
+    })
+    expect(evaluateSafeImagePreview("image/png", { width: 32, height: 24, frames: 1 })).toEqual({
+      ok: true,
+      mediaType: "image/png",
+    })
   })
 })
 

@@ -13,8 +13,20 @@
     "noImplicitReturns": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
+    "baseUrl": ".",
     "types": [
       "electron-vite/node"
-    ]
+    ],
+    "paths": {
+      "@renderer/*": [
+        "src/renderer/src/*"
+      ],
+      "@main/*": [
+        "src/main/*"
+      ],
+      "@shared/*": [
+        "src/shared/*"
+      ]
+    }
   }
 }
