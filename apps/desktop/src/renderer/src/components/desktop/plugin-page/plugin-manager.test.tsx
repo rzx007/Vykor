@@ -13,6 +13,11 @@ const plugin = (overrides: Partial<DesktopPluginInfo> = {}): DesktopPluginInfo =
   enabled: true,
   installation: "installed",
   activation: "active",
+  runtimeStatus: {
+    state: "pending_reload",
+    message: "已启用，下一次对话生效。",
+    action: "reload",
+  },
   inventory: {},
   permissions: { requested: [], approved: [], missing: [] },
   diagnostics: [],
@@ -27,6 +32,12 @@ const populatedSnapshot: DesktopPluginSnapshot = {
       identity: { id: "beta", name: "beta", version: "2.0.0", displayName: "Beta" },
       enabled: false,
       activation: "partial",
+      runtimeStatus: {
+        state: "failed",
+        code: "snapshot_missing",
+        message: "加载失败：插件文件不完整，请重新导入 ZIP。",
+        action: "reimport",
+      },
     }),
     plugin({
       identity: { id: "managed", name: "managed", version: "1.0.0", displayName: "Managed" },
@@ -296,6 +307,21 @@ describe("PluginManager archive import", () => {
     expect(host.querySelectorAll("[data-extension-row]")).toHaveLength(1)
     expect(host.textContent).toContain("Beta")
     expect(host.textContent).not.toContain("Managed ·")
+  })
+
+  it("shows runtime status in the plugin list and details", async () => {
+    api().snapshot.mockResolvedValue(populatedSnapshot)
+    await render()
+
+    expect(host.textContent).toContain("已启用，下一次对话生效。")
+    expect(host.textContent).toContain("加载失败：插件文件不完整，请重新导入 ZIP。")
+
+    await click("查看 Beta 详情")
+
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain("运行状态")
+    expect(dialog?.textContent).toContain("加载失败：插件文件不完整，请重新导入 ZIP。")
+    expect(dialog?.textContent).toContain("请重新导入 ZIP。")
   })
 
   it("disables a user plugin with its project context and updates the list snapshot", async () => {

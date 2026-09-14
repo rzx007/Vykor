@@ -37,6 +37,11 @@ const examplePlugin: PluginInfo = {
   enabled: true,
   installation: "installed",
   activation: "active",
+  runtimeStatus: {
+    state: "loaded",
+    message: "插件已加载。",
+    action: "none",
+  },
   inventory: { tools: 2 },
   permissions: { requested: ["network"], approved: ["network"], missing: [] },
   diagnostics: [],

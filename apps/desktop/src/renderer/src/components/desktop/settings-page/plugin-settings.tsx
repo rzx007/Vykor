@@ -79,6 +79,17 @@ const activationLabels: Record<DesktopPluginInfo["activation"], string> = {
   "reload-required": "需要重载",
 }
 
+const runtimeActionHints = {
+  enable: "启用后下次对话生效。",
+  reload: "新开对话或重载插件后生效。",
+  reimport: "请重新导入 ZIP。",
+  approve: "请重新导入并确认新增权限。",
+  disable: "可以先禁用该插件。",
+  uninstall: "可以卸载该插件。",
+  details: "请查看下方诊断详情。",
+  none: "",
+} satisfies Record<DesktopPluginInfo["runtimeStatus"]["action"], string>
+
 export function PluginSettings(): React.JSX.Element {
   const pluginApi = window.desktop.plugins
   const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
@@ -426,7 +437,7 @@ function PluginRow({
               : "原生插件"}
           </ItemDescription>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>{activationLabels[plugin.activation]}</span>
+            <span>{plugin.runtimeStatus.message}</span>
             <span>{inventorySummary(plugin)}</span>
             {plugin.toolRuntime ? (
               <span>Tool Runtime：{runtimeLabel(plugin.toolRuntime.state)}</span>
@@ -514,6 +525,10 @@ export function PluginDetailsDialog({
             />
             <DetailRow label="安装" value={plugin.installation} />
             <DetailRow label="激活" value={activationLabels[plugin.activation]} />
+            <DetailRow label="运行状态" value={plugin.runtimeStatus.message} />
+            {runtimeActionHint(plugin) ? (
+              <DetailRow label="建议" value={runtimeActionHint(plugin)} />
+            ) : null}
           </DetailSection>
           <DetailSection title="贡献内容">
             {Object.entries(plugin.inventory).length ? (
@@ -617,27 +632,18 @@ function PluginIcon({
 }
 
 function PluginHealthBadge({ plugin }: { plugin: DesktopPluginInfo }): React.JSX.Element | null {
-  if (plugin.installation === "invalid" || plugin.toolRuntime?.state === "error") {
-    return <Badge variant="destructive">错误</Badge>
+  if (plugin.runtimeStatus.state === "failed") {
+    return <Badge variant="destructive">失败</Badge>
   }
-  if (plugin.permissions.missing.length) return <Badge variant="destructive">权限缺失</Badge>
-  if (plugin.activation === "reload-required") return <Badge variant="secondary">待重载</Badge>
-  if (plugin.activation === "partial" || plugin.toolRuntime?.state === "degraded") {
+  if (plugin.runtimeStatus.state === "pending_reload") return <Badge variant="secondary">待生效</Badge>
+  if (plugin.runtimeStatus.state === "degraded") {
     return <Badge variant="secondary">部分可用</Badge>
   }
   return null
 }
 
 function needsAttention(plugin: DesktopPluginInfo): boolean {
-  return (
-    plugin.installation !== "installed" ||
-    plugin.activation === "partial" ||
-    plugin.activation === "reload-required" ||
-    plugin.permissions.missing.length > 0 ||
-    plugin.diagnostics.some((diagnostic) => diagnostic.severity !== "info") ||
-    plugin.toolRuntime?.state === "degraded" ||
-    plugin.toolRuntime?.state === "error"
-  )
+  return plugin.runtimeStatus.state === "failed" || plugin.runtimeStatus.state === "degraded"
 }
 
 function inventorySummary(plugin: DesktopPluginInfo): string {
@@ -661,6 +667,10 @@ function runtimeLabel(state: NonNullable<DesktopPluginInfo["toolRuntime"]>["stat
 
 function pluginDisplayName(plugin: DesktopPluginInfo): string {
   return plugin.identity.displayName ?? plugin.identity.name ?? plugin.identity.id
+}
+
+function runtimeActionHint(plugin: DesktopPluginInfo): string {
+  return runtimeActionHints[plugin.runtimeStatus.action]
 }
 
 function PluginSettingsSkeleton(): React.JSX.Element {

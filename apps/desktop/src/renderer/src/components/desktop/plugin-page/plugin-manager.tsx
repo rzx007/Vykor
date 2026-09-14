@@ -63,13 +63,8 @@ const permissionLabels: Record<string, string> = {
 const displayName = (plugin: DesktopPluginInfo): string =>
   plugin.identity.displayName ?? plugin.identity.name ?? plugin.identity.id
 const needsAttention = (plugin: DesktopPluginInfo): boolean =>
-  plugin.installation !== "installed" ||
-  plugin.activation === "partial" ||
-  plugin.activation === "reload-required" ||
-  plugin.permissions.missing.length > 0 ||
-  plugin.diagnostics.some((item) => item.severity !== "info") ||
-  plugin.toolRuntime?.state === "error" ||
-  plugin.toolRuntime?.state === "degraded"
+  plugin.runtimeStatus.state === "failed" || plugin.runtimeStatus.state === "degraded"
+const pluginRuntimeLabel = (plugin: DesktopPluginInfo): string => plugin.runtimeStatus.message
 const errorText = (error: unknown): string =>
   (error instanceof Error ? error.message : String(error)).replace(
     /^Error invoking remote method '[^']+': Error: /,
@@ -332,7 +327,7 @@ export function PluginManager({
                     ) : null}
                   </TooltipTrigger>
                   <TooltipContent>
-                    {displayName(plugin)} · {plugin.enabled ? "已启用" : "已禁用"}
+                    {displayName(plugin)} · {pluginRuntimeLabel(plugin)}
                   </TooltipContent>
                 </Tooltip>
               ))}
@@ -365,7 +360,7 @@ export function PluginManager({
                 <ExtensionRow
                   key={plugin.identity.id}
                   name={displayName(plugin)}
-                  description={`${plugin.identity.version} · ${plugin.scope === "managed" ? "由组织管理" : "个人安装"} · ${plugin.enabled ? "已启用" : "已禁用"}`}
+                  description={`${plugin.identity.version} · ${plugin.scope === "managed" ? "由组织管理" : "个人安装"} · ${pluginRuntimeLabel(plugin)}`}
                   onClick={() => setDetailId(plugin.identity.id)}
                   action={
                     <div className="flex items-center gap-2">
