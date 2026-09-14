@@ -53,18 +53,20 @@ describe("visibleTranscriptParts", () => {
           createdAt: 1,
           updatedAt: 1,
         },
-        parts: [{
-          id: "ordinary-system-part",
-          sessionId: "session-1",
-          messageId: "ordinary-system",
-          seq: 1,
-          type: "text",
-          status: "completed",
-          text: "普通系统提示",
-          metadata: {},
-          createdAt: 1,
-          updatedAt: 1,
-        }],
+        parts: [
+          {
+            id: "ordinary-system-part",
+            sessionId: "session-1",
+            messageId: "ordinary-system",
+            seq: 1,
+            type: "text",
+            status: "completed",
+            text: "普通系统提示",
+            metadata: {},
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
         streaming: false,
         onOpenFile: () => undefined,
         canOpenReview: false,
@@ -143,16 +145,39 @@ describe("visibleTranscriptParts", () => {
   })
 
   it("keeps ordered text and skill display items for transcript rendering", () => {
-    expect(renderUserItems([
-      { type: "text", text: "使用 " },
-      { type: "skill", name: "a", path: "/a/SKILL.md", displayName: "Skill A" },
-      { type: "text", text: " 然后 " },
-      { type: "skill", name: "b", path: "/b/SKILL.md", displayName: "Skill B" },
-    ])).toEqual([
+    expect(
+      renderUserItems([
+        { type: "text", text: "使用 " },
+        { type: "skill", name: "a", path: "/a/SKILL.md", displayName: "Skill A" },
+        { type: "text", text: " 然后 " },
+        { type: "skill", name: "b", path: "/b/SKILL.md", displayName: "Skill B" },
+      ])
+    ).toEqual([
       { kind: "text", text: "使用 " },
       { kind: "skill", name: "a", displayName: "Skill A" },
       { kind: "text", text: " 然后 " },
       { kind: "skill", name: "b", displayName: "Skill B" },
+    ])
+  })
+
+  it("keeps a Chinese skill name as a rich transcript item", () => {
+    expect(
+      renderUserItems([
+        {
+          type: "skill",
+          name: "会议纪要汇总工作流",
+          path: "D:/skills/meeting-summary/SKILL.md",
+          displayName: "会议纪要汇总工作流",
+        },
+        { type: "text", text: " 这是什么技能" },
+      ])
+    ).toEqual([
+      {
+        kind: "skill",
+        name: "会议纪要汇总工作流",
+        displayName: "会议纪要汇总工作流",
+      },
+      { kind: "text", text: " 这是什么技能" },
     ])
   })
 
@@ -168,25 +193,29 @@ describe("visibleTranscriptParts", () => {
           createdAt: 1,
           updatedAt: 1,
         },
-        parts: [{
-          id: "skill-only-text",
-          sessionId: "session-1",
-          messageId: "skill-only",
-          seq: 0,
-          type: "text",
-          status: "completed",
-          text: "",
-          metadata: {
-            items: [{
-              type: "skill",
-              name: "archify",
-              displayName: "Archify",
-              path: "D:/skills/archify/SKILL.md",
-            }],
+        parts: [
+          {
+            id: "skill-only-text",
+            sessionId: "session-1",
+            messageId: "skill-only",
+            seq: 0,
+            type: "text",
+            status: "completed",
+            text: "",
+            metadata: {
+              items: [
+                {
+                  type: "skill",
+                  name: "archify",
+                  displayName: "Archify",
+                  path: "D:/skills/archify/SKILL.md",
+                },
+              ],
+            },
+            createdAt: 1,
+            updatedAt: 1,
           },
-          createdAt: 1,
-          updatedAt: 1,
-        }],
+        ],
         streaming: false,
         onOpenFile: () => undefined,
         canOpenReview: false,
@@ -309,35 +338,38 @@ describe("visibleTranscriptParts", () => {
     const html = renderToStaticMarkup(
       createElement(MessageBlock, {
         message,
-        parts: [{
-          id: "image-1",
-          sessionId: "session-1",
-          messageId: "assistant-message",
-          seq: 0,
-          type: "tool",
-          status: "completed",
-          toolUseId: "image-1",
-          toolName: "ImageGeneration",
-          input: { prompt: "draw", ratio: "1:1" },
-          metadata: {},
-          createdAt: 2,
-          updatedAt: 2,
-        }, {
-          id: "generated-attachment:image-1:0",
-          sessionId: "session-1",
-          messageId: "assistant-message",
-          seq: 1,
-          type: "attachment",
-          status: "completed",
-          assetId: "att-generated",
-          intent: "tool_resource",
-          displayName: "generated-image-1.png",
-          mediaType: "image/png",
-          sizeBytes: 128,
-          metadata: { source: "image_generation", toolUseId: "image-1" },
-          createdAt: 2,
-          updatedAt: 2,
-        }],
+        parts: [
+          {
+            id: "image-1",
+            sessionId: "session-1",
+            messageId: "assistant-message",
+            seq: 0,
+            type: "tool",
+            status: "completed",
+            toolUseId: "image-1",
+            toolName: "ImageGeneration",
+            input: { prompt: "draw", ratio: "1:1" },
+            metadata: {},
+            createdAt: 2,
+            updatedAt: 2,
+          },
+          {
+            id: "generated-attachment:image-1:0",
+            sessionId: "session-1",
+            messageId: "assistant-message",
+            seq: 1,
+            type: "attachment",
+            status: "completed",
+            assetId: "att-generated",
+            intent: "tool_resource",
+            displayName: "generated-image-1.png",
+            mediaType: "image/png",
+            sizeBytes: 128,
+            metadata: { source: "image_generation", toolUseId: "image-1" },
+            createdAt: 2,
+            updatedAt: 2,
+          },
+        ],
         streaming: false,
         onOpenFile: () => undefined,
         canOpenReview: false,

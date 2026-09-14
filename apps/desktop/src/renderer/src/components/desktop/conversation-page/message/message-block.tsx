@@ -33,7 +33,10 @@ import {
   type ComposerDocument,
 } from "@renderer/stores/desktop-session/composer-document"
 import { ModelSwitchDivider, readModelSwitchPresentation } from "./model-switch-divider"
-import { ContextCompactionDivider, readContextCompactionPresentation } from "./context-compaction-divider"
+import {
+  ContextCompactionDivider,
+  readContextCompactionPresentation,
+} from "./context-compaction-divider"
 
 const collapsibleUserMessageChars = 900
 const collapsibleUserMessageLines = 14
@@ -253,10 +256,12 @@ export type UserDisplayItem =
 export function renderUserItems(items: readonly SessionUserInputItem[]): UserDisplayItem[] {
   return items.flatMap((item): UserDisplayItem[] => {
     if (item.type === "text") return item.text ? [{ kind: "text", text: item.text }] : []
-    if (item.type === "context") return [{ kind: "context", name: item.id, displayName: item.displayName }]
-    if (item.type === "capability") return [{ kind: "plugin", name: item.pluginId, displayName: item.displayName }]
+    if (item.type === "context")
+      return [{ kind: "context", name: item.id, displayName: item.displayName }]
+    if (item.type === "capability")
+      return [{ kind: "plugin", name: item.pluginId, displayName: item.displayName }]
     const name = item.name.trim()
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(name)) return []
+    if (!name) return []
     return [{ kind: "skill", name, displayName: item.displayName?.trim() || name }]
   })
 }
@@ -300,7 +305,10 @@ function UserMessageBubble({
                     className="inline-flex items-center gap-1 align-baseline font-medium !text-primary select-none"
                   >
                     {item.kind !== "plugin" ? <Box className="size-3.5 shrink-0" /> : null}
-                    <span>{item.kind === "plugin" ? "@" : ""}{item.displayName}</span>
+                    <span>
+                      {item.kind === "plugin" ? "@" : ""}
+                      {item.displayName}
+                    </span>
                   </span>
                 )
               )
