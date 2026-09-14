@@ -17,6 +17,7 @@ import type {
   DesktopAttachmentError,
   DesktopAttachmentUploadEvent,
 } from "../../../shared/attachment-types"
+import { validateSafeImageBytes, type SafeImageMediaType } from "../../../shared/safe-image-preview"
 
 interface AttachmentClient {
   uploadAttachment(input: UploadAttachmentInput): Promise<AttachmentAssetRecord>
@@ -250,7 +251,7 @@ export class DesktopAttachmentService {
     if ((asset.sizeBytes ?? 0) > previewLimit) throw serviceError("attachment_preview_too_large")
     const response = await client.downloadAttachment(assetId)
     const bytes = await readResponseBytes(response, previewLimit)
-    if (!hasExpectedBitmapSignature(bytes, mediaType)) {
+    if (!validateSafeImageBytes(bytes, mediaType as SafeImageMediaType)) {
       throw serviceError("attachment_preview_unsupported")
     }
     return { bytes: exactArrayBuffer(bytes), mediaType }
@@ -610,41 +611,8 @@ function inferMediaType(fileName: string): string {
   return mediaTypes[extension] ?? "application/octet-stream"
 }
 
-function hasExpectedBitmapSignature(bytes: Uint8Array, mediaType: string): boolean {
-  if (mediaType === "image/png") {
-    return startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-  }
-  if (mediaType === "image/jpeg") return startsWithBytes(bytes, [0xff, 0xd8, 0xff])
-  if (mediaType === "image/gif") {
-    return startsWithAscii(bytes, "GIF87a") || startsWithAscii(bytes, "GIF89a")
-  }
-  if (mediaType === "image/webp") {
-    return startsWithAscii(bytes, "RIFF") && asciiAt(bytes, 8, "WEBP")
-  }
-  if (mediaType === "image/bmp") return startsWithAscii(bytes, "BM")
-  if (mediaType === "image/avif") {
-    return asciiAt(bytes, 4, "ftyp") && (asciiAt(bytes, 8, "avif") || asciiAt(bytes, 8, "avis"))
-  }
-  return false
-}
-
 function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength)
   copy.set(bytes)
   return copy.buffer
-}
-
-function startsWithBytes(bytes: Uint8Array, expected: readonly number[]): boolean {
-  return expected.every((value, index) => bytes[index] === value)
-}
-
-function startsWithAscii(bytes: Uint8Array, expected: string): boolean {
-  return asciiAt(bytes, 0, expected)
-}
-
-function asciiAt(bytes: Uint8Array, offset: number, expected: string): boolean {
-  if (bytes.byteLength < offset + expected.length) return false
-  return [...expected].every(
-    (character, index) => bytes[offset + index] === character.charCodeAt(0)
-  )
 }
