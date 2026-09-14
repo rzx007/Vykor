@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "description": "检查传入文本的行首制表符和行尾空白。",
   "components": {
+    "agents": ["./agents/reviewer.md"],
     "skills": ["./skills/check-text/SKILL.md"],
     "tools": [{ "entry": "./tools/index.mjs", "runtime": "node", "permissions": [] }]
   },

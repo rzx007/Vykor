@@ -121,11 +121,11 @@
 - [Desktop 本地 Native Plugin ZIP 导入](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)与[实施计划](./superpowers/plans/2026-09-09-desktop-native-plugin-zip-import.md)：插件页面当前可选择一个本地 Native ZIP，后台校验后直接安装或进行一次权限确认；其他来源仍未进入 Desktop。
 - [Native Plugin 重新安装核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)与[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)：重新导入同一插件 ID 的 Native ZIP 完成手动更新或修复，只在新增权限时重新确认，并保留旧记录到新快照成功切换。
 - [Native Plugin Runtime 诊断 v1](./superpowers/specs/2026-09-14-native-plugin-runtime-diagnostics-v1-design.md)与[实施计划](./superpowers/plans/2026-09-14-native-plugin-runtime-diagnostics-v1.md)：Plugin Service 返回 `runtimeStatus`，Desktop 插件页显示已禁用、待生效、已加载、部分可用或加载失败，并给出一条建议动作。
-- [Native Plugin 后续工作交接](./native-plugin-next-stage-handoff.md)：运行诊断 v1 完成后的接手说明；下一步建议做作者体验小修。Agent 对话安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
+- [Native Plugin 后续工作交接](./native-plugin-next-stage-handoff.md)：运行诊断 v1 和作者体验小修完成后的接手说明；Agent 对话安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
 - [Native Plugin v1 与 Claude Code Converter 实施计划](./superpowers/plans/2026-08-25-native-plugin-and-claude-converter.md)：按 Native schema、安装激活、格式硬切、Converter core 和 Claude 转换闭环拆分的可执行任务。
 - [Native Plugin 当前实现](./plugins-contributions-design.md)：当前 Native Plugin 的 manifest、安装快照、外部转换、Runtime 激活和安全边界。
 - [插件能力召唤与运行设计](./plugin-capability-invocation-design.md)：`@插件` 选择后，Skill、MCP、Native Tool 和 Agent 怎样按当前 Run 装配、执行和继承权限。
-- [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、参考插件、五类组件写法、安装调试与当前能力边界。
+- [原生插件开发指南](./native-plugin-authoring.md)：公开 Tool 类型、Plugin Agent、参考插件、五类组件写法、Desktop ZIP 打包导入、安装调试与当前能力边界。
 - [Claude Code 真实插件回归](./claude-real-plugin-regression.md)：用固定 commit 的真实 Claude Code 插件样本验证 detect、convert、install 和 Runtime discover 全链路。
 - [Slash Commands](./slash-commands.md) 与 [Slash Command Flow](./slash-commands-flow.md)：当前命令清单、三层分流和执行入口。
 - [Skills Flow](./skills-flow.md) 与 [Skill Prompt Flow](./skill-prompt-flow.md)：Skill 的发现、可见性，以及结构化 Skill 输入从发送到 Run 收尾。

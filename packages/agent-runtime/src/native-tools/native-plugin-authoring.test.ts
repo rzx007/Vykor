@@ -58,6 +58,8 @@ describe("native plugin authoring installation (real Tool Host)", () => {
       expect(installed.status).toBe("installed");
       const discovery = await fixture.discover();
       expect(discovery.plugins.map(plugin => plugin.manifest.id)).toEqual([pluginId]);
+      expect(discovery.agentDefinitions.map(agent => agent.name)).toContain(`${pluginId}:reviewer`);
+      expect(discovery.pluginCapabilityInventory.agents.get(`${pluginId}:reviewer`)).toEqual({ pluginId });
       expect(await fixture.executions()).toEqual([]);
 
       const runtime = await fixture.activate();

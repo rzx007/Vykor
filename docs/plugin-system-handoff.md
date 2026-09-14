@@ -659,7 +659,11 @@ Native Plugin → 在 daemon 主进程注册 Converter
 
 2026-09-10 补充最小重新安装语义：用户重新导入同一插件 ID 的可信 ZIP，即可手动更新或修复。Server 复用能够覆盖本次请求的既有权限批准，新增权限仍请求一次完整确认；Installer 只在新快照成功后切换记录，并保留原启停状态。自动更新、Repair 命令、版本回滚和垃圾回收仍不在近期范围。详见[核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)和[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)。
 
-2026-09-14 Native Plugin 运行诊断 v1 已完成：`PluginInfo.runtimeStatus` 返回 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`，Plugin Service 根据安装校验、组件诊断和 Native Tool Runtime 状态计算，Desktop 插件页展示主状态和一条建议动作。该阶段不包含自动修复、自动更新、新来源或复杂诊断树。下一步建议做作者体验小修。Agent 对话内安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
+2026-09-14 Native Plugin 运行诊断 v1 已完成：`PluginInfo.runtimeStatus` 返回 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`，Plugin Service 根据安装校验、组件诊断和 Native Tool Runtime 状态计算，Desktop 插件页展示主状态和一条建议动作。该阶段不包含自动修复、自动更新、新来源或复杂诊断树。Agent 对话内安装、`output_styles`、自动更新、Marketplace 和远程来源继续暂缓。
+
+2026-09-14 Native Plugin 作者体验小修已完成：开发指南和文本检查参考插件补齐 Desktop ZIP 打包、重新导入验证、运行状态查看和常见失败排查。该阶段没有新增安装来源、命令、Runtime 能力或 UI 复杂度，只把现有 Native ZIP 导入和 `runtimeStatus` 诊断串成作者可照做的闭环。
+
+2026-09-14 Plugin Agent 可用性收口已完成：核心加载、能力选择和 Child 边界已有测试覆盖，本阶段补了文本检查参考插件的最小 Agent 示例和说明。作者现在能看到 `components.agents` 怎样声明、安装后名字是什么、何时可见，以及它不能越过当前 Run 的插件能力边界。
 
 2026-09-09 调整：Converter 本轮开发到此结束。原生插件第一阶段已完成：公开开发类型、五类组件指南，以及无外部服务依赖的“文本检查助手”，覆盖安装、加载、调用、真实重载和清理。详见 [开发指南](./native-plugin-authoring.md)、[第一阶段设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)和[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。相关测试共 146 项通过，类型、缓存输入和文档检查通过，独立审查无代码阻断项。验收使用真实插件进程和管理路由，不包含完整 AgentPool、模型会话或桌面 UI。Desktop 本地 Native ZIP 导入也已在本阶段完成；以下长期顺序作为后续路线参考。
 
@@ -668,7 +672,7 @@ Native Plugin → 在 daemon 主进程注册 Converter
 1. **Codex Converter**：首版已接入 Converter → Native → Installer，并增加依据真实 manifest 结构独立编写的 fixture；范围和限制见 [Codex 转换器设计](./superpowers/specs/2026-09-09-codex-plugin-converter-design.md)。
 2. **Desktop 本地 Native ZIP 导入**：已完成最简导入、后台校验、权限确认和结构化失败反馈。Agent 对话、Claude/Codex 和远程来源仍延后。
 3. **Native Plugin 运行诊断 v1**：已完成。Plugin Service 返回用户可读的运行主状态，Desktop 列表与详情页直接显示下一步建议。
-4. **作者体验小修**：补充打 ZIP、重装验证、看诊断和参考插件排障说明。
+4. **作者体验小修**：已完成。开发指南和参考插件 README 已补充打 ZIP、重装验证、看诊断和常见失败排查说明。
 5. **声明式贡献**：`output_styles` 已决定暂缓；Themes、Monitors、Workflows 等需要重新开规格后再做。
 6. **Source Resolver**：依次实现本地 archive、Git、npm；每一种都要做完整性和路径安全测试。
 7. **Marketplace**：建立在 Source Resolver 和统一安装流程之上，不先做另一套假安装 UI。

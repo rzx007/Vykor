@@ -8,7 +8,7 @@ Desktop 默认支持 `@/+` 选择插件；协议 3 的服务通过 `pluginCapabi
 
 Run 从暖 Runtime 的已加载状态生成冻结的内存 View，固定工具定义及调用对象，不创建新的持久化快照。插件更新使后续 Runtime 重建；已开始的 Run 不切换绑定。linked 目录外部修改在显式 `/reload-plugins`、重启或新会话后生效。
 
-Plugin Agent 由 root 的 Agent 工具创建 Child，继承所选插件的父 View 并按工具和 MCP server identity 取交集；换目录不能增加插件。普通 Coordinator 的 Child 可按自身角色重建非插件基线，宿主上限、禁用项和权限检查仍然有效。新增插件权限未获批准时不能激活；Goal 每轮沿用 pluginId，失效时暂停并说明原因。
+Plugin Agent 由 root 的 Agent 工具创建 Child，继承所选插件的父 View 并按工具和 MCP server identity 取交集；换目录不能增加插件。普通 Coordinator 的 Child 可按自身角色重建非插件基线，宿主上限、禁用项和权限检查仍然有效。新增插件权限未获批准时不能激活；Goal 每轮沿用 pluginId，失效时暂停并说明原因。参考插件 `example.text-inspector` 包含最小 Plugin Agent：`example.text-inspector:reviewer`，用于证明 Agent 文件、插件能力选择和 Tool Host 调用可以组成一个简单闭环。
 
 ```text
 手写 Native Plugin
@@ -34,7 +34,7 @@ Runtime 唯一识别的 manifest 是：
 
 Native v1 使用 `schemaVersion: 1`、稳定 dotted `id`、kebab-case `name` 和显式 `components`。每条组件路径必须以 `./` 开头。Validator 会同时检查规范化路径和符号链接后的真实路径，越界、缺失或重复来源都会产生结构化诊断。
 
-Skills、Agents、Hooks、MCP 和 Node Tool 已进入加载闭环。Tool 不会在 daemon 主进程动态 import；Runtime 会为每个插件版本启动独立 Tool Host 子进程。LSP、Workflow、Channel、Provider、UI 等已预留 schema，但会返回 unsupported 诊断。
+Skills、Agents、Hooks、MCP 和 Node Tool 已进入加载闭环。Tool 不会在 daemon 主进程动态 import；Runtime 会为每个插件版本启动独立 Tool Host 子进程。插件 Agent 使用插件 ID 前缀注册，例如 `example.text-inspector:reviewer`；只有用户本轮选择该插件时，Agent 工具才会看到这些定义。LSP、Workflow、Channel、Provider、UI 等已预留 schema，但会返回 unsupported 诊断。
 
 ## 安装状态
 
@@ -55,6 +55,8 @@ Native Plugin 只支持用户级安装；当前 cwd 只作为插件运行时的�
 Desktop 插件页现可选择一个本地 Native Plugin ZIP。Source Resolver 只做安全复制、解压和静态校验；Server 再安装为不可变用户快照。无权限时直接安装，申请权限时 Renderer 只显示一次确认，且不会收到 ZIP 绝对路径或摘要。重新导入同一插件 ID 即执行手动更新或修复：既有批准覆盖本次权限时直接安装，新增权限时才重新确认；新快照成功前不切换旧记录，重新安装保留原启停状态。成功、失败和安装结果暂无法确认均为显式反馈，成功后的 Runtime 激活从下一次对话开始。
 
 Plugin Service 会为每个已安装插件计算 `runtimeStatus`，Desktop 列表和详情直接显示这条主状态。当前状态只分为已禁用、等待下次对话生效、已加载、部分能力不可用和加载失败；失败时只给一个建议动作，例如重新导入 ZIP、重新确认权限或先禁用插件。内部 `diagnostics` 和 Tool Runtime 统计仍保留在详情里，不要求用户理解 cache、digest 或 manifest diff。
+
+作者打包时不需要理解 Source Resolver 的内部细节。当前推荐做法是把完整插件目录压成一个 ZIP，ZIP 内允许有一层包装目录，但必须只有一个 `.openharness-plugin/plugin.json`。Desktop 导入失败只向用户反馈失败原因和一个动作；具体校验项留在插件详情和诊断里。
 
 Desktop 尚不支持自动更新、独立 Repair 命令、版本回滚、旧快照垃圾回收界面、Agent 对话安装、Claude Code/Codex 转换、Git、npm、归档 URL、tar 格式或 Marketplace。被旧插件页面隐藏的 localStorage 配置仍原样保留，未执行迁移或删除。
 

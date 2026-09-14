@@ -1,6 +1,6 @@
 # Native Plugin 后续工作交接
 
-> 状态：Native Plugin 运行诊断 v1 完成后的阶段交接。
+> 状态：当前阶段交接。
 > 日期：2026-09-14
 > 适用范围：Native Plugin 安装后诊断、插件管理界面、作者体验、后续来源扩展与明确暂缓项。
 
@@ -14,7 +14,9 @@
 
 Native Plugin 运行诊断 v1 已完成。安装链路和运行状态现在都能给出清晰反馈：用户不需要理解 cache、digest 或 manifest diff，只看插件页的状态文案和建议动作即可。
 
-下一阶段建议做 **作者体验小修**：补齐“如何打 ZIP、如何重装验证、如何看诊断、参考插件常见失败”的文档和示例，不扩展来源，不做 Marketplace，不做 Agent 对话内安装，也不做自动更新。
+作者体验小修也已完成：开发指南和文本检查参考插件 README 已补齐“如何打 ZIP、如何重装验证、如何看诊断、参考插件常见失败”。该阶段没有扩展来源，不做 Marketplace，不做 Agent 对话内安装，也不做自动更新。
+
+Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent，并在用户本轮选择插件后把它们放入 Agent 工具可见范围。本轮补了参考插件的最小 Agent 示例和作者说明，没有增加新的安装来源或复杂 UI。
 
 ## 2. 当前已经完成什么
 
@@ -223,12 +225,14 @@ runtimeStatus:
 
 ### P1：作者体验小修
 
-建议下一阶段做，成本低、收益稳定。
+已完成，成本低、收益稳定。
 
 - 补充“如何打 ZIP、如何重装验证、如何看诊断”；
 - 让参考插件 README 覆盖常见失败；
 - 明确 `reload-plugins` 与“下一次对话生效”的区别；
 - 保持 SDK 类型和实际示例同步。
+
+完成结果集中在 [原生插件开发指南](./native-plugin-authoring.md) 和 [文本检查参考插件](../examples/plugins/text-inspector/README.md)。后续如果要继续推进，建议从 P2 或 P3 中重新选一个小范围开规格。
 
 ### P2：Agent 对话内安装本地 Native ZIP
 
@@ -238,6 +242,15 @@ runtimeStatus:
 - 调用同一条 Archive Resolver 和 Plugin Service；
 - 仍然只反馈成功、失败、权限确认；
 - 不在对话里设计复杂管理界面。
+
+### P2.5：Plugin Agent 可用性收口
+
+已完成，范围很小。
+
+- 文本检查参考插件包含 `example.text-inspector:reviewer`；
+- 文档说明 `components.agents` 的声明、命名和可见性；
+- 不改变 Agent 对话安装 ZIP；
+- 不新增复杂 Agent 管理界面。
 
 ### P3：更多 Source Resolver
 
@@ -313,16 +326,16 @@ runtimeStatus:
 
 ## 10. 下一阶段建议规格标题
 
-如果继续按当前节奏推进，下一份规格建议命名为：
+如果继续按当前节奏推进，作者体验小修已经不需要再开规格。下一份规格应按实际选择命名，例如：
 
 ```text
-docs/superpowers/specs/2026-09-14-native-plugin-authoring-polish-v1-design.md
+docs/superpowers/specs/2026-09-14-agent-native-plugin-zip-install-design.md
 ```
 
 实施计划可以命名为：
 
 ```text
-docs/superpowers/plans/2026-09-14-native-plugin-authoring-polish-v1.md
+docs/superpowers/plans/2026-09-14-agent-native-plugin-zip-install.md
 ```
 
-规格只覆盖作者体验小修：打 ZIP、重装验证、看诊断、参考插件 README 和少量示例。不要覆盖来源扩展、自动更新或新 Component，这样阶段边界清楚，也不容易把插件系统重新拖回“大而全”的状态。
+如果暂时不做 Agent 对话安装，则可以选择本地 archive 格式补齐，例如 `.tar` / `.tar.gz`。不要把来源扩展、自动更新或新 Component 混在同一阶段，这样边界清楚，也不容易把插件系统重新拖回“大而全”的状态。

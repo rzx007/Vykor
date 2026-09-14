@@ -2,7 +2,7 @@
 
 > 状态：当前开发指南。
 
-本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含一个 Skill 和一个真正运行在独立 Node 进程中的 Tool，没有外部服务或运行依赖。SDK 类型尚未作为独立 npm 产品发布。
+本文面向在本仓库内开发插件的作者。可以从 [文本检查助手](../examples/plugins/text-inspector/README.md) 开始：它包含一个 Skill、一个 Plugin Agent 和一个真正运行在独立 Node 进程中的 Tool，没有外部服务或运行依赖。SDK 类型尚未作为独立 npm 产品发布。
 
 ## 从样例开始
 
@@ -16,6 +16,15 @@ ohs plugin details example.text-inspector
 ```
 
 进入使用本地执行环境的 OpenHarness 会话，通过 `/text-inspector:check-text` 提供需要检查的文本，或明确要求模型使用 `TextInspectorCheck`。例如提供第一行 `hello` 后带两个空格、第二行以制表符开头的文本；工具应报告第 1 行 `trailing-whitespace` 和第 2 行 `tab-indentation`。自然语言调用需要正常配置模型；仓库自动验收直接调用注册后的工具，不需要模型服务。
+
+如果只是想在 Desktop 里走一遍真实安装，可以先把样例打成 ZIP：
+
+```powershell
+New-Item -ItemType Directory -Force .\.plugin-dist
+Compress-Archive -LiteralPath .\examples\plugins\text-inspector -DestinationPath .\.plugin-dist\text-inspector.zip -Force
+```
+
+然后打开 Desktop 的插件页，选择 `.\.plugin-dist\text-inspector.zip` 导入。这个 ZIP 内可以带一层 `text-inspector/` 包装目录，只要里面有唯一的 `.openharness-plugin/plugin.json` 即可。导入成功只表示插件已经写入安装记录；它会从下一次对话开始生效。
 
 修改链接目录里的工具实现后，在没有运行中任务的会话执行：
 
@@ -42,6 +51,16 @@ Desktop 插件页当前只支持选择 **一个本地 Native Plugin ZIP**。系�
 
 该入口不支持自动更新、独立 Repair 命令、版本回滚或旧快照垃圾回收界面，也不支持在 Agent 对话中安装、转换 Claude Code/Codex 插件、Git、npm、归档 URL、`.tar`/`.tar.gz` 等其他来源或格式。请使用 CLI 的目录开发/安装流程处理这些场景。旧插件页 localStorage 配置已从页面隐藏，但保留原数据，不迁移也不删除。
 
+ZIP 导入的作者侧检查很短：
+
+1. ZIP 里必须只有一个 Native manifest，可以在根目录，也可以在唯一一层包装目录里；
+2. manifest 路径必须是 `.openharness-plugin/plugin.json`；
+3. 不要把两个插件目录一起压进同一个 ZIP；
+4. 不要压入符号链接、超大文件或需要安装依赖后才存在的文件；
+5. 导入同一个插件 ID 的新 ZIP 就是手动更新或修复，不需要另一套 repair 流程。
+
+导入失败时优先看插件页详情。如果提示文件不完整、摘要不一致或 manifest 不匹配，从可信源重新打 ZIP；如果提示缺少权限，重新导入并确认新增权限；如果提示 Tool Host 启动失败，先在本地确认 `tools/index.mjs` 能被 Node import。
+
 ## 包结构与 manifest
 
 唯一原生入口是 `.openharness-plugin/plugin.json`：
@@ -53,6 +72,7 @@ Desktop 插件页当前只支持选择 **一个本地 Native Plugin ZIP**。系�
   "name": "text-inspector",
   "version": "1.0.0",
   "components": {
+    "agents": ["./agents/reviewer.md"],
     "skills": ["./skills/check-text/SKILL.md"],
     "tools": [{ "entry": "./tools/index.mjs", "runtime": "node" }]
   },
@@ -162,6 +182,22 @@ manifest 声明 `./skills/check-text/SKILL.md`。运行时命令名为 `text-ins
 
 插件 Agent 当前不直接激活其文件内嵌的 hooks 或 mcpServers；需要通过插件 manifest 的独立组件入口声明。名称前缀使用插件 ID，与 Skill 使用插件 name 的规则不同。
 
+最小示例：
+
+```markdown
+---
+name: reviewer
+description: Review supplied text with the plugin tool.
+tools:
+  - TextInspectorCheck
+maxTurns: 3
+---
+
+Call TextInspectorCheck with the text supplied by the user, then explain the findings.
+```
+
+安装 `example.text-inspector` 后，这个 Agent 的完整名字是 `example.text-inspector:reviewer`。它不会自动出现在普通对话里；只有本轮选择了对应插件，模型才会看到并可以用 Agent 工具创建它。它继承本轮插件选择允许的 Skill、Tool 和 MCP，不会因为自己写了 `tools` 或 `mcpServers` 就越过宿主边界。
+
 ### Hooks
 
 通过 `components.hooks` 指向 JSON 文件。内容直接使用 Native 事件名，例如：
@@ -204,6 +240,18 @@ MCP 名称不会自动加插件前缀，请使用独特名称，避免与其他�
 `PluginInfo.runtimeStatus` 是面向展示的主状态，目前包含 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`。列表页只需要看这一个字段；`diagnostics` 和 `toolRuntime` 保留在详情里，用于作者排查具体原因。`list --verbose`、`details` 和 `/reload-plugins` 用于查看安装校验、组件诊断和 Tool Host 状态。
 
 遇到权限或身份变化，先查看源 manifest，再重新 link/install-local 并明确批准所需权限；遇到快照损坏，从可信源重新安装。组织管理的插件由管理员修复，普通用户不能替换或卸载。
+
+常见排查顺序：
+
+```text
+导入失败       → 检查 ZIP 里是否有唯一的 .openharness-plugin/plugin.json
+等待生效       → 开新对话，或在没有运行中任务时执行 /reload-plugins
+缺少权限       → 重新导入或 install-local，并批准这次 manifest 请求的权限
+组件部分不可用 → 看详情里的 diagnostics，确认是不是当前版本暂不支持
+Tool 启动失败  → 检查 entry 路径、Node 语法、运行期普通 import 和本机依赖
+```
+
+如果 `validate` 通过但插件页显示失败，说明静态结构没问题，但安装快照、权限或 Runtime 激活阶段出了问题；以插件页详情和 `ohs plugin details <id>` 的 `runtimeStatus` 为准。
 
 仓库验证入口：
 
