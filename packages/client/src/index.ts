@@ -12,7 +12,12 @@ export {
   IncompatibleProtocolError,
   OpenHarnessClient,
   streamServerSentEvents,
+  HttpTransport,
+  SseTransport,
 } from "./transport/index.js";
+export {
+  ProtocolClient,
+} from "./protocol/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
 export type {
   PluginCatalogEntry,

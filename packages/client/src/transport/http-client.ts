@@ -97,8 +97,6 @@ import type {
   ServerCapabilities,
 } from "@openharness/protocol";
 import {
-  checkProtocolCompatibility,
-  CURRENT_PROTOCOL_VERSION,
   decodeJobReadResult,
   decodeJobSnapshot,
   decodeJobWaitResult,
@@ -108,7 +106,6 @@ import {
   decodeTerminalReadResult,
   decodeTerminalSessionInfo,
   ProtocolDataError,
-  parseServerCapabilities,
   parseAttachmentAssetRecord,
 } from "@openharness/protocol";
 
@@ -125,6 +122,10 @@ import {
   SseTransport,
   streamServerSentEvents,
 } from "./sse-transport.js";
+import {
+  ProtocolClient,
+  IncompatibleProtocolError,
+} from "../protocol/index.js";
 
 export {
   HttpTransport,
@@ -132,6 +133,8 @@ export {
   normalizeDaemonBaseUrl,
   SseTransport,
   streamServerSentEvents,
+  ProtocolClient,
+  IncompatibleProtocolError,
 };
 
 let promptRequestCounter = 0;
@@ -151,10 +154,12 @@ export function createPromptRequestId(): string {
 export class OpenHarnessClient {
   readonly transport: HttpTransport;
   readonly sse: SseTransport;
+  readonly protocol: ProtocolClient;
 
   constructor(options: OpenHarnessClientOptions) {
     this.transport = new HttpTransport(options);
     this.sse = new SseTransport(this.transport.fetchImpl);
+    this.protocol = new ProtocolClient(this.transport);
   }
 
   get baseUrl(): string {
@@ -173,33 +178,14 @@ export class OpenHarnessClient {
   async health(
     options: { signal?: AbortSignal } = {},
   ): Promise<OpenHarnessServerHealth> {
-    return this.request<OpenHarnessServerHealth>("/health", {
-      auth: false,
-      signal: options.signal,
-    });
+    return this.protocol.health(options);
   }
 
   /** 连接产品应先调用它，再根据 features 决定显示哪些功能。 */
   async capabilities(
     options: { signal?: AbortSignal; support?: ClientProtocolSupport } = {},
   ): Promise<ServerCapabilities> {
-    const value = await this.request<unknown>("/capabilities", {
-      auth: false,
-      signal: options.signal,
-    });
-    const capabilities = parseServerCapabilities(value);
-    const compatibility = checkProtocolCompatibility(
-      capabilities,
-      options.support ?? { version: CURRENT_PROTOCOL_VERSION },
-    );
-    if (!compatibility.compatible) {
-      throw new IncompatibleProtocolError(
-        capabilities,
-        compatibility.reason ??
-          "Client and server protocol versions are incompatible",
-      );
-    }
-    return capabilities;
+    return this.protocol.capabilities(options);
   }
 
   /** `POST /attachments` — upload bytes without JSON or multipart buffering. */
@@ -1676,15 +1662,5 @@ export class OpenHarnessClient {
 
   private async throwResponseError(response: Response): Promise<never> {
     return this.transport.throwResponseError(response);
-  }
-}
-
-export class IncompatibleProtocolError extends Error {
-  constructor(
-    readonly capabilities: ServerCapabilities,
-    message: string,
-  ) {
-    super(message);
-    this.name = "IncompatibleProtocolError";
   }
 }
