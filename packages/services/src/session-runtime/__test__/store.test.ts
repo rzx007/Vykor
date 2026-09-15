@@ -3116,4 +3116,403 @@ describe("SessionStore", () => {
       });
     });
   });
+
+  describe("session runtime write contracts (Stage 3B)", () => {
+    it("locks session write contracts: clone, events, updatedAt, terminal guard, and persistence", () => {
+      withStore((store, path) => {
+        // createSession
+        const created = store.createSession({
+          id: "s1",
+          cwd: process.cwd(),
+          model: "gpt-4",
+          title: "Initial Title",
+          metadata: { initial: true },
+        });
+        created.title = "mutated locally";
+        expect(store.getSession("s1")!.title).toBe("Initial Title");
+        expect(created.createdAt).toBe(created.updatedAt);
+
+        // check session.created event
+        const createdEvent = store.listEvents({ sessionId: "s1" }).find((e) => e.type === "session.created");
+        expect(createdEvent).toBeDefined();
+        expect(createdEvent!.payload).toMatchObject({ session: { id: "s1", model: "gpt-4" } });
+
+        // updateSession
+        const originalUpdatedAt = store.getSession("s1")!.updatedAt;
+        const updated = store.updateSession("s1", {
+          title: "Updated Title",
+          agent: "coder",
+          metadata: { updated: true },
+        });
+        updated.title = "mutated again";
+        expect(store.getSession("s1")!.title).toBe("Updated Title");
+        expect(store.getSession("s1")!.agent).toBe("coder");
+        expect(store.getSession("s1")!.metadata).toEqual({ updated: true });
+        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(originalUpdatedAt);
+
+        // delete agent with null
+        store.updateSession("s1", { agent: null });
+        expect(store.getSession("s1")!.agent).toBeUndefined();
+
+        const updatedEvent = store.listEvents({ sessionId: "s1" }).find((e) => e.type === "session.updated");
+        expect(updatedEvent).toBeDefined();
+        expect(updatedEvent!.payload).toMatchObject({ session: { id: "s1", title: "Updated Title" } });
+
+        // beginArchive
+        const closing = store.beginArchive("s1");
+        expect(closing.status).toBe("closing");
+        // idempotent beginArchive
+        const closingAgain = store.beginArchive("s1");
+        expect(closingAgain.status).toBe("closing");
+
+        // terminal guard on closing session
+        expect(() => store.updateSession("s1", { title: "fail" })).toThrow(/Session is closing/);
+
+        // archiveSession
+        const archived = store.archiveSession("s1");
+        expect(archived.status).toBe("archived");
+        expect(archived.archivedAt).toBeDefined();
+        // idempotent archiveSession
+        const archivedAgain = store.archiveSession("s1");
+        expect(archivedAgain.status).toBe("archived");
+
+        // terminal guard on archived session
+        expect(() => store.updateSession("s1", { title: "fail" })).toThrow(/Session is archived/);
+
+        // Persistence across close & reopen
+        store.close();
+        const reloaded = new SessionStore({ path });
+        try {
+          const loadedSession = reloaded.getSession("s1")!;
+          expect(loadedSession.status).toBe("archived");
+          expect(loadedSession.title).toBe("Updated Title");
+          expect(loadedSession.archivedAt).toBe(archived.archivedAt);
+        } finally {
+          reloaded.close();
+        }
+      });
+    });
+
+    it("locks conversation message and part write contracts: clone, events, updatedAt, alignment, and persistence", () => {
+      withStore((store, path) => {
+        store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+        const s1BeforeMsg = store.getSession("s1")!.updatedAt;
+
+        // createMessage
+        const msg = store.createMessage({
+          id: "m1",
+          sessionId: "s1",
+          role: "user",
+          metadata: { note: "test" },
+        });
+        msg.role = "assistant";
+        expect(store.listMessages("s1")[0]!.role).toBe("user");
+        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(s1BeforeMsg);
+
+        const msgCreatedEvent = store.listEvents({ sessionId: "s1" }).find((e) => e.type === "session.message.created");
+        expect(msgCreatedEvent).toBeDefined();
+        expect(msgCreatedEvent!.payload).toMatchObject({ message: { id: "m1", role: "user" } });
+
+        // reject duplicate message id
+        expect(() => store.createMessage({ id: "m1", sessionId: "s1", role: "assistant" })).toThrow(
+          "Session message already exists: m1",
+        );
+
+        // upsertMessagePart (create)
+        const s1BeforePart = store.getSession("s1")!.updatedAt;
+        const part = store.upsertMessagePart({
+          id: "p1",
+          sessionId: "s1",
+          messageId: "m1",
+          type: "text",
+          text: "hello",
+          metadata: { step: 1 },
+        });
+        part.text = "mutated text";
+        expect(store.listMessageParts("s1", { messageId: "m1" })[0]!.text).toBe("hello");
+        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(s1BeforePart);
+
+        // upsertMessagePart (update)
+        const updatedPart = store.upsertMessagePart({
+          id: "p1",
+          sessionId: "s1",
+          messageId: "m1",
+          type: "text",
+          text: "hello world",
+          status: "completed",
+        });
+        expect(updatedPart.text).toBe("hello world");
+        expect(updatedPart.status).toBe("completed");
+
+        // alignment check: part sessionId must match message sessionId
+        store.createSession({ id: "s2", cwd: process.cwd(), model: "m" });
+        expect(() =>
+          store.upsertMessagePart({
+            id: "p2",
+            sessionId: "s2",
+            messageId: "m1",
+            type: "text",
+            text: "wrong session",
+          }),
+        ).toThrow("Session message m1 does not belong to session s2");
+
+        // Persistence across close & reopen
+        store.close();
+        const reloaded = new SessionStore({ path });
+        try {
+          expect(reloaded.listMessages("s1")).toHaveLength(1);
+          expect(reloaded.listMessageParts("s1", { messageId: "m1" })[0]!.text).toBe("hello world");
+        } finally {
+          reloaded.close();
+        }
+      });
+    });
+
+    it("locks event append write contracts: registry validation, seq monotonic, session updatedAt, and persistence", () => {
+      withStore((store, path) => {
+        store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+
+        // unknown event type throws
+        expect(() =>
+          store.appendEvent({
+            type: "unknown.event.type" as any,
+            sessionId: "s1",
+          }),
+        ).toThrow(/Unregistered durable event type/);
+
+        // valid event append
+        const event1 = store.appendEvent({
+          type: "session.closing",
+          sessionId: "s1",
+          payload: { sessionId: "s1" },
+        });
+        const event2 = store.appendEvent({
+          type: "session.archived",
+          sessionId: "s1",
+          payload: { sessionId: "s1" },
+        });
+        expect(event2.seq).toBeGreaterThan(event1.seq);
+        expect(store.latestEventSeq()).toBe(event2.seq);
+
+        event1.type = "mutated" as any;
+        const allEvents = store.listEvents({ sessionId: "s1" });
+        expect(allEvents.find((e) => e.id === event1.id)!.type).toBe("session.closing");
+
+        // Persistence across close & reopen
+        store.close();
+        const reloaded = new SessionStore({ path });
+        try {
+          const loadedEvents = reloaded.listEvents({ sessionId: "s1" });
+          expect(loadedEvents.find((e) => e.id === event2.id)!.seq).toBe(event2.seq);
+          expect(reloaded.latestEventSeq()).toBeGreaterThanOrEqual(event2.seq);
+        } finally {
+          reloaded.close();
+        }
+      });
+    });
+
+    it("locks run and attempt write contracts: clone, events, status transitions, terminal guards, and persistence", () => {
+      withStore((store, path) => {
+        store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+        const s1BeforeRun = store.getSession("s1")!.updatedAt;
+
+        // createRun
+        const run = store.createRun({
+          id: "r1",
+          sessionId: "s1",
+        });
+        run.status = "running";
+        expect(store.getRun("r1")!.status).toBe("pending");
+        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(s1BeforeRun);
+
+        // reject duplicate run id
+        expect(() => store.createRun({ id: "r1", sessionId: "s1" })).toThrow("Session run already exists: r1");
+
+        // cannot create run on archived session
+        store.createSession({ id: "s_archived", cwd: process.cwd(), model: "m" });
+        store.archiveSession("s_archived");
+        expect(() => store.createRun({ sessionId: "s_archived" })).toThrow(/Session is archived/);
+
+        // updateRun: pending -> running
+        const runningRun = store.updateRun("r1", { status: "running" });
+        expect(runningRun.status).toBe("running");
+        expect(runningRun.startedAt).toBeDefined();
+
+        const runUpdatedEvent = store.listEvents({ sessionId: "s1" }).find(
+          (e) => e.type === "session.run.updated" && (e.payload as any).previousStatus === "pending",
+        );
+        expect(runUpdatedEvent).toBeDefined();
+
+        // createRunAttempt
+        const attempt = store.createRunAttempt({
+          id: "ra1",
+          runId: "r1",
+          provider: "openai",
+          model: "gpt-4",
+        });
+        attempt.status = "running";
+        expect(store.getRunAttempt("ra1")!.status).toBe("pending");
+        expect(attempt.sequence).toBe(1);
+
+        // duplicate attempt sequence throws
+        expect(() =>
+          store.createRunAttempt({
+            runId: "r1",
+            sequence: 1,
+          }),
+        ).toThrow("Session run attempt sequence already exists: r1/1");
+
+        // updateRunAttempt: pending -> running -> completed
+        store.updateRunAttempt("ra1", { status: "running" });
+        const completedAttempt = store.updateRunAttempt("ra1", {
+          status: "completed",
+          inputTokens: 100,
+          outputTokens: 50,
+        });
+        expect(completedAttempt.status).toBe("completed");
+        expect(completedAttempt.finishedAt).toBeDefined();
+        expect(completedAttempt.inputTokens).toBe(100);
+
+        // terminal attempt cannot change status
+        expect(() => store.updateRunAttempt("ra1", { status: "failed" })).toThrow(
+          "Session run attempt is already terminal: ra1",
+        );
+
+        // updateRun: running -> completed
+        const completedRun = store.updateRun("r1", { status: "completed" });
+        expect(completedRun.status).toBe("completed");
+        expect(completedRun.finishedAt).toBeDefined();
+
+        // terminal run cannot change status
+        expect(() => store.updateRun("r1", { status: "running" })).toThrow(
+          "Session run is already terminal: r1",
+        );
+        // cannot create attempt on terminal run
+        expect(() => store.createRunAttempt({ runId: "r1" })).toThrow(
+          "Session run is already terminal: r1",
+        );
+
+        // Persistence across close & reopen
+        store.close();
+        const reloaded = new SessionStore({ path });
+        try {
+          expect(reloaded.getRun("r1")!.status).toBe("completed");
+          expect(reloaded.listRunAttempts("r1")).toHaveLength(1);
+          expect(reloaded.getRunAttempt("ra1")!.outputTokens).toBe(50);
+        } finally {
+          reloaded.close();
+        }
+      });
+    });
+
+    it("locks session task write contracts: request key pair, reserve, CAS transition, ownership, and persistence", () => {
+      withStore((store, path) => {
+        store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+        store.createSession({ id: "child1", parentId: "s1", cwd: process.cwd(), model: "m" });
+        store.createSession({ id: "other", cwd: process.cwd(), model: "m" });
+        store.createRun({ id: "r1", sessionId: "s1" });
+
+        // requestNamespace and requestId must be provided together
+        expect(() =>
+          store.createSessionTask({
+            sessionId: "s1",
+            type: "process",
+            description: "test",
+            cwd: process.cwd(),
+            requestNamespace: "ns",
+          }),
+        ).toThrow("Session task requestNamespace and requestId must be provided together");
+
+        // childSessionId ownership
+        expect(() =>
+          store.createSessionTask({
+            sessionId: "s1",
+            type: "process",
+            description: "test",
+            cwd: process.cwd(),
+            childSessionId: "other",
+          }),
+        ).toThrow("Child session does not belong to task session: other");
+
+        // runId ownership
+        const otherRun = store.createRun({ id: "r_other", sessionId: "other" });
+        expect(() =>
+          store.createSessionTask({
+            sessionId: "s1",
+            type: "process",
+            description: "test",
+            cwd: process.cwd(),
+            runId: otherRun.id,
+          }),
+        ).toThrow("Task run does not belong to task session: r_other");
+
+        // reserveSessionTask (first time: creates with pending)
+        const reserved1 = store.reserveSessionTask({
+          id: "task-reserved",
+          sessionId: "s1",
+          type: "process",
+          description: "reserved task",
+          cwd: process.cwd(),
+          requestNamespace: "daemon",
+          requestId: "req-1",
+        });
+        expect(reserved1.created).toBe(true);
+        expect(reserved1.task.status).toBe("pending");
+
+        // reserveSessionTask (second time: returns existing, created=false)
+        const reserved2 = store.reserveSessionTask({
+          sessionId: "s1",
+          type: "process",
+          description: "reserved task duplicate",
+          cwd: process.cwd(),
+          requestNamespace: "daemon",
+          requestId: "req-1",
+        });
+        expect(reserved2.created).toBe(false);
+        expect(reserved2.task.id).toBe("task-reserved");
+
+        // transitionPendingSessionTask: CAS when pending -> running
+        const transition1 = store.transitionPendingSessionTask("task-reserved", {
+          status: "running",
+        });
+        expect(transition1.transitioned).toBe(true);
+        expect(transition1.task.status).toBe("running");
+
+        // transitionPendingSessionTask: CAS when NOT pending -> does not transition
+        const transition2 = store.transitionPendingSessionTask("task-reserved", {
+          status: "completed",
+        });
+        expect(transition2.transitioned).toBe(false);
+        expect(transition2.task.status).toBe("running");
+
+        // updateSessionTask: running -> completed
+        const completedTask = store.updateSessionTask("task-reserved", {
+          status: "completed",
+          output: "success output",
+        });
+        expect(completedTask.status).toBe("completed");
+        expect(completedTask.finishedAt).toBeDefined();
+
+        // transition back to running clears finishedAt and error
+        const restarted = store.updateSessionTask("task-reserved", {
+          status: "running",
+        });
+        expect(restarted.status).toBe("running");
+        expect(restarted.finishedAt).toBeUndefined();
+        expect(restarted.output).toBeUndefined();
+
+        // Persistence across close & reopen
+        store.close();
+        const reloaded = new SessionStore({ path });
+        try {
+          const loadedTask = reloaded.getSessionTask("task-reserved")!;
+          expect(loadedTask.status).toBe("running");
+          expect(loadedTask.requestNamespace).toBe("daemon");
+          expect(loadedTask.requestId).toBe("req-1");
+        } finally {
+          reloaded.close();
+        }
+      });
+    });
+  });
 });
