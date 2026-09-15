@@ -217,6 +217,12 @@ export class RunAdmissionService {
     return this.accepting;
   }
 
+  hasPendingAdmission(sessionId: string): boolean {
+    return [...this.pendingAdmissions.values()].some(
+      (entry) => entry.sessionId === sessionId,
+    );
+  }
+
   persistGoalRun(
     sessionId: string,
     input: AdmitPromptInput,
