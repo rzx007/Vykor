@@ -137,4 +137,71 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("keeps committed memory and SQLite state when an after-commit callback throws", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ohs-tx-callback-error-"));
+    const dbPath = join(dir, "store.db");
+    let store = new SessionStore({ path: dbPath });
+
+    try {
+      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      const coordinator = new TransactionCoordinator({
+        storage: (store as any).storage,
+        persistChanges: () => (store as any).persistChanges(),
+      });
+
+      expect(() =>
+        coordinator.atomic(() => {
+          store.updateSession("s1", { title: "Committed Title" });
+          coordinator.deferUntilCommit(() => {
+            throw new Error("after commit failed");
+          });
+        }),
+      ).toThrow("after commit failed");
+
+      expect(store.getSession("s1")?.title).toBe("Committed Title");
+      store.close();
+      store = new SessionStore({ path: dbPath });
+      expect(store.getSession("s1")?.title).toBe("Committed Title");
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rolls back the outer transaction when a nested failure is caught by business code", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ohs-tx-nested-caught-"));
+    const dbPath = join(dir, "store.db");
+    let store = new SessionStore({ path: dbPath });
+
+    try {
+      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      const coordinator = new TransactionCoordinator({
+        storage: (store as any).storage,
+        persistChanges: () => (store as any).persistChanges(),
+      });
+
+      expect(() =>
+        coordinator.atomic(() => {
+          store.updateSession("s1", { title: "Outer Change" });
+          try {
+            coordinator.atomic(() => {
+              store.updateSession("s1", { title: "Inner Change" });
+              throw new Error("nested failed");
+            });
+          } catch {
+            // A caught nested failure still poisons the shared transaction.
+          }
+        }),
+      ).toThrow("nested failed");
+
+      expect(store.getSession("s1")?.title).toBe("");
+      store.close();
+      store = new SessionStore({ path: dbPath });
+      expect(store.getSession("s1")?.title).toBe("");
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

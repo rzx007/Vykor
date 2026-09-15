@@ -23,6 +23,7 @@ export class TransactionCoordinator {
   private depth = 0;
   private saveRequested = false;
   private deferredCallbacks: Array<() => void> = [];
+  private rollbackOnlyError: unknown;
   private hooks?: TransactionCoordinatorHooks;
   private readonly storage: StorageContext;
   private readonly persistChangesFn?: () => void;
@@ -63,6 +64,9 @@ export class TransactionCoordinator {
       this.depth += 1;
       try {
         return work();
+      } catch (error) {
+        this.rollbackOnlyError ??= error;
+        throw error;
       } finally {
         this.depth -= 1;
       }
@@ -77,13 +81,18 @@ export class TransactionCoordinator {
     this.depth = 1;
     this.saveRequested = false;
     this.deferredCallbacks = [];
+    this.rollbackOnlyError = undefined;
 
     let persisted = false;
     let completed = false;
 
+    let result: T;
     try {
-      const result = this.storage.database.connection.transaction(() => {
+      result = this.storage.database.connection.transaction(() => {
         const value = work();
+        if (this.rollbackOnlyError !== undefined) {
+          throw this.rollbackOnlyError;
+        }
         this.hooks?.beforeFlush?.();
 
         const shouldPersist =
@@ -99,20 +108,6 @@ export class TransactionCoordinator {
         return value;
       })();
 
-      if (persisted) {
-        this.storage.deltaCheckpoint.clear();
-        clearMutationBuffer(this.storage.mutations);
-      }
-
-      completed = true;
-
-      const callbacks = this.deferredCallbacks;
-      this.deferredCallbacks = [];
-      for (const callback of callbacks) {
-        callback();
-      }
-
-      return result;
     } catch (error) {
       this.storage.state = previousState;
       this.storage.eventSequence.restore(previousEventSequence);
@@ -120,10 +115,29 @@ export class TransactionCoordinator {
       restoreMutationBuffer(this.storage.mutations, previousMutations);
       this.saveRequested = previousSaveRequested;
       this.deferredCallbacks = [];
+      this.depth = 0;
+      this.rollbackOnlyError = undefined;
+      if (this.storage.deltaCheckpoint.dirtyPartIds().length > 0) {
+        this.storage.deltaCheckpoint.schedule();
+      }
       throw error;
+    }
+
+    if (persisted) {
+      this.storage.deltaCheckpoint.clear();
+      clearMutationBuffer(this.storage.mutations);
+    }
+    completed = true;
+
+    try {
+      const callbacks = this.deferredCallbacks;
+      this.deferredCallbacks = [];
+      for (const callback of callbacks) callback();
+      return result;
     } finally {
       this.depth = 0;
       this.saveRequested = previousSaveRequested;
+      this.rollbackOnlyError = undefined;
       if (this.storage.deltaCheckpoint.dirtyPartIds().length > 0) {
         if (completed && this.storage.deltaCheckpoint.reachedThreshold()) {
           this.flushDeltasFn?.();
