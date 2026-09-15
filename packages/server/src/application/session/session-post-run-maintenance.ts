@@ -6,7 +6,7 @@ import type { SessionStore } from "@openharness/services";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 
 export interface SessionPostRunMaintenanceContext {
-  store: SessionStore;
+  data: SessionStore;
   getSettings(cwd: string): Promise<Settings | undefined>;
   personalizationUpdater?: (messages: SessionMessageLike[]) => number;
   sessionMemoryWriter?: (cwd: string, messages: SessionMessageLike[], sessionId: string) => void;
@@ -45,11 +45,11 @@ export class SessionPostRunMaintenance {
     runId: string,
     agent: OpenHarnessAgent,
   ): Promise<void> {
-    const session = this.context.store.getSession(sessionId);
-    const run = this.context.store.getRun(runId);
+    const session = this.context.data.getSession(sessionId);
+    const run = this.context.data.getRun(runId);
     if (!session || run?.status !== "completed") return;
 
-    const messages = transcriptMessages(this.context.store, sessionId);
+    const messages = transcriptMessages(this.context.data, sessionId);
 
     await this.bestEffort("session.personalization.extract_failed", sessionId, runId, async () => {
       const update = this.context.personalizationUpdater ?? updateRulesFromSession;
@@ -75,7 +75,7 @@ export class SessionPostRunMaintenance {
       await this.bestEffort("session.memory.auto_dream_failed", sessionId, runId, async () => {
         const memoryDir = getProjectMemoryDir(session.cwd);
         const lastAtMs = (this.context.lastConsolidatedAt?.(memoryDir) ?? 0) * 1000;
-        const recentSessionIds = this.context.store
+        const recentSessionIds = this.context.data
           .listSessions({ cwd: session.cwd, includeArchived: true })
           .filter((candidate) => candidate.updatedAt > lastAtMs)
           .map((candidate) => candidate.id);

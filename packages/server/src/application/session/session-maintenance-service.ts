@@ -28,7 +28,7 @@ export class SessionMaintenanceError extends ApplicationError {
 }
 
 export interface SessionMaintenanceServiceContext {
-  store: SessionStore;
+  data: SessionStore;
   runEngine: Pick<SessionRunEngine, "hasActiveRunsForCwd" | "hasWork">;
   agentPool: AgentPool;
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
@@ -95,9 +95,9 @@ export class SessionMaintenanceService {
     const session = this.requireSession(sessionId);
     return await writeSessionExport({
       session,
-      inputs: this.context.store.listInputs(sessionId),
-      messages: this.context.store.listMessages(sessionId),
-      parts: this.context.store.listMessageParts(sessionId),
+      inputs: this.context.data.listInputs(sessionId),
+      messages: this.context.data.listMessages(sessionId),
+      parts: this.context.data.listMessageParts(sessionId),
       format: input.format,
       filename: input.filename,
     });
@@ -129,7 +129,7 @@ export class SessionMaintenanceService {
         this.context.events.publishSince(before);
         throw error;
       }
-      const replaced = this.context.store.replaceTranscript({
+      const replaced = this.context.data.replaceTranscript({
         sessionId,
         messages: agentMessagesToTranscript(compacted.history),
       });
@@ -155,12 +155,12 @@ export class SessionMaintenanceService {
     sessionId: string,
     phase: "started" | "completed" | "failed",
   ): void {
-    const message = this.context.store.createMessage({
+    const message = this.context.data.createMessage({
       sessionId,
       role: "system",
       metadata: { presentation: { kind: "context_compaction", phase } },
     });
-    this.context.store.upsertMessagePart({
+    this.context.data.upsertMessagePart({
       sessionId,
       messageId: message.id,
       type: "text",
@@ -193,15 +193,15 @@ export class SessionMaintenanceService {
     );
     try {
       const rewound = rewindTranscript(
-        this.context.store.listMessages(sessionId),
-        this.context.store.listMessageParts(sessionId),
+        this.context.data.listMessages(sessionId),
+        this.context.data.listMessageParts(sessionId),
         count,
       );
       if (rewound.removed === 0) {
         throw new SessionMaintenanceError(400, "No messages to rewind");
       }
       const before = this.context.events.checkpoint();
-      const replaced = this.context.store.replaceTranscript({
+      const replaced = this.context.data.replaceTranscript({
         sessionId,
         messages: rewound.kept,
       });
@@ -247,7 +247,7 @@ export class SessionMaintenanceService {
   }
 
   private requireSession(sessionId: string): NonNullable<ReturnType<SessionStore["getSession"]>> {
-    const session = this.context.store.getSession(sessionId);
+    const session = this.context.data.getSession(sessionId);
     if (!session) throw new SessionMaintenanceError(404, "Session not found");
     return session;
   }
@@ -303,8 +303,8 @@ export class SessionMaintenanceService {
   private updateLocalEnvironmentRules(sessionId: string): void {
     try {
       const messages = transcriptToPersonalizationMessages(
-        this.context.store.listMessages(sessionId),
-        this.context.store.listMessageParts(sessionId),
+        this.context.data.listMessages(sessionId),
+        this.context.data.listMessageParts(sessionId),
       );
       const updater = this.context.personalizationUpdater ?? updateRulesFromSession;
       updater(messages);

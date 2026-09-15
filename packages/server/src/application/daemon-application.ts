@@ -81,6 +81,7 @@ import { SessionExecutionProjector } from "./session/session-execution-projector
 import { BackgroundShellService } from "./session/background-shell-service.js";
 import { SessionTranscriptProjection } from "./session/transcript-projection.js";
 import { recoverInterruptedWorkflows } from "./session/workflow-recovery.js";
+import { StartupRecoveryService } from "./recovery/startup-recovery-service.js";
 import { ApplicationEventService } from "./events/application-event-service.js";
 import { ProjectApplicationService } from "./project-application-service.js";
 import { ChannelApplicationService } from "./channel/channel-application-service.js";
@@ -274,13 +275,6 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       // 上次进程可能是被杀掉的：内存里的 Agent/进程都没了，store 里却还挂着 running。
       // 先把这些半截状态结掉，再对外服务，免得窗口以为还在跑。
-      recoverProjectionSettlements(store);
-      store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON);
-      store.goals.pauseActiveGoalsOnStartup();
-      store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON);
-      store.permissions.expirePending(DAEMON_RESTART_PERMISSION_REASON);
-      store.finalizeClosingSessions();
-
       // events：窗口订的 SSE。eventPublisher：各处写完 store 后，把增量广播出去。
       this.events = new ApplicationEventService(store);
       this.eventPublisher = new SessionEventPublisher(store, this.events);
@@ -481,7 +475,7 @@ export class DaemonApplication implements DurableAgentApplication {
 
       // 一次 prompt 跑完才做：写记忆、个性化、auto-dream。失败的半截对话不写进去。
       const postRunMaintenance = new SessionPostRunMaintenance({
-        store,
+        data: store,
         getSettings: async (cwd) =>
           options.getSettingsForCwd
             ? await options.getSettingsForCwd(cwd)
@@ -708,7 +702,7 @@ export class DaemonApplication implements DurableAgentApplication {
        * 3. 与其他服务交互（如会话管理、日志记录）
        */
       this.maintenance = new SessionMaintenanceService({
-        store,
+        data: store,
         runEngine: this.runEngine,
         agentPool: this.agentPool,
         liveChildren: this.liveChildren,
@@ -966,11 +960,18 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供后台进程相关的查询和操作接口
        */
       // 构造可以立刻返回；workflow 恢复跑完才算 ready，避免一上来就对半截工作流动手。
-      this.startupRecovery = Promise.all([
-        this.attachments.recover(),
-        this.backgroundShells.reconcileActiveTasks(DAEMON_RESTART_TASK_REASON),
-      ])
-        .then(() => recoverInterruptedWorkflows({ workflows: this.workflows }))
+      const recovery = new StartupRecoveryService({
+        recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
+        interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
+        pauseActiveGoals: () => { store.goals.pauseActiveGoalsOnStartup(); },
+        terminalizeUnownedInputs: () => { store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON); },
+        expirePendingPermissions: () => { store.permissions.expirePending(DAEMON_RESTART_PERMISSION_REASON); },
+        finalizeClosingSessions: () => { store.finalizeClosingSessions(); },
+        recoverAttachments: () => this.attachments.recover(),
+        reconcileBackgroundTasks: () => this.backgroundShells.reconcileActiveTasks(DAEMON_RESTART_TASK_REASON),
+        recoverWorkflows: () => recoverInterruptedWorkflows({ workflows: this.workflows }),
+      });
+      this.startupRecovery = recovery.run()
         .then(
           () => {
             if (this.readyState === "starting") this.readyState = "ready";
