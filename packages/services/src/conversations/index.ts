@@ -1,4 +1,5 @@
 export { ConversationRepository } from "./conversation-repository.js";
+export { IncrementalOutput, type IncrementalOutputOptions } from "./incremental-output.js";
 export {
   ConversationTransactions,
   type AdmitPromptTransactionInput,

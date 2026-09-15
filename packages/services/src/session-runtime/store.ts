@@ -110,6 +110,7 @@ import { SessionRepository } from "../sessions/session-repository.js";
 import {
   ConversationRepository,
   ConversationTransactions,
+  IncrementalOutput,
 } from "../conversations/index.js";
 import { RunRepository } from "../runs/run-repository.js";
 import {
@@ -220,6 +221,7 @@ export class SessionStore {
   readonly conversations!: ConversationRepository;
   readonly runs!: RunRepository;
   readonly conversationTransactions!: ConversationTransactions;
+  readonly incrementalOutput!: IncrementalOutput;
   private storage!: StorageContext;
   private closed = false;
   private _coordinator!: TransactionCoordinator;
@@ -293,6 +295,10 @@ export class SessionStore {
         eventRegistry: this.eventRegistry,
         save: () => this.save(),
       });
+      this.incrementalOutput = new IncrementalOutput({
+        storage: this.storage,
+        appendTransientEvent: (input) => this.conversations.appendEventInMemory(input, false),
+      });
       this.sessions = new SessionRepository({
         storage: this.storage,
         projects: this.projects,
@@ -347,9 +353,8 @@ export class SessionStore {
   close(): void {
     if (this.closed) return;
     try {
-      this.flushMessagePartDeltas();
+      this.incrementalOutput.close();
     } finally {
-      this.deltaCheckpoint.close();
       this.databaseKernel.close();
       this.closed = true;
     }
@@ -1169,58 +1174,11 @@ export class SessionStore {
   appendMessagePartDelta(
     input: AppendMessagePartDeltaInput,
   ): SessionEventRecord {
-    const session = assertSession(this.state, input.sessionId);
-    const message = assertMessage(this.state, input.messageId);
-    const part = this.state.parts[input.partId];
-    if (!part)
-      throw new Error(`Session message part not found: ${input.partId}`);
-    if (
-      message.sessionId !== input.sessionId ||
-      part.sessionId !== input.sessionId ||
-      part.messageId !== input.messageId
-    ) {
-      throw new Error(
-        `Session message part ${input.partId} does not belong to message ${input.messageId}`,
-      );
-    }
-
-    const timestamp = now();
-    const event = this.appendEventInMemory(
-      {
-        type: "session.message.part.delta",
-        sessionId: input.sessionId,
-        payload: {
-          sessionId: input.sessionId,
-          messageId: input.messageId,
-          partId: input.partId,
-          field: input.field,
-          delta: input.delta,
-        },
-      },
-      false,
-    );
-    part.text = `${part.text ?? ""}${input.delta}`;
-    part.updatedAt = timestamp;
-    message.updatedAt = timestamp;
-    session.updatedAt = timestamp;
-    const reachedFlushThreshold = this.deltaCheckpoint.markDirty(
-      part.id,
-      Buffer.byteLength(input.delta, "utf8"),
-    );
-    if (!this.coordinator.inTransaction) {
-      if (reachedFlushThreshold) this.flushMessagePartDeltas();
-      else this.deltaCheckpoint.schedule();
-    }
-    return clone(event);
+    return this.incrementalOutput.appendMessagePartDelta(input);
   }
 
   flushMessagePartDeltas(): void {
-    const partIds = this.deltaCheckpoint.dirtyPartIds();
-    if (partIds.length === 0) return;
-    const flush = () => this.persistDeltaPartRows(partIds);
-    if (this.coordinator.inTransaction) flush();
-    else this.database.transaction(flush)();
-    for (const partId of partIds) this.deltaCheckpoint.delete(partId);
+    this.incrementalOutput.flushMessagePartDeltas();
   }
 
   listMessageParts(
@@ -1827,7 +1785,7 @@ export class SessionStore {
 
   private persistChanges(): void {
     const dirtyPartIds = this.deltaCheckpoint.dirtyPartIds();
-    if (dirtyPartIds.length > 0) this.persistDeltaPartRows(dirtyPartIds);
+    if (dirtyPartIds.length > 0) this.incrementalOutput.flushMessagePartDeltas();
 
     const deleteInputAttachment = this.database.prepare(
       "DELETE FROM session_input_attachment WHERE id = ?",
@@ -2146,34 +2104,6 @@ export class SessionStore {
     }
   }
 
-  private persistDeltaPartRows(partIds: string[]): void {
-    const updatePart = this.database.prepare(
-      "UPDATE session_message_part SET text = ?, updated_at = ? WHERE id = ?",
-    );
-    const updateMessage = this.database.prepare(
-      "UPDATE session_message SET updated_at = ? WHERE id = ?",
-    );
-    const updateSession = this.database.prepare(
-      "UPDATE session SET updated_at = ? WHERE id = ?",
-    );
-    const messageIds = new Set<string>();
-    const sessionIds = new Set<string>();
-    for (const partId of partIds) {
-      const part = this.state.parts[partId];
-      if (!part) continue;
-      updatePart.run(part.text ?? "", part.updatedAt, part.id);
-      messageIds.add(part.messageId);
-      sessionIds.add(part.sessionId);
-    }
-    for (const messageId of messageIds) {
-      const message = this.state.messages[messageId];
-      if (message) updateMessage.run(message.updatedAt, message.id);
-    }
-    for (const sessionId of sessionIds) {
-      const session = this.state.sessions[sessionId];
-      if (session) updateSession.run(session.updatedAt, session.id);
-    }
-  }
 }
 
 function applicationOwnerFromRow(

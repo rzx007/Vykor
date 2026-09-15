@@ -120,7 +120,7 @@
 
 - [ ] **步骤 3：实现 append**
 
-接口保持 appendMessagePartDelta(input: AppendMessagePartDeltaInput): SessionMessagePartRecord。先校验，再更新 read model 和 checkpoint。达到阈值时调用 flush；事务内 flush 服从 coordinator，不直接 commit。
+接口保持 appendMessagePartDelta(input: AppendMessagePartDeltaInput): SessionEventRecord。先校验，再更新 read model 和 checkpoint。达到阈值时调用 flush；事务内 flush 服从 coordinator，不直接 commit。
 
 - [ ] **步骤 4：实现 flush**
 
