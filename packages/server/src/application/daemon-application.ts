@@ -1031,4 +1031,3 @@ function isProcessAlive(pid: number): boolean {
     return (error as NodeJS.ErrnoException).code !== "ESRCH";
   }
 }
-

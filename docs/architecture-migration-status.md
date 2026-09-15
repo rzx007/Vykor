@@ -1,6 +1,6 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–3 及阶段 4A–4C 已完成，阶段 4D–4F 未开始。
+> 状态：当前。阶段 0–4 已完成，阶段 5 未开始。
 
 ## 当前阶段
 
@@ -8,14 +8,17 @@
 阶段 3 已完成：三域 Repository、跨域事务和增量输出均已抽取。`SessionStore` 保留公开兼容转发、Task waiter/listener、生命周期和维护入口。
 阶段 4A 已完成：Event、Retention、Channel、Terminal、Job、BackgroundShell、Attachment、AgentPool 等简单 Application Service 的依赖能力已全部收窄为最小接口，彻底移除对完整 `SessionStore` 的导入；Server 边界检查（Route、Application Service、Runtime）已补充并纳入架构护栏。
 阶段 4B 已完成：Session Query 与 Command 拆分完成，`SessionQueryService` 读服务完成能力收窄与协议解耦，`SessionCommandService` 写服务抽取完成，`SessionApplicationService` 变为向前兼容委托层，`DaemonApplication` 组装一次共享实例，新增 SessionCommand 与 SessionQuery 的架构护栏。
-阶段 4C 已完成：`RunAdmissionService` 统一拥有 prompt、持久 Run 派发、rejected-steer 恢复和 goal revision 执行准入；`RunControlService` 统一拥有查询、提升、等待、中断和关闭。`DaemonApplication` 将同一组实例注入 Session、Goal 和 DaemonControl，旧 `SessionRunEngine` 只保留兼容转发及 4D 才迁移的 coordinator/executor 接线。阶段 4D–4F 未开始。
+阶段 4C 已完成：`RunAdmissionService` 统一拥有 prompt、持久 Run 派发、rejected-steer 恢复和 goal revision 执行准入；`RunControlService` 统一拥有查询、提升、等待、中断和关闭。`DaemonApplication` 显式构造唯一共享实例并注入 Session、Goal、DaemonControl 与兼容 Engine。
+阶段 4D 已完成：`SessionRunCoordinator` 成为 lane、Promise 与 live 状态索引的唯一所有者；`SessionRunEngine` 不再保存第二份 run Promise map；`SessionRunExecutor` 通过命名 data capability 执行单个已准入 Run。
+阶段 4E 已完成：`StartupRecoveryService` 按固定顺序执行 durable recovery，失败继续阻止 ready；Maintenance 与 PostRun 使用命名 data 边界；既有 Transcript/Execution Projection 保持唯一映射所有者。
+阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。阶段 5 未开始。
 
 ## 指标
 
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 273`, `httpClientFlatCalls: 11`。
+- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 11`。
 - 当前 `SessionStore` 行数：2152 行。
 
 ## 阶段 3 迁移记录
@@ -156,4 +159,4 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-阶段 4D：Runtime Lane 与 Executor 拆分。不要把阶段 4C 的兼容 `SessionRunEngine` 当成第二套业务规则；4D 只迁移 live lane、promise/handle 跟踪和单 Run 执行接线。
+阶段 5：按总体路线处理剩余协议与客户端边界。阶段 4 的兼容门面暂不删除；删除前必须先迁完所有外部调用方并单独审核。
