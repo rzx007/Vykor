@@ -8,7 +8,9 @@ import type {
   SessionRunRecord,
 } from "@openharness/protocol";
 import { sessionUserInputText } from "@openharness/protocol";
+import { AttachmentError } from "@openharness/services";
 import { normalizeTraceId } from "../support.js";
+import { SessionApplicationError } from "./session-application-error.js";
 
 export interface RunControlDurableSessions {
   getSession(sessionId: string): { id: string; cwd?: string; status?: string } | undefined;
@@ -269,20 +271,46 @@ export class RunControlService {
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const input = this.options.durableInputs.getInput(inputId);
     const queuedRun = this.options.durableRuns.getRun(queuedRunId);
+    if (!input || input.sessionId !== sessionId) {
+      throw new SessionApplicationError(404, `Prompt not found: ${inputId}`);
+    }
+    if (typeof input.metadata?.pluginId === "string") {
+      throw new SessionApplicationError(409, "session_capability_requires_queued_run");
+    }
+    if (input.attachments.length > 0) {
+      throw new AttachmentError(
+        "attachment_structured_steer_unsupported",
+        "Queued prompts with attachments cannot be promoted during stage two",
+      );
+    }
+    if (!queuedRun || queuedRun.sessionId !== sessionId) {
+      throw new SessionApplicationError(404, `Session run not found: ${queuedRunId}`);
+    }
+    const promotion = queuedRun.metadata?.promotion;
+    if (
+      queuedRun.status === "interrupted" &&
+      promotion && typeof promotion === "object" &&
+      "kind" in promotion && promotion.kind === "steered" &&
+      "inputId" in promotion && promotion.inputId === inputId &&
+      "activeRunId" in promotion && typeof promotion.activeRunId === "string"
+    ) {
+      const promotedActiveRun = this.options.durableRuns.getRun(promotion.activeRunId);
+      if (!promotedActiveRun) {
+        throw new SessionApplicationError(409, "The promoted prompt no longer has its target run");
+      }
+      return { input, queued_run: queuedRun, active_run: promotedActiveRun };
+    }
+    if (input.delivery !== "queue" || queuedRun.inputId !== inputId || queuedRun.status !== "pending") {
+      throw new SessionApplicationError(409, "The selected prompt is no longer waiting in the queue");
+    }
+    if (this.options.runtime.activeRunId(sessionId) !== expectedActiveRunId) {
+      throw new SessionApplicationError(409, "The active run changed before the prompt could be promoted");
+    }
     const activeRun = this.options.durableRuns.getRun(expectedActiveRunId);
     if (
-      !input || input.sessionId !== sessionId ||
-      !queuedRun || queuedRun.sessionId !== sessionId ||
-      queuedRun.inputId !== inputId || queuedRun.status !== "pending"
-    ) return undefined;
-    if (typeof input.metadata?.pluginId === "string") {
-      throw new Error("session_capability_requires_queued_run");
-    }
-    if (
       !activeRun || activeRun.sessionId !== sessionId ||
-      (activeRun.status !== "pending" && activeRun.status !== "running") ||
-      this.options.runtime.activeRunId(sessionId) !== expectedActiveRunId
-    ) return undefined;
+      (activeRun.status !== "pending" && activeRun.status !== "running")
+    ) throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
     const content = await this.materializeSteerInput(sessionId, input.items);
     const promoted = this.options.runtime.promoteQueuedRun(
       sessionId,
@@ -304,7 +332,9 @@ export class RunControlService {
         },
       },
     );
-    if (!promoted.promoted) return undefined;
+    if (!promoted.promoted) {
+      throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
+    }
     await promoted.delivery;
 
     const before = this.options.events.checkpoint();

@@ -5,6 +5,7 @@ import {
   SessionApplicationError,
   SessionApplicationService,
 } from "../session-application-service.js";
+import { RunControlService } from "../run-control-service.js";
 
 describe("SessionApplicationService queued prompt actions", () => {
   it("rejects promotion for an admitted plugin capability Input", async () => {
@@ -159,20 +160,42 @@ function queueContext(
     };
     return queuedRun;
   });
-  return {
-    store: {
+  const store = {
       getSession: vi.fn(() => ({ id: "session-1", cwd: "D:/repo" })),
       getInput: vi.fn((id) => (id === input.id ? input : undefined)),
       getRun: vi.fn((id) =>
         id === "run-queued" ? queuedRun : activeRuns.get(id),
       ),
       updateRun,
-    },
-    runEngine: {
+      listRuns: vi.fn(() => []),
+      listSessions: vi.fn(() => []),
+      listMessages: vi.fn(() => []),
+      listMessageParts: vi.fn(() => []),
+      appendEvent: vi.fn(),
+      transaction: (work: () => unknown) => work(),
+    };
+  const runEngine = {
       activeRunId: vi.fn(() => "active-visible"),
       promoteQueuedRun: vi.fn(),
       interruptQueuedRun: vi.fn(),
-    },
+    };
+  const control = new RunControlService({
+    durableSessions: store as any,
+    durableRuns: store as any,
+    durableInputs: store as any,
+    runtime: {
+      activeRunId: runEngine.activeRunId,
+      queuedRunIds: vi.fn(() => ["run-queued"]), hasWork: vi.fn(() => true), sessionIds: vi.fn(() => []),
+      interruptSession: vi.fn(), interruptRun: vi.fn(), interruptQueuedRun: runEngine.interruptQueuedRun,
+      promoteQueuedRun: runEngine.promoteQueuedRun,
+      waitForRun: vi.fn(), waitForRuns: vi.fn(),
+    } as any,
+    events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+  });
+  return {
+    store,
+    runEngine,
+    control,
     agentPool: { close: vi.fn() },
     liveChildren: { has: vi.fn(), send: vi.fn(), interrupt: vi.fn() },
     operationGate: {

@@ -285,6 +285,30 @@ describe("RunControlService", () => {
     }));
   });
 
+  it("rejects attachment promotion directly without touching runtime", async () => {
+    const { options, sessions, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    sessions.set("s1", { id: "s1", cwd: "/project", status: "open" });
+    inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [], delivery: "queue", attachments: [{ assetId: "a1" }], metadata: {}, createdAt: 1 } as any);
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 });
+    activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
+
+    await expect(new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act"))
+      .rejects.toThrow("attachment_structured_steer_unsupported");
+    expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
+  });
+
+  it("returns an already promoted queued run idempotently", async () => {
+    const { options, runs, inputs } = createMockControlOptions();
+    inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [], delivery: "queue", attachments: [], metadata: {}, createdAt: 1 } as any);
+    runs.set("r-act", { id: "r-act", sessionId: "s1", status: "completed", metadata: {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "interrupted", metadata: { promotion: { kind: "steered", inputId: "inp-1", activeRunId: "r-act" } }, createdAt: 1, updatedAt: 1 });
+
+    await expect(new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act"))
+      .resolves.toEqual({ input: inputs.get("inp-1"), queued_run: runs.get("r-q1"), active_run: runs.get("r-act") });
+    expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
+  });
+
   it("keeps repeated interrupts idempotent after the first durable transition", () => {
     const { options, runs, queuedRuns } = createMockControlOptions();
     queuedRuns.set("s1", ["r-q1"]);
@@ -348,7 +372,7 @@ describe("RunControlService", () => {
     queuedRuns.set("s1", ["r-q1"]);
 
     const service = new RunControlService(options);
-    await expect(service.promoteQueuedRun("s1", "inp-1", "r-q1", "r-act")).resolves.toBeUndefined();
+    await expect(service.promoteQueuedRun("s1", "inp-1", "r-q1", "r-act")).rejects.toThrow();
 
     expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
     expect(options.durableRuns.updateRun).not.toHaveBeenCalled();

@@ -559,69 +559,13 @@ export class SessionApplicationService {
     if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
     const lease = this.enterSessionOperation(session);
     try {
-      const input = this.context.store.getInput(inputId);
-      const queuedRun = this.context.store.getRun(command.queuedRunId);
-      if (!input || input.sessionId !== sessionId) {
-        throw new SessionApplicationError(404, `Prompt not found: ${inputId}`);
-      }
-      if (typeof input.metadata.pluginId === "string") {
-        throw new SessionApplicationError(409, "session_capability_requires_queued_run");
-      }
-      if (input.attachments.length > 0) {
-        throw new AttachmentError(
-          "attachment_structured_steer_unsupported",
-          "Queued prompts with attachments cannot be promoted during stage two",
-        );
-      }
-      if (!queuedRun || queuedRun.sessionId !== sessionId) {
-        throw new SessionApplicationError(404, `Session run not found: ${command.queuedRunId}`);
-      }
-      const promotion = isRecord(queuedRun.metadata.promotion)
-        ? queuedRun.metadata.promotion
-        : undefined;
-      if (
-        queuedRun.status === "interrupted" &&
-        promotion?.kind === "steered" &&
-        promotion.inputId === inputId &&
-        typeof promotion.activeRunId === "string"
-      ) {
-        const activeRun = this.context.store.getRun(promotion.activeRunId);
-        if (!activeRun) {
-          throw new SessionApplicationError(
-            409,
-            "The promoted prompt no longer has its target run",
-          );
-        }
-        return { input, queued_run: queuedRun, active_run: activeRun };
-      }
-      if (
-        input.delivery !== "queue" ||
-        queuedRun.inputId !== inputId ||
-        queuedRun.status !== "pending"
-      ) {
-        throw new SessionApplicationError(
-          409,
-          "The selected prompt is no longer waiting in the queue",
-        );
-      }
-      if (this.control.activeRunId(sessionId) !== command.expectedActiveRunId) {
-        throw new SessionApplicationError(
-          409,
-          "The active run changed before the prompt could be promoted",
-        );
-      }
       const promoted = await this.control.promoteQueuedRun(
         sessionId,
         inputId,
         command.queuedRunId,
         command.expectedActiveRunId,
       );
-      if (!promoted) {
-        throw new SessionApplicationError(
-          409,
-          "The prompt or active run changed before promotion completed",
-        );
-      }
+      if (!promoted) throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
       return promoted;
     } finally {
       lease.release();
