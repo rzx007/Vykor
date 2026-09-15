@@ -5,9 +5,6 @@ import {
   type SessionStore,
 } from "@openharness/services";
 import {
-  patchSessionRuntimeMetadata,
-  readSessionRuntimeConfig,
-  readRuntimeMetadata,
   sessionUserInputText,
   type AdmitPromptAttachmentInput,
   type SessionUserInputItem,
@@ -27,15 +24,23 @@ import {
   type DaemonOperationGate,
   type DaemonOperationLease,
 } from "../control/daemon-operation-gate.js";
-import { isRecord, jsonEqual, runtimeSessionMetadataChanged, withoutTraceId } from "../support.js";
+import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import type { ContextUsageCache } from "../context-usage-cache.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "./session-conversation-context.js";
 import type { SessionRunExecutorContext } from "./session-run-executor.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
+import { SessionQueryService } from "./session-query-service.js";
+import {
+  SessionCommandService,
+  type CreateSessionCommand,
+  type ForkSessionCommand,
+  type UpdateSessionCommand,
+} from "./session-command-service.js";
 
 export { SessionApplicationError } from "./session-application-error.js";
+export type { CreateSessionCommand, ForkSessionCommand, UpdateSessionCommand } from "./session-command-service.js";
 
 export interface SessionApplicationServiceContext {
   store: SessionStore;
@@ -50,17 +55,8 @@ export interface SessionApplicationServiceContext {
   contextUsageCache?: Pick<ContextUsageCache, "invalidate">;
   resolveSkillCatalog?: SessionRunExecutorContext["resolveSkillCatalog"];
   pluginCapabilities?: Pick<SessionPluginCapabilityService, "admit">;
-}
-
-export interface UpdateSessionCommand {
-  title?: string;
-  agent?: string | null;
-  metadata?: Record<string, unknown>;
-}
-
-export interface ForkSessionCommand {
-  beforeMessageId?: string;
-  afterMessageId?: string;
+  queries?: SessionQueryService;
+  commands?: SessionCommandService;
 }
 
 export interface EditLatestPromptCommand {
@@ -109,12 +105,32 @@ export type ResumeSessionRunResult = AdmitPromptResult & {
 
 /** Session 写用例门面；child session 只由 framework 事件投影创建。 */
 export class SessionApplicationService {
-  private readonly archivePromises = new Map<
-    string,
-    Promise<ReturnType<SessionStore["archiveSession"]>>
-  >();
+  private readonly queries: SessionQueryService;
+  private readonly commands: SessionCommandService;
 
-  constructor(private readonly context: SessionApplicationServiceContext) {}
+  constructor(private readonly context: SessionApplicationServiceContext) {
+    this.commands =
+      context.commands ??
+      new SessionCommandService({
+        sessions: context.store,
+        transactions: context.store,
+        runtimeControl: {
+          closeAgent: (id) => context.agentPool.close(id),
+          hasActiveWorkForSession: (id) => context.agentPool.hasActiveWorkForSession(id),
+          interruptSession: (id) => context.runEngine.interruptSession(id),
+          waitForRuns: (ids) => context.runEngine.waitForRuns(ids),
+          hasRunWork: (id) => context.runEngine.hasWork(id),
+          interruptLiveChild: (id, reason) => context.liveChildren.interrupt(id, reason),
+          hasLiveChild: (id) => context.liveChildren.has(id),
+          warmSession: (session) => this.warmWhenAdmitted(session),
+        },
+        operationGate: context.operationGate,
+        events: context.events,
+        contextUsageCache: context.contextUsageCache,
+        assertReady: context.assertReady,
+      });
+    this.queries = context.queries ?? new SessionQueryService(context.store);
+  }
 
   get hasRuntime(): boolean {
     return this.context.agentPool.configured;
@@ -123,25 +139,14 @@ export class SessionApplicationService {
   createSession(
     input: Parameters<SessionStore["createSession"]>[0],
   ): ReturnType<SessionStore["createSession"]> {
-    this.assertReady();
-    const before = this.context.events.checkpoint();
-    const runtime = readRuntimeMetadata(input.metadata ?? {});
-    const model = typeof runtime.model === "string" ? runtime.model : input.model;
-    const session = this.context.store.createSession({
-      ...input,
-      model,
-      metadata: patchSessionRuntimeMetadata(input.metadata ?? {}, { model }),
-    });
-    this.warmWhenAdmitted(session);
-    this.context.events.publishSince(before);
-    return session;
+    return this.commands.createSession(input);
   }
 
   getSession(
     sessionId: string,
     options: { warm?: boolean } = {},
   ): ReturnType<SessionStore["getSession"]> {
-    const session = this.context.store.getSession(sessionId);
+    const session = this.queries.getSession(sessionId);
     if (session && options.warm && !this.context.liveChildren.has(sessionId)) {
       this.warmWhenAdmitted(session);
     }
@@ -152,41 +157,7 @@ export class SessionApplicationService {
     sessionId: string,
     input: ForkSessionCommand = {},
   ): ReturnType<SessionStore["createSession"]> {
-    this.assertReady();
-    const source = this.context.store.getSession(sessionId);
-    if (!source) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-
-    const before = this.context.events.checkpoint();
-    const metadata = forkSessionMetadata(source.metadata, {
-      sourceSessionId: source.id,
-      ...(input.beforeMessageId ? { beforeMessageId: input.beforeMessageId } : {}),
-      ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
-    });
-    let fork;
-    try {
-      fork = this.context.store.forkSessionWithHistory({
-        sourceSessionId: source.id,
-        ...(input.beforeMessageId ? { beforeMessageId: input.beforeMessageId } : {}),
-        ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
-        session: {
-          parentId: source.id,
-          ...(source.projectId ? { projectId: source.projectId } : {}),
-          cwd: source.cwd,
-          title: source.title ? `${source.title} fork` : "",
-          model: source.model,
-          ...(source.agent ? { agent: source.agent } : {}),
-          metadata,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message === "Fork point not found") {
-        throw new SessionApplicationError(404, error.message);
-      }
-      throw error;
-    }
-    this.warmWhenAdmitted(fork);
-    this.context.events.publishSince(before);
-    return this.context.store.getSession(fork.id) ?? fork;
+    return this.commands.forkSession(sessionId, input);
   }
 
   async editLatestPrompt(
@@ -288,68 +259,7 @@ export class SessionApplicationService {
     sessionId: string,
     input: UpdateSessionCommand,
   ): Promise<ReturnType<SessionStore["updateSession"]>> {
-    this.assertReady();
-    const existing = this.context.store.getSession(sessionId);
-    if (!existing) throw new SessionApplicationError(404, "Session not found");
-    const metadata = input.metadata
-      ? mergeSessionMetadata(existing.metadata, input.metadata)
-      : undefined;
-    const runtimeMetadataChanged =
-      metadata && runtimeSessionMetadataChanged(existing.metadata, metadata);
-    const runtimeConfigurationChanged = Boolean(
-      runtimeMetadataChanged ||
-      (input.agent !== undefined && (input.agent ?? undefined) !== existing.agent),
-    );
-    const lease = runtimeConfigurationChanged
-      ? this.acquireSessionMutation(
-          existing,
-          "Cannot update runtime session settings while the session is active",
-        )
-      : undefined;
-
-    try {
-      const before = this.context.events.checkpoint();
-      const nextModel = metadata
-        ? readSessionRuntimeConfig({ ...existing, metadata }).model
-        : undefined;
-      const modelChanged = nextModel !== undefined && nextModel !== existing.model;
-      const session = this.context.store.transaction(() => {
-        const updated = this.context.store.updateSession(sessionId, {
-          title: input.title,
-          model: nextModel,
-          agent: input.agent,
-          metadata,
-        });
-        if (!modelChanged) return updated;
-        const message = this.context.store.createMessage({
-          sessionId,
-          role: "system",
-          metadata: {
-            presentation: {
-              kind: "model_switch",
-              fromModel: existing.model,
-              toModel: nextModel,
-            },
-          },
-        });
-        this.context.store.upsertMessagePart({
-          sessionId,
-          messageId: message.id,
-          type: "text",
-          status: "completed",
-          text: `模型已切换 ${existing.model} → ${nextModel}`,
-        });
-        return updated;
-      });
-      if (runtimeConfigurationChanged) await this.context.agentPool.close(sessionId);
-      if (modelChanged) {
-        this.context.contextUsageCache?.invalidate(sessionId);
-      }
-      this.context.events.publishSince(before);
-      return session;
-    } finally {
-      lease?.release();
-    }
+    return await this.commands.updateSession(sessionId, input);
   }
 
   async withSessionOperation<T>(sessionId: string, work: () => Promise<T>): Promise<T> {
@@ -776,100 +686,15 @@ export class SessionApplicationService {
   }
 
   async closeRuntime(sessionId: string): Promise<void> {
-    this.assertReady();
-    if (await this.context.liveChildren.interrupt(sessionId, "Session runtime closed")) return;
-    await this.context.agentPool.close(sessionId);
+    return await this.commands.closeRuntime(sessionId);
   }
 
   async archiveSessionTree(sessionId: string): Promise<ReturnType<SessionStore["archiveSession"]>> {
-    this.assertReady();
-    const existing = this.archivePromises.get(sessionId);
-    if (existing) return await existing;
-    const archive = this.archiveSessionTreeWork(sessionId).finally(() => {
-      if (this.archivePromises.get(sessionId) === archive) this.archivePromises.delete(sessionId);
-    });
-    this.archivePromises.set(sessionId, archive);
-    return await archive;
+    return await this.commands.archiveSessionTree(sessionId);
   }
 
   async deleteSessionTree(sessionId: string): Promise<string[]> {
-    this.assertReady();
-    const current = this.context.store.getSession(sessionId);
-    if (!current) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    const lease = this.context.operationGate.tryEnterBarrier(
-      { kind: "session", sessionId, cwd: current.cwd },
-      () => true,
-      {
-        operationId: randomUUID(),
-        operationName: "删除会话",
-        startedAt: Date.now(),
-      },
-    );
-    if (!lease) throw new SessionApplicationError(409, "Session is busy with another operation");
-    try {
-      if (current.status !== "archived" && current.status !== "closing") {
-        this.context.store.beginArchive(sessionId);
-      }
-      const interrupted = this.context.runEngine.interruptSession(sessionId);
-      const liveInterrupt = this.context.liveChildren.interrupt(sessionId, "Session deleted");
-      const children = this.context.store.listChildSessions(sessionId, {
-        includeArchived: true,
-      });
-      await liveInterrupt;
-      const deletedChildIds: string[] = [];
-      for (const child of children)
-        deletedChildIds.push(...(await this.deleteSessionTree(child.id)));
-      const interruptedRunIds = [interrupted.activeRunId, ...interrupted.queuedRunIds].filter(
-        (runId): runId is string => !!runId,
-      );
-      await this.context.runEngine.waitForRuns(interruptedRunIds);
-      await this.context.agentPool.close(sessionId);
-      return [...deletedChildIds, ...this.context.store.deleteSessionTree(sessionId)];
-    } finally {
-      lease.release();
-    }
-  }
-
-  private async archiveSessionTreeWork(
-    sessionId: string,
-  ): Promise<ReturnType<SessionStore["archiveSession"]>> {
-    const beforeClosing = this.context.events.checkpoint();
-    const current = this.context.store.getSession(sessionId);
-    if (!current) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    if (current.status === "archived") return current;
-    const lease = this.context.operationGate.tryEnterBarrier(
-      { kind: "session", sessionId, cwd: current.cwd },
-      () => true,
-      {
-        operationId: randomUUID(),
-        operationName: "归档会话",
-        startedAt: Date.now(),
-      },
-    );
-    if (!lease) throw new SessionApplicationError(409, "Session is busy with another operation");
-    try {
-      this.context.store.beginArchive(sessionId);
-      this.context.events.publishSince(beforeClosing);
-      const interrupted = this.context.runEngine.interruptSession(sessionId);
-      const liveInterrupt = this.context.liveChildren.interrupt(sessionId, "Session archived");
-
-      // Closing the parent first makes the descendant snapshot stable: the
-      // event projector rejects child.created for closing sessions.
-      const children = this.context.store.listChildSessions(sessionId);
-      await liveInterrupt;
-      for (const child of children) await this.archiveSessionTree(child.id);
-      const interruptedRunIds = [interrupted.activeRunId, ...interrupted.queuedRunIds].filter(
-        (runId): runId is string => !!runId,
-      );
-      await this.context.runEngine.waitForRuns(interruptedRunIds);
-      await this.context.agentPool.close(sessionId);
-      const before = this.context.events.checkpoint();
-      const session = this.context.store.archiveSession(sessionId);
-      this.context.events.publishSince(before);
-      return session;
-    } finally {
-      lease.release();
-    }
+    return await this.commands.deleteSessionTree(sessionId);
   }
 
   private enterSessionOperation(
@@ -886,26 +711,6 @@ export class SessionApplicationService {
       }
       throw error;
     }
-  }
-
-  private acquireSessionMutation(
-    session: Pick<NonNullable<ReturnType<SessionStore["getSession"]>>, "id" | "cwd">,
-    message: string,
-  ): DaemonOperationLease {
-    const lease = this.context.operationGate.tryEnterBarrier(
-      { kind: "session", sessionId: session.id, cwd: session.cwd },
-      () =>
-        !this.context.liveChildren.has(session.id) &&
-        !this.context.runEngine.hasWork(session.id) &&
-        !this.context.agentPool.hasActiveWorkForSession(session.id),
-      {
-        operationId: randomUUID(),
-        operationName: message,
-        startedAt: Date.now(),
-      },
-    );
-    if (!lease) throw new SessionApplicationError(409, message);
-    return lease;
   }
 
   private warmWhenAdmitted(
@@ -937,43 +742,6 @@ export class SessionApplicationService {
   }
 }
 
-function mergeSessionMetadata(
-  existing: Record<string, unknown>,
-  patch: Record<string, unknown>,
-): Record<string, unknown> {
-  const next = { ...existing, ...patch };
-  if (patch.runtime !== undefined) {
-    next.runtime = {
-      ...readRuntimeMetadata(existing),
-      ...readRuntimeMetadata(patch),
-    };
-  }
-  return next;
-}
-
-function forkSessionMetadata(
-  existing: Record<string, unknown>,
-  fork: {
-    sourceSessionId: string;
-    beforeMessageId?: string;
-    afterMessageId?: string;
-  },
-): Record<string, unknown> {
-  const next: Record<string, unknown> = {
-    ...existing,
-    fork: {
-      ...fork,
-      createdAt: Date.now(),
-    },
-  };
-  if (isRecord(next.desktop)) {
-    const desktop = { ...next.desktop };
-    delete desktop.pinnedAt;
-    next.desktop = desktop;
-  }
-  return next;
-}
-
 function promptResult(
   store: SessionStore,
   input: NonNullable<ReturnType<SessionStore["getInput"]>>,
@@ -986,4 +754,3 @@ function promptResult(
     ...(run?.status === "pending" ? { queue_state: "queued" as const } : {}),
   };
 }
-import { randomUUID } from "node:crypto";

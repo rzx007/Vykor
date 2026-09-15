@@ -1,22 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type {
+  CreateSessionInput,
   SessionMessagePartRecord,
   SessionMessageRecord,
+  SessionMessageRole,
   SessionRecord,
+  UpsertMessagePartInput,
 } from "@openharness/protocol";
 import { readSessionRuntimeConfig } from "@openharness/protocol";
+import { isRecord, runtimeSessionMetadataChanged } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 
-export interface CreateSessionCommand {
-  id?: string;
-  projectId?: string;
-  cwd: string;
-  title?: string;
-  model?: string;
-  agent?: string;
-  metadata?: Record<string, unknown>;
-  parentId?: string;
-}
+export type CreateSessionCommand = CreateSessionInput;
 
 export interface ForkSessionCommand {
   beforeMessageId?: string;
@@ -30,8 +25,8 @@ export interface UpdateSessionCommand {
 }
 
 export interface SessionCommandStoreOperations {
-  createSession(input: CreateSessionCommand): SessionRecord;
-  getSession(sessionId: string): SessionRecord | undefined;
+  createSession(input: CreateSessionInput): SessionRecord;
+  getSession(sessionId: string): SessionRecord | null | undefined;
   updateSession(sessionId: string, input: {
     title?: string;
     model?: string;
@@ -46,15 +41,7 @@ export interface SessionCommandStoreOperations {
     sourceSessionId: string;
     beforeMessageId?: string;
     afterMessageId?: string;
-    session: {
-      parentId: string;
-      projectId?: string;
-      cwd: string;
-      title: string;
-      model?: string;
-      agent?: string;
-      metadata: Record<string, unknown>;
-    };
+    session: CreateSessionInput;
   }): SessionRecord;
 }
 
@@ -62,16 +49,10 @@ export interface SessionCommandTransactions {
   transaction<T>(work: () => T): T;
   createMessage(input: {
     sessionId: string;
-    role: "system" | "user" | "assistant";
+    role: SessionMessageRole;
     metadata?: Record<string, unknown>;
   }): SessionMessageRecord;
-  upsertMessagePart(input: {
-    sessionId: string;
-    messageId: string;
-    type: "text";
-    status: "completed" | "streaming" | "pending" | "failed";
-    text: string;
-  }): SessionMessagePartRecord;
+  upsertMessagePart(input: UpsertMessagePartInput): SessionMessagePartRecord;
 }
 
 export interface SessionCommandRuntimeControl {
@@ -87,11 +68,10 @@ export interface SessionCommandRuntimeControl {
 
 export interface SessionCommandOperationGate {
   tryEnterBarrier(
-    target: { kind: string; sessionId?: string; cwd?: string },
+    target: { kind: "session"; sessionId: string; cwd: string },
     predicate: () => boolean,
     descriptor?: { operationId: string; operationName: string; startedAt: number },
-  ): { release(): void } | null;
-  hasActiveBarriers(): boolean;
+  ): { release(): void } | null | undefined;
 }
 
 export interface SessionCommandEvents {
@@ -134,54 +114,37 @@ function mergeSessionMetadata(
   existing: Record<string, unknown> | undefined,
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...(existing ?? {}) };
-  for (const [key, value] of Object.entries(patch)) {
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      typeof result[key] === "object" &&
-      result[key] !== null &&
-      !Array.isArray(result[key])
-    ) {
-      result[key] = {
-        ...(result[key] as Record<string, unknown>),
-        ...(value as Record<string, unknown>),
-      };
-    } else {
-      result[key] = value;
-    }
+  const next = { ...(existing ?? {}), ...patch };
+  if (patch.runtime !== undefined) {
+    next.runtime = {
+      ...readRuntimeMetadata(existing ?? {}),
+      ...readRuntimeMetadata(patch),
+    };
   }
-  return result;
-}
-
-function runtimeSessionMetadataChanged(
-  previous: Record<string, unknown> | undefined,
-  next: Record<string, unknown>,
-): boolean {
-  return (
-    JSON.stringify(previous?.runtime ?? null) !== JSON.stringify(next.runtime ?? null)
-  );
+  return next;
 }
 
 function forkSessionMetadata(
-  metadata: Record<string, unknown> | undefined,
+  existing: Record<string, unknown> | undefined,
   fork: {
     sourceSessionId: string;
     beforeMessageId?: string;
     afterMessageId?: string;
   },
 ): Record<string, unknown> {
-  const base = metadata ? { ...metadata } : {};
-  delete base.subagent;
-  return {
-    ...base,
+  const next: Record<string, unknown> = {
+    ...(existing ?? {}),
     fork: {
-      sourceSessionId: fork.sourceSessionId,
-      ...(fork.beforeMessageId ? { beforeMessageId: fork.beforeMessageId } : {}),
-      ...(fork.afterMessageId ? { afterMessageId: fork.afterMessageId } : {}),
+      ...fork,
+      createdAt: Date.now(),
     },
   };
+  if (isRecord(next.desktop)) {
+    const desktop = { ...next.desktop };
+    delete desktop.pinnedAt;
+    next.desktop = desktop;
+  }
+  return next;
 }
 
 export class SessionCommandService {
