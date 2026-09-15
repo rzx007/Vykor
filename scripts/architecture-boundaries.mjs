@@ -61,11 +61,28 @@ export function checkImportBoundary(fromFile, specifier) {
     }
   }
 
+  const isSessionCommand = /(?:^|\/)session-command-service(?:\.[a-zA-Z]+)?$/.test(normalized);
+  if (isSessionCommand) {
+    if (/(?:^|\/)http(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on http`];
+    }
+    if (/(?:^|\/)daemon(?:\/|\.|$)/.test(specifier) || /(?:^|\/)daemon-application(?:\.[a-zA-Z]+)?$/.test(specifier)) {
+      return [`${fromFile} must not depend on Daemon`];
+    }
+  }
+
   const isServerApplication = /(?:^|\/)(?:packages\/server\/src\/)?application\//.test(normalized);
   const isCompositionRoot = /(?:daemon-application|default-node-application|index)\.ts$/.test(normalized);
   if (isServerApplication && !isCompositionRoot) {
     if (/(?:^|\/)daemon-application(?:\.[a-zA-Z]+)?$/.test(specifier)) {
       return [`${fromFile} must not depend on DaemonApplication`];
+    }
+  }
+
+  const isSessionQuery = /(?:^|\/)session-query-service(?:\.[a-zA-Z]+)?$/.test(normalized);
+  if (isSessionQuery) {
+    if (/(?:^|\/)(?:runtime|session-runtime)(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on runtime`];
     }
   }
 

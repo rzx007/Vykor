@@ -57,9 +57,13 @@ import {
   recoverProjectionSettlements,
 } from "./agent/projection-settlement-recovery.js";
 import { DaemonControlService } from "./control/daemon-control-service.js";
-import { DaemonOperationGate } from "./control/daemon-operation-gate.js";
+import {
+  DaemonOperationGate,
+  DaemonOperationUnavailableError,
+} from "./control/daemon-operation-gate.js";
 import { LiveChildAgentDirectory } from "./agent/live-child-agent-directory.js";
 import { SessionApplicationService } from "./session/session-application-service.js";
+import { SessionCommandService } from "./session/session-command-service.js";
 import { SessionGoalService } from "./session/session-goal-service.js";
 import { GoalWaitVerifier } from "./session/goal-wait-verifier.js";
 import { SessionEventPublisher } from "./session/session-event-publisher.js";
@@ -136,6 +140,7 @@ export interface DurableAgentApplication {
   readonly sessions: SessionApplicationService;
   readonly goals: SessionGoalService;
   readonly queries: SessionQueryService;
+  readonly commands: SessionCommandService;
   readonly permissions: StorePermissionBroker;
   readonly backgroundShells: BackgroundShellService;
   readonly maintenance: SessionMaintenanceService;
@@ -173,6 +178,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly goals: SessionGoalService;
   readonly maintenance: SessionMaintenanceService;
   readonly queries: SessionQueryService;
+  readonly commands: SessionCommandService;
   readonly control: DaemonControlService;
   readonly schedules: ScheduledTaskService;
   readonly jobs: DaemonJobService;
@@ -676,6 +682,37 @@ export class DaemonApplication implements DurableAgentApplication {
             .pluginCapabilityInventory;
         },
       });
+      this.queries = new SessionQueryService(store);
+      this.commands = new SessionCommandService({
+        sessions: store,
+        transactions: store,
+        runtimeControl: {
+          closeAgent: (id) => this.agentPool.close(id),
+          hasActiveWorkForSession: (id) => this.agentPool.hasActiveWorkForSession(id),
+          interruptSession: (id) => this.runEngine.interruptSession(id),
+          waitForRuns: (ids) => this.runEngine.waitForRuns(ids),
+          hasRunWork: (id) => this.runEngine.hasWork(id),
+          interruptLiveChild: (id, reason) => this.liveChildren.interrupt(id, reason),
+          hasLiveChild: (id) => this.liveChildren.has(id),
+          warmSession: (session) => {
+            let lease;
+            try {
+              lease = this.operationGate.enter({
+                sessionId: session.id,
+                cwd: session.cwd,
+              });
+            } catch (error) {
+              if (error instanceof DaemonOperationUnavailableError) return;
+              throw error;
+            }
+            void this.agentPool.warm(session.id).finally(() => lease.release());
+          },
+        },
+        operationGate: this.operationGate,
+        events: this.eventPublisher,
+        contextUsageCache,
+        assertReady: () => this.assertReady(),
+      });
       this.sessions = new SessionApplicationService({
         store,
         runEngine: this.runEngine,
@@ -691,6 +728,8 @@ export class DaemonApplication implements DurableAgentApplication {
           return (await discoverOpenHarnessExtensions(session.cwd, settings)).skillRegistry;
         },
         pluginCapabilities,
+        queries: this.queries,
+        commands: this.commands,
       });
       this.goals = new SessionGoalService({
         store,
@@ -865,14 +904,6 @@ export class DaemonApplication implements DurableAgentApplication {
           }
         },
       });
-      /**
-       * 查询服务：
-       * 1. 提供会话数据的查询和检索功能
-       * 2. 支持复杂的查询条件和排序
-       * 3. 与其他服务交互（如会话管理、日志记录）
-       * 4. 提供查询相关的统计和分析功能
-       */
-      this.queries = new SessionQueryService(store);
       /**
        * 后台进程服务：
        * 1. 管理后台进程的生命周期（创建、销毁、状态管理）

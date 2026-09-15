@@ -134,3 +134,25 @@ test("runtime cannot import http routes", () => {
     ["packages/server/src/runtime/run-coordinator.ts must not depend on http/routes"],
   );
 });
+
+test("session command service cannot import HTTP or Daemon", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/application/session/session-command-service.ts", "../../http/routes/session.js"),
+    ["packages/server/src/application/session/session-command-service.ts must not depend on http"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/application/session/session-command-service.ts", "../daemon-application.js"),
+    ["packages/server/src/application/session/session-command-service.ts must not depend on Daemon"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/application/session/session-command-service.ts", "../../daemon/scheduled-task-service.js"),
+    ["packages/server/src/application/session/session-command-service.ts must not depend on Daemon"],
+  );
+});
+
+test("session query service cannot import runtime", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/application/session/session-query-service.ts", "../../runtime/session-run-engine.js"),
+    ["packages/server/src/application/session/session-query-service.ts must not depend on runtime"],
+  );
+});

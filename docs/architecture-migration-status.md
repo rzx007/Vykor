@@ -1,19 +1,20 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–3 已完成，阶段 4A 已完成，阶段 4B–4F 未开始。
+> 状态：当前。阶段 0–3 已完成，阶段 4A、4B 已完成，阶段 4C–4F 未开始。
 
 ## 当前阶段
 
 阶段 0–2 已完成：依赖护栏、Session SQLite 数据库内核，以及 Project、Schedule、Workflow、Channel、Goal、Permission、Attachment 业务边界已经落地。
 阶段 3 已完成：三域 Repository、跨域事务和增量输出均已抽取。`SessionStore` 保留公开兼容转发、Task waiter/listener、生命周期和维护入口。
-阶段 4A 已完成：Event、Retention、Channel、Terminal、Job、BackgroundShell、Attachment、AgentPool 等简单 Application Service 的依赖能力已全部收窄为最小接口，彻底移除对完整 `SessionStore` 的导入；Server 边界检查（Route、Application Service、Runtime）已补充并纳入架构护栏。阶段 4B–4F 未开始。
+阶段 4A 已完成：Event、Retention、Channel、Terminal、Job、BackgroundShell、Attachment、AgentPool 等简单 Application Service 的依赖能力已全部收窄为最小接口，彻底移除对完整 `SessionStore` 的导入；Server 边界检查（Route、Application Service、Runtime）已补充并纳入架构护栏。
+阶段 4B 已完成：Session Query 与 Command 拆分完成，`SessionQueryService` 读服务完成能力收窄与协议解耦，`SessionCommandService` 写服务抽取完成，`SessionApplicationService` 变为向前兼容委托层，`DaemonApplication` 组装一次共享实例，新增 SessionCommand 与 SessionQuery 的架构护栏。阶段 4C–4F 未开始。
 
 ## 指标
 
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 343`, `httpClientFlatCalls: 11`。
+- 当前基线：`sessionStoreFlatCalls: 325`, `httpClientFlatCalls: 11`。
 - 当前 `SessionStore` 行数：2152 行。
 
 ## 阶段 3 迁移记录
@@ -125,6 +126,33 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
   - `node scripts/check-docs.mjs`
   - `git diff --check`
 
+## 阶段 4B 迁移记录：Session Query 与 Command 拆分
+
+- 起始 commit：`1b5a12f8`
+- 提交记录：
+  - `7e364be6` test(server): lock session lifecycle application contracts
+  - `35a61ee8` refactor(server): complete session query service
+  - `115a48a7` refactor(server): extract session command service
+  - `0d6c264f` refactor(server): delegate session query and commands
+- 拆分内容：
+  - `SessionQueryService`：从直接依赖 `SessionStore` 收窄为 `SessionQueryStore` 接口，解耦具体 Store 实现；完全移除写能力与事务，确保纯只读查询。
+  - `SessionCommandService`：抽离会话生命周期命令操作（`createSession`、`forkSession`、`updateSession`、`archiveSessionTree`、`deleteSessionTree`、`closeRuntime`），通过细粒度接口依赖会话存储、事务编排、运行时控制、操作并发门（Operation Gate）与事件发布。
+  - `SessionApplicationService`：转换为向前兼容委托门面，已抽离的查询委托至 `SessionQueryService`，生命周期写操作委托至 `SessionCommandService`，并删除已迁移的私有 helper（如 `archiveSessionTreeWork`、`acquireSessionMutation`、`mergeSessionMetadata`、`forkSessionMetadata`）。
+  - `DaemonApplication`：统一在装配根初始化一次 `SessionQueryService` 与 `SessionCommandService`，复用给 `SessionApplicationService` 与 `DurableAgentApplication`，禁止在各层重复构造。
+  - `scripts/architecture-boundaries.mjs`：新增架构护栏，禁止 `SessionCommandService` 导入 HTTP 路由与 Daemon 顶层，禁止 `SessionQueryService` 导入 Runtime。
+- 调用指标与基线变化：
+  - `sessionStoreFlatCalls`：从 343 降至 325（-18）。
+  - `httpClientFlatCalls`：保持 11。
+  - `SessionApplicationService.ts` 行数：从 907 行减少至 764 行（-143 行）。
+- 验证命令：
+  - `pnpm --filter @openharness/server test`
+  - `pnpm --filter @openharness/server check-types`
+  - `pnpm --filter @openharness/services test`
+  - `node --test scripts/architecture-boundaries.test.mjs`
+  - `pnpm check:architecture`
+  - `node scripts/check-docs.mjs`
+  - `git diff --check`
+
 ## 下一步
 
-阶段 4B：Session Query 与 Command 拆分（`SessionQueryService` 读服务抽取，`SessionCommandService` 写服务抽取，`SessionApplicationService` 变为向前兼容委托层）。
+阶段 4C：Run Admission 与 Control 拆分（`RunAdmissionService` 准入服务抽取，`RunControlService` 控制服务抽取）。
