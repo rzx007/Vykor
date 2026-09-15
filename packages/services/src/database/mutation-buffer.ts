@@ -58,3 +58,28 @@ export function cloneMutationBuffer(value: MutationBuffer): MutationBuffer {
     deletedAttempts: new Set(value.deletedAttempts),
   };
 }
+
+export function restoreMutationBuffer(
+  target: MutationBuffer,
+  snapshot: MutationBuffer,
+): void {
+  for (const key of Object.keys(snapshot) as (keyof MutationBuffer)[]) {
+    target[key].clear();
+    for (const item of snapshot[key]) {
+      target[key].add(item);
+    }
+  }
+}
+
+export function clearMutationBuffer(target: MutationBuffer): void {
+  for (const set of Object.values(target)) {
+    set.clear();
+  }
+}
+
+export function hasPendingMutations(buffer: MutationBuffer): boolean {
+  for (const set of Object.values(buffer)) {
+    if (set.size > 0) return true;
+  }
+  return false;
+}

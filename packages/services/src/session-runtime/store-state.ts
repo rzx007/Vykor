@@ -11,6 +11,7 @@ import type {
   SessionRunAttemptRecord,
   SessionExecutionRecord,
 } from "@openharness/protocol";
+import type { TransactionCoordinatorHooks } from "../database/index.js";
 import type { DurableEventRegistry } from "./event-registry.js";
 
 export interface SessionState {
@@ -34,6 +35,7 @@ export interface SessionStoreOptions {
   /** Dedicated extension point for tests or plugins that own additional event contracts. */
   eventRegistry?: DurableEventRegistry;
   attachmentLimits?: Partial<AttachmentLimits>;
+  transactionHooks?: TransactionCoordinatorHooks;
 }
 
 export const DEFAULT_DELTA_FLUSH_INTERVAL_MS = 150;

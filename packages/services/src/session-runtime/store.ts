@@ -95,6 +95,10 @@ import {
 } from "../database/mutation-buffer.js";
 import { loadSessionReadModel } from "../database/read-model.js";
 import type { StorageContext } from "../database/storage-context.js";
+import {
+  TransactionCoordinator,
+  type TransactionCoordinatorHooks,
+} from "../database/index.js";
 import { ProjectRepository } from "../projects/project-repository.js";
 import { ScheduleRepository } from "../schedules/schedule-repository.js";
 import { WorkflowRepository } from "../workflows/workflow-repository.js";
@@ -214,12 +218,22 @@ export class SessionStore {
   readonly runs!: RunRepository;
   private storage!: StorageContext;
   private closed = false;
-  private transactionDepth = 0;
-  private saveRequested = false;
+  private _coordinator!: TransactionCoordinator;
   private readonly eventRegistry: DurableEventRegistry;
   private readonly attachmentLimits: AttachmentLimits;
   private readonly taskListeners = new Map<string, Set<() => void>>();
   private activeOwnerLease?: ApplicationOwnerLease;
+
+  private get coordinator(): TransactionCoordinator {
+    return this.storage?.coordinator ?? this._coordinator;
+  }
+
+  private set coordinator(value: TransactionCoordinator) {
+    this._coordinator = value;
+    if (this.storage) {
+      this.storage.coordinator = value;
+    }
+  }
 
   constructor(options: SessionStoreOptions) {
     const database = SessionDatabase.open({ path: options.path });
@@ -256,9 +270,16 @@ export class SessionStore {
           loaded.state,
         ),
         deltaCheckpoint,
-        atomic: (work) => this.transaction(work),
+        atomic: (work) => this.coordinator.atomic(work),
+        deferUntilCommit: (callback) => this.coordinator.deferUntilCommit(callback),
         assertWritable: () => this.assertCurrentOwner(),
       };
+      this.coordinator = new TransactionCoordinator({
+        storage: this.storage,
+        persistChanges: () => this.persistChanges(),
+        flushDeltas: () => this.flushMessagePartDeltas(),
+        hooks: options.transactionHooks,
+      });
       this.projects = new ProjectRepository(this.storage);
       this.schedules = new ScheduleRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);
@@ -548,49 +569,7 @@ export class SessionStore {
    * rows and the in-memory read model return to their previous state on error.
    */
   transaction<T>(work: () => T): T {
-    const previous = structuredClone(this.state);
-    const previousDeltaCheckpoint = this.deltaCheckpoint.snapshot();
-    const previousSaveRequested = this.saveRequested;
-    const previousEventSequence = this.eventSequence.snapshot();
-    const previousMutations = cloneMutationBuffer(this.mutations);
-    this.transactionDepth += 1;
-    if (this.transactionDepth === 1) this.saveRequested = false;
-    let persisted = false;
-    let completed = false;
-    try {
-      const result = this.database.transaction(() => {
-        const value = work();
-        if (this.transactionDepth === 1 && this.saveRequested) {
-          this.persistChanges();
-          persisted = true;
-        }
-        return value;
-      })();
-      if (persisted) {
-        this.deltaCheckpoint.clear();
-        this.mutations = createMutationBuffer();
-      }
-      completed = true;
-      return result;
-    } catch (error) {
-      this.state = previous;
-      this.eventSequence = DurableEventSequence.load(this.database, this.state);
-      this.deltaCheckpoint.restore(previousDeltaCheckpoint);
-      this.saveRequested = previousSaveRequested;
-      this.eventSequence.restore(previousEventSequence);
-      this.mutations = previousMutations;
-      throw error;
-    } finally {
-      this.transactionDepth -= 1;
-      if (this.transactionDepth === 0) {
-        this.saveRequested = previousSaveRequested;
-        if (this.deltaCheckpoint.dirtyPartIds().length > 0) {
-          if (completed && this.deltaCheckpoint.reachedThreshold()) {
-            this.flushMessagePartDeltas();
-          } else this.deltaCheckpoint.schedule();
-        }
-      }
-    }
+    return this.coordinator.atomic(work);
   }
 
   createSession(input: CreateSessionInput): SessionRecord {
@@ -613,7 +592,7 @@ export class SessionStore {
   }
 
   deleteSessionTree(sessionId: string): string[] {
-    if (this.transactionDepth > 0) {
+    if (this.coordinator.inTransaction) {
       throw new Error(
         "deleteSessionTree cannot be called inside a store transaction",
       );
@@ -1841,7 +1820,7 @@ export class SessionStore {
       part.id,
       Buffer.byteLength(input.delta, "utf8"),
     );
-    if (this.transactionDepth === 0) {
+    if (!this.coordinator.inTransaction) {
       if (reachedFlushThreshold) this.flushMessagePartDeltas();
       else this.deltaCheckpoint.schedule();
     }
@@ -1852,7 +1831,7 @@ export class SessionStore {
     const partIds = this.deltaCheckpoint.dirtyPartIds();
     if (partIds.length === 0) return;
     const flush = () => this.persistDeltaPartRows(partIds);
-    if (this.transactionDepth > 0) flush();
+    if (this.coordinator.inTransaction) flush();
     else this.database.transaction(flush)();
     for (const partId of partIds) this.deltaCheckpoint.delete(partId);
   }
@@ -2570,14 +2549,14 @@ export class SessionStore {
   private save(): void {
     if (this.activeOwnerLease)
       this.assertApplicationOwner(this.activeOwnerLease);
-    if (this.transactionDepth > 0) {
-      this.saveRequested = true;
+    if (this.coordinator.inTransaction) {
+      this.coordinator.requestSave();
       return;
     }
     try {
-      this.database.transaction(() => this.persistChanges())();
-      this.deltaCheckpoint.clear();
-      this.mutations = createMutationBuffer();
+      this.coordinator.atomic(() => {
+        this.coordinator.requestSave();
+      });
     } catch (error) {
       this.state = this.load();
       this.deltaCheckpoint.clear();

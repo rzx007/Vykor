@@ -29,7 +29,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
           text: "hello",
         });
 
-        const initialSessionUpdatedAt = s1.updatedAt;
+        const initialSessionUpdatedAt = store.getSession("s1")!.updatedAt;
         const initialEventCount = store.listEvents({ sessionId: "s1" }).length;
         const initialPartText = p1.text;
 
@@ -56,7 +56,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
             store.appendEvent({
               type: "session.updated",
               sessionId: "s1",
-              payload: { reason: "test" },
+              payload: { session: store.getSession("s1")! },
             });
 
             // 3. Mark part dirty
