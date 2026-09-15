@@ -1488,6 +1488,52 @@ describe("ConversationTransactions.admitPrompt", () => {
         }
       });
 
+      it("rolls back active run, attempt, and running parts when run recovery fails", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-run-recovery-fail-"));
+        const dbPath = join(dir, "store.db");
+        let store = new SessionStore({ path: dbPath });
+        try {
+          store.createSession({ id: "s1", cwd: dir, model: "m" });
+          const run = store.createRun({ id: "run", sessionId: "s1" });
+          store.updateRun(run.id, { status: "running" });
+          const attempt = store.createRunAttempt({ id: "attempt", runId: run.id });
+          store.updateRunAttempt(attempt.id, { status: "running" });
+          const message = store.createMessage({ id: "message", sessionId: "s1", role: "assistant", runId: run.id });
+          store.upsertMessagePart({ id: "text-part", sessionId: "s1", messageId: message.id, type: "text", status: "running", text: "partial" });
+          store.upsertMessagePart({
+            id: "tool-part", sessionId: "s1", messageId: message.id, type: "tool",
+            status: "running", toolUseId: "tool-use", toolName: "Write", metadata: { existing: true },
+          });
+          const tx = createTransactions(store, {
+            afterRecoveryMutation: () => { throw new Error("injected run recovery failure"); },
+          });
+
+          expect(() => tx.interruptActiveRuns()).toThrow("injected run recovery failure");
+          expect(store.getRun("run")!.status).toBe("running");
+          expect(store.getRunAttempt("attempt")!.status).toBe("running");
+          expect(store.listMessageParts("s1")).toEqual(expect.arrayContaining([
+            expect.objectContaining({ id: "text-part", status: "running" }),
+            expect.objectContaining({ id: "tool-part", status: "running", metadata: { existing: true } }),
+          ]));
+          expect(store.listMessageParts("s1").find(({ id }) => id === "tool-part")!.metadata)
+            .not.toHaveProperty("failureKind");
+
+          store.close();
+          store = new SessionStore({ path: dbPath });
+          expect(store.getRun("run")!.status).toBe("running");
+          expect(store.getRunAttempt("attempt")!.status).toBe("running");
+          expect(store.listMessageParts("s1")).toEqual(expect.arrayContaining([
+            expect.objectContaining({ id: "text-part", status: "running" }),
+            expect.objectContaining({ id: "tool-part", status: "running", metadata: { existing: true } }),
+          ]));
+          expect(store.listMessageParts("s1").find(({ id }) => id === "tool-part")!.metadata)
+            .not.toHaveProperty("failureKind");
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
       it("notifies task listeners only after outer commit, never on rollback, and once per batch task", () => {
         const dir = mkdtempSync(join(tmpdir(), "ohs-task-notify-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
