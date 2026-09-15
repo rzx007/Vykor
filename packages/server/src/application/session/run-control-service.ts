@@ -260,9 +260,17 @@ export class RunControlService {
     expectedActiveRunId: string,
   ): Promise<PromoteQueuedRunResult | undefined> {
     if (!this.accepting) throw new Error("Session run engine is stopping");
+    if (!this.options.durableSessions.getSession(sessionId)) return undefined;
     const input = this.options.durableInputs.getInput(inputId);
     const queuedRun = this.options.durableRuns.getRun(queuedRunId);
-    if (!input || !queuedRun) return undefined;
+    const activeRun = this.options.durableRuns.getRun(expectedActiveRunId);
+    if (
+      !input || input.sessionId !== sessionId ||
+      !queuedRun || queuedRun.sessionId !== sessionId ||
+      queuedRun.inputId !== inputId || queuedRun.status !== "pending" ||
+      !activeRun || activeRun.sessionId !== sessionId || activeRun.status !== "running" ||
+      this.options.runtime.activeRunId(sessionId) !== expectedActiveRunId
+    ) return undefined;
     if (typeof input.metadata?.pluginId === "string") {
       throw new Error("session_capability_requires_queued_run");
     }
@@ -306,12 +314,6 @@ export class RunControlService {
       },
     });
     this.options.events.publishSince(before);
-    const activeRun = this.options.durableRuns.getRun(expectedActiveRunId);
-    if (!activeRun || activeRun.sessionId !== sessionId) {
-      throw new Error(
-        `Promoted prompt active run was not found: ${expectedActiveRunId}`,
-      );
-    }
     return { input, queued_run: updatedQueuedRun, active_run: activeRun };
   }
 

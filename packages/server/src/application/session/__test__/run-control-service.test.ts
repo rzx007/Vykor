@@ -243,7 +243,8 @@ describe("RunControlService", () => {
   });
 
   it("promotes queued prompt into active run and updates metadata", async () => {
-    const { options, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    const { options, sessions, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    sessions.set("s1", { id: "s1", cwd: "/project", status: "open" });
     inputs.set("inp-1", {
       id: "inp-1",
       sessionId: "s1",
@@ -282,6 +283,53 @@ describe("RunControlService", () => {
       status: "interrupted",
       error: "Queued prompt was promoted into the active run",
     }));
+  });
+
+  it.each([
+    ["input belongs to another session", { inputSessionId: "s2" }],
+    ["queued run belongs to another session", { queuedSessionId: "s2" }],
+    ["queued run belongs to another input", { queuedInputId: "inp-2" }],
+    ["queued run is no longer pending", { queuedStatus: "completed" }],
+    ["expected active run belongs to another session", { activeSessionId: "s2" }],
+    ["expected active run is no longer running", { activeStatus: "completed" }],
+    ["runtime owns a different active run", { runtimeActiveRunId: "r-other" }],
+  ] as const)("rejects promotion before touching runtime when %s", async (_name, overrides) => {
+    const { options, sessions, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    sessions.set("s1", { id: "s1", cwd: "/project", status: "open" });
+    inputs.set("inp-1", {
+      id: "inp-1",
+      sessionId: overrides.inputSessionId ?? "s1",
+      items: [{ type: "text", text: "steer queued" }],
+      delivery: "queue",
+      attachments: [],
+      metadata: {},
+      createdAt: 1,
+    } as any);
+    runs.set("r-q1", {
+      id: "r-q1",
+      sessionId: overrides.queuedSessionId ?? "s1",
+      inputId: overrides.queuedInputId ?? "inp-1",
+      status: overrides.queuedStatus ?? "pending",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    runs.set("r-act", {
+      id: "r-act",
+      sessionId: overrides.activeSessionId ?? "s1",
+      status: overrides.activeStatus ?? "running",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    activeRuns.set("s1", overrides.runtimeActiveRunId ?? "r-act");
+    queuedRuns.set("s1", ["r-q1"]);
+
+    const service = new RunControlService(options);
+    await expect(service.promoteQueuedRun("s1", "inp-1", "r-q1", "r-act")).resolves.toBeUndefined();
+
+    expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
+    expect(options.durableRuns.updateRun).not.toHaveBeenCalled();
   });
 
   it("awaits completed run and formats assistant output", async () => {
