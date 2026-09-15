@@ -12,6 +12,8 @@ export interface ScheduledTaskExecutorOptions {
   settings?: Settings;
   getSettings?: () => Settings;
   getSettingsForCwd?: (cwd: string) => Promise<Settings>;
+  createWorktreeManager?: typeof createChildAgentWorktreeManager;
+  allocateWorkspace?: (root: string | undefined, runId: string) => Promise<string>;
 }
 
 /** Executes one claimed scheduled run; timer/claim ownership stays in ScheduledTaskService. */
@@ -28,11 +30,11 @@ export class ScheduledTaskExecutor {
     let session: ReturnType<ScheduledTaskExecutorOptions["sessions"]["getSession"]>;
     try {
       executionCwd = outsideProject
-        ? await allocateWorkspace(this.options.outsideProjectWorkspaceRoot, scheduledRun.id)
+        ? await (this.options.allocateWorkspace ?? allocateWorkspace)(this.options.outsideProjectWorkspaceRoot, scheduledRun.id)
         : projectCwd;
       if (task.executionMode === "worktree") {
       if (!projectCwd) throw new Error("Worktree scheduled execution requires user attention: project is unavailable");
-      const manager = createChildAgentWorktreeManager({ cwd: projectCwd });
+      const manager = (this.options.createWorktreeManager ?? createChildAgentWorktreeManager)({ cwd: projectCwd });
       if (!(await manager.isGitRepo())) throw new Error("Worktree scheduled execution requires user attention: project is not a Git repository");
       const slug = buildChildAgentWorktreeSlug({ team: "scheduled", agent: task.id, nonce: scheduledRun.id.slice(0, 8) });
       const created = await manager.create(slug).catch((error) => {

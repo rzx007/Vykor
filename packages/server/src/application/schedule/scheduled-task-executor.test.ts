@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -30,5 +30,47 @@ describe("ScheduledTaskExecutor", () => {
     expect(result).toEqual({ sessionId: "s1", runId: "r1", summary: "done" });
     expect(existsSync(createSession.mock.calls[0]![0].cwd)).toBe(true);
     expect(admitPrompt).toHaveBeenCalledOnce();
+  });
+
+  it("cleans an allocated standalone workspace when worktree mode has no project", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-scheduled-cleanup-"));
+    const workspace = join(directory, "allocated");
+    cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
+    const executor = new ScheduledTaskExecutor({
+      sessions: {} as any,
+      allocateWorkspace: async () => { mkdirSync(workspace); return workspace; },
+    });
+    await expect(executor.execute({
+      id: "task-1", projectPaths: [], destination: "standalone", executionMode: "worktree",
+      permissionProfile: { mode: "workspace_write" }, skillNames: [], pluginNames: [],
+    } as any, { id: "run-1" } as any)).rejects.toThrow("project is unavailable");
+    expect(existsSync(workspace)).toBe(false);
+  });
+
+  it.each([
+    [false, false, 0],
+    [true, false, 1],
+    [true, true, 0],
+  ] as const)("handles worktree created=%s changed=%s cleanup", async (created, changed, removes) => {
+    const remove = vi.fn(async () => {});
+    const manager = {
+      isGitRepo: vi.fn(async () => true),
+      create: vi.fn(async () => ({ slug: "scheduled/task", path: "D:/repo-wt", branch: "codex/task", created })),
+      hasChanges: vi.fn(async () => changed), remove,
+    };
+    const executor = new ScheduledTaskExecutor({
+      settings: { model: "test" } as any,
+      createWorktreeManager: (() => manager) as any,
+      sessions: {
+        getSession: vi.fn(), createSession: vi.fn(() => ({ id: "s1" })),
+        admitPrompt: vi.fn(async () => { throw new Error("execution failed"); }), awaitRun: vi.fn(),
+      } as any,
+    });
+    await expect(executor.execute({
+      id: "task-1", name: "Task", prompt: "work", projectPaths: ["D:/repo"], destination: "standalone",
+      executionMode: "worktree", model: "test", skillNames: [], pluginNames: [],
+      permissionProfile: { mode: "workspace_write" },
+    } as any, { id: "run-1", scheduledFor: 1 } as any)).rejects.toThrow("execution failed");
+    expect(remove).toHaveBeenCalledTimes(removes);
   });
 });

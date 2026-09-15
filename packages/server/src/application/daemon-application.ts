@@ -12,7 +12,6 @@ import {
   readSessionRuntimeConfig,
   type AttachmentLimits,
   type SessionRecord,
-  type SessionUserInputItem,
 } from "@openharness/protocol";
 import {
   AttachmentApplicationService,
@@ -69,12 +68,10 @@ import { SessionMaintenanceService } from "./session/session-maintenance-service
 import { SessionQueryService } from "./session/session-query-service.js";
 import { SessionRunEngine } from "./session/session-run-engine.js";
 import { assembleSessionRunServices } from "./session/session-run-assembly.js";
+import { assembleSessionRunExecutor } from "./session/session-run-executor-assembly.js";
 import { RunAdmissionService } from "./session/run-admission-service.js";
 import { RunControlService } from "./session/run-control-service.js";
-import { SessionRunExecutor } from "./session/session-run-executor.js";
-import { materializeSessionInput } from "./session/session-input-materializer.js";
 import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
-import { conversationContextCatalog } from "./session/session-conversation-context.js";
 import { SessionPostRunMaintenance } from "./session/session-post-run-maintenance.js";
 import { SessionExecutionProjector } from "./session/session-execution-projector.js";
 import { BackgroundShellService } from "./session/background-shell-service.js";
@@ -87,8 +84,6 @@ import { ChannelApplicationService } from "./channel/channel-application-service
 import { SessionWorkflowRunRepository } from "./workflow/session-workflow-run-repository.js";
 import { ApplicationRetentionService } from "./retention/application-retention-service.js";
 import { buildCompactAttachmentSection } from "./attachment-resource/compact-attachment-catalog.js";
-import { AttachmentCapabilityRouter } from "./attachment-routing/attachment-capability-router.js";
-import { resolveRuntimeAttachmentCapabilities } from "./attachment-routing/attachment-capabilities.js";
 import { createDefaultModelService } from "./default-services/model-service.js";
 import { SessionAttachmentResources } from "./attachment-resource/session-attachment-resources.js";
 import { sharedContextUsageCache } from "./context-usage-cache.js";
@@ -557,67 +552,15 @@ export class DaemonApplication implements DurableAgentApplication {
         });
       });
 
-      // 车道轮到这条 run 时，真正 submitMessage 的地方。
-      const attachmentRouter = new AttachmentCapabilityRouter({
-        resolveReadyContentPath: (assetId) => this.attachments.resolveReadyContentPath(assetId),
-        readReadyText: (assetId, readOptions) =>
-          this.attachments.readReadyText(assetId, readOptions),
+      const runExecution = assembleSessionRunExecutor({
+        store, attachmentApplication: this.attachments, goals: store.goals,
+        agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
+        traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
+        attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,
+        resolveSessionSettings,
       });
-      const runExecutor = new SessionRunExecutor({
-        data: store,
-        attachments: store.attachments,
-        goals: store.goals,
-        agentPool: this.agentPool,
-        events: this.eventPublisher,
-        transcriptProjection: this.transcriptProjection,
-        traceIdForRun: (runId) => this.traceIdForRun(runId),
-        log: options.log,
-        postRunMaintenance,
-        attachmentResources: this.attachmentResources,
-        attachmentOcrAvailable: true,
-        contextUsageCache,
-        refreshContextUsage,
-        resolveSkillCatalog: async (session) => {
-          const settings = await resolveSessionSettings(session.cwd);
-          if (!settings) {
-            throw new Error("session_input_skill_catalog_unavailable");
-          }
-          return (await discoverOpenHarnessExtensions(session.cwd, settings)).skillRegistry;
-        },
-        routeAttachments: (input) => attachmentRouter.route(input),
-        resolveCapabilities: async (session) => {
-          const settings = options.getSettingsForCwd
-            ? await options.getSettingsForCwd(session.cwd)
-            : (options.getSettings?.() ?? options.settings);
-          const modelProviders = await createDefaultModelService(
-            settings ? { current: settings } : undefined,
-          ).list();
-          return resolveRuntimeAttachmentCapabilities({
-            runtime: readSessionRuntimeConfig(
-              session,
-              settings?.provider ? { provider: settings.provider } : undefined,
-            ),
-            settings,
-            modelProviders,
-          });
-        },
-      });
-      // 每个会话一条车道：收下 prompt、排队、interrupt。HTTP 202 之后工作在这里继续。
-      /**
-       * 运行引擎服务：
-       * 1. 管理会话的运行队列（如收下 prompt、排队、interrupt）
-       * 2. 处理会话的运行状态（如运行中、中断、完成）
-       * 3. 与其他服务交互（如会话管理、日志记录）
-       * 4. 提供运行引擎相关的查询和操作接口
-       */
-      const materializeSteerInput = async (sessionId: string, items: readonly SessionUserInputItem[]) => {
-        const session = store.getSession(sessionId);
-        if (!session) throw new Error(`Session not found: ${sessionId}`);
-        const settings = await resolveSessionSettings(session.cwd);
-        if (!settings) throw new Error("session_input_skill_catalog_unavailable");
-        const { skillRegistry } = await discoverOpenHarnessExtensions(session.cwd, settings);
-        return materializeSessionInput(items, skillRegistry, conversationContextCatalog(store, sessionId)).instruction;
-      };
+      const runExecutor = runExecution.executor;
+      const materializeSteerInput = runExecution.materializeSteerInput;
       const runServices = assembleSessionRunServices({
         store, goals: store.goals, agentPool: this.agentPool, runExecutor, events: this.eventPublisher,
         attachmentLimits: this.attachments.limits, materializeSteerInput,

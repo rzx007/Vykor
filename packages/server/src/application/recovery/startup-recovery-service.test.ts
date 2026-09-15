@@ -11,7 +11,8 @@ afterEach(() => cleanup.splice(0).forEach((dispose) => dispose()));
 describe("StartupRecoveryService", () => {
   it("runs durable SQLite recovery in order and remains idempotent", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-startup-recovery-"));
-    const store = new SessionStore({ path: join(directory, "store.db") });
+    const databasePath = join(directory, "store.db");
+    let store = new SessionStore({ path: databasePath });
     cleanup.push(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
     store.createSession({ id: "s1", cwd: directory, model: "test" });
     store.createRun({ id: "r1", sessionId: "s1", status: "running" });
@@ -28,6 +29,9 @@ describe("StartupRecoveryService", () => {
       recoverWorkflows: async () => { order.push("workflows"); },
     });
     await recovery.run();
+    store.close();
+    store = new SessionStore({ path: databasePath });
+    expect(store.getRun("r1")?.status).toBe("interrupted");
     await recovery.run();
     expect(store.getRun("r1")?.status).toBe("interrupted");
     expect(order.slice(0, 6)).toEqual(["projection", "runs", "goals", "inputs", "permissions", "sessions"]);
@@ -42,5 +46,17 @@ describe("StartupRecoveryService", () => {
       recoverAttachments: async () => {}, reconcileBackgroundTasks: async () => {}, recoverWorkflows: async () => {},
     });
     await expect(recovery.run()).rejects.toThrow("projection failed");
+  });
+
+  it.each(["attachments", "background", "workflows"] as const)("propagates async %s recovery failure", async (failed) => {
+    const step = (name: typeof failed) => async () => {
+      if (name === failed) throw new Error(`${name} failed`);
+    };
+    const recovery = new StartupRecoveryService({
+      recoverProjectionSettlements: () => {}, interruptActiveRuns: () => {}, pauseActiveGoals: () => {},
+      terminalizeUnownedInputs: () => {}, expirePendingPermissions: () => {}, finalizeClosingSessions: () => {},
+      recoverAttachments: step("attachments"), reconcileBackgroundTasks: step("background"), recoverWorkflows: step("workflows"),
+    });
+    await expect(recovery.run()).rejects.toThrow(`${failed} failed`);
   });
 });

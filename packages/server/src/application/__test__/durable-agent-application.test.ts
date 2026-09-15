@@ -21,7 +21,7 @@ import type {
   ToolDefinition,
 } from "@openharness/core";
 import type { AgentJobHost } from "@openharness/jobs";
-import { LightOcrEngine, SessionStore } from "@openharness/services";
+import { AttachmentApplicationService, AttachmentBlobStore, LightOcrEngine, SessionStore } from "@openharness/services";
 
 import type { CreateDaemonAgent } from "../../daemon/daemon-agent.js";
 import { DaemonApplication } from "../daemon-application.js";
@@ -138,6 +138,25 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
 };
 
 describe("DaemonApplication", () => {
+  it("rejects ready on attachment recovery failure and still releases ownership on close", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "openharness-ready-recovery-"));
+    const store = new SessionStore({ path: join(directory, "store.db") });
+    const attachments = new AttachmentApplicationService({
+      store: store.attachments,
+      blobs: new AttachmentBlobStore({ root: join(directory, "attachments") }),
+    });
+    const recover = vi.spyOn(attachments, "recover").mockRejectedValueOnce(new Error("attachment recovery failed"));
+    const application = new DaemonApplication({ store, attachments, settings: { model: "test" } as any, log: () => {} });
+    await expect(application.ready()).rejects.toThrow("attachment recovery failed");
+    await expect(application.close()).rejects.toThrow("attachment recovery failed");
+
+    recover.mockResolvedValue({ failedImportIds: [], removedStagingNames: [], retainedStagingNames: [] });
+    const replacement = new DaemonApplication({ store, attachments, settings: { model: "test" } as any, log: () => {} });
+    await replacement.ready();
+    await replacement.close();
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
   it("lets a real child Agent read its root attachment without authorizing another session", async () => {
     const dir = mkdtempSync(join(tmpdir(), "openharness-child-attachment-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
