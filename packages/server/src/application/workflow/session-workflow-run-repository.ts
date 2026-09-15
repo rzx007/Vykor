@@ -9,23 +9,58 @@ import {
   type WorkflowRunSnapshot,
   type WorkflowRunSummary,
 } from "@openharness/coordinator";
-import type { SessionStore } from "@openharness/services";
+import type {
+  StoredWorkflowRunInput,
+  StoredWorkflowRunRecord,
+} from "@openharness/services/workflows";
+
+export interface WorkflowStorage {
+  saveRun(input: StoredWorkflowRunInput): void;
+  loadRun(runId: string): StoredWorkflowRunRecord | undefined;
+  listRuns(options?: { ownerSessionId?: string; status?: string }): StoredWorkflowRunRecord[];
+  appendEvent(input: {
+    runId: string;
+    type: string;
+    eventJson: string;
+    createdAt: number;
+  }): number;
+  listEvents(runId: string): string[];
+  claimRun(
+    runId: string,
+    ownerId: string,
+  ): { ownerId: string; generation: number; claimedAt: number };
+  finishClaim(runId: string, ownerId: string, status: string): void;
+}
+
+export interface WorkflowSessionEvents {
+  latestEventSeq(): number;
+  appendEvent(input: {
+    type: string;
+    sessionId?: string;
+    payload?: Record<string, unknown>;
+  }): unknown;
+}
+
+export interface SessionWorkflowRunRepositoryOptions {
+  workflows: WorkflowStorage;
+  events: WorkflowSessionEvents;
+  path: string;
+  onDurableEvent?: (previousEventSeq: number) => void;
+}
 
 /** daemon 使用的 Workflow repository。事实写进和 Session/Run 相同的 SQLite。 */
 export class SessionWorkflowRunRepository implements WorkflowRunRepository {
   readonly repositoryKey: string;
   private readonly ownerId = `workflow-owner:${process.pid}:${randomUUID()}`;
   private readonly listeners = new Map<string, Set<() => void>>();
+  private readonly versions = new Map<string, number>();
 
-  constructor(
-    private readonly store: SessionStore,
-    private readonly onDurableEvent?: (previousEventSeq: number) => void,
-  ) {
-    this.repositoryKey = `sqlite:${store.path}`;
+  constructor(private readonly options: SessionWorkflowRunRepositoryOptions) {
+    this.repositoryKey = `sqlite:${options.path}`;
   }
 
   save(snapshot: WorkflowRunSnapshot): void {
-    this.store.saveWorkflowRun({
+    this.options.workflows.saveRun({
       runId: snapshot.runId,
       ownerSessionId: snapshot.ownerSession,
       ownerInputId: snapshot.ownerInput,
@@ -44,34 +79,40 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
         finishedAt: result.finishedAt,
       })),
     });
-    this.notify(snapshot.runId);
+    this.changed(snapshot.runId);
   }
 
   appendEvent(event: WorkflowRunEvent): void {
     const snapshot = this.load(event.runId);
-    const previousEventSeq = this.store.latestEventSeq();
-    this.store.appendWorkflowEvent({
+    const previousEventSeq = this.options.events.latestEventSeq();
+    this.options.workflows.appendEvent({
       runId: event.runId,
-      sessionId: snapshot?.ownerSession,
       type: event.type,
       eventJson: JSON.stringify(event),
       createdAt: event.timestamp,
     });
-    this.onDurableEvent?.(previousEventSeq);
-    this.notify(event.runId);
+    if (snapshot?.ownerSession) {
+      this.options.events.appendEvent({
+        type: `workflow.${event.type}`,
+        sessionId: snapshot.ownerSession,
+        payload: { event: JSON.parse(JSON.stringify(event)) as Record<string, unknown> },
+      });
+    }
+    this.options.onDurableEvent?.(previousEventSeq);
+    this.changed(event.runId);
   }
 
   loadEvents(runId: string): WorkflowRunEvent[] {
-    return this.store.listWorkflowEvents(runId).map(decodeWorkflowRunEvent);
+    return this.options.workflows.listEvents(runId).map(decodeWorkflowRunEvent);
   }
 
   load(runId: string): WorkflowRunSnapshot | undefined {
-    const stored = this.store.loadWorkflowRun(runId);
+    const stored = this.options.workflows.loadRun(runId);
     return stored ? decodeWorkflowRunSnapshot(stored.snapshotJson) : undefined;
   }
 
   list(): WorkflowRunSnapshot[] {
-    return this.store.listWorkflowRuns().map((stored) => decodeWorkflowRunSnapshot(stored.snapshotJson));
+    return this.options.workflows.listRuns().map((stored) => decodeWorkflowRunSnapshot(stored.snapshotJson));
   }
 
   listSummaries(): WorkflowRunSummary[] {
@@ -83,11 +124,11 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
   }
 
   claim(runId: string) {
-    return this.store.claimWorkflowRun(runId, this.ownerId);
+    return this.options.workflows.claimRun(runId, this.ownerId);
   }
 
   finish(runId: string, status: WorkflowRunSnapshot["status"]): void {
-    this.store.finishWorkflowRunClaim(runId, this.ownerId, status);
+    this.options.workflows.finishClaim(runId, this.ownerId, status);
   }
 
   async waitForChange(
@@ -95,6 +136,7 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
     after: number,
     options: { timeoutMs: number; signal?: AbortSignal },
   ): Promise<WorkflowRunSnapshot | undefined> {
+    const version = this.versions.get(runId) ?? 0;
     const current = this.load(runId);
     if (!current || current.updatedAt > after) return current;
     return await new Promise((resolve, reject) => {
@@ -122,7 +164,11 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
       }
       options.signal?.addEventListener("abort", aborted, { once: true });
       const registered = this.load(runId);
-      if (!registered || registered.updatedAt > after) {
+      if (
+        !registered ||
+        registered.updatedAt > after ||
+        (this.versions.get(runId) ?? 0) !== version
+      ) {
         changed();
         return;
       }
@@ -136,5 +182,10 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
 
   private notify(runId: string): void {
     for (const listener of [...(this.listeners.get(runId) ?? [])]) listener();
+  }
+
+  private changed(runId: string): void {
+    this.versions.set(runId, (this.versions.get(runId) ?? 0) + 1);
+    this.notify(runId);
   }
 }

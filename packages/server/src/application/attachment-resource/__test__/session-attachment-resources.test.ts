@@ -35,7 +35,7 @@ async function harness() {
   const store = new SessionStore({ path: join(root, "store.db") });
   stores.push(store);
   const attachments = new AttachmentApplicationService({
-    store,
+    store: store.attachments,
     blobs: new AttachmentBlobStore({ root: join(root, "blobs") }),
     id: () => "att_text",
   });

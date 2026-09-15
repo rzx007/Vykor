@@ -43,11 +43,12 @@ function harness(
   let pluginsAvailable = true;
   const engine = new SessionRunEngine({
     store,
+    goals: store.goals,
     agentPool: { configured: true } as any,
     events,
     settleGoalRun: (sessionId, runId) => service.settleRun(sessionId, runId),
     runExecutor: createView ? new SessionRunExecutor({
-      store, events,
+      store, attachments: store.attachments, goals: store.goals, events,
       agentPool: {
         configured: true,
         acquireSession: async () => ({
@@ -70,6 +71,8 @@ function harness(
   });
   service = new SessionGoalService({
     store,
+    permissions: store.permissions,
+    goals: store.goals,
     runEngine: engine,
     events,
     sessions: { withSessionOperation: async (_id, work) => work() },

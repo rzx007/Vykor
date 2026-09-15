@@ -7,7 +7,7 @@ import {
   type AttachmentLimits,
 } from "@openharness/protocol";
 
-import type { SessionStore } from "../session-runtime/store.js";
+import type { AttachmentTransactions } from "../attachments/attachment-transactions.js";
 import {
   AttachmentBlobStore,
   type AttachmentBlobRange,
@@ -20,7 +20,14 @@ import {
 import { AttachmentStorageOperationGate } from "./attachment-storage-operation-gate.js";
 
 export interface AttachmentApplicationServiceOptions {
-  store: SessionStore;
+  store: Pick<AttachmentTransactions,
+    | "createImportingAttachment"
+    | "markAttachmentReady"
+    | "failAttachmentImport"
+    | "getAttachment"
+    | "softDeleteUnreferencedAttachment"
+    | "listImportingAttachments"
+  >;
   blobs: AttachmentBlobStore;
   limits?: Partial<AttachmentLimits>;
   now?: () => number;
@@ -67,7 +74,7 @@ export interface AttachmentRecoveryResult {
 export class AttachmentApplicationService {
   readonly limits: AttachmentLimits;
   readonly operationGate: AttachmentStorageOperationGate;
-  private readonly store: SessionStore;
+  private readonly store: AttachmentApplicationServiceOptions["store"];
   private readonly blobs: AttachmentBlobStore;
   private readonly now: () => number;
   private readonly id: () => string;

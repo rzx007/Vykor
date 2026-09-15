@@ -230,7 +230,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.attachments =
         options.attachments ??
         new AttachmentApplicationService({
-          store,
+          store: store.attachments,
           blobs: attachmentBlobs,
           limits: options.attachmentLimits,
         });
@@ -254,11 +254,11 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         repository: {
           findCompleted: (assetId, cacheKey) =>
-            store.findCompletedAttachmentRepresentation(assetId, "ocr_text", cacheKey),
-          begin: (input) => store.createAttachmentRepresentation(input),
-          complete: (id, output) => store.completeAttachmentRepresentation(id, output),
+            store.attachments.findCompletedAttachmentRepresentation(assetId, "ocr_text", cacheKey),
+          begin: (input) => store.attachments.createAttachmentRepresentation(input),
+          complete: (id, output) => store.attachments.completeAttachmentRepresentation(id, output),
           fail: (id, error) => {
-            store.failAttachmentRepresentation(id, error);
+            store.attachments.failAttachmentRepresentation(id, error);
           },
         },
       });
@@ -266,21 +266,26 @@ export class DaemonApplication implements DurableAgentApplication {
       // 先把这些半截状态结掉，再对外服务，免得窗口以为还在跑。
       recoverProjectionSettlements(store);
       store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON);
-      store.pauseActiveGoalsOnStartup();
+      store.goals.pauseActiveGoalsOnStartup();
       store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON);
-      store.expirePendingPermissionRequests(DAEMON_RESTART_PERMISSION_REASON);
+      store.permissions.expirePending(DAEMON_RESTART_PERMISSION_REASON);
       store.finalizeClosingSessions();
 
       // events：窗口订的 SSE。eventPublisher：各处写完 store 后，把增量广播出去。
       this.events = new ApplicationEventService(store);
       this.eventPublisher = new SessionEventPublisher(store, this.events);
-      this.workflows = new SessionWorkflowRunRepository(store, (previousEventSeq) =>
-        this.eventPublisher.publishSince(previousEventSeq),
-      );
+      this.workflows = new SessionWorkflowRunRepository({
+        workflows: store.workflows,
+        events: store,
+        path: store.path,
+        onDurableEvent: (previousEventSeq) =>
+          this.eventPublisher.publishSince(previousEventSeq),
+      });
       this.retention = new ApplicationRetentionService(
         store,
         new AttachmentIntegrityService({
           store,
+          attachments: store.attachments,
           blobs: attachmentBlobs,
           operationGate: this.attachments.operationGate,
         }),
@@ -296,9 +301,11 @@ export class DaemonApplication implements DurableAgentApplication {
             : (options.getSettings?.() ?? options.settings ?? failMissingSettings()),
         acquireEnvironment: acquireSessionEnvironment,
       });
-      this.projects = new ProjectApplicationService(store);
+      this.projects = new ProjectApplicationService(store.projects);
       this.permissions = new StorePermissionBroker({
-        store,
+        permissions: store.permissions,
+        getSession: (sessionId) => store.getSession(sessionId),
+        latestEventSeq: () => store.latestEventSeq(),
         onChange: (previousEventSeq) => this.eventPublisher.publishSince(previousEventSeq),
         logger: options.log,
       });
@@ -552,6 +559,8 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       const runExecutor = new SessionRunExecutor({
         store,
+        attachments: store.attachments,
+        goals: store.goals,
         agentPool: this.agentPool,
         events: this.eventPublisher,
         transcriptProjection: this.transcriptProjection,
@@ -598,6 +607,7 @@ export class DaemonApplication implements DurableAgentApplication {
       this.runEngine = new SessionRunEngine({
         settleGoalRun: (sessionId, runId) => this.goals.settleRun(sessionId, runId),
         store,
+        goals: store.goals,
         attachmentLimits: this.attachments.limits,
         agentPool: this.agentPool,
         runExecutor,
@@ -624,6 +634,8 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       this.control = new DaemonControlService({
         store,
+        permissions: store.permissions,
+        workflows: store.workflows,
         runEngine: this.runEngine,
         agentPool: this.agentPool,
         operationGate: this.operationGate,
@@ -679,6 +691,8 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.goals = new SessionGoalService({
         store,
+        permissions: store.permissions,
+        goals: store.goals,
         sessions: this.sessions,
         runEngine: this.runEngine,
         events: this.eventPublisher,
@@ -697,6 +711,7 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       this.channels = new ChannelApplicationService({
         store,
+        channels: store.channels,
         sessions: this.sessions,
         log: options.log,
       });
@@ -708,7 +723,7 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供定时任务相关的查询和操作接口
        */
       this.schedules = new ScheduledTaskService({
-        store,
+        schedules: store.schedules,
         // 定时任务不是另一套执行器：到期后也是 admitPrompt，走上面同一条 Agent 车道。
         execute: async (task, scheduledRun) => {
           const projectCwd = task.projectPaths[0];

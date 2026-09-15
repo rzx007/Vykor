@@ -24,7 +24,7 @@ function fixture(ids: string[]) {
   const blobs = new AttachmentBlobStore({ root: join(root, "attachments") });
   let index = 0;
   const attachments = new AttachmentApplicationService({
-    store,
+    store: store.attachments,
     blobs,
     id: () => ids[index++]!,
   });
@@ -72,7 +72,7 @@ describe("AttachmentIntegrityService", () => {
         maxBytes: 100,
       });
 
-      const service = new AttachmentIntegrityService({ store, blobs, now: () => 10_000 });
+      const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 10_000 });
       const before = await blobs.listBlobs();
       const report = await service.scan({ gracePeriodMs: 1_000 });
 
@@ -99,7 +99,7 @@ describe("AttachmentIntegrityService", () => {
       const second = await attachments.import({ displayName: "b.txt", content: content("same") });
       expect(first.sha256).toBe(second.sha256);
       store.softDeleteAttachment(first.id, 100);
-      const service = new AttachmentIntegrityService({ store, blobs, now: () => 1_000 });
+      const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
 
       const firstGc = await service.gc({ gracePeriodMs: 100 });
 
@@ -148,7 +148,7 @@ describe("AttachmentIntegrityService", () => {
         expiresAt: 500,
       });
       store.softDeleteAttachment(asset.id, 100);
-      const service = new AttachmentIntegrityService({ store, blobs, now: () => 300 });
+      const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 300 });
 
       await expect(service.gc({ gracePeriodMs: 100 })).resolves.toMatchObject({
         deletedAssets: 0,
@@ -182,7 +182,7 @@ describe("AttachmentIntegrityService", () => {
         sizeBytes: asset.sizeBytes,
       });
       store.softDeleteAttachment(asset.id, 100);
-      const service = new AttachmentIntegrityService({ store, blobs, now: () => 1_000 });
+      const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
 
       await expect(service.gc({ gracePeriodMs: 100 })).resolves.toMatchObject({
         deletedAssets: 0,
@@ -200,7 +200,7 @@ describe("AttachmentIntegrityService", () => {
     try {
       const asset = await attachments.import({ displayName: "retry.txt", content: content("retry") });
       store.softDeleteAttachment(asset.id, 100);
-      const service = new AttachmentIntegrityService({ store, blobs, now: () => 1_000 });
+      const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
       const originalDelete = blobs.deleteBlob.bind(blobs);
       vi.spyOn(blobs, "deleteBlob").mockRejectedValueOnce(new Error("locked"));
 

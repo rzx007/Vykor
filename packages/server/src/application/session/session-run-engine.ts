@@ -13,6 +13,7 @@ import {
   normalizePromptAttachments,
   promptAttachmentFingerprint,
   type SessionStore,
+  type GoalOperations,
 } from "@openharness/services";
 
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../support.js";
@@ -67,6 +68,14 @@ export type PromoteQueuedRunResult = {
 
 export interface SessionRunEngineContext {
   store: SessionStore;
+  goals: Pick<
+    GoalOperations,
+    | "getCurrentGoal"
+    | "getGoal"
+    | "updateGoal"
+    | "markGoalContinuation"
+    | "startGoalRun"
+  >;
   agentPool: AgentPool;
   runExecutor: Pick<SessionRunExecutor, "execute">;
   events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
@@ -133,7 +142,7 @@ export class SessionRunEngine {
       ids.push(run.id);
       this.interruptRun(sessionId, run.id, reason);
       if (this.activeRunId(sessionId) !== run.id) this.context.store.updateRun(run.id, { status: "interrupted", error: reason });
-      this.context.store.markGoalContinuation(run.id, "cancelled");
+      this.context.goals.markGoalContinuation(run.id, "cancelled");
     }
     return ids;
   }
@@ -407,7 +416,7 @@ export class SessionRunEngine {
       return Promise.reject(new Error("session_capability_requires_queued_run"));
     }
     if (!input.runMetadata?.goalId) {
-      const goal = this.context.store.getCurrentGoal(sessionId);
+      const goal = this.context.goals.getCurrentGoal(sessionId);
       if (goal?.status === "active") this.cancelGoalRuns(sessionId, goal.id, "用户消息优先", true);
     }
     if (!input.id) return this.admitPrompt(sessionId, input);
@@ -734,8 +743,8 @@ export class SessionRunEngine {
 
   private pauseGoalForRun(runId: string | undefined): void {
     const run = runId ? this.context.store.getRun(runId) : undefined;
-    const goal = typeof run?.metadata.goalId === "string" ? this.context.store.getGoal(run.metadata.goalId) : undefined;
-    if (goal?.status === "active") this.context.store.updateGoal(goal.id, { expectedRevision: goal.revision, status: "paused", reason: "用户停止了目标回合" });
+    const goal = typeof run?.metadata.goalId === "string" ? this.context.goals.getGoal(run.metadata.goalId) : undefined;
+    if (goal?.status === "active") this.context.goals.updateGoal(goal.id, { expectedRevision: goal.revision, status: "paused", reason: "用户停止了目标回合" });
   }
 
   private enqueueRun(
@@ -753,12 +762,12 @@ export class SessionRunEngine {
         const isUserRun = !stored.metadata.goalRunKind || stored.metadata.goalRunKind === "user";
         if (stored.metadata.goalRunKind === "continuation" && this.hasUserWork(run.sessionId)) {
           this.context.store.updateRun(run.id, { status: "interrupted", error: "用户消息优先" });
-          this.context.store.markGoalContinuation(run.id, "cancelled");
+          this.context.goals.markGoalContinuation(run.id, "cancelled");
           this.context.events.publishSince(beforeStart);
           return;
         }
-        const goal = isUserRun ? this.context.store.getCurrentGoal(run.sessionId) :
-          typeof stored.metadata.goalId === "string" ? this.context.store.getGoal(stored.metadata.goalId) : undefined;
+        const goal = isUserRun ? this.context.goals.getCurrentGoal(run.sessionId) :
+          typeof stored.metadata.goalId === "string" ? this.context.goals.getGoal(stored.metadata.goalId) : undefined;
         if (!isUserRun && !goal) {
           this.context.store.updateRun(run.id, { status: "interrupted", error: "目标已不存在" });
           this.context.events.publishSince(beforeStart);
@@ -767,7 +776,7 @@ export class SessionRunEngine {
         if (goal && (goal.status === "active" || !isUserRun)) {
           const revision = isUserRun ? goal.revision : stored.metadata.goalRevision;
           const before = this.context.events.checkpoint();
-          if (typeof revision !== "number" || !this.context.store.startGoalRun(goal.id, revision, run.id, stored.metadata.goalRunKind === "continuation")) {
+          if (typeof revision !== "number" || !this.context.goals.startGoalRun(goal.id, revision, run.id, stored.metadata.goalRunKind === "continuation")) {
             this.context.store.updateRun(run.id, { status: "interrupted", error: "目标已暂停或版本已变化" });
             this.context.events.publishSince(before);
             return;

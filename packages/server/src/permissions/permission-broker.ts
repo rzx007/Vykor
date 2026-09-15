@@ -40,7 +40,9 @@ export interface PermissionBroker {
 }
 
 export interface StorePermissionBrokerOptions {
-  store: SessionStore;
+  permissions: Pick<SessionStore["permissions"], "create" | "reply" | "expirePending" | "get" | "list">;
+  getSession: SessionStore["getSession"];
+  latestEventSeq: SessionStore["latestEventSeq"];
   onChange?: (previousEventSeq: number) => void;
   logger?: StructuredLogger;
 }
@@ -50,13 +52,17 @@ export interface StorePermissionBrokerOptions {
  * 支持 session 级审批复用与 parent/child session 权限上溯；变更时触发事件广播。
  */
 export class StorePermissionBroker implements PermissionBroker {
-  private readonly store: SessionStore;
+  private readonly permissions: StorePermissionBrokerOptions["permissions"];
+  private readonly getSession: StorePermissionBrokerOptions["getSession"];
+  private readonly eventCursor: StorePermissionBrokerOptions["latestEventSeq"];
   private readonly onChange?: (previousEventSeq: number) => void;
   private readonly logger?: StructuredLogger;
   private readonly controller = new PermissionController();
 
   constructor(options: StorePermissionBrokerOptions) {
-    this.store = options.store;
+    this.permissions = options.permissions;
+    this.getSession = options.getSession;
+    this.eventCursor = options.latestEventSeq;
     this.onChange = options.onChange;
     this.logger = options.logger;
   }
@@ -65,7 +71,7 @@ export class StorePermissionBroker implements PermissionBroker {
     const permissionSessionId = this.resolvePermissionSessionId(input.sessionId);
     const reusable = this.findSessionApproval(input.sessionId, input.toolName);
     const previousEventSeq = this.latestEventSeq();
-    const request = this.store.createPermissionRequest({
+    const request = this.permissions.create({
       sessionId: permissionSessionId,
       runId: permissionSessionId === input.sessionId ? input.runId : undefined,
       toolName: input.toolName,
@@ -91,7 +97,7 @@ export class StorePermissionBroker implements PermissionBroker {
 
     if (reusable) {
       const beforeReply = this.latestEventSeq();
-      const replied = this.store.replyPermission({
+      const replied = this.permissions.reply({
         requestId: request.id,
         status: "approved",
         decision: "session",
@@ -118,12 +124,12 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   reply(input: PermissionReplyInput): PermissionRequestRecord {
-    const current = this.store.getPermissionRequest(input.requestId);
+    const current = this.permissions.get(input.requestId);
     if (!current) throw new Error(`Permission request not found: ${input.requestId}`);
     if (current.status !== "pending") throw new Error(`Permission request already resolved: ${input.requestId}`);
 
     const previousEventSeq = this.latestEventSeq();
-    const replied = this.store.replyPermission({
+    const replied = this.permissions.reply({
       requestId: input.requestId,
       status: input.status,
       decision: input.decision,
@@ -144,17 +150,17 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   getRequest(requestId: string): PermissionRequestRecord | undefined {
-    return this.store.getPermissionRequest(requestId);
+    return this.permissions.get(requestId);
   }
 
   listRequests(input: ListPermissionRequestsInput = {}): PermissionRequestRecord[] {
-    return this.store.listPermissionRequests(input);
+    return this.permissions.list(input);
   }
 
   private findSessionApproval(sessionId: string, toolName: string): PermissionRequestRecord | undefined {
     for (const candidateId of this.sessionLineage(sessionId)) {
-      const approval = this.store
-        .listPermissionRequests({ sessionId: candidateId, toolName, status: "approved" })
+      const approval = this.permissions
+        .list({ sessionId: candidateId, toolName, status: "approved" })
         .filter((request) => request.decision === "session")
         .at(-1);
       if (approval) return approval;
@@ -173,16 +179,16 @@ export class StorePermissionBroker implements PermissionBroker {
     while (currentId && !seen.has(currentId)) {
       seen.add(currentId);
       lineage.push(currentId);
-      currentId = this.store.getSession(currentId)?.parentId;
+      currentId = this.getSession(currentId)?.parentId;
     }
     return lineage;
   }
 
   private expire(requestId: string, reason: string): void {
-    const current = this.store.getPermissionRequest(requestId);
+    const current = this.permissions.get(requestId);
     if (!current || current.status !== "pending") return;
     const previousEventSeq = this.latestEventSeq();
-    const expired = this.store.replyPermission({
+    const expired = this.permissions.reply({
       requestId,
       status: "expired",
       decision: reason,
@@ -220,7 +226,7 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   private latestEventSeq(): number {
-    return this.store.latestEventSeq();
+    return this.eventCursor();
   }
 
   private notify(previousEventSeq: number): void {

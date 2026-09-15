@@ -1,17 +1,12 @@
 import type { CompactContextSection } from "@openharness/core";
 import type {
-  AttachmentAssetRecord,
-  AttachmentRepresentationRecord,
   SessionInputAttachmentRecord,
 } from "@openharness/protocol";
+import type { SessionStore } from "@openharness/services";
 
 export interface CompactAttachmentSectionStore {
   listSessionInputAttachments(sessionId: string): SessionInputAttachmentRecord[];
-  getAttachment(
-    assetId: string,
-    options?: { includeDeleted?: boolean },
-  ): AttachmentAssetRecord | undefined;
-  listAttachmentRepresentations(assetId: string): AttachmentRepresentationRecord[];
+  attachments: Pick<SessionStore["attachments"], "getAttachment" | "listAttachmentRepresentations">;
 }
 
 export interface CompactAttachmentSectionOptions {
@@ -63,7 +58,7 @@ function formatReference(
   reference: SessionInputAttachmentRecord,
   maxPreviewChars: number,
 ): string {
-  const asset = store.getAttachment(reference.assetId, { includeDeleted: true });
+  const asset = store.attachments.getAttachment(reference.assetId, { includeDeleted: true });
   const available = asset?.status === "ready";
   const resourceUri = attachmentResourceUri(reference.assetId, reference.displayName);
   const access = !available
@@ -75,7 +70,7 @@ function formatReference(
         : "No supported inspection tool is available; do not claim to have read it.";
 
   const representation = available
-    ? store.listAttachmentRepresentations(reference.assetId)
+    ? store.attachments.listAttachmentRepresentations(reference.assetId)
       .filter((candidate) =>
         candidate.status === "completed" && typeof candidate.text === "string"
       )

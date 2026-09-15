@@ -16,6 +16,10 @@
     "./executions": {
       "import": "./src/executions/index.ts",
       "types": "./src/executions/index.ts"
+    },
+    "./workflows": {
+      "import": "./src/workflows/index.ts",
+      "types": "./src/workflows/index.ts"
     }
   },
   "scripts": {

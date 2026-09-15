@@ -11,6 +11,8 @@ import { inspectDurableRun, listProjectionDiagnostics } from "./run-inspector.js
 
 export interface DaemonControlServiceContext {
   store: SessionStore;
+  permissions: Pick<SessionStore["permissions"], "list">;
+  workflows: Pick<SessionStore["workflows"], "listRuns">;
   runEngine: Pick<
     SessionRunEngine,
     "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain"
@@ -46,11 +48,8 @@ export class DaemonControlService {
     const sessions = this.context.store.listSessions({ includeArchived: true });
     const runs = sessions.flatMap((session) => this.context.store.listRuns(session.id));
     const tasks = sessions.flatMap((session) => this.context.store.listSessionTasks(session.id));
-    const workflows =
-      typeof this.context.store.listWorkflowRuns === "function"
-        ? this.context.store.listWorkflowRuns()
-        : [];
-    const permissions = this.context.store.listPermissionRequests();
+    const workflows = this.context.workflows.listRuns();
+    const permissions = this.context.permissions.list();
     const projectionSettlements = this.context.store.listProjectionSettlements();
     const attempts =
       typeof this.context.store.listRunAttempts === "function"
@@ -105,7 +104,7 @@ export class DaemonControlService {
   }
 
   inspectRun(runId: string, options: { includeContent?: boolean } = {}) {
-    return inspectDurableRun(this.context.store, runId, options.includeContent === true);
+    return inspectDurableRun(this.context.store, this.context.permissions, this.context.workflows, runId, options.includeContent === true);
   }
 
   listProjectionDiagnostics(options: { includeContent?: boolean } = {}) {

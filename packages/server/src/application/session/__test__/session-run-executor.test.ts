@@ -13,6 +13,8 @@ describe("SessionRunExecutor", () => {
     let modelCalls = 0;
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {},
         createRunCapabilityView: (pluginId?: string) => createRunCapabilityView({
@@ -45,6 +47,8 @@ describe("SessionRunExecutor", () => {
     let submitted = "";
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {}, createRunCapabilityView: () => view,
         submitMessage: (content: string) => { submitted = content; return completedHandle(); },
@@ -66,6 +70,8 @@ describe("SessionRunExecutor", () => {
     const observed: string[][] = [];
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: async () => ({
@@ -97,6 +103,8 @@ describe("SessionRunExecutor", () => {
     const closeIfStale = vi.fn(async () => {});
     const executorWithMaintenance = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => agent),
@@ -139,6 +147,8 @@ describe("SessionRunExecutor", () => {
     });
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => ({ setModel: vi.fn(), submitMessage })),
@@ -179,6 +189,8 @@ describe("SessionRunExecutor", () => {
     const finalizeRunParts = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
@@ -207,6 +219,8 @@ describe("SessionRunExecutor", () => {
     const log = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
@@ -247,6 +261,8 @@ describe("SessionRunExecutor", () => {
     }));
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => ({
@@ -303,18 +319,18 @@ describe("SessionRunExecutor", () => {
       runId: "run-1",
     }));
     expect(cleanupResources).toHaveBeenCalledOnce();
-    expect(store.acquireAttachmentLeases).toHaveBeenCalledWith(
+    expect(store.attachments.acquireAttachmentLeases).toHaveBeenCalledWith(
       expect.objectContaining({
         assetIds: ["asset-1"],
         ownerKind: "session_run",
         ownerId: "run-1",
       }),
     );
-    expect(store.releaseAttachmentLeases).toHaveBeenCalledWith(
+    expect(store.attachments.releaseAttachmentLeases).toHaveBeenCalledWith(
       "session_run",
       "run-1",
     );
-    expect(store.acquireAttachmentLeases.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(store.attachments.acquireAttachmentLeases.mock.invocationCallOrder[0]).toBeLessThan(
       submitMessage.mock.invocationCallOrder[0]!,
     );
   });
@@ -329,6 +345,8 @@ describe("SessionRunExecutor", () => {
     const projectAttachmentTransformations = vi.fn();
     const executor = new SessionRunExecutor({
       store: store as any,
+      attachments: store.attachments,
+      goals: store as any,
       agentPool: { configured: true, acquireSession, close } as any,
       events: { checkpoint: () => 4, publishSince: vi.fn() },
       transcriptProjection: {
@@ -420,9 +438,11 @@ function createStore(options: {
     getRun: vi.fn(() => run),
     appendEvent: vi.fn(),
     updateRun: vi.fn((id, update) => Object.assign(run, update, { id })),
-    acquireAttachmentLeases: vi.fn(() => []),
-    renewAttachmentLeases: vi.fn(() => 1),
-    releaseAttachmentLeases: vi.fn(() => 1),
+    attachments: {
+      acquireAttachmentLeases: vi.fn(() => []),
+      renewAttachmentLeases: vi.fn(() => 1),
+      releaseAttachmentLeases: vi.fn(() => 1),
+    },
   };
 }
 

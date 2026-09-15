@@ -13,19 +13,8 @@ import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { SessionApplicationService } from "../session/session-application-service.js";
 
 export interface ChannelApplicationServiceContext {
-  store: Pick<
-    SessionStore,
-    | "createChannelDelivery"
-    | "findChannelDeliveryByInput"
-    | "findExternalConversation"
-    | "getChannelDelivery"
-    | "getInput"
-    | "getSession"
-    | "listChannelDeliveries"
-    | "listExternalConversations"
-    | "updateChannelDelivery"
-    | "upsertExternalConversation"
-  >;
+  store: Pick<SessionStore, "getInput" | "getSession">;
+  channels: SessionStore["channels"];
   sessions: Pick<
     SessionApplicationService,
     "admitPrompt" | "awaitRun" | "createSession"
@@ -118,7 +107,7 @@ export class ChannelApplicationService {
       result.status === "completed"
         ? result.output.trim() || "[Agent completed without a text reply]"
         : `[Error: ${result.error ?? `Agent run ${result.status}`}]`;
-    const delivery = this.context.store.createChannelDelivery({
+    const delivery = this.context.channels.createDelivery({
       conversationId: conversation.id,
       connector: input.connector,
       accountId: input.accountId,
@@ -158,25 +147,25 @@ export class ChannelApplicationService {
     deliveryId: string,
     input: RecordChannelDeliveryInput,
   ) {
-    const existing = this.context.store.getChannelDelivery(deliveryId);
+    const existing = this.context.channels.getDelivery(deliveryId);
     if (!existing)
       throw new ApplicationError(
         404,
         `Channel delivery not found: ${deliveryId}`,
       );
     if (existing.status === "sent") return existing;
-    return this.context.store.updateChannelDelivery(deliveryId, input);
+    return this.context.channels.updateDelivery(deliveryId, input);
   }
 
   status(options: { connector?: string; limit?: number } = {}): ChannelStatusSnapshot {
     return {
-      conversations: this.context.store.listExternalConversations(options),
-      deliveries: this.context.store.listChannelDeliveries(options),
+      conversations: this.context.channels.listConversations(options),
+      deliveries: this.context.channels.listDeliveries(options),
     };
   }
 
   pendingDeliveries(options: { connector?: string; limit?: number } = {}) {
-    return this.context.store.listChannelDeliveries({
+    return this.context.channels.listDeliveries({
       ...options,
       statuses: ["pending", "failed"],
     });
@@ -185,7 +174,7 @@ export class ChannelApplicationService {
   private resolveConversation(
     input: DurableChannelMessageInput,
   ): ExternalConversationRecord {
-    const existing = this.context.store.findExternalConversation(input);
+    const existing = this.context.channels.findConversation(input);
     const session = existing
       ? this.context.store.getSession(existing.sessionId)
       : undefined;
@@ -206,7 +195,7 @@ export class ChannelApplicationService {
         },
       },
     });
-    return this.context.store.upsertExternalConversation({
+    return this.context.channels.upsertConversation({
       ...(existing ? { id: existing.id } : {}),
       connector: input.connector,
       accountId: input.accountId,

@@ -3,9 +3,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { SessionStore } from "@openharness/services";
+import type {
+  ScheduledRunRecord,
+  ScheduledTaskRecord,
+} from "@openharness/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ScheduledTaskService } from "../scheduled-task-service.js";
+import {
+  ScheduledTaskService,
+  type ScheduleOperations,
+} from "../scheduled-task-service.js";
+import { DaemonApplication } from "../../application/daemon-application.js";
 
 const cleanups: Array<() => Promise<void> | void> = [];
 
@@ -23,7 +31,10 @@ function createHarness(
 ) {
   const dir = mkdtempSync(join(tmpdir(), "ohs-scheduled-service-"));
   const store = new SessionStore({ path: join(dir, "store.db") });
-  const service = new ScheduledTaskService({ store, execute });
+  const service = new ScheduledTaskService({
+    schedules: store.schedules,
+    execute,
+  });
   cleanups.push(async () => {
     await service.shutdown();
     store.close();
@@ -33,6 +44,142 @@ function createHarness(
 }
 
 describe("ScheduledTaskService", () => {
+  it("is composed with store.schedules instead of legacy Store methods", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ohs-schedule-composition-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const application = new DaemonApplication({
+      store,
+      settings: {
+        apiFormat: "anthropic",
+        model: "test-model",
+        maxTurns: 1,
+        permission: { mode: "full_auto" },
+        sandbox: { enabled: false },
+        memory: { enabled: false },
+      },
+      log: () => undefined,
+    });
+    try {
+      (store as any).listScheduledTasks = () => {
+        throw new Error("legacy method must not be used");
+      };
+      expect(application.schedules.listTasks()).toEqual([]);
+    } finally {
+      await application.close();
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("interrupts active runs before reading tasks during startup", async () => {
+    const calls: string[] = [];
+    const schedules: ScheduleOperations = {
+      interruptActiveRuns: (reason) => {
+        calls.push(`interrupt:${reason}`);
+        return 0;
+      },
+      listTasks: () => {
+        calls.push("listTasks");
+        return [];
+      },
+      listRuns: () => [],
+      getTask: () => undefined,
+      createTask: () => {
+        throw new Error("unused");
+      },
+      updateTask: () => {
+        throw new Error("unused");
+      },
+      deleteTask: () => false,
+      createRun: () => {
+        throw new Error("unused");
+      },
+      updateRun: () => {
+        throw new Error("unused");
+      },
+    };
+    const service = new ScheduledTaskService({
+      schedules,
+      execute: async () => {
+        throw new Error("unused");
+      },
+    });
+    cleanups.push(() => service.shutdown());
+
+    expect(calls).toEqual([
+      "interrupt:Daemon restarted while the scheduled task was running",
+      "listTasks",
+    ]);
+  });
+
+  it("routes task and run workflows through all nine schedule operations", async () => {
+    const task: ScheduledTaskRecord = {
+      id: "task-fake",
+      name: "fake",
+      prompt: "fake",
+      recurrence: "2099-01-01T00:00:00.000Z",
+      recurrenceFormat: "once",
+      timezone: "UTC",
+      status: "active",
+      destination: "standalone",
+      projectPaths: [],
+      executionMode: "local",
+      skillNames: [],
+      pluginNames: [],
+      permissionProfile: { mode: "workspace_write" },
+      overlapPolicy: "skip",
+      missedRunPolicy: "skip",
+      createdBy: "user",
+      runCount: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const run: ScheduledRunRecord = {
+      id: "run-fake",
+      taskId: task.id,
+      cause: "manual",
+      status: "queued",
+      scheduledFor: 1,
+      unread: false,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const schedules: ScheduleOperations = {
+      interruptActiveRuns: vi.fn(() => 0),
+      listTasks: vi.fn(() => []),
+      getTask: vi.fn(() => task),
+      createTask: vi.fn(() => task),
+      updateTask: vi.fn(
+        (_id, patch) => ({ ...task, ...patch }) as ScheduledTaskRecord,
+      ),
+      deleteTask: vi.fn(() => true),
+      createRun: vi.fn(() => run),
+      listRuns: vi.fn(() => []),
+      updateRun: vi.fn(
+        (_id, patch) => ({ ...run, ...patch }) as ScheduledRunRecord,
+      ),
+    };
+    const service = new ScheduledTaskService({
+      schedules,
+      execute: async () => ({ sessionId: "s1", runId: "r1", summary: "done" }),
+    });
+    cleanups.push(() => service.shutdown());
+
+    service.status();
+    service.listTasks();
+    service.getTask(task.id);
+    service.listRuns();
+    service.createTask(task);
+    service.updateTask(task.id, { name: "updated" });
+    service.removeTask(task.id);
+    service.markRunRead(run.id);
+    await service.trigger(task.id);
+
+    for (const operation of Object.values(schedules)) {
+      expect(operation).toHaveBeenCalled();
+    }
+  });
+
   it("runs a saved Agent prompt and projects its Session run result", async () => {
     const { execute, service, store } = createHarness();
     const task = service.createTask({
@@ -168,7 +315,10 @@ describe("ScheduledTaskService", () => {
       runId: "recovered-run",
       summary: "Recovered missed run.",
     }));
-    const service = new ScheduledTaskService({ store, execute });
+    const service = new ScheduledTaskService({
+      schedules: store.schedules,
+      execute,
+    });
     cleanups.push(async () => {
       await service.shutdown();
       store.close();
@@ -500,10 +650,14 @@ describe("ScheduledTaskService", () => {
 
     // Updating non-schedule fields should succeed without "One-time schedule is not in the future"
     expect(() => {
-      service.updateTask(task.id, { prompt: "Updated prompt for completed task" });
+      service.updateTask(task.id, {
+        prompt: "Updated prompt for completed task",
+      });
     }).not.toThrow();
 
-    expect(store.getScheduledTask(task.id)?.prompt).toBe("Updated prompt for completed task");
+    expect(store.getScheduledTask(task.id)?.prompt).toBe(
+      "Updated prompt for completed task",
+    );
 
     // Manually triggering a completed task should also succeed
     const run = await service.trigger(task.id);
@@ -511,4 +665,3 @@ describe("ScheduledTaskService", () => {
     expect(store.getScheduledTask(task.id)?.status).toBe("completed");
   });
 });
-

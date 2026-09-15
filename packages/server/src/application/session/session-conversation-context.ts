@@ -4,7 +4,7 @@ import type { SessionInputConversationCatalog } from "./session-input-materializ
 const MAX_CONVERSATION_CONTEXT_CHARS = 12_000;
 
 export function conversationContextCatalog(
-  store: SessionStore,
+  store: Pick<SessionStore, "getSession" | "listMessageParts" | "listMessages">,
   currentSessionId: string,
 ): SessionInputConversationCatalog {
   return {

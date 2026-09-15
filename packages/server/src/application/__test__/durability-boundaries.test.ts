@@ -28,6 +28,14 @@ import {
 } from "../backup/application-backup.js";
 import { SessionWorkflowRunRepository } from "../workflow/session-workflow-run-repository.js";
 
+function workflowRepository(store: SessionStore): SessionWorkflowRunRepository {
+  return new SessionWorkflowRunRepository({
+    workflows: store.workflows,
+    events: store,
+    path: store.path,
+  });
+}
+
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {
@@ -115,7 +123,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     workflows.save(workflowSnapshot("workflow-1", "session-1", "completed"));
     expect(workflows.load("workflow-1")).toMatchObject({
       ownerSession: "session-1",
@@ -272,7 +280,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     const running = workflowSnapshot("running-1", "session-1", "running");
     running.updatedAt = 1;
     workflows.save(running);
@@ -298,7 +306,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     const running = workflowSnapshot("wait-1", "session-1", "running");
     workflows.save(running);
     const waiting = workflows.waitForChange("wait-1", running.updatedAt, {
@@ -313,7 +321,7 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     const running = workflowSnapshot("race-1", "session-1", "running");
     running.updatedAt = 100;
     workflows.save(running);
@@ -335,11 +343,79 @@ describe("durable application long-running boundaries", () => {
     store.close();
   });
 
+  it.each(["after registration", "during first load"])("wakes a Workflow waiter for an event-only change %s before timeout", async (timing) => {
+    const dir = temporaryDirectory();
+    const store = new SessionStore({ path: join(dir, "sessions.db") });
+    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    const workflows = workflowRepository(store);
+    const running = workflowSnapshot("event-wait-1", "session-1", "running");
+    workflows.save(running);
+    const appendEvent = () => workflows.appendEvent({ runId: "event-wait-1", type: "workflow_started", timestamp: Date.now(), status: "running", summary: "started" } as any);
+    const originalLoad = workflows.load.bind(workflows);
+    const load = vi.spyOn(workflows, "load");
+    vi.useFakeTimers();
+    try {
+      if (timing === "during first load") {
+        load.mockImplementationOnce((runId) => {
+          const snapshot = originalLoad(runId);
+          appendEvent(); // No listener exists yet; only the change version can wake this wait.
+          return snapshot;
+        });
+      }
+      let settled = false;
+      const waiting = workflows.waitForChange("event-wait-1", running.updatedAt, { timeoutMs: 1_000 }).then((snapshot) => {
+        settled = true;
+        return snapshot;
+      });
+      if (timing === "after registration") appendEvent();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(true);
+      await expect(waiting).resolves.toMatchObject({ status: "running", updatedAt: running.updatedAt });
+    } finally {
+      load.mockRestore();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      store.close();
+    }
+  });
+
+  it("keeps a Workflow event but does not notify after session event mirroring fails", async () => {
+    const dir = temporaryDirectory();
+    const store = new SessionStore({ path: join(dir, "sessions.db") });
+    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    const onDurableEvent = vi.fn();
+    const workflows = new SessionWorkflowRunRepository({
+      workflows: store.workflows,
+      path: store.path,
+      events: {
+        latestEventSeq: () => store.latestEventSeq(),
+        appendEvent: () => { throw new Error("mirror failed"); },
+      },
+      onDurableEvent,
+    });
+    const running = workflowSnapshot("mirror-fail-1", "session-1", "running");
+    workflows.save(running);
+    let settled = false;
+    const waiting = workflows.waitForChange("mirror-fail-1", running.updatedAt, { timeoutMs: 1_000 }).then((snapshot) => {
+      settled = true;
+      return snapshot;
+    });
+    expect(() => workflows.appendEvent({ runId: "mirror-fail-1", type: "workflow_started", timestamp: Date.now(), status: "running", summary: "started" } as any)).toThrow("mirror failed");
+    expect(store.workflows.listEvents("mirror-fail-1")).toHaveLength(1);
+    expect(onDurableEvent).not.toHaveBeenCalled();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    workflows.save(workflowSnapshot("mirror-fail-1", "session-1", "completed"));
+    await expect(waiting).resolves.toMatchObject({ status: "completed" });
+    store.close();
+  });
+
   it("rejects a duplicate Workflow claim in the same Application", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     store.createSession({ id: "session-1", cwd: dir, model: "test" });
-    const workflows = new SessionWorkflowRunRepository(store);
+    const workflows = workflowRepository(store);
     workflows.save(workflowSnapshot("claimed-1", "session-1", "running"));
     workflows.claim("claimed-1");
     expect(() => workflows.claim("claimed-1")).toThrow("already claimed");

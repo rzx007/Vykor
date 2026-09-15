@@ -43,26 +43,32 @@ export interface RunInspection {
   diagnosticOk: boolean;
 }
 
-export function inspectDurableRun(store: SessionStore, runId: string, includeContent = false): RunInspection | undefined {
+export function inspectDurableRun(
+  store: SessionStore,
+  permissions: Pick<SessionStore["permissions"], "list">,
+  workflowQueries: Pick<SessionStore["workflows"], "listRuns">,
+  runId: string,
+  includeContent = false,
+): RunInspection | undefined {
   const run = store.getRun(runId);
   if (!run) return undefined;
   const input = run.inputId ? store.getInput(run.inputId) : undefined;
   const messages = store.listMessages(run.sessionId).filter((row) => row.runId === runId || row.inputId === run.inputId);
   const messageIds = new Set(messages.map((row) => row.id));
   const parts = store.listMessageParts(run.sessionId).filter((row) => messageIds.has(row.messageId));
-  const permissions = store.listPermissionRequests({ sessionId: run.sessionId }).filter((row) => row.runId === runId);
+  const permissionRequests = permissions.list({ sessionId: run.sessionId }).filter((row) => row.runId === runId);
   const childExecutions = store.listSessionTasks(run.sessionId).filter((row) => row.runId === runId || row.metadata.sourceRunId === runId);
   const attempts = store.listRunAttempts(runId);
-  const workflows = typeof store.listWorkflowRuns === "function"
-    ? store.listWorkflowRuns().filter((workflow) => workflow.ownerRunId === runId)
-    : [];
+  const workflows = workflowQueries
+    .listRuns()
+    .filter((workflow) => workflow.ownerRunId === runId);
   const references = new Set<string>([
     runId,
     ...(run.inputId ? [run.inputId] : []),
     ...attempts.map((row) => row.id),
     ...messages.map((row) => row.id),
     ...parts.flatMap((row) => [row.id, row.toolUseId, stringMetadata(row.metadata.toolAttemptId)]).filter((value): value is string => !!value),
-    ...permissions.map((row) => row.id),
+    ...permissionRequests.map((row) => row.id),
     ...childExecutions.flatMap((row) => [row.id, row.childSessionId]).filter((value): value is string => !!value),
     ...workflows.map((workflow) => workflow.runId),
   ]);
@@ -105,7 +111,7 @@ export function inspectDurableRun(store: SessionStore, runId: string, includeCon
     messages: messages.map((row) => ({ ...row, metadata: includeContent ? row.metadata : redactRecord(row.metadata) })),
     parts: parts.map((row) => redactPart(row, includeContent)),
     toolCalls: parts.filter((row) => row.type === "tool" || row.type === "tool_result").map((row) => redactPart(row, includeContent)),
-    permissions: permissions.map((row) => includeContent ? row : { ...row, payload: { redacted: true } }),
+    permissions: permissionRequests.map((row) => includeContent ? row : { ...row, payload: { redacted: true } }),
     childExecutions: childExecutions.map((row) => includeContent ? row : {
       ...row,
       description: "[redacted]",

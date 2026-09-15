@@ -70,7 +70,15 @@ export class AttachmentIntegrityService {
 
   constructor(
     private readonly options: {
-      store: SessionStore;
+      store: Pick<SessionStore, "latestRetentionAudit" | "recordRetentionAudit">;
+      attachments: Pick<SessionStore["attachments"],
+        | "listAttachments"
+        | "listAttachmentLeases"
+        | "listActiveAttachmentLeases"
+        | "deleteExpiredAttachmentLeases"
+        | "countAttachmentReferences"
+        | "purgeDeletedAttachment"
+      >;
       blobs: AttachmentBlobStore;
       now?: () => number;
       operationGate?: AttachmentStorageOperationGate;
@@ -82,11 +90,11 @@ export class AttachmentIntegrityService {
   async scan(input: { gracePeriodMs: number }): Promise<AttachmentIntegrityReport> {
     const now = this.now();
     validateGracePeriod(input.gracePeriodMs);
-    const assets = this.options.store.listAttachments({ includeDeleted: true });
+    const assets = this.options.attachments.listAttachments({ includeDeleted: true });
     const blobs = await this.options.blobs.listBlobs();
     const blobByHash = new Map(blobs.map((blob) => [blob.sha256, blob]));
     const assetsByHash = groupAssetsByHash(assets);
-    const leases = this.options.store.listAttachmentLeases();
+    const leases = this.options.attachments.listAttachmentLeases();
     const activeLeases = leases.filter((lease) => lease.expiresAt > now);
     const issues: AttachmentIntegrityIssue[] = [];
 
@@ -185,7 +193,7 @@ export class AttachmentIntegrityService {
   }> {
     const now = this.now();
     const report = await this.scan(input);
-    const expiredLeases = this.options.store.deleteExpiredAttachmentLeases(now);
+    const expiredLeases = this.options.attachments.deleteExpiredAttachmentLeases(now);
     let deletedOrphanBlobs = 0;
     let releasedBytes = 0;
     for (const issue of report.issues) {
@@ -210,12 +218,12 @@ export class AttachmentIntegrityService {
   private async gcUnlocked(input: { gracePeriodMs: number }): Promise<AttachmentGcResult> {
     const now = this.now();
     validateGracePeriod(input.gracePeriodMs);
-    const expiredLeases = this.options.store.deleteExpiredAttachmentLeases(now);
+    const expiredLeases = this.options.attachments.deleteExpiredAttachmentLeases(now);
     let deletedAssets = 0;
     let deletedBlobs = 0;
     let releasedBytes = 0;
-    const assets = this.options.store.listAttachments({ includeDeleted: true });
-    const activeLeases = this.options.store.listActiveAttachmentLeases(now);
+    const assets = this.options.attachments.listAttachments({ includeDeleted: true });
+    const activeLeases = this.options.attachments.listActiveAttachmentLeases(now);
     const skipped: AttachmentGcResult["skipped"] = {
       notDeleted: 0,
       gracePeriod: 0,
@@ -232,7 +240,7 @@ export class AttachmentIntegrityService {
         continue;
       }
       if (!asset.sha256) { skipped.missingHash++; continue; }
-      if (this.options.store.countAttachmentReferences(asset.id) > 0) {
+      if (this.options.attachments.countAttachmentReferences(asset.id) > 0) {
         skipped.referenced++;
         continue;
       }
@@ -245,7 +253,7 @@ export class AttachmentIntegrityService {
         other.sha256 === asset.sha256 &&
         (
           other.status === "ready" ||
-          this.options.store.countAttachmentReferences(other.id) > 0 ||
+          this.options.attachments.countAttachmentReferences(other.id) > 0 ||
           activeLeases.some((lease) => lease.assetId === other.id)
         )
       );
@@ -261,7 +269,7 @@ export class AttachmentIntegrityService {
       } else {
         skipped.sharedBlob++;
       }
-      if (this.options.store.purgeDeletedAttachment(asset.id, now)) {
+      if (this.options.attachments.purgeDeletedAttachment(asset.id, now)) {
         deletedAssets++;
       }
     }
@@ -287,7 +295,7 @@ export class AttachmentIntegrityService {
     activeLeases: AttachmentLeaseRecord[],
     _timestamp: number,
   ): boolean {
-    return this.options.store.countAttachmentReferences(asset.id) === 0 &&
+    return this.options.attachments.countAttachmentReferences(asset.id) === 0 &&
       !activeLeases.some((lease) => lease.assetId === asset.id);
   }
 

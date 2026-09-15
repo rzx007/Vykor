@@ -2,7 +2,7 @@ import { readSessionRuntimeConfig, type SessionRecord } from "@openharness/proto
 import type { ProviderInputCapabilities } from "@openharness/api";
 import { PluginPreparationError } from "@openharness/agent-runtime";
 import type { ContentBlock, ModelInputCapabilities } from "@openharness/core";
-import type { SessionStore } from "@openharness/services";
+import type { GoalOperations, SessionStore } from "@openharness/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import { RunInterruptedError, type SessionRunWorkContext } from "../../runtime/run-coordinator.js";
@@ -30,7 +30,14 @@ const ATTACHMENT_LEASE_TTL_MS = 2 * 60 * 1_000;
 const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
-  store: SessionStore;
+  store: Pick<SessionStore,
+    | "getSession" | "getInput" | "getRun" | "transaction" | "updateRun"
+    | "appendEvent" | "settleActiveRunAttempts" | "listMessageParts" | "listMessages"
+  >;
+  attachments: Pick<SessionStore["attachments"],
+    "acquireAttachmentLeases" | "renewAttachmentLeases" | "releaseAttachmentLeases"
+  >;
+  goals: Pick<GoalOperations, "getGoal">;
   agentPool: Pick<
     AgentPool,
     "configured" | "acquireSession" | "close" | "closeIfStale"
@@ -101,7 +108,7 @@ export class SessionRunExecutor {
 
       if (admitted.attachments.length > 0) {
         const acquiredAt = Date.now();
-        this.context.store.acquireAttachmentLeases({
+        this.context.attachments.acquireAttachmentLeases({
           assetIds: admitted.attachments.map((reference) => reference.assetId),
           ownerKind: "session_run",
           ownerId: runId,
@@ -111,7 +118,7 @@ export class SessionRunExecutor {
         const renewTimer = setInterval(() => {
           const timestamp = Date.now();
           try {
-            this.context.store.renewAttachmentLeases({
+            this.context.attachments.renewAttachmentLeases({
               ownerKind: "session_run",
               ownerId: runId,
               timestamp,
@@ -131,7 +138,7 @@ export class SessionRunExecutor {
         renewTimer.unref?.();
         cleanupAttachmentLease = () => {
           clearInterval(renewTimer);
-          this.context.store.releaseAttachmentLeases("session_run", runId);
+          this.context.attachments.releaseAttachmentLeases("session_run", runId);
         };
       }
 
@@ -206,7 +213,7 @@ export class SessionRunExecutor {
       const goalRevision = typeof storedRun?.metadata?.goalRevision === "number" ? storedRun.metadata.goalRevision : undefined;
       let goalBinding: { goalId: string; revision: number; objective: string } | undefined;
       if (goalId && goalRevision !== undefined) {
-        const goal = this.context.store.getGoal(goalId);
+        const goal = this.context.goals.getGoal(goalId);
         if (!goal || goal.sessionId !== sessionId || goal.revision !== goalRevision || goal.status !== "active") {
           throw new Error("session_goal_run_is_stale");
         }

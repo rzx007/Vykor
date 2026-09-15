@@ -1,38 +1,48 @@
 import { stat } from "node:fs/promises";
 
-import type { SessionStore } from "@openharness/services";
+import type { ProjectRecord } from "@openharness/protocol";
+
+export interface ProjectOperations {
+  list(options?: { includeArchived?: boolean }): ProjectRecord[];
+  inspect(path: string): ProjectRecord;
+  rename(projectId: string, name: string): ProjectRecord;
+  setPinned(projectId: string, pinned: boolean): ProjectRecord;
+  setDefaultShell(projectId: string, shell: string | null): ProjectRecord;
+  rebind(projectId: string, path: string): ProjectRecord;
+  archive(projectId: string): ProjectRecord;
+}
 
 export class ProjectApplicationService {
-  constructor(private readonly store: SessionStore) {}
+  constructor(private readonly projects: ProjectOperations) {}
 
   list(options: { includeArchived?: boolean } = {}) {
-    return this.store.listProjects(options);
+    return this.projects.list(options);
   }
 
   async inspect(path: string) {
     await this.assertDirectory(path);
-    return this.store.inspectProject(path);
+    return this.projects.inspect(path);
   }
 
   rename(projectId: string, name: string) {
-    return this.store.renameProject(projectId, name);
+    return this.projects.rename(projectId, name);
   }
 
   setPinned(projectId: string, pinned: boolean) {
-    return this.store.setProjectPinned(projectId, pinned);
+    return this.projects.setPinned(projectId, pinned);
   }
 
   setDefaultShell(projectId: string, shell: string | null) {
-    return this.store.setProjectDefaultShell(projectId, shell);
+    return this.projects.setDefaultShell(projectId, shell);
   }
 
   async rebind(projectId: string, path: string) {
     await this.assertDirectory(path);
-    return this.store.rebindProject(projectId, path);
+    return this.projects.rebind(projectId, path);
   }
 
   archive(projectId: string) {
-    return this.store.archiveProject(projectId);
+    return this.projects.archive(projectId);
   }
 
   private async assertDirectory(path: string): Promise<void> {
