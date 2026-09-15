@@ -65,4 +65,32 @@ describe("ApplicationEventService", () => {
     await expect(next).resolves.toEqual({ value: undefined, done: true });
     expect(service.subscriberCount).toBe(0);
   });
+
+  it("支持查询历史事件并正确暴露最新游标", () => {
+    const durable = [event(10), event(11), event(12)];
+    const service = new ApplicationEventService({
+      latestEventSeq: () => 12,
+      listEvents: (options) =>
+        durable.filter((e) => (options?.afterSeq !== undefined ? e.seq > options.afterSeq : true)),
+    } as any);
+
+    expect(service.list({ afterSeq: 10 })).toEqual([event(11), event(12)]);
+    const subscription = service.subscribe();
+    expect(subscription.snapshotCursor).toBe(12);
+  });
+
+  it("已中止的 signal 立即终止订阅", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const service = new ApplicationEventService({
+      latestEventSeq: () => 0,
+      listEvents: () => [],
+    } as any);
+
+    const subscription = service.subscribe({ signal: controller.signal });
+    const iterator = subscription.stream[Symbol.asyncIterator]();
+    const result = await iterator.next();
+    expect(result).toEqual({ value: undefined, done: true });
+    expect(service.subscriberCount).toBe(0);
+  });
 });

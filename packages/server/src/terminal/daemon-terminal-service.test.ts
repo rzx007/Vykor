@@ -114,6 +114,10 @@ describe("DaemonTerminalService scoped environments", () => {
       scope: { kind: "session", sessionId: session.id },
       cwd: "/workspace",
     });
+
+    expect(service.get(terminal.id)).resolves.toMatchObject({ id: terminal.id, status: "running" });
+    await service.close(terminal.id);
+    expect(service.get(terminal.id)).resolves.toMatchObject({ id: terminal.id, status: "killed" });
   });
 });
 
