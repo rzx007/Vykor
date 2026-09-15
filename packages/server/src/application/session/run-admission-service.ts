@@ -166,6 +166,10 @@ export interface RunAdmissionEvents {
 
 export interface RunAdmissionGoalControl {
   getCurrentGoal?(sessionId: string): { id: string; status: string; revision: number } | undefined;
+  getGoal?(goalId: string): { id: string; status: string; revision: number } | undefined;
+  startGoalRun?(goalId: string, revision: number, runId: string, continuation: boolean): boolean;
+  markGoalContinuation?(runId: string, status: "cancelled"): void;
+  hasUserWork?(sessionId: string): boolean;
   cancelGoalRuns?(sessionId: string, goalId: string, reason: string, queuedOnly?: boolean): string[];
 }
 
@@ -260,6 +264,46 @@ export class RunAdmissionService {
     this.options.events.publishSince(before);
     this.options.runtimeQueue.enqueueRun(run, admitted.id);
     return run.id;
+  }
+
+  prepareRunExecution(runId: string): boolean {
+    const run = this.options.runOperations.getRun(runId);
+    if (!run) throw new Error(`Session run not found: ${runId}`);
+    const isUserRun = !run.metadata.goalRunKind || run.metadata.goalRunKind === "user";
+    if (run.metadata.goalRunKind === "continuation" && this.options.goals?.hasUserWork?.(run.sessionId)) {
+      this.options.runOperations.updateRun(run.id, { status: "interrupted", error: "用户消息优先" });
+      this.options.goals.markGoalContinuation?.(run.id, "cancelled");
+      return false;
+    }
+    const goal = isUserRun
+      ? this.options.goals?.getCurrentGoal?.(run.sessionId)
+      : typeof run.metadata.goalId === "string"
+        ? this.options.goals?.getGoal?.(run.metadata.goalId)
+        : undefined;
+    if (!isUserRun && !goal) {
+      this.options.runOperations.updateRun(run.id, { status: "interrupted", error: "目标已不存在" });
+      return false;
+    }
+    if (!goal || (goal.status !== "active" && isUserRun)) return true;
+    const revision = isUserRun ? goal.revision : run.metadata.goalRevision;
+    if (
+      typeof revision !== "number" ||
+      !this.options.goals?.startGoalRun?.(
+        goal.id,
+        revision,
+        run.id,
+        run.metadata.goalRunKind === "continuation",
+      )
+    ) {
+      this.options.runOperations.updateRun(run.id, { status: "interrupted", error: "目标已暂停或版本已变化" });
+      return false;
+    }
+    if (isUserRun) {
+      this.options.runOperations.updateRun(run.id, {
+        metadata: { goalId: goal.id, goalRevision: revision, goalRunKind: "user" },
+      });
+    }
+    return true;
   }
 
   persistGoalRun(

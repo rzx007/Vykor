@@ -172,6 +172,21 @@ describe("RunAdmissionService", () => {
     expect(createRun).toHaveBeenCalledOnce();
   });
 
+  it("rejects stale goal revisions before execution", () => {
+    const { options, runs, runOperations } = createMockOptions();
+    runs.set("r1", { id: "r1", sessionId: "s1", inputId: "i1", status: "pending", metadata: { goalId: "g1", goalRevision: 1, goalRunKind: "continuation" }, createdAt: 1, updatedAt: 1 });
+    options.goals = {
+      getGoal: vi.fn(() => ({ id: "g1", sessionId: "s1", status: "active", revision: 2 } as any)),
+      startGoalRun: vi.fn(() => false),
+    };
+
+    expect(new RunAdmissionService(options).prepareRunExecution("r1")).toBe(false);
+    expect(runOperations.updateRun).toHaveBeenCalledWith("r1", expect.objectContaining({
+      status: "interrupted",
+      error: "目标已暂停或版本已变化",
+    }));
+  });
+
   it("admits prompt and enqueues run when runtime is idle", async () => {
     const { options, createRun, enqueueRunFn } = createMockOptions();
     const service = new RunAdmissionService(options);

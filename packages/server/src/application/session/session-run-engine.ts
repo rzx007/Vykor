@@ -118,6 +118,11 @@ export class SessionRunEngine {
         attachmentLimits: context.attachmentLimits,
         goals: {
           getCurrentGoal: (sId) => context.goals.getCurrentGoal(sId),
+          getGoal: (goalId) => context.goals.getGoal(goalId),
+          startGoalRun: (goalId, revision, runId, continuation) =>
+            context.goals.startGoalRun(goalId, revision, runId, continuation),
+          markGoalContinuation: (runId, status) => context.goals.markGoalContinuation(runId, status),
+          hasUserWork: (sessionId) => this.controlService.hasUserWork(sessionId),
           cancelGoalRuns: (sId, gId, r, queuedOnly) =>
             this.controlService.cancelGoalRuns(sId, gId, r, queuedOnly),
         },
@@ -280,32 +285,11 @@ export class SessionRunEngine {
         // Let enqueue register the promise before execution can settle or be interrupted.
         await Promise.resolve();
         const beforeStart = this.context.events.checkpoint();
-        const stored = this.context.store.getRun(run.id)!;
-        const isUserRun = !stored.metadata.goalRunKind || stored.metadata.goalRunKind === "user";
-        if (stored.metadata.goalRunKind === "continuation" && this.hasUserWork(run.sessionId)) {
-          this.context.store.updateRun(run.id, { status: "interrupted", error: "用户消息优先" });
-          this.context.goals.markGoalContinuation(run.id, "cancelled");
+        if (!this.admissionService.prepareRunExecution(run.id)) {
           this.context.events.publishSince(beforeStart);
           return;
         }
-        const goal = isUserRun ? this.context.goals.getCurrentGoal(run.sessionId) :
-          typeof stored.metadata.goalId === "string" ? this.context.goals.getGoal(stored.metadata.goalId) : undefined;
-        if (!isUserRun && !goal) {
-          this.context.store.updateRun(run.id, { status: "interrupted", error: "目标已不存在" });
-          this.context.events.publishSince(beforeStart);
-          return;
-        }
-        if (goal && (goal.status === "active" || !isUserRun)) {
-          const revision = isUserRun ? goal.revision : stored.metadata.goalRevision;
-          const before = this.context.events.checkpoint();
-          if (typeof revision !== "number" || !this.context.goals.startGoalRun(goal.id, revision, run.id, stored.metadata.goalRunKind === "continuation")) {
-            this.context.store.updateRun(run.id, { status: "interrupted", error: "目标已暂停或版本已变化" });
-            this.context.events.publishSince(before);
-            return;
-          }
-          if (isUserRun) this.context.store.updateRun(run.id, { metadata: { goalId: goal.id, goalRevision: revision, goalRunKind: "user" } });
-          this.context.events.publishSince(before);
-        }
+        this.context.events.publishSince(beforeStart);
         await this.context.runExecutor.execute(
           {
             sessionId: run.sessionId,
