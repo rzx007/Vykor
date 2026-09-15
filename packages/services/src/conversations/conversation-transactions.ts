@@ -7,6 +7,8 @@ import {
   type AttachmentAssetRecord,
   type AttachmentLimits,
   type CreateSessionInput,
+  type ListPermissionRequestsOptions,
+  type PermissionRequestRecord,
   type ReplaceTranscriptInput,
   type SessionInputAttachmentRecord,
   type SessionInputRecord,
@@ -69,6 +71,9 @@ export interface ConversationTransactionsOptions {
   conversations: ConversationRepository;
   sessions?: SessionRepository;
   runs?: RunRepository;
+  permissions?: {
+    list(options?: ListPermissionRequestsOptions): PermissionRequestRecord[];
+  };
   attachments?: {
     getAttachment?(id: string, options?: { includeDeleted?: boolean }): AttachmentAssetRecord | undefined;
     get?(id: string, options?: { includeDeleted?: boolean }): AttachmentAssetRecord | undefined;
@@ -400,6 +405,13 @@ export class ConversationTransactions {
       throw new Error("SessionRepository is required for session transactions");
     }
     return this.sessions;
+  }
+
+  private requirePermissions(): NonNullable<ConversationTransactionsOptions["permissions"]> {
+    if (!this.options.permissions) {
+      throw new Error("Permission query collaborator is required for session snapshots");
+    }
+    return this.options.permissions;
   }
 
   replaceTranscript(input: ReplaceTranscriptInput): {
@@ -920,26 +932,20 @@ export class ConversationTransactions {
   }
 
   getSessionState(sessionId: string): SessionStateSnapshot {
-    const session = assertSession(this.storage.state, sessionId);
-    const runs = Object.values(this.storage.state.runs)
-      .filter((run) => run.sessionId === sessionId)
-      .sort((left, right) => left.createdAt - right.createdAt);
+    const session = this.requireSessions().get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    const runs = this.requireRuns().listRuns(sessionId);
     return clone({
-      cursor: this.storage.state.nextEventSeq - 1,
+      cursor: this.conversations.latestEventSeq(),
       session,
       inputs: this.conversations.listInputs(sessionId),
       messages: this.conversations.listMessages(sessionId),
       parts: this.conversations.listMessageParts(sessionId),
       runs,
-      attempts: Object.values(this.storage.state.attempts)
-        .filter((attempt) => this.storage.state.runs[attempt.runId]?.sessionId === sessionId)
+      attempts: runs.flatMap((run) => this.requireRuns().listRunAttempts(run.id))
         .sort((left, right) => left.createdAt - right.createdAt || left.sequence - right.sequence),
-      tasks: Object.values(this.storage.state.tasks)
-        .filter((task) => task.sessionId === sessionId)
-        .sort((left, right) => left.createdAt - right.createdAt),
-      permissions: Object.values(this.storage.state.permissions)
-        .filter((request) => request.sessionId === sessionId)
-        .sort((left, right) => left.createdAt - right.createdAt),
+      tasks: this.requireRuns().listSessionTasks(sessionId),
+      permissions: this.requirePermissions().list({ sessionId }),
     });
   }
 }

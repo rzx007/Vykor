@@ -332,6 +332,7 @@ export class SessionStore {
         conversations: this.conversations,
         sessions: this.sessions,
         runs: this.runs,
+        permissions: this.permissions,
         attachments: this.attachments,
         attachmentLimits: this.attachmentLimits,
         save: () => this.save(),

@@ -718,6 +718,7 @@ describe("ConversationTransactions.admitPrompt", () => {
         conversations: store.conversations,
         sessions: store.sessions,
         runs: store.runs,
+        permissions: store.permissions,
         attachments: store.attachments,
         save: () => (store as any).save(),
         notifySessionTask: (taskId) => (store as any).notifySessionTask(taskId),
@@ -1615,6 +1616,34 @@ describe("ConversationTransactions.admitPrompt", () => {
           store.close();
           rmSync(dir, { recursive: true, force: true });
         }
+      });
+
+      it("composes a snapshot exclusively through narrow query collaborators", () => {
+        const session = { id: "s1", cwd: "/repo", title: "", model: "m", status: "idle", metadata: {}, createdAt: 1, updatedAt: 1 };
+        const run = { id: "run", sessionId: "s1", status: "completed", metadata: {}, createdAt: 2, updatedAt: 2 };
+        const attempt = { id: "attempt", runId: "run", sequence: 1, status: "completed", createdAt: 3, updatedAt: 3 };
+        const task = { id: "task", sessionId: "s1", type: "process", status: "completed", description: "task", cwd: "/repo", metadata: {}, createdAt: 4, updatedAt: 4 };
+        const permission = { id: "permission", sessionId: "s1", toolName: "Read", payload: {}, status: "approved", createdAt: 5, updatedAt: 5 };
+        const storage = {
+          get state(): never { throw new Error("snapshot accessed storage state"); },
+        };
+        const tx = new ConversationTransactions({
+          storage,
+          sessions: { get: () => session },
+          conversations: {
+            latestEventSeq: () => 17,
+            listInputs: () => [], listMessages: () => [], listMessageParts: () => [],
+          },
+          runs: {
+            listRuns: () => [run], listRunAttempts: () => [attempt], listSessionTasks: () => [task],
+          },
+          permissions: { list: () => [permission] },
+        } as any);
+
+        expect(tx.getSessionState("s1")).toEqual({
+          cursor: 17, session, inputs: [], messages: [], parts: [],
+          runs: [run], attempts: [attempt], tasks: [task], permissions: [permission],
+        });
       });
     });
   });
