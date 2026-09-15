@@ -1159,15 +1159,7 @@ export class SessionStore {
     input: SessionInputRecord;
     run?: SessionRunRecord;
   } {
-    return this.transaction(() => {
-      const transcript = this.replaceTranscript(input.transcript);
-      if (input.createRun) {
-        const admitted = this.admitPromptWithRun(input.admission);
-        return { transcript, input: admitted.input, run: admitted.run };
-      }
-      const admitted = this.admitPrompt(input.admission.prompt);
-      return { transcript, input: admitted };
-    });
+    return this.conversationTransactions.replaceTranscriptAndAdmitPrompt(input);
   }
 
   createReplayRun(
@@ -1190,100 +1182,7 @@ export class SessionStore {
     input: SessionInputRecord;
     run?: SessionRunRecord;
   } {
-    return this.transaction(() => {
-      const session = assertSession(this.state, input.sessionId);
-      const sourceMessage = assertMessage(this.state, input.sourceMessageId);
-      if (
-        sourceMessage.sessionId !== input.sessionId ||
-        sourceMessage.role !== "user"
-      ) {
-        throw new Error(
-          "The edit source must be a user message in the session",
-        );
-      }
-      const sourceInput = sourceMessage.inputId
-        ? this.state.inputs[sourceMessage.inputId]
-        : undefined;
-      if (!sourceInput || sourceInput.sessionId !== input.sessionId) {
-        throw new Error("The edit source input is unavailable");
-      }
-
-      const removedMessages = Object.values(this.state.messages).filter(
-        (message) =>
-          message.sessionId === input.sessionId &&
-          message.seq >= sourceMessage.seq,
-      );
-      const removedMessageIds = new Set(
-        removedMessages.map((message) => message.id),
-      );
-      const removedInputs = Object.values(this.state.inputs).filter(
-        (candidate) =>
-          candidate.sessionId === input.sessionId &&
-          candidate.seq >= sourceInput.seq,
-      );
-      const removedInputIds = new Set(
-        removedInputs.map((candidate) => candidate.id),
-      );
-      const removedRuns = Object.values(this.state.runs).filter(
-        (run) =>
-          run.sessionId === input.sessionId &&
-          (removedInputIds.has(run.inputId ?? "") ||
-            removedMessages.some((message) => message.runId === run.id)),
-      );
-      const removedRunIds = new Set(removedRuns.map((run) => run.id));
-
-      for (const [id, part] of Object.entries(this.state.parts)) {
-        if (!removedMessageIds.has(part.messageId)) continue;
-        delete this.state.parts[id];
-        this.mutations.parts.delete(id);
-        this.mutations.deletedParts.add(id);
-        this.deltaCheckpoint.delete(id);
-      }
-      for (const message of removedMessages) {
-        delete this.state.messages[message.id];
-        this.mutations.messages.delete(message.id);
-        this.mutations.deletedMessages.add(message.id);
-      }
-      for (const [id, reference] of Object.entries(
-        this.state.inputAttachments,
-      )) {
-        if (!removedInputIds.has(reference.inputId)) continue;
-        delete this.state.inputAttachments[id];
-        this.mutations.inputAttachments.delete(id);
-        this.mutations.deletedInputAttachments.add(id);
-      }
-      for (const [id, attempt] of Object.entries(this.state.attempts)) {
-        if (!removedRunIds.has(attempt.runId)) continue;
-        delete this.state.attempts[id];
-        this.mutations.attempts.delete(id);
-        this.mutations.deletedAttempts.add(id);
-      }
-      for (const run of removedRuns) {
-        delete this.state.runs[run.id];
-        this.mutations.runs.delete(run.id);
-        this.mutations.deletedRuns.add(run.id);
-      }
-      for (const candidate of removedInputs) {
-        delete this.state.inputs[candidate.id];
-        this.mutations.inputs.delete(candidate.id);
-        this.mutations.deletedInputs.add(candidate.id);
-      }
-      this.refreshSessionStatus(session);
-
-      const transcript = {
-        messages: this.listMessages(input.sessionId),
-        parts: this.listMessageParts(input.sessionId),
-      };
-      this.appendEventInMemory({
-        type: "session.transcript.replaced",
-        sessionId: input.sessionId,
-        payload: { messages: transcript.messages, parts: transcript.parts },
-      });
-      const admitted = input.createRun
-        ? this.admitPromptWithRun(input.admission)
-        : { input: this.admitPrompt(input.admission.prompt) };
-      return { transcript, ...admitted };
-    });
+    return this.conversationTransactions.replaceLatestPromptWithAdmission(input);
   }
 
   forkSessionWithHistory(input: {
@@ -1470,114 +1369,7 @@ export class SessionStore {
     messages: SessionMessageRecord[];
     parts: SessionMessagePartRecord[];
   } {
-    const session = assertSession(this.state, input.sessionId);
-    const timestamp = now();
-
-    for (const [id, message] of Object.entries(this.state.messages)) {
-      if (message.sessionId === input.sessionId) {
-        delete this.state.messages[id];
-        this.mutations.messages.delete(id);
-        this.mutations.deletedMessages.add(id);
-      }
-    }
-    for (const [id, part] of Object.entries(this.state.parts)) {
-      if (part.sessionId === input.sessionId) {
-        delete this.state.parts[id];
-        this.mutations.parts.delete(id);
-        this.mutations.deletedParts.add(id);
-        this.deltaCheckpoint.delete(id);
-      }
-    }
-
-    const messages: SessionMessageRecord[] = [];
-    const parts: SessionMessagePartRecord[] = [];
-    let messageSeq = 0;
-    let partSeq = 0;
-
-    for (const row of input.messages) {
-      messageSeq += 1;
-      const messageId = randomUUID();
-      const message: SessionMessageRecord = {
-        id: messageId,
-        sessionId: input.sessionId,
-        seq: messageSeq,
-        role: row.role,
-        metadata: row.metadata ?? {},
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      this.state.messages[messageId] = message;
-      this.mutations.messages.add(messageId);
-      messages.push(message);
-
-      for (const partInput of row.parts) {
-        partSeq += 1;
-        const partId = randomUUID();
-        const part: SessionMessagePartRecord = {
-          id: partId,
-          sessionId: input.sessionId,
-          messageId,
-          seq: partSeq,
-          type: partInput.type,
-          status: partInput.status ?? "completed",
-          ...(partInput.text !== undefined ? { text: partInput.text } : {}),
-          ...(partInput.toolUseId !== undefined
-            ? { toolUseId: partInput.toolUseId }
-            : {}),
-          ...(partInput.toolName !== undefined
-            ? { toolName: partInput.toolName }
-            : {}),
-          ...(partInput.input !== undefined ? { input: partInput.input } : {}),
-          ...(partInput.output !== undefined
-            ? { output: partInput.output }
-            : {}),
-          ...(partInput.isError !== undefined
-            ? { isError: partInput.isError }
-            : {}),
-          ...(partInput.assetId !== undefined
-            ? { assetId: partInput.assetId }
-            : {}),
-          ...(partInput.intent !== undefined
-            ? { intent: partInput.intent }
-            : {}),
-          ...(partInput.displayName !== undefined
-            ? { displayName: partInput.displayName }
-            : {}),
-          ...(partInput.mediaType !== undefined
-            ? { mediaType: partInput.mediaType }
-            : {}),
-          ...(partInput.sizeBytes !== undefined
-            ? { sizeBytes: partInput.sizeBytes }
-            : {}),
-          ...(partInput.kind !== undefined ? { kind: partInput.kind } : {}),
-          ...(partInput.representationId !== undefined
-            ? { representationId: partInput.representationId }
-            : {}),
-          ...(partInput.processor !== undefined
-            ? { processor: partInput.processor }
-            : {}),
-          ...(partInput.transformationError !== undefined
-            ? { transformationError: partInput.transformationError }
-            : {}),
-          metadata: partInput.metadata ?? {},
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-        this.state.parts[partId] = part;
-        this.mutations.parts.add(partId);
-        parts.push(part);
-      }
-    }
-
-    session.updatedAt = timestamp;
-    this.mutations.sessions.add(input.sessionId);
-    this.appendEventInMemory({
-      type: "session.transcript.replaced",
-      sessionId: input.sessionId,
-      payload: { messages: clone(messages), parts: clone(parts) },
-    });
-    this.save();
-    return { messages: clone(messages), parts: clone(parts) };
+    return this.conversationTransactions.replaceTranscript(input);
   }
 
   upsertMessagePart(input: UpsertMessagePartInput): SessionMessagePartRecord {

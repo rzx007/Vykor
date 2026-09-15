@@ -710,4 +710,265 @@ describe("ConversationTransactions.admitPrompt", () => {
       }
     });
   });
+
+  describe("transcript replacement and prompt edit", () => {
+    function createTransactions(store: SessionStore, hooks?: ConversationTransactionTestHooks) {
+      return new ConversationTransactions({
+        storage: (store as any).storage,
+        conversations: store.conversations,
+        sessions: store.sessions,
+        runs: store.runs,
+        attachments: store.attachments,
+        save: () => (store as any).save(),
+        testHooks: hooks,
+      });
+    }
+
+    it("replaces every message and part, preserves all part fields, and survives reopen", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-transcript-"));
+      const dbPath = join(dir, "store.db");
+      let store = new SessionStore({ path: dbPath });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        const oldMessage = store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        store.upsertMessagePart({
+          id: "old-part",
+          sessionId: "s1",
+          messageId: oldMessage.id,
+          type: "text",
+          status: "completed",
+          text: "old",
+        });
+        const previousUpdatedAt = store.getSession("s1")!.updatedAt;
+
+        let observedDeletedMessages = false;
+        let observedDeletedParts = false;
+        const result = createTransactions(store, {
+          afterTranscriptReplacement: () => {
+            const mutations = (store as any).storage.mutations;
+            observedDeletedMessages = mutations.deletedMessages.has("old-message");
+            observedDeletedParts = mutations.deletedParts.has("old-part");
+          },
+        }).replaceTranscript({
+          sessionId: "s1",
+          messages: [{
+            role: "assistant",
+            metadata: { summary: true },
+            parts: [{
+              type: "tool",
+              status: "failed",
+              text: "replacement",
+              toolUseId: "tool-use",
+              toolName: "reader",
+              input: { path: "README.md" },
+              output: { code: 1 },
+              isError: true,
+              assetId: "asset-1",
+              intent: "ocr",
+              displayName: "readme.txt",
+              mediaType: "text/plain",
+              sizeBytes: 12,
+              kind: "document_extract",
+              representationId: "representation-1",
+              processor: "text-extractor",
+              transformationError: "partial",
+              metadata: { source: "test" },
+            }],
+          }],
+        });
+
+        expect(result.messages).toEqual([
+          expect.objectContaining({ sessionId: "s1", seq: 1, role: "assistant", metadata: { summary: true } }),
+        ]);
+        expect(result.parts).toEqual([
+          expect.objectContaining({
+            sessionId: "s1",
+            messageId: result.messages[0]!.id,
+            seq: 1,
+            type: "tool",
+            status: "failed",
+            text: "replacement",
+            toolUseId: "tool-use",
+            toolName: "reader",
+            input: { path: "README.md" },
+            output: { code: 1 },
+            isError: true,
+            assetId: "asset-1",
+            intent: "ocr",
+            displayName: "readme.txt",
+            mediaType: "text/plain",
+            sizeBytes: 12,
+            kind: "document_extract",
+            representationId: "representation-1",
+            processor: "text-extractor",
+            transformationError: "partial",
+            metadata: { source: "test" },
+          }),
+        ]);
+        expect(observedDeletedMessages).toBe(true);
+        expect(observedDeletedParts).toBe(true);
+        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(previousUpdatedAt);
+        expect(
+          store.listEvents({ sessionId: "s1" })
+            .filter(({ type }) => type === "session.transcript.replaced"),
+        ).toHaveLength(1);
+
+        store.close();
+        store = new SessionStore({ path: dbPath });
+        expect(store.listMessages("s1")).toEqual(result.messages);
+        expect(store.listMessageParts("s1")).toEqual(result.parts);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("rolls back transcript replacement after an injected failure", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-transcript-fail-"));
+      const dbPath = join(dir, "store.db");
+      let store = new SessionStore({ path: dbPath });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        const message = store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        store.upsertMessagePart({ id: "old-part", sessionId: "s1", messageId: message.id, type: "text", text: "old" });
+
+        const tx = createTransactions(store, {
+          afterTranscriptReplacement: () => { throw new Error("injected transcript failure"); },
+        });
+        expect(() => tx.replaceTranscript({ sessionId: "s1", messages: [] }))
+          .toThrow("injected transcript failure");
+        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
+
+        store.close();
+        store = new SessionStore({ path: dbPath });
+        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it.each([false, true])("replaces transcript and admits a prompt with createRun=%s", (createRun) => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-and-admit-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        const result = createTransactions(store).replaceTranscriptAndAdmitPrompt({
+          transcript: { sessionId: "s1", messages: [{ role: "assistant", parts: [{ type: "text", text: "summary" }] }] },
+          admission: { prompt: { id: "replacement-input", sessionId: "s1", content: "continue" }, run: { id: "replacement-run" } },
+          createRun,
+        });
+
+        expect(result.transcript.messages).toHaveLength(1);
+        expect(result.input.id).toBe("replacement-input");
+        expect(result.run?.id).toBe(createRun ? "replacement-run" : undefined);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("rolls back replacement and admission when run creation fails", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-admit-fail-"));
+      const dbPath = join(dir, "store.db");
+      let store = new SessionStore({ path: dbPath });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        const tx = createTransactions(store, {
+          beforeRunCreation: () => { throw new Error("injected run failure"); },
+        });
+
+        expect(() => tx.replaceTranscriptAndAdmitPrompt({
+          transcript: { sessionId: "s1", messages: [] },
+          admission: { prompt: { id: "replacement-input", sessionId: "s1", content: "continue" } },
+          createRun: true,
+        })).toThrow("injected run failure");
+        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.getInput("replacement-input")).toBeUndefined();
+
+        store.close();
+        store = new SessionStore({ path: dbPath });
+        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.getInput("replacement-input")).toBeUndefined();
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("edits the latest prompt by removing its dependent graph and keeping earlier history", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        createReadyAttachment(store, "asset-old", 10);
+        const keepInput = store.admitPrompt({ id: "keep-input", sessionId: "s1", content: "keep" });
+        const keepMessage = store.createMessage({ id: "keep-message", sessionId: "s1", role: "user", inputId: keepInput.id });
+        const oldInput = store.admitPrompt({ id: "old-input", sessionId: "s1", content: "old", attachments: [{ assetId: "asset-old" }] });
+        const oldRun = store.createRun({ id: "old-run", sessionId: "s1", inputId: oldInput.id });
+        store.createRunAttempt({ id: "old-attempt", runId: oldRun.id });
+        const oldMessage = store.createMessage({ id: "old-message", sessionId: "s1", role: "user", inputId: oldInput.id, runId: oldRun.id });
+        store.upsertMessagePart({ id: "old-part", sessionId: "s1", messageId: oldMessage.id, type: "text", text: "old" });
+
+        const result = createTransactions(store).replaceLatestPromptWithAdmission({
+          sessionId: "s1",
+          sourceMessageId: oldMessage.id,
+          admission: { prompt: { id: "new-input", sessionId: "s1", content: "new" } },
+          createRun: false,
+        });
+
+        expect(result.transcript.messages.map(({ id }) => id)).toEqual([keepMessage.id]);
+        expect(store.getInput("keep-input")).toBeDefined();
+        expect(store.getInput("old-input")).toBeUndefined();
+        expect(store.getRun("old-run")).toBeUndefined();
+        expect(store.getRunAttempt("old-attempt")).toBeUndefined();
+        expect(store.listInputAttachments("old-input")).toEqual([]);
+        expect(store.listMessageParts("s1")).toEqual([]);
+        expect(result.input.id).toBe("new-input");
+        expect(
+          store.listEvents({ sessionId: "s1" })
+            .filter(({ type }) => type === "session.transcript.replaced"),
+        ).toHaveLength(1);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("validates edit source ownership and rolls back deletion when admission fails", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-fail-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.createSession({ id: "s2", cwd: dir, model: "m" });
+        const sourceInput = store.admitPrompt({ id: "source-input", sessionId: "s1", content: "source" });
+        const sourceMessage = store.createMessage({ id: "source-message", sessionId: "s1", role: "user", inputId: sourceInput.id });
+        const otherMessage = store.createMessage({ id: "other-message", sessionId: "s2", role: "user" });
+        const tx = createTransactions(store);
+
+        expect(() => tx.replaceLatestPromptWithAdmission({
+          sessionId: "s1",
+          sourceMessageId: otherMessage.id,
+          admission: { prompt: { sessionId: "s1", content: "new" } },
+          createRun: false,
+        })).toThrow("The edit source must be a user message in the session");
+
+        expect(() => tx.replaceLatestPromptWithAdmission({
+          sessionId: "s1",
+          sourceMessageId: sourceMessage.id,
+          admission: { prompt: { sessionId: "s1", content: "new", attachments: [{ assetId: "missing" }] } },
+          createRun: false,
+        })).toThrow(/missing/i);
+        expect(store.getInput("source-input")).toBeDefined();
+        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["source-message"]);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });

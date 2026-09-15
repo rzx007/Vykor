@@ -6,8 +6,12 @@ import {
   type AdmitPromptWithRunInput,
   type AttachmentAssetRecord,
   type AttachmentLimits,
+  type ReplaceTranscriptInput,
   type SessionInputAttachmentRecord,
   type SessionInputRecord,
+  type SessionMessagePartRecord,
+  type SessionMessageRecord,
+  type SessionRecord,
   type SessionRunRecord,
   type SessionUserInputItem,
   normalizeSessionUserInputItems,
@@ -23,6 +27,7 @@ import type { RunRepository } from "../runs/run-repository.js";
 import { AttachmentError } from "../attachment/attachment-errors.js";
 import {
   assertMutableSession,
+  assertMessage,
   assertSession,
   clone,
   maxSeq,
@@ -46,6 +51,7 @@ export interface ConversationTransactionTestHooks {
   afterTitleUpdate?: () => void;
   afterEventAllocation?: () => void;
   beforeRunCreation?: () => void;
+  afterTranscriptReplacement?: () => void;
 }
 
 export interface ConversationTransactionsOptions {
@@ -376,5 +382,208 @@ export class ConversationTransactions {
         metadata: input.metadata,
       });
     });
+  }
+
+  replaceTranscript(input: ReplaceTranscriptInput): {
+    messages: SessionMessageRecord[];
+    parts: SessionMessagePartRecord[];
+  } {
+    return this.storage.atomic(() => {
+      const session = assertSession(this.storage.state, input.sessionId);
+      const timestamp = now();
+
+      for (const [id, message] of Object.entries(this.storage.state.messages)) {
+        if (message.sessionId !== input.sessionId) continue;
+        delete this.storage.state.messages[id];
+        this.storage.mutations.messages.delete(id);
+        this.storage.mutations.deletedMessages.add(id);
+      }
+      for (const [id, part] of Object.entries(this.storage.state.parts)) {
+        if (part.sessionId !== input.sessionId) continue;
+        delete this.storage.state.parts[id];
+        this.storage.mutations.parts.delete(id);
+        this.storage.mutations.deletedParts.add(id);
+        this.storage.deltaCheckpoint.delete(id);
+      }
+
+      const messages: SessionMessageRecord[] = [];
+      const parts: SessionMessagePartRecord[] = [];
+      let messageSeq = 0;
+      let partSeq = 0;
+      for (const row of input.messages) {
+        const messageId = randomUUID();
+        const message: SessionMessageRecord = {
+          id: messageId,
+          sessionId: input.sessionId,
+          seq: ++messageSeq,
+          role: row.role,
+          metadata: row.metadata ?? {},
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        this.storage.state.messages[messageId] = message;
+        this.storage.mutations.messages.add(messageId);
+        messages.push(message);
+
+        for (const partInput of row.parts) {
+          const partId = randomUUID();
+          const part: SessionMessagePartRecord = {
+            id: partId,
+            sessionId: input.sessionId,
+            messageId,
+            seq: ++partSeq,
+            type: partInput.type,
+            status: partInput.status ?? "completed",
+            ...(partInput.text !== undefined ? { text: partInput.text } : {}),
+            ...(partInput.toolUseId !== undefined ? { toolUseId: partInput.toolUseId } : {}),
+            ...(partInput.toolName !== undefined ? { toolName: partInput.toolName } : {}),
+            ...(partInput.input !== undefined ? { input: partInput.input } : {}),
+            ...(partInput.output !== undefined ? { output: partInput.output } : {}),
+            ...(partInput.isError !== undefined ? { isError: partInput.isError } : {}),
+            ...(partInput.assetId !== undefined ? { assetId: partInput.assetId } : {}),
+            ...(partInput.intent !== undefined ? { intent: partInput.intent } : {}),
+            ...(partInput.displayName !== undefined ? { displayName: partInput.displayName } : {}),
+            ...(partInput.mediaType !== undefined ? { mediaType: partInput.mediaType } : {}),
+            ...(partInput.sizeBytes !== undefined ? { sizeBytes: partInput.sizeBytes } : {}),
+            ...(partInput.kind !== undefined ? { kind: partInput.kind } : {}),
+            ...(partInput.representationId !== undefined ? { representationId: partInput.representationId } : {}),
+            ...(partInput.processor !== undefined ? { processor: partInput.processor } : {}),
+            ...(partInput.transformationError !== undefined ? { transformationError: partInput.transformationError } : {}),
+            metadata: partInput.metadata ?? {},
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          };
+          this.storage.state.parts[partId] = part;
+          this.storage.mutations.parts.add(partId);
+          parts.push(part);
+        }
+      }
+
+      session.updatedAt = timestamp;
+      this.storage.mutations.sessions.add(input.sessionId);
+      this.conversations.appendEventInMemory({
+        type: "session.transcript.replaced",
+        sessionId: input.sessionId,
+        payload: { messages: clone(messages), parts: clone(parts) },
+      });
+      this.testHooks?.afterTranscriptReplacement?.();
+      this.saveChanges?.();
+      return { messages: clone(messages), parts: clone(parts) };
+    });
+  }
+
+  replaceTranscriptAndAdmitPrompt(input: {
+    transcript: ReplaceTranscriptInput;
+    admission: AdmitPromptWithRunInput;
+    createRun: boolean;
+  }): {
+    transcript: { messages: SessionMessageRecord[]; parts: SessionMessagePartRecord[] };
+    input: SessionInputRecord;
+    run?: SessionRunRecord;
+  } {
+    return this.storage.atomic(() => {
+      const transcript = this.replaceTranscript(input.transcript);
+      const admitted = input.createRun
+        ? this.admitPromptWithRun(input.admission)
+        : { input: this.admitPrompt(input.admission.prompt) };
+      return { transcript, ...admitted };
+    });
+  }
+
+  replaceLatestPromptWithAdmission(input: {
+    sessionId: string;
+    sourceMessageId: string;
+    admission: AdmitPromptWithRunInput;
+    createRun: boolean;
+  }): {
+    transcript: { messages: SessionMessageRecord[]; parts: SessionMessagePartRecord[] };
+    input: SessionInputRecord;
+    run?: SessionRunRecord;
+  } {
+    return this.storage.atomic(() => {
+      const session = assertSession(this.storage.state, input.sessionId);
+      const sourceMessage = assertMessage(this.storage.state, input.sourceMessageId);
+      if (sourceMessage.sessionId !== input.sessionId || sourceMessage.role !== "user") {
+        throw new Error("The edit source must be a user message in the session");
+      }
+      const sourceInput = sourceMessage.inputId
+        ? this.storage.state.inputs[sourceMessage.inputId]
+        : undefined;
+      if (!sourceInput || sourceInput.sessionId !== input.sessionId) {
+        throw new Error("The edit source input is unavailable");
+      }
+
+      const removedMessages = Object.values(this.storage.state.messages).filter(
+        (message) => message.sessionId === input.sessionId && message.seq >= sourceMessage.seq,
+      );
+      const removedMessageIds = new Set(removedMessages.map(({ id }) => id));
+      const removedInputs = Object.values(this.storage.state.inputs).filter(
+        (candidate) => candidate.sessionId === input.sessionId && candidate.seq >= sourceInput.seq,
+      );
+      const removedInputIds = new Set(removedInputs.map(({ id }) => id));
+      const removedRuns = Object.values(this.storage.state.runs).filter(
+        (run) => run.sessionId === input.sessionId &&
+          (removedInputIds.has(run.inputId ?? "") || removedMessages.some((message) => message.runId === run.id)),
+      );
+      const removedRunIds = new Set(removedRuns.map(({ id }) => id));
+
+      for (const [id, part] of Object.entries(this.storage.state.parts)) {
+        if (!removedMessageIds.has(part.messageId)) continue;
+        delete this.storage.state.parts[id];
+        this.storage.mutations.parts.delete(id);
+        this.storage.mutations.deletedParts.add(id);
+        this.storage.deltaCheckpoint.delete(id);
+      }
+      for (const message of removedMessages) {
+        delete this.storage.state.messages[message.id];
+        this.storage.mutations.messages.delete(message.id);
+        this.storage.mutations.deletedMessages.add(message.id);
+      }
+      for (const [id, reference] of Object.entries(this.storage.state.inputAttachments)) {
+        if (!removedInputIds.has(reference.inputId)) continue;
+        delete this.storage.state.inputAttachments[id];
+        this.storage.mutations.inputAttachments.delete(id);
+        this.storage.mutations.deletedInputAttachments.add(id);
+      }
+      for (const [id, attempt] of Object.entries(this.storage.state.attempts)) {
+        if (!removedRunIds.has(attempt.runId)) continue;
+        delete this.storage.state.attempts[id];
+        this.storage.mutations.attempts.delete(id);
+        this.storage.mutations.deletedAttempts.add(id);
+      }
+      for (const run of removedRuns) {
+        delete this.storage.state.runs[run.id];
+        this.storage.mutations.runs.delete(run.id);
+        this.storage.mutations.deletedRuns.add(run.id);
+      }
+      for (const candidate of removedInputs) {
+        delete this.storage.state.inputs[candidate.id];
+        this.storage.mutations.inputs.delete(candidate.id);
+        this.storage.mutations.deletedInputs.add(candidate.id);
+      }
+      this.refreshSessionStatus(session);
+
+      const transcript = {
+        messages: this.conversations.listMessages(input.sessionId),
+        parts: this.conversations.listMessageParts(input.sessionId),
+      };
+      this.conversations.appendEventInMemory({
+        type: "session.transcript.replaced",
+        sessionId: input.sessionId,
+        payload: { messages: transcript.messages, parts: transcript.parts },
+      });
+      const admitted = input.createRun
+        ? this.admitPromptWithRun(input.admission)
+        : { input: this.admitPrompt(input.admission.prompt) };
+      return { transcript, ...admitted };
+    });
+  }
+
+  private refreshSessionStatus(session: SessionRecord): void {
+    if (session.status === "archived" || session.status === "closing") return;
+    const hasActiveRun = Object.values(this.storage.state.runs).some(
+      (run) => run.sessionId === session.id && (run.status === "pending" || run.status === "running"),
+    );
+    session.status = hasActiveRun ? "running" : "idle";
   }
 }
