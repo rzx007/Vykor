@@ -83,6 +83,14 @@ export function isTerminalRunStatus(
   );
 }
 
+export function isTerminalAttemptStatus(
+  status: SessionRunAttemptRecord["status"],
+): boolean {
+  return (
+    status === "completed" || status === "failed" || status === "cancelled"
+  );
+}
+
 export function maxSeq<T extends { sessionId: string; seq: number }>(
   table: Record<string, T>,
   sessionId: string,

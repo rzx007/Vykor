@@ -152,3 +152,160 @@ describe("RunRepository read operations", () => {
     }
   });
 });
+
+describe("RunRepository write operations", () => {
+    it("creates and updates runs with session status refresh, input alignment, terminal guards, and events", () => {
+      const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-write-"));
+      const store = new SessionStore({ path: join(directory, "store.db") });
+      try {
+        const repository = new RunRepository({
+          storage: (store as any).storage,
+          appendEvent: (input) => (store as any).appendEvent(input),
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: directory, model: "m" });
+        store.createSession({ id: "s2", cwd: directory, model: "m" });
+        const input1 = store.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "prompt" }] });
+
+        // 1. Input/session alignment check
+        expect(() =>
+          repository.createRun({ id: "r_misaligned", sessionId: "s2", inputId: "i1" }),
+        ).toThrow("Session input does not belong to session: i1");
+
+        // 2. Create run with default status pending, session becomes running
+        const before = store.getSession("s1")!.updatedAt;
+        const r1 = repository.createRun({
+          id: "r1",
+          sessionId: "s1",
+          inputId: "i1",
+          metadata: { initial: true },
+        });
+        expect(r1.id).toBe("r1");
+        expect(r1.status).toBe("pending");
+        expect(store.getSession("s1")!.status).toBe("running");
+        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
+
+        // returns clone
+        r1.status = "failed";
+        expect(repository.getRun("r1")!.status).toBe("pending");
+
+        // Event emitted
+        const events = store.listEvents({ sessionId: "s1" });
+        const createdEvent = events.find((e) => e.type === "session.run.created");
+        expect(createdEvent).toBeDefined();
+        expect(createdEvent!.payload).toMatchObject({ run: { id: "r1" } });
+
+        // 3. Reject duplicate run id
+        expect(() => repository.createRun({ id: "r1", sessionId: "s1" })).toThrow(
+          "Session run already exists: r1",
+        );
+
+        // 4. Update run: pending -> running
+        const running = repository.updateRun("r1", {
+          status: "running",
+          metadata: { step: 1 },
+        });
+        expect(running.status).toBe("running");
+        expect(running.startedAt).toBeDefined();
+        expect(running.metadata).toEqual({ initial: true, step: 1 });
+
+        // Event emitted with previousStatus
+        const events2 = store.listEvents({ sessionId: "s1" });
+        const updatedEvent = events2.find(
+          (e) => e.type === "session.run.updated" && (e.payload as any).previousStatus === "pending",
+        );
+        expect(updatedEvent).toBeDefined();
+
+        // 5. Update run: running -> completed, finishedAt set, session becomes idle
+        const completed = repository.updateRun("r1", { status: "completed" });
+        expect(completed.status).toBe("completed");
+        expect(completed.finishedAt).toBeDefined();
+        expect(store.getSession("s1")!.status).toBe("idle");
+
+        // 6. Terminal guard
+        expect(() => repository.updateRun("r1", { status: "running" })).toThrow(
+          "Session run is already terminal: r1",
+        );
+      } finally {
+        store.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    it("creates and updates run attempts with auto sequence, terminal guards, tokens, and events", () => {
+      const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-att-write-"));
+      const store = new SessionStore({ path: join(directory, "store.db") });
+      try {
+        const repository = new RunRepository({
+          storage: (store as any).storage,
+          appendEvent: (input) => (store as any).appendEvent(input),
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: directory, model: "m" });
+        const r1 = repository.createRun({ id: "r1", sessionId: "s1" });
+
+        // 1. Create first attempt auto sequence
+        const a1 = repository.createRunAttempt({
+          id: "a1",
+          runId: "r1",
+          provider: "openai",
+          model: "gpt-4",
+        });
+        expect(a1.sequence).toBe(1);
+        expect(a1.status).toBe("pending");
+
+        // returns clone
+        a1.status = "completed";
+        expect(repository.getRunAttempt("a1")!.status).toBe("pending");
+
+        // Event emitted
+        const events = store.listEvents({ sessionId: "s1" });
+        const createdEvent = events.find((e) => e.type === "session.run_attempt.created");
+        expect(createdEvent).toBeDefined();
+        expect(createdEvent!.payload).toMatchObject({ attempt: { id: "a1", sequence: 1 } });
+
+        // 2. Reject duplicate sequence on same run
+        expect(() =>
+          repository.createRunAttempt({
+            runId: "r1",
+            sequence: 1,
+          }),
+        ).toThrow("Session run attempt sequence already exists: r1/1");
+
+        // 3. Update attempt: pending -> running -> completed
+        repository.updateRunAttempt("a1", { status: "running" });
+        const updatedA1 = repository.updateRunAttempt("a1", {
+          status: "completed",
+          inputTokens: 200,
+          outputTokens: 80,
+        });
+        expect(updatedA1.status).toBe("completed");
+        expect(updatedA1.finishedAt).toBeDefined();
+        expect(updatedA1.inputTokens).toBe(200);
+        expect(updatedA1.outputTokens).toBe(80);
+
+        // Event emitted with previousStatus
+        const events2 = store.listEvents({ sessionId: "s1" });
+        const updatedEvent = events2.find(
+          (e) => e.type === "session.run_attempt.updated" && (e.payload as any).previousStatus === "running",
+        );
+        expect(updatedEvent).toBeDefined();
+
+        // 4. Terminal attempt guard
+        expect(() => repository.updateRunAttempt("a1", { status: "failed" })).toThrow(
+          "Session run attempt is already terminal: a1",
+        );
+
+        // 5. If run is terminal, cannot create attempt
+        repository.updateRun("r1", { status: "completed" });
+        expect(() => repository.createRunAttempt({ runId: "r1" })).toThrow(
+          "Session run is already terminal: r1",
+        );
+      } finally {
+        store.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  });
