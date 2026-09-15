@@ -86,6 +86,16 @@ export function checkImportBoundary(fromFile, specifier) {
     }
   }
 
+  const isRunAdmission = /(?:^|\/)run-admission-service(?:\.[a-zA-Z]+)?$/.test(normalized);
+  if (isRunAdmission && (/(?:^|\/)http(?:\/|\.|$)/.test(specifier) || /(?:^|\/)daemon(?:\/|\.|$)/.test(specifier) || /(?:^|\/)daemon-application(?:\.[a-zA-Z]+)?$/.test(specifier))) {
+    return [`${fromFile} must not depend on http or Daemon`];
+  }
+
+  const isRunControl = /(?:^|\/)run-control-service(?:\.[a-zA-Z]+)?$/.test(normalized);
+  if (isRunControl && /(?:^|\/)session-run-executor(?:\.[a-zA-Z]+)?$/.test(specifier)) {
+    return [`${fromFile} must not depend on SessionRunExecutor`];
+  }
+
   const isServerRuntime = /(?:^|\/)(?:packages\/server\/src\/)?(?:runtime|session-runtime)\//.test(normalized) ||
     /(?:^|\/)(?:packages\/services\/src\/)?session-runtime\//.test(normalized);
   if (isServerRuntime) {

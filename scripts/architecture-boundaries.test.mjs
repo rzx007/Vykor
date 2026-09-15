@@ -156,3 +156,14 @@ test("session query service cannot import runtime", () => {
     ["packages/server/src/application/session/session-query-service.ts must not depend on runtime"],
   );
 });
+
+test("run admission and control services keep their stage 4C boundaries", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/application/session/run-admission-service.ts", "../../http/routes/sessions.js"),
+    ["packages/server/src/application/session/run-admission-service.ts must not depend on http or Daemon"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/application/session/run-control-service.ts", "./session-run-executor.js"),
+    ["packages/server/src/application/session/run-control-service.ts must not depend on SessionRunExecutor"],
+  );
+});

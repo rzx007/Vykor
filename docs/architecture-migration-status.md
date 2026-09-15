@@ -1,20 +1,21 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–3 已完成，阶段 4A、4B 已完成，阶段 4C–4F 未开始。
+> 状态：当前。阶段 0–3 及阶段 4A–4C 已完成，阶段 4D–4F 未开始。
 
 ## 当前阶段
 
 阶段 0–2 已完成：依赖护栏、Session SQLite 数据库内核，以及 Project、Schedule、Workflow、Channel、Goal、Permission、Attachment 业务边界已经落地。
 阶段 3 已完成：三域 Repository、跨域事务和增量输出均已抽取。`SessionStore` 保留公开兼容转发、Task waiter/listener、生命周期和维护入口。
 阶段 4A 已完成：Event、Retention、Channel、Terminal、Job、BackgroundShell、Attachment、AgentPool 等简单 Application Service 的依赖能力已全部收窄为最小接口，彻底移除对完整 `SessionStore` 的导入；Server 边界检查（Route、Application Service、Runtime）已补充并纳入架构护栏。
-阶段 4B 已完成：Session Query 与 Command 拆分完成，`SessionQueryService` 读服务完成能力收窄与协议解耦，`SessionCommandService` 写服务抽取完成，`SessionApplicationService` 变为向前兼容委托层，`DaemonApplication` 组装一次共享实例，新增 SessionCommand 与 SessionQuery 的架构护栏。阶段 4C–4F 未开始。
+阶段 4B 已完成：Session Query 与 Command 拆分完成，`SessionQueryService` 读服务完成能力收窄与协议解耦，`SessionCommandService` 写服务抽取完成，`SessionApplicationService` 变为向前兼容委托层，`DaemonApplication` 组装一次共享实例，新增 SessionCommand 与 SessionQuery 的架构护栏。
+阶段 4C 已完成：`RunAdmissionService` 统一拥有 prompt、持久 Run 派发、rejected-steer 恢复和 goal revision 执行准入；`RunControlService` 统一拥有查询、提升、等待、中断和关闭。`DaemonApplication` 将同一组实例注入 Session、Goal 和 DaemonControl，旧 `SessionRunEngine` 只保留兼容转发及 4D 才迁移的 coordinator/executor 接线。阶段 4D–4F 未开始。
 
 ## 指标
 
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 325`, `httpClientFlatCalls: 11`。
+- 当前基线：`sessionStoreFlatCalls: 276`, `httpClientFlatCalls: 11`。
 - 当前 `SessionStore` 行数：2152 行。
 
 ## 阶段 3 迁移记录
@@ -155,4 +156,4 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-阶段 4C：Run Admission 与 Control 拆分（`RunAdmissionService` 准入服务抽取，`RunControlService` 控制服务抽取）。
+阶段 4D：Runtime Lane 与 Executor 拆分。不要把阶段 4C 的兼容 `SessionRunEngine` 当成第二套业务规则；4D 只迁移 live lane、promise/handle 跟踪和单 Run 执行接线。
