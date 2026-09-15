@@ -120,4 +120,124 @@ describe("SessionRepository read operations", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  describe("SessionRepository write operations", () => {
+    it("creates sessions with project inspection, parent project inheritance, defaults, and events", () => {
+      const directory = mkdtempSync(join(tmpdir(), "ohs-session-repo-write-"));
+      const store = new SessionStore({ path: join(directory, "store.db") });
+      try {
+        const repository = new SessionRepository({
+          storage: (store as any).storage,
+          projects: (store as any).projects,
+          appendEvent: (input) => (store as any).appendEvent(input),
+          save: () => (store as any).save(),
+        });
+
+        // 1. Create with defaults and inspect cwd
+        const s1 = repository.create({
+          id: "s1",
+          cwd: directory,
+          model: "gpt-4",
+        });
+        expect(s1.id).toBe("s1");
+        expect(s1.title).toBe("");
+        expect(s1.status).toBe("idle");
+        expect(s1.metadata).toEqual({});
+        expect(s1.createdAt).toBe(s1.updatedAt);
+        expect(s1.cwdRelative).toBeDefined();
+
+        // returns clone
+        s1.title = "mutated title";
+        expect(repository.get("s1")!.title).toBe("");
+
+        // event emitted
+        const events = store.listEvents({ sessionId: "s1" });
+        const createdEvent = events.find((e) => e.type === "session.created");
+        expect(createdEvent).toBeDefined();
+        expect(createdEvent!.payload).toMatchObject({ session: { id: "s1" } });
+
+        // 2. Reject duplicate id
+        expect(() => repository.create({ id: "s1", cwd: directory, model: "m" })).toThrow(
+          "Session already exists: s1",
+        );
+
+        // 3. Child session inherits parent's projectId
+        const child = repository.create({
+          id: "child1",
+          parentId: "s1",
+          cwd: directory,
+          model: "m",
+        });
+        expect(child.projectId).toBe(s1.projectId);
+        expect(child.parentId).toBe("s1");
+      } finally {
+        store.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    it("updates sessions, handles agent deletion, replaces metadata, enforces mutable guard, and emits events", () => {
+      const directory = mkdtempSync(join(tmpdir(), "ohs-session-repo-update-"));
+      const store = new SessionStore({ path: join(directory, "store.db") });
+      try {
+        const repository = new SessionRepository({
+          storage: (store as any).storage,
+          projects: (store as any).projects,
+          appendEvent: (input) => (store as any).appendEvent(input),
+          save: () => (store as any).save(),
+        });
+
+        repository.create({
+          id: "s1",
+          cwd: directory,
+          model: "gpt-4",
+          title: "Initial",
+          agent: "coder",
+          metadata: { initial: 1 },
+        });
+
+        // Update title, model, metadata replacement, agent null removal
+        const updated = repository.update("s1", {
+          title: "New Title",
+          model: "gpt-4-turbo",
+          agent: null,
+          metadata: { replaced: true },
+        });
+        expect(updated.title).toBe("New Title");
+        expect(updated.model).toBe("gpt-4-turbo");
+        expect(updated.agent).toBeUndefined();
+        expect(updated.metadata).toEqual({ replaced: true });
+
+        // event emitted
+        const events = store.listEvents({ sessionId: "s1" });
+        const updatedEvent = events.find((e) => e.type === "session.updated");
+        expect(updatedEvent).toBeDefined();
+        expect(updatedEvent!.payload).toMatchObject({
+          session: { id: "s1", title: "New Title" },
+        });
+
+        // beginArchive & idempotency
+        const closing = repository.beginArchive("s1");
+        expect(closing.status).toBe("closing");
+        const closing2 = repository.beginArchive("s1");
+        expect(closing2.status).toBe("closing");
+
+        // mutable guard on closing session
+        expect(() => repository.update("s1", { title: "fail" })).toThrow(/Session is closing/);
+
+        // archive & idempotency
+        const archived = repository.archive("s1");
+        expect(archived.status).toBe("archived");
+        expect(archived.archivedAt).toBeDefined();
+        const archived2 = repository.archive("s1");
+        expect(archived2.status).toBe("archived");
+
+        // mutable guard on archived session
+        expect(() => repository.update("s1", { title: "fail" })).toThrow(/Session is archived/);
+      } finally {
+        store.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  });
 });
