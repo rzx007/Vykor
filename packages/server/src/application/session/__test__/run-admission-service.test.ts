@@ -140,6 +140,38 @@ function createMockOptions() {
 }
 
 describe("RunAdmissionService", () => {
+  it("dispatches a persisted pending run once", () => {
+    const { options, inputs, runs, enqueueRunFn } = createMockOptions();
+    inputs.set("i1", { id: "i1", sessionId: "s1", items: [], delivery: "queue", attachments: [], metadata: {}, createdAt: 1 } as any);
+    runs.set("r1", { id: "r1", sessionId: "s1", inputId: "i1", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
+    options.runtimeQueue.runState = vi.fn(() => undefined);
+    const service = new RunAdmissionService(options);
+
+    expect(service.dispatchPersistedRun("r1")).toBe("running");
+    expect(enqueueRunFn).toHaveBeenCalledOnce();
+
+    (options.runtimeQueue.runState as any).mockReturnValue("running");
+    expect(service.dispatchPersistedRun("r1")).toBe("running");
+    expect(enqueueRunFn).toHaveBeenCalledOnce();
+  });
+
+  it("recovers a rejected steer with one durable replacement run", () => {
+    const { options, inputs, runs, createRun, enqueueRunFn } = createMockOptions();
+    inputs.set("i1", { id: "i1", sessionId: "s1", items: [], delivery: "steer", attachments: [], metadata: { traceId: "trace-1" }, createdAt: 1 } as any);
+    const service = new RunAdmissionService(options);
+
+    const runId = service.recoverRejectedSteer("s1", { id: "i1" });
+    expect(createRun).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "s1",
+      inputId: "i1",
+      metadata: { traceId: "trace-1", recoveredFromSteer: true },
+    }));
+    expect(enqueueRunFn).toHaveBeenCalledOnce();
+
+    expect(service.recoverRejectedSteer("s1", { id: "i1" })).toBe(runId);
+    expect(createRun).toHaveBeenCalledOnce();
+  });
+
   it("admits prompt and enqueues run when runtime is idle", async () => {
     const { options, createRun, enqueueRunFn } = createMockOptions();
     const service = new RunAdmissionService(options);

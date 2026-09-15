@@ -137,6 +137,7 @@ export interface RunAdmissionRunOperations {
 
 export interface RunAdmissionRuntimeQueue {
   enqueueRun(run: SessionRunRecord, inputId: string): "running" | "queued";
+  runState?(sessionId: string, runId: string): "running" | "queued" | undefined;
   steer(
     sessionId: string,
     input: {
@@ -221,6 +222,42 @@ export class RunAdmissionService {
     return [...this.pendingAdmissions.values()].some(
       (entry) => entry.sessionId === sessionId,
     );
+  }
+
+  dispatchPersistedRun(runId: string): "running" | "queued" | undefined {
+    if (!this.accepting) throw new Error("Session run engine is stopping");
+    const run = this.options.runOperations.getRun(runId);
+    if (!run?.inputId) throw new Error(`Session run not found: ${runId}`);
+    const existingState = this.options.runtimeQueue.runState?.(run.sessionId, runId);
+    if (existingState) return existingState;
+    if (run.status !== "pending") return undefined;
+    return this.options.runtimeQueue.enqueueRun(run, run.inputId);
+  }
+
+  recoverRejectedSteer(
+    sessionId: string,
+    input: { id?: string; traceId?: string },
+  ): string {
+    if (!input.id) throw new Error("Rejected steer is missing its durable input id");
+    const admitted = this.options.conversationTransactions.getInput(input.id);
+    if (!admitted || admitted.sessionId !== sessionId) {
+      throw new Error(`Rejected steer input was not found: ${input.id}`);
+    }
+    const existing = this.options.runOperations.findRunByInput(admitted.id);
+    if (existing?.inputId === admitted.id) return existing.id;
+    const before = this.options.events.checkpoint();
+    const traceId =
+      normalizeTraceId(input.traceId) ??
+      normalizeTraceId(admitted.metadata.traceId) ??
+      randomUUID();
+    const run = this.options.runOperations.createRun({
+      sessionId,
+      inputId: admitted.id,
+      metadata: { traceId, recoveredFromSteer: true },
+    });
+    this.options.events.publishSince(before);
+    this.options.runtimeQueue.enqueueRun(run, admitted.id);
+    return run.id;
   }
 
   persistGoalRun(

@@ -260,20 +260,22 @@ export class RunControlService {
     expectedActiveRunId: string,
   ): Promise<PromoteQueuedRunResult | undefined> {
     if (!this.accepting) throw new Error("Session run engine is stopping");
-    if (!this.options.durableSessions.getSession(sessionId)) return undefined;
     const input = this.options.durableInputs.getInput(inputId);
     const queuedRun = this.options.durableRuns.getRun(queuedRunId);
     const activeRun = this.options.durableRuns.getRun(expectedActiveRunId);
     if (
       !input || input.sessionId !== sessionId ||
       !queuedRun || queuedRun.sessionId !== sessionId ||
-      queuedRun.inputId !== inputId || queuedRun.status !== "pending" ||
-      !activeRun || activeRun.sessionId !== sessionId || activeRun.status !== "running" ||
-      this.options.runtime.activeRunId(sessionId) !== expectedActiveRunId
+      queuedRun.inputId !== inputId || queuedRun.status !== "pending"
     ) return undefined;
     if (typeof input.metadata?.pluginId === "string") {
       throw new Error("session_capability_requires_queued_run");
     }
+    if (
+      !activeRun || activeRun.sessionId !== sessionId ||
+      (activeRun.status !== "pending" && activeRun.status !== "running") ||
+      this.options.runtime.activeRunId(sessionId) !== expectedActiveRunId
+    ) return undefined;
     const content = await this.materializeSteerInput(sessionId, input.items);
     const promoted = this.options.runtime.promoteQueuedRun(
       sessionId,

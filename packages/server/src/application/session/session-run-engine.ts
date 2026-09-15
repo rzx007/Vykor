@@ -1,6 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { sessionUserInputText } from "@openharness/protocol";
-
 import type {
   AdmitPromptAttachmentInput,
   AttachmentLimits,
@@ -13,7 +10,6 @@ import {
   type GoalOperations,
 } from "@openharness/services";
 
-import { normalizeTraceId } from "../support.js";
 import {
   RunInterruptedError,
   SessionRunCoordinator,
@@ -112,6 +108,10 @@ export class SessionRunEngine {
         runtimeQueue: {
           hasRuntime: context.agentPool.configured,
           enqueueRun: (run, inputId) => this.enqueueRun(run, inputId),
+          runState: (sessionId, runId) => {
+            if (!this.runPromises.has(runId)) return undefined;
+            return this.runCoordinator.activeRunId(sessionId) === runId ? "running" : "queued";
+          },
           steer: (sId, input) => this.runCoordinator.steer(sId, input),
         },
         events: context.events,
@@ -133,12 +133,7 @@ export class SessionRunEngine {
   }
 
   dispatchPersistedRun(runId: string): "running" | "queued" | undefined {
-    if (!this.accepting) throw new Error("Session run engine is stopping");
-    const run = this.context.store.getRun(runId);
-    if (!run || !run.inputId) throw new Error(`Session run not found: ${runId}`);
-    if (this.runPromises.has(runId)) return this.activeRunId(run.sessionId) === runId ? "running" : "queued";
-    if (run.status !== "pending") return undefined;
-    return this.enqueueRun(run, run.inputId);
+    return this.admissionService.dispatchPersistedRun(runId);
   }
 
   hasUserWork(sessionId: string): boolean {
@@ -313,7 +308,7 @@ export class SessionRunEngine {
         );
       },
       onSteerRejected: (input) =>
-        this.enqueueRejectedSteer(run.sessionId, input),
+        this.admissionService.recoverRejectedSteer(run.sessionId, input),
     });
     const tracked = enqueued.promise
       .catch(() => {
@@ -329,30 +324,4 @@ export class SessionRunEngine {
     return enqueued.state;
   }
 
-  private enqueueRejectedSteer(
-    sessionId: string,
-    input: { id?: string; traceId?: string },
-  ): string {
-    if (!input.id)
-      throw new Error("Rejected steer is missing its durable input id");
-    const admitted = this.context.store.getInput(input.id);
-    if (!admitted || admitted.sessionId !== sessionId) {
-      throw new Error(`Rejected steer input was not found: ${input.id}`);
-    }
-    const existing = this.context.store.findRunByInput(admitted.id);
-    if (existing?.inputId === admitted.id) return existing.id;
-    const before = this.context.events.checkpoint();
-    const traceId =
-      normalizeTraceId(input.traceId) ??
-      normalizeTraceId(admitted.metadata.traceId) ??
-      randomUUID();
-    const run = this.context.store.createRun({
-      sessionId,
-      inputId: admitted.id,
-      metadata: { traceId, recoveredFromSteer: true },
-    });
-    this.context.events.publishSince(before);
-    this.enqueueRun(run, admitted.id);
-    return run.id;
-  }
 }
