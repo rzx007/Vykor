@@ -1,9 +1,17 @@
+import type { SessionInputAttachmentRecord, SessionRecord } from "@openharness/protocol";
 import {
   classifyAttachmentCandidate,
   type AttachmentApplicationService,
   type LocalOcrResult,
-  type SessionStore,
 } from "@openharness/services";
+
+export interface AttachmentSessionResolverQueries {
+  getSession(sessionId: string): SessionRecord | undefined;
+}
+
+export interface AttachmentSessionReferenceQueries {
+  listSessionInputAttachments(sessionId: string): SessionInputAttachmentRecord[];
+}
 
 export interface AttachmentAuthorizationSessionResolver {
   resolve(executionSessionId: string): string | undefined;
@@ -38,7 +46,7 @@ export interface AttachmentOcrService {
 }
 
 export function createAttachmentAuthorizationSessionResolver(options: {
-  store: Pick<SessionStore, "getSession">;
+  store: AttachmentSessionResolverQueries;
   liveChildren: { resolveRootSessionId(sessionId: string): string | undefined };
 }): AttachmentAuthorizationSessionResolver {
   return {
@@ -53,7 +61,7 @@ export function createAttachmentAuthorizationSessionResolver(options: {
 }
 
 export function createAttachmentTextReader(options: {
-  store: Pick<SessionStore, "listSessionInputAttachments">;
+  store: AttachmentSessionReferenceQueries;
   attachments: AttachmentApplicationService;
 }): AttachmentTextReader {
   return {
@@ -87,7 +95,7 @@ export function createAttachmentTextReader(options: {
 }
 
 export function createAttachmentOcrService(options: {
-  store: Pick<SessionStore, "listSessionInputAttachments">;
+  store: AttachmentSessionReferenceQueries;
   recognize(input: { assetId: string; signal?: AbortSignal }): Promise<LocalOcrResult>;
 }): AttachmentOcrService {
   return {
@@ -103,7 +111,7 @@ export function createAttachmentOcrService(options: {
 }
 
 function validateReference(
-  store: Pick<SessionStore, "listSessionInputAttachments">,
+  store: AttachmentSessionReferenceQueries,
   sessionId: string,
   assetId: string,
 ): void {

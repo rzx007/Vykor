@@ -14,7 +14,7 @@ describe("attachment authorization", () => {
       ["closed", { id: "closed", parentId: "root" }],
     ]);
     const resolver = createAttachmentAuthorizationSessionResolver({
-      store: { getSession: (id: string) => sessions.get(id) } as any,
+      store: { getSession: (id: string) => sessions.get(id) as any },
       liveChildren: {
         resolveRootSessionId: (id: string) =>
           id === "child" || id === "nested" ? "root" : undefined,
@@ -29,12 +29,12 @@ describe("attachment authorization", () => {
   });
 
   it("checks the root input reference before invoking OCR", async () => {
-    const recognize = vi.fn(async () => ({ status: "completed", text: "ok" }));
+    const recognize = vi.fn(async () => ({ status: "completed" as const, text: "ok" }));
     const service = createAttachmentOcrService({
       store: {
         listSessionInputAttachments: (sessionId: string) =>
-          sessionId === "root" ? [{ assetId: "allowed" }] : [],
-      } as any,
+          sessionId === "root" ? [{ assetId: "allowed" } as any] : [],
+      },
       recognize,
     });
 

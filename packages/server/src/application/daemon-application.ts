@@ -367,15 +367,15 @@ export class DaemonApplication implements DurableAgentApplication {
       );
 
       const attachmentAuthorizationSessions = createAttachmentAuthorizationSessionResolver({
-        store,
+        store: { getSession: (id) => store.getSession(id) },
         liveChildren: this.liveChildren,
       });
       const attachmentReader = createAttachmentTextReader({
-        store,
+        store: { listSessionInputAttachments: (id) => store.listSessionInputAttachments(id) },
         attachments: this.attachments,
       });
       const attachmentOcr = createAttachmentOcrService({
-        store,
+        store: { listSessionInputAttachments: (id) => store.listSessionInputAttachments(id) },
         recognize: (input) => this.localOcr.recognize(input),
       });
       const imageToTextTool = createDaemonImageToTextTool({
@@ -476,10 +476,21 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       // 一个会话一个热着的 Agent。子 Agent 自己占会话，不要被这个池子抢去。
       this.agentPool = new AgentPool({
-        store,
+        sessionQueries: {
+          getSession: (id) => store.getSession(id),
+          listSessions: (opts) => store.listSessions(opts),
+          listMessages: (id) => store.listMessages(id),
+          listMessageParts: (id) => store.listMessageParts(id),
+        },
         loadAgent,
         supplementalSections: (sessionId) => {
-          const section = buildCompactAttachmentSection(store, sessionId);
+          const section = buildCompactAttachmentSection({
+            listSessionInputAttachments: (id) => store.listSessionInputAttachments(id),
+            attachments: {
+              getAttachment: (id, opts) => store.attachments.getAttachment(id, opts),
+              listAttachmentRepresentations: (id) => store.attachments.listAttachmentRepresentations(id),
+            },
+          }, sessionId);
           return section ? [section] : [];
         },
         sessionMemory: (sessionId) => {

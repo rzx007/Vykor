@@ -3,7 +3,6 @@ import {
   type OpenHarnessAgent,
 } from "@openharness/agent-runtime";
 import type { CompactContextSection } from "@openharness/core";
-import type { SessionStore } from "@openharness/services";
 import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
@@ -12,8 +11,16 @@ import type {
 
 import type { LoadDaemonAgent } from "../../daemon/daemon-agent.js";
 
+export interface AgentPoolSessionQueries {
+  getSession(sessionId: string): SessionRecord | undefined;
+  listSessions(options?: { cwd?: string; includeArchived?: boolean }): SessionRecord[];
+  listMessages(sessionId: string): SessionMessageRecord[];
+  listMessageParts(sessionId: string): SessionMessagePartRecord[];
+}
+
 export interface AgentPoolContext {
-  store: Pick<SessionStore, "getSession" | "listMessageParts" | "listMessages" | "listSessions">;
+  store?: AgentPoolSessionQueries;
+  sessionQueries?: AgentPoolSessionQueries;
   loadAgent?: LoadDaemonAgent;
   supplementalSections?(
     sessionId: string,
@@ -34,8 +41,15 @@ interface AgentPoolEntry {
 /** One warm framework agent per pool-owned durable session; live children stay framework-owned. */
 export class AgentPool {
   private readonly agents = new Map<string, AgentPoolEntry>();
+  private readonly sessionQueries: AgentPoolSessionQueries;
 
-  constructor(private readonly context: AgentPoolContext) {}
+  constructor(private readonly context: AgentPoolContext) {
+    const queries = context.sessionQueries ?? context.store;
+    if (!queries) {
+      throw new Error("AgentPool requires sessionQueries");
+    }
+    this.sessionQueries = queries;
+  }
 
   get configured(): boolean {
     return this.context.loadAgent !== undefined;
@@ -55,13 +69,13 @@ export class AgentPool {
   }
 
   hasActiveWorkForCwd(cwd: string): boolean {
-    return this.context.store.listSessions({ cwd, includeArchived: true })
+    return this.sessionQueries.listSessions({ cwd, includeArchived: true })
       .some((session) => this.hasActiveWorkForSession(session.id));
   }
 
   async warm(sessionId: string): Promise<void> {
     if (!this.configured || this.agents.has(sessionId) || this.context.isSessionExternallyOwned?.(sessionId)) return;
-    const session = this.context.store.getSession(sessionId);
+    const session = this.sessionQueries.getSession(sessionId);
     if (!session || session.status === "closing" || session.status === "archived") return;
     await this.acquireSession(sessionId).catch(() => {});
   }
@@ -80,7 +94,7 @@ export class AgentPool {
     if (this.context.isSessionExternallyOwned?.(sessionId)) {
       throw new Error(`Session runtime is owned by a live child agent: ${sessionId}`);
     }
-    const current = this.context.store.getSession(sessionId);
+    const current = this.sessionQueries.getSession(sessionId);
     if (!current) throw new Error(`Session not found: ${sessionId}`);
     if (current.status === "closing" || current.status === "archived") {
       throw new Error(`Session runtime is not available: ${sessionId}`);
@@ -101,8 +115,8 @@ export class AgentPool {
     const entry = { state: "active" as const } as AgentPoolEntry;
     const promise = this.create(
       current,
-      this.context.store.listMessages(sessionId),
-      this.context.store.listMessageParts(sessionId),
+      this.sessionQueries.listMessages(sessionId),
+      this.sessionQueries.listMessageParts(sessionId),
       entry,
     ).catch((error) => {
       if (entry.state === "active" && this.agents.get(sessionId) === entry) this.agents.delete(sessionId);
@@ -138,7 +152,7 @@ export class AgentPool {
   }
 
   async closeForCwd(cwd: string): Promise<void> {
-    const sessions = this.context.store.listSessions({ cwd, includeArchived: true });
+    const sessions = this.sessionQueries.listSessions({ cwd, includeArchived: true });
     await this.closeSessions(sessions.map((session) => session.id), `Agent pool cleanup failed for cwd: ${cwd}`);
   }
 

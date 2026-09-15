@@ -1,12 +1,23 @@
 import type { CompactContextSection } from "@openharness/core";
 import type {
+  AttachmentAssetRecord,
+  AttachmentRepresentationRecord,
   SessionInputAttachmentRecord,
 } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
+
+export interface CompactAttachmentAssetQueries {
+  getAttachment(
+    assetId: string,
+    options?: { includeDeleted?: boolean },
+  ): AttachmentAssetRecord | undefined;
+  listAttachmentRepresentations(
+    assetId: string,
+  ): AttachmentRepresentationRecord[];
+}
 
 export interface CompactAttachmentSectionStore {
   listSessionInputAttachments(sessionId: string): SessionInputAttachmentRecord[];
-  attachments: Pick<SessionStore["attachments"], "getAttachment" | "listAttachmentRepresentations">;
+  attachments: CompactAttachmentAssetQueries;
 }
 
 export interface CompactAttachmentSectionOptions {
