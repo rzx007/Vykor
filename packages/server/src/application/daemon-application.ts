@@ -300,13 +300,19 @@ export class DaemonApplication implements DurableAgentApplication {
         options.executionSurface === "desktop_managed"
           ? createSessionEnvironmentAcquirer()
           : undefined;
-      this.terminals = new DaemonTerminalService(store, {
-        getSettingsForCwd: async (cwd) =>
-          options.getSettingsForCwd
-            ? await options.getSettingsForCwd(cwd)
-            : (options.getSettings?.() ?? options.settings ?? failMissingSettings()),
-        acquireEnvironment: acquireSessionEnvironment,
-      });
+      this.terminals = new DaemonTerminalService(
+        {
+          getProject: (id) => store.getProject(id),
+          getSession: (id) => store.getSession(id),
+        },
+        {
+          getSettingsForCwd: async (cwd) =>
+            options.getSettingsForCwd
+              ? await options.getSettingsForCwd(cwd)
+              : (options.getSettings?.() ?? options.settings ?? failMissingSettings()),
+          acquireEnvironment: acquireSessionEnvironment,
+        },
+      );
       this.projects = new ProjectApplicationService(store.projects);
       this.permissions = new StorePermissionBroker({
         permissions: store.permissions,
@@ -326,7 +332,16 @@ export class DaemonApplication implements DurableAgentApplication {
         log: options.log,
       });
       this.backgroundShells = new BackgroundShellService({
-        store,
+        store: {
+          getSession: (id) => store.getSession(id),
+          listSessions: (opts) => store.listSessions(opts),
+          listSessionTasks: (id) => store.listSessionTasks(id),
+          getSessionTask: (id) => store.getSessionTask(id),
+          createSessionTask: (input) => store.createSessionTask(input),
+          reserveSessionTask: (input) => store.reserveSessionTask(input),
+          transitionPendingSessionTask: (id, input) => store.transitionPendingSessionTask(id, input),
+          updateSessionTask: (id, input) => store.updateSessionTask(id, input),
+        },
         executionProjector: this.executionProjector,
         getDetachedProcessSupervisor: (scope) => getDetachedProcessSupervisor(scope),
         events: this.eventPublisher,
@@ -338,7 +353,13 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       // JobWait / JobList 走这里：终端、后台 shell、子 Agent、workflow 合成一张本会话任务表。
       this.jobs = new DaemonJobService(
-        store,
+        {
+          getSession: (id) => store.getSession(id),
+          listSessionTasks: (id) => store.listSessionTasks(id),
+          getSessionTask: (id) => store.getSessionTask(id),
+          updateSessionTask: (id, input) => store.updateSessionTask(id, input),
+          waitForSessionTaskChange: (id, after, opts) => store.waitForSessionTaskChange?.(id, after, opts),
+        },
         this.terminals,
         (scope) => getDetachedProcessSupervisor(scope),
         (scope) => getChildAgentExecutionRegistry(scope),

@@ -26,13 +26,16 @@ import { ApplicationError } from "../../shared/application-error.js";
 type ProcessSupervisor = DetachedProcessSupervisor;
 type TaskScope = { cwd: string; sessionId?: string };
 
-interface BackgroundShellStore {
+export interface BackgroundShellSessionQueries {
   getSession(sessionId: string): SessionRecord | undefined;
   listSessions(options?: { includeArchived?: boolean }): Array<{
     id: string;
     cwd: string;
     status: SessionStatus;
   }>;
+}
+
+export interface BackgroundShellTaskOperations {
   listSessionTasks(sessionId: string): Array<{
     id: string;
     sessionId: string;
@@ -79,6 +82,8 @@ interface BackgroundShellStore {
     metadata?: Record<string, unknown>;
   }): SessionExecutionRecord;
 }
+
+export interface BackgroundShellStore extends BackgroundShellSessionQueries, BackgroundShellTaskOperations {}
 
 export class BackgroundShellError extends ApplicationError {
   constructor(

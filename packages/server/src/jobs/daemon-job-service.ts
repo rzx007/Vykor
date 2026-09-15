@@ -24,8 +24,11 @@ import type { TerminalSessionInfo } from "@openharness/terminal";
 
 import type { DaemonTerminalService } from "../terminal/index.js";
 
-interface JobSessionStore {
+export interface JobSessionQueries {
   getSession(sessionId: string): SessionRecord | undefined;
+}
+
+export interface JobTaskOperations {
   listSessionTasks(sessionId: string): SessionExecutionRecord[];
   getSessionTask(taskId: string): SessionExecutionRecord | undefined;
   updateSessionTask(taskId: string, input: {
@@ -38,6 +41,8 @@ interface JobSessionStore {
     signal?: AbortSignal;
   }): Promise<SessionExecutionRecord | undefined>;
 }
+
+export interface JobSessionStore extends JobSessionQueries, JobTaskOperations {}
 
 interface JobExecutionRuntime {
   readOutput(executionId: string): string;

@@ -23,14 +23,18 @@ import {
   LocalTerminalProvider,
   type LocalTerminalProviderOptions,
 } from "@openharness/terminal-node";
-import type { SessionRecord } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
+import type { ProjectRecord, SessionRecord } from "@openharness/protocol";
 import { ApplicationError } from "../shared/application-error.js";
 
 export interface ListDaemonTerminalsOptions {
   projectId?: string;
   sessionId?: string;
   source?: TerminalSource;
+}
+
+export interface DaemonTerminalSessionScopeQueries {
+  getProject(projectId: string): ProjectRecord | undefined;
+  getSession(sessionId: string): SessionRecord | undefined;
 }
 
 export interface DaemonTerminalServiceOptions {
@@ -54,7 +58,7 @@ export class DaemonTerminalService {
   private readonly provider: LocalTerminalProvider;
 
   constructor(
-    private readonly store: Pick<SessionStore, "getProject" | "getSession">,
+    private readonly store: DaemonTerminalSessionScopeQueries,
     private readonly options: DaemonTerminalServiceOptions = {},
   ) {
     this.provider = new LocalTerminalProvider({
