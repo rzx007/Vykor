@@ -1,6 +1,6 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–4 已完成，阶段 5 未开始。
+> 状态：当前。阶段 0–5 已完成，阶段 6 未开始。
 
 ## 当前阶段
 
@@ -11,7 +11,8 @@
 阶段 4C 已完成：`RunAdmissionService` 统一拥有 prompt、持久 Run 派发、rejected-steer 恢复和 goal revision 执行准入；`RunControlService` 统一拥有查询、提升、等待、中断和关闭。`DaemonApplication` 显式构造唯一共享实例并注入 Session、Goal、DaemonControl 与兼容 Engine。
 阶段 4D 已完成：`SessionRunCoordinator` 成为 lane、Promise 与 live 状态索引的唯一所有者；`SessionRunEngine` 不再保存第二份 run Promise map；`SessionRunExecutor` 通过命名 data capability 执行单个已准入 Run。
 阶段 4E 已完成：`StartupRecoveryService` 按固定顺序执行 durable recovery，失败继续阻止 ready；Maintenance 与 PostRun 使用命名 data 边界；既有 Transcript/Execution Projection 保持唯一映射所有者。
-阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。阶段 5 未开始。
+阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。
+阶段 5 已完成：Transport 内核、ProtocolClient、14 个专用业务/执行 Resource 彻底抽取完成。`OpenHarnessClient` 收敛为纯净 Resource 组合根与兼容转发门面，移除全部 endpoint 字符串与业务 decoder；内部 consumer 收窄为命名 capability，`httpClientFlatCalls` 由 11 降至 4；架构规则补充 Client Resource 与 Transport 隔离护栏。阶段 6 未开始。
 
 阶段 4 最终复审补充：Coordinator 等待的是包含 `settleGoalRun` 的完整 completion Promise，shutdown 不会在 Goal settlement 尚未结束时关闭 Store；Session Run 三件套的两阶段闭包装配进入纯 `assembleSessionRunServices` factory，Executor 的 Skill/Attachment/Capability/steer 依赖进入 `assembleSessionRunExecutor`；settings、model limits、Skill catalog/list 和 plugin inventory 统一由 `createSessionRuntimeDiscovery` 提供，避免 Daemon 内重复发现扩展；Maintenance/PostRun 使用精确方法 capability，并由架构测试禁止重新持有完整 `SessionStore`。`DaemonApplication` 最终为 908 行。最终统一验证为 Server 80 个文件、717 个测试，Services 最近一次回归为 45 个文件、430 个测试，全仓 TypeScript 61/61，架构测试 15/15。
 
@@ -20,8 +21,9 @@
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 11`。
+- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 4`。
 - 当前 `SessionStore` 行数：2152 行。
+- 当前 `OpenHarnessClient`（`http-client.ts`）行数：1112 行（原 1430 行，净删减 318 行业务实现）。
 
 ## 阶段 3 迁移记录
 
@@ -161,4 +163,4 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-阶段 5：按总体路线处理剩余协议与客户端边界。阶段 4 的兼容门面暂不删除；删除前必须先迁完所有外部调用方并单独审核。
+阶段 6：按总体路线推进下一阶段（如产品适配、高级外部协议与持久集成）。阶段 5 的客户端平铺兼容转发暂不删除；删除前必须先迁完所有外部调用方并单独审核。

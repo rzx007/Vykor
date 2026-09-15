@@ -104,6 +104,20 @@ export function checkImportBoundary(fromFile, specifier) {
     }
   }
 
+  const isClientResource = /(?:^|\/)(?:packages\/client\/src\/)?resources\//.test(normalized);
+  if (isClientResource) {
+    if (/(?:^|\/)http-client(?:\.[a-zA-Z]+)?$/.test(specifier) || specifier === "@openharness/server" || specifier.startsWith("@openharness/server/")) {
+      return [`${fromFile} must not depend on OpenHarnessClient or Server`];
+    }
+  }
+
+  const isClientTransport = /(?:^|\/)(?:packages\/client\/src\/)?transport\/(?:http-transport|sse-transport)(?:\.[a-zA-Z]+)?$/.test(normalized);
+  if (isClientTransport) {
+    if (/(?:^|\/)resources(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Resource`];
+    }
+  }
+
   return [];
 }
 
@@ -193,6 +207,8 @@ function collectArchitectureErrors() {
     ...sourceFiles(join(root, "packages", "server", "src", "http", "routes")),
     ...sourceFiles(join(root, "packages", "server", "src", "application")),
     ...sourceFiles(join(root, "packages", "server", "src", "runtime")),
+    ...sourceFiles(join(root, "packages", "client", "src", "resources")),
+    ...sourceFiles(join(root, "packages", "client", "src", "transport")),
   ];
 
   for (const path of boundaryFiles) {

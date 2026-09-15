@@ -191,3 +191,21 @@ test("maintenance services cannot hold a full SessionStore", () => {
     [],
   );
 });
+
+test("client resources cannot import OpenHarnessClient or Server", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/client/src/resources/session-resource.ts", "../transport/http-client.js"),
+    ["packages/client/src/resources/session-resource.ts must not depend on OpenHarnessClient or Server"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/client/src/resources/session-resource.ts", "@openharness/server"),
+    ["packages/client/src/resources/session-resource.ts must not depend on OpenHarnessClient or Server"],
+  );
+});
+
+test("client transport cannot import resources", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/client/src/transport/http-transport.ts", "../resources/session-resource.js"),
+    ["packages/client/src/transport/http-transport.ts must not depend on Resource"],
+  );
+});
