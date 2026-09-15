@@ -571,7 +571,7 @@ export class DaemonApplication implements DurableAgentApplication {
           this.attachments.readReadyText(assetId, readOptions),
       });
       const runExecutor = new SessionRunExecutor({
-        store,
+        data: store,
         attachments: store.attachments,
         goals: store.goals,
         agentPool: this.agentPool,

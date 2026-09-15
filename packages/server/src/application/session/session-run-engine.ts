@@ -62,7 +62,6 @@ export interface SessionRunEngineContext {
  */
 export class SessionRunEngine {
   private readonly runCoordinator = new SessionRunCoordinator();
-  private readonly runPromises = new Map<string, Promise<void>>();
   private accepting = true;
   private stopPromise?: Promise<void>;
   private readonly admissionService: RunAdmissionService;
@@ -78,17 +77,11 @@ export class SessionRunEngine {
     interruptQueuedRun: (sessionId: string, runId: string, reason?: string) => this.runCoordinator.interruptQueuedRun(sessionId, runId, reason),
     promoteQueuedRun: (sessionId: string, queuedRunId: string, expectedActiveRunId: string, steer: Parameters<SessionRunCoordinator["promoteQueuedRun"]>[3]) =>
       this.runCoordinator.promoteQueuedRun(sessionId, queuedRunId, expectedActiveRunId, steer),
-    waitForRun: async (runId: string) => {
-      const promise = this.runPromises.get(runId);
-      if (promise) await promise;
-    },
-    waitForRuns: async (runIds: string[]) => {
-      await Promise.all(runIds.map((runId) => this.runPromises.get(runId)).filter((promise): promise is Promise<void> => promise !== undefined));
-    },
+    waitForRun: (runId: string) => this.runCoordinator.waitForRun(runId),
+    waitForRuns: (runIds: string[]) => this.runCoordinator.waitForRuns(runIds),
     enqueueRun: (run: SessionRunRecord, inputId: string) => this.enqueueRun(run, inputId),
     runState: (sessionId: string, runId: string): "running" | "queued" | undefined => {
-      if (!this.runPromises.has(runId)) return undefined;
-      return this.runCoordinator.activeRunId(sessionId) === runId ? "running" : "queued";
+      return this.runCoordinator.runState(sessionId, runId);
     },
     steer: (sessionId: string, input: Parameters<SessionRunCoordinator["steer"]>[1]) => this.runCoordinator.steer(sessionId, input),
   };
@@ -320,12 +313,9 @@ export class SessionRunEngine {
         // The persisted run state is updated by SessionRunExecutor or interrupt handling.
       })
       .finally(async () => {
-        if (this.runPromises.get(run.id) === tracked)
-          this.runPromises.delete(run.id);
         await this.context.settleGoalRun?.(run.sessionId, run.id);
       });
     void tracked.catch(() => {});
-    this.runPromises.set(run.id, tracked);
     return enqueued.state;
   }
 

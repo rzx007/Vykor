@@ -30,7 +30,7 @@ const ATTACHMENT_LEASE_TTL_MS = 2 * 60 * 1_000;
 const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
-  store: Pick<SessionStore,
+  data: Pick<SessionStore,
     | "getSession" | "getInput" | "getRun" | "transaction" | "updateRun"
     | "appendEvent" | "settleActiveRunAttempts" | "listMessageParts" | "listMessages"
   >;
@@ -96,12 +96,12 @@ export class SessionRunExecutor {
     let cleanupAttachmentResources: (() => Promise<void>) | undefined;
     let cleanupAttachmentLease: (() => void) | undefined;
     try {
-      const session = this.context.store.getSession(sessionId);
+      const session = this.context.data.getSession(sessionId);
       if (!session) throw new Error(`Session not found: ${sessionId}`);
-      const admitted = this.context.store.getInput(inputId);
+      const admitted = this.context.data.getInput(inputId);
       if (!admitted) throw new Error(`Session input not found: ${inputId}`);
-      const storedRun = typeof this.context.store.getRun === "function"
-        ? this.context.store.getRun(runId)
+      const storedRun = typeof this.context.data.getRun === "function"
+        ? this.context.data.getRun(runId)
         : undefined;
       const hasStructuredContext = admitted.items.some((item) => item.type === "skill" || item.type === "context" || (item.type === "capability" && item.kind === "plugin_agent"));
       const hasExplicitSkills = admitted.items.some((item) => item.type === "skill");
@@ -155,7 +155,7 @@ export class SessionRunExecutor {
             hasExplicitSkills
               ? await resolveSkillCatalog(session, this.context.resolveSkillCatalog)
               : { resolvePath: () => undefined },
-            conversationContextCatalog(this.context.store, sessionId),
+            conversationContextCatalog(this.context.data, sessionId),
             capabilityView,
           )
         : undefined;
@@ -182,7 +182,7 @@ export class SessionRunExecutor {
           decisions: routed.decisions,
         });
         const beforeAttachmentProjection = this.context.events.checkpoint();
-        this.context.store.transaction(() => {
+        this.context.data.transaction(() => {
           this.context.transcriptProjection.projectAttachmentTransformations({
             sessionId,
             inputId,
@@ -191,7 +191,7 @@ export class SessionRunExecutor {
             decisions: routed.decisions,
             status: "completed",
           });
-          this.context.store.updateRun(runId, {
+          this.context.data.updateRun(runId, {
             metadata: {
               attachmentRouting: {
                 status: "completed",
@@ -275,7 +275,7 @@ export class SessionRunExecutor {
           cleanupError = closeError;
         }
       }
-      const current = this.context.store.getRun(runId);
+      const current = this.context.data.getRun(runId);
       if (cleanupError) {
         this.context.log({
           level: "error",
@@ -298,9 +298,9 @@ export class SessionRunExecutor {
       const interrupted = error instanceof RunInterruptedError || workContext.signal.aborted;
       const routingError = attachmentRoutingError(error);
       const before = this.context.events.checkpoint();
-      this.context.store.transaction(() => {
+      this.context.data.transaction(() => {
         if (routingError) {
-          const admitted = this.context.store.getInput(inputId);
+          const admitted = this.context.data.getInput(inputId);
           if (admitted) {
             this.context.transcriptProjection.projectAttachmentTransformations({
               sessionId,
@@ -318,7 +318,7 @@ export class SessionRunExecutor {
           runId,
           interrupted ? "interrupted" : "failed",
         );
-        this.context.store.appendEvent({
+        this.context.data.appendEvent({
           type: interrupted ? "session.run.interrupted" : "session.run.error",
           sessionId,
           payload: {
@@ -328,14 +328,14 @@ export class SessionRunExecutor {
             ...(routingError ? { errorKind: routingError.code } : {}),
           },
         });
-        if (typeof this.context.store.settleActiveRunAttempts === "function") {
-          this.context.store.settleActiveRunAttempts(
+        if (typeof this.context.data.settleActiveRunAttempts === "function") {
+          this.context.data.settleActiveRunAttempts(
             runId,
             interrupted ? "cancelled" : "failed",
             message,
           );
         }
-        this.context.store.updateRun(runId, {
+        this.context.data.updateRun(runId, {
           status: interrupted ? "interrupted" : "failed",
           error: message,
           ...(error instanceof PluginPreparationError ? {

@@ -82,6 +82,7 @@ interface SessionLane {
 
 export class SessionRunCoordinator {
   private readonly lanes = new Map<string, SessionLane>();
+  private readonly runPromises = new Map<string, Promise<void>>();
 
   enqueue(options: EnqueueRunOptions): EnqueueRunResult {
     const lane = this.getLane(options.sessionId);
@@ -89,12 +90,29 @@ export class SessionRunCoordinator {
     const state = lane.active ? "queued" : "running";
     if (lane.active) lane.queue.push(task);
     else this.startTask(lane, task);
+    const promise = task.promise.finally(() => {
+      if (this.runPromises.get(task.runId) === promise) this.runPromises.delete(task.runId);
+    });
+    this.runPromises.set(task.runId, promise);
     return {
       runId: task.runId,
       sessionId: task.sessionId,
       state,
-      promise: task.promise,
+      promise,
     };
+  }
+
+  runState(sessionId: string, runId: string): "running" | "queued" | undefined {
+    if (!this.runPromises.has(runId)) return undefined;
+    return this.activeRunId(sessionId) === runId ? "running" : "queued";
+  }
+
+  async waitForRun(runId: string): Promise<void> {
+    await this.runPromises.get(runId);
+  }
+
+  async waitForRuns(runIds: string[]): Promise<void> {
+    await Promise.all(runIds.map((runId) => this.runPromises.get(runId)).filter((promise): promise is Promise<void> => promise !== undefined));
   }
 
   steer(
