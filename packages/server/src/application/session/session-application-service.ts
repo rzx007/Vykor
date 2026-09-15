@@ -38,6 +38,8 @@ import {
   type ForkSessionCommand,
   type UpdateSessionCommand,
 } from "./session-command-service.js";
+import type { RunAdmissionService } from "./run-admission-service.js";
+import type { RunControlService } from "./run-control-service.js";
 
 export { SessionApplicationError } from "./session-application-error.js";
 export type { CreateSessionCommand, ForkSessionCommand, UpdateSessionCommand } from "./session-command-service.js";
@@ -45,6 +47,8 @@ export type { CreateSessionCommand, ForkSessionCommand, UpdateSessionCommand } f
 export interface SessionApplicationServiceContext {
   store: SessionStore;
   runEngine: SessionRunEngine;
+  admission?: Pick<RunAdmissionService, "admitPromptAndMaybeRun" | "replaceLatestPrompt" | "replayInput">;
+  control?: Pick<RunControlService, "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "activeRunId" | "promoteQueuedRun" | "awaitRun" | "waitForRuns">;
   agentPool: AgentPool;
   liveChildren: Pick<LiveChildAgentDirectory, "has" | "send" | "interrupt">;
   operationGate: Pick<DaemonOperationGate, "enter" | "tryEnterBarrier">;
@@ -105,10 +109,14 @@ export type ResumeSessionRunResult = AdmitPromptResult & {
 
 /** Session 写用例门面；child session 只由 framework 事件投影创建。 */
 export class SessionApplicationService {
+  private readonly admission: NonNullable<SessionApplicationServiceContext["admission"]>;
+  private readonly control: NonNullable<SessionApplicationServiceContext["control"]>;
   private readonly queries: SessionQueryService;
   private readonly commands: SessionCommandService;
 
   constructor(private readonly context: SessionApplicationServiceContext) {
+    this.admission = context.admission ?? context.runEngine;
+    this.control = context.control ?? context.runEngine;
     this.commands =
       context.commands ??
       new SessionCommandService({
@@ -117,9 +125,9 @@ export class SessionApplicationService {
         runtimeControl: {
           closeAgent: (id) => context.agentPool.close(id),
           hasActiveWorkForSession: (id) => context.agentPool.hasActiveWorkForSession(id),
-          interruptSession: (id) => context.runEngine.interruptSession(id),
-          waitForRuns: (ids) => context.runEngine.waitForRuns(ids),
-          hasRunWork: (id) => context.runEngine.hasWork(id),
+          interruptSession: (id) => this.control.interruptSession(id),
+          waitForRuns: (ids) => this.control.waitForRuns(ids),
+          hasRunWork: (id) => this.control.hasWork(id),
           interruptLiveChild: (id, reason) => context.liveChildren.interrupt(id, reason),
           hasLiveChild: (id) => context.liveChildren.has(id),
           warmSession: (session) => this.warmWhenAdmitted(session),
@@ -211,7 +219,7 @@ export class SessionApplicationService {
       const capability = hasPluginCandidates && this.context.pluginCapabilities
         ? await this.context.pluginCapabilities.admit(session, items)
         : {};
-      if (this.context.runEngine.hasWork(sessionId)) {
+      if (this.control.hasWork(sessionId)) {
         throw new SessionApplicationError(
           409,
           "Wait for the active session run before editing the latest prompt",
@@ -233,7 +241,7 @@ export class SessionApplicationService {
         );
       }
       await this.context.agentPool.close(sessionId);
-      return this.context.runEngine.replaceLatestPrompt(sessionId, latestUserMessage.id, {
+      return this.admission.replaceLatestPrompt(sessionId, latestUserMessage.id, {
         id: input.id,
         items,
         attachments,
@@ -413,7 +421,7 @@ export class SessionApplicationService {
         ...(run.status === "pending" ? { queue_state: "queued" as const } : {}),
       };
     }
-    return await this.context.runEngine.admitPromptAndMaybeRun(sessionId, input);
+    return await this.admission.admitPromptAndMaybeRun(sessionId, input);
   }
 
   async resumeRun(
@@ -483,7 +491,7 @@ export class SessionApplicationService {
       if (!this.hasRuntime) {
         throw new SessionApplicationError(409, "Session runtime is unavailable");
       }
-      if (this.context.runEngine.hasWork(sessionId)) {
+      if (this.control.hasWork(sessionId)) {
         throw new SessionApplicationError(
           409,
           "Wait for the active session run before resuming interrupted work",
@@ -498,7 +506,7 @@ export class SessionApplicationService {
       const pluginId = typeof sourceInput.metadata.pluginId === "string"
         ? sourceInput.metadata.pluginId
         : undefined;
-      const resumed = this.context.runEngine.replayInput(sourceInput.id, {
+      const resumed = this.admission.replayInput(sourceInput.id, {
         id: input.id,
         metadata: {
           ...(withoutPluginId(input.metadata) ?? {}),
@@ -530,8 +538,8 @@ export class SessionApplicationService {
     expectedRunId?: string,
   ): Promise<ReturnType<SessionRunEngine["interruptSession"]>> {
     this.assertReady();
-    if (expectedRunId) return this.context.runEngine.interruptRun(sessionId, expectedRunId);
-    const lane = this.context.runEngine.interruptSession(sessionId);
+    if (expectedRunId) return this.control.interruptRun(sessionId, expectedRunId);
+    const lane = this.control.interruptSession(sessionId);
     const targets = [sessionId, ...this.descendantSessionIds(sessionId)];
     const childInterrupted = (
       await Promise.all(
@@ -596,13 +604,13 @@ export class SessionApplicationService {
           "The selected prompt is no longer waiting in the queue",
         );
       }
-      if (this.context.runEngine.activeRunId(sessionId) !== command.expectedActiveRunId) {
+      if (this.control.activeRunId(sessionId) !== command.expectedActiveRunId) {
         throw new SessionApplicationError(
           409,
           "The active run changed before the prompt could be promoted",
         );
       }
-      const promoted = await this.context.runEngine.promoteQueuedRun(
+      const promoted = await this.control.promoteQueuedRun(
         sessionId,
         inputId,
         command.queuedRunId,
@@ -653,7 +661,7 @@ export class SessionApplicationService {
           "The selected prompt is no longer waiting in the queue",
         );
       }
-      const interrupted = this.context.runEngine.interruptQueuedRun(
+      const interrupted = this.control.interruptQueuedRun(
         sessionId,
         command.queuedRunId,
         "Queued prompt cancelled by the user",
@@ -682,7 +690,7 @@ export class SessionApplicationService {
   }
 
   async awaitRun(sessionId: string, runId: string): Promise<AwaitSessionRunResult> {
-    return await this.context.runEngine.awaitRun(sessionId, runId);
+    return await this.control.awaitRun(sessionId, runId);
   }
 
   async closeRuntime(sessionId: string): Promise<void> {

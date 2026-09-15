@@ -127,6 +127,14 @@ export class SessionRunEngine {
       });
   }
 
+  get admission(): RunAdmissionService {
+    return this.admissionService;
+  }
+
+  get control(): RunControlService {
+    return this.controlService;
+  }
+
   persistGoalRun(sessionId: string, input: AdmitPromptInput) {
     if (!this.accepting) throw new Error("Session run engine is stopping");
     return this.admissionService.persistGoalRun(sessionId, input);

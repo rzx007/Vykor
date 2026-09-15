@@ -49,16 +49,17 @@ export interface RunControlRuntime {
   };
   interruptQueuedRun(sessionId: string, runId: string, reason?: string): {
     queuedRunIds: string[];
+    interrupted: boolean;
+    activeRunId?: string;
   };
   promoteQueuedRun(
     sessionId: string,
     queuedRunId: string,
     expectedActiveRunId: string,
     steerInput: any,
-  ): {
-    promoted: boolean;
-    delivery: Promise<any>;
-  };
+  ):
+    | { promoted: false; reason: "active_run_changed" | "queued_run_changed" }
+    | { promoted: true; delivery: Promise<any> };
   waitForRun(runId: string): Promise<void>;
   waitForRuns(runIds: string[]): Promise<void>;
 }
@@ -70,8 +71,8 @@ export interface RunControlEvents {
 
 export interface RunControlGoals {
   getGoal?(goalId: string): SessionGoal | undefined;
-  updateGoal?(goalId: string, patch: { expectedRevision?: number; status: "paused"; reason: string }): SessionGoal | undefined;
-  markGoalContinuation?(runId: string, status: "cancelled" | "running" | "completed" | "failed"): void;
+  updateGoal?(goalId: string, patch: { expectedRevision: number; status: "paused"; reason: string }): SessionGoal | undefined;
+  markGoalContinuation?(runId: string, status: "cancelled"): void;
 }
 
 export interface RunControlAdmissionQuery {
@@ -208,7 +209,7 @@ export class RunControlService {
     sessionId: string,
     runId: string,
     reason?: string,
-  ): { queuedRunIds: string[] } {
+  ): { activeRunId?: string; queuedRunIds: string[]; interrupted: boolean } {
     const before = this.options.events.checkpoint();
     const result = this.options.runtime.interruptQueuedRun(
       sessionId,

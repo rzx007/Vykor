@@ -7,9 +7,13 @@ import { SessionApplicationError } from "./session-application-error.js";
 import { classifyGoalCompletion, verifiedGoalEvidence } from "./goal-assessment-policy.js";
 import type { GoalWaitVerifier } from "./goal-wait-verifier.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
+import type { RunAdmissionService } from "./run-admission-service.js";
+import type { RunControlService } from "./run-control-service.js";
 
 export class SessionGoalService {
   private readonly requests = new Map<string, { fingerprint: string; promise: Promise<SessionGoal> }>();
+  private readonly admission: Pick<RunAdmissionService, "persistGoalRun" | "dispatchPersistedRun">;
+  private readonly control: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
   constructor(
     private readonly context: {
       store: SessionStore;
@@ -17,11 +21,16 @@ export class SessionGoalService {
       goals: GoalOperations;
       sessions: Pick<SessionApplicationService, "withSessionOperation">;
       runEngine: Pick<SessionRunEngine, "persistGoalRun" | "dispatchPersistedRun" | "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
+      admission?: Pick<RunAdmissionService, "persistGoalRun" | "dispatchPersistedRun">;
+      control?: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
       events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
       waitVerifier?: Pick<GoalWaitVerifier, "check">;
       pluginCapabilities: Pick<SessionPluginCapabilityService, "admit">;
     },
-  ) {}
+  ) {
+    this.admission = context.admission ?? context.runEngine;
+    this.control = context.control ?? context.runEngine;
+  }
   private readonly waitTimers = new Map<string, { attempt: number; timer: ReturnType<typeof setTimeout> }>();
 
   get(sessionId: string): SessionGoal | null {
@@ -163,7 +172,7 @@ export class SessionGoalService {
         this.context.store.updateRun(runId, {
           metadata: { goalSettled: true },
         });
-        if (this.context.runEngine.hasUserWork(sessionId)) return;
+        if (this.control.hasUserWork(sessionId)) return;
         let currentAssessment: GoalAssessment | undefined;
         const change = (patch: Omit<Parameters<SessionStore["updateGoal"]>[1], "expectedRevision">) =>
           this.context.goals.updateGoal(goal.id, {
@@ -330,7 +339,7 @@ export class SessionGoalService {
           evidence: assessment.evidence,
           reason: null,
         });
-        const admitted = this.context.runEngine.persistGoalRun(
+        const admitted = this.admission.persistGoalRun(
           sessionId,
           this.runInput(continued, `goal-${goal.id}-${goal.revision}-${runId}`, "continuation", {
             items: [
@@ -355,7 +364,7 @@ export class SessionGoalService {
       });
       if (waitToObserve) this.observeExternalWait(waitToObserve);
       if (nextRunId) {
-        this.context.runEngine.dispatchPersistedRun(nextRunId);
+        this.admission.dispatchPersistedRun(nextRunId);
         this.context.goals.markGoalContinuation(nextRunId, "dispatched");
       }
     } catch (error) {
@@ -368,7 +377,7 @@ export class SessionGoalService {
           currentRunId: null,
           reason: `目标结算失败，请检查后继续：${error instanceof Error ? error.message : String(error)}`,
         });
-        this.context.runEngine.cancelGoalRuns(sessionId, goal.id, "目标结算失败");
+        this.control.cancelGoalRuns(sessionId, goal.id, "目标结算失败");
       }
     } finally {
       this.context.events.publishSince(before);
@@ -407,7 +416,7 @@ export class SessionGoalService {
           reason: null,
         });
         const inputId = `goal-wait-${continued.id}-${continued.revision}-${wait.handleId}`;
-        const admitted = this.context.runEngine.persistGoalRun(
+        const admitted = this.admission.persistGoalRun(
           continued.sessionId,
           this.runInput(continued, inputId, "continuation", {
             items: [
@@ -427,7 +436,7 @@ export class SessionGoalService {
             runId: admitted.run.id,
           })
         ) {
-          this.context.runEngine.dispatchPersistedRun(admitted.run.id);
+          this.admission.dispatchPersistedRun(admitted.run.id);
           this.context.goals.markGoalContinuation(admitted.run.id, "dispatched");
         }
       } catch (error) {
@@ -555,7 +564,7 @@ export class SessionGoalService {
       attachments?: AdmitPromptInput["attachments"];
     },
   ): void {
-    const admitted = this.context.runEngine.persistGoalRun(goal.sessionId, this.runInput(goal, requestId, kind, input));
+    const admitted = this.admission.persistGoalRun(goal.sessionId, this.runInput(goal, requestId, kind, input));
     this.context.goals.settleGoalRequest(requestId, {
       status: "pending",
       goalId: goal.id,
@@ -592,7 +601,7 @@ export class SessionGoalService {
     if (typeof runId !== "string") throw new Error("目标请求缺少持久运行记录");
     const run = this.context.store.getRun(runId);
     if (!run || run.status === "failed" || run.status === "interrupted" || goal.status !== "active" || run.metadata.goalRevision !== goal.revision) throw new SessionApplicationError(409, "目标启动已中断，请刷新目标并明确继续");
-    this.context.runEngine.dispatchPersistedRun(runId);
+    this.admission.dispatchPersistedRun(runId);
     this.context.goals.settleGoalRequest(requestId, {
       status: "completed",
       goalId: goal.id,
@@ -603,9 +612,9 @@ export class SessionGoalService {
   private async stopRuns(goal: SessionGoal, reason: string): Promise<void> {
     this.clearWaitObserver(goal.id);
     const before = this.context.events.checkpoint();
-    const ids = this.context.runEngine.cancelGoalRuns(goal.sessionId, goal.id, reason);
+    const ids = this.control.cancelGoalRuns(goal.sessionId, goal.id, reason);
     this.context.events.publishSince(before);
-    await this.context.runEngine.waitForRuns(ids);
+    await this.control.waitForRuns(ids);
     if (this.context.store.listRuns(goal.sessionId).some((run) => ids.includes(run.id) && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标尚未停止，请稍后重试");
   }
   private requireSession(sessionId: string): NonNullable<ReturnType<SessionStore["getSession"]>> {

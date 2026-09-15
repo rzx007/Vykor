@@ -148,11 +148,13 @@ export interface RunAdmissionRuntimeQueue {
       traceId?: string;
       metadata?: Record<string, unknown>;
     },
-  ): {
-    merged: boolean;
-    activeRunId?: string;
-    delivery: Promise<{ sessionId: string; inputId: string; runId: string }>;
-  };
+  ):
+    | { merged: false }
+    | {
+        merged: true;
+        activeRunId: string;
+        delivery: Promise<{ sessionId?: string; inputId?: string; runId: string }>;
+      };
   hasRuntime: boolean;
   hasWork?(sessionId: string): boolean;
 }

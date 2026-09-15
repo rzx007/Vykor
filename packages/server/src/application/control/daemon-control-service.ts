@@ -3,6 +3,7 @@ import type { SessionStore } from "@openharness/services";
 
 import type { HookInfo } from "../settings-api.js";
 import type { SessionRunEngine } from "../session/session-run-engine.js";
+import type { RunControlService } from "../session/run-control-service.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { DaemonOperationGate, DaemonOperationLease } from "./daemon-operation-gate.js";
 import { countByStatus, type OpenHarnessRuntimeSnapshot } from "../support.js";
@@ -17,6 +18,7 @@ export interface DaemonControlServiceContext {
     SessionRunEngine,
     "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain"
   >;
+  runControl?: Pick<RunControlService, "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain">;
   agentPool: Pick<
     AgentPool,
     | "configured"
@@ -38,7 +40,11 @@ export interface DaemonControlServiceContext {
  * hooks 等检查能力；供 /health、settings/plugin 等路由在写配置前做 barrier。
  */
 export class DaemonControlService {
-  constructor(private readonly context: DaemonControlServiceContext) {}
+  private readonly runControl;
+
+  constructor(private readonly context: DaemonControlServiceContext) {
+    this.runControl = context.runControl ?? context.runEngine;
+  }
 
   get runtimeInspectionAvailable(): boolean {
     return this.context.agentPool.configured;
@@ -60,10 +66,10 @@ export class DaemonControlService {
         ? sessions.flatMap((session) => this.context.store.listMessageParts(session.id))
         : [];
     const activeRunCount = sessions.filter(
-      (session) => this.context.runEngine.activeRunId(session.id) !== undefined,
+      (session) => this.runControl.activeRunId(session.id) !== undefined,
     ).length;
     const queuedRunCount = sessions.reduce(
-      (count, session) => count + this.context.runEngine.queuedRunIds(session.id).length,
+      (count, session) => count + this.runControl.queuedRunIds(session.id).length,
       0,
     );
     const now = Date.now();
@@ -112,12 +118,12 @@ export class DaemonControlService {
   }
 
   hasAnyActiveRuns(): boolean {
-    return this.context.runEngine.hasAnyActiveRuns() || this.context.agentPool.hasActiveWork();
+    return this.runControl.hasAnyActiveRuns() || this.context.agentPool.hasActiveWork();
   }
 
   hasActiveRunsForCwd(cwd: string): boolean {
     return (
-      this.context.runEngine.hasActiveRunsForCwd(cwd) ||
+      this.runControl.hasActiveRunsForCwd(cwd) ||
       this.context.agentPool.hasActiveWorkForCwd(cwd)
     );
   }
@@ -162,7 +168,7 @@ export class DaemonControlService {
     await this.context.operationGate.beginShutdown();
     const failures: unknown[] = [];
     try {
-      await this.context.runEngine.stopAndDrain();
+      await this.runControl.stopAndDrain();
     } catch (error) {
       failures.push(error);
     }

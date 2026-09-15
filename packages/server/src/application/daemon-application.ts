@@ -646,6 +646,7 @@ export class DaemonApplication implements DurableAgentApplication {
         permissions: store.permissions,
         workflows: store.workflows,
         runEngine: this.runEngine,
+        runControl: this.runEngine.control,
         agentPool: this.agentPool,
         operationGate: this.operationGate,
         startedAt: Date.now(),
@@ -716,6 +717,8 @@ export class DaemonApplication implements DurableAgentApplication {
       this.sessions = new SessionApplicationService({
         store,
         runEngine: this.runEngine,
+        admission: this.runEngine.admission,
+        control: this.runEngine.control,
         agentPool: this.agentPool,
         liveChildren: this.liveChildren,
         operationGate: this.operationGate,
@@ -737,6 +740,8 @@ export class DaemonApplication implements DurableAgentApplication {
         goals: store.goals,
         sessions: this.sessions,
         runEngine: this.runEngine,
+        admission: this.runEngine.admission,
+        control: this.runEngine.control,
         events: this.eventPublisher,
         pluginCapabilities,
         waitVerifier: new GoalWaitVerifier({
