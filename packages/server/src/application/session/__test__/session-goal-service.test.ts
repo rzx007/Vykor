@@ -49,7 +49,7 @@ function harness(
     events,
     settleGoalRun: (sessionId, runId) => service.settleRun(sessionId, runId),
     runExecutor: createView ? new SessionRunExecutor({
-      store, attachments: store.attachments, goals: store.goals, events,
+      data: store, attachments: store.attachments, goals: store.goals, events,
       agentPool: {
         configured: true,
         acquireSession: async () => ({

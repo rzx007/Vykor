@@ -23,7 +23,7 @@ describe("SessionPostRunMaintenance", () => {
     const remember = vi.fn(async () => ({ skipped: true, writtenIds: [], titles: [] }));
     const personalizationUpdater = vi.fn(() => 1);
     const maintenance = new SessionPostRunMaintenance({
-      store: store as any,
+      data: store as any,
       getSettings: vi.fn(async () => ({
         memory: {
           enabled: true,
@@ -47,7 +47,7 @@ describe("SessionPostRunMaintenance", () => {
   it("does nothing for a non-completed run", async () => {
     const getSettings = vi.fn();
     const maintenance = new SessionPostRunMaintenance({
-      store: createStore("failed") as any,
+      data: createStore("failed") as any,
       getSettings,
       log: vi.fn(),
     });
@@ -61,7 +61,7 @@ describe("SessionPostRunMaintenance", () => {
     const personalizationUpdater = vi.fn(() => 1);
     const remember = vi.fn();
     const maintenance = new SessionPostRunMaintenance({
-      store: createStore() as any,
+      data: createStore() as any,
       getSettings: vi.fn(async () => ({ memory: { enabled: false } } as any)),
       personalizationUpdater,
       log: vi.fn(),
@@ -76,7 +76,7 @@ describe("SessionPostRunMaintenance", () => {
   it("logs best-effort failures without failing the completed run", async () => {
     const log = vi.fn();
     const maintenance = new SessionPostRunMaintenance({
-      store: createStore() as any,
+      data: createStore() as any,
       getSettings: vi.fn(async () => ({
         memory: { enabled: true, sessionMemoryEnabled: false, autoExtractEnabled: false },
       } as any)),
@@ -94,7 +94,7 @@ describe("SessionPostRunMaintenance", () => {
   it("does not reopen a completed run when loading maintenance settings fails", async () => {
     const log = vi.fn();
     const maintenance = new SessionPostRunMaintenance({
-      store: createStore() as any,
+      data: createStore() as any,
       getSettings: vi.fn(async () => { throw new Error("bad settings"); }),
       log,
     });

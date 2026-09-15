@@ -12,7 +12,7 @@ describe("SessionRunExecutor", () => {
     Object.assign(store.getRun(), { metadata: { pluginId: "selected", retained: "yes" } });
     let modelCalls = 0;
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
@@ -46,7 +46,7 @@ describe("SessionRunExecutor", () => {
     } }] }, "selected");
     let submitted = "";
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: { configured: true, acquireSession: async () => ({
@@ -69,7 +69,7 @@ describe("SessionRunExecutor", () => {
       { kind: "plugin", id: "selected" });
     const observed: string[][] = [];
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: {
@@ -102,7 +102,7 @@ describe("SessionRunExecutor", () => {
     const postRunMaintenance = { run: vi.fn(async () => {}) };
     const closeIfStale = vi.fn(async () => {});
     const executorWithMaintenance = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: {
@@ -146,7 +146,7 @@ describe("SessionRunExecutor", () => {
       ],
     });
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: {
@@ -188,7 +188,7 @@ describe("SessionRunExecutor", () => {
     const close = vi.fn(async () => {});
     const finalizeRunParts = vi.fn();
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: {
@@ -218,7 +218,7 @@ describe("SessionRunExecutor", () => {
     const closeError = new Error("close failed");
     const log = vi.fn();
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: {
@@ -260,7 +260,7 @@ describe("SessionRunExecutor", () => {
       decisions: [{ assetId: "asset-1", intent: "auto" as const, mediaType: "image/png", route: "native_image" as const }],
     }));
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: {
@@ -344,7 +344,7 @@ describe("SessionRunExecutor", () => {
     const close = vi.fn();
     const projectAttachmentTransformations = vi.fn();
     const executor = new SessionRunExecutor({
-      store: store as any,
+      data: store as any,
       attachments: store.attachments,
       goals: store as any,
       agentPool: { configured: true, acquireSession, close } as any,

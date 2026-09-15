@@ -93,6 +93,7 @@ export class SessionRunCoordinator {
     const promise = task.promise.finally(() => {
       if (this.runPromises.get(task.runId) === promise) this.runPromises.delete(task.runId);
     });
+    void promise.catch(() => {});
     this.runPromises.set(task.runId, promise);
     return {
       runId: task.runId,
@@ -108,11 +109,11 @@ export class SessionRunCoordinator {
   }
 
   async waitForRun(runId: string): Promise<void> {
-    await this.runPromises.get(runId);
+    await this.runPromises.get(runId)?.catch(() => {});
   }
 
   async waitForRuns(runIds: string[]): Promise<void> {
-    await Promise.all(runIds.map((runId) => this.runPromises.get(runId)).filter((promise): promise is Promise<void> => promise !== undefined));
+    await Promise.all(runIds.map((runId) => this.runPromises.get(runId)).filter((promise): promise is Promise<void> => promise !== undefined).map((promise) => promise.catch(() => {})));
   }
 
   steer(

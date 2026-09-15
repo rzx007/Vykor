@@ -57,7 +57,7 @@ function createMaintenance(agent: Record<string, any>, options: { personalizatio
   const broadcastSince = vi.fn();
   const operationGate = new DaemonOperationGate();
   const maintenance = new SessionMaintenanceService({
-    store: store as any,
+    data: store as any,
     runEngine: runEngine as any,
     agentPool: agentPool as any,
     liveChildren: { has: vi.fn(() => false) },
@@ -88,7 +88,7 @@ describe("SessionMaintenanceService", () => {
         afterMessageCount: 1,
       }));
       const maintenance = new SessionMaintenanceService({
-        store,
+        data: store,
         runEngine: { hasWork: () => false, hasActiveRunsForCwd: () => false } as any,
         agentPool: {
           configured: true,
