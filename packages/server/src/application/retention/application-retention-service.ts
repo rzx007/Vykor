@@ -2,13 +2,17 @@ import {
   type AttachmentIntegrityService,
   DEFAULT_RETENTION_POLICY,
   type RetentionPolicy,
-  type SessionStore,
 } from "@openharness/services";
+
+export interface RetentionStoreOperations {
+  applyRetention(policy: RetentionPolicy, timestamp: number): unknown;
+  listRetentionAudits(): Array<Record<string, unknown>>;
+}
 
 /** 手动或定时运行的数据清理入口；每次结果都会写入 retention_audit。 */
 export class ApplicationRetentionService {
   constructor(
-    private readonly store: SessionStore,
+    private readonly store: RetentionStoreOperations,
     private readonly attachmentIntegrity?: AttachmentIntegrityService,
   ) {}
 

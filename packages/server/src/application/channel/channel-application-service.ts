@@ -1,20 +1,62 @@
 import {
   durableChannelInputId,
+  type ChannelDeliveryRecord,
   type ChannelStatusSnapshot,
   type DurableChannelMessageInput,
   type DurableChannelMessageResult,
   type ExternalConversationRecord,
   type RecordChannelDeliveryInput,
+  type SessionInputRecord,
+  type SessionRecord,
 } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { SessionApplicationService } from "../session/session-application-service.js";
 
+export interface ChannelSessionQueries {
+  getInput(inputId: string): SessionInputRecord | undefined;
+  getSession(sessionId: string): SessionRecord | undefined;
+}
+
+export interface ChannelOperations {
+  findConversation(input: DurableChannelMessageInput): ExternalConversationRecord | undefined;
+  upsertConversation(input: {
+    id?: string;
+    connector: string;
+    accountId: string;
+    workspaceId?: string;
+    chatId: string;
+    threadId?: string;
+    sessionId: string;
+  }): ExternalConversationRecord;
+  createDelivery(input: {
+    conversationId: string;
+    connector: string;
+    accountId: string;
+    chatId: string;
+    threadId?: string;
+    sessionId: string;
+    inputId: string;
+    runId: string;
+    externalMessageId?: string;
+    content: string;
+  }): ChannelDeliveryRecord;
+  getDelivery(deliveryId: string): ChannelDeliveryRecord | undefined;
+  updateDelivery(deliveryId: string, input: RecordChannelDeliveryInput): ChannelDeliveryRecord;
+  listConversations(options?: { connector?: string; limit?: number }): ExternalConversationRecord[];
+  listDeliveries(options?: {
+    connector?: string;
+    limit?: number;
+    statuses?: Array<ChannelDeliveryRecord["status"]>;
+  }): ChannelDeliveryRecord[];
+}
+
 export interface ChannelApplicationServiceContext {
-  store: Pick<SessionStore, "getInput" | "getSession">;
-  channels: SessionStore["channels"];
+  sessionQueries?: ChannelSessionQueries;
+  /** @deprecated use sessionQueries */
+  store?: ChannelSessionQueries;
+  channels: ChannelOperations;
   sessions: Pick<
     SessionApplicationService,
     "admitPrompt" | "awaitRun" | "createSession"
@@ -25,8 +67,15 @@ export interface ChannelApplicationServiceContext {
 /** 外部聊天消息进入 durable Session/Run 的唯一应用入口。 */
 export class ChannelApplicationService {
   private readonly conversationLanes = new Map<string, Promise<void>>();
+  private readonly sessionQueries: ChannelSessionQueries;
 
-  constructor(private readonly context: ChannelApplicationServiceContext) {}
+  constructor(private readonly context: ChannelApplicationServiceContext) {
+    const queries = context.sessionQueries ?? context.store;
+    if (!queries) {
+      throw new Error("ChannelApplicationService requires sessionQueries");
+    }
+    this.sessionQueries = queries;
+  }
 
   async handleMessage(
     input: DurableChannelMessageInput,
@@ -46,7 +95,7 @@ export class ChannelApplicationService {
     input: DurableChannelMessageInput,
   ): Promise<DurableChannelMessageResult> {
     const inputId = durableChannelInputId(input);
-    const existedBefore = Boolean(this.context.store.getInput(inputId));
+    const existedBefore = Boolean(this.sessionQueries.getInput(inputId));
     const conversation = this.resolveConversation(input);
     let admission;
     try {
@@ -176,7 +225,7 @@ export class ChannelApplicationService {
   ): ExternalConversationRecord {
     const existing = this.context.channels.findConversation(input);
     const session = existing
-      ? this.context.store.getSession(existing.sessionId)
+      ? this.sessionQueries.getSession(existing.sessionId)
       : undefined;
     if (existing && session && session.status !== "archived") return existing;
 

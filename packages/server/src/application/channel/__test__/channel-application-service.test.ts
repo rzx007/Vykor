@@ -54,7 +54,7 @@ describe("ChannelApplicationService contracts", () => {
       createSession: vi.fn(() => ({ id: "s1" })),
     };
 
-    const store = {
+    const sessionQueries = {
       getInput: vi.fn((id: string) => existingInputs.get(id)),
       getSession: vi.fn((id: string) => existingSessions.get(id)),
     };
@@ -62,7 +62,7 @@ describe("ChannelApplicationService contracts", () => {
     const log = vi.fn();
 
     return {
-      store,
+      sessionQueries,
       channels,
       sessions,
       log,
@@ -75,7 +75,7 @@ describe("ChannelApplicationService contracts", () => {
 
   function createService(fixture: ReturnType<typeof createFixture>) {
     return new ChannelApplicationService({
-      store: fixture.store as any,
+      sessionQueries: fixture.sessionQueries,
       channels: fixture.channels as any,
       sessions: fixture.sessions as any,
       log: fixture.log,
@@ -122,7 +122,7 @@ describe("ChannelApplicationService contracts", () => {
     };
 
     // Simulate input already in store
-    fixture.store.getInput.mockReturnValueOnce({ id: "inp-dup" });
+    fixture.sessionQueries.getInput.mockReturnValueOnce({ id: "inp-dup" });
 
     const result = await service.handleMessage(input);
     expect(result.duplicate).toBe(true);

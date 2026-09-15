@@ -272,7 +272,10 @@ export class DaemonApplication implements DurableAgentApplication {
       store.finalizeClosingSessions();
 
       // events：窗口订的 SSE。eventPublisher：各处写完 store 后，把增量广播出去。
-      this.events = new ApplicationEventService(store);
+      this.events = new ApplicationEventService({
+        listEvents: (options) => store.listEvents(options),
+        latestEventSeq: () => store.latestEventSeq(),
+      });
       this.eventPublisher = new SessionEventPublisher(store, this.events);
       this.workflows = new SessionWorkflowRunRepository({
         workflows: store.workflows,
@@ -282,7 +285,10 @@ export class DaemonApplication implements DurableAgentApplication {
           this.eventPublisher.publishSince(previousEventSeq),
       });
       this.retention = new ApplicationRetentionService(
-        store,
+        {
+          applyRetention: (policy, timestamp) => store.applyRetention(policy, timestamp),
+          listRetentionAudits: () => store.listRetentionAudits(),
+        },
         new AttachmentIntegrityService({
           store,
           attachments: store.attachments,
@@ -710,7 +716,10 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供通道相关的管理和监控功能
        */
       this.channels = new ChannelApplicationService({
-        store,
+        sessionQueries: {
+          getInput: (id) => store.getInput(id),
+          getSession: (id) => store.getSession(id),
+        },
         channels: store.channels,
         sessions: this.sessions,
         log: options.log,

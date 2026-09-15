@@ -1,5 +1,13 @@
 import type { SessionEventRecord } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
+
+export interface ApplicationEventStore {
+  listEvents(options?: {
+    afterSeq?: number;
+    sessionId?: string;
+    limit?: number;
+  }): SessionEventRecord[];
+  latestEventSeq(): number;
+}
 
 export interface ApplicationEventStreamOptions {
   after?: number;
@@ -31,10 +39,7 @@ export class ApplicationEventService {
   private closed = false;
 
   constructor(
-    private readonly store: Pick<
-      SessionStore,
-      "latestEventSeq" | "listEvents"
-    >,
+    private readonly store: ApplicationEventStore,
   ) {}
 
   get subscriberCount(): number {
