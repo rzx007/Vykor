@@ -2964,4 +2964,156 @@ describe("SessionStore", () => {
       expect(store.listActiveAttachmentLeases(150)).toEqual([]);
     });
   });
+
+  describe("session runtime read contracts", () => {
+    it("returns deep clones for all read methods to prevent caller mutation", () => {
+      withStore((store) => {
+        store.createSession({
+          id: "s1",
+          cwd: process.cwd(),
+          model: "test-model",
+          title: "original title",
+          metadata: { tag: "alpha", nested: { count: 1 } },
+        });
+        const s1 = store.getSession("s1")!;
+        s1.title = "mutated title";
+        (s1.metadata.nested as { count: number }).count = 999;
+        expect(store.getSession("s1")!.title).toBe("original title");
+        expect(
+          (store.getSession("s1")!.metadata.nested as { count: number }).count,
+        ).toBe(1);
+
+        const listS = store.listSessions();
+        listS[0]!.title = "mutated in list";
+        expect(store.getSession("s1")!.title).toBe("original title");
+
+        const admitted = store.admitPrompt({
+          id: "in1",
+          sessionId: "s1",
+          delivery: "queue",
+          items: [{ type: "text", text: "hello world" }],
+          metadata: { key: "val" },
+        });
+        const in1 = store.getInput("in1")!;
+        in1.content = "mutated content";
+        in1.metadata.key = "mutated key";
+        expect(store.getInput("in1")!.content).toBe("hello world");
+        expect(store.getInput("in1")!.metadata.key).toBe("val");
+
+        const msg = store.createMessage({
+          id: "m1",
+          sessionId: "s1",
+          role: "assistant",
+          metadata: { note: "note1" },
+        });
+        const part = store.upsertMessagePart({
+          id: "p1",
+          sessionId: "s1",
+          messageId: "m1",
+          type: "text",
+          text: "original text",
+          metadata: { sub: "val1" },
+        });
+        const p1 = store.listMessageParts("s1")[0]!;
+        p1.text = "mutated part text";
+        p1.metadata.sub = "mutated sub";
+        expect(store.listMessageParts("s1")[0]!.text).toBe("original text");
+        expect(store.listMessageParts("s1")[0]!.metadata.sub).toBe("val1");
+
+        const run = store.createRun({
+          id: "r1",
+          sessionId: "s1",
+          inputId: admitted.id,
+          metadata: { runMeta: "initial" },
+        });
+        const r1 = store.getRun("r1")!;
+        r1.metadata.runMeta = "mutated";
+        expect(store.getRun("r1")!.metadata.runMeta).toBe("initial");
+        expect(store.findRunByInput("in1")!.metadata.runMeta).toBe("initial");
+        expect(store.listRunsByInput("in1")[0]!.metadata.runMeta).toBe("initial");
+
+        const attempt = store.createRunAttempt({
+          id: "att1",
+          runId: "r1",
+          retryReason: "orig",
+        });
+        const att1 = store.getRunAttempt("att1")!;
+        att1.retryReason = "mutated";
+        expect(store.getRunAttempt("att1")!.retryReason).toBe("orig");
+
+        const task = store.createSessionTask({
+          id: "t1",
+          sessionId: "s1",
+          type: "process",
+          description: "task 1",
+          cwd: process.cwd(),
+          metadata: { meta: "orig" },
+        });
+        const t1 = store.getSessionTask("t1")!;
+        t1.description = "mutated desc";
+        t1.metadata.meta = "mutated";
+        expect(store.getSessionTask("t1")!.description).toBe("task 1");
+        expect(store.getSessionTask("t1")!.metadata.meta).toBe("orig");
+      });
+    });
+
+    it("verifies stable sorting orders and filters for list methods", () => {
+      withStore((store) => {
+        store.createSession({ id: "s1", cwd: process.cwd(), model: "m", title: "first" });
+        store.createSession({ id: "s2", cwd: process.cwd(), model: "m", title: "second" });
+        // Update s1 to make its updatedAt newer
+        store.updateSession("s1", { title: "first updated" });
+        const sessions = store.listSessions();
+        expect(sessions[0]!.id).toBe("s1");
+        expect(sessions[1]!.id).toBe("s2");
+
+        // listChildSessions sorted by createdAt asc
+        store.createSession({ id: "c1", parentId: "s1", cwd: process.cwd(), model: "m" });
+        store.createSession({ id: "c2", parentId: "s1", cwd: process.cwd(), model: "m" });
+        const children = store.listChildSessions("s1");
+        expect(children.map((c) => c.id)).toEqual(["c1", "c2"]);
+
+        // listRuns sorted by createdAt asc
+        const in1 = store.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "1" }] });
+        const in2 = store.admitPrompt({ id: "i2", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "2" }] });
+        store.createRun({ id: "r1", sessionId: "s1", inputId: "i1" });
+        store.createRun({ id: "r2", sessionId: "s1", inputId: "i2" });
+        expect(store.listRuns("s1").map((r) => r.id)).toEqual(["r1", "r2"]);
+
+        // listRunAttempts sorted by sequence asc
+        store.createRunAttempt({ id: "ra1", runId: "r1", sequence: 1 });
+        store.createRunAttempt({ id: "ra2", runId: "r1", sequence: 2 });
+        expect(store.listRunAttempts("r1").map((a) => a.id)).toEqual(["ra1", "ra2"]);
+
+        // listSessionTasks sorted by createdAt asc
+        store.createSessionTask({ id: "t1", sessionId: "s1", type: "process", description: "t1", cwd: process.cwd() });
+        store.createSessionTask({ id: "t2", sessionId: "s1", type: "process", description: "t2", cwd: process.cwd() });
+        expect(store.listSessionTasks("s1").map((t) => t.id)).toEqual(["t1", "t2"]);
+
+        // listMessages and listMessageParts with afterSeq and limit
+        store.createMessage({ id: "m1", sessionId: "s1", role: "user" });
+        store.createMessage({ id: "m2", sessionId: "s1", role: "assistant" });
+        store.createMessage({ id: "m3", sessionId: "s1", role: "user" });
+        expect(store.listMessages("s1", { afterSeq: 1, limit: 1 }).map((m) => m.id)).toEqual(["m2"]);
+
+        store.upsertMessagePart({ id: "p1", sessionId: "s1", messageId: "m1", type: "text", text: "part 1" });
+        store.upsertMessagePart({ id: "p2", sessionId: "s1", messageId: "m1", type: "text", text: "part 2" });
+        store.upsertMessagePart({ id: "p3", sessionId: "s1", messageId: "m2", type: "text", text: "part 3" });
+        expect(store.listMessageParts("s1", { messageId: "m1" }).map((p) => p.id)).toEqual(["p1", "p2"]);
+        expect(store.listMessageParts("s1", { afterSeq: 1, limit: 1 }).map((p) => p.id)).toEqual(["p2"]);
+      });
+    });
+
+    it("verifies not-found errors preserve expected error messages", () => {
+      withStore((store) => {
+        expect(() => store.listChildSessions("nonexistent")).toThrow("Session not found: nonexistent");
+        expect(() => store.listInputs("nonexistent")).toThrow("Session not found: nonexistent");
+        expect(() => store.listMessages("nonexistent")).toThrow("Session not found: nonexistent");
+        expect(() => store.listMessageParts("nonexistent")).toThrow("Session not found: nonexistent");
+        expect(() => store.listRuns("nonexistent")).toThrow("Session not found: nonexistent");
+        expect(() => store.listSessionTasks("nonexistent")).toThrow("Session not found: nonexistent");
+        expect(() => store.listRunAttempts("nonexistent")).toThrow("Session run not found: nonexistent");
+      });
+    });
+  });
 });
