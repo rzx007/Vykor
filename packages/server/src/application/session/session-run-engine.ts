@@ -97,6 +97,10 @@ export class SessionRunEngine {
         },
         events: context.events,
         goals: context.goals,
+        admission: {
+          hasPendingAdmission: (sessionId) =>
+            this.admissionService?.hasPendingAdmission(sessionId) ?? false,
+        },
         materializeSteerInput: context.materializeSteerInput,
       });
 

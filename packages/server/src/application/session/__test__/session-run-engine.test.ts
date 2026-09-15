@@ -8,6 +8,32 @@ import { SessionRunEngine } from "../session-run-engine.js";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 
 describe("SessionRunEngine", () => {
+  it("shares pending user admission with RunControl before durable work exists", async () => {
+    const store = createStore();
+    const engine = new SessionRunEngine({
+      store: store as any,
+      goals: store as any,
+      agentPool: { configured: false } as any,
+      runExecutor: { execute: vi.fn() } as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+
+    const admission = engine.admitPromptAndMaybeRun("s1", { id: "pending-user", content: "hello" });
+    expect(engine.control.hasUserWork("s1")).toBe(true);
+    const continuation = store.createRun({
+      id: "goal-continuation",
+      sessionId: "s1",
+      inputId: "goal-input",
+      status: "pending",
+      metadata: { goalId: "g1", goalRevision: 1, goalRunKind: "continuation" },
+    });
+    expect(engine.admission.prepareRunExecution(continuation.id)).toBe(false);
+    expect(store.updateRun).toHaveBeenCalledWith(continuation.id, expect.objectContaining({
+      status: "interrupted",
+      error: "用户消息优先",
+    }));
+    await admission;
+  });
   it("rejects capability steer without delivering it to the active run", async () => {
     const store = createStore();
     const pending = deferred<void>();
