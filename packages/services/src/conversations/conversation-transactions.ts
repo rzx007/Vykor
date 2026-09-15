@@ -14,6 +14,7 @@ import {
   type SessionMessageRecord,
   type SessionRecord,
   type SessionRunRecord,
+  type SessionStateSnapshot,
   type SessionUserInputItem,
   normalizeSessionUserInputItems,
   sessionUserInputText,
@@ -915,6 +916,30 @@ export class ConversationTransactions {
         this.testHooks?.afterRecoveryMutation?.();
       }
       return closing.length;
+    });
+  }
+
+  getSessionState(sessionId: string): SessionStateSnapshot {
+    const session = assertSession(this.storage.state, sessionId);
+    const runs = Object.values(this.storage.state.runs)
+      .filter((run) => run.sessionId === sessionId)
+      .sort((left, right) => left.createdAt - right.createdAt);
+    return clone({
+      cursor: this.storage.state.nextEventSeq - 1,
+      session,
+      inputs: this.conversations.listInputs(sessionId),
+      messages: this.conversations.listMessages(sessionId),
+      parts: this.conversations.listMessageParts(sessionId),
+      runs,
+      attempts: Object.values(this.storage.state.attempts)
+        .filter((attempt) => this.storage.state.runs[attempt.runId]?.sessionId === sessionId)
+        .sort((left, right) => left.createdAt - right.createdAt || left.sequence - right.sequence),
+      tasks: Object.values(this.storage.state.tasks)
+        .filter((task) => task.sessionId === sessionId)
+        .sort((left, right) => left.createdAt - right.createdAt),
+      permissions: Object.values(this.storage.state.permissions)
+        .filter((request) => request.sessionId === sessionId)
+        .sort((left, right) => left.createdAt - right.createdAt),
     });
   }
 }

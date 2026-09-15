@@ -148,7 +148,7 @@ StorageContext 仍暴露 atomic 和 assertWritable，业务代码无需知道 co
 
 - [ ] **步骤 2：写 createReplayRun 测试**
 
-覆盖 source Input 不存在、显式 id 幂等、显式 id 冲突、metadata 继承和 replay ownership。
+覆盖 source Input 不存在、显式 id 幂等、显式 id 冲突、调用方显式传入的 metadata 和 replay ownership；兼容行为是不从 source Input 隐式继承 metadata。
 
 - [ ] **步骤 3：实现两个命名事务**
 
@@ -194,7 +194,7 @@ refactor(services): move prompt edit transaction
 
 - [ ] **步骤 1：固定复制矩阵**
 
-覆盖完整 fork、beforeMessageId、afterMessageId、边界 id 不存在、Input 去重映射、附件引用 position、Message inputId/runId 关系、Part 字段、Session parent/project/cwd/title/model/agent/metadata。
+覆盖完整 fork、beforeMessageId、afterMessageId、边界 id 不存在、Input 去重映射、附件引用 position、Message inputId 关系、Part 字段、Session parent/project/cwd/title/model/agent/metadata。兼容行为是不复制 Run，复制后的 Message 不保留源 runId。
 
 - [ ] **步骤 2：测试中途失败**
 
@@ -277,7 +277,7 @@ Run interrupted、Attempt cancelled、running Part interrupted/failed 必须一�
 
 - [ ] **步骤 1：测试 getSessionState**
 
-断言 root、canonical children、Input、attachment、Message、Part、Run、Attempt、Task、Permission 和 event cursor 取自同一已提交状态；返回深拷贝；不存在 Session 保持错误。
+断言 Session、Input、Message、Part、Run、Attempt、Task、Permission 和 event cursor 取自同一已提交状态；返回深拷贝；不存在 Session 保持错误。现有 `SessionStateSnapshot` 协议不包含 children，本阶段不得新增该字段。
 
 - [ ] **步骤 2：迁移快照组装**
 

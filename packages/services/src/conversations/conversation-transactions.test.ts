@@ -1564,5 +1564,58 @@ describe("ConversationTransactions.admitPrompt", () => {
         }
       });
     });
+
+    describe("getSessionState", () => {
+      it("rejects a missing session", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-snapshot-missing-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          expect(() => createTransactions(store).getSessionState("missing"))
+            .toThrow("Session not found: missing");
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it("returns the complete canonical aggregate at one cursor as a deep clone without children", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-snapshot-full-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          store.createSession({ id: "s1", cwd: dir, model: "m", metadata: { nested: { value: 1 } } });
+          store.createSession({ id: "child", parentId: "s1", cwd: dir, model: "m" });
+          const input = store.admitPrompt({ id: "input", sessionId: "s1", content: "prompt" });
+          const run = store.createRun({ id: "run", sessionId: "s1", inputId: input.id });
+          store.createRunAttempt({ id: "attempt", runId: run.id });
+          const message = store.createMessage({ id: "message", sessionId: "s1", role: "user", inputId: input.id, runId: run.id });
+          store.upsertMessagePart({ id: "part", sessionId: "s1", messageId: message.id, type: "text", text: "hello" });
+          store.createSessionTask({ id: "task", sessionId: "s1", runId: run.id, type: "process", description: "task", cwd: dir });
+          store.createPermissionRequest({ id: "permission", sessionId: "s1", runId: run.id, toolName: "Read", payload: {} });
+          const expectedCursor = store.latestEventSeq();
+
+          const snapshot = createTransactions(store).getSessionState("s1");
+          expect(snapshot.cursor).toBe(expectedCursor);
+          expect(snapshot).toEqual(expect.objectContaining({
+            session: expect.objectContaining({ id: "s1" }),
+            inputs: [expect.objectContaining({ id: "input" })],
+            messages: [expect.objectContaining({ id: "message" })],
+            parts: [expect.objectContaining({ id: "part" })],
+            runs: [expect.objectContaining({ id: "run" })],
+            attempts: [expect.objectContaining({ id: "attempt" })],
+            tasks: [expect.objectContaining({ id: "task" })],
+            permissions: [expect.objectContaining({ id: "permission" })],
+          }));
+          expect(snapshot).not.toHaveProperty("children");
+
+          (snapshot.session.metadata.nested as { value: number }).value = 99;
+          snapshot.messages[0]!.metadata.changed = true;
+          expect(store.getSession("s1")!.metadata).toEqual({ nested: { value: 1 } });
+          expect(store.listMessages("s1")[0]!.metadata).toEqual({});
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    });
   });
 });

@@ -1727,36 +1727,9 @@ export class SessionStore {
     return this.permissions.list(options);
   }
 
-  /** Read one session and its canonical children at a single event cursor. */
+  /** Read one session's canonical aggregate at a single event cursor. */
   getSessionState(sessionId: string): SessionStateSnapshot {
-    const session = assertSession(this.state, sessionId);
-    return clone({
-      cursor: this.state.nextEventSeq - 1,
-      session,
-      inputs: Object.values(this.state.inputs)
-        .filter((input) => input.sessionId === sessionId)
-        .sort((a, b) => a.seq - b.seq),
-      messages: Object.values(this.state.messages)
-        .filter((message) => message.sessionId === sessionId)
-        .sort((a, b) => a.seq - b.seq),
-      parts: Object.values(this.state.parts)
-        .filter((part) => part.sessionId === sessionId)
-        .sort((a, b) => a.seq - b.seq),
-      runs: Object.values(this.state.runs)
-        .filter((run) => run.sessionId === sessionId)
-        .sort((a, b) => a.createdAt - b.createdAt),
-      attempts: Object.values(this.state.attempts)
-        .filter(
-          (attempt) => this.state.runs[attempt.runId]?.sessionId === sessionId,
-        )
-        .sort((a, b) => a.createdAt - b.createdAt || a.sequence - b.sequence),
-      tasks: Object.values(this.state.tasks)
-        .filter((task) => task.sessionId === sessionId)
-        .sort((a, b) => a.createdAt - b.createdAt),
-      permissions: Object.values(this.state.permissions)
-        .filter((request) => request.sessionId === sessionId)
-        .sort((a, b) => a.createdAt - b.createdAt),
-    });
+    return this.conversationTransactions.getSessionState(sessionId);
   }
 
   private appendEventInMemory(
