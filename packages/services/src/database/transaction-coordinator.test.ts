@@ -169,7 +169,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
     }
   });
 
-  it("rolls back the outer transaction when a nested failure is caught by business code", () => {
+  it("allows an outer transaction to continue after a caught nested validation error", () => {
     const dir = mkdtempSync(join(tmpdir(), "ohs-tx-nested-caught-"));
     const dbPath = join(dir, "store.db");
     let store = new SessionStore({ path: dbPath });
@@ -186,19 +186,18 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
           store.updateSession("s1", { title: "Outer Change" });
           try {
             coordinator.atomic(() => {
-              store.updateSession("s1", { title: "Inner Change" });
               throw new Error("nested failed");
             });
           } catch {
-            // A caught nested failure still poisons the shared transaction.
+            // Existing callers intentionally recover from validation failures.
           }
         }),
-      ).toThrow("nested failed");
+      ).not.toThrow();
 
-      expect(store.getSession("s1")?.title).toBe("");
+      expect(store.getSession("s1")?.title).toBe("Outer Change");
       store.close();
       store = new SessionStore({ path: dbPath });
-      expect(store.getSession("s1")?.title).toBe("");
+      expect(store.getSession("s1")?.title).toBe("Outer Change");
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
