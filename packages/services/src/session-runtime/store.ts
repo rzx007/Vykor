@@ -263,8 +263,17 @@ export class SessionStore {
       this.schedules = new ScheduleRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);
       this.channels = new ChannelRepository(this.storage);
-      this.sessions = new SessionRepository(this.storage);
-      this.conversations = new ConversationRepository(this.storage);
+      this.conversations = new ConversationRepository({
+        storage: this.storage,
+        eventRegistry: this.eventRegistry,
+        save: () => this.save(),
+      });
+      this.sessions = new SessionRepository({
+        storage: this.storage,
+        projects: this.projects,
+        appendEvent: (input) => this.appendEvent(input),
+        save: () => this.save(),
+      });
       this.runs = new RunRepository({
         storage: this.storage,
         appendEvent: (input) => this.appendEvent(input),
@@ -585,43 +594,7 @@ export class SessionStore {
   }
 
   createSession(input: CreateSessionInput): SessionRecord {
-    const id = input.id ?? randomUUID();
-    if (this.state.sessions[id])
-      throw new Error(`Session already exists: ${id}`);
-    const timestamp = now();
-    const projectId =
-      input.projectId ??
-      (input.parentId
-        ? this.state.sessions[input.parentId]?.projectId
-        : undefined);
-    const project = projectId
-      ? this.projects.get(projectId)
-      : this.projects.inspect(input.cwd);
-    if (!project) throw new Error(`Project not found: ${projectId}`);
-    const cwd = resolve(input.cwd);
-    const session: SessionRecord = {
-      id,
-      ...(input.parentId ? { parentId: input.parentId } : {}),
-      projectId: project.id,
-      cwd,
-      cwdRelative: relative(project.path, cwd),
-      title: input.title ?? "",
-      model: input.model,
-      ...(input.agent ? { agent: input.agent } : {}),
-      status: "idle",
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.state.sessions[id] = session;
-    this.mutations.sessions.add(id);
-    this.appendEventInMemory({
-      type: "session.created",
-      sessionId: id,
-      payload: { session },
-    });
-    this.save();
-    return clone(session);
+    return this.sessions.create(input);
   }
 
   getSession(sessionId: string): SessionRecord | undefined {
@@ -741,60 +714,16 @@ export class SessionStore {
   }
 
   archiveSession(sessionId: string): SessionRecord {
-    const session = assertSession(this.state, sessionId);
-    if (session.status === "archived") return clone(session);
-    const timestamp = now();
-    session.status = "archived";
-    session.updatedAt = timestamp;
-    session.archivedAt = timestamp;
-    this.mutations.sessions.add(sessionId);
-    this.appendEventInMemory({
-      type: "session.archived",
-      sessionId,
-      payload: { sessionId },
-    });
-    this.save();
-    return clone(session);
+    return this.sessions.archive(sessionId);
   }
 
   /** Prevent further mutation while the server joins interrupted work. */
   beginArchive(sessionId: string): SessionRecord {
-    const session = assertSession(this.state, sessionId);
-    if (session.status === "archived" || session.status === "closing")
-      return clone(session);
-    const timestamp = now();
-    session.status = "closing";
-    session.updatedAt = timestamp;
-    this.mutations.sessions.add(sessionId);
-    this.appendEventInMemory({
-      type: "session.closing",
-      sessionId,
-      payload: { sessionId },
-    });
-    this.save();
-    return clone(session);
+    return this.sessions.beginArchive(sessionId);
   }
 
   updateSession(sessionId: string, input: UpdateSessionInput): SessionRecord {
-    const session = assertSession(this.state, sessionId);
-    assertMutableSession(session);
-    const timestamp = now();
-    if (input.title !== undefined) session.title = input.title;
-    if (input.model !== undefined) session.model = input.model;
-    if (input.agent !== undefined) {
-      if (input.agent === null) delete session.agent;
-      else session.agent = input.agent;
-    }
-    if (input.metadata !== undefined) session.metadata = input.metadata;
-    session.updatedAt = timestamp;
-    this.mutations.sessions.add(sessionId);
-    this.appendEventInMemory({
-      type: "session.updated",
-      sessionId,
-      payload: { session: clone(session) },
-    });
-    this.save();
-    return clone(session);
+    return this.sessions.update(sessionId, input);
   }
 
   admitPrompt(
@@ -1739,33 +1668,7 @@ export class SessionStore {
   }
 
   createMessage(input: CreateMessageInput): SessionMessageRecord {
-    const session = assertSession(this.state, input.sessionId);
-    const id = input.id ?? randomUUID();
-    if (this.state.messages[id])
-      throw new Error(`Session message already exists: ${id}`);
-    const timestamp = now();
-    const row: SessionMessageRecord = {
-      id,
-      sessionId: input.sessionId,
-      seq: maxSeq(this.state.messages, input.sessionId) + 1,
-      role: input.role,
-      ...(input.runId ? { runId: input.runId } : {}),
-      ...(input.inputId ? { inputId: input.inputId } : {}),
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.state.messages[id] = row;
-    session.updatedAt = timestamp;
-    this.mutations.messages.add(id);
-    this.mutations.sessions.add(input.sessionId);
-    this.appendEventInMemory({
-      type: "session.message.created",
-      sessionId: input.sessionId,
-      payload: { message: row },
-    });
-    this.save();
-    return clone(row);
+    return this.conversations.createMessage(input);
   }
 
   listMessages(
@@ -1894,109 +1797,7 @@ export class SessionStore {
   }
 
   upsertMessagePart(input: UpsertMessagePartInput): SessionMessagePartRecord {
-    const session = assertSession(this.state, input.sessionId);
-    const message = assertMessage(this.state, input.messageId);
-    if (message.sessionId !== input.sessionId) {
-      throw new Error(
-        `Session message ${input.messageId} does not belong to session ${input.sessionId}`,
-      );
-    }
-    const id = input.id ?? randomUUID();
-    const timestamp = now();
-    const existing = this.state.parts[id];
-    const row: SessionMessagePartRecord = existing
-      ? {
-          ...existing,
-          type: input.type,
-          status: input.status ?? existing.status,
-          ...(input.text !== undefined ? { text: input.text } : {}),
-          ...(input.toolUseId !== undefined
-            ? { toolUseId: input.toolUseId }
-            : {}),
-          ...(input.toolName !== undefined ? { toolName: input.toolName } : {}),
-          ...(input.input !== undefined ? { input: input.input } : {}),
-          ...(input.output !== undefined ? { output: input.output } : {}),
-          ...(input.isError !== undefined ? { isError: input.isError } : {}),
-          ...(input.assetId !== undefined ? { assetId: input.assetId } : {}),
-          ...(input.intent !== undefined ? { intent: input.intent } : {}),
-          ...(input.displayName !== undefined
-            ? { displayName: input.displayName }
-            : {}),
-          ...(input.mediaType !== undefined
-            ? { mediaType: input.mediaType }
-            : {}),
-          ...(input.sizeBytes !== undefined
-            ? { sizeBytes: input.sizeBytes }
-            : {}),
-          ...(input.kind !== undefined ? { kind: input.kind } : {}),
-          ...(input.representationId !== undefined
-            ? { representationId: input.representationId }
-            : {}),
-          ...(input.processor !== undefined
-            ? { processor: input.processor }
-            : {}),
-          ...(input.transformationError !== undefined
-            ? { transformationError: input.transformationError }
-            : {}),
-          metadata: input.metadata
-            ? { ...existing.metadata, ...input.metadata }
-            : existing.metadata,
-          updatedAt: timestamp,
-        }
-      : {
-          id,
-          sessionId: input.sessionId,
-          messageId: input.messageId,
-          seq: maxSeq(this.state.parts, input.sessionId) + 1,
-          type: input.type,
-          status: input.status ?? "pending",
-          ...(input.text !== undefined ? { text: input.text } : {}),
-          ...(input.toolUseId !== undefined
-            ? { toolUseId: input.toolUseId }
-            : {}),
-          ...(input.toolName !== undefined ? { toolName: input.toolName } : {}),
-          ...(input.input !== undefined ? { input: input.input } : {}),
-          ...(input.output !== undefined ? { output: input.output } : {}),
-          ...(input.isError !== undefined ? { isError: input.isError } : {}),
-          ...(input.assetId !== undefined ? { assetId: input.assetId } : {}),
-          ...(input.intent !== undefined ? { intent: input.intent } : {}),
-          ...(input.displayName !== undefined
-            ? { displayName: input.displayName }
-            : {}),
-          ...(input.mediaType !== undefined
-            ? { mediaType: input.mediaType }
-            : {}),
-          ...(input.sizeBytes !== undefined
-            ? { sizeBytes: input.sizeBytes }
-            : {}),
-          ...(input.kind !== undefined ? { kind: input.kind } : {}),
-          ...(input.representationId !== undefined
-            ? { representationId: input.representationId }
-            : {}),
-          ...(input.processor !== undefined
-            ? { processor: input.processor }
-            : {}),
-          ...(input.transformationError !== undefined
-            ? { transformationError: input.transformationError }
-            : {}),
-          metadata: input.metadata ?? {},
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-
-    this.state.parts[id] = row;
-    message.updatedAt = timestamp;
-    session.updatedAt = timestamp;
-    this.mutations.parts.add(id);
-    this.mutations.messages.add(message.id);
-    this.mutations.sessions.add(session.id);
-    this.appendEventInMemory({
-      type: "session.message.part.updated",
-      sessionId: input.sessionId,
-      payload: { part: clone(row) },
-    });
-    this.save();
-    return clone(row);
+    return this.conversations.upsertMessagePart(input);
   }
 
   appendMessagePartDelta(
@@ -2064,10 +1865,7 @@ export class SessionStore {
   }
 
   appendEvent(input: AppendEventInput): SessionEventRecord {
-    if (input.sessionId) assertSession(this.state, input.sessionId);
-    const event = this.appendEventInMemory(input);
-    this.save();
-    return clone(event);
+    return this.conversations.appendEvent(input);
   }
 
   listEvents(options: ListEventsOptions = {}): SessionEventRecord[] {
@@ -2328,79 +2126,11 @@ export class SessionStore {
   }
 
   createRun(input: CreateRunInput): SessionRunRecord {
-    const session = assertSession(this.state, input.sessionId);
-    assertMutableSession(session);
-    if (input.inputId && !this.state.inputs[input.inputId]) {
-      throw new Error(`Session input not found: ${input.inputId}`);
-    }
-    if (
-      input.inputId &&
-      this.state.inputs[input.inputId]!.sessionId !== input.sessionId
-    ) {
-      throw new Error(
-        `Session input does not belong to session: ${input.inputId}`,
-      );
-    }
-    const id = input.id ?? randomUUID();
-    if (this.state.runs[id])
-      throw new Error(`Session run already exists: ${id}`);
-    const timestamp = now();
-    const run: SessionRunRecord = {
-      id,
-      sessionId: input.sessionId,
-      ...(input.inputId ? { inputId: input.inputId } : {}),
-      status: "pending",
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.state.runs[id] = run;
-    this.refreshSessionStatus(session);
-    session.updatedAt = timestamp;
-    this.mutations.runs.add(id);
-    this.mutations.sessions.add(session.id);
-    this.appendEventInMemory({
-      type: "session.run.created",
-      sessionId: input.sessionId,
-      payload: { run },
-    });
-    this.save();
-    return clone(run);
+    return this.runs.createRun(input);
   }
 
   updateRun(runId: string, input: UpdateRunInput): SessionRunRecord {
-    const run = this.state.runs[runId];
-    if (!run) throw new Error(`Session run not found: ${runId}`);
-    const session = assertSession(this.state, run.sessionId);
-    const timestamp = now();
-    const previous = run.status;
-    if (input.status) {
-      if (isTerminalRunStatus(previous) && input.status !== previous) {
-        throw new Error(`Session run is already terminal: ${runId}`);
-      }
-      run.status = input.status;
-      if (input.status === "running" && previous !== "running") {
-        run.startedAt = timestamp;
-        delete run.finishedAt;
-        delete run.error;
-      }
-      if (["completed", "failed", "interrupted"].includes(input.status))
-        run.finishedAt = timestamp;
-    }
-    if (input.error !== undefined) run.error = input.error;
-    if (input.metadata) run.metadata = { ...run.metadata, ...input.metadata };
-    run.updatedAt = timestamp;
-    this.refreshSessionStatus(session);
-    session.updatedAt = timestamp;
-    this.mutations.runs.add(runId);
-    this.mutations.sessions.add(session.id);
-    this.appendEventInMemory({
-      type: "session.run.updated",
-      sessionId: run.sessionId,
-      payload: { run, previousStatus: previous },
-    });
-    this.save();
-    return clone(run);
+    return this.runs.updateRun(runId, input);
   }
 
   getRun(runId: string): SessionRunRecord | undefined {
@@ -2606,88 +2336,14 @@ export class SessionStore {
   }
 
   createRunAttempt(input: CreateRunAttemptInput): SessionRunAttemptRecord {
-    const run = this.state.runs[input.runId];
-    if (!run) throw new Error(`Session run not found: ${input.runId}`);
-    if (isTerminalRunStatus(run.status))
-      throw new Error(`Session run is already terminal: ${input.runId}`);
-    const attempts = Object.values(this.state.attempts).filter(
-      (attempt) => attempt.runId === input.runId,
-    );
-    const sequence =
-      input.sequence ??
-      attempts.reduce((max, attempt) => Math.max(max, attempt.sequence), 0) + 1;
-    if (attempts.some((attempt) => attempt.sequence === sequence)) {
-      throw new Error(
-        `Session run attempt sequence already exists: ${input.runId}/${sequence}`,
-      );
-    }
-    const id = input.id ?? `attempt_${randomUUID()}`;
-    if (this.state.attempts[id])
-      throw new Error(`Session run attempt already exists: ${id}`);
-    const timestamp = now();
-    const attempt: SessionRunAttemptRecord = {
-      id,
-      runId: input.runId,
-      sequence,
-      status: "pending",
-      ...(input.provider ? { provider: input.provider } : {}),
-      ...(input.model ? { model: input.model } : {}),
-      ...(input.retryReason ? { retryReason: input.retryReason } : {}),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    this.state.attempts[id] = attempt;
-    this.mutations.attempts.add(id);
-    this.appendEventInMemory({
-      type: "session.run_attempt.created",
-      sessionId: run.sessionId,
-      payload: { attempt },
-    });
-    this.save();
-    return clone(attempt);
+    return this.runs.createRunAttempt(input);
   }
 
   updateRunAttempt(
     attemptId: string,
     input: UpdateRunAttemptInput,
   ): SessionRunAttemptRecord {
-    const attempt = this.state.attempts[attemptId];
-    if (!attempt)
-      throw new Error(`Session run attempt not found: ${attemptId}`);
-    const run = this.state.runs[attempt.runId];
-    if (!run) throw new Error(`Session run not found: ${attempt.runId}`);
-    const previous = attempt.status;
-    const timestamp = now();
-    if (input.status) {
-      if (isTerminalAttemptStatus(previous) && input.status !== previous) {
-        throw new Error(
-          `Session run attempt is already terminal: ${attemptId}`,
-        );
-      }
-      attempt.status = input.status;
-      if (input.status === "running" && previous !== "running") {
-        attempt.startedAt = timestamp;
-        delete attempt.finishedAt;
-        delete attempt.error;
-        delete attempt.errorKind;
-      }
-      if (isTerminalAttemptStatus(input.status)) attempt.finishedAt = timestamp;
-    }
-    if (input.errorKind !== undefined) attempt.errorKind = input.errorKind;
-    if (input.error !== undefined) attempt.error = input.error;
-    if (input.inputTokens !== undefined)
-      attempt.inputTokens = input.inputTokens;
-    if (input.outputTokens !== undefined)
-      attempt.outputTokens = input.outputTokens;
-    attempt.updatedAt = timestamp;
-    this.mutations.attempts.add(attemptId);
-    this.appendEventInMemory({
-      type: "session.run_attempt.updated",
-      sessionId: run.sessionId,
-      payload: { attempt, previousStatus: previous },
-    });
-    this.save();
-    return clone(attempt);
+    return this.runs.updateRunAttempt(attemptId, input);
   }
 
   getRunAttempt(attemptId: string): SessionRunAttemptRecord | undefined {
@@ -2842,25 +2498,7 @@ export class SessionStore {
     input: AppendEventInput,
     retain = true,
   ): SessionEventRecord {
-    const prepared = this.eventRegistry.prepareWrite(
-      input.type,
-      input.payload ?? {},
-      input.sessionId,
-    );
-    const event: SessionEventRecord = {
-      id: input.id ?? randomUUID(),
-      seq: this.eventSequence.allocate(),
-      type: input.type,
-      schemaVersion: prepared.schemaVersion,
-      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-      payload: prepared.payload,
-      createdAt: now(),
-    };
-    if (retain) {
-      this.state.events.push(event);
-      this.mutations.events.add(event.id);
-    }
-    return event;
+    return this.conversations.appendEventInMemory(input, retain);
   }
 
   private refreshSessionStatus(session: SessionRecord): void {
