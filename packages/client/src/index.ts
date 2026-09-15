@@ -26,6 +26,13 @@ export {
   PluginResource,
   DevelopmentResource,
   SessionResource,
+  AttachmentResource,
+  PermissionResource,
+  ScheduleResource,
+  JobResource,
+  TerminalResource,
+  ChannelResource,
+  EventResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
 export type {

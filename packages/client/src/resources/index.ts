@@ -5,3 +5,11 @@ export * from "./project-resource.js";
 export * from "./plugin-resource.js";
 export * from "./development-resource.js";
 export * from "./session-resource.js";
+export * from "./attachment-resource.js";
+export * from "./permission-resource.js";
+export * from "./schedule-resource.js";
+export * from "./job-resource.js";
+export * from "./terminal-resource.js";
+export * from "./channel-resource.js";
+export * from "./event-resource.js";
+
