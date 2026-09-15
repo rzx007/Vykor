@@ -285,6 +285,28 @@ describe("RunControlService", () => {
     }));
   });
 
+  it("keeps repeated interrupts idempotent after the first durable transition", () => {
+    const { options, runs, queuedRuns } = createMockControlOptions();
+    queuedRuns.set("s1", ["r-q1"]);
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
+    const service = new RunControlService(options);
+
+    expect(service.interruptRun("s1", "r-q1").interrupted).toBe(true);
+    expect(service.interruptRun("s1", "r-q1").interrupted).toBe(false);
+    expect(options.durableRuns.updateRun).toHaveBeenCalledOnce();
+  });
+
+  it("does not send terminal runs to runtime interruption", () => {
+    const { options, runs } = createMockControlOptions();
+    runs.set("r1", { id: "r1", sessionId: "s1", status: "completed", metadata: {}, createdAt: 1, updatedAt: 1 });
+
+    expect(new RunControlService(options).interruptRun("s1", "r1")).toEqual({
+      queuedRunIds: [],
+      interrupted: false,
+    });
+    expect(options.runtime.interruptRun).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["input belongs to another session", { inputSessionId: "s2" }],
     ["queued run belongs to another session", { queuedSessionId: "s2" }],
@@ -354,6 +376,39 @@ describe("RunControlService", () => {
 
     expect(result.status).toBe("completed");
     expect(result.output).toBe("Hello world");
+  });
+
+  it("aborts await without cancelling the run", async () => {
+    const { options, runs } = createMockControlOptions();
+    runs.set("r1", { id: "r1", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 });
+    options.runtime.waitForRun = vi.fn(() => new Promise<void>(() => {}));
+    const controller = new AbortController();
+    controller.abort("caller stopped waiting");
+
+    await expect(new RunControlService(options).awaitRun("s1", "r1", {
+      signal: controller.signal,
+    })).rejects.toThrow("caller stopped waiting");
+    expect(options.runtime.interruptRun).not.toHaveBeenCalled();
+  });
+
+  it("times out await without cancelling the run", async () => {
+    const { options, runs } = createMockControlOptions();
+    runs.set("r1", { id: "r1", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 });
+    options.runtime.waitForRun = vi.fn(() => new Promise<void>(() => {}));
+
+    await expect(new RunControlService(options).awaitRun("s1", "r1", {
+      timeoutMs: 1,
+    })).rejects.toThrow("Timed out waiting for session run: r1");
+    expect(options.runtime.interruptRun).not.toHaveBeenCalled();
+  });
+
+  it("rejects promotion after stop without touching runtime", async () => {
+    const { options } = createMockControlOptions();
+    const service = new RunControlService(options);
+    await service.stopAndDrain();
+
+    await expect(service.promoteQueuedRun("s1", "i1", "q1", "a1")).rejects.toThrow("stopping");
+    expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
   });
 
   it("stops and drains active sessions and queued runs", async () => {

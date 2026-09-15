@@ -179,6 +179,12 @@ export class RunControlService {
     reason?: string,
   ): { activeRunId?: string; queuedRunIds: string[]; interrupted: boolean } {
     const before = this.options.events.checkpoint();
+    const durableRun = this.options.durableRuns.getRun(runId);
+    if (
+      durableRun?.sessionId === sessionId &&
+      durableRun.status !== "pending" &&
+      durableRun.status !== "running"
+    ) return { queuedRunIds: [], interrupted: false };
     if (this.activeRunId(sessionId) === runId) this.pauseGoalForRun(runId);
     const result = this.options.runtime.interruptRun(sessionId, runId, reason);
     if (result.interrupted) {
@@ -323,13 +329,14 @@ export class RunControlService {
   async awaitRun(
     sessionId: string,
     runId: string,
+    options: { timeoutMs?: number; signal?: AbortSignal } = {},
   ): Promise<AwaitSessionRunResult> {
     const initial = this.options.durableRuns.getRun(runId);
     if (!initial || initial.sessionId !== sessionId) {
       throw new Error(`Session run not found: ${runId}`);
     }
     if (initial.status === "pending" || initial.status === "running") {
-      await this.options.runtime.waitForRun(runId);
+      await this.waitForRun(runId, options);
     }
     const run = this.options.durableRuns.getRun(runId);
     if (!run || run.sessionId !== sessionId) {
@@ -362,6 +369,43 @@ export class RunControlService {
       output,
       ...(run.error ? { error: run.error } : {}),
     };
+  }
+
+  private async waitForRun(
+    runId: string,
+    options: { timeoutMs?: number; signal?: AbortSignal },
+  ): Promise<void> {
+    const signal = options.signal;
+    if (signal?.aborted) throw this.abortError(signal);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    const guards: Promise<never>[] = [];
+    if (options.timeoutMs !== undefined) {
+      guards.push(new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Timed out waiting for session run: ${runId}`)),
+          options.timeoutMs,
+        );
+      }));
+    }
+    if (signal) {
+      guards.push(new Promise((_, reject) => {
+        onAbort = () => reject(this.abortError(signal));
+        signal.addEventListener("abort", onAbort, { once: true });
+      }));
+    }
+    try {
+      await Promise.race([this.options.runtime.waitForRun(runId), ...guards]);
+    } finally {
+      if (timer) clearTimeout(timer);
+      if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  private abortError(signal: AbortSignal): Error {
+    return signal.reason instanceof Error
+      ? signal.reason
+      : new Error(typeof signal.reason === "string" ? signal.reason : "Run wait aborted");
   }
 
   async waitForRuns(runIds: string[]): Promise<void> {
