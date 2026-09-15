@@ -12,7 +12,7 @@
 | `devDependencies` | React、Tailwind、图标、workspace 包、electron-vite 等 | 开发期用；渲染进程和主进程 JS 已经打进 `out/` |
 | `electron-builder.yml` 的 `files` | `out/**`、`resources/**`、`package.json` | 不要默认拷整个 `apps/desktop` |
 
-Desktop 只直接依赖 `@openharness/client` 和 `@openharness/server`。主进程把 server 及其 `core`、`sandbox`、`terminal-node` 等传递实现打进 `out/main`；renderer/preload 不允许导入 server。SQLite 迁移文件仍由 `electron.vite.config.ts` 拷到 `out/main/migrations`。原生模块保持外置，asar 里再解开 `prebuilds` / `build`。
+Desktop 只直接依赖 `@openharness/client` 和 `@openharness/server`。主进程把 server 及其 `core`、`sandbox`、`terminal-node` 等传递实现打进 `out/main`；renderer/preload 不允许导入 server。SQLite 迁移文件仍由 `electron.vite.config.ts` 拷到 `out/session-runtime/migrations`，以匹配 bundle 后迁移加载器相对于 `out/main/index.js` 的路径。原生模块保持外置，asar 里再解开 `prebuilds` / `build`。
 
 ## 不要把这些加回 `dependencies`
 
