@@ -1,0 +1,149 @@
+/**
+ * SseTransport: Server-Sent Events 流式传输内核。
+ *
+ * 负责：
+ * - 原始字节流 TextDecoder 解码
+ * - SSE 行解析（data:, event:, id:, retry:, 注释行）
+ * - 多行 data 拼接（\n 间隔）
+ * - CRLF / LF 空行完成单个 frame
+ * - signal / abort 支持
+ * - Last-Event-ID 透传与错误处理
+ */
+
+import { throwResponseError } from "./http-transport.js";
+
+export interface SseStreamOptions<T = unknown> {
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+  lastEventId?: string;
+  decode?: (value: unknown) => T;
+}
+
+export interface SseRawFrame {
+  id?: string;
+  event?: string;
+  data?: string;
+  retry?: number;
+}
+
+/**
+ * 解析单个 SSE frame 的各字段。
+ * 符合 W3C SSE 规范：多行 data 以 LF 拼接；以冒号开头的注释行跳过。
+ */
+export function parseRawSseFrame(frame: string): SseRawFrame | undefined {
+  let id: string | undefined;
+  let event: string | undefined;
+  let retry: number | undefined;
+  const dataLines: string[] = [];
+
+  for (const line of frame.split(/\r?\n/)) {
+    if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("data:")) {
+      dataLines.push(line.startsWith("data: ") ? line.slice(6) : line.slice(5));
+    } else if (line.startsWith("event:")) {
+      event = (line.startsWith("event: ") ? line.slice(7) : line.slice(6)).trim();
+    } else if (line.startsWith("id:")) {
+      id = (line.startsWith("id: ") ? line.slice(4) : line.slice(3)).trim();
+    } else if (line.startsWith("retry:")) {
+      const value = (line.startsWith("retry: ") ? line.slice(7) : line.slice(6)).trim();
+      const parsed = parseInt(value, 10);
+      if (!Number.isNaN(parsed)) {
+        retry = parsed;
+      }
+    }
+  }
+
+  if (dataLines.length === 0 && !id && !event && retry === undefined) {
+    return undefined;
+  }
+
+  return {
+    id,
+    event,
+    retry,
+    data: dataLines.length > 0 ? dataLines.join("\n") : undefined,
+  };
+}
+
+/** 解析单个 SSE frame 的 `data:` 行，得到事件 JSON。保持原有行为。 */
+export function parseSseFrame(frame: string): unknown | undefined {
+  let data = "";
+  for (const line of frame.split(/\r?\n/)) {
+    if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("data:")) {
+      const slice = line.slice(5).trimStart();
+      data = data ? `${data}\n${slice}` : slice;
+    }
+  }
+  if (!data) return undefined;
+  return JSON.parse(data) as unknown;
+}
+
+/**
+ * 将 SSE 字节流解析为事件异步迭代器。
+ * `open` 负责建立连接并返回 response body，便于重试或注入。
+ */
+export async function* streamServerSentEvents<T>(
+  open: () => Promise<ReadableStream<Uint8Array>>,
+  decode: (value: unknown) => T = (value) => value as T,
+): AsyncIterable<T> {
+  const reader = (await open()).getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      // SSE 事件以空行分隔
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const event = parseSseFrame(frame);
+        if (event !== undefined) yield decode(event);
+      }
+    }
+    buffer += decoder.decode();
+    const event = parseSseFrame(buffer);
+    if (event !== undefined) yield decode(event);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export class SseTransport {
+  constructor(private readonly fetchImpl: typeof fetch = fetch) {}
+
+  streamFromReader<T>(
+    open: () => Promise<ReadableStream<Uint8Array>>,
+    decode: (value: unknown) => T = (val) => val as T,
+  ): AsyncIterable<T> {
+    return streamServerSentEvents(open, decode);
+  }
+
+  async *stream<T>(
+    url: string,
+    options: SseStreamOptions<T> = {},
+  ): AsyncIterable<T> {
+    const headers: Record<string, string> = {
+      ...(options.headers ?? {}),
+      ...(options.lastEventId ? { "Last-Event-ID": options.lastEventId } : {}),
+    };
+
+    const open = async () => {
+      const response = await this.fetchImpl(url, {
+        headers,
+        signal: options.signal,
+      });
+      if (!response.ok) {
+        await throwResponseError(response);
+      }
+      if (!response.body) {
+        throw new Error("Event stream response has no body");
+      }
+      return response.body;
+    };
+
+    yield* streamServerSentEvents(open, options.decode);
+  }
+}

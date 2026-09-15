@@ -112,58 +112,29 @@ import {
   parseAttachmentAssetRecord,
 } from "@openharness/protocol";
 
+import {
+  HttpTransport,
+  OpenHarnessApiError,
+  normalizeDaemonBaseUrl,
+  responseField,
+  responseArray,
+  attachmentRangeHeader,
+  isReadableStream,
+} from "./http-transport.js";
+import {
+  SseTransport,
+  streamServerSentEvents,
+} from "./sse-transport.js";
+
+export {
+  HttpTransport,
+  OpenHarnessApiError,
+  normalizeDaemonBaseUrl,
+  SseTransport,
+  streamServerSentEvents,
+};
+
 let promptRequestCounter = 0;
-
-function responseField(value: unknown, field: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ProtocolDataError("Response body must be an object");
-  }
-  if (!(field in value)) {
-    throw new ProtocolDataError(`Response body is missing ${field}`, field);
-  }
-  return (value as Record<string, unknown>)[field];
-}
-
-function responseArray<T>(
-  value: unknown,
-  field: string,
-  decode: (item: unknown) => T,
-): T[] {
-  const items = responseField(value, field);
-  if (!Array.isArray(items)) {
-    throw new ProtocolDataError(`Response ${field} must be an array`, field);
-  }
-  return items.map(decode);
-}
-
-/** Normalize a daemon base URL without accepting credentials or request fragments. */
-export function normalizeDaemonBaseUrl(value: string): string {
-  const raw = value.trim();
-  if (!raw) throw new Error("Daemon URL is required");
-
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new Error("Daemon URL must be an absolute http or https URL");
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Daemon URL must use http or https");
-  }
-  if (url.username || url.password) {
-    throw new Error(
-      "Daemon URL must not contain credentials; use a bearer token instead",
-    );
-  }
-  if (url.search || url.hash) {
-    throw new Error(
-      "Daemon URL must not contain query parameters or a fragment",
-    );
-  }
-
-  const pathname = url.pathname.replace(/\/+$/, "");
-  return `${url.origin}${pathname === "/" ? "" : pathname}`;
-}
 
 /** Generate a caller-stable id for one prompt admission attempt. */
 export function createPromptRequestId(): string {
@@ -173,31 +144,29 @@ export function createPromptRequestId(): string {
   return `prompt-${Date.now().toString(36)}-${promptRequestCounter.toString(36)}`;
 }
 
-/** HTTP API 非 2xx 时抛出；携带 status 与原始响应体。 */
-export class OpenHarnessApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly body: unknown,
-  ) {
-    super(message);
-    this.name = "OpenHarnessApiError";
-  }
-}
-
 /**
  * 面向 daemon 的 typed fetch 客户端。
  * 构造时传入 `baseUrl` 与可选 Bearer `token`（通常来自 daemon registry）。
  */
 export class OpenHarnessClient {
-  private readonly baseUrl: string;
-  private readonly token?: string;
-  private readonly fetchImpl: typeof fetch;
+  readonly transport: HttpTransport;
+  readonly sse: SseTransport;
 
   constructor(options: OpenHarnessClientOptions) {
-    this.baseUrl = normalizeDaemonBaseUrl(options.baseUrl);
-    this.token = options.token;
-    this.fetchImpl = options.fetch ?? fetch;
+    this.transport = new HttpTransport(options);
+    this.sse = new SseTransport(this.transport.fetchImpl);
+  }
+
+  get baseUrl(): string {
+    return this.transport.baseUrl;
+  }
+
+  get token(): string | undefined {
+    return this.transport.token;
+  }
+
+  get fetchImpl(): typeof fetch {
+    return this.transport.fetchImpl;
   }
 
   /** `GET /health` */
@@ -237,18 +206,15 @@ export class OpenHarnessClient {
   async uploadAttachment(
     input: UploadAttachmentInput,
   ): Promise<AttachmentAssetRecord> {
-    const headers = this.headers();
+    const headers: Record<string, string> = {};
     headers["x-openharness-filename"] = encodeURIComponent(input.displayName);
     if (input.mediaType) headers["content-type"] = input.mediaType;
-    const init: RequestInit & { duplex?: "half" } = {
+    const response = await this.transport.requestResponse("/attachments", {
       method: "POST",
       headers,
       body: input.body as RequestInit["body"],
       signal: input.signal,
-    };
-    if (isReadableStream(input.body)) init.duplex = "half";
-    const response = await this.fetchImpl(`${this.baseUrl}/attachments`, init);
-    if (!response.ok) await this.throwResponseError(response);
+    });
     return parseAttachmentAssetRecord(await response.json());
   }
 
@@ -269,14 +235,12 @@ export class OpenHarnessClient {
     options: DownloadAttachmentOptions = {},
   ): Promise<Response> {
     const range = attachmentRangeHeader(options.range);
-    const headers = this.headers();
+    const headers: Record<string, string> = {};
     if (range) headers.range = range;
-    const response = await this.fetchImpl(
-      `${this.baseUrl}/attachments/${encodeURIComponent(id)}/content`,
+    return await this.transport.requestResponse(
+      `/attachments/${encodeURIComponent(id)}/content`,
       { method: "GET", headers, signal: options.signal },
     );
-    if (!response.ok) await this.throwResponseError(response);
-    return response;
   }
 
   async deleteAttachment(
@@ -1662,40 +1626,31 @@ export class OpenHarnessClient {
   streamTerminalEvents(
     options: { signal?: AbortSignal } = {},
   ): AsyncIterable<TerminalEvent> {
-    return streamServerSentEvents(async () => {
-      const response = await this.fetchImpl(
-        `${this.baseUrl}/terminals/stream`,
-        {
-          headers: this.headers(),
-          signal: options.signal,
-        },
-      );
-      if (!response.ok) await this.throwResponseError(response);
-      if (!response.body)
-        throw new Error("Terminal event stream response has no body");
-      return response.body;
-    }, decodeTerminalEvent);
+    return this.sse.stream(
+      this.transport.resolveUrl("/terminals/stream"),
+      {
+        headers: this.transport.headers(),
+        signal: options.signal,
+        decode: decodeTerminalEvent,
+      },
+    );
   }
 
   streamEvents(
     options: EventSyncOptions = {},
   ): AsyncIterable<SessionEventRecord> {
-    return streamServerSentEvents(async () => {
-      const query = {
-        cursor: options.cursor,
-        sessionId: options.sessionId,
-      };
-      const response = await this.fetchImpl(
-        `${this.baseUrl}${this.path("/events/stream", query)}`,
-        {
-          headers: this.headers(),
-          signal: options.signal,
-        },
-      );
-      if (!response.ok) await this.throwResponseError(response);
-      if (!response.body) throw new Error("Event stream response has no body");
-      return response.body;
-    }, decodeSessionEventRecord);
+    const query = {
+      cursor: options.cursor,
+      sessionId: options.sessionId,
+    };
+    return this.sse.stream(
+      this.transport.resolveUrl("/events/stream", query),
+      {
+        headers: this.transport.headers(),
+        signal: options.signal,
+        decode: decodeSessionEventRecord,
+      },
+    );
   }
 
   private async request<T>(
@@ -1707,140 +1662,21 @@ export class OpenHarnessClient {
       auth?: boolean;
     } = {},
   ): Promise<T> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method: options.method ?? "GET",
-      headers: this.headers(options.body !== undefined, options.auth ?? true),
-      body:
-        options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
-    });
-    if (!response.ok) await this.throwResponseError(response);
-    return (await response.json()) as T;
+    return this.transport.request<T>(path, options);
   }
 
   private headers(json = false, auth = true): Record<string, string> {
-    return {
-      ...(auth && this.token ? { authorization: `Bearer ${this.token}` } : {}),
-      ...(json ? { "content-type": "application/json" } : {}),
-    };
+    return this.transport.headers(json, auth);
   }
 
   /** 拼 query；跳过 undefined / null / false。 */
   private path(pathname: string, query: Record<string, unknown> = {}): string {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value === undefined || value === null || value === false) continue;
-      params.set(key, String(value));
-    }
-    const qs = params.toString();
-    return qs ? `${pathname}?${qs}` : pathname;
+    return this.transport.path(pathname, query);
   }
 
   private async throwResponseError(response: Response): Promise<never> {
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      body = await response.text().catch(() => "");
-    }
-    const message =
-      body &&
-      typeof body === "object" &&
-      "error" in body &&
-      typeof body.error === "string"
-        ? body.error
-        : body &&
-            typeof body === "object" &&
-            "message" in body &&
-            typeof body.message === "string"
-          ? body.message
-          : `OpenHarness API request failed with ${response.status}`;
-    throw new OpenHarnessApiError(message, response.status, body);
+    return this.transport.throwResponseError(response);
   }
-}
-
-function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
-  return (
-    typeof ReadableStream !== "undefined" && value instanceof ReadableStream
-  );
-}
-
-function attachmentRangeHeader(
-  range: DownloadAttachmentOptions["range"],
-): string | undefined {
-  if (!range) return undefined;
-  const { start, end, suffixBytes } = range;
-  if (suffixBytes !== undefined) {
-    if (start !== undefined || end !== undefined) {
-      throw new Error("suffixBytes cannot be combined with start or end");
-    }
-    assertPositiveSafeInteger(suffixBytes, "suffixBytes");
-    return `bytes=-${suffixBytes}`;
-  }
-  if (start === undefined && end === undefined) return undefined;
-  if (start === undefined) {
-    throw new Error("range start is required when end is provided");
-  }
-  assertNonNegativeSafeInteger(start, "start");
-  if (end === undefined) return `bytes=${start}-`;
-  assertNonNegativeSafeInteger(end, "end");
-  if (end < start) throw new Error("range end must not be less than start");
-  return `bytes=${start}-${end}`;
-}
-
-function assertNonNegativeSafeInteger(value: number, field: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${field} must be a non-negative safe integer`);
-  }
-}
-
-function assertPositiveSafeInteger(value: number, field: string): void {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${field} must be a positive safe integer`);
-  }
-}
-
-/**
- * 将 SSE 字节流解析为 `SessionEventRecord` 异步迭代。
- * `open` 负责建立连接并返回 response body，便于重试或注入。
- */
-export async function* streamServerSentEvents<T = SessionEventRecord>(
-  open: () => Promise<ReadableStream<Uint8Array>>,
-  decode: (value: unknown) => T = (value) => value as T,
-): AsyncIterable<T> {
-  const reader = (await open()).getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      buffer += decoder.decode(chunk.value, { stream: true });
-      // SSE 事件以空行分隔
-      const frames = buffer.split(/\r?\n\r?\n/);
-      buffer = frames.pop() ?? "";
-      for (const frame of frames) {
-        const event = parseSseFrame(frame);
-        if (event !== undefined) yield decode(event);
-      }
-    }
-    buffer += decoder.decode();
-    const event = parseSseFrame(buffer);
-    if (event !== undefined) yield decode(event);
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-/** 解析单个 SSE frame 的 `data:` 行，得到事件 JSON。 */
-function parseSseFrame(frame: string): unknown | undefined {
-  let data = "";
-  for (const line of frame.split(/\r?\n/)) {
-    if (!line || line.startsWith(":")) continue;
-    if (line.startsWith("data:")) data += line.slice(5).trimStart();
-  }
-  if (!data) return undefined;
-  return JSON.parse(data) as unknown;
 }
 
 export class IncompatibleProtocolError extends Error {
