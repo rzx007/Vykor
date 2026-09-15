@@ -15,7 +15,7 @@
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 276`, `httpClientFlatCalls: 11`。
+- 当前基线：`sessionStoreFlatCalls: 273`, `httpClientFlatCalls: 11`。
 - 当前 `SessionStore` 行数：2152 行。
 
 ## 阶段 3 迁移记录
