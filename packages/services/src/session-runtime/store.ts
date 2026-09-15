@@ -100,9 +100,12 @@ import { ScheduleRepository } from "../schedules/schedule-repository.js";
 import { WorkflowRepository } from "../workflows/workflow-repository.js";
 import { ChannelRepository } from "../channels/channel-repository.js";
 import { PermissionRepository } from "../permissions/permission-repository.js";
+import { GoalRepository } from "../goals/goal-repository.js";
+import { GoalTransactions } from "../goals/goal-transactions.js";
+import { SessionRepository } from "../sessions/session-repository.js";
+import { ConversationRepository } from "../conversations/conversation-repository.js";
+import { RunRepository } from "../runs/run-repository.js";
 import {
-  GoalRepository,
-  GoalTransactions,
   type CreateSessionGoalStoreInput,
   type SessionGoalRequestRecord,
   type UpdateSessionGoalStoreInput,
@@ -206,6 +209,9 @@ export class SessionStore {
   readonly permissions!: PermissionRepository;
   readonly goals!: GoalTransactions;
   readonly attachments!: AttachmentTransactions;
+  readonly sessions!: SessionRepository;
+  readonly conversations!: ConversationRepository;
+  readonly runs!: RunRepository;
   private storage!: StorageContext;
   private closed = false;
   private transactionDepth = 0;
@@ -257,6 +263,9 @@ export class SessionStore {
       this.schedules = new ScheduleRepository(this.storage);
       this.workflows = new WorkflowRepository(this.storage);
       this.channels = new ChannelRepository(this.storage);
+      this.sessions = new SessionRepository(this.storage);
+      this.conversations = new ConversationRepository(this.storage);
+      this.runs = new RunRepository(this.storage);
       this.permissions = new PermissionRepository({
         storage: this.storage,
         assertSession: (sessionId) => assertSession(this.state, sessionId),
@@ -612,36 +621,18 @@ export class SessionStore {
   }
 
   getSession(sessionId: string): SessionRecord | undefined {
-    const session = this.state.sessions[sessionId];
-    return session ? clone(session) : undefined;
+    return this.sessions.get(sessionId);
   }
 
   listSessions(options: ListSessionsOptions = {}): SessionRecord[] {
-    const cwd = options.cwd ? resolve(options.cwd) : undefined;
-    let sessions = Object.values(this.state.sessions);
-    if (cwd) sessions = sessions.filter((session) => session.cwd === cwd);
-    if (!options.includeArchived)
-      sessions = sessions.filter((session) => session.status !== "archived");
-    sessions = sessions.sort((a, b) => b.updatedAt - a.updatedAt);
-    if (options.limit !== undefined)
-      sessions = sessions.slice(0, options.limit);
-    return clone(sessions);
+    return this.sessions.list(options);
   }
 
   listChildSessions(
     parentId: string,
     options: { includeArchived?: boolean } = {},
   ): SessionRecord[] {
-    assertSession(this.state, parentId);
-    return clone(
-      Object.values(this.state.sessions)
-        .filter(
-          (session) =>
-            session.parentId === parentId &&
-            (options.includeArchived || session.status !== "archived"),
-        )
-        .sort((a, b) => a.createdAt - b.createdAt),
-    );
+    return this.sessions.listChildren(parentId, options);
   }
 
   deleteSessionTree(sessionId: string): string[] {
@@ -1718,53 +1709,29 @@ export class SessionStore {
   }
 
   getInput(inputId: string): SessionInputRecord | undefined {
-    const input = this.state.inputs[inputId];
-    return input ? clone(input) : undefined;
+    return this.conversations.getInput(inputId);
   }
 
   listInputAttachments(inputId: string): SessionInputAttachmentRecord[] {
-    return clone(
-      Object.values(this.state.inputAttachments)
-        .filter((reference) => reference.inputId === inputId)
-        .sort((left, right) => left.seq - right.seq),
-    );
+    return this.conversations.listInputAttachments(inputId);
   }
 
   listSessionInputAttachments(
     sessionId: string,
   ): SessionInputAttachmentRecord[] {
-    assertSession(this.state, sessionId);
-    return clone(
-      Object.values(this.state.inputAttachments)
-        .filter((reference) => reference.sessionId === sessionId)
-        .sort(
-          (left, right) =>
-            left.createdAt - right.createdAt || left.seq - right.seq,
-        ),
-    );
+    return this.conversations.listSessionInputAttachments(sessionId);
   }
 
   countInputAttachmentReferences(assetId: string): number {
-    return Object.values(this.state.inputAttachments).filter(
-      (reference) => reference.assetId === assetId,
-    ).length;
+    return this.conversations.countInputAttachmentReferences(assetId);
   }
 
   countAttachmentReferences(assetId: string): number {
-    const inputReferences = this.countInputAttachmentReferences(assetId);
-    const messageReferences = Object.values(this.state.parts).filter(
-      (part) => part.type === "attachment" && part.assetId === assetId,
-    ).length;
-    return inputReferences + messageReferences;
+    return this.conversations.countAttachmentReferences(assetId);
   }
 
   listInputs(sessionId: string): SessionInputRecord[] {
-    assertSession(this.state, sessionId);
-    return clone(
-      Object.values(this.state.inputs)
-        .filter((input) => input.sessionId === sessionId)
-        .sort((a, b) => a.seq - b.seq),
-    );
+    return this.conversations.listInputs(sessionId);
   }
 
   createMessage(input: CreateMessageInput): SessionMessageRecord {
@@ -1801,15 +1768,7 @@ export class SessionStore {
     sessionId: string,
     options: ListMessagesOptions = {},
   ): SessionMessageRecord[] {
-    assertSession(this.state, sessionId);
-    let messages = Object.values(this.state.messages)
-      .filter((message) => message.sessionId === sessionId)
-      .sort((a, b) => a.seq - b.seq);
-    if (options.afterSeq !== undefined)
-      messages = messages.filter((message) => message.seq > options.afterSeq!);
-    if (options.limit !== undefined)
-      messages = messages.slice(0, options.limit);
-    return clone(messages);
+    return this.conversations.listMessages(sessionId, options);
   }
 
   /**
@@ -2097,16 +2056,7 @@ export class SessionStore {
     sessionId: string,
     options: ListMessagePartsOptions = {},
   ): SessionMessagePartRecord[] {
-    assertSession(this.state, sessionId);
-    let parts = Object.values(this.state.parts)
-      .filter((part) => part.sessionId === sessionId)
-      .sort((a, b) => a.seq - b.seq);
-    if (options.messageId)
-      parts = parts.filter((part) => part.messageId === options.messageId);
-    if (options.afterSeq !== undefined)
-      parts = parts.filter((part) => part.seq > options.afterSeq!);
-    if (options.limit !== undefined) parts = parts.slice(0, options.limit);
-    return clone(parts);
+    return this.conversations.listMessageParts(sessionId, options);
   }
 
   appendEvent(input: AppendEventInput): SessionEventRecord {
@@ -2117,23 +2067,11 @@ export class SessionStore {
   }
 
   listEvents(options: ListEventsOptions = {}): SessionEventRecord[] {
-    let events = this.state.events;
-    if (options.afterSeq !== undefined)
-      events = events.filter((event) => event.seq > options.afterSeq!);
-    if (options.sessionId) {
-      events = events.filter(
-        (event) =>
-          event.sessionId === undefined ||
-          event.sessionId === options.sessionId,
-      );
-    }
-    events = events.sort((a, b) => a.seq - b.seq);
-    if (options.limit !== undefined) events = events.slice(0, options.limit);
-    return clone(events);
+    return this.conversations.listEvents(options);
   }
 
   latestEventSeq(): number {
-    return this.state.nextEventSeq - 1;
+    return this.conversations.latestEventSeq();
   }
 
   createProjectionSettlement(
@@ -2462,42 +2400,23 @@ export class SessionStore {
   }
 
   getRun(runId: string): SessionRunRecord | undefined {
-    const run = this.state.runs[runId];
-    return run ? clone(run) : undefined;
+    return this.runs.getRun(runId);
   }
 
   findRunByInput(inputId: string): SessionRunRecord | undefined {
-    const direct = this.findOwningRunByInput(inputId);
-    if (direct) return clone(direct);
-    const promoted = Object.values(this.state.messages).find(
-      (message) => message.inputId === inputId && message.runId,
-    );
-    const run = promoted?.runId ? this.state.runs[promoted.runId] : undefined;
-    return run ? clone(run) : undefined;
+    return this.runs.findRunByInput(inputId);
   }
 
   listRunsByInput(inputId: string): SessionRunRecord[] {
-    return clone(
-      Object.values(this.state.runs)
-        .filter((candidate) => candidate.inputId === inputId)
-        .sort(
-          (left, right) =>
-            left.createdAt - right.createdAt || left.id.localeCompare(right.id),
-        ),
-    );
+    return this.runs.listRunsByInput(inputId);
   }
 
   findOwningRunByInput(inputId: string): SessionRunRecord | undefined {
-    return this.listRunsByInput(inputId)[0];
+    return this.runs.findOwningRunByInput(inputId);
   }
 
   listRuns(sessionId: string): SessionRunRecord[] {
-    assertSession(this.state, sessionId);
-    return clone(
-      Object.values(this.state.runs)
-        .filter((run) => run.sessionId === sessionId)
-        .sort((a, b) => a.createdAt - b.createdAt),
-    );
+    return this.runs.listRuns(sessionId);
   }
 
   createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
@@ -2666,31 +2585,21 @@ export class SessionStore {
   }
 
   getSessionTask(taskId: string): SessionExecutionRecord | undefined {
-    const task = this.state.tasks[taskId];
-    return task ? clone(task) : undefined;
+    return this.runs.getSessionTask(taskId);
   }
 
   listSessionTasks(sessionId: string): SessionExecutionRecord[] {
-    assertSession(this.state, sessionId);
-    return clone(
-      Object.values(this.state.tasks)
-        .filter((task) => task.sessionId === sessionId)
-        .sort((a, b) => a.createdAt - b.createdAt),
-    );
+    return this.runs.listSessionTasks(sessionId);
   }
 
   findSessionExecutionByRuntimeId(
     sessionId: string,
     runtimeExecutionId: string,
   ): SessionExecutionRecord | undefined {
-    assertSession(this.state, sessionId);
-    const task = Object.values(this.state.tasks).find(
-      (candidate) =>
-        candidate.sessionId === sessionId &&
-        (candidate.metadata.runtimeExecutionId === runtimeExecutionId ||
-          candidate.metadata.taskManagerId === runtimeExecutionId),
+    return this.runs.findSessionExecutionByRuntimeId(
+      sessionId,
+      runtimeExecutionId,
     );
-    return task ? clone(task) : undefined;
   }
 
   /** A daemon restart cannot retain child Agent callbacks or detached process handles. */
@@ -2898,18 +2807,11 @@ export class SessionStore {
   }
 
   getRunAttempt(attemptId: string): SessionRunAttemptRecord | undefined {
-    const attempt = this.state.attempts[attemptId];
-    return attempt ? clone(attempt) : undefined;
+    return this.runs.getRunAttempt(attemptId);
   }
 
   listRunAttempts(runId: string): SessionRunAttemptRecord[] {
-    if (!this.state.runs[runId])
-      throw new Error(`Session run not found: ${runId}`);
-    return clone(
-      Object.values(this.state.attempts)
-        .filter((attempt) => attempt.runId === runId)
-        .sort((left, right) => left.sequence - right.sequence),
-    );
+    return this.runs.listRunAttempts(runId);
   }
 
   settleActiveRunAttempts(
