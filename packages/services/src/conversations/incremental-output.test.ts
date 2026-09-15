@@ -1,8 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionStore } from "../session-runtime/store.js";
+import { IncrementalOutput } from "./incremental-output.js";
+
+afterEach(() => vi.useRealTimers());
 
 function setup(bytes = 1024) {
   const dir = mkdtempSync(join(tmpdir(), "ohs-incremental-"));
@@ -15,6 +18,49 @@ function setup(bytes = 1024) {
 }
 
 describe("IncrementalOutput", () => {
+  it("flushes on the interval timer", async () => {
+    vi.useFakeTimers();
+    const dir = mkdtempSync(join(tmpdir(), "ohs-incremental-timer-"));
+    const store = new SessionStore({ path: join(dir, "store.db"), deltaFlushBytes: 1024, deltaFlushIntervalMs: 10 });
+    try {
+      store.createSession({ id: "s", cwd: dir, model: "m" });
+      const message = store.createMessage({ id: "m", sessionId: "s", role: "assistant" });
+      store.upsertMessagePart({ id: "p", sessionId: "s", messageId: message.id, type: "text", text: "" });
+      store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "timer" });
+      const db = (store as any).storage.database.connection;
+      expect(db.prepare("SELECT text FROM session_message_part WHERE id='p'").pluck().get()).toBe("");
+      await vi.advanceTimersByTimeAsync(10);
+      expect(db.prepare("SELECT text FROM session_message_part WHERE id='p'").pluck().get()).toBe("timer");
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("validates ownership, preserves accepted type/status, and allocates a cloned transient event before text", () => {
+    const { dir, store } = setup();
+    try {
+      const storage = (store as any).storage;
+      let textWhenEventAllocated: string | undefined;
+      const output = new IncrementalOutput({
+        storage,
+        appendTransientEvent: (input) => {
+          textWhenEventAllocated = storage.state.parts.p.text;
+          return store.conversations.appendEventInMemory(input, false);
+        },
+      });
+      const beforeSeq = store.latestEventSeq();
+      const event = output.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "x" });
+      expect(textWhenEventAllocated).toBe("");
+      expect(event).toMatchObject({ seq: beforeSeq + 1, type: "session.message.part.delta", payload: { sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "x" } });
+      expect(store.listEvents().some(({ id }) => id === event.id)).toBe(false);
+      event.payload.delta = "changed";
+      expect(store.listMessageParts("s")[0]!.text).toBe("x");
+      store.upsertMessagePart({ id: "p", sessionId: "s", messageId: "m", type: "tool", status: "failed" });
+      expect(() => output.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "y" })).not.toThrow();
+      expect(() => output.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "missing", field: "text", delta: "z" })).toThrow("Session message part not found: missing");
+      expect(() => output.appendMessagePartDelta({ sessionId: "missing", messageId: "m", partId: "p", field: "text", delta: "z" })).toThrow("Session not found: missing");
+      store.createSession({ id: "other", cwd: dir, model: "m" });
+      expect(() => output.appendMessagePartDelta({ sessionId: "other", messageId: "m", partId: "p", field: "text", delta: "z" })).toThrow(/does not belong/);
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
   it("keeps memory ahead of SQLite, counts UTF-8 bytes, and flushes at threshold", () => {
     const { dir, store } = setup(6);
     try {
@@ -34,9 +80,10 @@ describe("IncrementalOutput", () => {
     try {
       const storage = (store as any).storage;
       store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "tail" });
-      storage.database.connection.exec("CREATE TRIGGER fail_delta BEFORE UPDATE OF text ON session_message_part BEGIN SELECT RAISE(ABORT, 'delta failure'); END;");
+      storage.database.connection.exec("CREATE TRIGGER fail_delta BEFORE UPDATE ON session_message BEGIN SELECT RAISE(ABORT, 'delta failure'); END;");
       expect(() => store.flushMessagePartDeltas()).toThrow("delta failure");
       expect(storage.deltaCheckpoint.dirtyPartIds()).toEqual(["p"]);
+      expect(storage.database.connection.prepare("SELECT text FROM session_message_part WHERE id='p'").pluck().get()).toBe("");
       storage.database.connection.exec("DROP TRIGGER fail_delta");
       store.flushMessagePartDeltas();
       expect(storage.deltaCheckpoint.dirtyPartIds()).toEqual([]);
@@ -45,17 +92,33 @@ describe("IncrementalOutput", () => {
 
   it("restores text, timestamps, and checkpoint on atomic rollback and flushes on close", () => {
     const { dir, path, store } = setup();
-    const before = store.listMessageParts("s")[0]!;
+    const before = { part: store.listMessageParts("s")[0]!, message: store.listMessages("s")[0]!, session: store.getSession("s")! };
     expect(() => store.transaction(() => {
       store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "rolled back" });
       throw new Error("rollback");
     })).toThrow("rollback");
-    expect(store.listMessageParts("s")[0]).toEqual(before);
+    expect(store.listMessageParts("s")[0]).toEqual(before.part);
+    expect(store.listMessages("s")[0]).toEqual(before.message);
+    expect(store.getSession("s")).toEqual(before.session);
     expect((store as any).storage.deltaCheckpoint.dirtyPartIds()).toEqual([]);
     store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "closed" });
     store.close();
     const reopened = new SessionStore({ path });
     try { expect(reopened.listMessageParts("s")[0]!.text).toBe("closed"); }
     finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("closes checkpoint and database while preserving the original flush error", async () => {
+    vi.useFakeTimers();
+    const { dir, store } = setup();
+    const storage = (store as any).storage;
+    store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "tail" });
+    storage.database.connection.exec("CREATE TRIGGER fail_close_delta BEFORE UPDATE ON session_message BEGIN SELECT RAISE(ABORT, 'close delta failure'); END;");
+    expect(() => store.close()).toThrow("close delta failure");
+    expect((storage.deltaCheckpoint as any).closed).toBe(true);
+    expect(() => storage.database.connection.prepare("SELECT 1")).toThrow();
+    await vi.runOnlyPendingTimersAsync();
+    expect(vi.getTimerCount()).toBe(0);
+    rmSync(dir, { recursive: true, force: true });
   });
 });

@@ -45,8 +45,11 @@ export class IncrementalOutput {
   }
 
   close(): void {
-    this.flushMessagePartDeltas();
-    this.options.storage.deltaCheckpoint.close();
+    try {
+      this.flushMessagePartDeltas();
+    } finally {
+      this.options.storage.deltaCheckpoint.close();
+    }
   }
 
   private persist(partIds: string[]): void {
