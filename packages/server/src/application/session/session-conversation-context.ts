@@ -1,10 +1,20 @@
-import type { SessionStore } from "@openharness/services";
+import type {
+  SessionMessagePartRecord,
+  SessionMessageRecord,
+  SessionRecord,
+} from "@openharness/protocol";
 import type { SessionInputConversationCatalog } from "./session-input-materializer.js";
 
 const MAX_CONVERSATION_CONTEXT_CHARS = 12_000;
 
+export interface ConversationContextCatalogStore {
+  getSession(id: string): Pick<SessionRecord, "title" | "status"> | null | undefined;
+  listMessageParts(sessionId: string): SessionMessagePartRecord[];
+  listMessages(sessionId: string): SessionMessageRecord[];
+}
+
 export function conversationContextCatalog(
-  store: Pick<SessionStore, "getSession" | "listMessageParts" | "listMessages">,
+  store: ConversationContextCatalogStore,
   currentSessionId: string,
 ): SessionInputConversationCatalog {
   return {

@@ -35,21 +35,11 @@ function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
   );
 }
 
-export type AdmitPromptInput = {
-  id?: string;
-  delivery?: "queue" | "steer";
-  items: SessionUserInputItem[];
-  metadata?: Record<string, unknown>;
-  runMetadata?: Record<string, unknown>;
-  traceId?: string;
-  attachments?: AdmitPromptAttachmentInput[];
-};
-
-export type AdmitPromptResult = {
-  input: ReturnType<SessionStore["admitPrompt"]>;
-  run?: ReturnType<SessionStore["createRun"]>;
-  queue_state?: "running" | "queued";
-};
+import type {
+  AdmitPromptInput,
+  AdmitPromptResult,
+} from "./run-admission-service.js";
+export type { AdmitPromptInput, AdmitPromptResult };
 
 export type AwaitSessionRunResult = {
   status: Extract<
