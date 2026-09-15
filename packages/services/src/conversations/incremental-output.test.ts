@@ -76,7 +76,7 @@ describe("IncrementalOutput", () => {
   });
 
   it("retains dirty state after SQL failure and succeeds on retry", () => {
-    const { dir, store } = setup();
+    const { dir, path, store } = setup();
     try {
       const storage = (store as any).storage;
       store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "tail" });
@@ -87,14 +87,37 @@ describe("IncrementalOutput", () => {
       storage.database.connection.exec("DROP TRIGGER fail_delta");
       store.flushMessagePartDeltas();
       expect(storage.deltaCheckpoint.dirtyPartIds()).toEqual([]);
-    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+      const part = store.listMessageParts("s")[0]!;
+      const message = store.listMessages("s")[0]!;
+      const session = store.getSession("s")!;
+      expect(storage.database.connection.prepare("SELECT text, updated_at FROM session_message_part WHERE id='p'").get()).toEqual({ text: "tail", updated_at: part.updatedAt });
+      expect(storage.database.connection.prepare("SELECT updated_at FROM session_message WHERE id='m'").get()).toEqual({ updated_at: message.updatedAt });
+      expect(storage.database.connection.prepare("SELECT updated_at FROM session WHERE id='s'").get()).toEqual({ updated_at: session.updatedAt });
+      store.close();
+      const reopened = new SessionStore({ path });
+      try {
+        expect(reopened.listMessageParts("s")[0]).toMatchObject({ text: "tail", updatedAt: part.updatedAt });
+        expect(reopened.listMessages("s")[0]!.updatedAt).toBe(message.updatedAt);
+        expect(reopened.getSession("s")!.updatedAt).toBe(session.updatedAt);
+      } finally { reopened.close(); }
+    } finally {
+      try { store.close(); } catch {}
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("restores text, timestamps, and checkpoint on atomic rollback and flushes on close", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     const { dir, path, store } = setup();
     const before = { part: store.listMessageParts("s")[0]!, message: store.listMessages("s")[0]!, session: store.getSession("s")! };
     expect(() => store.transaction(() => {
+      vi.setSystemTime(new Date("2026-01-01T00:00:10.000Z"));
       store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "rolled back" });
+      expect(store.listMessageParts("s")[0]).toMatchObject({ text: "rolled back", updatedAt: before.part.updatedAt + 10_000 });
+      expect(store.listMessages("s")[0]!.updatedAt).toBe(before.message.updatedAt + 10_000);
+      expect(store.getSession("s")!.updatedAt).toBe(before.session.updatedAt + 10_000);
+      expect((store as any).storage.deltaCheckpoint.dirtyPartIds()).toEqual(["p"]);
       throw new Error("rollback");
     })).toThrow("rollback");
     expect(store.listMessageParts("s")[0]).toEqual(before.part);
