@@ -6,6 +6,7 @@ import {
   type AdmitPromptWithRunInput,
   type AttachmentAssetRecord,
   type AttachmentLimits,
+  type CreateSessionInput,
   type ReplaceTranscriptInput,
   type SessionInputAttachmentRecord,
   type SessionInputRecord,
@@ -52,6 +53,10 @@ export interface ConversationTransactionTestHooks {
   afterEventAllocation?: () => void;
   beforeRunCreation?: () => void;
   afterTranscriptReplacement?: () => void;
+  afterForkSessionCreated?: () => void;
+  afterForkInputsCopied?: () => void;
+  afterForkMessagesCopied?: () => void;
+  afterForkPartsCopied?: () => void;
 }
 
 export interface ConversationTransactionsOptions {
@@ -384,6 +389,13 @@ export class ConversationTransactions {
     });
   }
 
+  private requireSessions(): SessionRepository {
+    if (!this.sessions) {
+      throw new Error("SessionRepository is required for session transactions");
+    }
+    return this.sessions;
+  }
+
   replaceTranscript(input: ReplaceTranscriptInput): {
     messages: SessionMessageRecord[];
     parts: SessionMessagePartRecord[];
@@ -585,5 +597,107 @@ export class ConversationTransactions {
       (run) => run.sessionId === session.id && (run.status === "pending" || run.status === "running"),
     );
     session.status = hasActiveRun ? "running" : "idle";
+  }
+
+  forkSessionWithHistory(input: {
+    sourceSessionId: string;
+    beforeMessageId?: string;
+    afterMessageId?: string;
+    session: CreateSessionInput;
+  }): SessionRecord {
+    return this.storage.atomic(() => {
+      const source = assertSession(this.storage.state, input.sourceSessionId);
+      const sourceMessages = this.conversations.listMessages(source.id);
+      const beforeMessage = input.beforeMessageId
+        ? sourceMessages.find(({ id }) => id === input.beforeMessageId)
+        : undefined;
+      const afterMessage = input.afterMessageId
+        ? sourceMessages.find(({ id }) => id === input.afterMessageId)
+        : undefined;
+      if ((input.beforeMessageId && !beforeMessage) || (input.afterMessageId && !afterMessage)) {
+        throw new Error("Fork point not found");
+      }
+      const beforeSeq = beforeMessage?.seq ?? Number.POSITIVE_INFINITY;
+      const afterSeq = afterMessage?.seq ?? Number.POSITIVE_INFINITY;
+      const copiedMessages = sourceMessages.filter(
+        ({ seq }) => seq < beforeSeq && seq <= afterSeq,
+      );
+      const sourceParts = this.conversations.listMessageParts(source.id);
+      const fork = this.requireSessions().create({ ...input.session, parentId: source.id });
+      this.testHooks?.afterForkSessionCreated?.();
+
+      const inputIdMap = new Map<string, string>();
+      const attachmentReferenceIdMap = new Map<string, string>();
+      for (const message of copiedMessages) {
+        if (!message.inputId || inputIdMap.has(message.inputId)) continue;
+        const sourceInput = this.storage.state.inputs[message.inputId];
+        if (!sourceInput) continue;
+        const copiedInput = this.admitPrompt({
+          sessionId: fork.id,
+          delivery: sourceInput.delivery,
+          items: sourceInput.items,
+          attachments: sourceInput.attachments.map((attachment) => ({
+            assetId: attachment.assetId,
+            intent: attachment.intent,
+            displayName: attachment.displayName,
+          })),
+          metadata: sourceInput.metadata,
+        });
+        inputIdMap.set(sourceInput.id, copiedInput.id);
+        sourceInput.attachments.forEach((attachment, index) => {
+          const copiedReference = copiedInput.attachments[index];
+          if (copiedReference) attachmentReferenceIdMap.set(attachment.id, copiedReference.id);
+        });
+      }
+      this.testHooks?.afterForkInputsCopied?.();
+
+      const messageIdMap = new Map<string, string>();
+      for (const message of copiedMessages) {
+        const copiedMessage = this.conversations.createMessage({
+          sessionId: fork.id,
+          role: message.role,
+          ...(message.inputId && inputIdMap.has(message.inputId)
+            ? { inputId: inputIdMap.get(message.inputId)! }
+            : {}),
+          metadata: message.metadata,
+        });
+        messageIdMap.set(message.id, copiedMessage.id);
+      }
+      this.testHooks?.afterForkMessagesCopied?.();
+
+      for (const part of sourceParts) {
+        const messageId = messageIdMap.get(part.messageId);
+        if (!messageId) continue;
+        const sourceReferenceId = typeof part.metadata.inputAttachmentId === "string"
+          ? part.metadata.inputAttachmentId
+          : undefined;
+        this.conversations.upsertMessagePart({
+          sessionId: fork.id,
+          messageId,
+          type: part.type,
+          status: part.status,
+          ...(part.text !== undefined ? { text: part.text } : {}),
+          ...(part.toolUseId !== undefined ? { toolUseId: part.toolUseId } : {}),
+          ...(part.toolName !== undefined ? { toolName: part.toolName } : {}),
+          ...(part.input !== undefined ? { input: part.input } : {}),
+          ...(part.output !== undefined ? { output: part.output } : {}),
+          ...(part.isError !== undefined ? { isError: part.isError } : {}),
+          ...(part.assetId !== undefined ? { assetId: part.assetId } : {}),
+          ...(part.intent !== undefined ? { intent: part.intent } : {}),
+          ...(part.displayName !== undefined ? { displayName: part.displayName } : {}),
+          ...(part.mediaType !== undefined ? { mediaType: part.mediaType } : {}),
+          ...(part.sizeBytes !== undefined ? { sizeBytes: part.sizeBytes } : {}),
+          ...(part.kind !== undefined ? { kind: part.kind } : {}),
+          ...(part.representationId !== undefined ? { representationId: part.representationId } : {}),
+          ...(part.processor !== undefined ? { processor: part.processor } : {}),
+          ...(part.transformationError !== undefined ? { transformationError: part.transformationError } : {}),
+          metadata: sourceReferenceId && attachmentReferenceIdMap.has(sourceReferenceId)
+            ? { ...part.metadata, inputAttachmentId: attachmentReferenceIdMap.get(sourceReferenceId) }
+            : part.metadata,
+        });
+      }
+      this.testHooks?.afterForkPartsCopied?.();
+      return clone(assertSession(this.storage.state, fork.id));
+    });
   }
 }

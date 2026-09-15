@@ -1084,5 +1084,181 @@ describe("ConversationTransactions.admitPrompt", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     });
+
+    describe("forkSessionWithHistory", () => {
+      function seedForkSource(store: SessionStore, dir: string) {
+        store.createSession({ id: "source", cwd: dir, model: "model-a", title: "source" });
+        createReadyAttachment(store, "asset-a", 10);
+        createReadyAttachment(store, "asset-b", 20);
+        const input = store.admitPrompt({
+          id: "source-input",
+          sessionId: "source",
+          content: "source prompt",
+          attachments: [
+            { assetId: "asset-b", intent: "ocr", displayName: "B" },
+            { assetId: "asset-a", intent: "vision", displayName: "A" },
+          ],
+          metadata: { input: true },
+        });
+        const run = store.createRun({ id: "source-run", sessionId: "source", inputId: input.id });
+        const first = store.createMessage({
+          id: "first-message",
+          sessionId: "source",
+          role: "user",
+          inputId: input.id,
+          runId: run.id,
+          metadata: { order: 1 },
+        });
+        store.upsertMessagePart({
+          id: "first-part",
+          sessionId: "source",
+          messageId: first.id,
+          type: "tool",
+          status: "failed",
+          text: "full fields",
+          toolUseId: "tool-use",
+          toolName: "reader",
+          input: { path: "x" },
+          output: { code: 1 },
+          isError: true,
+          assetId: "asset-b",
+          intent: "ocr",
+          displayName: "B",
+          mediaType: "text/plain",
+          sizeBytes: 20,
+          kind: "document_extract",
+          representationId: "representation",
+          processor: "extractor",
+          transformationError: "partial",
+          metadata: { inputAttachmentId: input.attachments[0]!.id, extra: true },
+        });
+        const second = store.createMessage({
+          id: "second-message",
+          sessionId: "source",
+          role: "assistant",
+          inputId: input.id,
+          runId: run.id,
+          metadata: { order: 2 },
+        });
+        store.upsertMessagePart({ id: "second-part", sessionId: "source", messageId: second.id, type: "text", text: "second" });
+        const third = store.createMessage({ id: "third-message", sessionId: "source", role: "system", metadata: { order: 3 } });
+        return { input, first, second, third };
+      }
+
+      it("copies complete history with deduplicated inputs, attachment positions, all part fields, and requested session fields", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-fork-full-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          const source = seedForkSource(store, dir);
+          const child = createTransactions(store).forkSessionWithHistory({
+            sourceSessionId: "source",
+            session: { id: "child", cwd: dir, model: "model-b", agent: "agent-b", title: "child title", metadata: { child: true } },
+          });
+
+          expect(child).toEqual(expect.objectContaining({
+            id: "child",
+            parentId: "source",
+            cwd: store.getSession("source")!.cwd,
+            model: "model-b",
+            agent: "agent-b",
+            title: "child title",
+            metadata: { child: true },
+          }));
+          const inputs = store.listInputs("child");
+          expect(inputs).toHaveLength(1);
+          expect(inputs[0]!.attachments.map(({ assetId, seq, displayName }) => ({ assetId, seq, displayName }))).toEqual([
+            { assetId: "asset-b", seq: 0, displayName: "B" },
+            { assetId: "asset-a", seq: 1, displayName: "A" },
+          ]);
+          const messages = store.listMessages("child");
+          expect(messages).toHaveLength(3);
+          expect(messages.slice(0, 2).map(({ inputId }) => inputId)).toEqual([inputs[0]!.id, inputs[0]!.id]);
+          expect(messages.every(({ runId }) => runId === undefined)).toBe(true);
+          expect(store.listRuns("child")).toEqual([]);
+          const part = store.listMessageParts("child")[0]!;
+          expect(part).toEqual(expect.objectContaining({
+            type: "tool", status: "failed", text: "full fields", toolUseId: "tool-use", toolName: "reader",
+            input: { path: "x" }, output: { code: 1 }, isError: true, assetId: "asset-b", intent: "ocr",
+            displayName: "B", mediaType: "text/plain", sizeBytes: 20, kind: "document_extract",
+            representationId: "representation", processor: "extractor", transformationError: "partial",
+            metadata: { inputAttachmentId: inputs[0]!.attachments[0]!.id, extra: true },
+          }));
+          expect(part.metadata.inputAttachmentId).not.toBe(source.input.attachments[0]!.id);
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it("honors before and after boundaries and rejects unknown fork points", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-fork-boundary-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          const source = seedForkSource(store, dir);
+          const tx = createTransactions(store);
+          tx.forkSessionWithHistory({ sourceSessionId: "source", beforeMessageId: source.second.id, session: { id: "before", cwd: dir, model: "m" } });
+          tx.forkSessionWithHistory({ sourceSessionId: "source", afterMessageId: source.second.id, session: { id: "after", cwd: dir, model: "m" } });
+          expect(store.listMessages("before").map(({ metadata }) => metadata.order)).toEqual([1]);
+          expect(store.listMessages("after").map(({ metadata }) => metadata.order)).toEqual([1, 2]);
+          expect(() => tx.forkSessionWithHistory({ sourceSessionId: "source", beforeMessageId: "missing", session: { id: "bad-before", cwd: dir, model: "m" } })).toThrow("Fork point not found");
+          expect(() => tx.forkSessionWithHistory({ sourceSessionId: "source", afterMessageId: "missing", session: { id: "bad-after", cwd: dir, model: "m" } })).toThrow("Fork point not found");
+          expect(store.getSession("bad-before")).toBeUndefined();
+          expect(store.getSession("bad-after")).toBeUndefined();
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it.each([
+        "afterForkSessionCreated",
+        "afterForkInputsCopied",
+        "afterForkMessagesCopied",
+        "afterForkPartsCopied",
+      ] as const)("rolls back memory and disk when %s fails", (failurePoint) => {
+        const dir = mkdtempSync(join(tmpdir(), `ohs-fork-fail-${failurePoint}-`));
+        const dbPath = join(dir, "store.db");
+        let store = new SessionStore({ path: dbPath });
+        try {
+          seedForkSource(store, dir);
+          const before = {
+            sessions: Object.keys((store as any).storage.state.sessions),
+            inputs: Object.keys((store as any).storage.state.inputs),
+            references: Object.keys((store as any).storage.state.inputAttachments),
+            messages: Object.keys((store as any).storage.state.messages),
+            parts: Object.keys((store as any).storage.state.parts),
+          };
+          const tx = createTransactions(store, {
+            [failurePoint]: () => { throw new Error(`injected ${failurePoint}`); },
+          });
+          expect(() => tx.forkSessionWithHistory({
+            sourceSessionId: "source",
+            session: { id: "failed-child", cwd: dir, model: "m" },
+          })).toThrow(`injected ${failurePoint}`);
+          expect(store.getSession("failed-child")).toBeUndefined();
+          expect({
+            sessions: Object.keys((store as any).storage.state.sessions),
+            inputs: Object.keys((store as any).storage.state.inputs),
+            references: Object.keys((store as any).storage.state.inputAttachments),
+            messages: Object.keys((store as any).storage.state.messages),
+            parts: Object.keys((store as any).storage.state.parts),
+          }).toEqual(before);
+
+          store.close();
+          store = new SessionStore({ path: dbPath });
+          expect(store.getSession("failed-child")).toBeUndefined();
+          expect({
+            sessions: Object.keys((store as any).storage.state.sessions),
+            inputs: Object.keys((store as any).storage.state.inputs),
+            references: Object.keys((store as any).storage.state.inputAttachments),
+            messages: Object.keys((store as any).storage.state.messages),
+            parts: Object.keys((store as any).storage.state.parts),
+          }).toEqual(before);
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    });
   });
 });
