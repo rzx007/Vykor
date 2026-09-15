@@ -1260,5 +1260,140 @@ describe("ConversationTransactions.admitPrompt", () => {
         }
       });
     });
+
+    describe("deleteSessionTree", () => {
+      function seedDeleteFixture(store: SessionStore, dir: string) {
+        createReadyAttachment(store, "tree-asset", 10);
+        const ids = ["root", "child", "grandchild", "outside"];
+        store.createSession({ id: "root", cwd: dir, model: "m" });
+        store.createSession({ id: "child", parentId: "root", cwd: dir, model: "m" });
+        store.createSession({ id: "grandchild", parentId: "child", cwd: dir, model: "m" });
+        store.createSession({ id: "outside", cwd: dir, model: "m" });
+        for (const id of ids) {
+          const input = store.admitPrompt({
+            id: `${id}-input`, sessionId: id, content: id,
+            attachments: [{ assetId: "tree-asset" }],
+          });
+          const run = store.createRun({ id: `${id}-run`, sessionId: id, inputId: input.id });
+          store.createRunAttempt({ id: `${id}-attempt`, runId: run.id });
+          const message = store.createMessage({
+            id: `${id}-message`, sessionId: id, role: "assistant", runId: run.id, inputId: input.id,
+          });
+          store.upsertMessagePart({
+            id: `${id}-part`, sessionId: id, messageId: message.id, type: "text", text: id,
+          });
+          store.createSessionTask({
+            id: `${id}-task`, sessionId: id, runId: run.id, type: "process",
+            description: id, cwd: dir,
+          });
+          store.createPermissionRequest({
+            id: `${id}-permission`, sessionId: id, runId: run.id, toolName: "Write", payload: {},
+          });
+        }
+      }
+
+      function entityIds(store: SessionStore) {
+        const state = (store as any).storage.state;
+        return {
+          sessions: Object.keys(state.sessions).sort(),
+          inputs: Object.keys(state.inputs).sort(),
+          references: Object.keys(state.inputAttachments).sort(),
+          messages: Object.keys(state.messages).sort(),
+          parts: Object.keys(state.parts).sort(),
+          runs: Object.keys(state.runs).sort(),
+          attempts: Object.keys(state.attempts).sort(),
+          tasks: Object.keys(state.tasks).sort(),
+          permissions: Object.keys(state.permissions).sort(),
+          events: state.events.map(({ id }: { id: string }) => id).sort(),
+        };
+      }
+
+      it("deletes a three-level tree in DFS order while preserving outside state and pending mutation", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-tree-"));
+        const dbPath = join(dir, "store.db");
+        let store = new SessionStore({ path: dbPath });
+        try {
+          seedDeleteFixture(store, dir);
+          const storage = (store as any).storage;
+          storage.state.messages["outside-message"].metadata = { pending: true };
+          storage.mutations.messages.add("outside-message");
+          storage.deltaCheckpoint.markDirty("root-part", 4);
+          storage.deltaCheckpoint.markDirty("outside-part", 7);
+          let dirtyDuringCleanup: string[] = [];
+          const tx = createTransactions(store, {
+            afterDeleteMemory: () => { dirtyDuringCleanup = storage.deltaCheckpoint.dirtyPartIds(); },
+          });
+
+          expect(tx.deleteSessionTree("root")).toEqual(["root", "child", "grandchild"]);
+          expect(dirtyDuringCleanup).toEqual(["outside-part"]);
+          expect(entityIds(store)).toEqual({
+            sessions: ["outside"], inputs: ["outside-input"],
+            references: [expect.stringMatching(/.+/)], messages: ["outside-message"],
+            parts: ["outside-part"], runs: ["outside-run"], attempts: ["outside-attempt"],
+            tasks: ["outside-task"], permissions: ["outside-permission"],
+            events: expect.any(Array),
+          });
+          expect(store.listEvents().some(({ sessionId }) => sessionId === "outside")).toBe(true);
+          expect(store.listEvents().some(({ sessionId }) => ["root", "child", "grandchild"].includes(sessionId ?? ""))).toBe(false);
+          expect(store.getSessionState("outside").messages[0]!.metadata).toEqual({ pending: true });
+
+          store.close();
+          store = new SessionStore({ path: dbPath });
+          expect(store.getSession("root")).toBeUndefined();
+          expect(store.getSession("child")).toBeUndefined();
+          expect(store.getSession("grandchild")).toBeUndefined();
+          expect(store.getSessionState("outside").messages[0]!.metadata).toEqual({ pending: true });
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it.each(["sql", "memory"] as const)("rolls back all state and disk on %s failure", (kind) => {
+        const dir = mkdtempSync(join(tmpdir(), `ohs-delete-tree-${kind}-`));
+        const dbPath = join(dir, "store.db");
+        let store = new SessionStore({ path: dbPath });
+        try {
+          seedDeleteFixture(store, dir);
+          const storage = (store as any).storage;
+          storage.deltaCheckpoint.markDirty("root-part", 4);
+          const before = entityIds(store);
+          if (kind === "sql") {
+            storage.database.connection.exec(`
+              CREATE TRIGGER fail_tree_message_delete BEFORE DELETE ON session_message
+              WHEN OLD.session_id = 'root' BEGIN SELECT RAISE(ABORT, 'injected delete sql failure'); END;
+            `);
+          }
+          const tx = createTransactions(store, kind === "memory" ? {
+            duringDeleteMemory: () => { throw new Error("injected delete memory failure"); },
+          } : undefined);
+          expect(() => tx.deleteSessionTree("root")).toThrow(`injected delete ${kind} failure`);
+          expect(entityIds(store)).toEqual(before);
+          expect(storage.deltaCheckpoint.dirtyPartIds()).toEqual(["root-part"]);
+
+          store.close();
+          store = new SessionStore({ path: dbPath });
+          expect(entityIds(store)).toEqual(before);
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it("rejects deletion from inside another store transaction", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-tree-nested-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          store.createSession({ id: "root", cwd: dir, model: "m" });
+          const tx = createTransactions(store);
+          expect(() => store.transaction(() => tx.deleteSessionTree("root")))
+            .toThrow("deleteSessionTree cannot be called inside a store transaction");
+          expect(store.getSession("root")).toBeDefined();
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    });
   });
 });

@@ -57,6 +57,8 @@ export interface ConversationTransactionTestHooks {
   afterForkInputsCopied?: () => void;
   afterForkMessagesCopied?: () => void;
   afterForkPartsCopied?: () => void;
+  duringDeleteMemory?: () => void;
+  afterDeleteMemory?: () => void;
 }
 
 export interface ConversationTransactionsOptions {
@@ -699,5 +701,111 @@ export class ConversationTransactions {
       this.testHooks?.afterForkPartsCopied?.();
       return clone(assertSession(this.storage.state, fork.id));
     });
+  }
+
+  deleteSessionTree(sessionId: string): string[] {
+    if (this.storage.coordinator?.inTransaction) {
+      throw new Error("deleteSessionTree cannot be called inside a store transaction");
+    }
+    assertSession(this.storage.state, sessionId);
+    const sessionIds = this.collectSessionTreeIds(sessionId);
+    const sessionIdSet = new Set(sessionIds);
+    const runIds = new Set(
+      Object.values(this.storage.state.runs)
+        .filter((run) => sessionIdSet.has(run.sessionId))
+        .map(({ id }) => id),
+    );
+
+    return this.storage.atomic(() => {
+      const placeholders = sessionIds.map(() => "?").join(", ");
+      const database = this.storage.database.connection;
+      database.prepare(`DELETE FROM permission_request WHERE session_id IN (${placeholders})`).run(...sessionIds);
+      database.prepare(`DELETE FROM session_task WHERE session_id IN (${placeholders})`).run(...sessionIds);
+      database.prepare(`DELETE FROM session_run_attempt WHERE run_id IN (SELECT id FROM session_run WHERE session_id IN (${placeholders}))`).run(...sessionIds);
+      database.prepare(`DELETE FROM session_run WHERE session_id IN (${placeholders})`).run(...sessionIds);
+      database.prepare(`DELETE FROM session_message_part WHERE session_id IN (${placeholders})`).run(...sessionIds);
+      database.prepare(`DELETE FROM session_message WHERE session_id IN (${placeholders})`).run(...sessionIds);
+      database.prepare(`DELETE FROM session_input WHERE session_id IN (${placeholders})`).run(...sessionIds);
+      database.prepare(`DELETE FROM session_event WHERE session_id IN (${placeholders})`).run(...sessionIds);
+      database.prepare(`DELETE FROM session WHERE id IN (${placeholders})`).run(...sessionIds);
+
+      for (const id of sessionIds) {
+        delete this.storage.state.sessions[id];
+        this.storage.mutations.sessions.delete(id);
+      }
+      this.testHooks?.duringDeleteMemory?.();
+      for (const [id, row] of Object.entries(this.storage.state.inputs)) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        delete this.storage.state.inputs[id];
+        this.storage.mutations.inputs.delete(id);
+        this.storage.mutations.deletedInputs.delete(id);
+      }
+      for (const [id, row] of Object.entries(this.storage.state.inputAttachments)) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        delete this.storage.state.inputAttachments[id];
+        this.storage.mutations.inputAttachments.delete(id);
+        this.storage.mutations.deletedInputAttachments.delete(id);
+      }
+      for (const [id, row] of Object.entries(this.storage.state.messages)) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        delete this.storage.state.messages[id];
+        this.storage.mutations.messages.delete(id);
+        this.storage.mutations.deletedMessages.delete(id);
+      }
+      for (const [id, row] of Object.entries(this.storage.state.parts)) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        delete this.storage.state.parts[id];
+        this.storage.mutations.parts.delete(id);
+        this.storage.mutations.deletedParts.delete(id);
+        this.storage.deltaCheckpoint.delete(id);
+      }
+      for (const [id, row] of Object.entries(this.storage.state.runs)) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        delete this.storage.state.runs[id];
+        this.storage.mutations.runs.delete(id);
+        this.storage.mutations.deletedRuns.delete(id);
+      }
+      for (const [id, row] of Object.entries(this.storage.state.attempts)) {
+        if (!runIds.has(row.runId)) continue;
+        delete this.storage.state.attempts[id];
+        this.storage.mutations.attempts.delete(id);
+        this.storage.mutations.deletedAttempts.delete(id);
+      }
+      for (const [id, row] of Object.entries(this.storage.state.tasks)) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        delete this.storage.state.tasks[id];
+        this.storage.mutations.tasks.delete(id);
+      }
+      for (const [id, row] of Object.entries(this.storage.state.permissions)) {
+        if (!sessionIdSet.has(row.sessionId)) continue;
+        delete this.storage.state.permissions[id];
+        this.storage.mutations.permissions.delete(id);
+      }
+      const removedEventIds = new Set(
+        this.storage.state.events
+          .filter((event) => event.sessionId && sessionIdSet.has(event.sessionId))
+          .map(({ id }) => id),
+      );
+      this.storage.state.events = this.storage.state.events.filter(
+        (event) => !event.sessionId || !sessionIdSet.has(event.sessionId),
+      );
+      for (const id of removedEventIds) this.storage.mutations.events.delete(id);
+      this.testHooks?.afterDeleteMemory?.();
+      return sessionIds;
+    });
+  }
+
+  private collectSessionTreeIds(sessionId: string): string[] {
+    const result: string[] = [];
+    const visit = (id: string): void => {
+      result.push(id);
+      for (const child of Object.values(this.storage.state.sessions)
+        .filter((session) => session.parentId === id)
+        .sort((left, right) => left.createdAt - right.createdAt)) {
+        visit(child.id);
+      }
+    };
+    visit(sessionId);
+    return result;
   }
 }

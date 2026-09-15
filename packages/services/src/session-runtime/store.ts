@@ -605,104 +605,7 @@ export class SessionStore {
   }
 
   deleteSessionTree(sessionId: string): string[] {
-    if (this.coordinator.inTransaction) {
-      throw new Error(
-        "deleteSessionTree cannot be called inside a store transaction",
-      );
-    }
-    assertSession(this.state, sessionId);
-    const sessionIds = this.collectSessionTreeIds(sessionId);
-    const sessionIdSet = new Set(sessionIds);
-    const runIds = new Set(
-      Object.values(this.state.runs)
-        .filter((run) => sessionIdSet.has(run.sessionId))
-        .map((run) => run.id),
-    );
-
-    this.database.transaction(() => {
-      const placeholders = sessionIds.map(() => "?").join(", ");
-      this.database
-        .prepare(
-          `DELETE FROM permission_request WHERE session_id IN (${placeholders})`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(
-          `DELETE FROM session_task WHERE session_id IN (${placeholders})`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(
-          `DELETE FROM session_run_attempt WHERE run_id IN (SELECT id FROM session_run WHERE session_id IN (${placeholders}))`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(
-          `DELETE FROM session_run WHERE session_id IN (${placeholders})`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(
-          `DELETE FROM session_message_part WHERE session_id IN (${placeholders})`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(
-          `DELETE FROM session_message WHERE session_id IN (${placeholders})`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(
-          `DELETE FROM session_input WHERE session_id IN (${placeholders})`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(
-          `DELETE FROM session_event WHERE session_id IN (${placeholders})`,
-        )
-        .run(...sessionIds);
-      this.database
-        .prepare(`DELETE FROM session WHERE id IN (${placeholders})`)
-        .run(...sessionIds);
-    })();
-
-    for (const id of sessionIds) delete this.state.sessions[id];
-    for (const [id, input] of Object.entries(this.state.inputs)) {
-      if (sessionIdSet.has(input.sessionId)) delete this.state.inputs[id];
-    }
-    for (const [id, reference] of Object.entries(this.state.inputAttachments)) {
-      if (sessionIdSet.has(reference.sessionId)) {
-        delete this.state.inputAttachments[id];
-      }
-    }
-    for (const [id, message] of Object.entries(this.state.messages)) {
-      if (sessionIdSet.has(message.sessionId)) delete this.state.messages[id];
-    }
-    for (const [id, part] of Object.entries(this.state.parts)) {
-      if (sessionIdSet.has(part.sessionId)) {
-        delete this.state.parts[id];
-        this.deltaCheckpoint.delete(id);
-      }
-    }
-    for (const [id, run] of Object.entries(this.state.runs)) {
-      if (sessionIdSet.has(run.sessionId)) delete this.state.runs[id];
-    }
-    for (const [id, attempt] of Object.entries(this.state.attempts)) {
-      if (runIds.has(attempt.runId)) delete this.state.attempts[id];
-    }
-    for (const [id, task] of Object.entries(this.state.tasks)) {
-      if (sessionIdSet.has(task.sessionId)) delete this.state.tasks[id];
-    }
-    for (const [id, permission] of Object.entries(this.state.permissions)) {
-      if (sessionIdSet.has(permission.sessionId))
-        delete this.state.permissions[id];
-    }
-    this.state.events = this.state.events.filter(
-      (event) => !event.sessionId || !sessionIdSet.has(event.sessionId),
-    );
-    this.mutations = createMutationBuffer();
-
-    return sessionIds;
+    return this.conversationTransactions.deleteSessionTree(sessionId);
   }
 
   archiveSession(sessionId: string): SessionRecord {
@@ -1970,20 +1873,6 @@ export class SessionStore {
         (run.status === "pending" || run.status === "running"),
     );
     session.status = hasActiveRun ? "running" : "idle";
-  }
-
-  private collectSessionTreeIds(sessionId: string): string[] {
-    const result: string[] = [];
-    const visit = (id: string): void => {
-      result.push(id);
-      for (const child of Object.values(this.state.sessions)
-        .filter((session) => session.parentId === id)
-        .sort((a, b) => a.createdAt - b.createdAt)) {
-        visit(child.id);
-      }
-    };
-    visit(sessionId);
-    return result;
   }
 
   private load(): SessionState {
