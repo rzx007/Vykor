@@ -15,11 +15,25 @@ import {
 } from "./reducer.js";
 import type {
   EventSyncOptions,
+  ListEventsOptions,
   OpenHarnessClientState,
   SessionEventRecord,
+  SessionStateSnapshot,
   SyncEventUpdate,
 } from "../types/index.js";
-import type { OpenHarnessClient } from "../transport/http-client.js";
+
+export interface SyncEventsClient {
+  getSessionState(
+    sessionId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<SessionStateSnapshot>;
+  listEvents(
+    options?: ListEventsOptions & { signal?: AbortSignal },
+  ): Promise<SessionEventRecord[]>;
+  streamEvents(
+    options?: EventSyncOptions,
+  ): AsyncIterable<SessionEventRecord>;
+}
 
 const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
   Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
@@ -35,7 +49,7 @@ export function hydrateState(events: Iterable<SessionEventRecord>): OpenHarnessC
  * live 阶段若 `applyEvent` 因重复 seq 返回同一引用，则跳过 yield。
  */
 export async function* syncEvents(
-  client: OpenHarnessClient,
+  client: SyncEventsClient,
   options: EventSyncOptions = {},
 ): AsyncIterable<SyncEventUpdate> {
   let state = createInitialClientState();
@@ -62,7 +76,7 @@ export async function* syncEvents(
 }
 
 async function* liveWithReconnect(
-  client: OpenHarnessClient,
+  client: SyncEventsClient,
   initialState: OpenHarnessClientState,
   options: EventSyncOptions,
   initialCursor: number,

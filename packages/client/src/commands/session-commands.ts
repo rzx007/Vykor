@@ -18,8 +18,10 @@ export type RuntimeDiagnostics = {
   architecture?: string;
 };
 
+export type SessionCommandClient = OpenHarnessClient;
+
 export type SessionCommandHost = {
-  client: OpenHarnessClient;
+  client: SessionCommandClient;
   sessionId?: string;
   /** Project cwd for memory/git/plugins/etc. */
   cwd: string;

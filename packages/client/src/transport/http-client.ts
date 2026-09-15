@@ -133,6 +133,8 @@ import {
   ProjectResource,
   PluginResource,
   DevelopmentResource,
+  SessionResource,
+  createPromptRequestId,
 } from "../resources/index.js";
 
 export {
@@ -149,17 +151,9 @@ export {
   ProjectResource,
   PluginResource,
   DevelopmentResource,
+  SessionResource,
+  createPromptRequestId,
 };
-
-let promptRequestCounter = 0;
-
-/** Generate a caller-stable id for one prompt admission attempt. */
-export function createPromptRequestId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function")
-    return globalThis.crypto.randomUUID();
-  promptRequestCounter += 1;
-  return `prompt-${Date.now().toString(36)}-${promptRequestCounter.toString(36)}`;
-}
 
 /**
  * 面向 daemon 的 typed fetch 客户端。
@@ -175,6 +169,7 @@ export class OpenHarnessClient {
   readonly projects: ProjectResource;
   readonly plugins: PluginResource;
   readonly development: DevelopmentResource;
+  readonly sessions: SessionResource;
 
   constructor(options: OpenHarnessClientOptions) {
     this.transport = new HttpTransport(options);
@@ -186,6 +181,7 @@ export class OpenHarnessClient {
     this.projects = new ProjectResource(this.transport);
     this.plugins = new PluginResource(this.transport);
     this.development = new DevelopmentResource(this.transport);
+    this.sessions = new SessionResource(this.transport);
   }
 
   get baseUrl(): string {
@@ -515,30 +511,23 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<CompactSessionResponse> {
-    return await this.request<CompactSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/compact`,
-      { method: "POST", signal: options.signal },
-    );
+    return this.sessions.compact(sessionId, options);
   }
 
   async getSessionGoal(sessionId: string): Promise<SessionGoal | null> {
-    const response = await this.request<{ goal: SessionGoal | null }>(`/sessions/${encodeURIComponent(sessionId)}/goal`);
-    return response.goal;
+    return this.sessions.getGoal(sessionId);
   }
 
   async createSessionGoal(sessionId: string, input: CreateSessionGoalInput): Promise<SessionGoal> {
-    const response = await this.request<{ goal: SessionGoal }>(`/sessions/${encodeURIComponent(sessionId)}/goals`, { method: "POST", body: input });
-    return response.goal;
+    return this.sessions.createGoal(sessionId, input);
   }
 
   async updateSessionGoal(sessionId: string, goalId: string, input: UpdateSessionGoalInput): Promise<SessionGoal> {
-    const response = await this.request<{ goal: SessionGoal }>(`/sessions/${encodeURIComponent(sessionId)}/goals/${encodeURIComponent(goalId)}`, { method: "PATCH", body: input });
-    return response.goal;
+    return this.sessions.updateGoal(sessionId, goalId, input);
   }
 
   async applySessionGoalAction(sessionId: string, goalId: string, input: GoalActionInput): Promise<SessionGoal> {
-    const response = await this.request<{ goal: SessionGoal }>(`/sessions/${encodeURIComponent(sessionId)}/goals/${encodeURIComponent(goalId)}/actions`, { method: "POST", body: input });
-    return response.goal;
+    return this.sessions.applyGoalAction(sessionId, goalId, input);
   }
 
   /** `POST /sessions/:id/rewind` */
@@ -547,10 +536,7 @@ export class OpenHarnessClient {
     input: { count?: number } = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<RewindSessionResponse> {
-    return await this.request<RewindSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/rewind`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.rewind(sessionId, input, options);
   }
 
   /** `POST /sessions/:id/remember` */
@@ -558,10 +544,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<RememberSessionResponse> {
-    return await this.request<RememberSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/remember`,
-      { method: "POST", signal: options.signal },
-    );
+    return this.sessions.remember(sessionId, options);
   }
 
   /** `POST /dream` */
@@ -753,10 +736,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionUsageResponse> {
-    return await this.request<SessionUsageResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/usage`,
-      { signal: options.signal },
-    );
+    return this.sessions.getUsage(sessionId, options);
   }
 
   /** `POST /sessions/:id/export` */
@@ -765,22 +745,14 @@ export class OpenHarnessClient {
     input: { filename?: string; json?: boolean } = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionExportResponse> {
-    return await this.request<SessionExportResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/export`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.export(sessionId, input, options);
   }
 
   /** `GET /sessions` */
   async listSessions(
     options: ListSessionsOptions & { signal?: AbortSignal } = {},
   ): Promise<SessionRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ sessions: SessionRecord[] }>(
-      this.path("/sessions", query),
-      { signal },
-    );
-    return response.sessions;
+    return this.sessions.list(options);
   }
 
   async listProjects(
@@ -824,15 +796,7 @@ export class OpenHarnessClient {
     input: CreateClientSessionInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      "/sessions",
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.create(input, options);
   }
 
   /** `GET /sessions/:id` */
@@ -840,13 +804,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}`,
-      {
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.get(sessionId, options);
   }
 
   /** `POST /sessions/:id/fork` */
@@ -855,15 +813,7 @@ export class OpenHarnessClient {
     input: ForkClientSessionInput = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}/fork`,
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.fork(sessionId, input, options);
   }
 
   /** `GET /sessions/:id/state` - atomic attach snapshot plus SSE cursor. */
@@ -871,13 +821,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionStateSnapshot> {
-    const response = await this.request<unknown>(
-      `/sessions/${encodeURIComponent(sessionId)}/state`,
-      {
-        signal: options.signal,
-      },
-    );
-    return decodeSessionStateSnapshot(response);
+    return this.sessions.getState(sessionId, options);
   }
 
   /** `DELETE /sessions/:id` */
@@ -885,14 +829,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}`,
-      {
-        method: "DELETE",
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.archive(sessionId, options);
   }
 
   /** `DELETE /sessions/:id/hard` */
@@ -900,14 +837,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<string[]> {
-    const response = await this.request<{ deletedSessionIds: string[] }>(
-      `/sessions/${encodeURIComponent(sessionId)}/hard`,
-      {
-        method: "DELETE",
-        signal: options.signal,
-      },
-    );
-    return response.deletedSessionIds;
+    return this.sessions.delete(sessionId, options);
   }
 
   /** `PATCH /sessions/:id` - update title, agent, or metadata.runtime fields. */
@@ -916,15 +846,7 @@ export class OpenHarnessClient {
     input: UpdateClientSessionInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}`,
-      {
-        method: "PATCH",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.update(sessionId, input, options);
   }
 
   /** `GET /sessions/:id/messages` */
@@ -932,12 +854,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: ListMessagesOptions & { signal?: AbortSignal } = {},
   ): Promise<SessionMessageRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ messages: SessionMessageRecord[] }>(
-      this.path(`/sessions/${encodeURIComponent(sessionId)}/messages`, query),
-      { signal },
-    );
-    return response.messages;
+    return this.sessions.listMessages(sessionId, options);
   }
 
   /** `GET /sessions/:id/parts` */
@@ -945,12 +862,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: ListClientMessagePartsOptions & { signal?: AbortSignal } = {},
   ): Promise<SessionMessagePartRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ parts: SessionMessagePartRecord[] }>(
-      this.path(`/sessions/${encodeURIComponent(sessionId)}/parts`, query),
-      { signal },
-    );
-    return response.parts;
+    return this.sessions.listMessageParts(sessionId, options);
   }
 
   /** `POST /sessions/:id/prompts` — 提交用户输入并触发/排队一次 run。 */
@@ -959,14 +871,7 @@ export class OpenHarnessClient {
     input: AdmitClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromptResponse> {
-    return await this.request<PromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts`,
-      {
-        method: "POST",
-        body: { ...input, id: input.id ?? createPromptRequestId() },
-        signal: options.signal,
-      },
-    );
+    return this.sessions.admitPrompt(sessionId, input, options);
   }
 
   /** `POST /sessions/:id/prompts/latest/edit` */
@@ -975,14 +880,7 @@ export class OpenHarnessClient {
     input: EditLatestClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromptResponse> {
-    return await this.request<PromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts/latest/edit`,
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
+    return this.sessions.editLatestPrompt(sessionId, input, options);
   }
 
   /** Promote one durable queued prompt into the exact active run. */
@@ -992,10 +890,7 @@ export class OpenHarnessClient {
     input: PromoteQueuedClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromoteQueuedPromptResponse> {
-    return await this.request<PromoteQueuedPromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts/${encodeURIComponent(inputId)}/promote`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.promoteQueuedPrompt(sessionId, inputId, input, options);
   }
 
   /** Cancel one durable prompt that is still waiting in the run queue. */
@@ -1005,10 +900,7 @@ export class OpenHarnessClient {
     input: CancelQueuedClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<CancelQueuedPromptResponse> {
-    return await this.request<CancelQueuedPromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts/${encodeURIComponent(inputId)}/cancel`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.cancelQueuedPrompt(sessionId, inputId, input, options);
   }
 
   /**
@@ -1021,14 +913,7 @@ export class OpenHarnessClient {
     input: ResumeInterruptedRunInput = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<ResumeInterruptedRunResponse> {
-    return await this.request<ResumeInterruptedRunResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(runId)}/resume`,
-      {
-        method: "POST",
-        body: { ...input, id: input.id ?? createPromptRequestId() },
-        signal: options.signal,
-      },
-    );
+    return this.sessions.resumeInterruptedRun(sessionId, runId, input, options);
   }
 
   /** `POST /sessions/:id/interrupt` — 中断当前/排队中的 run。 */
@@ -1036,16 +921,7 @@ export class OpenHarnessClient {
     sessionId: string,
     options: { signal?: AbortSignal; expectedRunId?: string } = {},
   ): Promise<InterruptSessionResponse> {
-    return await this.request<InterruptSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/interrupt`,
-      {
-        method: "POST",
-        body: options.expectedRunId
-          ? { expectedRunId: options.expectedRunId }
-          : undefined,
-        signal: options.signal,
-      },
-    );
+    return this.sessions.interrupt(sessionId, options);
   }
 
   /** `GET /events` — 用于 attach 时的历史 replay。 */

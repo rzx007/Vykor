@@ -25,6 +25,7 @@ export {
   ProjectResource,
   PluginResource,
   DevelopmentResource,
+  SessionResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
 export type {
