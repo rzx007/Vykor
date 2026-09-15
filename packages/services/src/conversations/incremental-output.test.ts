@@ -43,10 +43,54 @@ describe("IncrementalOutput", () => {
     store.createRun({ id: "run", sessionId: "s" });
     store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: `${status} tail` });
     store.updateRun("run", { status });
+    const storage = (store as any).storage;
+    const part = store.listMessageParts("s")[0]!;
+    const message = store.listMessages("s")[0]!;
+    const session = store.getSession("s")!;
+    expect(storage.database.connection.prepare("SELECT text, updated_at FROM session_message_part WHERE id='p'").get()).toEqual({ text: `${status} tail`, updated_at: part.updatedAt });
+    expect(storage.database.connection.prepare("SELECT updated_at FROM session_message WHERE id='m'").get()).toEqual({ updated_at: message.updatedAt });
+    expect(storage.database.connection.prepare("SELECT updated_at FROM session WHERE id='s'").get()).toEqual({ updated_at: session.updatedAt });
     store.close();
     const reopened = new SessionStore({ path });
-    try { expect(reopened.listMessageParts("s")[0]!.text).toBe(`${status} tail`); }
+    try {
+      expect(reopened.listMessageParts("s")[0]).toMatchObject({ text: `${status} tail`, updatedAt: part.updatedAt });
+      expect(reopened.listMessages("s")[0]!.updatedAt).toBe(message.updatedAt);
+      expect(reopened.getSession("s")!.updatedAt).toBe(session.updatedAt);
+    }
     finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("flushes dirty output before interruptActiveRuns returns", () => {
+    const { dir, path, store } = setup();
+    const run = store.createRun({ id: "run", sessionId: "s" });
+    store.updateRun(run.id, { status: "running" });
+    const attempt = store.createRunAttempt({ id: "attempt", runId: run.id });
+    store.updateRunAttempt(attempt.id, { status: "running" });
+    const message = store.createMessage({ id: "run-message", sessionId: "s", role: "assistant", runId: run.id });
+    store.upsertMessagePart({ id: "run-part", sessionId: "s", messageId: message.id, type: "text", status: "running", text: "" });
+    store.appendMessagePartDelta({ sessionId: "s", messageId: message.id, partId: "run-part", field: "text", delta: "interrupt tail" });
+
+    expect(store.interruptActiveRuns()).toBe(1);
+    const storage = (store as any).storage;
+    const part = store.listMessageParts("s").find(({ id }) => id === "run-part")!;
+    const persistedMessage = store.listMessages("s").find(({ id }) => id === "run-message")!;
+    const session = store.getSession("s")!;
+    expect(storage.database.connection.prepare("SELECT text, status, updated_at FROM session_message_part WHERE id='run-part'").get()).toEqual({ text: "interrupt tail", status: "interrupted", updated_at: part.updatedAt });
+    expect(storage.database.connection.prepare("SELECT updated_at FROM session_message WHERE id='run-message'").get()).toEqual({ updated_at: persistedMessage.updatedAt });
+    expect(storage.database.connection.prepare("SELECT updated_at FROM session WHERE id='s'").get()).toEqual({ updated_at: session.updatedAt });
+    expect(store.getRun("run")!.status).toBe("interrupted");
+    expect(store.getRunAttempt("attempt")!.status).toBe("cancelled");
+    expect(part.status).toBe("interrupted");
+
+    store.close();
+    const reopened = new SessionStore({ path });
+    try {
+      expect(reopened.getRun("run")!.status).toBe("interrupted");
+      expect(reopened.getRunAttempt("attempt")!.status).toBe("cancelled");
+      expect(reopened.listMessageParts("s").find(({ id }) => id === "run-part")).toMatchObject({ text: "interrupt tail", status: "interrupted", updatedAt: part.updatedAt });
+      expect(reopened.listMessages("s").find(({ id }) => id === "run-message")!.updatedAt).toBe(persistedMessage.updatedAt);
+      expect(reopened.getSession("s")!.updatedAt).toBe(session.updatedAt);
+    } finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 
   it("drops old dirty output when replacing the transcript and persists only new history", () => {

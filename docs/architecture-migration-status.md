@@ -74,7 +74,7 @@
 - Store 的 append/flush 只转发，`persistChanges` 复用同一 flush 实现，不再保留第二套 delta SQL。
 - close、backup、Run terminal 和 transcript replace durability 边界已用 reopen 测试固定；backup 在 owner fence 后、复制数据库前 flush。
 - services 全量验证为 45 个测试文件、429 个测试；已知 WSL/node-pty 全仓并发环境问题未在本阶段处理。
-- Server 定向验证中 transcript projection 与 run engine 共 34 个测试通过；run executor 收集及 Server typecheck 受当前 worktree 缺失 `yaml`、内部 workspace 包解析和重复物理路径类型问题阻断，未通过安装依赖或改业务代码规避。
+- Server 定向验证覆盖 transcript projection、run engine 与 run executor；Server typecheck 在 worktree 按锁文件安装依赖并构建 `@openharness/agent-runtime` 后通过。此前临时 Junction 导致的 `yaml`、workspace 包解析和重复物理路径报错不属于代码回归。
 
 ## 当前所有权
 
