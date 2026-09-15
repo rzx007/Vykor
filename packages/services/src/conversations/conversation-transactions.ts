@@ -3,10 +3,12 @@ import { isDeepStrictEqual } from "node:util";
 
 import {
   type AdmitPromptInput,
+  type AdmitPromptWithRunInput,
   type AttachmentAssetRecord,
   type AttachmentLimits,
   type SessionInputAttachmentRecord,
   type SessionInputRecord,
+  type SessionRunRecord,
   type SessionUserInputItem,
   normalizeSessionUserInputItems,
   sessionUserInputText,
@@ -43,6 +45,7 @@ export interface ConversationTransactionTestHooks {
   duringAttachmentReference?: (index: number) => void;
   afterTitleUpdate?: () => void;
   afterEventAllocation?: () => void;
+  beforeRunCreation?: () => void;
 }
 
 export interface ConversationTransactionsOptions {
@@ -303,6 +306,75 @@ export class ConversationTransactions {
 
       this.saveChanges?.();
       return clone(row);
+    });
+  }
+
+  private requireRuns(): RunRepository {
+    if (!this.runs) {
+      throw new Error("RunRepository is required for run transactions");
+    }
+    return this.runs;
+  }
+
+  admitPromptWithRun(
+    input: AdmitPromptWithRunInput,
+    options: { attachmentLimits?: Partial<AttachmentLimits> } = {},
+  ): {
+    input: SessionInputRecord;
+    run: SessionRunRecord;
+  } {
+    if (input.prompt.delivery === "steer") {
+      throw new Error(
+        "Steered prompts cannot create their owning run during admission",
+      );
+    }
+    return this.storage.atomic(() => {
+      const admitted = this.admitPrompt(
+        {
+          ...input.prompt,
+          delivery: "queue",
+        },
+        options,
+      );
+      const runs = this.requireRuns();
+      const existingRun = runs.findOwningRunByInput(admitted.id);
+      if (existingRun) return { input: admitted, run: existingRun };
+      this.testHooks?.beforeRunCreation?.();
+      const run = runs.createRun({
+        id: input.run?.id,
+        sessionId: admitted.sessionId,
+        inputId: admitted.id,
+        metadata: input.run?.metadata,
+      });
+      return { input: admitted, run };
+    });
+  }
+
+  createReplayRun(
+    inputId: string,
+    input: { id?: string; metadata?: Record<string, unknown> } = {},
+  ): SessionRunRecord {
+    return this.storage.atomic(() => {
+      const sourceInput = this.storage.state.inputs[inputId];
+      if (!sourceInput) throw new Error(`Session input not found: ${inputId}`);
+      if (input.id) {
+        const existing = this.storage.state.runs[input.id];
+        if (existing) {
+          if (
+            existing.sessionId !== sourceInput.sessionId ||
+            existing.inputId !== sourceInput.id
+          ) {
+            throw new Error(`Replay run id is already used: ${input.id}`);
+          }
+          return clone(existing);
+        }
+      }
+      return this.requireRuns().createRun({
+        id: input.id,
+        sessionId: sourceInput.sessionId,
+        inputId: sourceInput.id,
+        metadata: input.metadata,
+      });
     });
   }
 }

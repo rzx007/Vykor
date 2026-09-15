@@ -1139,29 +1139,7 @@ export class SessionStore {
     input: SessionInputRecord;
     run: SessionRunRecord;
   } {
-    if (input.prompt.delivery === "steer") {
-      throw new Error(
-        "Steered prompts cannot create their owning run during admission",
-      );
-    }
-    return this.transaction(() => {
-      const admitted = this.admitPrompt(
-        {
-          ...input.prompt,
-          delivery: "queue",
-        },
-        options,
-      );
-      const existingRun = this.findOwningRunByInput(admitted.id);
-      if (existingRun) return { input: admitted, run: existingRun };
-      const run = this.createRun({
-        id: input.run?.id,
-        sessionId: admitted.sessionId,
-        inputId: admitted.id,
-        metadata: input.run?.metadata,
-      });
-      return { input: admitted, run };
-    });
+    return this.conversationTransactions.admitPromptWithRun(input, options);
   }
 
   /**
@@ -1196,26 +1174,7 @@ export class SessionStore {
     inputId: string,
     input: { id?: string; metadata?: Record<string, unknown> } = {},
   ): SessionRunRecord {
-    const sourceInput = this.state.inputs[inputId];
-    if (!sourceInput) throw new Error(`Session input not found: ${inputId}`);
-    if (input.id) {
-      const existing = this.state.runs[input.id];
-      if (existing) {
-        if (
-          existing.sessionId !== sourceInput.sessionId ||
-          existing.inputId !== sourceInput.id
-        ) {
-          throw new Error(`Replay run id is already used: ${input.id}`);
-        }
-        return clone(existing);
-      }
-    }
-    return this.createRun({
-      id: input.id,
-      sessionId: sourceInput.sessionId,
-      inputId: sourceInput.id,
-      metadata: input.metadata,
-    });
+    return this.conversationTransactions.createReplayRun(inputId, input);
   }
 
   replaceLatestPromptWithAdmission(input: {

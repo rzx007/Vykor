@@ -468,4 +468,246 @@ describe("ConversationTransactions.admitPrompt", () => {
       },
     );
   });
+
+  describe("admitPromptWithRun", () => {
+    it("admits queued prompt and creates owning root run atomically", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        const result = tx.admitPromptWithRun({
+          prompt: { sessionId: "s1", content: "Run this task" },
+          run: { metadata: { source: "test" } },
+        });
+
+        expect(result.input.content).toBe("Run this task");
+        expect(result.run.sessionId).toBe("s1");
+        expect(result.run.inputId).toBe(result.input.id);
+        expect(result.run.metadata).toEqual({ source: "test" });
+        expect(result.run.status).toBe("pending");
+
+        // Verify owning run query
+        expect(store.runs.findOwningRunByInput(result.input.id)?.id).toBe(result.run.id);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns existing input and owning run on retry with same content", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-retry-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        const first = tx.admitPromptWithRun({
+          prompt: { id: "input-retry", sessionId: "s1", content: "Retry prompt" },
+        });
+
+        const second = tx.admitPromptWithRun({
+          prompt: { id: "input-retry", sessionId: "s1", content: "Retry prompt" },
+        });
+
+        expect(second.input.id).toBe(first.input.id);
+        expect(second.run.id).toBe(first.run.id);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("throws if delivery is steer", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-steer-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        expect(() =>
+          tx.admitPromptWithRun({
+            prompt: { sessionId: "s1", content: "steer", delivery: "steer" },
+          }),
+        ).toThrow("Steered prompts cannot create their owning run during admission");
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("rolls back input if run creation fails", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-fail-"));
+      const dbPath = join(dir, "store.db");
+      let store = new SessionStore({ path: dbPath });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+          testHooks: {
+            beforeRunCreation: () => {
+              throw new Error("Simulated failure during run creation");
+            },
+          },
+        });
+
+        expect(() =>
+          tx.admitPromptWithRun({
+            prompt: { id: "should-rollback", sessionId: "s1", content: "Rollback prompt" },
+          }),
+        ).toThrow("Simulated failure during run creation");
+
+        expect(store.getInput("should-rollback")).toBeUndefined();
+        expect(store.listInputs("s1")).toEqual([]);
+        expect(store.runs.listRuns("s1")).toEqual([]);
+
+        // Reopen store from SQLite
+        store.close();
+        store = new SessionStore({ path: dbPath });
+        expect(store.getInput("should-rollback")).toBeUndefined();
+        expect(store.listInputs("s1")).toEqual([]);
+        expect(store.runs.listRuns("s1")).toEqual([]);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("does not create a run if input id exists with different content", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-conflict-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        tx.admitPrompt({ id: "input-1", sessionId: "s1", content: "Original" });
+
+        expect(() =>
+          tx.admitPromptWithRun({
+            prompt: { id: "input-1", sessionId: "s1", content: "Conflict" },
+          }),
+        ).toThrow(/prompt_id_conflict/);
+
+        expect(store.runs.listRuns("s1")).toHaveLength(0);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("createReplayRun", () => {
+    it("creates replay run for existing input with metadata", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-replay-run-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        const input = tx.admitPrompt({ sessionId: "s1", content: "Source prompt" });
+
+        const replayRun = tx.createReplayRun(input.id, {
+          id: "replay-1",
+          metadata: { replay: true },
+        });
+
+        expect(replayRun.id).toBe("replay-1");
+        expect(replayRun.sessionId).toBe("s1");
+        expect(replayRun.inputId).toBe(input.id);
+        expect(replayRun.metadata).toEqual({ replay: true });
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("throws if source input does not exist", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-replay-missing-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        expect(() => tx.createReplayRun("non-existent")).toThrow(
+          "Session input not found: non-existent",
+        );
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("supports explicit id idempotency and throws on explicit id conflict", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-replay-idemp-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        const tx = new ConversationTransactions({
+          storage: (store as any).storage,
+          conversations: store.conversations,
+          runs: store.runs,
+          attachments: store.attachments,
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.createSession({ id: "s2", cwd: dir, model: "m" });
+        const input1 = tx.admitPrompt({ sessionId: "s1", content: "Prompt 1" });
+        const input2 = tx.admitPrompt({ sessionId: "s2", content: "Prompt 2" });
+
+        const first = tx.createReplayRun(input1.id, { id: "replay-id" });
+        const retried = tx.createReplayRun(input1.id, { id: "replay-id" });
+        expect(retried.id).toBe(first.id);
+
+        // Conflict: same run id used for a different session / input
+        expect(() =>
+          tx.createReplayRun(input2.id, { id: "replay-id" }),
+        ).toThrow("Replay run id is already used: replay-id");
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });
