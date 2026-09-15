@@ -831,6 +831,8 @@ describe("ConversationTransactions.admitPrompt", () => {
         store.createSession({ id: "s1", cwd: dir, model: "m" });
         const message = store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
         store.upsertMessagePart({ id: "old-part", sessionId: "s1", messageId: message.id, type: "text", text: "old" });
+        const storage = (store as any).storage;
+        storage.deltaCheckpoint.markDirty("old-part", 3);
 
         const tx = createTransactions(store, {
           afterTranscriptReplacement: () => { throw new Error("injected transcript failure"); },
@@ -839,11 +841,21 @@ describe("ConversationTransactions.admitPrompt", () => {
           .toThrow("injected transcript failure");
         expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
         expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
+        expect(storage.mutations.messages.size).toBe(0);
+        expect(storage.mutations.parts.size).toBe(0);
+        expect(storage.mutations.deletedMessages.size).toBe(0);
+        expect(storage.mutations.deletedParts.size).toBe(0);
+        expect(storage.deltaCheckpoint.dirtyPartIds()).toEqual(["old-part"]);
+
+        store.updateSession("s1", { title: "unrelated save" });
+        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
 
         store.close();
         store = new SessionStore({ path: dbPath });
         expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
         expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
+        expect(store.getSession("s1")!.title).toBe("unrelated save");
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
@@ -933,6 +945,108 @@ describe("ConversationTransactions.admitPrompt", () => {
           store.listEvents({ sessionId: "s1" })
             .filter(({ type }) => type === "session.transcript.replaced"),
         ).toHaveLength(1);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("edits the latest prompt and creates its owning run", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-run-"));
+      const store = new SessionStore({ path: join(dir, "store.db") });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        const sourceInput = store.admitPrompt({ id: "source-input", sessionId: "s1", content: "source" });
+        const sourceMessage = store.createMessage({ id: "source-message", sessionId: "s1", role: "user", inputId: sourceInput.id });
+
+        const result = createTransactions(store).replaceLatestPromptWithAdmission({
+          sessionId: "s1",
+          sourceMessageId: sourceMessage.id,
+          admission: {
+            prompt: { id: "replacement-input", sessionId: "s1", content: "replacement" },
+            run: { id: "replacement-run" },
+          },
+          createRun: true,
+        });
+
+        expect(result.input.id).toBe("replacement-input");
+        expect(result.run).toEqual(expect.objectContaining({
+          id: "replacement-run",
+          sessionId: "s1",
+          inputId: "replacement-input",
+        }));
+        expect(store.runs.findOwningRunByInput("replacement-input")?.id).toBe("replacement-run");
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("restores the entire removed graph when edited prompt run creation fails", () => {
+      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-run-fail-"));
+      const dbPath = join(dir, "store.db");
+      let store = new SessionStore({ path: dbPath });
+      try {
+        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        createReadyAttachment(store, "source-asset", 10);
+        const sourceInput = store.admitPrompt({
+          id: "source-input",
+          sessionId: "s1",
+          content: "source",
+          attachments: [{ assetId: "source-asset" }],
+        });
+        const sourceRun = store.createRun({ id: "source-run", sessionId: "s1", inputId: sourceInput.id });
+        const sourceAttempt = store.createRunAttempt({ id: "source-attempt", runId: sourceRun.id });
+        const sourceMessage = store.createMessage({
+          id: "source-message",
+          sessionId: "s1",
+          role: "user",
+          inputId: sourceInput.id,
+          runId: sourceRun.id,
+        });
+        store.upsertMessagePart({
+          id: "source-part",
+          sessionId: "s1",
+          messageId: sourceMessage.id,
+          type: "text",
+          text: "source",
+        });
+        const sourceReferences = store.listInputAttachments(sourceInput.id);
+        const sourceMessages = store.listMessages("s1");
+        const sourceParts = store.listMessageParts("s1");
+        const tx = createTransactions(store, {
+          beforeRunCreation: () => { throw new Error("injected edit run failure"); },
+        });
+
+        expect(() => tx.replaceLatestPromptWithAdmission({
+          sessionId: "s1",
+          sourceMessageId: sourceMessage.id,
+          admission: {
+            prompt: { id: "replacement-input", sessionId: "s1", content: "replacement" },
+            run: { id: "replacement-run" },
+          },
+          createRun: true,
+        })).toThrow("injected edit run failure");
+
+        expect(store.getInput(sourceInput.id)).toEqual(sourceInput);
+        expect(store.listInputAttachments(sourceInput.id)).toEqual(sourceReferences);
+        expect(store.getRun(sourceRun.id)).toEqual(sourceRun);
+        expect(store.getRunAttempt(sourceAttempt.id)).toEqual(sourceAttempt);
+        expect(store.listMessages("s1")).toEqual(sourceMessages);
+        expect(store.listMessageParts("s1")).toEqual(sourceParts);
+        expect(store.getInput("replacement-input")).toBeUndefined();
+        expect(store.getRun("replacement-run")).toBeUndefined();
+
+        store.close();
+        store = new SessionStore({ path: dbPath });
+        expect(store.getInput(sourceInput.id)).toEqual(sourceInput);
+        expect(store.listInputAttachments(sourceInput.id)).toEqual(sourceReferences);
+        expect(store.getRun(sourceRun.id)).toEqual(sourceRun);
+        expect(store.getRunAttempt(sourceAttempt.id)).toEqual(sourceAttempt);
+        expect(store.listMessages("s1")).toEqual(sourceMessages);
+        expect(store.listMessageParts("s1")).toEqual(sourceParts);
+        expect(store.getInput("replacement-input")).toBeUndefined();
+        expect(store.getRun("replacement-run")).toBeUndefined();
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
