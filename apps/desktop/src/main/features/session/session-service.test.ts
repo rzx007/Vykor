@@ -299,10 +299,17 @@ describe("DesktopSessionService.listCommands", () => {
 
 function serviceWithClient(client: Record<string, unknown>): DesktopSessionService {
   const service = new DesktopSessionService()
+  const sessions = (client.sessions as Record<string, unknown> | undefined) ?? client
+  const projects = (client.projects as Record<string, unknown> | undefined) ?? client
+  const fullClient = {
+    ...client,
+    sessions,
+    projects,
+  }
   ;(
     service as unknown as {
-      clientPromise: Promise<typeof client>
+      clientPromise: Promise<typeof fullClient>
     }
-  ).clientPromise = Promise.resolve(client)
+  ).clientPromise = Promise.resolve(fullClient)
   return service
 }

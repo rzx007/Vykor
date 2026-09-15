@@ -122,7 +122,7 @@ export class DesktopSessionService {
       client.getSettings(),
       client.listModels(),
       client.listSessions({ includeArchived: true, limit: 400 }),
-      client.listProjects(),
+      client.projects.list(),
       client.capabilities(),
     ])
     requireDesktopPluginCapabilities(capabilities)
@@ -311,7 +311,7 @@ export class DesktopSessionService {
       : await allocateOutsideProjectWorkspace(app.getPath("documents"))
 
     try {
-      const session = await client.createSession({
+      const session = await client.sessions.create({
         ...(projectId ? { projectId } : {}),
         cwd,
         model,
@@ -358,7 +358,7 @@ export class DesktopSessionService {
   async resolveProjectDirectory(projectIdInput: string): Promise<string> {
     const projectId = requireString(projectIdInput, "Project ID")
     const client = await this.getClient()
-    const project = (await client.listProjects()).find((item) => item.id === projectId)
+    const project = (await client.projects.list()).find((item) => item.id === projectId)
     if (!project) throw new Error(`Project ${projectId} does not exist.`)
 
     const info = await stat(project.path)
@@ -468,7 +468,7 @@ export class DesktopSessionService {
       throw new Error("消息内容和附件不能同时为空。")
     }
     const client = await this.getClient()
-    await client.admitPrompt(sessionId, {
+    await client.sessions.admitPrompt(sessionId, {
       id,
       items,
       attachments,
@@ -848,7 +848,7 @@ async function verifyDaemonWithTimeout(client: OpenHarnessClient): Promise<void>
   const timeout = setTimeout(() => controller.abort(), 1_500)
   try {
     await client.health({ signal: controller.signal })
-    await client.listProjects({ signal: controller.signal })
+    await client.projects.list({ signal: controller.signal })
   } finally {
     clearTimeout(timeout)
   }

@@ -238,7 +238,7 @@ export async function runPrintSession(
 
   const cwd = options.cwd ? options.cwd : process.cwd();
   const model = options.model ?? settings.model;
-  const session = await client.createSession({
+  const session = await client.sessions.create({
     cwd,
     model,
     title: "print",
@@ -268,9 +268,9 @@ export async function runPrintSession(
 
       if (update.source === "snapshot" && !admitted) {
         admitted = true;
-        const response = await client.admitPrompt(session.id, { id: createPromptRequestId(), items: [{ type: "text", text: prompt }] });
+        const response = await client.sessions.admitPrompt(session.id, { id: createPromptRequestId(), items: [{ type: "text", text: prompt }] });
         runId = response.run?.id;
-        observedState = mergeSessionSnapshot(update.state, await client.getSessionState(session.id));
+        observedState = mergeSessionSnapshot(update.state, await client.sessions.getState(session.id));
         renderSessionSnapshot(observedState, session.id, renderer, options.outputFormat, partTextSeen);
       }
 

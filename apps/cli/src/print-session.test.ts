@@ -10,9 +10,24 @@ vi.mock("./ensure-daemon.js", () => ({
 
 vi.mock("@openharness/client", async () => {
   const actual = await vi.importActual<typeof import("@openharness/client")>("@openharness/client");
+  const MockClient = vi.fn();
+  const WrappedMockClient = new Proxy(MockClient, {
+    construct(target, args, newTarget) {
+      const instance = Reflect.construct(target, args, newTarget) as Record<string, unknown>;
+      instance.sessions ??= {
+        create: (...a: unknown[]) => (instance.createSession as Function)?.(...a),
+        admitPrompt: (...a: unknown[]) => (instance.admitPrompt as Function)?.(...a),
+        getState: (...a: unknown[]) => (instance.getSessionState as Function)?.(...a),
+      };
+      instance.permissions ??= {
+        reply: (...a: unknown[]) => (instance.replyPermission as Function)?.(...a),
+      };
+      return instance;
+    },
+  });
   return {
     ...actual,
-    OpenHarnessClient: vi.fn(),
+    OpenHarnessClient: WrappedMockClient,
   };
 });
 

@@ -97,26 +97,9 @@ import type {
   ServerCapabilities,
 } from "@openharness/protocol";
 import {
-  decodeJobReadResult,
-  decodeJobSnapshot,
-  decodeJobWaitResult,
-  decodeSessionEventRecord,
-  decodeSessionStateSnapshot,
-  decodeTerminalEvent,
-  decodeTerminalReadResult,
-  decodeTerminalSessionInfo,
-  ProtocolDataError,
-  parseAttachmentAssetRecord,
-} from "@openharness/protocol";
-
-import {
   HttpTransport,
   OpenHarnessApiError,
   normalizeDaemonBaseUrl,
-  responseField,
-  responseArray,
-  attachmentRangeHeader,
-  isReadableStream,
 } from "./http-transport.js";
 import {
   SseTransport,
@@ -1125,30 +1108,5 @@ export class OpenHarnessClient {
     options: EventSyncOptions = {},
   ): AsyncIterable<SessionEventRecord> {
     return this.events.stream(options);
-  }
-
-  private async request<T>(
-    path: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      signal?: AbortSignal;
-      auth?: boolean;
-    } = {},
-  ): Promise<T> {
-    return this.transport.request<T>(path, options);
-  }
-
-  private headers(json = false, auth = true): Record<string, string> {
-    return this.transport.headers(json, auth);
-  }
-
-  /** 拼 query；跳过 undefined / null / false。 */
-  private path(pathname: string, query: Record<string, unknown> = {}): string {
-    return this.transport.path(pathname, query);
-  }
-
-  private async throwResponseError(response: Response): Promise<never> {
-    return this.transport.throwResponseError(response);
   }
 }
