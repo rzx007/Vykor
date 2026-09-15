@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import type { AgentBackgroundShellHost, Settings } from "@openharness/core";
 import { fileReadTool } from "@openharness/tools";
 import {
-  discoverOpenHarnessExtensions,
   type ObservableJobProducer,
 } from "@openharness/agent-runtime";
 import type { AgentTerminalHost } from "@openharness/terminal";
@@ -69,6 +68,7 @@ import { SessionQueryService } from "./session/session-query-service.js";
 import { SessionRunEngine } from "./session/session-run-engine.js";
 import { assembleSessionRunServices } from "./session/session-run-assembly.js";
 import { assembleSessionRunExecutor } from "./session/session-run-executor-assembly.js";
+import { createSessionRuntimeDiscovery } from "./session/session-runtime-discovery.js";
 import { RunAdmissionService } from "./session/run-admission-service.js";
 import { RunControlService } from "./session/run-control-service.js";
 import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
@@ -84,12 +84,10 @@ import { ChannelApplicationService } from "./channel/channel-application-service
 import { SessionWorkflowRunRepository } from "./workflow/session-workflow-run-repository.js";
 import { ApplicationRetentionService } from "./retention/application-retention-service.js";
 import { buildCompactAttachmentSection } from "./attachment-resource/compact-attachment-catalog.js";
-import { createDefaultModelService } from "./default-services/model-service.js";
 import { SessionAttachmentResources } from "./attachment-resource/session-attachment-resources.js";
 import { sharedContextUsageCache } from "./context-usage-cache.js";
 import {
   assembleSessionContextUsage,
-  resolveSessionModelContextLimits,
   tryAssembleSessionContextUsageLive,
   type SessionContextUsageAgent,
 } from "./assemble-session-context-usage.js";
@@ -482,20 +480,10 @@ export class DaemonApplication implements DurableAgentApplication {
       });
 
       const contextUsageCache = sharedContextUsageCache;
-      const resolveSessionSettings = async (cwd: string) =>
-        options.getSettingsForCwd
-          ? await options.getSettingsForCwd(cwd)
-          : (options.getSettings?.() ?? options.settings);
-      const resolveSessionModelLimits = async (session: SessionRecord, settings: Settings) =>
-        await resolveSessionModelContextLimits({
-          session,
-          settings,
-          listProviders: () => createDefaultModelService({ current: settings }).list(),
-        });
-      const resolveSessionSkillsList = async (cwd: string, settings: Settings) => {
-        const { skillRegistry } = await discoverOpenHarnessExtensions(cwd, settings);
-        return skillRegistry.modelVisibleList();
-      };
+      const runtimeDiscovery = createSessionRuntimeDiscovery(options);
+      const resolveSessionSettings = runtimeDiscovery.resolveSettings;
+      const resolveSessionModelLimits = runtimeDiscovery.resolveModelLimits;
+      const resolveSessionSkillsList = runtimeDiscovery.resolveSkillsList;
       const refreshContextUsage = async (sessionId: string, agent: SessionContextUsageAgent) => {
         const session = store.getSession(sessionId);
         if (!session) return;
@@ -612,12 +600,7 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供会话相关的查询和操作接口
        */
       const pluginCapabilities = new SessionPluginCapabilityService({
-        resolveInventory: async (session) => {
-          const settings = await resolveSessionSettings(session.cwd);
-          if (!settings) throw new Error("session_plugin_capability_unavailable");
-          return (await discoverOpenHarnessExtensions(session.cwd, settings))
-            .pluginCapabilityInventory;
-        },
+        resolveInventory: runtimeDiscovery.resolvePluginInventory,
       });
       this.queries = new SessionQueryService(store);
       this.commands = new SessionCommandService({
@@ -661,11 +644,7 @@ export class DaemonApplication implements DurableAgentApplication {
         events: this.eventPublisher,
         assertReady: () => this.assertReady(),
         contextUsageCache,
-        resolveSkillCatalog: async (session) => {
-          const settings = await resolveSessionSettings(session.cwd);
-          if (!settings) throw new Error("session_input_skill_catalog_unavailable");
-          return (await discoverOpenHarnessExtensions(session.cwd, settings)).skillRegistry;
-        },
+        resolveSkillCatalog: runtimeDiscovery.resolveSkillCatalog,
         pluginCapabilities,
         queries: this.queries,
         commands: this.commands,
