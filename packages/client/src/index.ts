@@ -18,6 +18,14 @@ export {
 export {
   ProtocolClient,
 } from "./protocol/index.js";
+export {
+  SystemResource,
+  ProviderResource,
+  AuthResource,
+  ProjectResource,
+  PluginResource,
+  DevelopmentResource,
+} from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
 export type {
   PluginCatalogEntry,
