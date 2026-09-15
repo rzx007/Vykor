@@ -753,6 +753,150 @@ describe("SessionRunEngine", () => {
       engine.admitPromptAndMaybeRun("s1", { content: "too late" }),
     ).rejects.toThrow("stopping");
   });
+
+  it("cancels active goal continuation runs with '用户消息优先' when admitting user prompt", async () => {
+    const store = createStore();
+    const activeGoal = { id: "g1", status: "active", revision: 1 };
+    store.getCurrentGoal = vi.fn(() => activeGoal as any);
+    store.getGoal = vi.fn(() => activeGoal as any);
+    store.createRun({
+      id: "gr1",
+      sessionId: "s1",
+      inputId: "gi1",
+      status: "pending",
+      metadata: { goalId: "g1", goalRunKind: "continuation" },
+    });
+    const engine = new SessionRunEngine({
+      store: store as any,
+      goals: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: { execute: vi.fn() } as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+
+    await engine.admitPromptAndMaybeRun("s1", { content: "user message" });
+
+    expect(store.updateRun).toHaveBeenCalledWith(
+      "gr1",
+      expect.objectContaining({ status: "interrupted", error: "用户消息优先" }),
+    );
+    expect(store.markGoalContinuation).toHaveBeenCalledWith("gr1", "cancelled");
+  });
+
+  it("interrupts goal run when goal revision has changed or goal is paused", async () => {
+    const store = createStore();
+    const goal = { id: "g1", status: "active", revision: 2 };
+    store.getCurrentGoal = vi.fn(() => goal as any);
+    store.getGoal = vi.fn(() => goal as any);
+    store.startGoalRun = vi.fn(() => false);
+    const runExecutor = { execute: vi.fn() };
+    const engine = new SessionRunEngine({
+      store: store as any,
+      goals: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: runExecutor as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+
+    const admitted = await engine.admitPromptAndMaybeRun("s1", {
+      content: "goal step",
+      runMetadata: { goalId: "g1", goalRevision: 1, goalRunKind: "continuation" },
+    });
+
+    await vi.waitFor(() =>
+      expect(store.updateRun).toHaveBeenCalledWith(
+        admitted.run?.id,
+        expect.objectContaining({
+          status: "interrupted",
+          error: "目标已暂停或版本已变化",
+        }),
+      ),
+    );
+    expect(runExecutor.execute).not.toHaveBeenCalled();
+  });
+
+  it("downgrades steer to queue when attachments are present", async () => {
+    const store = createStore();
+    const engine = new SessionRunEngine({
+      store: store as any,
+      goals: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: { execute: vi.fn() } as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+
+    const result = await engine.admitPromptAndMaybeRun("s1", {
+      delivery: "steer",
+      content: "with attachment",
+      attachments: [{ assetId: "asset-1" }],
+    });
+
+    expect(result.input.delivery).toBe("queue");
+    expect(store.admitPromptWithRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.objectContaining({ delivery: "queue" }),
+      }),
+    );
+  });
+
+  it("returns existing input and run idempotently when prompt id was already admitted", async () => {
+    const store = createStore();
+    const engine = new SessionRunEngine({
+      store: store as any,
+      goals: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: { execute: vi.fn() } as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+
+    const first = await engine.admitPromptAndMaybeRun("s1", {
+      id: "p1",
+      content: "hello",
+    });
+    const second = await engine.admitPromptAndMaybeRun("s1", {
+      id: "p1",
+      content: "hello",
+    });
+
+    expect(second.input.id).toBe(first.input.id);
+    expect(second.run?.id).toBe(first.run?.id);
+  });
+
+  it("does not create duplicate failed run when terminalizing undelivered steer if owning run exists", async () => {
+    const store = createStore();
+    const handle = runHandle(
+      deferred<void>().promise,
+      vi.fn(async () => {
+        throw new Error("delivery failed");
+      }),
+    );
+    const runExecutor = {
+      execute: vi.fn(async (_input, context) => {
+        await context.registerHandle(handle);
+        await handle.result;
+      }),
+    };
+    const engine = new SessionRunEngine({
+      store: store as any,
+      goals: store as any,
+      agentPool: { configured: true } as any,
+      runExecutor: runExecutor as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    });
+
+    await engine.admitPromptAndMaybeRun("s1", { content: "root" });
+    await vi.waitFor(() => expect(runExecutor.execute).toHaveBeenCalledOnce());
+
+    await expect(
+      engine.admitPromptAndMaybeRun("s1", {
+        id: "steer-fail",
+        delivery: "steer",
+        content: "steer that fails",
+      }),
+    ).rejects.toThrow("delivery failed");
+
+    expect(store.findRunByInput("steer-fail")).toBeDefined();
+  });
 });
 
 function createStore() {
@@ -786,6 +930,13 @@ function createStore() {
   return {
     transaction: <T>(work: () => T) => work(),
     getCurrentGoal: vi.fn(() => undefined),
+    getGoal: vi.fn((_id: string) => undefined),
+    updateGoal: vi.fn(),
+    markGoalContinuation: vi.fn(),
+    startGoalRun: vi.fn(() => true),
+    listRuns: vi.fn((sessionId: string) =>
+      [...runs.values()].filter((run) => run.sessionId === sessionId),
+    ),
     admitPrompt,
     admitPromptWithRun: vi.fn((input) => {
       const admitted = admitPrompt({ ...input.prompt, delivery: "queue" });
