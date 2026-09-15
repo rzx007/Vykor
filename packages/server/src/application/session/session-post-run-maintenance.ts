@@ -6,7 +6,7 @@ import type { SessionStore } from "@openharness/services";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 
 export interface SessionPostRunMaintenanceContext {
-  data: SessionStore;
+  data: Pick<SessionStore, "getSession" | "getRun" | "listSessions" | "listMessages" | "listMessageParts">;
   getSettings(cwd: string): Promise<Settings | undefined>;
   personalizationUpdater?: (messages: SessionMessageLike[]) => number;
   sessionMemoryWriter?: (cwd: string, messages: SessionMessageLike[], sessionId: string) => void;
@@ -111,7 +111,10 @@ export class SessionPostRunMaintenance {
   }
 }
 
-function transcriptMessages(store: SessionStore, sessionId: string): SessionMessageLike[] {
+function transcriptMessages(
+  store: Pick<SessionStore, "listMessages" | "listMessageParts">,
+  sessionId: string,
+): SessionMessageLike[] {
   return store.listMessages(sessionId)
     .sort((a, b) => a.seq - b.seq)
     .map((message) => {

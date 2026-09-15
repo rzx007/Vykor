@@ -109,11 +109,20 @@ export class SessionRunCoordinator {
   }
 
   async waitForRun(runId: string): Promise<void> {
-    await this.runPromises.get(runId)?.catch(() => {});
+    await this.runPromises.get(runId);
   }
 
   async waitForRuns(runIds: string[]): Promise<void> {
-    await Promise.all(runIds.map((runId) => this.runPromises.get(runId)).filter((promise): promise is Promise<void> => promise !== undefined).map((promise) => promise.catch(() => {})));
+    await Promise.all(runIds.map((runId) => this.runPromises.get(runId)).filter((promise): promise is Promise<void> => promise !== undefined));
+  }
+
+  trackRunCompletion(runId: string, promise: Promise<void>): void {
+    if (!this.runPromises.has(runId)) return;
+    const completion = promise.finally(() => {
+      if (this.runPromises.get(runId) === completion) this.runPromises.delete(runId);
+    });
+    this.runPromises.set(runId, completion);
+    void completion.catch(() => {});
   }
 
   steer(

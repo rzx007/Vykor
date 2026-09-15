@@ -316,6 +316,7 @@ export class SessionRunEngine {
         await this.context.settleGoalRun?.(run.sessionId, run.id);
       });
     void tracked.catch(() => {});
+    this.runCoordinator.trackRunCompletion(run.id, tracked);
     return enqueued.state;
   }
 

@@ -21,13 +21,16 @@ export class ScheduledTaskExecutor {
   async execute(task: ScheduledTaskRecord, scheduledRun: ScheduledRunRecord) {
     const projectCwd = task.projectPaths[0];
     const outsideProject = task.destination === "standalone" && !projectCwd;
-    let executionCwd = outsideProject
-      ? await allocateWorkspace(this.options.outsideProjectWorkspaceRoot, scheduledRun.id)
-      : projectCwd;
+    let executionCwd: string | undefined;
     let worktree: Awaited<ReturnType<ReturnType<typeof createChildAgentWorktreeManager>["create"]>> & {
       manager: ReturnType<typeof createChildAgentWorktreeManager>;
     } | undefined;
-    if (task.executionMode === "worktree") {
+    let session: ReturnType<ScheduledTaskExecutorOptions["sessions"]["getSession"]>;
+    try {
+      executionCwd = outsideProject
+        ? await allocateWorkspace(this.options.outsideProjectWorkspaceRoot, scheduledRun.id)
+        : projectCwd;
+      if (task.executionMode === "worktree") {
       if (!projectCwd) throw new Error("Worktree scheduled execution requires user attention: project is unavailable");
       const manager = createChildAgentWorktreeManager({ cwd: projectCwd });
       if (!(await manager.isGitRepo())) throw new Error("Worktree scheduled execution requires user attention: project is not a Git repository");
@@ -37,9 +40,8 @@ export class ScheduledTaskExecutor {
       });
       worktree = { manager, ...created };
       executionCwd = created.path;
-    }
-    let session = task.sessionId ? this.options.sessions.getSession(task.sessionId) : undefined;
-    try {
+      }
+      session = task.sessionId ? this.options.sessions.getSession(task.sessionId) : undefined;
       if (task.destination === "chat") {
         if (!session) throw new Error(`Scheduled task chat is unavailable: ${task.sessionId}`);
         if (session.status === "archived") throw new Error("Scheduled task chat is archived and requires user attention");

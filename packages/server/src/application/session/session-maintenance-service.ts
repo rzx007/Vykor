@@ -28,7 +28,10 @@ export class SessionMaintenanceError extends ApplicationError {
 }
 
 export interface SessionMaintenanceServiceContext {
-  data: SessionStore;
+  data: Pick<SessionStore,
+    "createMessage" | "getSession" | "listInputs" | "listMessageParts" |
+    "listMessages" | "replaceTranscript" | "upsertMessagePart"
+  >;
   runEngine: Pick<SessionRunEngine, "hasActiveRunsForCwd" | "hasWork">;
   agentPool: AgentPool;
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
