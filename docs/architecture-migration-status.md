@@ -1,11 +1,11 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–2 及阶段 3A–3C 已完成，阶段 3D 未开始。
+> 状态：当前。阶段 0–3 已完成，阶段 4 未开始。
 
 ## 当前阶段
 
 阶段 0–2 已完成：依赖护栏、Session SQLite 数据库内核，以及 Project、Schedule、Workflow、Channel、Goal、Permission、Attachment 业务边界已经落地。
-阶段 3A–3C 已完成：三域 Repository 的只读查询、单实体写操作和跨域事务已抽取完毕。`SessionStore` 保留公开兼容转发、Task waiter/listener，以及阶段 3D 尚未迁移的增量输出与 Checkpoint。阶段 3D 未开始。
+阶段 3 已完成：三域 Repository、跨域事务和增量输出均已抽取。`SessionStore` 保留公开兼容转发、Task waiter/listener、生命周期和维护入口。阶段 4 未开始。
 
 ## 指标
 
@@ -13,7 +13,7 @@
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
 - 当前基线：`sessionStoreFlatCalls: 351`, `httpClientFlatCalls: 11`。
-- 当前 `SessionStore` 行数：2220 行。
+- 当前 `SessionStore` 行数：2152 行。
 
 ## 阶段 3 迁移记录
 
@@ -67,12 +67,18 @@
 - Task listener 通知通过 `deferUntilCommit` 延迟到最外层提交成功之后。
 - fork 不复制 Run，复制后的 Message 不保留源 `runId`；replay metadata 只接受调用方显式值；snapshot 保持现有协议，不新增 children。
 - 事务测试包含 6 个 coordinator 契约用例和至少 15 个业务阶段失败注入场景，覆盖内存、mutation、delta、event sequence、SQLite reopen 与提交后通知。
-- Store 残留 SQL 已逐项核对：application owner lease 属于进程写入围栏；retention 属于维护事务；`flushMessagePartDeltas` 及 delta SQL 属于未开始的 3D；`persistChanges` 中的 SQL 是 database kernel 尚由 Store 装配的持久化回调，不是跨域业务事务。
-- 阶段 3D（增量输出与 Checkpoint）未开始。
+- Store 残留 SQL 已逐项核对：application owner lease 属于进程写入围栏；retention 属于维护事务；`persistChanges` 中的 SQL 是 database kernel 尚由 Store 装配的持久化回调，不是跨域业务事务。
+
+### 阶段 3D：增量输出与 Checkpoint
+- `IncrementalOutput` 接管 delta append、UTF-8 字节/时间阈值、显式 flush、三层时间戳 SQL 和 checkpoint close。
+- Store 的 append/flush 只转发，`persistChanges` 复用同一 flush 实现，不再保留第二套 delta SQL。
+- close、backup、Run terminal 和 transcript replace durability 边界已用 reopen 测试固定；backup 在 owner fence 后、复制数据库前 flush。
+- services 全量验证为 45 个测试文件、429 个测试；已知 WSL/node-pty 全仓并发环境问题未在本阶段处理。
+- Server 定向验证中 transcript projection 与 run engine 共 34 个测试通过；run executor 收集及 Server typecheck 受当前 worktree 缺失 `yaml`、内部 workspace 包解析和重复物理路径类型问题阻断，未通过安装依赖或改业务代码规避。
 
 ## 当前所有权
 
-`SessionStore` 不再拥有阶段 3C 的跨域业务事务；它仍拥有增量输出与 Checkpoint 以及公开兼容接口。SQLite 生命周期、read model、mutation buffer、event sequence、delta checkpoint 和 transaction coordinator 位于 `packages/services/src/database`，并由一个 `StorageContext` 持有。
+`SessionStore` 不再拥有阶段 3 的领域读写、跨域业务事务或 delta SQL；它保留公开兼容接口、进程内 listener、数据库生命周期和维护入口。
 三域 Repository 独立负责各领域的单实体读写，`ConversationTransactions` 负责 Session/Conversation/Run 的跨域原子编排；`SessionStore` 保留代理转发与 Task waiter/listener。
 
 Project SQL、路径规则和写操作已迁入 `packages/services/src/projects`。`SessionStore` 保留八个兼容转发方法，Server 的 `ProjectApplicationService` 只依赖七个 Project 动作的窄 capability。`StorageContext.atomic()` 由 database 内核的 `TransactionCoordinator` 提供。
@@ -91,4 +97,4 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-阶段 3D：增量输出与 Checkpoint。
+阶段 4：拆分 Server Application Service 与 Runtime 编排。

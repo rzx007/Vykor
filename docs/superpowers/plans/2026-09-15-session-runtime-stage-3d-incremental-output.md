@@ -1,5 +1,7 @@
 # Session Runtime 阶段 3D：增量输出与 Checkpoint 实现计划
 
+> 状态：已完成。兼容行为保持 `appendMessagePartDelta` 返回 transient `SessionEventRecord`；Run terminal 复用现有保存链，不重复 flush；transcript replace 会移除旧 Part 的 dirty checkpoint；backup 在复制前显式 flush。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（- [ ]）语法来跟踪进度。
 
 **目标：** 将 Message Part 文本增量、延迟 checkpoint 和强制刷盘从 SessionStore 提取为独立模块，并证明 terminal、事务和关闭场景不会丢失最后一段输出。

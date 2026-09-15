@@ -18,6 +18,50 @@ function setup(bytes = 1024) {
 }
 
 describe("IncrementalOutput", () => {
+  it("flushes a low-threshold delta before database backup", async () => {
+    const { dir, store } = setup();
+    const backupPath = join(dir, "backup.db");
+    try {
+      store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "backup tail" });
+      const expected = {
+        part: store.listMessageParts("s")[0]!,
+        message: store.listMessages("s")[0]!,
+        session: store.getSession("s")!,
+      };
+      await store.backupDatabase(backupPath);
+      const backup = new SessionStore({ path: backupPath });
+      try {
+        expect(backup.listMessageParts("s")[0]).toMatchObject({ text: "backup tail", updatedAt: expected.part.updatedAt });
+        expect(backup.listMessages("s")[0]!.updatedAt).toBe(expected.message.updatedAt);
+        expect(backup.getSession("s")!.updatedAt).toBe(expected.session.updatedAt);
+      } finally { backup.close(); }
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it.each(["completed", "failed", "interrupted"] as const)("persists the final delta through a %s run transition", (status) => {
+    const { dir, path, store } = setup();
+    store.createRun({ id: "run", sessionId: "s" });
+    store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: `${status} tail` });
+    store.updateRun("run", { status });
+    store.close();
+    const reopened = new SessionStore({ path });
+    try { expect(reopened.listMessageParts("s")[0]!.text).toBe(`${status} tail`); }
+    finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("drops old dirty output when replacing the transcript and persists only new history", () => {
+    const { dir, path, store } = setup();
+    store.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "old dirty tail" });
+    store.replaceTranscript({ sessionId: "s", messages: [{ role: "assistant", parts: [{ type: "text", text: "new summary" }] }] });
+    expect((store as any).storage.deltaCheckpoint.dirtyPartIds()).toEqual([]);
+    store.close();
+    const reopened = new SessionStore({ path });
+    try {
+      expect(reopened.listMessages("s")).toHaveLength(1);
+      expect(reopened.listMessageParts("s").map(({ text }) => text)).toEqual(["new summary"]);
+    } finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it("flushes on the interval timer", async () => {
     vi.useFakeTimers();
     const dir = mkdtempSync(join(tmpdir(), "ohs-incremental-timer-"));

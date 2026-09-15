@@ -638,6 +638,7 @@ export class SessionStore {
   async backupDatabase(destination: string): Promise<void> {
     if (this.activeOwnerLease)
       this.assertApplicationOwner(this.activeOwnerLease);
+    this.incrementalOutput.flushMessagePartDeltas();
     mkdirSync(dirname(resolve(destination)), { recursive: true });
     const path = resolve(destination);
     await this.database.backup(path);
