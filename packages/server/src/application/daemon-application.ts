@@ -272,10 +272,7 @@ export class DaemonApplication implements DurableAgentApplication {
       store.finalizeClosingSessions();
 
       // events：窗口订的 SSE。eventPublisher：各处写完 store 后，把增量广播出去。
-      this.events = new ApplicationEventService({
-        listEvents: (options) => store.listEvents(options),
-        latestEventSeq: () => store.latestEventSeq(),
-      });
+      this.events = new ApplicationEventService(store);
       this.eventPublisher = new SessionEventPublisher(store, this.events);
       this.workflows = new SessionWorkflowRunRepository({
         workflows: store.workflows,
@@ -285,10 +282,7 @@ export class DaemonApplication implements DurableAgentApplication {
           this.eventPublisher.publishSince(previousEventSeq),
       });
       this.retention = new ApplicationRetentionService(
-        {
-          applyRetention: (policy, timestamp) => store.applyRetention(policy, timestamp),
-          listRetentionAudits: () => store.listRetentionAudits(),
-        },
+        store,
         new AttachmentIntegrityService({
           store,
           attachments: store.attachments,
@@ -301,10 +295,7 @@ export class DaemonApplication implements DurableAgentApplication {
           ? createSessionEnvironmentAcquirer()
           : undefined;
       this.terminals = new DaemonTerminalService(
-        {
-          getProject: (id) => store.getProject(id),
-          getSession: (id) => store.getSession(id),
-        },
+        store,
         {
           getSettingsForCwd: async (cwd) =>
             options.getSettingsForCwd
@@ -332,16 +323,7 @@ export class DaemonApplication implements DurableAgentApplication {
         log: options.log,
       });
       this.backgroundShells = new BackgroundShellService({
-        store: {
-          getSession: (id) => store.getSession(id),
-          listSessions: (opts) => store.listSessions(opts),
-          listSessionTasks: (id) => store.listSessionTasks(id),
-          getSessionTask: (id) => store.getSessionTask(id),
-          createSessionTask: (input) => store.createSessionTask(input),
-          reserveSessionTask: (input) => store.reserveSessionTask(input),
-          transitionPendingSessionTask: (id, input) => store.transitionPendingSessionTask(id, input),
-          updateSessionTask: (id, input) => store.updateSessionTask(id, input),
-        },
+        store,
         executionProjector: this.executionProjector,
         getDetachedProcessSupervisor: (scope) => getDetachedProcessSupervisor(scope),
         events: this.eventPublisher,
@@ -353,13 +335,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       // JobWait / JobList 走这里：终端、后台 shell、子 Agent、workflow 合成一张本会话任务表。
       this.jobs = new DaemonJobService(
-        {
-          getSession: (id) => store.getSession(id),
-          listSessionTasks: (id) => store.listSessionTasks(id),
-          getSessionTask: (id) => store.getSessionTask(id),
-          updateSessionTask: (id, input) => store.updateSessionTask(id, input),
-          waitForSessionTaskChange: (id, after, opts) => store.waitForSessionTaskChange?.(id, after, opts),
-        },
+        store,
         this.terminals,
         (scope) => getDetachedProcessSupervisor(scope),
         (scope) => getChildAgentExecutionRegistry(scope),
@@ -367,15 +343,15 @@ export class DaemonApplication implements DurableAgentApplication {
       );
 
       const attachmentAuthorizationSessions = createAttachmentAuthorizationSessionResolver({
-        store: { getSession: (id) => store.getSession(id) },
+        store,
         liveChildren: this.liveChildren,
       });
       const attachmentReader = createAttachmentTextReader({
-        store: { listSessionInputAttachments: (id) => store.listSessionInputAttachments(id) },
+        store,
         attachments: this.attachments,
       });
       const attachmentOcr = createAttachmentOcrService({
-        store: { listSessionInputAttachments: (id) => store.listSessionInputAttachments(id) },
+        store,
         recognize: (input) => this.localOcr.recognize(input),
       });
       const imageToTextTool = createDaemonImageToTextTool({
@@ -476,21 +452,10 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       // 一个会话一个热着的 Agent。子 Agent 自己占会话，不要被这个池子抢去。
       this.agentPool = new AgentPool({
-        sessionQueries: {
-          getSession: (id) => store.getSession(id),
-          listSessions: (opts) => store.listSessions(opts),
-          listMessages: (id) => store.listMessages(id),
-          listMessageParts: (id) => store.listMessageParts(id),
-        },
+        sessionQueries: store,
         loadAgent,
         supplementalSections: (sessionId) => {
-          const section = buildCompactAttachmentSection({
-            listSessionInputAttachments: (id) => store.listSessionInputAttachments(id),
-            attachments: {
-              getAttachment: (id, opts) => store.attachments.getAttachment(id, opts),
-              listAttachmentRepresentations: (id) => store.attachments.listAttachmentRepresentations(id),
-            },
-          }, sessionId);
+          const section = buildCompactAttachmentSection(store, sessionId);
           return section ? [section] : [];
         },
         sessionMemory: (sessionId) => {
@@ -748,10 +713,7 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供通道相关的管理和监控功能
        */
       this.channels = new ChannelApplicationService({
-        sessionQueries: {
-          getInput: (id) => store.getInput(id),
-          getSession: (id) => store.getSession(id),
-        },
+        sessionQueries: store,
         channels: store.channels,
         sessions: this.sessions,
         log: options.log,

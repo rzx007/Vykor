@@ -44,6 +44,39 @@ export function checkImportBoundary(fromFile, specifier) {
       return [`${fromFile} must not depend on ${domainMatch[1]}`];
     }
   }
+
+  const isServerRoute = /(?:^|\/)(?:packages\/server\/src\/)?http\/routes\//.test(normalized);
+  if (isServerRoute) {
+    if (/(?:^|\/)session-runtime\/store(?:\.[a-zA-Z]+)?$/.test(specifier) || /SessionStore(?:\.[a-zA-Z]+)?$/.test(specifier)) {
+      return [`${fromFile} must not depend on SessionStore`];
+    }
+    if (/(?:^|\/|\.\.\/)(?:sessions\/session-repository|@openharness\/services\/sessions)(?:\/|\.|$)/.test(specifier) || specifier === "@openharness/services/sessions") {
+      return [`${fromFile} must not depend on session repository`];
+    }
+    if (/(?:^|\/|\.\.\/)(?:conversations\/conversation-repository|@openharness\/services\/conversations)(?:\/|\.|$)/.test(specifier) || specifier === "@openharness/services/conversations") {
+      return [`${fromFile} must not depend on conversation repository`];
+    }
+    if (/(?:^|\/|\.\.\/)(?:runs\/run-repository|@openharness\/services\/runs)(?:\/|\.|$)/.test(specifier) || specifier === "@openharness/services/runs") {
+      return [`${fromFile} must not depend on run repository`];
+    }
+  }
+
+  const isServerApplication = /(?:^|\/)(?:packages\/server\/src\/)?application\//.test(normalized);
+  const isCompositionRoot = /(?:daemon-application|default-node-application|index)\.ts$/.test(normalized);
+  if (isServerApplication && !isCompositionRoot) {
+    if (/(?:^|\/)daemon-application(?:\.[a-zA-Z]+)?$/.test(specifier)) {
+      return [`${fromFile} must not depend on DaemonApplication`];
+    }
+  }
+
+  const isServerRuntime = /(?:^|\/)(?:packages\/server\/src\/)?(?:runtime|session-runtime)\//.test(normalized) ||
+    /(?:^|\/)(?:packages\/services\/src\/)?session-runtime\//.test(normalized);
+  if (isServerRuntime) {
+    if (/(?:^|\/)http\/routes(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on http/routes`];
+    }
+  }
+
   return [];
 }
 
@@ -117,6 +150,9 @@ function collectArchitectureErrors() {
     ...sourceFiles(join(root, "packages", "services", "src", "conversations")),
     ...sourceFiles(join(root, "packages", "services", "src", "runs")),
     ...sourceFiles(join(root, "packages", "services", "src", "database")),
+    ...sourceFiles(join(root, "packages", "server", "src", "http", "routes")),
+    ...sourceFiles(join(root, "packages", "server", "src", "application")),
+    ...sourceFiles(join(root, "packages", "server", "src", "runtime")),
   ];
 
   for (const path of boundaryFiles) {

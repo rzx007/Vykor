@@ -101,3 +101,36 @@ test("counts direct legacy store calls with file locations", () => {
     ],
   );
 });
+
+test("server routes cannot import SessionStore or repositories", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/http/routes/sessions.ts", "../../../services/src/session-runtime/store.js"),
+    ["packages/server/src/http/routes/sessions.ts must not depend on SessionStore"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/http/routes/sessions.ts", "@openharness/services/sessions"),
+    ["packages/server/src/http/routes/sessions.ts must not depend on session repository"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/http/routes/sessions.ts", "../../../services/src/conversations/conversation-repository.js"),
+    ["packages/server/src/http/routes/sessions.ts must not depend on conversation repository"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/http/routes/sessions.ts", "../../../services/src/runs/run-repository.js"),
+    ["packages/server/src/http/routes/sessions.ts must not depend on run repository"],
+  );
+});
+
+test("application services cannot import DaemonApplication", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/application/session/session-application-service.ts", "../daemon-application.js"),
+    ["packages/server/src/application/session/session-application-service.ts must not depend on DaemonApplication"],
+  );
+});
+
+test("runtime cannot import http routes", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/server/src/runtime/run-coordinator.ts", "../http/routes/sessions.js"),
+    ["packages/server/src/runtime/run-coordinator.ts must not depend on http/routes"],
+  );
+});
