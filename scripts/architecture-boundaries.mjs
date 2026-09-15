@@ -16,6 +16,36 @@ const forbiddenPackageEdges = new Map([
 
 const storeCallPattern = /\b(?:this\.)?(?:context\.)?store\.([A-Za-z_$][\w$]*)\s*\(/g;
 const clientCallPattern = /\bclient\.(createSession|admitPrompt|interruptRun|listProjects)\s*\(/g;
+const importPattern = /(?:(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?from\s+)?|import\s*\()\s*['"]([^'"]+)['"]/g;
+
+export function extractImports(source) {
+  const matches = [];
+  for (const match of source.matchAll(importPattern)) {
+    matches.push(match[1]);
+  }
+  return matches;
+}
+
+export function checkImportBoundary(fromFile, specifier) {
+  const normalized = fromFile.replaceAll("\\", "/");
+  const isDomain = /(?:^|\/)(?:packages\/services\/src\/)?(sessions|conversations|runs)\//.test(normalized);
+  if (isDomain) {
+    if (specifier === "@openharness/server" || specifier.startsWith("@openharness/server/")) {
+      return [`${fromFile} must not depend on @openharness/server`];
+    }
+    if (/(?:^|\/)session-runtime\/store(?:\.[a-zA-Z]+)?$/.test(specifier)) {
+      return [`${fromFile} must not depend on session-runtime/store`];
+    }
+  }
+  const isDatabase = /(?:^|\/)(?:packages\/services\/src\/)?database\//.test(normalized);
+  if (isDatabase) {
+    const domainMatch = specifier.match(/(?:^|\/|\.\.\/)(sessions|conversations|runs)(?:\/|\.|$)/);
+    if (domainMatch) {
+      return [`${fromFile} must not depend on ${domainMatch[1]}`];
+    }
+  }
+  return [];
+}
 
 export function checkPackageDependency(from, to) {
   return forbiddenPackageEdges.get(from)?.has(to)
@@ -81,6 +111,24 @@ function collectArchitectureErrors() {
       }
     }
   }
+
+  const boundaryFiles = [
+    ...sourceFiles(join(root, "packages", "services", "src", "sessions")),
+    ...sourceFiles(join(root, "packages", "services", "src", "conversations")),
+    ...sourceFiles(join(root, "packages", "services", "src", "runs")),
+    ...sourceFiles(join(root, "packages", "services", "src", "database")),
+  ];
+
+  for (const path of boundaryFiles) {
+    const rel = relative(root, path);
+    const content = readFileSync(path, "utf8");
+    for (const specifier of extractImports(content)) {
+      for (const error of checkImportBoundary(rel, specifier)) {
+        errors.push(error);
+      }
+    }
+  }
+
   return errors;
 }
 
