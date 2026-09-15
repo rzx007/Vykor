@@ -7,6 +7,7 @@ import {
   countLegacyCalls,
   validateLegacyBaseline,
   checkSessionRunEngineComposition,
+  checkMaintenanceCapability,
 } from "./architecture-boundaries.mjs";
 
 test("services cannot depend on server", () => {
@@ -176,6 +177,17 @@ test("production SessionRunEngine construction requires both shared services", (
   );
   assert.deepEqual(
     checkSessionRunEngineComposition("new SessionRunEngine({ admission: sharedAdmission, control: sharedControl })", "packages/server/src/application/daemon-application.ts"),
+    [],
+  );
+});
+
+test("maintenance services cannot hold a full SessionStore", () => {
+  assert.deepEqual(
+    checkMaintenanceCapability("interface Context { data: SessionStore; }", "session-maintenance-service.ts"),
+    ["session-maintenance-service.ts must use a narrow maintenance capability instead of SessionStore"],
+  );
+  assert.deepEqual(
+    checkMaintenanceCapability("interface Context { data: Pick<SessionStore, 'getSession'>; }", "session-maintenance-service.ts"),
     [],
   );
 });

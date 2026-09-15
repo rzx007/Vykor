@@ -138,6 +138,12 @@ export function checkSessionRunEngineComposition(source, file) {
     : [`${file} must inject shared admission and control services`];
 }
 
+export function checkMaintenanceCapability(source, file) {
+  return /\b(?:store|data)\s*:\s*SessionStore\s*[;,]/.test(source)
+    ? [`${file} must use a narrow maintenance capability instead of SessionStore`]
+    : [];
+}
+
 function workspacePackagePaths() {
   return ["packages", "apps"].flatMap((parent) =>
     readdirSync(join(root, parent), { withFileTypes: true })
@@ -199,6 +205,9 @@ function collectArchitectureErrors() {
     }
     if (!/\.(?:test|spec)\.(?:ts|tsx)$/.test(path)) {
       errors.push(...checkSessionRunEngineComposition(content, rel));
+      if (/session-(?:post-run-)?maintenance-service\.ts$/.test(rel.replaceAll("\\", "/"))) {
+        errors.push(...checkMaintenanceCapability(content, rel));
+      }
     }
   }
 

@@ -13,6 +13,8 @@
 阶段 4E 已完成：`StartupRecoveryService` 按固定顺序执行 durable recovery，失败继续阻止 ready；Maintenance 与 PostRun 使用命名 data 边界；既有 Transcript/Execution Projection 保持唯一映射所有者。
 阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。阶段 5 未开始。
 
+阶段 4 最终复审补充：Coordinator 等待的是包含 `settleGoalRun` 的完整 completion Promise，shutdown 不会在 Goal settlement 尚未结束时关闭 Store；Session Run 三件套的两阶段闭包装配进入纯 `assembleSessionRunServices` factory；Maintenance/PostRun 使用精确方法 capability，并由架构测试禁止重新持有完整 `SessionStore`。最终统一验证为 Server 80 个文件、709 个测试，Services 45 个文件、430 个测试，全仓 TypeScript 61/61，架构测试 15/15。
+
 ## 指标
 
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
