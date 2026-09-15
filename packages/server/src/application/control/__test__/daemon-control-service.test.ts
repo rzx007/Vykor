@@ -58,6 +58,30 @@ function createControl() {
 }
 
 describe("DaemonControlService", () => {
+  it("uses the composed run lifecycle to stop admission before draining control", async () => {
+    const { store, runEngine, agentPool, operationGate } = createControl();
+    const runControl = {
+      activeRunId: vi.fn(), queuedRunIds: vi.fn(() => []),
+      hasAnyActiveRuns: vi.fn(() => false), hasActiveRunsForCwd: vi.fn(() => false),
+      stopAndDrain: vi.fn(async () => {}),
+    };
+    const control = new DaemonControlService({
+      store: store as any,
+      permissions: store.permissions,
+      workflows: { listRuns: () => [] },
+      runEngine: runEngine as any,
+      runControl,
+      agentPool: agentPool as any,
+      operationGate,
+      startedAt: Date.now(),
+      sseClientCount: () => 0,
+    });
+
+    await control.shutdown();
+
+    expect(runEngine.stopAndDrain).toHaveBeenCalledOnce();
+    expect(runControl.stopAndDrain).not.toHaveBeenCalled();
+  });
   it("uses the Workflow queries supplied by daemon composition for snapshots and run inspection", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-control-workflows-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });

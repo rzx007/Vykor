@@ -778,6 +778,9 @@ describe("SessionRunEngine", () => {
     await expect(
       engine.admitPromptAndMaybeRun("s1", { content: "too late" }),
     ).rejects.toThrow("stopping");
+    await expect(
+      engine.admission.admitPromptAndMaybeRun("s1", { items: [{ type: "text", text: "also too late" }] }),
+    ).rejects.toThrow("stopping");
   });
 
   it("cancels active goal continuation runs with '用户消息优先' when admitting user prompt", async () => {

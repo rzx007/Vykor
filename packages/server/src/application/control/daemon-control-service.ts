@@ -168,7 +168,7 @@ export class DaemonControlService {
     await this.context.operationGate.beginShutdown();
     const failures: unknown[] = [];
     try {
-      await this.runControl.stopAndDrain();
+      await this.context.runEngine.stopAndDrain();
     } catch (error) {
       failures.push(error);
     }
