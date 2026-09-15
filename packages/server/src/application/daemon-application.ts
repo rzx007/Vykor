@@ -70,6 +70,8 @@ import { SessionEventPublisher } from "./session/session-event-publisher.js";
 import { SessionMaintenanceService } from "./session/session-maintenance-service.js";
 import { SessionQueryService } from "./session/session-query-service.js";
 import { SessionRunEngine } from "./session/session-run-engine.js";
+import { RunAdmissionService } from "./session/run-admission-service.js";
+import { RunControlService } from "./session/run-control-service.js";
 import { SessionRunExecutor } from "./session/session-run-executor.js";
 import { materializeSessionInput } from "./session/session-input-materializer.js";
 import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
@@ -198,6 +200,8 @@ export class DaemonApplication implements DurableAgentApplication {
   private readonly operationGate = new DaemonOperationGate();
   private readonly agentPool: AgentPool;
   private readonly runEngine: SessionRunEngine;
+  readonly runAdmission: RunAdmissionService;
+  readonly runControl: RunControlService;
   private readonly localOcr: LocalOcrService;
   private readonly startupRecovery: Promise<void>;
   private closePromise?: Promise<void>;
@@ -613,7 +617,60 @@ export class DaemonApplication implements DurableAgentApplication {
        * 3. 与其他服务交互（如会话管理、日志记录）
        * 4. 提供运行引擎相关的查询和操作接口
        */
-      this.runEngine = new SessionRunEngine({
+      let runEngine!: SessionRunEngine;
+      const materializeSteerInput = async (sessionId: string, items: Parameters<RunAdmissionService["admitPromptAndMaybeRun"]>[1]["items"]) => {
+        const session = store.getSession(sessionId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        const settings = await resolveSessionSettings(session.cwd);
+        if (!settings) throw new Error("session_input_skill_catalog_unavailable");
+        const { skillRegistry } = await discoverOpenHarnessExtensions(session.cwd, settings);
+        return materializeSessionInput(items, skillRegistry, conversationContextCatalog(store, sessionId)).instruction;
+      };
+      this.runControl = new RunControlService({
+        durableSessions: store,
+        durableRuns: store,
+        durableInputs: store,
+        runtime: {
+          activeRunId: (sessionId) => runEngine.runtimeBridge.activeRunId(sessionId),
+          queuedRunIds: (sessionId) => runEngine.runtimeBridge.queuedRunIds(sessionId),
+          hasWork: (sessionId) => runEngine.runtimeBridge.hasWork(sessionId),
+          sessionIds: () => runEngine.runtimeBridge.sessionIds(),
+          interruptSession: (sessionId, reason) => runEngine.runtimeBridge.interruptSession(sessionId, reason),
+          interruptRun: (sessionId, runId, reason) => runEngine.runtimeBridge.interruptRun(sessionId, runId, reason),
+          interruptQueuedRun: (sessionId, runId, reason) => runEngine.runtimeBridge.interruptQueuedRun(sessionId, runId, reason),
+          promoteQueuedRun: (sessionId, queuedRunId, activeRunId, steer) => runEngine.runtimeBridge.promoteQueuedRun(sessionId, queuedRunId, activeRunId, steer),
+          waitForRun: (runId) => runEngine.runtimeBridge.waitForRun(runId),
+          waitForRuns: (runIds) => runEngine.runtimeBridge.waitForRuns(runIds),
+        },
+        events: this.eventPublisher,
+        goals: store.goals,
+        admission: { hasPendingAdmission: (sessionId) => this.runAdmission.hasPendingAdmission(sessionId) },
+        materializeSteerInput,
+      });
+      this.runAdmission = new RunAdmissionService({
+        sessionQueries: store,
+        conversationTransactions: store,
+        runOperations: store,
+        runtimeQueue: {
+          hasRuntime: this.agentPool.configured,
+          enqueueRun: (run, inputId) => runEngine.runtimeBridge.enqueueRun(run, inputId),
+          runState: (sessionId, runId) => runEngine.runtimeBridge.runState(sessionId, runId),
+          steer: (sessionId, input) => runEngine.runtimeBridge.steer(sessionId, input),
+        },
+        events: this.eventPublisher,
+        attachmentLimits: this.attachments.limits,
+        goals: {
+          getCurrentGoal: (sessionId) => store.goals.getCurrentGoal(sessionId),
+          getGoal: (goalId) => store.goals.getGoal(goalId),
+          startGoalRun: (goalId, revision, runId, continuation) => store.goals.startGoalRun(goalId, revision, runId, continuation),
+          markGoalContinuation: (runId, status) => store.goals.markGoalContinuation(runId, status),
+          hasUserWork: (sessionId) => this.runControl.hasUserWork(sessionId),
+          cancelGoalRuns: (sessionId, goalId, reason, queuedOnly) => this.runControl.cancelGoalRuns(sessionId, goalId, reason, queuedOnly),
+        },
+        materializer: { materializeSteerInput },
+        assertReady: () => this.assertReady(),
+      });
+      runEngine = new SessionRunEngine({
         settleGoalRun: (sessionId, runId) => this.goals.settleRun(sessionId, runId),
         store,
         goals: store.goals,
@@ -621,19 +678,11 @@ export class DaemonApplication implements DurableAgentApplication {
         agentPool: this.agentPool,
         runExecutor,
         events: this.eventPublisher,
-        materializeSteerInput: async (sessionId, items) => {
-          const session = store.getSession(sessionId);
-          if (!session) throw new Error(`Session not found: ${sessionId}`);
-          const settings = await resolveSessionSettings(session.cwd);
-          if (!settings) throw new Error("session_input_skill_catalog_unavailable");
-          const { skillRegistry } = await discoverOpenHarnessExtensions(session.cwd, settings);
-          return materializeSessionInput(
-            items,
-            skillRegistry,
-            conversationContextCatalog(store, sessionId),
-          ).instruction;
-        },
+        materializeSteerInput,
+        admission: this.runAdmission,
+        control: this.runControl,
       });
+      this.runEngine = runEngine;
       /**
        * 控制服务：
        * 1. 接收控制命令（如停止、重启）
@@ -646,7 +695,7 @@ export class DaemonApplication implements DurableAgentApplication {
         permissions: store.permissions,
         workflows: store.workflows,
         runEngine: this.runEngine,
-        runControl: this.runEngine.control,
+        runControl: this.runControl,
         agentPool: this.agentPool,
         operationGate: this.operationGate,
         startedAt: Date.now(),
@@ -717,8 +766,8 @@ export class DaemonApplication implements DurableAgentApplication {
       this.sessions = new SessionApplicationService({
         store,
         runEngine: this.runEngine,
-        admission: this.runEngine.admission,
-        control: this.runEngine.control,
+        admission: this.runAdmission,
+        control: this.runControl,
         agentPool: this.agentPool,
         liveChildren: this.liveChildren,
         operationGate: this.operationGate,
@@ -740,8 +789,8 @@ export class DaemonApplication implements DurableAgentApplication {
         goals: store.goals,
         sessions: this.sessions,
         runEngine: this.runEngine,
-        admission: this.runEngine.admission,
-        control: this.runEngine.control,
+        admission: this.runAdmission,
+        control: this.runControl,
         events: this.eventPublisher,
         pluginCapabilities,
         waitVerifier: new GoalWaitVerifier({

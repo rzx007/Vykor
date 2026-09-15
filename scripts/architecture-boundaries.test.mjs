@@ -6,6 +6,7 @@ import {
   checkPackageDependency,
   countLegacyCalls,
   validateLegacyBaseline,
+  checkSessionRunEngineComposition,
 } from "./architecture-boundaries.mjs";
 
 test("services cannot depend on server", () => {
@@ -165,5 +166,16 @@ test("run admission and control services keep their stage 4C boundaries", () => 
   assert.deepEqual(
     checkImportBoundary("packages/server/src/application/session/run-control-service.ts", "./session-run-executor.js"),
     ["packages/server/src/application/session/run-control-service.ts must not depend on SessionRunExecutor"],
+  );
+});
+
+test("production SessionRunEngine construction requires both shared services", () => {
+  assert.deepEqual(
+    checkSessionRunEngineComposition("new SessionRunEngine({ store })", "packages/server/src/application/daemon-application.ts"),
+    ["packages/server/src/application/daemon-application.ts must inject shared admission and control services"],
+  );
+  assert.deepEqual(
+    checkSessionRunEngineComposition("new SessionRunEngine({ admission: sharedAdmission, control: sharedControl })", "packages/server/src/application/daemon-application.ts"),
+    [],
   );
 });

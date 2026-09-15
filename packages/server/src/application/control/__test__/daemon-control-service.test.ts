@@ -95,6 +95,9 @@ describe("DaemonControlService", () => {
     });
     const workflows = store.workflows;
     try {
+      const composed = application as unknown as { runEngine: { admission: unknown; control: unknown } };
+      expect(application.runAdmission).toBe(composed.runEngine.admission);
+      expect(application.runControl).toBe(composed.runEngine.control);
       store.createSession({ id: "s1", cwd: directory, model: "test" });
       store.createRun({ id: "r1", sessionId: "s1" });
       const spec = { mode: "sequential" as const, tasks: [{ id: "one" }] };

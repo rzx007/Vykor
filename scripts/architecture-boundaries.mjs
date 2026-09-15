@@ -131,6 +131,13 @@ export function countLegacyCalls(source, file) {
   return matches;
 }
 
+export function checkSessionRunEngineComposition(source, file) {
+  if (!source.includes("new SessionRunEngine(")) return [];
+  return /\badmission\s*:/.test(source) && /\bcontrol\s*:/.test(source)
+    ? []
+    : [`${file} must inject shared admission and control services`];
+}
+
 function workspacePackagePaths() {
   return ["packages", "apps"].flatMap((parent) =>
     readdirSync(join(root, parent), { withFileTypes: true })
@@ -189,6 +196,9 @@ function collectArchitectureErrors() {
       for (const error of checkImportBoundary(rel, specifier)) {
         errors.push(error);
       }
+    }
+    if (!/\.(?:test|spec)\.(?:ts|tsx)$/.test(path)) {
+      errors.push(...checkSessionRunEngineComposition(content, rel));
     }
   }
 

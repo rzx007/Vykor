@@ -51,6 +51,8 @@ export interface SessionRunEngineContext {
   ): Promise<string>;
   admission?: RunAdmissionService;
   control?: RunControlService;
+  /** Tests that construct the compatibility facade without a composition root must opt in. */
+  allowServiceFallbackForTests?: boolean;
 }
 
 /**
@@ -66,35 +68,45 @@ export class SessionRunEngine {
   private readonly admissionService: RunAdmissionService;
   private readonly controlService: RunControlService;
 
+  readonly runtimeBridge = {
+    activeRunId: (sessionId: string) => this.runCoordinator.activeRunId(sessionId),
+    queuedRunIds: (sessionId: string) => this.runCoordinator.queuedRunIds(sessionId),
+    hasWork: (sessionId: string) => this.runCoordinator.hasWork(sessionId),
+    sessionIds: () => this.runCoordinator.sessionIds(),
+    interruptSession: (sessionId: string, reason?: string) => this.runCoordinator.interrupt(sessionId, reason),
+    interruptRun: (sessionId: string, runId: string, reason?: string) => this.runCoordinator.interruptRun(sessionId, runId, reason),
+    interruptQueuedRun: (sessionId: string, runId: string, reason?: string) => this.runCoordinator.interruptQueuedRun(sessionId, runId, reason),
+    promoteQueuedRun: (sessionId: string, queuedRunId: string, expectedActiveRunId: string, steer: Parameters<SessionRunCoordinator["promoteQueuedRun"]>[3]) =>
+      this.runCoordinator.promoteQueuedRun(sessionId, queuedRunId, expectedActiveRunId, steer),
+    waitForRun: async (runId: string) => {
+      const promise = this.runPromises.get(runId);
+      if (promise) await promise;
+    },
+    waitForRuns: async (runIds: string[]) => {
+      await Promise.all(runIds.map((runId) => this.runPromises.get(runId)).filter((promise): promise is Promise<void> => promise !== undefined));
+    },
+    enqueueRun: (run: SessionRunRecord, inputId: string) => this.enqueueRun(run, inputId),
+    runState: (sessionId: string, runId: string): "running" | "queued" | undefined => {
+      if (!this.runPromises.has(runId)) return undefined;
+      return this.runCoordinator.activeRunId(sessionId) === runId ? "running" : "queued";
+    },
+    steer: (sessionId: string, input: Parameters<SessionRunCoordinator["steer"]>[1]) => this.runCoordinator.steer(sessionId, input),
+  };
+
   constructor(private readonly context: SessionRunEngineContext) {
+    if (Boolean(context.admission) !== Boolean(context.control)) {
+      throw new Error("RunAdmissionService and RunControlService must be supplied together");
+    }
+    if (!context.admission && !context.allowServiceFallbackForTests) {
+      throw new Error("RunAdmissionService and RunControlService are required outside test factories");
+    }
     this.controlService =
       context.control ??
       new RunControlService({
         durableSessions: context.store,
         durableRuns: context.store,
         durableInputs: context.store,
-        runtime: {
-          activeRunId: (sId) => this.runCoordinator.activeRunId(sId),
-          queuedRunIds: (sId) => this.runCoordinator.queuedRunIds(sId),
-          hasWork: (sId) => this.runCoordinator.hasWork(sId),
-          sessionIds: () => this.runCoordinator.sessionIds(),
-          interruptSession: (sId, r) => this.runCoordinator.interrupt(sId, r),
-          interruptRun: (sId, rId, r) => this.runCoordinator.interruptRun(sId, rId, r),
-          interruptQueuedRun: (sId, rId, r) => this.runCoordinator.interruptQueuedRun(sId, rId, r),
-          promoteQueuedRun: (sId, qId, exp, steer) =>
-            this.runCoordinator.promoteQueuedRun(sId, qId, exp, steer),
-          waitForRun: async (rId) => {
-            const p = this.runPromises.get(rId);
-            if (p) await p;
-          },
-          waitForRuns: async (rIds) => {
-            await Promise.all(
-              rIds
-                .map((rId) => this.runPromises.get(rId))
-                .filter((p): p is Promise<void> => p !== undefined),
-            );
-          },
-        },
+        runtime: this.runtimeBridge,
         events: context.events,
         goals: context.goals,
         admission: {
@@ -111,12 +123,9 @@ export class SessionRunEngine {
         runOperations: context.store,
         runtimeQueue: {
           hasRuntime: context.agentPool.configured,
-          enqueueRun: (run, inputId) => this.enqueueRun(run, inputId),
-          runState: (sessionId, runId) => {
-            if (!this.runPromises.has(runId)) return undefined;
-            return this.runCoordinator.activeRunId(sessionId) === runId ? "running" : "queued";
-          },
-          steer: (sId, input) => this.runCoordinator.steer(sId, input),
+          enqueueRun: this.runtimeBridge.enqueueRun,
+          runState: this.runtimeBridge.runState,
+          steer: this.runtimeBridge.steer,
         },
         events: context.events,
         attachmentLimits: context.attachmentLimits,

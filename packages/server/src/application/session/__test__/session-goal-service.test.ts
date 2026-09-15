@@ -42,6 +42,7 @@ function harness(
   let service: SessionGoalService;
   let pluginsAvailable = true;
   const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
     store,
     goals: store.goals,
     agentPool: { configured: true } as any,

@@ -8,9 +8,25 @@ import { SessionRunEngine } from "../session-run-engine.js";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 
 describe("SessionRunEngine", () => {
+  it("rejects a single injected admission or control service", () => {
+    const store = createStore();
+    const context = {
+      store: store as any, goals: store as any, agentPool: { configured: false } as any,
+      runExecutor: { execute: vi.fn() } as any,
+      events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+      allowServiceFallbackForTests: true,
+    };
+    const fallback = new SessionRunEngine(context);
+
+    expect(() => new SessionRunEngine({ ...context, admission: fallback.admission, allowServiceFallbackForTests: false }))
+      .toThrow("RunAdmissionService and RunControlService must be supplied together");
+    expect(() => new SessionRunEngine({ ...context, control: fallback.control, allowServiceFallbackForTests: false }))
+      .toThrow("RunAdmissionService and RunControlService must be supplied together");
+  });
   it("shares pending user admission with RunControl before durable work exists", async () => {
     const store = createStore();
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: false } as any,
@@ -45,6 +61,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -89,6 +106,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -147,6 +165,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -192,6 +211,7 @@ describe("SessionRunEngine", () => {
   ] as const)("rejects concurrent id reuse with changed attachment %s", async (_label, firstAttachments, changedAttachments) => {
     const store = createStore();
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: false } as any,
@@ -236,6 +256,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -270,6 +291,7 @@ describe("SessionRunEngine", () => {
   it("returns an existing prompt/run for an identical request id", async () => {
     const store = createStore();
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: false } as any,
@@ -292,6 +314,7 @@ describe("SessionRunEngine", () => {
     const pending = deferred<void>();
     const runExecutor = { execute: vi.fn(async () => await pending.promise) };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -332,6 +355,7 @@ describe("SessionRunEngine", () => {
     const store = createStore();
     const runExecutor = { execute: vi.fn(async () => {}) };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -368,6 +392,7 @@ describe("SessionRunEngine", () => {
     const runDone = deferred<void>();
     const runExecutor = { execute: vi.fn(async () => await runDone.promise) };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -410,6 +435,7 @@ describe("SessionRunEngine", () => {
     const store = createStore();
     const runExecutor = { execute: vi.fn(async () => {}) };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -452,6 +478,7 @@ describe("SessionRunEngine", () => {
   it("atomically replaces the latest prompt and forwards ordered attachments", async () => {
     const store = createStore();
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -497,6 +524,7 @@ describe("SessionRunEngine", () => {
       attachments: [{ assetId: "asset-1", intent: "vision" }],
     });
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -541,6 +569,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -591,6 +620,7 @@ describe("SessionRunEngine", () => {
     };
     const events = { checkpoint: vi.fn(() => 1), publishSince: vi.fn() };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -659,6 +689,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -713,6 +744,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -760,6 +792,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -796,6 +829,7 @@ describe("SessionRunEngine", () => {
       metadata: { goalId: "g1", goalRunKind: "continuation" },
     });
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -820,6 +854,7 @@ describe("SessionRunEngine", () => {
     store.startGoalRun = vi.fn(() => false);
     const runExecutor = { execute: vi.fn() };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -847,6 +882,7 @@ describe("SessionRunEngine", () => {
   it("downgrades steer to queue when attachments are present", async () => {
     const store = createStore();
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -871,6 +907,7 @@ describe("SessionRunEngine", () => {
   it("returns existing input and run idempotently when prompt id was already admitted", async () => {
     const store = createStore();
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
@@ -906,6 +943,7 @@ describe("SessionRunEngine", () => {
       }),
     };
     const engine = new SessionRunEngine({
+      allowServiceFallbackForTests: true,
       store: store as any,
       goals: store as any,
       agentPool: { configured: true } as any,
