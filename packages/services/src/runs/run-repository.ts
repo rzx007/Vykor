@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 
 import type {
   AppendEventInput,
   CreateRunAttemptInput,
   CreateRunInput,
+  CreateSessionTaskInput,
   SessionEventRecord,
   SessionExecutionRecord,
   SessionRecord,
@@ -11,6 +13,7 @@ import type {
   SessionRunRecord,
   UpdateRunAttemptInput,
   UpdateRunInput,
+  UpdateSessionTaskInput,
 } from "@openharness/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
@@ -295,5 +298,168 @@ export class RunRepository {
           candidate.metadata.taskManagerId === runtimeExecutionId),
     );
     return task ? clone(task) : undefined;
+  }
+
+  createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
+    const session = assertSession(this.storage.state, input.sessionId);
+    if (
+      (input.requestNamespace === undefined) !==
+      (input.requestId === undefined)
+    ) {
+      throw new Error(
+        "Session task requestNamespace and requestId must be provided together",
+      );
+    }
+    if (input.requestNamespace && input.requestId) {
+      const existing = Object.values(this.storage.state.tasks).find(
+        (task) =>
+          task.sessionId === input.sessionId &&
+          task.requestNamespace === input.requestNamespace &&
+          task.requestId === input.requestId,
+      );
+      if (existing)
+        throw new Error(`Session task request already exists: ${existing.id}`);
+    }
+    const id = input.id ?? randomUUID();
+    if (this.storage.state.tasks[id])
+      throw new Error(`Session task already exists: ${id}`);
+    if (input.childSessionId) {
+      const child = assertSession(this.storage.state, input.childSessionId);
+      if (child.parentId !== input.sessionId) {
+        throw new Error(
+          `Child session does not belong to task session: ${input.childSessionId}`,
+        );
+      }
+    }
+    if (input.runId) {
+      const run = this.storage.state.runs[input.runId];
+      if (
+        !run ||
+        (run.sessionId !== input.childSessionId &&
+          run.sessionId !== input.sessionId)
+      ) {
+        throw new Error(
+          `Task run does not belong to task session: ${input.runId}`,
+        );
+      }
+    }
+    const timestamp = now();
+    const task: SessionExecutionRecord = {
+      id,
+      sessionId: input.sessionId,
+      ...(input.requestNamespace
+        ? { requestNamespace: input.requestNamespace }
+        : {}),
+      ...(input.requestId ? { requestId: input.requestId } : {}),
+      ...(input.childSessionId ? { childSessionId: input.childSessionId } : {}),
+      ...(input.runId ? { runId: input.runId } : {}),
+      type: input.type,
+      status: input.status ?? "running",
+      description: input.description,
+      cwd: resolve(input.cwd),
+      metadata: input.metadata ?? {},
+      createdAt: timestamp,
+      ...((input.status ?? "running") === "running"
+        ? { startedAt: timestamp }
+        : {}),
+      updatedAt: timestamp,
+    };
+    this.storage.state.tasks[id] = task;
+    session.updatedAt = timestamp;
+    this.storage.mutations.tasks.add(id);
+    this.storage.mutations.sessions.add(session.id);
+    this.appendEvent?.({
+      type: "session.task.created",
+      sessionId: task.sessionId,
+      payload: { task },
+    });
+    this.saveChanges?.();
+    return clone(task);
+  }
+
+  /** Atomically reserves one durable task for a producer request. */
+  reserveSessionTask(
+    input: CreateSessionTaskInput & {
+      requestNamespace: string;
+      requestId: string;
+    },
+  ): { task: SessionExecutionRecord; created: boolean } {
+    const existing = Object.values(this.storage.state.tasks).find(
+      (task) =>
+        task.sessionId === input.sessionId &&
+        task.requestNamespace === input.requestNamespace &&
+        task.requestId === input.requestId,
+    );
+    if (existing) return { task: clone(existing), created: false };
+    return {
+      task: this.createSessionTask({ ...input, status: "pending" }),
+      created: true,
+    };
+  }
+
+  /**
+   * Confirms or fails an admitted task only while it is still pending.
+   * The check and update are synchronous so a concurrent stop cannot be
+   * overwritten by a stale process-start result.
+   */
+  transitionPendingSessionTask(
+    taskId: string,
+    input: UpdateSessionTaskInput,
+  ): { task: SessionExecutionRecord; transitioned: boolean } {
+    const current = this.storage.state.tasks[taskId];
+    if (!current) throw new Error(`Session task not found: ${taskId}`);
+    if (current.status !== "pending") {
+      return { task: clone(current), transitioned: false };
+    }
+    return { task: this.updateSessionTask(taskId, input), transitioned: true };
+  }
+
+  updateSessionTask(
+    taskId: string,
+    input: UpdateSessionTaskInput,
+  ): SessionExecutionRecord {
+    const task = this.storage.state.tasks[taskId];
+    if (!task) throw new Error(`Session task not found: ${taskId}`);
+    const session = assertSession(this.storage.state, task.sessionId);
+    if (input.runId !== undefined) {
+      const run = this.storage.state.runs[input.runId];
+      if (
+        !run ||
+        (run.sessionId !== task.sessionId &&
+          run.sessionId !== task.childSessionId)
+      ) {
+        throw new Error(`Task run does not belong to task: ${input.runId}`);
+      }
+      task.runId = input.runId;
+    }
+    const timestamp = now();
+    const previousStatus = task.status;
+    if (input.status) {
+      task.status = input.status;
+      if (input.status === "running" && previousStatus !== "running") {
+        task.startedAt = timestamp;
+        delete task.finishedAt;
+        delete task.output;
+        delete task.error;
+      }
+      if (
+        ["completed", "failed", "stopped", "interrupted"].includes(input.status)
+      )
+        task.finishedAt = timestamp;
+    }
+    if (input.output !== undefined) task.output = input.output;
+    if (input.error !== undefined) task.error = input.error;
+    if (input.metadata) task.metadata = { ...task.metadata, ...input.metadata };
+    task.updatedAt = timestamp;
+    session.updatedAt = timestamp;
+    this.storage.mutations.tasks.add(taskId);
+    this.storage.mutations.sessions.add(session.id);
+    this.appendEvent?.({
+      type: "session.task.updated",
+      sessionId: task.sessionId,
+      payload: { task, previousStatus },
+    });
+    this.saveChanges?.();
+    return clone(task);
   }
 }

@@ -308,4 +308,170 @@ describe("RunRepository write operations", () => {
         rmSync(directory, { recursive: true, force: true });
       }
     });
+
+    it("creates, reserves, transitions and updates session tasks with validation, events and clone protection", () => {
+      const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-task-write-"));
+      const store = new SessionStore({ path: join(directory, "store.db") });
+      try {
+        const repository = new RunRepository({
+          storage: (store as any).storage,
+          appendEvent: (input) => (store as any).appendEvent(input),
+          save: () => (store as any).save(),
+        });
+
+        store.createSession({ id: "s1", cwd: directory, model: "m" });
+        store.createSession({ id: "s2", cwd: directory, model: "m" });
+        store.createSession({ id: "child_s1", parentId: "s1", cwd: directory, model: "m" });
+        const r1 = repository.createRun({ id: "r1", sessionId: "s1" });
+        const r2 = repository.createRun({ id: "r2", sessionId: "s2" });
+
+        // 1. requestNamespace and requestId pairing
+        expect(() =>
+          repository.createSessionTask({
+            sessionId: "s1",
+            type: "subagent",
+            description: "d",
+            cwd: directory,
+            requestNamespace: "ns",
+          }),
+        ).toThrow("Session task requestNamespace and requestId must be provided together");
+
+        // 2. Child session ownership
+        expect(() =>
+          repository.createSessionTask({
+            sessionId: "s2",
+            childSessionId: "child_s1", // child_s1 parent is s1, not s2
+            type: "subagent",
+            description: "d",
+            cwd: directory,
+          }),
+        ).toThrow("Child session does not belong to task session: child_s1");
+
+        // 3. Run ownership
+        expect(() =>
+          repository.createSessionTask({
+            sessionId: "s1",
+            runId: "r2", // r2 belongs to s2
+            type: "subagent",
+            description: "d",
+            cwd: directory,
+          }),
+        ).toThrow("Task run does not belong to task session: r2");
+
+        // 4. Default running status, startedAt set, clone returned, event emitted
+        const before = store.getSession("s1")!.updatedAt;
+        const task1 = repository.createSessionTask({
+          id: "t1",
+          sessionId: "s1",
+          runId: "r1",
+          childSessionId: "child_s1",
+          type: "subagent",
+          description: "Task 1",
+          cwd: directory,
+          metadata: { initial: 1 },
+          requestNamespace: "ns1",
+          requestId: "req1",
+        });
+        expect(task1.status).toBe("running");
+        expect(task1.startedAt).toBeDefined();
+        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
+
+        // duplicate request check
+        expect(() =>
+          repository.createSessionTask({
+            sessionId: "s1",
+            type: "subagent",
+            description: "d",
+            cwd: directory,
+            requestNamespace: "ns1",
+            requestId: "req1",
+          }),
+        ).toThrow("Session task request already exists: t1");
+
+        // duplicate task id check
+        expect(() =>
+          repository.createSessionTask({
+            id: "t1",
+            sessionId: "s1",
+            type: "subagent",
+            description: "d",
+            cwd: directory,
+          }),
+        ).toThrow("Session task already exists: t1");
+
+        // clone protection
+        task1.status = "failed";
+        expect(repository.getSessionTask("t1")!.status).toBe("running");
+
+        // event emitted
+        const events = store.listEvents({ sessionId: "s1" });
+        const createdEvent = events.find((e) => e.type === "session.task.created");
+        expect(createdEvent).toBeDefined();
+        expect(createdEvent!.payload).toMatchObject({ task: { id: "t1" } });
+
+        // 5. reserveSessionTask
+        const res1 = repository.reserveSessionTask({
+          sessionId: "s1",
+          requestNamespace: "ns2",
+          requestId: "req2",
+          type: "subagent",
+          description: "Reserve 1",
+          cwd: directory,
+        });
+        expect(res1.created).toBe(true);
+        expect(res1.task.status).toBe("pending");
+        expect(res1.task.startedAt).toBeUndefined();
+
+        const res2 = repository.reserveSessionTask({
+          sessionId: "s1",
+          requestNamespace: "ns2",
+          requestId: "req2",
+          type: "subagent",
+          description: "Reserve 2",
+          cwd: directory,
+        });
+        expect(res2.created).toBe(false);
+        expect(res2.task.id).toBe(res1.task.id);
+
+        // 6. transitionPendingSessionTask
+        const trans1 = repository.transitionPendingSessionTask(res1.task.id, {
+          status: "running",
+        });
+        expect(trans1.transitioned).toBe(true);
+        expect(trans1.task.status).toBe("running");
+        expect(trans1.task.startedAt).toBeDefined();
+
+        // Already running, transition should return transitioned: false
+        const trans2 = repository.transitionPendingSessionTask(res1.task.id, {
+          status: "failed",
+          error: "err",
+        });
+        expect(trans2.transitioned).toBe(false);
+        expect(trans2.task.status).toBe("running");
+
+        // 7. updateSessionTask: running -> completed, finishedAt set, metadata merged
+        const updated = repository.updateSessionTask(res1.task.id, {
+          status: "completed",
+          output: "success output",
+          metadata: { extra: true },
+        });
+        expect(updated.status).toBe("completed");
+        expect(updated.finishedAt).toBeDefined();
+        expect(updated.output).toBe("success output");
+        expect(updated.metadata).toEqual({ extra: true });
+
+        // Event emitted with previousStatus
+        const events2 = store.listEvents({ sessionId: "s1" });
+        const updatedEvent = events2.find(
+          (e) =>
+            e.type === "session.task.updated" &&
+            (e.payload as any).task.id === res1.task.id &&
+            (e.payload as any).previousStatus === "running",
+        );
+        expect(updatedEvent).toBeDefined();
+      } finally {
+        store.close();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
   });

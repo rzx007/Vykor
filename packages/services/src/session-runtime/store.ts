@@ -265,7 +265,11 @@ export class SessionStore {
       this.channels = new ChannelRepository(this.storage);
       this.sessions = new SessionRepository(this.storage);
       this.conversations = new ConversationRepository(this.storage);
-      this.runs = new RunRepository(this.storage);
+      this.runs = new RunRepository({
+        storage: this.storage,
+        appendEvent: (input) => this.appendEvent(input),
+        save: () => this.save(),
+      });
       this.permissions = new PermissionRepository({
         storage: this.storage,
         assertSession: (sessionId) => assertSession(this.state, sessionId),
@@ -2420,81 +2424,9 @@ export class SessionStore {
   }
 
   createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
-    const session = assertSession(this.state, input.sessionId);
-    if (
-      (input.requestNamespace === undefined) !==
-      (input.requestId === undefined)
-    ) {
-      throw new Error(
-        "Session task requestNamespace and requestId must be provided together",
-      );
-    }
-    if (input.requestNamespace && input.requestId) {
-      const existing = Object.values(this.state.tasks).find(
-        (task) =>
-          task.sessionId === input.sessionId &&
-          task.requestNamespace === input.requestNamespace &&
-          task.requestId === input.requestId,
-      );
-      if (existing)
-        throw new Error(`Session task request already exists: ${existing.id}`);
-    }
-    const id = input.id ?? randomUUID();
-    if (this.state.tasks[id])
-      throw new Error(`Session task already exists: ${id}`);
-    if (input.childSessionId) {
-      const child = assertSession(this.state, input.childSessionId);
-      if (child.parentId !== input.sessionId) {
-        throw new Error(
-          `Child session does not belong to task session: ${input.childSessionId}`,
-        );
-      }
-    }
-    if (input.runId) {
-      const run = this.state.runs[input.runId];
-      if (
-        !run ||
-        (run.sessionId !== input.childSessionId &&
-          run.sessionId !== input.sessionId)
-      ) {
-        throw new Error(
-          `Task run does not belong to task session: ${input.runId}`,
-        );
-      }
-    }
-    const timestamp = now();
-    const task: SessionExecutionRecord = {
-      id,
-      sessionId: input.sessionId,
-      ...(input.requestNamespace
-        ? { requestNamespace: input.requestNamespace }
-        : {}),
-      ...(input.requestId ? { requestId: input.requestId } : {}),
-      ...(input.childSessionId ? { childSessionId: input.childSessionId } : {}),
-      ...(input.runId ? { runId: input.runId } : {}),
-      type: input.type,
-      status: input.status ?? "running",
-      description: input.description,
-      cwd: resolve(input.cwd),
-      metadata: input.metadata ?? {},
-      createdAt: timestamp,
-      ...((input.status ?? "running") === "running"
-        ? { startedAt: timestamp }
-        : {}),
-      updatedAt: timestamp,
-    };
-    this.state.tasks[id] = task;
-    session.updatedAt = timestamp;
-    this.mutations.tasks.add(id);
-    this.mutations.sessions.add(session.id);
-    this.appendEventInMemory({
-      type: "session.task.created",
-      sessionId: task.sessionId,
-      payload: { task },
-    });
-    this.save();
-    this.notifySessionTask(id);
-    return clone(task);
+    const task = this.runs.createSessionTask(input);
+    this.notifySessionTask(task.id);
+    return task;
   }
 
   /** Atomically reserves one durable task for a producer request. */
@@ -2504,17 +2436,11 @@ export class SessionStore {
       requestId: string;
     },
   ): { task: SessionExecutionRecord; created: boolean } {
-    const existing = Object.values(this.state.tasks).find(
-      (task) =>
-        task.sessionId === input.sessionId &&
-        task.requestNamespace === input.requestNamespace &&
-        task.requestId === input.requestId,
-    );
-    if (existing) return { task: clone(existing), created: false };
-    return {
-      task: this.createSessionTask({ ...input, status: "pending" }),
-      created: true,
-    };
+    const result = this.runs.reserveSessionTask(input);
+    if (result.created) {
+      this.notifySessionTask(result.task.id);
+    }
+    return result;
   }
 
   /**
@@ -2526,62 +2452,20 @@ export class SessionStore {
     taskId: string,
     input: UpdateSessionTaskInput,
   ): { task: SessionExecutionRecord; transitioned: boolean } {
-    const current = this.state.tasks[taskId];
-    if (!current) throw new Error(`Session task not found: ${taskId}`);
-    if (current.status !== "pending") {
-      return { task: clone(current), transitioned: false };
+    const result = this.runs.transitionPendingSessionTask(taskId, input);
+    if (result.transitioned) {
+      this.notifySessionTask(taskId);
     }
-    return { task: this.updateSessionTask(taskId, input), transitioned: true };
+    return result;
   }
 
   updateSessionTask(
     taskId: string,
     input: UpdateSessionTaskInput,
   ): SessionExecutionRecord {
-    const task = this.state.tasks[taskId];
-    if (!task) throw new Error(`Session task not found: ${taskId}`);
-    const session = assertSession(this.state, task.sessionId);
-    if (input.runId !== undefined) {
-      const run = this.state.runs[input.runId];
-      if (
-        !run ||
-        (run.sessionId !== task.sessionId &&
-          run.sessionId !== task.childSessionId)
-      ) {
-        throw new Error(`Task run does not belong to task: ${input.runId}`);
-      }
-      task.runId = input.runId;
-    }
-    const timestamp = now();
-    const previousStatus = task.status;
-    if (input.status) {
-      task.status = input.status;
-      if (input.status === "running" && previousStatus !== "running") {
-        task.startedAt = timestamp;
-        delete task.finishedAt;
-        delete task.output;
-        delete task.error;
-      }
-      if (
-        ["completed", "failed", "stopped", "interrupted"].includes(input.status)
-      )
-        task.finishedAt = timestamp;
-    }
-    if (input.output !== undefined) task.output = input.output;
-    if (input.error !== undefined) task.error = input.error;
-    if (input.metadata) task.metadata = { ...task.metadata, ...input.metadata };
-    task.updatedAt = timestamp;
-    session.updatedAt = timestamp;
-    this.mutations.tasks.add(taskId);
-    this.mutations.sessions.add(session.id);
-    this.appendEventInMemory({
-      type: "session.task.updated",
-      sessionId: task.sessionId,
-      payload: { task, previousStatus },
-    });
-    this.save();
+    const task = this.runs.updateSessionTask(taskId, input);
     this.notifySessionTask(taskId);
-    return clone(task);
+    return task;
   }
 
   getSessionTask(taskId: string): SessionExecutionRecord | undefined {
