@@ -720,6 +720,7 @@ describe("ConversationTransactions.admitPrompt", () => {
         runs: store.runs,
         attachments: store.attachments,
         save: () => (store as any).save(),
+        notifySessionTask: (taskId) => (store as any).notifySessionTask(taskId),
         testHooks: hooks,
       });
     }
@@ -1389,6 +1390,128 @@ describe("ConversationTransactions.admitPrompt", () => {
           expect(() => store.transaction(() => tx.deleteSessionTree("root")))
             .toThrow("deleteSessionTree cannot be called inside a store transaction");
           expect(store.getSession("root")).toBeDefined();
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    });
+
+    describe("recovery transactions", () => {
+      it("settles only active attempts and interrupts only active tasks with defaults", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-attempt-task-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          store.createSession({ id: "s1", cwd: dir, model: "m" });
+          const run = store.createRun({ id: "run", sessionId: "s1" });
+          store.createRunAttempt({ id: "pending-attempt", runId: run.id });
+          const runningAttempt = store.createRunAttempt({ id: "running-attempt", runId: run.id });
+          store.updateRunAttempt(runningAttempt.id, { status: "running" });
+          const completedAttempt = store.createRunAttempt({ id: "completed-attempt", runId: run.id });
+          store.updateRunAttempt(completedAttempt.id, { status: "completed" });
+          store.createSessionTask({ id: "pending-task", sessionId: "s1", type: "process", status: "pending", description: "pending", cwd: dir });
+          store.createSessionTask({ id: "running-task", sessionId: "s1", type: "process", description: "running", cwd: dir });
+          store.createSessionTask({ id: "done-task", sessionId: "s1", type: "process", status: "completed", description: "done", cwd: dir });
+          const tx = createTransactions(store);
+
+          expect(tx.settleActiveRunAttempts(run.id, "cancelled", "stopped")).toBe(2);
+          expect(store.listRunAttempts(run.id).map(({ status }) => status)).toEqual(["cancelled", "cancelled", "completed"]);
+          expect(store.getRunAttempt("pending-attempt")).toMatchObject({ error: "stopped", errorKind: "interrupted" });
+          expect(tx.interruptActiveSessionTasks()).toBe(2);
+          expect(store.getSessionTask("pending-task")).toMatchObject({ status: "interrupted", error: "Daemon restarted before the task completed" });
+          expect(store.getSessionTask("running-task")).toMatchObject({ status: "interrupted" });
+          expect(store.getSessionTask("done-task")!.status).toBe("completed");
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it("interrupts active runs, marks unknown tool outcomes, terminalizes orphans, and finalizes eligible closing sessions", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-runs-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          store.createSession({ id: "active", cwd: dir, model: "m" });
+          const input = store.admitPrompt({ id: "owned", sessionId: "active", content: "owned" });
+          const run = store.createRun({ id: "active-run", sessionId: "active", inputId: input.id });
+          const attempt = store.createRunAttempt({ id: "active-attempt", runId: run.id });
+          store.updateRunAttempt(attempt.id, { status: "running" });
+          const message = store.createMessage({ id: "assistant", sessionId: "active", role: "assistant", runId: run.id });
+          store.upsertMessagePart({ id: "text-part", sessionId: "active", messageId: message.id, type: "text", status: "running", text: "partial" });
+          store.upsertMessagePart({ id: "tool-part", sessionId: "active", messageId: message.id, type: "tool", status: "running", toolUseId: "tool-use", toolName: "Write" });
+          store.admitPrompt({ id: "orphan", sessionId: "active", delivery: "steer", content: "orphan", metadata: { traceId: "trace" } });
+          store.createSession({ id: "idle-closing", cwd: dir, model: "m" });
+          store.beginArchive("idle-closing");
+          const tx = createTransactions(store);
+
+          expect(tx.interruptActiveRuns()).toBe(1);
+          expect(store.getRun("active-run")).toMatchObject({ status: "interrupted", error: "Daemon restarted before the run completed" });
+          expect(store.getRunAttempt("active-attempt")).toMatchObject({ status: "cancelled", errorKind: "interrupted" });
+          expect(store.listMessageParts("active")).toEqual(expect.arrayContaining([
+            expect.objectContaining({ id: "text-part", status: "interrupted" }),
+            expect.objectContaining({ id: "tool-part", status: "failed", metadata: expect.objectContaining({ outcome: "unknown", failureKind: "unknown_outcome" }) }),
+          ]));
+          expect(tx.terminalizeUnownedInputs()).toBe(1);
+          expect(store.findRunByInput("orphan")).toMatchObject({
+            status: "interrupted",
+            metadata: { traceId: "trace", recovery: expect.objectContaining({ kind: "orphan_input", delivery: "steer" }) },
+          });
+          store.createSession({ id: "busy-closing", cwd: dir, model: "m" });
+          store.createRun({ id: "busy-run", sessionId: "busy-closing" });
+          store.beginArchive("busy-closing");
+          expect(tx.finalizeClosingSessions()).toBe(2);
+          expect(store.getSession("idle-closing")!.status).toBe("archived");
+          expect(store.getSession("busy-closing")!.status).toBe("closing");
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it("rolls back a failed recovery batch in memory and after reopen", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-fail-"));
+        const dbPath = join(dir, "store.db");
+        let store = new SessionStore({ path: dbPath });
+        try {
+          store.createSession({ id: "s1", cwd: dir, model: "m" });
+          store.createSessionTask({ id: "task-1", sessionId: "s1", type: "process", description: "one", cwd: dir });
+          store.createSessionTask({ id: "task-2", sessionId: "s1", type: "process", description: "two", cwd: dir });
+          const tx = createTransactions(store, { afterRecoveryMutation: () => { throw new Error("injected recovery failure"); } });
+          expect(() => tx.interruptActiveSessionTasks()).toThrow("injected recovery failure");
+          expect(store.listSessionTasks("s1").map(({ status }) => status)).toEqual(["running", "running"]);
+          store.close();
+          store = new SessionStore({ path: dbPath });
+          expect(store.listSessionTasks("s1").map(({ status }) => status)).toEqual(["running", "running"]);
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
+      it("notifies task listeners only after outer commit, never on rollback, and once per batch task", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-task-notify-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          store.createSession({ id: "s1", cwd: dir, model: "m" });
+          store.createSessionTask({ id: "task-1", sessionId: "s1", type: "process", description: "one", cwd: dir });
+          store.createSessionTask({ id: "task-2", sessionId: "s1", type: "process", description: "two", cwd: dir });
+          const calls = { one: 0, two: 0 };
+          (store as any).taskListeners.set("task-1", new Set([() => { calls.one += 1; }]));
+          (store as any).taskListeners.set("task-2", new Set([() => { calls.two += 1; }]));
+
+          expect(() => store.transaction(() => {
+            store.updateSessionTask("task-1", { status: "failed" });
+            expect(calls.one).toBe(0);
+            throw new Error("rollback");
+          })).toThrow("rollback");
+          expect(calls.one).toBe(0);
+          store.transaction(() => {
+            store.transaction(() => store.updateSessionTask("task-1", { status: "completed" }));
+            expect(calls.one).toBe(0);
+          });
+          expect(calls.one).toBe(1);
+          expect(createTransactions(store).interruptActiveSessionTasks()).toBe(1);
+          expect(calls).toEqual({ one: 1, two: 1 });
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });

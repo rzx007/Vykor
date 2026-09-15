@@ -31,6 +31,7 @@ import {
   assertMessage,
   assertSession,
   clone,
+  isTerminalAttemptStatus,
   maxSeq,
   now,
 } from "../session-runtime/store-state.js";
@@ -59,6 +60,7 @@ export interface ConversationTransactionTestHooks {
   afterForkPartsCopied?: () => void;
   duringDeleteMemory?: () => void;
   afterDeleteMemory?: () => void;
+  afterRecoveryMutation?: () => void;
 }
 
 export interface ConversationTransactionsOptions {
@@ -73,6 +75,7 @@ export interface ConversationTransactionsOptions {
   getAttachment?: (id: string, options?: { includeDeleted?: boolean }) => AttachmentAssetRecord | undefined;
   attachmentLimits?: AttachmentLimits;
   save?: () => void;
+  notifySessionTask?: (taskId: string) => void;
   testHooks?: ConversationTransactionTestHooks;
 }
 
@@ -807,5 +810,111 @@ export class ConversationTransactions {
     };
     visit(sessionId);
     return result;
+  }
+
+  private notifyTaskAfterCommit(taskId: string): void {
+    const notify = this.options.notifySessionTask;
+    if (!notify) return;
+    if (this.storage.deferUntilCommit) this.storage.deferUntilCommit(() => notify(taskId));
+    else notify(taskId);
+  }
+
+  settleActiveRunAttempts(runId: string, status: "completed" | "failed" | "cancelled", error?: string): number {
+    return this.storage.atomic(() => {
+      const active = Object.values(this.storage.state.attempts).filter(
+        (attempt) => attempt.runId === runId && !isTerminalAttemptStatus(attempt.status),
+      );
+      for (const attempt of active) {
+        this.requireRuns().updateRunAttempt(attempt.id, {
+          status,
+          ...(error ? { error, errorKind: status === "cancelled" ? "interrupted" : "provider" } : {}),
+        });
+        this.testHooks?.afterRecoveryMutation?.();
+      }
+      return active.length;
+    });
+  }
+
+  interruptActiveSessionTasks(reason = "Daemon restarted before the task completed"): number {
+    return this.storage.atomic(() => {
+      const active = Object.values(this.storage.state.tasks).filter(
+        (task) => task.status === "pending" || task.status === "running",
+      );
+      for (const task of active) {
+        this.requireRuns().updateSessionTask(task.id, { status: "interrupted", error: reason });
+        this.notifyTaskAfterCommit(task.id);
+        this.testHooks?.afterRecoveryMutation?.();
+      }
+      return active.length;
+    });
+  }
+
+  interruptActiveRuns(reason = "Daemon restarted before the run completed"): number {
+    return this.storage.atomic(() => {
+      const active = Object.values(this.storage.state.runs).filter(
+        (run) => run.status === "pending" || run.status === "running",
+      );
+      for (const run of active) {
+        const messageIds = new Set(Object.values(this.storage.state.messages)
+          .filter((message) => message.runId === run.id).map(({ id }) => id));
+        for (const part of Object.values(this.storage.state.parts)) {
+          if (!messageIds.has(part.messageId) || part.status !== "running") continue;
+          this.conversations.upsertMessagePart({
+            id: part.id, sessionId: part.sessionId, messageId: part.messageId, type: part.type,
+            status: part.type === "tool" ? "failed" : "interrupted",
+            ...(part.type === "tool" ? { metadata: {
+              ...part.metadata,
+              toolCallId: part.toolUseId ?? part.id,
+              toolAttemptId: typeof part.metadata.toolAttemptId === "string"
+                ? part.metadata.toolAttemptId : `tool_attempt_${part.toolUseId ?? part.id}_1`,
+              outcome: "unknown", failureKind: "unknown_outcome",
+              outcomeWarning: "Tool may already have executed; automatic retry is disabled",
+            } } : {}),
+          });
+        }
+        this.settleActiveRunAttempts(run.id, "cancelled", reason);
+        this.requireRuns().updateRun(run.id, { status: "interrupted", error: reason });
+        this.testHooks?.afterRecoveryMutation?.();
+      }
+      return active.length;
+    });
+  }
+
+  terminalizeUnownedInputs(reason = "Daemon restarted before the input was assigned to a run"): number {
+    return this.storage.atomic(() => {
+      const runs = this.requireRuns();
+      const unowned = Object.values(this.storage.state.inputs).filter((input) => {
+        const session = this.storage.state.sessions[input.sessionId];
+        return session !== undefined && session.status !== "archived" && session.status !== "closing"
+          && runs.findRunByInput(input.id) === undefined;
+      });
+      for (const input of unowned) {
+        const traceId = typeof input.metadata.traceId === "string" ? input.metadata.traceId : undefined;
+        const run = runs.createRun({
+          sessionId: input.sessionId, inputId: input.id,
+          metadata: {
+            ...(traceId ? { traceId } : {}),
+            recovery: { kind: "orphan_input", inputId: input.id, delivery: input.delivery, reason },
+          },
+        });
+        runs.updateRun(run.id, { status: "interrupted", error: reason });
+        this.testHooks?.afterRecoveryMutation?.();
+      }
+      return unowned.length;
+    });
+  }
+
+  finalizeClosingSessions(): number {
+    return this.storage.atomic(() => {
+      const closing = Object.values(this.storage.state.sessions).filter(({ status }) => status === "closing");
+      for (const session of closing) {
+        const hasActiveRun = Object.values(this.storage.state.runs).some(
+          (run) => run.sessionId === session.id && (run.status === "pending" || run.status === "running"),
+        );
+        if (!hasActiveRun) this.requireSessions().archive(session.id);
+        this.testHooks?.afterRecoveryMutation?.();
+      }
+      return closing.length;
+    });
   }
 }

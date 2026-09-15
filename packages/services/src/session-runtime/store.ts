@@ -335,6 +335,7 @@ export class SessionStore {
         attachments: this.attachments,
         attachmentLimits: this.attachmentLimits,
         save: () => this.save(),
+        notifySessionTask: (taskId) => this.notifySessionTask(taskId),
       });
     } catch (error) {
       database.close();
@@ -1519,7 +1520,7 @@ export class SessionStore {
 
   createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
     const task = this.runs.createSessionTask(input);
-    this.notifySessionTask(task.id);
+    this.deferSessionTaskNotification(task.id);
     return task;
   }
 
@@ -1532,7 +1533,7 @@ export class SessionStore {
   ): { task: SessionExecutionRecord; created: boolean } {
     const result = this.runs.reserveSessionTask(input);
     if (result.created) {
-      this.notifySessionTask(result.task.id);
+      this.deferSessionTaskNotification(result.task.id);
     }
     return result;
   }
@@ -1548,7 +1549,7 @@ export class SessionStore {
   ): { task: SessionExecutionRecord; transitioned: boolean } {
     const result = this.runs.transitionPendingSessionTask(taskId, input);
     if (result.transitioned) {
-      this.notifySessionTask(taskId);
+      this.deferSessionTaskNotification(taskId);
     }
     return result;
   }
@@ -1558,7 +1559,7 @@ export class SessionStore {
     input: UpdateSessionTaskInput,
   ): SessionExecutionRecord {
     const task = this.runs.updateSessionTask(taskId, input);
-    this.notifySessionTask(taskId);
+    this.deferSessionTaskNotification(taskId);
     return task;
   }
 
@@ -1584,13 +1585,7 @@ export class SessionStore {
   interruptActiveSessionTasks(
     reason = "Daemon restarted before the task completed",
   ): number {
-    const active = Object.values(this.state.tasks).filter(
-      (task) => task.status === "pending" || task.status === "running",
-    );
-    for (const task of active) {
-      this.updateSessionTask(task.id, { status: "interrupted", error: reason });
-    }
-    return active.length;
+    return this.conversationTransactions.interruptActiveSessionTasks(reason);
   }
 
   /**
@@ -1601,48 +1596,7 @@ export class SessionStore {
   interruptActiveRuns(
     reason = "Daemon restarted before the run completed",
   ): number {
-    const active = Object.values(this.state.runs).filter(
-      (run) => run.status === "pending" || run.status === "running",
-    );
-    for (const run of active) {
-      const messageIds = new Set(
-        Object.values(this.state.messages)
-          .filter((message) => message.runId === run.id)
-          .map((message) => message.id),
-      );
-      for (const part of Object.values(this.state.parts)) {
-        if (!messageIds.has(part.messageId) || part.status !== "running")
-          continue;
-        this.upsertMessagePart({
-          id: part.id,
-          sessionId: part.sessionId,
-          messageId: part.messageId,
-          type: part.type,
-          status: part.type === "tool" ? "failed" : "interrupted",
-          ...(part.type === "tool"
-            ? {
-                metadata: {
-                  ...part.metadata,
-                  toolCallId: part.toolUseId ?? part.id,
-                  toolAttemptId:
-                    typeof part.metadata.toolAttemptId === "string"
-                      ? part.metadata.toolAttemptId
-                      : `tool_attempt_${part.toolUseId ?? part.id}_1`,
-                  outcome: "unknown",
-                  failureKind: "unknown_outcome",
-                  outcomeWarning:
-                    "Tool may already have executed; automatic retry is disabled",
-                },
-              }
-            : {}),
-        });
-      }
-      this.transaction(() => {
-        this.settleActiveRunAttempts(run.id, "cancelled", reason);
-        this.updateRun(run.id, { status: "interrupted", error: reason });
-      });
-    }
-    return active.length;
+    return this.conversationTransactions.interruptActiveRuns(reason);
   }
 
   async waitForSessionTaskChange(
@@ -1699,6 +1653,10 @@ export class SessionStore {
       listener();
   }
 
+  private deferSessionTaskNotification(taskId: string): void {
+    this.storage.deferUntilCommit?.(() => this.notifySessionTask(taskId));
+  }
+
   createRunAttempt(input: CreateRunAttemptInput): SessionRunAttemptRecord {
     return this.runs.createRunAttempt(input);
   }
@@ -1723,22 +1681,7 @@ export class SessionStore {
     status: "completed" | "failed" | "cancelled",
     error?: string,
   ): number {
-    const active = Object.values(this.state.attempts).filter(
-      (attempt) =>
-        attempt.runId === runId && !isTerminalAttemptStatus(attempt.status),
-    );
-    for (const attempt of active) {
-      this.updateRunAttempt(attempt.id, {
-        status,
-        ...(error
-          ? {
-              error,
-              errorKind: status === "cancelled" ? "interrupted" : "provider",
-            }
-          : {}),
-      });
-    }
-    return active.length;
+    return this.conversationTransactions.settleActiveRunAttempts(runId, status, error);
   }
 
   /**
@@ -1749,38 +1692,7 @@ export class SessionStore {
   terminalizeUnownedInputs(
     reason = "Daemon restarted before the input was assigned to a run",
   ): number {
-    return this.transaction(() => {
-      const unowned = Object.values(this.state.inputs).filter((input) => {
-        const session = this.state.sessions[input.sessionId];
-        return (
-          session !== undefined &&
-          session.status !== "archived" &&
-          session.status !== "closing" &&
-          this.findRunByInput(input.id) === undefined
-        );
-      });
-      for (const input of unowned) {
-        const traceId =
-          typeof input.metadata.traceId === "string"
-            ? input.metadata.traceId
-            : undefined;
-        const run = this.createRun({
-          sessionId: input.sessionId,
-          inputId: input.id,
-          metadata: {
-            ...(traceId ? { traceId } : {}),
-            recovery: {
-              kind: "orphan_input",
-              inputId: input.id,
-              delivery: input.delivery,
-              reason,
-            },
-          },
-        });
-        this.updateRun(run.id, { status: "interrupted", error: reason });
-      }
-      return unowned.length;
-    });
+    return this.conversationTransactions.terminalizeUnownedInputs(reason);
   }
 
   /** A previous process cannot retain the resolver behind a pending permission prompt. */
@@ -1792,18 +1704,7 @@ export class SessionStore {
 
   /** Complete an archive that was interrupted by a daemon process exit. */
   finalizeClosingSessions(): number {
-    const closing = Object.values(this.state.sessions).filter(
-      (session) => session.status === "closing",
-    );
-    for (const session of closing) {
-      const hasActiveRun = Object.values(this.state.runs).some(
-        (run) =>
-          run.sessionId === session.id &&
-          (run.status === "pending" || run.status === "running"),
-      );
-      if (!hasActiveRun) this.archiveSession(session.id);
-    }
-    return closing.length;
+    return this.conversationTransactions.finalizeClosingSessions();
   }
 
   createPermissionRequest(
