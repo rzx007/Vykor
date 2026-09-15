@@ -1,13 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rmdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type { AgentBackgroundShellHost, Settings } from "@openharness/core";
 import { fileReadTool } from "@openharness/tools";
 import {
-  buildChildAgentWorktreeSlug,
-  createChildAgentWorktreeManager,
   discoverOpenHarnessExtensions,
   type ObservableJobProducer,
 } from "@openharness/agent-runtime";
@@ -38,6 +34,7 @@ import {
 
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
+import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
 import { DaemonJobService } from "../jobs/daemon-job-service.js";
 import type { ObservabilityEvent } from "../shared/observability.js";
 import { DaemonTerminalService } from "../terminal/daemon-terminal-service.js";
@@ -812,145 +809,16 @@ export class DaemonApplication implements DurableAgentApplication {
        * 3. 与其他服务交互（如会话管理、日志记录）
        * 4. 提供定时任务相关的查询和操作接口
        */
+      const scheduledExecutor = new ScheduledTaskExecutor({
+        sessions: this.sessions,
+        outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
+        settings: options.settings,
+        getSettings: options.getSettings,
+        getSettingsForCwd: options.getSettingsForCwd,
+      });
       this.schedules = new ScheduledTaskService({
         schedules: store.schedules,
-        // 定时任务不是另一套执行器：到期后也是 admitPrompt，走上面同一条 Agent 车道。
-        execute: async (task, scheduledRun) => {
-          const projectCwd = task.projectPaths[0];
-          const outsideProject = task.destination === "standalone" && !projectCwd;
-          let executionCwd = outsideProject
-            ? await allocateScheduledOutsideProjectWorkspace(
-                options.outsideProjectWorkspaceRoot,
-                scheduledRun.id,
-              )
-            : projectCwd;
-          let worktree:
-            | {
-                manager: ReturnType<typeof createChildAgentWorktreeManager>;
-                slug: string;
-                path: string;
-                branch: string;
-                created: boolean;
-              }
-            | undefined;
-          if (task.executionMode === "worktree") {
-            if (!projectCwd)
-              throw new Error(
-                "Worktree scheduled execution requires user attention: project is unavailable",
-              );
-            const manager = createChildAgentWorktreeManager({
-              cwd: projectCwd,
-            });
-            if (!(await manager.isGitRepo())) {
-              throw new Error(
-                "Worktree scheduled execution requires user attention: project is not a Git repository",
-              );
-            }
-            const slug = buildChildAgentWorktreeSlug({
-              team: "scheduled",
-              agent: task.id,
-              nonce: scheduledRun.id.slice(0, 8),
-            });
-            const created = await manager.create(slug).catch((error) => {
-              const message = error instanceof Error ? error.message : String(error);
-              throw new Error(`Worktree scheduled execution requires user attention: ${message}`);
-            });
-            worktree = { manager, ...created };
-            executionCwd = created.path;
-          }
-          let session = task.sessionId ? this.sessions.getSession(task.sessionId) : undefined;
-          try {
-            if (task.destination === "chat") {
-              if (!session)
-                throw new Error(`Scheduled task chat is unavailable: ${task.sessionId}`);
-              if (session.status === "archived") {
-                throw new Error("Scheduled task chat is archived and requires user attention");
-              }
-            } else {
-              if (!executionCwd) throw new Error("Scheduled task project is unavailable");
-              const settingsCwd = projectCwd ?? executionCwd;
-              const settings =
-                (await options.getSettingsForCwd?.(settingsCwd)) ??
-                options.getSettings?.() ??
-                options.settings;
-              const model = task.model ?? settings?.model;
-              if (!model) throw new Error("Scheduled task model is unavailable");
-              const permissionMode = scheduledPermissionMode(task.permissionProfile.mode);
-              const deniedTools = new Set(task.permissionProfile.deniedTools ?? []);
-              if (task.permissionProfile.network === false) {
-                deniedTools.add("WebFetch");
-                deniedTools.add("WebSearch");
-              }
-              session = this.sessions.createSession({
-                cwd: executionCwd,
-                title: `${task.name} · scheduled run`,
-                model,
-                metadata: {
-                  ...(outsideProject ? { desktop: { workspaceMode: "outside_project" } } : {}),
-                  runtime: {
-                    model,
-                    permissionMode,
-                    ...(isScheduledEffort(task.effort) ? { effort: task.effort } : {}),
-                    ...(task.permissionProfile.allowedTools?.length
-                      ? { allowedTools: task.permissionProfile.allowedTools }
-                      : {}),
-                    ...(deniedTools.size > 0 ? { disallowedTools: [...deniedTools] } : {}),
-                  },
-                  scheduledTask: {
-                    taskId: task.id,
-                    scheduledRunId: scheduledRun.id,
-                    destination: task.destination,
-                    executionMode: task.executionMode,
-                    ...(worktree
-                      ? {
-                          worktree: {
-                            path: worktree.path,
-                            branch: worktree.branch,
-                          },
-                        }
-                      : {}),
-                  },
-                },
-              });
-            }
-            const admission = await this.sessions.admitPrompt(session!.id, {
-              id: `scheduled-input:${scheduledRun.id}`,
-              items: [{ type: "text", text: scheduledPrompt(task) }],
-              delivery: "queue",
-              metadata: {
-                source: "scheduled_task",
-                scheduledTaskId: task.id,
-                scheduledRunId: scheduledRun.id,
-                scheduledFor: scheduledRun.scheduledFor,
-              },
-              runMetadata: {
-                source: "scheduled_task",
-                scheduledTaskId: task.id,
-                scheduledRunId: scheduledRun.id,
-              },
-            });
-            if (!admission.run) throw new Error("Scheduled task Agent runtime is unavailable");
-            const result = await this.sessions.awaitRun(session!.id, admission.run.id);
-            if (result.status !== "completed") {
-              throw new Error(result.error ?? `Scheduled Agent run ${result.status}`);
-            }
-            return {
-              sessionId: session!.id,
-              runId: admission.run.id,
-              summary: result.output.slice(0, 20_000),
-            };
-          } finally {
-            if (outsideProject && !session && executionCwd) {
-              await rmdir(executionCwd).catch(() => {});
-            }
-            if (worktree?.created) {
-              const hasChanges = await worktree.manager.hasChanges(worktree.slug).catch(() => true);
-              if (!hasChanges) {
-                await worktree.manager.remove(worktree.slug).catch(() => {});
-              }
-            }
-          }
-        },
+        execute: (task, run) => scheduledExecutor.execute(task, run),
       });
       /**
        * 后台进程服务：
@@ -1134,22 +1002,6 @@ async function readAttachmentBytes(
   return output;
 }
 
-async function allocateScheduledOutsideProjectWorkspace(
-  configuredRoot: string | undefined,
-  runId: string,
-): Promise<string> {
-  const root = configuredRoot ?? join(homedir(), "Documents", "OpenHarness");
-  const now = new Date();
-  const day = [
-    String(now.getFullYear()).padStart(4, "0"),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-  const workspace = join(root, day, `scheduled-${runId}`);
-  await mkdir(workspace, { recursive: true });
-  return workspace;
-}
-
 function isSessionInTree(
   store: { getSession(sessionId: string): SessionRecord | undefined },
   rootSessionId: string,
@@ -1180,29 +1032,3 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function scheduledPermissionMode(
-  mode: "read_only" | "workspace_write" | "full_access",
-): "plan" | "default" | "full_auto" {
-  if (mode === "read_only") return "plan";
-  if (mode === "full_access") return "full_auto";
-  return "default";
-}
-
-function isScheduledEffort(value: string | undefined): value is "low" | "medium" | "high" {
-  return value === "low" || value === "medium" || value === "high";
-}
-
-function scheduledPrompt(task: {
-  prompt: string;
-  skillNames: string[];
-  pluginNames: string[];
-}): string {
-  const context: string[] = [];
-  if (task.skillNames.length > 0) {
-    context.push(`Use these task skills when applicable: ${task.skillNames.join(", ")}.`);
-  }
-  if (task.pluginNames.length > 0) {
-    context.push(`Use these connected plugins when applicable: ${task.pluginNames.join(", ")}.`);
-  }
-  return context.length > 0 ? `${task.prompt}\n\n${context.join("\n")}` : task.prompt;
-}
