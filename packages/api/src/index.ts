@@ -6,6 +6,13 @@ export {
 } from "./providers/codex";
 export { OpenAICompatibleClient } from "./providers/openai";
 export {
+  OPENCODE_GO_SESSION_HEADER,
+  OPENCODE_GO_USER_AGENT,
+  OPENCODE_GO_VALIDATION_SESSION_ID,
+  buildOpenCodeGoHeaders,
+  isOpenCodeGoTarget,
+} from "./providers/opencode-go";
+export {
   PROVIDERS,
   detectProvider,
   detectProviderFromEnv,
@@ -41,3 +48,10 @@ export {
   RateLimitFailure,
   RequestFailure,
 } from "./errors";
+export {
+  OPENHARNESS_USER_AGENT,
+  RequestHeaderTemplateError,
+  expandRequestHeaderTemplates,
+  normalizeRequestHeaderTemplates,
+} from "./providers/request-header-templates";
+export type { RequestHeaderTemplateContext } from "./providers/request-header-templates";
