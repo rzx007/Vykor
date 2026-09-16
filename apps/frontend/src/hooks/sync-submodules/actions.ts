@@ -2,6 +2,7 @@ import {
   createPromptRequestId,
   patchSessionRuntimeMetadata,
   type CommandCatalogEntry,
+  type JobResource,
   type OpenHarnessClient,
   type OpenHarnessClientState,
   type SessionRecord,
@@ -425,7 +426,7 @@ export async function executeTuiAction(
             ctx.jobControlAbortRef.current?.abort();
             const controller = new AbortController();
             ctx.jobControlAbortRef.current = controller;
-            let response: Awaited<ReturnType<OpenHarnessClient["cancelJob"]>>;
+            let response: Awaited<ReturnType<JobResource["cancel"]>>;
             try {
               response = await client.jobs.cancel(
                 action.job_id,

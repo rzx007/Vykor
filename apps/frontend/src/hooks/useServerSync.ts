@@ -232,7 +232,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     });
 
     try {
-      const response = await client.listJobs({
+      const response = await client.jobs.list({
         sessionId,
         includeFinished: true,
         limit: 100,
@@ -299,7 +299,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     setJobDetailState(loading);
 
     try {
-      const response = await client.readJob(jobId, {
+      const response = await client.jobs.read(jobId, {
         sessionId,
         signal: controller.signal,
       });
@@ -338,7 +338,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   const loadModels = useCallback(async (): Promise<ModelProviderInfo[]> => {
     const client = clientRef.current;
     if (!client) return [];
-    return await client.listModels();
+    return await client.providers.listModels();
   }, []);
 
   const cacheFirstRead = useCallback(
@@ -469,12 +469,12 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
 
     void (async () => {
       try {
-        await client.health();
+        await client.protocol.health();
         const cwd = daemon.cwd ?? process.cwd();
         const [settings, sessions, commands] = await Promise.all([
-          client.getSettings().catch(() => ({}) as Record<string, unknown>),
-          client.listSessions({ cwd, limit: 20 }),
-          client.listCommands({ cwd }).catch(() => [] as CommandCatalogEntry[]),
+          client.system.getSettings().catch(() => ({}) as Record<string, unknown>),
+          client.sessions.list({ cwd, limit: 20 }),
+          client.system.listCommands({ cwd }).catch(() => [] as CommandCatalogEntry[]),
         ]);
         const model = daemon.model ?? stringSetting(settings.model) ?? "default";
         const provider = stringSetting(settings.provider);
@@ -501,7 +501,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         const session = sessions[0];
         if (session && shouldAutoActivateSession(session, model, daemon?.pluginsEnabled)) {
           activateSession(session);
-          void client.getSession(session.id).catch(() => {});
+          void client.sessions.get(session.id).catch(() => {});
         }
         setReady(true);
       } catch (error) {
@@ -571,7 +571,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     mcpAbortRef.current = controller;
     const isCurrent = () => activeSessionIdRef.current === sessionId && auxiliaryGenerationRef.current === generation;
 
-    void client.getSessionMcp(sessionId, { signal: controller.signal })
+    void client.system.getSessionMcp(sessionId, { signal: controller.signal })
       .then((servers) => {
         if (!isCurrent()) return;
         setMcpServers(Array.isArray(servers) ? servers.map(mcpServerSnapshot) : []);
@@ -669,7 +669,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     if (!client) return;
     setLocalBusy(true);
     void (async () => {
-      const session = activeSessionId ? (clientState.sessions[activeSessionId] ?? (await client.getSession(activeSessionId))) : await createAndSwitchSession();
+      const session = activeSessionId ? (clientState.sessions[activeSessionId] ?? (await client.sessions.get(activeSessionId))) : await createAndSwitchSession();
       if (!session) {
         setLocalBusy(false);
         return;
