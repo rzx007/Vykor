@@ -248,4 +248,4 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-阶段 8：Flat Facade Removal（彻底移除平铺兼容门面）。在生产调用保持为 0、且平铺方法的弃用公告伴随至少一个正式版本发布（`deprecatedCarrierRelease`）并跨越至少一个完整保留发行版周期（`retentionCarrierRelease`）后，正式物理移除 `OpenHarnessClient` 顶层 118 个兼容转发方法。
+阶段 8 已开始，但物理删除尚未解锁。已增加可执行的 `check:client-removal-gate`：它逐项检查 118 个兼容方法的首次弃用发行与后续保留发行证据，并验证载体、版本、日期和证据一致性。当前两项发行证据仍全部为 `pending`，所以门禁按设计返回非零；在真实发布完成前继续保留 `OpenHarnessClient` 顶层 118 个兼容转发方法。详细执行顺序见 `docs/superpowers/plans/2026-09-16-client-flat-facade-removal-stage-8.md`。

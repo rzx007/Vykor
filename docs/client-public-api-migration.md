@@ -179,3 +179,5 @@ for await (const event of client.events.stream({ sessionId, signal: controller.s
 3. 目前两项证据状态均为 `pending`。在任一证据就绪前，严禁删除任何兼容 facade 方法。
 
 证据关联规则：`commit` 必须是该 carrier 版本实际构建所使用的 OpenHarness-ts 提交；`version` 必须与同一次 CLI 发布标签或 release note 对应。不得用分支头、未发布构建或 Desktop 的另一版本替代。只有发行流程明确改为由 Desktop 承载 Client 时，才能一次性修改契约中的默认 carrier，不能逐个方法混用 carrier。
+
+执行 `pnpm check:client-removal-gate` 可检查删除资格。该命令要求 118 个兼容方法使用同一组载体发行证据，且保留发行的版本号和日期都晚于首次弃用发行；未满足时以非零状态退出。历史 tag 不能倒填：只有包含本次 Stage 7 弃用声明的实际发布，才可作为首次证据。
