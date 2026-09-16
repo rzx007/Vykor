@@ -96,7 +96,7 @@ export async function executeTuiAction(
       if (!model) return;
 
       if (sessionId) {
-        const session = await client.updateSession(sessionId, {
+        const session = await client.sessions.update(sessionId, {
           metadata: patchSessionRuntimeMetadata(
             {},
             {
@@ -109,7 +109,7 @@ export async function executeTuiAction(
       } else {
         const settingsPatch: Record<string, unknown> = { model };
         if (provider) settingsPatch.provider = provider;
-        await client.patchSettings(settingsPatch);
+        await client.system.patchSettings(settingsPatch);
         ctx.defaultRuntimeRef.current = {
           ...ctx.defaultRuntimeRef.current,
           model,
@@ -147,7 +147,7 @@ export async function executeTuiAction(
           ctx.activateSession(knownSession);
           return;
         }
-        const session = await client.getSession(target);
+        const session = await client.sessions.get(target);
         ctx.activateSession(session);
         return;
       }
@@ -181,7 +181,7 @@ export async function executeTuiAction(
           return;
         }
         ctx.setLocalBusy(true);
-        const response = await client.resumeInterruptedRun(sessionId, runId, { id: createPromptRequestId() });
+        const response = await client.sessions.resumeInterruptedRun(sessionId, runId, { id: createPromptRequestId() });
         ctx.setLocalBusy(false);
         ctx.setSubmittedRun(response.run ? { sessionId, runId: response.run.id } : null);
         ctx.setSelectRequest(null);
@@ -263,7 +263,7 @@ export async function executeTuiAction(
       if (!client) return;
       const target = action.session_id;
       if (!target) return;
-      const archived = await client.archiveSession(target);
+      const archived = await client.sessions.archive(target);
       const archivedAt = archived.archivedAt ?? Date.now();
       delete ctx.listedSessionsRef.current[target];
       ctx.setClientState((current) => archiveClientSession(current, target, archivedAt));
@@ -288,7 +288,7 @@ export async function executeTuiAction(
         if (remaining[0]) {
           ctx.activateSession(remaining[0]);
         } else {
-          const sessions = await client.listSessions({
+          const sessions = await client.sessions.list({
             cwd: ctx.daemon?.cwd ?? undefined,
             includeArchived: false,
             limit: 20,
@@ -304,7 +304,7 @@ export async function executeTuiAction(
 
     case "interrupt": {
       if (!client) return;
-      if (sessionId) await client.interruptSession(sessionId);
+      if (sessionId) await client.sessions.interrupt(sessionId);
       ctx.setLocalBusy(false);
       ctx.setSubmittedRun(null);
       return;
@@ -314,7 +314,7 @@ export async function executeTuiAction(
       if (!client) return;
       const requestId = action.request_id;
       const allowed = action.allowed;
-      await client.replyPermission(requestId, {
+      await client.permissions.reply(requestId, {
         status: allowed ? "approved" : "denied",
         decision: action.scope === "session" ? "session" : "once",
         clientId: "tui",
@@ -336,7 +336,7 @@ export async function executeTuiAction(
         submitPrefix: "/sessions open ",
         options: cachedOptions,
       });
-      const sessions = await client.listSessions({
+      const sessions = await client.sessions.list({
         cwd: ctx.daemon?.cwd ?? undefined,
         includeArchived: false,
         limit: 20,
@@ -359,7 +359,7 @@ export async function executeTuiAction(
       const mode = action.permission_mode;
       ctx.setStatus((current) => ({ ...current, permission_mode: mode }));
       if (sessionId) {
-        await client.updateSession(sessionId, {
+        await client.sessions.update(sessionId, {
           metadata: patchSessionRuntimeMetadata({}, { permissionMode: mode }),
         });
       }
@@ -427,7 +427,7 @@ export async function executeTuiAction(
             ctx.jobControlAbortRef.current = controller;
             let response: Awaited<ReturnType<OpenHarnessClient["cancelJob"]>>;
             try {
-              response = await client.cancelJob(
+              response = await client.jobs.cancel(
                 action.job_id,
                 {
                   sessionId: currentSessionId,
@@ -474,7 +474,7 @@ export async function executeTuiAction(
             const controller = new AbortController();
             ctx.jobControlAbortRef.current = controller;
             try {
-              await client.sendJob(
+              await client.jobs.send(
                 action.job_id,
                 {
                   sessionId: currentSessionId,

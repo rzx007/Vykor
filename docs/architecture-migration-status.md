@@ -1,6 +1,6 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–5 已完成，阶段 6 未开始。
+> 状态：当前。阶段 0–6 已完成，阶段 7 未开始。
 
 ## 当前阶段
 
@@ -12,7 +12,8 @@
 阶段 4D 已完成：`SessionRunCoordinator` 成为 lane、Promise 与 live 状态索引的唯一所有者；`SessionRunEngine` 不再保存第二份 run Promise map；`SessionRunExecutor` 通过命名 data capability 执行单个已准入 Run。
 阶段 4E 已完成：`StartupRecoveryService` 按固定顺序执行 durable recovery，失败继续阻止 ready；Maintenance 与 PostRun 使用命名 data 边界；既有 Transcript/Execution Projection 保持唯一映射所有者。
 阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。
-阶段 5 已完成：Transport 内核、ProtocolClient、14 个专用业务/执行 Resource 彻底抽取完成。`OpenHarnessClient` 收敛为纯净 Resource 组合根与兼容转发门面，移除全部 endpoint 字符串与业务 decoder；内部 consumer 收窄为命名 capability，原有重点调用指标 `httpClientFlatCalls` 由 11 降至 0；架构规则补充 Client Resource 与 Transport 隔离护栏。另新增覆盖 commands、state、CLI、Desktop、Frontend 全部直接 `client.method()` 调用的 `clientLegacyFlatCalls`，初始真实基线为 104，用于后续兼容门面下线治理；这不是放宽旧指标。阶段 6 未开始。
+阶段 5 已完成：Transport 内核、ProtocolClient、14 个专用业务/执行 Resource 彻底抽取完成。`OpenHarnessClient` 收敛为纯净 Resource 组合根与兼容转发门面，移除全部 endpoint 字符串与业务 decoder；内部 consumer 收窄为命名 capability，原有重点调用指标 `httpClientFlatCalls` 由 11 降至 0；架构规则补充 Client Resource 与 Transport 隔离护栏。
+阶段 6 已完成：Desktop 与 Frontend 状态边界重组完成。建立平台状态所有权（Matrix + 纯 Selector）；抽取跨平台 SSE 连接与断线重连控制器 `SessionSyncController`；解构 Frontend `useServerSync`（1333 行降至 770 行）；解构 Desktop Main `SessionService`（1152 行降至 439 行）；统一 Desktop Renderer Store 持久对账入口（`applySessionUpdate`）；架构护栏收窄 client 扁平旧调用至 79（下降 25 次）。阶段 7 未开始。
 
 阶段 4 最终复审补充：Coordinator 等待的是包含 `settleGoalRun` 的完整 completion Promise，shutdown 不会在 Goal settlement 尚未结束时关闭 Store；Session Run 三件套的两阶段闭包装配进入纯 `assembleSessionRunServices` factory，Executor 的 Skill/Attachment/Capability/steer 依赖进入 `assembleSessionRunExecutor`；settings、model limits、Skill catalog/list 和 plugin inventory 统一由 `createSessionRuntimeDiscovery` 提供，避免 Daemon 内重复发现扩展；Maintenance/PostRun 使用精确方法 capability，并由架构测试禁止重新持有完整 `SessionStore`。`DaemonApplication` 最终为 908 行。最终统一验证为 Server 80 个文件、717 个测试，Services 最近一次回归为 45 个文件、430 个测试，全仓 TypeScript 61/61，架构测试 15/15。
 
@@ -21,9 +22,12 @@
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 0`, `clientLegacyFlatCalls: 105`。
+- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 0`, `clientLegacyFlatCalls: 79`。
 - 当前 `SessionStore` 行数：2152 行。
-- 当前 `OpenHarnessClient`（`http-client.ts`）行数：1112 行（原 1430 行，净删减 318 行业务实现）。
+- 当前 `OpenHarnessClient`（`http-client.ts`）行数：1113 行。
+- 当前 `useServerSync.ts` 行数：770 行（原 1333 行，净删减 563 行）。
+- 当前 Desktop `SessionService.ts` 行数：439 行（原 1152 行，净删减 713 行）。
+- 当前 Desktop `session-actions.ts` 行数：926 行。
 
 ## 阶段 3 迁移记录
 
@@ -161,6 +165,41 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
   - `node scripts/check-docs.mjs`
   - `git diff --check`
 
+## 阶段 6 迁移记录：Desktop 与 Frontend 状态边界重组
+
+- 起始 commit：`b616e1df`
+- 阶段子模块与提交记录：
+  - 阶段 6A：`105d3183` refactor(client): establish platform state ownership
+    - 在 `@openharness/client` 新增纯派生选择器 `selectSessionInputs`、`selectSessionOrderedMessages`、`selectSessionParts`、`selectSessionRuns`、`selectSessionTasks`、`selectSessionPermissions`、`selectFirstPendingPermission`。
+    - 确立统一跨平台状态所有权矩阵（Matrix），补充 `scripts/architecture-boundaries.mjs` 跨平台边界规则。
+  - 阶段 6B：`aec2268e` refactor(client): extract platform sync controller
+    - 在 `@openharness/client` 抽取 `SessionSyncController`，统一快照挂载、增量游标同步、gap 检测与指数退避重连。
+  - 阶段 6C：`24793c09` refactor(frontend): split server sync hook
+    - 解构 Frontend `useServerSync.ts`（1333 行降至 770 行），拆分为 `actions.ts`、`connection.ts`、`mcp.ts`、`permissions.ts`、`view-model.ts`，保留全部 hook 接口兼容。
+  - 阶段 6D：`5a0180a7` refactor(desktop): split main session service 与 `11ee38c4` fix(desktop): preserve clientPromise accessor for test compatibility
+    - 解构 Desktop Main `session-service.ts`（1152 行降至 439 行），拆分为 `daemon-connection-service.ts`、`session-subscription-service.ts`、`session-operations.ts`，保留 `DesktopSessionService` 门面及公开属性兼容。
+  - 阶段 6E：`9f95ca54` refactor(desktop): unify renderer durable reconciliation
+    - 统一 Desktop Renderer Store 持久对账入口为 `applySessionUpdate`，明确 Feature Action 只操作本地 operation/draft 状态。
+  - 阶段 6F：兼容集成、调用收口与统一验收
+    - 将 `session-operations.ts` 与 `actions.ts` 中的调用平移至 Client Resource 原生方法（如 `client.sessions.*`、`client.projects.*`、`client.system.*`、`client.jobs.*`）。
+    - 治理旧扁平调用：`clientLegacyFlatCalls` 真实下降至 79（下降 25 次），更新基线。
+- 调用指标与基线变化：
+  - `clientLegacyFlatCalls`：从 104 降至 79（-25）。
+  - `useServerSync.ts` 行数：1333 行 -> 770 行（-563 行）。
+  - Desktop `SessionService.ts` 行数：1152 行 -> 439 行（-713 行）。
+  - Desktop `session-actions.ts` 行数：926 行（保持单一持久对账入口）。
+- 验证命令：
+  - `pnpm --filter @openharness/client test`
+  - `pnpm --filter @openharness/frontend test`
+  - `pnpm --filter @openharness/desktop test`
+  - `pnpm --filter @rzx/ohs test`
+  - `pnpm --filter @openharness/server test -- src/http`
+  - `pnpm check-types`
+  - `node --test scripts/architecture-boundaries.test.mjs`
+  - `pnpm check:architecture`
+  - `node scripts/check-docs.mjs`
+  - `git diff --check`
+
 ## 下一步
 
-阶段 6：按总体路线推进下一阶段（如产品适配、高级外部协议与持久集成）。阶段 5 的客户端平铺兼容转发暂不删除；删除前必须先迁完所有外部调用方并单独审核。
+阶段 7：按总体路线推进下一阶段（如产品适配、高级外部协议与持久集成）。阶段 5 的客户端平铺兼容转发暂不删除；删除前必须先迁完所有外部调用方并单独审核。

@@ -66,7 +66,7 @@ export class SessionOperations {
     const info = await stat(path)
     if (!info.isDirectory()) throw new Error("选择的项目路径不是目录。")
 
-    const project = await toDesktopProject(await client.inspectProject(path))
+    const project = await toDesktopProject(await client.projects.inspect(path))
     let git = false
     let branch: string | null = null
     let branches: string[] = []
@@ -74,7 +74,7 @@ export class SessionOperations {
       await execGit(path, ["rev-parse", "--show-toplevel"])
       git = true
       try {
-        branch = parseCurrentBranch(await client.getGitBranch({ cwd: path }))
+        branch = parseCurrentBranch(await client.development.getGitBranch({ cwd: path }))
       } catch {
         branch = null
       }
@@ -94,7 +94,7 @@ export class SessionOperations {
 
   async listCommands(client: OpenHarnessClient, cwdInput: string): Promise<DesktopCommandCatalogEntry[]> {
     const cwd = resolveRequiredPath(cwdInput)
-    const commands = await client.listCommands({ cwd })
+    const commands = await client.system.listCommands({ cwd })
     return commands.flatMap((command): DesktopCommandCatalogEntry[] => {
       if (command.kind === "template") {
         if (!command.path) return []
@@ -107,27 +107,27 @@ export class SessionOperations {
   }
 
   async listContextPlugins(client: OpenHarnessClient, cwdInput: string) {
-    return client.listContextPlugins({ cwd: resolveRequiredPath(cwdInput) })
+    return client.system.listContextPlugins({ cwd: resolveRequiredPath(cwdInput) })
   }
 
   async compactSession(client: OpenHarnessClient, input: CompactDesktopSessionInput): Promise<DesktopCompactSessionResult> {
     const sessionId = requireString(input.sessionId, "会话 ID")
-    const result = await client.compactSession(sessionId)
+    const result = await client.sessions.compact(sessionId)
     return { messageCount: result.messageCount }
   }
 
   async getGoal(client: OpenHarnessClient, input: GetDesktopSessionGoalInput): Promise<SessionGoal | null> {
-    return await client.getSessionGoal(requireString(input.sessionId, "会话 ID"))
+    return await client.sessions.getGoal(requireString(input.sessionId, "会话 ID"))
   }
 
   async createGoal(client: OpenHarnessClient, input: CreateDesktopSessionGoalInput): Promise<SessionGoal> {
     const { sessionId, ...body } = input
-    return await client.createSessionGoal(requireString(sessionId, "会话 ID"), parseCreateSessionGoalInput(body))
+    return await client.sessions.createGoal(requireString(sessionId, "会话 ID"), parseCreateSessionGoalInput(body))
   }
 
   async updateGoal(client: OpenHarnessClient, input: UpdateDesktopSessionGoalInput): Promise<SessionGoal> {
     const { sessionId, goalId, ...body } = input
-    return await client.updateSessionGoal(
+    return await client.sessions.updateGoal(
       requireString(sessionId, "会话 ID"),
       requireString(goalId, "目标 ID"),
       parseUpdateSessionGoalInput(body)
@@ -136,7 +136,7 @@ export class SessionOperations {
 
   async goalAction(client: OpenHarnessClient, input: DesktopSessionGoalActionInput): Promise<SessionGoal> {
     const { sessionId, goalId, ...body } = input
-    return await client.applySessionGoalAction(
+    return await client.sessions.applyGoalAction(
       requireString(sessionId, "会话 ID"),
       requireString(goalId, "目标 ID"),
       parseGoalActionInput(body)
@@ -191,19 +191,19 @@ export class SessionOperations {
 
   async renameProject(client: OpenHarnessClient, input: RenameDesktopProjectInput): Promise<DesktopProject> {
     const name = requireString(input.name, "项目名称")
-    return await toDesktopProject(await client.renameProject(input.projectId, name))
+    return await toDesktopProject(await client.projects.rename(input.projectId, name))
   }
 
   async setProjectPinned(client: OpenHarnessClient, input: PinDesktopProjectInput): Promise<DesktopProject> {
-    return await toDesktopProject(await client.setProjectPinned(input.projectId, input.pinned))
+    return await toDesktopProject(await client.projects.setPinned(input.projectId, input.pinned))
   }
 
   async setProjectDefaultShell(client: OpenHarnessClient, input: SetDefaultDesktopProjectShellInput): Promise<DesktopProject> {
-    return await toDesktopProject(await client.setProjectDefaultShell(input.projectId, input.shell))
+    return await toDesktopProject(await client.projects.setDefaultShell(input.projectId, input.shell))
   }
 
   async removeProject(client: OpenHarnessClient, projectId: string): Promise<void> {
-    await client.archiveProject(requireString(projectId, "Project ID"))
+    await client.projects.archive(requireString(projectId, "Project ID"))
   }
 
   async resolveProjectDirectory(client: OpenHarnessClient, projectIdInput: string): Promise<string> {
@@ -248,7 +248,7 @@ export class SessionOperations {
     if (!hasPromptItems(items) && attachments.length === 0) {
       throw new Error("消息内容、附件和技能不能同时为空。")
     }
-    await client.editLatestPrompt(sessionId, {
+    await client.sessions.editLatestPrompt(sessionId, {
       id,
       items,
       sourceMessageId,
@@ -268,7 +268,7 @@ export class SessionOperations {
     const inputId = requireString(input.inputId, "输入 ID")
     const queuedRunId = requireString(input.queuedRunId, "排队运行 ID")
     const expectedActiveRunId = requireString(input.expectedActiveRunId, "当前运行 ID")
-    await client.promoteQueuedPrompt(sessionId, inputId, {
+    await client.sessions.promoteQueuedPrompt(sessionId, inputId, {
       queuedRunId,
       expectedActiveRunId,
     })
@@ -278,13 +278,13 @@ export class SessionOperations {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const inputId = requireString(input.inputId, "输入 ID")
     const queuedRunId = requireString(input.queuedRunId, "排队运行 ID")
-    await client.cancelQueuedPrompt(sessionId, inputId, { queuedRunId })
+    await client.sessions.cancelQueuedPrompt(sessionId, inputId, { queuedRunId })
   }
 
   async forkSession(client: OpenHarnessClient, input: ForkDesktopSessionInput): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     return toDesktopSessionRecord(
-      await client.forkSession(sessionId, {
+      await client.sessions.fork(sessionId, {
         ...(input.beforeMessageId ? { beforeMessageId: input.beforeMessageId } : {}),
         ...(input.afterMessageId ? { afterMessageId: input.afterMessageId } : {}),
       })
@@ -297,7 +297,7 @@ export class SessionOperations {
       input.expectedRunId === undefined
         ? undefined
         : requireString(input.expectedRunId, "预期运行 ID")
-    await client.interruptSession(sessionId, {
+    await client.sessions.interrupt(sessionId, {
       ...(expectedRunId ? { expectedRunId } : {}),
     })
   }
@@ -316,7 +316,7 @@ export class SessionOperations {
     const model = requireString(input.model, "模型")
     const provider = await resolveProviderForModel(client, model, input.provider)
     return toDesktopSessionRecord(
-      await client.updateSession(sessionId, {
+      await client.sessions.update(sessionId, {
         metadata: {
           runtime: {
             model,
@@ -331,7 +331,7 @@ export class SessionOperations {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const permissionMode = requirePermissionMode(input.permissionMode)
     return toDesktopSessionRecord(
-      await client.updateSession(sessionId, {
+      await client.sessions.update(sessionId, {
         metadata: { runtime: { permissionMode } },
       })
     )
@@ -339,7 +339,7 @@ export class SessionOperations {
 
   async getContextUsage(client: OpenHarnessClient, input: GetDesktopContextUsageInput): Promise<DesktopContextUsageSnapshot> {
     const cwd = requireString(input.cwd, "工作目录")
-    const result = await client.getContextUsage({
+    const result = await client.system.getContextUsage({
       cwd,
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
       ...(input.refresh !== undefined ? { refresh: input.refresh } : {}),
@@ -357,12 +357,12 @@ export class SessionOperations {
   async renameSession(client: OpenHarnessClient, input: RenameDesktopSessionInput): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const title = requireString(input.title, "会话名称")
-    return toDesktopSessionRecord(await client.updateSession(sessionId, { title }))
+    return toDesktopSessionRecord(await client.sessions.update(sessionId, { title }))
   }
 
   async setSessionPinned(client: OpenHarnessClient, input: PinDesktopSessionInput): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
-    const session = (await client.listSessions({ includeArchived: true, limit: 1_000 })).find(
+    const session = (await client.sessions.list({ includeArchived: true, limit: 1_000 })).find(
       (item) => item.id === sessionId
     )
     if (!session) throw new Error(`会话 ${sessionId} 不存在。`)
@@ -370,7 +370,7 @@ export class SessionOperations {
     if (input.pinned) desktop.pinnedAt = Date.now()
     else delete desktop.pinnedAt
     return toDesktopSessionRecord(
-      await client.updateSession(sessionId, {
+      await client.sessions.update(sessionId, {
         metadata: { desktop, runtime: { model: session.model } },
       })
     )
@@ -427,7 +427,7 @@ export async function resolveProviderForModel(
   requestedProvider: unknown
 ): Promise<string | undefined> {
   const provider = optionalProvider(requestedProvider)
-  const models = (await client.listModels()).flatMap((item) => item.models)
+  const models = (await client.providers.listModels()).flatMap((item) => item.models)
   if (provider) {
     if (!models.some((item) => item.id === model && item.providerName === provider)) {
       throw new Error(`模型 ${model} 不属于 provider ${provider}。`)
@@ -438,7 +438,7 @@ export async function resolveProviderForModel(
   const providers = uniqueModelProviders(models, model)
   if (providers.length <= 1) return providers[0]
 
-  const settings = await client.getSettings()
+  const settings = await client.system.getSettings()
   const configuredProvider = optionalProvider(settings["provider"])
   if (configuredProvider && providers.includes(configuredProvider)) return configuredProvider
   throw new Error(`模型 ${model} 在多个 provider 中同名，请明确指定 provider。`)
