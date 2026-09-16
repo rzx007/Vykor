@@ -31,7 +31,7 @@ Stage 7 因此只完成“迁移和告知”：仓库内部停止依赖旧入口
 - 不删除 `OpenHarnessClient` 平铺方法。
 - 不删除根入口现有导出。
 - 不改变包名、HTTP/SSE/IPC schema、请求路径或认证方式。
-- 不改变 `OpenHarnessApiError`、`IncompatibleProtocolError`、`ProtocolDataError` 等错误语义。
+- 不改变 `OpenHarnessApiError`、`IncompatibleProtocolError` 及 Resource decoder 的现有错误语义。
 - 不增加产品功能、视觉改版或新的状态库。
 - 不拆分 npm 包，也不引入 API Extractor、Changesets 等新依赖。
 - 不为尚不存在的第三方使用场景增加抽象。
@@ -56,14 +56,19 @@ Stage 7 因此只完成“迁移和告知”：仓库内部停止依赖旧入口
 
 - `HttpTransport`、`SseTransport`、`ProtocolClient`；
 - 各个 Resource class；
+- `createPromptRequestId`、`normalizeDaemonBaseUrl`、`streamServerSentEvents`；
 - `applyEvent`、`applySessionSnapshot`、`SessionSyncController`、`syncEvents` 和 selectors；
 - commands parser/dispatcher。
+
+`OpenHarnessClient.transport`、`sse`、`baseUrl`、`token`、`fetchImpl` 暂列为“保留但待 Stage 8 评估”的高级表面：Stage 7 不删除、不新增使用，也不把它们写成普通业务调用的推荐入口。`health` 和 `capabilities` 是兼容方法，长期目标分别是 `client.protocol.health()` 和 `client.protocol.capabilities()`。
+
+Stage 7 建立穷尽式契约清单，逐项记录根入口每个 runtime export、每个 type-only export，以及 `OpenHarnessClient` 每个 public property、getter 和 method，并标明分类、替代入口、Stage 7 行为和 Stage 8 决策。大量协议 record type 继续作为长期类型契约，但以该清单为准，不在正文重复数百个名称。`ProtocolDataError` 当前不是根入口导出，Stage 7 不新增对它的根包导出承诺。
 
 Stage 7 不建立新的 subpath export。原因是当前包只发布源码入口，贸然增加 `@openharness/client/state` 等子路径会形成新的长期兼容承诺。Stage 8 删除兼容层后再根据真实外部使用情况决定是否增加子路径。
 
 ### 4.3 兼容入口
 
-`OpenHarnessClient` 上所有与 Resource 一对一转发的平铺方法属于兼容入口，例如：
+`OpenHarnessClient` 上所有与 Resource 或 ProtocolClient 一对一转发的平铺方法属于兼容入口，例如：
 
 ```ts
 client.getSession(id)        // 兼容入口
@@ -136,12 +141,14 @@ interface SessionReadResources {
 ### 6.1 7A：契约清单与自动化护栏
 
 - 从 `OpenHarnessClient` 实际属性和方法生成/维护人工可审查的契约清单；
-- 建立根入口 runtime export 与 type export 快照测试；
-- 将旧调用统计从单一总数扩展为按文件、方法和生产/测试分类；
-- 固定 Stage 7 起始基线 `clientLegacyFlatCalls: 79`；
+- 建立根入口 runtime export 快照和代表性 type consumer fixture；
+- 将旧调用统计从正则表达式升级为基于仓库现有 `typescript` 包的 AST（语法树）扫描，并按文件、方法和生产/测试分类；
+- 建立经过人工核对的兼容方法名清单，扫描 `client/api/this.client`、`(await client())`、可识别别名与解构引用；
+- 用架构测试 fixture 证明直接调用、别名、await factory、成员字段和解构形态都能被识别；
+- 将 `clientLegacyFlatCalls: 79` 只记录为旧正则脚本的历史基线，不把它当作真实迁移分母；7A 输出新的 AST 基线后，后续阶段只使用新指标；
 - 规则允许兼容门面自身和专门的兼容测试，禁止新增生产调用。
 
-快照测试不依赖 TypeScript Compiler API 或新工具。runtime export 使用动态 import 后排序比较；类型契约通过一个只编译、不执行的 consumer fixture 验证关键导入和签名。
+不新增依赖：AST 扫描直接使用仓库已有的 `typescript`。runtime export 使用动态 import 后排序比较；type-only export 由穷尽契约清单人工审查，并用只编译、不执行的代表性 consumer fixture 验证关键导入和签名。fixture 使用独立 `tests/client-public-api/tsconfig.json`，通过 workspace package resolution 指向 `@openharness/client`，并纳入根类型检查与架构测试。
 
 ### 6.2 7B：Client commands 与 state
 
@@ -156,6 +163,7 @@ interface SessionReadResources {
 
 - `print-session` 改用 `sessions`、`events`、`permissions` 等 Resource；
 - channel commands 改用 `system`、`channels`；
+- plugin commands 改用 `plugins`，覆盖当前 `(await client()).listPlugins/installLocalPlugin/...` 等旧统计器漏报调用；
 - daemon lifecycle 可以构造完整 Client，但业务命令只接收窄能力；
 - CLI 输出、退出码、JSON 和错误消息保持不变。
 
@@ -164,18 +172,19 @@ interface SessionReadResources {
 按 feature 迁移，不跨 feature 建立新的通用 facade：
 
 - settings/provider 使用 `system`、`providers`、`auth`；
-- attachment 使用 `attachments` 与 `system.capabilities`；
+- attachment 使用 `attachments` 与 `protocol.capabilities`；
 - plugin/skill 使用 `plugins` 与对应 system/development resource；
 - schedule 使用 `schedules`；
 - terminal 使用 `terminals`；
 - session operations 使用 `sessions`、`projects`、`permissions`、`jobs` 等命名 Resource。
 
-`DaemonConnectionService` 仍返回完整 Client，因为它是连接所有者。各 feature service 的参数改成实际 Resource capability，`withDaemonRetry` 保持 Client 刷新职责，不复制业务方法。
+`DaemonConnectionService` 仍返回完整 Client，因为它是连接所有者。`withDaemonRetry` 也继续把完整 Client 交给 callback，以便统一刷新连接；callback 的第一步取得需要的 Resource/Protocol capability，再传给业务函数。各 feature 业务函数不接收完整 Client，不为每个 feature 复制一套 retry helper。
 
 ### 6.5 7E：Frontend
 
 - connection lifecycle 继续创建完整 Client；
-- `useServerSync` 初始化调用迁到 `system`、`sessions`；
+- `useServerSync` 初始化调用迁到 `protocol.health`、`system`、`sessions`；
+- model 与 Job 调用分别迁到 `providers`、`jobs`；
 - action 子模块按 feature 接收 Resource capability；
 - Jobs、MCP、permission、session actions 不使用平铺方法；
 - `SessionSyncController` 继续接收既有 `SyncEventsClient` 窄接口。
@@ -190,16 +199,42 @@ interface SessionReadResources {
 - 更新架构迁移状态、真实调用指标和验证结果；
 - 生成 Stage 8 删除清单，列出仍需保留的纯兼容测试和可能的外部 breaking surface。
 
+### 6.7 已知生产调用文件矩阵
+
+7A 的 AST 清单是最终事实来源，但实施计划不得遗漏当前已经确认的文件：
+
+| 消费层 | 当前文件 | 目标能力 |
+|---|---|---|
+| Client | `packages/client/src/commands/session-commands.ts` | `protocol`、`system`、`sessions` 等窄能力 |
+| Client | `packages/client/src/state/sync.ts`、`session-sync-controller.ts` | 已有 `sessions.getState`、`events.list/stream` 窄接口，验证而非重写 |
+| CLI | `apps/cli/src/print-session.ts` | `sessions`、`events`、`permissions` |
+| CLI | `apps/cli/src/commands/channels.ts` | `protocol`、`channels` |
+| CLI | `apps/cli/src/commands/plugin.ts` | `plugins`；包括 await factory 和 `api` 别名调用 |
+| Desktop | `features/settings/settings-service.ts` | `protocol`、`system` |
+| Desktop | `features/attachment/attachment-service.ts`、`attachment/ipc.ts` | `attachments`、`protocol` |
+| Desktop | `features/provider/provider-service.ts` | `providers`、`auth`、`system` |
+| Desktop | `features/plugin/plugin-service.ts` | `plugins` |
+| Desktop | `features/skill/skill-service.ts` | `development` |
+| Desktop | `features/schedule/schedule-service.ts` | `schedules` |
+| Desktop | `features/terminal/terminal-service.ts` | `terminals` |
+| Desktop | `features/session/session-service.ts`、`session-operations.ts`、`session-subscription-service.ts` | `protocol`、`system`、`sessions`、`projects`、`permissions`、`events`、`jobs` |
+| Frontend | `apps/frontend/src/hooks/useServerSync.ts` | `protocol`、`system`、`sessions`、`providers`、`jobs` |
+| Frontend | `sync-submodules/actions.ts`、`sessionSlashCommands.ts` | 按 action 使用 `sessions`、`projects`、`permissions`、`plugins`、`development`、`jobs` 等能力 |
+
+连接 owner 仍可构造和保存完整 Client，但表中业务调用必须使用命名属性。7A 如果发现矩阵外生产文件，先补进清单和对应波次，再实施迁移。
+
 ## 7. 弃用与版本策略
 
 Stage 7 不承诺具体发布日期，但固定以下退场条件：
 
-1. 至少一个明确发布周期保留 deprecated 方法；
+1. 至少一个可验证的实际发布周期保留 deprecated 方法；
 2. 仓库内部生产代码旧调用为 0；
 3. README、示例和命令代码均使用 Resource API；
 4. 兼容方法拥有一对一迁移目标；
 5. Stage 8 只能在明确 breaking version 中删除；
 6. 删除前再次搜索仓库、发布文档和已知外部适配器。
+
+Stage 7 完成文档必须记录 `deprecatedSince`、实际版本、发布日期和发行渠道。若 `@openharness/client` 当时没有独立发布物，则以实际承载该 Client 的 CLI 或 Desktop 首个发行版本为准，并记录对应 release note。Stage 8 只有在能提供该版本及至少一个后续发行周期的证据后才能删除；如果项目尚未产生可验证发行，则继续保留 deprecated 方法。
 
 如果项目在 Stage 8 前仍按 `0.x` 发布，也必须在 release notes 明确标注 breaking change，不能以 `0.x` 为由静默删除。
 
@@ -209,7 +244,7 @@ Stage 7 不承诺具体发布日期，但固定以下退场条件：
 
 测试动态导入 `@openharness/client` 根入口，比较排序后的关键 runtime export 名称。快照关注“意外删除或新增承诺”，不记录函数源码、属性顺序或构建器内部字段。
 
-### 8.2 Type consumer fixture
+### 8.2 代表性 Type consumer fixture
 
 建立独立 TypeScript fixture，验证：
 
@@ -219,9 +254,11 @@ Stage 7 不承诺具体发布日期，但固定以下退场条件：
 - 高级 state/sync 能力仍可导入；
 - deprecated 平铺方法在 Stage 7 仍能编译。
 
+该 fixture 证明列出的代表性契约可消费，但不宣称能枚举全部 type-only exports。完整 type-only export 的新增、删除和分类由穷尽契约清单 diff 审查。fixture 的独立 tsconfig 和执行命令必须进入根类型检查，不能只依赖源码包内部的相对路径解析。
+
 ### 8.3 旧调用治理
 
-架构脚本输出：
+基于 TypeScript AST 的架构脚本输出：
 
 - 生产旧调用总数；
 - 测试兼容调用总数；
@@ -248,10 +285,10 @@ Stage 7 不承诺具体发布日期，但固定以下退场条件：
 
 继续遵循用户确认的批量节奏：
 
-1. 7A–7F 先完成生产迁移和文档；
-2. 期间只运行必要类型快检；
-3. 所有调用方迁完后统一运行测试；
-4. 集中修复真实失败；
+1. 7A–7F 连续完成生产迁移和文档，不为每个小步骤反复跑全仓；
+2. 每个波次提交前运行对应包 typecheck 和最小定向测试，避免把错误积累到最后；
+3. 所有调用方迁完后统一运行完整测试；
+4. 集中修复完整测试发现的真实失败；
 5. 最后统一子代理代码审查并修复全部 Critical/Important。
 
 最终验证至少包括：
@@ -299,7 +336,7 @@ Stage 7 不承诺具体发布日期，但固定以下退场条件：
 
 ## 13. 完成条件
 
-- 仓库内部生产代码 `clientLegacyFlatCalls` 为 0；
+- 新 AST 指标中的仓库内部生产旧调用为 0；旧正则指标 79 只保留为历史参考；
 - facade 和专门兼容测试之外没有平铺 Client 调用；
 - 所有平铺方法都有准确 `@deprecated` 替代路径；
 - 长期、高级和兼容 API 分类写入 Client README；
