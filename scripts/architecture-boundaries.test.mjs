@@ -220,3 +220,37 @@ test("client transport cannot import resources", () => {
     ["packages/client/src/transport/http-transport.ts must not depend on Resource"],
   );
 });
+
+test("frontend cannot import electron or desktop", () => {
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "electron"),
+    ["apps/frontend/src/hooks/useServerSync.ts must not depend on Electron"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@openharness/desktop"),
+    ["apps/frontend/src/hooks/useServerSync.ts must not depend on Desktop"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@openharness/client"),
+    [],
+  );
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "../../../desktop/src/main/session-service.js"),
+    ["apps/frontend/src/hooks/useServerSync.ts must not depend on Desktop"],
+  );
+});
+
+test("desktop renderer cannot import desktop main", () => {
+  assert.deepEqual(
+    checkImportBoundary("apps/desktop/src/renderer/src/stores/desktop-session/session-actions.ts", "../../main/session-service.js"),
+    ["apps/desktop/src/renderer/src/stores/desktop-session/session-actions.ts must not depend on Desktop main"],
+  );
+});
+
+test("desktop main cannot import desktop renderer", () => {
+  assert.deepEqual(
+    checkImportBoundary("apps/desktop/src/main/features/session/session-service.ts", "../../renderer/src/stores/desktop-session.js"),
+    ["apps/desktop/src/main/features/session/session-service.ts must not depend on Desktop renderer"],
+  );
+});
+

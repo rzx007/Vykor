@@ -19,8 +19,20 @@ ohs serve / daemon
 |------|------|
 | `client.ts` | `OpenHarnessClient`：包装 server REST + `/events/stream` SSE |
 | `reducer.ts` | `applySessionSnapshot` / `applyEvent`：快照水合后归并实时事件 |
+| `selectors.ts` | `selectSessionMessagesWithParts` / `selectFirstPendingPermission` 等纯函数读视图 |
 | `sync.ts` | `syncEvents`：会话先读取原子 snapshot，再从 snapshot cursor 接 SSE live |
 | `types.ts` | 请求/响应与客户端聚合状态类型 |
+
+### 状态所有权矩阵
+
+| 状态类别 | 包含内容 | 唯一所有者 | 规则 |
+|---|---|---|---|
+| **Durable Remote State** | Session, Input, Message, Part, Run, Task, Permission, Event cursor | `@openharness/client/state` (`reducer`, `snapshot`, `sync`) | 平台层不得自行实现第二套 Message/Run/Task 对账 |
+| **Connection State** | daemon registry, client instance, connected/reconnecting/error, abort/generation fencing, retry timers | 平台 connection controller / service | 纯平台生命周期持有，不混入 durable 对账 |
+| **Operation State** | create/update/archive, prompt admission, upload, job 操作, optimistic tokens | 各平台 feature store / hook | 失败只回退局部 operation，不重置全局 durable 状态 |
+| **Draft State** | composer text, attachments, plugin selection, edit state | 各平台 composer feature | 纯本地瞬态，不跨 session 混淆 |
+| **View State** | selected session/project, panels, scroll, filters | UI store | 纯界面派生展示状态 |
+| **Platform State** | window, tray, updater, filesystem, terminal, IPC | Desktop main / preload | 不得泄漏到共享 Client 或 Web 前端 |
 
 约束：
 

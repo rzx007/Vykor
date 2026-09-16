@@ -119,8 +119,33 @@ export function checkImportBoundary(fromFile, specifier) {
     }
   }
 
+  const isFrontend = /(?:^|\/)apps\/frontend\//.test(normalized);
+  if (isFrontend) {
+    if (specifier === "electron" || specifier.startsWith("electron/")) {
+      return [`${fromFile} must not depend on Electron`];
+    }
+    if (specifier === "@openharness/desktop" || /(?:^|\/|\.\.\/)desktop(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Desktop`];
+    }
+  }
+
+  const isDesktopRenderer = /(?:^|\/)apps\/desktop\/src\/renderer\//.test(normalized);
+  if (isDesktopRenderer) {
+    if (/(?:^|\/)apps\/desktop\/src\/main\//.test(specifier) || /(?:^|\/|\.\.\/)main(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Desktop main`];
+    }
+  }
+
+  const isDesktopMain = /(?:^|\/)apps\/desktop\/src\/main\//.test(normalized);
+  if (isDesktopMain) {
+    if (/(?:^|\/)apps\/desktop\/src\/renderer\//.test(specifier) || /(?:^|\/|\.\.\/)renderer(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Desktop renderer`];
+    }
+  }
+
   return [];
 }
+
 
 export function checkPackageDependency(from, to) {
   return forbiddenPackageEdges.get(from)?.has(to)
@@ -218,6 +243,8 @@ function collectArchitectureErrors() {
     ...sourceFiles(join(root, "packages", "server", "src", "runtime")),
     ...sourceFiles(join(root, "packages", "client", "src", "resources")),
     ...sourceFiles(join(root, "packages", "client", "src", "transport")),
+    ...sourceFiles(join(root, "apps", "frontend", "src")),
+    ...sourceFiles(join(root, "apps", "desktop", "src")),
   ];
 
   for (const path of boundaryFiles) {
