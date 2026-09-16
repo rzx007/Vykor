@@ -36,7 +36,7 @@ export class EventResource {
         headers: this.transport.headers(),
         signal: options.signal,
         decode: decodeSessionEventRecord,
-        reconnect: options.transportReconnect ?? true,
+        reconnect: options.transportReconnect ?? false,
       },
     );
   }

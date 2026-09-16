@@ -130,11 +130,14 @@ export class SseTransport {
   ): AsyncIterable<T> {
     let lastEventId = options.lastEventId;
     let reconnectDelayMs = options.reconnectDelayMs ?? 250;
+    let connected = false;
 
     while (!options.signal?.aborted) {
       const headers = new Headers(options.headers);
       if (lastEventId) headers.set("Last-Event-ID", lastEventId);
-      const response = await this.fetchImpl(url, { headers, signal: options.signal });
+      const requestUrl = connected && lastEventId ? withoutCursor(url) : url;
+      const response = await this.fetchImpl(requestUrl, { headers, signal: options.signal });
+      connected = true;
       if (!response.ok) await throwResponseError(response);
       if (!response.body) {
         throw new Error(options.noBodyMessage ?? "Event stream response has no body");
@@ -198,4 +201,10 @@ function waitForReconnect(ms: number, signal?: AbortSignal): Promise<void> {
 function abortError(signal: AbortSignal): Error {
   if (signal.reason instanceof Error) return signal.reason;
   return new DOMException("Aborted", "AbortError");
+}
+
+function withoutCursor(url: string): string {
+  const parsed = new URL(url);
+  parsed.searchParams.delete("cursor");
+  return parsed.toString();
 }

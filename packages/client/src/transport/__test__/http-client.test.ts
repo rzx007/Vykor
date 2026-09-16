@@ -941,22 +941,27 @@ describe("OpenHarnessClient", () => {
   it("reconnects SSE with the latest frame id and server retry delay", async () => {
     vi.useFakeTimers();
     const headers: Array<string | null> = [];
+    const urls: string[] = [];
     let attempt = 0;
     const client = new OpenHarnessClient({
       baseUrl: "http://daemon.test",
-      fetch: (async (_url, init) => {
+      fetch: (async (url, init) => {
+        urls.push(String(url));
         headers.push(new Headers(init?.headers).get("last-event-id"));
         attempt += 1;
+        // Mirror the server's cursor precedence: query cursor wins over Last-Event-ID.
+        const queryCursor = new URL(String(url)).searchParams.get("cursor");
+        const effectiveCursor = queryCursor ?? headers.at(-1);
         const body = attempt === 1
           ? `id: 7\nretry: 0\ndata: ${JSON.stringify(event(7))}\n\n`
-          : `id: 8\ndata: ${JSON.stringify(event(8))}\n\n`;
+          : `id: ${Number(effectiveCursor) + 1}\ndata: ${JSON.stringify(event(Number(effectiveCursor) + 1))}\n\n`;
         return new Response(body, { status: 200 });
       }) as typeof fetch,
     });
 
     const received: SessionEventRecord[] = [];
     const run = (async () => {
-      for await (const item of client.events.stream({ cursor: 0 })) {
+      for await (const item of client.events.stream({ cursor: 6, transportReconnect: true })) {
         received.push(item);
         if (received.length === 2) break;
       }
@@ -966,7 +971,28 @@ describe("OpenHarnessClient", () => {
 
     expect(received.map((item) => item.seq)).toEqual([7, 8]);
     expect(headers).toEqual([null, "7"]);
+    expect(urls).toEqual([
+      "http://daemon.test/events/stream?cursor=6",
+      "http://daemon.test/events/stream",
+    ]);
     vi.useRealTimers();
+  });
+
+  it("keeps the legacy event facade finite when the server closes the stream", async () => {
+    let calls = 0;
+    const client = new OpenHarnessClient({
+      baseUrl: "http://daemon.test",
+      fetch: (async () => {
+        calls += 1;
+        return new Response(`id: 1\ndata: ${JSON.stringify(event(1))}\n\n`);
+      }) as typeof fetch,
+    });
+
+    const received: SessionEventRecord[] = [];
+    for await (const item of client.streamEvents({ cursor: 0 })) received.push(item);
+
+    expect(received.map((item) => item.seq)).toEqual([1]);
+    expect(calls).toBe(1);
   });
 
   it("merges replayed and live events while suppressing live duplicates", async () => {
