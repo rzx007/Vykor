@@ -102,7 +102,6 @@ for await (const update of syncEvents(client, { sessionId: session.id })) {
 
 - **长期入口：** `protocol` 和各命名 Resource，是业务调用的默认选择。
 - **高级入口：** Resource class 与 state/sync 工具。底层 transport 由 Client 内部持有，不作为实例 API 暴露。
-- **兼容入口：** Client 顶层平铺方法，仅用于过渡，均带有一对一 `@deprecated` 替代路径；双发行证据未满足前不会删除。
 
 ## 相关文档
 

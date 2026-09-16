@@ -52,6 +52,98 @@ test("reports a removed Client method used by production code", () => {
   }
 });
 
+test("reports optional-chain and bracket access to removed Client methods", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  try {
+    mkdirSync(join(cwd, "src"));
+    writeFileSync(
+      join(cwd, "src", "demo.ts"),
+      'client?.getSession("s1");\nclient["getSession"]("s1");\nclient?.["getSession"]("s1");\n',
+    );
+    const errors = scanForbiddenSurfaces({
+      cwd,
+      roots: ["src"],
+      surfaces: {
+        version: 1,
+        clientMethods: ["getSession"],
+        runtimeExports: [],
+        httpRoutes: [],
+        cliCommands: [],
+        cliOptions: [],
+        environmentVariables: [],
+        configFields: [],
+        enumValues: [],
+        schemaNames: [],
+      },
+    });
+    assert.equal(errors.length, 3);
+    assert.deepEqual(errors.map((error) => error.line), [1, 2, 3]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("reports aliases and destructuring of removed Client methods", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  try {
+    mkdirSync(join(cwd, "src"));
+    writeFileSync(
+      join(cwd, "src", "demo.ts"),
+      'const daemon = client;\ndaemon.getSession("s1");\nconst { getSession: readSession } = client;\n',
+    );
+    const errors = scanForbiddenSurfaces({
+      cwd,
+      roots: ["src"],
+      surfaces: {
+        version: 1,
+        clientMethods: ["getSession"],
+        runtimeExports: [],
+        httpRoutes: [],
+        cliCommands: [],
+        cliOptions: [],
+        environmentVariables: [],
+        configFields: [],
+        enumValues: [],
+        schemaNames: [],
+      },
+    });
+    assert.equal(errors.length, 2);
+    assert.deepEqual(errors.map((error) => error.line), [2, 3]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("does not report current Resource methods", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  try {
+    mkdirSync(join(cwd, "src"));
+    writeFileSync(
+      join(cwd, "src", "demo.ts"),
+      'client.sessions.get("s1");\nclient.sessions.admitPrompt("s1", {});\nclient.protocol.capabilities();\n',
+    );
+    const errors = scanForbiddenSurfaces({
+      cwd,
+      roots: ["src"],
+      surfaces: {
+        version: 1,
+        clientMethods: ["getSession", "admitPrompt", "capabilities"],
+        runtimeExports: [],
+        httpRoutes: [],
+        cliCommands: [],
+        cliOptions: [],
+        environmentVariables: [],
+        configFields: [],
+        enumValues: [],
+        schemaNames: [],
+      },
+    });
+    assert.deepEqual(errors, []);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 test("does not scan the forbidden manifest itself", () => {
   const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
   try {

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -37,6 +38,7 @@ const defaultAllow = [
   "docs/superpowers/specs/",
 ];
 const scannedExtension = /\.(?:c?js|mjs|json|md|ts|tsx|ya?ml)$/i;
+const codeExtension = /\.(?:c?js|mjs|ts|tsx)$/i;
 
 function normalizePath(path) {
   return path.replaceAll("\\", "/");
@@ -93,8 +95,8 @@ function matchPatterns(category, name, rel) {
   const escaped = escapeRegExp(name);
   if (category === "clientMethods" || category === "runtimeExports") {
     const patterns = [
-      new RegExp(`\\bclient\\s*(?:\\?\\.)?\\s*\\.\\s*${escaped}\\b`, "g"),
-      new RegExp(`\\bclient\\s*\\[\\s*["']${escaped}["']\\s*\\]`, "g"),
+      new RegExp(`\\bclient\\s*(?:\\?\\.|\\.)\\s*${escaped}\\b`, "g"),
+      new RegExp(`\\bclient\\s*(?:\\?\\.\\s*)?\\[\\s*["']${escaped}["']\\s*\\]`, "g"),
     ];
     if (rel === "packages/client/src/transport/http-client.ts") {
       patterns.push(new RegExp(`(?:^|\\n)\\s*(?:readonly\\s+|get\\s+|async\\s+)?${escaped}\\s*(?::|\\()`, "g"));
@@ -119,6 +121,123 @@ function matchPatterns(category, name, rel) {
   return [new RegExp(`\\b${escaped}\\b`, "g")];
 }
 
+function unwrapExpression(node) {
+  let current = node;
+  while (
+    current &&
+    (ts.isParenthesizedExpression(current) ||
+      ts.isAsExpression(current) ||
+      ts.isTypeAssertionExpression(current) ||
+      ts.isNonNullExpression(current) ||
+      ts.isSatisfiesExpression(current))
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function hasClientType(node, sourceFile) {
+  return Boolean(node?.type && /(?:^|\W)OpenHarnessClient(?:$|\W)/.test(node.type.getText(sourceFile)));
+}
+
+function propertyName(node) {
+  if (!node) return null;
+  if (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNumericLiteral(node)) return node.text;
+  return null;
+}
+
+function scanClientAst(source, rel, surfaces) {
+  const kind = rel.endsWith(".tsx") ? ts.ScriptKind.TSX : rel.endsWith(".jsx") ? ts.ScriptKind.JSX : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(rel, source, ts.ScriptTarget.Latest, true, kind);
+  const forbidden = new Map([
+    ...surfaces.clientMethods.map((name) => [name, "client-method"]),
+    ...surfaces.runtimeExports.map((name) => [name, "runtime-export"]),
+  ]);
+  const clientIdentifiers = new Set(["client"]);
+
+  function isClientExpression(node) {
+    const expression = unwrapExpression(node);
+    if (!expression) return false;
+    if (ts.isIdentifier(expression)) return clientIdentifiers.has(expression.text);
+    if (ts.isNewExpression(expression)) {
+      return /(?:^|\.)OpenHarnessClient$/.test(expression.expression.getText(sourceFile));
+    }
+    return ts.isPropertyAccessExpression(expression) && expression.name.text === "client";
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    function collectAliases(node) {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        if (hasClientType(node, sourceFile) || isClientExpression(node.initializer)) {
+          if (!clientIdentifiers.has(node.name.text)) {
+            clientIdentifiers.add(node.name.text);
+            changed = true;
+          }
+        }
+      } else if (ts.isParameter(node) && ts.isIdentifier(node.name) && hasClientType(node, sourceFile)) {
+        if (!clientIdentifiers.has(node.name.text)) {
+          clientIdentifiers.add(node.name.text);
+          changed = true;
+        }
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left) &&
+        isClientExpression(node.right) &&
+        !clientIdentifiers.has(node.left.text)
+      ) {
+        clientIdentifiers.add(node.left.text);
+        changed = true;
+      }
+      ts.forEachChild(node, collectAliases);
+    }
+    collectAliases(sourceFile);
+  }
+
+  const errors = [];
+  const seen = new Set();
+  function report(node, name) {
+    const label = forbidden.get(name);
+    if (!label) return;
+    const start = node.getStart(sourceFile);
+    const position = sourceFile.getLineAndCharacterOfPosition(start);
+    const key = `${start}:${label}/${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    errors.push({
+      surface: `${label}/${name}`,
+      file: rel,
+      line: position.line + 1,
+      column: position.character + 1,
+    });
+  }
+
+  function visit(node) {
+    if (ts.isPropertyAccessExpression(node) && isClientExpression(node.expression)) {
+      report(node.name, node.name.text);
+    } else if (ts.isElementAccessExpression(node) && isClientExpression(node.expression)) {
+      report(node.argumentExpression, propertyName(node.argumentExpression));
+    } else if (
+      ts.isBindingElement(node) &&
+      ts.isObjectBindingPattern(node.parent) &&
+      ((ts.isVariableDeclaration(node.parent.parent) && isClientExpression(node.parent.parent.initializer)) ||
+        (ts.isParameter(node.parent.parent) && hasClientType(node.parent.parent, sourceFile)))
+    ) {
+      report(node.propertyName ?? node.name, propertyName(node.propertyName ?? node.name));
+    } else if (
+      (ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)) &&
+      node.name?.text === "OpenHarnessClient"
+    ) {
+      for (const member of node.members) report(member.name ?? member, propertyName(member.name));
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return errors;
+}
+
 function locate(source, index) {
   const before = source.slice(0, index);
   const lines = before.split("\n");
@@ -140,7 +259,9 @@ export function scanForbiddenSurfaces(options = {}) {
     const rel = normalizePath(relative(cwd, file));
     if (isAllowed(rel, allow)) continue;
     const source = readFileSync(file, "utf8");
+    if (codeExtension.test(rel)) errors.push(...scanClientAst(source, rel, surfaces));
     for (const category of categories) {
+      if (codeExtension.test(rel) && (category === "clientMethods" || category === "runtimeExports")) continue;
       for (const name of surfaces[category]) {
         for (const pattern of matchPatterns(category, name, rel)) {
           for (const match of source.matchAll(pattern)) {

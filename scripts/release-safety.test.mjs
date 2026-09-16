@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -60,6 +64,34 @@ test("stable release notes contain immutable release identity and artifacts", ()
   assert.doesNotMatch(notes, /compatibility|deprecation|retention|breaking removal/i);
 });
 
+test("release asset CLI preserves the version in notes and artifact validation", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "openharness-release-assets-"));
+  const script = fileURLToPath(new URL("./release-assets.mjs", import.meta.url));
+  const notes = join(cwd, "release-notes.md");
+  const artifacts = join(cwd, "artifact-names.txt");
+  const env = { ...process.env, VERSION: "1.2.3", COMMIT: "a".repeat(40) };
+  try {
+    execFileSync(process.execPath, [script, "write-notes", notes], { cwd, env, stdio: "pipe" });
+    assert.match(readFileSync(notes, "utf8"), /OpenHarness-1\.2\.3-setup\.exe/);
+    assert.match(readFileSync(notes, "utf8"), /OpenHarness-1\.2\.3\.AppImage/);
+    assert.match(readFileSync(notes, "utf8"), /OpenHarness-1\.2\.3\.deb/);
+
+    writeFileSync(
+      artifacts,
+      "OpenHarness-1.2.3-setup.exe\nOpenHarness-1.2.3.AppImage\nOpenHarness-1.2.3.deb\nlatest.yml\nlatest-linux.yml\n",
+    );
+    execFileSync(process.execPath, [script, "assert-artifacts", artifacts], { cwd, env, stdio: "pipe" });
+
+    writeFileSync(artifacts, "OpenHarness--setup.exe\nOpenHarness-.AppImage\nOpenHarness-.deb\nlatest.yml\nlatest-linux.yml\n");
+    assert.throws(
+      () => execFileSync(process.execPath, [script, "assert-artifacts", artifacts], { cwd, env, stdio: "pipe" }),
+      /Command failed/,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 test("workflow preserves build, publication, verification and rerun ordering", () => {
   const workflow = readFileSync(new URL("../.github/workflows/tag-release.yml", import.meta.url), "utf8");
   assert.doesNotMatch(workflow, /release_phase|client-compat|compatibility lifecycle/i);
@@ -72,4 +104,9 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   assert.match(workflow, /gh release view "\$TAG" --json body/);
   assert.match(workflow, /gh release view "\$TAG" --json assets/);
   assert.match(workflow, /notify:[\s\S]*if: always\(\)/);
+  assert.deepEqual(
+    [...workflow.matchAll(/node scripts\/release-assets\.mjs (write-notes|assert-artifacts)/g)].map((match) => match[1]),
+    ["write-notes", "assert-artifacts", "assert-artifacts"],
+  );
+  assert.doesNotMatch(workflow, /\$\{v\}/);
 });

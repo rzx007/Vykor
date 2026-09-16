@@ -80,7 +80,7 @@ jobs:
           VERSION: ${{ needs.validate.outputs.version }}
           COMMIT: ${{ needs.validate.outputs.commit }}
         run: |
-          node --input-type=module -e "import { writeFileSync } from 'node:fs'; import { renderStableReleaseNotes } from './scripts/release-safety.mjs'; const v=process.env.VERSION; writeFileSync('release-notes.md', renderStableReleaseNotes({ version:v, commit:process.env.COMMIT, artifacts:[\`OpenHarness-${v}-setup.exe\`,\`OpenHarness-${v}.AppImage\`,\`OpenHarness-${v}.deb\`]}))"
+          node scripts/release-assets.mjs write-notes release-notes.md
       - name: Upload release notes
         uses: actions/upload-artifact@v4
         with:
@@ -227,7 +227,7 @@ jobs:
         run: |
           test -f release-assets/release-notes.md
           find release-assets -maxdepth 1 -type f -printf '%f\n' > artifact-names.txt
-          VERSION="$VERSION" node --input-type=module -e "import { readFileSync } from 'node:fs'; import { assertArtifacts } from './scripts/release-safety.mjs'; const v=process.env.VERSION; assertArtifacts([\`OpenHarness-${v}-setup.exe\`,\`OpenHarness-${v}.AppImage\`,\`OpenHarness-${v}.deb\`,'latest.yml','latest-linux.yml'], readFileSync('artifact-names.txt','utf8').trim().split(/\\r?\\n/))"
+          node scripts/release-assets.mjs assert-artifacts artifact-names.txt
           cp release-assets/release-notes.md release-notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" release-assets/* --clobber
@@ -261,7 +261,7 @@ jobs:
           gh release view "$TAG" --json body --jq .body > published-release-notes.md
           diff -u release-notes.md published-release-notes.md
           gh release view "$TAG" --json assets --jq '.assets[].name' > published-artifacts.txt
-          VERSION="$VERSION" node --input-type=module -e "import { readFileSync } from 'node:fs'; import { assertArtifacts } from './scripts/release-safety.mjs'; const v=process.env.VERSION; assertArtifacts([\`OpenHarness-${v}-setup.exe\`,\`OpenHarness-${v}.AppImage\`,\`OpenHarness-${v}.deb\`,'latest.yml','latest-linux.yml'], readFileSync('published-artifacts.txt','utf8').trim().split(/\\r?\\n/))"
+          node scripts/release-assets.mjs assert-artifacts published-artifacts.txt
           printf 'Version: %s\nCommit: %s\nTag: %s\n' "$VERSION" "$COMMIT" "$TAG" >> "$GITHUB_STEP_SUMMARY"
 
   notify:
