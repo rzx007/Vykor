@@ -33,6 +33,50 @@ function event(seq: number, type = "daemon.test"): SessionEventRecord {
 }
 
 describe("OpenHarnessClient", () => {
+  it("routes every resource and compatibility facade through the same endpoint", async () => {
+    const cases: Array<{
+      name: string;
+      response: unknown;
+      expectedPath: string;
+      direct(client: OpenHarnessClient, signal: AbortSignal): Promise<unknown>;
+      facade(client: OpenHarnessClient, signal: AbortSignal): Promise<unknown>;
+    }> = [
+      { name: "system", response: { settings: {} }, expectedPath: "/settings", direct: (c, signal) => c.system.getSettings({ signal }), facade: (c, signal) => c.getSettings({ signal }) },
+      { name: "provider", response: { providers: [] }, expectedPath: "/providers", direct: (c, signal) => c.providers.listProviders({ signal }), facade: (c, signal) => c.listProviders({ signal }) },
+      { name: "auth", response: { auth: { providers: [] } }, expectedPath: "/auth", direct: (c, signal) => c.auth.getStatus({ signal }), facade: (c, signal) => c.getAuthStatus({ signal }) },
+      { name: "project", response: { projects: [] }, expectedPath: "/projects", direct: (c, signal) => c.projects.list({ signal }), facade: (c, signal) => c.listProjects({ signal }) },
+      { name: "plugin", response: { plugins: [], warnings: [] }, expectedPath: "/plugins?cwd=%2Frepo", direct: (c, signal) => c.plugins.list({ cwd: "/repo", signal }), facade: (c, signal) => c.listPlugins({ cwd: "/repo", signal }) },
+      { name: "development", response: { agents: [] }, expectedPath: "/agent-personas", direct: (c, signal) => c.development.listAgentPersonas({ signal }), facade: (c, signal) => c.listAgentPersonas({ signal }) },
+      { name: "session", response: { sessions: [] }, expectedPath: "/sessions", direct: (c, signal) => c.sessions.list({ signal }), facade: (c, signal) => c.listSessions({ signal }) },
+      { name: "attachment", response: { missingFiles: [], orphanFiles: [], pendingDeletes: [], referencedAssets: 0, storedFiles: 0 }, expectedPath: "/attachments/storage", direct: (c, signal) => c.attachments.scanStorage({ signal }), facade: (c, signal) => c.scanAttachmentStorage({ signal }) },
+      { name: "permission", response: { requests: [] }, expectedPath: "/permissions", direct: (c, signal) => c.permissions.list({ signal }), facade: (c, signal) => c.listPermissions({ signal }) },
+      { name: "schedule", response: { running: false }, expectedPath: "/schedules/status", direct: (c, signal) => c.schedules.getStatus({ signal }), facade: (c, signal) => c.getScheduledTaskStatus({ signal }) },
+      { name: "job", response: { jobs: [] }, expectedPath: "/jobs?sessionId=s1", direct: (c, signal) => c.jobs.list({ sessionId: "s1", signal }), facade: (c, signal) => c.listJobs({ sessionId: "s1", signal }) },
+      { name: "terminal", response: { terminals: [] }, expectedPath: "/terminals", direct: (c, signal) => c.terminals.list({ signal }), facade: (c, signal) => c.listTerminals({ signal }) },
+      { name: "channel", response: { connectors: [] }, expectedPath: "/channels/status", direct: (c, signal) => c.channels.getStatus({ signal }), facade: (c, signal) => c.getChannelStatus({ signal }) },
+      { name: "event", response: { events: [] }, expectedPath: "/events", direct: (c, signal) => c.events.list({ signal }), facade: (c, signal) => c.listEvents({ signal }) },
+    ];
+
+    for (const entry of cases) {
+      const calls: Array<{ url: string; init: RequestInit }> = [];
+      const controller = new AbortController();
+      const client = new OpenHarnessClient({
+        baseUrl: "http://daemon.test",
+        fetch: (async (url, init = {}) => {
+          calls.push({ url: String(url), init });
+          return jsonResponse(entry.response);
+        }) as typeof fetch,
+      });
+      await entry.direct(client, controller.signal);
+      await entry.facade(client, controller.signal);
+      expect(calls, entry.name).toHaveLength(2);
+      expect(calls.map((call) => new URL(call.url).pathname + new URL(call.url).search), entry.name)
+        .toEqual([entry.expectedPath, entry.expectedPath]);
+      expect(calls.every((call) => (call.init.method ?? "GET") === "GET"), entry.name).toBe(true);
+      expect(calls.every((call) => call.init.signal === controller.signal), entry.name).toBe(true);
+    }
+  });
+
   it("uses typed plugin archive endpoints and preserves structured failures", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const client = new OpenHarnessClient({
@@ -894,6 +938,37 @@ describe("OpenHarnessClient", () => {
     expect(events.map((item) => item.seq)).toEqual([1, 2]);
   });
 
+  it("reconnects SSE with the latest frame id and server retry delay", async () => {
+    vi.useFakeTimers();
+    const headers: Array<string | null> = [];
+    let attempt = 0;
+    const client = new OpenHarnessClient({
+      baseUrl: "http://daemon.test",
+      fetch: (async (_url, init) => {
+        headers.push(new Headers(init?.headers).get("last-event-id"));
+        attempt += 1;
+        const body = attempt === 1
+          ? `id: 7\nretry: 0\ndata: ${JSON.stringify(event(7))}\n\n`
+          : `id: 8\ndata: ${JSON.stringify(event(8))}\n\n`;
+        return new Response(body, { status: 200 });
+      }) as typeof fetch,
+    });
+
+    const received: SessionEventRecord[] = [];
+    const run = (async () => {
+      for await (const item of client.events.stream({ cursor: 0 })) {
+        received.push(item);
+        if (received.length === 2) break;
+      }
+    })();
+    await vi.advanceTimersByTimeAsync(0);
+    await run;
+
+    expect(received.map((item) => item.seq)).toEqual([7, 8]);
+    expect(headers).toEqual([null, "7"]);
+    vi.useRealTimers();
+  });
+
   it("merges replayed and live events while suppressing live duplicates", async () => {
     const controller = new AbortController();
     const stream = async function* (): AsyncIterable<SessionEventRecord> {
@@ -903,11 +978,11 @@ describe("OpenHarnessClient", () => {
       throw new DOMException("Aborted", "AbortError");
     };
     const client = {
-      listEvents: async () => [
-        event(1, "session.created"),
-        event(2, "session.message.created"),
-      ],
-      streamEvents: () => stream(),
+      sessions: {},
+      events: {
+        list: async () => [event(1, "session.created"), event(2, "session.message.created")],
+        stream: () => stream(),
+      },
     } as unknown as OpenHarnessClient;
 
     const updates: Array<{ seq: number; source: string; lastSeq: number }> = [];
@@ -935,8 +1010,10 @@ describe("OpenHarnessClient", () => {
     const cursors: Array<number | undefined> = [];
     let attempt = 0;
     const client = {
-      listEvents: async () => [event(1, "session.created")],
-      streamEvents: (options: { cursor?: number }) => {
+      sessions: {},
+      events: {
+        list: async () => [event(1, "session.created")],
+        stream: (options: { cursor?: number }) => {
         cursors.push(options.cursor);
         attempt += 1;
         if (attempt === 1) {
@@ -950,6 +1027,7 @@ describe("OpenHarnessClient", () => {
           controller.abort();
           throw new DOMException("Aborted", "AbortError");
         })();
+        },
       },
     } as unknown as OpenHarnessClient;
 
@@ -970,14 +1048,17 @@ describe("OpenHarnessClient", () => {
     const controller = new AbortController();
     let streamCalls = 0;
     const client = {
-      listEvents: async () => [event(1, "session.created")],
-      streamEvents: () => {
+      sessions: {},
+      events: {
+        list: async () => [event(1, "session.created")],
+        stream: () => {
         streamCalls += 1;
         return (async function* () {
           yield event(2, "session.message.created");
           controller.abort();
           throw new DOMException("The operation was aborted.", "AbortError");
         })();
+        },
       },
     } as unknown as OpenHarnessClient;
 
@@ -1018,25 +1099,30 @@ describe("OpenHarnessClient", () => {
     let streamAttempt = 0;
     let snapshotCalls = 0;
     const client = {
-      getSessionState: async () => {
-        snapshotCalls += 1;
-        return snapshot(snapshotCalls === 1 ? 1 : 4);
+      sessions: {
+        getState: async () => {
+          snapshotCalls += 1;
+          return snapshot(snapshotCalls === 1 ? 1 : 4);
+        },
       },
-      streamEvents: (options: { cursor?: number }) => {
-        streamAttempt += 1;
-        if (streamAttempt === 1) {
-          expect(options.cursor).toBe(1);
+      events: {
+        list: async () => [],
+        stream: (options: { cursor?: number }) => {
+          streamAttempt += 1;
+          if (streamAttempt === 1) {
+            expect(options.cursor).toBe(1);
+            return (async function* () {
+              yield event(2, "session.message.created");
+              throw new Error("stream reset");
+            })();
+          }
+          expect(options.cursor).toBe(2);
           return (async function* () {
-            yield event(2, "session.message.created");
-            throw new Error("stream reset");
+            yield event(5, "session.run.updated");
+            controller.abort();
+            throw new DOMException("Aborted", "AbortError");
           })();
-        }
-        expect(options.cursor).toBe(2);
-        return (async function* () {
-          yield event(5, "session.run.updated");
-          controller.abort();
-          throw new DOMException("Aborted", "AbortError");
-        })();
+        },
       },
     } as unknown as OpenHarnessClient;
 
@@ -1144,8 +1230,10 @@ describe("OpenHarnessClient", () => {
     const delays: number[] = [];
     let attempt = 0;
     const client = {
-      listEvents: async () => [],
-      streamEvents: () => {
+      sessions: {},
+      events: {
+        list: async () => [],
+        stream: () => {
         attempt += 1;
         if (attempt < 3) {
           return (async function* () {
@@ -1157,6 +1245,7 @@ describe("OpenHarnessClient", () => {
           controller.abort();
           throw new DOMException("Aborted", "AbortError");
         })();
+        },
       },
     } as unknown as OpenHarnessClient;
 

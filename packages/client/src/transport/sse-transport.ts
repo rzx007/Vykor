@@ -13,10 +13,13 @@
 import { throwResponseError } from "./http-transport.js";
 
 export interface SseStreamOptions<T = unknown> {
-  headers?: Record<string, string>;
+  headers?: HeadersInit;
   signal?: AbortSignal;
   lastEventId?: string;
   decode?: (value: unknown) => T;
+  reconnect?: boolean;
+  reconnectDelayMs?: number;
+  noBodyMessage?: string;
 }
 
 export interface SseRawFrame {
@@ -125,25 +128,74 @@ export class SseTransport {
     url: string,
     options: SseStreamOptions<T> = {},
   ): AsyncIterable<T> {
-    const headers: Record<string, string> = {
-      ...(options.headers ?? {}),
-      ...(options.lastEventId ? { "Last-Event-ID": options.lastEventId } : {}),
-    };
+    let lastEventId = options.lastEventId;
+    let reconnectDelayMs = options.reconnectDelayMs ?? 250;
 
-    const open = async () => {
-      const response = await this.fetchImpl(url, {
-        headers,
-        signal: options.signal,
-      });
-      if (!response.ok) {
-        await throwResponseError(response);
-      }
+    while (!options.signal?.aborted) {
+      const headers = new Headers(options.headers);
+      if (lastEventId) headers.set("Last-Event-ID", lastEventId);
+      const response = await this.fetchImpl(url, { headers, signal: options.signal });
+      if (!response.ok) await throwResponseError(response);
       if (!response.body) {
-        throw new Error("Event stream response has no body");
+        throw new Error(options.noBodyMessage ?? "Event stream response has no body");
       }
-      return response.body;
-    };
 
-    yield* streamServerSentEvents(open, options.decode);
+      for await (const frame of readRawSseFrames(response.body)) {
+        if (frame.id !== undefined) lastEventId = frame.id;
+        if (frame.retry !== undefined) reconnectDelayMs = frame.retry;
+        if (frame.data !== undefined) {
+          yield (options.decode ?? ((value) => value as T))(JSON.parse(frame.data));
+        }
+      }
+
+      if (!options.reconnect || options.signal?.aborted) return;
+      await waitForReconnect(reconnectDelayMs, options.signal);
+    }
   }
+}
+
+async function* readRawSseFrames(
+  stream: ReadableStream<Uint8Array>,
+): AsyncIterable<SseRawFrame> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() ?? "";
+      for (const value of frames) {
+        const frame = parseRawSseFrame(value);
+        if (frame) yield frame;
+      }
+    }
+    buffer += decoder.decode();
+    const frame = parseRawSseFrame(buffer);
+    if (frame) yield frame;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function waitForReconnect(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortError(signal));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, Math.max(0, ms));
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError(signal!));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function abortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  return new DOMException("Aborted", "AbortError");
 }

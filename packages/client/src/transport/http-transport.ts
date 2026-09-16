@@ -23,7 +23,7 @@ export interface HttpTransportOptions {
 export interface HttpRequestOptions {
   method?: string;
   body?: unknown;
-  headers?: Record<string, string>;
+  headers?: HeadersInit;
   query?: Record<string, unknown>;
   signal?: AbortSignal;
   auth?: boolean;
@@ -222,10 +222,10 @@ export class HttpTransport {
   async request<T>(path: string, options: HttpRequestOptions = {}): Promise<T> {
     const url = this.resolveUrl(path, options.query);
     const hasJsonBody = options.body !== undefined;
-    const headers = {
-      ...this.headers(hasJsonBody, options.auth ?? true),
-      ...(options.headers ?? {}),
-    };
+    const headers = mergeHeaders(
+      this.headers(hasJsonBody, options.auth ?? true),
+      options.headers,
+    );
 
     const response = await this.fetchImpl(url, {
       method: options.method ?? "GET",
@@ -247,40 +247,13 @@ export class HttpTransport {
     return this.request<unknown>(path, options);
   }
 
-  async requestEmpty(
-    path: string,
-    options: HttpRequestOptions = {},
-  ): Promise<void> {
-    const url = this.resolveUrl(path, options.query);
-    const hasJsonBody = options.body !== undefined;
-    const headers = {
-      ...this.headers(hasJsonBody, options.auth ?? true),
-      ...(options.headers ?? {}),
-    };
-
-    const response = await this.fetchImpl(url, {
-      method: options.method ?? "GET",
-      headers,
-      body: hasJsonBody ? JSON.stringify(options.body) : undefined,
-      signal: options.signal,
-    });
-
-    if (!response.ok) {
-      await throwResponseError(response);
-    }
-  }
-
   async requestResponse(
     path: string,
     options: RawRequestOptions = {},
   ): Promise<Response> {
     const url = this.resolveUrl(path, options.query);
     const auth = options.auth ?? true;
-    const defaultHeaders = this.headers(false, auth);
-    const headers = {
-      ...defaultHeaders,
-      ...((options.headers as Record<string, string>) ?? {}),
-    };
+    const headers = mergeHeaders(this.headers(false, auth), options.headers);
 
     const init: RequestInit & { duplex?: "half" } = {
       ...options,
@@ -300,4 +273,12 @@ export class HttpTransport {
   async throwResponseError(response: Response): Promise<never> {
     return throwResponseError(response);
   }
+}
+
+function mergeHeaders(defaults: HeadersInit, overrides?: HeadersInit): Record<string, string> {
+  const headers = new Headers(defaults);
+  if (overrides) {
+    new Headers(overrides).forEach((value, key) => headers.set(key, value));
+  }
+  return Object.fromEntries(headers.entries());
 }

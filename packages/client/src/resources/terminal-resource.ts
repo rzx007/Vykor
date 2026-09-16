@@ -130,6 +130,7 @@ export class TerminalResource {
         headers: this.transport.headers(),
         signal: options.signal,
         decode: decodeTerminalEvent,
+        noBodyMessage: "Terminal event stream response has no body",
       },
     );
   }
