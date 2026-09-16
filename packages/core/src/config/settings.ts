@@ -137,6 +137,7 @@ export async function loadSettings(
     ...envSettings.plugins,
     ...cliOverrides?.plugins,
   } as NonNullable<Settings["plugins"]>;
+  merged.customProviders = fileSettings?.customProviders;
   return merged;
 }
 
