@@ -208,4 +208,9 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-阶段 8A、8B 已完成：永久 removal ledger 固定了 118 个旧名称、replacement、Stage 7 Git 快照与 SHA-256；普通 integrity check 已接入根测试和架构检查；显式 removal gate 会验证 stable channel、commit/tag/祖先关系、发布时间、npm 证据结构、授权摘要和 major target。Tag Release 现在会在类型检查、全量测试、架构检查和双平台安装包构建完成后才创建 tag，npm 在线校验成功后才创建 GitHub Release，并输出机器可读证据。当前 integrity 为 PASS，removal gate 因 A/B 发行均 pending 而保持 118/118 BLOCKED。下一步为 8C：执行弃用版 A 的真实稳定发行并登记证据；物理删除仍未解锁。详细顺序见 `docs/superpowers/plans/2026-09-16-client-flat-facade-removal-stage-8.md`。
+Clean-slate Stage 8A 已完成 Client 顶层 facade 与旧发行治理删除。后续按以下原子批次推进，不再执行 A/B/C 兼容发行路线：
+
+1. [Stage 8B](./superpowers/plans/2026-09-16-clean-slate-stage-8b-application-storage.md)：收口应用与存储边界，删除 `SessionApplicationService` 与 `SessionStore` 的纯转发职责。
+2. [Stage 8C](./superpowers/plans/2026-09-16-clean-slate-stage-8c-consumers-packages.md)：清理消费者与底层包中只服务旧 OpenHarness 入口的分支，同时保留外部互操作、平台适配和可靠性逻辑。
+3. [Stage 8D](./superpowers/plans/2026-09-16-clean-slate-stage-8d-protocol-database.md)：实施精确协议握手，并将历史数据库 migration 压缩为只服务空库的当前基线。
+4. [Stage 8E](./superpowers/plans/2026-09-16-clean-slate-stage-8e-integration-closeout.md)：在隔离空环境完成集成验收、清理剩余旧引用，并准备需逐项授权的数据重置手册。
