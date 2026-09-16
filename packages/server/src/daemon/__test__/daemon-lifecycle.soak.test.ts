@@ -17,6 +17,12 @@ import type {
 import type { CreateDaemonAgent } from "../daemon-agent.js";
 import { OpenHarnessHttpServer } from "../../http/server.js";
 
+const fetch: typeof globalThis.fetch = (input, init) => {
+  const headers = new Headers(init?.headers);
+  headers.set("x-openharness-protocol-version", "4");
+  return globalThis.fetch(input, { ...init, headers });
+};
+
 interface SoakMetrics {
   generations: Map<string, number>;
   restoredHistoryLengths: Map<string, number[]>;

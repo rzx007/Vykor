@@ -56,6 +56,12 @@ import type { ObservabilityEvent } from "../../shared/observability.js";
 import { projectionSettlementInput } from "../../application/agent/projection-settlement-recovery.js";
 
 const serverTestConfigDir = mkdtempSync(join(tmpdir(), "oh-server-config-"));
+// HTTP fixtures represent current clients; version rejection has dedicated middleware tests.
+const fetch: typeof globalThis.fetch = (input, init) => {
+  const headers = new Headers(init?.headers);
+  headers.set("x-openharness-protocol-version", "4");
+  return globalThis.fetch(input, { ...init, headers });
+};
 let previousConfigDir: string | undefined;
 
 beforeAll(() => {
@@ -617,7 +623,7 @@ describe("OpenHarnessHttpServer", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       serverVersion: "0.4.0",
-      protocol: { version: 3 },
+      protocol: { version: 4 },
       features: { jobs: 2, workflow: 2, pluginCapabilities: 1 },
     });
     await server.close();

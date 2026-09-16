@@ -10,7 +10,7 @@
  * - Last-Event-ID 透传与错误处理
  */
 
-import { throwResponseError } from "./http-transport.js";
+import type { HttpTransport } from "./http-transport.js";
 
 export interface SseStreamOptions<T = unknown> {
   headers?: RequestInit["headers"];
@@ -115,7 +115,7 @@ export async function* streamServerSentEvents<T>(
 }
 
 export class SseTransport {
-  constructor(private readonly fetchImpl: typeof fetch = fetch) {}
+  constructor(private readonly transport: HttpTransport) {}
 
   streamFromReader<T>(
     open: () => Promise<ReadableStream<Uint8Array>>,
@@ -136,9 +136,11 @@ export class SseTransport {
       const headers = new Headers(options.headers);
       if (lastEventId) headers.set("Last-Event-ID", lastEventId);
       const requestUrl = connected && lastEventId ? withoutCursor(url) : url;
-      const response = await this.fetchImpl(requestUrl, { headers, signal: options.signal });
+      const response = await this.transport.requestResponse(
+        requestUrl.slice(this.transport.baseUrl.length),
+        { headers, signal: options.signal },
+      );
       connected = true;
-      if (!response.ok) await throwResponseError(response);
       if (!response.body) {
         throw new Error(options.noBodyMessage ?? "Event stream response has no body");
       }

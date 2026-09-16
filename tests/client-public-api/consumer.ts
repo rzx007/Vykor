@@ -104,6 +104,7 @@ export async function consumePublicApi(client: OpenHarnessClient): Promise<void>
 
   // Terminals Resource
   const termRequest: TerminalCreateRequest = {
+    scope: { kind: "session", sessionId: session.id },
     runtime: "local",
     cols: 80,
     rows: 24,

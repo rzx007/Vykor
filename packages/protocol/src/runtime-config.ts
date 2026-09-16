@@ -1,4 +1,5 @@
 import type { SessionRecord } from "./session.js";
+import { ProtocolDataError } from "./serialization.js";
 
 export type SessionApiFormat = "anthropic" | "openai";
 
@@ -58,7 +59,28 @@ function booleanValue(value: unknown): boolean | undefined {
 }
 
 export function readRuntimeMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> {
-  return isRecord(metadata?.runtime) ? metadata.runtime : {};
+  const runtime = metadata?.runtime;
+  if (runtime === undefined) return {};
+  if (!isRecord(runtime)) throw new ProtocolDataError("metadata.runtime must be an object", "metadata.runtime");
+  for (const [field, value] of Object.entries(runtime)) {
+    let valid = false;
+    switch (field) {
+      case "model": case "provider": case "baseUrl": case "systemPrompt":
+        valid = typeof value === "string"; break;
+      case "apiFormat": valid = apiFormatValue(value) !== undefined; break;
+      case "permissionMode": valid = permissionModeValue(value) !== undefined; break;
+      case "effort": valid = effortValue(value) !== undefined; break;
+      case "sessionMode": valid = sessionModeValue(value) !== undefined; break;
+      case "maxTurns": valid = numberValue(value) !== undefined; break;
+      case "pluginsEnabled": valid = booleanValue(value) !== undefined; break;
+      case "allowedTools": case "disallowedTools":
+        valid = Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim().length > 0); break;
+    }
+    if (!valid) {
+      throw new ProtocolDataError(`Invalid runtime config field metadata.runtime.${field}`, `metadata.runtime.${field}`);
+    }
+  }
+  return runtime;
 }
 
 export function readSessionRuntimeConfig(
@@ -116,6 +138,7 @@ export function patchSessionRuntimeMetadata(
     ...readRuntimeMetadata(metadata),
     ...stripUndefined(patch),
   };
+  readRuntimeMetadata({ runtime });
   return {
     ...metadata,
     runtime,

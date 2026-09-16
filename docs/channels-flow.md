@@ -128,6 +128,6 @@ ohs channels status
 | FeishuAdapter | `packages/channels/src/impl/feishu.ts` | 飞书 WebSocket、真实 message ID、thread ID 和文本发送 |
 | 应用服务 | `packages/server/src/application/channel/channel-application-service.ts` | 映射 Session、幂等准入、等待 Run、保存回复 |
 | HTTP 接入 | `packages/server/src/http/routes/channel.ts` | 把 `/channels/*` 请求转给应用服务 |
-| 数据库 | `packages/services/src/session-runtime/migrations/0009_external_channels.sql` | 保存聊天映射和回复状态 |
+| 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 当前数据库基线，包含聊天映射和回复状态 |
 
 `FeishuPush` 工具仍是另一条主动推送捷径：它由当前 Agent 主动选择目标并发消息，不代表收到一条外部消息后的 durable 回复流程。

@@ -12,7 +12,15 @@
  * 约束：不感知任何业务 Resource 领域逻辑。
  */
 
-import { ProtocolDataError } from "@openharness/protocol";
+import {
+  ProtocolDataError,
+  CURRENT_PROTOCOL_VERSION,
+  PROTOCOL_VERSION_HEADER,
+  checkProtocolCompatibility,
+  parseServerCapabilities,
+  type ServerCapabilities,
+} from "@openharness/protocol";
+import { IncompatibleProtocolError } from "../protocol/protocol-client.js";
 
 export interface HttpTransportOptions {
   baseUrl: string;
@@ -168,6 +176,7 @@ export async function throwResponseError(response: Response): Promise<never> {
 }
 
 export class HttpTransport {
+  private protocolHandshake?: Promise<ServerCapabilities>;
   readonly baseUrl: string;
   readonly token?: string;
   readonly fetchImpl: typeof fetch;
@@ -176,6 +185,37 @@ export class HttpTransport {
     this.baseUrl = normalizeDaemonBaseUrl(options.baseUrl);
     this.token = options.token;
     this.fetchImpl = options.fetch ?? fetch;
+  }
+
+  isHandshakeExempt(pathname: string): boolean {
+    const path = pathname.split("?")[0];
+    return path === "/health" || path === "/capabilities";
+  }
+
+  ensureProtocol(signal?: AbortSignal): Promise<ServerCapabilities> {
+    signal?.throwIfAborted();
+    this.protocolHandshake ??= this.requestUnknown("/capabilities", { auth: false })
+      .then((value) => {
+        const capabilities = parseServerCapabilities(value);
+        const result = checkProtocolCompatibility(capabilities, { version: CURRENT_PROTOCOL_VERSION });
+        if (!result.compatible) {
+          throw new IncompatibleProtocolError(capabilities, result.reason!);
+        }
+        return capabilities;
+      })
+      .catch((error: unknown) => {
+        this.protocolHandshake = undefined;
+        throw error;
+      });
+    // Cancellation belongs to each waiter, not to the shared connection probe.
+    if (!signal) return this.protocolHandshake;
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(signal.reason);
+      signal.addEventListener("abort", onAbort, { once: true });
+      this.protocolHandshake!.then(resolve, reject).finally(() => {
+        signal.removeEventListener("abort", onAbort);
+      });
+    });
   }
 
   headers(
@@ -220,12 +260,16 @@ export class HttpTransport {
   }
 
   async request<T>(path: string, options: HttpRequestOptions = {}): Promise<T> {
+    const business = !this.isHandshakeExempt(path);
+    if (business) await this.ensureProtocol(options.signal);
+    options.signal?.throwIfAborted();
     const url = this.resolveUrl(path, options.query);
     const hasJsonBody = options.body !== undefined;
     const headers = mergeHeaders(
       this.headers(hasJsonBody, options.auth ?? true),
       options.headers,
     );
+    if (business) headers[PROTOCOL_VERSION_HEADER] = String(CURRENT_PROTOCOL_VERSION);
 
     const response = await this.fetchImpl(url, {
       method: options.method ?? "GET",
@@ -251,9 +295,13 @@ export class HttpTransport {
     path: string,
     options: RawRequestOptions = {},
   ): Promise<Response> {
+    const business = !this.isHandshakeExempt(path);
+    if (business) await this.ensureProtocol(options.signal ?? undefined);
+    options.signal?.throwIfAborted();
     const url = this.resolveUrl(path, options.query);
     const auth = options.auth ?? true;
     const headers = mergeHeaders(this.headers(false, auth), options.headers);
+    if (business) headers[PROTOCOL_VERSION_HEADER] = String(CURRENT_PROTOCOL_VERSION);
 
     const init: RequestInit & { duplex?: "half" } = {
       ...options,

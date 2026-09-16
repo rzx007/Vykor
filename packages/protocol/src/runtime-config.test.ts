@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import {
   patchSessionRuntimeMetadata,
@@ -22,6 +23,30 @@ function session(metadata: Record<string, unknown>): SessionRecord {
 }
 
 describe("session runtime metadata", () => {
+  const forbidden = JSON.parse(readFileSync(new URL("../../../scripts/forbidden-compatibility-surfaces.json", import.meta.url), "utf8"));
+  it.each(forbidden.configFields as string[])("rejects the removed runtime field %s", (field) => {
+    expect(() => readSessionRuntimeConfig(session({ runtime: { model: "m", [field]: "old" } })))
+      .toThrow(expect.objectContaining({ name: "ProtocolDataError" }));
+  });
+
+  it.each([
+    { permission: { mode: "default" } },
+    { apiFormat: "old-format" },
+    { permissionMode: "old-mode" },
+    { effort: "old-effort" },
+    { sessionMode: "old-mode" },
+    { maxTurns: "10" },
+    { allowedTools: ["read", 42] },
+    { pluginsEnabled: "false" },
+  ])("rejects invalid runtime structure before defaults can hide it: %j", (invalid) => {
+    expect(() => readSessionRuntimeConfig(session({ runtime: { model: "m", ...invalid } }), { effort: "medium" }))
+      .toThrow(expect.objectContaining({ name: "ProtocolDataError" }));
+  });
+
+  it("rejects a non-object runtime and invalid patches", () => {
+    expect(() => readRuntimeMetadata({ runtime: "old" })).toThrow();
+    expect(() => patchSessionRuntimeMetadata({}, { maxTurns: "10" } as never)).toThrow();
+  });
   it("reads the model only from metadata.runtime", () => {
     expect(() => readSessionRuntimeConfig(session({}))).toThrow(
       /metadata\.runtime\.model/,

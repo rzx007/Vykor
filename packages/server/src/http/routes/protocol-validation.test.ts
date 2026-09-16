@@ -11,7 +11,7 @@ const invalidRequest = (field?: string) => ({
   ...(field ? { details: { field } } : {}),
 });
 
-function sessionRoutes(createSession = vi.fn()) {
+function sessionRoutes(createSession = vi.fn(), updateSession = vi.fn()) {
   return {
     app: createSessionRoutes({
       queries: {
@@ -23,7 +23,7 @@ function sessionRoutes(createSession = vi.fn()) {
       },
       commands: {
         createSession,
-        updateSession: vi.fn(),
+        updateSession,
         archiveSessionTree: vi.fn(),
         deleteSessionTree: vi.fn(),
         forkSession: vi.fn(),
@@ -36,6 +36,17 @@ function sessionRoutes(createSession = vi.fn()) {
 }
 
 describe("protocol validation at HTTP routes", () => {
+  it.each(["POST", "PATCH"])("rejects old nested runtime config before %s session mutations", async (method) => {
+    const mutation = vi.fn();
+    const { app } = sessionRoutes(mutation, mutation);
+    const response = await app.request(method === "POST" ? "/" : "/s1", {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cwd: "/repo", model: "m", metadata: { runtime: { model: "m", projectId: "old" } } }),
+    });
+    expect(response.status).toBe(400);
+    expect(mutation).not.toHaveBeenCalled();
+  });
   it("rejects an invalid Session field before calling the application", async () => {
     const { app, createSession } = sessionRoutes();
     const response = await app.request("/", {

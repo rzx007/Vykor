@@ -68,6 +68,7 @@ import {
 } from "./routes/terminal.js";
 import type { DaemonTerminalService } from "../terminal/index.js";
 import type { DaemonJobService } from "../jobs/index.js";
+import { protocolMiddleware } from "./protocol-middleware.js";
 
 export interface OpenHarnessServerServices {
   commandCatalog?: CommandCatalogProvider;
@@ -304,6 +305,8 @@ export class OpenHarnessHttpServer {
       for (const [name, value] of Object.entries(headers))
         c.res.headers.set(name, value);
     });
+
+    this.app.use("*", protocolMiddleware);
 
     this.app.use("*", async (c, next) => {
       if (

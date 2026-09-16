@@ -21,6 +21,17 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+// Resource endpoint fixtures share the real transport handshake.
+function businessClient(options: ConstructorParameters<typeof OpenHarnessClient>[0]): OpenHarnessClient {
+  const endpointFetch = options.fetch!;
+  return new OpenHarnessClient({
+    ...options,
+    fetch: (input, init) => new URL(String(input)).pathname === "/capabilities"
+      ? Promise.resolve(jsonResponse({ serverVersion: "test", protocol: { version: 4 }, features: {} }))
+      : endpointFetch(input, init),
+  });
+}
+
 function event(seq: number, type = "daemon.test"): SessionEventRecord {
   return {
     id: `e${seq}`,
@@ -35,7 +46,7 @@ function event(seq: number, type = "daemon.test"): SessionEventRecord {
 describe("OpenHarnessClient", () => {
   it("uses typed plugin archive endpoints and preserves structured failures", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async (url, init) => {
         calls.push({ url: String(url), init: init ?? {} });
@@ -101,7 +112,7 @@ describe("OpenHarnessClient", () => {
       projects: [{ name: "App", path: "/repo" }],
       warnings: [],
     };
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async (url, init = {}) => {
         calls.push({ url: String(url), init });
@@ -127,7 +138,7 @@ describe("OpenHarnessClient", () => {
 
   it("scans, repairs, and garbage-collects attachment storage", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async (url, init = {}) => {
         calls.push({ url: String(url), init });
@@ -203,7 +214,7 @@ describe("OpenHarnessClient", () => {
         init?.method === "POST" ? 201 : 200,
       );
     };
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       token: "tok",
       fetch: fetchImpl as typeof fetch,
@@ -249,7 +260,7 @@ describe("OpenHarnessClient", () => {
 
   it("sets duplex only for ReadableStream attachment uploads", async () => {
     const calls: Array<RequestInit & { duplex?: string }> = [];
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async (_url, init) => {
         calls.push(init ?? {});
@@ -279,7 +290,7 @@ describe("OpenHarnessClient", () => {
 
   it("validates attachment ranges before issuing a request", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: fetchImpl,
     });
@@ -306,7 +317,7 @@ describe("OpenHarnessClient", () => {
 
   it("builds open-ended and suffix attachment ranges", async () => {
     const ranges: Array<string | null> = [];
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async (_url, init) => {
         ranges.push(new Headers(init?.headers).get("range"));
@@ -323,7 +334,7 @@ describe("OpenHarnessClient", () => {
   });
 
   it("keeps attachment HTTP errors as OpenHarnessApiError", async () => {
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async () =>
         jsonResponse(
@@ -345,7 +356,7 @@ describe("OpenHarnessClient", () => {
   });
 
   it("does not expose the removed public Task CRUD methods", () => {
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
     });
 
@@ -378,7 +389,7 @@ describe("OpenHarnessClient", () => {
         init?.method === "POST" ? 201 : 200,
       );
     };
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       token: "tok",
       fetch: fetchImpl as typeof fetch,
@@ -440,7 +451,7 @@ describe("OpenHarnessClient", () => {
   });
 
   it("keeps protocol error messages from non-success responses", async () => {
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       fetch: (async () =>
         jsonResponse(
@@ -464,7 +475,7 @@ describe("OpenHarnessClient", () => {
   });
 
   it("rejects malformed success data instead of trusting its TypeScript type", async () => {
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       fetch: (async () =>
         jsonResponse({
@@ -504,7 +515,7 @@ describe("OpenHarnessClient", () => {
       return jsonResponse({ session });
     };
 
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456/",
       token: "tok",
       fetch: fetchImpl as typeof fetch,
@@ -541,7 +552,7 @@ describe("OpenHarnessClient", () => {
       return jsonResponse({ ok: true });
     };
 
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       token: "tok",
       fetch: fetchImpl as typeof fetch,
@@ -584,7 +595,7 @@ describe("OpenHarnessClient", () => {
       fetch: vi.fn(async () =>
         jsonResponse({
           serverVersion: "0.4.0",
-          protocol: { version: 3 },
+          protocol: { version: 4 },
           features: {},
           agentEnvironments: { native: true, wsl: true },
         }),
@@ -599,7 +610,7 @@ describe("OpenHarnessClient", () => {
   it("rejects the previous protocol by default instead of silently hiding plugin inputs", async () => {
     const client = new OpenHarnessClient({
       baseUrl: "http://127.0.0.1:3456",
-      fetch: (async () => jsonResponse({ serverVersion: "old", protocol: { version: 2 }, features: {} })) as typeof fetch,
+      fetch: (async () => jsonResponse({ serverVersion: "old", protocol: { version: 3 }, features: {} })) as typeof fetch,
     });
     await expect(client.protocol.capabilities()).rejects.toBeInstanceOf(IncompatibleProtocolError);
   });
@@ -645,7 +656,7 @@ describe("OpenHarnessClient", () => {
       return jsonResponse({ error: "unexpected" }, 500);
     };
 
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       token: "tok",
       fetch: fetchImpl as typeof fetch,
@@ -707,7 +718,7 @@ describe("OpenHarnessClient", () => {
       if (String(url).includes("/runs")) return jsonResponse({ runs: [] });
       return jsonResponse({ tasks: [task] });
     };
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       fetch: fetchImpl as typeof fetch,
     });
@@ -740,7 +751,7 @@ describe("OpenHarnessClient", () => {
 
   it("serializes the complete Jobs list query", async () => {
     const calls: string[] = [];
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       token: "tok",
       fetch: (async (url: string | URL | Request) => {
@@ -778,7 +789,7 @@ describe("OpenHarnessClient", () => {
       startedAt: 1,
       updatedAt: 1,
     };
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       fetch: (async (url, init) => {
         calls.push({ url: String(url), init: init ?? {} });
@@ -846,7 +857,7 @@ describe("OpenHarnessClient", () => {
         202,
       );
     };
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://127.0.0.1:3456",
       token: "tok",
       fetch: fetchImpl as typeof fetch,
@@ -899,7 +910,7 @@ describe("OpenHarnessClient", () => {
     const headers: Array<string | null> = [];
     const urls: string[] = [];
     let attempt = 0;
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async (url, init) => {
         urls.push(String(url));
@@ -936,7 +947,7 @@ describe("OpenHarnessClient", () => {
 
   it("keeps the legacy event facade finite when the server closes the stream", async () => {
     let calls = 0;
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async () => {
         calls += 1;
@@ -1127,7 +1138,7 @@ describe("OpenHarnessClient", () => {
 
   it("adds a stable request id when admitting a prompt", async () => {
     const calls: RequestInit[] = [];
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: async (_url, init) => {
         calls.push(init ?? {});
@@ -1177,7 +1188,7 @@ describe("OpenHarnessClient", () => {
 
   it("targets one durable queued prompt for promotion and cancellation", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
-    const client = new OpenHarnessClient({
+    const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: async (url, init) => {
         calls.push({ url: String(url), init: init ?? {} });

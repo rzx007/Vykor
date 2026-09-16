@@ -81,7 +81,7 @@ export class OpenHarnessClient {
 
   constructor(options: OpenHarnessClientOptions) {
     const transport = new HttpTransport(options);
-    const sse = new SseTransport(transport.fetchImpl);
+    const sse = new SseTransport(transport);
     this.protocol = new ProtocolClient(transport);
     this.system = new SystemResource(transport);
     this.providers = new ProviderResource(transport);

@@ -1,4 +1,4 @@
-import { cpSync } from "node:fs"
+import { cpSync, rmSync } from "node:fs"
 import { resolve } from "node:path"
 
 import { defineConfig } from "electron-vite"
@@ -12,9 +12,11 @@ function copySessionMigrations(): Plugin {
     name: "copy-session-migrations",
     writeBundle(options) {
       const outputDirectory = resolve(options.dir ?? "out/main")
+      const migrationsDirectory = resolve(outputDirectory, "../session-runtime/migrations")
+      rmSync(migrationsDirectory, { recursive: true, force: true })
       cpSync(
         resolve("../../packages/services/src/session-runtime/migrations"),
-        resolve(outputDirectory, "../session-runtime/migrations"),
+        migrationsDirectory,
         { recursive: true }
       )
       cpSync(

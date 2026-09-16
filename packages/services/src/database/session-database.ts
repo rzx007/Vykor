@@ -3,11 +3,7 @@ import { dirname, resolve } from "node:path";
 
 import Database from "better-sqlite3";
 
-import {
-  applySessionMigrations,
-  assertCurrentStorageFormat,
-  assertCurrentStorageFormatOrEmpty,
-} from "./migrations.js";
+import { applySessionMigrations } from "./migrations.js";
 
 export interface SessionDatabaseOptions {
   path: string;
@@ -31,9 +27,7 @@ export class SessionDatabase {
       connection.pragma("foreign_keys = ON");
       connection.pragma("busy_timeout = 5000");
       connection.pragma("synchronous = NORMAL");
-      assertCurrentStorageFormatOrEmpty(connection);
       applySessionMigrations(connection);
-      assertCurrentStorageFormat(connection);
       return new SessionDatabase(path, connection);
     } catch (error) {
       connection.close();

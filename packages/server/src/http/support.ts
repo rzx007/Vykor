@@ -1,5 +1,6 @@
 import {
   ProtocolValidationError,
+  PROTOCOL_VERSION_HEADER,
   type ProtocolError,
 } from "@openharness/protocol";
 import type { Context } from "hono";
@@ -54,7 +55,7 @@ export const SSE_HEADERS = {
 };
 export const CORS_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
 export const CORS_HEADERS =
-  "authorization, content-type, last-event-id, x-openharness-filename, x-openharness-trace-id, range, if-none-match";
+  `authorization, content-type, last-event-id, x-openharness-filename, x-openharness-trace-id, range, if-none-match, ${PROTOCOL_VERSION_HEADER}`;
 export const CORS_EXPOSE_HEADERS =
   "x-openharness-trace-id, content-range, content-disposition, etag, accept-ranges";
 

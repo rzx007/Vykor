@@ -135,31 +135,6 @@ describe("SessionStore", () => {
     }
   });
 
-  it("rejects a format 1 database before running new migrations", () => {
-    const root = mkdtempSync(join(tmpdir(), "ohs-format-1-"));
-    const path = join(root, "store.db");
-    try {
-      const legacy = new Database(path);
-      legacy.exec(`
-        CREATE TABLE application_storage_format (
-          id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
-          version INTEGER NOT NULL
-        );
-        INSERT INTO application_storage_format (id, version) VALUES (1, 1);
-      `);
-      legacy.close();
-      expect(() => new SessionStore({ path })).toThrow(
-        /format 1.*move or delete/i,
-      );
-    } finally {
-      rmSync(root, {
-        recursive: true,
-        force: true,
-        maxRetries: 5,
-        retryDelay: 50,
-      });
-    }
-  });
 
   it("creates a format 2 database with input attachment and typed part columns", () => {
     withStore((_store, path) => {
@@ -1657,33 +1632,6 @@ describe("SessionStore", () => {
     );
   });
 
-  it("rejects databases without the current storage format marker", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-session-event-version-"));
-    const path = join(dir, "store.db");
-    try {
-      const legacy = new Database(path);
-      legacy.exec(`
-        CREATE TABLE session_event (
-          id TEXT PRIMARY KEY,
-          seq INTEGER NOT NULL UNIQUE,
-          type TEXT NOT NULL,
-          session_id TEXT,
-          payload_json TEXT NOT NULL,
-          created_at INTEGER NOT NULL
-        );
-        INSERT INTO session_event
-          (id, seq, type, session_id, payload_json, created_at)
-        VALUES ('legacy-event', 7, 'daemon.legacy', NULL, '{"ok":true}', 100);
-      `);
-      legacy.close();
-
-      expect(
-        () => new SessionStore({ path, eventRegistry: fixtureEventRegistry }),
-      ).toThrow("Existing databases are not upgraded");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
 
   it("persists idempotent projection settlements and tracks finite repair attempts", () => {
     withStore((store, path) => {

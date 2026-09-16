@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadSettings, saveProjectSettings, saveSettings } from "./settings.js";
 
 describe("daemon settings", () => {
+  const forbidden = JSON.parse(readFileSync(new URL("../../../../scripts/forbidden-compatibility-surfaces.json", import.meta.url), "utf8"));
   let configDir: string;
   let previousConfigDir: string | undefined;
 
@@ -20,6 +21,13 @@ describe("daemon settings", () => {
     if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
     else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
     rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it.each(forbidden.configFields as string[])("rejects the removed config field %s before returning startup settings", async (field) => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ [field]: "old" }));
+    await expect(loadSettings()).rejects.toMatchObject({
+      name: "SettingsFileError", field: `settings.${field}`,
+    });
   });
 
   it("keeps automatic daemon startup off by default", async () => {

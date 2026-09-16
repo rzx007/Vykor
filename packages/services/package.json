@@ -28,6 +28,7 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:check": "drizzle-kit check --config drizzle.config.ts",
     "test": "vitest run",
+    "test:bundled-baseline": "bun run scripts/check-bundled-baseline.ts",
     "clean": "rimraf dist"
   },
   "dependencies": {

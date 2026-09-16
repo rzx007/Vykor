@@ -1,0 +1,3797 @@
+{
+  "schema": [
+    {
+      "type": "index",
+      "name": "attachment_asset_hash_status_idx",
+      "tbl_name": "attachment_asset",
+      "sql": "CREATE INDEX `attachment_asset_hash_status_idx`\r\n  ON `attachment_asset` (`sha256`, `status`)"
+    },
+    {
+      "type": "index",
+      "name": "attachment_asset_status_updated_idx",
+      "tbl_name": "attachment_asset",
+      "sql": "CREATE INDEX `attachment_asset_status_updated_idx`\r\n  ON `attachment_asset` (`status`, `updated_at`)"
+    },
+    {
+      "type": "index",
+      "name": "attachment_lease_asset_owner_unique",
+      "tbl_name": "attachment_lease",
+      "sql": "CREATE UNIQUE INDEX `attachment_lease_asset_owner_unique`\r\n  ON `attachment_lease` (`asset_id`, `owner_kind`, `owner_id`)"
+    },
+    {
+      "type": "index",
+      "name": "attachment_lease_expiry_idx",
+      "tbl_name": "attachment_lease",
+      "sql": "CREATE INDEX `attachment_lease_expiry_idx`\r\n  ON `attachment_lease` (`expires_at`, `asset_id`)"
+    },
+    {
+      "type": "index",
+      "name": "attachment_representation_asset_idx",
+      "tbl_name": "attachment_representation",
+      "sql": "CREATE INDEX `attachment_representation_asset_idx`\r\n  ON `attachment_representation` (`asset_id`, `created_at`)"
+    },
+    {
+      "type": "index",
+      "name": "attachment_representation_asset_kind_cache_unique",
+      "tbl_name": "attachment_representation",
+      "sql": "CREATE UNIQUE INDEX `attachment_representation_asset_kind_cache_unique`\r\n  ON `attachment_representation` (`asset_id`, `kind`, `cache_key`)"
+    },
+    {
+      "type": "index",
+      "name": "channel_delivery_input_unique",
+      "tbl_name": "channel_delivery",
+      "sql": "CREATE UNIQUE INDEX `channel_delivery_input_unique` ON `channel_delivery` (`input_id`)"
+    },
+    {
+      "type": "index",
+      "name": "channel_delivery_status_idx",
+      "tbl_name": "channel_delivery",
+      "sql": "CREATE INDEX `channel_delivery_status_idx` ON `channel_delivery` (`status`,`updated_at`)"
+    },
+    {
+      "type": "index",
+      "name": "cron_job_enabled_next_idx",
+      "tbl_name": "cron_job",
+      "sql": "CREATE INDEX `cron_job_enabled_next_idx` ON `cron_job` (`enabled`,`next_run_at`)"
+    },
+    {
+      "type": "index",
+      "name": "cron_job_name_unique",
+      "tbl_name": "cron_job",
+      "sql": "CREATE UNIQUE INDEX `cron_job_name_unique` ON `cron_job` (`name`)"
+    },
+    {
+      "type": "index",
+      "name": "cron_run_job_started_idx",
+      "tbl_name": "cron_run",
+      "sql": "CREATE INDEX `cron_run_job_started_idx` ON `cron_run` (`job_id`,`started_at`)"
+    },
+    {
+      "type": "index",
+      "name": "cron_run_status_idx",
+      "tbl_name": "cron_run",
+      "sql": "CREATE INDEX `cron_run_status_idx` ON `cron_run` (`status`)"
+    },
+    {
+      "type": "index",
+      "name": "external_conversation_identity_unique",
+      "tbl_name": "external_conversation",
+      "sql": "CREATE UNIQUE INDEX `external_conversation_identity_unique` ON `external_conversation` (`connector`,`account_id`,`chat_id`,`thread_id`)"
+    },
+    {
+      "type": "index",
+      "name": "external_conversation_session_idx",
+      "tbl_name": "external_conversation",
+      "sql": "CREATE INDEX `external_conversation_session_idx` ON `external_conversation` (`session_id`)"
+    },
+    {
+      "type": "index",
+      "name": "permission_session_status_idx",
+      "tbl_name": "permission_request",
+      "sql": "CREATE INDEX permission_session_status_idx ON permission_request(session_id, status)"
+    },
+    {
+      "type": "index",
+      "name": "project_location_active_path",
+      "tbl_name": "project_location",
+      "sql": "CREATE UNIQUE INDEX `project_location_active_path` ON `project_location` (`normalized_path`) WHERE `status` = 'active'"
+    },
+    {
+      "type": "index",
+      "name": "project_location_active_project",
+      "tbl_name": "project_location",
+      "sql": "CREATE UNIQUE INDEX `project_location_active_project` ON `project_location` (`project_id`) WHERE `status` = 'active'"
+    },
+    {
+      "type": "index",
+      "name": "project_location_project_idx",
+      "tbl_name": "project_location",
+      "sql": "CREATE INDEX `project_location_project_idx` ON `project_location` (`project_id`, `status`)"
+    },
+    {
+      "type": "index",
+      "name": "projection_settlement_event_idx",
+      "tbl_name": "projection_settlement",
+      "sql": "CREATE UNIQUE INDEX `projection_settlement_event_idx` ON `projection_settlement` (`projector`,`root_session_id`,`event_sequence`)"
+    },
+    {
+      "type": "index",
+      "name": "projection_settlement_status_retry_idx",
+      "tbl_name": "projection_settlement",
+      "sql": "CREATE INDEX `projection_settlement_status_retry_idx` ON `projection_settlement` (`status`,`next_retry_at`)"
+    },
+    {
+      "type": "index",
+      "name": "scheduled_run_status_idx",
+      "tbl_name": "scheduled_run",
+      "sql": "CREATE INDEX `scheduled_run_status_idx` ON `scheduled_run` (`status`)"
+    },
+    {
+      "type": "index",
+      "name": "scheduled_run_task_created_idx",
+      "tbl_name": "scheduled_run",
+      "sql": "CREATE INDEX `scheduled_run_task_created_idx` ON `scheduled_run` (`task_id`,`created_at`)"
+    },
+    {
+      "type": "index",
+      "name": "scheduled_run_unread_idx",
+      "tbl_name": "scheduled_run",
+      "sql": "CREATE INDEX `scheduled_run_unread_idx` ON `scheduled_run` (`unread`,`created_at`)"
+    },
+    {
+      "type": "index",
+      "name": "scheduled_task_session_idx",
+      "tbl_name": "scheduled_task",
+      "sql": "CREATE INDEX `scheduled_task_session_idx` ON `scheduled_task` (`session_id`)"
+    },
+    {
+      "type": "index",
+      "name": "scheduled_task_status_next_idx",
+      "tbl_name": "scheduled_task",
+      "sql": "CREATE INDEX `scheduled_task_status_next_idx` ON `scheduled_task` (`status`,`next_run_at`)"
+    },
+    {
+      "type": "index",
+      "name": "session_cwd_updated_idx",
+      "tbl_name": "session",
+      "sql": "CREATE INDEX session_cwd_updated_idx ON session(cwd, updated_at)"
+    },
+    {
+      "type": "index",
+      "name": "session_event_session_seq_idx",
+      "tbl_name": "session_event",
+      "sql": "CREATE INDEX session_event_session_seq_idx ON session_event(session_id, seq)"
+    },
+    {
+      "type": "index",
+      "name": "session_goal_assessment_run_unique",
+      "tbl_name": "session_goal_assessment",
+      "sql": "CREATE UNIQUE INDEX `session_goal_assessment_run_unique` ON `session_goal_assessment` (`goal_id`,`revision`,`run_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_goal_continuation_previous_unique",
+      "tbl_name": "session_goal_continuation",
+      "sql": "CREATE UNIQUE INDEX `session_goal_continuation_previous_unique` ON `session_goal_continuation` (`goal_id`,`revision`,`previous_run_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_goal_request_session_idx",
+      "tbl_name": "session_goal_request",
+      "sql": "CREATE INDEX `session_goal_request_session_idx` ON `session_goal_request` (`session_id`,`updated_at`)"
+    },
+    {
+      "type": "index",
+      "name": "session_goal_session_open_unique",
+      "tbl_name": "session_goal",
+      "sql": "CREATE UNIQUE INDEX `session_goal_session_open_unique` ON `session_goal` (`session_id`) WHERE `status` IN ('active','waiting_user','blocked','paused')"
+    },
+    {
+      "type": "index",
+      "name": "session_goal_session_updated_idx",
+      "tbl_name": "session_goal",
+      "sql": "CREATE INDEX `session_goal_session_updated_idx` ON `session_goal` (`session_id`,`updated_at`)"
+    },
+    {
+      "type": "index",
+      "name": "session_input_attachment_asset_idx",
+      "tbl_name": "session_input_attachment",
+      "sql": "CREATE INDEX `session_input_attachment_asset_idx`\r\n  ON `session_input_attachment` (`asset_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_input_attachment_input_seq_idx",
+      "tbl_name": "session_input_attachment",
+      "sql": "CREATE INDEX `session_input_attachment_input_seq_idx`\r\n  ON `session_input_attachment` (`input_id`, `seq`)"
+    },
+    {
+      "type": "index",
+      "name": "session_input_attachment_session_idx",
+      "tbl_name": "session_input_attachment",
+      "sql": "CREATE INDEX `session_input_attachment_session_idx`\r\n  ON `session_input_attachment` (`session_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_input_session_idx",
+      "tbl_name": "session_input",
+      "sql": "CREATE INDEX session_input_session_idx ON session_input(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "session_message_session_idx",
+      "tbl_name": "session_message",
+      "sql": "CREATE INDEX session_message_session_idx ON session_message(session_id)"
+    },
+    {
+      "type": "index",
+      "name": "session_parent_idx",
+      "tbl_name": "session",
+      "sql": "CREATE INDEX session_parent_idx ON session(parent_id)"
+    },
+    {
+      "type": "index",
+      "name": "session_part_message_idx",
+      "tbl_name": "session_message_part",
+      "sql": "CREATE INDEX session_part_message_idx ON session_message_part(message_id)"
+    },
+    {
+      "type": "index",
+      "name": "session_run_attempt_run_idx",
+      "tbl_name": "session_run_attempt",
+      "sql": "CREATE INDEX `session_run_attempt_run_idx` ON `session_run_attempt` (`run_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_run_attempt_run_sequence_unique",
+      "tbl_name": "session_run_attempt",
+      "sql": "CREATE UNIQUE INDEX `session_run_attempt_run_sequence_unique` ON `session_run_attempt` (`run_id`,`sequence`)"
+    },
+    {
+      "type": "index",
+      "name": "session_run_attempt_status_idx",
+      "tbl_name": "session_run_attempt",
+      "sql": "CREATE INDEX `session_run_attempt_status_idx` ON `session_run_attempt` (`status`)"
+    },
+    {
+      "type": "index",
+      "name": "session_run_input_idx",
+      "tbl_name": "session_run",
+      "sql": "CREATE INDEX session_run_input_idx ON session_run(input_id)"
+    },
+    {
+      "type": "index",
+      "name": "session_run_session_idx",
+      "tbl_name": "session_run",
+      "sql": "CREATE INDEX session_run_session_idx ON session_run(session_id, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "session_task_request_identity_idx",
+      "tbl_name": "session_task",
+      "sql": "CREATE UNIQUE INDEX `session_task_request_identity_idx`\r\n  ON `session_task` (`session_id`, `request_namespace`, `request_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_task_session_idx",
+      "tbl_name": "session_task",
+      "sql": "CREATE INDEX session_task_session_idx ON session_task(session_id, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "workflow_event_run_seq_idx",
+      "tbl_name": "workflow_event",
+      "sql": "CREATE INDEX `workflow_event_run_seq_idx` ON `workflow_event` (`workflow_run_id`,`seq`)"
+    },
+    {
+      "type": "index",
+      "name": "workflow_run_owner_idx",
+      "tbl_name": "workflow_run",
+      "sql": "CREATE INDEX `workflow_run_owner_idx` ON `workflow_run` (`owner_session_id`,`updated_at`)"
+    },
+    {
+      "type": "index",
+      "name": "workflow_run_status_idx",
+      "tbl_name": "workflow_run",
+      "sql": "CREATE INDEX `workflow_run_status_idx` ON `workflow_run` (`status`,`updated_at`)"
+    },
+    {
+      "type": "table",
+      "name": "application_owner",
+      "tbl_name": "application_owner",
+      "sql": "CREATE TABLE `application_owner` (\r\n\t`key` text PRIMARY KEY NOT NULL,\r\n\t`owner_id` text NOT NULL,\r\n\t`pid` integer NOT NULL,\r\n\t`generation` integer NOT NULL,\r\n\t`started_at` integer NOT NULL,\r\n\t`heartbeat_at` integer NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "application_storage_format",
+      "tbl_name": "application_storage_format",
+      "sql": "CREATE TABLE `application_storage_format` (\r\n\t`id` integer PRIMARY KEY NOT NULL CHECK (`id` = 1),\r\n\t`version` integer NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "attachment_asset",
+      "tbl_name": "attachment_asset",
+      "sql": "CREATE TABLE `attachment_asset` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `display_name` text NOT NULL,\r\n  `declared_media_type` text,\r\n  `media_type` text,\r\n  `size_bytes` integer,\r\n  `sha256` text,\r\n  `status` text NOT NULL,\r\n  `staging_name` text,\r\n  `failure_code` text,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL,\r\n  `deleted_at` integer\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "attachment_lease",
+      "tbl_name": "attachment_lease",
+      "sql": "CREATE TABLE `attachment_lease` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `asset_id` text NOT NULL,\r\n  `owner_kind` text NOT NULL,\r\n  `owner_id` text NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  `renewed_at` integer NOT NULL,\r\n  `expires_at` integer NOT NULL,\r\n  FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "attachment_representation",
+      "tbl_name": "attachment_representation",
+      "sql": "CREATE TABLE `attachment_representation` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `asset_id` text NOT NULL,\r\n  `kind` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `processor` text NOT NULL,\r\n  `processor_version` text NOT NULL,\r\n  `cache_key` text NOT NULL,\r\n  `media_type` text NOT NULL,\r\n  `text` text,\r\n  `error` text,\r\n  `metadata_json` text NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL,\r\n  FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "channel_delivery",
+      "tbl_name": "channel_delivery",
+      "sql": "CREATE TABLE `channel_delivery` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`conversation_id` text NOT NULL,\r\n\t`connector` text NOT NULL,\r\n\t`account_id` text NOT NULL,\r\n\t`chat_id` text NOT NULL,\r\n\t`thread_id` text NOT NULL DEFAULT '',\r\n\t`session_id` text NOT NULL,\r\n\t`input_id` text NOT NULL,\r\n\t`run_id` text NOT NULL,\r\n\t`external_message_id` text NOT NULL,\r\n\t`content` text NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`attempt_count` integer NOT NULL DEFAULT 0,\r\n\t`external_delivery_id` text,\r\n\t`error` text,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\t`sent_at` integer,\r\n\tFOREIGN KEY (`conversation_id`) REFERENCES `external_conversation`(`id`) ON UPDATE no action ON DELETE cascade,\r\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade,\r\n\tFOREIGN KEY (`input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE cascade,\r\n\tFOREIGN KEY (`run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "cron_job",
+      "tbl_name": "cron_job",
+      "sql": "CREATE TABLE `cron_job` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`name` text NOT NULL,\r\n\t`expression` text NOT NULL,\r\n\t`command` text NOT NULL,\r\n\t`cwd` text NOT NULL,\r\n\t`timezone` text,\r\n\t`enabled` integer NOT NULL,\r\n\t`last_run_at` integer,\r\n\t`next_run_at` integer,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "cron_run",
+      "tbl_name": "cron_run",
+      "sql": "CREATE TABLE `cron_run` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`job_id` text NOT NULL,\r\n\t`job_name` text NOT NULL,\r\n\t`cause` text NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`output` text,\r\n\t`error` text,\r\n\t`started_at` integer NOT NULL,\r\n\t`finished_at` integer\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "external_conversation",
+      "tbl_name": "external_conversation",
+      "sql": "CREATE TABLE `external_conversation` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`connector` text NOT NULL,\r\n\t`account_id` text NOT NULL,\r\n\t`workspace_id` text,\r\n\t`chat_id` text NOT NULL,\r\n\t`thread_id` text NOT NULL DEFAULT '',\r\n\t`session_id` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "permission_request",
+      "tbl_name": "permission_request",
+      "sql": "CREATE TABLE permission_request (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, run_id TEXT, tool_name TEXT NOT NULL,\r\n  payload_json TEXT NOT NULL, status TEXT NOT NULL, decision TEXT, decided_by_client_id TEXT,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "project",
+      "tbl_name": "project",
+      "sql": "CREATE TABLE `project` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `name` text NOT NULL,\r\n  `pinned_at` integer,\r\n  `last_opened_at` integer NOT NULL,\r\n  `archived_at` integer,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL\r\n, `default_shell` text)"
+    },
+    {
+      "type": "table",
+      "name": "project_location",
+      "tbl_name": "project_location",
+      "sql": "CREATE TABLE `project_location` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `project_id` text NOT NULL,\r\n  `path` text NOT NULL,\r\n  `normalized_path` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `bound_at` integer NOT NULL,\r\n  `last_verified_at` integer,\r\n  FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "projection_settlement",
+      "tbl_name": "projection_settlement",
+      "sql": "CREATE TABLE `projection_settlement` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`projector` text NOT NULL,\r\n\t`root_session_id` text NOT NULL,\r\n\t`event_sequence` integer NOT NULL,\r\n\t`action` text NOT NULL,\r\n\t`payload_json` text NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`attempt_count` integer DEFAULT 0 NOT NULL,\r\n\t`last_error` text,\r\n\t`next_retry_at` integer,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\t`resolved_at` integer\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "retention_audit",
+      "tbl_name": "retention_audit",
+      "sql": "CREATE TABLE `retention_audit` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`policy` text NOT NULL,\r\n\t`result_json` text NOT NULL,\r\n\t`created_at` integer NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "scheduled_run",
+      "tbl_name": "scheduled_run",
+      "sql": "CREATE TABLE `scheduled_run` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `task_id` text NOT NULL,\r\n  `cause` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `scheduled_for` integer NOT NULL,\r\n  `session_id` text,\r\n  `run_id` text,\r\n  `summary` text,\r\n  `error` text,\r\n  `unread` integer NOT NULL,\r\n  `attention_reason` text,\r\n  `created_at` integer NOT NULL,\r\n  `started_at` integer,\r\n  `finished_at` integer,\r\n  `updated_at` integer NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "scheduled_task",
+      "tbl_name": "scheduled_task",
+      "sql": "CREATE TABLE `scheduled_task` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `name` text NOT NULL,\r\n  `description` text,\r\n  `prompt` text NOT NULL,\r\n  `recurrence` text NOT NULL,\r\n  `recurrence_format` text NOT NULL,\r\n  `timezone` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `destination` text NOT NULL,\r\n  `session_id` text,\r\n  `project_paths_json` text NOT NULL,\r\n  `execution_mode` text NOT NULL,\r\n  `model` text,\r\n  `effort` text,\r\n  `skill_names_json` text NOT NULL,\r\n  `plugin_names_json` text NOT NULL,\r\n  `permission_profile_json` text NOT NULL,\r\n  `overlap_policy` text NOT NULL,\r\n  `missed_run_policy` text NOT NULL,\r\n  `stop_policy_json` text,\r\n  `created_by` text NOT NULL,\r\n  `created_from_session_id` text,\r\n  `last_run_at` integer,\r\n  `next_run_at` integer,\r\n  `run_count` integer NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session",
+      "tbl_name": "session",
+      "sql": "CREATE TABLE session (\r\n  id TEXT PRIMARY KEY, parent_id TEXT, cwd TEXT NOT NULL, title TEXT NOT NULL,\r\n  model TEXT NOT NULL, agent TEXT, status TEXT NOT NULL, metadata_json TEXT NOT NULL,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER\r\n, `project_id` text REFERENCES project(id), `cwd_relative` text)"
+    },
+    {
+      "type": "table",
+      "name": "session_event",
+      "tbl_name": "session_event",
+      "sql": "CREATE TABLE session_event (\r\n  id TEXT PRIMARY KEY, seq INTEGER NOT NULL UNIQUE, type TEXT NOT NULL, session_id TEXT,\r\n  payload_json TEXT NOT NULL, created_at INTEGER NOT NULL\r\n, `schema_version` integer DEFAULT 1 NOT NULL)"
+    },
+    {
+      "type": "table",
+      "name": "session_event_sequence",
+      "tbl_name": "session_event_sequence",
+      "sql": "CREATE TABLE session_event_sequence (\r\n  id INTEGER PRIMARY KEY CHECK (id = 1),\r\n  reserved_through INTEGER NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_goal",
+      "tbl_name": "session_goal",
+      "sql": "CREATE TABLE `session_goal` (`id` text PRIMARY KEY NOT NULL, `session_id` text NOT NULL REFERENCES `session`(`id`) ON DELETE cascade, `objective` text NOT NULL, `revision` integer NOT NULL, `status` text NOT NULL, `max_auto_turns` integer NOT NULL, `auto_turns_used` integer NOT NULL, `no_progress_count` integer NOT NULL, `current_run_id` text, `reason` text, `wait_json` text, `evidence_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `blocker_key` text, `last_assessment_json` text, `plugin_id` text)"
+    },
+    {
+      "type": "table",
+      "name": "session_goal_assessment",
+      "tbl_name": "session_goal_assessment",
+      "sql": "CREATE TABLE `session_goal_assessment` (`id` text PRIMARY KEY NOT NULL, `goal_id` text NOT NULL REFERENCES `session_goal`(`id`) ON DELETE cascade, `revision` integer NOT NULL, `run_id` text NOT NULL, `assessment_json` text NOT NULL, `created_at` integer NOT NULL)"
+    },
+    {
+      "type": "table",
+      "name": "session_goal_continuation",
+      "tbl_name": "session_goal_continuation",
+      "sql": "CREATE TABLE `session_goal_continuation` (`id` text PRIMARY KEY NOT NULL, `goal_id` text NOT NULL REFERENCES `session_goal`(`id`) ON DELETE cascade, `revision` integer NOT NULL, `previous_run_id` text NOT NULL, `input_id` text, `run_id` text, `status` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL)"
+    },
+    {
+      "type": "table",
+      "name": "session_goal_request",
+      "tbl_name": "session_goal_request",
+      "sql": "CREATE TABLE `session_goal_request` (`request_id` text PRIMARY KEY NOT NULL, `session_id` text NOT NULL REFERENCES `session`(`id`) ON DELETE cascade, `fingerprint` text NOT NULL, `status` text NOT NULL, `goal_id` text, `result_json` text, `error` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL)"
+    },
+    {
+      "type": "table",
+      "name": "session_input",
+      "tbl_name": "session_input",
+      "sql": "CREATE TABLE session_input (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL, delivery TEXT NOT NULL,\r\n  content TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL, `items_json` text,\r\n  UNIQUE(session_id, seq)\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_input_attachment",
+      "tbl_name": "session_input_attachment",
+      "sql": "CREATE TABLE `session_input_attachment` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `session_id` text NOT NULL,\r\n  `input_id` text NOT NULL,\r\n  `asset_id` text NOT NULL,\r\n  `seq` integer NOT NULL,\r\n  `intent` text NOT NULL,\r\n  `display_name` text NOT NULL,\r\n  `media_type` text NOT NULL,\r\n  `size_bytes` integer NOT NULL,\r\n  `metadata_json` text NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade,\r\n  FOREIGN KEY (`input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE cascade,\r\n  FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE restrict,\r\n  CONSTRAINT `session_input_attachment_input_seq_unique` UNIQUE(`input_id`, `seq`),\r\n  CONSTRAINT `session_input_attachment_input_asset_unique` UNIQUE(`input_id`, `asset_id`)\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_message",
+      "tbl_name": "session_message",
+      "sql": "CREATE TABLE session_message (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL,\r\n  run_id TEXT, input_id TEXT, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL,\r\n  updated_at INTEGER NOT NULL, UNIQUE(session_id, seq)\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_message_part",
+      "tbl_name": "session_message_part",
+      "sql": "CREATE TABLE session_message_part (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, message_id TEXT NOT NULL, seq INTEGER NOT NULL,\r\n  type TEXT NOT NULL, status TEXT NOT NULL, text TEXT, tool_use_id TEXT, tool_name TEXT,\r\n  input_json TEXT, output_json TEXT, is_error INTEGER, metadata_json TEXT NOT NULL,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, `asset_id` text, `attachment_intent` text, `display_name` text, `media_type` text, `size_bytes` integer, `transformation_kind` text, `representation_id` text, `processor` text, `transformation_error` text, UNIQUE(session_id, seq)\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_run",
+      "tbl_name": "session_run",
+      "sql": "CREATE TABLE session_run (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, input_id TEXT, status TEXT NOT NULL,\r\n  started_at INTEGER, finished_at INTEGER, error TEXT, metadata_json TEXT NOT NULL,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_run_attempt",
+      "tbl_name": "session_run_attempt",
+      "sql": "CREATE TABLE `session_run_attempt` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`run_id` text NOT NULL,\r\n\t`sequence` integer NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`provider` text,\r\n\t`model` text,\r\n\t`retry_reason` text,\r\n\t`error_kind` text,\r\n\t`error` text,\r\n\t`input_tokens` integer,\r\n\t`output_tokens` integer,\r\n\t`started_at` integer,\r\n\t`finished_at` integer,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "session_task",
+      "tbl_name": "session_task",
+      "sql": "CREATE TABLE session_task (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, child_session_id TEXT, run_id TEXT,\r\n  type TEXT NOT NULL, status TEXT NOT NULL, description TEXT NOT NULL, cwd TEXT NOT NULL,\r\n  output TEXT, error TEXT, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL,\r\n  started_at INTEGER, finished_at INTEGER, updated_at INTEGER NOT NULL\r\n, `request_namespace` text, `request_id` text)"
+    },
+    {
+      "type": "table",
+      "name": "workflow_event",
+      "tbl_name": "workflow_event",
+      "sql": "CREATE TABLE `workflow_event` (\r\n\t`seq` integer PRIMARY KEY AUTOINCREMENT NOT NULL,\r\n\t`workflow_run_id` text NOT NULL,\r\n\t`type` text NOT NULL,\r\n\t`event_json` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\tFOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "workflow_execution_claim",
+      "tbl_name": "workflow_execution_claim",
+      "sql": "CREATE TABLE `workflow_execution_claim` (\r\n\t`workflow_run_id` text PRIMARY KEY NOT NULL,\r\n\t`owner_id` text NOT NULL,\r\n\t`generation` integer NOT NULL,\r\n\t`claimed_at` integer NOT NULL,\r\n\t`heartbeat_at` integer NOT NULL,\r\n\t`finished_at` integer,\r\n\t`status` text NOT NULL,\r\n\tFOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "workflow_run",
+      "tbl_name": "workflow_run",
+      "sql": "CREATE TABLE `workflow_run` (\r\n\t`run_id` text PRIMARY KEY NOT NULL,\r\n\t`owner_session_id` text,\r\n\t`owner_input_id` text,\r\n\t`owner_run_id` text,\r\n\t`status` text NOT NULL,\r\n\t`termination` text,\r\n\t`snapshot_json` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\tFOREIGN KEY (`owner_session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE set null,\r\n\tFOREIGN KEY (`owner_input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE set null,\r\n\tFOREIGN KEY (`owner_run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE set null\r\n)"
+    },
+    {
+      "type": "table",
+      "name": "workflow_task_attempt",
+      "tbl_name": "workflow_task_attempt",
+      "sql": "CREATE TABLE `workflow_task_attempt` (\r\n\t`workflow_run_id` text NOT NULL,\r\n\t`task_id` text NOT NULL,\r\n\t`attempt` integer NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`payload_json` text NOT NULL,\r\n\t`started_at` integer NOT NULL,\r\n\t`finished_at` integer,\r\n\tPRIMARY KEY (`workflow_run_id`,`task_id`,`attempt`),\r\n\tFOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade\r\n)"
+    }
+  ],
+  "tables": [
+    {
+      "name": "application_owner",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "owner_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "pid",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "generation",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "heartbeat_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "application_storage_format",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "attachment_asset",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "display_name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "declared_media_type",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "media_type",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "size_bytes",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "staging_name",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "failure_code",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "deleted_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "attachment_lease",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "asset_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "owner_kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "owner_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "renewed_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "expires_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "attachment_asset",
+          "from": "asset_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "attachment_representation",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "asset_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "kind",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "processor",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "processor_version",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "cache_key",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "media_type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "text",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "attachment_asset",
+          "from": "asset_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "channel_delivery",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "conversation_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "connector",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "chat_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "thread_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "''",
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "input_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "external_message_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "content",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "attempt_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "external_delivery_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 17,
+          "name": "sent_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session_run",
+          "from": "run_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "session_input",
+          "from": "input_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "session",
+          "from": "session_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 3,
+          "seq": 0,
+          "table": "external_conversation",
+          "from": "conversation_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "cron_job",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "expression",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "command",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "cwd",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "timezone",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "enabled",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "last_run_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "next_run_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "cron_run",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "job_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "job_name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "cause",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "output",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "external_conversation",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "connector",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "account_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "workspace_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "chat_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "thread_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": "''",
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session",
+          "from": "session_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "permission_request",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "tool_name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "payload_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "decision",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "decided_by_client_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "project",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "pinned_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "last_opened_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "archived_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "default_shell",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "project_location",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "project_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "path",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "normalized_path",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "bound_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "last_verified_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "project",
+          "from": "project_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "projection_settlement",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "projector",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "root_session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "event_sequence",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "action",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "payload_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "attempt_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "0",
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "last_error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "next_retry_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "resolved_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "retention_audit",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "policy",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "result_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "scheduled_run",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "task_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "cause",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "scheduled_for",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "summary",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "unread",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "attention_reason",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "scheduled_task",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "description",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "prompt",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "recurrence",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "recurrence_format",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "timezone",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "destination",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "project_paths_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "execution_mode",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "model",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "effort",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "skill_names_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "plugin_names_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "permission_profile_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 17,
+          "name": "overlap_policy",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 18,
+          "name": "missed_run_policy",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 19,
+          "name": "stop_policy_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 20,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 21,
+          "name": "created_from_session_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 22,
+          "name": "last_run_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 23,
+          "name": "next_run_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 24,
+          "name": "run_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 25,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 26,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "parent_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "cwd",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "title",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "model",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "agent",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "archived_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "project_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "cwd_relative",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "project",
+          "from": "project_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "NO ACTION",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "session_event",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "seq",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "payload_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "schema_version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "1",
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session_event_sequence",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "reserved_through",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session_goal",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "objective",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "revision",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "max_auto_turns",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "auto_turns_used",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "no_progress_count",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "current_run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "reason",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "wait_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "evidence_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "blocker_key",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "last_assessment_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "plugin_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session",
+          "from": "session_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "session_goal_assessment",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "goal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "revision",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "assessment_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session_goal",
+          "from": "goal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "session_goal_continuation",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "goal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "revision",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "previous_run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "input_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session_goal",
+          "from": "goal_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "session_goal_request",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "request_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "fingerprint",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "goal_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "result_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session",
+          "from": "session_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "session_input",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "seq",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "delivery",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "content",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "items_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session_input_attachment",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "input_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "asset_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "seq",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "intent",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "display_name",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "media_type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "size_bytes",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "attachment_asset",
+          "from": "asset_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "RESTRICT",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "session_input",
+          "from": "input_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "session",
+          "from": "session_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "session_message",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "seq",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "role",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "input_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session_message_part",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "message_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "seq",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "text",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "tool_use_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "tool_name",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "input_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "output_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "is_error",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "asset_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "attachment_intent",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 17,
+          "name": "display_name",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 18,
+          "name": "media_type",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 19,
+          "name": "size_bytes",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 20,
+          "name": "transformation_kind",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 21,
+          "name": "representation_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 22,
+          "name": "processor",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 23,
+          "name": "transformation_error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session_run",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "input_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session_run_attempt",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "sequence",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "provider",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "model",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "retry_reason",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "error_kind",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "input_tokens",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "output_tokens",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "session_task",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "child_session_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "description",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "cwd",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "output",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "request_namespace",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "request_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": []
+    },
+    {
+      "name": "workflow_event",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "seq",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "workflow_run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "event_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "workflow_run",
+          "from": "workflow_run_id",
+          "to": "run_id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "workflow_execution_claim",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workflow_run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "owner_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "generation",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "claimed_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "heartbeat_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "workflow_run",
+          "from": "workflow_run_id",
+          "to": "run_id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "workflow_run",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "owner_session_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "owner_input_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "owner_run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "termination",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "snapshot_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "session_run",
+          "from": "owner_run_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "SET NULL",
+          "match": "NONE"
+        },
+        {
+          "id": 1,
+          "seq": 0,
+          "table": "session_input",
+          "from": "owner_input_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "SET NULL",
+          "match": "NONE"
+        },
+        {
+          "id": 2,
+          "seq": 0,
+          "table": "session",
+          "from": "owner_session_id",
+          "to": "id",
+          "on_update": "NO ACTION",
+          "on_delete": "SET NULL",
+          "match": "NONE"
+        }
+      ]
+    },
+    {
+      "name": "workflow_task_attempt",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "workflow_run_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "task_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 2
+        },
+        {
+          "cid": 2,
+          "name": "attempt",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 3
+        },
+        {
+          "cid": 3,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "payload_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "workflow_run",
+          "from": "workflow_run_id",
+          "to": "run_id",
+          "on_update": "NO ACTION",
+          "on_delete": "CASCADE",
+          "match": "NONE"
+        }
+      ]
+    }
+  ],
+  "format": [
+    {
+      "id": 1,
+      "version": 2
+    }
+  ]
+}

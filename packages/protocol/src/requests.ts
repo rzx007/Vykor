@@ -191,6 +191,7 @@ export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
   }
   const title = optionalString(body, "title");
   const metadata = optionalRecord(body, "metadata");
+  readRuntimeMetadata(metadata);
   const rawAgent = body.agent;
   if (rawAgent !== undefined && rawAgent !== null && typeof rawAgent !== "string") {
     throw new ProtocolValidationError("agent must be a string or null", "agent");

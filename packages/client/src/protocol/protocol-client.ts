@@ -8,8 +8,7 @@
  *
  * 约束：
  * - 构造只接收 HttpTransport
- * - 无全局或内存隐式状态缓存
- * - 业务 Resource 不得隐式触发协商请求
+ * - 业务请求的强制握手由 HttpTransport 缓存并执行
  */
 
 import type {

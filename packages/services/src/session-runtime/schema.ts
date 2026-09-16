@@ -1,11 +1,12 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const sessions = sqliteTable(
   "session",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     parentId: text("parent_id"),
-    projectId: text("project_id"),
+    projectId: text("project_id").references(() => projects.id),
     cwd: text("cwd").notNull(),
     cwdRelative: text("cwd_relative"),
     title: text("title").notNull(),
@@ -18,6 +19,7 @@ export const sessions = sqliteTable(
     archivedAt: integer("archived_at"),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index("session_parent_idx").on(table.parentId),
     index("session_cwd_updated_idx").on(table.cwd, table.updatedAt),
   ],
@@ -38,20 +40,24 @@ export const projectLocations = sqliteTable(
   "project_location",
   {
     id: text("id").primaryKey(),
-    projectId: text("project_id").notNull(),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     path: text("path").notNull(),
     normalizedPath: text("normalized_path").notNull(),
     status: text("status").notNull(),
     boundAt: integer("bound_at").notNull(),
     lastVerifiedAt: integer("last_verified_at"),
   },
-  (table) => [index("project_location_project_idx").on(table.projectId, table.status)],
+  (table) => [
+    index("project_location_project_idx").on(table.projectId, table.status),
+    uniqueIndex("project_location_active_path").on(table.normalizedPath).where(sql`${table.status} = 'active'`),
+    uniqueIndex("project_location_active_project").on(table.projectId).where(sql`${table.status} = 'active'`),
+  ],
 );
 
 export const sessionInputs = sqliteTable(
   "session_input",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     sessionId: text("session_id").notNull(),
     seq: integer("seq").notNull(),
     delivery: text("delivery").notNull(),
@@ -61,7 +67,8 @@ export const sessionInputs = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
-    uniqueIndex("session_input_session_seq").on(table.sessionId, table.seq),
+    primaryKey({ columns: [table.id] }),
+    unique("session_input_session_seq").on(table.sessionId, table.seq),
     index("session_input_session_idx").on(table.sessionId),
   ],
 );
@@ -162,8 +169,8 @@ export const sessionInputAttachments = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
-    uniqueIndex("session_input_attachment_input_seq_unique").on(table.inputId, table.seq),
-    uniqueIndex("session_input_attachment_input_asset_unique").on(table.inputId, table.assetId),
+    unique("session_input_attachment_input_seq_unique").on(table.inputId, table.seq),
+    unique("session_input_attachment_input_asset_unique").on(table.inputId, table.assetId),
     index("session_input_attachment_input_seq_idx").on(table.inputId, table.seq),
     index("session_input_attachment_asset_idx").on(table.assetId),
     index("session_input_attachment_session_idx").on(table.sessionId),
@@ -173,7 +180,7 @@ export const sessionInputAttachments = sqliteTable(
 export const sessionMessages = sqliteTable(
   "session_message",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     sessionId: text("session_id").notNull(),
     seq: integer("seq").notNull(),
     role: text("role").notNull(),
@@ -184,7 +191,8 @@ export const sessionMessages = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
   },
   (table) => [
-    uniqueIndex("session_message_session_seq").on(table.sessionId, table.seq),
+    primaryKey({ columns: [table.id] }),
+    unique("session_message_session_seq").on(table.sessionId, table.seq),
     index("session_message_session_idx").on(table.sessionId),
   ],
 );
@@ -192,7 +200,7 @@ export const sessionMessages = sqliteTable(
 export const sessionMessageParts = sqliteTable(
   "session_message_part",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     sessionId: text("session_id").notNull(),
     messageId: text("message_id").notNull(),
     seq: integer("seq").notNull(),
@@ -218,7 +226,8 @@ export const sessionMessageParts = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
   },
   (table) => [
-    uniqueIndex("session_part_session_seq").on(table.sessionId, table.seq),
+    primaryKey({ columns: [table.id] }),
+    unique("session_part_session_seq").on(table.sessionId, table.seq),
     index("session_part_message_idx").on(table.messageId),
   ],
 );
@@ -226,7 +235,7 @@ export const sessionMessageParts = sqliteTable(
 export const sessionRuns = sqliteTable(
   "session_run",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     sessionId: text("session_id").notNull(),
     inputId: text("input_id"),
     status: text("status").notNull(),
@@ -238,6 +247,7 @@ export const sessionRuns = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index("session_run_session_idx").on(table.sessionId, table.createdAt),
     index("session_run_input_idx").on(table.inputId),
   ],
@@ -266,7 +276,11 @@ export const sessionGoals = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [index("session_goal_session_updated_idx").on(table.sessionId, table.updatedAt)],
+  (table) => [
+    index("session_goal_session_updated_idx").on(table.sessionId, table.updatedAt),
+    uniqueIndex("session_goal_session_open_unique").on(table.sessionId)
+      .where(sql`${table.status} IN ('active','waiting_user','blocked','paused')`),
+  ],
 );
 
 export const sessionGoalRequests = sqliteTable(
@@ -455,11 +469,7 @@ export const workflowTaskAttempts = sqliteTable(
     finishedAt: integer("finished_at"),
   },
   (table) => [
-    uniqueIndex("workflow_task_attempt_identity").on(
-      table.workflowRunId,
-      table.taskId,
-      table.attempt,
-    ),
+    primaryKey({ columns: [table.workflowRunId, table.taskId, table.attempt] }),
   ],
 );
 
@@ -474,7 +484,8 @@ export const workflowEvents = sqliteTable(
     eventJson: text("event_json").notNull(),
     createdAt: integer("created_at").notNull(),
   },
-  (table) => [index("workflow_event_run_seq_idx").on(table.workflowRunId, table.seq)],
+  (table) => [index("workflow_event_run_seq_idx").on(table.workflowRunId, table.seq),
+  ],
 );
 
 export const workflowExecutionClaims = sqliteTable("workflow_execution_claim", {
@@ -508,7 +519,7 @@ export const retentionAudits = sqliteTable("retention_audit", {
 export const sessionTasks = sqliteTable(
   "session_task",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     sessionId: text("session_id").notNull(),
     requestNamespace: text("request_namespace"),
     requestId: text("request_id"),
@@ -527,6 +538,7 @@ export const sessionTasks = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
   },
   (table) => [
+    primaryKey({ columns: [table.id] }),
     index("session_task_session_idx").on(table.sessionId, table.createdAt),
     uniqueIndex("session_task_request_identity_idx").on(
       table.sessionId,
@@ -539,7 +551,7 @@ export const sessionTasks = sqliteTable(
 export const permissionRequests = sqliteTable(
   "permission_request",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     sessionId: text("session_id").notNull(),
     runId: text("run_id"),
     toolName: text("tool_name").notNull(),
@@ -550,13 +562,16 @@ export const permissionRequests = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [index("permission_session_status_idx").on(table.sessionId, table.status)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    index("permission_session_status_idx").on(table.sessionId, table.status),
+  ],
 );
 
 export const sessionEvents = sqliteTable(
   "session_event",
   {
-    id: text("id").primaryKey(),
+    id: text("id"),
     seq: integer("seq").notNull().unique(),
     type: text("type").notNull(),
     schemaVersion: integer("schema_version").notNull().default(1),
@@ -564,13 +579,24 @@ export const sessionEvents = sqliteTable(
     payloadJson: text("payload_json").notNull(),
     createdAt: integer("created_at").notNull(),
   },
-  (table) => [index("session_event_session_seq_idx").on(table.sessionId, table.seq)],
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    index("session_event_session_seq_idx").on(table.sessionId, table.seq),
+  ],
 );
 
 export const sessionEventSequence = sqliteTable("session_event_sequence", {
-  id: integer("id").primaryKey(),
+  id: integer("id"),
   reservedThrough: integer("reserved_through").notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.id] }),
+  check("session_event_sequence_singleton", sql`${table.id} = 1`),
+]);
+
+export const applicationStorageFormat = sqliteTable("application_storage_format", {
+  id: integer("id").primaryKey(),
+  version: integer("version").notNull(),
+}, (table) => [check("application_storage_format_singleton", sql`${table.id} = 1`)]);
 
 export const projectionSettlements = sqliteTable(
   "projection_settlement",
