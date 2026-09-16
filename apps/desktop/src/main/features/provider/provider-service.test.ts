@@ -1,10 +1,29 @@
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../session/session-service", () => ({
-  desktopSessionService: {},
+const daemon = vi.hoisted(() => ({
+  listProviders: vi.fn(),
+  getAuthStatus: vi.fn(),
+  getSettings: vi.fn(),
+  listModels: vi.fn(),
+  connectCatalogProvider: vi.fn(),
+  updateCatalogProviderHeaders: vi.fn(),
+  authLogin: vi.fn(),
+  patchSettings: vi.fn(),
 }))
 
-import { buildDesktopProviderSnapshot } from "./provider-service"
+const sessionService = vi.hoisted(() => ({
+  daemonClient: vi.fn(async () => daemon),
+  refreshDaemonClient: vi.fn(async () => daemon),
+}))
+
+vi.mock("../session/session-service", () => ({
+  desktopSessionService: sessionService,
+}))
+
+import {
+  DesktopProviderService,
+  buildDesktopProviderSnapshot,
+} from "./provider-service"
 
 describe("buildDesktopProviderSnapshot", () => {
   it("merges provider, auth, settings and model state without exposing credentials", () => {
@@ -147,6 +166,7 @@ describe("buildDesktopProviderSnapshot", () => {
             apiFormat: "openai",
             source: "models.dev",
             models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+            headers: { "X-Workspace": "team-a" },
           },
         ],
       },
@@ -170,9 +190,68 @@ describe("buildDesktopProviderSnapshot", () => {
       source: "catalog",
       connected: true,
       credentialSource: "credentials",
+      headers: { "X-Workspace": "team-a" },
       models: [{ id: "remote-chat", label: "Remote Chat" }],
     })
     expect(snapshot.providers[0]).not.toHaveProperty("custom")
+  })
+
+  it("requires both catalog snapshot and credential to report connected", () => {
+    const withoutSnapshot = buildDesktopProviderSnapshot({
+      providers: [{
+        name: "remote",
+        displayName: "Remote",
+        hasKey: true,
+        active: false,
+        source: "catalog",
+      }],
+      auth: {
+        codex: { configured: false, state: "missing", source: "none" },
+        storedProviders: ["remote"],
+        envProviders: [],
+      },
+      settings: { customProviders: [] },
+      models: [],
+    })
+
+    expect(withoutSnapshot.providers[0]).toMatchObject({
+      connected: false,
+      credentialSource: "none",
+    })
+  })
+
+  it("keeps true custom providers without API key as configured", () => {
+    const snapshot = buildDesktopProviderSnapshot({
+      providers: [{
+        name: "office-gateway",
+        displayName: "Office Gateway",
+        hasKey: false,
+        active: false,
+        custom: true,
+        requiresApiKey: false,
+      }],
+      auth: {
+        codex: { configured: false, state: "missing", source: "none" },
+        storedProviders: [],
+        envProviders: [],
+      },
+      settings: {
+        customProviders: [{
+          id: "office-gateway",
+          displayName: "Office Gateway",
+          baseUrl: "https://gateway.example/v1",
+          apiFormat: "openai",
+          models: [{ id: "team-model", displayName: "Team Model" }],
+        }],
+      },
+      models: [],
+    })
+
+    expect(snapshot.providers[0]).toMatchObject({
+      custom: true,
+      connected: true,
+      credentialSource: "configured",
+    })
   })
 
   it("does not treat Codex as connected when external auth is missing", () => {
@@ -258,6 +337,148 @@ describe("buildDesktopProviderSnapshot", () => {
     expect(snapshot.providers[0]).toMatchObject({
       connected: false,
       credentialSource: "none",
+    })
+  })
+})
+
+describe("DesktopProviderService catalog headers", () => {
+  const service = new DesktopProviderService()
+
+  const authMissing = {
+    codex: { configured: false, state: "missing" as const, source: "none" },
+    storedProviders: [] as string[],
+    envProviders: [] as Array<{ name: string; envKey: string }>,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    daemon.listProviders.mockResolvedValue([])
+    daemon.getAuthStatus.mockResolvedValue(authMissing)
+    daemon.getSettings.mockResolvedValue({})
+    daemon.listModels.mockResolvedValue([])
+    daemon.connectCatalogProvider.mockResolvedValue({
+      name: "remote",
+      displayName: "Remote",
+      hasKey: true,
+      active: false,
+      source: "catalog",
+    })
+    daemon.updateCatalogProviderHeaders.mockResolvedValue({
+      name: "remote",
+      displayName: "Remote",
+      hasKey: true,
+      active: false,
+      source: "catalog",
+    })
+    daemon.authLogin.mockResolvedValue({
+      name: "openai",
+      displayName: "OpenAI",
+      hasKey: true,
+      active: false,
+    })
+  })
+
+  it("forwards catalog connect header templates to the client", async () => {
+    daemon.listProviders.mockResolvedValue([
+      {
+        name: "remote",
+        displayName: "Remote",
+        hasKey: false,
+        active: false,
+        source: "catalog",
+      },
+    ])
+    daemon.getAuthStatus.mockResolvedValue({
+      ...authMissing,
+      storedProviders: ["remote"],
+    })
+    daemon.getSettings.mockResolvedValue({
+      customProviders: [{
+        id: "remote",
+        displayName: "Remote",
+        baseUrl: "https://remote.example/v1",
+        apiFormat: "openai",
+        source: "models.dev",
+        models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+        headers: { "X-Workspace": "team-a" },
+      }],
+    })
+
+    await service.connect({
+      provider: "remote",
+      apiKey: "catalog-secret",
+      headers: { "X-Workspace": "team-a" },
+    })
+
+    expect(daemon.connectCatalogProvider).toHaveBeenCalledWith("remote", {
+      apiKey: "catalog-secret",
+      headers: { "X-Workspace": "team-a" },
+    })
+    expect(daemon.authLogin).not.toHaveBeenCalled()
+  })
+
+  it("keeps built-in connect on authLogin and ignores headers", async () => {
+    daemon.listProviders.mockResolvedValue([
+      { name: "openai", displayName: "OpenAI", hasKey: false, active: false },
+    ])
+    daemon.getAuthStatus.mockResolvedValue({
+      ...authMissing,
+      storedProviders: ["openai"],
+    })
+
+    await service.connect({
+      provider: "openai",
+      apiKey: "sk-test",
+      headers: { "X-Ignored": "nope" },
+    })
+
+    expect(daemon.authLogin).toHaveBeenCalledWith({
+      provider: "openai",
+      apiKey: "sk-test",
+    })
+    expect(daemon.connectCatalogProvider).not.toHaveBeenCalled()
+  })
+
+  it("routes updateCatalogHeaders only through the catalog client method", async () => {
+    daemon.listProviders.mockResolvedValue([
+      {
+        name: "remote",
+        displayName: "Remote",
+        hasKey: true,
+        active: false,
+        source: "catalog",
+      },
+    ])
+    daemon.getAuthStatus.mockResolvedValue({
+      ...authMissing,
+      storedProviders: ["remote"],
+    })
+    daemon.getSettings.mockResolvedValue({
+      customProviders: [{
+        id: "remote",
+        displayName: "Remote",
+        baseUrl: "https://remote.example/v1",
+        apiFormat: "openai",
+        source: "models.dev",
+        models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+        headers: { "X-Workspace": "team-b" },
+      }],
+    })
+
+    const snapshot = await service.updateCatalogHeaders({
+      provider: "remote",
+      headers: { "X-Workspace": "team-b" },
+    })
+
+    expect(daemon.updateCatalogProviderHeaders).toHaveBeenCalledWith("remote", {
+      "X-Workspace": "team-b",
+    })
+    expect(daemon.connectCatalogProvider).not.toHaveBeenCalled()
+    expect(daemon.authLogin).not.toHaveBeenCalled()
+    expect(snapshot.providers[0]).toMatchObject({
+      source: "catalog",
+      connected: true,
+      headers: { "X-Workspace": "team-b" },
     })
   })
 })

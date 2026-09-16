@@ -188,6 +188,9 @@ export const desktopAPI = {
       invoke(IpcChannels.providerActivate, input),
     disconnect: (input: IpcInvokeMap[typeof IpcChannels.providerDisconnect]["args"][0]) =>
       invoke(IpcChannels.providerDisconnect, input),
+    updateCatalogHeaders: (
+      input: IpcInvokeMap[typeof IpcChannels.providerCatalogHeadersUpdate]["args"][0]
+    ) => invoke(IpcChannels.providerCatalogHeadersUpdate, input),
     createCustom: (input: IpcInvokeMap[typeof IpcChannels.providerCustomCreate]["args"][0]) =>
       invoke(IpcChannels.providerCustomCreate, input),
     updateCustom: (input: IpcInvokeMap[typeof IpcChannels.providerCustomUpdate]["args"][0]) =>

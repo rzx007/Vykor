@@ -70,6 +70,7 @@ import type {
   DesktopProviderSnapshot,
   DisconnectDesktopProviderInput,
   CreateDesktopCustomProviderInput,
+  UpdateDesktopCatalogProviderHeadersInput,
   UpdateDesktopCustomProviderInput,
   RemoveDesktopCustomProviderInput,
 } from "./provider-types"
@@ -242,6 +243,7 @@ export const IpcChannels = {
   providerConnect: "provider:connect",
   providerActivate: "provider:activate",
   providerDisconnect: "provider:disconnect",
+  providerCatalogHeadersUpdate: "provider:catalog-headers-update",
   providerCustomCreate: "provider:custom-create",
   providerCustomUpdate: "provider:custom-update",
   providerCustomRemove: "provider:custom-remove",
@@ -642,6 +644,10 @@ export interface IpcInvokeMap {
   }
   [IpcChannels.providerDisconnect]: {
     args: [input: DisconnectDesktopProviderInput]
+    result: DesktopProviderSnapshot
+  }
+  [IpcChannels.providerCatalogHeadersUpdate]: {
+    args: [input: UpdateDesktopCatalogProviderHeadersInput]
     result: DesktopProviderSnapshot
   }
   [IpcChannels.providerCustomCreate]: {

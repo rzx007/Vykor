@@ -13,6 +13,7 @@ import type {
   DesktopProviderSnapshot,
   DisconnectDesktopProviderInput,
   CreateDesktopCustomProviderInput,
+  UpdateDesktopCatalogProviderHeadersInput,
   UpdateDesktopCustomProviderInput,
   RemoveDesktopCustomProviderInput,
 } from "../../../shared/provider-types"
@@ -42,8 +43,14 @@ export class DesktopProviderService {
       const catalogProvider = (await client.listProviders()).find(
         (item) => item.name === provider && item.source === "catalog"
       )
-      if (catalogProvider) await client.connectCatalogProvider(provider, apiKey)
-      else await client.authLogin({ provider, apiKey })
+      if (catalogProvider) {
+        await client.connectCatalogProvider(provider, {
+          apiKey,
+          ...("headers" in input ? { headers: input.headers } : {}),
+        })
+      } else {
+        await client.authLogin({ provider, apiKey })
+      }
     })
     if (input.setActive) await this.activate({ provider })
     return await this.snapshot()
@@ -78,6 +85,18 @@ export class DesktopProviderService {
       if (catalogProvider) await client.disconnectCatalogProvider(provider)
       else await client.authLogout({ provider })
     })
+    return await this.snapshot()
+  }
+
+  async updateCatalogHeaders(
+    input: UpdateDesktopCatalogProviderHeadersInput
+  ): Promise<DesktopProviderSnapshot> {
+    const provider = normalizeProviderName(input.provider)
+    if (!provider) throw new Error("请选择要更新的目录供应商。")
+
+    await withDaemonRetry((client) =>
+      client.updateCatalogProviderHeaders(provider, input.headers)
+    )
     return await this.snapshot()
   }
 
@@ -123,7 +142,7 @@ export function buildDesktopProviderSnapshot(input: {
   const customByProvider = customProviderSettings(input.settings)
 
   const providers = input.providers.map((provider): DesktopProviderInfo => {
-    const source = resolveCredentialSource(provider, input.auth, stored, envByProvider)
+    const source = resolveCredentialSource(provider, input.auth, stored, envByProvider, customByProvider)
     const custom = customByProvider.get(provider.name)
     const models = (modelsByProvider.get(provider.name) ?? []).map((model) => ({
       id: model.id,
@@ -163,10 +182,16 @@ function resolveCredentialSource(
   provider: ProviderInfo,
   auth: AuthStatus,
   stored: Set<string>,
-  envByProvider: Map<string, string>
+  envByProvider: Map<string, string>,
+  customByProvider: Map<string, CustomProviderSettingView>
 ): DesktopProviderCredentialSource {
   if (provider.name === "codex") return auth.codex.configured ? "subscription" : "none"
-  if (provider.source === "catalog") return stored.has(provider.name) ? "credentials" : "none"
+  if (provider.source === "catalog") {
+    return stored.has(provider.name) &&
+      customByProvider.get(provider.name)?.source === "models.dev"
+      ? "credentials"
+      : "none"
+  }
   if (provider.custom) return stored.has(provider.name) ? "credentials" : "configured"
   if (provider.local) return "local"
   if (stored.has(provider.name)) return "credentials"
@@ -178,6 +203,7 @@ interface CustomProviderSettingView {
   id: string
   baseUrl: string
   apiFormat: "openai"
+  source?: string
   headers?: Record<string, string>
 }
 
@@ -205,6 +231,7 @@ function customProviderSettings(
           id: record.id,
           baseUrl: record.baseUrl,
           apiFormat: "openai",
+          ...(typeof record.source === "string" ? { source: record.source } : {}),
           ...(headers ? { headers } : {}),
         },
       ],
