@@ -33,50 +33,6 @@ function event(seq: number, type = "daemon.test"): SessionEventRecord {
 }
 
 describe("OpenHarnessClient", () => {
-  it("routes every resource and compatibility facade through the same endpoint", async () => {
-    const cases: Array<{
-      name: string;
-      response: unknown;
-      expectedPath: string;
-      direct(client: OpenHarnessClient, signal: AbortSignal): Promise<unknown>;
-      facade(client: OpenHarnessClient, signal: AbortSignal): Promise<unknown>;
-    }> = [
-      { name: "system", response: { settings: {} }, expectedPath: "/settings", direct: (c, signal) => c.system.getSettings({ signal }), facade: (c, signal) => c.getSettings({ signal }) },
-      { name: "provider", response: { providers: [] }, expectedPath: "/providers", direct: (c, signal) => c.providers.listProviders({ signal }), facade: (c, signal) => c.listProviders({ signal }) },
-      { name: "auth", response: { auth: { providers: [] } }, expectedPath: "/auth", direct: (c, signal) => c.auth.getStatus({ signal }), facade: (c, signal) => c.getAuthStatus({ signal }) },
-      { name: "project", response: { projects: [] }, expectedPath: "/projects", direct: (c, signal) => c.projects.list({ signal }), facade: (c, signal) => c.listProjects({ signal }) },
-      { name: "plugin", response: { plugins: [], warnings: [] }, expectedPath: "/plugins?cwd=%2Frepo", direct: (c, signal) => c.plugins.list({ cwd: "/repo", signal }), facade: (c, signal) => c.listPlugins({ cwd: "/repo", signal }) },
-      { name: "development", response: { agents: [] }, expectedPath: "/agent-personas", direct: (c, signal) => c.development.listAgentPersonas({ signal }), facade: (c, signal) => c.listAgentPersonas({ signal }) },
-      { name: "session", response: { sessions: [] }, expectedPath: "/sessions", direct: (c, signal) => c.sessions.list({ signal }), facade: (c, signal) => c.listSessions({ signal }) },
-      { name: "attachment", response: { missingFiles: [], orphanFiles: [], pendingDeletes: [], referencedAssets: 0, storedFiles: 0 }, expectedPath: "/attachments/storage", direct: (c, signal) => c.attachments.scanStorage({ signal }), facade: (c, signal) => c.scanAttachmentStorage({ signal }) },
-      { name: "permission", response: { requests: [] }, expectedPath: "/permissions", direct: (c, signal) => c.permissions.list({ signal }), facade: (c, signal) => c.listPermissions({ signal }) },
-      { name: "schedule", response: { running: false }, expectedPath: "/schedules/status", direct: (c, signal) => c.schedules.getStatus({ signal }), facade: (c, signal) => c.getScheduledTaskStatus({ signal }) },
-      { name: "job", response: { jobs: [] }, expectedPath: "/jobs?sessionId=s1", direct: (c, signal) => c.jobs.list({ sessionId: "s1", signal }), facade: (c, signal) => c.listJobs({ sessionId: "s1", signal }) },
-      { name: "terminal", response: { terminals: [] }, expectedPath: "/terminals", direct: (c, signal) => c.terminals.list({ signal }), facade: (c, signal) => c.listTerminals({ signal }) },
-      { name: "channel", response: { connectors: [] }, expectedPath: "/channels/status", direct: (c, signal) => c.channels.getStatus({ signal }), facade: (c, signal) => c.getChannelStatus({ signal }) },
-      { name: "event", response: { events: [] }, expectedPath: "/events", direct: (c, signal) => c.events.list({ signal }), facade: (c, signal) => c.listEvents({ signal }) },
-    ];
-
-    for (const entry of cases) {
-      const calls: Array<{ url: string; init: RequestInit }> = [];
-      const controller = new AbortController();
-      const client = new OpenHarnessClient({
-        baseUrl: "http://daemon.test",
-        fetch: (async (url, init = {}) => {
-          calls.push({ url: String(url), init });
-          return jsonResponse(entry.response);
-        }) as typeof fetch,
-      });
-      await entry.direct(client, controller.signal);
-      await entry.facade(client, controller.signal);
-      expect(calls, entry.name).toHaveLength(2);
-      expect(calls.map((call) => new URL(call.url).pathname + new URL(call.url).search), entry.name)
-        .toEqual([entry.expectedPath, entry.expectedPath]);
-      expect(calls.every((call) => (call.init.method ?? "GET") === "GET"), entry.name).toBe(true);
-      expect(calls.every((call) => call.init.signal === controller.signal), entry.name).toBe(true);
-    }
-  });
-
   it("uses typed plugin archive endpoints and preserves structured failures", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const client = new OpenHarnessClient({
@@ -108,7 +64,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      (client as any).previewPluginArchive({
+      client.plugins.previewArchive({
         cwd: "C:/workspace",
         archivePath: "C:/archive.zip",
       }),
@@ -118,7 +74,7 @@ describe("OpenHarnessClient", () => {
       approvalRequired: true,
     });
     await expect(
-      (client as any).installPluginArchive({
+      client.plugins.installArchive({
         cwd: "C:/workspace",
         archivePath: "C:/archive.zip",
         expectedArchiveDigest: "a".repeat(64),
@@ -153,9 +109,9 @@ describe("OpenHarnessClient", () => {
       }) as typeof fetch,
     });
 
-    await expect(client.listSkills()).resolves.toEqual(snapshot);
+    await expect(client.development.listSkills()).resolves.toEqual(snapshot);
     await expect(
-      client.removeSkill("skill/a b", { expectedContent: "current" }),
+      client.development.removeSkill("skill/a b", { expectedContent: "current" }),
     ).resolves.toEqual(snapshot);
 
     expect(
@@ -201,9 +157,9 @@ describe("OpenHarnessClient", () => {
       }) as typeof fetch,
     });
 
-    await client.scanAttachmentStorage();
-    await client.repairAttachmentStorage();
-    await client.gcAttachmentStorage();
+    await client.attachments.scanStorage();
+    await client.attachments.repairStorage();
+    await client.attachments.gcStorage();
 
     expect(
       calls.map(({ url, init }) => `${init.method ?? "GET"} ${url}`),
@@ -255,20 +211,20 @@ describe("OpenHarnessClient", () => {
     const body = new Blob([Uint8Array.of(1, 2, 3)]);
 
     await expect(
-      client.uploadAttachment({
+      client.attachments.upload({
         displayName: "截图.png",
         mediaType: "image/png",
         body,
       }),
     ).resolves.toEqual(ready);
-    await expect(client.getAttachment("att_test")).resolves.toEqual(ready);
-    const downloaded = await client.downloadAttachment("att_test", {
+    await expect(client.attachments.get("att_test")).resolves.toEqual(ready);
+    const downloaded = await client.attachments.download("att_test", {
       range: { start: 1, end: 2 },
     });
     expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(
       Uint8Array.of(1, 2, 3),
     );
-    await expect(client.deleteAttachment("att_test")).resolves.toMatchObject({
+    await expect(client.attachments.delete("att_test")).resolves.toMatchObject({
       status: "deleted",
     });
 
@@ -315,7 +271,7 @@ describe("OpenHarnessClient", () => {
       },
     });
 
-    await client.uploadAttachment({ displayName: "stream.bin", body: stream });
+    await client.attachments.upload({ displayName: "stream.bin", body: stream });
 
     expect(calls[0]!.body).toBe(stream);
     expect(calls[0]!.duplex).toBe("half");
@@ -329,21 +285,21 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.downloadAttachment("att_test", {
+      client.attachments.download("att_test", {
         range: { start: 0, suffixBytes: 2 },
       }),
     ).rejects.toThrow("suffixBytes");
     await expect(
-      client.downloadAttachment("att_test", { range: { start: -1 } }),
+      client.attachments.download("att_test", { range: { start: -1 } }),
     ).rejects.toThrow("start");
     await expect(
-      client.downloadAttachment("att_test", { range: { start: 5, end: 2 } }),
+      client.attachments.download("att_test", { range: { start: 5, end: 2 } }),
     ).rejects.toThrow("end");
     await expect(
-      client.downloadAttachment("att_test", { range: { end: 2 } }),
+      client.attachments.download("att_test", { range: { end: 2 } }),
     ).rejects.toThrow("start");
     await expect(
-      client.downloadAttachment("att_test", { range: { suffixBytes: 0 } }),
+      client.attachments.download("att_test", { range: { suffixBytes: 0 } }),
     ).rejects.toThrow("suffixBytes");
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -358,8 +314,8 @@ describe("OpenHarnessClient", () => {
       }) as typeof fetch,
     });
 
-    await client.downloadAttachment("att_test", { range: { start: 4 } });
-    await client.downloadAttachment("att_test", {
+    await client.attachments.download("att_test", { range: { start: 4 } });
+    await client.attachments.download("att_test", {
       range: { suffixBytes: 3 },
     });
 
@@ -377,7 +333,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.uploadAttachment({
+      client.attachments.upload({
         displayName: "large.bin",
         body: new Blob([Uint8Array.of(1)]),
       }),
@@ -436,24 +392,24 @@ describe("OpenHarnessClient", () => {
       models: [{ id: "team-model", displayName: "Team Model" }],
     };
 
-    await expect(client.createCustomProvider(input)).resolves.toMatchObject({
+    await expect(client.providers.createCustomProvider(input)).resolves.toMatchObject({
       name: "office-gateway",
       custom: true,
     });
     await expect(
-      client.connectCatalogProvider("remote", "catalog-secret"),
+      client.providers.connectCatalogProvider("remote", "catalog-secret"),
     ).resolves.toBeDefined();
     await expect(
-      client.disconnectCatalogProvider("remote"),
+      client.providers.disconnectCatalogProvider("remote"),
     ).resolves.toBeUndefined();
     await expect(
-      client.updateCustomProvider("office-gateway", {
+      client.providers.updateCustomProvider("office-gateway", {
         ...input,
         displayName: "Office AI",
       }),
     ).resolves.toMatchObject({ displayName: "Office AI" });
     await expect(
-      client.removeCustomProvider("office-gateway"),
+      client.providers.removeCustomProvider("office-gateway"),
     ).resolves.toBeUndefined();
 
     expect(calls.map((call) => [call.url, call.init.method])).toEqual([
@@ -497,7 +453,7 @@ describe("OpenHarnessClient", () => {
         )) as typeof fetch,
     });
 
-    await expect(client.health()).rejects.toMatchObject({
+    await expect(client.protocol.health()).rejects.toMatchObject({
       message: "delivery must be one of: queue, steer",
       status: 400,
       body: {
@@ -522,7 +478,7 @@ describe("OpenHarnessClient", () => {
         })) as typeof fetch,
     });
 
-    await expect(client.getSessionState("s1")).rejects.toMatchObject({
+    await expect(client.sessions.getState("s1")).rejects.toMatchObject({
       code: "invalid_protocol_data",
       details: { path: "snapshot.cursor" },
     });
@@ -555,7 +511,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.createSession({
+      client.sessions.create({
         id: "s1",
         cwd: process.cwd(),
         model: "m",
@@ -591,7 +547,7 @@ describe("OpenHarnessClient", () => {
       fetch: fetchImpl as typeof fetch,
     });
 
-    await expect(client.health()).resolves.toMatchObject({ ok: true });
+    await expect(client.protocol.health()).resolves.toMatchObject({ ok: true });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe("http://127.0.0.1:3456/health");
     expect(calls[0]!.init.headers).toEqual({});
@@ -612,7 +568,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.capabilities({
+      client.protocol.capabilities({
         support: { version: 2 },
       }),
     ).rejects.toBeInstanceOf(IncompatibleProtocolError);
@@ -635,7 +591,7 @@ describe("OpenHarnessClient", () => {
       ) as typeof fetch,
     });
 
-    await expect(client.capabilities()).resolves.toMatchObject({
+    await expect(client.protocol.capabilities()).resolves.toMatchObject({
       agentEnvironments: { native: true, wsl: true },
     });
   });
@@ -645,7 +601,7 @@ describe("OpenHarnessClient", () => {
       baseUrl: "http://127.0.0.1:3456",
       fetch: (async () => jsonResponse({ serverVersion: "old", protocol: { version: 2 }, features: {} })) as typeof fetch,
     });
-    await expect(client.capabilities()).rejects.toBeInstanceOf(IncompatibleProtocolError);
+    await expect(client.protocol.capabilities()).rejects.toBeInstanceOf(IncompatibleProtocolError);
   });
 
   it("lists commands without a command execution endpoint", async () => {
@@ -695,7 +651,7 @@ describe("OpenHarnessClient", () => {
       fetch: fetchImpl as typeof fetch,
     });
 
-    await expect(client.listCommands({ cwd: "/repo" })).resolves.toEqual([
+    await expect(client.system.listCommands({ cwd: "/repo" })).resolves.toEqual([
       {
         name: "/commit",
         kind: "template",
@@ -706,7 +662,7 @@ describe("OpenHarnessClient", () => {
       },
     ]);
     await expect(
-      client.updateSession("s1", {
+      client.sessions.update("s1", {
         metadata: { runtime: { model: "new-model" } },
       }),
     ).resolves.toMatchObject({ model: "new-model" });
@@ -757,7 +713,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.createScheduledTask({
+      client.schedules.createTask({
         name: task.name,
         prompt: task.prompt,
         recurrence: task.recurrence,
@@ -768,10 +724,10 @@ describe("OpenHarnessClient", () => {
       }),
     ).resolves.toEqual(task);
     await expect(
-      client.listScheduledTasks({ status: "active" }),
+      client.schedules.listTasks({ status: "active" }),
     ).resolves.toEqual([task]);
     await expect(
-      client.listScheduledRuns({ taskId: task.id, unread: true }),
+      client.schedules.listRuns({ taskId: task.id, unread: true }),
     ).resolves.toEqual([]);
     expect(
       calls.map((call) => `${call.init.method ?? "GET"} ${call.url}`),
@@ -794,7 +750,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.listJobs({
+      client.jobs.list({
         sessionId: "session-1",
         kinds: ["terminal", "agent"],
         statuses: ["running", "failed"],
@@ -831,7 +787,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.createBackgroundShell({
+      client.jobs.createBackgroundShell({
         requestId: "request-1",
         sessionId: "s1",
         command: "pnpm test",
@@ -897,7 +853,7 @@ describe("OpenHarnessClient", () => {
     });
 
     await expect(
-      client.resumeInterruptedRun("s1", "r1", { id: "request-1" }),
+      client.sessions.resumeInterruptedRun("s1", "r1", { id: "request-1" }),
     ).resolves.toMatchObject({
       run: { id: "recovery-r1" },
       source_run: { id: "r1", status: "interrupted" },
@@ -989,7 +945,7 @@ describe("OpenHarnessClient", () => {
     });
 
     const received: SessionEventRecord[] = [];
-    for await (const item of client.streamEvents({ cursor: 0 })) received.push(item);
+    for await (const item of client.events.stream({ cursor: 0 })) received.push(item);
 
     expect(received.map((item) => item.seq)).toEqual([1]);
     expect(calls).toBe(1);
@@ -1196,8 +1152,8 @@ describe("OpenHarnessClient", () => {
       { assetId: "att-b", intent: "auto" as const },
       { assetId: "att-a", intent: "ocr" as const, displayName: "receipt.png" },
     ];
-    await client.admitPrompt("s1", { content: "hello", attachments });
-    await client.editLatestPrompt("s1", {
+    await client.sessions.admitPrompt("s1", { content: "hello", attachments });
+    await client.sessions.editLatestPrompt("s1", {
       id: "edit-1",
       content: "replacement",
       sourceMessageId: "message-1",
@@ -1229,11 +1185,11 @@ describe("OpenHarnessClient", () => {
       },
     });
 
-    await client.promoteQueuedPrompt("s1", "input 1", {
+    await client.sessions.promoteQueuedPrompt("s1", "input 1", {
       queuedRunId: "queued-run",
       expectedActiveRunId: "active-run",
     });
-    await client.cancelQueuedPrompt("s1", "input 2", {
+    await client.sessions.cancelQueuedPrompt("s1", "input 2", {
       queuedRunId: "other-run",
     });
 

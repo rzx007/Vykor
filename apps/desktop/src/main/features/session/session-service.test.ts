@@ -93,7 +93,7 @@ describe("resolveDesktopRuntimeSnapshot", () => {
 describe("DesktopSessionService.sendPrompt attachments", () => {
   it("forwards a structured conversation reference", async () => {
     const admitPrompt = vi.fn(async () => undefined)
-    const service = serviceWithClient({ admitPrompt })
+    const service = serviceWithClient({ sessions: { admitPrompt } })
     const items = [
       { type: "context" as const, kind: "conversation" as const, id: "session-2", displayName: "技能安装" },
       { type: "text" as const, text: "继续处理" },
@@ -106,7 +106,7 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
 
   it("forwards a structured plugin capability reference", async () => {
     const admitPrompt = vi.fn(async () => undefined)
-    const service = serviceWithClient({ admitPrompt })
+    const service = serviceWithClient({ sessions: { admitPrompt } })
     const items = [
       {
         type: "capability" as const,
@@ -124,7 +124,7 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
 
   it("forwards ordered structured items without re-parsing a selected skill", async () => {
     const admitPrompt = vi.fn(async () => undefined)
-    const service = serviceWithClient({ admitPrompt })
+    const service = serviceWithClient({ sessions: { admitPrompt } })
     const items = [
       { type: "text" as const, text: "画一下" },
       {
@@ -161,7 +161,7 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
 
   it("accepts a selected skill without task text or attachments", async () => {
     const admitPrompt = vi.fn(async () => undefined)
-    const service = serviceWithClient({ admitPrompt })
+    const service = serviceWithClient({ sessions: { admitPrompt } })
 
     await service.sendPrompt({
       id: "input-skill-only",
@@ -189,7 +189,7 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
 
   it("accepts an attachment-only prompt and preserves attachment order", async () => {
     const admitPrompt = vi.fn(async () => undefined)
-    const service = serviceWithClient({ admitPrompt })
+    const service = serviceWithClient({ sessions: { admitPrompt } })
 
     await service.sendPrompt({
       id: "input-1",
@@ -221,7 +221,7 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
 
   it("rejects a prompt when both text and attachments are empty", async () => {
     const admitPrompt = vi.fn(async () => undefined)
-    const service = serviceWithClient({ admitPrompt })
+    const service = serviceWithClient({ sessions: { admitPrompt } })
 
     await expect(
       service.sendPrompt({
@@ -236,7 +236,7 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
 
   it("preserves ordered refs when editing an attachment-only prompt", async () => {
     const editLatestPrompt = vi.fn(async () => undefined)
-    const service = serviceWithClient({ admitPrompt: vi.fn(), editLatestPrompt })
+    const service = serviceWithClient({ sessions: { admitPrompt: vi.fn(), editLatestPrompt } })
 
     await service.editLatestPrompt({
       id: "edit-1",
@@ -276,7 +276,7 @@ describe("DesktopSessionService.listCommands", () => {
       { name: "/skills", kind: "session" as const, selection: "execute" as const, requiresEmptyComposer: true },
       { name: "/writing-plans", skillName: "writing-plans", kind: "template" as const, path: "D:/skills/writing-plans/SKILL.md" },
     ])
-    const service = serviceWithClient({ listCommands })
+    const service = serviceWithClient({ system: { listCommands } })
 
     await expect(service.listCommands(process.cwd())).resolves.toEqual([
       expect.objectContaining({ name: "/compact", kind: "session" }),
@@ -288,7 +288,7 @@ describe("DesktopSessionService.listCommands", () => {
 
   it("runs compact through the native session API", async () => {
     const compactSession = vi.fn(async () => ({ messageCount: 3, compacted: true }))
-    const service = serviceWithClient({ compactSession })
+    const service = serviceWithClient({ sessions: { compact: compactSession } })
 
     await expect(service.compactSession({ sessionId: "session-1" })).resolves.toEqual({
       messageCount: 3,
@@ -299,51 +299,10 @@ describe("DesktopSessionService.listCommands", () => {
 
 function serviceWithClient(client: Record<string, unknown>): DesktopSessionService {
   const service = new DesktopSessionService()
-  const sessions = (client.sessions as Record<string, unknown> | undefined) ?? {
-    create: client.createSession,
-    admitPrompt: client.admitPrompt,
-    compact: client.compactSession,
-    editLatestPrompt: client.editLatestPrompt,
-    promoteQueuedPrompt: client.promoteQueuedPrompt,
-    cancelQueuedPrompt: client.cancelQueuedPrompt,
-    fork: client.forkSession,
-    interrupt: client.interruptSession,
-    update: client.updateSession,
-    list: client.listSessions,
-    getGoal: client.getSessionGoal,
-    createGoal: client.createSessionGoal,
-    updateGoal: client.updateSessionGoal,
-    applyGoalAction: client.applySessionGoalAction,
-  }
-  const system = (client.system as Record<string, unknown> | undefined) ?? {
-    listCommands: client.listCommands,
-    listContextPlugins: client.listContextPlugins,
-    getContextUsage: client.getContextUsage,
-    getSettings: client.getSettings,
-    patchSettings: client.patchSettings,
-  }
-  const projects = (client.projects as Record<string, unknown> | undefined) ?? {
-    list: client.listProjects,
-    inspect: client.inspectProject,
-    rename: client.renameProject,
-    setPinned: client.setProjectPinned,
-    setDefaultShell: client.setProjectDefaultShell,
-    archive: client.archiveProject,
-  }
-  const permissions = (client.permissions as Record<string, unknown> | undefined) ?? {
-    reply: client.replyPermission,
-  }
-  const fullClient = {
-    ...client,
-    sessions,
-    system,
-    projects,
-    permissions,
-  }
   ;(
     service as unknown as {
-      clientPromise: Promise<typeof fullClient>
+      clientPromise: Promise<typeof client>
     }
-  ).clientPromise = Promise.resolve(fullClient)
+  ).clientPromise = Promise.resolve(client)
   return service
 }

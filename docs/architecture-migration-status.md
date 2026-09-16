@@ -201,50 +201,10 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
   - `node scripts/check-docs.mjs`
   - `git diff --check`
 
+
 ## 阶段 7 迁移记录：Public API Convergence（公共 API 收敛）
 
-- 起始 commit：`c1c6a3cb`
-- 阶段子模块与提交记录：
-  - 阶段 7A：`c1c6a3cb` test(client): lock public api contract
-    - 建立 Client 公共契约唯一事实源 `scripts/client-public-api-contract.json`（涵盖 55 项 runtime export、127 项 type-only export、138 项 Client public surface）。
-    - 基于 TypeScript Compiler API 实现严谨 AST 扫描器 `scripts/client-legacy-calls.mjs`，准确识别直接调用、别名、成员属性、await factory、解构、类型索引、值传递与 Pick mapped capability。
-    - 建立独立代表性消费者类型编译 fixture `tests/client-public-api` 与 Vitest 契约快照测试；固定根门禁 `check:client-api` 并由 `check:architecture` 串联执行。
-  - 阶段 7B：Client 内部自审
-    - 审计确认 `@openharness/client` 内部已无对 `OpenHarnessClient` 扁平旧方法的生产调用与成员引用；`SessionSyncController` 仅依赖事件订阅与 snapshot 机制，未发生反向侵入。
-  - 阶段 7C：`8a02156e` refactor(cli): use named client resources
-    - `apps/cli` 的命令与守护进程服务全面收敛至命名领域 Resource（`client.system`、`client.sessions`、`client.projects`、`client.providers`、`client.plugins`、`client.development`、`client.auth`、`client.jobs`、`client.terminal` 等）。
-    - 生产旧调用数与引用数在 CLI 中清零。
-  - 阶段 7D：`4be3a38f` refactor(desktop): use named client resources
-    - `apps/desktop` 主进程全面收敛（`daemon-connection-service.ts`、`plugin-service.ts`、`skill-service.ts`、`workspace-service.ts` 等），同步更新单元测试 mock 结构（`plugin-service.test.ts`、`skill-service.test.ts`）。
-    - 生产旧调用数与引用数在 Desktop 中清零。
-  - 阶段 7E：`d70902f8` refactor(frontend): use named client resources
-    - `apps/frontend` 生产代码全面收敛（`useServerSync/actions.ts`、`useServerSync/connection.ts`、`useServerSync/mcp.ts` 等），完全平移至命名领域 Resource。
-    - 生产旧调用数与引用数在 Frontend 中清零。
-  - 阶段 7F：`3d25be21` docs(client): deprecate flat client facade
-    - 为 `packages/client/src/transport/http-client.ts` 全部 118 个顶层平铺兼容方法添加明确的 `@deprecated Use client.<resource>.<method>() instead.` JSDoc 注解与对应 Resource 提示。
-    - 编写完整迁移指南 `docs/client-public-api-migration.md` 与 `packages/client/README.md` 迁移对照表。
-    - 在契约文件 `scripts/client-public-api-contract.json` 中标记 `deprecatedSince: "stage-7"`，确立 Stage 8 双发行门槛治理规则（`deprecatedCarrierRelease` 与 `retentionCarrierRelease`）。
-- 调用指标与基线变化：
-  - `clientLegacyProductionCalls`：80 -> 0（-80，生产零残留）。
-  - `clientLegacyProductionReferences`：3 -> 0（-3，生产零残留）。
-  - `clientLegacyCompatibilityTestCalls`：57（保留在 client-public-api contract 兼容回归测试中）。
-  - `clientLegacyOtherTestCalls`：0。
-- 验证命令与结果：
-  - `node scripts/client-legacy-calls.mjs --scope production`：0 calls, 0 references（完全清零）。
-  - `pnpm --filter @openharness/client check-types`：通过（exit code 0）。
-  - `pnpm --filter @openharness/client test`：5 个测试文件全部通过（87/87 tests passed）。
-  - `pnpm --filter @rzx/ohs check-types`：通过（exit code 0）。
-  - `pnpm --filter @rzx/ohs test`：25 个测试文件全部通过（180/180 tests passed）。
-  - `pnpm --filter @openharness/desktop typecheck`：通过（exit code 0，node 与 web）。
-  - `pnpm --filter @openharness/desktop test`：阶段提交环境中 142 个测试文件全部通过（892/892 tests passed），更新打包与工作区边界验证通过。审查隔离 worktree 使用 `--ignore-scripts` 安装依赖，Electron 二进制未执行 postinstall；复跑时 138 个文件、856 项测试通过，另 4 个测试文件在收集阶段因 `Electron failed to install correctly` 被环境阻断，本次修改直接覆盖的 Desktop 测试通过。
-  - `pnpm --filter @openharness/server check-types`：通过（exit code 0）。
-  - `pnpm --filter @openharness/server test`：80 个测试文件全部通过（717/717 tests passed）。
-  - `pnpm --filter @openharness/frontend check-types`：通过（exit code 0）。
-  - `pnpm --filter @openharness/frontend test`：24 个测试文件全部通过（143/143 tests passed）。
-  - `pnpm check-types`：61 个 workspace task 全部通过（exit code 0）。
-  - `pnpm check:architecture`：通过（exit code 0），包含公共 API 契约校验、AST 扫描器测试及架构边界。
-  - `node scripts/check-docs.mjs`：通过（268 个 Markdown 文件检查全部有效）。
-  - `git diff --check`：通过（无空白或格式异常）。
+阶段 7 曾把调用者迁到领域 Resource。后续 clean-slate 设计已经删除 Client 顶层兼容 facade 与双发行治理；当前事实源是只列当前导出的 `scripts/client-public-api-contract.json`，旧名称只保存在测试专用 forbidden 清单和负向编译 fixture 中。
 
 ## 下一步
 

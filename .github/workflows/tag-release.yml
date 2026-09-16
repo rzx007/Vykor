@@ -7,16 +7,6 @@ on:
         description: "Stable release version (X.Y.Z)"
         required: true
         type: string
-      release_phase:
-        description: "Compatibility lifecycle phase"
-        required: true
-        default: regular
-        type: choice
-        options:
-          - regular
-          - client-deprecation
-          - client-retention
-          - client-breaking-removal
 
 concurrency:
   group: tag-release
@@ -33,38 +23,32 @@ jobs:
       version: ${{ steps.prepare.outputs.version }}
       tag: ${{ steps.prepare.outputs.tag }}
       commit: ${{ steps.prepare.outputs.commit }}
-      phase: ${{ steps.prepare.outputs.phase }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-
-      - name: Validate version, phase, and existing tag
+      - name: Pin commit and validate tag
         id: prepare
         env:
           VERSION: ${{ inputs.version }}
-          PHASE: ${{ inputs.release_phase }}
+          REQUESTED_SHA: ${{ github.sha }}
         run: |
           TAG="v${VERSION}"
           TAG="$TAG" node --input-type=module -e "import { parseReleaseTag } from './scripts/prepare-tag-release.mjs'; parseReleaseTag(process.env.TAG)"
-          node scripts/client-compat-release.mjs validate-phase --phase "$PHASE" --version "$VERSION"
-          COMMIT="$(git rev-parse HEAD)"
+          CHECKED_OUT_SHA="$(git rev-parse HEAD)"
+          REQUESTED_SHA="$REQUESTED_SHA" CHECKED_OUT_SHA="$CHECKED_OUT_SHA" node --input-type=module -e "import { assertReleaseCommit } from './scripts/release-safety.mjs'; assertReleaseCommit({ requestedSha: process.env.REQUESTED_SHA, checkedOutSha: process.env.CHECKED_OUT_SHA })"
           REMOTE_COMMIT="$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | cut -f1)"
           if [ -z "$REMOTE_COMMIT" ]; then
             REMOTE_COMMIT="$(git ls-remote --tags origin "refs/tags/${TAG}" | cut -f1)"
           fi
-          if [ -n "$REMOTE_COMMIT" ] && [ "$REMOTE_COMMIT" != "$COMMIT" ]; then
-            echo "::error::${TAG} already points to ${REMOTE_COMMIT}, expected ${COMMIT}"
-            exit 1
-          fi
+          TAG="$TAG" TARGET_SHA="$CHECKED_OUT_SHA" EXISTING_SHA="$REMOTE_COMMIT" node --input-type=module -e "import { assertTagAvailable } from './scripts/release-safety.mjs'; assertTagAvailable({ tag: process.env.TAG, targetSha: process.env.TARGET_SHA, existingSha: process.env.EXISTING_SHA })"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
-          echo "phase=$PHASE" >> "$GITHUB_OUTPUT"
+          echo "commit=$CHECKED_OUT_SHA" >> "$GITHUB_OUTPUT"
 
   preflight:
     needs: validate
@@ -74,32 +58,16 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.commit }}
           fetch-depth: 0
-
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - uses: oven-sh/setup-bun@v2
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Sync candidate versions
         run: node scripts/prepare-tag-release.mjs ${{ needs.validate.outputs.tag }}
-
-      - name: Validate compatibility release phase
-        env:
-          PHASE: ${{ needs.validate.outputs.phase }}
-          VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          node scripts/client-compat-release.mjs validate-phase --phase "$PHASE" --version "$VERSION"
-          if [ "$PHASE" = "client-breaking-removal" ]; then
-            node scripts/client-compat-removal-gate.mjs
-          else
-            node scripts/client-compat-integrity.mjs
-          fi
-
       - name: Run release checks before creating a tag
         run: |
           pnpm check-types
@@ -107,14 +75,16 @@ jobs:
           pnpm check:architecture
           pnpm check-docs
           pnpm test:scripts
-
-      - name: Generate immutable release notes
-        run: node scripts/client-compat-release.mjs notes --phase "${{ needs.validate.outputs.phase }}" --version "${{ needs.validate.outputs.version }}" --output release-notes.md
-
-      - name: Upload preflight release notes
+      - name: Generate stable release notes
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          node --input-type=module -e "import { writeFileSync } from 'node:fs'; import { renderStableReleaseNotes } from './scripts/release-safety.mjs'; const v=process.env.VERSION; writeFileSync('release-notes.md', renderStableReleaseNotes({ version:v, commit:process.env.COMMIT, artifacts:[\`OpenHarness-${v}-setup.exe\`,\`OpenHarness-${v}.AppImage\`,\`OpenHarness-${v}.deb\`]}))"
+      - name: Upload release notes
         uses: actions/upload-artifact@v4
         with:
-          name: client-release-notes
+          name: stable-release-notes
           path: release-notes.md
           if-no-files-found: error
 
@@ -133,46 +103,37 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate.outputs.commit }}
-
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - uses: oven-sh/setup-bun@v2
-
       - name: Setup Visual Studio Build Tools (Windows)
         if: matrix.target == 'win'
         uses: microsoft/setup-msbuild@v2
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Sync workspace versions to the tag
         run: node scripts/prepare-tag-release.mjs ${{ needs.validate.outputs.tag }}
-
       - name: Build and verify Desktop
         run: |
           pnpm --filter @openharness/desktop verify:update-packaging
           pnpm --filter @openharness/desktop^... build
           pnpm --filter @openharness/desktop build
-
       - name: Package Windows
         if: matrix.target == 'win'
         run: pnpm --filter @openharness/desktop exec -- electron-builder --win --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-
       - name: Package Linux
         if: matrix.target == 'linux'
         run: pnpm --filter @openharness/desktop exec -- electron-builder --linux --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Verify updater artifacts
         run: pnpm --filter @openharness/desktop verify:update-packaging:artifact
-
       - name: Upload Desktop artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -195,8 +156,7 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.commit }}
           fetch-depth: 0
-
-      - name: Create tag only after preflight and packaging pass
+      - name: Create tag only after checks and packaging pass
         env:
           TAG: ${{ needs.validate.outputs.tag }}
           COMMIT: ${{ needs.validate.outputs.commit }}
@@ -205,11 +165,8 @@ jobs:
           if [ -z "$REMOTE_COMMIT" ]; then
             REMOTE_COMMIT="$(git ls-remote --tags origin "refs/tags/${TAG}" | cut -f1)"
           fi
-          if [ -n "$REMOTE_COMMIT" ] && [ "$REMOTE_COMMIT" != "$COMMIT" ]; then
-            echo "::error::${TAG} already points to ${REMOTE_COMMIT}, expected ${COMMIT}"
-            exit 1
-          fi
-          if [ -z "$REMOTE_COMMIT" ]; then
+          ACTION="$(TAG="$TAG" TARGET_SHA="$COMMIT" EXISTING_SHA="$REMOTE_COMMIT" node --input-type=module -e "import { assertTagAvailable } from './scripts/release-safety.mjs'; process.stdout.write(assertTagAvailable({ tag:process.env.TAG, targetSha:process.env.TARGET_SHA, existingSha:process.env.EXISTING_SHA }))")"
+          if [ "$ACTION" = "create" ]; then
             git tag "$TAG" "$COMMIT"
             git push origin "$TAG"
           fi
@@ -221,7 +178,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate.outputs.commit }}
-
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -229,19 +185,17 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - uses: oven-sh/setup-bun@v2
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Build and publish CLI if this version is new
+      - name: Build, publish idempotently, and verify npm
         env:
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           node scripts/prepare-tag-release.mjs "v${VERSION}"
           pnpm --filter @rzx/ohs... build
-          if npm view "@rzx/ohs@${VERSION}" version >/dev/null 2>&1; then
-            echo "@rzx/ohs@${VERSION} is already on npm; skipping publish."
-          else
+          PUBLISHED_VERSION="$(npm view "@rzx/ohs@${VERSION}" version 2>/dev/null || true)"
+          ACTION="$(EXPECTED_VERSION="$VERSION" PUBLISHED_VERSION="$PUBLISHED_VERSION" node --input-type=module -e "import { decideNpmPublish } from './scripts/release-safety.mjs'; process.stdout.write(decideNpmPublish({ expectedVersion:process.env.EXPECTED_VERSION, publishedVersion:process.env.PUBLISHED_VERSION }))")"
+          if [ "$ACTION" = "publish" ]; then
             pnpm --filter @rzx/ohs publish --access public --no-git-checks
           fi
           ACTUAL="$(npm view "@rzx/ohs@${VERSION}" version)"
@@ -254,98 +208,61 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate.outputs.commit }}
-
-      - name: Download release inputs
+      - name: Download Desktop artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: '{desktop-*,client-release-notes}'
+          pattern: desktop-*
           merge-multiple: true
           path: release-assets
-
-      - name: Create or update GitHub Release and notes
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: stable-release-notes
+          path: release-assets
+      - name: Validate, create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.validate.outputs.tag }}
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           test -f release-assets/release-notes.md
-          test -f release-assets/latest.yml
-          test -f release-assets/latest-linux.yml
-          test -n "$(find release-assets -maxdepth 1 -name '*.exe' -print -quit)"
-          test -n "$(find release-assets -maxdepth 1 -name '*.AppImage' -print -quit)"
-          test -n "$(find release-assets -maxdepth 1 -name '*.deb' -print -quit)"
+          find release-assets -maxdepth 1 -type f -printf '%f\n' > artifact-names.txt
+          VERSION="$VERSION" node --input-type=module -e "import { readFileSync } from 'node:fs'; import { assertArtifacts } from './scripts/release-safety.mjs'; const v=process.env.VERSION; assertArtifacts([\`OpenHarness-${v}-setup.exe\`,\`OpenHarness-${v}.AppImage\`,\`OpenHarness-${v}.deb\`,'latest.yml','latest-linux.yml'], readFileSync('artifact-names.txt','utf8').trim().split(/\\r?\\n/))"
           cp release-assets/release-notes.md release-notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" release-assets/* --clobber
             gh release edit "$TAG" --latest --title "OpenHarness ${VERSION}" --notes-file release-notes.md
           else
-            gh release create "$TAG" release-assets/* --verify-tag --latest \
-              --title "OpenHarness ${VERSION}" --notes-file release-notes.md
+            gh release create "$TAG" release-assets/* --verify-tag --latest --title "OpenHarness ${VERSION}" --notes-file release-notes.md
           fi
 
   finalize:
     needs: [validate, publish-npm, publish-release]
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ needs.validate.outputs.version }}
-      tag: ${{ needs.validate.outputs.tag }}
-      commit: ${{ needs.validate.outputs.commit }}
-      published-at: ${{ steps.evidence.outputs.published-at }}
-      workflow-run-url: ${{ steps.evidence.outputs.workflow-run-url }}
-      release-note-url: ${{ steps.evidence.outputs.release-note-url }}
-      npm-package: ${{ steps.evidence.outputs.npm-package }}
-      npm-version: ${{ steps.evidence.outputs.npm-version }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate.outputs.commit }}
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-
       - uses: actions/download-artifact@v4
         with:
-          name: client-release-notes
-
-      - name: Verify published npm and release notes, then write evidence
-        id: evidence
+          name: stable-release-notes
+      - name: Read back npm, notes and artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.validate.outputs.version }}
           TAG: ${{ needs.validate.outputs.tag }}
           COMMIT: ${{ needs.validate.outputs.commit }}
-          PHASE: ${{ needs.validate.outputs.phase }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           ACTUAL="$(npm view "@rzx/ohs@${VERSION}" version)"
           test "$ACTUAL" = "$VERSION"
           gh release view "$TAG" --json body --jq .body > published-release-notes.md
           diff -u release-notes.md published-release-notes.md
-          NOTES_SHA="$(sha256sum release-notes.md | cut -d' ' -f1)"
-          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
-          PUBLISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-          node scripts/client-compat-release.mjs evidence \
-            --phase "$PHASE" --version "$VERSION" --tag "$TAG" --commit "$COMMIT" \
-            --published-at "$PUBLISHED_AT" \
-            --workflow-run-url "$RUN_URL" --release-note-url "$RELEASE_URL" \
-            --npm-package "@rzx/ohs" --npm-version "$ACTUAL" --npm-verified true \
-            --release-notes-sha256 "$NOTES_SHA" --output client-release-evidence.json
-          echo "published-at=$PUBLISHED_AT" >> "$GITHUB_OUTPUT"
-          echo "workflow-run-url=$RUN_URL" >> "$GITHUB_OUTPUT"
-          echo "release-note-url=$RELEASE_URL" >> "$GITHUB_OUTPUT"
-          echo "npm-package=@rzx/ohs" >> "$GITHUB_OUTPUT"
-          echo "npm-version=$ACTUAL" >> "$GITHUB_OUTPUT"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat client-release-evidence.json >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload client release evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-release-evidence
-          path: client-release-evidence.json
-          if-no-files-found: error
+          gh release view "$TAG" --json assets --jq '.assets[].name' > published-artifacts.txt
+          VERSION="$VERSION" node --input-type=module -e "import { readFileSync } from 'node:fs'; import { assertArtifacts } from './scripts/release-safety.mjs'; const v=process.env.VERSION; assertArtifacts([\`OpenHarness-${v}-setup.exe\`,\`OpenHarness-${v}.AppImage\`,\`OpenHarness-${v}.deb\`,'latest.yml','latest-linux.yml'], readFileSync('published-artifacts.txt','utf8').trim().split(/\\r?\\n/))"
+          printf 'Version: %s\nCommit: %s\nTag: %s\n' "$VERSION" "$COMMIT" "$TAG" >> "$GITHUB_STEP_SUMMARY"
 
   notify:
     needs: [validate, preflight, build-desktop, create-tag, publish-npm, publish-release, finalize]
@@ -365,7 +282,6 @@ jobs:
           subject: "[Release] ${{ github.repository }} ${{ needs.finalize.result }} v${{ inputs.version }} (#${{ github.run_number }})"
           body: |
             Version: ${{ inputs.version }}
-            Phase: ${{ inputs.release_phase }}
             preflight: ${{ needs.preflight.result }}
             build-desktop: ${{ needs.build-desktop.result }}
             create-tag: ${{ needs.create-tag.result }}

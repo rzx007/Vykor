@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanClientLegacyCalls } from "./client-legacy-calls.mjs";
+import { scanForbiddenSurfaces } from "./forbidden-compatibility-surfaces.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const baselinePath = join(root, "scripts", "architecture-baseline.json");
@@ -16,8 +16,6 @@ const forbiddenPackageEdges = new Map([
 ]);
 
 const storeCallPattern = /\b(?:this\.)?(?:context\.)?store\.([A-Za-z_$][\w$]*)\s*\(/g;
-const clientCallPattern = /\bclient\.(createSession|admitPrompt|interruptRun|listProjects)\s*\(/g;
-const clientLegacyCallPattern = /\bclient\.([A-Za-z_$][\w$]*)\s*\(/g;
 const importPattern = /(?:(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?from\s+)?|import\s*\()\s*['"]([^'"]+)['"]/g;
 
 export function extractImports(source) {
@@ -155,24 +153,12 @@ export function checkPackageDependency(from, to) {
 }
 
 export function validateLegacyBaseline(baseline, current) {
-  const requiredZeroKeys = [
-    "clientLegacyProductionCalls",
-    "clientLegacyProductionReferences",
-  ];
-  const errors = requiredZeroKeys.flatMap((name) => {
-    if (!Object.hasOwn(baseline, name)) return [`missing required baseline key ${name}`];
-    return current[name] === 0 ? [] : [`${name} must remain 0, received ${current[name] ?? "missing"}`];
-  });
-  return errors.concat(Object.entries(baseline).flatMap(([name, previous]) => {
-    if (name === "clientLegacyRegexHistoricalBaseline" || name === "clientLegacyFlatCalls") {
-      return [];
-    }
-    if (requiredZeroKeys.includes(name)) return [];
+  return Object.entries(baseline).flatMap(([name, previous]) => {
     const next = current[name] ?? 0;
     return next > previous
       ? [`${name} increased from ${previous} to ${next}`]
       : [];
-  }));
+  });
 }
 
 export function countLegacyCalls(source, file) {
@@ -182,14 +168,6 @@ export function countLegacyCalls(source, file) {
     matches.push({ file, line, name: match[1] });
   }
   return matches;
-}
-
-export function countClientLegacyCalls(source, file) {
-  return [...source.matchAll(clientLegacyCallPattern)].map((match) => ({
-    file,
-    line: source.slice(0, match.index).split("\n").length,
-    name: match[1],
-  }));
 }
 
 export function checkSessionRunEngineComposition(source, file) {
@@ -285,39 +263,15 @@ function collectLegacyCalls() {
     ...sourceFiles(join(root, "packages", "services", "src", "attachment")),
     ...sourceFiles(join(root, "packages", "tools", "src", "agent", "workflow")),
   ];
-  const clientFiles = [
-    ...sourceFiles(join(root, "packages", "client", "src", "commands")),
-    ...sourceFiles(join(root, "packages", "client", "src", "state")),
-    ...sourceFiles(join(root, "apps", "cli", "src")),
-    ...sourceFiles(join(root, "apps", "desktop", "src")),
-    ...sourceFiles(join(root, "apps", "frontend", "src")),
-  ];
   const storeCalls = storeFiles.flatMap((path) =>
     countLegacyCalls(readFileSync(path, "utf8"), relative(root, path)),
   );
-  const clientCalls = clientFiles.flatMap((path) =>
-    [...readFileSync(path, "utf8").matchAll(clientCallPattern)].map((match) => ({
-      file: relative(root, path),
-      line: readFileSync(path, "utf8").slice(0, match.index).split("\n").length,
-      name: match[1],
-    })),
-  );
-  const clientLegacyCalls = clientFiles.flatMap((path) =>
-    countClientLegacyCalls(readFileSync(path, "utf8"), relative(root, path)),
-  );
-  const clientAst = scanClientLegacyCalls({ cwd: root });
-  return { storeCalls, clientCalls, clientLegacyCalls, clientAst };
+  return { storeCalls };
 }
 
 export function summary(calls) {
   return {
     sessionStoreFlatCalls: calls.storeCalls.length,
-    httpClientFlatCalls: calls.clientCalls.length,
-    clientLegacyRegexHistoricalBaseline: 79,
-    clientLegacyProductionCalls: calls.clientAst?.summary?.clientLegacyProductionCalls ?? 0,
-    clientLegacyProductionReferences: calls.clientAst?.summary?.clientLegacyProductionReferences ?? 0,
-    clientLegacyCompatibilityTestCalls: calls.clientAst?.summary?.clientLegacyCompatibilityTestCalls ?? 0,
-    clientLegacyOtherTestCalls: calls.clientAst?.summary?.clientLegacyOtherTestCalls ?? 0,
   };
 }
 
@@ -334,11 +288,8 @@ function run() {
   const errors = [
     ...collectArchitectureErrors(),
     ...validateLegacyBaseline(baseline, current),
-    ...(calls.clientAst?.unresolvedClientMembers || []).map(
-      (m) => `${m.file}:${m.line}:${m.column} unresolved client member: ${m.member}`,
-    ),
-    ...(calls.clientAst?.dynamicMembers || []).map(
-      (m) => `${m.file}:${m.line}:${m.column} dynamic client member: ${m.expression}`,
+    ...scanForbiddenSurfaces({ cwd: root }).map(
+      (error) => `${error.file}:${error.line}:${error.column} forbidden ${error.surface}`,
     ),
   ];
   if (errors.length > 0) {

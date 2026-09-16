@@ -5,7 +5,6 @@ import {
   checkImportBoundary,
   checkPackageDependency,
   countLegacyCalls,
-  countClientLegacyCalls,
   validateLegacyBaseline,
   checkSessionRunEngineComposition,
   checkMaintenanceCapability,
@@ -80,71 +79,17 @@ test("allowed imports return no errors", () => {
 test("legacy SessionStore calls may decrease but not increase", () => {
   assert.deepEqual(
     validateLegacyBaseline(
-      { sessionStoreFlatCalls: 8, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
-      { sessionStoreFlatCalls: 7, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
+      { sessionStoreFlatCalls: 8 },
+      { sessionStoreFlatCalls: 7 },
     ),
     [],
   );
   assert.match(
     validateLegacyBaseline(
-      { sessionStoreFlatCalls: 8, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
-      { sessionStoreFlatCalls: 9, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
+      { sessionStoreFlatCalls: 8 },
+      { sessionStoreFlatCalls: 9 },
     )[0],
     /sessionStoreFlatCalls increased from 8 to 9/,
-  );
-});
-
-test("AST compatibility test calls may decrease but not increase", () => {
-  assert.deepEqual(
-    validateLegacyBaseline(
-      {
-        clientLegacyProductionCalls: 0,
-        clientLegacyProductionReferences: 0,
-        clientLegacyCompatibilityTestCalls: 57,
-      },
-      {
-        clientLegacyProductionCalls: 0,
-        clientLegacyProductionReferences: 0,
-        clientLegacyCompatibilityTestCalls: 57,
-      },
-    ),
-    [],
-  );
-  assert.match(
-    validateLegacyBaseline(
-      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0, clientLegacyCompatibilityTestCalls: 57 },
-      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0, clientLegacyCompatibilityTestCalls: 58 },
-    )[0],
-    /clientLegacyCompatibilityTestCalls increased from 57 to 58/,
-  );
-  // Historical regex baseline is ignored in validation gate
-  assert.deepEqual(
-    validateLegacyBaseline(
-      { clientLegacyRegexHistoricalBaseline: 79, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
-      { clientLegacyRegexHistoricalBaseline: 999, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
-    ),
-    [],
-  );
-});
-
-test("completed client migration requires absolute zero production legacy usage", () => {
-  assert.match(
-    validateLegacyBaseline(
-      { clientLegacyProductionCalls: 1, clientLegacyProductionReferences: 0 },
-      { clientLegacyProductionCalls: 1, clientLegacyProductionReferences: 0 },
-    )[0],
-    /clientLegacyProductionCalls must remain 0/,
-  );
-  assert.match(
-    validateLegacyBaseline(
-      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 1 },
-      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 1 },
-    )[0],
-    /clientLegacyProductionReferences must remain 0/,
-  );
-  assert.match(
-    validateLegacyBaseline({}, {} )[0],
-    /missing required baseline key clientLegacyProductionCalls/,
   );
 });
 
@@ -154,16 +99,6 @@ test("counts direct legacy store calls with file locations", () => {
     [
       { file: "demo.ts", line: 1, name: "createRun" },
       { file: "demo.ts", line: 2, name: "listProjects" },
-    ],
-  );
-});
-
-test("counts every direct client facade call with file locations", () => {
-  assert.deepEqual(
-    countClientLegacyCalls("client.getSettings();\nclient.sessions.getState('s1');\nclient.replyPermission();", "client.ts"),
-    [
-      { file: "client.ts", line: 1, name: "getSettings" },
-      { file: "client.ts", line: 3, name: "replyPermission" },
     ],
   );
 });

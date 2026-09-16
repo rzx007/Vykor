@@ -99,7 +99,7 @@
            └─ unhandled   → 继续
 
   catalogEntry.kind === "template"
-      → client.admitPrompt(sessionId, {
+      → client.sessions.admitPrompt(sessionId, {
           items: [
             { type: "skill", name: skillName, path, displayName?, source? },
             ...(args ? [{ type: "text", text: ` ${args}` }] : [])
@@ -112,7 +112,7 @@
       → 不 admitPrompt
 
   普通文本
-      → client.admitPrompt(sessionId, { items: [{ type: "text", text: line }] })
+      → client.sessions.admitPrompt(sessionId, { items: [{ type: "text", text: line }] })
 ```
 
 Web/Desktop 应复用同一语义：session 命令仍由宿主或共享 dispatcher 处理；Skill 则统一提交普通 prompt 和结构化 items。Desktop 中从 `/` 或 `$` 菜单选中 Skill 时只插入行内 Skill 引用，不立即发送；用户发送后才调用 `admitPrompt`。消息列表根据 text part 的 `metadata.items` 显示 Skill 名称，不显示绝对路径或 `SKILL.md` 正文。

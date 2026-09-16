@@ -55,7 +55,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
     client, requests, reloadResponses, closedCwds,
     get globalCloseCount() { return globalCloseCount; },
     async install(link: boolean) {
-      await client.installLocalPlugin({
+      await client.plugins.installLocal({
         cwd: fixture.cwds[0], sourcePath: fixture.source, scope: "user", approvedPermissions: [], link,
       });
       expect(requests.at(-1)).toEqual({ path: link ? "/plugins/link-local" : "/plugins/install-local", method: "POST" });
@@ -175,8 +175,8 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       const before = await readInstalledPluginStore(getInstalledPluginStorePath());
       const previousCloses = routes.globalCloseCount;
 
-      if (operation === "disable") await routes.client.disablePlugin(pluginId, { cwd: fixture.cwds[0] });
-      else await routes.client.uninstallPlugin(pluginId, { cwd: fixture.cwds[0] });
+      if (operation === "disable") await routes.client.plugins.disable(pluginId, { cwd: fixture.cwds[0] });
+      else await routes.client.plugins.uninstall(pluginId, { cwd: fixture.cwds[0] });
       expect(routes.requests.at(-1)).toEqual({
         path: `/plugins/${pluginId}${operation === "disable" ? "/disable" : ""}`,
         method: operation === "disable" ? "POST" : "DELETE",
@@ -190,12 +190,12 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       expect(after.revision).toBe(before.revision + 1);
       if (operation === "disable") {
         expect(Object.values(after.plugins)).toEqual([{ ...installed, enabled: false, updatedAt: expect.any(String) }]);
-        expect((await routes.client.listPlugins({ cwd: fixture.cwds[1] })).plugins[0]).toMatchObject({
+        expect((await routes.client.plugins.list({ cwd: fixture.cwds[1] })).plugins[0]).toMatchObject({
           enabled: false, activation: "inactive", toolRuntime: { hostCount: 0, registeredToolCount: 0 },
         });
       } else {
         expect(after.plugins).toEqual({});
-        expect((await routes.client.listPlugins({ cwd: fixture.cwds[1] })).plugins).toEqual([]);
+        expect((await routes.client.plugins.list({ cwd: fixture.cwds[1] })).plugins).toEqual([]);
       }
       for (const cwd of fixture.cwds) {
         expect(await discoverInstalledNativePlugins({ cwd })).toEqual([]);

@@ -88,7 +88,7 @@
 - [Durable Execution Data Model](./durable-execution-data-model.md)：所有运行记录的固定格式、关系、终态和版本。
 - [Protocol Contract](./protocol-contract.md)：协议版本、请求错误、snapshot、SSE 和升级规则。
 - [Client Sync Flow](./client-sync-flow.md)：HTTP client、snapshot、SSE、cursor 和 reducer。
-- [Client Public API 迁移指南](./client-public-api-migration.md)：Stage 7 领域 Resource API 收敛与 Stage 8 弃用清理规则。
+- [Compatibility surface 实施审计](./compatibility-surface-audit.md)：clean-slate 删除/保留裁定与后续批次边界。
 - [Observability](./observability.md)：trace、结构化日志、runtime snapshot 和排障。
 - [Scheduled Tasks Flow](./scheduled-tasks-flow.md)：定时任务怎样保存、触发、运行和记录结果。
 - [Channels Flow](./channels-flow.md)：Bot/Channel 消息怎样进入同一套 durable Session/Run。

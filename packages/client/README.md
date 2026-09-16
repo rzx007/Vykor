@@ -98,12 +98,10 @@ for await (const update of syncEvents(client, { sessionId: session.id })) {
 | `client.channels` | 消息通道送达与投递确认 (`ChannelResource`) |
 | `client.events` | 会话与系统 SSE 事件流订阅 (`EventResource`) |
 
-历史平铺 facade 方法（如 `client.health()`、`client.createSession()`）现已标记为 `@deprecated` 并保留薄转发实现。完整迁移映射及 Stage 8 移除门槛请参阅 [docs/client-public-api-migration.md](../../docs/client-public-api-migration.md)。
-
-公共表面分为三类：
+公共表面分为两类：
 
 - **长期入口：** `protocol` 和各命名 Resource，是业务调用的默认选择。
-- **高级入口：** Resource class、state/sync 工具以及 `transport`、`sse`、`baseUrl`、`token`、`fetchImpl`。Stage 7 保留，但后五项仍待 Stage 8 根据真实外部使用情况评估。
+- **高级入口：** Resource class 与 state/sync 工具。底层 transport 由 Client 内部持有，不作为实例 API 暴露。
 - **兼容入口：** Client 顶层平铺方法，仅用于过渡，均带有一对一 `@deprecated` 替代路径；双发行证据未满足前不会删除。
 
 ## 相关文档

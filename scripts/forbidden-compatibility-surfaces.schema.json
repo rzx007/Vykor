@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openharness.dev/schemas/forbidden-compatibility-surfaces.schema.json",
+  "title": "Forbidden OpenHarness compatibility surfaces",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "version",
+    "clientMethods",
+    "runtimeExports",
+    "httpRoutes",
+    "cliCommands",
+    "cliOptions",
+    "environmentVariables",
+    "configFields",
+    "enumValues",
+    "schemaNames"
+  ],
+  "properties": {
+    "$schema": { "const": "./forbidden-compatibility-surfaces.schema.json" },
+    "version": { "const": 1 },
+    "clientMethods": { "$ref": "#/$defs/names" },
+    "runtimeExports": { "$ref": "#/$defs/names" },
+    "httpRoutes": { "$ref": "#/$defs/names" },
+    "cliCommands": { "$ref": "#/$defs/names" },
+    "cliOptions": { "$ref": "#/$defs/names" },
+    "environmentVariables": { "$ref": "#/$defs/names" },
+    "configFields": { "$ref": "#/$defs/names" },
+    "enumValues": { "$ref": "#/$defs/names" },
+    "schemaNames": { "$ref": "#/$defs/names" }
+  },
+  "$defs": {
+    "names": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  }
+}

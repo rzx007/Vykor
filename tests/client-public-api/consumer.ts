@@ -163,10 +163,244 @@ export async function consumePublicApi(client: OpenHarnessClient): Promise<void>
   });
   syncAbort.abort();
 
-  // Stage 7 Deprecated Flat API Compatibility Check
-  // Call deprecated flat method to verify compatibility layer still compiles and types properly
-  const flatSessionPromise: Promise<SessionRecord> = client.getSession(fetchedSession.id);
-  await flatSessionPromise;
-
   void [controller, permission, task, shellJob, terminal, channelRes, models, authStatus, projects, pluginResult, skills];
+}
+
+export function rejectRemovedFlatApi(client: OpenHarnessClient): void {
+  // @ts-expect-error removed flat compatibility API
+  client.addMemory;
+  // @ts-expect-error removed flat compatibility API
+  client.admitPrompt;
+  // @ts-expect-error removed flat compatibility API
+  client.applySessionGoalAction;
+  // @ts-expect-error removed flat compatibility API
+  client.archiveProject;
+  // @ts-expect-error removed flat compatibility API
+  client.archiveSession;
+  // @ts-expect-error removed flat compatibility API
+  client.authLogin;
+  // @ts-expect-error removed flat compatibility API
+  client.authLogout;
+  // @ts-expect-error removed flat compatibility API
+  client.cancelJob;
+  // @ts-expect-error removed flat compatibility API
+  client.cancelQueuedPrompt;
+  // @ts-expect-error removed flat compatibility API
+  client.capabilities;
+  // @ts-expect-error removed flat compatibility API
+  client.closeTerminal;
+  // @ts-expect-error removed flat compatibility API
+  client.compactSession;
+  // @ts-expect-error removed flat compatibility API
+  client.connectCatalogProvider;
+  // @ts-expect-error removed flat compatibility API
+  client.createBackgroundShell;
+  // @ts-expect-error removed flat compatibility API
+  client.createCustomProvider;
+  // @ts-expect-error removed flat compatibility API
+  client.createScheduledTask;
+  // @ts-expect-error removed flat compatibility API
+  client.createSession;
+  // @ts-expect-error removed flat compatibility API
+  client.createSessionGoal;
+  // @ts-expect-error removed flat compatibility API
+  client.createTerminal;
+  // @ts-expect-error removed flat compatibility API
+  client.deleteAttachment;
+  // @ts-expect-error removed flat compatibility API
+  client.deleteSession;
+  // @ts-expect-error removed flat compatibility API
+  client.disablePlugin;
+  // @ts-expect-error removed flat compatibility API
+  client.disconnectCatalogProvider;
+  // @ts-expect-error removed flat compatibility API
+  client.downloadAttachment;
+  // @ts-expect-error removed flat compatibility API
+  client.editLatestPrompt;
+  // @ts-expect-error removed flat compatibility API
+  client.enablePlugin;
+  // @ts-expect-error removed flat compatibility API
+  client.exportSession;
+  // @ts-expect-error removed flat compatibility API
+  client.forkSession;
+  // @ts-expect-error removed flat compatibility API
+  client.gcAttachmentStorage;
+  // @ts-expect-error removed flat compatibility API
+  client.getAttachment;
+  // @ts-expect-error removed flat compatibility API
+  client.getAuthStatus;
+  // @ts-expect-error removed flat compatibility API
+  client.getChannelStatus;
+  // @ts-expect-error removed flat compatibility API
+  client.getContextPreview;
+  // @ts-expect-error removed flat compatibility API
+  client.getContextStatus;
+  // @ts-expect-error removed flat compatibility API
+  client.getContextUsage;
+  // @ts-expect-error removed flat compatibility API
+  client.getGitBranch;
+  // @ts-expect-error removed flat compatibility API
+  client.getGitDiff;
+  // @ts-expect-error removed flat compatibility API
+  client.getGitStatus;
+  // @ts-expect-error removed flat compatibility API
+  client.getMemory;
+  // @ts-expect-error removed flat compatibility API
+  client.getProfileStatus;
+  // @ts-expect-error removed flat compatibility API
+  client.getScheduledTask;
+  // @ts-expect-error removed flat compatibility API
+  client.getScheduledTaskStatus;
+  // @ts-expect-error removed flat compatibility API
+  client.getSession;
+  // @ts-expect-error removed flat compatibility API
+  client.getSessionGoal;
+  // @ts-expect-error removed flat compatibility API
+  client.getSessionMcp;
+  // @ts-expect-error removed flat compatibility API
+  client.getSessionState;
+  // @ts-expect-error removed flat compatibility API
+  client.getSessionUsage;
+  // @ts-expect-error removed flat compatibility API
+  client.getSettings;
+  // @ts-expect-error removed flat compatibility API
+  client.getTerminal;
+  // @ts-expect-error removed flat compatibility API
+  client.gitCommit;
+  // @ts-expect-error removed flat compatibility API
+  client.handleChannelMessage;
+  // @ts-expect-error removed flat compatibility API
+  client.health;
+  // @ts-expect-error removed flat compatibility API
+  client.initProfile;
+  // @ts-expect-error removed flat compatibility API
+  client.initProject;
+  // @ts-expect-error removed flat compatibility API
+  client.inspectProject;
+  // @ts-expect-error removed flat compatibility API
+  client.installLocalPlugin;
+  // @ts-expect-error removed flat compatibility API
+  client.installPluginArchive;
+  // @ts-expect-error removed flat compatibility API
+  client.installPluginGit;
+  // @ts-expect-error removed flat compatibility API
+  client.interruptSession;
+  // @ts-expect-error removed flat compatibility API
+  client.listAgentPersonas;
+  // @ts-expect-error removed flat compatibility API
+  client.listCommands;
+  // @ts-expect-error removed flat compatibility API
+  client.listContextPlugins;
+  // @ts-expect-error removed flat compatibility API
+  client.listEvents;
+  // @ts-expect-error removed flat compatibility API
+  client.listHooks;
+  // @ts-expect-error removed flat compatibility API
+  client.listJobs;
+  // @ts-expect-error removed flat compatibility API
+  client.listMemory;
+  // @ts-expect-error removed flat compatibility API
+  client.listMessageParts;
+  // @ts-expect-error removed flat compatibility API
+  client.listMessages;
+  // @ts-expect-error removed flat compatibility API
+  client.listModels;
+  // @ts-expect-error removed flat compatibility API
+  client.listOutputStyles;
+  // @ts-expect-error removed flat compatibility API
+  client.listPendingChannelDeliveries;
+  // @ts-expect-error removed flat compatibility API
+  client.listPermissions;
+  // @ts-expect-error removed flat compatibility API
+  client.listPlugins;
+  // @ts-expect-error removed flat compatibility API
+  client.listProjects;
+  // @ts-expect-error removed flat compatibility API
+  client.listProviders;
+  // @ts-expect-error removed flat compatibility API
+  client.listScheduledRuns;
+  // @ts-expect-error removed flat compatibility API
+  client.listScheduledTasks;
+  // @ts-expect-error removed flat compatibility API
+  client.listSessions;
+  // @ts-expect-error removed flat compatibility API
+  client.listSkills;
+  // @ts-expect-error removed flat compatibility API
+  client.listTerminals;
+  // @ts-expect-error removed flat compatibility API
+  client.patchSettings;
+  // @ts-expect-error removed flat compatibility API
+  client.previewPluginArchive;
+  // @ts-expect-error removed flat compatibility API
+  client.previewPluginGit;
+  // @ts-expect-error removed flat compatibility API
+  client.promoteQueuedPrompt;
+  // @ts-expect-error removed flat compatibility API
+  client.readJob;
+  // @ts-expect-error removed flat compatibility API
+  client.readTerminal;
+  // @ts-expect-error removed flat compatibility API
+  client.rebindProject;
+  // @ts-expect-error removed flat compatibility API
+  client.recordChannelDelivery;
+  // @ts-expect-error removed flat compatibility API
+  client.reloadPlugins;
+  // @ts-expect-error removed flat compatibility API
+  client.rememberSession;
+  // @ts-expect-error removed flat compatibility API
+  client.removeCustomProvider;
+  // @ts-expect-error removed flat compatibility API
+  client.removeMemory;
+  // @ts-expect-error removed flat compatibility API
+  client.removeScheduledTask;
+  // @ts-expect-error removed flat compatibility API
+  client.removeSkill;
+  // @ts-expect-error removed flat compatibility API
+  client.renameProject;
+  // @ts-expect-error removed flat compatibility API
+  client.repairAttachmentStorage;
+  // @ts-expect-error removed flat compatibility API
+  client.replyPermission;
+  // @ts-expect-error removed flat compatibility API
+  client.resizeTerminal;
+  // @ts-expect-error removed flat compatibility API
+  client.resumeInterruptedRun;
+  // @ts-expect-error removed flat compatibility API
+  client.rewindSession;
+  // @ts-expect-error removed flat compatibility API
+  client.scanAttachmentStorage;
+  // @ts-expect-error removed flat compatibility API
+  client.sendJob;
+  // @ts-expect-error removed flat compatibility API
+  client.setProjectDefaultShell;
+  // @ts-expect-error removed flat compatibility API
+  client.setProjectPinned;
+  // @ts-expect-error removed flat compatibility API
+  client.setScheduledRunUnread;
+  // @ts-expect-error removed flat compatibility API
+  client.signalTerminal;
+  // @ts-expect-error removed flat compatibility API
+  client.startDream;
+  // @ts-expect-error removed flat compatibility API
+  client.streamEvents;
+  // @ts-expect-error removed flat compatibility API
+  client.streamTerminalEvents;
+  // @ts-expect-error removed flat compatibility API
+  client.triggerScheduledTask;
+  // @ts-expect-error removed flat compatibility API
+  client.uninstallPlugin;
+  // @ts-expect-error removed flat compatibility API
+  client.updateCustomProvider;
+  // @ts-expect-error removed flat compatibility API
+  client.updateScheduledTask;
+  // @ts-expect-error removed flat compatibility API
+  client.updateSession;
+  // @ts-expect-error removed flat compatibility API
+  client.updateSessionGoal;
+  // @ts-expect-error removed flat compatibility API
+  client.uploadAttachment;
+  // @ts-expect-error removed flat compatibility API
+  client.waitJob;
+  // @ts-expect-error removed flat compatibility API
+  client.writeTerminal;
 }

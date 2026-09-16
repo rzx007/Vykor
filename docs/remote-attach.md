@@ -50,8 +50,8 @@ const client = new OpenHarnessClient({
   token: process.env.OPENHARNESS_DAEMON_TOKEN,
 });
 
-await client.health();
-const sessions = await client.listSessions();
+await client.protocol.health();
+const sessions = await client.sessions.list();
 const state = await syncEvents(client);
 ```
 

@@ -1,3218 +1,794 @@
 {
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
-  "carrier": {
-    "defaultCarrier": "@rzx/ohs",
-    "carrierRule": "The default carrier release is the @rzx/ohs CLI package. Removal in Stage 8 requires two release evidences: deprecatedCarrierRelease and retentionCarrierRelease.",
-    "evidenceFields": ["carrier", "version", "date", "channel", "releaseNoteUrl|commit"],
-    "commitRule": "The evidence commit must be the OpenHarness-ts commit used to build the recorded carrier version and match its release tag or release note."
-  },
-  "summary": {
-    "runtimeExports": 55,
-    "typeExports": 127,
-    "clientMembers": 138,
-    "totalEntries": 320
-  },
   "entries": [
     {
       "name": "AttachmentResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "AuthResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "CURRENT_PROTOCOL_VERSION",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "ChannelResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "DevelopmentResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "EventResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "HttpTransport",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "IncompatibleProtocolError",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "JobResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "LOCAL_COMMAND_DETAILS",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "LOCAL_COMMAND_NAMES",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "OpenHarnessApiError",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "OpenHarnessClient",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "PermissionResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "PluginResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "ProjectResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "ProtocolClient",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "ProviderResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "ScheduleResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "SessionResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "SessionSyncController",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "SseTransport",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "SystemResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "TerminalResource",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "UnsupportedSessionEventSchemaVersionError",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "applyEvent",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "applyEvents",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "applySessionSnapshot",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "checkProtocolCompatibility",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "createInitialClientState",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "createPromptRequestId",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "dispatchSessionCommand",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "hasActiveRun",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "hydrateState",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "mergeCommandDetails",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "normalizeDaemonBaseUrl",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "parseCreateSessionGoalInput",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "parseGoalActionInput",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "parseSlashLine",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "parseUpdateSessionGoalInput",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "patchSessionRuntimeMetadata",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "readRuntimeMetadata",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "readSessionRuntimeConfig",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "resolveSessionCwd",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectFirstPendingPermission",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectSessionInputs",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectSessionMessagesWithParts",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectSessionOrderedMessages",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectSessionParts",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectSessionPermissions",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectSessionRuns",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "selectSessionTasks",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "streamServerSentEvents",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "supportsFeature",
-      "kind": "runtime-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "syncEvents",
-      "kind": "runtime-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "runtime-export"
     },
     {
       "name": "AdmitClientPromptInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AdmitPromptAttachmentInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AgentEnvironmentCapabilities",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AgentPersonaInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AttachmentAssetRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AttachmentStorageGcResult",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AttachmentStorageIssue",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AttachmentStorageRepairResult",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AttachmentStorageReport",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "AuthStatus",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CancelQueuedClientPromptInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CancelQueuedPromptResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ChannelDeliveryRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ChannelDeliveryStatus",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ChannelStatusSnapshot",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ClientProtocolSupport",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CommandCatalogEntry",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CommandKind",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CommandSelection",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CommandSource",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CompactSessionResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CreateBackgroundShellInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CreateBackgroundShellResult",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CreateClientSessionInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CreateScheduledTaskInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CreateSessionGoalInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "CustomProviderInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "DownloadAttachmentOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "DurableChannelMessageInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "DurableChannelMessageResult",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "EditLatestClientPromptInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "EventSyncOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ExternalConversationRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ForkClientSessionInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "GoalActionInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "HookInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "InputDelivery",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "InterruptSessionResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "JobCapabilities",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "JobKind",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "JobReadResult",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "JobSnapshot",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "JobStatus",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "JobWaitResult",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ListClientMessagePartsOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ListCommandsOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ListEventsOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ListMessagesOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ListPermissionsOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ListProjectsOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ListSessionsOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "McpServerStatus",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "MemoryEntryRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "MemoryListResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ModelInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ModelProviderInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "OpenHarnessClientOptions",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "OpenHarnessClientState",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "OpenHarnessServerHealth",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "OutputStyleInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PermissionRequestRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PermissionStatus",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PluginCatalogEntry",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PluginInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PluginRuntimeStatus",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PresentationReadRequest",
-      "kind": "type-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ProjectRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PromoteQueuedClientPromptInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PromoteQueuedPromptResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "PromptResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ProtocolCompatibility",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ProviderInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "RecordChannelDeliveryInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ReloadPluginsResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "RememberSessionResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ReplyPermissionInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "RewindSessionResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ScheduledRunRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ScheduledTaskRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ScheduledTaskStatusSummary",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "ServerCapabilities",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionAttachmentMessagePartRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionBucket",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionCommandHost",
-      "kind": "type-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionCommandOutcome",
-      "kind": "type-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionEventRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionExecutionRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionExportResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionGoal",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionInputAttachmentRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionInputRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionMessagePartRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionMessageRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionMessageWithParts",
-      "kind": "type-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionRunAttemptRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionRunRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionRuntimeConfig",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionRuntimeConfigPatch",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionStateSnapshot",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionSyncControllerOptions",
-      "kind": "type-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionTransformationMessagePartRecord",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionUsageResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SessionUserInputItem",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SkillInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SkillProject",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SkillSnapshot",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SkillSource",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SlashLine",
-      "kind": "type-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "StartDreamResponse",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SyncConnectionStatus",
-      "kind": "type-export",
-      "classification": "advanced",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "SyncEventUpdate",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalCreateRequest",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalEvent",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalReadRequest",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalReadResult",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalResizeRequest",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalRuntime",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalSessionInfo",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalSessionStatus",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalSignal",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalSource",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "TerminalWriteRequest",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "UpdateClientSessionInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "UpdateScheduledTaskInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "UpdateSessionGoalInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "UploadAttachmentInput",
-      "kind": "type-export",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
-    },
-    {
-      "name": "transport",
-      "kind": "client-property",
-      "classification": "retained-unclassified",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
-    },
-    {
-      "name": "sse",
-      "kind": "client-property",
-      "classification": "retained-unclassified",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "type-export"
     },
     {
       "name": "protocol",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "system",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "providers",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "auth",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "projects",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "plugins",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "development",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "sessions",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "attachments",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "permissions",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "schedules",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "jobs",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "terminals",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "channels",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
+      "kind": "client-resource"
     },
     {
       "name": "events",
-      "kind": "client-property",
-      "classification": "long-term",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
-    },
-    {
-      "name": "baseUrl",
-      "kind": "client-getter",
-      "classification": "retained-unclassified",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
-    },
-    {
-      "name": "token",
-      "kind": "client-getter",
-      "classification": "retained-unclassified",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
-    },
-    {
-      "name": "fetchImpl",
-      "kind": "client-getter",
-      "classification": "retained-unclassified",
-      "replacement": null,
-      "deprecatedSince": null,
-      "deprecatedCarrierRelease": null,
-      "retentionCarrierRelease": null,
-      "removeIn": null
-    },
-    {
-      "name": "health",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "protocol.health",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "capabilities",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "protocol.capabilities",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "uploadAttachment",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "attachments.upload",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getAttachment",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "attachments.get",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "downloadAttachment",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "attachments.download",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "deleteAttachment",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "attachments.delete",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "scanAttachmentStorage",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "attachments.scanStorage",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "repairAttachmentStorage",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "attachments.repairStorage",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "gcAttachmentStorage",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "attachments.gcStorage",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "handleChannelMessage",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "channels.handleMessage",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "recordChannelDelivery",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "channels.recordDelivery",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getChannelStatus",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "channels.getStatus",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listPendingChannelDeliveries",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "channels.listPendingDeliveries",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listCommands",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.listCommands",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getSettings",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.getSettings",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "patchSettings",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.patchSettings",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listProviders",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "providers.listProviders",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "createCustomProvider",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "providers.createCustomProvider",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "connectCatalogProvider",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "providers.connectCatalogProvider",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "disconnectCatalogProvider",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "providers.disconnectCatalogProvider",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "updateCustomProvider",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "providers.updateCustomProvider",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "removeCustomProvider",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "providers.removeCustomProvider",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listModels",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "providers.listModels",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getSessionMcp",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.getSessionMcp",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listMemory",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.listMemory",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getMemory",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.getMemory",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "addMemory",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.addMemory",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "removeMemory",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.removeMemory",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getAuthStatus",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "auth.getStatus",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "authLogin",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "auth.login",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "authLogout",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "auth.logout",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listContextPlugins",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.listContextPlugins",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getContextPreview",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.getContextPreview",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getContextStatus",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.getContextStatus",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getContextUsage",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.getContextUsage",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "compactSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.compact",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getSessionGoal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.getGoal",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "createSessionGoal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.createGoal",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "updateSessionGoal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.updateGoal",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "applySessionGoalAction",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.applyGoalAction",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "rewindSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.rewind",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "rememberSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.remember",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "startDream",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.startDream",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getProfileStatus",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.getProfileStatus",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "initProfile",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.initProfile",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listOutputStyles",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "system.listOutputStyles",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "initProject",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.init",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listPlugins",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.list",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "enablePlugin",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.enable",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "disablePlugin",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.disable",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "installLocalPlugin",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.installLocal",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "previewPluginArchive",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.previewArchive",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "installPluginArchive",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.installArchive",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "previewPluginGit",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.previewGit",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "installPluginGit",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.installGit",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "uninstallPlugin",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.uninstall",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "reloadPlugins",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "plugins.reload",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listSkills",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.listSkills",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "removeSkill",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.removeSkill",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listAgentPersonas",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.listAgentPersonas",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listHooks",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.listHooks",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getGitDiff",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.getGitDiff",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getGitBranch",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.getGitBranch",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getGitStatus",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.getGitStatus",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "gitCommit",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "development.gitCommit",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getSessionUsage",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.getUsage",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "exportSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.export",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listSessions",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.list",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listProjects",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.list",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "inspectProject",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.inspect",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "renameProject",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.rename",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "setProjectPinned",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.setPinned",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "setProjectDefaultShell",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.setDefaultShell",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "rebindProject",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.rebind",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "archiveProject",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "projects.archive",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "createSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.create",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.get",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "forkSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.fork",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getSessionState",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.getState",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "archiveSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.archive",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "deleteSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.delete",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "updateSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.update",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listMessages",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.listMessages",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listMessageParts",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.listMessageParts",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "admitPrompt",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.admitPrompt",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "editLatestPrompt",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.editLatestPrompt",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "promoteQueuedPrompt",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.promoteQueuedPrompt",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "cancelQueuedPrompt",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.cancelQueuedPrompt",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "resumeInterruptedRun",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.resumeInterruptedRun",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "interruptSession",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "sessions.interrupt",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listEvents",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "events.list",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listPermissions",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "permissions.list",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "replyPermission",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "permissions.reply",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getScheduledTaskStatus",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.getStatus",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listScheduledTasks",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.listTasks",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getScheduledTask",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.getTask",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "createScheduledTask",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.createTask",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "updateScheduledTask",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.updateTask",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "removeScheduledTask",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.removeTask",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "triggerScheduledTask",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.triggerTask",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listScheduledRuns",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.listRuns",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "setScheduledRunUnread",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "schedules.setRunUnread",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "createTerminal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.create",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listJobs",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "jobs.list",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "createBackgroundShell",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "jobs.createBackgroundShell",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "readJob",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "jobs.read",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "waitJob",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "jobs.wait",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "sendJob",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "jobs.send",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "cancelJob",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "jobs.cancel",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "listTerminals",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.list",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "getTerminal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.get",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "readTerminal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.read",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "writeTerminal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.write",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "resizeTerminal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.resize",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "signalTerminal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.signal",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "closeTerminal",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.close",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "streamTerminalEvents",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "terminals.streamEvents",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
-    },
-    {
-      "name": "streamEvents",
-      "kind": "client-method",
-      "classification": "compatibility",
-      "replacement": "events.stream",
-      "deprecatedSince": "stage-7",
-      "deprecatedCarrierRelease": "pending",
-      "retentionCarrierRelease": "pending",
-      "removeIn": "stage-8-after-release-gate"
+      "kind": "client-resource"
     }
   ]
 }

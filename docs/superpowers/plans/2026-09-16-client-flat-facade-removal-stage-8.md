@@ -1,6 +1,6 @@
 # Stage 8：Client 平铺兼容门面移除总计划
 
-> 状态：8A、8B 已完成，下一步执行 8C。执行人：Codex。A/B 两次真实稳定发行完成前禁止删除兼容方法。
+> 历史计划：已被 `docs/superpowers/specs/2026-09-16-clean-slate-compatibility-removal-design.md` 取代，不再作为当前发行或删除门禁。
 
 ## 1. 最终目标
 

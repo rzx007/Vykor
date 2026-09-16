@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import {
+  assertArtifacts,
+  assertReleaseCommit,
+  assertTagAvailable,
+  decideNpmPublish,
+  renderStableReleaseNotes,
+} from "./release-safety.mjs";
+
+const sha = "a".repeat(40);
+
+test("release commit must be one fixed full SHA", () => {
+  assert.equal(assertReleaseCommit({ requestedSha: sha.toUpperCase(), checkedOutSha: sha }), sha);
+  assert.throws(() => assertReleaseCommit({ requestedSha: "main", checkedOutSha: sha }), /full Git SHA/);
+  assert.throws(() => assertReleaseCommit({ requestedSha: sha, checkedOutSha: "b".repeat(40) }), /checked out/);
+});
+
+test("an existing tag is reusable only at the same commit", () => {
+  assert.equal(assertTagAvailable({ tag: "v1.2.3", targetSha: sha, existingSha: undefined }), "create");
+  assert.equal(assertTagAvailable({ tag: "v1.2.3", targetSha: sha, existingSha: sha }), "reuse");
+  assert.throws(
+    () => assertTagAvailable({ tag: "v1.2.3", targetSha: sha, existingSha: "b".repeat(40) }),
+    /already points/,
+  );
+});
+
+test("npm publication is idempotent but never accepts a different version", () => {
+  assert.equal(decideNpmPublish({ expectedVersion: "1.2.3", publishedVersion: undefined }), "publish");
+  assert.equal(decideNpmPublish({ expectedVersion: "1.2.3", publishedVersion: "1.2.3" }), "skip");
+  assert.throws(
+    () => decideNpmPublish({ expectedVersion: "1.2.3", publishedVersion: "1.2.2" }),
+    /expected 1.2.3/,
+  );
+});
+
+test("release artifacts must contain every expected file", () => {
+  assert.deepEqual(
+    assertArtifacts(["OpenHarness-1.2.3-setup.exe", "OpenHarness-1.2.3.AppImage"], [
+      "OpenHarness-1.2.3.AppImage",
+      "OpenHarness-1.2.3-setup.exe",
+      "latest.yml",
+    ]),
+    ["OpenHarness-1.2.3-setup.exe", "OpenHarness-1.2.3.AppImage"],
+  );
+  assert.throws(() => assertArtifacts(["app.exe", "app.deb"], ["app.exe"]), /app.deb/);
+});
+
+test("stable release notes contain immutable release identity and artifacts", () => {
+  const notes = renderStableReleaseNotes({
+    version: "1.2.3",
+    commit: sha,
+    artifacts: ["OpenHarness-1.2.3-setup.exe", "OpenHarness-1.2.3.AppImage"],
+  });
+  assert.match(notes, /OpenHarness 1\.2\.3/);
+  assert.match(notes, new RegExp(sha));
+  assert.match(notes, /OpenHarness-1\.2\.3-setup\.exe/);
+  assert.doesNotMatch(notes, /compatibility|deprecation|retention|breaking removal/i);
+});
+
+test("workflow preserves build, publication, verification and rerun ordering", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/tag-release.yml", import.meta.url), "utf8");
+  assert.doesNotMatch(workflow, /release_phase|client-compat|compatibility lifecycle/i);
+  assert.match(workflow, /ref:\s*\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /build-desktop:[\s\S]*create-tag:[\s\S]*needs: \[validate, preflight, build-desktop\]/);
+  assert.match(workflow, /publish-npm:[\s\S]*npm view "@rzx\/ohs@\$\{VERSION\}"/);
+  assert.match(workflow, /publish-release:[\s\S]*needs: \[validate, create-tag, publish-npm, build-desktop\]/);
+  assert.match(workflow, /gh release upload "\$TAG"[\s\S]*--clobber/);
+  assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--notes-file release-notes\.md/);
+  assert.match(workflow, /gh release view "\$TAG" --json body/);
+  assert.match(workflow, /gh release view "\$TAG" --json assets/);
+  assert.match(workflow, /notify:[\s\S]*if: always\(\)/);
+});
