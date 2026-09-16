@@ -136,7 +136,7 @@ async function verifyDaemonWithTimeout(client: OpenHarnessClient): Promise<void>
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 1_500)
   try {
-    await client.health({ signal: controller.signal })
+    await client.protocol.health({ signal: controller.signal })
     await client.projects.list({ signal: controller.signal })
   } finally {
     clearTimeout(timeout)

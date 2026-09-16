@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { extname, resolve } from "node:path"
 
-import type { OpenHarnessClient } from "@openharness/client"
+import type { OpenHarnessClient, PluginResource } from "@openharness/client"
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 
 import type {
@@ -54,33 +54,33 @@ export class DesktopPluginService {
 
   async snapshot(input: DesktopPluginContextInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    const result = await this.withDaemonRetry((client) => client.listPlugins({ cwd }))
+    const result = await this.withDaemonRetry((client) => client.plugins.list({ cwd }))
     return { cwd, plugins: result.plugins, warnings: result.warnings }
   }
 
   async enable(input: DesktopPluginActionInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    await this.withDaemonRetry((client) => client.enablePlugin(requirePluginId(input.pluginId), { cwd }))
+    await this.withDaemonRetry((client) => client.plugins.enable(requirePluginId(input.pluginId), { cwd }))
     return await this.snapshot({ cwd })
   }
 
   async disable(input: DesktopPluginActionInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    await this.withDaemonRetry((client) => client.disablePlugin(requirePluginId(input.pluginId), { cwd }))
+    await this.withDaemonRetry((client) => client.plugins.disable(requirePluginId(input.pluginId), { cwd }))
     return await this.snapshot({ cwd })
   }
 
   async uninstall(input: DesktopPluginActionInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
     await this.withDaemonRetry((client) =>
-      client.uninstallPlugin(requirePluginId(input.pluginId), { cwd })
+      client.plugins.uninstall(requirePluginId(input.pluginId), { cwd })
     )
     return await this.snapshot({ cwd })
   }
 
   async reload(input: DesktopPluginContextInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    const result = await this.withDaemonRetry((client) => client.reloadPlugins({ cwd }))
+    const result = await this.withDaemonRetry((client) => client.plugins.reload({ cwd }))
     return { cwd, plugins: result.plugins, warnings: result.warnings }
   }
 
@@ -102,10 +102,10 @@ export class DesktopPluginService {
       ])
     }
 
-    let preview: Awaited<ReturnType<OpenHarnessClient["previewPluginArchive"]>>
+    let preview: Awaited<ReturnType<PluginResource["previewArchive"]>>
     try {
       preview = await this.withDaemonRetry((client) =>
-        client.previewPluginArchive({ cwd, archivePath })
+        client.plugins.previewArchive({ cwd, archivePath })
       )
     } catch (error) {
       return archiveFailureFromError(error)
@@ -175,10 +175,10 @@ export class DesktopPluginService {
       return archiveFailure("请输入 Git 地址。", [{ code: "plugin_git_url_required" }])
     }
 
-    let preview: Awaited<ReturnType<OpenHarnessClient["previewPluginGit"]>>
+    let preview: Awaited<ReturnType<PluginResource["previewGit"]>>
     try {
       preview = await this.withDaemonRetry((client) =>
-        client.previewPluginGit({ cwd, url, ...(ref ? { ref } : {}) })
+        client.plugins.previewGit({ cwd, url, ...(ref ? { ref } : {}) })
       )
     } catch (error) {
       return gitFailureFromError(error)
@@ -201,34 +201,40 @@ export class DesktopPluginService {
       id: selectionId,
       cwd,
       url,
-      ...(ref ? { ref } : {}),
-      sourceDigest: preview.sourceDigest,
+      ref,
       pluginName,
-      requestedPermissions: [...preview.requestedPermissions],
+      expectedSourceDigest: preview.sourceDigest,
+      declaredPermissions: preview.declaredPermissions,
       createdAt,
       expiresAt: createdAt + SELECTION_TTL_MS,
     })
     return {
-      status: "approval-required",
+      status: "requires_confirmation",
       selectionId,
       pluginName,
-      requestedPermissions: [...preview.requestedPermissions],
+      declaredPermissions: preview.declaredPermissions,
+      expiresAt: createdAt + SELECTION_TTL_MS,
     }
   }
 
-  async confirmGit(input: DesktopPluginArchiveConfirmInput): Promise<DesktopPluginGitConfirmResult> {
+  async confirmGit(input: {
+    cwd: string
+    selectionId: string
+    approvedPermissions: string[]
+  }): Promise<DesktopPluginGitConfirmResult> {
     const cwd = normalizeCwd(input.cwd)
-    const selection = this.gitSelections.consume(input.selectionId)
-    if (!selection || selection.cwd !== cwd) return selectionFailure()
+    const selection = this.gitSelections.get(input.selectionId)
+    if (!selection || selection.cwd !== cwd) return gitConfirmationExpired()
 
     try {
       await this.installGit(
         cwd,
         selection.url,
         selection.ref,
-        selection.sourceDigest,
-        selection.requestedPermissions
+        selection.expectedSourceDigest,
+        input.approvedPermissions
       )
+      this.gitSelections.delete(input.selectionId)
     } catch (error) {
       if (isConnectionFailure(error)) return unknownInstallResult(selection.pluginName)
       return gitFailureFromError(error)
@@ -250,7 +256,8 @@ export class DesktopPluginService {
     pluginName: string
   ): Promise<DesktopPluginArchiveInstalledResult> {
     try {
-      return { status: "installed", snapshot: await this.snapshot({ cwd }), pluginName }
+      const snapshot = await this.snapshot({ cwd })
+      return { status: "installed", pluginName, snapshot }
     } catch {
       return { status: "installed", pluginName, refreshPending: true }
     }
@@ -262,7 +269,7 @@ export class DesktopPluginService {
     expectedArchiveDigest: string,
     approvedPermissions: string[]
   ): Promise<void> {
-    await (await this.daemonClient()).installPluginArchive({
+    await (await this.daemonClient()).plugins.installArchive({
       cwd,
       archivePath,
       expectedArchiveDigest,
@@ -277,7 +284,7 @@ export class DesktopPluginService {
     expectedSourceDigest: string,
     approvedPermissions: string[]
   ): Promise<void> {
-    await (await this.daemonClient()).installPluginGit({
+    await (await this.daemonClient()).plugins.installGit({
       cwd,
       url,
       ...(ref ? { ref } : {}),

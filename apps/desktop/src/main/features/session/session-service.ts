@@ -84,11 +84,11 @@ export class DesktopSessionService {
     })
     const client = await this.getClient()
     const [settings, providers, allSessions, projectRecords, capabilities] = await Promise.all([
-      client.getSettings(),
-      client.listModels(),
-      client.listSessions({ includeArchived: true, limit: 400 }),
+      client.system.getSettings(),
+      client.providers.listModels(),
+      client.sessions.list({ includeArchived: true, limit: 400 }),
       client.projects.list(),
-      client.capabilities(),
+      client.protocol.capabilities(),
     ])
     requireDesktopPluginCapabilities(capabilities)
     const sessions = allSessions
@@ -111,7 +111,7 @@ export class DesktopSessionService {
     }
 
     if (runtimeSnapshot.needsModelPatch || runtimeSnapshot.needsProviderPatch) {
-      await client.patchSettings({
+      await client.system.patchSettings({
         model: defaultModel,
         ...(defaultProvider ? { provider: defaultProvider } : {}),
       })
@@ -258,7 +258,7 @@ export class DesktopSessionService {
     const path = result.filePaths[0]
     if (result.canceled || !path) return null
     const client = await this.getClient()
-    const project = await client.rebindProject(requireString(projectIdInput, "Project ID"), path)
+    const project = await client.projects.rebind(requireString(projectIdInput, "Project ID"), path)
     return await toDesktopProject(project)
   }
 
@@ -322,7 +322,7 @@ export class DesktopSessionService {
     const model = requireString(input.model, "模型")
     const client = await this.getClient()
     const provider = await resolveProviderForModel(client, model, input.provider)
-    await client.patchSettings({
+    await client.system.patchSettings({
       model,
       ...(provider ? { provider } : {}),
     })
@@ -334,9 +334,9 @@ export class DesktopSessionService {
   ): Promise<DesktopBootstrapData> {
     const permissionMode = requirePermissionMode(input.permissionMode)
     const client = await this.getClient()
-    const settings = await client.getSettings()
+    const settings = await client.system.getSettings()
     const permission = settings["permission"]
-    await client.patchSettings({
+    await client.system.patchSettings({
       permission: {
         ...(permission && typeof permission === "object" && !Array.isArray(permission)
           ? permission
@@ -383,7 +383,7 @@ export class DesktopSessionService {
       this.closeSession(webContentsId)
     }
     const client = await this.getClient()
-    return toDesktopSessionRecord(await client.archiveSession(sessionId))
+    return toDesktopSessionRecord(await client.sessions.archive(sessionId))
   }
 
   async deleteSession(webContentsId: number, sessionIdInput: string): Promise<string[]> {
@@ -392,7 +392,7 @@ export class DesktopSessionService {
       this.closeSession(webContentsId)
     }
     const client = await this.getClient()
-    return await client.deleteSession(sessionId)
+    return await client.sessions.delete(sessionId)
   }
 
   async dispose(): Promise<void> {

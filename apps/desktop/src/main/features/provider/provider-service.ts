@@ -23,10 +23,10 @@ export class DesktopProviderService {
   snapshot(): Promise<DesktopProviderSnapshot> {
     return withDaemonRetry(async (client) => {
       const [providers, auth, settings, models] = await Promise.all([
-        client.listProviders(),
-        client.getAuthStatus(),
-        client.getSettings(),
-        client.listModels().catch(() => []),
+        client.providers.listProviders(),
+        client.auth.getStatus(),
+        client.system.getSettings(),
+        client.providers.listModels().catch(() => []),
       ])
       return buildDesktopProviderSnapshot({ providers, auth, settings, models })
     })
@@ -39,11 +39,11 @@ export class DesktopProviderService {
     if (!apiKey) throw new Error("请输入 API 密钥。")
 
     await withDaemonRetry(async (client) => {
-      const catalogProvider = (await client.listProviders()).find(
+      const catalogProvider = (await client.providers.listProviders()).find(
         (item) => item.name === provider && item.source === "catalog"
       )
-      if (catalogProvider) await client.connectCatalogProvider(provider, apiKey)
-      else await client.authLogin({ provider, apiKey })
+      if (catalogProvider) await client.providers.connectCatalogProvider(provider, apiKey)
+      else await client.auth.login({ provider, apiKey })
     })
     if (input.setActive) await this.activate({ provider })
     return await this.snapshot()
@@ -55,7 +55,7 @@ export class DesktopProviderService {
 
     await withDaemonRetry(async (client) => {
       const requestedModel = input.model?.trim()
-      await client.patchSettings({
+      await client.system.patchSettings({
         provider,
         ...(requestedModel ? { model: requestedModel } : {}),
       })
@@ -68,36 +68,36 @@ export class DesktopProviderService {
     if (!provider) throw new Error("请选择要断开的供应商。")
 
     await withDaemonRetry(async (client) => {
-      const settings = await client.getSettings()
+      const settings = await client.system.getSettings()
       if (settings.provider === provider) {
         throw new Error("该供应商正在使用中。请先切换到其他供应商，再断开连接。")
       }
-      const catalogProvider = (await client.listProviders()).find(
+      const catalogProvider = (await client.providers.listProviders()).find(
         (item) => item.name === provider && item.source === "catalog"
       )
-      if (catalogProvider) await client.disconnectCatalogProvider(provider)
-      else await client.authLogout({ provider })
+      if (catalogProvider) await client.providers.disconnectCatalogProvider(provider)
+      else await client.auth.logout({ provider })
     })
     return await this.snapshot()
   }
 
   async createCustom(input: CreateDesktopCustomProviderInput): Promise<DesktopProviderSnapshot> {
     await withDaemonRetry(async (client) => {
-      await client.createCustomProvider(input)
+      await client.providers.createCustomProvider(input)
       if (input.setActive) {
-        await client.patchSettings({ provider: input.id, model: input.models[0]?.id })
+        await client.system.patchSettings({ provider: input.id, model: input.models[0]?.id })
       }
     })
     return await this.snapshot()
   }
 
   async updateCustom(input: UpdateDesktopCustomProviderInput): Promise<DesktopProviderSnapshot> {
-    await withDaemonRetry((client) => client.updateCustomProvider(input.provider, input.value))
+    await withDaemonRetry((client) => client.providers.updateCustomProvider(input.provider, input.value))
     return await this.snapshot()
   }
 
   async removeCustom(input: RemoveDesktopCustomProviderInput): Promise<DesktopProviderSnapshot> {
-    await withDaemonRetry((client) => client.removeCustomProvider(input.provider))
+    await withDaemonRetry((client) => client.providers.removeCustomProvider(input.provider))
     return await this.snapshot()
   }
 }

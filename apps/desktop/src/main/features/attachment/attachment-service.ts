@@ -5,6 +5,7 @@ import { Readable } from "node:stream"
 
 import type {
   AttachmentAssetRecord,
+  AttachmentResource,
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
@@ -21,15 +22,16 @@ import type { SafeImageMediaType } from "@shared/safe-image-preview"
 import { evaluateInspectedImagePreview } from "../image-preview/inspect-safe-image-layout"
 
 interface AttachmentClient {
-  uploadAttachment(input: UploadAttachmentInput): Promise<AttachmentAssetRecord>
-  getAttachment(id: string, options?: { signal?: AbortSignal }): Promise<AttachmentAssetRecord>
-  downloadAttachment(id: string, options?: DownloadAttachmentOptions): Promise<Response>
-  deleteAttachment(id: string, options?: { signal?: AbortSignal }): Promise<AttachmentAssetRecord>
-  scanAttachmentStorage(options?: { signal?: AbortSignal }): Promise<AttachmentStorageReport>
-  repairAttachmentStorage(options?: {
-    signal?: AbortSignal
-  }): Promise<AttachmentStorageRepairResult>
-  gcAttachmentStorage(options?: { signal?: AbortSignal }): Promise<AttachmentStorageGcResult>
+  attachments: Pick<
+    AttachmentResource,
+    | "upload"
+    | "get"
+    | "download"
+    | "delete"
+    | "scanStorage"
+    | "repairStorage"
+    | "gcStorage"
+  >
 }
 
 export interface AttachmentFileSystem {
@@ -245,14 +247,14 @@ export class DesktopAttachmentService {
 
   async readPreview(assetId: string): Promise<{ bytes: ArrayBuffer; mediaType: string }> {
     const client = await this.dependencies.getClient()
-    const asset = await client.getAttachment(assetId)
+    const asset = await client.attachments.get(assetId)
     const mediaType = asset.mediaType ?? asset.declaredMediaType ?? "application/octet-stream"
     if (!SAFE_PREVIEW_MEDIA_TYPES.has(mediaType)) {
       throw serviceError("attachment_preview_unsupported")
     }
     const previewLimit = Math.min(this.dependencies.maxBytesPerFile, 10 * 1024 * 1024)
     if ((asset.sizeBytes ?? 0) > previewLimit) throw serviceError("attachment_preview_too_large")
-    const response = await client.downloadAttachment(assetId)
+    const response = await client.attachments.download(assetId)
     const bytes = await readResponseBytes(response, previewLimit)
     const decision = await evaluateInspectedImagePreview(bytes, mediaType as SafeImageMediaType)
     if (!decision.ok) {
@@ -268,7 +270,7 @@ export class DesktopAttachmentService {
   async deleteUnreferenced(assetId: string): Promise<{ deleted: boolean; inUse: boolean }> {
     try {
       const client = await this.dependencies.getClient()
-      await client.deleteAttachment(assetId)
+      await client.attachments.delete(assetId)
       return { deleted: true, inUse: false }
     } catch (error) {
       if (containsErrorCode(error, "attachment_in_use")) {
@@ -283,15 +285,15 @@ export class DesktopAttachmentService {
   }
 
   async scanStorage(): Promise<AttachmentStorageReport> {
-    return await (await this.dependencies.getClient()).scanAttachmentStorage()
+    return await (await this.dependencies.getClient()).attachments.scanStorage()
   }
 
   async repairStorage(): Promise<AttachmentStorageRepairResult> {
-    return await (await this.dependencies.getClient()).repairAttachmentStorage()
+    return await (await this.dependencies.getClient()).attachments.repairStorage()
   }
 
   async gcStorage(): Promise<AttachmentStorageGcResult> {
-    return await (await this.dependencies.getClient()).gcAttachmentStorage()
+    return await (await this.dependencies.getClient()).attachments.gcStorage()
   }
 
   async openAttachment(assetId: string): Promise<void> {
@@ -299,14 +301,14 @@ export class DesktopAttachmentService {
       throw serviceError("attachment_open_unavailable")
     }
     const client = await this.dependencies.getClient()
-    const asset = await client.getAttachment(assetId)
+    const asset = await client.attachments.get(assetId)
     const directory = await this.fileSystem.mkdtemp(
       join(this.dependencies.temporaryRoot, "openharness-attachment-")
     )
     this.managedTemporaryDirectories.add(directory)
     const targetPath = join(directory, safeDisplayName(asset.displayName))
     try {
-      const response = await client.downloadAttachment(assetId)
+      const response = await client.attachments.download(assetId)
       const bytes = await readResponseBytes(response, this.dependencies.maxBytesPerFile)
       await this.fileSystem.writeFile(targetPath, bytes)
       const error = await this.dependencies.openPath(targetPath)
@@ -323,11 +325,11 @@ export class DesktopAttachmentService {
   async saveAs(assetId: string): Promise<{ saved: boolean }> {
     if (!this.dependencies.chooseSavePath) throw serviceError("attachment_save_unavailable")
     const client = await this.dependencies.getClient()
-    const asset = await client.getAttachment(assetId)
+    const asset = await client.attachments.get(assetId)
     const targetPath = await this.dependencies.chooseSavePath(safeDisplayName(asset.displayName))
     if (!targetPath) return { saved: false }
     try {
-      const response = await client.downloadAttachment(assetId)
+      const response = await client.attachments.download(assetId)
       const bytes = await readResponseBytes(response, this.dependencies.maxBytesPerFile)
       await this.fileSystem.writeFile(targetPath, bytes)
       return { saved: true }
@@ -427,7 +429,7 @@ export class DesktopAttachmentService {
         })
       )
       const client = await this.dependencies.getClient()
-      const asset = await client.uploadAttachment({
+      const asset = await client.attachments.upload({
         displayName: task.source.displayName,
         mediaType: task.source.declaredMediaType,
         body,

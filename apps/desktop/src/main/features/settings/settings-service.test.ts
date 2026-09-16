@@ -93,8 +93,14 @@ describe("DesktopSettingsService.updateAgentEnvironment", () => {
       agentEnvironments: { native: true as const, wsl: true },
     }))
     const service = new DesktopSettingsService({
-      daemonClient: async () => ({ capabilities, getSettings: vi.fn(), patchSettings }),
-      refreshDaemonClient: async () => ({ capabilities, getSettings: vi.fn(), patchSettings }),
+      daemonClient: async () => ({
+        protocol: { capabilities },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
+      refreshDaemonClient: async () => ({
+        protocol: { capabilities },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
       getPreferences: preferences,
       patchPreferences: vi.fn(),
     })
@@ -117,9 +123,14 @@ describe("DesktopSettingsService.updateAgentEnvironment", () => {
     })
     const capabilities = vi.fn()
     const service = new DesktopSettingsService({
-      daemonClient: async () => ({ capabilities, getSettings: vi.fn(), patchSettings }) as never,
-      refreshDaemonClient: async () =>
-        ({ capabilities, getSettings: vi.fn(), patchSettings }) as never,
+      daemonClient: async () => ({
+        protocol: { capabilities },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
+      refreshDaemonClient: async () => ({
+        protocol: { capabilities },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
       getPreferences: preferences,
       patchPreferences: vi.fn(),
     })

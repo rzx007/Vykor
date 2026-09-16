@@ -18,7 +18,7 @@ export class DesktopSkillService {
   async snapshot(input: DesktopSkillSnapshotInput): Promise<DesktopSkillSnapshot> {
     void input
     return filterOutsideProjectWorkspaces(
-      await withDaemonRetry((client) => client.listSkills()),
+      await withDaemonRetry((client) => client.development.listSkills()),
       this.documentsPath()
     )
   }
@@ -26,7 +26,7 @@ export class DesktopSkillService {
   async remove(input: DesktopSkillRemoveInput): Promise<DesktopSkillSnapshot> {
     return filterOutsideProjectWorkspaces(
       await withDaemonRetry((client) =>
-        client.removeSkill(input.id, { expectedContent: input.expectedContent })
+        client.development.removeSkill(input.id, { expectedContent: input.expectedContent })
       ),
       this.documentsPath()
     )
