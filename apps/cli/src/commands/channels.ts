@@ -81,11 +81,15 @@ async function runChannelsServe(): Promise<void> {
     sendToolHints: settings.channels?.sendToolHints,
     onWarning: (w) => console.warn(`[channels] ${w}`),
     onDeliveryResult: async ({ deliveryId, status, error }) => {
-      await client.recordChannelDelivery(deliveryId, { status, error });
+      await client.channels.recordDelivery(deliveryId, { status, error });
     },
   });
   const bridge = new DurableChannelBridge({
-    application: client,
+    application: {
+      handleChannelMessage: (input, opts) => client.channels.handleMessage(input, opts),
+      listPendingChannelDeliveries: (opts) => client.channels.listPendingDeliveries(opts),
+      recordChannelDelivery: (id, input) => client.channels.recordDelivery(id, input),
+    },
     bus,
     cwd: process.cwd(),
     model: settings.model,
@@ -186,8 +190,8 @@ export function createChannelsCommand(): Command {
           baseUrl: daemon.url,
           token: daemon.token,
         });
-        await client.health();
-        const status = await client.getChannelStatus({ connector: "feishu", limit: 10 });
+        await client.protocol.health();
+        const status = await client.channels.getStatus({ connector: "feishu", limit: 10 });
         console.log(
           `daemon: ready (${daemon.url}); conversations: ${status.conversations.length}; recent deliveries: ${status.deliveries.length}`,
         );

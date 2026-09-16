@@ -136,9 +136,8 @@ export function createPluginCommand(): Command {
     )
     .option("--json", "print the complete machine-readable response")
     .action(async (options) => {
-      const result = await (
-        await client()
-      ).listPlugins({ cwd: resolve(options.cwd ?? process.cwd()) });
+      const c = await client();
+      const result = await c.plugins.list({ cwd: resolve(options.cwd ?? process.cwd()) });
       console.log(
         options.json
           ? JSON.stringify(result, null, 2)
@@ -161,7 +160,8 @@ export function createPluginCommand(): Command {
         const approved = options.approve as string[];
         const missing = requested.filter((item) => !approved.includes(item));
         if (missing.length) throw new Error(`Explicit approval required: ${missing.join(", ")}`);
-        const result = await (await client()).installLocalPlugin({
+        const c = await client();
+        const result = await c.plugins.installLocal({
           cwd: resolve(options.cwd ?? process.cwd()), sourcePath, scope: "user",
           approvedPermissions: approved, link,
         });
@@ -169,14 +169,16 @@ export function createPluginCommand(): Command {
       });
   }
   for (const action of ["enable", "disable"] as const) cmd.command(action).argument("<id>").option("--cwd <path>").action(async (id, options) => {
-    const api = await client(); const input = { cwd: resolve(options.cwd ?? process.cwd()) };
-    console.log((action === "enable" ? await api.enablePlugin(id, input) : await api.disablePlugin(id, input)).message);
+    const c = await client(); const input = { cwd: resolve(options.cwd ?? process.cwd()) };
+    console.log((action === "enable" ? await c.plugins.enable(id, input) : await c.plugins.disable(id, input)).message);
   });
   cmd.command("uninstall").argument("<id>").option("--cwd <path>").action(async (id, options) => {
-    console.log((await (await client()).uninstallPlugin(id, { cwd: resolve(options.cwd ?? process.cwd()) })).message);
+    const c = await client();
+    console.log((await c.plugins.uninstall(id, { cwd: resolve(options.cwd ?? process.cwd()) })).message);
   });
   cmd.command("details").argument("<id>").option("--cwd <path>").action(async (id, options) => {
-    const listed = await (await client()).listPlugins({ cwd: resolve(options.cwd ?? process.cwd()) });
+    const c = await client();
+    const listed = await c.plugins.list({ cwd: resolve(options.cwd ?? process.cwd()) });
     const plugin = listed.plugins.find((item) => item.identity.id === id);
     if (!plugin) throw new Error(`Plugin not found: ${id}`);
     console.log(JSON.stringify(plugin, null, 2));
@@ -196,7 +198,8 @@ export function createPluginCommand(): Command {
         const requested = requestedPluginPermissions(validation.plugin.manifest);
         const missing = requested.filter((item) => !(options.approve as string[]).includes(item));
         if (missing.length) throw new Error(`Explicit permission approval required: ${missing.join(", ")}`);
-        const result = await (await client()).installLocalPlugin({
+        const c = await client();
+        const result = await c.plugins.installLocal({
           cwd: resolve(options.cwd ?? process.cwd()), sourcePath: output, scope: "user",
           approvedPermissions: requested,
         });
