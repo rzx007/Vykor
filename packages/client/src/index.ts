@@ -12,7 +12,28 @@ export {
   IncompatibleProtocolError,
   OpenHarnessClient,
   streamServerSentEvents,
+  HttpTransport,
+  SseTransport,
 } from "./transport/index.js";
+export {
+  ProtocolClient,
+} from "./protocol/index.js";
+export {
+  SystemResource,
+  ProviderResource,
+  AuthResource,
+  ProjectResource,
+  PluginResource,
+  DevelopmentResource,
+  SessionResource,
+  AttachmentResource,
+  PermissionResource,
+  ScheduleResource,
+  JobResource,
+  TerminalResource,
+  ChannelResource,
+  EventResource,
+} from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
 export type {
   PluginCatalogEntry,
@@ -33,9 +54,21 @@ export {
   applySessionSnapshot,
   createInitialClientState,
   hydrateState,
+  selectFirstPendingPermission,
+  selectSessionInputs,
   selectSessionMessagesWithParts,
+  selectSessionOrderedMessages,
+  selectSessionParts,
+  selectSessionPermissions,
+  selectSessionRuns,
+  selectSessionTasks,
+  SessionSyncController,
   syncEvents,
   UnsupportedSessionEventSchemaVersionError,
+} from "./state/index.js";
+export type {
+  SessionSyncControllerOptions,
+  SyncConnectionStatus,
 } from "./state/index.js";
 export {
   LOCAL_COMMAND_DETAILS,

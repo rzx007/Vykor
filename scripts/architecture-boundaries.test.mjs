@@ -5,6 +5,7 @@ import {
   checkImportBoundary,
   checkPackageDependency,
   countLegacyCalls,
+  countClientLegacyCalls,
   validateLegacyBaseline,
   checkSessionRunEngineComposition,
   checkMaintenanceCapability,
@@ -16,7 +17,6 @@ test("services cannot depend on server", () => {
     ["@openharness/services must not depend on @openharness/server"],
   );
 });
-
 test("sessions, conversations, and runs cannot import server", () => {
   assert.deepEqual(
     checkImportBoundary("packages/services/src/sessions/session-repository.ts", "@openharness/server"),
@@ -80,17 +80,71 @@ test("allowed imports return no errors", () => {
 test("legacy SessionStore calls may decrease but not increase", () => {
   assert.deepEqual(
     validateLegacyBaseline(
-      { sessionStoreFlatCalls: 8 },
-      { sessionStoreFlatCalls: 7 },
+      { sessionStoreFlatCalls: 8, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
+      { sessionStoreFlatCalls: 7, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
     ),
     [],
   );
   assert.match(
     validateLegacyBaseline(
-      { sessionStoreFlatCalls: 8 },
-      { sessionStoreFlatCalls: 9 },
+      { sessionStoreFlatCalls: 8, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
+      { sessionStoreFlatCalls: 9, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
     )[0],
     /sessionStoreFlatCalls increased from 8 to 9/,
+  );
+});
+
+test("AST compatibility test calls may decrease but not increase", () => {
+  assert.deepEqual(
+    validateLegacyBaseline(
+      {
+        clientLegacyProductionCalls: 0,
+        clientLegacyProductionReferences: 0,
+        clientLegacyCompatibilityTestCalls: 57,
+      },
+      {
+        clientLegacyProductionCalls: 0,
+        clientLegacyProductionReferences: 0,
+        clientLegacyCompatibilityTestCalls: 57,
+      },
+    ),
+    [],
+  );
+  assert.match(
+    validateLegacyBaseline(
+      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0, clientLegacyCompatibilityTestCalls: 57 },
+      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0, clientLegacyCompatibilityTestCalls: 58 },
+    )[0],
+    /clientLegacyCompatibilityTestCalls increased from 57 to 58/,
+  );
+  // Historical regex baseline is ignored in validation gate
+  assert.deepEqual(
+    validateLegacyBaseline(
+      { clientLegacyRegexHistoricalBaseline: 79, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
+      { clientLegacyRegexHistoricalBaseline: 999, clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 0 },
+    ),
+    [],
+  );
+});
+
+test("completed client migration requires absolute zero production legacy usage", () => {
+  assert.match(
+    validateLegacyBaseline(
+      { clientLegacyProductionCalls: 1, clientLegacyProductionReferences: 0 },
+      { clientLegacyProductionCalls: 1, clientLegacyProductionReferences: 0 },
+    )[0],
+    /clientLegacyProductionCalls must remain 0/,
+  );
+  assert.match(
+    validateLegacyBaseline(
+      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 1 },
+      { clientLegacyProductionCalls: 0, clientLegacyProductionReferences: 1 },
+    )[0],
+    /clientLegacyProductionReferences must remain 0/,
+  );
+  assert.match(
+    validateLegacyBaseline({}, {} )[0],
+    /missing required baseline key clientLegacyProductionCalls/,
   );
 });
 
@@ -100,6 +154,16 @@ test("counts direct legacy store calls with file locations", () => {
     [
       { file: "demo.ts", line: 1, name: "createRun" },
       { file: "demo.ts", line: 2, name: "listProjects" },
+    ],
+  );
+});
+
+test("counts every direct client facade call with file locations", () => {
+  assert.deepEqual(
+    countClientLegacyCalls("client.getSettings();\nclient.sessions.getState('s1');\nclient.replyPermission();", "client.ts"),
+    [
+      { file: "client.ts", line: 1, name: "getSettings" },
+      { file: "client.ts", line: 3, name: "replyPermission" },
     ],
   );
 });
@@ -191,3 +255,55 @@ test("maintenance services cannot hold a full SessionStore", () => {
     [],
   );
 });
+
+test("client resources cannot import OpenHarnessClient or Server", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/client/src/resources/session-resource.ts", "../transport/http-client.js"),
+    ["packages/client/src/resources/session-resource.ts must not depend on OpenHarnessClient or Server"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("packages/client/src/resources/session-resource.ts", "@openharness/server"),
+    ["packages/client/src/resources/session-resource.ts must not depend on OpenHarnessClient or Server"],
+  );
+});
+
+test("client transport cannot import resources", () => {
+  assert.deepEqual(
+    checkImportBoundary("packages/client/src/transport/http-transport.ts", "../resources/session-resource.js"),
+    ["packages/client/src/transport/http-transport.ts must not depend on Resource"],
+  );
+});
+
+test("frontend cannot import electron or desktop", () => {
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "electron"),
+    ["apps/frontend/src/hooks/useServerSync.ts must not depend on Electron"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@openharness/desktop"),
+    ["apps/frontend/src/hooks/useServerSync.ts must not depend on Desktop"],
+  );
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@openharness/client"),
+    [],
+  );
+  assert.deepEqual(
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "../../../desktop/src/main/session-service.js"),
+    ["apps/frontend/src/hooks/useServerSync.ts must not depend on Desktop"],
+  );
+});
+
+test("desktop renderer cannot import desktop main", () => {
+  assert.deepEqual(
+    checkImportBoundary("apps/desktop/src/renderer/src/stores/desktop-session/session-actions.ts", "../../main/session-service.js"),
+    ["apps/desktop/src/renderer/src/stores/desktop-session/session-actions.ts must not depend on Desktop main"],
+  );
+});
+
+test("desktop main cannot import desktop renderer", () => {
+  assert.deepEqual(
+    checkImportBoundary("apps/desktop/src/main/features/session/session-service.ts", "../../renderer/src/stores/desktop-session.js"),
+    ["apps/desktop/src/main/features/session/session-service.ts must not depend on Desktop renderer"],
+  );
+});
+

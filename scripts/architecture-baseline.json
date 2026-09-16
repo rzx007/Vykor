@@ -1,4 +1,9 @@
 {
   "sessionStoreFlatCalls": 248,
-  "httpClientFlatCalls": 11
+  "httpClientFlatCalls": 0,
+  "clientLegacyRegexHistoricalBaseline": 79,
+  "clientLegacyProductionCalls": 0,
+  "clientLegacyProductionReferences": 0,
+  "clientLegacyCompatibilityTestCalls": 57,
+  "clientLegacyOtherTestCalls": 0
 }

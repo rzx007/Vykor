@@ -38,6 +38,22 @@ function event(seq: number, type: string, payload: Record<string, unknown>, sess
 }
 
 describe("session event reducer", () => {
+  it("ignores a session snapshot older than the accepted snapshot cursor", () => {
+    const newer = applySessionSnapshot(createInitialClientState(), {
+      cursor: 7,
+      session: { ...session("s1", 7), title: "newer" },
+      inputs: [], messages: [], parts: [], runs: [], permissions: [],
+    });
+    const stale = applySessionSnapshot(newer, {
+      cursor: 3,
+      session: { ...session("s1", 3), title: "stale" },
+      inputs: [], messages: [], parts: [], runs: [], permissions: [],
+    });
+
+    expect(stale).toBe(newer);
+    expect(stale.buckets.s1?.session?.title).toBe("newer");
+  });
+
   it("keeps the newest complete input attachment record regardless of snapshot/event arrival order", () => {
     const older: SessionInputRecord = {
       id: "input-1", sessionId: "s1", seq: 1, delivery: "queue", content: "look",

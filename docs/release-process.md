@@ -1,10 +1,10 @@
 # Desktop 与 CLI Tag 发版
 
-> 状态：当前实现。稳定版 GitHub tag 同时发布 Desktop 安装包和 npm CLI。
+> 状态：当前实现。稳定版 GitHub tag 同时发布 Desktop 安装包和 npm CLI；tag 只会在检查和安装包构建全部通过后创建。
 
 ## 一句话结论
 
-在 GitHub Actions 页面手动触发 Tag Release 工作流并输入版本号，工作流会自动打 tag、把同一版本写进仓库根目录、Desktop 和 CLI，打出 Windows NSIS 与 Linux AppImage/deb、发布 GitHub Latest Release，并把 `@rzx/ohs` 发到 npm。已安装的 Desktop 会在启动后静默检查这个 Latest Release；发现新版本后自动下载，标题栏胶囊提示进度，下载完成后可立即重启安装，或等退出时自动安装。
+在 GitHub Actions 页面手动触发 Tag Release 工作流，输入版本号并选择发布阶段。工作流先在精确 commit 上完成检查和打包，成功后才创建 tag；接着发布 `@rzx/ohs`，npm 在线校验通过后才创建或更新 GitHub Release。最后会输出机器可读的发布证据。已安装的 Desktop 会在启动后静默检查这个 Latest Release；发现新版本后自动下载，标题栏胶囊提示进度，下载完成后可立即重启安装，或等退出时自动安装。
 
 ## 发什么
 
@@ -37,19 +37,34 @@ pnpm test:scripts
 pnpm --filter @openharness/desktop verify:update-packaging
 ```
 
+兼容 API 的 A/B/C 发布还必须让 `scripts/client-compat-removal-ledger.json` 处于对应状态。工作流只读取和校验该文件，不会自动改写它。
+
 ## 正式发版
 
 在 GitHub 仓库页面手动触发：
 
 1. 进入 **Actions** → **Tag Release** 工作流。
-2. 点击 **Run workflow**，在 `version` 输入框填写版本号（例如 `1.0.1`），点击确认。
+2. 点击 **Run workflow**，在 `version` 输入框填写版本号（例如 `1.0.1`）。
+3. 选择 `release_phase`：普通版本选 `regular`；兼容 API 的弃用版 A、保留版 B、破坏性删除版 C 分别选 `client-deprecation`、`client-retention`、`client-breaking-removal`。
+4. 点击确认。阶段和 ledger 状态不匹配时，工作流会在创建 tag 前失败。
 
-工作流会自动在当前 `main` 分支最新 commit 上打 `v1.0.1` tag 并推送，然后：
+工作流按以下顺序执行：
 
-1. 校验版本格式是 `X.Y.Z`。
-2. 在 Windows / Ubuntu runner 上同步版本、构建 Desktop，并上传安装包和 `latest.yml` / `latest-linux.yml`。
-3. 两个平台的 Desktop 安装包都打成功后，再构建 `@rzx/ohs`；如果 npm 上还没有这个精确版本就发布，已经存在则跳过。
-4. 创建或更新 GitHub Release，并标成 Latest。Release 已存在时只覆盖资产，方便失败后重跑。
+1. 校验版本格式、发布阶段、ledger 状态，以及已有同名 tag 是否指向当前 commit。
+2. 在临时工作树同步候选版本，运行类型检查、全量测试、架构边界检查、文档检查和脚本测试，并生成固定的 release notes。
+3. 在 Windows / Ubuntu runner 构建 Desktop，验证更新配置并上传安装包和更新清单。
+4. 只有前两步都成功，才创建并推送 `vX.Y.Z` tag。已有 tag 指向同一 commit 时复用；指向其他 commit 时直接失败。
+5. 构建并发布 `@rzx/ohs`。已存在的精确版本会跳过上传，但仍通过 `npm view @rzx/ohs@X.Y.Z` 在线确认。
+6. 只有 npm 发布及在线确认成功，才创建或更新 GitHub Release。重跑会同时覆盖资产和 notes，避免页面说明与证据不一致。
+7. 再次读取 npm 和 GitHub Release notes，核对无误后上传 `client-release-evidence` artifact，并把证据写进 job summary。
+
+发布证据包含 `version`、`tag`、完整 commit、`publishedAt`、workflow run URL、Release URL、npm 包名/版本和校验结果。8C/8D 登记 A/B 证据时，应直接下载这个 artifact，不要手工拼写 URL 或时间。
+
+### A/B/C notes 的固定含义
+
+- A（`client-deprecation`）：明确 118 个旧方法已经弃用，链接迁移指南，并说明最早只能在后续 major 删除。
+- B（`client-retention`）：明确本版本仍保留全部 118 个旧方法，并告知下一 major 在授权后可以删除。
+- C（`client-breaking-removal`）：只允许在删除提交已经消费授权后执行；notes 会列出全部旧方法到领域 API 的迁移表，并给出 major 升级安装命令。
 
 ## 客户端怎样更新
 
@@ -64,7 +79,9 @@ pnpm --filter @openharness/desktop verify:update-packaging
 
 ## 失败重跑和回滚
 
-- 同一 tag 可以重新跑 workflow。Desktop 资产会覆盖；npm 上已有的精确版本会被跳过，不会重复发布。
+- 同一 tag 指向同一 commit 时可以重新跑 workflow。Desktop 资产和 release notes 会覆盖；npm 上已有的精确版本会被跳过，但仍进行在线校验。
+- 类型检查、测试或 Desktop 构建失败时，远端不会出现 tag。npm 发布或在线校验失败时，不会创建可登记的 GitHub Release。
+- 同名 tag 已指向其他 commit 时，不会移动 tag；请改用更高的新版本。
 - 不要改已经发布的 npm 版本内容。修 bug 请打下一个 patch tag，例如 `v1.0.2`。
 - 如果 GitHub Release 有问题，可以删掉该 Release 后重跑，或再发一个更高版本。已经装上错误版本的用户，需要再收到一个更高版本才会更新。
 

@@ -1,4 +1,4 @@
-import type { OpenHarnessClient } from "@openharness/client"
+import type { ProtocolClient, SystemResource } from "@openharness/client"
 
 import {
   buildDesktopSettingsSnapshot,
@@ -22,7 +22,10 @@ import {
   type DesktopPreferences,
 } from "./desktop-preferences"
 
-type SettingsClient = Pick<OpenHarnessClient, "capabilities" | "getSettings" | "patchSettings">
+interface SettingsClient {
+  protocol: Pick<ProtocolClient, "capabilities">
+  system: Pick<SystemResource, "getSettings" | "patchSettings">
+}
 
 export interface DesktopSettingsServiceDependencies {
   daemonClient(): Promise<SettingsClient>
@@ -52,7 +55,7 @@ export class DesktopSettingsService {
       throw new Error("未知的工作风格，请选择务实或高效。")
     }
     return this.withDaemonRetry(async (client) => {
-      const settings = await client.patchSettings({ workStyle: input.workStyle })
+      const settings = await client.system.patchSettings({ workStyle: input.workStyle })
       return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
     })
   }
@@ -93,10 +96,10 @@ export class DesktopSettingsService {
       throw new Error("未知的智能体运行环境，请选择本机或 WSL。")
     }
     return this.withDaemonRetry(async (client) => {
-      const settings = await client.patchSettings({
+      const settings = await client.system.patchSettings({
         agentEnvironment: { kind: input.environment },
       })
-      const capabilities = await client.capabilities()
+      const capabilities = await client.protocol.capabilities()
       return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences(), {
         restartRequired: true,
         wslSupported: capabilities.agentEnvironments?.wsl ?? false,
@@ -110,8 +113,8 @@ export class DesktopSettingsService {
     try {
       return await this.withDaemonRetry(async (client) => {
         const [settings, capabilities] = await Promise.all([
-          client.getSettings(),
-          client.capabilities(),
+          client.system.getSettings(),
+          client.protocol.capabilities(),
         ])
         return buildDesktopSettingsSnapshot(settings, preferences, {
           wslSupported: capabilities.agentEnvironments?.wsl ?? false,

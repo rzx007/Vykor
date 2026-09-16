@@ -299,10 +299,51 @@ describe("DesktopSessionService.listCommands", () => {
 
 function serviceWithClient(client: Record<string, unknown>): DesktopSessionService {
   const service = new DesktopSessionService()
+  const sessions = (client.sessions as Record<string, unknown> | undefined) ?? {
+    create: client.createSession,
+    admitPrompt: client.admitPrompt,
+    compact: client.compactSession,
+    editLatestPrompt: client.editLatestPrompt,
+    promoteQueuedPrompt: client.promoteQueuedPrompt,
+    cancelQueuedPrompt: client.cancelQueuedPrompt,
+    fork: client.forkSession,
+    interrupt: client.interruptSession,
+    update: client.updateSession,
+    list: client.listSessions,
+    getGoal: client.getSessionGoal,
+    createGoal: client.createSessionGoal,
+    updateGoal: client.updateSessionGoal,
+    applyGoalAction: client.applySessionGoalAction,
+  }
+  const system = (client.system as Record<string, unknown> | undefined) ?? {
+    listCommands: client.listCommands,
+    listContextPlugins: client.listContextPlugins,
+    getContextUsage: client.getContextUsage,
+    getSettings: client.getSettings,
+    patchSettings: client.patchSettings,
+  }
+  const projects = (client.projects as Record<string, unknown> | undefined) ?? {
+    list: client.listProjects,
+    inspect: client.inspectProject,
+    rename: client.renameProject,
+    setPinned: client.setProjectPinned,
+    setDefaultShell: client.setProjectDefaultShell,
+    archive: client.archiveProject,
+  }
+  const permissions = (client.permissions as Record<string, unknown> | undefined) ?? {
+    reply: client.replyPermission,
+  }
+  const fullClient = {
+    ...client,
+    sessions,
+    system,
+    projects,
+    permissions,
+  }
   ;(
     service as unknown as {
-      clientPromise: Promise<typeof client>
+      clientPromise: Promise<typeof fullClient>
     }
-  ).clientPromise = Promise.resolve(client)
+  ).clientPromise = Promise.resolve(fullClient)
   return service
 }

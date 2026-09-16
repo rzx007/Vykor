@@ -470,15 +470,17 @@ function createService(
     maxBytesPerFile: 2_000_000,
     emit: overrides.emit ?? (() => undefined),
     getClient: async () => ({
-      uploadAttachment:
-        overrides.uploadAttachment ??
-        (async (input) => readyAsset("asset-default", input.displayName, 0)),
-      getAttachment: overrides.getAttachment ?? vi.fn(),
-      downloadAttachment: overrides.downloadAttachment ?? vi.fn(),
-      deleteAttachment: overrides.deleteAttachment ?? vi.fn(),
-      scanAttachmentStorage: vi.fn(),
-      repairAttachmentStorage: vi.fn(),
-      gcAttachmentStorage: vi.fn(),
+      attachments: {
+        upload:
+          overrides.uploadAttachment ??
+          (async (input) => readyAsset("asset-default", input.displayName, 0)),
+        get: overrides.getAttachment ?? vi.fn(),
+        download: overrides.downloadAttachment ?? vi.fn(),
+        delete: overrides.deleteAttachment ?? vi.fn(),
+        scanStorage: vi.fn(),
+        repairStorage: vi.fn(),
+        gcStorage: vi.fn(),
+      },
     }),
     onOpenSource: overrides.onOpenSource,
     now: overrides.now,

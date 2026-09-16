@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { JobSnapshot } from "@openharness/protocol";
 
-import type { OpenHarnessClient } from "../../transport/http-client.js";
 import { createInitialClientState } from "../../state/reducer.js";
 import {
   LOCAL_COMMAND_DETAILS,
@@ -10,6 +9,7 @@ import {
   parseSlashLine,
   resolveSessionCwd,
 } from "../session-commands.js";
+import type { SessionCommandClient } from "../session-commands.js";
 import type { CommandCatalogEntry, PluginInfo } from "../../types/index.js";
 
 const agentJob: JobSnapshot = {
@@ -32,15 +32,69 @@ function job(overrides: Partial<JobSnapshot> = {}): JobSnapshot {
   };
 }
 
-function fakeClient(overrides: Partial<OpenHarnessClient> = {}): OpenHarnessClient {
+function fakeClient(overrides: Record<string, unknown> = {}): SessionCommandClient {
+  const method = (name: string, fallback: (...args: never[]) => unknown = vi.fn()) =>
+    (overrides[name] ?? fallback) as never;
   return {
-    health: vi.fn(async () => ({ ok: true, version: "1.2.3" })),
-    ...overrides,
-  } as unknown as OpenHarnessClient;
+    protocol: {
+      health: method("health", vi.fn(async () => ({ ok: true, version: "1.2.3" }))),
+    },
+    system: {
+      getSettings: method("getSettings", vi.fn(async () => ({}))),
+      patchSettings: method("patchSettings"),
+      getSessionMcp: method("getSessionMcp", vi.fn(async () => [])),
+      listMemory: method("listMemory", vi.fn(async () => ({ directory: "/memory", entries: [] }))),
+      getMemory: method("getMemory"),
+      addMemory: method("addMemory"),
+      removeMemory: method("removeMemory"),
+      getContextPreview: method("getContextPreview"),
+      getContextStatus: method("getContextStatus"),
+      getContextUsage: method("getContextUsage"),
+      startDream: method("startDream"),
+      getProfileStatus: method("getProfileStatus"),
+      initProfile: method("initProfile"),
+      listOutputStyles: method("listOutputStyles"),
+    },
+    providers: { listProviders: method("listProviders") },
+    auth: {
+      getStatus: method("getAuthStatus", vi.fn(async () => null)),
+      login: method("authLogin"),
+      logout: method("authLogout"),
+    },
+    projects: { init: method("initProject") },
+    plugins: {
+      list: method("listPlugins"),
+      enable: method("enablePlugin"),
+      disable: method("disablePlugin"),
+      reload: method("reloadPlugins"),
+    },
+    development: {
+      listAgentPersonas: method("listAgentPersonas"),
+      listHooks: method("listHooks"),
+      getGitDiff: method("getGitDiff"),
+      getGitBranch: method("getGitBranch"),
+      getGitStatus: method("getGitStatus"),
+      gitCommit: method("gitCommit"),
+    },
+    sessions: {
+      update: method("updateSession"),
+      compact: method("compactSession"),
+      rewind: method("rewindSession"),
+      remember: method("rememberSession"),
+      export: method("exportSession"),
+      getUsage: method("getSessionUsage"),
+    },
+    jobs: {
+      list: method("listJobs", vi.fn(async () => [])),
+      createBackgroundShell: method("createBackgroundShell"),
+      read: method("readJob"),
+      cancel: method("cancelJob"),
+    },
+  };
 }
 
 function host(partial: {
-  client?: OpenHarnessClient;
+  client?: SessionCommandClient;
   emit?: (text: string) => void;
   commandCatalog?: CommandCatalogEntry[];
   getRuntimeDiagnostics?: () => {
@@ -156,7 +210,7 @@ describe("dispatchSessionCommand", () => {
     const { host: h, emitted } = host({ client });
     const outcome = await dispatchSessionCommand({ name: "/version", args: "" }, h);
     expect(outcome).toBe("handled");
-    expect(client.health).toHaveBeenCalledOnce();
+    expect(client.protocol.health).toHaveBeenCalledOnce();
     expect(emitted[0]).toBe("OpenHarness v1.2.3");
   });
 

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanClientLegacyCalls } from "./client-legacy-calls.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const baselinePath = join(root, "scripts", "architecture-baseline.json");
@@ -16,6 +17,7 @@ const forbiddenPackageEdges = new Map([
 
 const storeCallPattern = /\b(?:this\.)?(?:context\.)?store\.([A-Za-z_$][\w$]*)\s*\(/g;
 const clientCallPattern = /\bclient\.(createSession|admitPrompt|interruptRun|listProjects)\s*\(/g;
+const clientLegacyCallPattern = /\bclient\.([A-Za-z_$][\w$]*)\s*\(/g;
 const importPattern = /(?:(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?from\s+)?|import\s*\()\s*['"]([^'"]+)['"]/g;
 
 export function extractImports(source) {
@@ -104,8 +106,47 @@ export function checkImportBoundary(fromFile, specifier) {
     }
   }
 
+  const isClientResource = /(?:^|\/)(?:packages\/client\/src\/)?resources\//.test(normalized);
+  if (isClientResource) {
+    if (/(?:^|\/)http-client(?:\.[a-zA-Z]+)?$/.test(specifier) || specifier === "@openharness/server" || specifier.startsWith("@openharness/server/")) {
+      return [`${fromFile} must not depend on OpenHarnessClient or Server`];
+    }
+  }
+
+  const isClientTransport = /(?:^|\/)(?:packages\/client\/src\/)?transport\/(?:http-transport|sse-transport)(?:\.[a-zA-Z]+)?$/.test(normalized);
+  if (isClientTransport) {
+    if (/(?:^|\/)resources(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Resource`];
+    }
+  }
+
+  const isFrontend = /(?:^|\/)apps\/frontend\//.test(normalized);
+  if (isFrontend) {
+    if (specifier === "electron" || specifier.startsWith("electron/")) {
+      return [`${fromFile} must not depend on Electron`];
+    }
+    if (specifier === "@openharness/desktop" || /(?:^|\/|\.\.\/)desktop(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Desktop`];
+    }
+  }
+
+  const isDesktopRenderer = /(?:^|\/)apps\/desktop\/src\/renderer\//.test(normalized);
+  if (isDesktopRenderer) {
+    if (/(?:^|\/)apps\/desktop\/src\/main\//.test(specifier) || /(?:^|\/|\.\.\/)main(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Desktop main`];
+    }
+  }
+
+  const isDesktopMain = /(?:^|\/)apps\/desktop\/src\/main\//.test(normalized);
+  if (isDesktopMain) {
+    if (/(?:^|\/)apps\/desktop\/src\/renderer\//.test(specifier) || /(?:^|\/|\.\.\/)renderer(?:\/|\.|$)/.test(specifier)) {
+      return [`${fromFile} must not depend on Desktop renderer`];
+    }
+  }
+
   return [];
 }
+
 
 export function checkPackageDependency(from, to) {
   return forbiddenPackageEdges.get(from)?.has(to)
@@ -114,12 +155,24 @@ export function checkPackageDependency(from, to) {
 }
 
 export function validateLegacyBaseline(baseline, current) {
-  return Object.entries(baseline).flatMap(([name, previous]) => {
+  const requiredZeroKeys = [
+    "clientLegacyProductionCalls",
+    "clientLegacyProductionReferences",
+  ];
+  const errors = requiredZeroKeys.flatMap((name) => {
+    if (!Object.hasOwn(baseline, name)) return [`missing required baseline key ${name}`];
+    return current[name] === 0 ? [] : [`${name} must remain 0, received ${current[name] ?? "missing"}`];
+  });
+  return errors.concat(Object.entries(baseline).flatMap(([name, previous]) => {
+    if (name === "clientLegacyRegexHistoricalBaseline" || name === "clientLegacyFlatCalls") {
+      return [];
+    }
+    if (requiredZeroKeys.includes(name)) return [];
     const next = current[name] ?? 0;
     return next > previous
       ? [`${name} increased from ${previous} to ${next}`]
       : [];
-  });
+  }));
 }
 
 export function countLegacyCalls(source, file) {
@@ -129,6 +182,14 @@ export function countLegacyCalls(source, file) {
     matches.push({ file, line, name: match[1] });
   }
   return matches;
+}
+
+export function countClientLegacyCalls(source, file) {
+  return [...source.matchAll(clientLegacyCallPattern)].map((match) => ({
+    file,
+    line: source.slice(0, match.index).split("\n").length,
+    name: match[1],
+  }));
 }
 
 export function checkSessionRunEngineComposition(source, file) {
@@ -193,6 +254,10 @@ function collectArchitectureErrors() {
     ...sourceFiles(join(root, "packages", "server", "src", "http", "routes")),
     ...sourceFiles(join(root, "packages", "server", "src", "application")),
     ...sourceFiles(join(root, "packages", "server", "src", "runtime")),
+    ...sourceFiles(join(root, "packages", "client", "src", "resources")),
+    ...sourceFiles(join(root, "packages", "client", "src", "transport")),
+    ...sourceFiles(join(root, "apps", "frontend", "src")),
+    ...sourceFiles(join(root, "apps", "desktop", "src")),
   ];
 
   for (const path of boundaryFiles) {
@@ -221,6 +286,8 @@ function collectLegacyCalls() {
     ...sourceFiles(join(root, "packages", "tools", "src", "agent", "workflow")),
   ];
   const clientFiles = [
+    ...sourceFiles(join(root, "packages", "client", "src", "commands")),
+    ...sourceFiles(join(root, "packages", "client", "src", "state")),
     ...sourceFiles(join(root, "apps", "cli", "src")),
     ...sourceFiles(join(root, "apps", "desktop", "src")),
     ...sourceFiles(join(root, "apps", "frontend", "src")),
@@ -235,13 +302,22 @@ function collectLegacyCalls() {
       name: match[1],
     })),
   );
-  return { storeCalls, clientCalls };
+  const clientLegacyCalls = clientFiles.flatMap((path) =>
+    countClientLegacyCalls(readFileSync(path, "utf8"), relative(root, path)),
+  );
+  const clientAst = scanClientLegacyCalls({ cwd: root });
+  return { storeCalls, clientCalls, clientLegacyCalls, clientAst };
 }
 
-function summary(calls) {
+export function summary(calls) {
   return {
     sessionStoreFlatCalls: calls.storeCalls.length,
     httpClientFlatCalls: calls.clientCalls.length,
+    clientLegacyRegexHistoricalBaseline: 79,
+    clientLegacyProductionCalls: calls.clientAst?.summary?.clientLegacyProductionCalls ?? 0,
+    clientLegacyProductionReferences: calls.clientAst?.summary?.clientLegacyProductionReferences ?? 0,
+    clientLegacyCompatibilityTestCalls: calls.clientAst?.summary?.clientLegacyCompatibilityTestCalls ?? 0,
+    clientLegacyOtherTestCalls: calls.clientAst?.summary?.clientLegacyOtherTestCalls ?? 0,
   };
 }
 
@@ -258,6 +334,12 @@ function run() {
   const errors = [
     ...collectArchitectureErrors(),
     ...validateLegacyBaseline(baseline, current),
+    ...(calls.clientAst?.unresolvedClientMembers || []).map(
+      (m) => `${m.file}:${m.line}:${m.column} unresolved client member: ${m.member}`,
+    ),
+    ...(calls.clientAst?.dynamicMembers || []).map(
+      (m) => `${m.file}:${m.line}:${m.column} dynamic client member: ${m.expression}`,
+    ),
   ];
   if (errors.length > 0) {
     process.stderr.write(`${errors.join("\n")}\n`);

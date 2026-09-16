@@ -97,532 +97,418 @@ import type {
   ServerCapabilities,
 } from "@openharness/protocol";
 import {
-  checkProtocolCompatibility,
-  CURRENT_PROTOCOL_VERSION,
-  decodeJobReadResult,
-  decodeJobSnapshot,
-  decodeJobWaitResult,
-  decodeSessionEventRecord,
-  decodeSessionStateSnapshot,
-  decodeTerminalEvent,
-  decodeTerminalReadResult,
-  decodeTerminalSessionInfo,
-  ProtocolDataError,
-  parseServerCapabilities,
-  parseAttachmentAssetRecord,
-} from "@openharness/protocol";
+  HttpTransport,
+  OpenHarnessApiError,
+  normalizeDaemonBaseUrl,
+} from "./http-transport.js";
+import {
+  SseTransport,
+  streamServerSentEvents,
+} from "./sse-transport.js";
+import {
+  ProtocolClient,
+  IncompatibleProtocolError,
+} from "../protocol/index.js";
+import {
+  SystemResource,
+  ProviderResource,
+  AuthResource,
+  ProjectResource,
+  PluginResource,
+  DevelopmentResource,
+  SessionResource,
+  AttachmentResource,
+  PermissionResource,
+  ScheduleResource,
+  JobResource,
+  TerminalResource,
+  ChannelResource,
+  EventResource,
+  createPromptRequestId,
+} from "../resources/index.js";
 
-let promptRequestCounter = 0;
-
-function responseField(value: unknown, field: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ProtocolDataError("Response body must be an object");
-  }
-  if (!(field in value)) {
-    throw new ProtocolDataError(`Response body is missing ${field}`, field);
-  }
-  return (value as Record<string, unknown>)[field];
-}
-
-function responseArray<T>(
-  value: unknown,
-  field: string,
-  decode: (item: unknown) => T,
-): T[] {
-  const items = responseField(value, field);
-  if (!Array.isArray(items)) {
-    throw new ProtocolDataError(`Response ${field} must be an array`, field);
-  }
-  return items.map(decode);
-}
-
-/** Normalize a daemon base URL without accepting credentials or request fragments. */
-export function normalizeDaemonBaseUrl(value: string): string {
-  const raw = value.trim();
-  if (!raw) throw new Error("Daemon URL is required");
-
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new Error("Daemon URL must be an absolute http or https URL");
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Daemon URL must use http or https");
-  }
-  if (url.username || url.password) {
-    throw new Error(
-      "Daemon URL must not contain credentials; use a bearer token instead",
-    );
-  }
-  if (url.search || url.hash) {
-    throw new Error(
-      "Daemon URL must not contain query parameters or a fragment",
-    );
-  }
-
-  const pathname = url.pathname.replace(/\/+$/, "");
-  return `${url.origin}${pathname === "/" ? "" : pathname}`;
-}
-
-/** Generate a caller-stable id for one prompt admission attempt. */
-export function createPromptRequestId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function")
-    return globalThis.crypto.randomUUID();
-  promptRequestCounter += 1;
-  return `prompt-${Date.now().toString(36)}-${promptRequestCounter.toString(36)}`;
-}
-
-/** HTTP API 非 2xx 时抛出；携带 status 与原始响应体。 */
-export class OpenHarnessApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly body: unknown,
-  ) {
-    super(message);
-    this.name = "OpenHarnessApiError";
-  }
-}
+export {
+  HttpTransport,
+  OpenHarnessApiError,
+  normalizeDaemonBaseUrl,
+  SseTransport,
+  streamServerSentEvents,
+  ProtocolClient,
+  IncompatibleProtocolError,
+  SystemResource,
+  ProviderResource,
+  AuthResource,
+  ProjectResource,
+  PluginResource,
+  DevelopmentResource,
+  SessionResource,
+  AttachmentResource,
+  PermissionResource,
+  ScheduleResource,
+  JobResource,
+  TerminalResource,
+  ChannelResource,
+  EventResource,
+  createPromptRequestId,
+};
 
 /**
  * 面向 daemon 的 typed fetch 客户端。
  * 构造时传入 `baseUrl` 与可选 Bearer `token`（通常来自 daemon registry）。
  */
 export class OpenHarnessClient {
-  private readonly baseUrl: string;
-  private readonly token?: string;
-  private readonly fetchImpl: typeof fetch;
+  readonly transport: HttpTransport;
+  readonly sse: SseTransport;
+  readonly protocol: ProtocolClient;
+  readonly system: SystemResource;
+  readonly providers: ProviderResource;
+  readonly auth: AuthResource;
+  readonly projects: ProjectResource;
+  readonly plugins: PluginResource;
+  readonly development: DevelopmentResource;
+  readonly sessions: SessionResource;
+  readonly attachments: AttachmentResource;
+  readonly permissions: PermissionResource;
+  readonly schedules: ScheduleResource;
+  readonly jobs: JobResource;
+  readonly terminals: TerminalResource;
+  readonly channels: ChannelResource;
+  readonly events: EventResource;
 
   constructor(options: OpenHarnessClientOptions) {
-    this.baseUrl = normalizeDaemonBaseUrl(options.baseUrl);
-    this.token = options.token;
-    this.fetchImpl = options.fetch ?? fetch;
+    this.transport = new HttpTransport(options);
+    this.sse = new SseTransport(this.transport.fetchImpl);
+    this.protocol = new ProtocolClient(this.transport);
+    this.system = new SystemResource(this.transport);
+    this.providers = new ProviderResource(this.transport);
+    this.auth = new AuthResource(this.transport);
+    this.projects = new ProjectResource(this.transport);
+    this.plugins = new PluginResource(this.transport);
+    this.development = new DevelopmentResource(this.transport);
+    this.sessions = new SessionResource(this.transport);
+    this.attachments = new AttachmentResource(this.transport);
+    this.permissions = new PermissionResource(this.transport);
+    this.schedules = new ScheduleResource(this.transport);
+    this.jobs = new JobResource(this.transport);
+    this.terminals = new TerminalResource(this.transport, this.sse);
+    this.channels = new ChannelResource(this.transport);
+    this.events = new EventResource(this.transport, this.sse);
   }
 
-  /** `GET /health` */
+  get baseUrl(): string {
+    return this.transport.baseUrl;
+  }
+
+  get token(): string | undefined {
+    return this.transport.token;
+  }
+
+  get fetchImpl(): typeof fetch {
+    return this.transport.fetchImpl;
+  }
+
+  /** `GET /health`
+   * @deprecated Use client.protocol.health() instead.
+   */
   async health(
     options: { signal?: AbortSignal } = {},
   ): Promise<OpenHarnessServerHealth> {
-    return this.request<OpenHarnessServerHealth>("/health", {
-      auth: false,
-      signal: options.signal,
-    });
+    return this.protocol.health(options);
   }
 
-  /** 连接产品应先调用它，再根据 features 决定显示哪些功能。 */
+  /** 连接产品应先调用它，再根据 features 决定显示哪些功能。
+   * @deprecated Use client.protocol.capabilities() instead.
+   */
   async capabilities(
     options: { signal?: AbortSignal; support?: ClientProtocolSupport } = {},
   ): Promise<ServerCapabilities> {
-    const value = await this.request<unknown>("/capabilities", {
-      auth: false,
-      signal: options.signal,
-    });
-    const capabilities = parseServerCapabilities(value);
-    const compatibility = checkProtocolCompatibility(
-      capabilities,
-      options.support ?? { version: CURRENT_PROTOCOL_VERSION },
-    );
-    if (!compatibility.compatible) {
-      throw new IncompatibleProtocolError(
-        capabilities,
-        compatibility.reason ??
-          "Client and server protocol versions are incompatible",
-      );
-    }
-    return capabilities;
+    return this.protocol.capabilities(options);
   }
 
-  /** `POST /attachments` — upload bytes without JSON or multipart buffering. */
+  /** `POST /attachments` — upload bytes without JSON or multipart buffering.
+   * @deprecated Use client.attachments.upload() instead.
+   */
   async uploadAttachment(
     input: UploadAttachmentInput,
   ): Promise<AttachmentAssetRecord> {
-    const headers = this.headers();
-    headers["x-openharness-filename"] = encodeURIComponent(input.displayName);
-    if (input.mediaType) headers["content-type"] = input.mediaType;
-    const init: RequestInit & { duplex?: "half" } = {
-      method: "POST",
-      headers,
-      body: input.body as RequestInit["body"],
-      signal: input.signal,
-    };
-    if (isReadableStream(input.body)) init.duplex = "half";
-    const response = await this.fetchImpl(`${this.baseUrl}/attachments`, init);
-    if (!response.ok) await this.throwResponseError(response);
-    return parseAttachmentAssetRecord(await response.json());
+    return this.attachments.upload(input);
   }
 
+  /** @deprecated Use client.attachments.get() instead. */
   async getAttachment(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<AttachmentAssetRecord> {
-    const value = await this.request<unknown>(
-      `/attachments/${encodeURIComponent(id)}`,
-      { signal: options.signal },
-    );
-    return parseAttachmentAssetRecord(value);
+    return this.attachments.get(id, options);
   }
 
-  /** Returns the raw response so callers can consume the body as a stream. */
+  /** Returns the raw response so callers can consume the body as a stream.
+   * @deprecated Use client.attachments.download() instead.
+   */
   async downloadAttachment(
     id: string,
     options: DownloadAttachmentOptions = {},
   ): Promise<Response> {
-    const range = attachmentRangeHeader(options.range);
-    const headers = this.headers();
-    if (range) headers.range = range;
-    const response = await this.fetchImpl(
-      `${this.baseUrl}/attachments/${encodeURIComponent(id)}/content`,
-      { method: "GET", headers, signal: options.signal },
-    );
-    if (!response.ok) await this.throwResponseError(response);
-    return response;
+    return this.attachments.download(id, options);
   }
 
+  /** @deprecated Use client.attachments.delete() instead. */
   async deleteAttachment(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<AttachmentAssetRecord> {
-    const value = await this.request<unknown>(
-      `/attachments/${encodeURIComponent(id)}`,
-      { method: "DELETE", signal: options.signal },
-    );
-    return parseAttachmentAssetRecord(value);
+    return this.attachments.delete(id, options);
   }
 
+  /** @deprecated Use client.attachments.scanStorage() instead. */
   async scanAttachmentStorage(
     options: { signal?: AbortSignal } = {},
   ): Promise<AttachmentStorageReport> {
-    return await this.request<AttachmentStorageReport>("/attachments/storage", {
-      signal: options.signal,
-    });
+    return this.attachments.scanStorage(options);
   }
 
+  /** @deprecated Use client.attachments.repairStorage() instead. */
   async repairAttachmentStorage(
     options: { signal?: AbortSignal } = {},
   ): Promise<AttachmentStorageRepairResult> {
-    return await this.request<AttachmentStorageRepairResult>(
-      "/attachments/storage/actions",
-      {
-        method: "POST",
-        body: { action: "repair-safe" },
-        signal: options.signal,
-      },
-    );
+    return this.attachments.repairStorage(options);
   }
 
+  /** @deprecated Use client.attachments.gcStorage() instead. */
   async gcAttachmentStorage(
     options: { signal?: AbortSignal } = {},
   ): Promise<AttachmentStorageGcResult> {
-    return await this.request<AttachmentStorageGcResult>(
-      "/attachments/storage/actions",
-      {
-        method: "POST",
-        body: { action: "gc" },
-        signal: options.signal,
-      },
-    );
+    return this.attachments.gcStorage(options);
   }
 
+  /** @deprecated Use client.channels.handleMessage() instead. */
   async handleChannelMessage(
     input: DurableChannelMessageInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<DurableChannelMessageResult> {
-    return await this.request<DurableChannelMessageResult>(
-      "/channels/messages",
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.channels.handleMessage(input, options);
   }
 
+  /** @deprecated Use client.channels.recordDelivery() instead. */
   async recordChannelDelivery(
     deliveryId: string,
     input: RecordChannelDeliveryInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<ChannelDeliveryRecord> {
-    const response = await this.request<{ delivery: ChannelDeliveryRecord }>(
-      `/channels/deliveries/${encodeURIComponent(deliveryId)}/result`,
-      { method: "POST", body: input, signal: options.signal },
-    );
-    return response.delivery;
+    return this.channels.recordDelivery(deliveryId, input, options);
   }
 
+  /** @deprecated Use client.channels.getStatus() instead. */
   async getChannelStatus(
     options: { connector?: string; limit?: number; signal?: AbortSignal } = {},
   ): Promise<ChannelStatusSnapshot> {
-    const { signal, ...query } = options;
-    return await this.request<ChannelStatusSnapshot>(
-      this.path("/channels/status", query),
-      { signal },
-    );
+    return this.channels.getStatus(options);
   }
 
+  /** @deprecated Use client.channels.listPendingDeliveries() instead. */
   async listPendingChannelDeliveries(
     options: { connector?: string; limit?: number; signal?: AbortSignal } = {},
   ): Promise<ChannelDeliveryRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{
-      deliveries: ChannelDeliveryRecord[];
-    }>(this.path("/channels/deliveries/pending", query), { signal });
-    return response.deliveries;
+    return this.channels.listPendingDeliveries(options);
   }
 
-  /** `GET /commands?cwd=` — cwd-scoped slash command catalog for autocomplete. */
+  /** `GET /commands?cwd=` — cwd-scoped slash command catalog for autocomplete.
+   * @deprecated Use client.system.listCommands() instead.
+   */
   async listCommands(
     options: ListCommandsOptions & { signal?: AbortSignal },
   ): Promise<CommandCatalogEntry[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ commands: CommandCatalogEntry[] }>(
-      this.path("/commands", query),
-      { signal },
-    );
-    return response.commands;
+    return this.system.listCommands(options);
   }
 
-  /** `GET /settings` */
+  /** `GET /settings`
+   * @deprecated Use client.system.getSettings() instead.
+   */
   async getSettings(
     options: { signal?: AbortSignal } = {},
   ): Promise<Record<string, unknown>> {
-    const response = await this.request<{ settings: Record<string, unknown> }>(
-      "/settings",
-      { signal: options.signal },
-    );
-    return response.settings;
+    return this.system.getSettings(options);
   }
 
-  /** `PATCH /settings` */
+  /** `PATCH /settings`
+   * @deprecated Use client.system.patchSettings() instead.
+   */
   async patchSettings(
     patch: Record<string, unknown>,
     options: { signal?: AbortSignal } = {},
   ): Promise<Record<string, unknown>> {
-    const response = await this.request<{ settings: Record<string, unknown> }>(
-      "/settings",
-      {
-        method: "PATCH",
-        body: patch,
-        signal: options.signal,
-      },
-    );
-    return response.settings;
+    return this.system.patchSettings(patch, options);
   }
 
-  /** `GET /providers` */
+  /** `GET /providers`
+   * @deprecated Use client.providers.listProviders() instead.
+   */
   async listProviders(
     options: { signal?: AbortSignal } = {},
   ): Promise<ProviderInfo[]> {
-    const response = await this.request<{ providers: ProviderInfo[] }>(
-      "/providers",
-      { signal: options.signal },
-    );
-    return response.providers;
+    return this.providers.listProviders(options);
   }
 
+  /** @deprecated Use client.providers.createCustomProvider() instead. */
   async createCustomProvider(
     input: CustomProviderInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<ProviderInfo> {
-    const response = await this.request<{ provider: ProviderInfo }>(
-      "/providers/custom",
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.provider;
+    return this.providers.createCustomProvider(input, options);
   }
 
+  /** @deprecated Use client.providers.connectCatalogProvider() instead. */
   async connectCatalogProvider(
     id: string,
     apiKey: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<ProviderInfo> {
-    const response = await this.request<{ provider: ProviderInfo }>(
-      `/providers/catalog/${encodeURIComponent(id)}/connect`,
-      { method: "POST", body: { apiKey }, signal: options.signal },
-    );
-    return response.provider;
+    return this.providers.connectCatalogProvider(id, apiKey, options);
   }
 
+  /** @deprecated Use client.providers.disconnectCatalogProvider() instead. */
   async disconnectCatalogProvider(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request<{ ok: true }>(
-      `/providers/catalog/${encodeURIComponent(id)}/connect`,
-      { method: "DELETE", signal: options.signal },
-    );
+    return this.providers.disconnectCatalogProvider(id, options);
   }
 
+  /** @deprecated Use client.providers.updateCustomProvider() instead. */
   async updateCustomProvider(
     id: string,
     input: CustomProviderInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<ProviderInfo> {
-    const response = await this.request<{ provider: ProviderInfo }>(
-      `/providers/custom/${encodeURIComponent(id)}`,
-      { method: "PATCH", body: input, signal: options.signal },
-    );
-    return response.provider;
+    return this.providers.updateCustomProvider(id, input, options);
   }
 
+  /** @deprecated Use client.providers.removeCustomProvider() instead. */
   async removeCustomProvider(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request<{ ok: true }>(
-      `/providers/custom/${encodeURIComponent(id)}`,
-      {
-        method: "DELETE",
-        signal: options.signal,
-      },
-    );
+    return this.providers.removeCustomProvider(id, options);
   }
 
-  /** `GET /models` */
+  /** `GET /models`
+   * @deprecated Use client.providers.listModels() instead.
+   */
   async listModels(
     options: { signal?: AbortSignal } = {},
   ): Promise<ModelProviderInfo[]> {
-    const response = await this.request<{ providers: ModelProviderInfo[] }>(
-      "/models",
-      { signal: options.signal },
-    );
-    return response.providers;
+    return this.providers.listModels(options);
   }
 
-  /** `GET /sessions/:id/mcp` */
+  /** `GET /sessions/:id/mcp`
+   * @deprecated Use client.system.getSessionMcp() instead.
+   */
   async getSessionMcp(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<McpServerStatus[]> {
-    const response = await this.request<{ servers: McpServerStatus[] }>(
-      `/sessions/${encodeURIComponent(sessionId)}/mcp`,
-      { signal: options.signal },
-    );
-    return response.servers;
+    return this.system.getSessionMcp(sessionId, options);
   }
 
-  /** `GET /memory?cwd=` */
+  /** `GET /memory?cwd=`
+   * @deprecated Use client.system.listMemory() instead.
+   */
   async listMemory(options: {
     cwd: string;
     signal?: AbortSignal;
   }): Promise<MemoryListResponse> {
-    const { signal, ...query } = options;
-    return await this.request<MemoryListResponse>(this.path("/memory", query), {
-      signal,
-    });
+    return this.system.listMemory(options);
   }
 
-  /** `GET /memory/:id?cwd=` */
+  /** `GET /memory/:id?cwd=`
+   * @deprecated Use client.system.getMemory() instead.
+   */
   async getMemory(
     entryId: string,
     options: { cwd: string; signal?: AbortSignal },
   ): Promise<MemoryEntryRecord> {
-    const { signal, cwd } = options;
-    const response = await this.request<{ entry: MemoryEntryRecord }>(
-      this.path(`/memory/${encodeURIComponent(entryId)}`, { cwd }),
-      { signal },
-    );
-    return response.entry;
+    return this.system.getMemory(entryId, options);
   }
 
-  /** `POST /memory` */
+  /** `POST /memory`
+   * @deprecated Use client.system.addMemory() instead.
+   */
   async addMemory(
     input: { cwd: string; content: string; tags?: string[] },
     options: { signal?: AbortSignal } = {},
   ): Promise<MemoryEntryRecord> {
-    const response = await this.request<{ entry: MemoryEntryRecord }>(
-      "/memory",
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.entry;
+    return this.system.addMemory(input, options);
   }
 
-  /** `DELETE /memory/:id?cwd=` */
+  /** `DELETE /memory/:id?cwd=`
+   * @deprecated Use client.system.removeMemory() instead.
+   */
   async removeMemory(
     entryId: string,
     options: { cwd: string; signal?: AbortSignal },
   ): Promise<void> {
-    const { signal, cwd } = options;
-    await this.request<{ deleted: boolean }>(
-      this.path(`/memory/${encodeURIComponent(entryId)}`, { cwd }),
-      { method: "DELETE", signal },
-    );
+    return this.system.removeMemory(entryId, options);
   }
 
-  /** `GET /auth` */
+  /** `GET /auth`
+   * @deprecated Use client.auth.getStatus() instead.
+   */
   async getAuthStatus(
     options: { signal?: AbortSignal } = {},
   ): Promise<AuthStatus> {
-    const response = await this.request<{ auth: AuthStatus }>("/auth", {
-      signal: options.signal,
-    });
-    return response.auth;
+    return this.auth.getStatus(options);
   }
 
-  /** `POST /auth/login` */
+  /** `POST /auth/login`
+   * @deprecated Use client.auth.login() instead.
+   */
   async authLogin(
     input: { provider: string; apiKey?: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {
-    return await this.request<{ message: string }>("/auth/login", {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
+    return this.auth.login(input, options);
   }
 
-  /** `POST /auth/logout` */
+  /** `POST /auth/logout`
+   * @deprecated Use client.auth.logout() instead.
+   */
   async authLogout(
     input: { provider: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {
-    return await this.request<{ message: string }>("/auth/logout", {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
+    return this.auth.logout(input, options);
   }
 
-  /** `GET /context/plugins?cwd=` — safe plugin picker metadata. */
+  /** `GET /context/plugins?cwd=` — safe plugin picker metadata.
+   * @deprecated Use client.system.listContextPlugins() instead.
+   */
   async listContextPlugins(options: { cwd: string; signal?: AbortSignal }): Promise<import("@openharness/protocol").PluginCatalogEntry[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ plugins: import("@openharness/protocol").PluginCatalogEntry[] }>(
-      this.path("/context/plugins", query), { signal },
-    );
-    return response.plugins;
+    return this.system.listContextPlugins(options);
   }
 
-  /** `GET /context?cwd=` */
+  /** `GET /context?cwd=`
+   * @deprecated Use client.system.getContextPreview() instead.
+   */
   async getContextPreview(options: {
     cwd: string;
     signal?: AbortSignal;
   }): Promise<string> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ report: string }>(
-      this.path("/context", query),
-      { signal },
-    );
-    return response.report;
+    return this.system.getContextPreview(options);
   }
 
-  /** `GET /context/status?cwd=` */
+  /** `GET /context/status?cwd=`
+   * @deprecated Use client.system.getContextStatus() instead.
+   */
   async getContextStatus(options: {
     cwd: string;
     signal?: AbortSignal;
   }): Promise<string> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ report: string }>(
-      this.path("/context/status", query),
-      { signal },
-    );
-    return response.report;
+    return this.system.getContextStatus(options);
   }
 
-  /** `GET /context/usage?cwd=&sessionId=&refresh=` */
+  /** `GET /context/usage?cwd=&sessionId=&refresh=`
+   * @deprecated Use client.system.getContextUsage() instead.
+   */
   async getContextUsage(options: {
     cwd: string;
     sessionId?: string;
@@ -630,167 +516,138 @@ export class OpenHarnessClient {
     previousContextWindow?: number;
     signal?: AbortSignal;
   }): Promise<{ snapshot: unknown; report: string }> {
-    const { signal, refresh, previousContextWindow, ...rest } = options;
-    const query: Record<string, string | undefined> = {
-      ...rest,
-      ...(refresh !== undefined ? { refresh: refresh ? "true" : "false" } : {}),
-      ...(previousContextWindow !== undefined
-        ? { previousContextWindow: String(previousContextWindow) }
-        : {}),
-    };
-    return await this.request<{ snapshot: unknown; report: string }>(
-      this.path("/context/usage", query),
-      { signal },
-    );
+    return this.system.getContextUsage(options);
   }
 
-  /** `POST /sessions/:id/compact` */
+  /** `POST /sessions/:id/compact`
+   * @deprecated Use client.sessions.compact() instead.
+   */
   async compactSession(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<CompactSessionResponse> {
-    return await this.request<CompactSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/compact`,
-      { method: "POST", signal: options.signal },
-    );
+    return this.sessions.compact(sessionId, options);
   }
 
+  /** @deprecated Use client.sessions.getGoal() instead. */
   async getSessionGoal(sessionId: string): Promise<SessionGoal | null> {
-    const response = await this.request<{ goal: SessionGoal | null }>(`/sessions/${encodeURIComponent(sessionId)}/goal`);
-    return response.goal;
+    return this.sessions.getGoal(sessionId);
   }
 
+  /** @deprecated Use client.sessions.createGoal() instead. */
   async createSessionGoal(sessionId: string, input: CreateSessionGoalInput): Promise<SessionGoal> {
-    const response = await this.request<{ goal: SessionGoal }>(`/sessions/${encodeURIComponent(sessionId)}/goals`, { method: "POST", body: input });
-    return response.goal;
+    return this.sessions.createGoal(sessionId, input);
   }
 
+  /** @deprecated Use client.sessions.updateGoal() instead. */
   async updateSessionGoal(sessionId: string, goalId: string, input: UpdateSessionGoalInput): Promise<SessionGoal> {
-    const response = await this.request<{ goal: SessionGoal }>(`/sessions/${encodeURIComponent(sessionId)}/goals/${encodeURIComponent(goalId)}`, { method: "PATCH", body: input });
-    return response.goal;
+    return this.sessions.updateGoal(sessionId, goalId, input);
   }
 
+  /** @deprecated Use client.sessions.applyGoalAction() instead. */
   async applySessionGoalAction(sessionId: string, goalId: string, input: GoalActionInput): Promise<SessionGoal> {
-    const response = await this.request<{ goal: SessionGoal }>(`/sessions/${encodeURIComponent(sessionId)}/goals/${encodeURIComponent(goalId)}/actions`, { method: "POST", body: input });
-    return response.goal;
+    return this.sessions.applyGoalAction(sessionId, goalId, input);
   }
 
-  /** `POST /sessions/:id/rewind` */
+  /** `POST /sessions/:id/rewind`
+   * @deprecated Use client.sessions.rewind() instead.
+   */
   async rewindSession(
     sessionId: string,
     input: { count?: number } = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<RewindSessionResponse> {
-    return await this.request<RewindSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/rewind`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.rewind(sessionId, input, options);
   }
 
-  /** `POST /sessions/:id/remember` */
+  /** `POST /sessions/:id/remember`
+   * @deprecated Use client.sessions.remember() instead.
+   */
   async rememberSession(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<RememberSessionResponse> {
-    return await this.request<RememberSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/remember`,
-      { method: "POST", signal: options.signal },
-    );
+    return this.sessions.remember(sessionId, options);
   }
 
-  /** `POST /dream` */
+  /** `POST /dream`
+   * @deprecated Use client.system.startDream() instead.
+   */
   async startDream(
     input: { cwd: string; sessionId?: string; preview?: boolean },
     options: { signal?: AbortSignal } = {},
   ): Promise<StartDreamResponse> {
-    return await this.request<StartDreamResponse>("/dream", {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
+    return this.system.startDream(input, options);
   }
 
-  /** `GET /profile` */
+  /** `GET /profile`
+   * @deprecated Use client.system.getProfileStatus() instead.
+   */
   async getProfileStatus(
     options: { signal?: AbortSignal } = {},
   ): Promise<string> {
-    const response = await this.request<{ report: string }>("/profile", {
-      signal: options.signal,
-    });
-    return response.report;
+    return this.system.getProfileStatus(options);
   }
 
-  /** `POST /profile/init` */
+  /** `POST /profile/init`
+   * @deprecated Use client.system.initProfile() instead.
+   */
   async initProfile(options: { signal?: AbortSignal } = {}): Promise<string> {
-    const response = await this.request<{ report: string }>("/profile/init", {
-      method: "POST",
-      signal: options.signal,
-    });
-    return response.report;
+    return this.system.initProfile(options);
   }
 
-  /** `GET /output-styles` */
+  /** `GET /output-styles`
+   * @deprecated Use client.system.listOutputStyles() instead.
+   */
   async listOutputStyles(
     options: { signal?: AbortSignal } = {},
   ): Promise<OutputStyleInfo[]> {
-    const response = await this.request<{ styles: OutputStyleInfo[] }>(
-      "/output-styles",
-      {
-        signal: options.signal,
-      },
-    );
-    return response.styles;
+    return this.system.listOutputStyles(options);
   }
 
-  /** `POST /project/init` */
+  /** `POST /project/init`
+   * @deprecated Use client.projects.init() instead.
+   */
   async initProject(
     input: { cwd: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<string> {
-    const response = await this.request<{ report: string }>("/project/init", {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
-    return response.report;
+    return this.projects.init(input, options);
   }
 
-  /** `GET /plugins?cwd=` */
+  /** `GET /plugins?cwd=`
+   * @deprecated Use client.plugins.list() instead.
+   */
   async listPlugins(options: { cwd: string; signal?: AbortSignal }): Promise<{
     plugins: PluginInfo[];
     warnings: string[];
   }> {
-    const { signal, ...query } = options;
-    return await this.request<{ plugins: PluginInfo[]; warnings: string[] }>(
-      this.path("/plugins", query),
-      { signal },
-    );
+    return this.plugins.list(options);
   }
 
-  /** `POST /plugins/:id/enable` */
+  /** `POST /plugins/:id/enable`
+   * @deprecated Use client.plugins.enable() instead.
+   */
   async enablePlugin(
     id: string,
     input: { cwd: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {
-    return await this.request<{ message: string }>(
-      `/plugins/${encodeURIComponent(id)}/enable`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.plugins.enable(id, input, options);
   }
 
-  /** `POST /plugins/:id/disable` */
+  /** `POST /plugins/:id/disable`
+   * @deprecated Use client.plugins.disable() instead.
+   */
   async disablePlugin(
     id: string,
     input: { cwd: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {
-    return await this.request<{ message: string }>(
-      `/plugins/${encodeURIComponent(id)}/disable`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.plugins.disable(id, input, options);
   }
 
+  /** @deprecated Use client.plugins.installLocal() instead. */
   async installLocalPlugin(input: {
     cwd: string;
     sourcePath: string;
@@ -798,481 +655,364 @@ export class OpenHarnessClient {
     approvedPermissions: string[];
     link?: boolean;
   }): Promise<{ message: string }> {
-    return await this.request<{ message: string }>(
-      input.link ? "/plugins/link-local" : "/plugins/install-local",
-      { method: "POST", body: input },
-    );
+    return this.plugins.installLocal(input);
   }
 
-  /** `POST /plugins/archive/preview` */
+  /** `POST /plugins/archive/preview`
+   * @deprecated Use client.plugins.previewArchive() instead.
+   */
   async previewPluginArchive(
     input: { cwd: string; archivePath: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<PluginArchivePreview> {
-    return await this.request<PluginArchivePreview>("/plugins/archive/preview", {
-      method: "POST", body: input, signal: options.signal,
-    });
+    return this.plugins.previewArchive(input, options);
   }
 
-  /** `POST /plugins/archive/install` */
+  /** `POST /plugins/archive/install`
+   * @deprecated Use client.plugins.installArchive() instead.
+   */
   async installPluginArchive(
     input: { cwd: string; archivePath: string; expectedArchiveDigest: string; approvedPermissions: string[] },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {
-    return await this.request<{ message: string }>("/plugins/archive/install", {
-      method: "POST", body: input, signal: options.signal,
-    });
+    return this.plugins.installArchive(input, options);
   }
 
-  /** `POST /plugins/git/preview` */
+  /** `POST /plugins/git/preview`
+   * @deprecated Use client.plugins.previewGit() instead.
+   */
   async previewPluginGit(
     input: { cwd: string; url: string; ref?: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<PluginGitPreview> {
-    return await this.request<PluginGitPreview>("/plugins/git/preview", {
-      method: "POST", body: input, signal: options.signal,
-    });
+    return this.plugins.previewGit(input, options);
   }
 
-  /** `POST /plugins/git/install` */
+  /** `POST /plugins/git/install`
+   * @deprecated Use client.plugins.installGit() instead.
+   */
   async installPluginGit(
     input: { cwd: string; url: string; ref?: string; expectedSourceDigest: string; approvedPermissions: string[] },
     options: { signal?: AbortSignal } = {},
   ): Promise<{ message: string }> {
-    return await this.request<{ message: string }>("/plugins/git/install", {
-      method: "POST", body: input, signal: options.signal,
-    });
+    return this.plugins.installGit(input, options);
   }
 
+  /** @deprecated Use client.plugins.uninstall() instead. */
   async uninstallPlugin(
     id: string,
     input: { cwd: string },
   ): Promise<{ message: string }> {
-    return await this.request<{ message: string }>(
-      `/plugins/${encodeURIComponent(id)}`,
-      { method: "DELETE", body: input },
-    );
+    return this.plugins.uninstall(id, input);
   }
 
-  /** `POST /plugins/reload` */
+  /** `POST /plugins/reload`
+   * @deprecated Use client.plugins.reload() instead.
+   */
   async reloadPlugins(
     input: { cwd: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<ReloadPluginsResponse> {
-    return await this.request<ReloadPluginsResponse>("/plugins/reload", {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
+    return this.plugins.reload(input, options);
   }
 
-  /** `GET /skills` */
+  /** `GET /skills`
+   * @deprecated Use client.development.listSkills() instead.
+   */
   async listSkills(
     options: { signal?: AbortSignal } = {},
   ): Promise<SkillSnapshot> {
-    return await this.request<SkillSnapshot>("/skills", {
-      signal: options.signal,
-    });
+    return this.development.listSkills(options);
   }
 
-  /** `DELETE /skills/:id` */
+  /** `DELETE /skills/:id`
+   * @deprecated Use client.development.removeSkill() instead.
+   */
   async removeSkill(
     id: string,
     input: { expectedContent: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<SkillSnapshot> {
-    return await this.request<SkillSnapshot>(
-      `/skills/${encodeURIComponent(id)}`,
-      {
-        method: "DELETE",
-        body: input,
-        signal: options.signal,
-      },
-    );
+    return this.development.removeSkill(id, input, options);
   }
 
-  /** `GET /agent-personas` */
+  /** `GET /agent-personas`
+   * @deprecated Use client.development.listAgentPersonas() instead.
+   */
   async listAgentPersonas(
     options: { signal?: AbortSignal } = {},
   ): Promise<AgentPersonaInfo[]> {
-    const response = await this.request<{ agents: AgentPersonaInfo[] }>(
-      "/agent-personas",
-      {
-        signal: options.signal,
-      },
-    );
-    return response.agents;
+    return this.development.listAgentPersonas(options);
   }
 
-  /** `GET /hooks?cwd=&sessionId=` */
+  /** `GET /hooks?cwd=&sessionId=`
+   * @deprecated Use client.development.listHooks() instead.
+   */
   async listHooks(options: {
     cwd: string;
     sessionId?: string;
     signal?: AbortSignal;
   }): Promise<HookInfo[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ hooks: HookInfo[] }>(
-      this.path("/hooks", query),
-      { signal },
-    );
-    return response.hooks;
+    return this.development.listHooks(options);
   }
 
-  /** `GET /git/diff?cwd=&full=` */
+  /** `GET /git/diff?cwd=&full=`
+   * @deprecated Use client.development.getGitDiff() instead.
+   */
   async getGitDiff(options: {
     cwd: string;
     full?: boolean;
     signal?: AbortSignal;
   }): Promise<string> {
-    const { signal, cwd, full } = options;
-    const response = await this.request<{ output: string }>(
-      this.path("/git/diff", { cwd, ...(full ? { full: "true" } : {}) }),
-      { signal },
-    );
-    return response.output;
+    return this.development.getGitDiff(options);
   }
 
-  /** `GET /git/branch?cwd=&list=` */
+  /** `GET /git/branch?cwd=&list=`
+   * @deprecated Use client.development.getGitBranch() instead.
+   */
   async getGitBranch(options: {
     cwd: string;
     list?: boolean;
     signal?: AbortSignal;
   }): Promise<string> {
-    const { signal, cwd, list } = options;
-    const response = await this.request<{ output: string }>(
-      this.path("/git/branch", { cwd, ...(list ? { list: "true" } : {}) }),
-      { signal },
-    );
-    return response.output;
+    return this.development.getGitBranch(options);
   }
 
-  /** `GET /git/status?cwd=` */
+  /** `GET /git/status?cwd=`
+   * @deprecated Use client.development.getGitStatus() instead.
+   */
   async getGitStatus(options: {
     cwd: string;
     signal?: AbortSignal;
   }): Promise<string> {
-    const { signal, cwd } = options;
-    const response = await this.request<{ output: string }>(
-      this.path("/git/status", { cwd }),
-      { signal },
-    );
-    return response.output;
+    return this.development.getGitStatus(options);
   }
 
-  /** `POST /git/commit` */
+  /** `POST /git/commit`
+   * @deprecated Use client.development.gitCommit() instead.
+   */
   async gitCommit(
     input: { cwd: string; message: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<string> {
-    const response = await this.request<{ output: string }>("/git/commit", {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
-    return response.output;
+    return this.development.gitCommit(input, options);
   }
 
-  /** `GET /sessions/:id/usage` */
+  /** `GET /sessions/:id/usage`
+   * @deprecated Use client.sessions.getUsage() instead.
+   */
   async getSessionUsage(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionUsageResponse> {
-    return await this.request<SessionUsageResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/usage`,
-      { signal: options.signal },
-    );
+    return this.sessions.getUsage(sessionId, options);
   }
 
-  /** `POST /sessions/:id/export` */
+  /** `POST /sessions/:id/export`
+   * @deprecated Use client.sessions.export() instead.
+   */
   async exportSession(
     sessionId: string,
     input: { filename?: string; json?: boolean } = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionExportResponse> {
-    return await this.request<SessionExportResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/export`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.export(sessionId, input, options);
   }
 
-  /** `GET /sessions` */
+  /** `GET /sessions`
+   * @deprecated Use client.sessions.list() instead.
+   */
   async listSessions(
     options: ListSessionsOptions & { signal?: AbortSignal } = {},
   ): Promise<SessionRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ sessions: SessionRecord[] }>(
-      this.path("/sessions", query),
-      { signal },
-    );
-    return response.sessions;
+    return this.sessions.list(options);
   }
 
+  /** @deprecated Use client.projects.list() instead. */
   async listProjects(
     options: ListProjectsOptions & { signal?: AbortSignal } = {},
   ): Promise<ProjectRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ projects: ProjectRecord[] }>(
-      this.path("/projects", query),
-      { signal },
-    );
-    return response.projects;
+    return this.projects.list(options);
   }
 
+  /** @deprecated Use client.projects.inspect() instead. */
   async inspectProject(path: string): Promise<ProjectRecord> {
-    return (
-      await this.request<{ project: ProjectRecord }>("/projects/inspect", {
-        method: "POST",
-        body: { path },
-      })
-    ).project;
+    return this.projects.inspect(path);
   }
 
+  /** @deprecated Use client.projects.rename() instead. */
   async renameProject(projectId: string, name: string): Promise<ProjectRecord> {
-    return (
-      await this.request<{ project: ProjectRecord }>(
-        `/projects/${encodeURIComponent(projectId)}`,
-        { method: "PATCH", body: { name } },
-      )
-    ).project;
+    return this.projects.rename(projectId, name);
   }
 
+  /** @deprecated Use client.projects.setPinned() instead. */
   async setProjectPinned(
     projectId: string,
     pinned: boolean,
   ): Promise<ProjectRecord> {
-    return (
-      await this.request<{ project: ProjectRecord }>(
-        `/projects/${encodeURIComponent(projectId)}`,
-        { method: "PATCH", body: { pinned } },
-      )
-    ).project;
+    return this.projects.setPinned(projectId, pinned);
   }
 
+  /** @deprecated Use client.projects.setDefaultShell() instead. */
   async setProjectDefaultShell(
     projectId: string,
     defaultShell: string | null,
   ): Promise<ProjectRecord> {
-    return (
-      await this.request<{ project: ProjectRecord }>(
-        `/projects/${encodeURIComponent(projectId)}`,
-        { method: "PATCH", body: { defaultShell } },
-      )
-    ).project;
+    return this.projects.setDefaultShell(projectId, defaultShell);
   }
 
+  /** @deprecated Use client.projects.rebind() instead. */
   async rebindProject(projectId: string, path: string): Promise<ProjectRecord> {
-    return (
-      await this.request<{ project: ProjectRecord }>(
-        `/projects/${encodeURIComponent(projectId)}/rebind`,
-        { method: "POST", body: { path } },
-      )
-    ).project;
+    return this.projects.rebind(projectId, path);
   }
 
+  /** @deprecated Use client.projects.archive() instead. */
   async archiveProject(projectId: string): Promise<ProjectRecord> {
-    return (
-      await this.request<{ project: ProjectRecord }>(
-        `/projects/${encodeURIComponent(projectId)}`,
-        { method: "DELETE" },
-      )
-    ).project;
+    return this.projects.archive(projectId);
   }
 
-  /** `POST /sessions` */
+  /** `POST /sessions`
+   * @deprecated Use client.sessions.create() instead.
+   */
   async createSession(
     input: CreateClientSessionInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      "/sessions",
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.create(input, options);
   }
 
-  /** `GET /sessions/:id` */
+  /** `GET /sessions/:id`
+   * @deprecated Use client.sessions.get() instead.
+   */
   async getSession(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}`,
-      {
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.get(sessionId, options);
   }
 
-  /** `POST /sessions/:id/fork` */
+  /** `POST /sessions/:id/fork`
+   * @deprecated Use client.sessions.fork() instead.
+   */
   async forkSession(
     sessionId: string,
     input: ForkClientSessionInput = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}/fork`,
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.fork(sessionId, input, options);
   }
 
-  /** `GET /sessions/:id/state` - atomic attach snapshot plus SSE cursor. */
+  /** `GET /sessions/:id/state` - atomic attach snapshot plus SSE cursor.
+   * @deprecated Use client.sessions.getState() instead.
+   */
   async getSessionState(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionStateSnapshot> {
-    const response = await this.request<unknown>(
-      `/sessions/${encodeURIComponent(sessionId)}/state`,
-      {
-        signal: options.signal,
-      },
-    );
-    return decodeSessionStateSnapshot(response);
+    return this.sessions.getState(sessionId, options);
   }
 
-  /** `DELETE /sessions/:id` */
+  /** `DELETE /sessions/:id`
+   * @deprecated Use client.sessions.archive() instead.
+   */
   async archiveSession(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}`,
-      {
-        method: "DELETE",
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.archive(sessionId, options);
   }
 
-  /** `DELETE /sessions/:id/hard` */
+  /** `DELETE /sessions/:id/hard`
+   * @deprecated Use client.sessions.delete() instead.
+   */
   async deleteSession(
     sessionId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<string[]> {
-    const response = await this.request<{ deletedSessionIds: string[] }>(
-      `/sessions/${encodeURIComponent(sessionId)}/hard`,
-      {
-        method: "DELETE",
-        signal: options.signal,
-      },
-    );
-    return response.deletedSessionIds;
+    return this.sessions.delete(sessionId, options);
   }
 
-  /** `PATCH /sessions/:id` - update title, agent, or metadata.runtime fields. */
+  /** `PATCH /sessions/:id` - update title, agent, or metadata.runtime fields.
+   * @deprecated Use client.sessions.update() instead.
+   */
   async updateSession(
     sessionId: string,
     input: UpdateClientSessionInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<SessionRecord> {
-    const response = await this.request<{ session: SessionRecord }>(
-      `/sessions/${encodeURIComponent(sessionId)}`,
-      {
-        method: "PATCH",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.session;
+    return this.sessions.update(sessionId, input, options);
   }
 
-  /** `GET /sessions/:id/messages` */
+  /** `GET /sessions/:id/messages`
+   * @deprecated Use client.sessions.listMessages() instead.
+   */
   async listMessages(
     sessionId: string,
     options: ListMessagesOptions & { signal?: AbortSignal } = {},
   ): Promise<SessionMessageRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ messages: SessionMessageRecord[] }>(
-      this.path(`/sessions/${encodeURIComponent(sessionId)}/messages`, query),
-      { signal },
-    );
-    return response.messages;
+    return this.sessions.listMessages(sessionId, options);
   }
 
-  /** `GET /sessions/:id/parts` */
+  /** `GET /sessions/:id/parts`
+   * @deprecated Use client.sessions.listMessageParts() instead.
+   */
   async listMessageParts(
     sessionId: string,
     options: ListClientMessagePartsOptions & { signal?: AbortSignal } = {},
   ): Promise<SessionMessagePartRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ parts: SessionMessagePartRecord[] }>(
-      this.path(`/sessions/${encodeURIComponent(sessionId)}/parts`, query),
-      { signal },
-    );
-    return response.parts;
+    return this.sessions.listMessageParts(sessionId, options);
   }
 
-  /** `POST /sessions/:id/prompts` — 提交用户输入并触发/排队一次 run。 */
+  /** `POST /sessions/:id/prompts` — 提交用户输入并触发/排队一次 run。
+   * @deprecated Use client.sessions.admitPrompt() instead.
+   */
   async admitPrompt(
     sessionId: string,
     input: AdmitClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromptResponse> {
-    return await this.request<PromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts`,
-      {
-        method: "POST",
-        body: { ...input, id: input.id ?? createPromptRequestId() },
-        signal: options.signal,
-      },
-    );
+    return this.sessions.admitPrompt(sessionId, input, options);
   }
 
-  /** `POST /sessions/:id/prompts/latest/edit` */
+  /** `POST /sessions/:id/prompts/latest/edit`
+   * @deprecated Use client.sessions.editLatestPrompt() instead.
+   */
   async editLatestPrompt(
     sessionId: string,
     input: EditLatestClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromptResponse> {
-    return await this.request<PromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts/latest/edit`,
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
+    return this.sessions.editLatestPrompt(sessionId, input, options);
   }
 
-  /** Promote one durable queued prompt into the exact active run. */
+  /** Promote one durable queued prompt into the exact active run.
+   * @deprecated Use client.sessions.promoteQueuedPrompt() instead.
+   */
   async promoteQueuedPrompt(
     sessionId: string,
     inputId: string,
     input: PromoteQueuedClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PromoteQueuedPromptResponse> {
-    return await this.request<PromoteQueuedPromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts/${encodeURIComponent(inputId)}/promote`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.promoteQueuedPrompt(sessionId, inputId, input, options);
   }
 
-  /** Cancel one durable prompt that is still waiting in the run queue. */
+  /** Cancel one durable prompt that is still waiting in the run queue.
+   * @deprecated Use client.sessions.cancelQueuedPrompt() instead.
+   */
   async cancelQueuedPrompt(
     sessionId: string,
     inputId: string,
     input: CancelQueuedClientPromptInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<CancelQueuedPromptResponse> {
-    return await this.request<CancelQueuedPromptResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/prompts/${encodeURIComponent(inputId)}/cancel`,
-      { method: "POST", body: input, signal: options.signal },
-    );
+    return this.sessions.cancelQueuedPrompt(sessionId, inputId, input, options);
   }
 
   /**
    * `POST /sessions/:id/runs/:runId/resume` — 显式重放一次中断 run 的原始 prompt。
    * 不会继续旧 provider stream；服务端会创建一个带恢复溯源的新 input/run。
+   * @deprecated Use client.sessions.resumeInterruptedRun() instead.
    */
   async resumeInterruptedRun(
     sessionId: string,
@@ -1280,156 +1020,107 @@ export class OpenHarnessClient {
     input: ResumeInterruptedRunInput = {},
     options: { signal?: AbortSignal } = {},
   ): Promise<ResumeInterruptedRunResponse> {
-    return await this.request<ResumeInterruptedRunResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(runId)}/resume`,
-      {
-        method: "POST",
-        body: { ...input, id: input.id ?? createPromptRequestId() },
-        signal: options.signal,
-      },
-    );
+    return this.sessions.resumeInterruptedRun(sessionId, runId, input, options);
   }
 
-  /** `POST /sessions/:id/interrupt` — 中断当前/排队中的 run。 */
+  /** `POST /sessions/:id/interrupt` — 中断当前/排队中的 run。
+   * @deprecated Use client.sessions.interrupt() instead.
+   */
   async interruptSession(
     sessionId: string,
     options: { signal?: AbortSignal; expectedRunId?: string } = {},
   ): Promise<InterruptSessionResponse> {
-    return await this.request<InterruptSessionResponse>(
-      `/sessions/${encodeURIComponent(sessionId)}/interrupt`,
-      {
-        method: "POST",
-        body: options.expectedRunId
-          ? { expectedRunId: options.expectedRunId }
-          : undefined,
-        signal: options.signal,
-      },
-    );
+    return this.sessions.interrupt(sessionId, options);
   }
 
-  /** `GET /events` — 用于 attach 时的历史 replay。 */
+  /** `GET /events` — 用于 attach 时的历史 replay。
+   * @deprecated Use client.events.list() instead.
+   */
   async listEvents(
     options: ListEventsOptions & { signal?: AbortSignal } = {},
   ): Promise<SessionEventRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<unknown>(this.path("/events", query), {
-      signal,
-    });
-    return responseArray(response, "events", decodeSessionEventRecord);
+    return this.events.list(options);
   }
 
-  /** `GET /permissions` */
+  /** `GET /permissions`
+   * @deprecated Use client.permissions.list() instead.
+   */
   async listPermissions(
     options: ListPermissionsOptions & { signal?: AbortSignal } = {},
   ): Promise<PermissionRequestRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{
-      requests: PermissionRequestRecord[];
-    }>(this.path("/permissions", query), { signal });
-    return response.requests;
+    return this.permissions.list(options);
   }
 
-  /** `POST /permissions/:id/reply` — 批准/拒绝工具权限请求。 */
+  /** `POST /permissions/:id/reply` — 批准/拒绝工具权限请求。
+   * @deprecated Use client.permissions.reply() instead.
+   */
   async replyPermission(
     requestId: string,
     input: ReplyPermissionInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<PermissionRequestRecord> {
-    const response = await this.request<{ request: PermissionRequestRecord }>(
-      `/permissions/${encodeURIComponent(requestId)}/reply`,
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.request;
+    return this.permissions.reply(requestId, input, options);
   }
 
+  /** @deprecated Use client.schedules.getStatus() instead. */
   async getScheduledTaskStatus(
     options: { signal?: AbortSignal } = {},
   ): Promise<ScheduledTaskStatusSummary> {
-    return await this.request<ScheduledTaskStatusSummary>("/schedules/status", {
-      signal: options.signal,
-    });
+    return this.schedules.getStatus(options);
   }
 
+  /** @deprecated Use client.schedules.listTasks() instead. */
   async listScheduledTasks(
     options: {
       status?: ScheduledTaskRecord["status"];
       signal?: AbortSignal;
     } = {},
   ): Promise<ScheduledTaskRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ tasks: ScheduledTaskRecord[] }>(
-      this.path("/schedules/tasks", query),
-      { signal },
-    );
-    return response.tasks;
+    return this.schedules.listTasks(options);
   }
 
+  /** @deprecated Use client.schedules.getTask() instead. */
   async getScheduledTask(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<ScheduledTaskRecord> {
-    const response = await this.request<{ task: ScheduledTaskRecord }>(
-      `/schedules/tasks/${encodeURIComponent(id)}`,
-      { signal: options.signal },
-    );
-    return response.task;
+    return this.schedules.getTask(id, options);
   }
 
+  /** @deprecated Use client.schedules.createTask() instead. */
   async createScheduledTask(
     input: CreateScheduledTaskInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<ScheduledTaskRecord> {
-    const response = await this.request<{ task: ScheduledTaskRecord }>(
-      "/schedules/tasks",
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return response.task;
+    return this.schedules.createTask(input, options);
   }
 
+  /** @deprecated Use client.schedules.updateTask() instead. */
   async updateScheduledTask(
     id: string,
     input: UpdateScheduledTaskInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<ScheduledTaskRecord> {
-    const response = await this.request<{ task: ScheduledTaskRecord }>(
-      `/schedules/tasks/${encodeURIComponent(id)}`,
-      { method: "PATCH", body: input, signal: options.signal },
-    );
-    return response.task;
+    return this.schedules.updateTask(id, input, options);
   }
 
+  /** @deprecated Use client.schedules.removeTask() instead. */
   async removeScheduledTask(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request<{ removed: true }>(
-      `/schedules/tasks/${encodeURIComponent(id)}`,
-      {
-        method: "DELETE",
-        signal: options.signal,
-      },
-    );
+    return this.schedules.removeTask(id, options);
   }
 
+  /** @deprecated Use client.schedules.triggerTask() instead. */
   async triggerScheduledTask(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<ScheduledRunRecord> {
-    const response = await this.request<{ run: ScheduledRunRecord }>(
-      `/schedules/tasks/${encodeURIComponent(id)}/run`,
-      { method: "POST", signal: options.signal },
-    );
-    return response.run;
+    return this.schedules.triggerTask(id, options);
   }
 
+  /** @deprecated Use client.schedules.listRuns() instead. */
   async listScheduledRuns(
     options: {
       taskId?: string;
@@ -1438,38 +1129,27 @@ export class OpenHarnessClient {
       signal?: AbortSignal;
     } = {},
   ): Promise<ScheduledRunRecord[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<{ runs: ScheduledRunRecord[] }>(
-      this.path("/schedules/runs", query),
-      { signal },
-    );
-    return response.runs;
+    return this.schedules.listRuns(options);
   }
 
+  /** @deprecated Use client.schedules.setRunUnread() instead. */
   async setScheduledRunUnread(
     id: string,
     unread: boolean,
     options: { signal?: AbortSignal } = {},
   ): Promise<ScheduledRunRecord> {
-    const response = await this.request<{ run: ScheduledRunRecord }>(
-      `/schedules/runs/${encodeURIComponent(id)}/read`,
-      { method: "PATCH", body: { unread }, signal: options.signal },
-    );
-    return response.run;
+    return this.schedules.setRunUnread(id, unread, options);
   }
 
+  /** @deprecated Use client.terminals.create() instead. */
   async createTerminal(
     input: TerminalCreateRequest,
     options: { signal?: AbortSignal } = {},
   ): Promise<TerminalSessionInfo> {
-    const response = await this.request<unknown>("/terminals", {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
-    return decodeTerminalSessionInfo(responseField(response, "terminal"));
+    return this.terminals.create(input, options);
   }
 
+  /** @deprecated Use client.jobs.list() instead. */
   async listJobs(options: {
     sessionId: string;
     kinds?: JobKind[];
@@ -1482,35 +1162,18 @@ export class OpenHarnessClient {
     limit?: number;
     signal?: AbortSignal;
   }): Promise<JobSnapshot[]> {
-    const { signal, kinds, statuses, includeFinished, ...query } = options;
-    const response = await this.request<unknown>(
-      this.path("/jobs", {
-        ...query,
-        ...(kinds ? { kinds: kinds.join(",") } : {}),
-        ...(statuses ? { statuses: statuses.join(",") } : {}),
-        ...(includeFinished !== undefined
-          ? { includeFinished: String(includeFinished) }
-          : {}),
-      }),
-      { signal },
-    );
-    return responseArray(response, "jobs", decodeJobSnapshot);
+    return this.jobs.list(options);
   }
 
+  /** @deprecated Use client.jobs.createBackgroundShell() instead. */
   async createBackgroundShell(
     input: CreateBackgroundShellInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<CreateBackgroundShellResult> {
-    return await this.request<CreateBackgroundShellResult>(
-      "/background-shells",
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
+    return this.jobs.createBackgroundShell(input, options);
   }
 
+  /** @deprecated Use client.jobs.read() instead. */
   async readJob(
     jobId: string,
     options: {
@@ -1520,14 +1183,10 @@ export class OpenHarnessClient {
       signal?: AbortSignal;
     },
   ): Promise<JobReadResult> {
-    const { signal, ...query } = options;
-    const response = await this.request<unknown>(
-      this.path(`/jobs/${encodeURIComponent(jobId)}`, query),
-      { signal },
-    );
-    return decodeJobReadResult(response);
+    return this.jobs.read(jobId, options);
   }
 
+  /** @deprecated Use client.jobs.wait() instead. */
   async waitJob(
     jobId: string,
     input: {
@@ -1538,41 +1197,28 @@ export class OpenHarnessClient {
     },
     options: { signal?: AbortSignal } = {},
   ): Promise<JobWaitResult> {
-    const response = await this.request<unknown>(
-      `/jobs/${encodeURIComponent(jobId)}/wait`,
-      {
-        method: "POST",
-        body: input,
-        signal: options.signal,
-      },
-    );
-    return decodeJobWaitResult(response);
+    return this.jobs.wait(jobId, input, options);
   }
 
+  /** @deprecated Use client.jobs.send() instead. */
   async sendJob(
     jobId: string,
     input: { sessionId: string; data: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request(`/jobs/${encodeURIComponent(jobId)}/input`, {
-      method: "POST",
-      body: input,
-      signal: options.signal,
-    });
+    return this.jobs.send(jobId, input, options);
   }
 
+  /** @deprecated Use client.jobs.cancel() instead. */
   async cancelJob(
     jobId: string,
     input: { sessionId: string; reason?: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<JobSnapshot> {
-    const response = await this.request<unknown>(
-      `/jobs/${encodeURIComponent(jobId)}/cancel`,
-      { method: "POST", body: input, signal: options.signal },
-    );
-    return decodeJobSnapshot(responseField(response, "snapshot"));
+    return this.jobs.cancel(jobId, input, options);
   }
 
+  /** @deprecated Use client.terminals.list() instead. */
   async listTerminals(
     options: {
       projectId?: string;
@@ -1581,274 +1227,69 @@ export class OpenHarnessClient {
       signal?: AbortSignal;
     } = {},
   ): Promise<TerminalSessionInfo[]> {
-    const { signal, ...query } = options;
-    const response = await this.request<unknown>(
-      this.path("/terminals", query),
-      { signal },
-    );
-    return responseArray(response, "terminals", decodeTerminalSessionInfo);
+    return this.terminals.list(options);
   }
 
+  /** @deprecated Use client.terminals.get() instead. */
   async getTerminal(
     terminalId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<TerminalSessionInfo> {
-    const response = await this.request<unknown>(
-      `/terminals/${encodeURIComponent(terminalId)}`,
-      { signal: options.signal },
-    );
-    return decodeTerminalSessionInfo(responseField(response, "terminal"));
+    return this.terminals.get(terminalId, options);
   }
 
+  /** @deprecated Use client.terminals.read() instead. */
   async readTerminal(
     terminalId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<TerminalReadResult> {
-    const response = await this.request<unknown>(
-      `/terminals/${encodeURIComponent(terminalId)}/output`,
-      { signal: options.signal },
-    );
-    return decodeTerminalReadResult(responseField(response, "snapshot"));
+    return this.terminals.read(terminalId, options);
   }
 
+  /** @deprecated Use client.terminals.write() instead. */
   async writeTerminal(
     input: TerminalWriteRequest,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request<{ written: true }>(
-      `/terminals/${encodeURIComponent(input.terminalId)}/input`,
-      { method: "POST", body: { data: input.data }, signal: options.signal },
-    );
+    return this.terminals.write(input, options);
   }
 
+  /** @deprecated Use client.terminals.resize() instead. */
   async resizeTerminal(
     input: TerminalResizeRequest,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request<{ resized: true }>(
-      `/terminals/${encodeURIComponent(input.terminalId)}/resize`,
-      {
-        method: "POST",
-        body: { cols: input.cols, rows: input.rows },
-        signal: options.signal,
-      },
-    );
+    return this.terminals.resize(input, options);
   }
 
+  /** @deprecated Use client.terminals.signal() instead. */
   async signalTerminal(
     terminalId: string,
     signal: TerminalSignal,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request<{ signaled: true }>(
-      `/terminals/${encodeURIComponent(terminalId)}/signal`,
-      { method: "POST", body: { signal }, signal: options.signal },
-    );
+    return this.terminals.signal(terminalId, signal, options);
   }
 
+  /** @deprecated Use client.terminals.close() instead. */
   async closeTerminal(
     terminalId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    await this.request<{ removed: true }>(
-      `/terminals/${encodeURIComponent(terminalId)}`,
-      {
-        method: "DELETE",
-        signal: options.signal,
-      },
-    );
+    return this.terminals.close(terminalId, options);
   }
 
+  /** @deprecated Use client.terminals.streamEvents() instead. */
   streamTerminalEvents(
     options: { signal?: AbortSignal } = {},
   ): AsyncIterable<TerminalEvent> {
-    return streamServerSentEvents(async () => {
-      const response = await this.fetchImpl(
-        `${this.baseUrl}/terminals/stream`,
-        {
-          headers: this.headers(),
-          signal: options.signal,
-        },
-      );
-      if (!response.ok) await this.throwResponseError(response);
-      if (!response.body)
-        throw new Error("Terminal event stream response has no body");
-      return response.body;
-    }, decodeTerminalEvent);
+    return this.terminals.streamEvents(options);
   }
 
+  /** @deprecated Use client.events.stream() instead. */
   streamEvents(
     options: EventSyncOptions = {},
   ): AsyncIterable<SessionEventRecord> {
-    return streamServerSentEvents(async () => {
-      const query = {
-        cursor: options.cursor,
-        sessionId: options.sessionId,
-      };
-      const response = await this.fetchImpl(
-        `${this.baseUrl}${this.path("/events/stream", query)}`,
-        {
-          headers: this.headers(),
-          signal: options.signal,
-        },
-      );
-      if (!response.ok) await this.throwResponseError(response);
-      if (!response.body) throw new Error("Event stream response has no body");
-      return response.body;
-    }, decodeSessionEventRecord);
-  }
-
-  private async request<T>(
-    path: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      signal?: AbortSignal;
-      auth?: boolean;
-    } = {},
-  ): Promise<T> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method: options.method ?? "GET",
-      headers: this.headers(options.body !== undefined, options.auth ?? true),
-      body:
-        options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
-    });
-    if (!response.ok) await this.throwResponseError(response);
-    return (await response.json()) as T;
-  }
-
-  private headers(json = false, auth = true): Record<string, string> {
-    return {
-      ...(auth && this.token ? { authorization: `Bearer ${this.token}` } : {}),
-      ...(json ? { "content-type": "application/json" } : {}),
-    };
-  }
-
-  /** 拼 query；跳过 undefined / null / false。 */
-  private path(pathname: string, query: Record<string, unknown> = {}): string {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value === undefined || value === null || value === false) continue;
-      params.set(key, String(value));
-    }
-    const qs = params.toString();
-    return qs ? `${pathname}?${qs}` : pathname;
-  }
-
-  private async throwResponseError(response: Response): Promise<never> {
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      body = await response.text().catch(() => "");
-    }
-    const message =
-      body &&
-      typeof body === "object" &&
-      "error" in body &&
-      typeof body.error === "string"
-        ? body.error
-        : body &&
-            typeof body === "object" &&
-            "message" in body &&
-            typeof body.message === "string"
-          ? body.message
-          : `OpenHarness API request failed with ${response.status}`;
-    throw new OpenHarnessApiError(message, response.status, body);
-  }
-}
-
-function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
-  return (
-    typeof ReadableStream !== "undefined" && value instanceof ReadableStream
-  );
-}
-
-function attachmentRangeHeader(
-  range: DownloadAttachmentOptions["range"],
-): string | undefined {
-  if (!range) return undefined;
-  const { start, end, suffixBytes } = range;
-  if (suffixBytes !== undefined) {
-    if (start !== undefined || end !== undefined) {
-      throw new Error("suffixBytes cannot be combined with start or end");
-    }
-    assertPositiveSafeInteger(suffixBytes, "suffixBytes");
-    return `bytes=-${suffixBytes}`;
-  }
-  if (start === undefined && end === undefined) return undefined;
-  if (start === undefined) {
-    throw new Error("range start is required when end is provided");
-  }
-  assertNonNegativeSafeInteger(start, "start");
-  if (end === undefined) return `bytes=${start}-`;
-  assertNonNegativeSafeInteger(end, "end");
-  if (end < start) throw new Error("range end must not be less than start");
-  return `bytes=${start}-${end}`;
-}
-
-function assertNonNegativeSafeInteger(value: number, field: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${field} must be a non-negative safe integer`);
-  }
-}
-
-function assertPositiveSafeInteger(value: number, field: string): void {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${field} must be a positive safe integer`);
-  }
-}
-
-/**
- * 将 SSE 字节流解析为 `SessionEventRecord` 异步迭代。
- * `open` 负责建立连接并返回 response body，便于重试或注入。
- */
-export async function* streamServerSentEvents<T = SessionEventRecord>(
-  open: () => Promise<ReadableStream<Uint8Array>>,
-  decode: (value: unknown) => T = (value) => value as T,
-): AsyncIterable<T> {
-  const reader = (await open()).getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      buffer += decoder.decode(chunk.value, { stream: true });
-      // SSE 事件以空行分隔
-      const frames = buffer.split(/\r?\n\r?\n/);
-      buffer = frames.pop() ?? "";
-      for (const frame of frames) {
-        const event = parseSseFrame(frame);
-        if (event !== undefined) yield decode(event);
-      }
-    }
-    buffer += decoder.decode();
-    const event = parseSseFrame(buffer);
-    if (event !== undefined) yield decode(event);
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-/** 解析单个 SSE frame 的 `data:` 行，得到事件 JSON。 */
-function parseSseFrame(frame: string): unknown | undefined {
-  let data = "";
-  for (const line of frame.split(/\r?\n/)) {
-    if (!line || line.startsWith(":")) continue;
-    if (line.startsWith("data:")) data += line.slice(5).trimStart();
-  }
-  if (!data) return undefined;
-  return JSON.parse(data) as unknown;
-}
-
-export class IncompatibleProtocolError extends Error {
-  constructor(
-    readonly capabilities: ServerCapabilities,
-    message: string,
-  ) {
-    super(message);
-    this.name = "IncompatibleProtocolError";
+    return this.events.stream(options);
   }
 }

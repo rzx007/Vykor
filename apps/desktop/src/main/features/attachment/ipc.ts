@@ -237,7 +237,7 @@ async function getDefaultService(): Promise<AttachmentIpcService> {
 
 async function createDefaultService(): Promise<AttachmentIpcService> {
   const client = await desktopSessionService.daemonClient()
-  const capabilities = await client.capabilities()
+  const capabilities = await client.protocol.capabilities()
   const maxBytesPerFile = capabilities.attachments?.limits.maxBytesPerFile ?? 100 * 1024 * 1024
   const service = createAttachmentService({
     sourceTokenTtlMs: 5 * 60 * 1_000,

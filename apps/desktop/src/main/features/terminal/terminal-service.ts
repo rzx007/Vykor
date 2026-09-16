@@ -16,6 +16,8 @@ import { listDetectedTerminalShells, resolvePreferredTerminalShell } from "./det
 import { desktopSessionService } from "../session/session-service"
 import { desktopSettingsService } from "../settings/settings-service"
 
+type TerminalClient = Pick<OpenHarnessClient, "terminals">
+
 interface TerminalSubscription {
   controller: AbortController
 }
@@ -38,32 +40,32 @@ class DesktopTerminalService {
       preferred,
       settings.agentEnvironment === "native"
     )
-    return await withDaemonRetry((client) => client.createTerminal(next))
+    return await withDaemonRetry((client) => client.terminals.create(next))
   }
 
   async write(webContents: WebContents, input: TerminalWriteRequest): Promise<void> {
     this.ensureSubscription(webContents)
-    await withDaemonRetry((client) => client.writeTerminal(input))
+    await withDaemonRetry((client) => client.terminals.write(input))
   }
 
   async resize(webContents: WebContents, input: TerminalResizeRequest): Promise<void> {
     this.ensureSubscription(webContents)
-    await withDaemonRetry((client) => client.resizeTerminal(input))
+    await withDaemonRetry((client) => client.terminals.resize(input))
   }
 
   async read(webContents: WebContents, input: TerminalReadRequest): Promise<TerminalReadResult> {
     this.ensureSubscription(webContents)
-    return await withDaemonRetry((client) => client.readTerminal(input.terminalId))
+    return await withDaemonRetry((client) => client.terminals.read(input.terminalId))
   }
 
   async kill(webContents: WebContents, terminalId: string): Promise<void> {
     this.ensureSubscription(webContents)
-    await withDaemonRetry((client) => client.closeTerminal(terminalId))
+    await withDaemonRetry((client) => client.terminals.close(terminalId))
   }
 
   async list(webContents: WebContents): Promise<TerminalSessionInfo[]> {
     this.ensureSubscription(webContents)
-    return await withDaemonRetry((client) => client.listTerminals())
+    return await withDaemonRetry((client) => client.terminals.list())
   }
 
   async dispose(): Promise<void> {
@@ -85,7 +87,7 @@ class DesktopTerminalService {
   private async pumpEvents(webContents: WebContents, controller: AbortController): Promise<void> {
     try {
       const client = await desktopSessionService.daemonClient()
-      for await (const event of client.streamTerminalEvents({ signal: controller.signal })) {
+      for await (const event of client.terminals.streamEvents({ signal: controller.signal })) {
         if (controller.signal.aborted || webContents.isDestroyed()) return
         if (event.type === "data") webContents.send(IpcEvents.terminalData, event)
         else if (event.type === "status") webContents.send(IpcEvents.terminalStatus, event)
@@ -103,7 +105,7 @@ class DesktopTerminalService {
 export const desktopTerminalService = new DesktopTerminalService()
 
 async function withDaemonRetry<T>(
-  operation: (client: OpenHarnessClient) => Promise<T>
+  operation: (client: TerminalClient) => Promise<T>
 ): Promise<T> {
   try {
     return await operation(await desktopSessionService.daemonClient())

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { act } from "react";
+import { act, useState } from "react";
 import { testRender } from "@opentui/react/test-utils";
 
 import { useServerSync } from "./useServerSync";
@@ -1124,8 +1124,12 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
   const healthCalls = calls.filter((call) => new URL(call.url).pathname === "/health");
   const authenticatedCalls = calls.filter((call) => new URL(call.url).pathname !== "/health");
   expect(healthCalls.length).toBeGreaterThan(0);
-  expect(healthCalls.every((call) => (call.init.headers as Record<string, string> | undefined)?.authorization === undefined)).toBe(true);
-  expect(authenticatedCalls.every((call) => (call.init.headers as Record<string, string> | undefined)?.authorization === "Bearer tok")).toBe(true);
+  expect(healthCalls.every((call) => new Headers(call.init.headers).get("authorization") === null)).toBe(true);
+  expect(
+    authenticatedCalls
+      .filter((call) => new Headers(call.init.headers).get("authorization") !== "Bearer tok")
+      .map((call) => call.url),
+  ).toEqual([]);
 
   await act(async () => {
     captured?.sendRequest({
@@ -1433,6 +1437,91 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
 
   renderer.destroy();
 }, 15_000);
+
+test("useServerSync reconnects the active session when daemon identity changes", async () => {
+  const session: SessionRecord = {
+    id: "s1",
+    cwd: process.cwd(),
+    title: "Session",
+    model: "m",
+    status: "idle",
+    metadata: { runtime: { model: "m" } },
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  let firstStreamAborted = false;
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const requestUrl = new URL(String(url));
+    calls.push({ url: requestUrl.toString(), init: init ?? {} });
+    const pathname = requestUrl.pathname;
+    if (pathname === "/health") return jsonResponse({ ok: true });
+    if (pathname === "/settings") return jsonResponse({ settings: { model: "m" } });
+    if (pathname === "/commands") return jsonResponse({ commands: [] });
+    if (pathname === "/sessions") return jsonResponse({ sessions: [session] });
+    if (pathname === "/sessions/s1") return jsonResponse({ session });
+    if (pathname === "/sessions/s1/state") {
+      return jsonResponse({
+        cursor: requestUrl.host === "daemon-next.test" ? 2 : 1,
+        session,
+        inputs: [],
+        messages: [],
+        parts: [],
+        runs: [],
+        attempts: [],
+        tasks: [],
+        permissions: [],
+      });
+    }
+    if (pathname === "/sessions/s1/mcp") return jsonResponse({ servers: [] });
+    if (pathname === "/jobs") return jsonResponse({ jobs: [] });
+    if (pathname === "/events/stream") {
+      const signal = init?.signal;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            signal?.addEventListener("abort", () => {
+              if (requestUrl.host === "daemon.test") firstStreamAborted = true;
+              controller.close();
+            }, { once: true });
+          },
+        }),
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    }
+    return jsonResponse({});
+  }) as typeof fetch;
+
+  let switchDaemon: (() => void) | undefined;
+  function Harness() {
+    const [daemon, setDaemon] = useState({ url: "http://daemon.test", token: "old", model: "m" });
+    switchDaemon = () => setDaemon({ url: "http://daemon-next.test", token: "next", model: "m" });
+    useServerSync({ daemon });
+    return <box />;
+  }
+
+  const { renderer, renderOnce } = await testRender(<Harness />, { width: 80, height: 24 });
+  for (let i = 0; i < 20 && !calls.some((call) => call.url.includes("daemon.test/events/stream")); i += 1) {
+    await act(async () => {
+      await renderOnce();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  }
+
+  await act(async () => {
+    switchDaemon?.();
+    await renderOnce();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+
+  expect(firstStreamAborted).toBe(true);
+  expect(calls.some((call) => call.url.includes("daemon-next.test/sessions/s1/state"))).toBe(true);
+  const nextStream = calls.find((call) => call.url.includes("daemon-next.test/events/stream"));
+  expect(nextStream).toBeTruthy();
+  expect(new Headers(nextStream?.init.headers).get("authorization")).toBe("Bearer next");
+  renderer.destroy();
+});
 
 test("useServerSync starts on the new-session home when the latest session uses an older model", async () => {
   const oldSession: SessionRecord = {

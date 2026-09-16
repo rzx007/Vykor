@@ -1,4 +1,14 @@
-import type { OpenHarnessClient } from "../transport/http-client.js";
+import type {
+  AuthResource,
+  DevelopmentResource,
+  JobResource,
+  PluginResource,
+  ProjectResource,
+  ProviderResource,
+  SessionResource,
+  SystemResource,
+} from "../resources/index.js";
+import type { ProtocolClient } from "../protocol/index.js";
 import type { CommandCatalogEntry, OpenHarnessClientState } from "../types/index.js";
 import type { JobReadResult, JobSnapshot } from "@openharness/protocol";
 import { patchSessionRuntimeMetadata } from "@openharness/protocol";
@@ -18,8 +28,32 @@ export type RuntimeDiagnostics = {
   architecture?: string;
 };
 
+export interface SessionCommandClient {
+  protocol: Pick<ProtocolClient, "health">;
+  system: Pick<
+    SystemResource,
+    | "getSettings" | "patchSettings" | "getSessionMcp"
+    | "listMemory" | "getMemory" | "addMemory" | "removeMemory"
+    | "getContextPreview" | "getContextStatus" | "getContextUsage"
+    | "startDream" | "getProfileStatus" | "initProfile" | "listOutputStyles"
+  >;
+  providers: Pick<ProviderResource, "listProviders">;
+  auth: Pick<AuthResource, "getStatus" | "login" | "logout">;
+  projects: Pick<ProjectResource, "init">;
+  plugins: Pick<PluginResource, "list" | "enable" | "disable" | "reload">;
+  development: Pick<
+    DevelopmentResource,
+    "listAgentPersonas" | "listHooks" | "getGitDiff" | "getGitBranch" | "getGitStatus" | "gitCommit"
+  >;
+  sessions: Pick<
+    SessionResource,
+    "update" | "compact" | "rewind" | "remember" | "export" | "getUsage"
+  >;
+  jobs: Pick<JobResource, "list" | "createBackgroundShell" | "read" | "cancel">;
+}
+
 export type SessionCommandHost = {
-  client: OpenHarnessClient;
+  client: SessionCommandClient;
   sessionId?: string;
   /** Project cwd for memory/git/plugins/etc. */
   cwd: string;
@@ -245,7 +279,7 @@ export async function dispatchSessionCommand(
     }
     patchStatus({ permission_mode: next });
     if (sessionId) {
-      await client.updateSession(sessionId, {
+      await client.sessions.update(sessionId, {
         metadata: patchSessionRuntimeMetadata({}, { permissionMode: next }),
       });
     }
@@ -287,7 +321,7 @@ export async function dispatchSessionCommand(
 
   if (slash?.name === "/version") {
     await readPresentation("version", "Version", async () => {
-      const health = await client.health();
+      const health = await client.protocol.health();
       return `OpenHarness${health.version ? ` v${health.version}` : ""}`;
     });
     return "handled";
@@ -309,7 +343,7 @@ export async function dispatchSessionCommand(
     const args = slash.args.trim();
     if (!args || args === "show") {
       await readPresentation(`config:${cwd}`, "Config", async () => {
-        const settings = await client.getSettings();
+        const settings = await client.system.getSettings();
         return JSON.stringify(settings, null, 2);
       });
       return "handled";
@@ -319,7 +353,7 @@ export async function dispatchSessionCommand(
       emit("Usage: /config [show | set KEY VALUE]");
       return "handled";
     }
-    await client.patchSettings({ path: setMatch[1], value: setMatch[2].trim() });
+    await client.system.patchSettings({ path: setMatch[1], value: setMatch[2].trim() });
     emit(`Set ${setMatch[1]} = ${setMatch[2].trim()}`);
     return "handled";
   }
@@ -327,7 +361,7 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/provider") {
     if (!slash.args) {
       await readPresentation("providers", "Provider", async () => {
-        const providers = await client.listProviders();
+        const providers = await client.providers.listProviders();
         const lines = ["Available providers:", ""];
         for (const provider of providers) {
           const marker = provider.active ? " (active)" : "";
@@ -338,7 +372,7 @@ export async function dispatchSessionCommand(
       });
       return "handled";
     }
-    const settings = await client.patchSettings(
+    const settings = await client.system.patchSettings(
       slash.args === "auto"
         ? { provider: "auto" }
         : { provider: slash.args },
@@ -353,7 +387,7 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/mcp") {
     if (!sessionId) return "handled";
     await readPresentation(`mcp:${sessionId}`, "MCP", async () => {
-      const servers = await client.getSessionMcp(sessionId);
+      const servers = await client.system.getSessionMcp(sessionId);
       if (servers.length === 0) return "No MCP servers connected.";
       return [
         `MCP Servers (${servers.length}):`,
@@ -376,7 +410,7 @@ export async function dispatchSessionCommand(
     const [sub, id, ...extra] = args.split(/\s+/).filter(Boolean);
     if ((!sub || sub === "list") && !id) {
       await readPresentation(`jobs:${sessionId}`, "Jobs", async () => {
-        const jobs = await client.listJobs({
+        const jobs = await client.jobs.list({
           sessionId,
           includeFinished: true,
           limit: 100,
@@ -392,13 +426,13 @@ export async function dispatchSessionCommand(
     }
     if (sub === "show" && id && extra.length === 0) {
       await readPresentation(`job:${sessionId}:${id}`, "Jobs", async () => {
-        const result = await client.readJob(id, { sessionId });
+        const result = await client.jobs.read(id, { sessionId });
         return formatJobReadResult(result);
       });
       return "handled";
     }
     if (sub === "cancel" && id && extra.length === 0) {
-      const snapshot = await client.cancelJob(id, {
+      const snapshot = await client.jobs.cancel(id, {
         sessionId,
         reason: "Cancelled from slash command",
       });
@@ -416,7 +450,7 @@ export async function dispatchSessionCommand(
       return "handled";
     }
     if (!sessionId) return "handled";
-    const result = await client.createBackgroundShell({ sessionId, command });
+    const result = await client.jobs.createBackgroundShell({ sessionId, command });
     emit(`Background shell started: ${result.jobId}. Use /jobs to inspect it.`);
     return "handled";
   }
@@ -426,7 +460,7 @@ export async function dispatchSessionCommand(
     const [sub, ...rest] = args.split(/\s+/).filter(Boolean);
     if (!sub || sub === "list") {
       await readPresentation(`memory:${cwd}:list`, "Memory", async () => {
-        const listed = await client.listMemory({ cwd });
+        const listed = await client.system.listMemory({ cwd });
         if (listed.entries.length === 0) return `Memory directory: ${listed.directory}\nNo entries found.`;
         return [
           `Memory entries (${listed.entries.length}):`,
@@ -445,7 +479,7 @@ export async function dispatchSessionCommand(
     if (sub === "show" && rest[0]) {
       const memoryId = rest[0];
       await readPresentation(`memory:${cwd}:show:${memoryId}`, "Memory", async () => {
-        const entry = await client.getMemory(memoryId, { cwd });
+        const entry = await client.system.getMemory(memoryId, { cwd });
         return [
           `ID:       ${entry.id}`,
           `Created:  ${new Date(entry.createdAt).toISOString()}`,
@@ -463,12 +497,12 @@ export async function dispatchSessionCommand(
         emit("Usage: /memory add <content>");
         return "handled";
       }
-      const entry = await client.addMemory({ cwd, content });
+      const entry = await client.system.addMemory({ cwd, content });
       emit(`Memory added: ${entry.id}`);
       return "handled";
     }
     if (sub === "remove" && rest[0]) {
-      await client.removeMemory(rest[0], { cwd });
+      await client.system.removeMemory(rest[0], { cwd });
       emit(`Memory removed: ${rest[0]}`);
       return "handled";
     }
@@ -481,7 +515,7 @@ export async function dispatchSessionCommand(
     const [sub, provider, apiKey] = args.split(/\s+/).filter(Boolean);
     if (!sub || sub === "status") {
       await readPresentation("auth:status", "Auth", async () => {
-        const auth = await client.getAuthStatus();
+        const auth = await client.auth.getStatus();
         const lines = ["Credential status:", "", "  Auth sources:"];
         lines.push(
           `    codex_subscription: ${auth.codex.configured ? "ready" : auth.codex.state} (${auth.codex.source})`,
@@ -508,7 +542,7 @@ export async function dispatchSessionCommand(
         emit("Usage: /auth login <provider> <api-key> or /auth login codex");
         return "handled";
       }
-      const result = await client.authLogin({ provider, apiKey });
+      const result = await client.auth.login({ provider, apiKey });
       emit(result.message);
       return "handled";
     }
@@ -517,7 +551,7 @@ export async function dispatchSessionCommand(
         emit("Usage: /auth logout <provider>");
         return "handled";
       }
-      const result = await client.authLogout({ provider });
+      const result = await client.auth.logout({ provider });
       emit(result.message);
       return "handled";
     }
@@ -528,7 +562,7 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/context") {
     const action = slash.args.trim().split(/\s+/).filter(Boolean)[0] ?? "preview";
     if (action === "status") {
-      await readPresentation(`context:${cwd}:status`, "Context", async () => await client.getContextStatus({ cwd }));
+      await readPresentation(`context:${cwd}:status`, "Context", async () => await client.system.getContextStatus({ cwd }));
       return "handled";
     }
     if (action === "usage") {
@@ -536,7 +570,7 @@ export async function dispatchSessionCommand(
         `context:${cwd}:usage:${sessionId ?? "none"}`,
         "Context",
         async () => {
-          const result = await client.getContextUsage({
+          const result = await client.system.getContextUsage({
             cwd,
             ...(sessionId ? { sessionId } : {}),
           });
@@ -549,7 +583,7 @@ export async function dispatchSessionCommand(
       emit("Usage: /context [preview|status|usage]");
       return "handled";
     }
-    await readPresentation(`context:${cwd}`, "Context", async () => await client.getContextPreview({ cwd }));
+    await readPresentation(`context:${cwd}`, "Context", async () => await client.system.getContextPreview({ cwd }));
     return "handled";
   }
 
@@ -563,13 +597,13 @@ export async function dispatchSessionCommand(
       .join(" ");
     const estimatedTokens = Math.max(1, Math.ceil(text.length / 4));
     const [memory, jobsResult, settings] = await Promise.all([
-      client.listMemory({ cwd }).catch(() => ({ entries: [] as Array<{ id: string }> })),
-      client.listJobs({ sessionId, includeFinished: true, limit: 100 })
+      client.system.listMemory({ cwd }).catch(() => ({ entries: [] as Array<{ id: string }> })),
+      client.jobs.list({ sessionId, includeFinished: true, limit: 100 })
         .then((jobs) => ({ jobs }))
         .catch((error: unknown) => ({
           error: error instanceof Error ? error.message : String(error),
         })),
-      client.getSettings().catch(() => ({} as Record<string, unknown>)),
+      client.system.getSettings().catch(() => ({} as Record<string, unknown>)),
     ]);
     const jobsSummary = "jobs" in jobsResult
       ? String(jobsResult.jobs.length)
@@ -587,7 +621,7 @@ export async function dispatchSessionCommand(
 
   if (slash?.name === "/agents") {
     if (!sessionId) return "handled";
-    const agents = await client.listJobs({
+    const agents = await client.jobs.list({
       sessionId,
       kinds: ["agent"],
       includeFinished: true,
@@ -615,21 +649,21 @@ export async function dispatchSessionCommand(
       emit("Count must be a positive integer");
       return "handled";
     }
-    const result = await client.rewindSession(sessionId, { count });
+    const result = await client.sessions.rewind(sessionId, { count });
     emit(`Rewound ${result.turns} turn(s), removed ${result.removed} message(s).`);
     return "handled";
   }
 
   if (slash?.name === "/compact") {
     if (!sessionId) return "handled";
-    const result = await client.compactSession(sessionId);
+    const result = await client.sessions.compact(sessionId);
     emit(`Conversation compacted (${result.messageCount} messages retained).`);
     return "handled";
   }
 
   if (slash?.name === "/remember") {
     if (!sessionId) return "handled";
-    const result = await client.rememberSession(sessionId);
+    const result = await client.sessions.remember(sessionId);
     if (result.skipped) {
       emit(`未写入记忆:${result.reason ?? "skipped"}`);
       return "handled";
@@ -640,7 +674,7 @@ export async function dispatchSessionCommand(
 
   if (slash?.name === "/dream") {
     const preview = slash.args.includes("--preview");
-    const result = await client.startDream({
+    const result = await client.system.startDream({
       cwd,
       ...(sessionId ? { sessionId } : {}),
       preview,
@@ -652,11 +686,11 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/profile") {
     const action = slash.args.trim().split(/\s+/).filter(Boolean)[0] ?? "status";
     if (action === "status" || action === "show") {
-      emit(await client.getProfileStatus());
+      emit(await client.system.getProfileStatus());
       return "handled";
     }
     if (action === "init") {
-      emit(await client.initProfile());
+      emit(await client.system.initProfile());
       return "handled";
     }
     emit("Usage: /profile [status|init]");
@@ -665,12 +699,12 @@ export async function dispatchSessionCommand(
 
   if (slash?.name === "/doctor") {
     const [settings, auth, memory, mcp, jobsResult] = await Promise.all([
-      client.getSettings().catch(() => ({}) as Record<string, unknown>),
-      client.getAuthStatus().catch(() => null),
-      client.listMemory({ cwd }).catch(() => ({ directory: "(unavailable)", entries: [] as Array<{ id: string }> })),
-      sessionId ? client.getSessionMcp(sessionId).catch(() => []) : Promise.resolve([]),
+      client.system.getSettings().catch(() => ({}) as Record<string, unknown>),
+      client.auth.getStatus().catch(() => null),
+      client.system.listMemory({ cwd }).catch(() => ({ directory: "(unavailable)", entries: [] as Array<{ id: string }> })),
+      sessionId ? client.system.getSessionMcp(sessionId).catch(() => []) : Promise.resolve([]),
       sessionId
-        ? client.listJobs({ sessionId, includeFinished: true, limit: 100 })
+        ? client.jobs.list({ sessionId, includeFinished: true, limit: 100 })
           .then((jobs) => ({ jobs }))
           .catch((error: unknown) => ({
             error: error instanceof Error ? error.message : String(error),
@@ -732,7 +766,7 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/effort") {
     const level = slash.args.trim().split(/\s+/).filter(Boolean)[0];
     if (!level) {
-      const settings = await client.getSettings();
+      const settings = await client.system.getSettings();
       emit(`Current effort: ${String(settings.effort ?? "medium")}`);
       return "handled";
     }
@@ -740,20 +774,20 @@ export async function dispatchSessionCommand(
       emit("Invalid effort. Use: low, medium, or high");
       return "handled";
     }
-    await client.patchSettings({ effort: level });
+    await client.system.patchSettings({ effort: level });
     emit(`Effort set to: ${level}`);
     return "handled";
   }
 
   if (slash?.name === "/fast") {
     const arg = slash.args.trim().split(/\s+/).filter(Boolean)[0];
-    const settings = await client.getSettings();
+    const settings = await client.system.getSettings();
     const current = settings.fastMode === true;
     let next: boolean;
     if (arg === "on") next = true;
     else if (arg === "off") next = false;
     else next = !current;
-    await client.patchSettings({ fastMode: next });
+    await client.system.patchSettings({ fastMode: next });
     emit(`Fast mode: ${next ? "ON" : "OFF"}`);
     return "handled";
   }
@@ -761,7 +795,7 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/turns") {
     const value = slash.args.trim().split(/\s+/).filter(Boolean)[0];
     if (!value) {
-      const settings = await client.getSettings();
+      const settings = await client.system.getSettings();
       emit(`Current max turns: ${String(settings.maxTurns ?? "(default)")}`);
       return "handled";
     }
@@ -770,7 +804,7 @@ export async function dispatchSessionCommand(
       emit("Value must be between 1 and 512");
       return "handled";
     }
-    await client.patchSettings({ maxTurns: n });
+    await client.system.patchSettings({ maxTurns: n });
     emit(`Max turns set to: ${n}`);
     return "handled";
   }
@@ -779,7 +813,7 @@ export async function dispatchSessionCommand(
     if (!sessionId) return "handled";
     if (slash.name === "/cost") {
       await readPresentation(`cost:${sessionId}`, "Cost", async () => {
-        const usage = await client.getSessionUsage(sessionId);
+        const usage = await client.sessions.getUsage(sessionId);
         return [
           "Cost estimate:",
           `  Model:         ${usage.model}`,
@@ -797,7 +831,7 @@ export async function dispatchSessionCommand(
       return "handled";
     }
     await readPresentation(`usage:${sessionId}`, "Usage", async () => {
-      const usage = await client.getSessionUsage(sessionId);
+      const usage = await client.sessions.getUsage(sessionId);
       return [
         "Token usage:",
         `  Input:         ${usage.inputTokens.toLocaleString()}`,
@@ -817,7 +851,7 @@ export async function dispatchSessionCommand(
     const args = slash.args.trim().split(/\s+/).filter(Boolean);
     const forceJson = args.includes("--json");
     const filename = args.find((arg) => !arg.startsWith("--"));
-    const result = await client.exportSession(sessionId, {
+    const result = await client.sessions.export(sessionId, {
       ...(filename ? { filename } : {}),
       json: forceJson,
     });
@@ -827,8 +861,8 @@ export async function dispatchSessionCommand(
 
   if (slash?.name === "/output-style") {
     const args = slash.args.trim();
-    const styles = await client.listOutputStyles();
-    const settings = await client.getSettings();
+    const styles = await client.system.listOutputStyles();
+    const settings = await client.system.getSettings();
     const current = typeof settings.outputStyle === "string" ? settings.outputStyle : "default";
     const firstSpace = args.search(/\s/);
     const first = firstSpace === -1 ? args : args.slice(0, firstSpace);
@@ -856,13 +890,13 @@ export async function dispatchSessionCommand(
       emit(`Unknown output style: ${styleName}`);
       return "handled";
     }
-    await client.patchSettings({ outputStyle: styleName });
+    await client.system.patchSettings({ outputStyle: styleName });
     emit(`Output style set to ${styleName}`);
     return "handled";
   }
 
   if (slash?.name === "/init") {
-    emit(await client.initProject({ cwd }));
+    emit(await client.projects.init({ cwd }));
     return "handled";
   }
 
@@ -871,7 +905,7 @@ export async function dispatchSessionCommand(
     const sub = args[0];
     if (!sub || sub === "list") {
       await readPresentation(`plugins:${cwd}`, "Plugin", async () => {
-        const listed = await client.listPlugins({ cwd });
+        const listed = await client.plugins.list({ cwd });
         if (listed.plugins.length === 0) return "No plugins discovered.";
         return [
           ...listed.plugins.map(
@@ -888,8 +922,8 @@ export async function dispatchSessionCommand(
     }
     if ((sub === "enable" || sub === "disable") && args[1]) {
       const result = sub === "enable"
-        ? await client.enablePlugin(args[1], { cwd })
-        : await client.disablePlugin(args[1], { cwd });
+        ? await client.plugins.enable(args[1], { cwd })
+        : await client.plugins.disable(args[1], { cwd });
       emit(result.message);
       return "handled";
     }
@@ -898,14 +932,14 @@ export async function dispatchSessionCommand(
   }
 
   if (slash?.name === "/reload-plugins") {
-    const result = await client.reloadPlugins({ cwd });
+    const result = await client.plugins.reload({ cwd });
     emit(formatPluginReload(result));
     return "handled";
   }
 
   if (slash?.name === "/hooks") {
     await readPresentation(`hooks:${cwd}:${sessionId ?? "global"}`, "Hooks", async () => {
-      const hooks = await client.listHooks({
+      const hooks = await client.development.listHooks({
         cwd,
         ...(sessionId ? { sessionId } : {}),
       });
@@ -932,7 +966,7 @@ export async function dispatchSessionCommand(
   }
 
   if (slash?.name === "/subagents") {
-    const agents = await client.listAgentPersonas();
+    const agents = await client.development.listAgentPersonas();
     emit(
       [
         `Available subagent personas (${agents.length}):`,
@@ -951,24 +985,24 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/diff") {
     const full = slash.args.trim().split(/\s+/).includes("full");
     await readPresentation(`git:diff:${cwd}:${full ? "full" : "summary"}`, "Diff", async () =>
-      await client.getGitDiff({ cwd, full }));
+      await client.development.getGitDiff({ cwd, full }));
     return "handled";
   }
 
   if (slash?.name === "/branch") {
     const list = slash.args.trim().split(/\s+/).includes("list");
     await readPresentation(`git:branch:${cwd}:${list ? "list" : "current"}`, "Branch", async () =>
-      await client.getGitBranch({ cwd, list }));
+      await client.development.getGitBranch({ cwd, list }));
     return "handled";
   }
 
   if (slash?.name === "/commit") {
     const message = slash.args.trim();
     if (!message) {
-      await readPresentation(`git:status:${cwd}`, "Commit", async () => await client.getGitStatus({ cwd }));
+      await readPresentation(`git:status:${cwd}`, "Commit", async () => await client.development.getGitStatus({ cwd }));
       return "handled";
     }
-    emit(await client.gitCommit({ cwd, message }));
+    emit(await client.development.gitCommit({ cwd, message }));
     return "handled";
   }
 

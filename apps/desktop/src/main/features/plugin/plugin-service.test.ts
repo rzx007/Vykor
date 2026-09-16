@@ -3,15 +3,20 @@ import { resolve } from "node:path"
 import type { PluginInfo } from "@openharness/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const daemon = vi.hoisted(() => ({
-  listPlugins: vi.fn(),
-  enablePlugin: vi.fn(),
-  disablePlugin: vi.fn(),
-  uninstallPlugin: vi.fn(),
-  reloadPlugins: vi.fn(),
-  previewPluginArchive: vi.fn(),
-  installPluginArchive: vi.fn(),
-}))
+const daemon = vi.hoisted(() => {
+  const plugins = {
+    list: vi.fn(),
+    enable: vi.fn(),
+    disable: vi.fn(),
+    uninstall: vi.fn(),
+    reload: vi.fn(),
+    previewArchive: vi.fn(),
+    installArchive: vi.fn(),
+    previewGit: vi.fn(),
+    installGit: vi.fn(),
+  }
+  return { plugins }
+})
 
 const electron = vi.hoisted(() => ({
   BrowserWindow: { fromWebContents: vi.fn() },
@@ -50,16 +55,16 @@ const examplePlugin: PluginInfo = {
 describe("DesktopPluginService", () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    daemon.listPlugins.mockResolvedValue({ plugins: [examplePlugin], warnings: [] })
-    daemon.enablePlugin.mockResolvedValue({ message: "enabled" })
-    daemon.disablePlugin.mockResolvedValue({ message: "disabled" })
-    daemon.uninstallPlugin.mockResolvedValue({ message: "uninstalled" })
-    daemon.reloadPlugins.mockResolvedValue({
+    daemon.plugins.list.mockResolvedValue({ plugins: [examplePlugin], warnings: [] })
+    daemon.plugins.enable.mockResolvedValue({ message: "enabled" })
+    daemon.plugins.disable.mockResolvedValue({ message: "disabled" })
+    daemon.plugins.uninstall.mockResolvedValue({ message: "uninstalled" })
+    daemon.plugins.reload.mockResolvedValue({
       plugins: [examplePlugin],
       warnings: ["cache rebuilt"],
       message: "reloaded",
     })
-    daemon.previewPluginArchive.mockResolvedValue({
+    daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "a".repeat(64),
       identity: { id: "archive-plugin", name: "archive-plugin", version: "1.0.0" },
       requestedPermissions: [],
@@ -67,7 +72,7 @@ describe("DesktopPluginService", () => {
       inventory: {},
       diagnostics: [],
     })
-    daemon.installPluginArchive.mockResolvedValue({ message: "installed" })
+    daemon.plugins.installArchive.mockResolvedValue({ message: "installed" })
     electron.BrowserWindow.fromWebContents.mockReset()
     electron.dialog.showOpenDialog.mockReset()
   })
@@ -81,17 +86,17 @@ describe("DesktopPluginService", () => {
       plugins: [examplePlugin],
       warnings: [],
     })
-    expect(daemon.listPlugins).toHaveBeenCalledWith({ cwd: resolve("C:/workspace/project") })
+    expect(daemon.plugins.list).toHaveBeenCalledWith({ cwd: resolve("C:/workspace/project") })
   })
 
   it("mutates a plugin and refreshes the snapshot", async () => {
     const service = new DesktopPluginService()
     const snapshot = await service.disable({ cwd: "C:/workspace/project", pluginId: " context7 " })
 
-    expect(daemon.disablePlugin).toHaveBeenCalledWith("context7", {
+    expect(daemon.plugins.disable).toHaveBeenCalledWith("context7", {
       cwd: resolve("C:/workspace/project"),
     })
-    expect(daemon.listPlugins).toHaveBeenCalledOnce()
+    expect(daemon.plugins.list).toHaveBeenCalledOnce()
     expect(snapshot.plugins).toEqual([examplePlugin])
   })
 
@@ -100,8 +105,8 @@ describe("DesktopPluginService", () => {
     const snapshot = await service.reload({ cwd: "C:/workspace/project" })
 
     expect(snapshot.warnings).toEqual(["cache rebuilt"])
-    expect(daemon.reloadPlugins).toHaveBeenCalledWith({ cwd: resolve("C:/workspace/project") })
-    expect(daemon.listPlugins).not.toHaveBeenCalled()
+    expect(daemon.plugins.reload).toHaveBeenCalledWith({ cwd: resolve("C:/workspace/project") })
+    expect(daemon.plugins.list).not.toHaveBeenCalled()
   })
 
   it("returns cancelled without previewing when the native ZIP picker is cancelled", async () => {
@@ -111,7 +116,7 @@ describe("DesktopPluginService", () => {
     await expect((service as any).importArchive({} as never, { cwd: "C:/workspace" })).resolves.toEqual({
       status: "cancelled",
     })
-    expect(daemon.previewPluginArchive).not.toHaveBeenCalled()
+    expect(daemon.plugins.previewArchive).not.toHaveBeenCalled()
   })
 
   it("installs a permission-free archive immediately and never exposes its path or digest", async () => {
@@ -121,11 +126,11 @@ describe("DesktopPluginService", () => {
 
     const result = await (service as any).importArchive({} as never, { cwd: "C:/workspace" })
 
-    expect(daemon.previewPluginArchive).toHaveBeenCalledWith({
+    expect(daemon.plugins.previewArchive).toHaveBeenCalledWith({
       cwd: resolve("C:/workspace"),
       archivePath: "C:/private/Plugin.ZIP",
     })
-    expect(daemon.installPluginArchive).toHaveBeenCalledWith({
+    expect(daemon.plugins.installArchive).toHaveBeenCalledWith({
       cwd: resolve("C:/workspace"),
       archivePath: "C:/private/Plugin.ZIP",
       expectedArchiveDigest: "a".repeat(64),
@@ -137,7 +142,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("reinstalls immediately when existing approval covers requested permissions", async () => {
-    daemon.previewPluginArchive.mockResolvedValue({
+    daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "d".repeat(64),
       identity: { id: "archive-plugin", name: "Archive Plugin", version: "1.1.0" },
       requestedPermissions: ["process:spawn"],
@@ -152,7 +157,7 @@ describe("DesktopPluginService", () => {
     await expect(
       (service as any).importArchive({} as never, { cwd: "C:/workspace" })
     ).resolves.toMatchObject({ status: "installed", pluginName: "Archive Plugin" })
-    expect(daemon.installPluginArchive).toHaveBeenCalledWith({
+    expect(daemon.plugins.installArchive).toHaveBeenCalledWith({
       cwd: resolve("C:/workspace"),
       archivePath: "C:/private/plugin.zip",
       expectedArchiveDigest: "d".repeat(64),
@@ -161,7 +166,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("stores an approval once, confirms using stored archive details, and consumes the selection", async () => {
-    daemon.previewPluginArchive.mockResolvedValue({
+    daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "b".repeat(64),
       identity: { id: "archive-plugin", name: "Archive Plugin", version: "1.0.0" },
       requestedPermissions: ["network", "process:spawn"],
@@ -188,7 +193,7 @@ describe("DesktopPluginService", () => {
       status: "installed",
       pluginName: "Archive Plugin",
     })
-    expect(daemon.installPluginArchive).toHaveBeenCalledWith({
+    expect(daemon.plugins.installArchive).toHaveBeenCalledWith({
       cwd: resolve("C:/workspace"),
       archivePath: "C:/private/plugin.zip",
       expectedArchiveDigest: "b".repeat(64),
@@ -209,7 +214,7 @@ describe("DesktopPluginService", () => {
       now: () => now,
       createSelectionId: () => `selection-${++nextId}`,
     })
-    daemon.previewPluginArchive.mockResolvedValue({
+    daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "c".repeat(64),
       identity: { id: "archive-plugin", name: "Archive Plugin", version: "1.0.0" },
       requestedPermissions: ["network"],
@@ -251,7 +256,7 @@ describe("DesktopPluginService", () => {
       status: "installed",
       pluginName: "archive-plugin",
     })
-    expect(daemon.previewPluginArchive).toHaveBeenCalledWith({
+    expect(daemon.plugins.previewArchive).toHaveBeenCalledWith({
       cwd: resolve("C:/workspace"),
       archivePath: "C:/private/plugin.tar.gz",
     })
@@ -265,7 +270,7 @@ describe("DesktopPluginService", () => {
       message: "请选择 ZIP、TAR 或 TAR.GZ 格式的插件包。",
       details: [{ code: "plugin_archive_invalid_extension" }],
     })
-    expect(daemon.previewPluginArchive).not.toHaveBeenCalled()
+    expect(daemon.plugins.previewArchive).not.toHaveBeenCalled()
   })
 
   it("binds the default ZIP picker to the invoking window", async () => {
@@ -283,7 +288,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("returns only safe structured diagnostic details without leaking Server messages or absolute paths", async () => {
-    daemon.previewPluginArchive.mockRejectedValue({
+    daemon.plugins.previewArchive.mockRejectedValue({
       body: {
         code: "plugin_archive_invalid",
         message: "raw preview error for C:/private/plugin.zip",
@@ -326,7 +331,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("returns unknown after a direct-install connection failure without retrying the mutation", async () => {
-    daemon.installPluginArchive
+    daemon.plugins.installArchive
       .mockRejectedValueOnce(new Error("ECONNRESET"))
       .mockRejectedValueOnce({ body: { code: "plugin_archive_permissions_not_approved" } })
     const refreshDaemonClient = vi.fn(async () => daemon as never)
@@ -342,14 +347,14 @@ describe("DesktopPluginService", () => {
       message: "安装结果暂时无法确认，请刷新插件列表。",
       details: [{ code: "plugin_archive_install_unknown" }],
     })
-    expect(daemon.installPluginArchive).toHaveBeenCalledOnce()
+    expect(daemon.plugins.installArchive).toHaveBeenCalledOnce()
     expect(refreshDaemonClient).not.toHaveBeenCalled()
     expect(JSON.stringify(result)).not.toContain("C:/private")
     expect(JSON.stringify(result)).not.toContain("a".repeat(64))
   })
 
   it("returns unknown and consumes the selection after a confirmation-install connection failure without retrying the mutation", async () => {
-    daemon.previewPluginArchive.mockResolvedValue({
+    daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "e".repeat(64),
       identity: { id: "archive-plugin", name: "Archive Plugin", version: "1.0.0" },
       requestedPermissions: ["network"],
@@ -364,7 +369,7 @@ describe("DesktopPluginService", () => {
       refreshDaemonClient,
     })
     const preview = await (service as any).importArchive({} as never, { cwd: "C:/workspace" })
-    daemon.installPluginArchive
+    daemon.plugins.installArchive
       .mockRejectedValueOnce(new Error("Failed to fetch"))
       .mockRejectedValueOnce({ body: { code: "plugin_archive_permissions_not_approved" } })
 
@@ -374,7 +379,7 @@ describe("DesktopPluginService", () => {
       message: "安装结果暂时无法确认，请刷新插件列表。",
       details: [{ code: "plugin_archive_install_unknown" }],
     })
-    expect(daemon.installPluginArchive).toHaveBeenCalledOnce()
+    expect(daemon.plugins.installArchive).toHaveBeenCalledOnce()
     expect(refreshDaemonClient).not.toHaveBeenCalled()
     await expect((service as any).confirmArchive({ cwd: "C:/workspace", selectionId: preview.selectionId })).resolves.toMatchObject({
       status: "failed",
@@ -383,7 +388,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("keeps a structured install rejection as failed instead of unknown", async () => {
-    daemon.installPluginArchive.mockRejectedValue({
+    daemon.plugins.installArchive.mockRejectedValue({
       body: { code: "plugin_archive_permissions_not_approved", message: "raw rejection" },
     })
     const service = new DesktopPluginService({ chooseArchive: async () => "C:/private/plugin.zip" })
@@ -396,7 +401,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("returns installed with refreshPending when an immediate archive install succeeds but its snapshot cannot refresh", async () => {
-    daemon.listPlugins.mockRejectedValue(new Error("Failed to fetch"))
+    daemon.plugins.list.mockRejectedValue(new Error("Failed to fetch"))
     const service = new DesktopPluginService({ chooseArchive: async () => "C:/private/plugin.zip" })
 
     await expect((service as any).importArchive({} as never, { cwd: "C:/workspace" })).resolves.toEqual({
@@ -404,11 +409,11 @@ describe("DesktopPluginService", () => {
       pluginName: "archive-plugin",
       refreshPending: true,
     })
-    expect(daemon.installPluginArchive).toHaveBeenCalledOnce()
+    expect(daemon.plugins.installArchive).toHaveBeenCalledOnce()
   })
 
   it("returns installed with refreshPending when a confirmed archive install succeeds but its snapshot cannot refresh", async () => {
-    daemon.previewPluginArchive.mockResolvedValue({
+    daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "d".repeat(64),
       identity: { id: "archive-plugin", name: "Archive Plugin", version: "1.0.0" },
       requestedPermissions: ["network"],
@@ -421,13 +426,13 @@ describe("DesktopPluginService", () => {
       createSelectionId: () => "selection-refresh-pending",
     })
     const preview = await (service as any).importArchive({} as never, { cwd: "C:/workspace" })
-    daemon.listPlugins.mockRejectedValue(new Error("Failed to fetch"))
+    daemon.plugins.list.mockRejectedValue(new Error("Failed to fetch"))
 
     await expect((service as any).confirmArchive({ cwd: "C:/workspace", selectionId: preview.selectionId })).resolves.toEqual({
       status: "installed",
       pluginName: "Archive Plugin",
       refreshPending: true,
     })
-    expect(daemon.installPluginArchive).toHaveBeenCalledOnce()
+    expect(daemon.plugins.installArchive).toHaveBeenCalledOnce()
   })
 })

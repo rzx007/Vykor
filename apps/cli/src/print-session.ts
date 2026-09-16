@@ -35,6 +35,8 @@ export interface PrintSessionOptions {
   daemonToken?: string;
 }
 
+type PermissionClient = Pick<OpenHarnessClient, "permissions">;
+
 /** Build daemon session.metadata from CLI overrides / settings. */
 export function buildPrintSessionMetadata(
   settings: Settings,
@@ -85,7 +87,7 @@ function runTerminalStatus(
 }
 
 async function autoReplyPermissions(
-  client: OpenHarnessClient,
+  client: PermissionClient,
   state: OpenHarnessClientState,
   sessionId: string,
   approve: boolean,
@@ -97,7 +99,7 @@ async function autoReplyPermissions(
     if (request.status !== "pending" || seen.has(request.id)) continue;
     seen.add(request.id);
     const status = approve ? "approved" : "denied";
-    await client.replyPermission(request.id, { status, decision: "once" });
+    await client.permissions.reply(request.id, { status, decision: "once" });
     process.stderr.write(
       approve
         ? `[print] auto-approved permission for ${request.toolName}\n`
@@ -238,7 +240,7 @@ export async function runPrintSession(
 
   const cwd = options.cwd ? options.cwd : process.cwd();
   const model = options.model ?? settings.model;
-  const session = await client.createSession({
+  const session = await client.sessions.create({
     cwd,
     model,
     title: "print",
@@ -268,9 +270,9 @@ export async function runPrintSession(
 
       if (update.source === "snapshot" && !admitted) {
         admitted = true;
-        const response = await client.admitPrompt(session.id, { id: createPromptRequestId(), items: [{ type: "text", text: prompt }] });
+        const response = await client.sessions.admitPrompt(session.id, { id: createPromptRequestId(), items: [{ type: "text", text: prompt }] });
         runId = response.run?.id;
-        observedState = mergeSessionSnapshot(update.state, await client.getSessionState(session.id));
+        observedState = mergeSessionSnapshot(update.state, await client.sessions.getState(session.id));
         renderSessionSnapshot(observedState, session.id, renderer, options.outputFormat, partTextSeen);
       }
 
@@ -290,7 +292,7 @@ export async function runPrintSession(
       if (!admitted) continue;
       const terminal = runTerminalStatus(observedState, session.id, runId);
       if (terminal === "active" || terminal === "unknown") continue;
-      observedState = mergeSessionSnapshot(observedState, await client.getSessionState(session.id));
+      observedState = mergeSessionSnapshot(observedState, await client.sessions.getState(session.id));
       renderSessionSnapshot(observedState, session.id, renderer, options.outputFormat, partTextSeen);
       if (terminal === "failed") exitCode = 1;
       controller.abort();

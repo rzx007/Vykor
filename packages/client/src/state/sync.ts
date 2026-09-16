@@ -15,11 +15,22 @@ import {
 } from "./reducer.js";
 import type {
   EventSyncOptions,
+  ListEventsOptions,
   OpenHarnessClientState,
   SessionEventRecord,
+  SessionStateSnapshot,
   SyncEventUpdate,
 } from "../types/index.js";
-import type { OpenHarnessClient } from "../transport/http-client.js";
+
+export interface SyncEventsClient {
+  sessions: {
+    getState(sessionId: string, options?: { signal?: AbortSignal }): Promise<SessionStateSnapshot>;
+  };
+  events: {
+    list(options?: ListEventsOptions & { signal?: AbortSignal }): Promise<SessionEventRecord[]>;
+    stream(options?: EventSyncOptions & { transportReconnect?: boolean }): AsyncIterable<SessionEventRecord>;
+  };
+}
 
 const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
   Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
@@ -35,19 +46,19 @@ export function hydrateState(events: Iterable<SessionEventRecord>): OpenHarnessC
  * live 阶段若 `applyEvent` 因重复 seq 返回同一引用，则跳过 yield。
  */
 export async function* syncEvents(
-  client: OpenHarnessClient,
+  client: SyncEventsClient,
   options: EventSyncOptions = {},
 ): AsyncIterable<SyncEventUpdate> {
   let state = createInitialClientState();
   if (options.sessionId) {
-    const snapshot = await client.getSessionState(options.sessionId, { signal: options.signal });
+    const snapshot = await client.sessions.getState(options.sessionId, { signal: options.signal });
     state = applySessionSnapshot(state, snapshot);
     yield { state, source: "snapshot" };
 
     yield* liveWithReconnect(client, state, options, snapshot.cursor);
     return;
   }
-  const replay = await client.listEvents({
+  const replay = await client.events.list({
     cursor: options.cursor,
     sessionId: options.sessionId,
     signal: options.signal,
@@ -62,7 +73,7 @@ export async function* syncEvents(
 }
 
 async function* liveWithReconnect(
-  client: OpenHarnessClient,
+  client: SyncEventsClient,
   initialState: OpenHarnessClientState,
   options: EventSyncOptions,
   initialCursor: number,
@@ -74,14 +85,15 @@ async function* liveWithReconnect(
 
   while (!options.signal?.aborted) {
     try {
-      for await (const event of client.streamEvents({
+      for await (const event of client.events.stream({
         cursor,
         sessionId: options.sessionId,
         signal: options.signal,
+        transportReconnect: false,
       })) {
         attempt = 0;
         if (event.seq > state.lastSeq + 1 && !options.sessionId) {
-          const gap = await client.listEvents({
+          const gap = await client.events.list({
             cursor: state.lastSeq,
             signal: options.signal,
           });

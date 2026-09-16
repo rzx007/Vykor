@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { extname, resolve } from "node:path"
 
-import type { OpenHarnessClient } from "@openharness/client"
+import type { OpenHarnessClient, PluginResource } from "@openharness/client"
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 
 import type {
@@ -21,6 +21,8 @@ import type {
 } from "../../../shared/plugin-types"
 import { desktopSessionService } from "../session/session-service"
 import { PluginArchiveSelectionStore, PluginGitSelectionStore } from "./selection-store"
+
+type PluginClient = Pick<OpenHarnessClient, "plugins">
 
 const SELECTION_TTL_MS = 10 * 60 * 1_000
 
@@ -54,33 +56,33 @@ export class DesktopPluginService {
 
   async snapshot(input: DesktopPluginContextInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    const result = await this.withDaemonRetry((client) => client.listPlugins({ cwd }))
+    const result = await this.withDaemonRetry((client) => client.plugins.list({ cwd }))
     return { cwd, plugins: result.plugins, warnings: result.warnings }
   }
 
   async enable(input: DesktopPluginActionInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    await this.withDaemonRetry((client) => client.enablePlugin(requirePluginId(input.pluginId), { cwd }))
+    await this.withDaemonRetry((client) => client.plugins.enable(requirePluginId(input.pluginId), { cwd }))
     return await this.snapshot({ cwd })
   }
 
   async disable(input: DesktopPluginActionInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    await this.withDaemonRetry((client) => client.disablePlugin(requirePluginId(input.pluginId), { cwd }))
+    await this.withDaemonRetry((client) => client.plugins.disable(requirePluginId(input.pluginId), { cwd }))
     return await this.snapshot({ cwd })
   }
 
   async uninstall(input: DesktopPluginActionInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
     await this.withDaemonRetry((client) =>
-      client.uninstallPlugin(requirePluginId(input.pluginId), { cwd })
+      client.plugins.uninstall(requirePluginId(input.pluginId), { cwd })
     )
     return await this.snapshot({ cwd })
   }
 
   async reload(input: DesktopPluginContextInput): Promise<DesktopPluginSnapshot> {
     const cwd = normalizeCwd(input.cwd)
-    const result = await this.withDaemonRetry((client) => client.reloadPlugins({ cwd }))
+    const result = await this.withDaemonRetry((client) => client.plugins.reload({ cwd }))
     return { cwd, plugins: result.plugins, warnings: result.warnings }
   }
 
@@ -102,10 +104,10 @@ export class DesktopPluginService {
       ])
     }
 
-    let preview: Awaited<ReturnType<OpenHarnessClient["previewPluginArchive"]>>
+    let preview: Awaited<ReturnType<PluginResource["previewArchive"]>>
     try {
       preview = await this.withDaemonRetry((client) =>
-        client.previewPluginArchive({ cwd, archivePath })
+        client.plugins.previewArchive({ cwd, archivePath })
       )
     } catch (error) {
       return archiveFailureFromError(error)
@@ -175,10 +177,10 @@ export class DesktopPluginService {
       return archiveFailure("请输入 Git 地址。", [{ code: "plugin_git_url_required" }])
     }
 
-    let preview: Awaited<ReturnType<OpenHarnessClient["previewPluginGit"]>>
+    let preview: Awaited<ReturnType<PluginResource["previewGit"]>>
     try {
       preview = await this.withDaemonRetry((client) =>
-        client.previewPluginGit({ cwd, url, ...(ref ? { ref } : {}) })
+        client.plugins.previewGit({ cwd, url, ...(ref ? { ref } : {}) })
       )
     } catch (error) {
       return gitFailureFromError(error)
@@ -262,7 +264,7 @@ export class DesktopPluginService {
     expectedArchiveDigest: string,
     approvedPermissions: string[]
   ): Promise<void> {
-    await (await this.daemonClient()).installPluginArchive({
+    await (await this.daemonClient()).plugins.installArchive({
       cwd,
       archivePath,
       expectedArchiveDigest,
@@ -277,7 +279,7 @@ export class DesktopPluginService {
     expectedSourceDigest: string,
     approvedPermissions: string[]
   ): Promise<void> {
-    await (await this.daemonClient()).installPluginGit({
+    await (await this.daemonClient()).plugins.installGit({
       cwd,
       url,
       ...(ref ? { ref } : {}),
@@ -287,7 +289,7 @@ export class DesktopPluginService {
   }
 
   private async withDaemonRetry<T>(
-    operation: (client: OpenHarnessClient) => Promise<T>
+    operation: (client: PluginClient) => Promise<T>
   ): Promise<T> {
     try {
       return await operation(await this.daemonClient())

@@ -101,6 +101,12 @@
 
 renderer 只有一处订阅入口：`store.ts` 的 `attachDesktopSessionEvents`。第一个调用者注册 `sessions.onUpdated`，后续调用只增加计数；最后一个清理函数解除订阅并取消 Git 刷新，因而不会留下重复监听。若曾全部解绑，下一次从 0 变为 1 时调用 `resyncActiveSessionSnapshot` 对仍是 active 的会话补快照；它不会推进导航代次、不会替换在途 `open-session`，同一轮的第二个引用也不会重复打开。
 
+所有权威 durable `SessionView` 状态更新统一收口于唯一的对账入口 `applySessionUpdate`：
+- 所有来自 IPC 的权威快照（`sessions.onUpdated` 与 `resyncActiveSessionSnapshot`）必须经过该入口完成受控写入；
+- 各 feature actions（prompt、attachment、goal、project）只修改其自身的 operation/draft/view 临时交互状态，不直接绕过权威入口伪造持久化 terminal 状态；
+- 打开会话 `openSession` 在验证 generation 与 operation 所有权后，仅将初次权威 snapshot 与项目工作区原子写入，随后由 `applySessionUpdate` 负责后续所有增量对账；
+- Notification 监听器（`notification-observer.ts`）纯粹作为只读观察者消费状态变更，不二次分发或重新应用事件。
+
 打开会话的流程如下：
 
 1. **入口 → 标记所有者。** 路由或侧边栏调用 `openSession(sessionId)`；它推进导航代次，在该会话 runtime 写 `open-session` operation，并先把该 ID 设为 active。

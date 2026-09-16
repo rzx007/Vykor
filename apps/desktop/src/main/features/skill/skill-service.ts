@@ -8,6 +8,8 @@ import { app } from "electron"
 import { isOutsideProjectWorkspacePath } from "../session/outside-project-workspace"
 import { desktopSessionService } from "../session/session-service"
 
+type SkillClient = Pick<OpenHarnessClient, "development">
+
 export interface DesktopSkillServiceOptions {
   documentsPath?: string
 }
@@ -18,7 +20,7 @@ export class DesktopSkillService {
   async snapshot(input: DesktopSkillSnapshotInput): Promise<DesktopSkillSnapshot> {
     void input
     return filterOutsideProjectWorkspaces(
-      await withDaemonRetry((client) => client.listSkills()),
+      await withDaemonRetry((client) => client.development.listSkills()),
       this.documentsPath()
     )
   }
@@ -26,7 +28,7 @@ export class DesktopSkillService {
   async remove(input: DesktopSkillRemoveInput): Promise<DesktopSkillSnapshot> {
     return filterOutsideProjectWorkspaces(
       await withDaemonRetry((client) =>
-        client.removeSkill(input.id, { expectedContent: input.expectedContent })
+        client.development.removeSkill(input.id, { expectedContent: input.expectedContent })
       ),
       this.documentsPath()
     )
@@ -40,7 +42,7 @@ export class DesktopSkillService {
 export const desktopSkillService = new DesktopSkillService()
 
 async function withDaemonRetry<T>(
-  operation: (client: OpenHarnessClient) => Promise<T>
+  operation: (client: SkillClient) => Promise<T>
 ): Promise<T> {
   try {
     return await operation(await desktopSessionService.daemonClient())

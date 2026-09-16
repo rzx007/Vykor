@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { fileURLToPath } from "node:url";
 import type { PluginInfo } from "@openharness/client";
+
+const clientMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+}));
+
+vi.mock("../ensure-daemon.js", () => ({
+  ensureLocalDaemon: vi.fn(async () => ({ url: "http://127.0.0.1:4000", token: "test-token" })),
+}));
+vi.mock("@openharness/client", () => ({
+  OpenHarnessClient: class {
+    plugins = { list: clientMocks.list };
+  },
+}));
+
 import { createPluginCommand, formatPluginList } from "./plugin";
 
 function plugin(partial: Partial<PluginInfo> = {}): PluginInfo {
@@ -87,6 +101,18 @@ describe("formatPluginList", () => {
 });
 
 describe("createPluginCommand", () => {
+  it("routes list through the plugins resource and preserves JSON output", async () => {
+    const result = { plugins: [plugin()], warnings: [] };
+    clientMocks.list.mockResolvedValueOnce(result);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await createPluginCommand().parseAsync(["list", "--cwd", ".", "--json"], { from: "user" });
+      expect(clientMocks.list).toHaveBeenCalledWith({ cwd: process.cwd() });
+      expect(log).toHaveBeenCalledWith(JSON.stringify(result, null, 2));
+    } finally {
+      log.mockRestore();
+    }
+  });
   it("previews Codex conversion with permission and loss approvals in JSON", async () => {
     const output: string[] = [];
     const log = vi.spyOn(console, "log").mockImplementation(value => { output.push(String(value)); });

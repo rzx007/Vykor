@@ -66,6 +66,9 @@ export function applySessionSnapshot(
   state: OpenHarnessClientState,
   snapshot: SessionStateSnapshot,
 ): OpenHarnessClientState {
+  const knownCursor = state.snapshotCursorBySession[snapshot.session.id] ?? 0;
+  if (snapshot.cursor < knownCursor) return state;
+
   const partsByMessageId: SessionBucket["partsByMessageId"] = {};
   for (const part of snapshot.parts) {
     const parts = partsByMessageId[part.messageId] ?? [];

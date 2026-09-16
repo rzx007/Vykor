@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "client-public-api-contract.schema.json",
+  "type": "object",
+  "required": ["version", "carrier", "summary", "entries"],
+  "properties": {
+    "version": { "const": 1 },
+    "carrier": {
+      "type": "object",
+      "required": ["defaultCarrier", "carrierRule", "evidenceFields", "commitRule"]
+    },
+    "summary": {
+      "type": "object",
+      "required": ["runtimeExports", "typeExports", "clientMembers", "totalEntries"]
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "classification",
+          "replacement",
+          "deprecatedSince",
+          "deprecatedCarrierRelease",
+          "retentionCarrierRelease",
+          "removeIn"
+        ],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "kind": {
+            "enum": ["runtime-export", "type-export", "client-property", "client-getter", "client-method"]
+          },
+          "classification": {
+            "enum": ["long-term", "advanced", "compatibility", "retained-unclassified"]
+          },
+          "replacement": { "type": ["string", "null"] },
+          "deprecatedSince": { "type": ["string", "null"] },
+          "deprecatedCarrierRelease": { "$ref": "#/$defs/releaseEvidence" },
+          "retentionCarrierRelease": { "$ref": "#/$defs/releaseEvidence" },
+          "removeIn": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "releaseEvidence": {
+      "oneOf": [
+        { "type": "null" },
+        { "const": "pending" },
+        {
+          "type": "object",
+          "required": ["carrier", "version", "date", "channel"],
+          "properties": {
+            "carrier": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 },
+            "date": { "type": "string", "format": "date" },
+            "channel": { "type": "string", "minLength": 1 },
+            "releaseNoteUrl": { "type": "string", "format": "uri" },
+            "commit": { "type": "string", "minLength": 7 }
+          },
+          "anyOf": [
+            { "required": ["releaseNoteUrl"] },
+            { "required": ["commit"] }
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
