@@ -97,7 +97,7 @@ async function autoReplyPermissions(
     if (request.status !== "pending" || seen.has(request.id)) continue;
     seen.add(request.id);
     const status = approve ? "approved" : "denied";
-    await client.replyPermission(request.id, { status, decision: "once" });
+    await client.permissions.reply(request.id, { status, decision: "once" });
     process.stderr.write(
       approve
         ? `[print] auto-approved permission for ${request.toolName}\n`
@@ -290,7 +290,7 @@ export async function runPrintSession(
       if (!admitted) continue;
       const terminal = runTerminalStatus(observedState, session.id, runId);
       if (terminal === "active" || terminal === "unknown") continue;
-      observedState = mergeSessionSnapshot(observedState, await client.getSessionState(session.id));
+      observedState = mergeSessionSnapshot(observedState, await client.sessions.getState(session.id));
       renderSessionSnapshot(observedState, session.id, renderer, options.outputFormat, partTextSeen);
       if (terminal === "failed") exitCode = 1;
       controller.abort();

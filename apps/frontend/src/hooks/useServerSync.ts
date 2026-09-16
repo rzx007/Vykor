@@ -803,7 +803,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
       sessionMode: nextSessionModeRef.current,
       pluginsEnabled: daemon?.pluginsEnabled,
     });
-    const session = await client.createSession({
+    const session = await client.sessions.create({
       cwd,
       model,
       title: title?.trim() || "TUI",
@@ -831,7 +831,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         setLocalBusy(false);
         return;
       }
-      const response = await client.admitPrompt(session.id, {
+      const response = await client.sessions.admitPrompt(session.id, {
         id: createPromptRequestId(),
         items: [{ type: "text", text: config.initial_prompt! }],
       });
@@ -983,7 +983,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
           if (catalogEntry?.kind === "template") {
             if (!sessionId) return;
             setLocalBusy(true);
-            const response = await client.admitPrompt(sessionId, {
+            const response = await client.sessions.admitPrompt(sessionId, {
               id: createPromptRequestId(),
               items: [
                 {
@@ -1010,7 +1010,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
           sessionId = session.id;
         }
         setLocalBusy(true);
-            const response = await client.admitPrompt(sessionId, {
+            const response = await client.sessions.admitPrompt(sessionId, {
               id: createPromptRequestId(),
               items: [{ type: "text", text: line }],
             });

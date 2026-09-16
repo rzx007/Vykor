@@ -299,12 +299,18 @@ describe("DesktopSessionService.listCommands", () => {
 
 function serviceWithClient(client: Record<string, unknown>): DesktopSessionService {
   const service = new DesktopSessionService()
-  const sessions = (client.sessions as Record<string, unknown> | undefined) ?? client
-  const projects = (client.projects as Record<string, unknown> | undefined) ?? client
   const fullClient = {
     ...client,
-    sessions,
-    projects,
+    sessions: (client.sessions as Record<string, unknown> | undefined) ?? {
+      create: client.createSession,
+      admitPrompt: client.admitPrompt,
+    },
+    projects: (client.projects as Record<string, unknown> | undefined) ?? {
+      list: client.listProjects,
+    },
+    permissions: (client.permissions as Record<string, unknown> | undefined) ?? {
+      reply: client.replyPermission,
+    },
   }
   ;(
     service as unknown as {

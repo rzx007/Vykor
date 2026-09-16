@@ -10,30 +10,36 @@ vi.mock("./ensure-daemon.js", () => ({
 
 vi.mock("@openharness/client", async () => {
   const actual = await vi.importActual<typeof import("@openharness/client")>("@openharness/client");
-  const MockClient = vi.fn();
-  const WrappedMockClient = new Proxy(MockClient, {
-    construct(target, args, newTarget) {
-      const instance = Reflect.construct(target, args, newTarget) as Record<string, unknown>;
-      instance.sessions ??= {
-        create: (...a: unknown[]) => (instance.createSession as Function)?.(...a),
-        admitPrompt: (...a: unknown[]) => (instance.admitPrompt as Function)?.(...a),
-        getState: (...a: unknown[]) => (instance.getSessionState as Function)?.(...a),
-      };
-      instance.permissions ??= {
-        reply: (...a: unknown[]) => (instance.replyPermission as Function)?.(...a),
-      };
-      return instance;
-    },
-  });
   return {
     ...actual,
-    OpenHarnessClient: WrappedMockClient,
+    OpenHarnessClient: vi.fn(),
   };
 });
 
 import { OpenHarnessClient } from "@openharness/client";
 import { ensureLocalDaemon } from "./ensure-daemon.js";
 import { runPrintSession } from "./print-session.js";
+
+function printClient(resources: {
+  create: ReturnType<typeof vi.fn>;
+  admitPrompt: ReturnType<typeof vi.fn>;
+  getState: ReturnType<typeof vi.fn>;
+  reply: ReturnType<typeof vi.fn>;
+  stream: () => AsyncIterable<unknown>;
+}) {
+  return {
+    sessions: {
+      create: resources.create,
+      admitPrompt: resources.admitPrompt,
+      getState: resources.getState,
+    },
+    permissions: { reply: resources.reply },
+    events: {
+      list: vi.fn(async () => []),
+      stream: resources.stream,
+    },
+  };
+}
 
 describe("runPrintSession", () => {
   let exitSpy: MockInstance<(code?: string | number | null) => never>;
@@ -89,14 +95,14 @@ describe("runPrintSession", () => {
     };
 
     const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
-    Client.mockImplementation(() => ({
-      createSession: vi.fn(async () => session),
+    Client.mockImplementation(() => printClient({
+      create: vi.fn(async () => session),
       admitPrompt: vi.fn(async () => ({
         input: { id: "i1", sessionId: "s1", seq: 1, delivery: "queue", items: [{ type: "text" as const, text: "hi" }],
         content: "hi", metadata: {}, createdAt: 2 },
         run,
       })),
-      getSessionState: vi.fn(async () => ({
+      getState: vi.fn(async () => ({
         cursor: 1,
         session,
         inputs: [],
@@ -106,8 +112,8 @@ describe("runPrintSession", () => {
         attempts: [],
         permissions: [],
       })),
-      replyPermission: vi.fn(),
-      streamEvents: async function* () {
+      reply: vi.fn(),
+      stream: async function* () {
         yield {
           id: "e2",
           seq: 2,
@@ -159,7 +165,7 @@ describe("runPrintSession", () => {
       { model: "m", cwd: "/tmp", daemonUrl: "https://daemon.example/", daemonToken: "remote-token" },
     );
 
-    expect(Client.mock.results[0]!.value.admitPrompt).toHaveBeenCalledWith("s1", { id: expect.any(String), items: [{ type: "text", text: "hi" }] });
+    expect(Client.mock.results[0]!.value.sessions.admitPrompt).toHaveBeenCalledWith("s1", { id: expect.any(String), items: [{ type: "text", text: "hi" }] });
     expect(writes.join("")).toContain("hello from daemon");
     expect(exitSpy).not.toHaveBeenCalled();
     expect(ensureLocalDaemon).not.toHaveBeenCalled();
@@ -251,14 +257,14 @@ describe("runPrintSession", () => {
       permissions: [],
     };
     const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
-    Client.mockImplementation(() => ({
-      createSession: vi.fn(async () => session),
+    Client.mockImplementation(() => printClient({
+      create: vi.fn(async () => session),
       admitPrompt: vi.fn(async () => ({
         input: { id: "i1", sessionId: "s1", seq: 1, delivery: "queue", items: [{ type: "text" as const, text: "hi" }],
         content: "hi", metadata: {}, createdAt: 2 },
         run: { ...run, status: "running", updatedAt: 2 },
       })),
-      getSessionState: vi.fn()
+      getState: vi.fn()
         .mockResolvedValueOnce({
           cursor: 1,
           session,
@@ -270,8 +276,8 @@ describe("runPrintSession", () => {
           permissions: [],
         })
         .mockResolvedValue(completedSnapshot),
-      replyPermission: vi.fn(),
-      streamEvents: async function* () {},
+      reply: vi.fn(),
+      stream: async function* () {},
     }));
 
     await runPrintSession(
@@ -348,14 +354,14 @@ describe("runPrintSession", () => {
       permissions: [],
     };
     const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
-    Client.mockImplementation(() => ({
-      createSession: vi.fn(async () => session),
+    Client.mockImplementation(() => printClient({
+      create: vi.fn(async () => session),
       admitPrompt: vi.fn(async () => ({
         input: { id: "i1", sessionId: "s1", seq: 1, delivery: "queue", items: [{ type: "text" as const, text: "hi" }],
         content: "hi", metadata: {}, createdAt: 2 },
         run: { ...run, status: "running", updatedAt: 2 },
       })),
-      getSessionState: vi.fn()
+      getState: vi.fn()
         .mockResolvedValueOnce({
           cursor: 1,
           session,
@@ -367,8 +373,8 @@ describe("runPrintSession", () => {
           permissions: [],
         })
         .mockResolvedValue(completedSnapshot),
-      replyPermission: vi.fn(),
-      streamEvents: async function* () {},
+      reply: vi.fn(),
+      stream: async function* () {},
     }));
 
     await runPrintSession(
@@ -394,14 +400,14 @@ describe("runPrintSession", () => {
       updatedAt: 1,
     }));
     const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
-    Client.mockImplementation(() => ({
-      createSession,
+    Client.mockImplementation(() => printClient({
+      create: createSession,
       admitPrompt: vi.fn(async () => ({
         input: { id: "i1", sessionId: "s1", seq: 1, delivery: "queue", items: [{ type: "text" as const, text: "hi" }],
         content: "hi", metadata: {}, createdAt: 2 },
         run: { id: "r1", sessionId: "s1", status: "completed", metadata: {}, createdAt: 2, updatedAt: 2 },
       })),
-      getSessionState: vi.fn(async () => ({
+      getState: vi.fn(async () => ({
         cursor: 0,
         session: {
           id: "s1",
@@ -420,8 +426,8 @@ describe("runPrintSession", () => {
         attempts: [],
         permissions: [],
       })),
-      replyPermission: vi.fn(),
-      streamEvents: async function* () {
+      reply: vi.fn(),
+      stream: async function* () {
         yield {
           id: "e1",
           seq: 1,

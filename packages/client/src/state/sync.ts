@@ -23,16 +23,13 @@ import type {
 } from "../types/index.js";
 
 export interface SyncEventsClient {
-  getSessionState(
-    sessionId: string,
-    options?: { signal?: AbortSignal },
-  ): Promise<SessionStateSnapshot>;
-  listEvents(
-    options?: ListEventsOptions & { signal?: AbortSignal },
-  ): Promise<SessionEventRecord[]>;
-  streamEvents(
-    options?: EventSyncOptions,
-  ): AsyncIterable<SessionEventRecord>;
+  sessions: {
+    getState(sessionId: string, options?: { signal?: AbortSignal }): Promise<SessionStateSnapshot>;
+  };
+  events: {
+    list(options?: ListEventsOptions & { signal?: AbortSignal }): Promise<SessionEventRecord[]>;
+    stream(options?: EventSyncOptions): AsyncIterable<SessionEventRecord>;
+  };
 }
 
 const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
@@ -54,14 +51,14 @@ export async function* syncEvents(
 ): AsyncIterable<SyncEventUpdate> {
   let state = createInitialClientState();
   if (options.sessionId) {
-    const snapshot = await client.getSessionState(options.sessionId, { signal: options.signal });
+    const snapshot = await client.sessions.getState(options.sessionId, { signal: options.signal });
     state = applySessionSnapshot(state, snapshot);
     yield { state, source: "snapshot" };
 
     yield* liveWithReconnect(client, state, options, snapshot.cursor);
     return;
   }
-  const replay = await client.listEvents({
+  const replay = await client.events.list({
     cursor: options.cursor,
     sessionId: options.sessionId,
     signal: options.signal,
@@ -88,14 +85,14 @@ async function* liveWithReconnect(
 
   while (!options.signal?.aborted) {
     try {
-      for await (const event of client.streamEvents({
+      for await (const event of client.events.stream({
         cursor,
         sessionId: options.sessionId,
         signal: options.signal,
       })) {
         attempt = 0;
         if (event.seq > state.lastSeq + 1 && !options.sessionId) {
-          const gap = await client.listEvents({
+          const gap = await client.events.list({
             cursor: state.lastSeq,
             signal: options.signal,
           });

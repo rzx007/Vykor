@@ -554,7 +554,7 @@ export class DesktopSessionService {
   async replyPermission(input: ReplyDesktopPermissionInput): Promise<void> {
     const permissionId = requireString(input.permissionId, "权限请求 ID")
     const client = await this.getClient()
-    await client.replyPermission(permissionId, {
+    await client.permissions.reply(permissionId, {
       status: input.status,
       decision: input.decision ?? "once",
       clientId: "desktop",
