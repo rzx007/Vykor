@@ -409,6 +409,14 @@ export class DesktopSessionService {
     return this.connection.refreshClient()
   }
 
+  get clientPromise(): Promise<OpenHarnessClient> | null {
+    return (this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null }).clientPromise
+  }
+
+  set clientPromise(promise: Promise<OpenHarnessClient> | null) {
+    ;(this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null }).clientPromise = promise
+  }
+
   private getClient(): Promise<OpenHarnessClient> {
     return this.connection.getClient()
   }
