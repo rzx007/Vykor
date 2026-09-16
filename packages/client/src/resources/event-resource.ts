@@ -24,7 +24,7 @@ export class EventResource {
   }
 
   stream(
-    options: EventSyncOptions = {},
+    options: EventSyncOptions & { transportReconnect?: boolean } = {},
   ): AsyncIterable<SessionEventRecord> {
     const query = {
       cursor: options.cursor,
@@ -36,7 +36,7 @@ export class EventResource {
         headers: this.transport.headers(),
         signal: options.signal,
         decode: decodeSessionEventRecord,
-        reconnect: true,
+        reconnect: options.transportReconnect ?? true,
       },
     );
   }

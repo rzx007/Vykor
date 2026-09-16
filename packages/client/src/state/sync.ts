@@ -28,7 +28,7 @@ export interface SyncEventsClient {
   };
   events: {
     list(options?: ListEventsOptions & { signal?: AbortSignal }): Promise<SessionEventRecord[]>;
-    stream(options?: EventSyncOptions): AsyncIterable<SessionEventRecord>;
+    stream(options?: EventSyncOptions & { transportReconnect?: boolean }): AsyncIterable<SessionEventRecord>;
   };
 }
 
@@ -89,6 +89,7 @@ async function* liveWithReconnect(
         cursor,
         sessionId: options.sessionId,
         signal: options.signal,
+        transportReconnect: false,
       })) {
         attempt = 0;
         if (event.seq > state.lastSeq + 1 && !options.sessionId) {
