@@ -62,8 +62,13 @@ export {
   selectSessionPermissions,
   selectSessionRuns,
   selectSessionTasks,
+  SessionSyncController,
   syncEvents,
   UnsupportedSessionEventSchemaVersionError,
+} from "./state/index.js";
+export type {
+  SessionSyncControllerOptions,
+  SyncConnectionStatus,
 } from "./state/index.js";
 export {
   LOCAL_COMMAND_DETAILS,
