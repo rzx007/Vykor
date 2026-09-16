@@ -14,7 +14,7 @@ function copySessionMigrations(): Plugin {
       const outputDirectory = resolve(options.dir ?? "out/main")
       cpSync(
         resolve("../../packages/services/src/session-runtime/migrations"),
-        resolve(outputDirectory, "migrations"),
+        resolve(outputDirectory, "../session-runtime/migrations"),
         { recursive: true }
       )
       cpSync(

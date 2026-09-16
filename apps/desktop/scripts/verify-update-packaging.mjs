@@ -56,6 +56,11 @@ if (verifyBuild) {
   } catch {
     failures.push("Desktop main build is missing host-entry.mjs")
   }
+  try {
+    await access(join(desktopRoot, "out", "session-runtime", "migrations", "meta", "_journal.json"))
+  } catch {
+    failures.push("Desktop main build is missing session-runtime migrations")
+  }
 }
 
 if (verifyArtifact) await verifyUpdateArtifacts(failures)
