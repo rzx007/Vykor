@@ -1,10 +1,16 @@
 import {
+  OPENHARNESS_USER_AGENT,
+  expandRequestHeaderTemplates,
   findByName,
   resolveProviderScopedBaseUrl,
   type BackendType,
 } from "@openharness/api";
 
 const VALIDATION_USER_AGENT = "openharness-ts/credential-validation";
+const VALIDATION_HEADER_CONTEXT = {
+  sessionId: "openharness-credential-validation",
+  userAgent: OPENHARNESS_USER_AGENT,
+};
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
 const DEFAULT_GEMINI_BASE_URL =
@@ -46,13 +52,17 @@ async function validateOpenAICompatibleCredential(
     input.baseUrl,
     input.backendType,
   );
+  const expandedHeaders = expandRequestHeaderTemplates(
+    input.headers,
+    VALIDATION_HEADER_CONTEXT,
+  );
   let response: Response;
   try {
     response = await fetch(`${baseUrl}/models`, {
       headers: {
         Authorization: `Bearer ${input.apiKey}`,
         "User-Agent": VALIDATION_USER_AGENT,
-        ...(input.headers ?? {}),
+        ...(expandedHeaders ?? {}),
       },
     });
   } catch (error) {

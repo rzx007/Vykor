@@ -290,10 +290,49 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           "Cannot update providers while session runs are active",
         );
       try {
-        const body = (await readJson(c)) as { apiKey?: unknown };
+        const body = (await readJson(c)) as {
+          apiKey?: unknown;
+          headers?: unknown;
+        };
+        const input = {
+          apiKey: typeof body.apiKey === "string" ? body.apiKey : "",
+          ...("headers" in body
+            ? { headers: body.headers as Record<string, string> }
+            : {}),
+        };
         const provider = await context.providerService.connectCatalog(
           c.req.param("id"),
-          typeof body.apiKey === "string" ? body.apiKey : "",
+          input,
+        );
+        await context.control.closeAllRuntimes();
+        return jsonResponse({ provider });
+      } catch (error) {
+        return providerMutationErrorResponse(error);
+      } finally {
+        lease.release();
+      }
+    })
+    .patch("/providers/catalog/:id", async (c) => {
+      if (!context.providerService?.updateCatalogHeaders) {
+        return errorResponse(
+          501,
+          "Catalog provider header updates are not configured",
+        );
+      }
+      const lease = context.control.acquireGlobalMutation();
+      if (!lease)
+        return errorResponse(
+          409,
+          "Cannot update providers while session runs are active",
+        );
+      try {
+        const body = (await readJson(c)) as { headers?: unknown };
+        if (!("headers" in body)) {
+          return errorResponse(400, "Request body must include headers");
+        }
+        const provider = await context.providerService.updateCatalogHeaders(
+          c.req.param("id"),
+          (body.headers ?? {}) as Record<string, string>,
         );
         await context.control.closeAllRuntimes();
         return jsonResponse({ provider });
