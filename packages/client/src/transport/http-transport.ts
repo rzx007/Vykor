@@ -23,7 +23,7 @@ export interface HttpTransportOptions {
 export interface HttpRequestOptions {
   method?: string;
   body?: unknown;
-  headers?: HeadersInit;
+  headers?: RequestInit["headers"];
   query?: Record<string, unknown>;
   signal?: AbortSignal;
   auth?: boolean;
@@ -275,7 +275,10 @@ export class HttpTransport {
   }
 }
 
-function mergeHeaders(defaults: HeadersInit, overrides?: HeadersInit): Record<string, string> {
+function mergeHeaders(
+  defaults: NonNullable<RequestInit["headers"]>,
+  overrides?: RequestInit["headers"],
+): Record<string, string> {
   const headers = new Headers(defaults);
   if (overrides) {
     new Headers(overrides).forEach((value, key) => headers.set(key, value));

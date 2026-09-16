@@ -13,7 +13,7 @@
 import { throwResponseError } from "./http-transport.js";
 
 export interface SseStreamOptions<T = unknown> {
-  headers?: HeadersInit;
+  headers?: RequestInit["headers"];
   signal?: AbortSignal;
   lastEventId?: string;
   decode?: (value: unknown) => T;
