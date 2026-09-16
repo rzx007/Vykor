@@ -28,6 +28,7 @@ import type {
   CompactSessionResponse,
   CreateBackgroundShellInput,
   CreateBackgroundShellResult,
+  ConnectCatalogProviderInput,
   CustomProviderInput,
   CreateScheduledTaskInput,
   HookInfo,
@@ -434,11 +435,41 @@ export class OpenHarnessClient {
   async connectCatalogProvider(
     id: string,
     apiKey: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ProviderInfo>;
+  async connectCatalogProvider(
+    id: string,
+    input: ConnectCatalogProviderInput,
+    options?: { signal?: AbortSignal },
+  ): Promise<ProviderInfo>;
+  async connectCatalogProvider(
+    id: string,
+    apiKeyOrInput: string | ConnectCatalogProviderInput,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<ProviderInfo> {
+    const body: ConnectCatalogProviderInput =
+      typeof apiKeyOrInput === "string"
+        ? { apiKey: apiKeyOrInput }
+        : apiKeyOrInput;
+    const response = await this.request<{ provider: ProviderInfo }>(
+      `/providers/catalog/${encodeURIComponent(id)}/connect`,
+      { method: "POST", body, signal: options.signal },
+    );
+    return response.provider;
+  }
+
+  async updateCatalogProviderHeaders(
+    id: string,
+    headers: Record<string, string>,
     options: { signal?: AbortSignal } = {},
   ): Promise<ProviderInfo> {
     const response = await this.request<{ provider: ProviderInfo }>(
-      `/providers/catalog/${encodeURIComponent(id)}/connect`,
-      { method: "POST", body: { apiKey }, signal: options.signal },
+      `/providers/catalog/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        body: { headers },
+        signal: options.signal,
+      },
     );
     return response.provider;
   }
