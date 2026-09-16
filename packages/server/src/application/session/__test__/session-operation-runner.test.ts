@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import type { SessionEventRecord } from "@openharness/protocol";
 
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
+import { ApplicationEventService } from "../../events/application-event-service.js";
+import { SessionEventPublisher } from "../session-event-publisher.js";
 import { SessionOperationRunner } from "../session-operation-runner.js";
 
 function deferred<T>() {
@@ -26,6 +29,35 @@ function createRunner(assertReady = vi.fn()) {
     assertReady,
   });
   return { runner, operationGate, events, assertReady };
+}
+
+function event(seq: number): SessionEventRecord {
+  return {
+    id: `event-${seq}`,
+    seq,
+    schemaVersion: 1,
+    type: "session.updated",
+    sessionId: "s1",
+    payload: {},
+    createdAt: seq,
+  };
+}
+
+function createPublishedRunner() {
+  const durable: SessionEventRecord[] = [];
+  const store = {
+    latestEventSeq: () => durable.at(-1)?.seq ?? 0,
+    listEvents: ({ afterSeq = 0 } = {}) =>
+      durable.filter((item) => item.seq > afterSeq),
+  };
+  const eventService = new ApplicationEventService(store);
+  const publisher = new SessionEventPublisher(store, eventService);
+  const runner = new SessionOperationRunner({
+    sessions: { get: (id) => ({ id, cwd: `/repo/${id}` }) as any },
+    operationGate: new DaemonOperationGate(),
+    events: publisher,
+  });
+  return { durable, eventService, publisher, runner };
 }
 
 describe("SessionOperationRunner", () => {
@@ -89,14 +121,15 @@ describe("SessionOperationRunner", () => {
     barrier.release();
   });
 
-  it("releases the lease after errors and publishes each successful operation once", async () => {
+  it("releases the lease and publishes the durable boundary after errors", async () => {
     const { runner, operationGate, events } = createRunner();
     await expect(
       runner.run("s1", async () => {
         throw new Error("failed work");
       }),
     ).rejects.toThrow("failed work");
-    expect(events.publishSince).not.toHaveBeenCalled();
+    expect(events.publishSince).toHaveBeenCalledOnce();
+    expect(events.publishSince).toHaveBeenLastCalledWith(11);
 
     const barrier = operationGate.tryEnterBarrier(
       { kind: "session", sessionId: "s1", cwd: "/repo/s1" },
@@ -107,7 +140,40 @@ describe("SessionOperationRunner", () => {
 
     await expect(runner.run("s1", async () => "ok")).resolves.toBe("ok");
     expect(events.checkpoint).toHaveBeenCalledTimes(2);
-    expect(events.publishSince).toHaveBeenCalledTimes(1);
+    expect(events.publishSince).toHaveBeenCalledTimes(2);
     expect(events.publishSince).toHaveBeenCalledWith(11);
+  });
+
+  it("does not enqueue a durable event twice when nested work already published it", async () => {
+    const { durable, eventService, publisher, runner } = createPublishedRunner();
+    const iterator = eventService.subscribe().stream[Symbol.asyncIterator]();
+
+    await runner.run("s1", async () => {
+      durable.push(event(1));
+      publisher.publishSince(0);
+    });
+    durable.push(event(2));
+    publisher.publish(event(2));
+
+    await expect(iterator.next()).resolves.toMatchObject({ value: { seq: 1 } });
+    await expect(iterator.next()).resolves.toMatchObject({ value: { seq: 2 } });
+    await iterator.return?.();
+  });
+
+  it("publishes durable events committed before work throws", async () => {
+    const { durable, eventService, publisher, runner } = createPublishedRunner();
+    const iterator = eventService.subscribe().stream[Symbol.asyncIterator]();
+
+    await expect(
+      runner.run("s1", async () => {
+        durable.push(event(1));
+        throw new Error("dispatch unavailable");
+      }),
+    ).rejects.toThrow("dispatch unavailable");
+    durable.push(event(2));
+    publisher.publish(event(2));
+
+    await expect(iterator.next()).resolves.toMatchObject({ value: { seq: 1 } });
+    await iterator.return?.();
   });
 });

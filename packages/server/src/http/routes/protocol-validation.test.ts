@@ -21,15 +21,14 @@ function sessionRoutes(createSession = vi.fn()) {
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
       },
-      application: {
+      commands: {
         createSession,
-        getSession: vi.fn(),
         updateSession: vi.fn(),
         archiveSessionTree: vi.fn(),
         deleteSessionTree: vi.fn(),
         forkSession: vi.fn(),
-        admitPrompt: vi.fn(),
       },
+      interactions: { warmSession: vi.fn() },
       traces: { get: vi.fn() },
     }),
     createSession,

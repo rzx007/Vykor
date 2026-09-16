@@ -52,11 +52,13 @@ export class SessionOperationRunner {
 
       const checkpoint = this.context.events.checkpoint();
       try {
-        const result = await work();
-        this.context.events.publishSince(checkpoint);
-        return result;
+        return await work();
       } finally {
-        lease.release();
+        try {
+          this.context.events.publishSince(checkpoint);
+        } finally {
+          lease.release();
+        }
       }
     } finally {
       releaseLane();

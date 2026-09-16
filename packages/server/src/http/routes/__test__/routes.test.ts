@@ -474,15 +474,14 @@ describe("session routes", () => {
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
       },
-      application: {
+      commands: {
         createSession,
-        getSession: vi.fn(),
         updateSession: vi.fn(),
         archiveSessionTree: vi.fn(async () => session),
         deleteSessionTree: vi.fn(),
         forkSession: vi.fn(),
-        admitPrompt: vi.fn(),
       },
+      interactions: { warmSession: vi.fn() },
       traces: { get: () => "trace-1" },
     });
 
@@ -519,15 +518,14 @@ describe("session routes", () => {
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
       },
-      application: {
+      commands: {
         createSession: vi.fn(),
-        getSession: vi.fn(),
         updateSession: vi.fn(),
         archiveSessionTree: vi.fn(),
         deleteSessionTree: vi.fn(),
         forkSession,
-        admitPrompt: vi.fn(),
       },
+      interactions: { warmSession: vi.fn() },
       traces: { get: () => "trace-1" },
     });
 
@@ -554,15 +552,14 @@ describe("session routes", () => {
         listMessages: vi.fn(() => []),
         listSessions: vi.fn(() => []),
       },
-      application: {
+      commands: {
         createSession: vi.fn(),
-        getSession: vi.fn(),
         updateSession: vi.fn(),
         archiveSessionTree: vi.fn(),
         deleteSessionTree,
         forkSession: vi.fn(),
-        admitPrompt: vi.fn(),
       },
+      interactions: { warmSession: vi.fn() },
       traces: { get: () => "trace-1" },
     });
 

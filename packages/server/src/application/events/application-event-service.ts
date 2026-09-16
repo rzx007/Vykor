@@ -25,6 +25,7 @@ export interface ApplicationEventSubscription {
 interface Subscriber {
   sessionId?: string;
   after: number;
+  queuedThrough: number;
   queue: SessionEventRecord[];
   wake?: () => void;
   closed: boolean;
@@ -59,6 +60,7 @@ export class ApplicationEventService {
     const subscriber: Subscriber = {
       sessionId: options.sessionId,
       after: options.after ?? 0,
+      queuedThrough: options.after ?? 0,
       queue: [],
       closed: false,
     };
@@ -76,6 +78,10 @@ export class ApplicationEventService {
     subscriber.queue = subscriber.queue.filter(
       (event) => event.seq > snapshotCursor,
     );
+    subscriber.queuedThrough = Math.max(
+      snapshotCursor,
+      subscriber.queue.at(-1)?.seq ?? 0,
+    );
 
     return {
       snapshotCursor,
@@ -92,7 +98,7 @@ export class ApplicationEventService {
   broadcastEvent(event: SessionEventRecord): void {
     if (this.closed) return;
     for (const subscriber of this.subscribers) {
-      if (event.seq <= subscriber.after) continue;
+      if (event.seq <= subscriber.queuedThrough) continue;
       if (
         subscriber.sessionId &&
         event.sessionId !== subscriber.sessionId
@@ -100,6 +106,7 @@ export class ApplicationEventService {
         continue;
       }
       subscriber.queue.push(event);
+      subscriber.queuedThrough = event.seq;
       subscriber.wake?.();
       subscriber.wake = undefined;
     }
