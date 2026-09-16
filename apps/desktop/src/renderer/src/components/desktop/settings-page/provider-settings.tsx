@@ -34,17 +34,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@renderer/components/ui/card"
-import { Checkbox } from "@renderer/components/ui/checkbox"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@renderer/components/ui/field"
 import { Input } from "@renderer/components/ui/input"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Separator } from "@renderer/components/ui/separator"
@@ -58,7 +54,12 @@ import type {
   DesktopProviderInfo,
   DesktopProviderSnapshot,
 } from "@shared/provider-types"
+import { CatalogProviderHeadersDialog } from "./catalog-provider-headers-dialog"
 import { scheduleProviderNoticeDismissal } from "./provider-feedback"
+import {
+  ProviderConnectionDialog,
+  type ProviderConnectionSubmitValue,
+} from "./provider-connection-dialog"
 import { CustomProviderDialog } from "./custom-provider-dialog"
 import { resolveProviderBrandIcon, type ProviderBrandIcon } from "./provider-brand-icons"
 
@@ -111,9 +112,8 @@ export function ProviderSettings(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [connectTarget, setConnectTarget] = useState<DesktopProviderInfo | null>(null)
+  const [catalogHeadersTarget, setCatalogHeadersTarget] = useState<DesktopProviderInfo | null>(null)
   const [disconnectTarget, setDisconnectTarget] = useState<DesktopProviderInfo | null>(null)
-  const [apiKey, setApiKey] = useState("")
-  const [setActiveAfterConnect, setSetActiveAfterConnect] = useState(true)
   const [moreProvidersOpen, setMoreProvidersOpen] = useState(false)
   const [providerQuery, setProviderQuery] = useState("")
   const [customDialogOpen, setCustomDialogOpen] = useState(false)
@@ -243,23 +243,22 @@ export function ProviderSettings(): React.JSX.Element {
     )
   }
 
-  const connect = (event: React.FormEvent<HTMLFormElement>): void => {
-    event.preventDefault()
-    if (!connectTarget || !apiKey.trim() || busyProvider) return
+  const connect = (value: ProviderConnectionSubmitValue): void => {
+    if (!connectTarget || !value.apiKey.trim() || busyProvider) return
     const target = connectTarget
     void runMutation(
       target.name,
       () =>
         window.desktop.providers.connect({
           provider: target.name,
-          apiKey,
-          setActive: setActiveAfterConnect,
+          apiKey: value.apiKey,
+          ...(value.headers !== undefined ? { headers: value.headers } : {}),
+          setActive: value.setActive,
         }),
       `已连接 ${providerDisplayName(target)}。`
     ).then((succeeded) => {
       if (!succeeded) return
       setConnectTarget(null)
-      setApiKey("")
     })
   }
 
@@ -267,6 +266,23 @@ export function ProviderSettings(): React.JSX.Element {
     setMoreProvidersOpen(false)
     setProviderQuery("")
     setConnectTarget(provider)
+  }
+
+  const saveCatalogHeaders = (headers: Record<string, string>): void => {
+    if (!catalogHeadersTarget || busyProvider) return
+    const target = catalogHeadersTarget
+    void runMutation(
+      target.name,
+      () =>
+        window.desktop.providers.updateCatalogHeaders({
+          provider: target.name,
+          headers,
+        }),
+      `已更新 ${providerDisplayName(target)} 的请求头。`
+    ).then((succeeded) => {
+      if (!succeeded) return
+      setCatalogHeadersTarget(null)
+    })
   }
 
   const disconnect = (): void => {
@@ -383,6 +399,7 @@ export function ProviderSettings(): React.JSX.Element {
           onActivate={activate}
           onConnect={openConnectDialog}
           onDisconnect={setDisconnectTarget}
+          onEditCatalogHeaders={setCatalogHeadersTarget}
           onAddCustom={() => {
             setCustomEditTarget(null)
             setCustomDialogOpen(true)
@@ -420,57 +437,28 @@ export function ProviderSettings(): React.JSX.Element {
         onSubmit={saveCustomProvider}
       />
 
-      <Dialog
+      <ProviderConnectionDialog
         open={connectTarget !== null}
+        provider={connectTarget}
+        busy={busyProvider !== null}
         onOpenChange={(open) => {
           if (open || busyProvider) return
           setConnectTarget(null)
-          setApiKey("")
         }}
-      >
-        <DialogContent>
-          <form onSubmit={connect} className="contents">
-            <DialogHeader>
-              <DialogTitle>连接 {connectTarget?.displayName}</DialogTitle>
-              <DialogDescription>
-                API 密钥会由 OpenHarness 认证服务保存到本地凭证文件，不会写入普通设置。
-              </DialogDescription>
-            </DialogHeader>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="provider-api-key">API 密钥</FieldLabel>
-                <Input
-                  id="provider-api-key"
-                  type="password"
-                  autoFocus
-                  autoComplete="off"
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                  placeholder="输入 API 密钥"
-                />
-                <FieldDescription>保存后页面只显示凭证来源，不会再次读取密钥。</FieldDescription>
-              </Field>
-              <Field orientation="horizontal">
-                <Checkbox
-                  id="provider-set-active"
-                  checked={setActiveAfterConnect}
-                  onCheckedChange={(checked) => setSetActiveAfterConnect(checked === true)}
-                />
-                <FieldLabel htmlFor="provider-set-active">连接后设为当前供应商</FieldLabel>
-              </Field>
-            </FieldGroup>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline">取消</Button>} />
-              <Button type="submit" disabled={!apiKey.trim() || busyProvider !== null}>
-                {busyProvider ? (
-                  <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                ) : null}
-                {busyProvider ? "连接中..." : "连接"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        onSubmit={connect}
+      />
+
+      {catalogHeadersTarget ? (
+        <CatalogProviderHeadersDialog
+          provider={catalogHeadersTarget}
+          busy={busyProvider !== null}
+          onOpenChange={(open) => {
+            if (open || busyProvider) return
+            setCatalogHeadersTarget(null)
+          }}
+          onSubmit={saveCatalogHeaders}
+        />
+      ) : null}
 
       <AlertDialog
         open={disconnectTarget !== null}
@@ -574,6 +562,7 @@ function ProviderListCard({
   onActivate,
   onConnect,
   onDisconnect,
+  onEditCatalogHeaders,
   onAddCustom,
   onEditCustom,
   onRemoveCustom,
@@ -586,6 +575,7 @@ function ProviderListCard({
   onActivate: (provider: DesktopProviderInfo) => void
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
+  onEditCatalogHeaders: (provider: DesktopProviderInfo) => void
   onAddCustom: () => void
   onEditCustom: (provider: DesktopProviderInfo) => void
   onRemoveCustom: (provider: DesktopProviderInfo) => void
@@ -605,6 +595,7 @@ function ProviderListCard({
           onActivate={onActivate}
           onConnect={onConnect}
           onDisconnect={onDisconnect}
+          onEditCatalogHeaders={onEditCatalogHeaders}
           onEditCustom={onEditCustom}
           onRemoveCustom={onRemoveCustom}
         />
@@ -618,6 +609,7 @@ function ProviderListCard({
           onActivate={onActivate}
           onConnect={onConnect}
           onDisconnect={onDisconnect}
+          onEditCatalogHeaders={onEditCatalogHeaders}
           onEditCustom={onEditCustom}
           onRemoveCustom={onRemoveCustom}
         />
@@ -749,6 +741,7 @@ function ProviderGroup({
   onActivate,
   onConnect,
   onDisconnect,
+  onEditCatalogHeaders,
   onEditCustom,
   onRemoveCustom,
 }: {
@@ -760,6 +753,7 @@ function ProviderGroup({
   onActivate: (provider: DesktopProviderInfo) => void
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
+  onEditCatalogHeaders: (provider: DesktopProviderInfo) => void
   onEditCustom: (provider: DesktopProviderInfo) => void
   onRemoveCustom: (provider: DesktopProviderInfo) => void
 }): React.JSX.Element {
@@ -786,6 +780,7 @@ function ProviderGroup({
                 onActivate={() => onActivate(provider)}
                 onConnect={() => onConnect(provider)}
                 onDisconnect={() => onDisconnect(provider)}
+                onEditCatalogHeaders={() => onEditCatalogHeaders(provider)}
                 onEditCustom={() => onEditCustom(provider)}
                 onRemoveCustom={() => onRemoveCustom(provider)}
               />
@@ -804,6 +799,7 @@ function ProviderRow({
   onActivate,
   onConnect,
   onDisconnect,
+  onEditCatalogHeaders,
   onEditCustom,
   onRemoveCustom,
 }: {
@@ -813,6 +809,7 @@ function ProviderRow({
   onActivate: () => void
   onConnect: () => void
   onDisconnect: () => void
+  onEditCatalogHeaders: () => void
   onEditCustom: () => void
   onRemoveCustom: () => void
 }): React.JSX.Element {
@@ -862,6 +859,17 @@ function ProviderRow({
             {provider.active ? "重新连接" : "连接"}
           </Button>
         )}
+        {provider.source === "catalog" && provider.connected ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={locked}
+            onClick={onEditCatalogHeaders}
+          >
+            请求头
+          </Button>
+        ) : null}
         {provider.credentialSource === "credentials" && !provider.active && !provider.custom ? (
           <Button type="button" size="sm" variant="ghost" disabled={locked} onClick={onDisconnect}>
             断开

@@ -1,4 +1,5 @@
 import type { DesktopCustomProviderInput, DesktopInputSupport } from "@shared/provider-types"
+import { headersFromRows, type RequestHeaderRow } from "./request-header-form"
 
 export interface CustomProviderModelRow {
   key: string
@@ -7,11 +8,7 @@ export interface CustomProviderModelRow {
   imageInputSupport: DesktopInputSupport
 }
 
-export interface CustomProviderHeaderRow {
-  key: string
-  name: string
-  value: string
-}
+export type CustomProviderHeaderRow = RequestHeaderRow
 
 export interface CustomProviderFormState {
   id: string
@@ -64,17 +61,10 @@ export function validateCustomProviderForm(
   if (new Set(models.map((model) => model.id)).size !== models.length) {
     return { ok: false, field: "models", message: "模型 ID 不能重复。" }
   }
-  const incompleteHeader = form.headers.some(
-    (header) => Boolean(header.name.trim()) !== Boolean(header.value.trim())
-  )
-  if (incompleteHeader) {
-    return { ok: false, field: "headers", message: "请求头名称和值需要同时填写。" }
+  const headersResult = headersFromRows(form.headers)
+  if (!headersResult.ok) {
+    return { ok: false, field: "headers", message: headersResult.message }
   }
-  const headers = Object.fromEntries(
-    form.headers
-      .map((header) => [header.name.trim(), header.value.trim()] as const)
-      .filter(([name, value]) => name && value)
-  )
   const apiKey = form.apiKey.trim()
   return {
     ok: true,
@@ -85,7 +75,7 @@ export function validateCustomProviderForm(
       apiFormat: "openai",
       ...(apiKey ? { apiKey } : {}),
       models,
-      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      ...(Object.keys(headersResult.headers).length > 0 ? { headers: headersResult.headers } : {}),
     },
   }
 }
