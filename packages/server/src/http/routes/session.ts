@@ -15,7 +15,8 @@ import {
   sessionMutationErrorStatus,
 } from "../support.js";
 import type { RequestTraceRegistry } from "../control/index.js";
-import type { SessionApplicationService } from "../../application/session/session-application-service.js";
+import type { SessionCommandService } from "../../application/session/session-command-service.js";
+import type { SessionInteractionService } from "../../application/session/session-interaction-service.js";
 import type { SessionQueryService } from "../../application/session/session-query-service.js";
 
 export interface SessionRoutesContext {
@@ -27,16 +28,15 @@ export interface SessionRoutesContext {
     | "listMessages"
     | "listSessions"
   >;
-  application: Pick<
-    SessionApplicationService,
-    | "admitPrompt"
+  commands: Pick<
+    SessionCommandService,
     | "archiveSessionTree"
     | "createSession"
     | "deleteSessionTree"
     | "forkSession"
-    | "getSession"
     | "updateSession"
   >;
+  interactions: Pick<SessionInteractionService, "warmSession">;
   traces: Pick<RequestTraceRegistry, "get">;
 }
 
@@ -58,13 +58,13 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
       } catch (error) {
         return protocolValidationErrorResponse(error);
       }
-      const session = context.application.createSession(input);
+      const session = context.commands.createSession(input);
       return jsonResponse({ session }, 201);
     })
-    .get("/:sessionId", (c) => {
+    .get("/:sessionId", async (c) => {
       const sessionId = c.req.param("sessionId");
       if (!sessionId) return errorResponse(400, "sessionId is required");
-      const session = context.application.getSession(sessionId, { warm: true });
+      const session = await context.interactions.warmSession(sessionId);
       if (!session) return errorResponse(404, "Session not found");
       return jsonResponse({ session });
     })
@@ -73,7 +73,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
       if (!sessionId) return errorResponse(400, "sessionId is required");
       const body = await readJson(c);
       try {
-        const session = context.application.forkSession(sessionId, {
+        const session = context.commands.forkSession(sessionId, {
           beforeMessageId:
             typeof body.beforeMessageId === "string"
               ? body.beforeMessageId
@@ -98,7 +98,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
         return protocolValidationErrorResponse(error);
       }
       try {
-        const session = await context.application.updateSession(sessionId, input);
+        const session = await context.commands.updateSession(sessionId, input);
         return jsonResponse({ session });
       } catch (error) {
         return applicationErrorResponse(
@@ -123,7 +123,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
       const sessionId = c.req.param("sessionId");
       if (!sessionId) return errorResponse(400, "sessionId is required");
       try {
-        const session = await context.application.archiveSessionTree(sessionId);
+        const session = await context.commands.archiveSessionTree(sessionId);
         return jsonResponse({ session });
       } catch (error) {
         return applicationErrorResponse(error, 404);
@@ -134,7 +134,7 @@ export function createSessionRoutes(context: SessionRoutesContext): Hono {
       if (!sessionId) return errorResponse(400, "sessionId is required");
       try {
         const deletedSessionIds =
-          await context.application.deleteSessionTree(sessionId);
+          await context.commands.deleteSessionTree(sessionId);
         return jsonResponse({ deletedSessionIds });
       } catch (error) {
         return applicationErrorResponse(error, 404);

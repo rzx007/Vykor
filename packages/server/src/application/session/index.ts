@@ -1,6 +1,7 @@
 export type { AdmitPromptInput, AdmitPromptResult } from "./run-admission-service.js";
 export type { PromoteQueuedRunResult, AwaitSessionRunResult } from "./run-control-service.js";
-export * from "./session-application-service.js";
+export * from "./session-interaction-service.js";
+export * from "./session-operation-runner.js";
 export * from "./session-event-publisher.js";
 export * from "./session-maintenance-service.js";
 export * from "./session-query-service.js";

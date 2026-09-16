@@ -3,14 +3,14 @@ import { AttachmentError } from "@openharness/services";
 
 import {
   SessionApplicationError,
-  SessionApplicationService,
-} from "../session-application-service.js";
+  SessionInteractionService,
+} from "../session-interaction-service.js";
 import { RunControlService } from "../run-control-service.js";
 
-describe("SessionApplicationService queued prompt actions", () => {
+describe("SessionInteractionService queued prompt actions", () => {
   it("rejects promotion for an admitted plugin capability Input", async () => {
     const context = queueContext({ inputMetadata: { pluginId: "dev.openharness.quality" } });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(
       service.promoteQueuedPrompt("session-1", "input-queued", {
@@ -25,7 +25,7 @@ describe("SessionApplicationService queued prompt actions", () => {
   it("rejects promotion when the active run changed", async () => {
     const context = queueContext();
     context.runEngine.activeRunId.mockReturnValue("active-new");
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(
       service.promoteQueuedPrompt("session-1", "input-queued", {
@@ -47,7 +47,7 @@ describe("SessionApplicationService queued prompt actions", () => {
       attachments: [{ assetId: "att-1" }],
       metadata: {},
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(
       service.promoteQueuedPrompt("session-1", "input-queued", {
@@ -78,7 +78,7 @@ describe("SessionApplicationService queued prompt actions", () => {
         },
       },
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(
       service.promoteQueuedPrompt("session-1", "input-queued", {
@@ -100,7 +100,7 @@ describe("SessionApplicationService queued prompt actions", () => {
       queuedRunIds: ["run-queued"],
       interrupted: true,
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await service.cancelQueuedPrompt("session-1", "input-queued", {
       queuedRunId: "run-queued",
@@ -196,6 +196,11 @@ function queueContext(
     store,
     runEngine,
     control,
+    sessions: { get: store.getSession, listChildren: vi.fn(() => []) },
+    conversations: store,
+    runs: store,
+    admission: runEngine,
+    operationRunner: { run: async (_id: string, work: () => Promise<unknown>) => work() },
     agentPool: { close: vi.fn() },
     liveChildren: { has: vi.fn(), send: vi.fn(), interrupt: vi.fn() },
     operationGate: {

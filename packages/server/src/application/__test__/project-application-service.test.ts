@@ -62,7 +62,7 @@ describe("ProjectApplicationService", () => {
   it("is composed with store.projects instead of the legacy Store methods", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-project-composition-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
-    const project = store.inspectProject(directory);
+    const project = store.projects.inspect(directory);
     const application = new DaemonApplication({
       store,
       settings: {
@@ -76,10 +76,6 @@ describe("ProjectApplicationService", () => {
       log: () => undefined,
     });
     try {
-      (store as any).renameProject = () => {
-        throw new Error("legacy method must not be used");
-      };
-
       expect(application.projects.rename(project.id, "Renamed").name).toBe(
         "Renamed",
       );

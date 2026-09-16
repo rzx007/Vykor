@@ -77,7 +77,9 @@ describe("ChannelApplicationService contracts", () => {
     return new ChannelApplicationService({
       sessionQueries: fixture.sessionQueries,
       channels: fixture.channels as any,
-      sessions: fixture.sessions as any,
+      sessionCommands: fixture.sessions as any,
+      sessionInteractions: fixture.sessions as any,
+      runControl: fixture.sessions as any,
       log: fixture.log,
     });
   }

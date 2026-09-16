@@ -71,12 +71,15 @@ function harness(
     },
   });
   service = new SessionGoalService({
-    store,
+    transaction: store,
+    sessions: store.sessions,
+    runs: store.runs,
+    conversations: store.conversations,
     permissions: store.permissions,
     goals: store.goals,
     runEngine: engine,
     events,
-    sessions: { withSessionOperation: async (_id, work) => work() },
+    operationRunner: { run: async (_id, work) => work() },
     waitVerifier,
     pluginCapabilities: new SessionPluginCapabilityService({
       resolveInventory: async () => ({

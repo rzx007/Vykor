@@ -69,7 +69,7 @@ sequenceDiagram
 | OpenTUI 根组件 | `apps/frontend/src/App.tsx` |
 | daemon hydrate、prompt、permission、SSE | `apps/frontend/src/hooks/useServerSync.ts` |
 | client HTTP API | `packages/client/src/transport/http-client.ts` |
-| prompt/run 应用链 | `packages/server/src/application/session/session-application-service.ts` |
+| prompt/run 应用链 | `packages/server/src/application/session/session-interaction-service.ts` |
 | durable event reducer | `packages/server/src/application/agent/daemon-agent-event-projector.ts` |
 | server 权威流程 | `docs/daemon-application-architecture.md` |
 | 结构化 Skill prompt | `docs/skill-prompt-flow.md` |

@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   SessionApplicationError,
-  SessionApplicationService,
-} from "../session-application-service.js";
+  SessionInteractionService,
+} from "../session-interaction-service.js";
 
-describe("SessionApplicationService editLatestPrompt", () => {
+describe("SessionInteractionService editLatestPrompt", () => {
   it("revalidates the selected source message after entering the session operation", async () => {
     let messages = [userMessage("message-1", 1)];
     const context = editContext({
@@ -15,7 +15,7 @@ describe("SessionApplicationService editLatestPrompt", () => {
       },
       listMessages: () => messages,
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(
       service.editLatestPrompt("session-1", {
@@ -38,7 +38,7 @@ describe("SessionApplicationService editLatestPrompt", () => {
         throw new Error("close failed");
       }),
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(
       service.editLatestPrompt("session-1", {
@@ -56,7 +56,7 @@ describe("SessionApplicationService editLatestPrompt", () => {
 
   it("closes the old agent before atomically replacing and admitting", async () => {
     const context = editContext();
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await service.editLatestPrompt("session-1", {
       id: "edit-1",
@@ -109,7 +109,7 @@ describe("SessionApplicationService editLatestPrompt", () => {
       id: "replacement-run",
       status: "running",
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     const result = await service.editLatestPrompt("session-1", {
       id: "edit-1",
@@ -142,7 +142,7 @@ describe("SessionApplicationService editLatestPrompt", () => {
         },
       })),
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(
       service.editLatestPrompt("session-1", {
@@ -172,7 +172,7 @@ describe("SessionApplicationService editLatestPrompt", () => {
         },
       })),
     });
-    const service = new SessionApplicationService(context as any);
+    const service = new SessionInteractionService(context as any);
 
     await expect(service.editLatestPrompt("session-1", {
       id: "edit-1",
@@ -203,19 +203,43 @@ function editContext(
     run: { id: "replacement-run" },
     queue_state: "running" as const,
   }));
+  const store = {
+    getSession: vi.fn(() => ({ id: "session-1", cwd: "D:/repo" })),
+    getInput: overrides.getInput ?? vi.fn(() => undefined),
+    findRunByInput: vi.fn(() => undefined),
+    listMessages: vi.fn(
+      overrides.listMessages ?? (() => [userMessage("message-1", 1)]),
+    ),
+    listMessageParts: vi.fn(() => []),
+  };
+  const runEngine = {
+    hasWork: overrides.hasWork ?? vi.fn(() => false),
+    replaceLatestPrompt,
+  };
+  const operationGate = {
+    enter: vi.fn(overrides.enter ?? (() => ({ release: vi.fn() }))),
+  };
+  const events = { checkpoint: vi.fn(() => 1), publishSince: vi.fn() };
   return {
-    store: {
-      getSession: vi.fn(() => ({ id: "session-1", cwd: "D:/repo" })),
-      getInput: overrides.getInput ?? vi.fn(() => undefined),
-      findRunByInput: vi.fn(() => undefined),
-      listMessages: vi.fn(
-        overrides.listMessages ?? (() => [userMessage("message-1", 1)]),
-      ),
-      listMessageParts: vi.fn(() => []),
-    },
-    runEngine: {
-      hasWork: overrides.hasWork ?? vi.fn(() => false),
-      replaceLatestPrompt,
+    store,
+    runEngine,
+    sessions: { get: store.getSession, listChildren: vi.fn(() => []) },
+    conversations: store,
+    runs: store,
+    admission: runEngine,
+    control: runEngine,
+    operationRunner: {
+      run: async (_sessionId: string, work: () => Promise<unknown>) => {
+        const lease = operationGate.enter();
+        try {
+          const checkpoint = events.checkpoint();
+          const result = await work();
+          events.publishSince(checkpoint);
+          return result;
+        } finally {
+          lease.release();
+        }
+      },
     },
     agentPool: {
       close: overrides.close ?? vi.fn(async () => undefined),
@@ -225,11 +249,8 @@ function editContext(
       send: vi.fn(),
       interrupt: vi.fn(),
     },
-    operationGate: {
-      enter: vi.fn(overrides.enter ?? (() => ({ release: vi.fn() }))),
-      tryEnterBarrier: vi.fn(),
-    },
-    events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
+    operationGate,
+    events,
   };
 }
 

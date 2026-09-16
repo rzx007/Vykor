@@ -2,8 +2,14 @@ import type {
   GoalAssessment,
   GoalEvidenceRef,
   SessionGoal,
+  SessionMessagePartRecord,
+  SessionMessageRecord,
 } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
+
+export interface GoalEvidenceReader {
+  listMessages(sessionId: string): SessionMessageRecord[];
+  listMessageParts(sessionId: string): SessionMessagePartRecord[];
+}
 
 export type GoalCompletionDisposition =
   | { kind: "completed" }
@@ -11,7 +17,7 @@ export type GoalCompletionDisposition =
   | { kind: "waiting_user"; reason: string };
 
 export function verifiedGoalEvidence(
-  store: SessionStore,
+  store: GoalEvidenceReader,
   goal: SessionGoal,
   assessment: GoalAssessment,
 ) {

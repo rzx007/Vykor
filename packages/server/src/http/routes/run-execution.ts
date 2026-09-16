@@ -15,11 +15,11 @@ import {
   sessionMutationErrorStatus,
 } from "../support.js";
 import type { RequestTraceRegistry } from "../control/index.js";
-import type { SessionApplicationService } from "../../application/session/session-application-service.js";
+import type { SessionInteractionService } from "../../application/session/session-interaction-service.js";
 
 export interface RunExecutionRoutesContext {
   application: Pick<
-    SessionApplicationService,
+    SessionInteractionService,
     | "admitPrompt"
     | "cancelQueuedPrompt"
     | "editLatestPrompt"

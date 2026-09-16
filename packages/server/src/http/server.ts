@@ -401,7 +401,8 @@ export class OpenHarnessHttpServer {
       "/sessions",
       createSessionRoutes({
         queries: this.application.queries,
-        application: this.application.sessions,
+        commands: this.application.commands,
+        interactions: this.application.interactions,
         traces: this.requestTraces,
       }),
     );
@@ -409,7 +410,7 @@ export class OpenHarnessHttpServer {
     this.app.route(
       "/sessions",
       createRunExecutionRoutes({
-        application: this.application.sessions,
+        application: this.application.interactions,
         traces: this.requestTraces,
       }),
     );

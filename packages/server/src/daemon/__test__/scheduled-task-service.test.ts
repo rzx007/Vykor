@@ -60,9 +60,6 @@ describe("ScheduledTaskService", () => {
       log: () => undefined,
     });
     try {
-      (store as any).listScheduledTasks = () => {
-        throw new Error("legacy method must not be used");
-      };
       expect(application.schedules.listTasks()).toEqual([]);
     } finally {
       await application.close();
@@ -209,7 +206,7 @@ describe("ScheduledTaskService", () => {
       runId: "agent-run",
       unread: true,
     });
-    expect(store.getScheduledTask(task.id)).toMatchObject({
+    expect(store.schedules.getTask(task.id)).toMatchObject({
       status: "completed",
       runCount: 1,
     });
@@ -298,7 +295,7 @@ describe("ScheduledTaskService", () => {
     vi.setSystemTime(new Date("2026-08-18T09:00:00Z"));
     const dir = mkdtempSync(join(tmpdir(), "ohs-scheduled-recovery-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
-    store.createScheduledTask({
+    store.schedules.createTask({
       id: "missed-task",
       name: "missed-review",
       prompt: "Review the missed interval.",
@@ -328,7 +325,7 @@ describe("ScheduledTaskService", () => {
     await vi.runAllTimersAsync();
 
     expect(execute).toHaveBeenCalledOnce();
-    expect(store.getScheduledTask("missed-task")).toMatchObject({
+    expect(store.schedules.getTask("missed-task")).toMatchObject({
       status: "completed",
       runCount: 1,
     });
@@ -349,7 +346,7 @@ describe("ScheduledTaskService", () => {
 
     await service.trigger(task.id);
 
-    const completed = store.getScheduledTask(task.id);
+    const completed = store.schedules.getTask(task.id);
     expect(completed).toMatchObject({
       status: "completed",
       runCount: 1,
@@ -382,7 +379,7 @@ describe("ScheduledTaskService", () => {
       destination: "chat",
       sessionId: "chat-1",
     });
-    store.updateScheduledTask(task.id, {
+    store.schedules.updateTask(task.id, {
       nextRunAt: Date.parse("2026-08-20T09:00:00Z"),
     });
 
@@ -395,8 +392,8 @@ describe("ScheduledTaskService", () => {
     await running;
 
     expect(
-      store
-        .listScheduledRuns({ taskId: task.id })
+      store.schedules
+        .listRuns({ taskId: task.id })
         .filter((run) => run.status === "skipped"),
     ).toHaveLength(0);
   });
@@ -535,7 +532,7 @@ describe("ScheduledTaskService", () => {
     release();
     await running;
 
-    expect(store.getScheduledTask(task.id)).toMatchObject({
+    expect(store.schedules.getTask(task.id)).toMatchObject({
       status: "active",
       recurrenceFormat: "rrule",
       runCount: 1,
@@ -544,7 +541,7 @@ describe("ScheduledTaskService", () => {
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(execute).toHaveBeenCalledTimes(2);
-    expect(store.getScheduledTask(task.id)).toMatchObject({
+    expect(store.schedules.getTask(task.id)).toMatchObject({
       status: "active",
       runCount: 2,
     });
@@ -580,7 +577,7 @@ describe("ScheduledTaskService", () => {
     release();
     await running;
 
-    const paused = store.getScheduledTask(task.id);
+    const paused = store.schedules.getTask(task.id);
     expect(paused).toMatchObject({
       status: "paused",
       runCount: 1,
@@ -619,7 +616,7 @@ describe("ScheduledTaskService", () => {
     await Promise.resolve();
 
     expect(execute).toHaveBeenCalledOnce();
-    expect(store.getScheduledTask(task.id)).toMatchObject({
+    expect(store.schedules.getTask(task.id)).toMatchObject({
       status: "completed",
       runCount: 1,
     });
@@ -641,10 +638,10 @@ describe("ScheduledTaskService", () => {
     });
 
     await service.trigger(task.id);
-    expect(store.getScheduledTask(task.id)?.status).toBe("completed");
+    expect(store.schedules.getTask(task.id)?.status).toBe("completed");
 
     // Simulate that the one-time date has passed into history
-    store.updateScheduledTask(task.id, {
+    store.schedules.updateTask(task.id, {
       recurrence: "2020-01-01T00:00:00Z",
     });
 
@@ -655,13 +652,13 @@ describe("ScheduledTaskService", () => {
       });
     }).not.toThrow();
 
-    expect(store.getScheduledTask(task.id)?.prompt).toBe(
+    expect(store.schedules.getTask(task.id)?.prompt).toBe(
       "Updated prompt for completed task",
     );
 
     // Manually triggering a completed task should also succeed
     const run = await service.trigger(task.id);
     expect(run.status).toBe("succeeded");
-    expect(store.getScheduledTask(task.id)?.status).toBe("completed");
+    expect(store.schedules.getTask(task.id)?.status).toBe("completed");
   });
 });

@@ -166,68 +166,6 @@ describe("assembleSessionContextUsage", () => {
     expect(snapshot.buckets.find((b) => b.id === "skills")!.tokens).toBeGreaterThan(0);
   });
 
-  it("invalidates cache on model change", async () => {
-    const cache = new ContextUsageCache();
-    const snap = assembleContextUsageSnapshot({
-      segments: [{ bucket: "conversation", text: "cached" }],
-      model: "old-model",
-      contextWindow: 50_000,
-      source: "live_assembly",
-    });
-    cache.set("s1", snap);
-
-    const { SessionApplicationService } = await import(
-      "./session/session-application-service.js"
-    );
-    const { DaemonOperationGate } = await import("./control/daemon-operation-gate.js");
-
-    const session = {
-      id: "s1",
-      cwd: "/repo",
-      title: "Session",
-      model: "old-model",
-      status: "idle",
-      metadata: { runtime: { model: "old-model" } },
-      createdAt: 1,
-      updatedAt: 1,
-    };
-    const store = {
-      transaction: vi.fn((work: () => unknown) => work()),
-      getSession: vi.fn(() => session),
-      updateSession: vi.fn((_id: string, input: Record<string, unknown>) => ({
-        ...session,
-        ...input,
-      })),
-      createMessage: vi.fn((input: Record<string, unknown>) => ({
-        id: "model-switch-message",
-        ...input,
-      })),
-      upsertMessagePart: vi.fn(),
-    };
-    const agentPool = {
-      configured: true,
-      close: vi.fn(async () => {}),
-      hasActiveWorkForSession: vi.fn(() => false),
-    };
-    const service = new SessionApplicationService({
-      store: store as any,
-      runEngine: {
-        hasWork: () => false,
-        hasActiveRunsForCwd: () => false,
-      } as any,
-      agentPool: agentPool as any,
-      liveChildren: { has: () => false, send: vi.fn(), interrupt: vi.fn() },
-      operationGate: new DaemonOperationGate(),
-      events: { checkpoint: () => 1, publishSince: vi.fn() },
-      contextUsageCache: cache,
-    });
-
-    await service.updateSession("s1", {
-      metadata: { runtime: { model: "other-model" } },
-    });
-
-    expect(cache.get("s1")).toBeUndefined();
-  });
 });
 
 describe("ContextService.usage live assembly", () => {

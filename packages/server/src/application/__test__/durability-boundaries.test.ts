@@ -78,7 +78,7 @@ describe("durable application long-running boundaries", () => {
       ApplicationOwnerConflictError,
     );
     expect(() =>
-      first.upsertExternalConversation({
+      first.channels.upsertConversation({
         connector: "test",
         accountId: "account",
         chatId: "chat",

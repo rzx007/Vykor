@@ -58,7 +58,8 @@ import {
   DaemonOperationUnavailableError,
 } from "./control/daemon-operation-gate.js";
 import { LiveChildAgentDirectory } from "./agent/live-child-agent-directory.js";
-import { SessionApplicationService } from "./session/session-application-service.js";
+import { SessionInteractionService } from "./session/session-interaction-service.js";
+import { SessionOperationRunner } from "./session/session-operation-runner.js";
 import { SessionCommandService } from "./session/session-command-service.js";
 import { SessionGoalService } from "./session/session-goal-service.js";
 import { GoalWaitVerifier } from "./session/goal-wait-verifier.js";
@@ -132,10 +133,11 @@ export interface DaemonApplicationOptions {
 export interface DurableAgentApplication {
   readonly store: SessionStore;
   readonly attachments: AttachmentApplicationService;
-  readonly sessions: SessionApplicationService;
+  readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
   readonly queries: SessionQueryService;
   readonly commands: SessionCommandService;
+  readonly runControl: RunControlService;
   readonly permissions: StorePermissionBroker;
   readonly backgroundShells: BackgroundShellService;
   readonly maintenance: SessionMaintenanceService;
@@ -169,7 +171,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly attachments: AttachmentApplicationService;
   readonly permissions: StorePermissionBroker;
   readonly backgroundShells: BackgroundShellService;
-  readonly sessions: SessionApplicationService;
+  readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
   readonly maintenance: SessionMaintenanceService;
   readonly queries: SessionQueryService;
@@ -191,6 +193,7 @@ export class DaemonApplication implements DurableAgentApplication {
   /** 正在跑的子 Agent 会话。主会话池不能把它们再当成普通会话 acquire。 */
   private readonly liveChildren = new LiveChildAgentDirectory();
   private readonly operationGate = new DaemonOperationGate();
+  private readonly operationRunner: SessionOperationRunner;
   private readonly agentPool: AgentPool;
   private readonly runEngine: SessionRunEngine;
   readonly runAdmission: RunAdmissionService;
@@ -291,7 +294,10 @@ export class DaemonApplication implements DurableAgentApplication {
           ? createSessionEnvironmentAcquirer()
           : undefined;
       this.terminals = new DaemonTerminalService(
-        store,
+        {
+          getProject: (projectId) => store.projects.get(projectId),
+          getSession: (sessionId) => store.sessions.get(sessionId),
+        },
         {
           getSettingsForCwd: async (cwd) =>
             options.getSettingsForCwd
@@ -633,27 +639,33 @@ export class DaemonApplication implements DurableAgentApplication {
         contextUsageCache,
         assertReady: () => this.assertReady(),
       });
-      this.sessions = new SessionApplicationService({
-        store,
-        runEngine: this.runEngine,
-        admission: this.runAdmission,
-        control: this.runControl,
-        agentPool: this.agentPool,
-        liveChildren: this.liveChildren,
+      this.operationRunner = new SessionOperationRunner({
+        sessions: store.sessions,
         operationGate: this.operationGate,
         events: this.eventPublisher,
         assertReady: () => this.assertReady(),
-        contextUsageCache,
+      });
+      this.interactions = new SessionInteractionService({
+        sessions: store.sessions,
+        conversations: store.conversations,
+        runs: store.runs,
+        admission: this.runAdmission,
+        control: this.runControl,
+        operationRunner: this.operationRunner,
+        agentPool: this.agentPool,
+        liveChildren: this.liveChildren,
+        operationGate: this.operationGate,
         resolveSkillCatalog: runtimeDiscovery.resolveSkillCatalog,
         pluginCapabilities,
-        queries: this.queries,
-        commands: this.commands,
       });
       this.goals = new SessionGoalService({
-        store,
+        transaction: store,
+        sessions: store.sessions,
+        runs: store.runs,
+        conversations: store.conversations,
         permissions: store.permissions,
         goals: store.goals,
-        sessions: this.sessions,
+        operationRunner: this.operationRunner,
         runEngine: this.runEngine,
         admission: this.runAdmission,
         control: this.runControl,
@@ -672,9 +684,14 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供通道相关的管理和监控功能
        */
       this.channels = new ChannelApplicationService({
-        sessionQueries: store,
+        sessionQueries: {
+          getInput: (inputId) => store.conversations.getInput(inputId),
+          getSession: (sessionId) => store.sessions.get(sessionId),
+        },
         channels: store.channels,
-        sessions: this.sessions,
+        sessionCommands: this.commands,
+        sessionInteractions: this.interactions,
+        runControl: this.runControl,
         log: options.log,
       });
       /**
@@ -685,7 +702,10 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 提供定时任务相关的查询和操作接口
        */
       const scheduledExecutor = new ScheduledTaskExecutor({
-        sessions: this.sessions,
+        sessionQueries: this.queries,
+        sessionCommands: this.commands,
+        sessionInteractions: this.interactions,
+        runControl: this.runControl,
         outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
         settings: options.settings,
         getSettings: options.getSettings,

@@ -12,7 +12,9 @@ import {
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";
-import type { SessionApplicationService } from "../session/session-application-service.js";
+import type { SessionCommandService } from "../session/session-command-service.js";
+import type { SessionInteractionService } from "../session/session-interaction-service.js";
+import type { RunControlService } from "../session/run-control-service.js";
 
 export interface ChannelSessionQueries {
   getInput(inputId: string): SessionInputRecord | undefined;
@@ -53,14 +55,11 @@ export interface ChannelOperations {
 }
 
 export interface ChannelApplicationServiceContext {
-  sessionQueries?: ChannelSessionQueries;
-  /** @deprecated use sessionQueries */
-  store?: ChannelSessionQueries;
+  sessionQueries: ChannelSessionQueries;
   channels: ChannelOperations;
-  sessions: Pick<
-    SessionApplicationService,
-    "admitPrompt" | "awaitRun" | "createSession"
-  >;
+  sessionCommands: Pick<SessionCommandService, "createSession">;
+  sessionInteractions: Pick<SessionInteractionService, "admitPrompt">;
+  runControl: Pick<RunControlService, "awaitRun">;
   log(event: ObservabilityEvent): void;
 }
 
@@ -70,11 +69,7 @@ export class ChannelApplicationService {
   private readonly sessionQueries: ChannelSessionQueries;
 
   constructor(private readonly context: ChannelApplicationServiceContext) {
-    const queries = context.sessionQueries ?? context.store;
-    if (!queries) {
-      throw new Error("ChannelApplicationService requires sessionQueries");
-    }
-    this.sessionQueries = queries;
+    this.sessionQueries = context.sessionQueries;
   }
 
   async handleMessage(
@@ -99,7 +94,7 @@ export class ChannelApplicationService {
     const conversation = this.resolveConversation(input);
     let admission;
     try {
-      admission = await this.context.sessions.admitPrompt(
+      admission = await this.context.sessionInteractions.admitPrompt(
         conversation.sessionId,
         {
           id: inputId,
@@ -148,7 +143,7 @@ export class ChannelApplicationService {
       );
     }
 
-    const result = await this.context.sessions.awaitRun(
+    const result = await this.context.runControl.awaitRun(
       conversation.sessionId,
       admission.run.id,
     );
@@ -229,7 +224,7 @@ export class ChannelApplicationService {
       : undefined;
     if (existing && session && session.status !== "archived") return existing;
 
-    const created = this.context.sessions.createSession({
+    const created = this.context.sessionCommands.createSession({
       cwd: input.cwd,
       model: input.model,
       title: `${input.connector} · ${input.chatId}`,

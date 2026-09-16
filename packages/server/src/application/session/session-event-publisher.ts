@@ -1,5 +1,8 @@
 import type { SessionEventRecord } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
+
+export interface SessionEventCursor {
+  latestEventSeq(): number;
+}
 
 export interface SessionEventSink {
   broadcastSince(seq: number): void;
@@ -9,7 +12,7 @@ export interface SessionEventSink {
 /** Publishes newly persisted session events to live HTTP subscribers. */
 export class SessionEventPublisher {
   constructor(
-    private readonly store: Pick<SessionStore, "latestEventSeq">,
+    private readonly store: SessionEventCursor,
     private readonly sink: SessionEventSink,
   ) {}
 

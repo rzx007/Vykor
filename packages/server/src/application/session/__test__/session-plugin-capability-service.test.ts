@@ -3,7 +3,7 @@ import type { SessionRecord, SessionUserInputItem } from "@openharness/protocol"
 import { describe, expect, it, vi } from "vitest";
 
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
-import { SessionApplicationService } from "../session-application-service.js";
+import { SessionInteractionService } from "../session-interaction-service.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
 const pluginId = "dev.openharness.quality";
@@ -473,14 +473,22 @@ function applicationService(current: PluginCapabilityInventory, options: {
     run: { id: "edited-run", sessionId: "s1", inputId: input.id, metadata: input.runMetadata },
   }));
   const agentPool = { configured: true, close: vi.fn(async () => {}) };
-  const application = new SessionApplicationService({
-    store: store as never,
-    runEngine: {
+  const application = new SessionInteractionService({
+    sessions: {
+      get: store.getSession,
+      listChildren: vi.fn(() => []),
+    },
+    conversations: store as never,
+    runs: store as never,
+    admission: {
       admitPromptAndMaybeRun,
       replayInput,
       replaceLatestPrompt,
+    },
+    control: {
       hasWork: vi.fn(() => false),
     } as never,
+    operationRunner: { run: async (_id, work) => work() },
     agentPool: agentPool as never,
     liveChildren: {
       has: vi.fn(() => false),
@@ -488,7 +496,6 @@ function applicationService(current: PluginCapabilityInventory, options: {
       interrupt: vi.fn(),
     },
     operationGate: new DaemonOperationGate(),
-    events: { checkpoint: vi.fn(() => 1), publishSince: vi.fn() },
     pluginCapabilities: options.pluginCapabilities ?? capabilityService(current),
   });
   return {

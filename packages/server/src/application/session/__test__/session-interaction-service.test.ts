@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { SessionApplicationError, SessionApplicationService } from "../session-application-service.js";
+import { SessionApplicationError, SessionInteractionService } from "../session-interaction-service.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
 const session = {
@@ -84,20 +84,31 @@ function createService(options: {
   };
   const operationGate = new DaemonOperationGate();
   const contextUsageCache = { invalidate: vi.fn(), get: vi.fn(), set: vi.fn(), clear: vi.fn() };
-  const service = new SessionApplicationService({
-    store: store as any,
-    runEngine: runEngine as any,
+  const service = new SessionInteractionService({
+    sessions: {
+      get: store.getSession,
+      listChildren: store.listChildSessions,
+    },
+    conversations: store as any,
+    runs: store as any,
+    admission: runEngine as any,
+    control: runEngine as any,
+    operationRunner: {
+      run: async (_id, work) => {
+        const result = await work();
+        broadcastSince(7);
+        return result;
+      },
+    },
     agentPool: agentPool as any,
     liveChildren,
     operationGate,
-    events: { checkpoint: () => 7, publishSince: broadcastSince },
-    contextUsageCache,
     resolveSkillCatalog: options.resolveSkillCatalog,
   });
   return { service, store, runEngine, agentPool, liveChildren, operationGate, broadcastSince, contextUsageCache };
 }
 
-describe("SessionApplicationService", () => {
+describe("SessionInteractionService", () => {
   it("delivers validated Skill instructions to a live child while preserving original input items", async () => {
     const items = [{ type: "skill" as const, name: "review", path: "/review/SKILL.md" }];
     const run = { id: "live-run", sessionId: "s1", inputId: "live-input", status: "running" };
@@ -133,7 +144,7 @@ describe("SessionApplicationService", () => {
     });
     store.getInput.mockReturnValueOnce(undefined).mockReturnValue(input);
 
-    service.getSession("s1", { warm: true });
+    await service.warmSession("s1");
     const admitted = await service.admitPrompt("s1", {
       id: "live-input",
       delivery: "queue",
@@ -208,80 +219,6 @@ describe("SessionApplicationService", () => {
     })).rejects.toEqual(expect.objectContaining<Partial<SessionApplicationError>>({ status: 500 }));
   });
 
-  it("creates a session, starts warming it, and publishes the store event", () => {
-    const { service, agentPool, broadcastSince } = createService();
-
-    const created = service.createSession({ cwd: "/repo", model: "gpt-test" });
-
-    expect(created).toMatchObject({ cwd: "/repo", model: "gpt-test" });
-    expect(agentPool.warm).toHaveBeenCalledWith("s1");
-    expect(broadcastSince).toHaveBeenCalledWith(7);
-  });
-
-  it("rejects runtime-setting changes while the session has run work", async () => {
-    const { service, store, agentPool } = createService({ hasWork: true });
-
-    await expect(service.updateSession("s1", {
-      metadata: { runtime: { permissionMode: "plan" } },
-    })).rejects.toEqual(expect.objectContaining<Partial<SessionApplicationError>>({
-      status: 409,
-    }));
-    expect(store.updateSession).not.toHaveBeenCalled();
-    expect(agentPool.close).not.toHaveBeenCalled();
-  });
-
-  it("closes the runtime after changing runtime metadata", async () => {
-    const { service, store, agentPool, broadcastSince } = createService();
-
-    await service.updateSession("s1", { metadata: { runtime: { permissionMode: "plan" } } });
-
-    expect(store.updateSession).toHaveBeenCalledWith("s1", expect.objectContaining({
-      metadata: { runtime: { model: "gpt-test", permissionMode: "plan" } },
-    }));
-    expect(agentPool.close).toHaveBeenCalledWith("s1");
-    expect(broadcastSince).toHaveBeenCalledWith(7);
-  });
-
-  it("closes the runtime after changing the model", async () => {
-    const { service, store, agentPool } = createService();
-
-    await service.updateSession("s1", { metadata: { runtime: { model: "next-model" } } });
-
-    expect(store.updateSession).toHaveBeenCalledWith("s1", expect.objectContaining({
-      model: "next-model",
-      metadata: { runtime: { model: "next-model" } },
-    }));
-    expect(store.transaction).toHaveBeenCalledOnce();
-    expect(store.createMessage).toHaveBeenCalledWith({
-      sessionId: "s1",
-      role: "system",
-      metadata: {
-        presentation: {
-          kind: "model_switch",
-          fromModel: "gpt-test",
-          toModel: "next-model",
-        },
-      },
-    });
-    expect(store.upsertMessagePart).toHaveBeenCalledWith(expect.objectContaining({
-      sessionId: "s1",
-      messageId: "model-switch-message",
-      type: "text",
-      status: "completed",
-      text: "模型已切换 gpt-test → next-model",
-    }));
-    expect(agentPool.close).toHaveBeenCalledWith("s1");
-  });
-
-  it("does not create a presentation message when the model is unchanged", async () => {
-    const { service, store } = createService();
-
-    await service.updateSession("s1", { metadata: { runtime: { model: "gpt-test" } } });
-
-    expect(store.createMessage).not.toHaveBeenCalled();
-    expect(store.upsertMessagePart).not.toHaveBeenCalled();
-  });
-
   it("routes attachment prompts to the durable run engine instead of a live child", async () => {
     const { service, runEngine, liveChildren } = createService({ live: true });
 
@@ -302,28 +239,11 @@ describe("SessionApplicationService", () => {
     );
   });
 
-  it("blocks prompt admission until a runtime configuration change has closed the old agent", async () => {
-    const { service, agentPool, runEngine } = createService();
-    let finishClose!: () => void;
-    const closing = new Promise<void>((resolve) => { finishClose = resolve; });
-    agentPool.close.mockReturnValue(closing);
-
-    const updating = service.updateSession("s1", { metadata: { runtime: { model: "next-model" } } });
-    await expect(service.admitPrompt("s1", { content: "too early" })).rejects.toEqual(
-      expect.objectContaining<Partial<SessionApplicationError>>({ status: 409 }),
-    );
-    expect(runEngine.admitPromptAndMaybeRun).not.toHaveBeenCalled();
-
-    finishClose();
-    await updating;
-    await expect(service.admitPrompt("s1", { content: "now" })).resolves.toBeDefined();
-  });
-
-  it("does not warm a session through an active global mutation barrier", () => {
+  it("does not warm a session through an active global mutation barrier", async () => {
     const { service, agentPool, operationGate } = createService();
     const lease = operationGate.tryEnterBarrier({ kind: "global" }, () => true)!;
 
-    service.getSession("s1", { warm: true });
+    await service.warmSession("s1");
 
     expect(agentPool.warm).not.toHaveBeenCalled();
     lease.release();
@@ -416,196 +336,5 @@ describe("SessionApplicationService", () => {
     })).rejects.toMatchObject({ status: 409 });
 
     expect(runEngine.replayInput).not.toHaveBeenCalled();
-  });
-
-  it("forks a session through the store's atomic history copy", () => {
-    const { service, store } = createService();
-
-    service.forkSession("s1", { afterMessageId: "message-2" });
-
-    expect(store.forkSessionWithHistory).toHaveBeenCalledWith({
-      sourceSessionId: "s1",
-      afterMessageId: "message-2",
-      session: expect.objectContaining({
-        parentId: "s1",
-        cwd: "/repo",
-        title: "Session fork",
-        model: "gpt-test",
-      }),
-    });
-  });
-
-  it("closes child admission before taking the archive descendant snapshot", async () => {
-    const { service, store } = createService();
-    let closing = false;
-    store.beginArchive.mockImplementation(() => {
-      closing = true;
-      return { ...session, status: "closing" };
-    });
-    store.listChildSessions.mockImplementation(() => {
-      expect(closing).toBe(true);
-      return [];
-    });
-
-    await service.archiveSessionTree("s1");
-
-    expect(store.beginArchive.mock.invocationCallOrder[0])
-      .toBeLessThan(store.listChildSessions.mock.invocationCallOrder[0]!);
-  });
-
-  describe("lifecycle characterization", () => {
-    it("creates a session with runtime metadata and warms it", () => {
-      const { service, store, agentPool, broadcastSince } = createService();
-
-      const created = service.createSession({
-        id: "s2",
-        cwd: "/new-repo",
-        metadata: { runtime: { model: "custom-model" } },
-      });
-
-      expect(store.createSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "s2",
-          cwd: "/new-repo",
-          model: "custom-model",
-          metadata: expect.objectContaining({
-            runtime: expect.objectContaining({ model: "custom-model" }),
-          }),
-        }),
-      );
-      expect(agentPool.warm).toHaveBeenCalledWith("s2");
-      expect(broadcastSince).toHaveBeenCalledWith(7);
-    });
-
-    it("fails fork when source session does not exist", () => {
-      const { service, store } = createService();
-      store.getSession.mockReturnValue(undefined);
-
-      expect(() => service.forkSession("missing-s")).toThrowError(
-        new SessionApplicationError(404, "Session not found: missing-s"),
-      );
-    });
-
-    it("maps Fork point not found error to 404", () => {
-      const { service, store } = createService();
-      store.forkSessionWithHistory.mockImplementation(() => {
-        throw new Error("Fork point not found");
-      });
-
-      expect(() => service.forkSession("s1", { beforeMessageId: "invalid-id" })).toThrowError(
-        new SessionApplicationError(404, "Fork point not found"),
-      );
-    });
-
-    it("fails update when session does not exist", async () => {
-      const { service, store } = createService();
-      store.getSession.mockReturnValue(undefined);
-
-      await expect(service.updateSession("missing-s", { title: "New" })).rejects.toMatchObject({
-        status: 404,
-        message: "Session not found",
-      });
-    });
-
-    it("rejects runtime config update when session has active work", async () => {
-      const { service } = createService({ hasWork: true });
-
-      await expect(
-        service.updateSession("s1", { metadata: { runtime: { model: "another-model" } } }),
-      ).rejects.toMatchObject({
-        status: 409,
-        message: "Cannot update runtime session settings while the session is active",
-      });
-    });
-
-    it("switches model, creates system message, closes agent pool, and invalidates context usage cache", async () => {
-      const { service, store, agentPool, contextUsageCache, broadcastSince } = createService();
-
-      await service.updateSession("s1", { metadata: { runtime: { model: "gpt-4o" } } });
-
-      expect(store.createMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionId: "s1",
-          role: "system",
-          metadata: {
-            presentation: {
-              kind: "model_switch",
-              fromModel: "gpt-test",
-              toModel: "gpt-4o",
-            },
-          },
-        }),
-      );
-      expect(store.upsertMessagePart).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionId: "s1",
-          text: "模型已切换 gpt-test → gpt-4o",
-        }),
-      );
-      expect(agentPool.close).toHaveBeenCalledWith("s1");
-      expect(contextUsageCache.invalidate).toHaveBeenCalledWith("s1");
-      expect(broadcastSince).toHaveBeenCalledWith(7);
-    });
-
-    it("returns immediately if session is already archived", async () => {
-      const { service, store } = createService();
-      store.getSession.mockReturnValue({ ...session, status: "archived" });
-
-      const result = await service.archiveSessionTree("s1");
-
-      expect(result.status).toBe("archived");
-      expect(store.archiveSession).not.toHaveBeenCalled();
-    });
-
-    it("fails archive when session does not exist", async () => {
-      const { service, store } = createService();
-      store.getSession.mockReturnValue(undefined);
-
-      await expect(service.archiveSessionTree("missing")).rejects.toMatchObject({
-        status: 404,
-      });
-    });
-
-    it("deduplicates concurrent archiveSessionTree calls", async () => {
-      const { service, store, agentPool } = createService();
-      let resolveClose!: () => void;
-      const closePromise = new Promise<void>((resolve) => {
-        resolveClose = resolve;
-      });
-      agentPool.close.mockReturnValue(closePromise);
-
-      const p1 = service.archiveSessionTree("s1");
-      const p2 = service.archiveSessionTree("s1");
-
-      resolveClose();
-      const [r1, r2] = await Promise.all([p1, p2]);
-
-      expect(r1).toBe(r2);
-      expect(store.archiveSession).toHaveBeenCalledTimes(1);
-    });
-
-    it("deletes session tree recursively and cleans up agent runtime", async () => {
-      const { service, store, agentPool, runEngine, liveChildren } = createService();
-      const child = { ...session, id: "child-1", parentId: "s1" };
-      store.listChildSessions.mockImplementation((id) => (id === "s1" ? [child] : []));
-      store.deleteSessionTree.mockImplementation((id) => (id === "s1" ? ["s1"] : [id]));
-
-      const deletedIds = await service.deleteSessionTree("s1");
-
-      expect(deletedIds).toEqual(["child-1", "s1"]);
-      expect(liveChildren.interrupt).toHaveBeenCalledWith("s1", "Session deleted");
-      expect(runEngine.interruptSession).toHaveBeenCalledWith("s1");
-      expect(agentPool.close).toHaveBeenCalledWith("s1");
-      expect(store.deleteSessionTree).toHaveBeenCalledWith("s1");
-    });
-
-    it("fails delete when session does not exist", async () => {
-      const { service, store } = createService();
-      store.getSession.mockReturnValue(undefined);
-
-      await expect(service.deleteSessionTree("missing")).rejects.toMatchObject({
-        status: 404,
-      });
-    });
   });
 });

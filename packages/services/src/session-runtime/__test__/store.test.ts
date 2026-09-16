@@ -1090,7 +1090,7 @@ describe("SessionStore", () => {
 
   it("stores Scheduled tasks and Agent run projections in SQLite", () => {
     withStore((store, path) => {
-      const task = store.createScheduledTask({
+      const task = store.schedules.createTask({
         id: "schedule-1",
         name: "weekday-review",
         prompt: "Review the last day of changes and report risks.",
@@ -1106,13 +1106,13 @@ describe("SessionStore", () => {
         createdBy: "agent",
         nextRunAt: 200,
       });
-      const run = store.createScheduledRun({
+      const run = store.schedules.createRun({
         id: "scheduled-run-1",
         taskId: task.id,
         cause: "manual",
         scheduledFor: 100,
       });
-      store.updateScheduledRun(run.id, {
+      store.schedules.updateRun(run.id, {
         status: "succeeded",
         sessionId: "session-1",
         runId: "agent-run-1",
@@ -1121,7 +1121,7 @@ describe("SessionStore", () => {
         startedAt: 110,
         finishedAt: 150,
       });
-      store.updateScheduledTask(task.id, {
+      store.schedules.updateTask(task.id, {
         lastRunAt: 150,
         runCount: 1,
         nextRunAt: 300,
@@ -1129,7 +1129,7 @@ describe("SessionStore", () => {
       store.close();
 
       const reloaded = new SessionStore({ path });
-      expect(reloaded.getScheduledTask(task.id)).toMatchObject({
+      expect(reloaded.schedules.getTask(task.id)).toMatchObject({
         name: "weekday-review",
         destination: "standalone",
         executionMode: "worktree",
@@ -1139,7 +1139,7 @@ describe("SessionStore", () => {
         nextRunAt: 300,
       });
       expect(
-        reloaded.listScheduledRuns({ taskId: task.id, unread: true }),
+        reloaded.schedules.listRuns({ taskId: task.id, unread: true }),
       ).toMatchObject([
         {
           id: "scheduled-run-1",
@@ -1150,20 +1150,20 @@ describe("SessionStore", () => {
           unread: true,
         },
       ]);
-      expect(reloaded.listScheduledTasks().map((item) => item.id)).toContain(
+      expect(reloaded.schedules.listTasks().map((item) => item.id)).toContain(
         task.id,
       );
-      expect(reloaded.getScheduledRun(run.id)?.id).toBe(run.id);
-      expect(reloaded.deleteScheduledTask(task.id)).toBe(true);
-      expect(reloaded.getScheduledTask(task.id)).toBeUndefined();
-      expect(reloaded.getScheduledRun(run.id)).toBeUndefined();
+      expect(reloaded.schedules.getRun(run.id)?.id).toBe(run.id);
+      expect(reloaded.schedules.deleteTask(task.id)).toBe(true);
+      expect(reloaded.schedules.getTask(task.id)).toBeUndefined();
+      expect(reloaded.schedules.getRun(run.id)).toBeUndefined();
       reloaded.close();
     });
   });
 
   it("interrupts unfinished Scheduled runs after daemon restart", () => {
     withStore((store) => {
-      const task = store.createScheduledTask({
+      const task = store.schedules.createTask({
         name: "follow-up",
         prompt: "Check deployment status.",
         recurrence: "RRULE:FREQ=MINUTELY;INTERVAL=10",
@@ -1172,18 +1172,18 @@ describe("SessionStore", () => {
         destination: "chat",
         sessionId: "session-1",
       });
-      const run = store.createScheduledRun({
+      const run = store.schedules.createRun({
         taskId: task.id,
         cause: "scheduled",
         scheduledFor: Date.now(),
       });
-      store.updateScheduledRun(run.id, {
+      store.schedules.updateRun(run.id, {
         status: "running",
         startedAt: Date.now(),
       });
 
-      expect(store.interruptActiveScheduledRuns("daemon restarted")).toBe(1);
-      expect(store.getScheduledRun(run.id)).toMatchObject({
+      expect(store.schedules.interruptActiveRuns("daemon restarted")).toBe(1);
+      expect(store.schedules.getRun(run.id)).toMatchObject({
         status: "interrupted",
         error: "daemon restarted",
         unread: true,
@@ -2776,7 +2776,7 @@ describe("SessionStore", () => {
       mkdirSync(nested, { recursive: true });
       mkdirSync(join(moved, "apps", "desktop"), { recursive: true });
       try {
-        const project = store.inspectProject(join(root, "source"));
+        const project = store.projects.inspect(join(root, "source"));
         const session = store.createSession({
           id: "project-session",
           projectId: project.id,
@@ -2784,17 +2784,17 @@ describe("SessionStore", () => {
           model: "m",
         });
         expect(session.cwdRelative).toBe(join("apps", "desktop"));
-        expect(store.listProjects()).toHaveLength(1);
+        expect(store.projects.list()).toHaveLength(1);
 
-        store.rebindProject(project.id, moved);
+        store.projects.rebind(project.id, moved);
         expect(store.getSession(session.id)).toMatchObject({
           projectId: project.id,
           cwd: join(moved, "apps", "desktop"),
         });
 
-        store.archiveProject(project.id);
-        expect(store.listProjects()).toEqual([]);
-        expect(store.listProjects({ includeArchived: true })).toHaveLength(1);
+        store.projects.archive(project.id);
+        expect(store.projects.list()).toEqual([]);
+        expect(store.projects.list({ includeArchived: true })).toHaveLength(1);
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -2809,8 +2809,8 @@ describe("SessionStore", () => {
       mkdirSync(firstPath);
       mkdirSync(secondPath);
       try {
-        const first = store.inspectProject(firstPath);
-        const second = store.inspectProject(secondPath);
+        const first = store.projects.inspect(firstPath);
+        const second = store.projects.inspect(secondPath);
         const database = new Database(databasePath);
         try {
           database
@@ -2827,9 +2827,9 @@ describe("SessionStore", () => {
           database.close();
         }
 
-        store.inspectProject(firstPath);
+        store.projects.inspect(firstPath);
 
-        expect(store.listProjects().map((project) => project.id)).toEqual([
+        expect(store.projects.list().map((project) => project.id)).toEqual([
           second.id,
           first.id,
         ]);
@@ -2843,17 +2843,17 @@ describe("SessionStore", () => {
     withStore((store) => {
       const root = mkdtempSync(join(tmpdir(), "ohs-project-shell-"));
       try {
-        const project = store.inspectProject(root);
+        const project = store.projects.inspect(root);
         expect(project.defaultShell).toBeUndefined();
 
-        const updated = store.setProjectDefaultShell(
+        const updated = store.projects.setDefaultShell(
           project.id,
           "  pwsh.exe  ",
         );
         expect(updated.defaultShell).toBe("pwsh.exe");
-        expect(store.getProject(project.id)?.defaultShell).toBe("pwsh.exe");
+        expect(store.projects.get(project.id)?.defaultShell).toBe("pwsh.exe");
 
-        const cleared = store.setProjectDefaultShell(project.id, "");
+        const cleared = store.projects.setDefaultShell(project.id, "");
         expect(cleared.defaultShell).toBeUndefined();
       } finally {
         rmSync(root, { recursive: true, force: true });

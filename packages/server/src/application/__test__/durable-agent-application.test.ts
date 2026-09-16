@@ -301,7 +301,7 @@ describe("DaemonApplication", () => {
 
     try {
       await application.ready();
-      const rootSession = application.sessions.createSession({
+      const rootSession = application.commands.createSession({
         cwd: dir,
         model: "child-attachment-e2e-model",
       });
@@ -317,11 +317,11 @@ describe("DaemonApplication", () => {
         content: "",
         attachments: [{ assetId: attachment.id, intent: "tool_resource" }],
       });
-      const rootAdmission = await application.sessions.admitPrompt(rootSession.id, {
+      const rootAdmission = await application.interactions.admitPrompt(rootSession.id, {
         content: "delegate the attachment read",
       });
       await expect(
-        application.sessions.awaitRun(rootSession.id, rootAdmission.run!.id),
+        application.runControl.awaitRun(rootSession.id, rootAdmission.run!.id),
       ).resolves.toMatchObject({
         status: "completed",
         output: expect.stringContaining("attachment visible through the child tool"),
@@ -354,15 +354,15 @@ describe("DaemonApplication", () => {
       expect((closedChildRead.content[0] as { text: string }).text)
         .toContain("attachment_resource_access_denied");
 
-      const otherSession = application.sessions.createSession({
+      const otherSession = application.commands.createSession({
         cwd: dir,
         model: "child-attachment-e2e-model",
       });
-      const otherAdmission = await application.sessions.admitPrompt(otherSession.id, {
+      const otherAdmission = await application.interactions.admitPrompt(otherSession.id, {
         content: "try the other session attachment",
       });
       await expect(
-        application.sessions.awaitRun(otherSession.id, otherAdmission.run!.id),
+        application.runControl.awaitRun(otherSession.id, otherAdmission.run!.id),
       ).resolves.toMatchObject({
         status: "completed",
         output: expect.stringContaining("attachment_resource_access_denied"),
@@ -404,15 +404,15 @@ describe("DaemonApplication", () => {
 
     try {
       await application.ready();
-      const session = application.sessions.createSession({
+      const session = application.commands.createSession({
         cwd: dir,
         model: "test-model",
       });
-      const admission = await application.sessions.admitPrompt(session.id, {
+      const admission = await application.interactions.admitPrompt(session.id, {
         content: "preserve this checkpoint detail",
       });
       await expect(
-        application.sessions.awaitRun(session.id, admission.run!.id),
+        application.runControl.awaitRun(session.id, admission.run!.id),
       ).resolves.toMatchObject({ status: "completed" });
       const attachment = await application.attachments.import({
         displayName: "phase-two-notes.txt",
@@ -469,12 +469,12 @@ describe("DaemonApplication", () => {
 
     try {
       await application.ready();
-      const session = application.sessions.createSession({
+      const session = application.commands.createSession({
         cwd: process.cwd(),
         model: "test-model",
       });
-      const admission = await application.sessions.admitPrompt(session.id, { content: "initialize" });
-      await application.sessions.awaitRun(session.id, admission.run!.id);
+      const admission = await application.interactions.admitPrompt(session.id, { content: "initialize" });
+      await application.runControl.awaitRun(session.id, admission.run!.id);
 
       expect(backgroundShellJobs).not.toBe(terminalJobs);
 
@@ -553,9 +553,9 @@ describe("DaemonApplication", () => {
     });
     try {
       await application.ready();
-      const session = application.sessions.createSession({ cwd: dir, model: "test-model" });
-      const admission = await application.sessions.admitPrompt(session.id, { content: "hello" });
-      await application.sessions.awaitRun(session.id, admission.run!.id);
+      const session = application.commands.createSession({ cwd: dir, model: "test-model" });
+      const admission = await application.interactions.admitPrompt(session.id, { content: "hello" });
+      await application.runControl.awaitRun(session.id, admission.run!.id);
       expect(imageToText).toBeDefined();
       const png = Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
@@ -601,23 +601,23 @@ describe("DaemonApplication", () => {
     });
     try {
       expect(() =>
-        application.sessions.createSession({
+        application.commands.createSession({
           cwd: process.cwd(),
           model: "too-early",
         }),
       ).toThrow("Durable Agent Application is not ready");
       await application.ready();
-      const session = application.sessions.createSession({
+      const session = application.commands.createSession({
         cwd: process.cwd(),
         model: "test-model",
       });
-      const admission = await application.sessions.admitPrompt(session.id, {
+      const admission = await application.interactions.admitPrompt(session.id, {
         content: "hello",
       });
 
       expect(admission.run).toBeDefined();
       await expect(
-        application.sessions.awaitRun(session.id, admission.run!.id),
+        application.runControl.awaitRun(session.id, admission.run!.id),
       ).resolves.toEqual({ status: "completed", output: "echo: hello" });
       expect(application.queries.getSessionState(session.id)).toMatchObject({
         session: { id: session.id },
@@ -685,7 +685,7 @@ describe("DaemonApplication", () => {
         }),
       ).rejects.toThrow("Prompt id is already used");
 
-      await application.sessions.archiveSessionTree(
+      await application.commands.archiveSessionTree(
         first.conversation.sessionId,
       );
       const afterArchive = await application.channels.handleMessage({

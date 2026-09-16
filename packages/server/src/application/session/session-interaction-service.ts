@@ -2,21 +2,23 @@ import {
   AttachmentError,
   normalizePromptAttachments,
   promptAttachmentFingerprint,
-  type SessionStore,
 } from "@openharness/services";
 import {
   sessionUserInputText,
   type AdmitPromptAttachmentInput,
+  type AppendEventInput,
+  type SessionInputRecord,
+  type SessionMessagePartRecord,
+  type SessionMessageRecord,
+  type SessionRecord,
+  type SessionRunRecord,
   type SessionUserInputItem,
 } from "@openharness/protocol";
 
 import type {
   AdmitPromptInput,
   AdmitPromptResult,
-  AwaitSessionRunResult,
-  SessionRunEngine,
 } from "./session-run-engine.js";
-import type { SessionEventPublisher } from "./session-event-publisher.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { LiveChildAgentDirectory } from "../agent/live-child-agent-directory.js";
 import {
@@ -26,44 +28,50 @@ import {
 } from "../control/daemon-operation-gate.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
-import type { ContextUsageCache } from "../context-usage-cache.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "./session-conversation-context.js";
 import type { SessionRunExecutorContext } from "./session-run-executor.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
-import { SessionQueryService } from "./session-query-service.js";
-import {
-  SessionCommandService,
-  type CreateSessionCommand,
-  type ForkSessionCommand,
-  type UpdateSessionCommand,
-} from "./session-command-service.js";
 import type { RunAdmissionService } from "./run-admission-service.js";
 import type { RunControlService } from "./run-control-service.js";
+import type { SessionOperationRunner } from "./session-operation-runner.js";
 
 export { SessionApplicationError } from "./session-application-error.js";
-export type { CreateSessionCommand, ForkSessionCommand, UpdateSessionCommand } from "./session-command-service.js";
 
-export interface SessionApplicationServiceContext {
-  store: SessionStore;
-  runEngine: SessionRunEngine;
-  admission?: Pick<RunAdmissionService, "admitPromptAndMaybeRun" | "replaceLatestPrompt" | "replayInput">;
-  control?: Pick<RunControlService, "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "activeRunId" | "promoteQueuedRun" | "awaitRun" | "waitForRuns">;
-  agentPool: AgentPool;
-  liveChildren: Pick<LiveChildAgentDirectory, "has" | "send" | "interrupt">;
-  operationGate: Pick<DaemonOperationGate, "enter" | "tryEnterBarrier">;
-  events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
-  /** 应用启动恢复完成前，拒绝新的写操作。测试和独立服务可不提供。 */
-  assertReady?(): void;
-  /** Optional: invalidate session context-usage cache on model/runtime changes. */
-  contextUsageCache?: Pick<ContextUsageCache, "invalidate">;
-  resolveSkillCatalog?: SessionRunExecutorContext["resolveSkillCatalog"];
-  pluginCapabilities?: Pick<SessionPluginCapabilityService, "admit">;
-  queries?: SessionQueryService;
-  commands?: SessionCommandService;
+export interface SessionInteractionSessions {
+  get(sessionId: string): SessionRecord | undefined;
+  listChildren(sessionId: string): SessionRecord[];
 }
 
-export interface EditLatestPromptCommand {
+export interface SessionInteractionConversations {
+  getInput(inputId: string): SessionInputRecord | undefined;
+  listMessages(sessionId: string): SessionMessageRecord[];
+  listMessageParts(sessionId: string): SessionMessagePartRecord[];
+  appendEvent(input: AppendEventInput): unknown;
+}
+
+export interface SessionInteractionRuns {
+  getRun(runId: string): SessionRunRecord | undefined;
+  findRunByInput(inputId: string): SessionRunRecord | undefined;
+  listRunsByInput(inputId: string): SessionRunRecord[];
+  updateRun(runId: string, input: Partial<SessionRunRecord>): SessionRunRecord;
+}
+
+export interface SessionInteractionServiceContext {
+  sessions: SessionInteractionSessions;
+  conversations: SessionInteractionConversations;
+  runs: SessionInteractionRuns;
+  admission: Pick<RunAdmissionService, "admitPromptAndMaybeRun" | "replaceLatestPrompt" | "replayInput">;
+  control: Pick<RunControlService, "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "promoteQueuedRun">;
+  operationRunner: Pick<SessionOperationRunner, "run">;
+  agentPool: Pick<AgentPool, "close" | "configured" | "warm">;
+  liveChildren: Pick<LiveChildAgentDirectory, "has" | "send" | "interrupt">;
+  operationGate: Pick<DaemonOperationGate, "enter">;
+  resolveSkillCatalog?: SessionRunExecutorContext["resolveSkillCatalog"];
+  pluginCapabilities?: Pick<SessionPluginCapabilityService, "admit">;
+}
+
+export interface EditLatestPromptInput {
   id: string;
   items: SessionUserInputItem[];
   attachments?: AdmitPromptAttachmentInput[];
@@ -88,102 +96,54 @@ function withoutPluginId(
   return sanitized;
 }
 
-export interface ResumeSessionRunCommand {
+export interface ResumeRunInput {
   id?: string;
   metadata?: Record<string, unknown>;
   traceId: string;
 }
 
-export interface PromoteQueuedPromptCommand {
+export interface PromoteQueuedPromptInput {
   queuedRunId: string;
   expectedActiveRunId: string;
 }
 
-export interface CancelQueuedPromptCommand {
+export interface CancelQueuedPromptInput {
   queuedRunId: string;
 }
 
-export type ResumeSessionRunResult = AdmitPromptResult & {
-  source_run: NonNullable<ReturnType<SessionStore["getRun"]>>;
+export type ResumeRunResult = AdmitPromptResult & {
+  source_run: SessionRunRecord;
 };
 
-/** Session 写用例门面；child session 只由 framework 事件投影创建。 */
-export class SessionApplicationService {
-  private readonly admission: NonNullable<SessionApplicationServiceContext["admission"]>;
-  private readonly control: NonNullable<SessionApplicationServiceContext["control"]>;
-  private readonly queries: SessionQueryService;
-  private readonly commands: SessionCommandService;
+/** Cross-service Prompt/Run interactions; child sessions are projected by framework events. */
+export class SessionInteractionService {
+  constructor(private readonly context: SessionInteractionServiceContext) {}
 
-  constructor(private readonly context: SessionApplicationServiceContext) {
-    this.admission = context.admission ?? context.runEngine;
-    this.control = context.control ?? context.runEngine;
-    this.commands =
-      context.commands ??
-      new SessionCommandService({
-        sessions: context.store,
-        transactions: context.store,
-        runtimeControl: {
-          closeAgent: (id) => context.agentPool.close(id),
-          hasActiveWorkForSession: (id) => context.agentPool.hasActiveWorkForSession(id),
-          interruptSession: (id) => this.control.interruptSession(id),
-          waitForRuns: (ids) => this.control.waitForRuns(ids),
-          hasRunWork: (id) => this.control.hasWork(id),
-          interruptLiveChild: (id, reason) => context.liveChildren.interrupt(id, reason),
-          hasLiveChild: (id) => context.liveChildren.has(id),
-          warmSession: (session) => this.warmWhenAdmitted(session),
-        },
-        operationGate: context.operationGate,
-        events: context.events,
-        contextUsageCache: context.contextUsageCache,
-        assertReady: context.assertReady,
-      });
-    this.queries = context.queries ?? new SessionQueryService(context.store);
-  }
-
-  get hasRuntime(): boolean {
+  private get hasRuntime(): boolean {
     return this.context.agentPool.configured;
   }
 
-  createSession(
-    input: Parameters<SessionStore["createSession"]>[0],
-  ): ReturnType<SessionStore["createSession"]> {
-    return this.commands.createSession(input);
-  }
-
-  getSession(
-    sessionId: string,
-    options: { warm?: boolean } = {},
-  ): ReturnType<SessionStore["getSession"]> {
-    const session = this.queries.getSession(sessionId);
-    if (session && options.warm && !this.context.liveChildren.has(sessionId)) {
+  async warmSession(sessionId: string): Promise<SessionRecord | undefined> {
+    const session = this.context.sessions.get(sessionId);
+    if (session && !this.context.liveChildren.has(sessionId)) {
       this.warmWhenAdmitted(session);
     }
     return session;
   }
 
-  forkSession(
-    sessionId: string,
-    input: ForkSessionCommand = {},
-  ): ReturnType<SessionStore["createSession"]> {
-    return this.commands.forkSession(sessionId, input);
-  }
-
   async editLatestPrompt(
     sessionId: string,
-    input: EditLatestPromptCommand,
+    input: EditLatestPromptInput,
   ): Promise<AdmitPromptResult> {
-    this.assertReady();
-    const session = this.context.store.getSession(sessionId);
-    if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    const items = inputItems(input);
-    const content = sessionUserInputText(items).trim();
-    const attachments = normalizePromptAttachments(input.attachments);
-    if (!content && attachments.length === 0) {
-      throw new SessionApplicationError(400, "content or attachments are required");
-    }
-    const lease = this.enterSessionOperation(session);
-    try {
-      const existingInput = this.context.store.getInput(input.id);
+    return this.context.operationRunner.run(sessionId, async () => {
+      const session = this.requireSession(sessionId);
+      const items = inputItems(input);
+      const content = sessionUserInputText(items).trim();
+      const attachments = normalizePromptAttachments(input.attachments);
+      if (!content && attachments.length === 0) {
+        throw new SessionApplicationError(400, "content or attachments are required");
+      }
+      const existingInput = this.context.conversations.getInput(input.id);
       if (existingInput) {
         const edit = isRecord(existingInput.metadata.edit)
           ? existingInput.metadata.edit
@@ -205,7 +165,7 @@ export class SessionApplicationService {
         ) {
           throw new SessionApplicationError(409, `Prompt id is already used: ${input.id}`);
         }
-        return promptResult(this.context.store, existingInput);
+        return promptResult(this.context.runs, existingInput);
       }
       const hasPluginCandidates = items.some((item) =>
         item.type === "capability" || item.type === "skill"
@@ -219,7 +179,7 @@ export class SessionApplicationService {
       const capability = hasPluginCandidates && this.context.pluginCapabilities
         ? await this.context.pluginCapabilities.admit(session, items)
         : {};
-      if (this.control.hasWork(sessionId)) {
+      if (this.context.control.hasWork(sessionId)) {
         throw new SessionApplicationError(
           409,
           "Wait for the active session run before editing the latest prompt",
@@ -228,7 +188,7 @@ export class SessionApplicationService {
       if (this.context.liveChildren.has(sessionId)) {
         throw new SessionApplicationError(409, "Editing a live child session is not supported");
       }
-      const latestUserMessage = [...this.context.store.listMessages(sessionId)]
+      const latestUserMessage = [...this.context.conversations.listMessages(sessionId)]
         .reverse()
         .find((message) => message.role === "user");
       if (!latestUserMessage) {
@@ -241,7 +201,7 @@ export class SessionApplicationService {
         );
       }
       await this.context.agentPool.close(sessionId);
-      return this.admission.replaceLatestPrompt(sessionId, latestUserMessage.id, {
+      return this.context.admission.replaceLatestPrompt(sessionId, latestUserMessage.id, {
         id: input.id,
         items,
         attachments,
@@ -258,44 +218,17 @@ export class SessionApplicationService {
           ? { runMetadata: { pluginId: capability.pluginId } }
           : {}),
       });
-    } finally {
-      lease.release();
-    }
-  }
-
-  async updateSession(
-    sessionId: string,
-    input: UpdateSessionCommand,
-  ): Promise<ReturnType<SessionStore["updateSession"]>> {
-    return await this.commands.updateSession(sessionId, input);
-  }
-
-  async withSessionOperation<T>(sessionId: string, work: () => Promise<T>): Promise<T> {
-    this.assertReady();
-    const session = this.context.store.getSession(sessionId);
-    if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    const lease = this.enterSessionOperation(session);
-    try {
-      return await work();
-    } finally {
-      lease.release();
-    }
+    });
   }
 
   async admitPrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult> {
-    this.assertReady();
-    const session = this.context.store.getSession(sessionId);
-    if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    const lease = this.enterSessionOperation(session);
-    try {
-      return await this.admitPromptWork(session, input);
-    } finally {
-      lease.release();
-    }
+    return this.context.operationRunner.run(sessionId, () =>
+      this.admitPromptWork(this.requireSession(sessionId), input),
+    );
   }
 
   private async admitPromptWork(
-    session: NonNullable<ReturnType<SessionStore["getSession"]>>,
+    session: SessionRecord,
     originalInput: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     const sessionId = session.id;
@@ -310,7 +243,7 @@ export class SessionApplicationService {
       throw new Error("session_plugin_capability_unavailable");
     }
     const existingPluginId = hasPluginCandidates && originalInput.id
-      ? this.context.store.getInput(originalInput.id)?.metadata.pluginId
+      ? this.context.conversations.getInput(originalInput.id)?.metadata.pluginId
       : undefined;
     const capability = hasPluginCandidates && this.context.pluginCapabilities
       ? typeof existingPluginId === "string"
@@ -344,7 +277,7 @@ export class SessionApplicationService {
     };
     const hasAttachments = (input.attachments?.length ?? 0) > 0;
     if (!hasAttachments && this.context.liveChildren.has(sessionId) && input.id) {
-      const existing = this.context.store.getInput(input.id);
+      const existing = this.context.conversations.getInput(input.id);
       if (existing) {
         if (
           existing.sessionId !== sessionId ||
@@ -354,7 +287,7 @@ export class SessionApplicationService {
         ) {
           throw new SessionApplicationError(409, `Prompt id is already used: ${input.id}`);
         }
-        return promptResult(this.context.store, existing);
+        return promptResult(this.context.runs, existing);
       }
     }
     let liveContent = sessionUserInputText(items);
@@ -371,7 +304,14 @@ export class SessionApplicationService {
         hasExplicitSkills
           ? await this.context.resolveSkillCatalog!(session)
           : { resolvePath: () => undefined },
-        conversationContextCatalog(this.context.store, sessionId),
+        conversationContextCatalog(
+          {
+            getSession: (id) => this.context.sessions.get(id),
+            listMessages: (id) => this.context.conversations.listMessages(id),
+            listMessageParts: (id) => this.context.conversations.listMessageParts(id),
+          },
+          sessionId,
+        ),
       ).instruction;
     }
     const live = hasAttachments || capability.pluginId
@@ -385,9 +325,9 @@ export class SessionApplicationService {
           metadata: input.metadata,
         });
     if (live) {
-      const admitted = this.context.store.getInput(live.inputId);
-      const run = this.context.store.getRun(live.runId);
-      const owningRun = this.context.store.findRunByInput(live.inputId);
+      const admitted = this.context.conversations.getInput(live.inputId);
+      const run = this.context.runs.getRun(live.runId);
+      const owningRun = this.context.runs.findRunByInput(live.inputId);
       if (
         live.sessionId !== sessionId ||
         !admitted ||
@@ -421,20 +361,16 @@ export class SessionApplicationService {
         ...(run.status === "pending" ? { queue_state: "queued" as const } : {}),
       };
     }
-    return await this.admission.admitPromptAndMaybeRun(sessionId, input);
+    return await this.context.admission.admitPromptAndMaybeRun(sessionId, input);
   }
 
   async resumeRun(
     sessionId: string,
     runId: string,
-    input: ResumeSessionRunCommand,
-  ): Promise<ResumeSessionRunResult> {
-    this.assertReady();
-    const session = this.context.store.getSession(sessionId);
-    if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    const lease = this.enterSessionOperation(session);
-    try {
-      const sourceRun = this.context.store.getRun(runId);
+    input: ResumeRunInput,
+  ): Promise<ResumeRunResult> {
+    return this.context.operationRunner.run(sessionId, async () => {
+      const sourceRun = this.context.runs.getRun(runId);
       if (!sourceRun || sourceRun.sessionId !== sessionId) {
         throw new SessionApplicationError(404, "Interrupted run not found");
       }
@@ -444,12 +380,12 @@ export class SessionApplicationService {
       if (!sourceRun.inputId) {
         throw new SessionApplicationError(409, "This interrupted run has no prompt to replay");
       }
-      const sourceInput = this.context.store.getInput(sourceRun.inputId);
+      const sourceInput = this.context.conversations.getInput(sourceRun.inputId);
       if (!sourceInput || sourceInput.sessionId !== sessionId) {
         throw new SessionApplicationError(409, "The original prompt is unavailable");
       }
 
-      const requestedRecovery = input.id ? this.context.store.getRun(input.id) : undefined;
+      const requestedRecovery = input.id ? this.context.runs.getRun(input.id) : undefined;
       if (requestedRecovery) {
         const requestedLink = isRecord(requestedRecovery.metadata.recovery)
           ? requestedRecovery.metadata.recovery
@@ -466,7 +402,7 @@ export class SessionApplicationService {
         }
       }
 
-      const existingRecovery = this.context.store
+      const existingRecovery = this.context.runs
         .listRunsByInput(sourceInput.id)
         .find(
           (candidate) =>
@@ -491,7 +427,7 @@ export class SessionApplicationService {
       if (!this.hasRuntime) {
         throw new SessionApplicationError(409, "Session runtime is unavailable");
       }
-      if (this.control.hasWork(sessionId)) {
+      if (this.context.control.hasWork(sessionId)) {
         throw new SessionApplicationError(
           409,
           "Wait for the active session run before resuming interrupted work",
@@ -506,7 +442,7 @@ export class SessionApplicationService {
       const pluginId = typeof sourceInput.metadata.pluginId === "string"
         ? sourceInput.metadata.pluginId
         : undefined;
-      const resumed = this.admission.replayInput(sourceInput.id, {
+      const resumed = this.context.admission.replayInput(sourceInput.id, {
         id: input.id,
         metadata: {
           ...(withoutPluginId(input.metadata) ?? {}),
@@ -515,8 +451,7 @@ export class SessionApplicationService {
         },
         traceId: input.traceId,
       });
-      const before = this.context.events.checkpoint();
-      this.context.store.appendEvent({
+      this.context.conversations.appendEvent({
         type: "session.run.recovery_requested",
         sessionId,
         payload: {
@@ -526,40 +461,40 @@ export class SessionApplicationService {
           recoveryRunId: resumed.run?.id,
         },
       });
-      this.context.events.publishSince(before);
       return { ...resumed, source_run: sourceRun };
-    } finally {
-      lease.release();
-    }
+    });
   }
 
   async interruptSession(
     sessionId: string,
     expectedRunId?: string,
-  ): Promise<ReturnType<SessionRunEngine["interruptSession"]>> {
-    this.assertReady();
-    if (expectedRunId) return this.control.interruptRun(sessionId, expectedRunId);
-    const lane = this.control.interruptSession(sessionId);
-    const targets = [sessionId, ...this.descendantSessionIds(sessionId)];
-    const childInterrupted = (
-      await Promise.all(
-        targets.map((target) => this.context.liveChildren.interrupt(target, "Session interrupted")),
-      )
-    ).some(Boolean);
-    return childInterrupted && !lane.interrupted ? { ...lane, interrupted: true } : lane;
+  ): Promise<{ activeRunId?: string; queuedRunIds: string[]; interrupted: boolean }> {
+    return this.context.operationRunner.run(sessionId, async () => {
+      if (expectedRunId) {
+        return this.context.control.interruptRun(sessionId, expectedRunId);
+      }
+      const lane = this.context.control.interruptSession(sessionId);
+      const targets = [sessionId, ...this.descendantSessionIds(sessionId)];
+      const childInterrupted = (
+        await Promise.all(
+          targets.map((target) =>
+            this.context.liveChildren.interrupt(target, "Session interrupted"),
+          ),
+        )
+      ).some(Boolean);
+      return childInterrupted && !lane.interrupted
+        ? { ...lane, interrupted: true }
+        : lane;
+    });
   }
 
   async promoteQueuedPrompt(
     sessionId: string,
     inputId: string,
-    command: PromoteQueuedPromptCommand,
-  ): Promise<NonNullable<Awaited<ReturnType<SessionRunEngine["promoteQueuedRun"]>>>> {
-    this.assertReady();
-    const session = this.context.store.getSession(sessionId);
-    if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    const lease = this.enterSessionOperation(session);
-    try {
-      const promoted = await this.control.promoteQueuedRun(
+    command: PromoteQueuedPromptInput,
+  ): Promise<NonNullable<Awaited<ReturnType<RunControlService["promoteQueuedRun"]>>>> {
+    return this.context.operationRunner.run(sessionId, async () => {
+      const promoted = await this.context.control.promoteQueuedRun(
         sessionId,
         inputId,
         command.queuedRunId,
@@ -567,26 +502,20 @@ export class SessionApplicationService {
       );
       if (!promoted) throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
       return promoted;
-    } finally {
-      lease.release();
-    }
+    });
   }
 
   async cancelQueuedPrompt(
     sessionId: string,
     inputId: string,
-    command: CancelQueuedPromptCommand,
+    command: CancelQueuedPromptInput,
   ): Promise<{
-    input: NonNullable<ReturnType<SessionStore["getInput"]>>;
-    run: NonNullable<ReturnType<SessionStore["getRun"]>>;
+    input: SessionInputRecord;
+    run: SessionRunRecord;
   }> {
-    this.assertReady();
-    const session = this.context.store.getSession(sessionId);
-    if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
-    const lease = this.enterSessionOperation(session);
-    try {
-      const input = this.context.store.getInput(inputId);
-      let run = this.context.store.getRun(command.queuedRunId);
+    return this.context.operationRunner.run(sessionId, async () => {
+      const input = this.context.conversations.getInput(inputId);
+      let run = this.context.runs.getRun(command.queuedRunId);
       if (!input || input.sessionId !== sessionId) {
         throw new SessionApplicationError(404, `Prompt not found: ${inputId}`);
       }
@@ -605,7 +534,7 @@ export class SessionApplicationService {
           "The selected prompt is no longer waiting in the queue",
         );
       }
-      const interrupted = this.control.interruptQueuedRun(
+      const interrupted = this.context.control.interruptQueuedRun(
         sessionId,
         command.queuedRunId,
         "Queued prompt cancelled by the user",
@@ -616,8 +545,7 @@ export class SessionApplicationService {
           "The queued prompt changed before it could be cancelled",
         );
       }
-      const before = this.context.events.checkpoint();
-      run = this.context.store.updateRun(command.queuedRunId, {
+      run = this.context.runs.updateRun(command.queuedRunId, {
         metadata: {
           cancellation: {
             kind: "user_cancelled_pending",
@@ -626,47 +554,12 @@ export class SessionApplicationService {
           },
         },
       });
-      this.context.events.publishSince(before);
       return { input, run };
-    } finally {
-      lease.release();
-    }
-  }
-
-  async awaitRun(sessionId: string, runId: string): Promise<AwaitSessionRunResult> {
-    return await this.control.awaitRun(sessionId, runId);
-  }
-
-  async closeRuntime(sessionId: string): Promise<void> {
-    return await this.commands.closeRuntime(sessionId);
-  }
-
-  async archiveSessionTree(sessionId: string): Promise<ReturnType<SessionStore["archiveSession"]>> {
-    return await this.commands.archiveSessionTree(sessionId);
-  }
-
-  async deleteSessionTree(sessionId: string): Promise<string[]> {
-    return await this.commands.deleteSessionTree(sessionId);
-  }
-
-  private enterSessionOperation(
-    session: Pick<NonNullable<ReturnType<SessionStore["getSession"]>>, "id" | "cwd">,
-  ): DaemonOperationLease {
-    try {
-      return this.context.operationGate.enter({
-        sessionId: session.id,
-        cwd: session.cwd,
-      });
-    } catch (error) {
-      if (error instanceof DaemonOperationUnavailableError) {
-        throw new SessionApplicationError(409, error.message);
-      }
-      throw error;
-    }
+    });
   }
 
   private warmWhenAdmitted(
-    session: Pick<NonNullable<ReturnType<SessionStore["getSession"]>>, "id" | "cwd">,
+    session: Pick<SessionRecord, "id" | "cwd">,
   ): void {
     let lease: DaemonOperationLease;
     try {
@@ -681,24 +574,28 @@ export class SessionApplicationService {
     void this.context.agentPool.warm(session.id).finally(() => lease.release());
   }
 
-  private assertReady(): void {
-    this.context.assertReady?.();
-  }
-
   private descendantSessionIds(sessionId: string): string[] {
     const result: string[] = [];
-    for (const child of this.context.store.listChildSessions(sessionId)) {
+    for (const child of this.context.sessions.listChildren(sessionId)) {
       result.push(child.id, ...this.descendantSessionIds(child.id));
     }
     return result;
   }
+
+  private requireSession(sessionId: string): SessionRecord {
+    const session = this.context.sessions.get(sessionId);
+    if (!session) {
+      throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
+    }
+    return session;
+  }
 }
 
 function promptResult(
-  store: SessionStore,
-  input: NonNullable<ReturnType<SessionStore["getInput"]>>,
+  runs: Pick<SessionInteractionRuns, "findRunByInput">,
+  input: SessionInputRecord,
 ): AdmitPromptResult {
-  const run = store.findRunByInput(input.id);
+  const run = runs.findRunByInput(input.id);
   return {
     input,
     ...(run ? { run } : {}),

@@ -16,8 +16,8 @@ describe("ProjectRepository queries", () => {
     const secondPath = join(directory, "second");
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      const first = store.inspectProject(firstPath);
-      const second = store.inspectProject(secondPath);
+      const first = store.projects.inspect(firstPath);
+      const second = store.projects.inspect(secondPath);
       const repository = new ProjectRepository((store as any).storage);
 
       expect(repository.list().map((project) => project.id)).toEqual([
@@ -58,13 +58,13 @@ describe("ProjectRepository mutations", () => {
     ["setDefaultShell", (store, id) => store.projects.setDefaultShell(id, "pwsh")],
     ["archive", (store, id) => store.projects.archive(id)],
     ["rebind", (store, id, path) => store.projects.rebind(id, `${path}-new`)],
-    ["inspectProject new", (store, _id, path) => store.inspectProject(`${path}-new`)],
-    ["inspectProject existing", (store, _id, path) => store.inspectProject(path)],
-    ["renameProject", (store, id) => store.renameProject(id, "changed")],
-    ["setProjectPinned", (store, id) => store.setProjectPinned(id, true)],
-    ["setProjectDefaultShell", (store, id) => store.setProjectDefaultShell(id, "pwsh")],
-    ["archiveProject", (store, id) => store.archiveProject(id)],
-    ["rebindProject", (store, id, path) => store.rebindProject(id, `${path}-new`)],
+    ["inspectProject new", (store, _id, path) => store.projects.inspect(`${path}-new`)],
+    ["inspectProject existing", (store, _id, path) => store.projects.inspect(path)],
+    ["renameProject", (store, id) => store.projects.rename(id, "changed")],
+    ["setProjectPinned", (store, id) => store.projects.setPinned(id, true)],
+    ["setProjectDefaultShell", (store, id) => store.projects.setDefaultShell(id, "pwsh")],
+    ["archiveProject", (store, id) => store.projects.archive(id)],
+    ["rebindProject", (store, id, path) => store.projects.rebind(id, `${path}-new`)],
   ];
 
   describe.each(["before owner check", "after owner check"])("takeover %s", (timing) => {
@@ -142,7 +142,7 @@ describe("ProjectRepository mutations", () => {
     const databasePath = join(directory, "sessions.db");
     const store = new SessionStore({ path: databasePath });
     try {
-      const project = store.inspectProject(oldPath);
+      const project = store.projects.inspect(oldPath);
       const firstOldCwd = join(oldPath, "first");
       const secondOldCwd = join(oldPath, "second");
       store.createSession({
@@ -197,14 +197,14 @@ describe("ProjectRepository mutations", () => {
     const conflictPath = join(directory, "conflict");
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      const project = store.inspectProject(originalPath);
+      const project = store.projects.inspect(originalPath);
       store.createSession({
         id: "s1",
         projectId: project.id,
         cwd: join(originalPath, "app"),
         model: "m",
       });
-      const conflict = store.inspectProject(conflictPath);
+      const conflict = store.projects.inspect(conflictPath);
       const storage = (store as any).storage;
       const repository = new ProjectRepository(storage);
 
@@ -247,7 +247,7 @@ describe("ProjectRepository mutations", () => {
     const nextPath = join(directory, "next");
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      const project = store.inspectProject(originalPath);
+      const project = store.projects.inspect(originalPath);
       const repository = store.projects;
       const returned = repository.get(project.id)!;
       returned.name = "mutated by caller";

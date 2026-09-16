@@ -20,8 +20,6 @@ import type {
   CreateMessageInput,
   CreatePermissionRequestInput,
   CreateProjectionSettlementInput,
-  CreateScheduledRunInput,
-  CreateScheduledTaskInput,
   CreateRunInput,
   CreateRunAttemptInput,
   CreateSessionTaskInput,
@@ -34,9 +32,6 @@ import type {
   ListSessionsOptions,
   PermissionRequestRecord,
   ProjectionSettlementRecord,
-  ScheduledRunRecord,
-  ScheduledTaskRecord,
-  ProjectRecord,
   ReplyPermissionInput,
   SessionMessagePartRecord,
   SessionEventRecord,
@@ -48,16 +43,11 @@ import type {
   SessionExecutionRecord,
   SessionStateSnapshot,
   UpsertMessagePartInput,
-  UpdateScheduledRunInput,
-  UpdateScheduledTaskInput,
   UpdateRunInput,
   UpdateRunAttemptInput,
   UpdateSessionTaskInput,
   UpdateSessionInput,
   ReplaceTranscriptInput,
-  ExternalConversationRecord,
-  ChannelDeliveryRecord,
-  ChannelDeliveryStatus,
   AttachmentAssetRecord,
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
@@ -499,91 +489,6 @@ export class SessionStore {
     return this.attachments.softDeleteUnreferencedAttachment(id, deletedAt);
   }
 
-  listProjects(options: { includeArchived?: boolean } = {}): ProjectRecord[] {
-    return this.projects.list(options);
-  }
-
-  getProject(projectId: string): ProjectRecord | undefined {
-    return this.projects.get(projectId);
-  }
-
-  inspectProject(inputPath: string): ProjectRecord {
-    return this.projects.inspect(inputPath);
-  }
-
-  renameProject(projectId: string, name: string): ProjectRecord {
-    return this.projects.rename(projectId, name);
-  }
-
-  setProjectPinned(projectId: string, pinned: boolean): ProjectRecord {
-    return this.projects.setPinned(projectId, pinned);
-  }
-
-  setProjectDefaultShell(
-    projectId: string,
-    shell: string | null,
-  ): ProjectRecord {
-    return this.projects.setDefaultShell(projectId, shell);
-  }
-
-  archiveProject(projectId: string): ProjectRecord {
-    return this.projects.archive(projectId);
-  }
-
-  rebindProject(projectId: string, inputPath: string): ProjectRecord {
-    return this.projects.rebind(projectId, inputPath);
-  }
-
-  createScheduledTask(input: CreateScheduledTaskInput): ScheduledTaskRecord {
-    return this.schedules.createTask(input);
-  }
-
-  getScheduledTask(id: string): ScheduledTaskRecord | undefined {
-    return this.schedules.getTask(id);
-  }
-
-  listScheduledTasks(
-    options: { status?: ScheduledTaskRecord["status"] } = {},
-  ): ScheduledTaskRecord[] {
-    return this.schedules.listTasks(options);
-  }
-
-  updateScheduledTask(
-    id: string,
-    patch: UpdateScheduledTaskInput,
-  ): ScheduledTaskRecord {
-    return this.schedules.updateTask(id, patch);
-  }
-
-  deleteScheduledTask(id: string): boolean {
-    return this.schedules.deleteTask(id);
-  }
-
-  createScheduledRun(input: CreateScheduledRunInput): ScheduledRunRecord {
-    return this.schedules.createRun(input);
-  }
-
-  getScheduledRun(id: string): ScheduledRunRecord | undefined {
-    return this.schedules.getRun(id);
-  }
-
-  listScheduledRuns(
-    options: { taskId?: string; unread?: boolean; limit?: number } = {},
-  ): ScheduledRunRecord[] {
-    return this.schedules.listRuns(options);
-  }
-
-  updateScheduledRun(
-    id: string,
-    patch: UpdateScheduledRunInput,
-  ): ScheduledRunRecord {
-    return this.schedules.updateRun(id, patch);
-  }
-
-  interruptActiveScheduledRuns(reason: string): number {
-    return this.schedules.interruptActiveRuns(reason);
-  }
-
   /**
    * Groups synchronous store mutations into one durable commit. Both SQLite
    * rows and the in-memory read model return to their previous state on error.
@@ -968,78 +873,6 @@ export class SessionStore {
 
   finishWorkflowRunClaim(runId: string, ownerId: string, status: string): void {
     this.workflows.finishClaim(runId, ownerId, status);
-  }
-
-  findExternalConversation(input: {
-    connector: string;
-    accountId: string;
-    chatId: string;
-    threadId?: string;
-  }): ExternalConversationRecord | undefined {
-    return this.channels.findConversation(input);
-  }
-
-  upsertExternalConversation(input: {
-    id?: string;
-    connector: string;
-    accountId: string;
-    workspaceId?: string;
-    chatId: string;
-    threadId?: string;
-    sessionId: string;
-  }): ExternalConversationRecord {
-    return this.channels.upsertConversation(input);
-  }
-
-  listExternalConversations(
-    options: { connector?: string; limit?: number } = {},
-  ): ExternalConversationRecord[] {
-    return this.channels.listConversations(options);
-  }
-
-  createChannelDelivery(input: {
-    id?: string;
-    conversationId: string;
-    connector: string;
-    accountId: string;
-    chatId: string;
-    threadId?: string;
-    sessionId: string;
-    inputId: string;
-    runId: string;
-    externalMessageId: string;
-    content: string;
-  }): ChannelDeliveryRecord {
-    return this.channels.createDelivery(input);
-  }
-
-  getChannelDelivery(id: string): ChannelDeliveryRecord | undefined {
-    return this.channels.getDelivery(id);
-  }
-
-  findChannelDeliveryByInput(inputId: string): ChannelDeliveryRecord | undefined {
-    return this.channels.findDeliveryByInput(inputId);
-  }
-
-  updateChannelDelivery(
-    id: string,
-    input: {
-      status: Extract<ChannelDeliveryStatus, "sent" | "failed" | "unknown">;
-      externalDeliveryId?: string;
-      error?: string;
-    },
-  ): ChannelDeliveryRecord {
-    return this.channels.updateDelivery(id, input);
-  }
-
-  listChannelDeliveries(
-    options: {
-      statuses?: ChannelDeliveryStatus[];
-      connector?: string;
-      limit?: number;
-    } = {},
-  ): ChannelDeliveryRecord[] {
-    return this.channels.listDeliveries(options);
   }
 
   /** Atomically persists a queued prompt and the one root run that owns it. */

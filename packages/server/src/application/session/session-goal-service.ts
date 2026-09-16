@@ -1,6 +1,6 @@
-import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalAssessment, type CreateSessionGoalInput, type GoalActionInput, type GoalAssessment, type SessionGoal, type UpdateSessionGoalInput } from "@openharness/protocol";
-import type { GoalOperations, SessionStore } from "@openharness/services";
-import type { SessionApplicationService } from "./session-application-service.js";
+import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalAssessment, type CreateSessionGoalInput, type GoalActionInput, type GoalAssessment, type PermissionRequestRecord, type SessionGoal, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@openharness/protocol";
+import type { GoalOperations } from "@openharness/services";
+import type { SessionOperationRunner } from "./session-operation-runner.js";
 import type { SessionRunEngine, AdmitPromptInput } from "./session-run-engine.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { SessionApplicationError } from "./session-application-error.js";
@@ -16,10 +16,23 @@ export class SessionGoalService {
   private readonly control: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
   constructor(
     private readonly context: {
-      store: SessionStore;
-      permissions: Pick<SessionStore["permissions"], "get" | "list">;
+      transaction: { transaction<T>(work: () => T): T };
+      sessions: { get(sessionId: string): SessionRecord | undefined };
+      runs: {
+        getRun(runId: string): SessionRunRecord | undefined;
+        updateRun(runId: string, input: Partial<SessionRunRecord>): SessionRunRecord;
+        listRuns(sessionId: string): SessionRunRecord[];
+      };
+      conversations: {
+        listMessages(sessionId: string): SessionMessageRecord[];
+        listMessageParts(sessionId: string): SessionMessagePartRecord[];
+      };
+      permissions: {
+        get(requestId: string): PermissionRequestRecord | undefined;
+        list(options?: { sessionId?: string; status?: "pending" | "approved" | "denied" | "expired" }): PermissionRequestRecord[];
+      };
       goals: GoalOperations;
-      sessions: Pick<SessionApplicationService, "withSessionOperation">;
+      operationRunner: Pick<SessionOperationRunner, "run">;
       runEngine: Pick<SessionRunEngine, "persistGoalRun" | "dispatchPersistedRun" | "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
       admission?: Pick<RunAdmissionService, "persistGoalRun" | "dispatchPersistedRun">;
       control?: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
@@ -37,7 +50,7 @@ export class SessionGoalService {
     this.requireSession(sessionId);
     return this.context.goals.getCurrentGoal(sessionId) ?? null;
   }
-  getRequest(sessionId: string, requestId: string): ReturnType<SessionStore["getGoalRequest"]> {
+  getRequest(sessionId: string, requestId: string): ReturnType<GoalOperations["getGoalRequest"]> {
     this.requireSession(sessionId);
     const request = this.context.goals.getGoalRequest(requestId);
     if (!request || request.sessionId !== sessionId) throw new SessionApplicationError(404, `Goal request not found: ${requestId}`);
@@ -48,7 +61,7 @@ export class SessionGoalService {
     return this.command(sessionId, input.requestId, { operation: "create", ...input }, async () => {
       const replay = await this.replay(input.requestId);
       if (replay) return replay;
-      const goal = this.context.store.transaction(() => {
+      const goal = this.context.transaction.transaction(() => {
         const created = this.context.goals.createGoal({
           sessionId,
           objective: input.objective,
@@ -76,7 +89,7 @@ export class SessionGoalService {
         if (paused.revision !== request.result.revision || paused.status !== "paused") throw new SessionApplicationError(409, "目标在停止期间已被修改，请重新提交");
       } else {
         this.assertOpen(this.requireGoal(sessionId, goalId));
-        paused = this.context.store.transaction(() => {
+        paused = this.context.transaction.transaction(() => {
           const changed = this.context.goals.updateGoal(goalId, {
             expectedRevision: input.expectedRevision,
             status: "paused",
@@ -91,7 +104,7 @@ export class SessionGoalService {
         });
       }
       await this.stopRuns(paused, "目标正文已修改");
-      const updated = this.context.store.transaction(() => {
+      const updated = this.context.transaction.transaction(() => {
         const goal = this.context.goals.updateGoal(goalId, {
           expectedRevision: paused.revision,
           objective: input.objective,
@@ -120,7 +133,7 @@ export class SessionGoalService {
       if (goal.revision !== input.expectedRevision) throw new SessionApplicationError(409, "目标已变化，请刷新后重试");
       if (input.action === "confirm" && (goal.status !== "waiting_user" || goal.wait?.kind !== "user" || !goal.wait.questionId.startsWith("goal-complete-") || input.questionId !== goal.wait.questionId)) throw new SessionApplicationError(409, "当前目标没有等待这次验收");
       if (input.action === "resume") this.validateResume(goal, input);
-      const updated = this.context.store.transaction(() => {
+      const updated = this.context.transaction.transaction(() => {
         const changed = this.context.goals.updateGoal(goalId, {
           expectedRevision: input.expectedRevision,
           status: input.action === "cancel" ? "cancelled" : input.action === "pause" ? "paused" : input.action === "confirm" ? "completed" : "active",
@@ -163,18 +176,18 @@ export class SessionGoalService {
     let nextRunId: string | undefined;
     let waitToObserve: SessionGoal | undefined;
     try {
-      this.context.store.transaction(() => {
-        const run = this.context.store.getRun(runId);
+      this.context.transaction.transaction(() => {
+        const run = this.context.runs.getRun(runId);
         if (!run || run.sessionId !== sessionId || run.status === "pending" || run.status === "running" || run.metadata.goalSettled) return;
         this.context.goals.finishGoalRun(runId);
         const goal = typeof run.metadata.goalId === "string" ? this.context.goals.getGoal(run.metadata.goalId) : undefined;
         if (!goal || goal.sessionId !== sessionId || goal.status !== "active" || goal.revision !== run.metadata.goalRevision || (goal.currentRunId && goal.currentRunId !== runId)) return;
-        this.context.store.updateRun(runId, {
+        this.context.runs.updateRun(runId, {
           metadata: { goalSettled: true },
         });
         if (this.control.hasUserWork(sessionId)) return;
         let currentAssessment: GoalAssessment | undefined;
-        const change = (patch: Omit<Parameters<SessionStore["updateGoal"]>[1], "expectedRevision">) =>
+        const change = (patch: Omit<Parameters<GoalOperations["updateGoal"]>[1], "expectedRevision">) =>
           this.context.goals.updateGoal(goal.id, {
             expectedRevision: goal.revision,
             currentRunId: null,
@@ -200,7 +213,7 @@ export class SessionGoalService {
           return;
         }
         currentAssessment = assessment;
-        const verified = verifiedGoalEvidence(this.context.store, goal, assessment);
+        const verified = verifiedGoalEvidence(this.context.conversations, goal, assessment);
         const priorSignatures = new Set(this.context.goals.goalEvidenceSignatures(goal.id));
         const verifiedSignatures = verified.map((part) => JSON.stringify([part.toolName, part.input, part.output]));
         const hasNewEvidence = verifiedSignatures.some((signature) => !priorSignatures.has(signature));
@@ -332,7 +345,7 @@ export class SessionGoalService {
           change({ status: "paused", reason: "评估没有给出可执行的下一步" });
           return;
         }
-        if (this.context.store.listRuns(sessionId).some((candidate) => candidate.id !== runId && candidate.metadata.goalId === goal.id && (candidate.status === "pending" || candidate.status === "running"))) return;
+        if (this.context.runs.listRuns(sessionId).some((candidate) => candidate.id !== runId && candidate.metadata.goalId === goal.id && (candidate.status === "pending" || candidate.status === "running"))) return;
         const continued = change({
           noProgressCount,
           blockerKey: blockerKey ?? null,
@@ -368,7 +381,7 @@ export class SessionGoalService {
         this.context.goals.markGoalContinuation(nextRunId, "dispatched");
       }
     } catch (error) {
-      const run = this.context.store.getRun(runId);
+      const run = this.context.runs.getRun(runId);
       const goal = typeof run?.metadata.goalId === "string" ? this.context.goals.getGoal(run.metadata.goalId) : undefined;
       if (goal?.status === "active") {
         this.context.goals.updateGoal(goal.id, {
@@ -468,7 +481,7 @@ export class SessionGoalService {
     if (!["paused", "blocked", "waiting_user"].includes(goal.status)) throw new SessionApplicationError(409, `Goal cannot resume from ${goal.status}`);
     if (goal.maxAutoTurns + (input.additionalAutoTurns ?? 0) > MAX_GOAL_AUTO_TURNS) throw new SessionApplicationError(400, "自动续跑总额度最多为 1000");
     if (goal.autoTurnsUsed >= goal.maxAutoTurns + (input.additionalAutoTurns ?? 0)) throw new SessionApplicationError(409, "请明确增加自动续跑额度");
-    if (this.context.store.listRuns(goal.sessionId).some((run) => run.metadata.goalId === goal.id && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标仍在停止，请稍后继续");
+    if (this.context.runs.listRuns(goal.sessionId).some((run) => run.metadata.goalId === goal.id && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标仍在停止，请稍后继续");
     if (goal.status === "blocked" && !input.response?.trim()) throw new SessionApplicationError(409, "请说明阻塞条件发生了什么变化，再检查并继续");
     if (goal.status === "waiting_user") {
       if (goal.wait?.kind === "user" && (!input.response?.trim() || goal.wait.questionId !== input.questionId)) throw new SessionApplicationError(409, "请先回答当前目标的问题");
@@ -499,9 +512,8 @@ export class SessionGoalService {
       if (pending.fingerprint !== fingerprint) return Promise.reject(new SessionApplicationError(409, "请求 ID 已用于不同操作"));
       return pending.promise;
     }
-    const promise = this.context.sessions
-      .withSessionOperation(sessionId, async () => {
-        const before = this.context.events.checkpoint();
+    const promise = this.context.operationRunner
+      .run(sessionId, async () => {
         try {
           const existing = this.context.goals.getGoalRequest(requestId);
           if (existing && (existing.sessionId !== sessionId || existing.fingerprint !== fingerprint)) {
@@ -527,8 +539,6 @@ export class SessionGoalService {
             });
           if (error instanceof Error && (error.message === "session_goal_revision_conflict" || error.message === "session_goal_request_conflict" || error.message.includes("UNIQUE constraint failed"))) throw new SessionApplicationError(409, error.message);
           throw error;
-        } finally {
-          this.context.events.publishSince(before);
         }
       })
       .finally(() => {
@@ -599,7 +609,7 @@ export class SessionGoalService {
     const request = this.context.goals.getGoalRequest(requestId)!;
     const runId = request.result?.runId;
     if (typeof runId !== "string") throw new Error("目标请求缺少持久运行记录");
-    const run = this.context.store.getRun(runId);
+    const run = this.context.runs.getRun(runId);
     if (!run || run.status === "failed" || run.status === "interrupted" || goal.status !== "active" || run.metadata.goalRevision !== goal.revision) throw new SessionApplicationError(409, "目标启动已中断，请刷新目标并明确继续");
     this.admission.dispatchPersistedRun(runId);
     this.context.goals.settleGoalRequest(requestId, {
@@ -615,10 +625,10 @@ export class SessionGoalService {
     const ids = this.control.cancelGoalRuns(goal.sessionId, goal.id, reason);
     this.context.events.publishSince(before);
     await this.control.waitForRuns(ids);
-    if (this.context.store.listRuns(goal.sessionId).some((run) => ids.includes(run.id) && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标尚未停止，请稍后重试");
+    if (this.context.runs.listRuns(goal.sessionId).some((run) => ids.includes(run.id) && (run.status === "pending" || run.status === "running"))) throw new SessionApplicationError(409, "目标尚未停止，请稍后重试");
   }
-  private requireSession(sessionId: string): NonNullable<ReturnType<SessionStore["getSession"]>> {
-    const session = this.context.store.getSession(sessionId);
+  private requireSession(sessionId: string): SessionRecord {
+    const session = this.context.sessions.get(sessionId);
     if (!session) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
     return session;
   }

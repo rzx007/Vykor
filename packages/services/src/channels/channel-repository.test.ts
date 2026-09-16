@@ -52,9 +52,9 @@ describe("ChannelRepository", () => {
 
       sent.content = "caller mutation";
       expect(store.channels.getDelivery(delivery.id)?.content).toBe("reply");
-      expect(store.findChannelDeliveryByInput(input.id)?.id).toBe(delivery.id);
-      expect(store.listExternalConversations()).toHaveLength(1);
-      expect(store.listChannelDeliveries()).toHaveLength(1);
+      expect(store.channels.findDeliveryByInput(input.id)?.id).toBe(delivery.id);
+      expect(store.channels.listConversations()).toHaveLength(1);
+      expect(store.channels.listDeliveries()).toHaveLength(1);
     } finally {
       store.close();
     }

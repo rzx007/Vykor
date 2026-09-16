@@ -35,12 +35,12 @@ describe("ScheduleRepository", () => {
     ["createRun", (store) => store.schedules.createRun({ ...runInput, id: "new-run" })],
     ["updateRun", (store) => store.schedules.updateRun("run", { status: "running" })],
     ["interruptActiveRuns", (store) => store.schedules.interruptActiveRuns("restart")],
-    ["createScheduledTask", (store) => store.createScheduledTask({ ...taskInput, id: "new-task" })],
-    ["updateScheduledTask", (store) => store.updateScheduledTask("task", { name: "changed" })],
-    ["deleteScheduledTask", (store) => store.deleteScheduledTask("task")],
-    ["createScheduledRun", (store) => store.createScheduledRun({ ...runInput, id: "new-run" })],
-    ["updateScheduledRun", (store) => store.updateScheduledRun("run", { status: "running" })],
-    ["interruptActiveScheduledRuns", (store) => store.interruptActiveScheduledRuns("restart")],
+    ["createScheduledTask", (store) => store.schedules.createTask({ ...taskInput, id: "new-task" })],
+    ["updateScheduledTask", (store) => store.schedules.updateTask("task", { name: "changed" })],
+    ["deleteScheduledTask", (store) => store.schedules.deleteTask("task")],
+    ["createScheduledRun", (store) => store.schedules.createRun({ ...runInput, id: "new-run" })],
+    ["updateScheduledRun", (store) => store.schedules.updateRun("run", { status: "running" })],
+    ["interruptActiveScheduledRuns", (store) => store.schedules.interruptActiveRuns("restart")],
   ];
 
   describe.each(["before owner check", "after owner check"])("takeover %s", (timing) => {

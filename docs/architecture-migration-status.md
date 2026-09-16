@@ -1,13 +1,13 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–7 与 clean-slate Stage 8A 已完成。
+> 状态：当前。阶段 0–7 与 clean-slate Stage 8A–8B 已完成。
 
 ## 当前阶段
 
 阶段 0–2 已完成：依赖护栏、Session SQLite 数据库内核，以及 Project、Schedule、Workflow、Channel、Goal、Permission、Attachment 业务边界已经落地。
 阶段 3 已完成：三域 Repository、跨域事务和增量输出均已抽取。`SessionStore` 保留公开兼容转发、Task waiter/listener、生命周期和维护入口。
 阶段 4A 已完成：Event、Retention、Channel、Terminal、Job、BackgroundShell、Attachment、AgentPool 等简单 Application Service 的依赖能力已全部收窄为最小接口，彻底移除对完整 `SessionStore` 的导入；Server 边界检查（Route、Application Service、Runtime）已补充并纳入架构护栏。
-阶段 4B 已完成：Session Query 与 Command 拆分完成，`SessionQueryService` 读服务完成能力收窄与协议解耦，`SessionCommandService` 写服务抽取完成，`SessionApplicationService` 变为向前兼容委托层，`DaemonApplication` 组装一次共享实例，新增 SessionCommand 与 SessionQuery 的架构护栏。
+阶段 4B 已完成：Session Query 与 Command 拆分完成，`SessionQueryService` 读服务完成能力收窄与协议解耦，`SessionCommandService` 写服务抽取完成；当时保留的 `SessionApplicationService` 兼容委托层已在 clean-slate Stage 8B 删除。
 阶段 4C 已完成：`RunAdmissionService` 统一拥有 prompt、持久 Run 派发、rejected-steer 恢复和 goal revision 执行准入；`RunControlService` 统一拥有查询、提升、等待、中断和关闭。`DaemonApplication` 显式构造唯一共享实例并注入 Session、Goal、DaemonControl 与兼容 Engine。
 阶段 4D 已完成：`SessionRunCoordinator` 成为 lane、Promise 与 live 状态索引的唯一所有者；`SessionRunEngine` 不再保存第二份 run Promise map；`SessionRunExecutor` 通过命名 data capability 执行单个已准入 Run。
 阶段 4E 已完成：`StartupRecoveryService` 按固定顺序执行 durable recovery，失败继续阻止 ready；Maintenance 与 PostRun 使用命名 data 边界；既有 Transcript/Execution Projection 保持唯一映射所有者。
@@ -15,6 +15,7 @@
 阶段 5 已完成：Transport 内核、ProtocolClient、14 个专用业务/执行 Resource 彻底抽取完成。`OpenHarnessClient` 收敛为 Resource 组合根，移除全部 endpoint 字符串与业务 decoder；内部 consumer 收窄为命名 capability；架构规则补充 Client Resource 与 Transport 隔离护栏。后续 clean-slate Stage 8A 已物理删除顶层兼容 facade，领域 Resource 是唯一业务入口。
 阶段 6 已完成：Desktop 与 Frontend 状态边界重组完成。建立平台状态所有权（Matrix + 纯 Selector）；抽取跨平台 SSE 连接与断线重连控制器 `SessionSyncController`；解构 Frontend `useServerSync`（1333 行降至 770 行）；解构 Desktop Main `SessionService`（1152 行降至 439 行）；审计确认 Desktop Renderer Store 已有的 `applySessionUpdate` 是持久对账单入口（本阶段未改动 renderer 生产代码）；架构护栏收窄 client 扁平旧调用至 79（下降 25 次）。
 阶段 7 已完成：Public API Convergence（公共 API 收敛）。Client 内部、CLI、Desktop Main 与 Frontend 的生产调用均迁到命名领域 Resource。该阶段曾短暂保留的 118 个顶层方法与双发行治理属于历史过程，已由 clean-slate Stage 8A 删除，不构成当前 API 或发行承诺。
+Clean-slate Stage 8B 已完成：`SessionOperationRunner` 统一 session 串行、ready、owner lease 与事件 checkpoint/publish；`SessionInteractionService` 只保留 edit/admit/resume/interrupt/promote/cancel/warm 的真实编排，HTTP、Channel、Schedule 与 Daemon 直接依赖 Query、Command、Interaction、Run Control 窄服务。已确认无生产调用的 Project、Schedule、Channel 共 26 个 `SessionStore` 转发被删除。
 
 阶段 4 最终复审补充：Coordinator 等待的是包含 `settleGoalRun` 的完整 completion Promise，shutdown 不会在 Goal settlement 尚未结束时关闭 Store；Session Run 三件套的两阶段闭包装配进入纯 `assembleSessionRunServices` factory，Executor 的 Skill/Attachment/Capability/steer 依赖进入 `assembleSessionRunExecutor`；settings、model limits、Skill catalog/list 和 plugin inventory 统一由 `createSessionRuntimeDiscovery` 提供，避免 Daemon 内重复发现扩展；Maintenance/PostRun 使用精确方法 capability，并由架构测试禁止重新持有完整 `SessionStore`。`DaemonApplication` 最终为 908 行。最终统一验证为 Server 80 个文件、717 个测试，Services 最近一次回归为 45 个文件、430 个测试，全仓 TypeScript 61/61，架构测试 15/15。
 
@@ -23,8 +24,8 @@
 - `scripts/architecture-baseline.json` 只保留尚在迁移的 `SessionStore` 调用基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并串联 `pnpm check:client-api` 执行当前契约比对、永久 forbidden-surface 扫描与 consumer 负向 fixture 编译。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 248`。Client 旧名采用绝对禁止，不再维护数量基线。
-- 当前 `SessionStore` 行数：2152 行。
+- 当前基线：`sessionStoreFlatCalls: 213`。Client 旧名采用绝对禁止，不再维护数量基线。
+- 当前 `SessionStore` 行数：1815 行。
 - 当前 `OpenHarnessClient`（`http-client.ts`）只组装 15 个 Resource，不提供顶层业务转发或底层 transport 成员。
 - 当前 `useServerSync.ts` 行数：770 行（原 1333 行，净删减 563 行）。
 - 当前 Desktop `SessionService.ts` 行数：439 行（原 1152 行，净删减 713 行）。
@@ -93,16 +94,30 @@
 
 ## 当前所有权
 
-`SessionStore` 不再拥有阶段 3 的领域读写、跨域业务事务或 delta SQL；它保留公开兼容接口、进程内 listener、数据库生命周期和维护入口。
-三域 Repository 独立负责各领域的单实体读写，`ConversationTransactions` 负责 Session/Conversation/Run 的跨域原子编排；`SessionStore` 保留代理转发与 Task waiter/listener。
+`SessionStore` 不再拥有阶段 3 的领域读写、跨域业务事务或 delta SQL。它保留数据库生命周期与 backup、进程 owner lease、当前事件/waiter，以及尚无独立 owner 的 retention、projection settlement 和启动恢复入口。
 
-Project SQL、路径规则和写操作已迁入 `packages/services/src/projects`。`SessionStore` 保留八个兼容转发方法，Server 的 `ProjectApplicationService` 只依赖七个 Project 动作的窄 capability。`StorageContext.atomic()` 由 database 内核的 `TransactionCoordinator` 提供。
+当前存储方法的最终所有者如下；生产调用按具名能力注入，不再把 `SessionStore` 当作这些领域的接口：
 
-Scheduled Task/Run SQL 和 row conversion 已迁入 `packages/services/src/schedules`。`SessionStore` 保留十个兼容转发方法；Server 的 `ScheduledTaskService` 只依赖九个实际使用的 Schedule 操作，计时器和 Agent 执行策略仍由 Server 拥有。
+| 领域 | 最终所有者 |
+|---|---|
+| Projects | `ProjectRepository`（`store.projects`） |
+| Schedules | `ScheduleRepository`（`store.schedules`） |
+| Workflows | `WorkflowRepository`（`store.workflows`） |
+| Channels | `ChannelRepository`（`store.channels`） |
+| Goals | `GoalTransactions`（`store.goals`） |
+| Permissions | `PermissionRepository`（`store.permissions`） |
+| Attachments | `AttachmentTransactions`（`store.attachments`） |
+| Sessions | `SessionRepository`（`store.sessions`） |
+| Conversations | `ConversationRepository` 与 `ConversationTransactions` |
+| Runs / Tasks | `RunRepository` 与 `ConversationTransactions`；Task waiter 暂由 `SessionStore` 持有 |
+
+Project SQL、路径规则和写操作由 `packages/services/src/projects` 独立负责，Stage 8B 已删除 `SessionStore` 上八个纯转发方法。`StorageContext.atomic()` 由 database 内核的 `TransactionCoordinator` 提供。
+
+Scheduled Task/Run SQL 和 row conversion 由 `packages/services/src/schedules` 独立负责，Stage 8B 已删除 `SessionStore` 上十个纯转发方法；计时器和 Agent 执行策略仍由 Server 拥有。
 
 Workflow Run/Event/Claim SQL 和 row conversion 已迁入 `packages/services/src/workflows`，retention 跨域清理 SQL 暂留 Maintenance 路径。Server Workflow adapter 只依赖 Workflow 存储与 session event 窄能力，并使用进程内 change version 防止 event-only wait 注册竞态。
 
-External Conversation 与 Channel Delivery SQL 和 row conversion 已迁入 `packages/services/src/channels`。`SessionStore` 保留八个兼容转发方法；Server Channel application service 只通过 `store.channels` 执行 Channel 持久化，Session/Input 查询仍使用窄 Store 能力。
+External Conversation 与 Channel Delivery SQL 和 row conversion 由 `packages/services/src/channels` 独立负责，Stage 8B 已删除 `SessionStore` 上八个纯转发方法；Server Channel application service 直接使用 Channel、Session Query、Session Command、Session Interaction 与 Run Control 的窄能力。
 
 Goal 四组表 SQL 和 row conversion 已迁入 `packages/services/src/goals`，跨 Session、Run 与 durable event 的规则由 `GoalTransactions` 原子执行。`SessionStore` 保留十四个兼容转发方法；Server 的 Goal 调用统一经过 `store.goals`。
 
@@ -208,9 +223,8 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-Clean-slate Stage 8A 已完成 Client 顶层 facade 与旧发行治理删除。后续按以下原子批次推进，不再执行 A/B/C 兼容发行路线：
+Clean-slate Stage 8A 已完成 Client 顶层 facade 与旧发行治理删除，Stage 8B 已完成应用与已确认存储边界的收口。后续按以下原子批次推进，不再执行 A/B/C 兼容发行路线：
 
-1. [Stage 8B](./superpowers/plans/2026-09-16-clean-slate-stage-8b-application-storage.md)：收口应用与存储边界，删除 `SessionApplicationService` 与 `SessionStore` 的纯转发职责。
-2. [Stage 8C](./superpowers/plans/2026-09-16-clean-slate-stage-8c-consumers-packages.md)：清理消费者与底层包中只服务旧 OpenHarness 入口的分支，同时保留外部互操作、平台适配和可靠性逻辑。
-3. [Stage 8D](./superpowers/plans/2026-09-16-clean-slate-stage-8d-protocol-database.md)：实施精确协议握手，并将历史数据库 migration 压缩为只服务空库的当前基线。
-4. [Stage 8E](./superpowers/plans/2026-09-16-clean-slate-stage-8e-integration-closeout.md)：在隔离空环境完成集成验收、清理剩余旧引用，并准备需逐项授权的数据重置手册。
+1. [Stage 8C](./superpowers/plans/2026-09-16-clean-slate-stage-8c-consumers-packages.md)：清理消费者与底层包中只服务旧 OpenHarness 入口的分支，同时保留外部互操作、平台适配和可靠性逻辑。
+2. [Stage 8D](./superpowers/plans/2026-09-16-clean-slate-stage-8d-protocol-database.md)：实施精确协议握手，并将历史数据库 migration 压缩为只服务空库的当前基线。
+3. [Stage 8E](./superpowers/plans/2026-09-16-clean-slate-stage-8e-integration-closeout.md)：在隔离空环境完成集成验收、清理剩余旧引用，并准备需逐项授权的数据重置手册。
