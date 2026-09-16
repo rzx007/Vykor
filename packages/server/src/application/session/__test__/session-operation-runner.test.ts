@@ -176,4 +176,30 @@ describe("SessionOperationRunner", () => {
     await expect(iterator.next()).resolves.toMatchObject({ value: { seq: 1 } });
     await iterator.return?.();
   });
+
+  it("preserves the work error when publishing also fails", async () => {
+    const { runner, events } = createRunner();
+    const workError = new Error("work failed");
+    events.publishSince.mockImplementationOnce(() => {
+      throw new Error("publish failed");
+    });
+
+    await expect(
+      runner.run("s1", async () => {
+        throw workError;
+      }),
+    ).rejects.toBe(workError);
+    await expect(runner.run("s1", async () => "next")).resolves.toBe("next");
+  });
+
+  it("fails successful work when publishing fails and still releases the boundary", async () => {
+    const { runner, events } = createRunner();
+    const publishError = new Error("publish failed");
+    events.publishSince.mockImplementationOnce(() => {
+      throw publishError;
+    });
+
+    await expect(runner.run("s1", async () => "ok")).rejects.toBe(publishError);
+    await expect(runner.run("s1", async () => "next")).resolves.toBe("next");
+  });
 });

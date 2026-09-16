@@ -51,11 +51,17 @@ export class SessionOperationRunner {
       }
 
       const checkpoint = this.context.events.checkpoint();
+      let workFailed = false;
       try {
         return await work();
+      } catch (error) {
+        workFailed = true;
+        throw error;
       } finally {
         try {
           this.context.events.publishSince(checkpoint);
+        } catch (error) {
+          if (!workFailed) throw error;
         } finally {
           lease.release();
         }
