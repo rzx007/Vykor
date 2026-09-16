@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import ts from "typescript";
-import { scanClientLegacyCalls } from "./client-legacy-calls.mjs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { discoverWorkspaceScanConfigs, scanClientLegacyCalls } from "./client-legacy-calls.mjs";
 
 test("identifies direct, alias, member, await-factory, destructure, type-index, value-ref and mapped Pick", () => {
   const source = `
@@ -42,6 +45,14 @@ narrowed.capabilities();
 // 9. Pick callback parameter
 declare function invoke(callback: (c: Capability) => void): void;
 invoke((c) => c.capabilities());
+
+// 10. parameter destructure
+function useDestructured({ getSession: get }: OpenHarnessClient) { return get("s2"); }
+
+// 11. explicit mapped type
+type ExplicitCapability = { [K in "getSession"]: OpenHarnessClient[K] };
+declare const explicit: ExplicitCapability;
+explicit.getSession("s3");
 
 // negative: Resource call (should not report)
 client.sessions.get("s1");
@@ -135,9 +146,9 @@ type ReturnType<T extends (...args: any) => any> = T extends (...args: any) => i
 
   // 1. direct getSession
   const getSessionCalls = byMethod("getSession").filter((r) => r.usage === "call");
-  assert.equal(getSessionCalls.length, 1);
-  assert.equal(getSessionCalls[0].receiver, "direct");
-  assert.equal(getSessionCalls[0].replacement, "sessions.get");
+  assert.equal(getSessionCalls.length, 2);
+  assert.ok(getSessionCalls.every((call) => call.receiver === "direct"));
+  assert.ok(getSessionCalls.every((call) => call.replacement === "sessions.get"));
 
   // 2. alias listJobs
   const listJobs = byMethod("listJobs");
@@ -156,7 +167,9 @@ type ReturnType<T extends (...args: any) => any> = T extends (...args: any) => i
   assert.equal(plugins[0].receiver, "await-factory");
 
   // 5. destructure getSession
-  const destr = byMethod("getSession").filter((r) => r.usage === "destructure");
+  const destr = byMethod("getSession").filter(
+    (r) => r.usage === "destructure" && r.receiver === "destructured",
+  );
   assert.equal(destr.length, 1);
   assert.equal(destr[0].receiver, "destructured");
 
@@ -175,8 +188,38 @@ type ReturnType<T extends (...args: any) => any> = T extends (...args: any) => i
   const capCalls = byMethod("capabilities");
   assert.equal(capCalls.length, 2);
 
-  // Total findings should be 9
-  assert.equal(result.references.length, 9);
+  const parameterDestructure = byMethod("getSession").filter(
+    (r) => r.usage === "destructure" && r.receiver === "parameter-destructured",
+  );
+  assert.equal(parameterDestructure.length, 1);
+
+  const explicitMapped = byMethod("getSession").filter((r) => r.usage === "type-index");
+  assert.equal(explicitMapped.length, 1);
+
+  // Existing 9 plus parameter destructure, explicit mapped type index and its call.
+  assert.equal(result.references.length, 12);
+});
+
+test("discovers every app and package workspace that imports the client", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "client-scan-workspaces-"));
+  try {
+    for (const workspace of ["apps/cli", "apps/new-app", "packages/client", "packages/new-package"]) {
+      mkdirSync(join(cwd, workspace, "src"), { recursive: true });
+      writeFileSync(join(cwd, workspace, "tsconfig.json"), "{}");
+      writeFileSync(
+        join(cwd, workspace, "src/index.ts"),
+        workspace === "packages/new-package" ? "export const unrelated = true;" : 'import "@openharness/client";',
+      );
+    }
+    const configs = discoverWorkspaceScanConfigs(cwd).map((item) => item.config);
+    assert.deepEqual(configs, [
+      "apps/cli/tsconfig.json",
+      "apps/new-app/tsconfig.json",
+      "packages/client/tsconfig.json",
+    ]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
 
 test("dynamically recognizes newly added compatibility methods from contract map", () => {

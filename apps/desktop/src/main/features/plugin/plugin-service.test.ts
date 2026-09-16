@@ -15,18 +15,7 @@ const daemon = vi.hoisted(() => {
     previewGit: vi.fn(),
     installGit: vi.fn(),
   }
-  return {
-    plugins,
-    listPlugins: plugins.list,
-    enablePlugin: plugins.enable,
-    disablePlugin: plugins.disable,
-    uninstallPlugin: plugins.uninstall,
-    reloadPlugins: plugins.reload,
-    previewPluginArchive: plugins.previewArchive,
-    installPluginArchive: plugins.installArchive,
-    previewPluginGit: plugins.previewGit,
-    installPluginGit: plugins.installGit,
-  }
+  return { plugins }
 })
 
 const electron = vi.hoisted(() => ({
@@ -267,7 +256,7 @@ describe("DesktopPluginService", () => {
       status: "installed",
       pluginName: "archive-plugin",
     })
-    expect(daemon.previewPluginArchive).toHaveBeenCalledWith({
+    expect(daemon.plugins.previewArchive).toHaveBeenCalledWith({
       cwd: resolve("C:/workspace"),
       archivePath: "C:/private/plugin.tar.gz",
     })
@@ -281,7 +270,7 @@ describe("DesktopPluginService", () => {
       message: "请选择 ZIP、TAR 或 TAR.GZ 格式的插件包。",
       details: [{ code: "plugin_archive_invalid_extension" }],
     })
-    expect(daemon.previewPluginArchive).not.toHaveBeenCalled()
+    expect(daemon.plugins.previewArchive).not.toHaveBeenCalled()
   })
 
   it("binds the default ZIP picker to the invoking window", async () => {
@@ -299,7 +288,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("returns only safe structured diagnostic details without leaking Server messages or absolute paths", async () => {
-    daemon.previewPluginArchive.mockRejectedValue({
+    daemon.plugins.previewArchive.mockRejectedValue({
       body: {
         code: "plugin_archive_invalid",
         message: "raw preview error for C:/private/plugin.zip",
@@ -342,7 +331,7 @@ describe("DesktopPluginService", () => {
   })
 
   it("returns unknown after a direct-install connection failure without retrying the mutation", async () => {
-    daemon.installPluginArchive
+    daemon.plugins.installArchive
       .mockRejectedValueOnce(new Error("ECONNRESET"))
       .mockRejectedValueOnce({ body: { code: "plugin_archive_permissions_not_approved" } })
     const refreshDaemonClient = vi.fn(async () => daemon as never)
@@ -358,14 +347,14 @@ describe("DesktopPluginService", () => {
       message: "安装结果暂时无法确认，请刷新插件列表。",
       details: [{ code: "plugin_archive_install_unknown" }],
     })
-    expect(daemon.installPluginArchive).toHaveBeenCalledOnce()
+    expect(daemon.plugins.installArchive).toHaveBeenCalledOnce()
     expect(refreshDaemonClient).not.toHaveBeenCalled()
     expect(JSON.stringify(result)).not.toContain("C:/private")
     expect(JSON.stringify(result)).not.toContain("a".repeat(64))
   })
 
   it("returns unknown and consumes the selection after a confirmation-install connection failure without retrying the mutation", async () => {
-    daemon.previewPluginArchive.mockResolvedValue({
+    daemon.plugins.previewArchive.mockResolvedValue({
       archiveDigest: "e".repeat(64),
       identity: { id: "archive-plugin", name: "Archive Plugin", version: "1.0.0" },
       requestedPermissions: ["network"],

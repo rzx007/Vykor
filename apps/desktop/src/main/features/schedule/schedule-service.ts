@@ -10,6 +10,8 @@ import type {
 
 import { desktopSessionService } from "../session/session-service"
 
+type ScheduleClient = Pick<OpenHarnessClient, "schedules">
+
 class DesktopScheduleService {
   status(): Promise<DesktopScheduledStatus> {
     return withDaemonRetry((client) => client.schedules.getStatus())
@@ -47,7 +49,7 @@ class DesktopScheduleService {
 export const desktopScheduleService = new DesktopScheduleService()
 
 async function withDaemonRetry<T>(
-  operation: (client: OpenHarnessClient) => Promise<T>
+  operation: (client: ScheduleClient) => Promise<T>
 ): Promise<T> {
   try {
     return await operation(await desktopSessionService.daemonClient())

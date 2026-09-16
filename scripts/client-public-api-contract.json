@@ -3,7 +3,9 @@
   "version": 1,
   "carrier": {
     "defaultCarrier": "@rzx/ohs",
-    "carrierRule": "The default carrier release is the @rzx/ohs CLI package. Removal in Stage 8 requires two release evidences: deprecatedCarrierRelease and retentionCarrierRelease."
+    "carrierRule": "The default carrier release is the @rzx/ohs CLI package. Removal in Stage 8 requires two release evidences: deprecatedCarrierRelease and retentionCarrierRelease.",
+    "evidenceFields": ["carrier", "version", "date", "channel", "releaseNoteUrl|commit"],
+    "commitRule": "The evidence commit must be the OpenHarness-ts commit used to build the recorded carrier version and match its release tag or release note."
   },
   "summary": {
     "runtimeExports": 55,

@@ -1,5 +1,21 @@
-import { describe, it, expect } from "vitest";
-import { assembleChannelAdapters } from "./channels.js";
+import { describe, it, expect, vi } from "vitest";
+
+const channelMocks = vi.hoisted(() => ({
+  health: vi.fn(),
+  getStatus: vi.fn(),
+  loadSettings: vi.fn(),
+  readDaemonRegistry: vi.fn(),
+}));
+
+vi.mock("@openharness/core", () => ({ loadSettings: channelMocks.loadSettings }));
+vi.mock("@openharness/server", () => ({ readDaemonRegistry: channelMocks.readDaemonRegistry }));
+vi.mock("@openharness/client", () => ({
+  OpenHarnessClient: class {
+    protocol = { health: channelMocks.health };
+    channels = { getStatus: channelMocks.getStatus };
+  },
+}));
+import { assembleChannelAdapters, createChannelsCommand } from "./channels.js";
 
 describe("assembleChannelAdapters", () => {
   it("无配置 → 空组装", async () => {
@@ -43,5 +59,25 @@ describe("assembleChannelAdapters", () => {
       },
     });
     expect(r.allowFrom).toEqual({ feishu: [] });
+  });
+});
+
+describe("channels status", () => {
+  it("uses protocol health and channel status resources", async () => {
+    channelMocks.loadSettings.mockResolvedValueOnce({
+      channels: { feishu: { enabled: true, appId: "cli_x", appSecret: "sec", allowFrom: {} } },
+    });
+    channelMocks.readDaemonRegistry.mockReturnValueOnce({ url: "http://127.0.0.1:4000", token: "token" });
+    channelMocks.health.mockResolvedValueOnce({ ok: true });
+    channelMocks.getStatus.mockResolvedValueOnce({ conversations: [], deliveries: [] });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await createChannelsCommand().parseAsync(["status"], { from: "user" });
+      expect(channelMocks.health).toHaveBeenCalledOnce();
+      expect(channelMocks.getStatus).toHaveBeenCalledWith({ connector: "feishu", limit: 10 });
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("daemon: ready"));
+    } finally {
+      log.mockRestore();
+    }
   });
 });

@@ -35,6 +35,8 @@ export interface PrintSessionOptions {
   daemonToken?: string;
 }
 
+type PermissionClient = Pick<OpenHarnessClient, "permissions">;
+
 /** Build daemon session.metadata from CLI overrides / settings. */
 export function buildPrintSessionMetadata(
   settings: Settings,
@@ -85,7 +87,7 @@ function runTerminalStatus(
 }
 
 async function autoReplyPermissions(
-  client: OpenHarnessClient,
+  client: PermissionClient,
   state: OpenHarnessClientState,
   sessionId: string,
   approve: boolean,

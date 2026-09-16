@@ -155,15 +155,24 @@ export function checkPackageDependency(from, to) {
 }
 
 export function validateLegacyBaseline(baseline, current) {
-  return Object.entries(baseline).flatMap(([name, previous]) => {
+  const requiredZeroKeys = [
+    "clientLegacyProductionCalls",
+    "clientLegacyProductionReferences",
+  ];
+  const errors = requiredZeroKeys.flatMap((name) => {
+    if (!Object.hasOwn(baseline, name)) return [`missing required baseline key ${name}`];
+    return current[name] === 0 ? [] : [`${name} must remain 0, received ${current[name] ?? "missing"}`];
+  });
+  return errors.concat(Object.entries(baseline).flatMap(([name, previous]) => {
     if (name === "clientLegacyRegexHistoricalBaseline" || name === "clientLegacyFlatCalls") {
       return [];
     }
+    if (requiredZeroKeys.includes(name)) return [];
     const next = current[name] ?? 0;
     return next > previous
       ? [`${name} increased from ${previous} to ${next}`]
       : [];
-  });
+  }));
 }
 
 export function countLegacyCalls(source, file) {

@@ -42,8 +42,14 @@ export const JOBS_AUXILIARY_SLASH_COMMANDS = new Set([
   "/stats",
 ]);
 
+type ActionClient = Pick<
+  OpenHarnessClient,
+  | "protocol" | "system" | "providers" | "auth" | "projects"
+  | "plugins" | "development" | "sessions" | "jobs" | "permissions"
+>;
+
 export interface ActionDispatcherContext {
-  clientRef: { current: OpenHarnessClient | null };
+  clientRef: { current: ActionClient | null };
   activeSessionIdRef: { current: string | undefined };
   clientState: OpenHarnessClientState;
   setClientState: React.Dispatch<React.SetStateAction<OpenHarnessClientState>>;
@@ -69,7 +75,7 @@ export interface ActionDispatcherContext {
   activateSession: (session: SessionRecord) => void;
   returnToHome: (title?: string) => void;
   refreshJobs: () => Promise<void>;
-  loadJobDetail: (client: OpenHarnessClient, sessionId: string, jobId: string) => Promise<void>;
+  loadJobDetail: (client: Pick<OpenHarnessClient, "jobs">, sessionId: string, jobId: string) => Promise<void>;
   createAndSwitchSession: (title?: string) => Promise<SessionRecord | undefined>;
   cacheFirstRead: (request: import("@openharness/client").PresentationReadRequest) => void;
   jobStateRef: { current: JobRemoteState };

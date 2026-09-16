@@ -1,7 +1,6 @@
 import type { WebContents } from "electron"
 import {
   syncEvents,
-  type OpenHarnessClient,
   type OpenHarnessClientState,
   type SessionAttachmentMessagePartRecord,
   type SessionMessagePartRecord,
@@ -26,6 +25,7 @@ import { reserveSubscriptionSnapshot, SessionSubscriptionRegistry } from "./sess
 import { app } from "electron"
 
 const primarySubscriptionSlot = "primary"
+type SessionSubscriptionClient = Parameters<typeof syncEvents>[0]
 
 function auxiliarySubscriptionSlot(subscriptionId: string): string {
   return `aux:${subscriptionId}`
@@ -53,7 +53,7 @@ export class SessionSubscriptionService {
   }
 
   async openSession(
-    client: OpenHarnessClient,
+    client: SessionSubscriptionClient,
     webContents: WebContents,
     sessionIdInput: string
   ): Promise<DesktopSessionView> {
@@ -85,7 +85,7 @@ export class SessionSubscriptionService {
   }
 
   async openAuxSession(
-    client: OpenHarnessClient,
+    client: SessionSubscriptionClient,
     webContents: WebContents,
     input: OpenDesktopAuxSessionInput
   ): Promise<DesktopSessionView> {

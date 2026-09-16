@@ -16,6 +16,8 @@ import { listDetectedTerminalShells, resolvePreferredTerminalShell } from "./det
 import { desktopSessionService } from "../session/session-service"
 import { desktopSettingsService } from "../settings/settings-service"
 
+type TerminalClient = Pick<OpenHarnessClient, "terminals">
+
 interface TerminalSubscription {
   controller: AbortController
 }
@@ -103,7 +105,7 @@ class DesktopTerminalService {
 export const desktopTerminalService = new DesktopTerminalService()
 
 async function withDaemonRetry<T>(
-  operation: (client: OpenHarnessClient) => Promise<T>
+  operation: (client: TerminalClient) => Promise<T>
 ): Promise<T> {
   try {
     return await operation(await desktopSessionService.daemonClient())

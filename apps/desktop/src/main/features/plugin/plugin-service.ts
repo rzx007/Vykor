@@ -22,6 +22,8 @@ import type {
 import { desktopSessionService } from "../session/session-service"
 import { PluginArchiveSelectionStore, PluginGitSelectionStore } from "./selection-store"
 
+type PluginClient = Pick<OpenHarnessClient, "plugins">
+
 const SELECTION_TTL_MS = 10 * 60 * 1_000
 
 export interface DesktopPluginServiceOptions {
@@ -287,7 +289,7 @@ export class DesktopPluginService {
   }
 
   private async withDaemonRetry<T>(
-    operation: (client: OpenHarnessClient) => Promise<T>
+    operation: (client: PluginClient) => Promise<T>
   ): Promise<T> {
     try {
       return await operation(await this.daemonClient())

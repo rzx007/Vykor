@@ -26,8 +26,13 @@ export {
   parseSlashLine,
 };
 
+type SessionSlashClient = Pick<
+  OpenHarnessClient,
+  "protocol" | "system" | "providers" | "auth" | "projects" | "plugins" | "development" | "sessions" | "jobs"
+>;
+
 export type SessionSlashCtx = {
-  client: OpenHarnessClient;
+  client: SessionSlashClient;
   sessionId: string | undefined;
   pushSystem: (text: string) => void;
   presentSystem: (title: string, content: string) => void;

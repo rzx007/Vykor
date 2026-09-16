@@ -276,7 +276,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   }, [reportAuxiliaryError]);
 
   const loadJobDetail = useCallback(async (
-    client: OpenHarnessClient,
+    client: Pick<OpenHarnessClient, "jobs">,
     sessionId: string,
     jobId: string,
   ): Promise<void> => {

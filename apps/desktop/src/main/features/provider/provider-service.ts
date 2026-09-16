@@ -19,6 +19,8 @@ import type {
 import { desktopSessionService } from "../session/session-service"
 import { resolveDesktopRuntimeSnapshot } from "../session/runtime-selection"
 
+type ProviderClient = Pick<OpenHarnessClient, "providers" | "auth" | "system">
+
 export class DesktopProviderService {
   snapshot(): Promise<DesktopProviderSnapshot> {
     return withDaemonRetry(async (client) => {
@@ -232,7 +234,7 @@ function normalizeProviderName(value: string): string {
 }
 
 async function withDaemonRetry<T>(
-  operation: (client: OpenHarnessClient) => Promise<T>
+  operation: (client: ProviderClient) => Promise<T>
 ): Promise<T> {
   try {
     return await operation(await desktopSessionService.daemonClient())

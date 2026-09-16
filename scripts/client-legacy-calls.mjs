@@ -34,6 +34,57 @@ function getAllSourceFiles(dir) {
   return results;
 }
 
+export function discoverWorkspaceScanConfigs(cwd = root) {
+  const configs = [];
+  for (const group of ["apps", "packages"]) {
+    const groupDir = join(cwd, group);
+    if (!existsSync(groupDir)) continue;
+    for (const entry of readdirSync(groupDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const workspace = `${group}/${entry.name}`;
+      const workspaceDir = join(cwd, workspace);
+      const sourceFiles = getAllSourceFiles(join(workspaceDir, "src"));
+      const usesClient = workspace === "packages/client" || sourceFiles.some((file) =>
+        readFileSync(file, "utf8").includes("@openharness/client"),
+      );
+      if (!usesClient) continue;
+      if (existsSync(join(workspaceDir, "tsconfig.json"))) {
+        configs.push({ config: `${workspace}/tsconfig.json`, dir: `${workspace}/src` });
+        continue;
+      }
+      for (const child of readdirSync(workspaceDir, { withFileTypes: true })) {
+        if (child.isFile() && /^tsconfig\.[^.]+\.json$/.test(child.name)) {
+          configs.push({ config: `${workspace}/${child.name}`, dir: `${workspace}/src` });
+        }
+      }
+    }
+  }
+  return configs.sort((a, b) => a.config.localeCompare(b.config));
+}
+
+function literalKeysFromTypeNode(node, checker, seen = new Set()) {
+  if (!node || seen.has(node)) return [];
+  seen.add(node);
+  if (ts.isLiteralTypeNode(node) && ts.isStringLiteral(node.literal)) return [node.literal.text];
+  if (ts.isUnionTypeNode(node)) {
+    return node.types.flatMap((item) => literalKeysFromTypeNode(item, checker, seen));
+  }
+  if (ts.isTypeReferenceNode(node)) {
+    const symbol = checker.getSymbolAtLocation(node.typeName);
+    for (const declaration of symbol?.declarations || []) {
+      if (ts.isTypeParameterDeclaration(declaration) && declaration.constraint) {
+        return literalKeysFromTypeNode(declaration.constraint, checker, seen);
+      }
+    }
+  }
+  const type = checker.getTypeFromTypeNode(node);
+  if (type.isStringLiteral?.()) return [type.value];
+  if (type.isUnion?.()) {
+    return type.types.filter((item) => item.isStringLiteral?.()).map((item) => item.value);
+  }
+  return [];
+}
+
 function tracesToOpenHarnessClient(type, checker, depth = 0, seen = new Set()) {
   if (!type || depth > 8) return false;
   if (seen.has(type)) return false;
@@ -66,6 +117,20 @@ function tracesToOpenHarnessClient(type, checker, depth = 0, seen = new Set()) {
             if (tracesToOpenHarnessClient(argType, checker, depth + 1, seen)) return true;
           }
         }
+        let indexedAccessTraces = false;
+        function inspectTypeNode(node) {
+          if (indexedAccessTraces) return;
+          if (ts.isIndexedAccessTypeNode(node)) {
+            const objectType = checker.getTypeFromTypeNode(node.objectType);
+            if (tracesToOpenHarnessClient(objectType, checker, depth + 1, seen)) {
+              indexedAccessTraces = true;
+              return;
+            }
+          }
+          ts.forEachChild(node, inspectTypeNode);
+        }
+        inspectTypeNode(decl.type);
+        if (indexedAccessTraces) return true;
       }
     }
   }
@@ -129,12 +194,7 @@ export function scanClientLegacyCalls(options = {}) {
 
   let programs = options.programs;
   if (!programs) {
-    const tsconfigConfigs = [
-      { config: "packages/client/tsconfig.json", dir: "packages/client/src" },
-      { config: "apps/cli/tsconfig.json", dir: "apps/cli/src" },
-      { config: "apps/desktop/tsconfig.node.json", dir: "apps/desktop/src" },
-      { config: "apps/frontend/tsconfig.json", dir: "apps/frontend/src" },
-    ];
+    const tsconfigConfigs = discoverWorkspaceScanConfigs(cwd);
 
     programs = [];
     for (const { config, dir } of tsconfigConfigs) {
@@ -149,6 +209,7 @@ export function scanClientLegacyCalls(options = {}) {
     }
   }
 
+  const visitedFiles = new Set();
   for (const item of programs) {
     const program = item.program || item;
     const checker = program.getTypeChecker();
@@ -157,6 +218,9 @@ export function scanClientLegacyCalls(options = {}) {
     for (const filePath of files) {
       const normalized = filePath.replaceAll("\\", "/");
       const rel = relative(cwd, filePath).replaceAll("\\", "/");
+
+      if (visitedFiles.has(normalized)) continue;
+      visitedFiles.add(normalized);
 
       if (rel === "packages/client/src/transport/http-client.ts") {
         continue;
@@ -241,20 +305,22 @@ export function scanClientLegacyCalls(options = {}) {
         } else if (ts.isIndexedAccessTypeNode(node)) {
           const objectType = checker.getTypeFromTypeNode(node.objectType);
           if (tracesToOpenHarnessClient(objectType, checker)) {
-            if (ts.isLiteralTypeNode(node.indexType) && ts.isStringLiteral(node.indexType.literal)) {
-              const propName = node.indexType.literal.text;
-              if (compatMethods.has(propName)) {
-                const { line, character } = sf.getLineAndCharacterOfPosition(node.getStart());
-                references.push({
-                  file: rel,
-                  line: line + 1,
-                  column: character + 1,
-                  method: propName,
-                  replacement: compatMethods.get(propName) || "",
-                  scope,
-                  receiver: "direct",
-                  usage: "type-index",
-                });
+            const propertyNames = literalKeysFromTypeNode(node.indexType, checker);
+            if (propertyNames.length > 0) {
+              for (const propName of propertyNames) {
+                if (compatMethods.has(propName)) {
+                  const { line, character } = sf.getLineAndCharacterOfPosition(node.getStart());
+                  references.push({
+                    file: rel,
+                    line: line + 1,
+                    column: character + 1,
+                    method: propName,
+                    replacement: compatMethods.get(propName) || "",
+                    scope,
+                    receiver: "direct",
+                    usage: "type-index",
+                  });
+                }
               }
             } else {
               const { line, character } = sf.getLineAndCharacterOfPosition(node.getStart());
@@ -278,8 +344,9 @@ export function scanClientLegacyCalls(options = {}) {
             if (ts.isVariableDeclaration(node.parent.parent)) {
               initExpr = node.parent.parent.initializer;
             }
-            if (initExpr) {
-              const initType = checker.getTypeAtLocation(initExpr);
+            const parameter = ts.isParameter(node.parent.parent) ? node.parent.parent : null;
+            if (initExpr || parameter) {
+              const initType = checker.getTypeAtLocation(initExpr || parameter);
               if (tracesToOpenHarnessClient(initType, checker)) {
                 const { line, character } = sf.getLineAndCharacterOfPosition(node.getStart());
                 references.push({
@@ -289,7 +356,7 @@ export function scanClientLegacyCalls(options = {}) {
                   method: propName,
                   replacement: compatMethods.get(propName) || "",
                   scope,
-                  receiver: "destructured",
+                  receiver: parameter ? "parameter-destructured" : "destructured",
                   usage: "destructure",
                 });
               }
