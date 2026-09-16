@@ -243,9 +243,9 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
   - `pnpm --filter @openharness/frontend test`：24 个测试文件全部通过（143/143 tests passed）。
   - `pnpm check-types`：61 个 workspace task 全部通过（exit code 0）。
   - `pnpm check:architecture`：通过（exit code 0），包含公共 API 契约校验、AST 扫描器测试及架构边界。
-  - `node scripts/check-docs.mjs`：通过（261 个 Markdown 文件检查全部有效）。
+  - `node scripts/check-docs.mjs`：通过（268 个 Markdown 文件检查全部有效）。
   - `git diff --check`：通过（无空白或格式异常）。
 
 ## 下一步
 
-阶段 8 已开始，但物理删除尚未解锁。已增加可执行的 `check:client-removal-gate`：它逐项检查 118 个兼容方法的首次弃用发行与后续保留发行证据，并验证载体、版本、日期和证据一致性。当前两项发行证据仍全部为 `pending`，所以门禁按设计返回非零；在真实发布完成前继续保留 `OpenHarnessClient` 顶层 118 个兼容转发方法。详细执行顺序见 `docs/superpowers/plans/2026-09-16-client-flat-facade-removal-stage-8.md`。
+阶段 8 已开始，但物理删除尚未解锁。首轮审查确认原型 `check:client-removal-gate` 能正确报告当前 118/118 BLOCKED，却会在未来删除 contract 条目后失去审计对象，因此暂时不能作为删除授权。修订后的 8A–8F 计划先建立永久 removal ledger 与不可绕过的 integrity check，再改造 A/B/C 发布流程、完成两次稳定保留周期、执行 major 删除并发布收口。在 8A 完成前继续保留 `OpenHarnessClient` 顶层 118 个兼容转发方法。详细顺序见 `docs/superpowers/plans/2026-09-16-client-flat-facade-removal-stage-8.md`。
