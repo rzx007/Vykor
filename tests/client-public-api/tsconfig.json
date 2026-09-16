@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "paths": {
+      "@openharness/client": ["../../packages/client/src/index.ts"]
+    }
+  },
+  "include": ["consumer.ts"]
+}

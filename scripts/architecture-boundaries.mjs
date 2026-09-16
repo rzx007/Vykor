@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanClientLegacyCalls } from "./client-legacy-calls.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const baselinePath = join(root, "scripts", "architecture-baseline.json");
@@ -155,6 +156,9 @@ export function checkPackageDependency(from, to) {
 
 export function validateLegacyBaseline(baseline, current) {
   return Object.entries(baseline).flatMap(([name, previous]) => {
+    if (name === "clientLegacyRegexHistoricalBaseline" || name === "clientLegacyFlatCalls") {
+      return [];
+    }
     const next = current[name] ?? 0;
     return next > previous
       ? [`${name} increased from ${previous} to ${next}`]
@@ -292,14 +296,19 @@ function collectLegacyCalls() {
   const clientLegacyCalls = clientFiles.flatMap((path) =>
     countClientLegacyCalls(readFileSync(path, "utf8"), relative(root, path)),
   );
-  return { storeCalls, clientCalls, clientLegacyCalls };
+  const clientAst = scanClientLegacyCalls({ cwd: root });
+  return { storeCalls, clientCalls, clientLegacyCalls, clientAst };
 }
 
-function summary(calls) {
+export function summary(calls) {
   return {
     sessionStoreFlatCalls: calls.storeCalls.length,
     httpClientFlatCalls: calls.clientCalls.length,
-    clientLegacyFlatCalls: calls.clientLegacyCalls.length,
+    clientLegacyRegexHistoricalBaseline: 79,
+    clientLegacyProductionCalls: calls.clientAst?.summary?.clientLegacyProductionCalls ?? 0,
+    clientLegacyProductionReferences: calls.clientAst?.summary?.clientLegacyProductionReferences ?? 0,
+    clientLegacyCompatibilityTestCalls: calls.clientAst?.summary?.clientLegacyCompatibilityTestCalls ?? 0,
+    clientLegacyOtherTestCalls: calls.clientAst?.summary?.clientLegacyOtherTestCalls ?? 0,
   };
 }
 
@@ -316,6 +325,12 @@ function run() {
   const errors = [
     ...collectArchitectureErrors(),
     ...validateLegacyBaseline(baseline, current),
+    ...(calls.clientAst?.unresolvedClientMembers || []).map(
+      (m) => `${m.file}:${m.line}:${m.column} unresolved client member: ${m.member}`,
+    ),
+    ...(calls.clientAst?.dynamicMembers || []).map(
+      (m) => `${m.file}:${m.line}:${m.column} dynamic client member: ${m.expression}`,
+    ),
   ];
   if (errors.length > 0) {
     process.stderr.write(`${errors.join("\n")}\n`);

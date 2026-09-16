@@ -1,6 +1,6 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–6 已完成，阶段 7 未开始。
+> 状态：当前。阶段 0–6 已完成，阶段 7A（公共契约清单与 AST 门禁）已完成，阶段 7B–7F 未开始。
 
 ## 当前阶段
 
@@ -13,16 +13,17 @@
 阶段 4E 已完成：`StartupRecoveryService` 按固定顺序执行 durable recovery，失败继续阻止 ready；Maintenance 与 PostRun 使用命名 data 边界；既有 Transcript/Execution Projection 保持唯一映射所有者。
 阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。
 阶段 5 已完成：Transport 内核、ProtocolClient、14 个专用业务/执行 Resource 彻底抽取完成。`OpenHarnessClient` 收敛为纯净 Resource 组合根与兼容转发门面，移除全部 endpoint 字符串与业务 decoder；内部 consumer 收窄为命名 capability，原有重点调用指标 `httpClientFlatCalls` 由 11 降至 0；架构规则补充 Client Resource 与 Transport 隔离护栏。
-阶段 6 已完成：Desktop 与 Frontend 状态边界重组完成。建立平台状态所有权（Matrix + 纯 Selector）；抽取跨平台 SSE 连接与断线重连控制器 `SessionSyncController`；解构 Frontend `useServerSync`（1333 行降至 770 行）；解构 Desktop Main `SessionService`（1152 行降至 439 行）；审计确认 Desktop Renderer Store 已有的 `applySessionUpdate` 是持久对账单入口（本阶段未改动 renderer 生产代码）；架构护栏收窄 client 扁平旧调用至 79（下降 25 次）。阶段 7 未开始。
+阶段 6 已完成：Desktop 与 Frontend 状态边界重组完成。建立平台状态所有权（Matrix + 纯 Selector）；抽取跨平台 SSE 连接与断线重连控制器 `SessionSyncController`；解构 Frontend `useServerSync`（1333 行降至 770 行）；解构 Desktop Main `SessionService`（1152 行降至 439 行）；审计确认 Desktop Renderer Store 已有的 `applySessionUpdate` 是持久对账单入口（本阶段未改动 renderer 生产代码）；架构护栏收窄 client 扁平旧调用至 79（下降 25 次）。
+阶段 7A 已完成：建立 Client 公共契约唯一事实源 `scripts/client-public-api-contract.json`（涵盖 55 项 runtime export、127 项 type-only export、138 项 Client public surface）；基于 TypeScript Compiler API 实现严谨 AST 扫描器 `scripts/client-legacy-calls.mjs`，准确识别直接调用、别名、成员属性、await factory、解构、类型索引、值传递与 Pick mapped capability；建立独立代表性消费者类型编译 fixture `tests/client-public-api` 与 Vitest 契约快照测试；固定根门禁 `check:client-api` 并由 `check:architecture` 串联执行。历史正则指标 79 保留为历史参考基线 `clientLegacyRegexHistoricalBaseline`，新 AST 起始指标确立为生产调用 80、生产成员引用 3、兼容测试调用 57。阶段 7B–7F 未开始。
 
 阶段 4 最终复审补充：Coordinator 等待的是包含 `settleGoalRun` 的完整 completion Promise，shutdown 不会在 Goal settlement 尚未结束时关闭 Store；Session Run 三件套的两阶段闭包装配进入纯 `assembleSessionRunServices` factory，Executor 的 Skill/Attachment/Capability/steer 依赖进入 `assembleSessionRunExecutor`；settings、model limits、Skill catalog/list 和 plugin inventory 统一由 `createSessionRuntimeDiscovery` 提供，避免 Daemon 内重复发现扩展；Maintenance/PostRun 使用精确方法 capability，并由架构测试禁止重新持有完整 `SessionStore`。`DaemonApplication` 最终为 908 行。最终统一验证为 Server 80 个文件、717 个测试，Services 最近一次回归为 45 个文件、430 个测试，全仓 TypeScript 61/61，架构测试 15/15。
 
 ## 指标
 
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
-- `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并比较当前生产代码调用数。
+- `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并串联 `pnpm check:client-api` 执行契约比对、AST 扫描器自测与 consumer fixture 编译。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 0`, `clientLegacyFlatCalls: 79`。
+- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 0`, `clientLegacyRegexHistoricalBaseline: 79`, `clientLegacyProductionCalls: 80`, `clientLegacyProductionReferences: 3`, `clientLegacyCompatibilityTestCalls: 57`, `clientLegacyOtherTestCalls: 0`。
 - 当前 `SessionStore` 行数：2152 行。
 - 当前 `OpenHarnessClient`（`http-client.ts`）行数：1113 行。
 - 当前 `useServerSync.ts` 行数：770 行（原 1333 行，净删减 563 行）。

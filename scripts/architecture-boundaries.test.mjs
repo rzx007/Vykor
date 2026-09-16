@@ -94,6 +94,46 @@ test("legacy SessionStore calls may decrease but not increase", () => {
   );
 });
 
+test("AST client production calls and references may decrease but not increase", () => {
+  assert.deepEqual(
+    validateLegacyBaseline(
+      {
+        clientLegacyProductionCalls: 80,
+        clientLegacyProductionReferences: 3,
+        clientLegacyCompatibilityTestCalls: 57,
+      },
+      {
+        clientLegacyProductionCalls: 75,
+        clientLegacyProductionReferences: 2,
+        clientLegacyCompatibilityTestCalls: 57,
+      },
+    ),
+    [],
+  );
+  assert.match(
+    validateLegacyBaseline(
+      { clientLegacyProductionCalls: 80 },
+      { clientLegacyProductionCalls: 81 },
+    )[0],
+    /clientLegacyProductionCalls increased from 80 to 81/,
+  );
+  assert.match(
+    validateLegacyBaseline(
+      { clientLegacyProductionReferences: 3 },
+      { clientLegacyProductionReferences: 4 },
+    )[0],
+    /clientLegacyProductionReferences increased from 3 to 4/,
+  );
+  // Historical regex baseline is ignored in validation gate
+  assert.deepEqual(
+    validateLegacyBaseline(
+      { clientLegacyRegexHistoricalBaseline: 79 },
+      { clientLegacyRegexHistoricalBaseline: 999 },
+    ),
+    [],
+  );
+});
+
 test("counts direct legacy store calls with file locations", () => {
   assert.deepEqual(
     countLegacyCalls("context.store.createRun();\nstore.listProjects()", "demo.ts"),
