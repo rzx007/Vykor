@@ -28,6 +28,7 @@ import type {
   CompactSessionResponse,
   CreateBackgroundShellInput,
   CreateBackgroundShellResult,
+  ConnectCatalogProviderInput,
   CustomProviderInput,
   CreateScheduledTaskInput,
   HookInfo,
@@ -361,9 +362,23 @@ export class OpenHarnessClient {
   async connectCatalogProvider(
     id: string,
     apiKey: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ProviderInfo>;
+  /** @deprecated Use client.providers.connectCatalogProvider() instead. */
+  async connectCatalogProvider(
+    id: string,
+    input: ConnectCatalogProviderInput,
+    options?: { signal?: AbortSignal },
+  ): Promise<ProviderInfo>;
+  /** @deprecated Use client.providers.connectCatalogProvider() instead. */
+  async connectCatalogProvider(
+    id: string,
+    apiKeyOrInput: string | ConnectCatalogProviderInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<ProviderInfo> {
-    return this.providers.connectCatalogProvider(id, apiKey, options);
+    return typeof apiKeyOrInput === "string"
+      ? this.providers.connectCatalogProvider(id, apiKeyOrInput, options)
+      : this.providers.connectCatalogProvider(id, apiKeyOrInput, options);
   }
 
   /** @deprecated Use client.providers.disconnectCatalogProvider() instead. */

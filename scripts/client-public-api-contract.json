@@ -9,9 +9,9 @@
   },
   "summary": {
     "runtimeExports": 55,
-    "typeExports": 127,
+    "typeExports": 129,
     "clientMembers": 138,
-    "totalEntries": 320
+    "totalEntries": 322
   },
   "entries": [
     {
@@ -826,6 +826,26 @@
     },
     {
       "name": "CustomProviderInput",
+      "kind": "type-export",
+      "classification": "long-term",
+      "replacement": null,
+      "deprecatedSince": null,
+      "deprecatedCarrierRelease": null,
+      "retentionCarrierRelease": null,
+      "removeIn": null
+    },
+    {
+      "name": "ConnectCatalogProviderInput",
+      "kind": "type-export",
+      "classification": "long-term",
+      "replacement": null,
+      "deprecatedSince": null,
+      "deprecatedCarrierRelease": null,
+      "retentionCarrierRelease": null,
+      "removeIn": null
+    },
+    {
+      "name": "UpdateCatalogProviderHeadersInput",
       "kind": "type-export",
       "classification": "long-term",
       "replacement": null,

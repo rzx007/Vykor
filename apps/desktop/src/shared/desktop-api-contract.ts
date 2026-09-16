@@ -78,6 +78,7 @@ import type {
   DesktopProviderSnapshot,
   DisconnectDesktopProviderInput,
   CreateDesktopCustomProviderInput,
+  UpdateDesktopCatalogProviderHeadersInput,
   UpdateDesktopCustomProviderInput,
   RemoveDesktopCustomProviderInput,
 } from "./provider-types"
@@ -230,6 +231,9 @@ export type DesktopAPI = {
     connect: (input: ConnectDesktopProviderInput) => Promise<DesktopProviderSnapshot>
     activate: (input: ActivateDesktopProviderInput) => Promise<DesktopProviderSnapshot>
     disconnect: (input: DisconnectDesktopProviderInput) => Promise<DesktopProviderSnapshot>
+    updateCatalogHeaders: (
+      input: UpdateDesktopCatalogProviderHeadersInput
+    ) => Promise<DesktopProviderSnapshot>
     createCustom: (input: CreateDesktopCustomProviderInput) => Promise<DesktopProviderSnapshot>
     updateCustom: (input: UpdateDesktopCustomProviderInput) => Promise<DesktopProviderSnapshot>
     removeCustom: (input: RemoveDesktopCustomProviderInput) => Promise<DesktopProviderSnapshot>

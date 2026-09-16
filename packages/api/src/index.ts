@@ -41,3 +41,10 @@ export {
   RateLimitFailure,
   RequestFailure,
 } from "./errors";
+export {
+  OPENHARNESS_USER_AGENT,
+  RequestHeaderTemplateError,
+  expandRequestHeaderTemplates,
+  normalizeRequestHeaderTemplates,
+} from "./providers/request-header-templates";
+export type { RequestHeaderTemplateContext } from "./providers/request-header-templates";

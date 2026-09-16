@@ -119,7 +119,7 @@ export async function createOpenHarnessRuntime(
 
   const apiClient =
     configuration.client ??
-    (await resolveApiClient(settings, configuration, storage));
+    (await resolveApiClient(settings, configuration, storage, options.sessionId));
 
   const terminal = availableValue(options.capabilities?.terminal);
   const jobs = availableValue(options.capabilities?.jobs);

@@ -2977,8 +2977,8 @@ describe("OpenHarnessHttpServer", () => {
           remove: (id) => {
             records.delete(id);
           },
-          connectCatalog: (id, apiKey) => {
-            if (!apiKey) throw new Error("apiKey required");
+          connectCatalog: (id, input) => {
+            if (!input.apiKey) throw new Error("apiKey required");
             catalogConnections.add(id);
             return {
               name: id,
@@ -2994,6 +2994,118 @@ describe("OpenHarnessHttpServer", () => {
         },
       },
     );
+  });
+
+  it("forwards catalog connect headers and patch updates through system routes", async () => {
+    const release = vi.fn();
+    const closeAllRuntimes = vi.fn(async () => {});
+    const connectCatalog = vi.fn(async () => ({
+      name: "remote",
+      displayName: "Remote AI",
+      hasKey: true,
+      active: false,
+      source: "catalog" as const,
+    }));
+    const updateCatalogHeaders = vi.fn(async () => ({
+      name: "remote",
+      displayName: "Remote AI",
+      hasKey: true,
+      active: false,
+      source: "catalog" as const,
+    }));
+    const { createSystemRoutes } = await import("../routes/system.js");
+    const { ProviderMutationError } = await import(
+      "../../application/default-services/provider-service.js"
+    );
+    const routes = createSystemRoutes({
+      providerService: {
+        list: () => [],
+        connectCatalog,
+        updateCatalogHeaders,
+      },
+      control: {
+        acquireGlobalMutation: vi.fn(() => ({ release })),
+        closeAllRuntimes,
+        invalidateRuntimes: vi.fn(async () => {}),
+        runtimeSnapshot: () => ({
+          startedAt: 0,
+          uptimeMs: 0,
+          sessions: { total: 0, byStatus: {} },
+          runs: { total: 0, byStatus: {} },
+          tasks: { total: 0, byStatus: {} },
+          permissions: { total: 0, byStatus: {} },
+          projectionSettlements: { total: 0, pending: 0, byStatus: {} },
+          sseClientCount: 0,
+          warmAgentCount: 0,
+          coordinator: { activeRunCount: 0, queuedRunCount: 0 },
+          metrics: { counters: {}, gauges: {}, histograms: {} },
+        }),
+        inspectRun: () => undefined,
+        listProjectionDiagnostics: () => ({
+          settlements: [],
+          pending: 0,
+          diagnosticOk: true,
+          includeContent: false,
+        }),
+      },
+    });
+
+    const connected = await routes.request("/providers/catalog/remote/connect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        apiKey: "secret",
+        headers: { "X-Session": "{{sessionId}}" },
+      }),
+    });
+    expect(connected.status).toBe(200);
+    expect(connectCatalog).toHaveBeenCalledWith("remote", {
+      apiKey: "secret",
+      headers: { "X-Session": "{{sessionId}}" },
+    });
+    expect(closeAllRuntimes).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+
+    closeAllRuntimes.mockClear();
+    release.mockClear();
+    const missingHeaders = await routes.request("/providers/catalog/remote", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(missingHeaders.status).toBe(400);
+    expect(updateCatalogHeaders).not.toHaveBeenCalled();
+    expect(closeAllRuntimes).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
+
+    closeAllRuntimes.mockClear();
+    release.mockClear();
+    const cleared = await routes.request("/providers/catalog/remote", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ headers: {} }),
+    });
+    expect(cleared.status).toBe(200);
+    expect(updateCatalogHeaders).toHaveBeenCalledWith("remote", {});
+    expect(closeAllRuntimes).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+
+    closeAllRuntimes.mockClear();
+    release.mockClear();
+    connectCatalog.mockRejectedValueOnce(
+      new ProviderMutationError(400, "Unknown template variable"),
+    );
+    const invalid = await routes.request("/providers/catalog/remote/connect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        apiKey: "secret",
+        headers: { "X-Test": "{{unknown}}" },
+      }),
+    });
+    expect(invalid.status).toBe(400);
+    expect(closeAllRuntimes).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
   });
 
   it("compacts a session transcript through the runtime and store", async () => {

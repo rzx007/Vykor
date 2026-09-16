@@ -2,9 +2,11 @@ import type { Settings, StreamingMessageClient } from "@openharness/core";
 import {
   AnthropicClient,
   CodexSubscriptionClient,
+  OPENHARNESS_USER_AGENT,
   OpenAICompatibleClient,
   detectProvider,
   detectProviderFromEnv,
+  expandRequestHeaderTemplates,
   findByName,
   resolveProviderScopedBaseUrl,
 } from "@openharness/api";
@@ -50,6 +52,7 @@ export async function resolveApiClient(
   settings: Settings,
   configuration?: OpenHarnessAgentConfiguration,
   storage?: CredentialStorage,
+  sessionId?: string,
 ): Promise<StreamingMessageClient> {
   const resolvedStorage = storage ?? new CredentialStorage();
   const apiKey = await resolveApiKey(settings, configuration, resolvedStorage);
@@ -60,6 +63,12 @@ export async function resolveApiClient(
     ? resolveProviderScopedBaseUrl(rawBaseURL, providerName)
     : rawBaseURL;
   const runtimeModel = resolveRuntimeModel(settings, configuration ?? {});
+  const requestHeaders = customProvider?.headers
+    ? expandRequestHeaderTemplates(customProvider.headers, {
+        sessionId,
+        userAgent: OPENHARNESS_USER_AGENT,
+      })
+    : undefined;
 
   // 按优先级顺序解析提供商规范：首先尝试通过名称查找，其次基于模型和凭据检测，最后尝试从环境变量检测
   let spec: ProviderSpec | undefined;
@@ -90,7 +99,7 @@ export async function resolveApiClient(
         apiKey,
         baseURL: baseURL ?? spec?.defaultBaseURL,
         model: runtimeModel,
-        ...(customProvider?.headers ? { headers: customProvider.headers } : {}),
+        ...(requestHeaders ? { headers: requestHeaders } : {}),
       });
     case "anthropic":
     default:

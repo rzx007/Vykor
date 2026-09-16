@@ -24,6 +24,8 @@ import { Input } from "@renderer/components/ui/input"
 import { Separator } from "@renderer/components/ui/separator"
 import type { DesktopCustomProviderInput, DesktopProviderInfo } from "@shared/provider-types"
 import { type CustomProviderFormState, validateCustomProviderForm } from "./custom-provider-form"
+import { RequestHeaderEditor } from "./request-header-editor"
+import { rowsFromHeaders } from "./request-header-form"
 
 const SAVED_CREDENTIAL_MASK = "••••••••••••"
 
@@ -273,82 +275,20 @@ export function CustomProviderDialog({
 
             <Separator />
 
-            <FieldSet data-invalid={invalid?.field === "headers" || undefined}>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <FieldLegend>请求头（可选）</FieldLegend>
-                  <FieldDescription>
-                    {invalid?.field === "headers" ? invalid.message : "用于租户或网关路由信息。"}
-                  </FieldDescription>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setForm((current) => ({
-                      ...current,
-                      headers: [...current.headers, { key: rowKey("header"), name: "", value: "" }],
-                    }))
-                  }
-                >
-                  <Plus data-icon="inline-start" />
-                  添加请求头
-                </Button>
-              </div>
-              {form.headers.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  {form.headers.map((header, index) => (
-                    <div key={header.key} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                      <Input
-                        value={header.name}
-                        aria-label={`请求头 ${index + 1} 名称`}
-                        aria-invalid={invalid?.field === "headers" || undefined}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            headers: current.headers.map((item) =>
-                              item.key === header.key ? { ...item, name: event.target.value } : item
-                            ),
-                          }))
-                        }
-                        placeholder="Header-Name"
-                      />
-                      <Input
-                        value={header.value}
-                        aria-label={`请求头 ${index + 1} 值`}
-                        aria-invalid={invalid?.field === "headers" || undefined}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            headers: current.headers.map((item) =>
-                              item.key === header.key
-                                ? { ...item, value: event.target.value }
-                                : item
-                            ),
-                          }))
-                        }
-                        placeholder="value"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`删除请求头 ${index + 1}`}
-                        onClick={() =>
-                          setForm((current) => ({
-                            ...current,
-                            headers: current.headers.filter((item) => item.key !== header.key),
-                          }))
-                        }
-                      >
-                        <Trash2 data-icon="inline-start" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </FieldSet>
+            <RequestHeaderEditor
+              rows={form.headers}
+              invalidMessage={invalid?.field === "headers" ? invalid.message : null}
+              onChange={(headers) => {
+                setInvalid((current) => (current?.field === "headers" ? null : current))
+                setForm((current) => ({ ...current, headers }))
+              }}
+              onAddRow={() =>
+                setForm((current) => ({
+                  ...current,
+                  headers: [...current.headers, { key: rowKey("header"), name: "", value: "" }],
+                }))
+              }
+            />
 
             {!provider ? (
               <Field orientation="horizontal">
@@ -396,10 +336,6 @@ function initialForm(provider?: DesktopProviderInfo): CustomProviderFormState {
             imageInputSupport: "unknown",
           },
         ],
-    headers: Object.entries(provider?.headers ?? {}).map(([name, value], index) => ({
-      key: `header-${index}`,
-      name,
-      value,
-    })),
+    headers: rowsFromHeaders(provider?.headers),
   }
 }

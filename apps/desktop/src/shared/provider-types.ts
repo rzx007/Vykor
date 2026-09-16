@@ -35,7 +35,13 @@ export interface DesktopProviderSnapshot {
 export interface ConnectDesktopProviderInput {
   provider: string
   apiKey: string
+  headers?: Record<string, string>
   setActive?: boolean
+}
+
+export interface UpdateDesktopCatalogProviderHeadersInput {
+  provider: string
+  headers: Record<string, string>
 }
 
 export interface ActivateDesktopProviderInput {
