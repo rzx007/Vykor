@@ -57,9 +57,12 @@ const client = new OpenHarnessClient({
   token: registry.token,
 });
 
-await client.health();
-const session = await client.createSession({ cwd: process.cwd() });
-await client.admitPrompt(session.id, { content: "hello" });
+await client.protocol.health();
+const session = await client.sessions.create({ cwd: process.cwd() });
+await client.sessions.admitPrompt(session.id, {
+  id: "prompt-1",
+  items: [{ type: "text", text: "hello" }],
+});
 
 for await (const update of syncEvents(client, { sessionId: session.id })) {
   // update.source: "snapshot" | "live"
@@ -73,22 +76,29 @@ for await (const update of syncEvents(client, { sessionId: session.id })) {
 - `apps/frontend` 的 `useServerSync`（TUI）
 - `apps/cli` 的 `print-session.ts`（用户 headless print）
 
-## API 一览
+## API 架构与 Resource 体系
 
-| 方法 | HTTP |
-|------|------|
-| `health()` | `GET /health` |
-| `listSessions()` | `GET /sessions` |
-| `createSession()` | `POST /sessions` |
-| `getSession(id)` | `GET /sessions/:id` |
-| `getSessionState(id)` | `GET /sessions/:id/state` |
-| `listMessages(id)` | `GET /sessions/:id/messages` |
-| `admitPrompt(id, input)` | `POST /sessions/:id/prompts` |
-| `interruptSession(id)` | `POST /sessions/:id/interrupt` |
-| `listEvents()` | `GET /events` |
-| `streamEvents()` | `GET /events/stream` |
-| `listPermissions()` | `GET /permissions` |
-| `replyPermission(id, input)` | `POST /permissions/:id/reply` |
+`OpenHarnessClient` 采用按领域划分的命名资源体系：
+
+| Resource / 命名空间 | 职责范围 |
+|---|---|
+| `client.protocol` | 协议握手、版本兼容性检查、服务健康探测与能力查询 (`ProtocolClient`) |
+| `client.system` | 系统配置、命令列表、MCP 状态、Dream、记忆管理 (`SystemResource`) |
+| `client.providers` | 模型提供商、Catalog 连接与模型列表 (`ProviderResource`) |
+| `client.auth` | 第三方身份认证与登录/注销 (`AuthResource`) |
+| `client.projects` | 项目目录绑定、别名与元数据管理 (`ProjectResource`) |
+| `client.plugins` | 插件发现、本地/归档/Git 安装、启用/禁用与重载 (`PluginResource`) |
+| `client.development` | 技能（Skills）、Agent Persona 与 Hook 管理 (`DevelopmentResource`) |
+| `client.sessions` | 会话生命周期、Prompt 准入排队、快照与 Goal 管理 (`SessionResource`) |
+| `client.attachments` | 附件上传、获取、删除与存储维护 (`AttachmentResource`) |
+| `client.permissions` | 权限请求查询与决策回复 (`PermissionResource`) |
+| `client.schedules` | 定时任务与调度执行记录 (`ScheduleResource`) |
+| `client.jobs` | 后台作业管理、流式通信与取消 (`JobResource`) |
+| `client.terminals` | 持久化 PTY 终端会话与事件流 (`TerminalResource`) |
+| `client.channels` | 消息通道送达与投递确认 (`ChannelResource`) |
+| `client.events` | 会话与系统 SSE 事件流订阅 (`EventResource`) |
+
+历史平铺 facade 方法（如 `client.health()`、`client.createSession()`）现已标记为 `@deprecated` 并保留薄转发实现。完整迁移映射及 Stage 8 移除门槛请参阅 [docs/client-public-api-migration.md](../../docs/client-public-api-migration.md)。
 
 ## 相关文档
 
