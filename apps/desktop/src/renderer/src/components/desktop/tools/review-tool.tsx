@@ -26,7 +26,7 @@ import {
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type {
   DesktopGitChangedFile,
   DesktopGitChangesResult,

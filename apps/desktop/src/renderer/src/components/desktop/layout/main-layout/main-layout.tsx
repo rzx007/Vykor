@@ -17,7 +17,7 @@ import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import {
   attachDesktopSessionEvents,
   useDesktopSessionStore,
-} from "@renderer/stores/desktop-session-store"
+} from "@renderer/stores/desktop-session"
 import {
   selectActiveSessionId,
   selectProjectOperationError,

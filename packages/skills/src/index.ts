@@ -561,8 +561,7 @@ function uniqueDirectories(directories: readonly string[]): string[] {
  * 返回的目录列表按"低优先级在前、高优先级在后"排序（root 先、cwd 后），
  * 调用方按顺序加载时，cwd 层技能会覆盖 git-root 层的同名技能。
  *
- * 每层收集顺序：.agents/skills → .openharness-ts/skills → .claude/skills
- * （后者优先级更高）。
+ * 每层收集顺序：.agents/skills → .openharness-ts/skills。
  *
  * 若祖先链上没有 `.git`，只扫描 cwd 自身，避免把家目录下的个人技能
  * （如 `~/.openharness-ts/skills`）误标成 project。个人技能目录始终排除。
@@ -594,7 +593,6 @@ export async function findProjectSkillDirs(cwd: string): Promise<string[]> {
     for (const dir of [
       join(level, ".agents", "skills"),
       join(level, ".openharness-ts", "skills"),
-      join(level, ".claude", "skills"),
     ]) {
       if (excluded.has(normalizePathKey(dir))) continue;
       dirs.push(dir);
@@ -611,7 +609,6 @@ function personalSkillDirectories(): Set<string> {
   return new Set(
     [
       join(configDir, "skills"),
-      join(home, ".claude", "skills"),
       join(home, ".agents", "skills"),
       join(home, ".config", "agents", "skills"),
     ].map(normalizePathKey),

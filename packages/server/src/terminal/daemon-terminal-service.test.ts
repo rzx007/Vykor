@@ -61,23 +61,6 @@ describe("DaemonTerminalService scoped environments", () => {
     expect(leaseRelease).toHaveBeenCalledOnce();
   });
 
-  it("rejects legacy projectId that disagrees with the session", async () => {
-    const session = { id: "s1", cwd: process.cwd(), projectId: "p1" } as any;
-    const service = new DaemonTerminalService({
-      getProject: () => undefined,
-      getSession: () => session,
-    } as any);
-
-    await expect(service.create({
-      scope: { kind: "session", sessionId: "s1" },
-      projectId: "different",
-      sessionId: "s1",
-      runtime: "local",
-      cols: 80,
-      rows: 24,
-    })).rejects.toThrow("does not belong to project different");
-  });
-
   it("opens an Agent Terminal for a projectless session in its environment", async () => {
     const session = { id: "outside-agent", cwd: process.cwd(), status: "idle" } as any;
     const prepare = vi.fn(async () => ({
@@ -115,9 +98,9 @@ describe("DaemonTerminalService scoped environments", () => {
       cwd: "/workspace",
     });
 
-    expect(service.get(terminal.id)).resolves.toMatchObject({ id: terminal.id, status: "running" });
+    await expect(service.get(terminal.id)).resolves.toMatchObject({ id: terminal.id, status: "running" });
     await service.close(terminal.id);
-    expect(service.get(terminal.id)).resolves.toMatchObject({ id: terminal.id, status: "killed" });
+    await expect(service.get(terminal.id)).resolves.toMatchObject({ id: terminal.id, status: "killed" });
   });
 });
 

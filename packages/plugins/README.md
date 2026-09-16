@@ -26,7 +26,7 @@ ohs config set plugins.enabled false
 ohs config set plugins.enabled true
 ```
 
-只关闭本次新建 Session 的插件贡献，可以使用 `ohs --no-plugins`；`ohs --bare` 是同义的旧入口。总开关只跳过 installed Native Plugin，不影响内置 Skill、普通用户/项目 Skill、Settings Hooks 或 Settings MCP。单插件仍使用 `ohs plugin enable/disable <id>` 管理。
+只关闭本次新建 Session 的插件贡献，可以使用 `ohs --no-plugins`。总开关只跳过 installed Native Plugin，不影响内置 Skill、普通用户/项目 Skill、Settings Hooks 或 Settings MCP。单插件仍使用 `ohs plugin enable/disable <id>` 管理。
 
 ```bash
 pnpm --filter @openharness/plugins test

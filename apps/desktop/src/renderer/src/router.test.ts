@@ -22,7 +22,7 @@ vi.mock("@renderer/components/desktop/plugin-page", () => ({
   PluginPage: () => null,
 }))
 
-vi.mock("@renderer/stores/desktop-session-store", () => ({
+vi.mock("@renderer/stores/desktop-session", () => ({
   useDesktopSessionStore: Object.assign(() => null, {
     getState: () => ({
       activeSessionId: null,

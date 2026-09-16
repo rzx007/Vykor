@@ -195,9 +195,9 @@ Do not guess. Default only if the user already said so.
 | Personal | \`~/.openharness-ts/skills/<skill-name>/\` | Available across all projects for this user |
 | Project | \`<cwd>/.openharness-ts/skills/<skill-name>/\` | Shared with the repository |
 
-The runtime also **scans** \`.agents/skills\` and \`.claude/skills\` (git-root to cwd)
-for compatibility. When *creating* a skill, write to \`.openharness-ts/skills\`
-unless the user explicitly asks for one of those other directories.
+The runtime also **scans** \`.agents/skills\` (git-root to cwd). When *creating*
+a skill, write to \`.openharness-ts/skills\` unless the user explicitly asks
+for the other project directory.
 
 Load order is last-writer-wins: bundled < plugin < user < project.
 

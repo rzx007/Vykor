@@ -173,3 +173,37 @@ test("does not scan the forbidden manifest itself", () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("reports terminal create payload aliases without flagging terminal session info", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  try {
+    mkdirSync(join(cwd, "src"));
+    writeFileSync(join(cwd, "src", "terminal.ts"), [
+      "interface TerminalCreateRequest { projectId?: string; scope: unknown }",
+      "interface TerminalSessionInfo { projectId?: string; sessionId?: string }",
+      'client.terminals.create({ sessionId: "s1", runtime: "local", cols: 80, rows: 24 });',
+    ].join("\n"));
+    const errors = scanForbiddenSurfaces({
+      cwd,
+      roots: ["src"],
+      surfaces: {
+        version: 1,
+        clientMethods: [],
+        runtimeExports: [],
+        httpRoutes: [],
+        cliCommands: [],
+        cliOptions: [],
+        environmentVariables: [],
+        configFields: ["projectId", "sessionId"],
+        enumValues: [],
+        schemaNames: [],
+      },
+    });
+    assert.deepEqual(errors.map((error) => error.surface), [
+      "config-field/projectId",
+      "config-field/sessionId",
+    ]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

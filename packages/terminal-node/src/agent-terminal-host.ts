@@ -140,7 +140,7 @@ function createRequest(
   sessionId: string,
 ): TerminalCreateRequest {
   return {
-    projectId: sessionId,
+    scope: { kind: "session", sessionId },
     runtime: "local",
     cols: input.cols ?? 100,
     rows: input.rows ?? 30,
@@ -148,7 +148,6 @@ function createRequest(
     ...(input.shell !== undefined ? { shell: input.shell } : {}),
     cwd: input.cwd,
     source: "agent",
-    sessionId,
   };
 }
 

@@ -23,7 +23,7 @@ import { cn } from "@renderer/lib/utils"
 import {
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
-} from "@renderer/stores/desktop-session-store"
+} from "@renderer/stores/desktop-session"
 import { prepareFileOpenRequest } from "./file-open-request"
 import {
   readPersistedUtilityFileTabs,

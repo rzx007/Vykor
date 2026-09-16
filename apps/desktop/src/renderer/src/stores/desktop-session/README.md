@@ -13,7 +13,7 @@
 - 不改 Electron main process 的 IPC 协议；
 - 不保存完整消息副本。完整 transcript 只来自当前 `sessionView` 的权威快照。
 
-组件仍从 `desktop-session-store.ts` 导入 `useDesktopSessionStore`。该文件只是兼容入口；业务代码必须留在本目录。
+组件从本目录入口导入 `useDesktopSessionStore`；业务代码也保持在本目录。
 
 ## 四层状态放在哪里
 
@@ -147,7 +147,7 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 - [ ] 每个异步动作使用稳定 operation ID，并只确认、失败或删除自己的 ID；跨模型/权限的默认设置和跨入口的项目详情必须共用最新意图协调器。
 - [ ] 会影响页面 pending/error 的规则增加到 `selectors.ts`；组件不遍历 operation 表自己拼规则。
 - [ ] 需要 SSE 确认时，同时覆盖「IPC 先到」「SSE 先到」「切换会话后返回」测试。
-- [ ] 新文件保持依赖向上：`types` 与纯状态模块不导入 action 或 store；action 由 `store.ts` 组合，兼容入口和组件只消费它们。
+- [ ] 新文件保持依赖向上：`types` 与纯状态模块不导入 action 或 store；action 由 `store.ts` 组合，目录入口和组件只消费它们。
 
 ## 不可破坏约束
 

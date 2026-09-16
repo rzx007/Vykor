@@ -51,7 +51,7 @@ import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type {
   DesktopProviderCredentialSource,
   DesktopCustomProviderInput,

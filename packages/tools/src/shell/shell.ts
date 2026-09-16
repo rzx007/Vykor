@@ -135,7 +135,7 @@ async function executeInEnvironment(
     return { content: [{ type: "text" as const, text: "command is required" }], isError: true };
   }
   const environment = context.environment!;
-  const descriptor = environment.info.shellDescriptor ?? legacyShellDescriptor(environment.info);
+  const descriptor = environment.info.shellDescriptor;
   const shell = descriptorHostLauncher(descriptor);
   const problems = diagnoseShellDialectMismatch(command, shell);
   if (problems.length > 0) {
@@ -229,35 +229,6 @@ function descriptorHostLauncher(descriptor: ShellDescriptor): HostShellLauncher 
     : { kind: "posix-sh" };
 }
 
-function legacyShellDescriptor(info: {
-  shell: string;
-  shellDialect: "powershell" | "cmd" | "posix";
-  pathStyle: "windows" | "posix";
-  tempDir: string;
-}): ShellDescriptor {
-  if (info.shellDialect === "powershell") {
-    return {
-      family: "powershell", dialect: /pwsh/i.test(info.shell) ? "pwsh" : "windows-powershell",
-      executable: info.shell, argsPrefix: [], displayName: "PowerShell",
-      pathStyle: info.pathStyle, tempDir: info.tempDir,
-      capabilities: { conditionalAndOr: /pwsh/i.test(info.shell), supportsLoginShell: false },
-    };
-  }
-  if (info.shellDialect === "cmd") {
-    return {
-      family: "cmd", dialect: "cmd", executable: info.shell, argsPrefix: [],
-      displayName: "Command Prompt", pathStyle: info.pathStyle, tempDir: info.tempDir,
-      capabilities: { conditionalAndOr: true, supportsLoginShell: false },
-    };
-  }
-  return {
-    family: "posix", dialect: /bash/i.test(info.shell) ? "bash" : "posix-sh",
-    executable: info.shell, argsPrefix: [], displayName: /bash/i.test(info.shell) ? "Bash" : "POSIX Shell",
-    pathStyle: info.pathStyle, tempDir: info.tempDir,
-    capabilities: { conditionalAndOr: true, supportsLoginShell: true },
-  };
-}
-
 export const shellTool: ToolDefinition = createShellTool();
 
 export function createShellDescription(shell?: ShellDescriptor): string {
@@ -312,10 +283,6 @@ export function diagnoseShellDialectMismatch(
   command: string,
   shell: HostShellLauncher = resolveHostShellLauncher(),
 ): ShellDialectProblem[] {
-  const isLegacyWindowsPowerShell = shell.kind === "powershell"
-    && /powershell(?:\.exe)?/i.test(shell.bin)
-    && !/pwsh(?:\.exe)?/i.test(shell.bin);
-
   const checks: Array<{
     code: string;
     pattern: RegExp;
@@ -386,7 +353,11 @@ export function diagnoseShellDialectMismatch(
       pattern: /(^|\s)(?:&&|\|\|)(?=\s|$)/,
       message: "uses Bash-style `&&` or `||` command chaining.",
       suggestion: "Use separate PowerShell commands or explicit `if ($LASTEXITCODE -eq 0) { ... }` logic.",
-      shells: isLegacyWindowsPowerShell ? ["powershell"] : [],
+      shells: shell.kind === "powershell"
+        && /powershell(?:\.exe)?/i.test(shell.bin)
+        && !/pwsh(?:\.exe)?/i.test(shell.bin)
+        ? ["powershell"]
+        : [],
     },
     {
       code: "cmd-dir-switch",

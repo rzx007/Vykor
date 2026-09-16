@@ -24,7 +24,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu"
-import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionRecord } from "@shared/session-types"
 
 export function SessionMoreMenu({

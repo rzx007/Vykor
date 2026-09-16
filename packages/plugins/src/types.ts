@@ -72,7 +72,6 @@ export interface OpenHarnessPluginManifestV1 {
   components: OpenHarnessPluginComponents;
   permissions?: OpenHarnessPluginPermissions;
   runtime?: OpenHarnessPluginRuntime;
-  compatibility?: Record<string, unknown>;
 }
 
 export interface ValidatedNativePlugin {

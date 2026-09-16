@@ -28,38 +28,32 @@ describe("installed plugin store", () => {
     await expect(readInstalledPluginStore(file)).rejects.toThrow("Unsupported installed plugin store");
   });
 
-  it("discovers only global records and warns about legacy project-local installations", async () => {
+  it.each(["project", "local"])("rejects a persisted %s installation scope", async (scope) => {
+    await import("node:fs/promises").then(({ writeFile }) => writeFile(file, JSON.stringify({
+      schemaVersion: 1,
+      revision: 0,
+      plugins: {
+        legacy: {
+          id: "dev.example.legacy", scope, enabled: true, currentVersion: "1", cachePath: "cache",
+          origin: "native", requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now",
+        },
+      },
+    })));
+
+    await expect(readInstalledPluginStore(file)).rejects.toThrow("Invalid installed plugin store");
+  });
+
+  it("discovers enabled user and managed installations", async () => {
     await updateInstalledPluginStore(file, (store) => {
       const common = {
-        enabled: true,
-        currentVersion: "1",
-        cachePath: "cache",
-        origin: "native" as const,
-        requestedPermissions: [],
-        approvedPermissions: [],
-        installedAt: "now",
-        updatedAt: "now",
+        enabled: true, currentVersion: "1", cachePath: "cache", origin: "native" as const,
+        requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now",
       };
       store.plugins["user::dev.example.user"] = { id: "dev.example.user", scope: "user", ...common };
-      store.plugins["project:C:/workspace:dev.example.project"] = {
-        id: "dev.example.project", scope: "project", projectDir: "C:/workspace", ...common,
-      };
-      store.plugins["local:C:/workspace:dev.example.local"] = {
-        id: "dev.example.local", scope: "local", projectDir: "C:/workspace", ...common, enabled: false,
-      };
+      store.plugins["managed::dev.example.managed"] = { id: "dev.example.managed", scope: "managed", ...common };
     });
-    const warnings: string[] = [];
 
-    const records = await discoverInstalledNativePlugins({
-      cwd: "C:/workspace",
-      storePath: file,
-      onWarning: (warning: string) => warnings.push(warning),
-    } as Parameters<typeof discoverInstalledNativePlugins>[0] & { onWarning(warning: string): void });
-
-    expect(records.map((record) => record.id)).toEqual(["dev.example.user"]);
-    expect(warnings).toEqual([
-      "dev.example.project: ignored legacy project-scoped installation; reinstall it for the user",
-      "dev.example.local: ignored legacy local-scoped installation; reinstall it for the user",
-    ]);
+    const records = await discoverInstalledNativePlugins({ cwd: "C:/workspace", storePath: file });
+    expect(records.map((record) => record.scope).sort()).toEqual(["managed", "user"]);
   });
 });

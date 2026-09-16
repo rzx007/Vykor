@@ -10,9 +10,7 @@ export type TerminalScope =
   | { kind: "session"; sessionId: string };
 
 export interface TerminalCreateRequest {
-  /** New callers must provide scope. Optional only for the HTTP legacy adapter. */
-  scope?: TerminalScope;
-  projectId?: string;
+  scope: TerminalScope;
   runtime: TerminalRuntime;
   cols: number;
   rows: number;
@@ -20,7 +18,6 @@ export interface TerminalCreateRequest {
   shell?: string;
   cwd?: string;
   source?: TerminalSource;
-  sessionId?: string;
 }
 
 /** 可以通过 HTTP/SSE 发送的终端状态，不包含 PTY 或子进程对象。 */

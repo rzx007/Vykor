@@ -22,7 +22,7 @@ import {
   selectActiveWorkspaceProject,
   selectActiveSessionRecord,
   useDesktopSessionStore,
-} from "@renderer/stores/desktop-session-store"
+} from "@renderer/stores/desktop-session"
 import type {
   DesktopTerminalEvent,
   DesktopTerminalRecord,

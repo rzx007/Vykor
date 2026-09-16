@@ -14,4 +14,3 @@ export * from "./installation/installer.js";
 export * from "./installation/store.js";
 export * from "./installation/verify.js";
 export * from "./activation/activate.js";
-export * from "./compatibility.js";

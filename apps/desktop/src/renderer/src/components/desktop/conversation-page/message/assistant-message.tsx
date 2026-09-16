@@ -12,7 +12,7 @@ import { Streamdown } from "streamdown"
 import { Button } from "@renderer/components/ui/button"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { routeChangedFileClick, toProjectRelativePath } from "@shared/workspace-open-path"
 

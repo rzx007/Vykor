@@ -13,7 +13,7 @@ import {
 import { Field, FieldGroup } from "@renderer/components/ui/field"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionRecord } from "@shared/session-types"
 
 export function useSessionActionDialogs(): {

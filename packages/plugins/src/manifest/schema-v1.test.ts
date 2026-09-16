@@ -22,6 +22,7 @@ describe("OpenHarnessPluginManifestV1Schema", () => {
     [{ ...validManifest, components: {} }, "components"],
     [{ ...validManifest, components: { skills: ["skills"] } }, "component path"],
     [{ ...validManifest, executable: "./index.js" }, "unknown top-level field"],
+    [{ ...validManifest, compatibility: { environmentAliases: ["CLAUDE_PLUGIN_ROOT"] } }, "compatibility"],
   ])("rejects invalid input: %s (%s)", (input) => {
     expect(OpenHarnessPluginManifestV1Schema.safeParse(input).success).toBe(false);
   });

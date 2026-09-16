@@ -130,9 +130,19 @@
   ],
   "httpRoutes": [],
   "cliCommands": [],
-  "cliOptions": [],
+  "cliOptions": [
+    "--bare"
+  ],
   "environmentVariables": [],
-  "configFields": [],
+  "configFields": [
+    "projectId",
+    "sessionId"
+  ],
   "enumValues": [],
-  "schemaNames": []
+  "schemaNames": [
+    "PluginScope",
+    "buildNativePluginCompatibilityEnvironment",
+    "isLegacyWindowsPowerShell",
+    "legacyShellDescriptor"
+  ]
 }

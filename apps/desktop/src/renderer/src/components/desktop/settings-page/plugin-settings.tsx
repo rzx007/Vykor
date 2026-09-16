@@ -62,7 +62,7 @@ import { Switch } from "@renderer/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@renderer/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopPluginInfo, DesktopPluginSnapshot } from "@shared/plugin-types"
 
 type PluginFilter = "all" | "enabled" | "attention"

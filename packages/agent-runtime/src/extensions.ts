@@ -10,7 +10,6 @@ import { GOAL_ASSESSMENT_TOOL_NAME } from "./goal-assessment-tool.js";
 import { getSkillsDir } from "@openharness/core";
 import {
   discoverInstalledNativePlugins,
-  buildNativePluginCompatibilityEnvironment,
   loadNativePlugin,
   verifyInstalledNativePlugin,
   type LoadedNativePlugin,
@@ -61,7 +60,7 @@ export async function discoverOpenHarnessExtensions(
   let plugins: LoadedNativePlugin[] = [];
   const warnings: string[] = [];
   const installedPlugins = (settings.plugins?.enabled ?? true) && (options.pluginsEnabled ?? true)
-    ? await discoverInstalledNativePlugins({ cwd, onWarning: (warning) => warnings.push(warning) })
+    ? await discoverInstalledNativePlugins({ cwd })
     : [];
   const winnerSelection = selectPluginInstallationWinners(installedPlugins);
   const loadedInstallations: LoadedPluginInstallation[] = [];
@@ -96,9 +95,8 @@ export async function discoverOpenHarnessExtensions(
   const agentDefinitions = plugins.flatMap((plugin) => plugin.components.agents?.value ?? []);
   const pluginMcpServers: Record<string, McpServerConfig> = {};
   for (const plugin of plugins) {
-    const compatibilityEnv = buildNativePluginCompatibilityEnvironment({ manifest: plugin.manifest, root: plugin.root, cwd });
     for (const [name, server] of Object.entries(plugin.components.mcpServers?.value ?? {})) {
-      pluginMcpServers[name] = server.type === "stdio" ? { ...server, env: { ...server.env, ...compatibilityEnv } } : server;
+      pluginMcpServers[name] = server;
     }
   }
   return {

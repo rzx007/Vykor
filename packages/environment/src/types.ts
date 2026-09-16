@@ -38,8 +38,7 @@ export interface EffectiveEnvironmentInfo {
   networkMode: string;
   git?: { repository: boolean; branch?: string };
   limitations: string[];
-  /** Canonical shell contract. Legacy scalar shell fields remain during migration. */
-  shellDescriptor?: ShellDescriptor;
+  shellDescriptor: ShellDescriptor;
 }
 
 export interface EnvironmentProcessResult {

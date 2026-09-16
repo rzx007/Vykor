@@ -5,7 +5,7 @@ import {
   isSettingsSection,
   settingsSectionLabel,
 } from "@renderer/components/desktop/settings-page/settings-navigation"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 
 export const Route = createFileRoute("/settings/$section")({
   beforeLoad: async ({ params }) => {

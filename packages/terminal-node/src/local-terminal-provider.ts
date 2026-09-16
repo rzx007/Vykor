@@ -27,6 +27,9 @@ import { createHostTerminalTarget } from "./environment-terminal-target.js";
 
 export interface LocalTerminalProviderOptions {
   resolveCwd: (input: TerminalCreateRequest) => Promise<string>;
+  resolveSessionInfo?: (
+    input: TerminalCreateRequest,
+  ) => Pick<TerminalSessionInfo, "projectId" | "sessionId">;
   resolveTarget?: (
     input: TerminalCreateRequest,
     resolvedCwd: string,
@@ -91,14 +94,19 @@ export class LocalTerminalProvider implements TerminalProvider {
         sequence: snapshot.sequence,
       });
     });
+    const scopeInfo = this.options.resolveSessionInfo?.(input) ?? (
+      input.scope.kind === "project"
+        ? { projectId: input.scope.projectId }
+        : { sessionId: input.scope.sessionId }
+    );
     const info: TerminalSessionInfo = {
       id,
       name: normalizeTerminalName(input.name),
-      scope: resolveTerminalScope(input),
-      ...(input.projectId ? { projectId: input.projectId } : {}),
+      scope: input.scope,
+      ...(scopeInfo.projectId ? { projectId: scopeInfo.projectId } : {}),
       runtime: input.runtime,
       source: input.source ?? "user",
-      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(scopeInfo.sessionId ? { sessionId: scopeInfo.sessionId } : {}),
       status: "running",
       cwd: target.executionCwd,
       shell: target.shell,
@@ -286,13 +294,6 @@ export class LocalTerminalProvider implements TerminalProvider {
     session.targetClosed = true;
     await session.target.close();
   }
-}
-
-function resolveTerminalScope(input: TerminalCreateRequest) {
-  if (input.scope) return input.scope;
-  if (input.sessionId) return { kind: "session" as const, sessionId: input.sessionId };
-  if (input.projectId) return { kind: "project" as const, projectId: input.projectId };
-  throw new Error("Terminal scope is required.");
 }
 
 function isTerminalStatus(status: TerminalSessionInfo["status"]): boolean {

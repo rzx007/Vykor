@@ -15,7 +15,7 @@ import {
   areDesktopAttachmentsSendable,
   disabledDesktopAttachmentSupport,
 } from "@shared/attachment-types"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   NEW_CONVERSATION_SCOPE,
   selectDraftAttachments,

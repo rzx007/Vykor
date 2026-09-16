@@ -93,7 +93,7 @@
 ### 打开已有会话
 
 ```text
-desktop-session-store 更新 activeSessionId
+desktop-session store 更新 activeSessionId
   -> controller 计算 session:<id>
   -> repository 读取该 scope 的视图状态
   -> controller 恢复展开/最大化/尺寸

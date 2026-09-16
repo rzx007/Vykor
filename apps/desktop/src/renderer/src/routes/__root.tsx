@@ -2,7 +2,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router"
 
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   selectAppOperationError,
   selectDaemonStatus,

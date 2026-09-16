@@ -47,15 +47,14 @@ The CLI loads skills into a single `SkillRegistry` in this order:
 1. Bundled skills from `BUNDLED_SKILLS`
 2. Plugin skills and plugin command projections
 3. User skills from `getSkillsDir()` (`~/.openharness-ts/skills` by default)
-4. Project skills from `.openharness-ts/skills`, `.agents/skills`, and
-   `.claude/skills`, walking from the git root toward the current working
+4. Project skills from `.openharness-ts/skills` and `.agents/skills`, walking
+   from the git root toward the current working
    directory
 
 To **create** a local skill, write `<name>/SKILL.md` under the user or project
 directory above. The bundled `create-skill` skill documents those paths for the
 model; invoke it with `/create-skill` or the `Skill` tool. Do not write new
-skills to `.agents/skills` or `.claude/skills` unless the user asks for that
-compatibility layout.
+skills to `.agents/skills` unless the user asks for that layout.
 
 Registration is last-writer-wins, so the effective priority is:
 

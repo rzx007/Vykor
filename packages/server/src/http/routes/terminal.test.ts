@@ -41,11 +41,10 @@ describe("Terminal routes", () => {
     const create = vi.fn(async (input: TerminalCreateRequest): Promise<TerminalSessionInfo> => ({
       id: "terminal-1",
       name: input.name ?? "Terminal",
-      scope: input.scope ?? { kind: "project", projectId: input.projectId },
-      ...(input.projectId ? { projectId: input.projectId } : {}),
+      scope: input.scope,
       runtime: input.runtime,
       source: input.source ?? "user",
-      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input.scope.kind === "project" ? { projectId: input.scope.projectId } : { sessionId: input.scope.sessionId }),
       status: "running",
       cwd: input.cwd ?? "/repo",
       shell: input.shell ?? "/bin/sh",
@@ -64,7 +63,6 @@ describe("Terminal routes", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         scope: { kind: "session", sessionId: "session-1" },
-        projectId: "project-1",
         runtime: "environment",
         cols: 120,
         rows: 32,
@@ -72,14 +70,12 @@ describe("Terminal routes", () => {
         shell: "/bin/sh -i",
         cwd: "/repo/apps/web",
         source: "agent",
-        sessionId: "session-1",
       }),
     });
 
     expect(response.status).toBe(201);
     expect(create).toHaveBeenCalledWith({
       scope: { kind: "session", sessionId: "session-1" },
-      projectId: "project-1",
       runtime: "environment",
       cols: 120,
       rows: 32,
@@ -87,7 +83,6 @@ describe("Terminal routes", () => {
       shell: "/bin/sh -i",
       cwd: "/repo/apps/web",
       source: "agent",
-      sessionId: "session-1",
     });
     await expect(response.json()).resolves.toMatchObject({
       terminal: {
@@ -97,6 +92,24 @@ describe("Terminal routes", () => {
         sessionId: "session-1",
       },
     });
+  });
+
+  it.each([
+    { projectId: "project-1" },
+    { sessionId: "session-1" },
+  ])("rejects a legacy top-level terminal scope payload: %s", async (legacyScope) => {
+    const create = vi.fn();
+    const terminals = { create, subscribe: () => () => {} } as unknown as DaemonTerminalService;
+    const app = createTerminalRoutes(terminals, new TerminalHttpEventHub(terminals));
+
+    const response = await app.request("/", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...legacyScope, runtime: "local", cols: 80, rows: 24 }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("accepts a new session-scoped terminal request without projectId", async () => {
@@ -131,8 +144,6 @@ describe("Terminal routes", () => {
     expect(response.status).toBe(201);
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
       scope: { kind: "session", sessionId: "outside-1" },
-      projectId: undefined,
-      sessionId: undefined,
     }));
   });
 });

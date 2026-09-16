@@ -8,7 +8,7 @@ import {
 } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { selectActiveSessionId } from "@renderer/stores/desktop-session/selectors"
 import { TitleBar } from "../title-bar"
 import { useDesktopWindowChrome } from "../use-desktop-window-chrome"

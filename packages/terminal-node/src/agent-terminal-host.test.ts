@@ -39,7 +39,7 @@ describe("createAgentTerminalBundle", () => {
     });
 
     expect(provider.createdWith).toEqual({
-      projectId: "session-1",
+      scope: { kind: "session", sessionId: "session-1" },
       runtime: "local",
       cols: 80,
       rows: 24,
@@ -47,7 +47,6 @@ describe("createAgentTerminalBundle", () => {
       shell: process.execPath,
       cwd: "C:\\repo",
       source: "agent",
-      sessionId: "session-1",
     });
     expect(await bundle.jobs.list({ sessionId: "session-1" })).toEqual([{
       id: opened.id,
@@ -316,10 +315,11 @@ class FakeTerminalProvider implements AgentTerminalProvider {
     const terminal: TerminalSessionInfo = {
       id: "terminal-1",
       name: input.name ?? "Agent terminal",
-      projectId: input.projectId,
+      scope: input.scope,
+      ...(input.scope.kind === "project" ? { projectId: input.scope.projectId } : {}),
       runtime: input.runtime,
       source: input.source ?? "user",
-      sessionId: input.sessionId,
+      ...(input.scope.kind === "session" ? { sessionId: input.scope.sessionId } : {}),
       status: "running",
       cwd: input.cwd ?? "C:\\repo",
       shell: input.shell ?? "shell",

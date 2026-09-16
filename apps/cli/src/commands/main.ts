@@ -47,7 +47,6 @@ interface MainOptions {
   disallowedTools?: string;
   outputFormat?: string;
   appendSystemPrompt?: string;
-  bare?: boolean;
   plugins?: boolean;
   dryRun?: boolean;
   sessionId?: string;
@@ -238,7 +237,7 @@ export async function mainAction(
   if (options.apiFormat) overrides.apiFormat = options.apiFormat as Settings["apiFormat"];
   if (options.permissionMode) overrides.permission = { mode: options.permissionMode as Settings["permission"]["mode"] };
   if (options.maxTurns) overrides.maxTurns = options.maxTurns;
-  if (options.bare || options.plugins === false) overrides.plugins = { enabled: false };
+  if (options.plugins === false) overrides.plugins = { enabled: false };
 
   const settings = await loadSettings(overrides, { includeProject: true, projectRoot: process.cwd() });
 
@@ -285,7 +284,7 @@ async function runPrintMode(
     allowedTools: options.allowedTools,
     disallowedTools: options.disallowedTools,
     effort: options.effort,
-    pluginsEnabled: options.bare || options.plugins === false ? false : settings.plugins?.enabled,
+    pluginsEnabled: options.plugins === false ? false : settings.plugins?.enabled,
     daemonUrl: options.daemonUrl,
     daemonToken: options.daemonToken,
   });
@@ -345,7 +344,7 @@ async function runTuiMode(
       permissionMode: options.permissionMode ?? settings.permission.mode,
       maxTurns: options.maxTurns ?? settings.maxTurns,
       sessionMode: isCoordinatorSessionRequested(options) ? "coordinator" : null,
-      pluginsEnabled: options.bare || options.plugins === false ? false : settings.plugins?.enabled,
+      pluginsEnabled: options.plugins === false ? false : settings.plugins?.enabled,
     },
     initial_prompt: prompt ?? null,
     theme: options.theme ?? "default",
@@ -413,10 +412,7 @@ export async function loadSkillsThreeSources(
   skillRegistry.registerBundled();
   const pluginContributions: { plugins: Awaited<ReturnType<typeof loadNativePlugin>>[]; warnings: string[] } = { plugins: [], warnings: [] };
   if (settings && (settings.plugins?.enabled ?? true)) {
-    const records = await discoverInstalledNativePlugins({
-      cwd,
-      onWarning: (warning) => pluginContributions.warnings.push(warning),
-    });
+    const records = await discoverInstalledNativePlugins({ cwd });
     for (const record of records) {
       const verification = await verifyInstalledNativePlugin(record);
       if (verification.status !== "valid") {

@@ -30,7 +30,7 @@ import {
 } from "@renderer/components/ui/message-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionTask, DesktopSessionView } from "@shared/session-types"
 import { groupAgentTasks, matchesAgentSessionUpdate } from "./agent-task-model"
 

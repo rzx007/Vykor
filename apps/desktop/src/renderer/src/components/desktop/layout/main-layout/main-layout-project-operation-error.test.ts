@@ -88,16 +88,16 @@ vi.mock("@renderer/components/desktop/layout/main-layout/utility-panel", () => (
     toolOpenRequest: null,
   }),
 }))
-vi.mock("@renderer/stores/desktop-session-store", async () => {
-  const actual = await vi.importActual<typeof import("@renderer/stores/desktop-session-store")>(
-    "@renderer/stores/desktop-session-store"
+vi.mock("@renderer/stores/desktop-session", async () => {
+  const actual = await vi.importActual<typeof import("@renderer/stores/desktop-session")>(
+    "@renderer/stores/desktop-session"
   )
 
   return { ...actual, attachDesktopSessionEvents: () => () => undefined }
 })
 
 import { MainLayout } from "./main-layout"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 
 const initialStoreState = useDesktopSessionStore.getState()
 let mountedRoot: Root | null = null

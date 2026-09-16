@@ -114,8 +114,7 @@ export function createTerminalRoutes(
       const body = await readJson(c);
       try {
         const terminal = await terminals.create({
-          scope: readTerminalScope(body),
-          projectId: optionalText(body.projectId),
+          scope: readTerminalScope(body.scope),
           runtime: readRuntime(body.runtime),
           cols: numberValue(body.cols, 80),
           rows: numberValue(body.rows, 24),
@@ -123,7 +122,6 @@ export function createTerminalRoutes(
           shell: optionalText(body.shell),
           cwd: optionalText(body.cwd),
           source: readSource(body.source) ?? "user",
-          sessionId: optionalText(body.sessionId),
         });
         return jsonResponse({ terminal }, 201);
       } catch (error) {
@@ -195,15 +193,15 @@ export function createTerminalRoutes(
     });
 }
 
-function readTerminalScope(body: Record<string, unknown>): {
+function readTerminalScope(value: unknown): {
   kind: "project";
   projectId: string;
 } | {
   kind: "session";
   sessionId: string;
 } {
-  if (body.scope && typeof body.scope === "object" && !Array.isArray(body.scope)) {
-    const scope = body.scope as Record<string, unknown>;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const scope = value as Record<string, unknown>;
     if (scope.kind === "project" && optionalText(scope.projectId)) {
       return { kind: "project", projectId: optionalText(scope.projectId)! };
     }
@@ -212,10 +210,6 @@ function readTerminalScope(body: Record<string, unknown>): {
     }
     throw new DaemonTerminalError(400, "terminal scope must contain a valid projectId or sessionId.");
   }
-  const projectId = optionalText(body.projectId);
-  const sessionId = optionalText(body.sessionId);
-  if (sessionId) return { kind: "session", sessionId };
-  if (projectId) return { kind: "project", projectId };
   throw new DaemonTerminalError(400, "terminal scope is required.");
 }
 

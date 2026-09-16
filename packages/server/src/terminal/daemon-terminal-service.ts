@@ -48,7 +48,7 @@ export interface DaemonTerminalServiceOptions {
 }
 
 interface ResolvedTerminalRequest {
-  scope: NonNullable<TerminalCreateRequest["scope"]>;
+  scope: TerminalCreateRequest["scope"];
   cwd: string;
   projectId?: string;
   session?: SessionRecord;
@@ -63,6 +63,13 @@ export class DaemonTerminalService {
   ) {
     this.provider = new LocalTerminalProvider({
       resolveCwd: async (input) => this.resolveRequest(input).cwd,
+      resolveSessionInfo: (input) => {
+        const resolved = this.resolveRequest(input);
+        return {
+          ...(resolved.projectId ? { projectId: resolved.projectId } : {}),
+          ...(resolved.session ? { sessionId: resolved.session.id } : {}),
+        };
+      },
       resolveTarget: async (input, _cwd, terminalId) =>
         await this.resolveEnvironmentTarget(input, terminalId),
       spawnPty: options.spawnPty,
@@ -74,8 +81,6 @@ export class DaemonTerminalService {
     return await this.provider.create({
       ...input,
       scope: resolved.scope,
-      projectId: resolved.projectId,
-      sessionId: resolved.session?.id,
       source: input.source ?? "user",
     });
   }
@@ -148,14 +153,7 @@ export class DaemonTerminalService {
   }
 
   private resolveRequest(input: TerminalCreateRequest): ResolvedTerminalRequest {
-    const scope = input.scope ?? (
-      input.sessionId
-        ? { kind: "session" as const, sessionId: input.sessionId }
-        : input.projectId
-          ? { kind: "project" as const, projectId: input.projectId }
-          : undefined
-    );
-    if (!scope) throw new DaemonTerminalError(400, "Terminal scope is required.");
+    const scope = input.scope;
 
     let cwd: string;
     let projectId: string | undefined;
@@ -164,30 +162,12 @@ export class DaemonTerminalService {
       session = this.store.getSession(scope.sessionId);
       if (!session) throw new DaemonTerminalError(404, `Session not found: ${scope.sessionId}`);
       projectId = session.projectId;
-      if (input.sessionId && input.sessionId !== session.id) {
-        throw new DaemonTerminalError(400, `Terminal sessionId does not match scope ${scope.sessionId}.`);
-      }
-      if (input.projectId && session.projectId !== input.projectId) {
-        throw new DaemonTerminalError(
-          400,
-          `Session ${session.id} does not belong to project ${input.projectId}.`,
-        );
-      }
       cwd = session.cwd;
     } else {
       projectId = scope.projectId;
       const project = this.store.getProject(projectId);
       if (!project) throw new DaemonTerminalError(404, `Project not found: ${projectId}`);
       cwd = project.path;
-      if (input.sessionId) {
-        session = this.store.getSession(input.sessionId);
-        if (!session || session.projectId !== projectId) {
-          throw new DaemonTerminalError(400, `Session ${input.sessionId} does not belong to project ${projectId}.`);
-        }
-        if (resolve(session.cwd) !== resolve(cwd)) {
-          throw new DaemonTerminalError(400, "Terminal session and project cwd do not match.");
-        }
-      }
     }
     if (input.cwd && resolve(input.cwd) !== resolve(cwd)) {
       throw new DaemonTerminalError(400, "Terminal cwd does not match its trusted scope.");

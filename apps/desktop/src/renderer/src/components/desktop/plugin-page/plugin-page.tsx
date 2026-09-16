@@ -19,7 +19,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/componen
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Switch } from "@renderer/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/ui/tabs"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { PluginManager } from "./plugin-manager"
 import { SkillManager } from "./skill-manager"
 import { McpManager } from "./mcp-manager"

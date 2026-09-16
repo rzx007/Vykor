@@ -33,6 +33,12 @@ const defaultAllow = [
   "scripts/forbidden-compatibility-surfaces.json",
   "scripts/forbidden-compatibility-surfaces.test.mjs",
   "tests/client-public-api/consumer.ts",
+  "apps/cli/src/index.test.ts",
+  "packages/plugins/src/installation/store.test.ts",
+  "packages/plugins/src/manifest/schema-v1.test.ts",
+  "packages/protocol/src/terminal.type-test.ts",
+  "packages/server/src/http/routes/terminal.test.ts",
+  "packages/skills/src/index.test.ts",
   "docs/compatibility-surface-audit.md",
   "docs/superpowers/plans/",
   "docs/superpowers/specs/",
@@ -238,6 +244,54 @@ function scanClientAst(source, rel, surfaces) {
   return errors;
 }
 
+function scanTerminalCreatePayloadAst(source, rel, surfaces) {
+  const names = new Set(surfaces.configFields.filter((name) => name === "projectId" || name === "sessionId"));
+  if (names.size === 0) return [];
+  const kind = rel.endsWith(".tsx") ? ts.ScriptKind.TSX : rel.endsWith(".jsx") ? ts.ScriptKind.JSX : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(rel, source, ts.ScriptTarget.Latest, true, kind);
+  const errors = [];
+
+  function report(node, name) {
+    if (!names.has(name)) return;
+    const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+    errors.push({
+      surface: `config-field/${name}`,
+      file: rel,
+      line: position.line + 1,
+      column: position.character + 1,
+    });
+  }
+
+  function scanObject(object) {
+    for (const property of object.properties) {
+      if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) {
+        report(property.name, propertyName(property.name));
+      }
+    }
+  }
+
+  function visit(node) {
+    if (ts.isInterfaceDeclaration(node) && node.name.text === "TerminalCreateRequest") {
+      for (const member of node.members) report(member.name ?? member, propertyName(member.name));
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      node.type?.getText(sourceFile).includes("TerminalCreateRequest") &&
+      node.initializer && ts.isObjectLiteralExpression(unwrapExpression(node.initializer))
+    ) {
+      scanObject(unwrapExpression(node.initializer));
+    } else if (ts.isCallExpression(node) && node.arguments[0]) {
+      const callee = node.expression.getText(sourceFile);
+      const argument = unwrapExpression(node.arguments[0]);
+      if (/(?:^|\.)(?:terminal|terminals)\.create$/.test(callee) && ts.isObjectLiteralExpression(argument)) {
+        scanObject(argument);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return errors;
+}
+
 function locate(source, index) {
   const before = source.slice(0, index);
   const lines = before.split("\n");
@@ -259,10 +313,14 @@ export function scanForbiddenSurfaces(options = {}) {
     const rel = normalizePath(relative(cwd, file));
     if (isAllowed(rel, allow)) continue;
     const source = readFileSync(file, "utf8");
-    if (codeExtension.test(rel)) errors.push(...scanClientAst(source, rel, surfaces));
+    if (codeExtension.test(rel)) {
+      errors.push(...scanClientAst(source, rel, surfaces));
+      errors.push(...scanTerminalCreatePayloadAst(source, rel, surfaces));
+    }
     for (const category of categories) {
       if (codeExtension.test(rel) && (category === "clientMethods" || category === "runtimeExports")) continue;
       for (const name of surfaces[category]) {
+        if (category === "configFields" && (name === "projectId" || name === "sessionId")) continue;
         for (const pattern of matchPatterns(category, name, rel)) {
           for (const match of source.matchAll(pattern)) {
             const location = locate(source, match.index);

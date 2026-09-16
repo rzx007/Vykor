@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 
 import { useMainLayout } from "@renderer/components/desktop/layout/main-layout"
 import { ScheduledPage } from "@renderer/components/desktop/scheduled-page"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 
 export const Route = createFileRoute("/_main/scheduled")({
   beforeLoad: () => useDesktopSessionStore.getState().initialize(),

@@ -68,7 +68,6 @@ program
   )
   .option("--append-system-prompt <prompt>", "Append to default system prompt")
   .option("--no-plugins", "Skip all installed Native Plugin contributions for this session")
-  .option("--bare", "Skip installed Native Plugins (legacy alias for --no-plugins)")
   .option("--dry-run", "预览解析后的运行时配置，不调用模型")
   .option("--session-id <id>", "预分配的 daemon session ID（内部用）")
   .action(mainAction);

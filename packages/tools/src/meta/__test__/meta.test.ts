@@ -313,20 +313,25 @@ describe("listSkillsTool", () => {
     expect(text).toContain("model=hidden");
   });
 
-  it("freshly scans project .claude/skills directory skills even with a stale shared registry", async () => {
+  it("freshly scans current project skill directories and ignores .claude/skills", async () => {
     const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oh-list-skills-"));
     process.env.OPENHARNESS_CONFIG_DIR = path.join(dir, "config");
     try {
-      const skillDir = path.join(dir, ".claude", "skills", "live-skill");
       await fs.mkdir(path.join(dir, ".git"), { recursive: true });
-      await fs.mkdir(skillDir, { recursive: true });
-      await fs.writeFile(
-        path.join(skillDir, "SKILL.md"),
-        "---\ndescription: Fresh project skill\n---\n\nLive skill body.",
-        "utf-8",
-      );
-      await fs.writeFile(path.join(skillDir, "notes.md"), "not a skill", "utf-8");
+      for (const [root, name, description] of [
+        [".agents", "agent-skill", "Fresh agent skill"],
+        [".openharness-ts", "local-skill", "Fresh local skill"],
+        [".claude", "old-skill", "Ignored old skill"],
+      ]) {
+        const skillDir = path.join(dir, root, "skills", name);
+        await fs.mkdir(skillDir, { recursive: true });
+        await fs.writeFile(
+          path.join(skillDir, "SKILL.md"),
+          `---\ndescription: ${description}\n---\n\nSkill body.`,
+          "utf-8",
+        );
+      }
 
       const staleRegistry = new SkillRegistry();
       staleRegistry.register(makeSkill({
@@ -341,8 +346,9 @@ describe("listSkillsTool", () => {
 
       const text = (result.content[0] as any).text;
       expect(text).toContain("stale — Existing runtime skill");
-      expect(text).toContain("live-skill — Fresh project skill");
-      expect(text).not.toContain("notes");
+      expect(text).toContain("agent-skill — Fresh agent skill");
+      expect(text).toContain("local-skill — Fresh local skill");
+      expect(text).not.toContain("old-skill");
     } finally {
       if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
       else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;

@@ -22,7 +22,7 @@ import {
 } from "@renderer/components/ui/select"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type {
   CreateDesktopScheduledTaskInput,
   DesktopScheduledTask,

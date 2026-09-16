@@ -24,10 +24,6 @@ type RuntimeDiagnostic = PluginInfo["diagnostics"][number];
 type RuntimeToolStatus = NonNullable<PluginInfo["toolRuntime"]>;
 type RuntimeStatus = PluginInfo["runtimeStatus"];
 
-function isGlobalPlugin<T extends { scope: string }>(record: T): record is T & { scope: "user" | "managed" } {
-  return record.scope === "user" || record.scope === "managed";
-}
-
 export class PluginArchiveFailure extends Error {
   constructor(readonly body: PluginArchiveError) {
     super(body.message);
@@ -323,10 +319,6 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
       const plugins: PluginInfo[] = [];
       const warnings: string[] = [];
       for (const record of Object.values(store.plugins)) {
-        if (!isGlobalPlugin(record)) {
-          warnings.push(`${record.id}: ignored legacy ${record.scope}-scoped installation; reinstall it for the user`);
-          continue;
-        }
         const verification = await verifyInstalledNativePlugin(record);
         const manifest = verification.plugin?.manifest;
         const loaded = verification.status === "valid" ? await loadNativePlugin(verification.plugin) : undefined;
@@ -381,7 +373,7 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
       let changed = false;
       await updateInstalledPluginStore(getInstalledPluginStorePath(), (store) => {
         for (const record of Object.values(store.plugins)) {
-          if (record.id !== id || !isGlobalPlugin(record)) continue;
+          if (record.id !== id) continue;
           if (record.scope === "managed") throw new Error(`Managed plugin cannot be modified: ${id}`);
           record.enabled = enabled;
           record.updatedAt = new Date().toISOString();
@@ -481,7 +473,7 @@ export function createDefaultPluginService(_ref: DaemonSettingsRef): PluginServi
       let changed = false;
       await updateInstalledPluginStore(getInstalledPluginStorePath(), (store) => {
         for (const [key, record] of Object.entries(store.plugins)) {
-          if (record.id !== id || !isGlobalPlugin(record)) continue;
+          if (record.id !== id) continue;
           if (record.scope === "managed") throw new Error(`Managed plugin cannot be removed: ${id}`);
           delete store.plugins[key];
           changed = true;

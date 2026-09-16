@@ -41,24 +41,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-async function writeLegacyProjectRecord(): Promise<void> {
-  await updateInstalledPluginStore(getInstalledPluginStorePath(), (store) => {
-    store.plugins["project:C:/workspace:dev.example.legacy"] = {
-      id: "dev.example.legacy",
-      scope: "project",
-      projectDir: "C:/workspace",
-      enabled: true,
-      currentVersion: "1.0.0",
-      cachePath: join(root, "missing-cache"),
-      origin: "native",
-      requestedPermissions: [],
-      approvedPermissions: [],
-      installedAt: "now",
-      updatedAt: "now",
-    };
-  });
-}
-
 function service() {
   return createDefaultPluginService({ current: {
     model: "test",
@@ -212,26 +194,6 @@ async function installPreviewedArchive(archive: string): Promise<void> {
 }
 
 describe("default plugin service user scope", () => {
-  it("hides legacy project records and reports how to migrate them", async () => {
-    await writeLegacyProjectRecord();
-
-    await expect(service().list({ cwd: "C:/workspace" })).resolves.toEqual({
-      plugins: [],
-      warnings: ["dev.example.legacy: ignored legacy project-scoped installation; reinstall it for the user"],
-    });
-  });
-
-  it.each(["setEnabled", "uninstall"] as const)("does not let %s mutate a legacy project record", async (operation) => {
-    await writeLegacyProjectRecord();
-    const plugins = service();
-
-    const result = operation === "setEnabled"
-      ? plugins.setEnabled({ id: "dev.example.legacy", cwd: "C:/workspace", enabled: false })
-      : plugins.uninstall!({ id: "dev.example.legacy", cwd: "C:/workspace" });
-    await expect(result).rejects.toThrow("Plugin not found for user: dev.example.legacy");
-    expect(Object.values((await readInstalledPluginStore(getInstalledPluginStorePath())).plugins)[0]?.enabled).toBe(true);
-  });
-
   it("marks an unverifiable copied user installation invalid without loading its contributions", async () => {
     const pluginDir = join(root, "cache", "dev.example.unverifiable");
     await mkdir(join(pluginDir, ".openharness-plugin"), { recursive: true });

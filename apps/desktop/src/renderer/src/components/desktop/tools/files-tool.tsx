@@ -47,7 +47,7 @@ import { Spinner } from "@renderer/components/ui/spinner"
 import {
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
-} from "@renderer/stores/desktop-session-store"
+} from "@renderer/stores/desktop-session"
 import type {
   WorkspaceFileEntry,
   WorkspaceListFilesResult,

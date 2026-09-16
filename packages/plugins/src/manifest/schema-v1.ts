@@ -82,6 +82,5 @@ export const OpenHarnessPluginManifestV1Schema: z.ZodType<OpenHarnessPluginManif
       })
       .strict()
       .optional(),
-    compatibility: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();

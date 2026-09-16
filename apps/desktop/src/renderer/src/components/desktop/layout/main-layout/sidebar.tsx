@@ -49,7 +49,7 @@ import { Label } from "@renderer/components/ui/label"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
-import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   selectActiveSessionId,
   selectArchivedSessions,

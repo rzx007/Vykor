@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router"
 
 import { useMainLayout } from "@renderer/components/desktop/layout/main-layout"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session-store"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 
 export const Route = createFileRoute("/_main/")({
   beforeLoad: async () => {

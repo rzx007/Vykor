@@ -614,7 +614,7 @@ describe("findProjectSkillDirs", () => {
     delete process.env.OPENHARNESS_CONFIG_DIR;
   });
 
-  it("collects .agents, .openharness-ts, and .claude skill dirs from git root to cwd", async () => {
+  it("collects only .agents and .openharness-ts skill dirs from git root to cwd", async () => {
     mockedStat.mockImplementation(async (target) => {
       if (String(target).endsWith(path.join("repo", ".git"))) return {} as any;
       throw new Error("not found");
@@ -626,13 +626,10 @@ describe("findProjectSkillDirs", () => {
     expect(dirs).toEqual([
       path.join(path.resolve("/repo"), ".agents", "skills"),
       path.join(path.resolve("/repo"), ".openharness-ts", "skills"),
-      path.join(path.resolve("/repo"), ".claude", "skills"),
       path.join(path.resolve("/repo/packages"), ".agents", "skills"),
       path.join(path.resolve("/repo/packages"), ".openharness-ts", "skills"),
-      path.join(path.resolve("/repo/packages"), ".claude", "skills"),
       path.join(path.resolve("/repo/packages/app"), ".agents", "skills"),
       path.join(path.resolve("/repo/packages/app"), ".openharness-ts", "skills"),
-      path.join(path.resolve("/repo/packages/app"), ".claude", "skills"),
     ]);
   });
 
@@ -645,7 +642,6 @@ describe("findProjectSkillDirs", () => {
     expect(dirs).toEqual([
       path.join(cwd, ".agents", "skills"),
       path.join(cwd, ".openharness-ts", "skills"),
-      path.join(cwd, ".claude", "skills"),
     ]);
     expect(dirs.some((dir) => dir.includes(path.join("home", "user", ".openharness-ts")))).toBe(
       false,

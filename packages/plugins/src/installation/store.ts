@@ -3,11 +3,10 @@ import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getInstalledPluginStorePath } from "@openharness/core";
 
-export type PluginScope = "user" | "project" | "local" | "managed";
+export type NativePluginInstallScope = "user" | "managed";
 export interface InstalledPluginRecord {
   id: string;
-  scope: PluginScope;
-  projectDir?: string;
+  scope: NativePluginInstallScope;
   enabled: boolean;
   currentVersion: string;
   cachePath: string;
@@ -26,8 +25,8 @@ export interface InstalledPluginStoreV1 {
   plugins: Record<string, InstalledPluginRecord>;
 }
 
-export function installedPluginKey(record: Pick<InstalledPluginRecord, "id" | "scope" | "projectDir">): string {
-  return `${record.scope}:${record.projectDir ?? ""}:${record.id}`;
+export function installedPluginKey(record: Pick<InstalledPluginRecord, "id" | "scope">): string {
+  return `${record.scope}::${record.id}`;
 }
 
 export async function readInstalledPluginStore(path: string): Promise<InstalledPluginStoreV1> {
@@ -42,6 +41,11 @@ export async function readInstalledPluginStore(path: string): Promise<InstalledP
   }
   const store = raw as InstalledPluginStoreV1;
   if (!Number.isInteger(store.revision) || store.revision < 0 || !store.plugins || typeof store.plugins !== "object") {
+    throw new Error("Invalid installed plugin store");
+  }
+  if (Object.values(store.plugins).some((record) =>
+    !record || typeof record !== "object" || (record.scope !== "user" && record.scope !== "managed")
+  )) {
     throw new Error("Invalid installed plugin store");
   }
   return store;
@@ -70,14 +74,7 @@ export async function updateInstalledPluginStore(
 export async function discoverInstalledNativePlugins(input: {
   cwd: string;
   storePath?: string;
-  onWarning?: (warning: string) => void;
 }): Promise<InstalledPluginRecord[]> {
   const store = await readInstalledPluginStore(input.storePath ?? getInstalledPluginStorePath());
-  return Object.values(store.plugins).filter((record) => {
-    if (record.scope !== "user" && record.scope !== "managed") {
-      input.onWarning?.(`${record.id}: ignored legacy ${record.scope}-scoped installation; reinstall it for the user`);
-      return false;
-    }
-    return record.enabled;
-  });
+  return Object.values(store.plugins).filter((record) => record.enabled);
 }
