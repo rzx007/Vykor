@@ -42,9 +42,16 @@ describe("protocol validation at HTTP routes", () => {
     const response = await app.request(method === "POST" ? "/" : "/s1", {
       method,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd: "/repo", model: "m", metadata: { runtime: { model: "m", projectId: "old" } } }),
+      body: JSON.stringify({
+        ...(method === "POST" ? { cwd: "/repo", model: "m" } : {}),
+        metadata: { runtime: { model: "m", projectId: "old" } },
+      }),
     });
     expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: "invalid_request",
+      message: "Invalid runtime config field metadata.runtime.projectId",
+    });
     expect(mutation).not.toHaveBeenCalled();
   });
   it("rejects an invalid Session field before calling the application", async () => {

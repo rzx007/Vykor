@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { HttpTransport } from "@openharness/client";
 
 interface DebugOptions {
   json?: boolean;
@@ -40,13 +41,10 @@ export function createDebugCommand(): Command {
 
 export async function requestDebug(path: string, options: DebugOptions): Promise<Record<string, unknown>> {
   const daemon = await resolveDaemon(options);
-  const query = options.includeContent ? "?includeContent=true" : "";
-  const response = await fetch(`${daemon.url.replace(/\/$/, "")}${path}${query}`, {
-    headers: { authorization: `Bearer ${daemon.token}` },
+  const transport = new HttpTransport({ baseUrl: daemon.url, token: daemon.token });
+  return transport.request<Record<string, unknown>>(path, {
+    query: { includeContent: options.includeContent },
   });
-  const body = await response.json().catch(() => ({})) as Record<string, unknown>;
-  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : `Daemon request failed: HTTP ${response.status}`);
-  return body;
 }
 
 export function printRunInspection(result: Record<string, unknown>, json: boolean): void {
