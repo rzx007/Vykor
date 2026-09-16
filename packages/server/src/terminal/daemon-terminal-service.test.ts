@@ -3,6 +3,44 @@ import { describe, expect, it, vi } from "vitest";
 import { DaemonTerminalService } from "./daemon-terminal-service.js";
 
 describe("DaemonTerminalService scoped environments", () => {
+  it("does not acquire an environment or spawn a PTY when the session disappears during create", async () => {
+    const session = { id: "race-session", cwd: process.cwd(), projectId: "race-project" } as any;
+    let sessionReads = 0;
+    const acquireEnvironment = vi.fn(async () => ({
+      workspace: { executionRoot: process.cwd() },
+      terminal: { prepare: async () => ({
+        command: "shell",
+        args: [],
+        hostCwd: process.cwd(),
+        executionCwd: process.cwd(),
+        shell: "shell",
+        signal: vi.fn(async () => {}),
+        close: vi.fn(async () => {}),
+      }) },
+      release: vi.fn(async () => {}),
+    } as any));
+    const spawnPty = vi.fn(() => fakePty().value);
+    const service = new DaemonTerminalService({
+      getProject: () => undefined,
+      getSession: () => ++sessionReads <= 3 ? session : undefined,
+    } as any, {
+      getSettingsForCwd: async () => ({ terminal: {} } as any),
+      acquireEnvironment,
+      spawnPty,
+    });
+
+    await expect(service.create({
+      scope: { kind: "session", sessionId: session.id },
+      runtime: "environment",
+      cols: 100,
+      rows: 30,
+    })).rejects.toThrow(`Session not found: ${session.id}`);
+
+    expect(spawnPty).not.toHaveBeenCalled();
+    expect(acquireEnvironment).not.toHaveBeenCalled();
+    await expect(service.list()).resolves.toEqual([]);
+  });
+
   it("opens a projectless terminal through its execution environment", async () => {
     const session = { id: "outside-1", cwd: process.cwd(), status: "idle" } as any;
     const signal = vi.fn(async () => {});

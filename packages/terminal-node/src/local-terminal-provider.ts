@@ -61,6 +61,15 @@ export class LocalTerminalProvider implements TerminalProvider {
   async create(input: TerminalCreateRequest): Promise<TerminalSessionInfo> {
     const id = randomUUID();
     const resolvedCwd = await this.options.resolveCwd(input);
+    const resolvedInfo = this.options.resolveSessionInfo?.(input) ?? (
+      input.scope.kind === "project"
+        ? { projectId: input.scope.projectId }
+        : { sessionId: input.scope.sessionId }
+    );
+    const scopeInfo = {
+      ...(resolvedInfo.projectId ? { projectId: resolvedInfo.projectId } : {}),
+      ...(resolvedInfo.sessionId ? { sessionId: resolvedInfo.sessionId } : {}),
+    };
     const target = input.runtime === "environment"
       ? await this.requireEnvironmentTarget(input, resolvedCwd, id)
       : createHostTerminalTarget({
@@ -68,13 +77,14 @@ export class LocalTerminalProvider implements TerminalProvider {
           shell: input.shell?.trim() || resolveDefaultShell().command,
         });
     await requireDirectory(target.hostCwd);
-    return await this.createPtyTerminal(id, input, target);
+    return await this.createPtyTerminal(id, input, target, scopeInfo);
   }
 
   private async createPtyTerminal(
     id: string,
     input: TerminalCreateRequest,
     target: EnvironmentPtyTarget,
+    scopeInfo: Pick<TerminalSessionInfo, "projectId" | "sessionId">,
   ): Promise<TerminalSessionInfo> {
     const spawnPty = this.options.spawnPty ?? (await import("node-pty")).spawn;
     const pty = spawnPty(target.command, target.args, {
@@ -94,11 +104,6 @@ export class LocalTerminalProvider implements TerminalProvider {
         sequence: snapshot.sequence,
       });
     });
-    const scopeInfo = this.options.resolveSessionInfo?.(input) ?? (
-      input.scope.kind === "project"
-        ? { projectId: input.scope.projectId }
-        : { sessionId: input.scope.sessionId }
-    );
     const info: TerminalSessionInfo = {
       id,
       name: normalizeTerminalName(input.name),
