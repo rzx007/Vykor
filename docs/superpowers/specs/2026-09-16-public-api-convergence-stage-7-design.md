@@ -142,13 +142,13 @@ interface SessionReadResources {
 
 - 从 `OpenHarnessClient` 实际属性和方法生成/维护人工可审查的契约清单；
 - 建立根入口 runtime export 快照和代表性 type consumer fixture；
-- 将旧调用统计从正则表达式升级为基于仓库现有 `typescript` 包的 AST（语法树）扫描，并按文件、方法和生产/测试分类；
+- 将旧调用统计从正则表达式升级为基于仓库现有 `typescript` 包的 AST（语法树）扫描，同时覆盖调用、属性取值/传递、解构和 `OpenHarnessClient["method"]` 类型索引引用，并按文件、方法和生产/测试分类；
 - 建立经过人工核对的兼容方法名清单，扫描 `client/api/this.client`、`(await client())`、可识别别名与解构引用；
 - 用架构测试 fixture 证明直接调用、别名、await factory、成员字段和解构形态都能被识别；
 - 将 `clientLegacyFlatCalls: 79` 只记录为旧正则脚本的历史基线，不把它当作真实迁移分母；7A 输出新的 AST 基线后，后续阶段只使用新指标；
 - 规则允许兼容门面自身和专门的兼容测试，禁止新增生产调用。
 
-不新增依赖：AST 扫描直接使用仓库已有的 `typescript`。runtime export 使用动态 import 后排序比较；type-only export 由穷尽契约清单人工审查，并用只编译、不执行的代表性 consumer fixture 验证关键导入和签名。fixture 使用独立 `tests/client-public-api/tsconfig.json`，通过 workspace package resolution 指向 `@openharness/client`，并纳入根类型检查与架构测试。
+不新增依赖：AST 扫描直接使用仓库已有的 `typescript`。runtime export 使用动态 import 后排序比较；type-only export 使用 TypeChecker 的 `getExportsOfModule` 枚举并按 SymbolFlags 分类后与穷尽契约清单比较，另用只编译、不执行的代表性 consumer fixture 验证关键导入和签名。fixture 使用独立 `tests/client-public-api/tsconfig.json`，通过 workspace package resolution 指向 `@openharness/client`。扫描器测试、契约比较和 consumer 编译统一接入根 `check:architecture`，避免成为可漏跑的旁路命令。
 
 ### 6.2 7B：Client commands 与 state
 
@@ -162,7 +162,7 @@ interface SessionReadResources {
 ### 6.3 7C：CLI
 
 - `print-session` 改用 `sessions`、`events`、`permissions` 等 Resource；
-- channel commands 改用 `system`、`channels`；
+- channel commands 改用 `protocol`、`channels`；
 - plugin commands 改用 `plugins`，覆盖当前 `(await client()).listPlugins/installLocalPlugin/...` 等旧统计器漏报调用；
 - daemon lifecycle 可以构造完整 Client，但业务命令只接收窄能力；
 - CLI 输出、退出码、JSON 和错误消息保持不变。
@@ -227,14 +227,14 @@ interface SessionReadResources {
 
 Stage 7 不承诺具体发布日期，但固定以下退场条件：
 
-1. 至少一个可验证的实际发布周期保留 deprecated 方法；
+1. 必须有两个可验证发行证据：首次携带 deprecated API 的发行，以及至少一个后续仍保留该 API 的发行；
 2. 仓库内部生产代码旧调用为 0；
 3. README、示例和命令代码均使用 Resource API；
 4. 兼容方法拥有一对一迁移目标；
 5. Stage 8 只能在明确 breaking version 中删除；
 6. 删除前再次搜索仓库、发布文档和已知外部适配器。
 
-Stage 7 完成文档必须记录 `deprecatedSince`、实际版本、发布日期和发行渠道。若 `@openharness/client` 当时没有独立发布物，则以实际承载该 Client 的 CLI 或 Desktop 首个发行版本为准，并记录对应 release note。Stage 8 只有在能提供该版本及至少一个后续发行周期的证据后才能删除；如果项目尚未产生可验证发行，则继续保留 deprecated 方法。
+Stage 7 的契约清单是唯一事实源，每个兼容符号记录 `deprecatedSince`、`deprecatedCarrierRelease` 和 `retentionCarrierRelease`。两份 release 字段都包含 version、date、channel 与 release-note URL 或提交 hash；未知值必须为 `null`/`pending`。若 `@openharness/client` 没有独立发布物，项目必须预先固定一个实际 carrier（默认使用发布 Client 的 CLI；只有发行流程明确由 Desktop 承载时才改为 Desktop），全部符号使用同一关联规则，不能逐项任意选择。Stage 8 仅在首次弃用发行与至少一个后续保留发行两份证据齐全后才能删除；任一字段 pending 就继续保留。
 
 如果项目在 Stage 8 前仍按 `0.x` 发布，也必须在 release notes 明确标注 breaking change，不能以 `0.x` 为由静默删除。
 
@@ -254,18 +254,19 @@ Stage 7 完成文档必须记录 `deprecatedSince`、实际版本、发布日期
 - 高级 state/sync 能力仍可导入；
 - deprecated 平铺方法在 Stage 7 仍能编译。
 
-该 fixture 证明列出的代表性契约可消费，但不宣称能枚举全部 type-only exports。完整 type-only export 的新增、删除和分类由穷尽契约清单 diff 审查。fixture 的独立 tsconfig 和执行命令必须进入根类型检查，不能只依赖源码包内部的相对路径解析。
+该 fixture 证明列出的代表性契约可消费。完整 type-only export 由 TypeChecker 枚举并与契约清单自动比较，清单 diff 再由人工审查分类。fixture 的独立 tsconfig、扫描器测试和契约比较必须由根 `check:architecture` 串联，不能只依赖源码包内部的相对路径解析或要求执行者记住额外命令。
 
 ### 8.3 旧调用治理
 
 基于 TypeScript AST 的架构脚本输出：
 
 - 生产旧调用总数；
+- 生产旧成员引用总数（属性取值/传递、解构及类型索引访问）；
 - 测试兼容调用总数；
 - 按文件和方法的详细位置；
 - 允许列表仅包含 `http-client.ts` facade 实现和专门兼容测试。
 
-完成 Stage 7 时，生产旧调用必须为 0。兼容测试调用不计入生产基线，但必须保留到 Stage 8。
+完成 Stage 7 时，生产旧调用和旧成员引用都必须为 0。兼容测试引用不计入生产基线，但必须保留到 Stage 8。对已经确认来源为 `OpenHarnessClient`、却无法解析具体成员的 production diagnostic，门禁直接失败；动态字符串成员另列人工审计结果，不允许静默跳过。
 
 ## 9. 错误与行为兼容
 
@@ -285,9 +286,9 @@ Stage 7 完成文档必须记录 `deprecatedSince`、实际版本、发布日期
 
 继续遵循用户确认的批量节奏：
 
-1. 7A–7F 连续完成生产迁移和文档，不为每个小步骤反复跑全仓；
-2. 每个波次提交前运行对应包 typecheck 和最小定向测试，避免把错误积累到最后；
-3. 所有调用方迁完后统一运行完整测试；
+1. 7A 只运行建立可靠门禁所需的 scanner/contract 自测；
+2. 7B–7E 连续完成生产迁移，只用 AST 明细核对范围，不运行包级 typecheck/test/architecture；中途提交注明尚未统一验证；
+3. 7F 在全部调用方迁完后统一运行类型检查、各包完整测试和所有根门禁；
 4. 集中修复完整测试发现的真实失败；
 5. 最后统一子代理代码审查并修复全部 Critical/Important。
 
@@ -314,7 +315,7 @@ Stage 7 完成文档必须记录 `deprecatedSince`、实际版本、发布日期
 6. `docs(client): deprecate flat client facade`
 7. `chore: complete public api convergence stage`
 
-每个提交只覆盖一个消费层。迁移调用路径与删除 API 不得出现在同一个提交。
+每个提交只覆盖一个消费层。迁移调用路径与删除 API 不得出现在同一个提交。某波审计后没有实际 diff 时不制造空提交，只在迁移状态记录结果。
 
 ## 12. 风险与控制
 
@@ -336,11 +337,11 @@ Stage 7 完成文档必须记录 `deprecatedSince`、实际版本、发布日期
 
 ## 13. 完成条件
 
-- 新 AST 指标中的仓库内部生产旧调用为 0；旧正则指标 79 只保留为历史参考；
-- facade 和专门兼容测试之外没有平铺 Client 调用；
+- 新 AST 指标中的仓库内部生产旧调用和旧成员引用均为 0；旧正则指标 79 只保留为历史参考；
+- facade 和专门兼容测试之外没有平铺 Client 调用、属性取值/传递、解构或类型索引依赖；
 - 所有平铺方法都有准确 `@deprecated` 替代路径；
 - 长期、高级和兼容 API 分类写入 Client README；
-- runtime export 快照和 type consumer fixture 能阻止意外破坏；
+- runtime/type-only export 契约比较和 type consumer fixture 能阻止意外破坏；
 - Client、CLI、Desktop、Frontend 不改变可观察行为；
 - Client、Server、CLI、Desktop、Frontend、类型、架构和文档验证通过；
 - Stage 8 删除清单完整，但没有提前删除任何兼容入口；
