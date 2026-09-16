@@ -1,0 +1,503 @@
+{
+  "$schema": "./client-compat-removal-ledger.schema.json",
+  "version": 1,
+  "repository": "rzx007/openharness-ts",
+  "baseline": {
+    "stage7Commit": "3860bf771194845818660075caf2f5048a0f3821",
+    "methodCount": 118,
+    "methodsSha256": "fdd45f2bf1471f4de8adfa9efd31f89f2d9180192fcbfef48083fcf84bb2becf",
+    "methods": [
+      {
+        "name": "addMemory",
+        "replacement": "system.addMemory"
+      },
+      {
+        "name": "admitPrompt",
+        "replacement": "sessions.admitPrompt"
+      },
+      {
+        "name": "applySessionGoalAction",
+        "replacement": "sessions.applyGoalAction"
+      },
+      {
+        "name": "archiveProject",
+        "replacement": "projects.archive"
+      },
+      {
+        "name": "archiveSession",
+        "replacement": "sessions.archive"
+      },
+      {
+        "name": "authLogin",
+        "replacement": "auth.login"
+      },
+      {
+        "name": "authLogout",
+        "replacement": "auth.logout"
+      },
+      {
+        "name": "cancelJob",
+        "replacement": "jobs.cancel"
+      },
+      {
+        "name": "cancelQueuedPrompt",
+        "replacement": "sessions.cancelQueuedPrompt"
+      },
+      {
+        "name": "capabilities",
+        "replacement": "protocol.capabilities"
+      },
+      {
+        "name": "closeTerminal",
+        "replacement": "terminals.close"
+      },
+      {
+        "name": "compactSession",
+        "replacement": "sessions.compact"
+      },
+      {
+        "name": "connectCatalogProvider",
+        "replacement": "providers.connectCatalogProvider"
+      },
+      {
+        "name": "createBackgroundShell",
+        "replacement": "jobs.createBackgroundShell"
+      },
+      {
+        "name": "createCustomProvider",
+        "replacement": "providers.createCustomProvider"
+      },
+      {
+        "name": "createScheduledTask",
+        "replacement": "schedules.createTask"
+      },
+      {
+        "name": "createSession",
+        "replacement": "sessions.create"
+      },
+      {
+        "name": "createSessionGoal",
+        "replacement": "sessions.createGoal"
+      },
+      {
+        "name": "createTerminal",
+        "replacement": "terminals.create"
+      },
+      {
+        "name": "deleteAttachment",
+        "replacement": "attachments.delete"
+      },
+      {
+        "name": "deleteSession",
+        "replacement": "sessions.delete"
+      },
+      {
+        "name": "disablePlugin",
+        "replacement": "plugins.disable"
+      },
+      {
+        "name": "disconnectCatalogProvider",
+        "replacement": "providers.disconnectCatalogProvider"
+      },
+      {
+        "name": "downloadAttachment",
+        "replacement": "attachments.download"
+      },
+      {
+        "name": "editLatestPrompt",
+        "replacement": "sessions.editLatestPrompt"
+      },
+      {
+        "name": "enablePlugin",
+        "replacement": "plugins.enable"
+      },
+      {
+        "name": "exportSession",
+        "replacement": "sessions.export"
+      },
+      {
+        "name": "forkSession",
+        "replacement": "sessions.fork"
+      },
+      {
+        "name": "gcAttachmentStorage",
+        "replacement": "attachments.gcStorage"
+      },
+      {
+        "name": "getAttachment",
+        "replacement": "attachments.get"
+      },
+      {
+        "name": "getAuthStatus",
+        "replacement": "auth.getStatus"
+      },
+      {
+        "name": "getChannelStatus",
+        "replacement": "channels.getStatus"
+      },
+      {
+        "name": "getContextPreview",
+        "replacement": "system.getContextPreview"
+      },
+      {
+        "name": "getContextStatus",
+        "replacement": "system.getContextStatus"
+      },
+      {
+        "name": "getContextUsage",
+        "replacement": "system.getContextUsage"
+      },
+      {
+        "name": "getGitBranch",
+        "replacement": "development.getGitBranch"
+      },
+      {
+        "name": "getGitDiff",
+        "replacement": "development.getGitDiff"
+      },
+      {
+        "name": "getGitStatus",
+        "replacement": "development.getGitStatus"
+      },
+      {
+        "name": "getMemory",
+        "replacement": "system.getMemory"
+      },
+      {
+        "name": "getProfileStatus",
+        "replacement": "system.getProfileStatus"
+      },
+      {
+        "name": "getScheduledTask",
+        "replacement": "schedules.getTask"
+      },
+      {
+        "name": "getScheduledTaskStatus",
+        "replacement": "schedules.getStatus"
+      },
+      {
+        "name": "getSession",
+        "replacement": "sessions.get"
+      },
+      {
+        "name": "getSessionGoal",
+        "replacement": "sessions.getGoal"
+      },
+      {
+        "name": "getSessionMcp",
+        "replacement": "system.getSessionMcp"
+      },
+      {
+        "name": "getSessionState",
+        "replacement": "sessions.getState"
+      },
+      {
+        "name": "getSessionUsage",
+        "replacement": "sessions.getUsage"
+      },
+      {
+        "name": "getSettings",
+        "replacement": "system.getSettings"
+      },
+      {
+        "name": "getTerminal",
+        "replacement": "terminals.get"
+      },
+      {
+        "name": "gitCommit",
+        "replacement": "development.gitCommit"
+      },
+      {
+        "name": "handleChannelMessage",
+        "replacement": "channels.handleMessage"
+      },
+      {
+        "name": "health",
+        "replacement": "protocol.health"
+      },
+      {
+        "name": "initProfile",
+        "replacement": "system.initProfile"
+      },
+      {
+        "name": "initProject",
+        "replacement": "projects.init"
+      },
+      {
+        "name": "inspectProject",
+        "replacement": "projects.inspect"
+      },
+      {
+        "name": "installLocalPlugin",
+        "replacement": "plugins.installLocal"
+      },
+      {
+        "name": "installPluginArchive",
+        "replacement": "plugins.installArchive"
+      },
+      {
+        "name": "installPluginGit",
+        "replacement": "plugins.installGit"
+      },
+      {
+        "name": "interruptSession",
+        "replacement": "sessions.interrupt"
+      },
+      {
+        "name": "listAgentPersonas",
+        "replacement": "development.listAgentPersonas"
+      },
+      {
+        "name": "listCommands",
+        "replacement": "system.listCommands"
+      },
+      {
+        "name": "listContextPlugins",
+        "replacement": "system.listContextPlugins"
+      },
+      {
+        "name": "listEvents",
+        "replacement": "events.list"
+      },
+      {
+        "name": "listHooks",
+        "replacement": "development.listHooks"
+      },
+      {
+        "name": "listJobs",
+        "replacement": "jobs.list"
+      },
+      {
+        "name": "listMemory",
+        "replacement": "system.listMemory"
+      },
+      {
+        "name": "listMessageParts",
+        "replacement": "sessions.listMessageParts"
+      },
+      {
+        "name": "listMessages",
+        "replacement": "sessions.listMessages"
+      },
+      {
+        "name": "listModels",
+        "replacement": "providers.listModels"
+      },
+      {
+        "name": "listOutputStyles",
+        "replacement": "system.listOutputStyles"
+      },
+      {
+        "name": "listPendingChannelDeliveries",
+        "replacement": "channels.listPendingDeliveries"
+      },
+      {
+        "name": "listPermissions",
+        "replacement": "permissions.list"
+      },
+      {
+        "name": "listPlugins",
+        "replacement": "plugins.list"
+      },
+      {
+        "name": "listProjects",
+        "replacement": "projects.list"
+      },
+      {
+        "name": "listProviders",
+        "replacement": "providers.listProviders"
+      },
+      {
+        "name": "listScheduledRuns",
+        "replacement": "schedules.listRuns"
+      },
+      {
+        "name": "listScheduledTasks",
+        "replacement": "schedules.listTasks"
+      },
+      {
+        "name": "listSessions",
+        "replacement": "sessions.list"
+      },
+      {
+        "name": "listSkills",
+        "replacement": "development.listSkills"
+      },
+      {
+        "name": "listTerminals",
+        "replacement": "terminals.list"
+      },
+      {
+        "name": "patchSettings",
+        "replacement": "system.patchSettings"
+      },
+      {
+        "name": "previewPluginArchive",
+        "replacement": "plugins.previewArchive"
+      },
+      {
+        "name": "previewPluginGit",
+        "replacement": "plugins.previewGit"
+      },
+      {
+        "name": "promoteQueuedPrompt",
+        "replacement": "sessions.promoteQueuedPrompt"
+      },
+      {
+        "name": "readJob",
+        "replacement": "jobs.read"
+      },
+      {
+        "name": "readTerminal",
+        "replacement": "terminals.read"
+      },
+      {
+        "name": "rebindProject",
+        "replacement": "projects.rebind"
+      },
+      {
+        "name": "recordChannelDelivery",
+        "replacement": "channels.recordDelivery"
+      },
+      {
+        "name": "reloadPlugins",
+        "replacement": "plugins.reload"
+      },
+      {
+        "name": "rememberSession",
+        "replacement": "sessions.remember"
+      },
+      {
+        "name": "removeCustomProvider",
+        "replacement": "providers.removeCustomProvider"
+      },
+      {
+        "name": "removeMemory",
+        "replacement": "system.removeMemory"
+      },
+      {
+        "name": "removeScheduledTask",
+        "replacement": "schedules.removeTask"
+      },
+      {
+        "name": "removeSkill",
+        "replacement": "development.removeSkill"
+      },
+      {
+        "name": "renameProject",
+        "replacement": "projects.rename"
+      },
+      {
+        "name": "repairAttachmentStorage",
+        "replacement": "attachments.repairStorage"
+      },
+      {
+        "name": "replyPermission",
+        "replacement": "permissions.reply"
+      },
+      {
+        "name": "resizeTerminal",
+        "replacement": "terminals.resize"
+      },
+      {
+        "name": "resumeInterruptedRun",
+        "replacement": "sessions.resumeInterruptedRun"
+      },
+      {
+        "name": "rewindSession",
+        "replacement": "sessions.rewind"
+      },
+      {
+        "name": "scanAttachmentStorage",
+        "replacement": "attachments.scanStorage"
+      },
+      {
+        "name": "sendJob",
+        "replacement": "jobs.send"
+      },
+      {
+        "name": "setProjectDefaultShell",
+        "replacement": "projects.setDefaultShell"
+      },
+      {
+        "name": "setProjectPinned",
+        "replacement": "projects.setPinned"
+      },
+      {
+        "name": "setScheduledRunUnread",
+        "replacement": "schedules.setRunUnread"
+      },
+      {
+        "name": "signalTerminal",
+        "replacement": "terminals.signal"
+      },
+      {
+        "name": "startDream",
+        "replacement": "system.startDream"
+      },
+      {
+        "name": "streamEvents",
+        "replacement": "events.stream"
+      },
+      {
+        "name": "streamTerminalEvents",
+        "replacement": "terminals.streamEvents"
+      },
+      {
+        "name": "triggerScheduledTask",
+        "replacement": "schedules.triggerTask"
+      },
+      {
+        "name": "uninstallPlugin",
+        "replacement": "plugins.uninstall"
+      },
+      {
+        "name": "updateCustomProvider",
+        "replacement": "providers.updateCustomProvider"
+      },
+      {
+        "name": "updateScheduledTask",
+        "replacement": "schedules.updateTask"
+      },
+      {
+        "name": "updateSession",
+        "replacement": "sessions.update"
+      },
+      {
+        "name": "updateSessionGoal",
+        "replacement": "sessions.updateGoal"
+      },
+      {
+        "name": "uploadAttachment",
+        "replacement": "attachments.upload"
+      },
+      {
+        "name": "waitJob",
+        "replacement": "jobs.wait"
+      },
+      {
+        "name": "writeTerminal",
+        "replacement": "terminals.write"
+      }
+    ]
+  },
+  "carrier": {
+    "package": "@rzx/ohs",
+    "channel": "stable"
+  },
+  "releases": {
+    "deprecation": "pending",
+    "retention": "pending"
+  },
+  "authorization": {
+    "status": "pending",
+    "targetVersion": null,
+    "authorizedAt": null,
+    "baselineSha256": null,
+    "evidenceSha256": null
+  },
+  "removal": {
+    "status": "not-started",
+    "commit": null
+  }
+}

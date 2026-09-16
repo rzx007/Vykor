@@ -248,4 +248,4 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
 
 ## 下一步
 
-阶段 8 已开始，但物理删除尚未解锁。首轮审查确认原型 `check:client-removal-gate` 能正确报告当前 118/118 BLOCKED，却会在未来删除 contract 条目后失去审计对象，因此暂时不能作为删除授权。修订后的 8A–8F 计划先建立永久 removal ledger 与不可绕过的 integrity check，再改造 A/B/C 发布流程、完成两次稳定保留周期、执行 major 删除并发布收口。在 8A 完成前继续保留 `OpenHarnessClient` 顶层 118 个兼容转发方法。详细顺序见 `docs/superpowers/plans/2026-09-16-client-flat-facade-removal-stage-8.md`。
+阶段 8A 已完成：新增永久 removal ledger，固定 118 个旧名称、replacement、Stage 7 Git 快照与 SHA-256；普通 integrity check 已接入根测试和架构检查，证据 pending 时通过，但减少、改名、改分类或复活旧方法都会失败；显式 removal gate 会验证 stable channel、commit/tag/祖先关系、发布时间、npm 证据结构、授权摘要和 major target。当前 integrity 为 PASS，removal gate 因 A/B 发行均 pending 而保持 118/118 BLOCKED。下一步为 8B：改造 A/B/C 发布流水线；物理删除仍未解锁。详细顺序见 `docs/superpowers/plans/2026-09-16-client-flat-facade-removal-stage-8.md`。

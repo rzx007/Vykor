@@ -5,15 +5,12 @@ import ts from "typescript";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
-function loadContract(contractPath) {
-  const fullPath = contractPath ? resolve(contractPath) : join(root, "scripts", "client-public-api-contract.json");
+export function loadLegacyMethods(ledgerPath) {
+  const fullPath = ledgerPath ? resolve(ledgerPath) : join(root, "scripts", "client-compat-removal-ledger.json");
   const data = JSON.parse(readFileSync(fullPath, "utf8"));
-  const entries = Array.isArray(data) ? data : data.entries;
   const compatMap = new Map();
-  for (const entry of entries) {
-    if (entry.kind === "client-method" && entry.classification === "compatibility") {
-      compatMap.set(entry.name, entry.replacement || `sessions.${entry.name}`);
-    }
+  for (const entry of data.baseline?.methods ?? []) {
+    compatMap.set(entry.name, entry.replacement);
   }
   return compatMap;
 }
@@ -184,7 +181,7 @@ function classifyScope(normalizedFile) {
 
 export function scanClientLegacyCalls(options = {}) {
   const cwd = options.cwd ? resolve(options.cwd) : root;
-  const compatMethods = options.compatMethods || loadContract(options.contractPath);
+  const compatMethods = options.compatMethods || loadLegacyMethods(options.ledgerPath);
   const pathFilter = options.pathFilter || options.path;
   const targetScope = options.scope;
 

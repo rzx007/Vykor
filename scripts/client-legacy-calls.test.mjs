@@ -4,7 +4,7 @@ import ts from "typescript";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverWorkspaceScanConfigs, scanClientLegacyCalls } from "./client-legacy-calls.mjs";
+import { discoverWorkspaceScanConfigs, loadLegacyMethods, scanClientLegacyCalls } from "./client-legacy-calls.mjs";
 
 test("identifies direct, alias, member, await-factory, destructure, type-index, value-ref and mapped Pick", () => {
   const source = `
@@ -274,4 +274,59 @@ export declare class OpenHarnessClient {
   assert.equal(result.references.length, 1);
   assert.equal(result.references[0].method, "newCompatMethod");
   assert.equal(result.references[0].replacement, "custom.newMethod");
+});
+
+test("loads permanent legacy names from ledger after contract compatibility entries disappear", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "client-legacy-ledger-"));
+  try {
+    const ledgerPath = join(cwd, "ledger.json");
+    writeFileSync(ledgerPath, JSON.stringify({
+      baseline: {
+        methods: [
+          { name: "health", replacement: "protocol.health" },
+          { name: "getSession", replacement: "sessions.get" },
+        ],
+      },
+    }));
+
+    assert.deepEqual([...loadLegacyMethods(ledgerPath)], [
+      ["health", "protocol.health"],
+      ["getSession", "sessions.get"],
+    ]);
+
+    const hostMap = new Map([
+      ["/workspace/src/demo.ts", 'import { OpenHarnessClient } from "@openharness/client"; declare const client: OpenHarnessClient; client.health();'],
+      ["/workspace/node_modules/@openharness/client/index.d.ts", "export declare class OpenHarnessClient { health(): Promise<void>; }"],
+      ["/lib.d.ts", "interface Promise<T> {}"],
+    ]);
+    const compilerHost = {
+      getSourceFile: (fileName) => hostMap.has(fileName)
+        ? ts.createSourceFile(fileName, hostMap.get(fileName), ts.ScriptTarget.Latest, true)
+        : undefined,
+      getDefaultLibFileName: () => "/lib.d.ts",
+      writeFile: () => {},
+      getCurrentDirectory: () => "/workspace",
+      getDirectories: () => [],
+      fileExists: (fileName) => hostMap.has(fileName),
+      readFile: (fileName) => hostMap.get(fileName),
+      getCanonicalFileName: (fileName) => fileName,
+      useCaseSensitiveFileNames: () => true,
+      getNewLine: () => "\n",
+    };
+    const program = ts.createProgram(
+      ["/workspace/src/demo.ts"],
+      { moduleResolution: ts.ModuleResolutionKind.Node10, target: ts.ScriptTarget.ES2022 },
+      compilerHost,
+    );
+    const result = scanClientLegacyCalls({
+      cwd: "/workspace",
+      ledgerPath,
+      programs: [{ program, scanFiles: ["/workspace/src/demo.ts"] }],
+    });
+    assert.equal(result.references.length, 1);
+    assert.equal(result.references[0].method, "health");
+    assert.equal(result.references[0].replacement, "protocol.health");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
