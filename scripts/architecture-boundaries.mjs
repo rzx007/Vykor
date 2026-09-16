@@ -16,6 +16,7 @@ const forbiddenPackageEdges = new Map([
 
 const storeCallPattern = /\b(?:this\.)?(?:context\.)?store\.([A-Za-z_$][\w$]*)\s*\(/g;
 const clientCallPattern = /\bclient\.(createSession|admitPrompt|interruptRun|listProjects)\s*\(/g;
+const clientLegacyCallPattern = /\bclient\.([A-Za-z_$][\w$]*)\s*\(/g;
 const importPattern = /(?:(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?from\s+)?|import\s*\()\s*['"]([^'"]+)['"]/g;
 
 export function extractImports(source) {
@@ -145,6 +146,14 @@ export function countLegacyCalls(source, file) {
   return matches;
 }
 
+export function countClientLegacyCalls(source, file) {
+  return [...source.matchAll(clientLegacyCallPattern)].map((match) => ({
+    file,
+    line: source.slice(0, match.index).split("\n").length,
+    name: match[1],
+  }));
+}
+
 export function checkSessionRunEngineComposition(source, file) {
   if (!source.includes("new SessionRunEngine(")) return [];
   return /\badmission\s*:/.test(source) && /\bcontrol\s*:/.test(source)
@@ -237,6 +246,8 @@ function collectLegacyCalls() {
     ...sourceFiles(join(root, "packages", "tools", "src", "agent", "workflow")),
   ];
   const clientFiles = [
+    ...sourceFiles(join(root, "packages", "client", "src", "commands")),
+    ...sourceFiles(join(root, "packages", "client", "src", "state")),
     ...sourceFiles(join(root, "apps", "cli", "src")),
     ...sourceFiles(join(root, "apps", "desktop", "src")),
     ...sourceFiles(join(root, "apps", "frontend", "src")),
@@ -251,13 +262,17 @@ function collectLegacyCalls() {
       name: match[1],
     })),
   );
-  return { storeCalls, clientCalls };
+  const clientLegacyCalls = clientFiles.flatMap((path) =>
+    countClientLegacyCalls(readFileSync(path, "utf8"), relative(root, path)),
+  );
+  return { storeCalls, clientCalls, clientLegacyCalls };
 }
 
 function summary(calls) {
   return {
     sessionStoreFlatCalls: calls.storeCalls.length,
     httpClientFlatCalls: calls.clientCalls.length,
+    clientLegacyFlatCalls: calls.clientLegacyCalls.length,
   };
 }
 

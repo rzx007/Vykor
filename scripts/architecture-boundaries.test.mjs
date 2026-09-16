@@ -5,6 +5,7 @@ import {
   checkImportBoundary,
   checkPackageDependency,
   countLegacyCalls,
+  countClientLegacyCalls,
   validateLegacyBaseline,
   checkSessionRunEngineComposition,
   checkMaintenanceCapability,
@@ -100,6 +101,16 @@ test("counts direct legacy store calls with file locations", () => {
     [
       { file: "demo.ts", line: 1, name: "createRun" },
       { file: "demo.ts", line: 2, name: "listProjects" },
+    ],
+  );
+});
+
+test("counts every direct client facade call with file locations", () => {
+  assert.deepEqual(
+    countClientLegacyCalls("client.getSettings();\nclient.sessions.getState('s1');\nclient.replyPermission();", "client.ts"),
+    [
+      { file: "client.ts", line: 1, name: "getSettings" },
+      { file: "client.ts", line: 3, name: "replyPermission" },
     ],
   );
 });
