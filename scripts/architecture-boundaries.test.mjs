@@ -17,7 +17,6 @@ test("services cannot depend on server", () => {
     ["@openharness/services must not depend on @openharness/server"],
   );
 });
-
 test("sessions, conversations, and runs cannot import server", () => {
   assert.deepEqual(
     checkImportBoundary("packages/services/src/sessions/session-repository.ts", "@openharness/server"),

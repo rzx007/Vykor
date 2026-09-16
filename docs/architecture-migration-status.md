@@ -13,7 +13,7 @@
 阶段 4E 已完成：`StartupRecoveryService` 按固定顺序执行 durable recovery，失败继续阻止 ready；Maintenance 与 PostRun 使用命名 data 边界；既有 Transcript/Execution Projection 保持唯一映射所有者。
 阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。
 阶段 5 已完成：Transport 内核、ProtocolClient、14 个专用业务/执行 Resource 彻底抽取完成。`OpenHarnessClient` 收敛为纯净 Resource 组合根与兼容转发门面，移除全部 endpoint 字符串与业务 decoder；内部 consumer 收窄为命名 capability，原有重点调用指标 `httpClientFlatCalls` 由 11 降至 0；架构规则补充 Client Resource 与 Transport 隔离护栏。
-阶段 6 已完成：Desktop 与 Frontend 状态边界重组完成。建立平台状态所有权（Matrix + 纯 Selector）；抽取跨平台 SSE 连接与断线重连控制器 `SessionSyncController`；解构 Frontend `useServerSync`（1333 行降至 770 行）；解构 Desktop Main `SessionService`（1152 行降至 439 行）；统一 Desktop Renderer Store 持久对账入口（`applySessionUpdate`）；架构护栏收窄 client 扁平旧调用至 79（下降 25 次）。阶段 7 未开始。
+阶段 6 已完成：Desktop 与 Frontend 状态边界重组完成。建立平台状态所有权（Matrix + 纯 Selector）；抽取跨平台 SSE 连接与断线重连控制器 `SessionSyncController`；解构 Frontend `useServerSync`（1333 行降至 770 行）；解构 Desktop Main `SessionService`（1152 行降至 439 行）；审计确认 Desktop Renderer Store 已有的 `applySessionUpdate` 是持久对账单入口（本阶段未改动 renderer 生产代码）；架构护栏收窄 client 扁平旧调用至 79（下降 25 次）。阶段 7 未开始。
 
 阶段 4 最终复审补充：Coordinator 等待的是包含 `settleGoalRun` 的完整 completion Promise，shutdown 不会在 Goal settlement 尚未结束时关闭 Store；Session Run 三件套的两阶段闭包装配进入纯 `assembleSessionRunServices` factory，Executor 的 Skill/Attachment/Capability/steer 依赖进入 `assembleSessionRunExecutor`；settings、model limits、Skill catalog/list 和 plugin inventory 统一由 `createSessionRuntimeDiscovery` 提供，避免 Daemon 内重复发现扩展；Maintenance/PostRun 使用精确方法 capability，并由架构测试禁止重新持有完整 `SessionStore`。`DaemonApplication` 最终为 908 行。最终统一验证为 Server 80 个文件、717 个测试，Services 最近一次回归为 45 个文件、430 个测试，全仓 TypeScript 61/61，架构测试 15/15。
 
@@ -179,7 +179,7 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
   - 阶段 6D：`5a0180a7` refactor(desktop): split main session service 与 `11ee38c4` fix(desktop): preserve clientPromise accessor for test compatibility
     - 解构 Desktop Main `session-service.ts`（1152 行降至 439 行），拆分为 `daemon-connection-service.ts`、`session-subscription-service.ts`、`session-operations.ts`，保留 `DesktopSessionService` 门面及公开属性兼容。
   - 阶段 6E：`9f95ca54` refactor(desktop): unify renderer durable reconciliation
-    - 统一 Desktop Renderer Store 持久对账入口为 `applySessionUpdate`，明确 Feature Action 只操作本地 operation/draft 状态。
+    - 审计确认既有 `applySessionUpdate` 已是 Desktop Renderer Store 持久对账单入口；该提交只补充状态所有权文档，没有改动 renderer 生产代码。
   - 阶段 6F：兼容集成、调用收口与统一验收
     - 将 `session-operations.ts` 与 `actions.ts` 中的调用平移至 Client Resource 原生方法（如 `client.sessions.*`、`client.projects.*`、`client.system.*`、`client.jobs.*`）。
     - 治理旧扁平调用：`clientLegacyFlatCalls` 真实下降至 79（下降 25 次），更新基线。

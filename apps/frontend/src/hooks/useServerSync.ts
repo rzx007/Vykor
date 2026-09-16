@@ -551,7 +551,15 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
       clearPendingClientState();
       controller.abort();
     };
-  }, [activeSessionId, clearPendingClientState, commitClientState, pushSystem, reportError]);
+  }, [
+    activeSessionId,
+    clearPendingClientState,
+    commitClientState,
+    daemon?.token,
+    daemon?.url,
+    pushSystem,
+    reportError,
+  ]);
 
   useEffect(() => {
     const client = clientRef.current;

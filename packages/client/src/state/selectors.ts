@@ -11,7 +11,6 @@ export interface SessionMessageWithParts {
   message: SessionMessageRecord;
   parts: SessionMessagePartRecord[];
 }
-
 export function selectSessionMessagesWithParts(
   bucket: SessionBucket | undefined,
 ): SessionMessageWithParts[] {

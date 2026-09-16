@@ -23,6 +23,7 @@ export type SyncConnectionStatus = "idle" | "connecting" | "connected" | "reconn
 export interface SessionSyncControllerOptions {
   client: SyncEventsClient;
   sessionId?: string;
+  initialState?: OpenHarnessClientState;
   cursor?: number;
   generation?: number;
   signal?: AbortSignal;
@@ -38,6 +39,7 @@ const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
 export class SessionSyncController {
   private readonly client: SyncEventsClient;
   private readonly sessionId?: string;
+  private readonly initialCursor: number;
   private readonly generation: number;
   private readonly externalSignal?: AbortSignal;
   private readonly reconnectDelayMs: (attempt: number) => number;
@@ -46,13 +48,18 @@ export class SessionSyncController {
   private readonly onError?: (error: unknown, generation: number) => void;
 
   private readonly abortController = new AbortController();
-  private state: OpenHarnessClientState = createInitialClientState();
+  private state: OpenHarnessClientState;
   private status: SyncConnectionStatus = "idle";
   private running = false;
 
   constructor(options: SessionSyncControllerOptions) {
     this.client = options.client;
     this.sessionId = options.sessionId;
+    this.state = options.initialState ?? createInitialClientState();
+    if ((options.cursor ?? 0) > 0 && !options.initialState) {
+      throw new Error("A non-zero cursor requires initialState so durable state is not skipped");
+    }
+    this.initialCursor = Math.max(0, options.cursor ?? 0, this.state.lastSeq);
     this.generation = options.generation ?? 0;
     this.externalSignal = options.signal;
     this.reconnectDelayMs = options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
@@ -107,7 +114,7 @@ export class SessionSyncController {
 
   /**
    * 启动同步循环。
-   * 返回一个当同步正常结束（如 abort）或抛出不可恢复错误时 resolve/reject 的 Promise。
+   * 返回一个在同步正常结束（如 abort）或不可恢复错误已通过 onError 上报后 resolve 的 Promise。
    */
   async start(): Promise<void> {
     if (this.running) return;
@@ -118,7 +125,7 @@ export class SessionSyncController {
       return;
     }
 
-    let cursor = 0;
+    let cursor = this.initialCursor;
     let attempt = 0;
 
     try {
@@ -128,11 +135,12 @@ export class SessionSyncController {
         const snapshot = await this.client.sessions.getState(this.sessionId, { signal });
         if (signal.aborted) return;
         this.state = applySessionSnapshot(this.state, snapshot);
-        cursor = snapshot.cursor;
+        cursor = Math.max(cursor, snapshot.cursor, this.state.lastSeq);
         this.setStatus("connected");
         this.emitUpdate({ state: this.state, source: "snapshot" });
       } else {
         const replay = await this.client.events.list({
+          cursor,
           sessionId: this.sessionId,
           signal,
         });
@@ -141,7 +149,7 @@ export class SessionSyncController {
           this.state = applyEvent(this.state, event);
           this.emitUpdate({ event, state: this.state, source: "replay" });
         }
-        cursor = this.state.lastSeq;
+        cursor = Math.max(cursor, this.state.lastSeq);
         this.setStatus("connected");
       }
 
@@ -157,9 +165,9 @@ export class SessionSyncController {
             attempt = 0;
             this.setStatus("connected");
 
-            if (event.seq > this.state.lastSeq + 1) {
+            if (event.seq > cursor + 1) {
               const gap = await this.client.events.list({
-                cursor: this.state.lastSeq,
+                cursor,
                 sessionId: this.sessionId,
                 signal,
               });
@@ -171,12 +179,12 @@ export class SessionSyncController {
                   this.emitUpdate({ event: missed, state: this.state, source: "replay" });
                 }
               }
-              cursor = this.state.lastSeq;
+              cursor = Math.max(cursor, this.state.lastSeq);
             }
 
             const before = this.state;
             this.state = applyEvent(this.state, event);
-            cursor = this.state.lastSeq;
+            cursor = Math.max(cursor, this.state.lastSeq);
             if (this.state !== before) {
               this.emitUpdate({ event, state: this.state, source: "live" });
             }
@@ -191,8 +199,6 @@ export class SessionSyncController {
           if (!(await this.waitForDelay(delay, signal))) return;
         } catch (error) {
           if (error instanceof UnsupportedSessionEventSchemaVersionError) {
-            this.setStatus("error");
-            this.onError?.(error, this.generation);
             throw error;
           }
           if (this.isAbortError(error) || signal.aborted) return;
