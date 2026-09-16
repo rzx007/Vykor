@@ -1,5 +1,7 @@
 # OpenHarness Client 公共 API 迁移指南
 
+> 状态：当前生效的客户端公共 API 迁移与兼容收敛规则。
+
 在 Stage 7（Public API Convergence）中，OpenHarness Client 的公共 API 全面收敛为按领域划分的**命名 Resource API**。
 
 为保证平滑过渡，原有平铺在 `client` 顶层的方法已被标记为 `@deprecated`，但保留完全向后兼容的薄转发实现，计划在 Stage 8 满足双发行门槛后正式移除。

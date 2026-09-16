@@ -1,6 +1,6 @@
 # 架构重组迁移状态
 
-> 状态：当前。阶段 0–6 已完成，阶段 7A（公共契约清单与 AST 门禁）已完成，阶段 7B–7F 未开始。
+> 状态：当前。阶段 0–7 已完成。
 
 ## 当前阶段
 
@@ -14,7 +14,7 @@
 阶段 4F 已完成：Scheduled Task 的 worktree、Session、permission、admission、await 与清理流程迁入 `ScheduledTaskExecutor`；Daemon 保留显式服务组合、ready 和 close。
 阶段 5 已完成：Transport 内核、ProtocolClient、14 个专用业务/执行 Resource 彻底抽取完成。`OpenHarnessClient` 收敛为纯净 Resource 组合根与兼容转发门面，移除全部 endpoint 字符串与业务 decoder；内部 consumer 收窄为命名 capability，原有重点调用指标 `httpClientFlatCalls` 由 11 降至 0；架构规则补充 Client Resource 与 Transport 隔离护栏。
 阶段 6 已完成：Desktop 与 Frontend 状态边界重组完成。建立平台状态所有权（Matrix + 纯 Selector）；抽取跨平台 SSE 连接与断线重连控制器 `SessionSyncController`；解构 Frontend `useServerSync`（1333 行降至 770 行）；解构 Desktop Main `SessionService`（1152 行降至 439 行）；审计确认 Desktop Renderer Store 已有的 `applySessionUpdate` 是持久对账单入口（本阶段未改动 renderer 生产代码）；架构护栏收窄 client 扁平旧调用至 79（下降 25 次）。
-阶段 7A 已完成：建立 Client 公共契约唯一事实源 `scripts/client-public-api-contract.json`（涵盖 55 项 runtime export、127 项 type-only export、138 项 Client public surface）；基于 TypeScript Compiler API 实现严谨 AST 扫描器 `scripts/client-legacy-calls.mjs`，准确识别直接调用、别名、成员属性、await factory、解构、类型索引、值传递与 Pick mapped capability；建立独立代表性消费者类型编译 fixture `tests/client-public-api` 与 Vitest 契约快照测试；固定根门禁 `check:client-api` 并由 `check:architecture` 串联执行。历史正则指标 79 保留为历史参考基线 `clientLegacyRegexHistoricalBaseline`，新 AST 起始指标确立为生产调用 80、生产成员引用 3、兼容测试调用 57。阶段 7B–7F 未开始。
+阶段 7 已完成：Public API Convergence（公共 API 收敛）。建立 Client 公共契约事实源与 TypeScript Compiler API AST 扫描器；审计确认 Client 内部与 SessionSyncController 零残留旧平铺调用；CLI（apps/cli）、Desktop Main（apps/desktop）与 Frontend（apps/frontend）所有生产代码已全部平移至命名领域 Resource（client.sessions、client.projects、client.system、client.providers、client.plugins、client.auth、client.development、client.protocol、client.evaluations 等）；生产旧调用数降至 0（原 80），生产成员引用数降至 0（原 3）；118 个顶层平铺兼容方法全部添加 @deprecated JSDoc 与迁移指引；确立 Stage 8 双发行门槛治理规则。
 
 阶段 4 最终复审补充：Coordinator 等待的是包含 `settleGoalRun` 的完整 completion Promise，shutdown 不会在 Goal settlement 尚未结束时关闭 Store；Session Run 三件套的两阶段闭包装配进入纯 `assembleSessionRunServices` factory，Executor 的 Skill/Attachment/Capability/steer 依赖进入 `assembleSessionRunExecutor`；settings、model limits、Skill catalog/list 和 plugin inventory 统一由 `createSessionRuntimeDiscovery` 提供，避免 Daemon 内重复发现扩展；Maintenance/PostRun 使用精确方法 capability，并由架构测试禁止重新持有完整 `SessionStore`。`DaemonApplication` 最终为 908 行。最终统一验证为 Server 80 个文件、717 个测试，Services 最近一次回归为 45 个文件、430 个测试，全仓 TypeScript 61/61，架构测试 15/15。
 
@@ -23,7 +23,7 @@
 - `scripts/architecture-baseline.json` 是旧入口调用的只减不增基线。
 - `pnpm check:architecture` 检查禁止的 package 依赖方向与内部模块导入边界，并串联 `pnpm check:client-api` 执行契约比对、AST 扫描器自测与 consumer fixture 编译。
 - 基线只能在调用数实际下降时通过 `node scripts/architecture-boundaries.mjs --write-baseline` 更新；禁止为了通过检查提高数字。
-- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 0`, `clientLegacyRegexHistoricalBaseline: 79`, `clientLegacyProductionCalls: 80`, `clientLegacyProductionReferences: 3`, `clientLegacyCompatibilityTestCalls: 57`, `clientLegacyOtherTestCalls: 0`。
+- 当前基线：`sessionStoreFlatCalls: 248`, `httpClientFlatCalls: 0`, `clientLegacyRegexHistoricalBaseline: 79`, `clientLegacyProductionCalls: 0`, `clientLegacyProductionReferences: 0`, `clientLegacyCompatibilityTestCalls: 57`, `clientLegacyOtherTestCalls: 0`。
 - 当前 `SessionStore` 行数：2152 行。
 - 当前 `OpenHarnessClient`（`http-client.ts`）行数：1113 行。
 - 当前 `useServerSync.ts` 行数：770 行（原 1333 行，净删减 563 行）。
@@ -201,6 +201,51 @@ Attachment asset、representation、lease 的 SQL、row conversion 和状态事�
   - `node scripts/check-docs.mjs`
   - `git diff --check`
 
+## 阶段 7 迁移记录：Public API Convergence（公共 API 收敛）
+
+- 起始 commit：`c1c6a3cb`
+- 阶段子模块与提交记录：
+  - 阶段 7A：`c1c6a3cb` test(client): lock public api contract
+    - 建立 Client 公共契约唯一事实源 `scripts/client-public-api-contract.json`（涵盖 55 项 runtime export、127 项 type-only export、138 项 Client public surface）。
+    - 基于 TypeScript Compiler API 实现严谨 AST 扫描器 `scripts/client-legacy-calls.mjs`，准确识别直接调用、别名、成员属性、await factory、解构、类型索引、值传递与 Pick mapped capability。
+    - 建立独立代表性消费者类型编译 fixture `tests/client-public-api` 与 Vitest 契约快照测试；固定根门禁 `check:client-api` 并由 `check:architecture` 串联执行。
+  - 阶段 7B：Client 内部自审
+    - 审计确认 `@openharness/client` 内部已无对 `OpenHarnessClient` 扁平旧方法的生产调用与成员引用；`SessionSyncController` 仅依赖事件订阅与 snapshot 机制，未发生反向侵入。
+  - 阶段 7C：`8a02156e` refactor(cli): use named client resources
+    - `apps/cli` 的命令与守护进程服务全面收敛至命名领域 Resource（`client.system`、`client.sessions`、`client.projects`、`client.providers`、`client.plugins`、`client.development`、`client.auth`、`client.jobs`、`client.terminal` 等）。
+    - 生产旧调用数与引用数在 CLI 中清零。
+  - 阶段 7D：`4be3a38f` refactor(desktop): use named client resources
+    - `apps/desktop` 主进程全面收敛（`daemon-connection-service.ts`、`plugin-service.ts`、`skill-service.ts`、`workspace-service.ts` 等），同步更新单元测试 mock 结构（`plugin-service.test.ts`、`skill-service.test.ts`）。
+    - 生产旧调用数与引用数在 Desktop 中清零。
+  - 阶段 7E：`d70902f8` refactor(frontend): use named client resources
+    - `apps/frontend` 生产代码全面收敛（`useServerSync/actions.ts`、`useServerSync/connection.ts`、`useServerSync/mcp.ts` 等），完全平移至命名领域 Resource。
+    - 生产旧调用数与引用数在 Frontend 中清零。
+  - 阶段 7F：`3d25be21` docs(client): deprecate flat client facade
+    - 为 `packages/client/src/transport/http-client.ts` 全部 118 个顶层平铺兼容方法添加明确的 `@deprecated Use client.<resource>.<method>() instead.` JSDoc 注解与对应 Resource 提示。
+    - 编写完整迁移指南 `docs/client-public-api-migration.md` 与 `packages/client/README.md` 迁移对照表。
+    - 在契约文件 `scripts/client-public-api-contract.json` 中标记 `deprecatedSince: "stage-7"`，确立 Stage 8 双发行门槛治理规则（`deprecatedCarrierRelease` 与 `retentionCarrierRelease`）。
+- 调用指标与基线变化：
+  - `clientLegacyProductionCalls`：80 -> 0（-80，生产零残留）。
+  - `clientLegacyProductionReferences`：3 -> 0（-3，生产零残留）。
+  - `clientLegacyCompatibilityTestCalls`：57（保留在 client-public-api contract 兼容回归测试中）。
+  - `clientLegacyOtherTestCalls`：0。
+- 验证命令与结果：
+  - `node scripts/client-legacy-calls.mjs --scope production`：0 calls, 0 references（完全清零）。
+  - `pnpm --filter @openharness/client check-types`：通过（exit code 0）。
+  - `pnpm --filter @openharness/client test`：5 个测试文件全部通过（85/85 tests passed）。
+  - `pnpm --filter @rzx/ohs check-types`：通过（exit code 0）。
+  - `pnpm --filter @rzx/ohs test`：25 个测试文件全部通过（178/178 tests passed）。
+  - `pnpm --filter @openharness/desktop typecheck`：通过（exit code 0，node 与 web）。
+  - `pnpm --filter @openharness/desktop test`：142 个测试文件全部通过（892/892 tests passed），更新打包与工作区边界验证通过。
+  - `pnpm --filter @openharness/server check-types`：通过（exit code 0）。
+  - `pnpm --filter @openharness/server test`：80 个测试文件全部通过（717/717 tests passed）。
+  - `pnpm --filter @openharness/frontend check-types`：通过（exit code 0）。
+  - `pnpm --filter @openharness/frontend test`：由于当前宿主环境未安装 Bun 运行环境（`sh: 1: bun: not found`），记录为环境运行时缺失限制，非代码回归。
+  - `pnpm check-types`：61 个 workspace task 全部通过（exit code 0）。
+  - `pnpm check:architecture`：通过（exit code 0），包含公共 API 契约校验、AST 扫描器测试及架构边界。
+  - `node scripts/check-docs.mjs`：通过（261 个 Markdown 文件检查全部有效）。
+  - `git diff --check`：通过（无空白或格式异常）。
+
 ## 下一步
 
-阶段 7：按总体路线推进下一阶段（如产品适配、高级外部协议与持久集成）。阶段 5 的客户端平铺兼容转发暂不删除；删除前必须先迁完所有外部调用方并单独审核。
+阶段 8：Flat Facade Removal（彻底移除平铺兼容门面）。在生产调用保持为 0、且平铺方法的弃用公告伴随至少一个正式版本发布（`deprecatedCarrierRelease`）并跨越至少一个完整保留发行版周期（`retentionCarrierRelease`）后，正式物理移除 `OpenHarnessClient` 顶层 118 个兼容转发方法。

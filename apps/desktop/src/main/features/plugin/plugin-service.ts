@@ -201,40 +201,34 @@ export class DesktopPluginService {
       id: selectionId,
       cwd,
       url,
-      ref,
+      ...(ref ? { ref } : {}),
+      sourceDigest: preview.sourceDigest,
       pluginName,
-      expectedSourceDigest: preview.sourceDigest,
-      declaredPermissions: preview.declaredPermissions,
+      requestedPermissions: [...preview.requestedPermissions],
       createdAt,
       expiresAt: createdAt + SELECTION_TTL_MS,
     })
     return {
-      status: "requires_confirmation",
+      status: "approval-required",
       selectionId,
       pluginName,
-      declaredPermissions: preview.declaredPermissions,
-      expiresAt: createdAt + SELECTION_TTL_MS,
+      requestedPermissions: [...preview.requestedPermissions],
     }
   }
 
-  async confirmGit(input: {
-    cwd: string
-    selectionId: string
-    approvedPermissions: string[]
-  }): Promise<DesktopPluginGitConfirmResult> {
+  async confirmGit(input: DesktopPluginArchiveConfirmInput): Promise<DesktopPluginGitConfirmResult> {
     const cwd = normalizeCwd(input.cwd)
-    const selection = this.gitSelections.get(input.selectionId)
-    if (!selection || selection.cwd !== cwd) return gitConfirmationExpired()
+    const selection = this.gitSelections.consume(input.selectionId)
+    if (!selection || selection.cwd !== cwd) return selectionFailure()
 
     try {
       await this.installGit(
         cwd,
         selection.url,
         selection.ref,
-        selection.expectedSourceDigest,
-        input.approvedPermissions
+        selection.sourceDigest,
+        selection.requestedPermissions
       )
-      this.gitSelections.delete(input.selectionId)
     } catch (error) {
       if (isConnectionFailure(error)) return unknownInstallResult(selection.pluginName)
       return gitFailureFromError(error)
@@ -256,8 +250,7 @@ export class DesktopPluginService {
     pluginName: string
   ): Promise<DesktopPluginArchiveInstalledResult> {
     try {
-      const snapshot = await this.snapshot({ cwd })
-      return { status: "installed", pluginName, snapshot }
+      return { status: "installed", snapshot: await this.snapshot({ cwd }), pluginName }
     } catch {
       return { status: "installed", pluginName, refreshPending: true }
     }

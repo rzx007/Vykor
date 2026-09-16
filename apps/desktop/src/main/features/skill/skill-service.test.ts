@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const daemon = vi.hoisted(() => ({
-  listSkills: vi.fn(),
-  removeSkill: vi.fn(),
+  development: {
+    listSkills: vi.fn(),
+    removeSkill: vi.fn(),
+  },
 }))
 
 const refreshedDaemon = vi.hoisted(() => ({
-  listSkills: vi.fn(),
-  removeSkill: vi.fn(),
+  development: {
+    listSkills: vi.fn(),
+    removeSkill: vi.fn(),
+  },
 }))
 
 const sessionService = vi.hoisted(() => ({
@@ -112,14 +116,14 @@ const mixedSnapshot = {
 describe("DesktopSkillService", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    daemon.listSkills.mockResolvedValue(snapshot)
-    daemon.removeSkill.mockResolvedValue(snapshot)
-    refreshedDaemon.listSkills.mockResolvedValue(snapshot)
-    refreshedDaemon.removeSkill.mockResolvedValue(snapshot)
+    daemon.development.listSkills.mockResolvedValue(snapshot)
+    daemon.development.removeSkill.mockResolvedValue(snapshot)
+    refreshedDaemon.development.listSkills.mockResolvedValue(snapshot)
+    refreshedDaemon.development.removeSkill.mockResolvedValue(snapshot)
   })
 
   it("delegates snapshots to the daemon client and hides outside-project workspaces", async () => {
-    daemon.listSkills.mockResolvedValueOnce(mixedSnapshot)
+    daemon.development.listSkills.mockResolvedValueOnce(mixedSnapshot)
     const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
     await expect(service.snapshot({ projectPath: "D:/code/OpenHarness-ts" })).resolves.toEqual({
@@ -137,13 +141,13 @@ describe("DesktopSkillService", () => {
         mixedSnapshot.skills[5],
       ],
     })
-    expect(daemon.listSkills).toHaveBeenCalledOnce()
-    expect(daemon.listSkills).toHaveBeenCalledWith()
+    expect(daemon.development.listSkills).toHaveBeenCalledOnce()
+    expect(daemon.development.listSkills).toHaveBeenCalledWith()
     expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()
   })
 
   it("does not require the current page project to be in the skill catalog", async () => {
-    daemon.listSkills.mockResolvedValueOnce(mixedSnapshot)
+    daemon.development.listSkills.mockResolvedValueOnce(mixedSnapshot)
     const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
     await expect(service.snapshot({ projectPath: "D:/code/hidden" })).resolves.toMatchObject({
@@ -163,30 +167,30 @@ describe("DesktopSkillService", () => {
     }
 
     await expect(service.remove(input)).resolves.toEqual(snapshot)
-    expect(daemon.removeSkill).toHaveBeenCalledWith("skill_personal", {
+    expect(daemon.development.removeSkill).toHaveBeenCalledWith("skill_personal", {
       expectedContent: "current skill contents",
     })
-    expect(daemon.listSkills).not.toHaveBeenCalled()
+    expect(daemon.development.listSkills).not.toHaveBeenCalled()
   })
 
   it.each(["Failed to fetch", "connect ECONNREFUSED", "read ECONNRESET"])(
     "refreshes the daemon client and retries once after %s",
     async (message) => {
-      daemon.listSkills.mockRejectedValueOnce(new Error(message))
+      daemon.development.listSkills.mockRejectedValueOnce(new Error(message))
       const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
       await expect(service.snapshot({ projectPath: "D:/code/OpenHarness-ts" })).resolves.toEqual(
         snapshot
       )
-      expect(daemon.listSkills).toHaveBeenCalledOnce()
+      expect(daemon.development.listSkills).toHaveBeenCalledOnce()
       expect(sessionService.refreshDaemonClient).toHaveBeenCalledOnce()
-      expect(refreshedDaemon.listSkills).toHaveBeenCalledOnce()
+      expect(refreshedDaemon.development.listSkills).toHaveBeenCalledOnce()
     }
   )
 
   it("does not retry non-connection errors", async () => {
     const error = new Error("skill conflict")
-    daemon.removeSkill.mockRejectedValueOnce(error)
+    daemon.development.removeSkill.mockRejectedValueOnce(error)
     const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
     await expect(
@@ -197,6 +201,6 @@ describe("DesktopSkillService", () => {
       })
     ).rejects.toBe(error)
     expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()
-    expect(refreshedDaemon.removeSkill).not.toHaveBeenCalled()
+    expect(refreshedDaemon.development.removeSkill).not.toHaveBeenCalled()
   })
 })
