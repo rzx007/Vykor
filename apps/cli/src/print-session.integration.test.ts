@@ -199,11 +199,11 @@ describe("runPrintSession daemon integration", () => {
         { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token },
       );
 
-      const sessions = server.store.listSessions({ includeArchived: true });
+      const sessions = server.store.sessions.list({ includeArchived: true });
       expect(sessions).toHaveLength(1);
       const session = sessions[0]!;
-      expect(server.store.listInputs(session.id).map((input) => input.content)).toEqual(["hello daemon"]);
-      expect(server.store.listRuns(session.id).map((run) => run.status)).toEqual(["completed"]);
+      expect(server.store.conversations.listInputs(session.id).map((input) => input.content)).toEqual(["hello daemon"]);
+      expect(server.store.runs.listRuns(session.id).map((run) => run.status)).toEqual(["completed"]);
     });
 
     expect(stdout.chunks.join("")).toContain("hello from real daemon");
@@ -235,11 +235,11 @@ describe("runPrintSession daemon integration", () => {
         { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token },
       );
 
-      const session = server.store.listSessions({ includeArchived: true })[0]!;
-      const requests = server.store.listPermissionRequests({ sessionId: session.id });
+      const session = server.store.sessions.list({ includeArchived: true })[0]!;
+      const requests = server.store.permissions.list({ sessionId: session.id });
       expect(requests).toHaveLength(1);
       expect(requests[0]).toMatchObject({ toolName: "Write", status: "denied" });
-      expect(server.store.listRuns(session.id).map((run) => run.status)).toEqual(["completed"]);
+      expect(server.store.runs.listRuns(session.id).map((run) => run.status)).toEqual(["completed"]);
     });
 
     expect(decisions).toEqual([false]);
