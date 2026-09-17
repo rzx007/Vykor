@@ -581,7 +581,7 @@ git diff --check
 - [ ] **步骤 5：执行最终负向搜索**
 
 ```powershell
-rg -n 'AttachmentApplicationService|packages/services/src/attachment/|packages/services/src/attachment-processing/|packages/server/src/application/attachment-(processing|resource|routing|tools)/' packages apps scripts README.md docs/README.md docs/session-runtime-storage-architecture.md packages/services/README.md
+rg -n 'AttachmentApplicationService|packages/services/src/attachment/|packages/services/src/attachment-processing/|packages/server/src/application/attachment-(processing|resource|routing|tools)/' packages apps README.md docs/README.md docs/session-runtime-storage-architecture.md packages/services/README.md -g '!**/*.test.*' -g '!**/*.spec.*'
 Get-ChildItem packages/services/src -Directory | Where-Object Name -Match '^attachment'
 Get-ChildItem packages/server/src/application -Directory | Where-Object Name -Match '^attachment'
 ```

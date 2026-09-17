@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -9,6 +12,7 @@ import {
   checkSessionRunEngineComposition,
   checkMaintenanceCapability,
   checkAttachmentLayout,
+  collectAttachmentLayoutErrors,
 } from "./architecture-boundaries.mjs";
 
 test("services cannot depend on server", () => {
@@ -269,5 +273,21 @@ test("retired attachment layouts are rejected", () => {
     ),
     [],
   );
+});
+
+test("attachment layout scan covers package root barrels", (t) => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "openharness-attachment-boundary-"));
+  t.after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  const servicesSource = join(fixtureRoot, "packages", "services", "src");
+  mkdirSync(servicesSource, { recursive: true });
+  writeFileSync(
+    join(servicesSource, "index.ts"),
+    'export { AttachmentService as AttachmentApplicationService } from "./attachments/index.js";\n',
+  );
+
+  assert.deepEqual(collectAttachmentLayoutErrors(fixtureRoot), [
+    "AttachmentApplicationService is retired; use Server AttachmentService",
+  ]);
 });
 

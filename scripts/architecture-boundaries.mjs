@@ -231,6 +231,22 @@ function sourceFiles(directory) {
   });
 }
 
+function workspaceSourceFiles(scanRoot) {
+  return ["packages", "apps"].flatMap((parent) => {
+    const parentPath = join(scanRoot, parent);
+    if (!existsSync(parentPath)) return [];
+    return readdirSync(parentPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => sourceFiles(join(parentPath, entry.name, "src")));
+  });
+}
+
+export function collectAttachmentLayoutErrors(scanRoot = root) {
+  return workspaceSourceFiles(scanRoot).flatMap((path) =>
+    checkAttachmentLayout(relative(scanRoot, path), readFileSync(path, "utf8")),
+  );
+}
+
 function collectArchitectureErrors() {
   const errors = [];
   for (const path of workspacePackagePaths()) {
@@ -241,6 +257,7 @@ function collectArchitectureErrors() {
       }
     }
   }
+  errors.push(...collectAttachmentLayoutErrors());
 
   const boundaryFiles = [
     ...sourceFiles(join(root, "packages", "services", "src", "sessions")),
@@ -267,7 +284,6 @@ function collectArchitectureErrors() {
         errors.push(error);
       }
     }
-    errors.push(...checkAttachmentLayout(rel, content));
     if (!/\.(?:test|spec)\.(?:ts|tsx)$/.test(path)) {
       errors.push(...checkSessionRunEngineComposition(content, rel));
       if (/session-(?:post-run-)?maintenance-service\.ts$/.test(rel.replaceAll("\\", "/"))) {
