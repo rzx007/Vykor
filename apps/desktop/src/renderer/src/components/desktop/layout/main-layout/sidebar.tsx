@@ -792,14 +792,14 @@ function SidebarSectionHeader({
       onClick={onToggle}
       aria-expanded={expanded}
       className={cn(
-        "group/section flex h-7 w-full items-center justify-between rounded-md px-2.5 text-left text-ui-small font-normal text-sidebar-muted/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none select-none",
+        "flex h-7 w-full cursor-pointer items-center justify-between px-2.5 text-left text-ui-small font-normal text-sidebar-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none select-none",
         className
       )}
     >
       <span>{title}</span>
       <ChevronDown
         className={cn(
-          "size-3.5 shrink-0 text-sidebar-muted/50 transition-transform duration-200 group-hover/section:text-sidebar-foreground",
+          "size-3.5 shrink-0 text-sidebar-muted/50 transition-transform duration-200",
           !expanded && "-rotate-90"
         )}
       />
