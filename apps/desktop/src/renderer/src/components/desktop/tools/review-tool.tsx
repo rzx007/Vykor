@@ -25,6 +25,7 @@ import {
 } from "@renderer/components/ui/dropdown-menu"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { queryGitChanges } from "@renderer/lib/git-changes-query"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type {
@@ -100,7 +101,7 @@ export function ReviewTool({
   const handledOpenRequestRef = useRef<number | null>(null)
   const lastTurnFilePaths = useMemo(() => collectLastTurnFilePaths(sessionView), [sessionView])
 
-  const loadChanges = useCallback(async (): Promise<void> => {
+  const loadChanges = useCallback(async ({ force = false }: { force?: boolean } = {}): Promise<void> => {
     if (!selectedProjectPath) {
       setChanges(null)
       setLoadState("idle")
@@ -110,10 +111,13 @@ export function ReviewTool({
     setLoadState("loading")
     setError(null)
     try {
-      const result = await window.desktop.git.changes({
-        rootPath: selectedProjectPath,
-        scope: gitScopeForRange(reviewRange),
-      })
+      const result = await queryGitChanges(
+        {
+          rootPath: selectedProjectPath,
+          scope: gitScopeForRange(reviewRange),
+        },
+        { force }
+      )
       const visibleResult =
         reviewRange === "last-turn"
           ? filterChangesByPaths(result, lastTurnFilePaths, selectedProjectPath)
@@ -220,7 +224,7 @@ export function ReviewTool({
           size="icon"
           aria-label="刷新改动"
           title="刷新改动"
-          onClick={() => void loadChanges()}
+          onClick={() => void loadChanges({ force: true })}
           className="text-muted-foreground"
         >
           <RefreshCw className={cn(loadState === "loading" && "animate-spin")} />
