@@ -14,10 +14,7 @@ import { ScopedOperationError } from "@renderer/components/desktop/conversation-
 import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
-import {
-  attachDesktopSessionEvents,
-  useDesktopSessionStore,
-} from "@renderer/stores/desktop-session"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   selectActiveSessionId,
   selectProjectOperationError,
@@ -101,11 +98,6 @@ export function MainLayout(): React.JSX.Element {
   const openReview = utilityPanel.openReview
   const openTerminal = utilityPanel.openTerminal
   const openUtilityTool = utilityPanel.openTool
-
-  useEffect(() => {
-    const detach = attachDesktopSessionEvents()
-    return detach
-  }, [])
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
