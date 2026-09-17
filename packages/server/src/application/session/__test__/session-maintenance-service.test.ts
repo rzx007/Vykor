@@ -58,7 +58,7 @@ function createMaintenance(agent: Record<string, any>, options: { personalizatio
   const operationGate = new DaemonOperationGate();
   const maintenance = new SessionMaintenanceService({
     data: store as any,
-    runEngine: runEngine as any,
+    runControl: runEngine as any,
     agentPool: agentPool as any,
     liveChildren: { has: vi.fn(() => false) },
     operationGate,
@@ -89,7 +89,7 @@ describe("SessionMaintenanceService", () => {
       }));
       const maintenance = new SessionMaintenanceService({
         data: store,
-        runEngine: { hasWork: () => false, hasActiveRunsForCwd: () => false } as any,
+        runControl: { hasWork: () => false, hasActiveRunsForCwd: () => false } as any,
         agentPool: {
           configured: true,
           acquireSession: async () => ({ compact }),

@@ -23,8 +23,8 @@ sequenceDiagram
   participant Input as OpenTUI input
   participant Sync as useServerSync
   participant Client as OpenHarnessClient
-  participant App as SessionApplicationService
-  participant Engine as SessionRunEngine
+  participant App as SessionInteractionService
+  participant Admission as RunAdmissionService
   participant Lane as SessionRunCoordinator
   participant Exec as SessionRunExecutor
   participant Agent as OpenHarnessAgent
@@ -35,8 +35,8 @@ sequenceDiagram
   Input->>Sync: submit "hi"
   Sync->>Client: admitPrompt(sessionId, content)
   Client->>App: POST /sessions/:id/prompts
-  App->>Engine: durable admit input/run
-  Engine->>Lane: enqueue per-session run
+  App->>Admission: durable admit input/run
+  Admission->>Lane: enqueue per-session run
   App-->>Client: 202 input/run/queue state
   Lane->>Exec: execute admitted run
   Exec->>Agent: submitMessage("hi", durable IDs)

@@ -41,15 +41,20 @@ async function checkForbidden(root, options = {}) {
   if (!existsSync(manifest)) return [missing("forbidden", "scripts/forbidden-compatibility-surfaces.json")];
   let results;
   try {
-    if (options.forceFallbackScanner) throw new Error("fallback scanner requested by test");
+    if (options.forceScannerFailure) throw new Error("scanner failure requested by test");
     const { scanForbiddenSurfaces } = await import("./forbidden-compatibility-surfaces.mjs");
     results = scanForbiddenSurfaces({
       cwd: root,
       manifestPath: manifest,
       allow: verifierForbiddenAllow,
     }).map((entry) => problem("forbidden", entry.file, entry.line, entry.surface));
-  } catch {
-    results = fallbackForbiddenScan(root, manifest);
+  } catch (error) {
+    return [problem(
+      "forbidden",
+      "scripts/forbidden-compatibility-surfaces.mjs",
+      1,
+      `BLOCKED: primary forbidden-surface scanner unavailable: ${error?.message ?? error}`,
+    )];
   }
 
   const explicit = [
@@ -65,46 +70,6 @@ async function checkForbidden(root, options = {}) {
       while (offset >= 0) {
         results.push(problem("forbidden", rel, lineOf(source, offset), `${item.label}: ${item.text}`));
         offset = source.indexOf(item.text, offset + item.text.length);
-      }
-    }
-  }
-  return results;
-}
-
-function fallbackForbiddenScan(root, manifestPath) {
-  const surfaces = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const labels = {
-    clientMethods: "client-method", runtimeExports: "runtime-export", httpRoutes: "http-route",
-    cliCommands: "cli-command", cliOptions: "cli-option", environmentVariables: "environment-variable",
-    configFields: "config-field", enumValues: "enum-value", schemaNames: "schema-name",
-  };
-  const results = [];
-  const allow = createForbiddenScanAllow(verifierForbiddenAllow);
-  for (const file of collectForbiddenScanFiles(root)) {
-    const rel = normalize(relative(root, file));
-    if (isForbiddenScanAllowed(root, file, allow)) continue;
-    const source = readFileSync(file, "utf8");
-    for (const [category, label] of Object.entries(labels)) {
-      for (const name of surfaces[category] ?? []) {
-        if (category === "configFields" && (name === "projectId" || name === "sessionId")) continue;
-        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        let pattern;
-        if (category === "clientMethods" || category === "runtimeExports") {
-          pattern = new RegExp(`\\bclient\\s*(?:\\?\\.|\\.)\\s*${escaped}\\b|\\bclient\\s*(?:\\?\\.\\s*)?\\[\\s*["']${escaped}["']\\s*\\]`, "g");
-        } else if (category === "cliOptions") {
-          pattern = new RegExp(`(?:^|[\\s,'"])${escaped}(?=$|[\\s,>'"])`, "g");
-        } else if (category === "cliCommands") {
-          pattern = new RegExp(`\\.command\\(\\s*["']${escaped}["']`, "g");
-        } else if (category === "configFields") {
-          pattern = new RegExp(`(?:["']${escaped}["']|\\b${escaped}\\b)\\s*[:=]`, "g");
-        } else if (category === "httpRoutes") {
-          pattern = new RegExp(`["']${escaped}["']`, "g");
-        } else {
-          pattern = new RegExp(`\\b${escaped}\\b`, "g");
-        }
-        for (const match of source.matchAll(pattern)) {
-          results.push(problem("forbidden", rel, lineOf(source, match.index), `${label}/${name}`));
-        }
       }
     }
   }

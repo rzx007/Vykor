@@ -76,8 +76,15 @@ export class LocalTerminalProvider implements TerminalProvider {
           cwd: resolvedCwd,
           shell: input.shell?.trim() || resolveDefaultShell().command,
         });
-    await requireDirectory(target.hostCwd);
-    return await this.createPtyTerminal(id, input, target, scopeInfo);
+    try {
+      await requireDirectory(target.hostCwd);
+      return await this.createPtyTerminal(id, input, target, scopeInfo);
+    } catch (error) {
+      // The environment target owns the runtime lease. A failed create is not
+      // registered in sessions, so this is the only place that can release it.
+      await target.close().catch(() => undefined);
+      throw error;
+    }
   }
 
   private async createPtyTerminal(
@@ -130,8 +137,9 @@ export class LocalTerminalProvider implements TerminalProvider {
       cancelRequested: false,
     });
 
-    pty.onData((data) => output.push(data));
-    pty.onExit(({ exitCode }) => {
+    try {
+      pty.onData((data) => output.push(data));
+      pty.onExit(({ exitCode }) => {
       output.dispose();
       const session = this.sessions.get(id);
       if (!session) return;
@@ -145,8 +153,14 @@ export class LocalTerminalProvider implements TerminalProvider {
       };
       if (status === "killed") this.events.emit({ type: "status", terminalId: id, status });
       this.events.emit({ type: "exit", terminalId: id, exitCode });
-      void this.closeTarget(session);
-    });
+        void this.closeTarget(session);
+      });
+    } catch (error) {
+      this.sessions.delete(id);
+      output.dispose();
+      try { pty.kill(); } catch {}
+      throw error;
+    }
 
     return info;
   }

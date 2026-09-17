@@ -572,10 +572,21 @@ export class DaemonApplication implements DurableAgentApplication {
        * 4. 与其他服务交互（如会话管理、日志记录）
        */
       this.control = new DaemonControlService({
-        store,
+        store: {
+          getSession: (id) => store.sessions.get(id),
+          listSessions: (input) => store.sessions.list(input),
+          listRuns: (id) => store.runs.listRuns(id),
+          listSessionTasks: (id) => store.runs.listSessionTasks(id),
+          listRunAttempts: (id) => store.runs.listRunAttempts(id),
+          listMessageParts: (id) => store.conversations.listMessageParts(id),
+          listProjectionSettlements: (input) => store["listProjectionSettlements"](input),
+          getRun: (id) => store.runs.getRun(id),
+          getInput: (id) => store.conversations.getInput(id),
+          listMessages: (id, input) => store.conversations.listMessages(id, input),
+          listEvents: (input) => store.conversations.listEvents(input),
+        },
         permissions: store.permissions,
         workflows: store.workflows,
-        runEngine: this.runEngine,
         runControl: this.runControl,
         agentPool: this.agentPool,
         operationGate: this.operationGate,
@@ -590,7 +601,7 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       this.maintenance = new SessionMaintenanceService({
         data: store,
-        runEngine: this.runEngine,
+        runControl: this.runControl,
         agentPool: this.agentPool,
         liveChildren: this.liveChildren,
         operationGate: this.operationGate,
@@ -608,16 +619,23 @@ export class DaemonApplication implements DurableAgentApplication {
       const pluginCapabilities = new SessionPluginCapabilityService({
         resolveInventory: runtimeDiscovery.resolvePluginInventory,
       });
-      this.queries = new SessionQueryService(store);
+      this.queries = new SessionQueryService({
+        getSession: (id) => store.sessions.get(id),
+        listSessions: (input) => store.sessions.list(input),
+        getSessionState: (id) => store.conversationTransactions.getSessionState(id),
+        listMessages: (id, input) => store.conversations.listMessages(id, input),
+        listMessageParts: (id, input) => store.conversations.listMessageParts(id, input),
+        resolveSessionListTitle: (id) => store["resolveSessionListTitle"](id),
+      });
       this.commands = new SessionCommandService({
         sessions: store,
         transactions: store,
         runtimeControl: {
           closeAgent: (id) => this.agentPool.close(id),
           hasActiveWorkForSession: (id) => this.agentPool.hasActiveWorkForSession(id),
-          interruptSession: (id) => this.runEngine.interruptSession(id),
-          waitForRuns: (ids) => this.runEngine.waitForRuns(ids),
-          hasRunWork: (id) => this.runEngine.hasWork(id),
+          interruptSession: (id) => this.runControl.interruptSession(id),
+          waitForRuns: (ids) => this.runControl.waitForRuns(ids),
+          hasRunWork: (id) => this.runControl.hasWork(id),
           interruptLiveChild: (id, reason) => this.liveChildren.interrupt(id, reason),
           hasLiveChild: (id) => this.liveChildren.has(id),
           warmSession: (session) => {
@@ -666,7 +684,6 @@ export class DaemonApplication implements DurableAgentApplication {
         permissions: store.permissions,
         goals: store.goals,
         operationRunner: this.operationRunner,
-        runEngine: this.runEngine,
         admission: this.runAdmission,
         control: this.runControl,
         events: this.eventPublisher,

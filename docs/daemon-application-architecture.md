@@ -20,8 +20,8 @@ flowchart TD
   Client["OpenHarnessClient"]
   Routes["HTTP routes"]
   Daemon["DaemonApplication"]
-  App["SessionApplicationService"]
-  Engine["SessionRunEngine"]
+  App["SessionInteractionService"]
+  Engine["RunAdmissionService / RunControlService"]
   Lane["SessionRunCoordinator"]
   Executor["SessionRunExecutor"]
   Pool["AgentPool"]
@@ -79,7 +79,7 @@ OpenHarnessAgent onEvent sink
 2. `ohs provider use <provider> -m <model>` 或 Home 页 `/models` 只改 settings，作用是“以后新建 session 的默认模型”。
 3. 已经打开的 session 改模型时，只能 PATCH `metadata.runtime.model`。旧写法 `PATCH /sessions/:id { model }` 会被拒绝。
 4. runtime 读取只认 `metadata.runtime.model`。缺少这个字段时不会从展示用的 `session.model` 猜测运行配置。
-5. `SessionApplicationService.updateSession()` 发现 runtime metadata 变化后，会先确认当前 session 没有正在跑的任务，再关闭 `AgentPool` 里当前 agent。下一次发送消息时，pool 会重新读 store，用新的 runtime 配置创建 agent。
+5. `SessionCommandService.updateSession()` 发现 runtime metadata 变化后，会先通过 `RunControlService` 确认当前 session 没有正在跑的任务，再关闭 `AgentPool` 里当前 agent。下一次发送消息时，pool 会重新读 session repository，用新的 runtime 配置创建 agent。
 6. `provider`、`baseUrl`、`apiFormat`、`permissionMode`、`maxTurns` 等同理放在 `metadata.runtime`。settings 只作为新 session 的默认值，或补齐 session 没写的可选字段；模型本身不能靠 settings 补。
 
 所以 TUI 下 `/models` 的行为是：
@@ -101,7 +101,8 @@ routes 在 `packages/server/src/http/server.ts` 组装；应用对象来自 `Dae
 
 | 服务                        | 文件                                  | 负责                                                               |
 | --------------------------- | ------------------------------------- | ------------------------------------------------------------------ |
-| `SessionApplicationService` | `application/session/session-application-service.ts` | create/update/archive、prompt、resume、interrupt、child route      |
+| `SessionCommandService`     | `application/session/session-command-service.ts`     | create/update/archive/delete/fork                                 |
+| `SessionInteractionService` | `application/session/session-interaction-service.ts` | prompt、resume、interrupt、queued prompt 与 child route           |
 | `SessionQueryService`       | `application/session/session-query-service.ts`       | session/state/message/part 查询                                    |
 | `SessionMaintenanceService` | `application/session/session-maintenance-service.ts` | compact、rewind、export、remember、MCP、usage                      |
 | `DaemonControlService`      | `application/control/daemon-control-service.ts`      | runtime snapshot、run barrier、pool close/inspect                  |
@@ -128,8 +129,8 @@ routes 在 `packages/server/src/http/server.ts` 组装；应用对象来自 `Dae
 sequenceDiagram
   participant UI as useServerSync
   participant C as OpenHarnessClient
-  participant A as SessionApplicationService
-  participant E as SessionRunEngine
+  participant A as SessionInteractionService
+  participant E as RunAdmissionService
   participant L as SessionRunCoordinator
   participant X as SessionRunExecutor
   participant P as AgentPool
@@ -168,7 +169,7 @@ apps/frontend/src/hooks/useServerSync.ts
 packages/client/src/transport/http-client.ts
 packages/server/src/http/routes/run-execution.ts
 packages/server/src/application/daemon-application.ts
-packages/server/src/application/session/session-application-service.ts
+packages/server/src/application/session/session-interaction-service.ts
 packages/server/src/application/session/session-run-engine.ts
 packages/server/src/runtime/run-coordinator.ts
 packages/server/src/application/session/session-run-executor.ts
@@ -311,8 +312,8 @@ interrupt 或 delivery failure 会拒绝所有尚未结算的 steer。若输入�
 
 ```text
 HTTP interrupt
-  -> SessionApplicationService.interruptSession
-  -> SessionRunEngine.interruptSession
+  -> SessionInteractionService.interruptSession
+  -> RunControlService.interruptSession
   -> SessionRunCoordinator.interrupt
      -> abort work signal
      -> active run.interrupt()

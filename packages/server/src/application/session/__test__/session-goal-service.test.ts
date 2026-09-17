@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionStore } from "@openharness/services";
 import { SessionGoalService } from "../session-goal-service.js";
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
-import { SessionRunEngine } from "../session-run-engine.js";
+import { assembleSessionRunServices } from "../session-run-assembly.js";
 import { SessionRunExecutor } from "../session-run-executor.js";
 import { createRunCapabilityView } from "@openharness/agent-runtime";
 import { ToolRegistry, type RunCapabilityView } from "@openharness/core";
@@ -41,12 +41,14 @@ function harness(
   };
   let service: SessionGoalService;
   let pluginsAvailable = true;
-  const engine = new SessionRunEngine({
-      allowServiceFallbackForTests: true,
+  const runServices = assembleSessionRunServices({
     store,
     goals: store.goals,
     agentPool: { configured: true } as any,
     events,
+    attachmentLimits: undefined,
+    materializeSteerInput: async (_sessionId, items) => items.map((item) => item.type === "text" ? item.text : "").join(""),
+    assertReady: () => {},
     settleGoalRun: (sessionId, runId) => service.settleRun(sessionId, runId),
     runExecutor: createView ? new SessionRunExecutor({
       data: store, attachments: store.attachments, goals: store.goals, events,
@@ -77,7 +79,8 @@ function harness(
     conversations: store.conversations,
     permissions: store.permissions,
     goals: store.goals,
-    runEngine: engine,
+    admission: runServices.admission,
+    control: runServices.control,
     events,
     operationRunner: { run: async (_id, work) => work() },
     waitVerifier,

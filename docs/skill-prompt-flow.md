@@ -23,7 +23,7 @@ Slash 的三层分流和未知命令处理见 [Slash Command Flow](./slash-comma
 sequenceDiagram
   participant UI as Desktop或TUI
   participant Client as OpenHarnessClient
-  participant App as SessionApplicationService
+  participant App as SessionInteractionService
   participant Store as SessionStore
   participant Exec as SessionRunExecutor
   participant Catalog as SkillRegistry
@@ -73,7 +73,7 @@ Session prompt 使用普通 `POST /sessions/:sessionId/prompts`，没有单独�
 
 ### 2. durable admission 与排队
 
-HTTP route 解析请求后调用 `SessionApplicationService.admitPrompt()`。`SessionRunEngine` 在事务中保存 input 和 pending run，再交给每个 session 独占的 `SessionRunCoordinator` 车道。HTTP 返回 `202` 只表示请求已经持久化并进入队列，不表示模型已经完成。
+HTTP route 解析请求后调用 `SessionInteractionService.admitPrompt()`。它把准入交给 `RunAdmissionService`：后者通过 Conversation Transaction 原子保存 input 和 pending run，再交给 `SessionRunEngine` 持有的每 session 独占车道。HTTP 返回 `202` 只表示请求已经持久化并进入队列，不表示模型已经完成。
 
 ### 3. 执行前重新校验 Skill
 

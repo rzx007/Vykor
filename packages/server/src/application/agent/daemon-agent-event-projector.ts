@@ -48,7 +48,15 @@ export interface DaemonAgentEventProjectorContext {
   projectorId?: string;
   rootSessionId?: string;
   rootAgent: OpenHarnessAgent;
-  store: SessionStore;
+  store: Pick<SessionStore,
+    "admitPrompt" | "appendEvent" | "archiveSession" | "createMessage" |
+    "createProjectionSettlement" | "createRun" | "createRunAttempt" | "createSession" |
+    "failProjectionSettlement" | "getInput" | "getProjectionSettlement" | "getRun" |
+    "getSession" | "getSessionTask" | "listEvents" | "listProjectionSettlements" |
+    "listRunAttempts" | "markProjectionSettlementRetrying" | "resolveProjectionSettlement" |
+    "settleActiveRunAttempts" | "transaction" | "updateRun" | "updateRunAttempt" |
+    "updateSessionTask" | "upsertMessagePart"
+  >;
   transcriptProjection: SessionTranscriptProjection;
   executionProjector: Pick<SessionExecutionProjector, "createBridge">;
   liveChildren: Pick<LiveChildAgentDirectory, "register" | "unregister">;

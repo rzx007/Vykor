@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { SessionStore } from "@openharness/services";
 
 import type { HookInfo } from "../settings-api.js";
-import type { SessionRunEngine } from "../session/session-run-engine.js";
 import type { RunControlService } from "../session/run-control-service.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { DaemonOperationGate, DaemonOperationLease } from "./daemon-operation-gate.js";
@@ -11,14 +10,14 @@ import { buildRuntimeMetricsSnapshot } from "../../shared/runtime-metrics.js";
 import { inspectDurableRun, listProjectionDiagnostics } from "./run-inspector.js";
 
 export interface DaemonControlServiceContext {
-  store: SessionStore;
+  store: Pick<SessionStore,
+    "getSession" | "listSessions" | "getRun" | "listRuns" | "listSessionTasks" |
+    "listRunAttempts" | "getInput" | "listMessages" | "listMessageParts" |
+    "listEvents" | "listProjectionSettlements"
+  >;
   permissions: Pick<SessionStore["permissions"], "list">;
   workflows: Pick<SessionStore["workflows"], "listRuns">;
-  runEngine: Pick<
-    SessionRunEngine,
-    "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain"
-  >;
-  runControl?: Pick<RunControlService, "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain">;
+  runControl: Pick<RunControlService, "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain">;
   agentPool: Pick<
     AgentPool,
     | "configured"
@@ -43,7 +42,7 @@ export class DaemonControlService {
   private readonly runControl;
 
   constructor(private readonly context: DaemonControlServiceContext) {
-    this.runControl = context.runControl ?? context.runEngine;
+    this.runControl = context.runControl;
   }
 
   get runtimeInspectionAvailable(): boolean {
@@ -168,7 +167,7 @@ export class DaemonControlService {
     await this.context.operationGate.beginShutdown();
     const failures: unknown[] = [];
     try {
-      await this.context.runEngine.stopAndDrain();
+      await this.runControl.stopAndDrain();
     } catch (error) {
       failures.push(error);
     }

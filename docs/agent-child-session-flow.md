@@ -77,7 +77,7 @@ JobSend(jobId)
   -> context.agent.children.sendChildInput(childId, input)
 
 HTTP child prompt
-  -> SessionApplicationService
+  -> SessionInteractionService
   -> LiveChildAgentDirectory.send(childSessionId)
   -> rootAgent.children.get(childId).send(input)
 
@@ -139,5 +139,5 @@ packages/tools/src/agent/workflow/runner.ts
 packages/server/src/application/agent/daemon-agent-event-projector.ts
 packages/server/src/application/agent/live-child-agent-directory.ts
 packages/server/src/application/session/session-execution-projector.ts
-packages/server/src/application/session/session-application-service.ts
+packages/server/src/application/session/session-interaction-service.ts
 ```

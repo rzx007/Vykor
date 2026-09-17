@@ -48,7 +48,7 @@ function createControl() {
     store: store as any,
     permissions: store.permissions,
     workflows: { listRuns: () => [{ runId: "workflow-1", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 2 }] },
-    runEngine: runEngine as any,
+    runControl: runEngine as any,
     agentPool: agentPool as any,
     operationGate,
     startedAt: Date.now() - 100,
@@ -69,7 +69,6 @@ describe("DaemonControlService", () => {
       store: store as any,
       permissions: store.permissions,
       workflows: { listRuns: () => [] },
-      runEngine: runEngine as any,
       runControl,
       agentPool: agentPool as any,
       operationGate,
@@ -79,8 +78,8 @@ describe("DaemonControlService", () => {
 
     await control.shutdown();
 
-    expect(runEngine.stopAndDrain).toHaveBeenCalledOnce();
-    expect(runControl.stopAndDrain).not.toHaveBeenCalled();
+    expect(runEngine.stopAndDrain).not.toHaveBeenCalled();
+    expect(runControl.stopAndDrain).toHaveBeenCalledOnce();
   });
   it("uses the Workflow queries supplied by daemon composition for snapshots and run inspection", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-control-workflows-"));
@@ -95,9 +94,8 @@ describe("DaemonControlService", () => {
     });
     const workflows = store.workflows;
     try {
-      const composed = application as unknown as { runEngine: { admission: unknown; control: unknown } };
-      expect(application.runAdmission).toBe(composed.runEngine.admission);
-      expect(application.runControl).toBe(composed.runEngine.control);
+      expect(application.runAdmission).toBeDefined();
+      expect(application.runControl).toBeDefined();
       store.createSession({ id: "s1", cwd: directory, model: "test" });
       store.createRun({ id: "r1", sessionId: "s1" });
       const spec = { mode: "sequential" as const, tasks: [{ id: "one" }] };

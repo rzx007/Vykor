@@ -5,6 +5,70 @@ import { LocalTerminalProvider } from "./local-terminal-provider";
 import { TerminalOutputStore } from "./terminal-output-store";
 
 describe("LocalTerminalProvider", () => {
+  it("releases an environment target when cwd validation fails", async () => {
+    const close = vi.fn(async () => {});
+    const provider = new LocalTerminalProvider({
+      resolveCwd: async () => process.cwd(),
+      resolveTarget: async () => ({
+        command: "shell", args: [], hostCwd: `${process.cwd()}-missing`,
+        executionCwd: "/workspace", shell: "shell",
+        signal: vi.fn(async () => {}), close,
+      }),
+      spawnPty: vi.fn(),
+    });
+
+    await expect(provider.create({
+      scope: { kind: "session", sessionId: "s1" }, runtime: "environment", cols: 80, rows: 24,
+    })).rejects.toBeDefined();
+    expect(close).toHaveBeenCalledOnce();
+    expect(await provider.list()).toEqual([]);
+  });
+
+  it("releases an environment target and preserves a spawn failure", async () => {
+    const original = new Error("pty spawn failed");
+    const close = vi.fn(async () => { throw new Error("lease cleanup failed"); });
+    const provider = new LocalTerminalProvider({
+      resolveCwd: async () => process.cwd(),
+      resolveTarget: async () => ({
+        command: "shell", args: [], hostCwd: process.cwd(),
+        executionCwd: "/workspace", shell: "shell",
+        signal: vi.fn(async () => {}), close,
+      }),
+      spawnPty: vi.fn(() => { throw original; }),
+    });
+
+    await expect(provider.create({
+      scope: { kind: "session", sessionId: "s1" }, runtime: "environment", cols: 80, rows: 24,
+    })).rejects.toBe(original);
+    expect(close).toHaveBeenCalledOnce();
+    expect(await provider.list()).toEqual([]);
+  });
+
+  it("kills a spawned PTY and releases its target when listener setup fails", async () => {
+    const original = new Error("listener setup failed");
+    const close = vi.fn(async () => {});
+    const pty = {
+      write: vi.fn(), resize: vi.fn(), kill: vi.fn(),
+      onData: vi.fn(() => { throw original; }), onExit: vi.fn(),
+    } as any;
+    const provider = new LocalTerminalProvider({
+      resolveCwd: async () => process.cwd(),
+      resolveTarget: async () => ({
+        command: "shell", args: [], hostCwd: process.cwd(),
+        executionCwd: "/workspace", shell: "shell",
+        signal: vi.fn(async () => {}), close,
+      }),
+      spawnPty: vi.fn(() => pty),
+    });
+
+    await expect(provider.create({
+      scope: { kind: "session", sessionId: "s1" }, runtime: "environment", cols: 80, rows: 24,
+    })).rejects.toBe(original);
+    expect(pty.kill).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
+    expect(await provider.list()).toEqual([]);
+  });
+
   it("drives a WSL target through node-pty with input, resize, and signals", async () => {
     let onData: ((data: string) => void) | undefined;
     let onExit: ((event: { exitCode: number }) => void) | undefined;

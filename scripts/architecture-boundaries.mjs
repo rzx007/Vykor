@@ -171,10 +171,13 @@ export function countLegacyCalls(source, file) {
 }
 
 export function checkSessionRunEngineComposition(source, file) {
-  if (!source.includes("new SessionRunEngine(")) return [];
-  return /\badmission\s*:/.test(source) && /\bcontrol\s*:/.test(source)
-    ? []
-    : [`${file} must inject shared admission and control services`];
+  const start = source.indexOf("new SessionRunEngine(");
+  if (start < 0) return [];
+  const end = source.indexOf("\n  });", start);
+  const construction = source.slice(start, end < 0 ? source.length : end + 6);
+  return /(?:\{|,)\s*(?:admission|control)\s*:/.test(construction)
+    ? [`${file} must not inject admission or control facades into SessionRunEngine`]
+    : [];
 }
 
 export function checkMaintenanceCapability(source, file) {

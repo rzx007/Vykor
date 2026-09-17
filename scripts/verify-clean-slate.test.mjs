@@ -40,7 +40,7 @@ test("aggregates every clean-slate violation with category, file and line", asyn
     write(root, "scripts/client-public-api-contract.json", JSON.stringify({ version: 1, entries: [] }));
     write(root, "packages/client/src/transport/http-client.ts", "export class OpenHarnessClient { readonly sessions: unknown; }\n");
 
-    const problems = await verifyCleanSlate({ root, forceFallbackScanner: true, requireBuildArtifacts: true });
+    const problems = await verifyCleanSlate({ root, requireBuildArtifacts: true });
     const output = problems.map((problem) => `${problem.category} ${problem.file}:${problem.line} ${problem.message}`).join("\n");
     for (const expected of [
       "forbidden", "contract", "migration", "protocol", "workflow", "bundle-inventory",
@@ -72,7 +72,7 @@ test("reports missing bundle outputs as skipped normally and failures in strict 
   }
 });
 
-test("fallback and official forbidden scans use the same allow and directory policy", async () => {
+test("reports the verifier as blocked when the primary forbidden scanner is unavailable", async () => {
   const root = mkdtempSync(join(tmpdir(), "verify-clean-slate-policy-"));
   try {
     const manifest = {
@@ -84,19 +84,9 @@ test("fallback and official forbidden scans use the same allow and directory pol
     write(root, "packages/tools/src/meta/__test__/meta.test.ts", "client.oldMethod();\n");
     write(root, "apps/desktop/out/legacy.ts", "client.oldMethod();\n");
 
-    const officialFiles = scanForbiddenSurfaces({ cwd: root, surfaces: manifest })
-      .map((item) => item.file)
-      .sort();
-    const fallbackFiles = (await verifyCleanSlate({ root, forceFallbackScanner: true }))
-      .filter((item) => item.category === "forbidden" && item.message.includes("oldMethod"))
-      .map((item) => item.file)
-      .sort();
-
-    assert.deepEqual(officialFiles, [
-      "apps/desktop/out/legacy.ts",
-      "packages/tools/src/meta/__test__/meta.test.ts",
-    ]);
-    assert.deepEqual(fallbackFiles, officialFiles);
+    assert.equal(scanForbiddenSurfaces({ cwd: root, surfaces: manifest }).length, 2);
+    const problems = await verifyCleanSlate({ root, forceScannerFailure: true });
+    assert.ok(problems.some((item) => item.category === "forbidden" && item.message.includes("BLOCKED")));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

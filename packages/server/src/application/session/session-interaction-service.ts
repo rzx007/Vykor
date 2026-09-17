@@ -18,7 +18,7 @@ import {
 import type {
   AdmitPromptInput,
   AdmitPromptResult,
-} from "./session-run-engine.js";
+} from "./run-admission-service.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { LiveChildAgentDirectory } from "../agent/live-child-agent-directory.js";
 import {

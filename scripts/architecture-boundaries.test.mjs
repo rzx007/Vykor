@@ -124,8 +124,8 @@ test("server routes cannot import SessionStore or repositories", () => {
 
 test("application services cannot import DaemonApplication", () => {
   assert.deepEqual(
-    checkImportBoundary("packages/server/src/application/session/session-application-service.ts", "../daemon-application.js"),
-    ["packages/server/src/application/session/session-application-service.ts must not depend on DaemonApplication"],
+    checkImportBoundary("packages/server/src/application/session/session-interaction-service.ts", "../daemon-application.js"),
+    ["packages/server/src/application/session/session-interaction-service.ts must not depend on DaemonApplication"],
   );
 });
 
@@ -169,14 +169,14 @@ test("run admission and control services keep their stage 4C boundaries", () => 
   );
 });
 
-test("production SessionRunEngine construction requires both shared services", () => {
+test("SessionRunEngine construction cannot regain admission or control facades", () => {
   assert.deepEqual(
     checkSessionRunEngineComposition("new SessionRunEngine({ store })", "packages/server/src/application/daemon-application.ts"),
-    ["packages/server/src/application/daemon-application.ts must inject shared admission and control services"],
+    [],
   );
   assert.deepEqual(
     checkSessionRunEngineComposition("new SessionRunEngine({ admission: sharedAdmission, control: sharedControl })", "packages/server/src/application/daemon-application.ts"),
-    [],
+    ["packages/server/src/application/daemon-application.ts must not inject admission or control facades into SessionRunEngine"],
   );
 });
 

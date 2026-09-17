@@ -5,7 +5,7 @@ import { updateRulesFromSession, type SessionMessageLike } from "@openharness/pe
 
 import { writeSessionExport, type SessionExportFormat } from "../../session/export-session.js";
 import { rewindTranscript } from "../../session/rewind.js";
-import type { SessionRunEngine } from "./session-run-engine.js";
+import type { RunControlService } from "./run-control-service.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { LiveChildAgentDirectory } from "../agent/live-child-agent-directory.js";
@@ -32,7 +32,7 @@ export interface SessionMaintenanceServiceContext {
     "createMessage" | "getSession" | "listInputs" | "listMessageParts" |
     "listMessages" | "replaceTranscript" | "upsertMessagePart"
   >;
-  runEngine: Pick<SessionRunEngine, "hasActiveRunsForCwd" | "hasWork">;
+  runControl: Pick<RunControlService, "hasActiveRunsForCwd" | "hasWork">;
   agentPool: AgentPool;
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
   operationGate: Pick<DaemonOperationGate, "enter" | "tryEnterBarrier">;
@@ -228,7 +228,7 @@ export class SessionMaintenanceService {
     const lease = this.context.operationGate.tryEnterBarrier(
       { kind: "cwd", cwd: session.cwd },
       () =>
-        !this.context.runEngine.hasActiveRunsForCwd(session.cwd) &&
+        !this.context.runControl.hasActiveRunsForCwd(session.cwd) &&
         !this.context.agentPool.hasActiveWorkForCwd(session.cwd),
       maintenanceInfo("更新会话记忆"),
     );
@@ -279,7 +279,7 @@ export class SessionMaintenanceService {
     const lease = this.context.operationGate.tryEnterBarrier(
       { kind: "session", sessionId, cwd },
       () =>
-        !this.context.runEngine.hasWork(sessionId) &&
+        !this.context.runControl.hasWork(sessionId) &&
         !this.context.agentPool.hasActiveWorkForSession(sessionId),
       maintenanceInfo(operationName),
     );

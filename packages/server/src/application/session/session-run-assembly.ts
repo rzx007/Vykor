@@ -19,7 +19,7 @@ export interface SessionRunAssemblyOptions {
   settleGoalRun(sessionId: string, runId: string): Promise<void>;
 }
 
-/** Explicit two-phase wiring for the one shared Admission, Control and compatibility Engine trio. */
+/** Explicit two-phase wiring for the shared lane runtime, Admission and Control services. */
 export function assembleSessionRunServices(options: SessionRunAssemblyOptions): {
   admission: RunAdmissionService;
   control: RunControlService;
@@ -27,10 +27,21 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
 } {
   let engine!: SessionRunEngine;
   let admission!: RunAdmissionService;
+  const transaction = options.store["transaction"].bind(options.store);
+  const durableRuns = {
+    getRun: (runId: string) => options.store.runs.getRun(runId),
+    updateRun: (runId: string, input: Parameters<SessionStore["runs"]["updateRun"]>[1]) => options.store.runs.updateRun(runId, input),
+    listRuns: (sessionId: string) => options.store.runs.listRuns(sessionId),
+    appendEvent: (input: Parameters<SessionStore["conversations"]["appendEvent"]>[0]) => options.store.conversations.appendEvent(input),
+    transaction: <T>(work: () => T) => transaction(work),
+  };
   const control = new RunControlService({
-    durableSessions: options.store,
-    durableRuns: options.store,
-    durableInputs: options.store,
+    durableSessions: {
+      getSession: (sessionId) => options.store.sessions.get(sessionId),
+      listSessions: (input) => options.store.sessions.list(input),
+    },
+    durableRuns,
+    durableInputs: options.store.conversations,
     runtime: {
       activeRunId: (sessionId) => engine.runtimeBridge.activeRunId(sessionId),
       queuedRunIds: (sessionId) => engine.runtimeBridge.queuedRunIds(sessionId),
@@ -49,9 +60,23 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     materializeSteerInput: options.materializeSteerInput,
   });
   admission = new RunAdmissionService({
-    sessionQueries: options.store,
-    conversationTransactions: options.store,
-    runOperations: options.store,
+    sessionQueries: { getSession: (sessionId) => options.store.sessions.get(sessionId) },
+    conversationTransactions: {
+      admitPrompt: (input, config) => options.store.conversationTransactions.admitPrompt(input, config),
+      admitPromptWithRun: (input, config) => options.store.conversationTransactions.admitPromptWithRun(input, config),
+      replaceTranscriptAndAdmitPrompt: (input) => options.store.conversationTransactions.replaceTranscriptAndAdmitPrompt({ ...input, createRun: input.createRun ?? false }),
+      replaceLatestPromptWithAdmission: (input) => options.store.conversationTransactions.replaceLatestPromptWithAdmission({ ...input, createRun: input.createRun ?? false }),
+      getInput: (inputId) => options.store.conversations.getInput(inputId),
+    },
+    runOperations: {
+      createRun: (input) => options.store.runs.createRun(input),
+      getRun: (runId) => options.store.runs.getRun(runId),
+      findRunByInput: (inputId) => options.store.runs.findRunByInput(inputId),
+      createReplayRun: (inputId, input) => options.store.conversationTransactions.createReplayRun(inputId, input),
+      updateRun: (runId, input) => options.store.runs.updateRun(runId, input),
+      appendEvent: (input) => options.store.conversations.appendEvent(input),
+      transaction: (work) => transaction(work),
+    },
     runtimeQueue: {
       hasRuntime: options.agentPool.configured,
       enqueueRun: (run, inputId) => engine.runtimeBridge.enqueueRun(run, inputId),
@@ -72,16 +97,13 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     assertReady: options.assertReady,
   });
   engine = new SessionRunEngine({
-    store: options.store,
-    goals: options.goals,
-    agentPool: options.agentPool,
     runExecutor: options.runExecutor,
     events: options.events,
-    attachmentLimits: options.attachmentLimits,
-    materializeSteerInput: options.materializeSteerInput,
     settleGoalRun: options.settleGoalRun,
-    admission,
-    control,
+    execution: {
+      prepareRunExecution: (runId) => admission.prepareRunExecution(runId),
+      recoverRejectedSteer: (sessionId, input) => admission.recoverRejectedSteer(sessionId, input),
+    },
   });
   return { admission, control, engine };
 }

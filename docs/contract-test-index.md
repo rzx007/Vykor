@@ -31,7 +31,7 @@
 | 硬规则 | 主要测试 |
 |---|---|
 | SQLite schema、migration、Run/Attempt/Task/Permission/Workflow 记录可以严格往返 | [store.test.ts](../packages/services/src/session-runtime/__test__/store.test.ts)、[event-registry.test.ts](../packages/services/src/session-runtime/__test__/event-registry.test.ts) |
-| Run engine 串行准入、steer、interrupt 和终态不可回退 | [session-run-engine.test.ts](../packages/server/src/application/session/__test__/session-run-engine.test.ts) |
+| Run 的准入、steer、interrupt 和终态不可回退 | [run-admission-service.test.ts](../packages/server/src/application/session/__test__/run-admission-service.test.ts)、[run-control-service.test.ts](../packages/server/src/application/session/__test__/run-control-service.test.ts)、[run-coordinator.test.ts](../packages/server/src/runtime/__test__/run-coordinator.test.ts) |
 | 执行器失败时仍关闭 Agent，并保留原始失败 | [session-run-executor.test.ts](../packages/server/src/application/session/__test__/session-run-executor.test.ts) |
 | 成功 Run 才执行自动记忆维护，维护失败不回退 Run 终态 | [session-post-run-maintenance.test.ts](../packages/server/src/application/session/__test__/session-post-run-maintenance.test.ts)、[session-run-executor.test.ts](../packages/server/src/application/session/__test__/session-run-executor.test.ts) |
 | Message/Part 投影可重试，不重复写 transcript | [transcript-projection.test.ts](../packages/server/src/application/session/__test__/transcript-projection.test.ts) |

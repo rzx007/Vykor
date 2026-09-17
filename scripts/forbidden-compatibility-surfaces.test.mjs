@@ -174,6 +174,30 @@ test("does not scan the forbidden manifest itself", () => {
   }
 });
 
+test("reports removed Server application facades in current code and docs", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-server-"));
+  try {
+    mkdirSync(join(cwd, "src"));
+    writeFileSync(join(cwd, "src", "current.ts"), "class SessionApplicationService {}\nconst path = 'session-application-service';\nwithSessionOperation();\n");
+    const errors = scanForbiddenSurfaces({
+      cwd,
+      roots: ["src"],
+      surfaces: {
+        version: 1, clientMethods: [], runtimeExports: [], httpRoutes: [], cliCommands: [],
+        cliOptions: [], environmentVariables: [], configFields: [], enumValues: [],
+        schemaNames: ["SessionApplicationService", "session-application-service", "withSessionOperation"],
+      },
+    });
+    assert.deepEqual(errors.map((error) => error.surface), [
+      "schema-name/SessionApplicationService",
+      "schema-name/session-application-service",
+      "schema-name/withSessionOperation",
+    ]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 test("reports terminal create payload aliases without flagging terminal session info", () => {
   const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
   try {

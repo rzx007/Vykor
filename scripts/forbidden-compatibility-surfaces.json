@@ -143,6 +143,9 @@
     "PluginScope",
     "buildNativePluginCompatibilityEnvironment",
     "isLegacyWindowsPowerShell",
-    "legacyShellDescriptor"
+    "legacyShellDescriptor",
+    "SessionApplicationService",
+    "session-application-service",
+    "withSessionOperation"
   ]
 }

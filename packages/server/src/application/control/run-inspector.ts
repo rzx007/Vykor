@@ -15,19 +15,24 @@ export interface RunInspectionWarning {
   message: string;
 }
 
+export type RunInspectorStore = Pick<SessionStore,
+  "getRun" | "getInput" | "listRunAttempts" | "listMessages" |
+  "listMessageParts" | "listSessionTasks" | "listEvents" | "listProjectionSettlements"
+>;
+
 export interface RunInspection {
   runId: string;
   includeContent: boolean;
   sensitiveContentWarning?: string;
-  run: NonNullable<ReturnType<SessionStore["getRun"]>>;
+  run: NonNullable<ReturnType<RunInspectorStore["getRun"]>>;
   input?: SessionInputRecord;
   sourceRecovery?: Record<string, unknown>;
-  attempts: ReturnType<SessionStore["listRunAttempts"]>;
-  messages: ReturnType<SessionStore["listMessages"]>;
+  attempts: ReturnType<RunInspectorStore["listRunAttempts"]>;
+  messages: ReturnType<RunInspectorStore["listMessages"]>;
   parts: SessionMessagePartRecord[];
   toolCalls: SessionMessagePartRecord[];
   permissions: PermissionRequestRecord[];
-  childExecutions: ReturnType<SessionStore["listSessionTasks"]>;
+  childExecutions: ReturnType<RunInspectorStore["listSessionTasks"]>;
   workflows: Array<{
     runId: string;
     status: string;
@@ -44,7 +49,7 @@ export interface RunInspection {
 }
 
 export function inspectDurableRun(
-  store: SessionStore,
+  store: RunInspectorStore,
   permissions: Pick<SessionStore["permissions"], "list">,
   workflowQueries: Pick<SessionStore["workflows"], "listRuns">,
   runId: string,
@@ -137,7 +142,7 @@ export function inspectDurableRun(
   };
 }
 
-export function listProjectionDiagnostics(store: SessionStore, includeContent = false): {
+export function listProjectionDiagnostics(store: RunInspectorStore, includeContent = false): {
   includeContent: boolean;
   sensitiveContentWarning?: string;
   settlements: ProjectionSettlementRecord[];

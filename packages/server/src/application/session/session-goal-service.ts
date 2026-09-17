@@ -1,7 +1,7 @@
 import { DEFAULT_GOAL_AUTO_TURNS, MAX_GOAL_AUTO_TURNS, parseGoalAssessment, type CreateSessionGoalInput, type GoalActionInput, type GoalAssessment, type PermissionRequestRecord, type SessionGoal, type SessionMessagePartRecord, type SessionMessageRecord, type SessionRecord, type SessionRunRecord, type UpdateSessionGoalInput } from "@openharness/protocol";
 import type { GoalOperations } from "@openharness/services";
 import type { SessionOperationRunner } from "./session-operation-runner.js";
-import type { SessionRunEngine, AdmitPromptInput } from "./session-run-engine.js";
+import type { AdmitPromptInput } from "./run-admission-service.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { classifyGoalCompletion, verifiedGoalEvidence } from "./goal-assessment-policy.js";
@@ -33,16 +33,15 @@ export class SessionGoalService {
       };
       goals: GoalOperations;
       operationRunner: Pick<SessionOperationRunner, "run">;
-      runEngine: Pick<SessionRunEngine, "persistGoalRun" | "dispatchPersistedRun" | "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
-      admission?: Pick<RunAdmissionService, "persistGoalRun" | "dispatchPersistedRun">;
-      control?: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
+      admission: Pick<RunAdmissionService, "persistGoalRun" | "dispatchPersistedRun">;
+      control: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
       events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
       waitVerifier?: Pick<GoalWaitVerifier, "check">;
       pluginCapabilities: Pick<SessionPluginCapabilityService, "admit">;
     },
   ) {
-    this.admission = context.admission ?? context.runEngine;
-    this.control = context.control ?? context.runEngine;
+    this.admission = context.admission;
+    this.control = context.control;
   }
   private readonly waitTimers = new Map<string, { attempt: number; timer: ReturnType<typeof setTimeout> }>();
 

@@ -27,7 +27,7 @@
 sequenceDiagram
   participant Timer as ScheduledTaskService
   participant Store as SessionStore
-  participant Session as SessionApplicationService
+  participant Session as SessionInteractionService
   participant Agent as Agent Runtime
   participant UI as Desktop 已安排
 

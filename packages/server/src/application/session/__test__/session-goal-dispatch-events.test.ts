@@ -58,7 +58,6 @@ describe("SessionGoalService dispatch event boundary", () => {
         permissions: store.permissions,
         goals: store.goals,
         operationRunner,
-        runEngine: { ...admission, ...control },
         admission,
         control,
         events: publisher,
