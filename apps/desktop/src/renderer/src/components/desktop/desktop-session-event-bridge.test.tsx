@@ -28,6 +28,9 @@ describe("DesktopSessionEventBridge", () => {
   let root: Root
 
   beforeEach(() => {
+    ;(
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true
     sessionEvents.active = 0
     sessionEvents.attach.mockClear()
     container = document.createElement("div")
@@ -36,6 +39,9 @@ describe("DesktopSessionEventBridge", () => {
 
   afterEach(() => {
     act(() => root.unmount())
+    expect(sessionEvents.active).toBe(0)
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+      .IS_REACT_ACT_ENVIRONMENT
   })
 
   it("keeps one listener set while enabled content rerenders", () => {
