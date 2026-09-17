@@ -96,4 +96,5 @@ export {
 export * from "./autodream/index.js";
 export * from "./attachment/index.js";
 export * from "./attachment-processing/index.js";
+export * from "./attachments/index.js";
 export type { GoalOperations } from "./goals/index.js";

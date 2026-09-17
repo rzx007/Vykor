@@ -1,7 +1,9 @@
 import { discoverOpenHarnessExtensions } from "@openharness/agent-runtime";
 import type { Settings } from "@openharness/core";
 import { readSessionRuntimeConfig, type SessionRecord, type SessionUserInputItem } from "@openharness/protocol";
-import type { AttachmentApplicationService, SessionStore } from "@openharness/services";
+import type { SessionStore } from "@openharness/services";
+
+import type { AttachmentService } from "../attachments/attachment-service.js";
 import { AttachmentCapabilityRouter } from "../attachment-routing/attachment-capability-router.js";
 import { resolveRuntimeAttachmentCapabilities } from "../attachment-routing/attachment-capabilities.js";
 import { createDefaultModelService } from "../default-services/model-service.js";
@@ -16,7 +18,7 @@ export interface SessionRunExecutorAssemblyOptions extends Omit<SessionRunExecut
     "attachments" | "conversations" | "conversationTransactions" |
     "runs" | "sessions" | "transaction"
   >;
-  attachmentApplication: Pick<AttachmentApplicationService, "resolveReadyContentPath" | "readReadyText">;
+  attachmentService: Pick<AttachmentService, "resolveReadyContentPath" | "readReadyText">;
   resolveSessionSettings(cwd: string): Promise<Settings | undefined>;
 }
 
@@ -25,8 +27,8 @@ export function assembleSessionRunExecutor(options: SessionRunExecutorAssemblyOp
   materializeSteerInput(sessionId: string, items: readonly SessionUserInputItem[]): Promise<string>;
 } {
   const attachmentRouter = new AttachmentCapabilityRouter({
-    resolveReadyContentPath: (assetId) => options.attachmentApplication.resolveReadyContentPath(assetId),
-    readReadyText: (assetId, readOptions) => options.attachmentApplication.readReadyText(assetId, readOptions),
+    resolveReadyContentPath: (assetId) => options.attachmentService.resolveReadyContentPath(assetId),
+    readReadyText: (assetId, readOptions) => options.attachmentService.readReadyText(assetId, readOptions),
   });
   const resolveSkillCatalog = async (session: SessionRecord) => {
     const settings = await options.resolveSessionSettings(session.cwd);

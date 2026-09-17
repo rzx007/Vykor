@@ -1,10 +1,8 @@
 import type { AttachmentAssetRecord } from "@openharness/protocol";
-import {
-  AttachmentError,
-  decodeAttachmentFilename,
-  type AttachmentApplicationService,
-} from "@openharness/services";
+import { AttachmentError, decodeAttachmentFilename } from "@openharness/services";
 import { Hono } from "hono";
+
+import type { AttachmentService } from "../../application/attachments/attachment-service.js";
 
 import {
   attachmentErrorResponse,
@@ -13,7 +11,7 @@ import {
 } from "../support.js";
 
 export type AttachmentRouteService = Pick<
-  AttachmentApplicationService,
+  AttachmentService,
   "limits" | "import" | "get" | "openContent" | "delete"
 >;
 

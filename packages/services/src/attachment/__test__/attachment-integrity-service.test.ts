@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SessionStore } from "../../session-runtime/store.js";
-import { AttachmentApplicationService } from "../attachment-application-service.js";
 import { AttachmentBlobStore } from "../attachment-blob-store.js";
 import { AttachmentIntegrityService } from "../attachment-integrity-service.js";
 
@@ -17,18 +16,41 @@ afterEach(() => {
   }
 });
 
-function fixture(ids: string[]) {
+function fixture() {
   const root = mkdtempSync(join(tmpdir(), "oh-attachment-integrity-"));
   roots.push(root);
   const store = new SessionStore({ path: join(root, "sessions.db") });
   const blobs = new AttachmentBlobStore({ root: join(root, "attachments") });
-  let index = 0;
-  const attachments = new AttachmentApplicationService({
-    store: store.attachments,
-    blobs,
-    id: () => ids[index++]!,
+  return { root, store, blobs };
+}
+
+async function importReadyAttachment(
+  store: SessionStore,
+  blobs: AttachmentBlobStore,
+  id: string,
+  displayName: string,
+  value: string,
+  declaredMediaType?: string,
+) {
+  store.attachments.createImportingAttachment({
+    id,
+    displayName,
+    stagingName: `${id}.part`,
+    createdAt: 1,
+    ...(declaredMediaType ? { declaredMediaType } : {}),
   });
-  return { root, store, blobs, attachments };
+  const imported = await blobs.import({
+    uploadId: id,
+    content: content(value),
+    maxBytes: 1024 * 1024,
+    ...(declaredMediaType ? { declaredMediaType } : {}),
+  });
+  return store.attachments.markAttachmentReady(id, {
+    sha256: imported.sha256,
+    sizeBytes: imported.sizeBytes,
+    mediaType: imported.mediaType,
+    updatedAt: 2,
+  });
 }
 
 function content(value: string): ReadableStream<Uint8Array> {
@@ -42,12 +64,15 @@ function content(value: string): ReadableStream<Uint8Array> {
 
 describe("AttachmentIntegrityService", () => {
   it("reports missing, corrupt, and orphan blobs without changing storage", async () => {
-    const { root, store, blobs, attachments } = fixture(["att-corrupt"]);
+    const { root, store, blobs } = fixture();
     try {
-      const corrupt = await attachments.import({
-        displayName: "corrupt.txt",
-        content: content("private content"),
-      });
+      const corrupt = await importReadyAttachment(
+        store,
+        blobs,
+        "att-corrupt",
+        "corrupt.txt",
+        "private content",
+      );
       const corruptPath = await blobs.resolveReadOnlyPath(
         corrupt.sha256!,
         corrupt.sizeBytes!,
@@ -93,10 +118,10 @@ describe("AttachmentIntegrityService", () => {
   });
 
   it("keeps a shared blob until the last deleted asset becomes collectible", async () => {
-    const { store, blobs, attachments } = fixture(["att-a", "att-b"]);
+    const { store, blobs } = fixture();
     try {
-      const first = await attachments.import({ displayName: "a.txt", content: content("same") });
-      const second = await attachments.import({ displayName: "b.txt", content: content("same") });
+      const first = await importReadyAttachment(store, blobs, "att-a", "a.txt", "same");
+      const second = await importReadyAttachment(store, blobs, "att-b", "b.txt", "same");
       expect(first.sha256).toBe(second.sha256);
       store.attachments.softDeleteAttachment(first.id, 100);
       const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
@@ -137,9 +162,15 @@ describe("AttachmentIntegrityService", () => {
   });
 
   it("does not collect a deleted asset while its run lease is active", async () => {
-    const { store, blobs, attachments } = fixture(["att-leased"]);
+    const { store, blobs } = fixture();
     try {
-      const asset = await attachments.import({ displayName: "leased.txt", content: content("lease") });
+      const asset = await importReadyAttachment(
+        store,
+        blobs,
+        "att-leased",
+        "leased.txt",
+        "lease",
+      );
       store.attachments.acquireAttachmentLeases({
         assetIds: [asset.id],
         ownerKind: "session_run",
@@ -161,13 +192,16 @@ describe("AttachmentIntegrityService", () => {
   });
 
   it("does not collect a deleted asset referenced by an assistant attachment part", async () => {
-    const { store, blobs, attachments } = fixture(["att-generated"]);
+    const { store, blobs } = fixture();
     try {
-      const asset = await attachments.import({
-        displayName: "generated.png",
-        declaredMediaType: "image/png",
-        content: content("generated image"),
-      });
+      const asset = await importReadyAttachment(
+        store,
+        blobs,
+        "att-generated",
+        "generated.png",
+        "generated image",
+        "image/png",
+      );
       store.sessions.create({ id: "s-generated", cwd: process.cwd(), model: "m" });
       const message = store.conversations.createMessage({ sessionId: "s-generated", role: "assistant" });
       store.conversations.upsertMessagePart({
@@ -196,9 +230,15 @@ describe("AttachmentIntegrityService", () => {
   });
 
   it("audits a blob deletion failure, keeps the tombstone, and retries later", async () => {
-    const { store, blobs, attachments } = fixture(["att-retry"]);
+    const { store, blobs } = fixture();
     try {
-      const asset = await attachments.import({ displayName: "retry.txt", content: content("retry") });
+      const asset = await importReadyAttachment(
+        store,
+        blobs,
+        "att-retry",
+        "retry.txt",
+        "retry",
+      );
       store.attachments.softDeleteAttachment(asset.id, 100);
       const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
       const originalDelete = blobs.deleteBlob.bind(blobs);

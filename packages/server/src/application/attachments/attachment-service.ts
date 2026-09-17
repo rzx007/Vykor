@@ -6,20 +6,18 @@ import {
   type AttachmentAssetRecord,
   type AttachmentLimits,
 } from "@openharness/protocol";
-
-import type { AttachmentTransactions } from "../attachments/attachment-transactions.js";
 import {
   AttachmentBlobStore,
-  type AttachmentBlobRange,
-} from "./attachment-blob-store.js";
-import { AttachmentError, isAttachmentError } from "./attachment-errors.js";
-import {
+  AttachmentError,
+  AttachmentStorageOperationGate,
   decodeAttachmentText,
+  isAttachmentError,
+  type AttachmentBlobRange,
   type AttachmentTextEncoding,
-} from "./attachment-text.js";
-import { AttachmentStorageOperationGate } from "./attachment-storage-operation-gate.js";
+  type AttachmentTransactions,
+} from "@openharness/services";
 
-export interface AttachmentApplicationServiceOptions {
+export interface AttachmentServiceOptions {
   store: Pick<AttachmentTransactions,
     | "createImportingAttachment"
     | "markAttachmentReady"
@@ -71,15 +69,15 @@ export interface AttachmentRecoveryResult {
   retainedStagingNames: string[];
 }
 
-export class AttachmentApplicationService {
+export class AttachmentService {
   readonly limits: AttachmentLimits;
   readonly operationGate: AttachmentStorageOperationGate;
-  private readonly store: AttachmentApplicationServiceOptions["store"];
+  private readonly store: AttachmentServiceOptions["store"];
   private readonly blobs: AttachmentBlobStore;
   private readonly now: () => number;
   private readonly id: () => string;
 
-  constructor(options: AttachmentApplicationServiceOptions) {
+  constructor(options: AttachmentServiceOptions) {
     this.store = options.store;
     this.blobs = options.blobs;
     this.now = options.now ?? Date.now;

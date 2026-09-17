@@ -1,15 +1,13 @@
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 
-import {
-  SessionStore,
-  type AttachmentApplicationService,
-} from "@openharness/services";
+import { SessionStore } from "@openharness/services";
 import type { Settings } from "@openharness/core";
 import type { AttachmentLimits } from "@openharness/protocol";
 
 import type { CommandCatalogProvider } from "../commands/commands.js";
 import type { DurableAgentApplication } from "../application/daemon-application.js";
+import type { AttachmentService } from "../application/attachments/attachment-service.js";
 import { createDefaultNodeApplication } from "../application/default-node-application.js";
 import type { CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import type {
@@ -99,7 +97,7 @@ export interface OpenHarnessServerOptions {
   storePath?: string;
   attachmentRoot?: string;
   attachmentLimits?: Partial<AttachmentLimits>;
-  attachments?: AttachmentApplicationService;
+  attachments?: AttachmentService;
   /** 已组装好的应用。传入后，HTTP Server 默认不负责关闭它。 */
   application?: DurableAgentApplication;
   /** 仅在传入 application 时生效；明确让 HTTP Server 随自身一起关闭应用。 */

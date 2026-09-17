@@ -1,9 +1,7 @@
 import type { ToolDefinition } from "@openharness/core";
-import {
-  sniffAttachmentMediaType,
-  type AttachmentApplicationService,
-} from "@openharness/services";
+import { sniffAttachmentMediaType } from "@openharness/services";
 
+import type { AttachmentService } from "../attachments/attachment-service.js";
 import {
   downloadRemoteImage as defaultDownloadRemoteImage,
   type ImportedImageSource,
@@ -16,7 +14,7 @@ const SIZE_VALUES = ["1K", "2K", "3K", "4K"] as const;
 const RATIO_VALUES = ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"] as const;
 
 export interface DaemonImageGenerationToolOptions {
-  attachments: Pick<AttachmentApplicationService, "limits" | "import" | "delete">;
+  attachments: Pick<AttachmentService, "limits" | "import" | "delete">;
   downloadRemoteImage?: (
     url: URL,
     signal?: AbortSignal,

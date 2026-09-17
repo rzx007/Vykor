@@ -13,7 +13,6 @@ import {
   type SessionRecord,
 } from "@openharness/protocol";
 import {
-  AttachmentApplicationService,
   AttachmentBlobStore,
   AttachmentIntegrityService,
   LightOcrEngine,
@@ -31,6 +30,7 @@ import {
   type ApplicationOwnerLease,
 } from "@openharness/services";
 
+import { AttachmentService } from "./attachments/attachment-service.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
 import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
@@ -108,7 +108,7 @@ export interface DaemonApplicationOptions {
   store: SessionStore;
   attachmentRoot?: string;
   attachmentLimits?: Partial<AttachmentLimits>;
-  attachments?: AttachmentApplicationService;
+  attachments?: AttachmentService;
   /** 只有默认 Node 组装应设为 true；外部注入的 Store 默认由调用方关闭。 */
   ownsStore?: boolean;
   settings?: Settings;
@@ -132,7 +132,7 @@ export interface DaemonApplicationOptions {
  */
 export interface DurableAgentApplication {
   readonly store: SessionStore;
-  readonly attachments: AttachmentApplicationService;
+  readonly attachments: AttachmentService;
   readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
   readonly queries: SessionQueryService;
@@ -168,7 +168,7 @@ function failMissingSettings(): never {
  */
 export class DaemonApplication implements DurableAgentApplication {
   readonly store: SessionStore;
-  readonly attachments: AttachmentApplicationService;
+  readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
   readonly backgroundShells: BackgroundShellService;
   readonly interactions: SessionInteractionService;
@@ -235,7 +235,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.attachments =
         options.attachments ??
-        new AttachmentApplicationService({
+        new AttachmentService({
           store: store.attachments,
           blobs: attachmentBlobs,
           limits: options.attachmentLimits,
@@ -573,7 +573,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
 
       const runExecution = assembleSessionRunExecutor({
-        store, attachmentApplication: this.attachments, goals: store.goals,
+        store, attachmentService: this.attachments, goals: store.goals,
         agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
         traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
         attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,

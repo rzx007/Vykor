@@ -3,16 +3,14 @@ import { mkdirSync, rmSync } from "node:fs";
 import { chmod, copyFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
-import {
-  classifyAttachmentCandidate,
-  type AttachmentApplicationService,
-} from "@openharness/services";
+import { classifyAttachmentCandidate } from "@openharness/services";
 
+import type { AttachmentService } from "../attachments/attachment-service.js";
 import type { AttachmentRoutingDecision } from "../attachment-routing/attachment-routing-types.js";
 
 export interface SessionAttachmentResourcesOptions {
   root: string;
-  attachments: AttachmentApplicationService;
+  attachments: AttachmentService;
 }
 
 export class SessionAttachmentResources {

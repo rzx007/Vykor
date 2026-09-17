@@ -21,9 +21,10 @@ import type {
   ToolDefinition,
 } from "@openharness/core";
 import type { AgentJobHost } from "@openharness/jobs";
-import { AttachmentApplicationService, AttachmentBlobStore, LightOcrEngine, SessionStore } from "@openharness/services";
+import { AttachmentBlobStore, LightOcrEngine, SessionStore } from "@openharness/services";
 
 import type { CreateDaemonAgent } from "../../daemon/daemon-agent.js";
+import { AttachmentService } from "../attachments/attachment-service.js";
 import { DaemonApplication } from "../daemon-application.js";
 
 const createEchoAgent: CreateDaemonAgent = async (context) => {
@@ -141,7 +142,7 @@ describe("DaemonApplication", () => {
   it("rejects ready on attachment recovery failure and still releases ownership on close", async () => {
     const directory = mkdtempSync(join(tmpdir(), "openharness-ready-recovery-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
-    const attachments = new AttachmentApplicationService({
+    const attachments = new AttachmentService({
       store: store.attachments,
       blobs: new AttachmentBlobStore({ root: join(directory, "attachments") }),
     });

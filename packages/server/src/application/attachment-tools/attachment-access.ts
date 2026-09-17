@@ -1,9 +1,10 @@
 import type { SessionInputAttachmentRecord, SessionRecord } from "@openharness/protocol";
 import {
   classifyAttachmentCandidate,
-  type AttachmentApplicationService,
   type LocalOcrResult,
 } from "@openharness/services";
+
+import type { AttachmentService } from "../attachments/attachment-service.js";
 
 export interface AttachmentSessionResolverQueries {
   getSession(sessionId: string): SessionRecord | undefined;
@@ -62,7 +63,7 @@ export function createAttachmentAuthorizationSessionResolver(options: {
 
 export function createAttachmentTextReader(options: {
   store: AttachmentSessionReferenceQueries;
-  attachments: AttachmentApplicationService;
+  attachments: AttachmentService;
 }): AttachmentTextReader {
   return {
     async readText(input) {

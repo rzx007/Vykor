@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  AttachmentApplicationService,
   AttachmentBlobStore,
   SessionStore,
 } from "@openharness/services";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { AttachmentService } from "../../attachments/attachment-service.js";
 import { SessionAttachmentResources } from "../session-attachment-resources.js";
 
 const roots: string[] = [];
@@ -34,7 +34,7 @@ async function harness() {
   roots.push(root);
   const store = new SessionStore({ path: join(root, "store.db") });
   stores.push(store);
-  const attachments = new AttachmentApplicationService({
+  const attachments = new AttachmentService({
     store: store.attachments,
     blobs: new AttachmentBlobStore({ root: join(root, "blobs") }),
     id: () => "att_text",

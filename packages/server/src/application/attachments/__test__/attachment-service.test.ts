@@ -11,9 +11,9 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SessionStore } from "../../session-runtime/store.js";
-import { AttachmentApplicationService } from "../attachment-application-service.js";
-import { AttachmentBlobStore } from "../attachment-blob-store.js";
+import { AttachmentBlobStore, SessionStore } from "@openharness/services";
+
+import { AttachmentService } from "../attachment-service.js";
 
 const roots: string[] = [];
 
@@ -44,7 +44,7 @@ function createHarness(options: {
 } = {}): {
   root: string;
   store: SessionStore;
-  service: AttachmentApplicationService;
+  service: AttachmentService;
 } {
   const root = mkdtempSync(join(tmpdir(), "ohs-attachment-service-"));
   roots.push(root);
@@ -52,7 +52,7 @@ function createHarness(options: {
   const ids = [...(options.ids ?? ["att_test"])];
   const now = () => options.now ?? 1_000;
   const blobs = new AttachmentBlobStore({ root: join(root, "attachments"), now });
-  const service = new AttachmentApplicationService({
+  const service = new AttachmentService({
     store: store.attachments,
     blobs,
     now,
@@ -76,7 +76,7 @@ function createHarness(options: {
   return { root, store, service };
 }
 
-describe("AttachmentApplicationService", () => {
+describe("AttachmentService", () => {
   it.each([
     ["utf-8", Uint8Array.from(new TextEncoder().encode("你好\r\n世界")), "你好\n世界"],
     ["utf-8 BOM", Uint8Array.from([0xef, 0xbb, 0xbf, 0x68, 0x69]), "hi"],
