@@ -1,5 +1,7 @@
 # Stage 8A：持久删除台账与不可绕过门禁
 
+> **历史计划，已被取代。** 当前依据是 [clean-slate 设计](../specs/2026-09-16-clean-slate-compatibility-removal-design.md) 与 [clean-slate 总计划](./2026-09-16-clean-slate-compatibility-removal.md)。以下正文仅保留决策历史，不再作为发行或删除门禁。
+
 **目标：** 修复首轮审查的 Critical，使 118 个旧名称在删除 contract 条目后仍可审计、仍被永久禁止复活。
 
 ## 任务 1：先固定失败用例

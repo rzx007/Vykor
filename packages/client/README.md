@@ -17,7 +17,7 @@ ohs serve / daemon
 
 | 模块 | 作用 |
 |------|------|
-| `client.ts` | `OpenHarnessClient`：包装 server REST + `/events/stream` SSE |
+| `transport/http-client.ts` | `OpenHarnessClient`：只组装当前领域 Resource |
 | `reducer.ts` | `applySessionSnapshot` / `applyEvent`：快照水合后归并实时事件 |
 | `selectors.ts` | `selectSessionMessagesWithParts` / `selectFirstPendingPermission` 等纯函数读视图 |
 | `sync.ts` | `syncEvents`：会话先读取原子 snapshot，再从 snapshot cursor 接 SSE live |
@@ -58,7 +58,7 @@ const client = new OpenHarnessClient({
 });
 
 await client.protocol.health();
-const session = await client.sessions.create({ cwd: process.cwd() });
+const session = await client.sessions.create({ cwd: process.cwd(), model: "gpt-5" });
 await client.sessions.admitPrompt(session.id, {
   id: "prompt-1",
   items: [{ type: "text", text: "hello" }],
@@ -102,6 +102,8 @@ for await (const update of syncEvents(client, { sessionId: session.id })) {
 
 - **长期入口：** `protocol` 和各命名 Resource，是业务调用的默认选择。
 - **高级入口：** Resource class 与 state/sync 工具。底层 transport 由 Client 内部持有，不作为实例 API 暴露。
+
+Client 在首次业务请求前读取 `/capabilities`，要求服务端精确使用协议版本 4；握手成功后，业务请求都携带 `x-openharness-protocol-version: 4`。`/health` 和 `/capabilities` 是仅有的握手例外。
 
 ## 相关文档
 

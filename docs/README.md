@@ -61,6 +61,7 @@
 | 一个数据目录只有一个活动 Application Owner | [Operations and Recovery：Application Owner](./operations-and-recovery.md#application-owner) |
 | 客户端与服务端必须使用完全相同的协议版本 | [Protocol Contract](./protocol-contract.md) |
 | 清理、备份和恢复不能留下半完成状态 | [Operations and Recovery](./operations-and-recovery.md) |
+| 开发数据重置必须先解析最终路径并逐项授权 | [OpenHarness 开发数据重置手册](./development-data-reset.md) |
 
 三条一级保证的入口：
 

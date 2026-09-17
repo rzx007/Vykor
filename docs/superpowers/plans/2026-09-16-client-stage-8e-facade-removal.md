@@ -1,5 +1,7 @@
 # Stage 8E：物理删除 118 个平铺 facade
 
+> **历史计划，已被取代。** 当前依据是 [clean-slate 设计](../specs/2026-09-16-clean-slate-compatibility-removal-design.md) 与 [clean-slate 总计划](./2026-09-16-clean-slate-compatibility-removal.md)。以下正文仅保留决策历史，不再作为发行或删除门禁。
+
 **目标：** 消费 8D 的删除授权，一次删除兼容门面，并保留永久 tombstone。
 
 ## 任务 1：删除前断言

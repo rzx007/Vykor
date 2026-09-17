@@ -1,5 +1,7 @@
 # Stage 8B：可验证的 A/B/C 发布流水线
 
+> **历史计划，已被取代。** 当前依据是 [clean-slate 设计](../specs/2026-09-16-clean-slate-compatibility-removal-design.md) 与 [clean-slate 总计划](./2026-09-16-clean-slate-compatibility-removal.md)。以下正文仅保留决策历史，不再作为发行或删除门禁。
+
 **目标：** 让实际发布流程产生门禁可验证的证据，并避免失败构建留下“看似有效”的正式发布。
 
 ## 任务 1：发布阶段输入

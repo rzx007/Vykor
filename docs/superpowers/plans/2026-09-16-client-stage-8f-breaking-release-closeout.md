@@ -1,5 +1,7 @@
 # Stage 8F：发行 C——Major Breaking Release 与收口
 
+> **历史计划，已被取代。** 当前依据是 [clean-slate 设计](../specs/2026-09-16-clean-slate-compatibility-removal-design.md) 与 [clean-slate 总计划](./2026-09-16-clean-slate-compatibility-removal.md)。以下正文仅保留决策历史，不再作为发行或删除门禁。
+
 **目标：** 发布实际移除 facade 的 major 版本，验证外部产物并结束重构。
 
 ## 发布前

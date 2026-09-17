@@ -1,5 +1,7 @@
 # Stage 8D：发行 B——完整保留周期与删除授权
 
+> **历史计划，已被取代。** 当前依据是 [clean-slate 设计](../specs/2026-09-16-clean-slate-compatibility-removal-design.md) 与 [clean-slate 总计划](./2026-09-16-clean-slate-compatibility-removal.md)。以下正文仅保留决策历史，不再作为发行或删除门禁。
+
 **目标：** 在 A 之后发布一个仍完整保留兼容层的稳定版本，并生成 major 删除授权。
 
 ## 发布前

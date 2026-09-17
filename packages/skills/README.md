@@ -56,6 +56,8 @@ directory above. The bundled `create-skill` skill documents those paths for the
 model; invoke it with `/create-skill` or the `Skill` tool. Do not write new
 skills to `.agents/skills` unless the user asks for that layout.
 
+Only these current directories are scanned. Other tool-specific skill directories are not OpenHarness project sources.
+
 Registration is last-writer-wins, so the effective priority is:
 
 ```text

@@ -4,6 +4,8 @@ OpenHarness Native Plugin 的校验、组件加载、安装状态、版本 cache
 
 Runtime 只接受插件根目录中的 `.openharness-plugin/plugin.json`。Claude Code、Codex 等外部格式不在本包解析，必须先由 `@openharness/plugin-converters` 转为 Native Plugin。
 
+当前 manifest 是严格的 Native v1 schema，只接受当前字段。安装 scope 只有 `user` 与 `managed`：用户可以管理 `user` 插件；`managed` 插件不可由普通安装、覆盖或卸载流程修改。旧记录和旧 manifest 字段不会被读取或转换。
+
 当前 Native v1 可加载 Skills、Agents、Hooks、MCP 和 Node Tool。Tool 模块只会在独立子进程中加载；插件元数据加载阶段不会 import 第三方代码。Wasm Tool 目前只校验和提示，不会激活。
 
 Node Tool 入口必须导出 `registerTools(context)`，并返回 Tool 定义数组。每个定义包含 `name`、`description`、`inputSchema` 和 `invoke(input, context)`；`invoke` 返回标准的 `{ content: [...] }` Tool 结果。一个插件版本共用一个 Tool Host 子进程，Agent Runtime 关闭或 Host 崩溃时会注销该插件注册的全部 Tool。

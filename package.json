@@ -15,13 +15,15 @@
     "check-types": "turbo check-types",
     "check-docs": "node scripts/check-docs.mjs",
     "check:client-api": "tsc -p tests/client-public-api/tsconfig.json && node --test scripts/forbidden-compatibility-surfaces.test.mjs scripts/architecture-boundaries.test.mjs && pnpm --filter @openharness/client exec vitest run src/__test__/public-api.test.ts",
-    "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs",
+    "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs && pnpm check:clean-slate",
+    "check:clean-slate": "node scripts/verify-clean-slate.mjs",
     "test": "turbo test && pnpm test:scripts",
     "test:client-browser": "vite build --config tests/browser-client/vite.config.ts",
     "clean": "turbo clean",
     "release:cli": "node scripts/npm-release.mjs",
     "release:cli:dry": "node scripts/npm-release.mjs --dry-run",
     "test:scripts": "node --test scripts/prepare-tag-release.test.mjs scripts/npm-release.test.mjs scripts/release-safety.test.mjs scripts/forbidden-compatibility-surfaces.test.mjs",
+    "test:clean-slate": "node --test scripts/verify-clean-slate.test.mjs scripts/clean-slate-smoke.test.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
