@@ -640,7 +640,7 @@ describe("OpenHarnessHttpServer", () => {
       resumableThresholdBytes: 512,
     };
     const interruptedStore = new SessionStore({ path: storePath });
-    interruptedStore.createImportingAttachment({
+    interruptedStore.attachments.createImportingAttachment({
       id: "att_interrupted",
       displayName: "interrupted.bin",
       stagingName: "att_interrupted.part",
@@ -1423,7 +1423,7 @@ describe("OpenHarnessHttpServer", () => {
               "completed",
         );
         const child = server.store
-          .listSessions({ includeArchived: true })
+          .sessions.list({ includeArchived: true })
           .find((session) => session.parentId === "parent");
         expect(child).toMatchObject({ model: "m", parentId: "parent" });
         const task = server.store.listSessionTasks("parent")[0];
@@ -2084,7 +2084,7 @@ describe("OpenHarnessHttpServer", () => {
         );
         expect(
           server.store
-            .listEvents({ sessionId: "s1" })
+            .conversations.listEvents({ sessionId: "s1" })
             .filter((event) => event.type === "session.run.recovery_requested"),
         ).toHaveLength(1);
 
@@ -2422,12 +2422,12 @@ describe("OpenHarnessHttpServer", () => {
         });
         expect(
           second.store
-            .listChildSessions(parent.id)
+            .sessions.listChildren(parent.id)
             .map((session) => session.id),
         ).toEqual([child.id]);
         expect(
           second.store
-            .listEvents({ sessionId: parent.id })
+            .conversations.listEvents({ sessionId: parent.id })
             .find((event) => event.type === "workflow.workflow_cancelled"),
         ).toMatchObject({ payload: { event: { runId: daemonRunId } } });
       } finally {

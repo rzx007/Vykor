@@ -7,28 +7,28 @@ function projectorStore(flat: Record<string, any>) {
   return {
     ...flat,
     sessions: {
-      get: flat.getSession,
-      create: flat.createSession,
-      archive: flat.archiveSession,
+      get: flat.getSession ?? vi.fn(),
+      create: flat.createSession ?? vi.fn(),
+      archive: flat.archiveSession ?? vi.fn(),
     },
     conversations: {
-      getInput: flat.getInput,
-      createMessage: flat.createMessage,
-      upsertMessagePart: flat.upsertMessagePart,
-      appendEvent: flat.appendEvent,
-      listEvents: flat.listEvents,
+      getInput: flat.getInput ?? vi.fn(),
+      createMessage: flat.createMessage ?? vi.fn(),
+      upsertMessagePart: flat.upsertMessagePart ?? vi.fn(),
+      appendEvent: flat.appendEvent ?? vi.fn(),
+      listEvents: flat.listEvents ?? vi.fn(() => []),
     },
     conversationTransactions: {
-      admitPrompt: flat.admitPrompt,
-      settleActiveRunAttempts: flat.settleActiveRunAttempts,
+      admitPrompt: flat.admitPrompt ?? vi.fn(),
+      settleActiveRunAttempts: flat.settleActiveRunAttempts ?? vi.fn(),
     },
     runs: {
-      getRun: flat.getRun,
-      createRun: flat.createRun,
-      updateRun: flat.updateRun,
-      createRunAttempt: flat.createRunAttempt,
-      updateRunAttempt: flat.updateRunAttempt,
-      listRunAttempts: flat.listRunAttempts,
+      getRun: flat.getRun ?? vi.fn(),
+      createRun: flat.createRun ?? vi.fn(),
+      updateRun: flat.updateRun ?? vi.fn(),
+      createRunAttempt: flat.createRunAttempt ?? vi.fn(),
+      updateRunAttempt: flat.updateRunAttempt ?? vi.fn(),
+      listRunAttempts: flat.listRunAttempts ?? vi.fn(() => []),
     },
   } as any;
 }
@@ -350,7 +350,7 @@ describe("DaemonAgentEventProjector", () => {
     };
     const projector = new DaemonAgentEventProjector({
       rootAgent,
-      store: store as any,
+      store: projectorStore(store),
       transcriptProjection: transcript as any,
       executionProjector: { createBridge: vi.fn(() => bridge) } as any,
       liveChildren,
@@ -552,7 +552,7 @@ describe("DaemonAgentEventProjector", () => {
     };
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: store as any,
+      store: projectorStore(store),
       transcriptProjection: {} as any,
       executionProjector: { createBridge: vi.fn(() => bridge) } as any,
       liveChildren,
@@ -605,7 +605,7 @@ describe("DaemonAgentEventProjector", () => {
     };
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: store as any,
+      store: projectorStore(store),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,
@@ -654,7 +654,7 @@ describe("DaemonAgentEventProjector", () => {
     };
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: store as any,
+      store: projectorStore(store),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,
@@ -709,7 +709,7 @@ describe("DaemonAgentEventProjector", () => {
     };
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: store as any,
+      store: projectorStore(store),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,
@@ -756,7 +756,7 @@ describe("DaemonAgentEventProjector", () => {
     };
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: store as any,
+      store: projectorStore(store),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,
@@ -872,7 +872,7 @@ describe("DaemonAgentEventProjector", () => {
       projectorId: "daemon-agent:agent-1",
       rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: store as any,
+      store: projectorStore(store),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: liveChildren as any,

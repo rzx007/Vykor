@@ -531,17 +531,6 @@ describe("DaemonApplication", () => {
       timing: { totalMs: 1 },
       modelProfile: "small",
     });
-    const legacyCalls = [
-      "createImportingAttachment", "markAttachmentReady",
-      "listImportingAttachments", "findCompletedAttachmentRepresentation",
-      "createAttachmentRepresentation", "completeAttachmentRepresentation",
-      "failAttachmentRepresentation",
-    ] as const;
-    for (const method of legacyCalls) {
-      vi.spyOn(store, method).mockImplementation(() => {
-        throw new Error(`legacy attachment entry: ${method}`);
-      });
-    }
     let imageToText: ToolDefinition | undefined;
     const application = new DaemonApplication({
       store,
@@ -567,10 +556,6 @@ describe("DaemonApplication", () => {
         content: new Blob([png]).stream(),
       });
       store.conversationTransactions.admitPrompt({ sessionId: session.id, content: "", attachments: [{ assetId: asset.id }] });
-      // Admission still owns its internal compatibility lookup; block it after setup.
-      const legacyGet = vi.spyOn(store, "getAttachment").mockImplementation(() => {
-        throw new Error("legacy attachment entry: getAttachment");
-      });
       const first = await imageToText!.execute({ attachment_id: asset.id }, { cwd: dir, sessionId: session.id });
       const cached = await imageToText!.execute({ attachment_id: asset.id }, { cwd: dir, sessionId: session.id });
       expect(first.isError).not.toBe(true);
@@ -581,8 +566,6 @@ describe("DaemonApplication", () => {
       expect(store.attachments.listAttachmentRepresentations(asset.id)).toMatchObject([
         { status: "completed", text: "invoice 123" },
       ]);
-      for (const method of legacyCalls) expect(store[method]).not.toHaveBeenCalled();
-      expect(legacyGet).not.toHaveBeenCalled();
     } finally {
       await application.close();
       store.close();

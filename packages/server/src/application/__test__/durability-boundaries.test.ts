@@ -31,7 +31,10 @@ import { SessionWorkflowRunRepository } from "../workflow/session-workflow-run-r
 function workflowRepository(store: SessionStore): SessionWorkflowRunRepository {
   return new SessionWorkflowRunRepository({
     workflows: store.workflows,
-    events: store,
+    events: {
+      latestEventSeq: () => store.conversations.latestEventSeq(),
+      appendEvent: (input) => store.conversations.appendEvent(input),
+    },
     path: store.path,
   });
 }
@@ -50,44 +53,47 @@ describe("durable application long-running boundaries", () => {
     const path = join(dir, "sessions.db");
     const first = new SessionStore({ path });
     const second = new SessionStore({ path });
-    const firstLease = first.acquireApplicationOwner({
-      ownerId: "first",
-      pid: 1,
-      staleAfterMs: 100,
-      now: 1_000,
-    });
-    first.createSession({ id: "owned-session", cwd: dir, model: "test" });
+    try {
+      const firstLease = first.acquireApplicationOwner({
+        ownerId: "first",
+        pid: 1,
+        staleAfterMs: 100,
+        now: 1_000,
+      });
+      first.sessions.create({ id: "owned-session", cwd: dir, model: "test" });
 
-    expect(() =>
-      second.acquireApplicationOwner({
+      expect(() =>
+        second.acquireApplicationOwner({
+          ownerId: "second",
+          pid: 2,
+          staleAfterMs: 100,
+          now: 1_050,
+        }),
+      ).toThrow(ApplicationOwnerConflictError);
+
+      const secondLease = second.acquireApplicationOwner({
         ownerId: "second",
         pid: 2,
         staleAfterMs: 100,
-        now: 1_050,
-      }),
-    ).toThrow(ApplicationOwnerConflictError);
-
-    const secondLease = second.acquireApplicationOwner({
-      ownerId: "second",
-      pid: 2,
-      staleAfterMs: 100,
-      now: 1_101,
-    });
-    expect(secondLease.generation).toBe(firstLease.generation + 1);
-    expect(() => first.createSession({ cwd: dir, model: "test" })).toThrow(
-      ApplicationOwnerConflictError,
-    );
-    expect(() =>
-      first.channels.upsertConversation({
-        connector: "test",
-        accountId: "account",
-        chatId: "chat",
-        sessionId: "owned-session",
-      }),
-    ).toThrow(ApplicationOwnerConflictError);
-    second.releaseApplicationOwner(secondLease);
-    first.close();
-    second.close();
+        now: 1_101,
+      });
+      expect(secondLease.generation).toBe(firstLease.generation + 1);
+      expect(() => first.sessions.create({ cwd: dir, model: "test" })).toThrow(
+        ApplicationOwnerConflictError,
+      );
+      expect(() =>
+        first.channels.upsertConversation({
+          connector: "test",
+          accountId: "account",
+          chatId: "chat",
+          sessionId: "owned-session",
+        }),
+      ).toThrow(ApplicationOwnerConflictError);
+      second.releaseApplicationOwner(secondLease);
+    } finally {
+      first.close();
+      second.close();
+    }
   });
 
   it("immediately takes over a fresh lease when its owner process is confirmed dead", () => {
@@ -95,28 +101,31 @@ describe("durable application long-running boundaries", () => {
     const path = join(dir, "sessions.db");
     const first = new SessionStore({ path });
     const second = new SessionStore({ path });
-    const firstLease = first.acquireApplicationOwner({
-      ownerId: "stopped-dev-daemon",
-      pid: 12_345,
-      staleAfterMs: 30_000,
-      now: 1_000,
-    });
+    try {
+      const firstLease = first.acquireApplicationOwner({
+        ownerId: "stopped-dev-daemon",
+        pid: 12_345,
+        staleAfterMs: 30_000,
+        now: 1_000,
+      });
 
-    const secondLease = second.acquireApplicationOwner({
-      ownerId: "restarted-dev-daemon",
-      pid: 67_890,
-      staleAfterMs: 30_000,
-      now: 1_001,
-      canTakeOver: (current) => current.pid === 12_345,
-    });
+      const secondLease = second.acquireApplicationOwner({
+        ownerId: "restarted-dev-daemon",
+        pid: 67_890,
+        staleAfterMs: 30_000,
+        now: 1_001,
+        canTakeOver: (current) => current.pid === 12_345,
+      });
 
-    expect(secondLease.generation).toBe(firstLease.generation + 1);
-    expect(() => first.createSession({ cwd: dir, model: "test" })).toThrow(
-      ApplicationOwnerConflictError,
-    );
-    second.releaseApplicationOwner(secondLease);
-    first.close();
-    second.close();
+      expect(secondLease.generation).toBe(firstLease.generation + 1);
+      expect(() => first.sessions.create({ cwd: dir, model: "test" })).toThrow(
+        ApplicationOwnerConflictError,
+      );
+      second.releaseApplicationOwner(secondLease);
+    } finally {
+      first.close();
+      second.close();
+    }
   });
 
   it("stores Workflow facts directly in SQLite", () => {
@@ -231,7 +240,7 @@ describe("durable application long-running boundaries", () => {
       readdirSync(dir).some((name) => name.includes(".restore-")),
     ).toBe(false);
     const restored = new SessionStore({ path: restoredPath });
-    expect(restored.getSession("session-1")).toBeDefined();
+    expect(restored.sessions.get("session-1")).toBeDefined();
     expect(existsSync(join(
       restoredAttachments,
       "blobs",

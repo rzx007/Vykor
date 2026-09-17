@@ -15,8 +15,8 @@ describe("projection settlement recovery", () => {
   it("completes a child terminal projection after a daemon restart and is idempotent", () => {
     withStorePath((path) => {
       const first = new SessionStore({ path });
-      first.createSession({ id: "parent", cwd: process.cwd(), model: "m" });
-      first.createSession({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
+      first.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      first.sessions.create({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
       first.createSessionTask({
         id: "child-1",
         sessionId: "parent",
@@ -40,35 +40,38 @@ describe("projection settlement recovery", () => {
       first.close();
 
       const restarted = new SessionStore({ path });
-      expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 1, pending: 0 });
-      expect(restarted.getSessionTask("child-1")).toMatchObject({
-        status: "completed",
-        output: "done",
-      });
-      expect(restarted.listProjectionSettlements()).toMatchObject([{
-        status: "resolved",
-        attemptCount: 1,
-      }]);
-      expect(restarted.listEvents().filter(
-        (event) => event.type === "agent.child.closed" && event.payload.frameworkEventId === closed.id,
-      )).toHaveLength(1);
+      try {
+        expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 1, pending: 0 });
+        expect(restarted.getSessionTask("child-1")).toMatchObject({
+          status: "completed",
+          output: "done",
+        });
+        expect(restarted.listProjectionSettlements()).toMatchObject([{
+          status: "resolved",
+          attemptCount: 1,
+        }]);
+        expect(restarted.conversations.listEvents().filter(
+          (event) => event.type === "agent.child.closed" && event.payload.frameworkEventId === closed.id,
+        )).toHaveLength(1);
 
-      expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 0, pending: 0 });
-      expect(restarted.listEvents().filter(
-        (event) => event.type === "agent.child.closed" && event.payload.frameworkEventId === closed.id,
-      )).toHaveLength(1);
-      restarted.close();
+        expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 0, pending: 0 });
+        expect(restarted.conversations.listEvents().filter(
+          (event) => event.type === "agent.child.closed" && event.payload.frameworkEventId === closed.id,
+        )).toHaveLength(1);
+      } finally {
+        restarted.close();
+      }
     });
   });
 
   it("uses durable compensation for live-only child creation after restart", () => {
     withStorePath((path) => {
       const first = new SessionStore({ path });
-      first.createSession({ id: "parent", cwd: process.cwd(), model: "m" });
-      first.createSession({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
-      const input = first.admitPrompt({ id: "input-1", sessionId: "parent", content: "spawn" });
-      const run = first.createRun({ id: "run-1", sessionId: "parent", inputId: input.id });
-      first.updateRun(run.id, { status: "running" });
+      first.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      first.sessions.create({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
+      const input = first.conversationTransactions.admitPrompt({ id: "input-1", sessionId: "parent", content: "spawn" });
+      const run = first.runs.createRun({ id: "run-1", sessionId: "parent", inputId: input.id });
+      first.runs.updateRun(run.id, { status: "running" });
       first.createSessionTask({
         id: "child-1",
         sessionId: "parent",
@@ -93,17 +96,20 @@ describe("projection settlement recovery", () => {
       first.close();
 
       const restarted = new SessionStore({ path });
-      expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 1, pending: 0 });
-      expect(restarted.getRun(run.id)).toMatchObject({
-        status: "failed",
-        error: "live route registration failed",
-      });
-      expect(restarted.getSessionTask("child-1")).toMatchObject({
-        status: "failed",
-        error: "live route registration failed",
-      });
-      expect(restarted.getSession("child-session")?.status).toBe("archived");
-      restarted.close();
+      try {
+        expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 1, pending: 0 });
+        expect(restarted.runs.getRun(run.id)).toMatchObject({
+          status: "failed",
+          error: "live route registration failed",
+        });
+        expect(restarted.getSessionTask("child-1")).toMatchObject({
+          status: "failed",
+          error: "live route registration failed",
+        });
+        expect(restarted.sessions.get("child-session")?.status).toBe("archived");
+      } finally {
+        restarted.close();
+      }
     });
   });
 

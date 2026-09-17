@@ -418,26 +418,42 @@ function createStore(options: {
   items?: Array<{ type: "text"; text: string } | { type: "skill"; name: string; path: string }>;
 } = {}) {
   const run = { id: "run-1", sessionId: "s1", inputId: "input-1", status: "pending" };
+  const getSession = vi.fn(() => ({
+    id: "s1",
+    cwd: "/repo",
+    model: "gpt-test",
+    metadata: { runtime: { model: "gpt-test" } },
+  }));
+  const getInput = vi.fn(() => ({
+    id: "input-1",
+    sessionId: "s1",
+    content: "hello",
+    items: options.items ?? [{ type: "text", text: "hello" }],
+    attachments: options.attachments ?? [],
+    delivery: "queue",
+    metadata: options.metadata ?? { requestedBy: "test", traceId: "trace-1" },
+  }));
+  const getRun = vi.fn(() => run);
+  const appendEvent = vi.fn();
+  const updateRun = vi.fn((id, update) => Object.assign(run, update, { id }));
   return {
     transaction: <T>(work: () => T) => work(),
-    getSession: vi.fn(() => ({
-      id: "s1",
-      cwd: "/repo",
-      model: "gpt-test",
-      metadata: { runtime: { model: "gpt-test" } },
-    })),
-    getInput: vi.fn(() => ({
-      id: "input-1",
-      sessionId: "s1",
-      content: "hello",
-      items: options.items ?? [{ type: "text", text: "hello" }],
-      attachments: options.attachments ?? [],
-      delivery: "queue",
-      metadata: options.metadata ?? { requestedBy: "test", traceId: "trace-1" },
-    })),
-    getRun: vi.fn(() => run),
-    appendEvent: vi.fn(),
-    updateRun: vi.fn((id, update) => Object.assign(run, update, { id })),
+    getSession,
+    getInput,
+    getRun,
+    appendEvent,
+    updateRun,
+    sessions: { get: getSession },
+    conversations: {
+      getInput,
+      listMessages: vi.fn(() => []),
+      listMessageParts: vi.fn(() => []),
+      appendEvent,
+    },
+    conversationTransactions: {
+      settleActiveRunAttempts: vi.fn(),
+    },
+    runs: { getRun, updateRun },
     attachments: {
       acquireAttachmentLeases: vi.fn(() => []),
       renewAttachmentLeases: vi.fn(() => 1),

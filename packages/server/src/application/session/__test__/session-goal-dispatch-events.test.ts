@@ -21,8 +21,8 @@ describe("SessionGoalService dispatch event boundary", () => {
         cwd: process.cwd(),
         model: "test-model",
       });
-      const eventService = new ApplicationEventService(store);
-      const publisher = new SessionEventPublisher(store, eventService);
+      const eventService = new ApplicationEventService(store.conversations);
+      const publisher = new SessionEventPublisher(store.conversations, eventService);
       const operationRunner = new SessionOperationRunner({
         sessions: store.sessions,
         operationGate: new DaemonOperationGate(),

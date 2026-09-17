@@ -16,10 +16,10 @@ describe("ScheduledTaskExecutor", () => {
     const executor = new ScheduledTaskExecutor({
       outsideProjectWorkspaceRoot: root,
       settings: { model: "test" } as any,
-      sessions: {
-        getSession: vi.fn(), createSession,
-        admitPrompt, awaitRun: vi.fn(async () => ({ status: "completed", output: "done" })),
-      } as any,
+      sessionQueries: { getSession: vi.fn() },
+      sessionCommands: { createSession },
+      sessionInteractions: { admitPrompt },
+      runControl: { awaitRun: vi.fn(async () => ({ status: "completed", output: "done" })) },
     });
     const task = {
       id: "task-1", name: "Daily", prompt: "work", projectPaths: [], destination: "standalone",
@@ -37,7 +37,10 @@ describe("ScheduledTaskExecutor", () => {
     const workspace = join(directory, "allocated");
     cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
     const executor = new ScheduledTaskExecutor({
-      sessions: {} as any,
+      sessionQueries: {} as any,
+      sessionCommands: {} as any,
+      sessionInteractions: {} as any,
+      runControl: {} as any,
       allocateWorkspace: async () => { mkdirSync(workspace); return workspace; },
     });
     await expect(executor.execute({
@@ -61,10 +64,10 @@ describe("ScheduledTaskExecutor", () => {
     const executor = new ScheduledTaskExecutor({
       settings: { model: "test" } as any,
       createWorktreeManager: (() => manager) as any,
-      sessions: {
-        getSession: vi.fn(), createSession: vi.fn(() => ({ id: "s1" })),
-        admitPrompt: vi.fn(async () => { throw new Error("execution failed"); }), awaitRun: vi.fn(),
-      } as any,
+      sessionQueries: { getSession: vi.fn() },
+      sessionCommands: { createSession: vi.fn(() => ({ id: "s1" })) } as any,
+      sessionInteractions: { admitPrompt: vi.fn(async () => { throw new Error("execution failed"); }) },
+      runControl: { awaitRun: vi.fn() },
     });
     await expect(executor.execute({
       id: "task-1", name: "Task", prompt: "work", projectPaths: ["D:/repo"], destination: "standalone",

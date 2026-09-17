@@ -106,7 +106,14 @@ function harness(
       }),
     }),
   });
-  return { store, engine, service, disablePlugins: () => { pluginsAvailable = false; } };
+  return {
+    store,
+    engine: runServices.engine,
+    control: runServices.control,
+    admission: runServices.admission,
+    service,
+    disablePlugins: () => { pluginsAvailable = false; },
+  };
 }
 
 function assessment(store: SessionStore, runId: string, value: Record<string, unknown>, status: "completed" | "failed" = "completed") {
@@ -137,17 +144,17 @@ function assessment(store: SessionStore, runId: string, value: Record<string, un
 
 describe("SessionGoalService durable lifecycle", () => {
   it.each(["create", "update"] as const)("replays accepted %s after its plugin becomes unavailable", async (operation) => {
-    const { service, store, engine, disablePlugins } = harness();
+    const { service, store, control, admission, disablePlugins } = harness();
     const original = operation === "update"
       ? await service.create("s1", { requestId: "original", objective: "original" }) : undefined;
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const input = { requestId: "accepted-plugin", objective: "review", items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] };
     const revision = original ? store.goals.getGoal(original.id)!.revision : 0;
     const request = (objective = input.objective) => original
       ? service.update("s1", original.id, { ...input, objective, expectedRevision: revision })
       : service.create("s1", { ...input, objective });
     const accepted = await request();
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const runs = store.runs.listRuns("s1");
     disablePlugins();
     await expect(request()).resolves.toEqual(accepted);
@@ -156,40 +163,40 @@ describe("SessionGoalService durable lifecycle", () => {
   });
 
   it.each(["create", "update"] as const)("recovers persisted %s dispatch without readmitting its unavailable plugin", async (operation) => {
-    const { service, store, engine, disablePlugins } = harness();
+    const { service, store, control, admission, disablePlugins } = harness();
     const original = operation === "update"
       ? await service.create("s1", { requestId: "original", objective: "original" }) : undefined;
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const input = { requestId: "recover-plugin", objective: "review", items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] };
     const revision = original ? store.goals.getGoal(original.id)!.revision : 0;
     const request = () => original
       ? service.update("s1", original.id, { ...input, expectedRevision: revision })
       : service.create("s1", input);
-    vi.spyOn(engine, "dispatchPersistedRun").mockImplementationOnce(() => { throw new Error("dispatch failed"); });
+    vi.spyOn(admission, "dispatchPersistedRun").mockImplementationOnce(() => { throw new Error("dispatch failed"); });
     await expect(request()).rejects.toThrow("dispatch failed");
     const persisted = store.runs.findRunByInput(input.requestId)!;
     const count = store.runs.listRuns("s1").length;
     disablePlugins();
     await expect(request()).resolves.toMatchObject({ pluginId });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.runs.listRuns("s1")).toHaveLength(count);
     expect(store.runs.findRunByInput(input.requestId)).toMatchObject({ id: persisted.id, status: "completed", metadata: { pluginId } });
     expect(store.goals.getGoalRequest(input.requestId)?.status).toBe("completed");
   });
 
   it("retains the admitted replacement plugin when an edit resumes after stopping failed", async () => {
-    const { service, store, engine, disablePlugins } = harness();
+    const { service, store, control, admission, disablePlugins } = harness();
     const original = await service.create("s1", { requestId: "original", objective: "original" });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const input = {
       requestId: "recover-stopping", expectedRevision: store.goals.getGoal(original.id)!.revision, objective: "research",
       items: [{ type: "capability" as const, kind: "plugin" as const, pluginId: "dev.openharness.research", displayName: "Research" }],
     };
-    vi.spyOn(engine, "waitForRuns").mockRejectedValueOnce(new Error("stop failed"));
+    vi.spyOn(control, "waitForRuns").mockRejectedValueOnce(new Error("stop failed"));
     await expect(service.update("s1", original.id, input)).rejects.toThrow("stop failed");
     disablePlugins();
     await expect(service.update("s1", original.id, input)).resolves.toMatchObject({ pluginId: "dev.openharness.research" });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.runs.findRunByInput(input.requestId)?.metadata.pluginId).toBe("dev.openharness.research");
     expect(store.runs.listRuns("s1")).toHaveLength(2);
   });
@@ -259,12 +266,12 @@ describe("SessionGoalService durable lifecycle", () => {
   });
 
   it("rejects an unavailable plugin Agent before updating a Goal", async () => {
-    const { service, store, engine } = harness();
+    const { service, store, control, admission } = harness();
     const created = await service.create("s1", {
       requestId: "ordinary-goal-create",
       objective: "ordinary goal",
     });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const beforeUpdate = store.goals.getGoal(created.id)!;
 
     await expect(service.update("s1", created.id, {
@@ -289,25 +296,25 @@ describe("SessionGoalService durable lifecycle", () => {
   });
 
   it("uses trusted Skill ownership even when its source claims user", async () => {
-    const { service, store, engine } = harness();
+    const { service, store, control, admission } = harness();
 
     const goal = await service.create("s1", {
       requestId: "forged-plugin-skill-create",
       objective: "use plugin skill",
       items: [{ type: "skill", source: "user", ...pluginSkill }],
     });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(goal).toMatchObject({ pluginId });
     expect(store.conversations.getInput("forged-plugin-skill-create")?.metadata.pluginId).toBe(pluginId);
   });
 
   it("changes plugin selection on explicit edit and retains it on text edit and resume", async () => {
-    const { service, store, engine } = harness();
+    const { service, store, control, admission } = harness();
     const created = await service.create("s1", {
       requestId: "ordinary-goal-for-skill-update",
       objective: "ordinary goal",
     });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const beforeUpdate = store.goals.getGoal(created.id)!;
 
     const edited = await service.update("s1", created.id, {
@@ -317,18 +324,18 @@ describe("SessionGoalService durable lifecycle", () => {
       items: [{ type: "skill", ...pluginSkill }],
     });
     expect(edited).toMatchObject({ pluginId });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const textEdited = await service.update("s1", created.id, {
       requestId: "text-edit", expectedRevision: store.goals.getGoal(created.id)!.revision,
       objective: "clarified objective", items: [{ type: "text", text: "clarified" }],
     });
     expect(textEdited).toMatchObject({ pluginId });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const resumed = await service.action("s1", created.id, {
       requestId: "resume-plugin", expectedRevision: store.goals.getGoal(created.id)!.revision,
       action: "resume",
     });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(resumed).toMatchObject({ pluginId });
     for (const id of ["implicit-plugin-skill-update", "text-edit", "resume-plugin"]) {
       expect(store.conversations.getInput(id)?.metadata.pluginId).toBe(pluginId);
@@ -339,7 +346,7 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "research instead",
       items: [{ type: "capability", kind: "plugin", pluginId: "dev.openharness.research", displayName: "Research" }],
     });
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(switched).toMatchObject({ pluginId: "dev.openharness.research" });
     expect(store.runs.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
     await service.action("s1", created.id, {
@@ -356,7 +363,7 @@ describe("SessionGoalService durable lifecycle", () => {
       release = done;
     });
     let activeSignal: AbortSignal | undefined;
-    const { service, store, engine } = harness(async (store, runId, signal) => {
+    const { service, store, control, admission } = harness(async (store, runId, signal) => {
       activeSignal = signal;
       await cleanupGate;
       store.runs.updateRun(runId, {
@@ -381,7 +388,7 @@ describe("SessionGoalService durable lifecycle", () => {
     expect(store.goals.getGoal(created.id)?.currentRunId).toBeDefined();
     release();
     const stopped = await first;
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(stopped.status).toBe("paused");
     expect(stopped.currentRunId).toBeUndefined();
     expect(store.goals.getGoalRequest(command.requestId)?.status).toBe("completed");
@@ -390,7 +397,7 @@ describe("SessionGoalService durable lifecycle", () => {
 
   it.each([false, true])("automatically completes after a verified continuation (plugin=%s)", async (withPlugin) => {
     let turns = 0;
-    const { service, store, engine } = harness(async (store, runId) => {
+    const { service, store, control, admission } = harness(async (store, runId) => {
       const message = store.conversations.createMessage({
         sessionId: "s1",
         role: "assistant",
@@ -431,7 +438,7 @@ describe("SessionGoalService durable lifecycle", () => {
       ...(withPlugin ? { items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] } : {}),
     });
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("completed"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.runs.listRuns("s1")).toHaveLength(2);
     expect(store.goals.getGoal(goal.id)?.autoTurnsUsed).toBe(1);
     expect(store.goals.getGoal(goal.id)?.pluginId).toBe(withPlugin ? pluginId : undefined);
@@ -447,7 +454,7 @@ describe("SessionGoalService durable lifecycle", () => {
       release = done;
     });
     const executed: string[] = [];
-    const { service, store, engine } = harness(async (store, runId) => {
+    const { service, store, control, admission } = harness(async (store, runId) => {
       executed.push(runId);
       if (executed.length === 1) {
         await gate;
@@ -463,13 +470,13 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "继续目标",
     });
     await vi.waitFor(() => expect(executed).toHaveLength(1));
-    const user = await engine.admitPromptAndMaybeRun("s1", {
+    const user = await admission.admitPromptAndMaybeRun("s1", {
       id: "user-priority",
       items: [{ type: "text", text: "先回答这个问题" }],
     });
     release();
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("waiting_user"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(executed).toEqual([store.runs.findRunByInput("priority")!.id, user.run!.id]);
     expect(store.runs.getRun(user.run!.id)?.metadata.goalRunKind).toBe("user");
     expect(store.goals.getGoal(goal.id)?.autoTurnsUsed).toBe(0);
@@ -479,14 +486,14 @@ describe("SessionGoalService durable lifecycle", () => {
   });
 
   it("pauses at the turn budget and rejects approval bypass", async () => {
-    const { service, store, engine } = harness(async (store, runId) => assessment(store, runId, {}));
+    const { service, store, control, admission } = harness(async (store, runId) => assessment(store, runId, {}));
     const goal = await service.create("s1", {
       requestId: "budget",
       objective: "有限续跑",
       maxAutoTurns: 1,
     });
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("paused"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const paused = store.goals.getGoal(goal.id)!;
     expect(paused.autoTurnsUsed).toBe(1);
     await expect(
@@ -534,8 +541,8 @@ describe("SessionGoalService durable lifecycle", () => {
   });
 
   it("replays committed admission after a dispatch failure without creating a second goal, input or run", async () => {
-    const { service, store, engine } = harness();
-    const dispatch = vi.spyOn(engine, "dispatchPersistedRun");
+    const { service, store, control, admission } = harness();
+    const dispatch = vi.spyOn(admission, "dispatchPersistedRun");
     dispatch.mockImplementationOnce(() => {
       throw new Error("dispatch unavailable");
     });
@@ -545,7 +552,7 @@ describe("SessionGoalService durable lifecycle", () => {
     const goalId = store.goals.getCurrentGoal("s1")!.id;
     const goal = await service.create("s1", input);
     expect(goal.id).toBe(goalId);
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.runs.listRuns("s1")).toHaveLength(1);
     expect(store.goals.getGoalRequest(input.requestId)?.status).toBe("completed");
     expect(await service.create("s1", input)).toEqual(goal);
@@ -553,13 +560,13 @@ describe("SessionGoalService durable lifecycle", () => {
   });
 
   it("settles only completed runs, counts automatic turns on start, and blocks after three rounds without real evidence", async () => {
-    const { service, store, engine } = harness(async (store, runId) => assessment(store, runId, { evidence: ["模型说有进展"] }));
+    const { service, store, control, admission } = harness(async (store, runId) => assessment(store, runId, { evidence: ["模型说有进展"] }));
     const goal = await service.create("s1", {
       requestId: "three-rounds",
       objective: "完成并验证",
     });
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("blocked"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.goals.getGoal(goal.id)).toMatchObject({
       autoTurnsUsed: 2,
       noProgressCount: 3,
@@ -574,7 +581,7 @@ describe("SessionGoalService durable lifecycle", () => {
   it("does not block until the same blocker repeats for three goal turns", async () => {
     let turns = 0;
     const blockers = ["missing-a", "missing-b", "missing-b", "missing-b"];
-    const { service, store, engine } = harness(async (store, runId) => {
+    const { service, store, control, admission } = harness(async (store, runId) => {
       const blockerKey = blockers[turns++]!;
       assessment(store, runId, {
         decision: "blocked",
@@ -592,7 +599,7 @@ describe("SessionGoalService durable lifecycle", () => {
       maxAutoTurns: 5,
     });
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("blocked"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.runs.listRuns("s1")).toHaveLength(4);
     expect(store.goals.getGoal(goal.id)).toMatchObject({
       noProgressCount: 3,
@@ -603,7 +610,7 @@ describe("SessionGoalService durable lifecycle", () => {
   it("blocks only after three consecutive identical blockerKey results", async () => {
     let turns = 0;
     const blockers = ["missing-a", "missing-a", "missing-a"];
-    const { service, store, engine } = harness(async (store, runId) => {
+    const { service, store, control, admission } = harness(async (store, runId) => {
       const blockerKey = blockers[turns++]!;
       assessment(store, runId, {
         decision: "blocked",
@@ -621,7 +628,7 @@ describe("SessionGoalService durable lifecycle", () => {
       maxAutoTurns: 5,
     });
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("blocked"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.runs.listRuns("s1")).toHaveLength(3);
     expect(store.goals.getGoal(goal.id)).toMatchObject({
       noProgressCount: 3,
@@ -635,7 +642,7 @@ describe("SessionGoalService durable lifecycle", () => {
     try {
       let check: "running" | "completed" = "running";
       let turns = 0;
-      const { service, store, engine } = harness(
+      const { service, store, control, admission } = harness(
         async (store, runId) => {
           turns += 1;
           if (turns === 1)
@@ -662,7 +669,7 @@ describe("SessionGoalService durable lifecycle", () => {
         requestId: "verified-wait",
         objective: "等待构建后检查",
       });
-      await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+      await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
       expect(store.goals.getGoal(goal.id)).toMatchObject({
         status: "active",
         wait: { kind: "external", handleId: "build-run" },
@@ -670,7 +677,7 @@ describe("SessionGoalService durable lifecycle", () => {
       });
       check = "completed";
       await vi.advanceTimersByTimeAsync(1_000);
-      await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+      await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
       expect(store.goals.getGoal(goal.id)).toMatchObject({
         status: "waiting_user",
         autoTurnsUsed: 1,
@@ -682,7 +689,7 @@ describe("SessionGoalService durable lifecycle", () => {
   });
 
   it("does not complete a failed run even if it submitted complete", async () => {
-    const { service, store, engine } = harness(async (store, runId) => {
+    const { service, store, control, admission } = harness(async (store, runId) => {
       assessment(store, runId, { decision: "complete" }, "failed");
     });
     const goal = await service.create("s1", {
@@ -690,13 +697,13 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "验证目标",
     });
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("paused"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.goals.getGoal(goal.id)?.reason).toBe("verification failed");
   });
 
   it("continues instead of completing while audited work remains", async () => {
     let turns = 0;
-    const { service, store, engine } = harness(async (store, runId) => {
+    const { service, store, control, admission } = harness(async (store, runId) => {
       turns += 1;
       if (turns === 1) {
         assessment(store, runId, {
@@ -724,12 +731,12 @@ describe("SessionGoalService durable lifecycle", () => {
       maxAutoTurns: 1,
     });
     await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("waiting_user"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(store.runs.listRuns("s1")).toHaveLength(2);
   });
 
   it("requires the matching question to confirm subjective completion and replays confirmation once", async () => {
-    const { service, store, engine } = harness(async (store, runId) =>
+    const { service, store, control, admission } = harness(async (store, runId) =>
       assessment(store, runId, {
         decision: "complete",
         requirements: [
@@ -748,7 +755,7 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "让页面更舒服",
     });
     await vi.waitFor(() => expect(store.goals.getGoal(created.id)?.status).toBe("waiting_user"));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const goal = store.goals.getGoal(created.id)!;
     await expect(
       service.action("s1", goal.id, {
@@ -777,7 +784,7 @@ describe("SessionGoalService durable lifecycle", () => {
     });
     let first = true;
     const executed: string[] = [];
-    const { service, store, engine } = harness(async (store, runId, signal) => {
+    const { service, store, control, admission } = harness(async (store, runId, signal) => {
       executed.push(runId);
       if (first) {
         first = false;
@@ -796,7 +803,7 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "旧目标",
     });
     await vi.waitFor(() => expect(executed).toHaveLength(1));
-    const ordinary = await engine.admitPromptAndMaybeRun("s1", {
+    const ordinary = await admission.admitPromptAndMaybeRun("s1", {
       id: "ordinary",
       items: [{ type: "text", text: "普通问题" }],
     });
@@ -812,7 +819,7 @@ describe("SessionGoalService durable lifecycle", () => {
     const updated = await edit;
     expect(updated.objective).toBe("新目标");
     await vi.waitFor(() => expect(store.runs.listRuns("s1").every((run) => run.status !== "pending" && run.status !== "running")).toBe(true));
-    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(executed).toContain(ordinary.run!.id);
     expect(store.runs.getRun(ordinary.run!.id)?.status).toBe("completed");
     expect(

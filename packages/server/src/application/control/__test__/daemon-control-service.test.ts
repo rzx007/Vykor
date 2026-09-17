@@ -15,15 +15,21 @@ function createControl() {
     { id: "s2", status: "archived" },
   ];
   const store = {
-    listSessions: vi.fn(() => sessions),
-    listRuns: vi.fn((sessionId) => sessionId === "s1" ? [{ status: "running" }] : []),
+    sessions: {
+      list: vi.fn(() => sessions),
+      get: vi.fn((sessionId) => sessions.find((session) => session.id === sessionId)),
+    },
+    runs: {
+      listRuns: vi.fn((sessionId) => sessionId === "s1" ? [{ status: "running" }] : []),
+      listRunAttempts: vi.fn(() => []),
+    },
+    conversations: { listMessageParts: vi.fn(() => []) },
     listSessionTasks: vi.fn(() => []),
     permissions: { list: vi.fn(() => [{ status: "pending" }]) },
     listProjectionSettlements: vi.fn(() => [
       { status: "pending" },
       { status: "resolved" },
     ]),
-    getSession: vi.fn((sessionId) => sessions.find((session) => session.id === sessionId)),
   };
   const runEngine = {
     activeRunId: vi.fn((sessionId) => sessionId === "s1" ? "run-1" : undefined),

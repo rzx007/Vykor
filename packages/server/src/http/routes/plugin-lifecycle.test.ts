@@ -16,6 +16,7 @@ import {
 import { createDefaultPluginService } from "../../application/default-services/plugin-service.js";
 import { DaemonOperationGate } from "../../application/control/daemon-operation-gate.js";
 import { createServiceRoutes, type ServiceRoutesContext } from "./service.js";
+import { createSystemRoutes } from "./system.js";
 
 function lifecycleRoutes(fixture: NativePluginFixture) {
   const gate = new DaemonOperationGate();
@@ -38,6 +39,16 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
     async inspectRuntimeHooks() { throw new Error("Hook inspection is outside this lifecycle test"); },
   };
   const app = createServiceRoutes({ pluginService: createDefaultPluginService({ current: settings }), control });
+  app.route("/", createSystemRoutes({
+    control: {
+      acquireGlobalMutation: () => undefined,
+      closeAllRuntimes: async () => {},
+      invalidateRuntimes: async () => {},
+      runtimeSnapshot: () => { throw new Error("Runtime snapshot is outside this lifecycle test"); },
+      inspectRun: () => undefined,
+      listProjectionDiagnostics: () => { throw new Error("Projection diagnostics are outside this lifecycle test"); },
+    },
+  }));
   const requests: Array<{ path: string; method: string }> = [];
   const reloadResponses: ReloadPluginsResponse[] = [];
   const client = new OpenHarnessClient({
