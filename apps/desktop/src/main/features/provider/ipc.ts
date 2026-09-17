@@ -4,6 +4,7 @@ import type {
   ConnectDesktopProviderInput,
   DisconnectDesktopProviderInput,
   CreateDesktopCustomProviderInput,
+  UpdateDesktopCatalogProviderHeadersInput,
   UpdateDesktopCustomProviderInput,
   RemoveDesktopCustomProviderInput,
 } from "../../../shared/provider-types"
@@ -29,6 +30,13 @@ export const providerIpcContribution: IpcContribution = {
         channel: IpcChannels.providerDisconnect,
         handler: (_event, input) =>
           desktopProviderService.disconnect(input as DisconnectDesktopProviderInput),
+      },
+      {
+        channel: IpcChannels.providerCatalogHeadersUpdate,
+        handler: (_event, input) =>
+          desktopProviderService.updateCatalogHeaders(
+            input as UpdateDesktopCatalogProviderHeadersInput
+          ),
       },
       {
         channel: IpcChannels.providerCustomCreate,

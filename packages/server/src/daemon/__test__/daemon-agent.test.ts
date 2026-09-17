@@ -320,6 +320,41 @@ describe("createDaemonAgentLoader", () => {
     );
   });
 
+  it("passes durable SessionRecord.id into runtime options and keeps it stable across reloads", async () => {
+    const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
+    const createAgent = vi.fn(async () => agent);
+    const loader = createDaemonAgentLoader({
+      settings: { model: "default-model" } as any,
+      createAgent,
+    })!;
+
+    await loader({ session, history: [], parts: [] });
+    await loader({ session, history: [], parts: [] });
+
+    expect(createAgent.mock.calls[0]![0].options.sessionId).toBe(session.id);
+    expect(createAgent.mock.calls[1]![0].options.sessionId).toBe(session.id);
+    expect(createAgent.mock.calls[0]![0].options.sessionId).toBe("session-1");
+  });
+
+  it("gives child sessions their own durable session id in runtime options", async () => {
+    const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
+    const createAgent = vi.fn(async () => agent);
+    const loader = createDaemonAgentLoader({
+      settings: { model: "default-model" } as any,
+      createAgent,
+    })!;
+    const childSession = {
+      ...session,
+      id: "session-child-9",
+    };
+
+    await loader({ session, history: [], parts: [] });
+    await loader({ session: childSession, history: [], parts: [] });
+
+    expect(createAgent.mock.calls[0]![0].options.sessionId).toBe("session-1");
+    expect(createAgent.mock.calls[1]![0].options.sessionId).toBe("session-child-9");
+  });
+
   it("closes a newly created Agent when durable history cannot be restored", async () => {
     const error = new Error("bad history");
     const close = vi.fn(async () => {});

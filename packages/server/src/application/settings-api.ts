@@ -48,6 +48,11 @@ export interface CustomProviderInput {
   headers?: Record<string, string>;
 }
 
+export interface ConnectCatalogProviderInput {
+  apiKey: string;
+  headers?: Record<string, string>;
+}
+
 export interface ProviderService {
   list(): Promise<ProviderInfo[]> | ProviderInfo[];
   create?(input: CustomProviderInput): Promise<ProviderInfo> | ProviderInfo;
@@ -58,7 +63,11 @@ export interface ProviderService {
   remove?(id: string): Promise<void> | void;
   connectCatalog?(
     id: string,
-    apiKey: string,
+    input: ConnectCatalogProviderInput,
+  ): Promise<ProviderInfo> | ProviderInfo;
+  updateCatalogHeaders?(
+    id: string,
+    headers: Record<string, string>,
   ): Promise<ProviderInfo> | ProviderInfo;
   disconnectCatalog?(id: string): Promise<void> | void;
 }

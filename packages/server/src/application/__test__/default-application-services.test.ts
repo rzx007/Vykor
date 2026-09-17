@@ -9,6 +9,8 @@ vi.mock("@openharness/services", () => ({
   startDreamNow: vi.fn(),
 }));
 
+import { CredentialStorage } from "@openharness/auth";
+
 import {
   createDefaultAgentPersonaService,
   createDefaultAuthService,
@@ -25,7 +27,6 @@ beforeEach(() => {
   temporaryDirectory = mkdtempSync(join(tmpdir(), "ohs-daemon-services-"));
   process.env.OPENHARNESS_CONFIG_DIR = join(temporaryDirectory, "config");
 });
-
 afterEach(() => {
   delete process.env.OPENHARNESS_CONFIG_DIR;
   vi.unstubAllEnvs();
@@ -498,7 +499,7 @@ describe("default daemon application services", () => {
     expect(available.some((item) => item.name === "bedrock")).toBe(false);
     expect(available.some((item) => item.name === "vertex")).toBe(false);
 
-    await providers.connectCatalog!("remote", "valid-key");
+    await providers.connectCatalog!("remote", { apiKey: "valid-key" });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://remote.example/v1/models",
       expect.objectContaining({
@@ -734,5 +735,526 @@ describe("default daemon application services", () => {
     });
 
     expect(ref.current.model).toBe("next-model");
+  });
+
+  it("persists normalized header templates on first catalog connect", async () => {
+    const catalogPath = join(temporaryDirectory, "models-headers.json");
+    writeFileSync(
+      catalogPath,
+      JSON.stringify({
+        remote: {
+          name: "Remote AI",
+          env: ["REMOTE_API_KEY"],
+          api: "https://remote.example/v1",
+          npm: "@ai-sdk/openai-compatible",
+          models: { "remote-chat": { name: "Remote Chat" } },
+        },
+      }),
+      "utf-8",
+    );
+    vi.stubEnv("OPENHARNESS_MODELS_PATH", catalogPath);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+
+    await providers.connectCatalog!("remote", {
+      apiKey: "valid-key",
+      headers: {
+        " User-Agent ": " {{userAgent}} ",
+        "X-Session": "{{sessionId}}",
+      },
+    });
+
+    expect(ref.current.customProviders).toEqual([
+      expect.objectContaining({
+        id: "remote",
+        source: "models.dev",
+        headers: {
+          "User-Agent": "{{userAgent}}",
+          "X-Session": "{{sessionId}}",
+        },
+      }),
+    ]);
+  });
+
+  it("keeps existing catalog headers when reconnect omits headers", async () => {
+    const catalogPath = join(temporaryDirectory, "models-reconnect-omit.json");
+    writeFileSync(
+      catalogPath,
+      JSON.stringify({
+        remote: {
+          name: "Remote AI",
+          env: ["REMOTE_API_KEY"],
+          api: "https://remote.example/v1",
+          npm: "@ai-sdk/openai-compatible",
+          models: { "remote-chat": { name: "Remote Chat" } },
+        },
+      }),
+      "utf-8",
+    );
+    vi.stubEnv("OPENHARNESS_MODELS_PATH", catalogPath);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+        customProviders: [
+          {
+            id: "remote",
+            displayName: "Remote AI",
+            baseUrl: "https://remote.example/v1",
+            apiFormat: "openai" as const,
+            models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+            source: "models.dev" as const,
+            headers: { "X-Session": "{{sessionId}}" },
+          },
+        ],
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+
+    await providers.connectCatalog!("remote", { apiKey: "new-key" });
+
+    expect(ref.current.customProviders?.[0]?.headers).toEqual({
+      "X-Session": "{{sessionId}}",
+    });
+    await expect(new CredentialStorage().loadApiKey("remote")).resolves.toBe(
+      "new-key",
+    );
+  });
+
+  it("clears catalog headers when reconnect passes an empty object", async () => {
+    const catalogPath = join(temporaryDirectory, "models-reconnect-clear.json");
+    writeFileSync(
+      catalogPath,
+      JSON.stringify({
+        remote: {
+          name: "Remote AI",
+          env: ["REMOTE_API_KEY"],
+          api: "https://remote.example/v1",
+          npm: "@ai-sdk/openai-compatible",
+          models: { "remote-chat": { name: "Remote Chat" } },
+        },
+      }),
+      "utf-8",
+    );
+    vi.stubEnv("OPENHARNESS_MODELS_PATH", catalogPath);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+        customProviders: [
+          {
+            id: "remote",
+            displayName: "Remote AI",
+            baseUrl: "https://remote.example/v1",
+            apiFormat: "openai" as const,
+            models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+            source: "models.dev" as const,
+            headers: { "X-Session": "{{sessionId}}" },
+          },
+        ],
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+
+    await providers.connectCatalog!("remote", {
+      apiKey: "new-key",
+      headers: {},
+    });
+
+    expect(ref.current.customProviders?.[0]?.headers).toBeUndefined();
+  });
+
+  it("updates only models.dev catalog headers via updateCatalogHeaders", async () => {
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+        customProviders: [
+          {
+            id: "remote",
+            displayName: "Remote AI",
+            baseUrl: "https://remote.example/v1",
+            apiFormat: "openai" as const,
+            models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+            source: "models.dev" as const,
+            headers: { "X-Old": "keep" },
+          },
+        ],
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+    const storage = new CredentialStorage();
+    await storage.storeApiKey("remote", "existing-key");
+
+    const info = await providers.updateCatalogHeaders!("remote", {
+      " User-Agent ": " {{userAgent}} ",
+    });
+
+    expect(info).toMatchObject({
+      name: "remote",
+      source: "catalog",
+      hasKey: true,
+    });
+    expect(ref.current.customProviders).toEqual([
+      {
+        id: "remote",
+        displayName: "Remote AI",
+        baseUrl: "https://remote.example/v1",
+        apiFormat: "openai",
+        models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+        source: "models.dev",
+        headers: { "User-Agent": "{{userAgent}}" },
+      },
+    ]);
+    await expect(storage.loadApiKey("remote")).resolves.toBe("existing-key");
+  });
+
+  it("rejects updateCatalogHeaders for custom or missing providers", async () => {
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+        customProviders: [
+          {
+            id: "office-gateway",
+            displayName: "Office Gateway",
+            baseUrl: "https://gateway.example/v1",
+            apiFormat: "openai" as const,
+            models: [{ id: "team-model", displayName: "Team Model" }],
+          },
+        ],
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+
+    await expect(
+      providers.updateCatalogHeaders!("office-gateway", {
+        "X-Session": "{{sessionId}}",
+      }),
+    ).rejects.toThrow(/目录供应商|models\.dev/);
+    await expect(
+      providers.updateCatalogHeaders!("missing", {
+        "X-Session": "{{sessionId}}",
+      }),
+    ).rejects.toThrow(/不存在|目录供应商/);
+  });
+
+  it("persists header template literals for custom providers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+
+    await providers.create!({
+      id: "office-gateway",
+      displayName: "Office Gateway",
+      baseUrl: "https://gateway.example/v1",
+      apiFormat: "openai",
+      apiKey: "secret",
+      models: [{ id: "team-model", displayName: "Team Model" }],
+      headers: {
+        "User-Agent": "{{userAgent}}",
+        "X-Session": "{{sessionId}}",
+      },
+    });
+
+    expect(ref.current.customProviders?.[0]?.headers).toEqual({
+      "User-Agent": "{{userAgent}}",
+      "X-Session": "{{sessionId}}",
+    });
+  });
+
+  it("rejects unknown variables, invalid names, CR/LF, and duplicate headers before save", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+    const base = {
+      id: "office-gateway",
+      displayName: "Office Gateway",
+      baseUrl: "https://gateway.example/v1",
+      apiFormat: "openai" as const,
+      models: [{ id: "team-model", displayName: "Team Model" }],
+    };
+
+    await expect(
+      providers.create!({ ...base, headers: { "X-Test": "{{unknown}}" } }),
+    ).rejects.toThrow(/unknown|未知/i);
+    await expect(
+      providers.create!({ ...base, headers: { "Bad Header": "value" } }),
+    ).rejects.toThrow(/name|头名/i);
+    await expect(
+      providers.create!({ ...base, headers: { "X-Test": "a\nb" } }),
+    ).rejects.toThrow(/CR|LF|value/i);
+    await expect(
+      providers.create!({
+        ...base,
+        headers: { "X-Test": "one", "x-test": "two" },
+      }),
+    ).rejects.toThrow(/duplicate|重复/i);
+
+    expect(ref.current.customProviders).toBeUndefined();
+  });
+
+  it("leaves settings and credentials unchanged when first catalog connect validation fails", async () => {
+    const catalogPath = join(temporaryDirectory, "models-connect-fail.json");
+    writeFileSync(
+      catalogPath,
+      JSON.stringify({
+        remote: {
+          name: "Remote AI",
+          env: ["REMOTE_API_KEY"],
+          api: "https://remote.example/v1",
+          npm: "@ai-sdk/openai-compatible",
+          models: { "remote-chat": { name: "Remote Chat" } },
+        },
+      }),
+      "utf-8",
+    );
+    vi.stubEnv("OPENHARNESS_MODELS_PATH", catalogPath);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("invalid", { status: 401 })),
+    );
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+
+    await expect(
+      providers.connectCatalog!("remote", {
+        apiKey: "bad-key",
+        headers: { "X-Session": "{{sessionId}}" },
+      }),
+    ).rejects.toThrow("API 密钥无效");
+
+    expect(ref.current.customProviders).toBeUndefined();
+    await expect(
+      new CredentialStorage().loadApiKey("remote"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps prior catalog headers and credential when reconnect validation fails", async () => {
+    const catalogPath = join(temporaryDirectory, "models-reconnect-fail.json");
+    writeFileSync(
+      catalogPath,
+      JSON.stringify({
+        remote: {
+          name: "Remote AI",
+          env: ["REMOTE_API_KEY"],
+          api: "https://remote.example/v1",
+          npm: "@ai-sdk/openai-compatible",
+          models: { "remote-chat": { name: "Remote Chat" } },
+        },
+      }),
+      "utf-8",
+    );
+    vi.stubEnv("OPENHARNESS_MODELS_PATH", catalogPath);
+    const storage = new CredentialStorage();
+    await storage.storeApiKey("remote", "old-key");
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+        customProviders: [
+          {
+            id: "remote",
+            displayName: "Remote AI",
+            baseUrl: "https://remote.example/v1",
+            apiFormat: "openai" as const,
+            models: [{ id: "remote-chat", displayName: "Remote Chat" }],
+            source: "models.dev" as const,
+            headers: { "X-Session": "{{sessionId}}" },
+          },
+        ],
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("invalid", { status: 401 })),
+    );
+
+    await expect(
+      providers.connectCatalog!("remote", {
+        apiKey: "bad-key",
+        headers: { "User-Agent": "{{userAgent}}" },
+      }),
+    ).rejects.toThrow("API 密钥无效");
+
+    expect(ref.current.customProviders?.[0]?.headers).toEqual({
+      "X-Session": "{{sessionId}}",
+    });
+    await expect(storage.loadApiKey("remote")).resolves.toBe("old-key");
+  });
+
+  it("keeps prior custom provider settings and credential when update validation fails", async () => {
+    const storage = new CredentialStorage();
+    await storage.storeApiKey("office-gateway", "old-key");
+    const existing = {
+      id: "office-gateway",
+      displayName: "Office Gateway",
+      baseUrl: "https://gateway.example/v1",
+      apiFormat: "openai" as const,
+      models: [{ id: "team-model", displayName: "Team Model" }],
+      headers: { "X-Tenant": "desktop" },
+    };
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+        customProviders: [existing],
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("forbidden", { status: 403 })),
+    );
+
+    await expect(
+      providers.update!("office-gateway", {
+        ...existing,
+        apiKey: "bad-key",
+        headers: { "User-Agent": "{{userAgent}}" },
+      }),
+    ).rejects.toThrow("API 密钥无效");
+
+    expect(ref.current.customProviders).toEqual([existing]);
+    await expect(storage.loadApiKey("office-gateway")).resolves.toBe("old-key");
+  });
+
+  it("does not invent a catalog snapshot from an orphaned credential alone", async () => {
+    const catalogPath = join(temporaryDirectory, "models-orphan.json");
+    writeFileSync(
+      catalogPath,
+      JSON.stringify({
+        remote: {
+          name: "Remote AI",
+          env: ["REMOTE_API_KEY"],
+          api: "https://remote.example/v1",
+          npm: "@ai-sdk/openai-compatible",
+          models: { "remote-chat": { name: "Remote Chat" } },
+        },
+      }),
+      "utf-8",
+    );
+    vi.stubEnv("OPENHARNESS_MODELS_PATH", catalogPath);
+    await new CredentialStorage().storeApiKey("remote", "orphan-key");
+    const ref = {
+      current: {
+        model: "m",
+        apiFormat: "openai" as const,
+        provider: "openai",
+        maxTurns: 50,
+        permission: { mode: "default" as const },
+      },
+    };
+    const providers = createDefaultProviderService(ref);
+
+    await expect(providers.list()).resolves.toContainEqual(
+      expect.objectContaining({
+        name: "remote",
+        source: "catalog",
+        hasKey: false,
+      }),
+    );
+    expect(ref.current.customProviders).toBeUndefined();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    await providers.connectCatalog!("remote", {
+      apiKey: "fresh-key",
+      headers: { "X-Session": "{{sessionId}}" },
+    });
+
+    expect(ref.current.customProviders).toEqual([
+      expect.objectContaining({
+        id: "remote",
+        source: "models.dev",
+        headers: { "X-Session": "{{sessionId}}" },
+      }),
+    ]);
+    await expect(new CredentialStorage().loadApiKey("remote")).resolves.toBe(
+      "fresh-key",
+    );
   });
 });

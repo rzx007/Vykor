@@ -3,6 +3,8 @@ import {
   createModelCatalogService,
   findByName,
   listDirectApiKeyCatalogProviders,
+  normalizeRequestHeaderTemplates,
+  RequestHeaderTemplateError,
   type DirectApiKeyCatalogProvider,
   type ModelsDevCatalog,
 } from "@openharness/api";
@@ -11,6 +13,7 @@ import type { CustomProviderSettings, Settings } from "@openharness/core";
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type {
+  ConnectCatalogProviderInput,
   CustomProviderInput,
   ProviderInfo,
   ProviderService,
@@ -210,9 +213,9 @@ export function createDefaultProviderService(
       );
       await storage.clearProviderCredentials(normalizedId);
     },
-    async connectCatalog(id, apiKey) {
+    async connectCatalog(id, input) {
       const normalizedId = id.trim().toLowerCase();
-      const credential = apiKey.trim();
+      const credential = input.apiKey.trim();
       if (!credential)
         throw new ProviderMutationError(400, "请输入 API 密钥。");
       const current = await readCurrentSettings(ref);
@@ -233,12 +236,14 @@ export function createDefaultProviderService(
           `供应商 ID “${normalizedId}” 已被自定义供应商使用。`,
         );
       }
+      const headers = resolveCatalogHeaders(input, existing?.headers);
       await validateProviderCredential({
         providerName: provider.id,
         providerDisplayName: provider.displayName,
         backendType: "openai_compat",
         apiKey: credential,
         baseUrl: provider.baseUrl,
+        headers,
       });
       const settingsProvider: CustomProviderSettings = {
         id: provider.id,
@@ -247,6 +252,7 @@ export function createDefaultProviderService(
         apiFormat: "openai",
         models: provider.models,
         source: "models.dev",
+        ...(headers ? { headers } : {}),
       };
       const providers = (current.customProviders ?? []).filter(
         (item) => item.id !== normalizedId,
@@ -255,6 +261,38 @@ export function createDefaultProviderService(
       await storage.storeApiKey(provider.id, credential);
       return await rowForCustomProvider(
         settingsProvider,
+        current.provider ?? "auto",
+      );
+    },
+    async updateCatalogHeaders(id, headers) {
+      const current = await readCurrentSettings(ref);
+      const normalizedId = id.trim().toLowerCase();
+      const index =
+        current.customProviders?.findIndex(
+          (item) => item.id === normalizedId,
+        ) ?? -1;
+      const existing = index >= 0 ? current.customProviders?.[index] : undefined;
+      if (!existing || existing.source !== "models.dev") {
+        throw new ProviderMutationError(
+          404,
+          `models.dev 目录供应商 “${normalizedId}” 不存在。`,
+        );
+      }
+      const normalizedHeaders = normalizeProviderHeaders(headers);
+      const nextProvider: CustomProviderSettings = {
+        id: existing.id,
+        displayName: existing.displayName,
+        baseUrl: existing.baseUrl,
+        apiFormat: existing.apiFormat,
+        models: existing.models,
+        source: "models.dev",
+        ...(normalizedHeaders ? { headers: normalizedHeaders } : {}),
+      };
+      const nextProviders = [...(current.customProviders ?? [])];
+      nextProviders[index] = nextProvider;
+      await saveCustomProviders(nextProviders);
+      return await rowForCustomProvider(
+        nextProvider,
         current.provider ?? "auto",
       );
     },
@@ -317,6 +355,43 @@ export class ProviderMutationError extends ApplicationError {
   }
 }
 
+function resolveCatalogHeaders(
+  input: ConnectCatalogProviderInput,
+  existingHeaders: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!Object.prototype.hasOwnProperty.call(input, "headers")) {
+    return existingHeaders;
+  }
+  return normalizeProviderHeaders(input.headers);
+}
+
+function normalizeProviderHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  try {
+    if (
+      headers !== undefined &&
+      (headers === null ||
+        typeof headers !== "object" ||
+        Array.isArray(headers))
+    ) {
+      throw new RequestHeaderTemplateError(
+        "Request headers must be a string record",
+      );
+    }
+    const normalized = normalizeRequestHeaderTemplates(headers);
+    if (!normalized || Object.keys(normalized).length === 0) {
+      return undefined;
+    }
+    return normalized;
+  } catch (error) {
+    if (error instanceof RequestHeaderTemplateError) {
+      throw new ProviderMutationError(400, error.message);
+    }
+    throw error;
+  }
+}
+
 function normalizeCustomProvider(
   input: CustomProviderInput,
 ): CustomProviderSettings {
@@ -359,17 +434,13 @@ function normalizeCustomProvider(
   if (new Set(models.map((model) => model.id)).size !== models.length) {
     throw new ProviderMutationError(400, "模型 ID 不能重复。");
   }
-  const headers = Object.fromEntries(
-    Object.entries(input.headers ?? {})
-      .map(([name, value]) => [name.trim(), value.trim()] as const)
-      .filter(([name, value]) => name && value),
-  );
+  const headers = normalizeProviderHeaders(input.headers);
   return {
     id,
     displayName,
     baseUrl,
     apiFormat: "openai",
     models,
-    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    ...(headers ? { headers } : {}),
   };
 }

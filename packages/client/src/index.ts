@@ -152,6 +152,8 @@ export type {
   PromptResponse,
   ProviderInfo,
   CustomProviderInput,
+  ConnectCatalogProviderInput,
+  UpdateCatalogProviderHeadersInput,
   RememberSessionResponse,
   ReplyPermissionInput,
   ScheduledRunRecord,

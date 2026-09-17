@@ -77,8 +77,8 @@ OPENHARNESS_CONFIG_DIR
 
 | 文件 | 用途 |
 |---|---|
-| `settings.json` | 非机密运行时设置，如 `provider`、`model`、`baseUrl`、`apiFormat`、权限、插件与 UI 偏好 |
-| `credentials.json` | OpenHarness 管理的凭证，按 provider 分组 |
+| `settings.json` | 非机密运行时设置，如 `provider`、`model`、`baseUrl`、`apiFormat`、`customProviders`（含请求头模板原文）、权限、插件与 UI 偏好 |
+| `credentials.json` | OpenHarness 管理的凭证，按 provider 分组（API Key 等机密） |
 | daemon SQLite | TUI/Web/Desktop/Bot 共用的 Session、Run、消息和权限记录 |
 | `plugins`、`skills`、`data/*` | 用户安装的插件、技能、日志、任务、cron 状态及其他本地数据 |
 
@@ -103,6 +103,43 @@ OPENHARNESS_CONFIG_DIR
   }
 }
 ```
+
+### 自定义 / 目录供应商的请求头模板
+
+真正自定义供应商与 models.dev 目录供应商可以把额外 HTTP 请求头写在
+`settings.json` 的 `customProviders[].headers` 里。这里保存的是**模板原文**，不是
+展开后的值；API Key 仍只放在 `credentials.json`。
+
+```json
+{
+  "customProviders": [{
+    "id": "opencode-go",
+    "source": "models.dev",
+    "headers": {
+      "User-Agent": "{{userAgent}}",
+      "x-opencode-session": "{{sessionId}}"
+    }
+  }]
+}
+```
+
+支持的模板变量（区分大小写，只能出现在请求头**值**中）：
+
+| 变量 | 含义 |
+|---|---|
+| `{{sessionId}}` | 当前会话 ID。同一会话内稳定；不同会话不同。凭证校验时使用固定占位会话 ID。 |
+| `{{userAgent}}` | 客户端标识，当前为 `openharness-ts/1.0`。 |
+
+适用范围：
+
+- **真正自定义供应商**与**目录供应商**（`source: "models.dev"`）：支持在设置 UI / API 中配置并持久化这些头。
+- **内置供应商**（registry 中的 DeepSeek、Anthropic 等）：暂不支持请求头模板；UI 不展示高级头，运行时也不读取。
+
+安全注意：请求头是明文配置。不要把 API Key、token 或其他秘密写进
+`headers`；机密只应放在 `credentials.json`。
+
+造客户端时，runtime 会用当前会话上下文展开模板，再把结果交给对应 SDK 的
+默认请求头。展开后的值不会写回 `settings.json`。
 
 ## Codex 凭证来源
 

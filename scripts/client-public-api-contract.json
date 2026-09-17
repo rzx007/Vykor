@@ -307,6 +307,10 @@
       "kind": "type-export"
     },
     {
+      "name": "ConnectCatalogProviderInput",
+      "kind": "type-export"
+    },
+    {
       "name": "CreateBackgroundShellInput",
       "kind": "type-export"
     },
@@ -712,6 +716,10 @@
     },
     {
       "name": "TerminalWriteRequest",
+      "kind": "type-export"
+    },
+    {
+      "name": "UpdateCatalogProviderHeadersInput",
       "kind": "type-export"
     },
     {

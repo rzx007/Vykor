@@ -355,6 +355,15 @@ export interface CustomProviderInput {
   headers?: Record<string, string>;
 }
 
+export interface ConnectCatalogProviderInput {
+  apiKey: string;
+  headers?: Record<string, string>;
+}
+
+export interface UpdateCatalogProviderHeadersInput {
+  headers: Record<string, string>;
+}
+
 export interface ModelInfo {
   id: string;
   label: string;

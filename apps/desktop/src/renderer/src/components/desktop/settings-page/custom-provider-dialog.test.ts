@@ -64,6 +64,42 @@ describe("CustomProviderDialog credentials", () => {
     expect(input?.readOnly).toBe(false)
     expect(document.body.textContent).toContain("输入新的 API 密钥")
   })
+
+  it("shows template guidance and echoes saved header templates", async () => {
+    await act(async () => {
+      root.render(
+        createElement(CustomProviderDialog, {
+          open: true,
+          provider: {
+            ...savedCustomProvider,
+            headers: {
+              "X-Session": "{{sessionId}}",
+              "User-Agent": "{{userAgent}}",
+            },
+          },
+          busy: false,
+          onOpenChange: vi.fn(),
+          onSubmit: vi.fn(),
+        })
+      )
+    })
+
+    expect(document.body.textContent).toContain("{{sessionId}}")
+    expect(document.body.textContent).toContain("{{userAgent}}")
+    expect(document.body.textContent).toContain("明文保存在 settings.json")
+    expect(
+      document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 名称"]')?.value
+    ).toBe("X-Session")
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 值"]')?.value).toBe(
+      "{{sessionId}}"
+    )
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="请求头 2 值"]')?.value).toBe(
+      "{{userAgent}}"
+    )
+
+    const input = document.querySelector<HTMLInputElement>("#custom-provider-key")
+    expect(input?.value).toBe("••••••••••••")
+  })
 })
 
 const savedCustomProvider: DesktopProviderInfo = {

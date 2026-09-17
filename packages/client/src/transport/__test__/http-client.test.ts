@@ -432,6 +432,53 @@ describe("OpenHarnessClient", () => {
     ]);
   });
 
+  it("connects catalog providers with optional headers and patches header templates", async () => {
+    const calls: Array<{ path: string; method: string; body: unknown }> = [];
+    const client = businessClient({
+      baseUrl: "http://daemon.test",
+      fetch: (async (url, init = {}) => {
+        const parsed = new URL(String(url));
+        calls.push({
+          path: parsed.pathname,
+          method: init.method ?? "GET",
+          body: init.body ? JSON.parse(String(init.body)) : undefined,
+        });
+        return jsonResponse({
+          provider: {
+            name: "remote",
+            displayName: "Remote",
+            hasKey: true,
+            active: true,
+          },
+        });
+      }) as typeof fetch,
+    });
+
+    await client.providers.connectCatalogProvider("remote", {
+      apiKey: "catalog-secret",
+      headers: { "X-Session": "{{sessionId}}" },
+    });
+    await client.providers.updateCatalogProviderHeaders("remote", {
+      "User-Agent": "{{userAgent}}",
+    });
+
+    expect(calls).toEqual([
+      {
+        path: "/providers/catalog/remote/connect",
+        method: "POST",
+        body: {
+          apiKey: "catalog-secret",
+          headers: { "X-Session": "{{sessionId}}" },
+        },
+      },
+      {
+        path: "/providers/catalog/remote",
+        method: "PATCH",
+        body: { headers: { "User-Agent": "{{userAgent}}" } },
+      },
+    ]);
+  });
+
   it("normalizes safe daemon URLs and rejects URL-based credential leaks", () => {
     expect(normalizeDaemonBaseUrl(" https://daemon.example/api/ ")).toBe(
       "https://daemon.example/api",

@@ -147,6 +147,54 @@ describe("daemon settings", () => {
     expect(readdirSync(projectConfigDir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
+  it("keeps custom providers user-scoped when project settings are included", async () => {
+    const projectRoot = join(configDir, "provider-project");
+    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    mkdirSync(projectConfigDir, { recursive: true });
+    const globalProvider = {
+      id: "global-provider",
+      displayName: "Global",
+      baseUrl: "https://global.example/v1",
+      apiFormat: "openai",
+      models: [{ id: "chat", displayName: "Chat" }],
+    };
+    writeFileSync(
+      join(configDir, "settings.json"),
+      JSON.stringify({ customProviders: [globalProvider] }),
+    );
+    writeFileSync(
+      join(projectConfigDir, "settings.json"),
+      JSON.stringify({ customProviders: [{ ...globalProvider, id: "project-provider" }] }),
+    );
+
+    const settings = await loadSettings(undefined, {
+      includeProject: true,
+      projectRoot,
+    });
+
+    expect(settings.customProviders).toEqual([globalProvider]);
+  });
+
+  it("keeps custom providers user-scoped when CLI overrides customProviders", async () => {
+    const globalProvider = {
+      id: "global-provider",
+      displayName: "Global",
+      baseUrl: "https://global.example/v1",
+      apiFormat: "openai",
+      models: [{ id: "chat", displayName: "Chat" }],
+    };
+    writeFileSync(
+      join(configDir, "settings.json"),
+      JSON.stringify({ customProviders: [globalProvider] }),
+    );
+
+    const settings = await loadSettings({
+      customProviders: [{ ...globalProvider, id: "cli-provider" }],
+    });
+
+    expect(settings.customProviders).toEqual([globalProvider]);
+  });
+
   it("loads the local terminal shell preference", async () => {
     const projectRoot = join(configDir, "terminal-project");
     const projectConfigDir = join(projectRoot, ".openharness-ts");
