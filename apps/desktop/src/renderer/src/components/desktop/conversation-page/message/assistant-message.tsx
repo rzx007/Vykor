@@ -11,6 +11,7 @@ import { Streamdown } from "streamdown"
 
 import { Button } from "@renderer/components/ui/button"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
+import { queryGitChanges } from "@renderer/lib/git-changes-query"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionPart } from "@shared/session-types"
@@ -385,7 +386,7 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   )
 }
 
-function ChangedFilesSummary({
+export function ChangedFilesSummary({
   files,
   canOpenReview,
   onOpenFile,
@@ -419,11 +420,10 @@ function ChangedFilesSummary({
         return
       }
 
-      void window.desktop.git
-        .changes({
-          rootPath: selectedProjectPath,
-          scope: "uncommitted",
-        })
+      void queryGitChanges({
+        rootPath: selectedProjectPath,
+        scope: "uncommitted",
+      })
         .then((result) => {
           if (cancelled) return
           const stats: Record<string, ChangedFileStats> = {}
