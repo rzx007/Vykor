@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SessionStore } from "../../session-runtime/store.js";
+import { SessionStore } from "../../../session-runtime/store.js";
 import { AttachmentBlobStore } from "../attachment-blob-store.js";
 import { AttachmentIntegrityService } from "../attachment-integrity-service.js";
 

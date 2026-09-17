@@ -28,7 +28,7 @@ import type { StorageContext } from "../database/storage-context.js";
 import type { ConversationRepository } from "./conversation-repository.js";
 import type { SessionRepository } from "../sessions/session-repository.js";
 import type { RunRepository } from "../runs/run-repository.js";
-import { AttachmentError } from "../attachment/attachment-errors.js";
+import { AttachmentError } from "../attachments/attachment-errors.js";
 import {
   assertMutableSession,
   assertMessage,

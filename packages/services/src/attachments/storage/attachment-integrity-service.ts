@@ -3,7 +3,7 @@ import type { AttachmentAssetRecord } from "@openharness/protocol";
 import type {
   AttachmentLeaseRecord,
   SessionStore,
-} from "../session-runtime/store.js";
+} from "../../session-runtime/store.js";
 import type {
   AttachmentBlobStore,
   StoredAttachmentBlob,

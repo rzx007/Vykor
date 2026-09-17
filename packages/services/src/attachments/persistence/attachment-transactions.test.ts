@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   ApplicationOwnerConflictError,
   SessionStore,
-} from "../session-runtime/store.js";
+} from "../../session-runtime/store.js";
 import { AttachmentRepository } from "./attachment-repository.js";
 
 function withStore(test: (store: SessionStore, path: string) => void): void {

@@ -4,7 +4,7 @@ import type {
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
 } from "@openharness/protocol";
-import type { StorageContext } from "../database/storage-context.js";
+import type { StorageContext } from "../../database/storage-context.js";
 import {
   attachmentAssetFromRow,
   attachmentRepresentationFromRow,

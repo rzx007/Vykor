@@ -1,4 +1,4 @@
-import { AttachmentError } from "./attachment-errors.js";
+import { AttachmentError } from "../attachment-errors.js";
 
 const MAX_FILENAME_CODE_POINTS = 255;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;

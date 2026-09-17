@@ -4,8 +4,8 @@ import type {
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
 } from "@openharness/protocol";
-import { AttachmentError } from "../attachment/attachment-errors.js";
-import type { StorageContext } from "../database/storage-context.js";
+import { AttachmentError } from "../attachment-errors.js";
+import type { StorageContext } from "../../database/storage-context.js";
 import type {
   CreateImportingAttachmentInput,
   CreateAttachmentRepresentationInput,

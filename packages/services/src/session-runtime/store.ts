@@ -74,7 +74,7 @@ export type {
   MarkAttachmentReadyInput,
   ImportingAttachmentRecord,
 } from "../attachments/index.js";
-import { AttachmentError } from "../attachment/attachment-errors.js";
+import { AttachmentError } from "../attachments/attachment-errors.js";
 import { SessionDatabase } from "../database/session-database.js";
 import { DurableEventSequence } from "../database/event-sequence.js";
 import { DeltaCheckpoint } from "../database/delta-checkpoint.js";

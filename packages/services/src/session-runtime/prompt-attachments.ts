@@ -5,7 +5,7 @@ import type {
   AttachmentIntent,
 } from "@openharness/protocol";
 
-import { AttachmentError } from "../attachment/attachment-errors.js";
+import { AttachmentError } from "../attachments/attachment-errors.js";
 
 export interface NormalizedPromptAttachment {
   assetId: string;

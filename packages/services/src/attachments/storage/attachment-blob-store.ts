@@ -12,7 +12,7 @@ import {
 import { join } from "node:path";
 import { Readable } from "node:stream";
 
-import { AttachmentError, isAttachmentError } from "./attachment-errors.js";
+import { AttachmentError, isAttachmentError } from "../attachment-errors.js";
 import { sniffAttachmentMediaType } from "./attachment-media-type.js";
 
 const MIME_PREFIX_BYTES = 4_100;
