@@ -22,7 +22,7 @@ export const forbiddenScanDefaultAllow = Object.freeze([
   "docs/superpowers/specs/",
 ]);
 
-const scannedExtension = /\.(?:c?js|mjs|json|md|ts|tsx|ya?ml)$/i;
+const scannedExtension = /\.(?:c?js|mjs|json|md|sql|ts|tsx|ya?ml)$/i;
 const excludedDirectories = new Set(["node_modules", "dist", ".git", ".turbo"]);
 
 export function normalizeForbiddenScanPath(path) {

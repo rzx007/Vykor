@@ -226,6 +226,9 @@ importers:
       '@blobatar/react':
         specifier: ^2.5.0
         version: 2.5.0(blobatar@2.5.0(react@19.2.7))(react@19.2.7)
+      '@electron/asar':
+        specifier: ^3.4.1
+        version: 3.4.1
       '@electron-toolkit/eslint-config-prettier':
         specifier: ^3.0.0
         version: 3.0.0(eslint@9.39.5(jiti@2.7.0))(prettier@3.9.6)

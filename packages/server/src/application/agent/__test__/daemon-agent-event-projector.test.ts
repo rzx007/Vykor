@@ -1,11 +1,13 @@
 import type { AgentEvent } from "@openharness/core";
 import { describe, expect, it, vi } from "vitest";
 
-import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
+import {
+  DaemonAgentEventProjector,
+  type DaemonAgentEventProjectorContext,
+} from "../daemon-agent-event-projector.js";
 
 function projectorStore(flat: Record<string, any>) {
   return {
-    ...flat,
     sessions: {
       get: flat.getSession ?? vi.fn(),
       create: flat.createSession ?? vi.fn(),
@@ -30,7 +32,16 @@ function projectorStore(flat: Record<string, any>) {
       updateRunAttempt: flat.updateRunAttempt ?? vi.fn(),
       listRunAttempts: flat.listRunAttempts ?? vi.fn(() => []),
     },
-  } as any;
+    createProjectionSettlement: flat.createProjectionSettlement ?? vi.fn(),
+    failProjectionSettlement: flat.failProjectionSettlement ?? vi.fn(),
+    getProjectionSettlement: flat.getProjectionSettlement ?? vi.fn(),
+    getSessionTask: flat.getSessionTask ?? vi.fn(),
+    listProjectionSettlements: flat.listProjectionSettlements ?? vi.fn(() => []),
+    markProjectionSettlementRetrying: flat.markProjectionSettlementRetrying ?? vi.fn(),
+    resolveProjectionSettlement: flat.resolveProjectionSettlement ?? vi.fn(),
+    transaction: flat.transaction ?? (<T>(work: () => T) => work()),
+    updateSessionTask: flat.updateSessionTask ?? vi.fn(),
+  } satisfies DaemonAgentEventProjectorContext["store"];
 }
 
 describe("DaemonAgentEventProjector", () => {

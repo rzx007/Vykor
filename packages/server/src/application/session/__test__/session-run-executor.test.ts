@@ -4,17 +4,20 @@ import { createRunCapabilityView } from "@openharness/agent-runtime";
 import { ToolRegistry } from "@openharness/core";
 import { describe, expect, it, vi } from "vitest";
 
-import { SessionRunExecutor } from "../session-run-executor.js";
+import {
+  SessionRunExecutor,
+  type SessionRunExecutorContext,
+} from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
   it("records a selected plugin preparation failure before submitting to the model", async () => {
     const store = createStore();
-    Object.assign(store.getRun(), { metadata: { pluginId: "selected", retained: "yes" } });
+    Object.assign(store.spies.getRun(), { metadata: { pluginId: "selected", retained: "yes" } });
     let modelCalls = 0;
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {},
         createRunCapabilityView: (pluginId?: string) => createRunCapabilityView({
@@ -30,7 +33,7 @@ describe("SessionRunExecutor", () => {
     await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
       { signal: new AbortController().signal, registerHandle: async () => {} });
     expect(modelCalls).toBe(0);
-    expect(store.getRun()).toMatchObject({
+    expect(store.spies.getRun()).toMatchObject({
       status: "failed", error: expect.stringContaining("registration exploded"),
       metadata: { pluginId: "selected", retained: "yes", pluginPreparation: {
         status: "failed", pluginId: "selected", error: expect.stringContaining("registration exploded"),
@@ -39,16 +42,16 @@ describe("SessionRunExecutor", () => {
   });
   it("materializes a plugin-agent-only input using the captured View description, never its body", async () => {
     const store = createStore();
-    store.getInput.mockReturnValue({ ...store.getInput(), items: [{ type: "capability", kind: "plugin_agent", pluginId: "selected", agentId: "selected:review", displayName: "Spoofed label" }], content: "@Spoofed label" } as any);
-    Object.assign(store.getRun(), { metadata: { pluginId: "selected" } });
+    store.spies.getInput.mockReturnValue({ ...store.spies.getInput(), items: [{ type: "capability", kind: "plugin_agent", pluginId: "selected", agentId: "selected:review", displayName: "Spoofed label" }], content: "@Spoofed label" } as any);
+    Object.assign(store.spies.getRun(), { metadata: { pluginId: "selected" } });
     const view = createRunCapabilityView({ toolRegistry: new ToolRegistry(), pluginIds: new Set(["selected"]), agents: [{ ownerPluginId: "selected", definition: {
       name: "selected:review", description: "Trusted review description", systemPrompt: "SECRET child body",
     } }] }, "selected");
     let submitted = "";
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: { configured: true, acquireSession: async () => ({
         setModel: () => {}, createRunCapabilityView: () => view,
         submitMessage: (content: string) => { submitted = content; return completedHandle(); },
@@ -63,15 +66,15 @@ describe("SessionRunExecutor", () => {
   });
   it("builds from the warm runtime using the durable Run owner and passes its captured bindings", async () => {
     const store = createStore({ metadata: { pluginId: "forged-input-owner" } });
-    Object.assign(store.getRun(), { metadata: { pluginId: "selected" } });
+    Object.assign(store.spies.getRun(), { metadata: { pluginId: "selected" } });
     const registry = new ToolRegistry();
     registry.register({ name: "Selected", description: "selected", inputSchema: {}, execute: async () => ({ content: [] }) },
       { kind: "plugin", id: "selected" });
     const observed: string[][] = [];
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: {
         configured: true,
         acquireSession: async () => ({
@@ -102,9 +105,9 @@ describe("SessionRunExecutor", () => {
     const postRunMaintenance = { run: vi.fn(async () => {}) };
     const closeIfStale = vi.fn(async () => {});
     const executorWithMaintenance = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => agent),
@@ -146,9 +149,9 @@ describe("SessionRunExecutor", () => {
       ],
     });
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => ({ setModel: vi.fn(), submitMessage })),
@@ -188,9 +191,9 @@ describe("SessionRunExecutor", () => {
     const close = vi.fn(async () => {});
     const finalizeRunParts = vi.fn();
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
@@ -209,7 +212,7 @@ describe("SessionRunExecutor", () => {
 
     expect(close).toHaveBeenCalledWith("s1");
     expect(finalizeRunParts).toHaveBeenCalledWith("s1", "run-1", "failed");
-    expect(store.updateRun).toHaveBeenCalledWith("run-1", { status: "failed", error: "agent failed" });
+    expect(store.spies.updateRun).toHaveBeenCalledWith("run-1", { status: "failed", error: "agent failed" });
     expect(publishSince).toHaveBeenCalledWith(7);
   });
 
@@ -218,9 +221,9 @@ describe("SessionRunExecutor", () => {
     const closeError = new Error("close failed");
     const log = vi.fn();
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => { throw new Error("agent failed"); }),
@@ -237,7 +240,7 @@ describe("SessionRunExecutor", () => {
       { signal: new AbortController().signal, registerHandle: vi.fn() },
     );
 
-    expect(store.updateRun).toHaveBeenCalledWith("run-1", { status: "failed", error: "agent failed" });
+    expect(store.spies.updateRun).toHaveBeenCalledWith("run-1", { status: "failed", error: "agent failed" });
     expect(log).toHaveBeenCalledWith(expect.objectContaining({
       event: "session.agent.cleanup_failed",
       error: "close failed",
@@ -260,9 +263,9 @@ describe("SessionRunExecutor", () => {
       decisions: [{ assetId: "asset-1", intent: "auto" as const, mediaType: "image/png", route: "native_image" as const }],
     }));
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: {
         configured: true,
         acquireSession: vi.fn(async () => ({
@@ -344,9 +347,9 @@ describe("SessionRunExecutor", () => {
     const close = vi.fn();
     const projectAttachmentTransformations = vi.fn();
     const executor = new SessionRunExecutor({
-      data: store as any,
+      data: store.data,
       attachments: store.attachments,
-      goals: store as any,
+      goals: store.goals,
       agentPool: { configured: true, acquireSession, close } as any,
       events: { checkpoint: () => 4, publishSince: vi.fn() },
       transcriptProjection: {
@@ -378,13 +381,13 @@ describe("SessionRunExecutor", () => {
 
     expect(acquireSession).toHaveBeenCalledWith("s1");
     expect(close).toHaveBeenCalledWith("s1");
-    expect(store.updateRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+    expect(store.spies.updateRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
       status: "failed",
       metadata: expect.objectContaining({
         attachmentRouting: expect.objectContaining({ code: "attachment_model_unsupported" }),
       }),
     }));
-    expect(store.appendEvent).toHaveBeenCalledWith(expect.objectContaining({
+    expect(store.spies.appendEvent).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({ errorKind: "attachment_model_unsupported" }),
     }));
     expect(projectAttachmentTransformations).toHaveBeenCalledWith(
@@ -436,13 +439,8 @@ function createStore(options: {
   const getRun = vi.fn(() => run);
   const appendEvent = vi.fn();
   const updateRun = vi.fn((id, update) => Object.assign(run, update, { id }));
-  return {
+  const data = {
     transaction: <T>(work: () => T) => work(),
-    getSession,
-    getInput,
-    getRun,
-    appendEvent,
-    updateRun,
     sessions: { get: getSession },
     conversations: {
       getInput,
@@ -454,11 +452,17 @@ function createStore(options: {
       settleActiveRunAttempts: vi.fn(),
     },
     runs: { getRun, updateRun },
-    attachments: {
+  } satisfies SessionRunExecutorContext["data"];
+  const attachments = {
       acquireAttachmentLeases: vi.fn(() => []),
       renewAttachmentLeases: vi.fn(() => 1),
       releaseAttachmentLeases: vi.fn(() => 1),
-    },
+  } satisfies SessionRunExecutorContext["attachments"];
+  return {
+    data,
+    attachments,
+    goals: { getGoal: vi.fn() } satisfies SessionRunExecutorContext["goals"],
+    spies: { getSession, getInput, getRun, appendEvent, updateRun },
   };
 }
 

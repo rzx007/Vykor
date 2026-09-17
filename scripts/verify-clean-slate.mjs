@@ -212,7 +212,9 @@ function checkWorkflow(root) {
     return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
   };
   for (const [job, pattern, message] of [
+    ["build-desktop", /verify-migration-artifact\.mjs\s+--write-inventory\s+\$\{\{ matrix\.target \}\}/, "each Desktop package must inventory migrations from its packaged app.asar"],
     ["verify-clean-slate-artifacts", /needs:\s*\[[^\]]*preflight[^\]]*build-desktop[^\]]*\]/, "strict bundle verification must depend on checks and both Desktop builds"],
+    ["verify-clean-slate-artifacts", /verify-migration-artifact\.mjs[\s\S]*--verify-inventories[\s\S]*clean-slate-migrations-win\.json[\s\S]*clean-slate-migrations-linux\.json/, "strict bundle verification must compare Windows and Linux packaged migration inventories"],
     ["verify-clean-slate-artifacts", /pnpm check:clean-slate:artifacts/, "strict bundle verification must run before tag creation"],
     ["create-tag", /needs:\s*\[[^\]]*preflight[^\]]*build-desktop[^\]]*verify-clean-slate-artifacts[^\]]*\]/, "tag creation must depend on checks, Desktop builds and strict bundle verification"],
     ["publish-npm", /needs:\s*\[[^\]]*create-tag[^\]]*\]/, "npm publication must depend on tag creation"],

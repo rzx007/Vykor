@@ -72,6 +72,39 @@ test("reports missing bundle outputs as skipped normally and failures in strict 
   }
 });
 
+test("reports forbidden schema names inside the single current SQL baseline", async () => {
+  const root = mkdtempSync(join(tmpdir(), "verify-clean-slate-sql-"));
+  try {
+    write(root, "scripts/forbidden-compatibility-surfaces.json", JSON.stringify({
+      version: 1,
+      clientMethods: [], runtimeExports: [], httpRoutes: [], cliCommands: [],
+      cliOptions: [], environmentVariables: [], configFields: [], enumValues: [],
+      schemaNames: ["legacy_session_table"],
+    }));
+    write(
+      root,
+      "packages/services/src/session-runtime/migrations/0000_current_schema.sql",
+      "CREATE TABLE legacy_session_table (id TEXT PRIMARY KEY);\n",
+    );
+    write(
+      root,
+      "packages/services/src/session-runtime/migrations/meta/_journal.json",
+      JSON.stringify({ entries: [{ idx: 0, tag: "0000_current_schema" }] }),
+    );
+
+    const problems = await verifyCleanSlate({ root });
+    assert.ok(
+      problems.some((item) =>
+        item.category === "forbidden"
+        && item.file.endsWith("0000_current_schema.sql")
+        && item.message.includes("legacy_session_table")),
+      problems.map((item) => `${item.file}: ${item.message}`).join("\n"),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("reports the verifier as blocked when the primary forbidden scanner is unavailable", async () => {
   const root = mkdtempSync(join(tmpdir(), "verify-clean-slate-policy-"));
   try {

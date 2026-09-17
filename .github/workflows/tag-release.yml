@@ -134,6 +134,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify updater artifacts
         run: pnpm --filter @openharness/desktop verify:update-packaging:artifact
+      - name: Record migrations from the packaged Desktop app
+        run: pnpm --filter @openharness/desktop exec node scripts/verify-migration-artifact.mjs --write-inventory ${{ matrix.target }}
       - name: Upload Desktop artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -146,6 +148,7 @@ jobs:
             apps/desktop/dist/*.deb
             apps/desktop/dist/latest.yml
             apps/desktop/dist/latest-linux.yml
+            apps/desktop/dist/clean-slate-migrations-*.json
           if-no-files-found: error
 
   verify-clean-slate-artifacts:
@@ -175,6 +178,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify Windows and Linux packaged migration inventories
+        run: >-
+          pnpm --filter @openharness/desktop exec node scripts/verify-migration-artifact.mjs
+          --verify-inventories
+          release-assets/clean-slate-migrations-win.json
+          release-assets/clean-slate-migrations-linux.json
       - name: Sync workspace versions to the tag
         run: node scripts/prepare-tag-release.mjs ${{ needs.validate.outputs.tag }}
       - name: Build CLI and Desktop migration inventories together
