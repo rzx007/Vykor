@@ -20,6 +20,7 @@ import {
   projectLabel,
   recurrenceFrequency,
   recurrenceTime,
+  runHistoryState,
   statusLabel,
 } from "./utils"
 
@@ -32,6 +33,7 @@ export function DetailPanel({
   onEdit,
   onToggle,
   onDelete,
+  onOpenSession,
 }: {
   task: DesktopScheduledTask
   runs: DesktopScheduledRun[]
@@ -41,6 +43,7 @@ export function DetailPanel({
   onEdit: () => void
   onToggle: () => void
   onDelete: () => void
+  onOpenSession: (sessionId: string) => void
 }): React.JSX.Element {
   const isRunning = busy === "run" || busy === `run:${task.id}`
   const canToggle = task.status !== "completed"
@@ -163,28 +166,44 @@ export function DetailPanel({
           </div>
         ) : (
           <div className="mt-3">
-            {runs.slice(0, 4).map((run, index) => (
-              <article
-                key={run.id}
-                className="flex min-h-10 items-center gap-3 px-2 text-xs text-muted-foreground"
-              >
-                {index === 0 ? (
-                  <Circle className="size-2.5 shrink-0 fill-current" strokeWidth={0} />
-                ) : (
-                  <Archive className="size-3.5 shrink-0" strokeWidth={1.6} />
-                )}
-                <span className={cn("truncate", index === 0 && "font-medium text-foreground/80")}>
-                  {task.name}
-                </span>
-                <span className="truncate text-muted-foreground/60">{projectLabel(task)}</span>
-                <time
-                  className="ml-auto shrink-0 text-muted-foreground/60 tabular-nums"
-                  dateTime={new Date(run.createdAt).toISOString()}
+            {runs.slice(0, 4).map((run, index) => {
+              const historyState = runHistoryState(run)
+              return (
+                <button
+                  key={run.id}
+                  type="button"
+                  disabled={historyState !== "openable"}
+                  onClick={() => run.sessionId && onOpenSession(run.sessionId)}
+                  className={cn(
+                    "flex min-h-10 w-full items-center gap-3 rounded-lg px-2 text-left text-xs text-muted-foreground",
+                    historyState === "openable" && "hover:bg-muted/60 hover:text-foreground",
+                    historyState !== "openable" && "cursor-default"
+                  )}
                 >
-                  {formatRunAge(run.createdAt)}
-                </time>
-              </article>
-            ))}
+                  {index === 0 ? (
+                    <Circle className="size-2.5 shrink-0 fill-current" strokeWidth={0} />
+                  ) : (
+                    <Archive className="size-3.5 shrink-0" strokeWidth={1.6} />
+                  )}
+                  <span className={cn("truncate", index === 0 && "font-medium text-foreground/80")}>
+                    {task.name}
+                  </span>
+                  <span className="truncate text-muted-foreground/60">
+                    {historyState === "pending"
+                      ? "正在创建会话"
+                      : historyState === "unavailable"
+                        ? "会话已删除或不可用"
+                        : projectLabel(task)}
+                  </span>
+                  <time
+                    className="ml-auto shrink-0 text-muted-foreground/60 tabular-nums"
+                    dateTime={new Date(run.createdAt).toISOString()}
+                  >
+                    {formatRunAge(run.createdAt)}
+                  </time>
+                </button>
+              )
+            })}
           </div>
         )}
       </section>

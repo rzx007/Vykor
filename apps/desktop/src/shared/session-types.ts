@@ -209,6 +209,11 @@ export interface DesktopBootstrapData {
   outsideProjectWorkspaceRoot: string
 }
 
+export interface DesktopSessionLists {
+  sessions: DesktopSessionRecord[]
+  archivedSessions: DesktopSessionRecord[]
+}
+
 export interface DesktopProjectDetails {
   project: DesktopProject
   git: boolean

@@ -26,7 +26,11 @@ export interface ScheduledTaskExecutorOptions {
 export class ScheduledTaskExecutor {
   constructor(private readonly options: ScheduledTaskExecutorOptions) {}
 
-  async execute(task: ScheduledTaskRecord, scheduledRun: ScheduledRunRecord) {
+  async execute(
+    task: ScheduledTaskRecord,
+    scheduledRun: ScheduledRunRecord,
+    onSessionReady: (sessionId: string) => void,
+  ) {
     const projectCwd = task.projectPaths[0];
     const outsideProject = task.destination === "standalone" && !projectCwd;
     let executionCwd: string | undefined;
@@ -77,6 +81,7 @@ export class ScheduledTaskExecutor {
           },
         });
       }
+      onSessionReady(session!.id);
       const admission = await this.options.sessionInteractions.admitPrompt(session!.id, {
         id: `scheduled-input:${scheduledRun.id}`,
         items: [{ type: "text", text: scheduledPrompt(task) }], delivery: "queue",
@@ -86,7 +91,7 @@ export class ScheduledTaskExecutor {
       if (!admission.run) throw new Error("Scheduled task Agent runtime is unavailable");
       const result = await this.options.runControl.awaitRun(session!.id, admission.run.id);
       if (result.status !== "completed") throw new Error(result.error ?? `Scheduled Agent run ${result.status}`);
-      return { sessionId: session!.id, runId: admission.run.id, summary: result.output.slice(0, 20_000) };
+      return { runId: admission.run.id, summary: result.output.slice(0, 20_000) };
     } finally {
       if (outsideProject && !session && executionCwd) await rmdir(executionCwd).catch(() => {});
       if (worktree?.created && !(await worktree.manager.hasChanges(worktree.slug).catch(() => true))) {

@@ -221,6 +221,16 @@ export class ScheduleRepository {
       return this.getRun(id)!;
     })();
   }
+  linkRunSession(id: string, sessionId: string): ScheduledRunRecord {
+    return this.database.transaction(() => {
+      this.storage.assertWritable();
+      if (!this.getRun(id)) throw new Error(`Scheduled run not found: ${id}`);
+      this.database.prepare(
+        "UPDATE scheduled_run SET session_id = ?, updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM session WHERE id = ?)",
+      ).run(sessionId, Date.now(), id, sessionId);
+      return this.getRun(id)!;
+    })();
+  }
   interruptActiveRuns(reason: string): number {
     return this.database.transaction(() => {
       this.storage.assertWritable();

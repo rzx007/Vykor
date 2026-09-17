@@ -23,14 +23,26 @@ afterEach(async () => {
 });
 
 function createHarness(
-  execute = vi.fn(async () => ({
-    sessionId: "scheduled-session",
-    runId: "agent-run",
-    summary: "Agent completed the scheduled work.",
-  })),
+  execute = vi.fn(async (
+    _task: ScheduledTaskRecord,
+    _run: ScheduledRunRecord,
+    reportSessionReady: (sessionId: string) => void,
+  ) => {
+    reportSessionReady("scheduled-session");
+    return {
+      sessionId: "scheduled-session",
+      runId: "agent-run",
+      summary: "Agent completed the scheduled work.",
+    };
+  }),
 ) {
   const dir = mkdtempSync(join(tmpdir(), "ohs-scheduled-service-"));
   const store = new SessionStore({ path: join(dir, "store.db") });
+  store.sessions.create({
+    id: "scheduled-session",
+    cwd: process.cwd(),
+    model: "test-model",
+  });
   const service = new ScheduledTaskService({
     schedules: store.schedules,
     execute,
@@ -44,6 +56,54 @@ function createHarness(
 }
 
 describe("ScheduledTaskService", () => {
+  it("persists a run session as soon as execution reports it", async () => {
+    let releaseExecution!: () => void;
+    let executionStarted!: (
+      reportSessionReady: ((sessionId: string) => void) | undefined,
+    ) => void;
+    const executionGate = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    const started = new Promise<((sessionId: string) => void) | undefined>(
+      (resolve) => {
+        executionStarted = resolve;
+      },
+    );
+    const { service, store } = createHarness(
+      vi.fn(async (_task, _run, reportSessionReady) => {
+        executionStarted(reportSessionReady);
+        await executionGate;
+        return {
+          sessionId: "scheduled-session",
+          runId: "agent-run",
+          summary: "done",
+        };
+      }),
+    );
+    const task = service.createTask({
+      name: "early-session-link",
+      prompt: "Run in a new conversation.",
+      recurrence: "2099-01-01T00:00:00Z",
+      recurrenceFormat: "once",
+      timezone: "UTC",
+      destination: "standalone",
+      projectPaths: [process.cwd()],
+    });
+
+    const pending = service.trigger(task.id);
+    const reportSessionReady = await started;
+    reportSessionReady?.("scheduled-session");
+    const running = store.schedules.listRuns({ taskId: task.id })[0];
+    releaseExecution();
+    await pending;
+
+    expect(reportSessionReady).toBeTypeOf("function");
+    expect(running).toMatchObject({
+      status: "running",
+      sessionId: "scheduled-session",
+    });
+  });
+
   it("is composed with store.schedules instead of legacy Store methods", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ohs-schedule-composition-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
@@ -94,6 +154,9 @@ describe("ScheduledTaskService", () => {
       updateRun: () => {
         throw new Error("unused");
       },
+      linkRunSession: () => {
+        throw new Error("unused");
+      },
     };
     const service = new ScheduledTaskService({
       schedules,
@@ -109,7 +172,7 @@ describe("ScheduledTaskService", () => {
     ]);
   });
 
-  it("routes task and run workflows through all nine schedule operations", async () => {
+  it("routes task and run workflows through all schedule operations", async () => {
     const task: ScheduledTaskRecord = {
       id: "task-fake",
       name: "fake",
@@ -155,10 +218,16 @@ describe("ScheduledTaskService", () => {
       updateRun: vi.fn(
         (_id, patch) => ({ ...run, ...patch }) as ScheduledRunRecord,
       ),
+      linkRunSession: vi.fn(
+        (_id, sessionId) => ({ ...run, sessionId }) as ScheduledRunRecord,
+      ),
     };
     const service = new ScheduledTaskService({
       schedules,
-      execute: async () => ({ sessionId: "s1", runId: "r1", summary: "done" }),
+      execute: async (_task, _run, reportSessionReady) => {
+        reportSessionReady("s1");
+        return { runId: "r1", summary: "done" };
+      },
     });
     cleanups.push(() => service.shutdown());
 
@@ -199,6 +268,7 @@ describe("ScheduledTaskService", () => {
         prompt: expect.stringContaining("deployment"),
       }),
       expect.objectContaining({ taskId: task.id, cause: "manual" }),
+      expect.any(Function),
     );
     expect(run).toMatchObject({
       status: "succeeded",
@@ -396,6 +466,104 @@ describe("ScheduledTaskService", () => {
         .listRuns({ taskId: task.id })
         .filter((run) => run.status === "skipped"),
     ).toHaveLength(0);
+  });
+
+  it("does not restore a run session after that link is cleared during execution", async () => {
+    let releaseExecution!: () => void;
+    let sessionLinked!: () => void;
+    const executionGate = new Promise<void>((resolve) => {
+      releaseExecution = resolve;
+    });
+    const linked = new Promise<void>((resolve) => {
+      sessionLinked = resolve;
+    });
+    const { service, store } = createHarness(
+      vi.fn(async (_task, _run, reportSessionReady) => {
+        reportSessionReady("scheduled-session");
+        sessionLinked();
+        await executionGate;
+        return {
+          sessionId: "scheduled-session",
+          runId: "agent-run",
+          summary: "done",
+        };
+      }),
+    );
+    const task = service.createTask({
+      name: "deleted-session",
+      prompt: "Run in a disposable conversation.",
+      recurrence: "2099-01-01T00:00:00Z",
+      recurrenceFormat: "once",
+      timezone: "UTC",
+      destination: "standalone",
+      projectPaths: [process.cwd()],
+    });
+
+    const pending = service.trigger(task.id);
+    await linked;
+    const runId = store.schedules.listRuns({ taskId: task.id })[0]!.id;
+    (store as any).storage.database.connection
+      .prepare("UPDATE scheduled_run SET session_id = NULL WHERE id = ?")
+      .run(runId);
+    releaseExecution();
+    await pending;
+
+    expect(store.schedules.getRun(runId)?.sessionId).toBeUndefined();
+  });
+
+  it("does not link a session that was deleted before the executor reports it", async () => {
+    let reportSessionReady!: (sessionId: string) => void;
+    let releaseExecution!: () => void;
+    let markStarted!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseExecution = resolve; });
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const execute = vi.fn(async (
+      _task: ScheduledTaskRecord,
+      _run: ScheduledRunRecord,
+      report: (id: string) => void,
+    ) => {
+      reportSessionReady = report;
+      markStarted();
+      await gate;
+      return { runId: "agent-run", summary: "done" };
+    });
+    const { service, store } = createHarness(execute);
+    store.sessions.create({ id: "deleted-session", cwd: process.cwd(), model: "test" });
+    const task = service.createTask({
+      name: "late-session-link", prompt: "work", recurrence: "2099-01-01T00:00:00Z",
+      recurrenceFormat: "once", timezone: "UTC", destination: "standalone",
+      projectPaths: [process.cwd()],
+    });
+
+    const pending = service.trigger(task.id);
+    await started;
+    store.conversationTransactions.deleteSessionTree("deleted-session");
+    reportSessionReady("deleted-session");
+    releaseExecution();
+    const run = await pending;
+
+    expect(run.sessionId).toBeUndefined();
+  });
+
+  it("ignores an installed timer after the task is paused outside the scheduler", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-20T10:00:00Z"));
+    const { execute, service, store } = createHarness();
+    const task = service.createTask({
+      name: "externally-paused",
+      prompt: "Do not run after the source chat is deleted.",
+      recurrence: "RRULE:FREQ=MINUTELY",
+      recurrenceFormat: "rrule",
+      timezone: "UTC",
+      destination: "chat",
+      sessionId: "chat-1",
+    });
+    store.schedules.updateTask(task.id, { status: "paused", nextRunAt: null });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(store.schedules.listRuns({ taskId: task.id })).toEqual([]);
   });
 
   it("does not start a queued run after the task is paused", async () => {

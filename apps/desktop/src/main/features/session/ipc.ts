@@ -35,6 +35,10 @@ export const sessionIpcContribution: IpcContribution = {
         handler: () => desktopSessionService.bootstrap(),
       },
       {
+        channel: IpcChannels.sessionList,
+        handler: () => desktopSessionService.listSessions(),
+      },
+      {
         channel: IpcChannels.sessionDaemonStatus,
         handler: () => desktopSessionService.getDaemonStatus(),
       },

@@ -17,6 +17,7 @@ import type {
   DesktopDaemonStatus,
   DesktopProjectDetails,
   DesktopSessionRecord,
+  DesktopSessionLists,
   DesktopSessionView,
   CloseDesktopAuxSessionInput,
   EditLatestDesktopPromptInput,
@@ -287,6 +288,7 @@ export type DesktopAPI = {
   }
   sessions: {
     bootstrap: () => Promise<DesktopBootstrapData>
+    list: () => Promise<DesktopSessionLists>
     daemonStatus: () => Promise<DesktopDaemonStatus>
     chooseProject: () => Promise<DesktopProjectDetails | null>
     inspectProject: (path: string) => Promise<DesktopProjectDetails>

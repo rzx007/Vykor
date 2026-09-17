@@ -1,9 +1,8 @@
 import { AnimatePresence, motion } from "motion/react"
-import { CalendarClock, CircleAlert, ExternalLink, X } from "lucide-react"
+import { CalendarClock, CircleAlert, X } from "lucide-react"
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
-import { Button } from "@renderer/components/ui/button"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
@@ -30,6 +29,7 @@ const splitColumns = "minmax(0, 0fr) minmax(0, 44rem) minmax(0, 1fr)"
 export function ScheduledPage({
   onStartConversation,
   onOpenConversation,
+  onSessionListChanged,
 }: ScheduledPageProps): React.JSX.Element {
   const { resolvedReducedMotion } = useAppearance()
   const [tasks, setTasks] = useState<DesktopScheduledTask[]>([])
@@ -48,30 +48,63 @@ export function ScheduledPage({
   const refreshInitializedRef = useRef(false)
   const unreadCountRef = useRef(0)
   const notifiedRunIdsRef = useRef<Set<string>>(new Set())
+  const knownRunSessionIdsRef = useRef<Set<string> | null>(null)
+  const refreshRequestRef = useRef(0)
+  const selectedIdRef = useRef(selectedId)
+  const selectTask = useCallback((nextSelectedId: string | null): void => {
+    selectedIdRef.current = nextSelectedId
+    setSelectedId(nextSelectedId)
+  }, [])
 
   const refresh = useCallback(async (): Promise<void> => {
+    const requestId = ++refreshRequestRef.current
+    const selectedTaskId = selectedId
     try {
       const previousUnread = unreadCountRef.current
       const initialized = refreshInitializedRef.current
-      const [nextStatus, nextTasks] = await Promise.all([
+      const [nextStatus, nextTasks, latestRuns, selectedRuns] = await Promise.all([
         window.desktop.schedules.status(),
         window.desktop.schedules.list(),
+        window.desktop.schedules.listRuns({ limit: 50 }),
+        selectedTaskId
+          ? window.desktop.schedules.listRuns({ taskId: selectedTaskId, limit: 30 })
+          : Promise.resolve(null),
       ])
-      const latestRuns =
-        nextStatus.executing > 0 ? await window.desktop.schedules.listRuns({ limit: 50 }) : []
+      if (requestId !== refreshRequestRef.current || selectedTaskId !== selectedIdRef.current) return
       if (initialized && nextStatus.unread > previousUnread) {
         const unreadRuns = await window.desktop.schedules.listRuns({ unread: true, limit: 10 })
         await notifyUnreadScheduledRuns(
           unreadRuns,
           nextTasks,
-          selectedId,
+          selectedTaskId,
           notifiedRunIdsRef.current
         )
       }
+      const nextSessionIds = new Set(
+        latestRuns.flatMap((run) => (run.sessionId ? [run.sessionId] : []))
+      )
+      const previousSessionIds = knownRunSessionIdsRef.current
+      const sessionIdsChanged =
+        (previousSessionIds === null && nextSessionIds.size > 0) ||
+        (previousSessionIds !== null && !sameStringSet(previousSessionIds, nextSessionIds))
+      let sessionListSynchronized = !sessionIdsChanged
+      if (sessionIdsChanged) {
+        try {
+          await onSessionListChanged()
+          sessionListSynchronized = true
+        } catch {
+          // Keep the previous snapshot so the next poll retries the narrow session-list refresh.
+        }
+      }
+      if (requestId !== refreshRequestRef.current || selectedTaskId !== selectedIdRef.current) return
+      if (sessionListSynchronized) knownRunSessionIdsRef.current = nextSessionIds
       unreadCountRef.current = nextStatus.unread
       refreshInitializedRef.current = true
       setStatus(nextStatus)
       setTasks(nextTasks)
+      if (selectedRuns) {
+        setRuns(selectedRuns.map((run) => (run.unread ? { ...run, unread: false } : run)))
+      }
       setRunningTaskIds(
         new Set(
           latestRuns
@@ -79,16 +112,21 @@ export function ScheduledPage({
             .map((run) => run.taskId)
         )
       )
-      setSelectedId((current) =>
-        current && nextTasks.some((task) => task.id === current) ? current : null
-      )
+      if (
+        selectedIdRef.current &&
+        !nextTasks.some((task) => task.id === selectedIdRef.current)
+      ) {
+        selectTask(null)
+      }
       setError(null)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      if (requestId === refreshRequestRef.current && selectedTaskId === selectedIdRef.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
     } finally {
       setLoading(false)
     }
-  }, [selectedId])
+  }, [onSessionListChanged, selectTask, selectedId])
 
   useEffect(() => {
     const initialTimer = window.setTimeout(() => void refresh(), 0)
@@ -156,16 +194,13 @@ export function ScheduledPage({
       try {
         await operation()
         await refresh()
-        if (selectedId) {
-          setRuns(await window.desktop.schedules.listRuns({ taskId: selectedId, limit: 30 }))
-        }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause))
       } finally {
         setBusy(null)
       }
     },
-    [refresh, selectedId]
+    [refresh]
   )
 
   const openCreateEditor = (): void => {
@@ -187,7 +222,7 @@ export function ScheduledPage({
         ? await window.desktop.schedules.update(editorTask.id, input)
         : await window.desktop.schedules.create(input as CreateDesktopScheduledTaskInput)
       await refresh()
-      setSelectedId(saved.id)
+      selectTask(saved.id)
       setError(null)
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause)
@@ -293,7 +328,7 @@ export function ScheduledPage({
                     compact={hasSelection}
                     running={runningTaskIds.has(task.id)}
                     busy={busy !== null}
-                    onSelect={() => setSelectedId(task.id)}
+                    onSelect={() => selectTask(task.id)}
                     onRunNow={() =>
                       void mutate("run", () => window.desktop.schedules.runNow(task.id))
                     }
@@ -339,7 +374,7 @@ export function ScheduledPage({
                     task={selected}
                     runs={runs}
                     busy={busy}
-                    onBack={() => setSelectedId(null)}
+                    onBack={() => selectTask(null)}
                     onRunNow={() =>
                       void mutate(`run:${selected.id}`, () =>
                         window.desktop.schedules.runNow(selected.id)
@@ -357,19 +392,15 @@ export function ScheduledPage({
                     onDelete={() =>
                       void mutate("delete", () => window.desktop.schedules.remove(selected.id))
                     }
+                    onOpenSession={(sessionId) => {
+                      setError(null)
+                      void onOpenConversation(sessionId).catch((cause) => {
+                        setError(cause instanceof Error ? cause.message : String(cause))
+                        void refresh()
+                      })
+                    }}
                   />
                 </ScrollArea>
-                <div className="flex h-14 shrink-0 items-center justify-end border-t border-border/70 bg-background px-5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onOpenConversation(selected.sessionId ?? runs[0]?.sessionId)}
-                    className="h-8 rounded-lg px-3 text-xs"
-                  >
-                    打开聊天
-                    <ExternalLink className="size-3.5" />
-                  </Button>
-                </div>
               </motion.section>
             ) : null}
           </AnimatePresence>
@@ -389,6 +420,10 @@ export function ScheduledPage({
       ) : null}
     </section>
   )
+}
+
+function sameStringSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every((value) => right.has(value))
 }
 
 async function notifyUnreadScheduledRuns(

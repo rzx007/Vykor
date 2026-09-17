@@ -16,7 +16,6 @@ const DAEMON_RESTART_REASON =
   "Daemon restarted while the scheduled task was running";
 
 export interface ScheduledTaskExecutionResult {
-  sessionId: string;
   runId: string;
   summary: string;
 }
@@ -30,6 +29,7 @@ export interface ScheduleOperations {
   createRun(input: CreateScheduledRunInput): ScheduledRunRecord;
   listRuns(options?: { taskId?: string; unread?: boolean; limit?: number }): ScheduledRunRecord[];
   updateRun(id: string, patch: UpdateScheduledRunInput): ScheduledRunRecord;
+  linkRunSession(id: string, sessionId: string): ScheduledRunRecord;
   interruptActiveRuns(reason: string): number;
 }
 
@@ -38,6 +38,7 @@ export interface ScheduledTaskServiceOptions {
   execute(
     task: ScheduledTaskRecord,
     run: ScheduledRunRecord,
+    onSessionReady: (sessionId: string) => void,
   ): Promise<ScheduledTaskExecutionResult>;
 }
 
@@ -200,11 +201,16 @@ export class ScheduledTaskService {
     const timer = setTimeout(
       () => {
         this.timers.delete(task.id);
-        if (Date.now() < task.nextRunAt!) {
-          this.install(task);
+        const latest = this.options.schedules.getTask(task.id);
+        if (!latest || latest.status !== "active" || latest.nextRunAt !== task.nextRunAt) {
+          if (latest) this.install(latest);
           return;
         }
-        void this.startRun(task, "scheduled", task.nextRunAt!);
+        if (Date.now() < latest.nextRunAt!) {
+          this.install(latest);
+          return;
+        }
+        void this.startRun(latest, "scheduled", latest.nextRunAt!);
       },
       Math.min(delay, MAX_TIMER_DELAY_MS),
     );
@@ -268,10 +274,11 @@ export class ScheduledTaskService {
       startedAt: Date.now(),
     });
     try {
-      const result = await this.options.execute(task, run);
+      const result = await this.options.execute(task, run, (sessionId) => {
+        this.options.schedules.linkRunSession(run.id, sessionId);
+      });
       const finished = this.options.schedules.updateRun(run.id, {
         status: "succeeded",
-        sessionId: result.sessionId,
         runId: result.runId,
         summary: result.summary,
         unread: true,

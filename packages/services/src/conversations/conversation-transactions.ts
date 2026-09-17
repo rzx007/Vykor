@@ -735,6 +735,10 @@ export class ConversationTransactions {
     return this.storage.atomic(() => {
       const placeholders = sessionIds.map(() => "?").join(", ");
       const database = this.storage.database.connection;
+      const timestamp = Date.now();
+      database.prepare(`UPDATE scheduled_run SET session_id = NULL, updated_at = ? WHERE session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
+      database.prepare(`UPDATE scheduled_task SET status = CASE WHEN destination = 'chat' THEN 'paused' ELSE status END, next_run_at = CASE WHEN destination = 'chat' THEN NULL ELSE next_run_at END, session_id = NULL, updated_at = ? WHERE session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
+      database.prepare(`UPDATE scheduled_task SET created_from_session_id = NULL, updated_at = ? WHERE created_from_session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
       database.prepare(`DELETE FROM permission_request WHERE session_id IN (${placeholders})`).run(...sessionIds);
       database.prepare(`DELETE FROM session_task WHERE session_id IN (${placeholders})`).run(...sessionIds);
       database.prepare(`DELETE FROM session_run_attempt WHERE run_id IN (SELECT id FROM session_run WHERE session_id IN (${placeholders}))`).run(...sessionIds);

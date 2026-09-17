@@ -289,15 +289,32 @@ describe("SessionCommandService", () => {
       const { service, sessions, runtimeControl, isBarrierReleased } = createService();
       const child = { ...session, id: "child-1", parentId: "s1" };
       sessions.listChildSessions.mockImplementation((id: string) => (id === "s1" ? [child as any] : []));
-      sessions.deleteSessionTree.mockImplementation((id: string) => (id === "s1" ? ["s1"] : [id]));
+      sessions.deleteSessionTree.mockImplementation(() => {
+        expect(isBarrierReleased()).toBe(false);
+        return ["s1", "child-1"];
+      });
 
       const deletedIds = await service.deleteSessionTree("s1");
 
-      expect(deletedIds).toEqual(["child-1", "s1"]);
+      expect(deletedIds).toEqual(["s1", "child-1"]);
       expect(runtimeControl.interruptLiveChild).toHaveBeenCalledWith("s1", "Session deleted");
       expect(runtimeControl.interruptSession).toHaveBeenCalledWith("s1");
       expect(runtimeControl.closeAgent).toHaveBeenCalledWith("s1");
       expect(sessions.deleteSessionTree).toHaveBeenCalledWith("s1");
+      expect(sessions.deleteSessionTree).toHaveBeenCalledTimes(1);
+      expect(sessions.beginArchive).not.toHaveBeenCalled();
+      expect(isBarrierReleased()).toBe(true);
+    });
+
+    it("releases the deletion barrier without leaving sessions closing when persistence fails", async () => {
+      const { service, sessions, isBarrierReleased } = createService();
+      sessions.deleteSessionTree.mockImplementation(() => {
+        throw new Error("delete failed");
+      });
+
+      await expect(service.deleteSessionTree("s1")).rejects.toThrow("delete failed");
+
+      expect(sessions.beginArchive).not.toHaveBeenCalled();
       expect(isBarrierReleased()).toBe(true);
     });
   });

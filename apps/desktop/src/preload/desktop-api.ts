@@ -253,6 +253,7 @@ export const desktopAPI = {
   },
   sessions: {
     bootstrap: () => invoke(IpcChannels.sessionBootstrap),
+    list: () => invoke(IpcChannels.sessionList),
     daemonStatus: () => invoke(IpcChannels.sessionDaemonStatus),
     chooseProject: () => invoke(IpcChannels.sessionChooseProject),
     inspectProject: (path: string) => invoke(IpcChannels.sessionInspectProject, path),

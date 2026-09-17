@@ -7,11 +7,12 @@ export const Route = createFileRoute("/_main/conversation/$sessionId")({
   beforeLoad: async ({ params }) => {
     await useDesktopSessionStore.getState().initialize()
     const state = useDesktopSessionStore.getState()
-    const sessionExists = [...state.sessions, ...state.archivedSessions].some(
-      (session) => session.id === params.sessionId
-    )
-    if (!sessionExists) throw redirect({ to: "/", replace: true })
-    if (state.activeSessionId !== params.sessionId) await state.openSession(params.sessionId)
+    if (state.sessionView?.session.id !== params.sessionId) {
+      await state.openSession(params.sessionId)
+    }
+    if (useDesktopSessionStore.getState().sessionView?.session.id !== params.sessionId) {
+      throw redirect({ to: "/", replace: true })
+    }
   },
   component: ConversationRoute,
 })

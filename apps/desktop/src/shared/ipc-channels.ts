@@ -10,6 +10,7 @@ import type {
   CompactDesktopSessionInput,
   DesktopCompactSessionResult,
   DesktopSessionRecord,
+  DesktopSessionLists,
   DesktopSessionView,
   CloseDesktopAuxSessionInput,
   EditLatestDesktopPromptInput,
@@ -154,6 +155,7 @@ export const IpcChannels = {
   petSetIgnoreMouseEvents: "pet:set-ignore-mouse-events",
 
   sessionBootstrap: "session:bootstrap",
+  sessionList: "session:list",
   sessionDaemonStatus: "session:daemon-status",
   sessionChooseProject: "session:choose-project",
   sessionInspectProject: "session:inspect-project",
@@ -382,6 +384,7 @@ export interface IpcInvokeMap {
   }
 
   [IpcChannels.sessionBootstrap]: { args: []; result: DesktopBootstrapData }
+  [IpcChannels.sessionList]: { args: []; result: DesktopSessionLists }
   [IpcChannels.sessionDaemonStatus]: { args: []; result: DesktopDaemonStatus }
   [IpcChannels.sessionChooseProject]: { args: []; result: DesktopProjectDetails | null }
   [IpcChannels.sessionInspectProject]: {

@@ -317,6 +317,34 @@ export class SessionCommandService {
 
   async deleteSessionTree(sessionId: string): Promise<string[]> {
     this.assertReady();
+    const leases: Array<{ release(): void }> = [];
+    try {
+      const sessionIds = this.acquireSessionTreeDeletionBarriers(sessionId, leases);
+      const interruptedRuns = new Map<string, string[]>();
+      for (const id of sessionIds) {
+        const interrupted = this.options.runtimeControl.interruptSession(id);
+        await this.options.runtimeControl.interruptLiveChild(id, "Session deleted");
+        interruptedRuns.set(
+          id,
+          [interrupted.activeRunId, ...interrupted.queuedRunIds].filter(
+            (runId): runId is string => !!runId,
+          ),
+        );
+      }
+      for (const id of [...sessionIds].reverse()) {
+        await this.options.runtimeControl.waitForRuns(interruptedRuns.get(id) ?? []);
+        await this.options.runtimeControl.closeAgent(id);
+      }
+      return this.options.sessions.deleteSessionTree(sessionId);
+    } finally {
+      for (const lease of leases.reverse()) lease.release();
+    }
+  }
+
+  private acquireSessionTreeDeletionBarriers(
+    sessionId: string,
+    leases: Array<{ release(): void }>,
+  ): string[] {
     const current = this.options.sessions.getSession(sessionId);
     if (!current) throw new SessionApplicationError(404, `Session not found: ${sessionId}`);
     const lease = this.options.operationGate.tryEnterBarrier(
@@ -329,32 +357,16 @@ export class SessionCommandService {
       },
     );
     if (!lease) throw new SessionApplicationError(409, "Session is busy with another operation");
-    try {
-      if (current.status !== "archived" && current.status !== "closing") {
-        this.options.sessions.beginArchive(sessionId);
-      }
-      const interrupted = this.options.runtimeControl.interruptSession(sessionId);
-      const liveInterrupt = this.options.runtimeControl.interruptLiveChild(
-        sessionId,
-        "Session deleted",
-      );
-      const children = this.options.sessions.listChildSessions(sessionId, {
-        includeArchived: true,
-      });
-      await liveInterrupt;
-      const deletedChildIds: string[] = [];
-      for (const child of children) {
-        deletedChildIds.push(...(await this.deleteSessionTree(child.id)));
-      }
-      const interruptedRunIds = [interrupted.activeRunId, ...interrupted.queuedRunIds].filter(
-        (runId): runId is string => !!runId,
-      );
-      await this.options.runtimeControl.waitForRuns(interruptedRunIds);
-      await this.options.runtimeControl.closeAgent(sessionId);
-      return [...deletedChildIds, ...this.options.sessions.deleteSessionTree(sessionId)];
-    } finally {
-      lease.release();
-    }
+    leases.push(lease);
+    const children = this.options.sessions.listChildSessions(sessionId, {
+      includeArchived: true,
+    });
+    return [
+      sessionId,
+      ...children.flatMap((child) =>
+        this.acquireSessionTreeDeletionBarriers(child.id, leases),
+      ),
+    ];
   }
 
   private async archiveSessionTreeWork(sessionId: string): Promise<SessionRecord> {

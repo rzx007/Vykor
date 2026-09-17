@@ -25,6 +25,7 @@ import type {
   DesktopProject,
   DesktopProjectDetails,
   DesktopSessionRecord,
+  DesktopSessionLists,
   DesktopSessionView,
   EditLatestDesktopPromptInput,
   ForkDesktopSessionInput,
@@ -76,6 +77,19 @@ export class DesktopSessionService {
   readonly connection = new DaemonConnectionService()
   readonly subscriptions = new SessionSubscriptionService()
   readonly operations = new SessionOperations()
+
+  async listSessions(): Promise<DesktopSessionLists> {
+    const client = await this.getClient()
+    const allSessions = await client.sessions.list({ includeArchived: true, limit: 400 })
+    return {
+      sessions: sortSessions(
+        allSessions.filter((session) => session.status !== "archived").map(toDesktopSessionRecord)
+      ),
+      archivedSessions: sortSessions(
+        allSessions.filter((session) => session.status === "archived").map(toDesktopSessionRecord)
+      ),
+    }
+  }
 
   async bootstrap(): Promise<DesktopBootstrapData> {
     workspaceService.configureAllowedRoots({

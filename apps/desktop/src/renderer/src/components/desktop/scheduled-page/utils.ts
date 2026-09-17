@@ -1,4 +1,4 @@
-import type { DesktopScheduledTask } from "@shared/schedule-types"
+import type { DesktopScheduledRun, DesktopScheduledTask } from "@shared/schedule-types"
 
 import type { ScheduledFilter } from "./types"
 
@@ -63,6 +63,14 @@ export function formatRunAge(createdAt: number): string {
   const days = Math.floor((Date.now() - createdAt) / 86_400_000)
   if (days <= 0) return "今天"
   return `${days} 天`
+}
+
+export function runHistoryState(
+  run: Pick<DesktopScheduledRun, "sessionId" | "status">
+): "openable" | "pending" | "unavailable" {
+  if (run.sessionId) return "openable"
+  if (run.status === "queued" || run.status === "running") return "pending"
+  return "unavailable"
 }
 
 function parseRecurrenceRule(task: DesktopScheduledTask): Record<string, string> {

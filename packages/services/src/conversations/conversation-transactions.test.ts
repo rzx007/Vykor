@@ -1310,6 +1310,82 @@ describe("ConversationTransactions.admitPrompt", () => {
         };
       }
 
+      it("invalidates scheduled links to every deleted session in the same transaction", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-scheduled-links-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          store.sessions.create({ id: "root", cwd: dir, model: "m" });
+          store.sessions.create({
+            id: "child",
+            parentId: "root",
+            cwd: dir,
+            model: "m",
+          });
+          store.sessions.create({ id: "outside", cwd: dir, model: "m" });
+          store.schedules.createTask({
+            id: "chat-task",
+            name: "Chat task",
+            prompt: "work",
+            recurrence: "RRULE:FREQ=DAILY",
+            recurrenceFormat: "rrule",
+            timezone: "UTC",
+            destination: "chat",
+            sessionId: "child",
+            nextRunAt: 100,
+          });
+          store.schedules.createTask({
+            id: "standalone-task",
+            name: "Standalone task",
+            prompt: "work",
+            recurrence: "RRULE:FREQ=DAILY",
+            recurrenceFormat: "rrule",
+            timezone: "UTC",
+            destination: "standalone",
+            projectPaths: [],
+            createdFromSessionId: "root",
+            nextRunAt: 100,
+          });
+          const deletedRun = store.schedules.createRun({
+            id: "deleted-run",
+            taskId: "standalone-task",
+            cause: "manual",
+            scheduledFor: 1,
+          });
+          const outsideRun = store.schedules.createRun({
+            id: "outside-run",
+            taskId: "standalone-task",
+            cause: "manual",
+            scheduledFor: 2,
+          });
+          store.schedules.updateRun(deletedRun.id, { sessionId: "root" });
+          store.schedules.updateRun(outsideRun.id, { sessionId: "outside" });
+
+          createTransactions(store).deleteSessionTree("root");
+
+          expect(store.schedules.getTask("chat-task")).toMatchObject({
+            status: "paused",
+          });
+          expect(
+            store.schedules.getTask("chat-task")?.sessionId,
+          ).toBeUndefined();
+          expect(
+            store.schedules.getTask("chat-task")?.nextRunAt,
+          ).toBeUndefined();
+          expect(
+            store.schedules.getTask("standalone-task")?.createdFromSessionId,
+          ).toBeUndefined();
+          expect(
+            store.schedules.getRun("deleted-run")?.sessionId,
+          ).toBeUndefined();
+          expect(store.schedules.getRun("outside-run")?.sessionId).toBe(
+            "outside",
+          );
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
       it("deletes a three-level tree in DFS order while preserving outside state and pending mutation", () => {
         const dir = mkdtempSync(join(tmpdir(), "ohs-delete-tree-"));
         const dbPath = join(dir, "store.db");
