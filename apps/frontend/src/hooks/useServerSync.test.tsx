@@ -22,6 +22,14 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" }, });
 }
 
+function capabilitiesResponse(): Response {
+  return jsonResponse({
+    serverVersion: "test",
+    protocol: { version: 4 },
+    features: {},
+  });
+}
+
 function event(seq: number, type: string, payload: Record<string, unknown>, sessionId = "s1"): SessionEventRecord {
   return { id: `e${seq}`, seq, type, schemaVersion: 1, sessionId, payload, createdAt: seq };
 }
@@ -448,6 +456,7 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
     if (pathname === "/health") {
       return jsonResponse({ ok: true });
     }
+    if (pathname === "/capabilities") return capabilitiesResponse();
     if (pathname === "/settings" && init?.method === "PATCH") {
       const body = JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>;
       return jsonResponse({
@@ -1121,10 +1130,13 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
 
   expect(calls.some((call) => call.url === "http://daemon.test/sessions/s1/prompts")).toBe(true);
   expect(calls.some((call) => call.url === "http://daemon.test/permissions/p1/reply")).toBe(true);
-  const healthCalls = calls.filter((call) => new URL(call.url).pathname === "/health");
-  const authenticatedCalls = calls.filter((call) => new URL(call.url).pathname !== "/health");
-  expect(healthCalls.length).toBeGreaterThan(0);
-  expect(healthCalls.every((call) => new Headers(call.init.headers).get("authorization") === null)).toBe(true);
+  const publicPaths = new Set(["/health", "/capabilities"]);
+  const publicCalls = calls.filter((call) => publicPaths.has(new URL(call.url).pathname));
+  const authenticatedCalls = calls.filter((call) => !publicPaths.has(new URL(call.url).pathname));
+  expect(publicCalls.map((call) => new URL(call.url).pathname)).toEqual(
+    expect.arrayContaining(["/health", "/capabilities"]),
+  );
+  expect(publicCalls.every((call) => new Headers(call.init.headers).get("authorization") === null)).toBe(true);
   expect(
     authenticatedCalls
       .filter((call) => new Headers(call.init.headers).get("authorization") !== "Bearer tok")
@@ -1457,6 +1469,7 @@ test("useServerSync reconnects the active session when daemon identity changes",
     calls.push({ url: requestUrl.toString(), init: init ?? {} });
     const pathname = requestUrl.pathname;
     if (pathname === "/health") return jsonResponse({ ok: true });
+    if (pathname === "/capabilities") return capabilitiesResponse();
     if (pathname === "/settings") return jsonResponse({ settings: { model: "m" } });
     if (pathname === "/commands") return jsonResponse({ commands: [] });
     if (pathname === "/sessions") return jsonResponse({ sessions: [session] });
@@ -1539,6 +1552,7 @@ test("useServerSync starts on the new-session home when the latest session uses 
     calls.push({ url: String(url), init: init ?? {} });
     const pathname = new URL(String(url)).pathname;
     if (pathname === "/health") return jsonResponse({ ok: true });
+    if (pathname === "/capabilities") return capabilitiesResponse();
     if (pathname === "/settings")
       return jsonResponse({
         settings: { model: "new-model", provider: "openrouter" },
@@ -1809,6 +1823,7 @@ function workflowJobFixture(options: {
       ...(init?.body ? { body: JSON.parse(String(init.body)) as unknown } : {}),
     });
     if (requestUrl.pathname === "/health") return jsonResponse({ ok: true });
+    if (requestUrl.pathname === "/capabilities") return capabilitiesResponse();
     if (requestUrl.pathname === "/settings") return jsonResponse({ settings: { model: "m" } });
     if (requestUrl.pathname === "/commands") return jsonResponse({ commands: [] });
     if (requestUrl.pathname === "/sessions") return jsonResponse({ sessions: [session] });
@@ -2779,6 +2794,7 @@ test("useServerSync ignores stale Jobs responses after switching sessions", asyn
   globalThis.fetch = (async (url: string | URL | Request) => {
     const requestUrl = new URL(String(url));
     if (requestUrl.pathname === "/health") return jsonResponse({ ok: true });
+    if (requestUrl.pathname === "/capabilities") return capabilitiesResponse();
     if (requestUrl.pathname === "/settings") return jsonResponse({ settings: { model: "m" } });
     if (requestUrl.pathname === "/commands") return jsonResponse({ commands: [] });
     if (requestUrl.pathname === "/sessions") return jsonResponse({ sessions: [sessionA, sessionB] });
