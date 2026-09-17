@@ -24,7 +24,9 @@ function normalizedScope(scope: DesktopGitDiffScope | undefined): DesktopGitDiff
 }
 
 function normalizedRootPath(rootPath: string): string {
-  return rootPath.replace(/\\/g, "/").replace(/\/+$/, "").toLocaleLowerCase()
+  const isWindowsPath = /^[a-z]:[\\/]/i.test(rootPath) || rootPath.startsWith("\\\\")
+  const normalized = (isWindowsPath ? rootPath.replace(/\\/g, "/") : rootPath).replace(/\/+$/, "")
+  return isWindowsPath ? normalized.toLowerCase() : normalized
 }
 
 function queryKey(input: DesktopGitChangesInput): string {

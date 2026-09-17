@@ -16,7 +16,10 @@ describe("queryGitChanges", () => {
     vi.useRealTimers()
   })
 
-  it("shares an in-flight request for normalized root and scope", async () => {
+  it.each([
+    ["D:\\Repo\\", "d:/repo"],
+    ["\\\\Server\\Share\\Repo\\", "\\\\server\\share\\repo"],
+  ])("shares an in-flight request for Windows paths %s and %s", async (firstPath, secondPath) => {
     let resolveRequest!: (value: ReturnType<typeof emptyResult>) => void
     const changes = vi.fn(
       () =>
@@ -29,11 +32,34 @@ describe("queryGitChanges", () => {
       value: { git: { changes } },
     })
 
-    const first = queryGitChanges({ rootPath: "D:\\repo\\", scope: "uncommitted" })
-    const second = queryGitChanges({ rootPath: "d:/repo", scope: undefined })
+    const first = queryGitChanges({ rootPath: firstPath, scope: "uncommitted" })
+    const second = queryGitChanges({ rootPath: secondPath, scope: undefined })
+    expect(second).toBe(first)
     expect(changes).toHaveBeenCalledTimes(1)
     resolveRequest(emptyResult("D:/repo"))
     await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+  })
+
+  it("keeps differently cased POSIX projects separate in flight and in cache", async () => {
+    const changes = vi.fn(({ rootPath }: DesktopGitChangesInput) =>
+      Promise.resolve(emptyResult(rootPath))
+    )
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: { git: { changes } },
+    })
+
+    const upper = queryGitChanges({ rootPath: "/work/Foo" })
+    const lower = queryGitChanges({ rootPath: "/work/foo" })
+    await expect(upper).resolves.toEqual(emptyResult("/work/Foo"))
+    await expect(lower).resolves.toEqual(emptyResult("/work/foo"))
+    await expect(queryGitChanges({ rootPath: "/work/Foo" })).resolves.toEqual(
+      emptyResult("/work/Foo")
+    )
+    await expect(queryGitChanges({ rootPath: "/work/foo" })).resolves.toEqual(
+      emptyResult("/work/foo")
+    )
+    expect(changes).toHaveBeenCalledTimes(2)
   })
 
   it("isolates different roots and scopes", async () => {
