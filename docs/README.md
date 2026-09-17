@@ -41,10 +41,12 @@
 ## 第 0 层：系统鸟瞰
 
 1. [OpenHarness 架构总览](./architecture-overview.md)：先看 CLI/TUI/Web/Desktop/IDE/Bot/Workflow 怎样共用一套 Application 和 Runtime。
-2. [产品入口接入边界](./product-surface-integration.md)：再看每种产品自己负责什么、哪些状态必须共用。
-3. [Framework 与 Durable Application 的能力边界](./agent-framework-capability-boundary.md)：继续下钻 Runtime、daemon 和产品界面的所有权。
-4. [Daemon Application Architecture](./daemon-application-architecture.md)：追踪一个请求怎样进入 durable state 和 Agent Runtime。
-5. [Client Sync Flow](./client-sync-flow.md)：理解 snapshot、SSE、cursor 和多端收敛。
+2. [可交互架构图](./openharness-current-architecture.html)：用组件图查看 Client、Application、Storage 和 Runtime 的主依赖方向。
+3. [架构重构收口与当前边界](./architecture-migration-status.md)：确认 Stage 0–8 的最终结果、已删除兼容面和长期门禁。
+4. [产品入口接入边界](./product-surface-integration.md)：再看每种产品自己负责什么、哪些状态必须共用。
+5. [Framework 与 Durable Application 的能力边界](./agent-framework-capability-boundary.md)：继续下钻 Runtime、daemon 和产品界面的所有权。
+6. [Daemon Application Architecture](./daemon-application-architecture.md)：追踪一个请求怎样进入 durable state 和 Agent Runtime。
+7. [Client Sync Flow](./client-sync-flow.md)：理解 snapshot、SSE、cursor 和多端收敛。
 
 ## 第 1 层：跨模块硬规则
 
@@ -84,13 +86,12 @@
 
 ### Durable Agent Application
 
-- [架构重组迁移状态](./architecture-migration-status.md)：按业务域重组的当前阶段、退场调用基线和下一步。
+- [架构重构收口与当前边界](./architecture-migration-status.md)：Stage 0–8 的最终结果、四层边界、协议/数据基线和长期门禁。
 - [Daemon Application Architecture](./daemon-application-architecture.md)：Session、Input、Run、Permission、Workflow、Owner、恢复和关闭的总入口。
 - [Session Runtime 存储架构](./session-runtime-storage-architecture.md)：SQLite、Repository、Transaction、`SessionStore`、owner lease 和提交/回滚边界。
 - [Durable Execution Data Model](./durable-execution-data-model.md)：所有运行记录的固定格式、关系、终态和版本。
 - [Protocol Contract](./protocol-contract.md)：协议版本、请求错误、snapshot、SSE 和升级规则。
 - [Client Sync Flow](./client-sync-flow.md)：HTTP client、snapshot、SSE、cursor 和 reducer。
-- [Compatibility surface 实施审计](./compatibility-surface-audit.md)：clean-slate 删除/保留裁定与后续批次边界。
 - [Observability](./observability.md)：trace、结构化日志、runtime snapshot 和排障。
 - [Scheduled Tasks Flow](./scheduled-tasks-flow.md)：定时任务怎样保存、触发、运行和记录结果。
 - [Channels Flow](./channels-flow.md)：Bot/Channel 消息怎样进入同一套 durable Session/Run。
@@ -190,6 +191,8 @@
 - `docs/plans/`：阶段实施计划和完成记录，不是当前 API 手册。
 - `docs/superpowers/plans/`、`docs/superpowers/specs/`：更细的历史实施过程。
 - 文件名包含 `review`、`notes` 或明确标为“历史设计”的文档：用于解释过去，不用于决定当前 API。
+- [Compatibility surface 实施审计](./compatibility-surface-audit.md)：Stage 8 删除/保留裁定的实施证据，不是当前 API 清单。
+- [Session 存储增强历史设计](./session-storage-design.md)：已经退场的项目级 JSON snapshot 设计；当前 SQLite 边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)。
 - [Output Styles 历史设计](./output-styles-design.md)、[Skills Enhancement 历史设计](./skills-enhance-design.md)、[Slash Batch 历史设计](./slash-batch-design.md)：保留迁移前背景，当前入口以各文档状态栏指向的新文档为准。
 
 当前文档、ADR、计划和历史发生冲突时，优先级是：
@@ -217,4 +220,5 @@
 - 一条跨模块硬规则只指定一份权威文档，其他地方链接过去，不复制整段契约。
 - 每份当前文档开头必须标明“当前实现”或“权威契约”；计划和历史资料也必须明确状态。
 - 修改公开入口、持久化格式、协议版本、状态机或所有权边界时，必须同步更新本目录和对应权威文档。
+- 修改 Client Resource、Server Application Service、Repository/Transaction 或 Runtime 所有权时，同时核对架构总览、对应专题文档、根 README 和 `openharness-current-architecture.architecture.json` 图源。
 - 不增加兼容代码来维持过时文档。
