@@ -35,6 +35,7 @@ function fixture(initial = false) {
     },
     createService: () => ({
       status: () => ({ platform: "win32", state }),
+      statusAsync: async () => ({ platform: "win32", state }),
       install,
       uninstall,
       start,
@@ -72,6 +73,7 @@ describe("daemon auto-start controller", () => {
       },
       createService: () => ({
         status: () => ({ platform: "linux", state: "unknown" }),
+        statusAsync: async () => ({ platform: "linux", state: "unknown" }),
         install: vi.fn(),
         uninstall: vi.fn(),
         start: vi.fn(),
@@ -107,6 +109,7 @@ describe("daemon auto-start controller", () => {
         status: () => {
           throw new Error("status recovery failed");
         },
+        statusAsync: async () => ({ platform: "win32", state: "not-installed" }),
         install: () => {
           throw new Error("install failed");
         },
@@ -129,6 +132,7 @@ describe("daemon auto-start controller", () => {
       },
       createService: () => ({
         status: () => ({ platform: "win32", state: "running" }),
+        statusAsync: async () => ({ platform: "win32", state: "running" }),
         install: vi.fn(),
         uninstall: vi.fn(),
         start: vi.fn(),
@@ -139,5 +143,30 @@ describe("daemon auto-start controller", () => {
       "Daemon system service did not reach a disabled state",
     );
     expect(current.daemon.autoStart).toBe(true);
+  });
+
+  it("reads snapshots through the asynchronous service status path", async () => {
+    const synchronousStatus = vi.fn(() => {
+      throw new Error("synchronous status must not run");
+    });
+    const controller = createDaemonAutoStartController({
+      invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
+      loadSettings: async () => settings(false),
+      saveSettings: vi.fn(),
+      createService: () => ({
+        status: synchronousStatus,
+        statusAsync: async () => ({ platform: "win32", state: "not-installed" }),
+        install: vi.fn(),
+        uninstall: vi.fn(),
+        start: vi.fn(),
+      }),
+    });
+
+    await expect(controller.snapshot()).resolves.toEqual({
+      configured: false,
+      serviceState: "not-installed",
+      enabled: false,
+    });
+    expect(synchronousStatus).not.toHaveBeenCalled();
   });
 });

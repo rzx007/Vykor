@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 
 /** User-scoped operating-system service manager for a local daemon host. */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -57,6 +57,11 @@ export interface DaemonSystemServiceOptions {
     args: string[],
     env?: NodeJS.ProcessEnv,
   ) => SystemCommandResult;
+  runCommandAsync?: (
+    command: string,
+    args: string[],
+    env?: NodeJS.ProcessEnv,
+  ) => Promise<SystemCommandResult>;
 }
 
 export class DaemonSystemService {
@@ -67,6 +72,9 @@ export class DaemonSystemService {
   private readonly runCommand: NonNullable<
     DaemonSystemServiceOptions["runCommand"]
   >;
+  private readonly runCommandAsync: NonNullable<
+    DaemonSystemServiceOptions["runCommandAsync"]
+  >;
 
   constructor(private readonly options: DaemonSystemServiceOptions) {
     this.platform = options.platform ?? process.platform;
@@ -74,6 +82,7 @@ export class DaemonSystemService {
     this.logsDir = options.logsDir ?? getLogsDir();
     this.uid = options.uid ?? process.getuid?.();
     this.runCommand = options.runCommand ?? runSystemCommand;
+    this.runCommandAsync = options.runCommandAsync ?? runSystemCommandAsync;
   }
 
   invocation(): DaemonServiceInvocation {
@@ -123,6 +132,13 @@ export class DaemonSystemService {
     }
 
     return { platform: this.platform, state: "not-installed" };
+  }
+
+  async statusAsync(): Promise<DaemonSystemServiceStatus> {
+    if (this.platform !== "win32") return this.status();
+    return this.windowsStatusFromResult(
+      await this.runCommandAsync("powershell.exe", this.windowsStatusArguments()),
+    );
   }
 
   isInstalled(): boolean {
@@ -271,13 +287,24 @@ export class DaemonSystemService {
   }
 
   private windowsStatus(): DaemonSystemServiceStatus {
+    return this.windowsStatusFromResult(
+      this.runCommand("powershell.exe", this.windowsStatusArguments()),
+    );
+  }
+
+  private windowsStatusArguments(): string[] {
     const script = `$task = Get-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction SilentlyContinue; if ($null -eq $task) { 'not-installed' } else { $task.State.ToString().ToLowerInvariant() }`;
-    const result = this.runCommand("powershell.exe", [
+    return [
       "-NoProfile",
       "-NonInteractive",
       "-Command",
       script,
-    ]);
+    ];
+  }
+
+  private windowsStatusFromResult(
+    result: SystemCommandResult,
+  ): DaemonSystemServiceStatus {
     if (result.error)
       throw new Error(
         `Cannot query Windows Task Scheduler: ${result.error.message}`,
@@ -517,4 +544,30 @@ function runSystemCommand(
     stderr: result.stderr ?? "",
     ...(result.error ? { error: result.error } : {}),
   };
+}
+
+function runSystemCommandAsync(
+  command: string,
+  args: string[],
+  extraEnv: NodeJS.ProcessEnv = {},
+): Promise<SystemCommandResult> {
+  return new Promise((resolve) => {
+    execFile(
+      command,
+      args,
+      {
+        encoding: "utf-8",
+        windowsHide: true,
+        env: { ...process.env, ...extraEnv },
+      },
+      (error, stdout, stderr) => {
+        resolve({
+          status: error ? (typeof error.code === "number" ? error.code : null) : 0,
+          stdout,
+          stderr,
+          ...(error ? { error } : {}),
+        });
+      },
+    );
+  });
 }

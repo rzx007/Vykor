@@ -27,7 +27,7 @@ export interface DaemonAutoStartControllerOptions {
   saveSettings?: typeof saveSettings;
   createService?: () => Pick<
     DaemonSystemService,
-    "status" | "install" | "start" | "uninstall"
+    "status" | "statusAsync" | "install" | "start" | "uninstall"
   >;
 }
 
@@ -42,7 +42,7 @@ export function createDaemonAutoStartController(
 
   const snapshot = async (): Promise<DaemonAutoStartSnapshot> => {
     const configured = (await read()).daemon?.autoStart ?? false;
-    const serviceState = createService().status().state;
+    const serviceState = (await createService().statusAsync()).state;
     return {
       configured,
       serviceState,
