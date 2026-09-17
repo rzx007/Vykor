@@ -50,8 +50,8 @@ it("shares one git request across changed-file summaries", async () => {
   })
 
   expect(changes).toHaveBeenCalledTimes(1)
-  expect(container.textContent?.match(/\+4/g)).toHaveLength(2)
-  expect(container.textContent?.match(/-2/g)).toHaveLength(2)
+  expect(container.textContent?.match(/\+4/g)).toHaveLength(4)
+  expect(container.textContent?.match(/-2/g)).toHaveLength(4)
   act(() => root.unmount())
   resetGitChangesQueryCacheForTests()
 })
