@@ -20,6 +20,7 @@ import {
 } from "../../../../../../packages/plugins/src/index.js"
 import { createDefaultPluginService } from "../../../../../../packages/server/src/application/default-services/plugin-service.js"
 import { createServiceRoutes } from "../../../../../../packages/server/src/http/routes/service.js"
+import { createSystemRoutes } from "../../../../../../packages/server/src/http/routes/system.js"
 import { DesktopPluginService } from "./plugin-service"
 
 const exampleSource = fileURLToPath(
@@ -94,6 +95,16 @@ function createDesktopService(archivePath: string): DesktopPluginService {
       sessionExists: () => false,
     },
   })
+  routes.route("/", createSystemRoutes({
+    control: {
+      acquireGlobalMutation: () => undefined,
+      closeAllRuntimes: async () => {},
+      invalidateRuntimes: async () => {},
+      runtimeSnapshot: () => { throw new Error("Runtime snapshot is outside this archive test") },
+      inspectRun: () => undefined,
+      listProjectionDiagnostics: () => { throw new Error("Projection diagnostics are outside this archive test") },
+    },
+  }))
   const client = new OpenHarnessClient({
     baseUrl: "http://desktop-archive.test",
     fetch: async (input, init) => await routes.request(input, init),
