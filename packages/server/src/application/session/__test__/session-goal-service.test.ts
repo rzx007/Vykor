@@ -337,6 +337,9 @@ describe("SessionGoalService durable lifecycle", () => {
     });
     await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(resumed).toMatchObject({ pluginId });
+    expect(store.conversations.getInput("resume-plugin")?.metadata).toMatchObject({
+      transcriptVisibility: "hidden",
+    });
     for (const id of ["implicit-plugin-skill-update", "text-edit", "resume-plugin"]) {
       expect(store.conversations.getInput(id)?.metadata.pluginId).toBe(pluginId);
       expect(store.runs.findRunByInput(id)?.metadata.pluginId).toBe(pluginId);

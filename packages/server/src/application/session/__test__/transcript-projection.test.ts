@@ -71,6 +71,19 @@ function createInput(
 }
 
 describe("SessionTranscriptProjection", () => {
+  it("does not project an internal input as a user message", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store as any);
+
+    projection.beginRun("s1", "i1", "r1", createInput({
+      content: "继续推进目标",
+      metadata: { transcriptVisibility: "hidden" },
+    }));
+
+    expect(store.createMessage).not.toHaveBeenCalled();
+    expect(store.upsertMessagePart).not.toHaveBeenCalled();
+  });
+
   it("projects structured input items onto the durable user text part", () => {
     const store = createStore();
     const projection = new SessionTranscriptProjection(store as any);

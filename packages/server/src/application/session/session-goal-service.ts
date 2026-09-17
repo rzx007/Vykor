@@ -146,9 +146,10 @@ export class SessionGoalService {
             items: [
               {
                 type: "text",
-                text: input.response ? `${changed.objective}\n\n用户补充：${input.response}` : changed.objective,
+                text: input.response ?? "继续推进目标。",
               },
             ],
+            ...(!input.response ? { transcriptVisibility: "hidden" as const } : {}),
           });
         else
           this.context.goals.settleGoalRequest(input.requestId, {
@@ -571,6 +572,7 @@ export class SessionGoalService {
     input: {
       items?: AdmitPromptInput["items"];
       attachments?: AdmitPromptInput["attachments"];
+      transcriptVisibility?: "hidden";
     },
   ): void {
     const admitted = this.admission.persistGoalRun(goal.sessionId, this.runInput(goal, requestId, kind, input));
@@ -587,12 +589,14 @@ export class SessionGoalService {
     input: {
       items?: AdmitPromptInput["items"];
       attachments?: AdmitPromptInput["attachments"];
+      transcriptVisibility?: "hidden";
     },
   ): AdmitPromptInput {
     const metadata = {
       goalId: goal.id,
       goalRevision: goal.revision,
       goalRunKind: kind,
+      ...(input.transcriptVisibility ? { transcriptVisibility: input.transcriptVisibility } : {}),
       ...(goal.pluginId ? { pluginId: goal.pluginId } : {}),
     };
     return {

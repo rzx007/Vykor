@@ -48,17 +48,19 @@ export class SessionTranscriptProjection {
     runId: string,
     input: SessionInputRecord,
   ): ActiveTranscriptProjectionState {
-    const existingUserMessage = this.store.conversations
-      .listMessages(sessionId)
-      .find((message) => message.inputId === inputId);
-    if (!existingUserMessage) {
-      const userMessage = this.store.conversations.createMessage({
-        sessionId,
-        role: "user",
-        runId,
-        inputId,
-      });
-      this.projectUserInput(userMessage.id, input);
+    if (input.metadata.transcriptVisibility !== "hidden") {
+      const existingUserMessage = this.store.conversations
+        .listMessages(sessionId)
+        .find((message) => message.inputId === inputId);
+      if (!existingUserMessage) {
+        const userMessage = this.store.conversations.createMessage({
+          sessionId,
+          role: "user",
+          runId,
+          inputId,
+        });
+        this.projectUserInput(userMessage.id, input);
+      }
     }
     return {
       sessionId,
