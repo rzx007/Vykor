@@ -1,6 +1,7 @@
 import {
   Archive,
   Bell,
+  ChevronDown,
   Clock3,
   FolderClosed,
   FolderOpen,
@@ -62,6 +63,11 @@ import { useSessionActionDialogs } from "../../conversation-page/session/session
 import { SessionMoreMenu } from "../../conversation-page/session/session-more-menu"
 import { projectMenuItems } from "./project-menu-items"
 import { DaemonAutoStartCard } from "./daemon-autostart-card"
+import {
+  loadSidebarSectionExpansion,
+  saveSidebarSectionExpansion,
+  type SidebarSectionExpansion,
+} from "./sidebar-section-expansion"
 
 type SidebarProps = {
   open: boolean
@@ -107,6 +113,17 @@ export function Sidebar({
   const [projectName, setProjectName] = useState("")
   const [busy, setBusy] = useState(false)
   const [projectExpansion, setProjectExpansion] = useState<Record<string, boolean>>({})
+  const [sectionExpansion, setSectionExpansion] = useState<SidebarSectionExpansion>(
+    () => loadSidebarSectionExpansion()
+  )
+
+  const toggleSection = (section: keyof SidebarSectionExpansion): void => {
+    setSectionExpansion((current) => {
+      const next = { ...current, [section]: !current[section] }
+      saveSidebarSectionExpansion(next)
+      return next
+    })
+  }
   const recentSessions = useMemo(
     () => sessions.filter((session) => session.workspaceMode === "outside_project"),
     [sessions]
@@ -267,51 +284,94 @@ export function Sidebar({
             />
           ) : (
             <>
-              <SidebarSectionLabel>项目</SidebarSectionLabel>
-              {loadStatus === "loading" && projects.length === 0 ? (
-                <p className="px-2.5 py-2 text-xs text-sidebar-muted">正在加载项目...</p>
-              ) : (
-                <div className="space-y-0.5">
-                  {projects.map((project, index) => {
-                    const path = normalizePath(project.path)
-                    const defaultExpanded = activeProjectPath
-                      ? activeProjectPath === path
-                      : index === 0
-                    const expanded = projectExpansion[path] ?? defaultExpanded
-                    return (
-                      <ProjectGroup
-                        key={project.path}
-                        project={project}
-                        sessions={sessions.filter((session) => samePath(session.cwd, project.path))}
-                        activeSessionId={activeSessionId}
-                        expanded={expanded}
-                        onToggle={() =>
-                          setProjectExpansion((current) => ({ ...current, [path]: !expanded }))
-                        }
-                        projectActions={projectActions}
-                        actions={sessionActions}
-                      />
-                    )
-                  })}
-                </div>
-              )}
+              <SidebarSectionHeader
+                title="项目"
+                expanded={sectionExpansion.projects}
+                onToggle={() => toggleSection("projects")}
+              />
+              <AnimatePresence initial={false}>
+                {sectionExpansion.projects ? (
+                  <motion.div
+                    key="projects-section"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{
+                      height: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
+                      opacity: { duration: 0.14, ease: "easeOut" },
+                    }}
+                    className="overflow-hidden"
+                  >
+                    {loadStatus === "loading" && projects.length === 0 ? (
+                      <p className="px-2.5 py-2 text-xs text-sidebar-muted">正在加载项目...</p>
+                    ) : projects.length === 0 ? (
+                      <p className="px-2.5 py-2 text-xs text-sidebar-muted">暂无项目</p>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {projects.map((project, index) => {
+                          const path = normalizePath(project.path)
+                          const defaultExpanded = activeProjectPath
+                            ? activeProjectPath === path
+                            : index === 0
+                          const expanded = projectExpansion[path] ?? defaultExpanded
+                          return (
+                            <ProjectGroup
+                              key={project.path}
+                              project={project}
+                              sessions={sessions.filter((session) => samePath(session.cwd, project.path))}
+                              activeSessionId={activeSessionId}
+                              expanded={expanded}
+                              onToggle={() =>
+                                setProjectExpansion((current) => ({ ...current, [path]: !expanded }))
+                              }
+                              projectActions={projectActions}
+                              actions={sessionActions}
+                            />
+                          )
+                        })}
+                      </div>
+                    )}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
 
-              {recentSessions.length > 0 ? (
-                <>
-                  <SidebarSectionLabel className="mt-5">最近</SidebarSectionLabel>
-                  <div>
-                    {recentSessions.map((session) => (
-                      <SessionRow
-                        key={session.id}
-                        session={session}
-                        active={activeSessionId === session.id}
-                        actions={sessionActions}
-                        nested={false}
-                      />
-                    ))}
-                  </div>
-                </>
-              ) : null}
+              <SidebarSectionHeader
+                title="最近"
+                expanded={sectionExpansion.recent}
+                onToggle={() => toggleSection("recent")}
+                className="mt-4"
+              />
+              <AnimatePresence initial={false}>
+                {sectionExpansion.recent ? (
+                  <motion.div
+                    key="recent-section"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{
+                      height: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
+                      opacity: { duration: 0.14, ease: "easeOut" },
+                    }}
+                    className="overflow-hidden"
+                  >
+                    {recentSessions.length === 0 ? (
+                      <p className="px-2.5 py-2 text-xs text-sidebar-muted">暂无最近会话</p>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {recentSessions.map((session) => (
+                          <SessionRow
+                            key={session.id}
+                            session={session}
+                            active={activeSessionId === session.id}
+                            actions={sessionActions}
+                            nested={false}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </>
           )}
         </ScrollArea>
@@ -711,6 +771,38 @@ function SidebarNavigationButton({
     >
       <Icon className="size-4 text-sidebar-muted" strokeWidth={1.8} />
       <span>{label}</span>
+    </button>
+  )
+}
+
+function SidebarSectionHeader({
+  title,
+  expanded,
+  onToggle,
+  className,
+}: {
+  title: string
+  expanded: boolean
+  onToggle: () => void
+  className?: string
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      className={cn(
+        "group/section flex h-7 w-full items-center justify-between rounded-md px-2.5 text-left text-ui-small font-normal text-sidebar-muted/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none select-none",
+        className
+      )}
+    >
+      <span>{title}</span>
+      <ChevronDown
+        className={cn(
+          "size-3.5 shrink-0 text-sidebar-muted/50 transition-transform duration-200 group-hover/section:text-sidebar-foreground",
+          !expanded && "-rotate-90"
+        )}
+      />
     </button>
   )
 }
