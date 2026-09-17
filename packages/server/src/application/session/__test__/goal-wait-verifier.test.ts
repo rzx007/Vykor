@@ -9,7 +9,7 @@ describe("GoalWaitVerifier", () => {
       ["foreign", { id: "foreign", sessionId: "s2", status: "running" }],
     ]);
     const verifier = new GoalWaitVerifier({
-      store: { getRun: (id: string) => statuses.get(id) } as never,
+      store: { runs: { getRun: (id: string) => statuses.get(id) } } as never,
       liveChildren: {
         resolveRootSessionId: (id: string) =>
           id === "child" ? "s1" : undefined,

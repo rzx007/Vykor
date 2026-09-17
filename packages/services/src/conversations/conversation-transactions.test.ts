@@ -15,14 +15,14 @@ function createReadyAttachment(
   sizeBytes: number,
   mime = "text/plain",
 ) {
-  store.createImportingAttachment({
+  store.attachments.createImportingAttachment({
     id,
     displayName: `${id}.txt`,
     declaredMediaType: mime,
     stagingName: `${id}.part`,
     createdAt: 10,
   });
-  store.markAttachmentReady(id, {
+  store.attachments.markAttachmentReady(id, {
     sha256: "a".repeat(64),
     sizeBytes,
     mediaType: mime,
@@ -43,7 +43,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m", title: "" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m", title: "" });
         const input = tx.admitPrompt({
           sessionId: "s1",
           content: "Hello world",
@@ -53,9 +53,9 @@ describe("ConversationTransactions.admitPrompt", () => {
         expect(input.content).toBe("Hello world");
         expect(input.delivery).toBe("queue");
         expect(input.attachments).toEqual([]);
-        expect(store.getSession("s1")!.title).toBe("Hello world");
+        expect(store.sessions.get("s1")!.title).toBe("Hello world");
 
-        const events = store.listEvents({ sessionId: "s1" });
+        const events = store.conversations.listEvents({ sessionId: "s1" });
         expect(events.some((e) => e.type === "session.input.admitted")).toBe(true);
       } finally {
         store.close();
@@ -74,7 +74,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         const input = tx.admitPrompt({
           sessionId: "s1",
           items: [
@@ -102,7 +102,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         expect(() =>
           tx.admitPrompt({ sessionId: "s1", content: "" }),
         ).toThrow(/prompt_content_required/);
@@ -127,7 +127,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         const first = tx.admitPrompt({
           id: "input-1",
           sessionId: "s1",
@@ -171,7 +171,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         createReadyAttachment(store, "att-1", 10);
 
         const steerNoAtt = tx.admitPrompt({
@@ -215,13 +215,13 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         createReadyAttachment(store, "ready-1", 30);
         createReadyAttachment(store, "ready-2", 40);
         createReadyAttachment(store, "ready-3", 20);
         createReadyAttachment(store, "oversized", 60);
 
-        store.createImportingAttachment({
+        store.attachments.createImportingAttachment({
           id: "importing",
           displayName: "imp.txt",
           declaredMediaType: "text/plain",
@@ -229,20 +229,20 @@ describe("ConversationTransactions.admitPrompt", () => {
           createdAt: 10,
         });
 
-        store.createImportingAttachment({
+        store.attachments.createImportingAttachment({
           id: "deleted-att",
           displayName: "del.txt",
           declaredMediaType: "text/plain",
           stagingName: "del.part",
           createdAt: 10,
         });
-        store.markAttachmentReady("deleted-att", {
+        store.attachments.markAttachmentReady("deleted-att", {
           sha256: "b".repeat(64),
           sizeBytes: 10,
           mediaType: "text/plain",
           updatedAt: 11,
         });
-        store.softDeleteAttachment("deleted-att");
+        store.attachments.softDeleteAttachment("deleted-att");
 
         // 1. Not found
         expect(() =>
@@ -357,7 +357,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         createReadyAttachment(store, "att-b", 20);
         createReadyAttachment(store, "att-a", 10);
 
@@ -408,7 +408,7 @@ describe("ConversationTransactions.admitPrompt", () => {
         let store = new SessionStore({ path: dbPath });
 
         try {
-          store.createSession({
+          store.sessions.create({
             id: "s1",
             cwd: dir,
             model: "m",
@@ -417,9 +417,9 @@ describe("ConversationTransactions.admitPrompt", () => {
           createReadyAttachment(store, "att-1", 10);
           createReadyAttachment(store, "att-2", 20);
 
-          const initialSession = store.getSession("s1")!;
-          const initialEvents = store.listEvents({ sessionId: "s1" });
-          const initialInputs = store.listInputs("s1");
+          const initialSession = store.sessions.get("s1")!;
+          const initialEvents = store.conversations.listEvents({ sessionId: "s1" });
+          const initialInputs = store.conversations.listInputs("s1");
 
           const testHooks: ConversationTransactionTestHooks = {
             [failurePoint]: () => {
@@ -445,22 +445,22 @@ describe("ConversationTransactions.admitPrompt", () => {
           ).toThrow(`Injected failure at ${failurePoint}`);
 
           // Assert in-memory state rolled back
-          expect(store.listInputs("s1")).toEqual(initialInputs);
-          expect(store.getInput("failed-input")).toBeUndefined();
+          expect(store.conversations.listInputs("s1")).toEqual(initialInputs);
+          expect(store.conversations.getInput("failed-input")).toBeUndefined();
           expect((store as any).storage.state.inputAttachments).toEqual({});
-          expect(store.getSession("s1")!.title).toBe(initialSession.title);
-          expect(store.getSession("s1")!.updatedAt).toBe(initialSession.updatedAt);
-          expect(store.listEvents({ sessionId: "s1" })).toEqual(initialEvents);
+          expect(store.sessions.get("s1")!.title).toBe(initialSession.title);
+          expect(store.sessions.get("s1")!.updatedAt).toBe(initialSession.updatedAt);
+          expect(store.conversations.listEvents({ sessionId: "s1" })).toEqual(initialEvents);
 
           // Assert SQLite disk state rolled back
           store.close();
           store = new SessionStore({ path: dbPath });
 
-          expect(store.listInputs("s1")).toEqual(initialInputs);
-          expect(store.getInput("failed-input")).toBeUndefined();
-          expect(store.getSession("s1")!.title).toBe(initialSession.title);
-          expect(store.getSession("s1")!.updatedAt).toBe(initialSession.updatedAt);
-          expect(store.listEvents({ sessionId: "s1" })).toEqual(initialEvents);
+          expect(store.conversations.listInputs("s1")).toEqual(initialInputs);
+          expect(store.conversations.getInput("failed-input")).toBeUndefined();
+          expect(store.sessions.get("s1")!.title).toBe(initialSession.title);
+          expect(store.sessions.get("s1")!.updatedAt).toBe(initialSession.updatedAt);
+          expect(store.conversations.listEvents({ sessionId: "s1" })).toEqual(initialEvents);
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });
@@ -482,7 +482,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         const result = tx.admitPromptWithRun({
           prompt: { sessionId: "s1", content: "Run this task" },
           run: { metadata: { source: "test" } },
@@ -514,7 +514,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         const first = tx.admitPromptWithRun({
           prompt: { id: "input-retry", sessionId: "s1", content: "Retry prompt" },
         });
@@ -543,7 +543,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         expect(() =>
           tx.admitPromptWithRun({
             prompt: { sessionId: "s1", content: "steer", delivery: "steer" },
@@ -560,7 +560,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
 
         const tx = new ConversationTransactions({
           storage: (store as any).storage,
@@ -581,15 +581,15 @@ describe("ConversationTransactions.admitPrompt", () => {
           }),
         ).toThrow("Simulated failure during run creation");
 
-        expect(store.getInput("should-rollback")).toBeUndefined();
-        expect(store.listInputs("s1")).toEqual([]);
+        expect(store.conversations.getInput("should-rollback")).toBeUndefined();
+        expect(store.conversations.listInputs("s1")).toEqual([]);
         expect(store.runs.listRuns("s1")).toEqual([]);
 
         // Reopen store from SQLite
         store.close();
         store = new SessionStore({ path: dbPath });
-        expect(store.getInput("should-rollback")).toBeUndefined();
-        expect(store.listInputs("s1")).toEqual([]);
+        expect(store.conversations.getInput("should-rollback")).toBeUndefined();
+        expect(store.conversations.listInputs("s1")).toEqual([]);
         expect(store.runs.listRuns("s1")).toEqual([]);
       } finally {
         store.close();
@@ -609,7 +609,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         tx.admitPrompt({ id: "input-1", sessionId: "s1", content: "Original" });
 
         expect(() =>
@@ -639,7 +639,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         const input = tx.admitPrompt({ sessionId: "s1", content: "Source prompt" });
 
         const replayRun = tx.createReplayRun(input.id, {
@@ -669,7 +669,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         expect(() => tx.createReplayRun("non-existent")).toThrow(
           "Session input not found: non-existent",
         );
@@ -691,8 +691,8 @@ describe("ConversationTransactions.admitPrompt", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
-        store.createSession({ id: "s2", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s2", cwd: dir, model: "m" });
         const input1 = tx.admitPrompt({ sessionId: "s1", content: "Prompt 1" });
         const input2 = tx.admitPrompt({ sessionId: "s2", content: "Prompt 2" });
 
@@ -731,9 +731,9 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
-        const oldMessage = store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
-        store.upsertMessagePart({
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        const oldMessage = store.conversations.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        store.conversations.upsertMessagePart({
           id: "old-part",
           sessionId: "s1",
           messageId: oldMessage.id,
@@ -741,7 +741,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           status: "completed",
           text: "old",
         });
-        const previousUpdatedAt = store.getSession("s1")!.updatedAt;
+        const previousUpdatedAt = store.sessions.get("s1")!.updatedAt;
 
         let observedDeletedMessages = false;
         let observedDeletedParts = false;
@@ -809,16 +809,16 @@ describe("ConversationTransactions.admitPrompt", () => {
         ]);
         expect(observedDeletedMessages).toBe(true);
         expect(observedDeletedParts).toBe(true);
-        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(previousUpdatedAt);
+        expect(store.sessions.get("s1")!.updatedAt).toBeGreaterThanOrEqual(previousUpdatedAt);
         expect(
-          store.listEvents({ sessionId: "s1" })
+          store.conversations.listEvents({ sessionId: "s1" })
             .filter(({ type }) => type === "session.transcript.replaced"),
         ).toHaveLength(1);
 
         store.close();
         store = new SessionStore({ path: dbPath });
-        expect(store.listMessages("s1")).toEqual(result.messages);
-        expect(store.listMessageParts("s1")).toEqual(result.parts);
+        expect(store.conversations.listMessages("s1")).toEqual(result.messages);
+        expect(store.conversations.listMessageParts("s1")).toEqual(result.parts);
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
@@ -830,9 +830,9 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
-        const message = store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
-        store.upsertMessagePart({ id: "old-part", sessionId: "s1", messageId: message.id, type: "text", text: "old" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        const message = store.conversations.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        store.conversations.upsertMessagePart({ id: "old-part", sessionId: "s1", messageId: message.id, type: "text", text: "old" });
         const storage = (store as any).storage;
         storage.deltaCheckpoint.markDirty("old-part", 3);
 
@@ -841,23 +841,23 @@ describe("ConversationTransactions.admitPrompt", () => {
         });
         expect(() => tx.replaceTranscript({ sessionId: "s1", messages: [] }))
           .toThrow("injected transcript failure");
-        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
-        expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
+        expect(store.conversations.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.conversations.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
         expect(storage.mutations.messages.size).toBe(0);
         expect(storage.mutations.parts.size).toBe(0);
         expect(storage.mutations.deletedMessages.size).toBe(0);
         expect(storage.mutations.deletedParts.size).toBe(0);
         expect(storage.deltaCheckpoint.dirtyPartIds()).toEqual(["old-part"]);
 
-        store.updateSession("s1", { title: "unrelated save" });
-        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
-        expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
+        store.sessions.update("s1", { title: "unrelated save" });
+        expect(store.conversations.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.conversations.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
 
         store.close();
         store = new SessionStore({ path: dbPath });
-        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
-        expect(store.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
-        expect(store.getSession("s1")!.title).toBe("unrelated save");
+        expect(store.conversations.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.conversations.listMessageParts("s1").map(({ id }) => id)).toEqual(["old-part"]);
+        expect(store.sessions.get("s1")!.title).toBe("unrelated save");
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
@@ -868,8 +868,8 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dir = mkdtempSync(join(tmpdir(), "ohs-replace-and-admit-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
-        store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        store.conversations.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
         const result = createTransactions(store).replaceTranscriptAndAdmitPrompt({
           transcript: { sessionId: "s1", messages: [{ role: "assistant", parts: [{ type: "text", text: "summary" }] }] },
           admission: { prompt: { id: "replacement-input", sessionId: "s1", content: "continue" }, run: { id: "replacement-run" } },
@@ -890,8 +890,8 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
-        store.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        store.conversations.createMessage({ id: "old-message", sessionId: "s1", role: "user" });
         const tx = createTransactions(store, {
           beforeRunCreation: () => { throw new Error("injected run failure"); },
         });
@@ -901,13 +901,13 @@ describe("ConversationTransactions.admitPrompt", () => {
           admission: { prompt: { id: "replacement-input", sessionId: "s1", content: "continue" } },
           createRun: true,
         })).toThrow("injected run failure");
-        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
-        expect(store.getInput("replacement-input")).toBeUndefined();
+        expect(store.conversations.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.conversations.getInput("replacement-input")).toBeUndefined();
 
         store.close();
         store = new SessionStore({ path: dbPath });
-        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
-        expect(store.getInput("replacement-input")).toBeUndefined();
+        expect(store.conversations.listMessages("s1").map(({ id }) => id)).toEqual(["old-message"]);
+        expect(store.conversations.getInput("replacement-input")).toBeUndefined();
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
@@ -918,15 +918,15 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         createReadyAttachment(store, "asset-old", 10);
-        const keepInput = store.admitPrompt({ id: "keep-input", sessionId: "s1", content: "keep" });
-        const keepMessage = store.createMessage({ id: "keep-message", sessionId: "s1", role: "user", inputId: keepInput.id });
-        const oldInput = store.admitPrompt({ id: "old-input", sessionId: "s1", content: "old", attachments: [{ assetId: "asset-old" }] });
-        const oldRun = store.createRun({ id: "old-run", sessionId: "s1", inputId: oldInput.id });
-        store.createRunAttempt({ id: "old-attempt", runId: oldRun.id });
-        const oldMessage = store.createMessage({ id: "old-message", sessionId: "s1", role: "user", inputId: oldInput.id, runId: oldRun.id });
-        store.upsertMessagePart({ id: "old-part", sessionId: "s1", messageId: oldMessage.id, type: "text", text: "old" });
+        const keepInput = store.conversationTransactions.admitPrompt({ id: "keep-input", sessionId: "s1", content: "keep" });
+        const keepMessage = store.conversations.createMessage({ id: "keep-message", sessionId: "s1", role: "user", inputId: keepInput.id });
+        const oldInput = store.conversationTransactions.admitPrompt({ id: "old-input", sessionId: "s1", content: "old", attachments: [{ assetId: "asset-old" }] });
+        const oldRun = store.runs.createRun({ id: "old-run", sessionId: "s1", inputId: oldInput.id });
+        store.runs.createRunAttempt({ id: "old-attempt", runId: oldRun.id });
+        const oldMessage = store.conversations.createMessage({ id: "old-message", sessionId: "s1", role: "user", inputId: oldInput.id, runId: oldRun.id });
+        store.conversations.upsertMessagePart({ id: "old-part", sessionId: "s1", messageId: oldMessage.id, type: "text", text: "old" });
 
         const result = createTransactions(store).replaceLatestPromptWithAdmission({
           sessionId: "s1",
@@ -936,15 +936,15 @@ describe("ConversationTransactions.admitPrompt", () => {
         });
 
         expect(result.transcript.messages.map(({ id }) => id)).toEqual([keepMessage.id]);
-        expect(store.getInput("keep-input")).toBeDefined();
-        expect(store.getInput("old-input")).toBeUndefined();
-        expect(store.getRun("old-run")).toBeUndefined();
-        expect(store.getRunAttempt("old-attempt")).toBeUndefined();
-        expect(store.listInputAttachments("old-input")).toEqual([]);
-        expect(store.listMessageParts("s1")).toEqual([]);
+        expect(store.conversations.getInput("keep-input")).toBeDefined();
+        expect(store.conversations.getInput("old-input")).toBeUndefined();
+        expect(store.runs.getRun("old-run")).toBeUndefined();
+        expect(store.runs.getRunAttempt("old-attempt")).toBeUndefined();
+        expect(store.conversations.listInputAttachments("old-input")).toEqual([]);
+        expect(store.conversations.listMessageParts("s1")).toEqual([]);
         expect(result.input.id).toBe("new-input");
         expect(
-          store.listEvents({ sessionId: "s1" })
+          store.conversations.listEvents({ sessionId: "s1" })
             .filter(({ type }) => type === "session.transcript.replaced"),
         ).toHaveLength(1);
       } finally {
@@ -957,9 +957,9 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-run-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
-        const sourceInput = store.admitPrompt({ id: "source-input", sessionId: "s1", content: "source" });
-        const sourceMessage = store.createMessage({ id: "source-message", sessionId: "s1", role: "user", inputId: sourceInput.id });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        const sourceInput = store.conversationTransactions.admitPrompt({ id: "source-input", sessionId: "s1", content: "source" });
+        const sourceMessage = store.conversations.createMessage({ id: "source-message", sessionId: "s1", role: "user", inputId: sourceInput.id });
 
         const result = createTransactions(store).replaceLatestPromptWithAdmission({
           sessionId: "s1",
@@ -989,33 +989,33 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
         createReadyAttachment(store, "source-asset", 10);
-        const sourceInput = store.admitPrompt({
+        const sourceInput = store.conversationTransactions.admitPrompt({
           id: "source-input",
           sessionId: "s1",
           content: "source",
           attachments: [{ assetId: "source-asset" }],
         });
-        const sourceRun = store.createRun({ id: "source-run", sessionId: "s1", inputId: sourceInput.id });
-        const sourceAttempt = store.createRunAttempt({ id: "source-attempt", runId: sourceRun.id });
-        const sourceMessage = store.createMessage({
+        const sourceRun = store.runs.createRun({ id: "source-run", sessionId: "s1", inputId: sourceInput.id });
+        const sourceAttempt = store.runs.createRunAttempt({ id: "source-attempt", runId: sourceRun.id });
+        const sourceMessage = store.conversations.createMessage({
           id: "source-message",
           sessionId: "s1",
           role: "user",
           inputId: sourceInput.id,
           runId: sourceRun.id,
         });
-        store.upsertMessagePart({
+        store.conversations.upsertMessagePart({
           id: "source-part",
           sessionId: "s1",
           messageId: sourceMessage.id,
           type: "text",
           text: "source",
         });
-        const sourceReferences = store.listInputAttachments(sourceInput.id);
-        const sourceMessages = store.listMessages("s1");
-        const sourceParts = store.listMessageParts("s1");
+        const sourceReferences = store.conversations.listInputAttachments(sourceInput.id);
+        const sourceMessages = store.conversations.listMessages("s1");
+        const sourceParts = store.conversations.listMessageParts("s1");
         const tx = createTransactions(store, {
           beforeRunCreation: () => { throw new Error("injected edit run failure"); },
         });
@@ -1030,25 +1030,25 @@ describe("ConversationTransactions.admitPrompt", () => {
           createRun: true,
         })).toThrow("injected edit run failure");
 
-        expect(store.getInput(sourceInput.id)).toEqual(sourceInput);
-        expect(store.listInputAttachments(sourceInput.id)).toEqual(sourceReferences);
-        expect(store.getRun(sourceRun.id)).toEqual(sourceRun);
-        expect(store.getRunAttempt(sourceAttempt.id)).toEqual(sourceAttempt);
-        expect(store.listMessages("s1")).toEqual(sourceMessages);
-        expect(store.listMessageParts("s1")).toEqual(sourceParts);
-        expect(store.getInput("replacement-input")).toBeUndefined();
-        expect(store.getRun("replacement-run")).toBeUndefined();
+        expect(store.conversations.getInput(sourceInput.id)).toEqual(sourceInput);
+        expect(store.conversations.listInputAttachments(sourceInput.id)).toEqual(sourceReferences);
+        expect(store.runs.getRun(sourceRun.id)).toEqual(sourceRun);
+        expect(store.runs.getRunAttempt(sourceAttempt.id)).toEqual(sourceAttempt);
+        expect(store.conversations.listMessages("s1")).toEqual(sourceMessages);
+        expect(store.conversations.listMessageParts("s1")).toEqual(sourceParts);
+        expect(store.conversations.getInput("replacement-input")).toBeUndefined();
+        expect(store.runs.getRun("replacement-run")).toBeUndefined();
 
         store.close();
         store = new SessionStore({ path: dbPath });
-        expect(store.getInput(sourceInput.id)).toEqual(sourceInput);
-        expect(store.listInputAttachments(sourceInput.id)).toEqual(sourceReferences);
-        expect(store.getRun(sourceRun.id)).toEqual(sourceRun);
-        expect(store.getRunAttempt(sourceAttempt.id)).toEqual(sourceAttempt);
-        expect(store.listMessages("s1")).toEqual(sourceMessages);
-        expect(store.listMessageParts("s1")).toEqual(sourceParts);
-        expect(store.getInput("replacement-input")).toBeUndefined();
-        expect(store.getRun("replacement-run")).toBeUndefined();
+        expect(store.conversations.getInput(sourceInput.id)).toEqual(sourceInput);
+        expect(store.conversations.listInputAttachments(sourceInput.id)).toEqual(sourceReferences);
+        expect(store.runs.getRun(sourceRun.id)).toEqual(sourceRun);
+        expect(store.runs.getRunAttempt(sourceAttempt.id)).toEqual(sourceAttempt);
+        expect(store.conversations.listMessages("s1")).toEqual(sourceMessages);
+        expect(store.conversations.listMessageParts("s1")).toEqual(sourceParts);
+        expect(store.conversations.getInput("replacement-input")).toBeUndefined();
+        expect(store.runs.getRun("replacement-run")).toBeUndefined();
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
@@ -1059,11 +1059,11 @@ describe("ConversationTransactions.admitPrompt", () => {
       const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-fail-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
-        store.createSession({ id: "s1", cwd: dir, model: "m" });
-        store.createSession({ id: "s2", cwd: dir, model: "m" });
-        const sourceInput = store.admitPrompt({ id: "source-input", sessionId: "s1", content: "source" });
-        const sourceMessage = store.createMessage({ id: "source-message", sessionId: "s1", role: "user", inputId: sourceInput.id });
-        const otherMessage = store.createMessage({ id: "other-message", sessionId: "s2", role: "user" });
+        store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        store.sessions.create({ id: "s2", cwd: dir, model: "m" });
+        const sourceInput = store.conversationTransactions.admitPrompt({ id: "source-input", sessionId: "s1", content: "source" });
+        const sourceMessage = store.conversations.createMessage({ id: "source-message", sessionId: "s1", role: "user", inputId: sourceInput.id });
+        const otherMessage = store.conversations.createMessage({ id: "other-message", sessionId: "s2", role: "user" });
         const tx = createTransactions(store);
 
         expect(() => tx.replaceLatestPromptWithAdmission({
@@ -1079,8 +1079,8 @@ describe("ConversationTransactions.admitPrompt", () => {
           admission: { prompt: { sessionId: "s1", content: "new", attachments: [{ assetId: "missing" }] } },
           createRun: false,
         })).toThrow(/missing/i);
-        expect(store.getInput("source-input")).toBeDefined();
-        expect(store.listMessages("s1").map(({ id }) => id)).toEqual(["source-message"]);
+        expect(store.conversations.getInput("source-input")).toBeDefined();
+        expect(store.conversations.listMessages("s1").map(({ id }) => id)).toEqual(["source-message"]);
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
@@ -1089,10 +1089,10 @@ describe("ConversationTransactions.admitPrompt", () => {
 
     describe("forkSessionWithHistory", () => {
       function seedForkSource(store: SessionStore, dir: string) {
-        store.createSession({ id: "source", cwd: dir, model: "model-a", title: "source" });
+        store.sessions.create({ id: "source", cwd: dir, model: "model-a", title: "source" });
         createReadyAttachment(store, "asset-a", 10);
         createReadyAttachment(store, "asset-b", 20);
-        const input = store.admitPrompt({
+        const input = store.conversationTransactions.admitPrompt({
           id: "source-input",
           sessionId: "source",
           content: "source prompt",
@@ -1102,8 +1102,8 @@ describe("ConversationTransactions.admitPrompt", () => {
           ],
           metadata: { input: true },
         });
-        const run = store.createRun({ id: "source-run", sessionId: "source", inputId: input.id });
-        const first = store.createMessage({
+        const run = store.runs.createRun({ id: "source-run", sessionId: "source", inputId: input.id });
+        const first = store.conversations.createMessage({
           id: "first-message",
           sessionId: "source",
           role: "user",
@@ -1111,7 +1111,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           runId: run.id,
           metadata: { order: 1 },
         });
-        store.upsertMessagePart({
+        store.conversations.upsertMessagePart({
           id: "first-part",
           sessionId: "source",
           messageId: first.id,
@@ -1134,7 +1134,7 @@ describe("ConversationTransactions.admitPrompt", () => {
           transformationError: "partial",
           metadata: { inputAttachmentId: input.attachments[0]!.id, extra: true },
         });
-        const second = store.createMessage({
+        const second = store.conversations.createMessage({
           id: "second-message",
           sessionId: "source",
           role: "assistant",
@@ -1142,8 +1142,8 @@ describe("ConversationTransactions.admitPrompt", () => {
           runId: run.id,
           metadata: { order: 2 },
         });
-        store.upsertMessagePart({ id: "second-part", sessionId: "source", messageId: second.id, type: "text", text: "second" });
-        const third = store.createMessage({ id: "third-message", sessionId: "source", role: "system", metadata: { order: 3 } });
+        store.conversations.upsertMessagePart({ id: "second-part", sessionId: "source", messageId: second.id, type: "text", text: "second" });
+        const third = store.conversations.createMessage({ id: "third-message", sessionId: "source", role: "system", metadata: { order: 3 } });
         return { input, first, second, third };
       }
 
@@ -1160,24 +1160,24 @@ describe("ConversationTransactions.admitPrompt", () => {
           expect(child).toEqual(expect.objectContaining({
             id: "child",
             parentId: "source",
-            cwd: store.getSession("source")!.cwd,
+            cwd: store.sessions.get("source")!.cwd,
             model: "model-b",
             agent: "agent-b",
             title: "child title",
             metadata: { child: true },
           }));
-          const inputs = store.listInputs("child");
+          const inputs = store.conversations.listInputs("child");
           expect(inputs).toHaveLength(1);
           expect(inputs[0]!.attachments.map(({ assetId, seq, displayName }) => ({ assetId, seq, displayName }))).toEqual([
             { assetId: "asset-b", seq: 0, displayName: "B" },
             { assetId: "asset-a", seq: 1, displayName: "A" },
           ]);
-          const messages = store.listMessages("child");
+          const messages = store.conversations.listMessages("child");
           expect(messages).toHaveLength(3);
           expect(messages.slice(0, 2).map(({ inputId }) => inputId)).toEqual([inputs[0]!.id, inputs[0]!.id]);
           expect(messages.every(({ runId }) => runId === undefined)).toBe(true);
-          expect(store.listRuns("child")).toEqual([]);
-          const part = store.listMessageParts("child")[0]!;
+          expect(store.runs.listRuns("child")).toEqual([]);
+          const part = store.conversations.listMessageParts("child")[0]!;
           expect(part).toEqual(expect.objectContaining({
             type: "tool", status: "failed", text: "full fields", toolUseId: "tool-use", toolName: "reader",
             input: { path: "x" }, output: { code: 1 }, isError: true, assetId: "asset-b", intent: "ocr",
@@ -1200,12 +1200,12 @@ describe("ConversationTransactions.admitPrompt", () => {
           const tx = createTransactions(store);
           tx.forkSessionWithHistory({ sourceSessionId: "source", beforeMessageId: source.second.id, session: { id: "before", cwd: dir, model: "m" } });
           tx.forkSessionWithHistory({ sourceSessionId: "source", afterMessageId: source.second.id, session: { id: "after", cwd: dir, model: "m" } });
-          expect(store.listMessages("before").map(({ metadata }) => metadata.order)).toEqual([1]);
-          expect(store.listMessages("after").map(({ metadata }) => metadata.order)).toEqual([1, 2]);
+          expect(store.conversations.listMessages("before").map(({ metadata }) => metadata.order)).toEqual([1]);
+          expect(store.conversations.listMessages("after").map(({ metadata }) => metadata.order)).toEqual([1, 2]);
           expect(() => tx.forkSessionWithHistory({ sourceSessionId: "source", beforeMessageId: "missing", session: { id: "bad-before", cwd: dir, model: "m" } })).toThrow("Fork point not found");
           expect(() => tx.forkSessionWithHistory({ sourceSessionId: "source", afterMessageId: "missing", session: { id: "bad-after", cwd: dir, model: "m" } })).toThrow("Fork point not found");
-          expect(store.getSession("bad-before")).toBeUndefined();
-          expect(store.getSession("bad-after")).toBeUndefined();
+          expect(store.sessions.get("bad-before")).toBeUndefined();
+          expect(store.sessions.get("bad-after")).toBeUndefined();
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });
@@ -1237,7 +1237,7 @@ describe("ConversationTransactions.admitPrompt", () => {
             sourceSessionId: "source",
             session: { id: "failed-child", cwd: dir, model: "m" },
           })).toThrow(`injected ${failurePoint}`);
-          expect(store.getSession("failed-child")).toBeUndefined();
+          expect(store.sessions.get("failed-child")).toBeUndefined();
           expect({
             sessions: Object.keys((store as any).storage.state.sessions),
             inputs: Object.keys((store as any).storage.state.inputs),
@@ -1248,7 +1248,7 @@ describe("ConversationTransactions.admitPrompt", () => {
 
           store.close();
           store = new SessionStore({ path: dbPath });
-          expect(store.getSession("failed-child")).toBeUndefined();
+          expect(store.sessions.get("failed-child")).toBeUndefined();
           expect({
             sessions: Object.keys((store as any).storage.state.sessions),
             inputs: Object.keys((store as any).storage.state.inputs),
@@ -1267,28 +1267,28 @@ describe("ConversationTransactions.admitPrompt", () => {
       function seedDeleteFixture(store: SessionStore, dir: string) {
         createReadyAttachment(store, "tree-asset", 10);
         const ids = ["root", "child", "grandchild", "outside"];
-        store.createSession({ id: "root", cwd: dir, model: "m" });
-        store.createSession({ id: "child", parentId: "root", cwd: dir, model: "m" });
-        store.createSession({ id: "grandchild", parentId: "child", cwd: dir, model: "m" });
-        store.createSession({ id: "outside", cwd: dir, model: "m" });
+        store.sessions.create({ id: "root", cwd: dir, model: "m" });
+        store.sessions.create({ id: "child", parentId: "root", cwd: dir, model: "m" });
+        store.sessions.create({ id: "grandchild", parentId: "child", cwd: dir, model: "m" });
+        store.sessions.create({ id: "outside", cwd: dir, model: "m" });
         for (const id of ids) {
-          const input = store.admitPrompt({
+          const input = store.conversationTransactions.admitPrompt({
             id: `${id}-input`, sessionId: id, content: id,
             attachments: [{ assetId: "tree-asset" }],
           });
-          const run = store.createRun({ id: `${id}-run`, sessionId: id, inputId: input.id });
-          store.createRunAttempt({ id: `${id}-attempt`, runId: run.id });
-          const message = store.createMessage({
+          const run = store.runs.createRun({ id: `${id}-run`, sessionId: id, inputId: input.id });
+          store.runs.createRunAttempt({ id: `${id}-attempt`, runId: run.id });
+          const message = store.conversations.createMessage({
             id: `${id}-message`, sessionId: id, role: "assistant", runId: run.id, inputId: input.id,
           });
-          store.upsertMessagePart({
+          store.conversations.upsertMessagePart({
             id: `${id}-part`, sessionId: id, messageId: message.id, type: "text", text: id,
           });
           store.createSessionTask({
             id: `${id}-task`, sessionId: id, runId: run.id, type: "process",
             description: id, cwd: dir,
           });
-          store.createPermissionRequest({
+          store.permissions.create({
             id: `${id}-permission`, sessionId: id, runId: run.id, toolName: "Write", payload: {},
           });
         }
@@ -1335,16 +1335,16 @@ describe("ConversationTransactions.admitPrompt", () => {
             tasks: ["outside-task"], permissions: ["outside-permission"],
             events: expect.any(Array),
           });
-          expect(store.listEvents().some(({ sessionId }) => sessionId === "outside")).toBe(true);
-          expect(store.listEvents().some(({ sessionId }) => ["root", "child", "grandchild"].includes(sessionId ?? ""))).toBe(false);
-          expect(store.getSessionState("outside").messages[0]!.metadata).toEqual({ pending: true });
+          expect(store.conversations.listEvents().some(({ sessionId }) => sessionId === "outside")).toBe(true);
+          expect(store.conversations.listEvents().some(({ sessionId }) => ["root", "child", "grandchild"].includes(sessionId ?? ""))).toBe(false);
+          expect(store.conversationTransactions.getSessionState("outside").messages[0]!.metadata).toEqual({ pending: true });
 
           store.close();
           store = new SessionStore({ path: dbPath });
-          expect(store.getSession("root")).toBeUndefined();
-          expect(store.getSession("child")).toBeUndefined();
-          expect(store.getSession("grandchild")).toBeUndefined();
-          expect(store.getSessionState("outside").messages[0]!.metadata).toEqual({ pending: true });
+          expect(store.sessions.get("root")).toBeUndefined();
+          expect(store.sessions.get("child")).toBeUndefined();
+          expect(store.sessions.get("grandchild")).toBeUndefined();
+          expect(store.conversationTransactions.getSessionState("outside").messages[0]!.metadata).toEqual({ pending: true });
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });
@@ -1386,11 +1386,11 @@ describe("ConversationTransactions.admitPrompt", () => {
         const dir = mkdtempSync(join(tmpdir(), "ohs-delete-tree-nested-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
-          store.createSession({ id: "root", cwd: dir, model: "m" });
+          store.sessions.create({ id: "root", cwd: dir, model: "m" });
           const tx = createTransactions(store);
           expect(() => store.transaction(() => tx.deleteSessionTree("root")))
             .toThrow("deleteSessionTree cannot be called inside a store transaction");
-          expect(store.getSession("root")).toBeDefined();
+          expect(store.sessions.get("root")).toBeDefined();
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });
@@ -1403,21 +1403,21 @@ describe("ConversationTransactions.admitPrompt", () => {
         const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-attempt-task-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
-          store.createSession({ id: "s1", cwd: dir, model: "m" });
-          const run = store.createRun({ id: "run", sessionId: "s1" });
-          store.createRunAttempt({ id: "pending-attempt", runId: run.id });
-          const runningAttempt = store.createRunAttempt({ id: "running-attempt", runId: run.id });
-          store.updateRunAttempt(runningAttempt.id, { status: "running" });
-          const completedAttempt = store.createRunAttempt({ id: "completed-attempt", runId: run.id });
-          store.updateRunAttempt(completedAttempt.id, { status: "completed" });
+          store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+          const run = store.runs.createRun({ id: "run", sessionId: "s1" });
+          store.runs.createRunAttempt({ id: "pending-attempt", runId: run.id });
+          const runningAttempt = store.runs.createRunAttempt({ id: "running-attempt", runId: run.id });
+          store.runs.updateRunAttempt(runningAttempt.id, { status: "running" });
+          const completedAttempt = store.runs.createRunAttempt({ id: "completed-attempt", runId: run.id });
+          store.runs.updateRunAttempt(completedAttempt.id, { status: "completed" });
           store.createSessionTask({ id: "pending-task", sessionId: "s1", type: "process", status: "pending", description: "pending", cwd: dir });
           store.createSessionTask({ id: "running-task", sessionId: "s1", type: "process", description: "running", cwd: dir });
           store.createSessionTask({ id: "done-task", sessionId: "s1", type: "process", status: "completed", description: "done", cwd: dir });
           const tx = createTransactions(store);
 
           expect(tx.settleActiveRunAttempts(run.id, "cancelled", "stopped")).toBe(2);
-          expect(store.listRunAttempts(run.id).map(({ status }) => status)).toEqual(["cancelled", "cancelled", "completed"]);
-          expect(store.getRunAttempt("pending-attempt")).toMatchObject({ error: "stopped", errorKind: "interrupted" });
+          expect(store.runs.listRunAttempts(run.id).map(({ status }) => status)).toEqual(["cancelled", "cancelled", "completed"]);
+          expect(store.runs.getRunAttempt("pending-attempt")).toMatchObject({ error: "stopped", errorKind: "interrupted" });
           expect(tx.interruptActiveSessionTasks()).toBe(2);
           expect(store.getSessionTask("pending-task")).toMatchObject({ status: "interrupted", error: "Daemon restarted before the task completed" });
           expect(store.getSessionTask("running-task")).toMatchObject({ status: "interrupted" });
@@ -1432,37 +1432,37 @@ describe("ConversationTransactions.admitPrompt", () => {
         const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-runs-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
-          store.createSession({ id: "active", cwd: dir, model: "m" });
-          const input = store.admitPrompt({ id: "owned", sessionId: "active", content: "owned" });
-          const run = store.createRun({ id: "active-run", sessionId: "active", inputId: input.id });
-          const attempt = store.createRunAttempt({ id: "active-attempt", runId: run.id });
-          store.updateRunAttempt(attempt.id, { status: "running" });
-          const message = store.createMessage({ id: "assistant", sessionId: "active", role: "assistant", runId: run.id });
-          store.upsertMessagePart({ id: "text-part", sessionId: "active", messageId: message.id, type: "text", status: "running", text: "partial" });
-          store.upsertMessagePart({ id: "tool-part", sessionId: "active", messageId: message.id, type: "tool", status: "running", toolUseId: "tool-use", toolName: "Write" });
-          store.admitPrompt({ id: "orphan", sessionId: "active", delivery: "steer", content: "orphan", metadata: { traceId: "trace" } });
-          store.createSession({ id: "idle-closing", cwd: dir, model: "m" });
-          store.beginArchive("idle-closing");
+          store.sessions.create({ id: "active", cwd: dir, model: "m" });
+          const input = store.conversationTransactions.admitPrompt({ id: "owned", sessionId: "active", content: "owned" });
+          const run = store.runs.createRun({ id: "active-run", sessionId: "active", inputId: input.id });
+          const attempt = store.runs.createRunAttempt({ id: "active-attempt", runId: run.id });
+          store.runs.updateRunAttempt(attempt.id, { status: "running" });
+          const message = store.conversations.createMessage({ id: "assistant", sessionId: "active", role: "assistant", runId: run.id });
+          store.conversations.upsertMessagePart({ id: "text-part", sessionId: "active", messageId: message.id, type: "text", status: "running", text: "partial" });
+          store.conversations.upsertMessagePart({ id: "tool-part", sessionId: "active", messageId: message.id, type: "tool", status: "running", toolUseId: "tool-use", toolName: "Write" });
+          store.conversationTransactions.admitPrompt({ id: "orphan", sessionId: "active", delivery: "steer", content: "orphan", metadata: { traceId: "trace" } });
+          store.sessions.create({ id: "idle-closing", cwd: dir, model: "m" });
+          store.sessions.beginArchive("idle-closing");
           const tx = createTransactions(store);
 
           expect(tx.interruptActiveRuns()).toBe(1);
-          expect(store.getRun("active-run")).toMatchObject({ status: "interrupted", error: "Daemon restarted before the run completed" });
-          expect(store.getRunAttempt("active-attempt")).toMatchObject({ status: "cancelled", errorKind: "interrupted" });
-          expect(store.listMessageParts("active")).toEqual(expect.arrayContaining([
+          expect(store.runs.getRun("active-run")).toMatchObject({ status: "interrupted", error: "Daemon restarted before the run completed" });
+          expect(store.runs.getRunAttempt("active-attempt")).toMatchObject({ status: "cancelled", errorKind: "interrupted" });
+          expect(store.conversations.listMessageParts("active")).toEqual(expect.arrayContaining([
             expect.objectContaining({ id: "text-part", status: "interrupted" }),
             expect.objectContaining({ id: "tool-part", status: "failed", metadata: expect.objectContaining({ outcome: "unknown", failureKind: "unknown_outcome" }) }),
           ]));
           expect(tx.terminalizeUnownedInputs()).toBe(1);
-          expect(store.findRunByInput("orphan")).toMatchObject({
+          expect(store.runs.findRunByInput("orphan")).toMatchObject({
             status: "interrupted",
             metadata: { traceId: "trace", recovery: expect.objectContaining({ kind: "orphan_input", delivery: "steer" }) },
           });
-          store.createSession({ id: "busy-closing", cwd: dir, model: "m" });
-          store.createRun({ id: "busy-run", sessionId: "busy-closing" });
-          store.beginArchive("busy-closing");
+          store.sessions.create({ id: "busy-closing", cwd: dir, model: "m" });
+          store.runs.createRun({ id: "busy-run", sessionId: "busy-closing" });
+          store.sessions.beginArchive("busy-closing");
           expect(tx.finalizeClosingSessions()).toBe(2);
-          expect(store.getSession("idle-closing")!.status).toBe("archived");
-          expect(store.getSession("busy-closing")!.status).toBe("closing");
+          expect(store.sessions.get("idle-closing")!.status).toBe("archived");
+          expect(store.sessions.get("busy-closing")!.status).toBe("closing");
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });
@@ -1474,7 +1474,7 @@ describe("ConversationTransactions.admitPrompt", () => {
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
         try {
-          store.createSession({ id: "s1", cwd: dir, model: "m" });
+          store.sessions.create({ id: "s1", cwd: dir, model: "m" });
           store.createSessionTask({ id: "task-1", sessionId: "s1", type: "process", description: "one", cwd: dir });
           store.createSessionTask({ id: "task-2", sessionId: "s1", type: "process", description: "two", cwd: dir });
           const tx = createTransactions(store, { afterRecoveryMutation: () => { throw new Error("injected recovery failure"); } });
@@ -1494,14 +1494,14 @@ describe("ConversationTransactions.admitPrompt", () => {
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
         try {
-          store.createSession({ id: "s1", cwd: dir, model: "m" });
-          const run = store.createRun({ id: "run", sessionId: "s1" });
-          store.updateRun(run.id, { status: "running" });
-          const attempt = store.createRunAttempt({ id: "attempt", runId: run.id });
-          store.updateRunAttempt(attempt.id, { status: "running" });
-          const message = store.createMessage({ id: "message", sessionId: "s1", role: "assistant", runId: run.id });
-          store.upsertMessagePart({ id: "text-part", sessionId: "s1", messageId: message.id, type: "text", status: "running", text: "partial" });
-          store.upsertMessagePart({
+          store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+          const run = store.runs.createRun({ id: "run", sessionId: "s1" });
+          store.runs.updateRun(run.id, { status: "running" });
+          const attempt = store.runs.createRunAttempt({ id: "attempt", runId: run.id });
+          store.runs.updateRunAttempt(attempt.id, { status: "running" });
+          const message = store.conversations.createMessage({ id: "message", sessionId: "s1", role: "assistant", runId: run.id });
+          store.conversations.upsertMessagePart({ id: "text-part", sessionId: "s1", messageId: message.id, type: "text", status: "running", text: "partial" });
+          store.conversations.upsertMessagePart({
             id: "tool-part", sessionId: "s1", messageId: message.id, type: "tool",
             status: "running", toolUseId: "tool-use", toolName: "Write", metadata: { existing: true },
           });
@@ -1510,24 +1510,24 @@ describe("ConversationTransactions.admitPrompt", () => {
           });
 
           expect(() => tx.interruptActiveRuns()).toThrow("injected run recovery failure");
-          expect(store.getRun("run")!.status).toBe("running");
-          expect(store.getRunAttempt("attempt")!.status).toBe("running");
-          expect(store.listMessageParts("s1")).toEqual(expect.arrayContaining([
+          expect(store.runs.getRun("run")!.status).toBe("running");
+          expect(store.runs.getRunAttempt("attempt")!.status).toBe("running");
+          expect(store.conversations.listMessageParts("s1")).toEqual(expect.arrayContaining([
             expect.objectContaining({ id: "text-part", status: "running" }),
             expect.objectContaining({ id: "tool-part", status: "running", metadata: { existing: true } }),
           ]));
-          expect(store.listMessageParts("s1").find(({ id }) => id === "tool-part")!.metadata)
+          expect(store.conversations.listMessageParts("s1").find(({ id }) => id === "tool-part")!.metadata)
             .not.toHaveProperty("failureKind");
 
           store.close();
           store = new SessionStore({ path: dbPath });
-          expect(store.getRun("run")!.status).toBe("running");
-          expect(store.getRunAttempt("attempt")!.status).toBe("running");
-          expect(store.listMessageParts("s1")).toEqual(expect.arrayContaining([
+          expect(store.runs.getRun("run")!.status).toBe("running");
+          expect(store.runs.getRunAttempt("attempt")!.status).toBe("running");
+          expect(store.conversations.listMessageParts("s1")).toEqual(expect.arrayContaining([
             expect.objectContaining({ id: "text-part", status: "running" }),
             expect.objectContaining({ id: "tool-part", status: "running", metadata: { existing: true } }),
           ]));
-          expect(store.listMessageParts("s1").find(({ id }) => id === "tool-part")!.metadata)
+          expect(store.conversations.listMessageParts("s1").find(({ id }) => id === "tool-part")!.metadata)
             .not.toHaveProperty("failureKind");
         } finally {
           store.close();
@@ -1539,7 +1539,7 @@ describe("ConversationTransactions.admitPrompt", () => {
         const dir = mkdtempSync(join(tmpdir(), "ohs-task-notify-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
-          store.createSession({ id: "s1", cwd: dir, model: "m" });
+          store.sessions.create({ id: "s1", cwd: dir, model: "m" });
           store.createSessionTask({ id: "task-1", sessionId: "s1", type: "process", description: "one", cwd: dir });
           store.createSessionTask({ id: "task-2", sessionId: "s1", type: "process", description: "two", cwd: dir });
           const calls = { one: 0, two: 0 };
@@ -1583,16 +1583,16 @@ describe("ConversationTransactions.admitPrompt", () => {
         const dir = mkdtempSync(join(tmpdir(), "ohs-snapshot-full-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
-          store.createSession({ id: "s1", cwd: dir, model: "m", metadata: { nested: { value: 1 } } });
-          store.createSession({ id: "child", parentId: "s1", cwd: dir, model: "m" });
-          const input = store.admitPrompt({ id: "input", sessionId: "s1", content: "prompt" });
-          const run = store.createRun({ id: "run", sessionId: "s1", inputId: input.id });
-          store.createRunAttempt({ id: "attempt", runId: run.id });
-          const message = store.createMessage({ id: "message", sessionId: "s1", role: "user", inputId: input.id, runId: run.id });
-          store.upsertMessagePart({ id: "part", sessionId: "s1", messageId: message.id, type: "text", text: "hello" });
+          store.sessions.create({ id: "s1", cwd: dir, model: "m", metadata: { nested: { value: 1 } } });
+          store.sessions.create({ id: "child", parentId: "s1", cwd: dir, model: "m" });
+          const input = store.conversationTransactions.admitPrompt({ id: "input", sessionId: "s1", content: "prompt" });
+          const run = store.runs.createRun({ id: "run", sessionId: "s1", inputId: input.id });
+          store.runs.createRunAttempt({ id: "attempt", runId: run.id });
+          const message = store.conversations.createMessage({ id: "message", sessionId: "s1", role: "user", inputId: input.id, runId: run.id });
+          store.conversations.upsertMessagePart({ id: "part", sessionId: "s1", messageId: message.id, type: "text", text: "hello" });
           store.createSessionTask({ id: "task", sessionId: "s1", runId: run.id, type: "process", description: "task", cwd: dir });
-          store.createPermissionRequest({ id: "permission", sessionId: "s1", runId: run.id, toolName: "Read", payload: {} });
-          const expectedCursor = store.latestEventSeq();
+          store.permissions.create({ id: "permission", sessionId: "s1", runId: run.id, toolName: "Read", payload: {} });
+          const expectedCursor = store.conversations.latestEventSeq();
 
           const snapshot = createTransactions(store).getSessionState("s1");
           expect(snapshot.cursor).toBe(expectedCursor);
@@ -1610,8 +1610,8 @@ describe("ConversationTransactions.admitPrompt", () => {
 
           (snapshot.session.metadata.nested as { value: number }).value = 99;
           snapshot.messages[0]!.metadata.changed = true;
-          expect(store.getSession("s1")!.metadata).toEqual({ nested: { value: 1 } });
-          expect(store.listMessages("s1")[0]!.metadata).toEqual({});
+          expect(store.sessions.get("s1")!.metadata).toEqual({ nested: { value: 1 } });
+          expect(store.conversations.listMessages("s1")[0]!.metadata).toEqual({});
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });

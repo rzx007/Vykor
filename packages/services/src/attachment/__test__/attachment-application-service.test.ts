@@ -200,7 +200,7 @@ describe("AttachmentApplicationService", () => {
           content: streamOf([bytes("too large")]),
         }),
       ).rejects.toMatchObject({ code: "attachment_too_large" });
-      expect(store.getAttachment("att_failed")).toMatchObject({
+      expect(store.attachments.getAttachment("att_failed")).toMatchObject({
         status: "failed",
         failureCode: "attachment_too_large",
       });
@@ -242,15 +242,15 @@ describe("AttachmentApplicationService", () => {
         declaredMediaType: "text/plain",
         content: streamOf([bytes("shared bytes")]),
       });
-      store.createSession({ id: "parent", cwd: process.cwd(), model: "m" });
-      store.createSession({ id: "child", cwd: process.cwd(), model: "m" });
-      store.admitPrompt({
+      store.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      store.sessions.create({ id: "child", cwd: process.cwd(), model: "m" });
+      store.conversationTransactions.admitPrompt({
         id: "parent-input",
         sessionId: "parent",
         content: "parent",
         attachments: [{ assetId: asset.id }],
       });
-      store.admitPrompt({
+      store.conversationTransactions.admitPrompt({
         id: "child-input",
         sessionId: "child",
         content: "child",
@@ -267,11 +267,11 @@ describe("AttachmentApplicationService", () => {
       expect(() => service.delete(asset.id)).toThrow(
         "attachment_in_use: attachment is referenced by a conversation",
       );
-      store.deleteSessionTree("child");
+      store.conversationTransactions.deleteSessionTree("child");
       expect(() => service.delete(asset.id)).toThrow(
         "attachment_in_use: attachment is referenced by a conversation",
       );
-      store.deleteSessionTree("parent");
+      store.conversationTransactions.deleteSessionTree("parent");
 
       expect(service.delete(asset.id)).toMatchObject({
         id: "att_shared",
@@ -291,12 +291,12 @@ describe("AttachmentApplicationService", () => {
         declaredMediaType: "image/png",
         content: streamOf([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])]),
       });
-      store.createSession({ id: "generated-session", cwd: process.cwd(), model: "m" });
-      const message = store.createMessage({
+      store.sessions.create({ id: "generated-session", cwd: process.cwd(), model: "m" });
+      const message = store.conversations.createMessage({
         sessionId: "generated-session",
         role: "assistant",
       });
-      store.upsertMessagePart({
+      store.conversations.upsertMessagePart({
         sessionId: "generated-session",
         messageId: message.id,
         type: "attachment",
@@ -311,7 +311,7 @@ describe("AttachmentApplicationService", () => {
       expect(() => service.delete(asset.id)).toThrow(
         "attachment_in_use: attachment is referenced by a conversation",
       );
-      store.deleteSessionTree("generated-session");
+      store.conversationTransactions.deleteSessionTree("generated-session");
       expect(service.delete(asset.id)).toMatchObject({
         id: "att_generated",
         status: "deleted",
@@ -333,25 +333,25 @@ describe("AttachmentApplicationService", () => {
     writeFileSync(join(staging, "att_current.part"), "partial");
     utimesSync(join(staging, "att_current.part"), 9, 9);
     mkdirSync(join(staging, "att_unsafe.part"));
-    store.createImportingAttachment({
+    store.attachments.createImportingAttachment({
       id: "att_interrupted",
       displayName: "partial.bin",
       stagingName: "att_interrupted.part",
       createdAt: 100,
     });
-    store.createImportingAttachment({
+    store.attachments.createImportingAttachment({
       id: "att_current",
       displayName: "current.bin",
       stagingName: "att_current.part",
       createdAt: 9_000,
     });
-    store.createImportingAttachment({
+    store.attachments.createImportingAttachment({
       id: "att_missing",
       displayName: "missing.bin",
       stagingName: "att_missing.part",
       createdAt: 9_000,
     });
-    store.createImportingAttachment({
+    store.attachments.createImportingAttachment({
       id: "att_unsafe",
       displayName: "unsafe.bin",
       stagingName: "att_unsafe.part",
@@ -361,19 +361,19 @@ describe("AttachmentApplicationService", () => {
     try {
       const result = await service.recover();
 
-      expect(store.getAttachment("att_interrupted")).toMatchObject({
+      expect(store.attachments.getAttachment("att_interrupted")).toMatchObject({
         status: "failed",
         failureCode: "attachment_storage_failed",
       });
-      expect(store.getAttachment("att_current")).toMatchObject({
+      expect(store.attachments.getAttachment("att_current")).toMatchObject({
         status: "failed",
         failureCode: "attachment_aborted",
       });
-      expect(store.getAttachment("att_missing")).toMatchObject({
+      expect(store.attachments.getAttachment("att_missing")).toMatchObject({
         status: "failed",
         failureCode: "attachment_storage_failed",
       });
-      expect(store.getAttachment("att_unsafe")).toMatchObject({
+      expect(store.attachments.getAttachment("att_unsafe")).toMatchObject({
         status: "failed",
         failureCode: "attachment_storage_failed",
       });

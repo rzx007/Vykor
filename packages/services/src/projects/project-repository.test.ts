@@ -145,13 +145,13 @@ describe("ProjectRepository mutations", () => {
       const project = store.projects.inspect(oldPath);
       const firstOldCwd = join(oldPath, "first");
       const secondOldCwd = join(oldPath, "second");
-      store.createSession({
+      store.sessions.create({
         id: "s1",
         projectId: project.id,
         cwd: firstOldCwd,
         model: "m",
       });
-      store.createSession({
+      store.sessions.create({
         id: "s2",
         projectId: project.id,
         cwd: secondOldCwd,
@@ -173,8 +173,8 @@ describe("ProjectRepository mutations", () => {
       );
 
       expect(repository.get(project.id)?.path).toBe(oldPath);
-      expect(store.getSession("s1")?.cwd).toBe(firstOldCwd);
-      expect(store.getSession("s2")?.cwd).toBe(secondOldCwd);
+      expect(store.sessions.get("s1")?.cwd).toBe(firstOldCwd);
+      expect(store.sessions.get("s2")?.cwd).toBe(secondOldCwd);
       expect(
         storage.database.connection
           .prepare("SELECT id, cwd FROM session ORDER BY id")
@@ -198,7 +198,7 @@ describe("ProjectRepository mutations", () => {
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
       const project = store.projects.inspect(originalPath);
-      store.createSession({
+      store.sessions.create({
         id: "s1",
         projectId: project.id,
         cwd: join(originalPath, "app"),
@@ -212,7 +212,7 @@ describe("ProjectRepository mutations", () => {
       repository.rebind(project.id, originalPath);
 
       expect(repository.get(project.id)?.path).toBe(originalPath);
-      expect(store.getSession("s1")?.cwd).toBe(join(originalPath, "app"));
+      expect(store.sessions.get("s1")?.cwd).toBe(join(originalPath, "app"));
       expect(
         storage.database.connection
           .prepare(

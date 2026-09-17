@@ -16,13 +16,13 @@ function withBroker(
   const changes: number[] = [];
   const broker = new StorePermissionBroker({
     permissions: store.permissions,
-    getSession: (sessionId) => store.getSession(sessionId),
-    latestEventSeq: () => store.latestEventSeq(),
+    getSession: (sessionId) => store.sessions.get(sessionId),
+    latestEventSeq: () => store.conversations.latestEventSeq(),
     onChange: (seq) => changes.push(seq),
   });
-  store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
-  const input = store.admitPrompt({ id: "i1", sessionId: "s1", content: "edit" });
-  store.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
+  store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
+  const input = store.conversationTransactions.admitPrompt({ id: "i1", sessionId: "s1", content: "edit" });
+  store.runs.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
   return test({ broker, store, changes }).finally(() => {
     store.close();
     rmSync(dir, { recursive: true, force: true });
@@ -34,13 +34,13 @@ describe("StorePermissionBroker", () => {
     const dir = mkdtempSync(join(tmpdir(), "ohs-permission-broker-narrow-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     try {
-      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
-      const input = store.admitPrompt({ id: "i1", sessionId: "s1", content: "edit" });
-      store.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
+      store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
+      const input = store.conversationTransactions.admitPrompt({ id: "i1", sessionId: "s1", content: "edit" });
+      store.runs.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
       const broker = new StorePermissionBroker({
         permissions: store.permissions,
-        getSession: (sessionId) => store.getSession(sessionId),
-        latestEventSeq: () => store.latestEventSeq(),
+        getSession: (sessionId) => store.sessions.get(sessionId),
+        latestEventSeq: () => store.conversations.latestEventSeq(),
       });
 
       const allowed = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write" });
@@ -82,7 +82,7 @@ describe("StorePermissionBroker", () => {
       });
       expect(replied).toMatchObject({ status: "approved", decision: "once", decidedByClientId: "web-1" });
       await expect(allowed).resolves.toEqual({ status: "approved", decision: "once" });
-      expect(store.listEvents().map((event) => event.type)).toContain("permission.replied");
+      expect(store.conversations.listEvents().map((event) => event.type)).toContain("permission.replied");
     });
   });
 
@@ -109,9 +109,9 @@ describe("StorePermissionBroker", () => {
 
   it("routes child asks to the parent session and reuses parent session approvals", async () => {
     await withBroker(async ({ broker, store }) => {
-      store.createSession({ id: "child", parentId: "s1", cwd: process.cwd(), model: "m" });
-      const childInput = store.admitPrompt({ id: "child-input", sessionId: "child", content: "edit" });
-      store.createRun({ id: "child-run", sessionId: "child", inputId: childInput.id });
+      store.sessions.create({ id: "child", parentId: "s1", cwd: process.cwd(), model: "m" });
+      const childInput = store.conversationTransactions.admitPrompt({ id: "child-input", sessionId: "child", content: "edit" });
+      store.runs.createRun({ id: "child-run", sessionId: "child", inputId: childInput.id });
 
       const parentAsk = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Write" });
       const parentRequest = store.permissions.list({ sessionId: "s1", status: "pending" })[0]!;

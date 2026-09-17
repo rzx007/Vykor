@@ -93,7 +93,7 @@ describe("AttachmentTransactions", () => {
     withStore((store, path) => {
       const second = ready(store, "b", 10);
       const first = ready(store, "a", 10);
-      store.createImportingAttachment({
+      store.attachments.createImportingAttachment({
         id: "pending",
         displayName: "pending.txt",
         declaredMediaType: "text/plain",
@@ -128,7 +128,7 @@ describe("AttachmentTransactions", () => {
           "cache",
         ),
       ).toBeUndefined();
-      const completed = store.completeAttachmentRepresentation("rep", {
+      const completed = store.attachments.completeAttachmentRepresentation("rep", {
         text: "你好",
         metadata: { pages: [1, 2] },
         updatedAt: 40,
@@ -140,7 +140,7 @@ describe("AttachmentTransactions", () => {
         createdAt: 30,
         updatedAt: 40,
       });
-      store.softDeleteAttachment("b", 50);
+      store.attachments.softDeleteAttachment("b", 50);
       expect(store.attachments.getAttachment("b")).toBeUndefined();
       expect(
         store.attachments.listAttachments({ includeDeleted: true }),
@@ -185,7 +185,7 @@ describe("AttachmentTransactions", () => {
       expect(() =>
         store.attachments.softDeleteAttachment("asset", -1),
       ).toThrow();
-      expect(store.getAttachment("asset")).toEqual(asset);
+      expect(store.attachments.getAttachment("asset")).toEqual(asset);
       store.attachments.createAttachmentRepresentation(representationInput);
       const failed = store.attachments.failAttachmentRepresentation(
         "rep",
@@ -201,7 +201,7 @@ describe("AttachmentTransactions", () => {
       expect(() =>
         store.attachments.failAttachmentRepresentation("rep", "late"),
       ).toThrow("is not running");
-      expect(store.getAttachmentRepresentation("rep")).toEqual(failed);
+      expect(store.attachments.getAttachmentRepresentation("rep")).toEqual(failed);
     });
   });
 
@@ -228,14 +228,14 @@ describe("AttachmentTransactions", () => {
           expiresAt: 300,
         }),
       ).toThrow("lease insert failed");
-      expect(store.listAttachmentLeases()).toEqual(original);
+      expect(store.attachments.listAttachmentLeases()).toEqual(original);
       expect(() =>
         store.attachments.acquireAttachmentLeases({
           ...input,
           assetIds: ["a", "missing"],
         }),
       ).toThrow("Attachment is not ready: missing");
-      expect(store.listAttachmentLeases()).toEqual(original);
+      expect(store.attachments.listAttachmentLeases()).toEqual(original);
     });
   });
 
@@ -286,16 +286,16 @@ describe("AttachmentTransactions", () => {
     withStore((store) => {
       ready(store, "input-asset");
       ready(store, "part-asset");
-      store.createSession({ id: "s", cwd: process.cwd(), model: "m" });
+      store.sessions.create({ id: "s", cwd: process.cwd(), model: "m" });
       store.transaction(() => {
-        store.admitPrompt({
+        store.conversationTransactions.admitPrompt({
           id: "input",
           sessionId: "s",
           content: "read",
           attachments: [{ assetId: "input-asset" }],
         });
-        store.createMessage({ id: "message", sessionId: "s", role: "user" });
-        store.upsertMessagePart({
+        store.conversations.createMessage({ id: "message", sessionId: "s", role: "user" });
+        store.conversations.upsertMessagePart({
           id: "part",
           messageId: "message",
           sessionId: "s",
@@ -317,7 +317,7 @@ describe("AttachmentTransactions", () => {
             store.attachments.purgeDeletedAttachment(assetId, 60),
           ).toBeUndefined();
           expect(
-            store.getAttachment(assetId, { includeDeleted: true })?.status,
+            store.attachments.getAttachment(assetId, { includeDeleted: true })?.status,
           ).toBe("deleted");
         }
       });
@@ -363,7 +363,7 @@ describe("AttachmentTransactions", () => {
       expect(
         store.attachments.getAttachmentRepresentation("rep"),
       ).toBeDefined();
-      expect(store.purgeDeletedAttachment("asset", 200)).toEqual(deleted);
+      expect(store.attachments.purgeDeletedAttachment("asset", 200)).toEqual(deleted);
       expect(store.attachments.listAttachmentLeases()).toEqual([]);
     });
   });
@@ -377,13 +377,13 @@ describe("AttachmentTransactions", () => {
         now: 1000,
       });
       ready(store);
-      store.createImportingAttachment({
+      store.attachments.createImportingAttachment({
         id: "pending",
         displayName: "p",
         stagingName: "p.part",
         createdAt: 10,
       });
-      store.createAttachmentRepresentation(representationInput);
+      store.attachments.createAttachmentRepresentation(representationInput);
       const second = new SessionStore({ path });
       try {
         second.acquireApplicationOwner({
@@ -437,14 +437,14 @@ describe("AttachmentTransactions", () => {
           for (const write of writes)
             expect(write).toThrow(ApplicationOwnerConflictError);
         }
-        expect(store.getAttachment("pending")?.status).toBe("importing");
-        expect(store.getAttachment("asset")?.status).toBe("ready");
-        expect(store.getAttachment("new")).toBeUndefined();
-        expect(store.getAttachmentRepresentation("rep")?.status).toBe(
+        expect(store.attachments.getAttachment("pending")?.status).toBe("importing");
+        expect(store.attachments.getAttachment("asset")?.status).toBe("ready");
+        expect(store.attachments.getAttachment("new")).toBeUndefined();
+        expect(store.attachments.getAttachmentRepresentation("rep")?.status).toBe(
           "running",
         );
-        expect(store.getAttachmentRepresentation("new-rep")).toBeUndefined();
-        expect(store.listAttachmentLeases()).toEqual([]);
+        expect(store.attachments.getAttachmentRepresentation("new-rep")).toBeUndefined();
+        expect(store.attachments.listAttachmentLeases()).toEqual([]);
       } finally {
         second.close();
       }

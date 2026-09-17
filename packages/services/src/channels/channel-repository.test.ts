@@ -12,9 +12,9 @@ describe("ChannelRepository", () => {
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {
-      store.createSession({ id: "session-1", cwd: directory, model: "m" });
-      const input = store.admitPrompt({ id: "input-1", sessionId: "session-1", content: "hello" });
-      const run = store.createRun({ id: "run-1", sessionId: "session-1", inputId: input.id });
+      store.sessions.create({ id: "session-1", cwd: directory, model: "m" });
+      const input = store.conversationTransactions.admitPrompt({ id: "input-1", sessionId: "session-1", content: "hello" });
+      const run = store.runs.createRun({ id: "run-1", sessionId: "session-1", inputId: input.id });
       const conversation = store.channels.upsertConversation({
         id: "conversation-1", connector: "feishu", accountId: "account-1",
         workspaceId: "workspace-1", chatId: "chat-1", threadId: "thread-1", sessionId: "session-1",
@@ -74,7 +74,7 @@ describe("ChannelRepository", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-channel-owner-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      store.createSession({ id: "session-1", cwd: directory, model: "m" });
+      store.sessions.create({ id: "session-1", cwd: directory, model: "m" });
       store.acquireApplicationOwner({ ownerId: "owner-a", pid: 1, staleAfterMs: 1_000, now: 10 });
       (store as any).storage.database.connection.prepare("UPDATE application_owner SET owner_id = 'owner-b' WHERE key = 'application'").run();
       expect(() => store.channels.upsertConversation({ connector: "x", accountId: "a", chatId: "c", sessionId: "session-1" })).toThrow();

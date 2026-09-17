@@ -8,7 +8,7 @@ import { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";
 
 export interface SessionRunAssemblyOptions {
-  store: SessionStore;
+  store: Pick<SessionStore, "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction">;
   goals: GoalOperations;
   agentPool: AgentPool;
   runExecutor: Pick<SessionRunExecutor, "execute">;

@@ -12,7 +12,7 @@ export type GoalWaitCheck =
 export class GoalWaitVerifier {
   constructor(
     private readonly context: {
-      store: Pick<SessionStore, "getRun">;
+      store: Pick<SessionStore, "runs">;
       liveChildren: Pick<LiveChildAgentDirectory, "resolveRootSessionId">;
       now?: () => number;
     },
@@ -26,7 +26,7 @@ export class GoalWaitVerifier {
     if (now >= wait.deadlineAt)
       return { state: "failed", reason: "等待外部任务超时" };
     try {
-      const run = this.context.store.getRun(wait.handleId);
+      const run = this.context.store.runs.getRun(wait.handleId);
       if (run) {
         if (run.sessionId !== sessionId) return { state: "missing" };
         if (run.status === "pending" || run.status === "running")

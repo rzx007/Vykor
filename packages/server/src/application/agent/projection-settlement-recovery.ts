@@ -14,20 +14,17 @@ export interface DaemonAgentSettlementPayload extends Record<string, unknown> {
 
 type SettlementStore = Pick<
   SessionStore,
-  | "appendEvent"
-  | "archiveSession"
+  | "conversations"
+  | "runs"
+  | "sessions"
   | "createProjectionSettlement"
   | "failProjectionSettlement"
   | "getProjectionSettlement"
-  | "getRun"
-  | "getSession"
   | "getSessionTask"
-  | "listEvents"
   | "listProjectionSettlements"
   | "markProjectionSettlementRetrying"
   | "resolveProjectionSettlement"
   | "transaction"
-  | "updateRun"
   | "updateSessionTask"
 >;
 
@@ -140,11 +137,11 @@ function recoverChildTerminalProjection(store: SettlementStore, event: AgentEven
 function compensateChildProjection(store: SettlementStore, event: AgentEvent, message: string): void {
   const runId = event.context.runId;
   if (runId) {
-    const run = store.getRun(runId);
+    const run = store.runs.getRun(runId);
     if (run && (run.status === "pending" || run.status === "running")) {
       store.transaction(() => {
         appendRunErrorOnce(store, event, runId, message);
-        store.updateRun(runId, { status: "failed", error: message });
+        store.runs.updateRun(runId, { status: "failed", error: message });
       });
     }
   }
@@ -158,8 +155,8 @@ function compensateChildProjection(store: SettlementStore, event: AgentEvent, me
   }
 
   if (event.type === "child.created") {
-    const child = store.getSession(event.data.sessionId);
-    if (child && child.status !== "archived") store.archiveSession(child.id);
+    const child = store.sessions.get(event.data.sessionId);
+    if (child && child.status !== "archived") store.sessions.archive(child.id);
   }
 }
 
@@ -169,11 +166,11 @@ function appendFrameworkEventOnce(
   type: string,
   payload: Record<string, unknown>,
 ): void {
-  const exists = store.listEvents({ sessionId: event.context.sessionId }).some(
+  const exists = store.conversations.listEvents({ sessionId: event.context.sessionId }).some(
     (candidate) => candidate.type === type && candidate.payload.frameworkEventId === event.id,
   );
   if (!exists) {
-    store.appendEvent({
+    store.conversations.appendEvent({
       type,
       sessionId: event.context.sessionId,
       payload: { frameworkEventId: event.id, ...payload },
@@ -187,14 +184,14 @@ function appendRunErrorOnce(
   runId: string,
   message: string,
 ): void {
-  const exists = store.listEvents({ sessionId: event.context.sessionId }).some(
+  const exists = store.conversations.listEvents({ sessionId: event.context.sessionId }).some(
     (candidate) =>
       candidate.type === "session.run.error" &&
       candidate.payload.runId === runId &&
       candidate.payload.projectionSettlementEventId === event.id,
   );
   if (!exists) {
-    store.appendEvent({
+    store.conversations.appendEvent({
       type: "session.run.error",
       sessionId: event.context.sessionId,
       payload: {

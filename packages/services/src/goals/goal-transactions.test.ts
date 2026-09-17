@@ -10,7 +10,7 @@ function withStore(test: (store: SessionStore) => void): void {
   const directory = mkdtempSync(join(tmpdir(), "ohs-goal-transactions-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   try {
-    store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+    store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
     test(store);
   } finally {
     store.close();
@@ -59,7 +59,7 @@ describe("GoalTransactions", () => {
         objective: "finish",
         maxAutoTurns: 2,
       });
-      const run = store.createRun({ id: "run-1", sessionId: "s1" });
+      const run = store.runs.createRun({ id: "run-1", sessionId: "s1" });
       failGoalEvent(store, "session.goal.updated");
 
       expect(() =>
@@ -91,7 +91,7 @@ describe("GoalTransactions", () => {
         objective: "finish",
         maxAutoTurns: 2,
       });
-      const run = store.createRun({ id: "run-1", sessionId: "s1" });
+      const run = store.runs.createRun({ id: "run-1", sessionId: "s1" });
       expect(store.goals.startGoalRun(goal.id, 0, run.id, false)).toBe(true);
       failGoalEvent(store, "session.goal.updated");
 
@@ -107,7 +107,7 @@ describe("GoalTransactions", () => {
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {
-      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
       const internals = (store as any).storage;
       const beforeSequence = internals.state.nextEventSeq;
       expect(() =>
@@ -118,7 +118,7 @@ describe("GoalTransactions", () => {
             objective: "outer",
             maxAutoTurns: 2,
           });
-          store.admitPromptWithRun({
+          store.conversationTransactions.admitPromptWithRun({
             prompt: {
               id: "input-outer",
               sessionId: "s1",
@@ -130,8 +130,8 @@ describe("GoalTransactions", () => {
         }),
       ).toThrow("outer failed");
       expect(store.goals.getGoal("goal-outer")).toBeUndefined();
-      expect(store.getInput("input-outer")).toBeUndefined();
-      expect(store.getRun("run-outer")).toBeUndefined();
+      expect(store.conversations.getInput("input-outer")).toBeUndefined();
+      expect(store.runs.getRun("run-outer")).toBeUndefined();
       expect(internals.state.nextEventSeq).toBe(beforeSequence);
       expect(internals.mutations.inputs.size).toBe(0);
       expect(internals.mutations.runs.size).toBe(0);

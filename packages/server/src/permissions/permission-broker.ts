@@ -41,8 +41,8 @@ export interface PermissionBroker {
 
 export interface StorePermissionBrokerOptions {
   permissions: Pick<SessionStore["permissions"], "create" | "reply" | "expirePending" | "get" | "list">;
-  getSession: SessionStore["getSession"];
-  latestEventSeq: SessionStore["latestEventSeq"];
+  getSession: SessionStore["sessions"]["get"];
+  latestEventSeq: SessionStore["conversations"]["latestEventSeq"];
   onChange?: (previousEventSeq: number) => void;
   logger?: StructuredLogger;
 }

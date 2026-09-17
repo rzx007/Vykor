@@ -28,10 +28,7 @@ export class SessionMaintenanceError extends ApplicationError {
 }
 
 export interface SessionMaintenanceServiceContext {
-  data: Pick<SessionStore,
-    "createMessage" | "getSession" | "listInputs" | "listMessageParts" |
-    "listMessages" | "replaceTranscript" | "upsertMessagePart"
-  >;
+  data: Pick<SessionStore, "conversations" | "conversationTransactions" | "sessions">;
   runControl: Pick<RunControlService, "hasActiveRunsForCwd" | "hasWork">;
   agentPool: AgentPool;
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
@@ -98,9 +95,9 @@ export class SessionMaintenanceService {
     const session = this.requireSession(sessionId);
     return await writeSessionExport({
       session,
-      inputs: this.context.data.listInputs(sessionId),
-      messages: this.context.data.listMessages(sessionId),
-      parts: this.context.data.listMessageParts(sessionId),
+      inputs: this.context.data.conversations.listInputs(sessionId),
+      messages: this.context.data.conversations.listMessages(sessionId),
+      parts: this.context.data.conversations.listMessageParts(sessionId),
       format: input.format,
       filename: input.filename,
     });
@@ -108,8 +105,8 @@ export class SessionMaintenanceService {
 
   async compact(sessionId: string): Promise<{
     messageCount: number;
-    messages: ReturnType<SessionStore["replaceTranscript"]>["messages"];
-    parts: ReturnType<SessionStore["replaceTranscript"]>["parts"];
+    messages: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["messages"];
+    parts: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["parts"];
   }> {
     const session = this.requireSession(sessionId);
     this.rejectLiveChild(sessionId);
@@ -132,7 +129,7 @@ export class SessionMaintenanceService {
         this.context.events.publishSince(before);
         throw error;
       }
-      const replaced = this.context.data.replaceTranscript({
+      const replaced = this.context.data.conversationTransactions.replaceTranscript({
         sessionId,
         messages: agentMessagesToTranscript(compacted.history),
       });
@@ -158,12 +155,12 @@ export class SessionMaintenanceService {
     sessionId: string,
     phase: "started" | "completed" | "failed",
   ): void {
-    const message = this.context.data.createMessage({
+    const message = this.context.data.conversations.createMessage({
       sessionId,
       role: "system",
       metadata: { presentation: { kind: "context_compaction", phase } },
     });
-    this.context.data.upsertMessagePart({
+    this.context.data.conversations.upsertMessagePart({
       sessionId,
       messageId: message.id,
       type: "text",
@@ -183,8 +180,8 @@ export class SessionMaintenanceService {
   ): Promise<{
     turns: number;
     removed: number;
-    messages: ReturnType<SessionStore["replaceTranscript"]>["messages"];
-    parts: ReturnType<SessionStore["replaceTranscript"]>["parts"];
+    messages: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["messages"];
+    parts: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>["parts"];
   }> {
     const session = this.requireSession(sessionId);
     this.rejectLiveChild(sessionId);
@@ -196,15 +193,15 @@ export class SessionMaintenanceService {
     );
     try {
       const rewound = rewindTranscript(
-        this.context.data.listMessages(sessionId),
-        this.context.data.listMessageParts(sessionId),
+        this.context.data.conversations.listMessages(sessionId),
+        this.context.data.conversations.listMessageParts(sessionId),
         count,
       );
       if (rewound.removed === 0) {
         throw new SessionMaintenanceError(400, "No messages to rewind");
       }
       const before = this.context.events.checkpoint();
-      const replaced = this.context.data.replaceTranscript({
+      const replaced = this.context.data.conversationTransactions.replaceTranscript({
         sessionId,
         messages: rewound.kept,
       });
@@ -249,8 +246,8 @@ export class SessionMaintenanceService {
     }
   }
 
-  private requireSession(sessionId: string): NonNullable<ReturnType<SessionStore["getSession"]>> {
-    const session = this.context.data.getSession(sessionId);
+  private requireSession(sessionId: string): NonNullable<ReturnType<SessionStore["sessions"]["get"]>> {
+    const session = this.context.data.sessions.get(sessionId);
     if (!session) throw new SessionMaintenanceError(404, "Session not found");
     return session;
   }
@@ -288,7 +285,7 @@ export class SessionMaintenanceService {
   }
 
   private enterSessionOperation(
-    session: Pick<NonNullable<ReturnType<SessionStore["getSession"]>>, "id" | "cwd">,
+    session: Pick<NonNullable<ReturnType<SessionStore["sessions"]["get"]>>, "id" | "cwd">,
   ): DaemonOperationLease {
     try {
       return this.context.operationGate.enter({
@@ -306,8 +303,8 @@ export class SessionMaintenanceService {
   private updateLocalEnvironmentRules(sessionId: string): void {
     try {
       const messages = transcriptToPersonalizationMessages(
-        this.context.data.listMessages(sessionId),
-        this.context.data.listMessageParts(sessionId),
+        this.context.data.conversations.listMessages(sessionId),
+        this.context.data.conversations.listMessageParts(sessionId),
       );
       const updater = this.context.personalizationUpdater ?? updateRulesFromSession;
       updater(messages);

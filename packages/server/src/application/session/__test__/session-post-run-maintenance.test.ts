@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SessionPostRunMaintenance } from "../session-post-run-maintenance.js";
 
 function createStore(runStatus = "completed") {
-  return {
+  const store = {
     getSession: vi.fn(() => ({
       id: "s1",
       cwd: "/repo",
@@ -14,6 +14,15 @@ function createStore(runStatus = "completed") {
     listMessages: vi.fn(() => [{ id: "m1", seq: 1, role: "user" }]),
     listMessageParts: vi.fn(() => [{ id: "p1", seq: 1, text: "ssh ops@10.0.0.9" }]),
     listSessions: vi.fn(() => []),
+  };
+  return {
+    ...store,
+    sessions: { get: store.getSession, list: store.listSessions },
+    runs: { getRun: store.getRun },
+    conversations: {
+      listMessages: store.listMessages,
+      listMessageParts: store.listMessageParts,
+    },
   };
 }
 

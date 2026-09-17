@@ -40,7 +40,17 @@ function createStore() {
       ...input,
     })),
   };
-  return store;
+  return {
+    ...store,
+    conversations: {
+      createMessage: store.createMessage,
+      listMessages: store.listMessages,
+      listMessageParts: store.listMessageParts,
+      upsertMessagePart: store.upsertMessagePart,
+    },
+    incrementalOutput: { appendMessagePartDelta: store.appendMessagePartDelta },
+    runs: { updateRun: store.updateRun },
+  };
 }
 
 function createInput(

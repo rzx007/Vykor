@@ -15,7 +15,7 @@ describe("SessionRepository read operations", () => {
       const repository = new SessionRepository((store as any).storage);
       expect(repository.get("nonexistent")).toBeUndefined();
 
-      store.createSession({
+      store.sessions.create({
         id: "s1",
         cwd: directory,
         model: "test-model",
@@ -49,12 +49,12 @@ describe("SessionRepository read operations", () => {
     try {
       const repository = new SessionRepository((store as any).storage);
 
-      store.createSession({ id: "s1", cwd: dirA, model: "m", title: "first" });
-      store.createSession({ id: "s2", cwd: dirA, model: "m", title: "second" });
-      store.createSession({ id: "s3", cwd: dirB, model: "m", title: "third" });
+      store.sessions.create({ id: "s1", cwd: dirA, model: "m", title: "first" });
+      store.sessions.create({ id: "s2", cwd: dirA, model: "m", title: "second" });
+      store.sessions.create({ id: "s3", cwd: dirB, model: "m", title: "third" });
 
       // s1 is updated later -> updatedAt is newer
-      store.updateSession("s1", { title: "first updated" });
+      store.sessions.update("s1", { title: "first updated" });
 
       // Default list: sorted by updatedAt desc, exclude archived
       const all = repository.list();
@@ -69,7 +69,7 @@ describe("SessionRepository read operations", () => {
       expect(limited.map((s) => s.id)).toEqual(["s1"]);
 
       // Archiving
-      store.archiveSession("s1");
+      store.sessions.archive("s1");
       expect(repository.list().map((s) => s.id)).toEqual(["s3", "s2"]);
       expect(repository.list({ includeArchived: true }).map((s) => s.id)).toEqual([
         "s1",
@@ -97,16 +97,16 @@ describe("SessionRepository read operations", () => {
         "Session not found: missing-parent",
       );
 
-      store.createSession({ id: "parent", cwd: directory, model: "m" });
-      store.createSession({ id: "child1", parentId: "parent", cwd: directory, model: "m" });
-      store.createSession({ id: "child2", parentId: "parent", cwd: directory, model: "m" });
-      store.createSession({ id: "other", cwd: directory, model: "m" });
+      store.sessions.create({ id: "parent", cwd: directory, model: "m" });
+      store.sessions.create({ id: "child1", parentId: "parent", cwd: directory, model: "m" });
+      store.sessions.create({ id: "child2", parentId: "parent", cwd: directory, model: "m" });
+      store.sessions.create({ id: "other", cwd: directory, model: "m" });
 
       const children = repository.listChildren("parent");
       expect(children.map((c) => c.id)).toEqual(["child1", "child2"]);
 
       // Archiving child1
-      store.archiveSession("child1");
+      store.sessions.archive("child1");
       expect(repository.listChildren("parent").map((c) => c.id)).toEqual(["child2"]);
       expect(
         repository.listChildren("parent", { includeArchived: true }).map((c) => c.id),
@@ -151,7 +151,7 @@ describe("SessionRepository read operations", () => {
         expect(repository.get("s1")!.title).toBe("");
 
         // event emitted
-        const events = store.listEvents({ sessionId: "s1" });
+        const events = store.conversations.listEvents({ sessionId: "s1" });
         const createdEvent = events.find((e) => e.type === "session.created");
         expect(createdEvent).toBeDefined();
         expect(createdEvent!.payload).toMatchObject({ session: { id: "s1" } });
@@ -209,7 +209,7 @@ describe("SessionRepository read operations", () => {
         expect(updated.metadata).toEqual({ replaced: true });
 
         // event emitted
-        const events = store.listEvents({ sessionId: "s1" });
+        const events = store.conversations.listEvents({ sessionId: "s1" });
         const updatedEvent = events.find((e) => e.type === "session.updated");
         expect(updatedEvent).toBeDefined();
         expect(updatedEvent!.payload).toMatchObject({

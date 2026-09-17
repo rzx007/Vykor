@@ -54,13 +54,13 @@ describe("AttachmentIntegrityService", () => {
       );
       truncateSync(corruptPath, 3);
 
-      store.createImportingAttachment({
+      store.attachments.createImportingAttachment({
         id: "att-missing",
         displayName: "missing.txt",
         stagingName: "missing.part",
         createdAt: 1,
       });
-      store.markAttachmentReady("att-missing", {
+      store.attachments.markAttachmentReady("att-missing", {
         sha256: "f".repeat(64),
         sizeBytes: 7,
         mediaType: "text/plain",
@@ -85,7 +85,7 @@ describe("AttachmentIntegrityService", () => {
         expect.objectContaining({ code: "orphan_blob", sha256: orphan.sha256 }),
       ]));
       expect(await blobs.listBlobs()).toEqual(before);
-      expect(store.getAttachment("att-missing")).toBeDefined();
+      expect(store.attachments.getAttachment("att-missing")).toBeDefined();
       expect(report).not.toHaveProperty("root", root);
     } finally {
       store.close();
@@ -98,16 +98,16 @@ describe("AttachmentIntegrityService", () => {
       const first = await attachments.import({ displayName: "a.txt", content: content("same") });
       const second = await attachments.import({ displayName: "b.txt", content: content("same") });
       expect(first.sha256).toBe(second.sha256);
-      store.softDeleteAttachment(first.id, 100);
+      store.attachments.softDeleteAttachment(first.id, 100);
       const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
 
       const firstGc = await service.gc({ gracePeriodMs: 100 });
 
       expect(firstGc).toMatchObject({ deletedAssets: 1, deletedBlobs: 0, releasedBytes: 0 });
-      expect(store.getAttachment(first.id, { includeDeleted: true })).toBeUndefined();
+      expect(store.attachments.getAttachment(first.id, { includeDeleted: true })).toBeUndefined();
       expect(await blobs.inspectBlob(first.sha256!)).toBeDefined();
 
-      store.softDeleteAttachment(second.id, 200);
+      store.attachments.softDeleteAttachment(second.id, 200);
       const secondGc = await service.gc({ gracePeriodMs: 100 });
       expect(secondGc).toMatchObject({ deletedAssets: 1, deletedBlobs: 1, releasedBytes: 4 });
       expect(secondGc).toMatchObject({
@@ -140,14 +140,14 @@ describe("AttachmentIntegrityService", () => {
     const { store, blobs, attachments } = fixture(["att-leased"]);
     try {
       const asset = await attachments.import({ displayName: "leased.txt", content: content("lease") });
-      store.acquireAttachmentLeases({
+      store.attachments.acquireAttachmentLeases({
         assetIds: [asset.id],
         ownerKind: "session_run",
         ownerId: "run-1",
         timestamp: 100,
         expiresAt: 500,
       });
-      store.softDeleteAttachment(asset.id, 100);
+      store.attachments.softDeleteAttachment(asset.id, 100);
       const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 300 });
 
       await expect(service.gc({ gracePeriodMs: 100 })).resolves.toMatchObject({
@@ -168,9 +168,9 @@ describe("AttachmentIntegrityService", () => {
         declaredMediaType: "image/png",
         content: content("generated image"),
       });
-      store.createSession({ id: "s-generated", cwd: process.cwd(), model: "m" });
-      const message = store.createMessage({ sessionId: "s-generated", role: "assistant" });
-      store.upsertMessagePart({
+      store.sessions.create({ id: "s-generated", cwd: process.cwd(), model: "m" });
+      const message = store.conversations.createMessage({ sessionId: "s-generated", role: "assistant" });
+      store.conversations.upsertMessagePart({
         sessionId: "s-generated",
         messageId: message.id,
         type: "attachment",
@@ -181,7 +181,7 @@ describe("AttachmentIntegrityService", () => {
         mediaType: asset.mediaType,
         sizeBytes: asset.sizeBytes,
       });
-      store.softDeleteAttachment(asset.id, 100);
+      store.attachments.softDeleteAttachment(asset.id, 100);
       const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
 
       await expect(service.gc({ gracePeriodMs: 100 })).resolves.toMatchObject({
@@ -199,7 +199,7 @@ describe("AttachmentIntegrityService", () => {
     const { store, blobs, attachments } = fixture(["att-retry"]);
     try {
       const asset = await attachments.import({ displayName: "retry.txt", content: content("retry") });
-      store.softDeleteAttachment(asset.id, 100);
+      store.attachments.softDeleteAttachment(asset.id, 100);
       const service = new AttachmentIntegrityService({ store, attachments: store.attachments, blobs, now: () => 1_000 });
       const originalDelete = blobs.deleteBlob.bind(blobs);
       vi.spyOn(blobs, "deleteBlob").mockRejectedValueOnce(new Error("locked"));
@@ -208,7 +208,7 @@ describe("AttachmentIntegrityService", () => {
         deletedAssets: 0,
         errors: [{ assetId: asset.id, code: "blob_delete_failed" }],
       });
-      expect(store.getAttachment(asset.id, { includeDeleted: true })).toBeDefined();
+      expect(store.attachments.getAttachment(asset.id, { includeDeleted: true })).toBeDefined();
       expect(store.latestRetentionAudit("attachment_gc")).toMatchObject({
         result: { errors: [{ assetId: asset.id, code: "blob_delete_failed" }] },
       });

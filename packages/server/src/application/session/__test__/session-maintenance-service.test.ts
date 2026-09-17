@@ -57,7 +57,17 @@ function createMaintenance(agent: Record<string, any>, options: { personalizatio
   const broadcastSince = vi.fn();
   const operationGate = new DaemonOperationGate();
   const maintenance = new SessionMaintenanceService({
-    data: store as any,
+    data: {
+      sessions: { get: store.getSession },
+      conversations: {
+        listInputs: vi.fn(() => []),
+        listMessages: store.listMessages,
+        listMessageParts: store.listMessageParts,
+        createMessage: store.createMessage,
+        upsertMessagePart: store.upsertMessagePart,
+      },
+      conversationTransactions: { replaceTranscript: store.replaceTranscript },
+    } as any,
     runControl: runEngine as any,
     agentPool: agentPool as any,
     liveChildren: { has: vi.fn(() => false) },
@@ -73,15 +83,15 @@ describe("SessionMaintenanceService", () => {
     const dir = mkdtempSync(join(tmpdir(), "oh-compact-attachments-"));
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     try {
-      store.createSession({ id: "s1", cwd: "/repo", model: "gpt-test" });
-      store.createImportingAttachment({ id: "att-1", displayName: "screen.png", stagingName: "att-1.part" });
-      store.markAttachmentReady("att-1", {
+      store.sessions.create({ id: "s1", cwd: "/repo", model: "gpt-test" });
+      store.attachments.createImportingAttachment({ id: "att-1", displayName: "screen.png", stagingName: "att-1.part" });
+      store.attachments.markAttachmentReady("att-1", {
         mediaType: "image/png", sizeBytes: 42, sha256: "a".repeat(64),
       });
-      const input = store.admitPrompt({
+      const input = store.conversationTransactions.admitPrompt({
         id: "input-1", sessionId: "s1", content: "", attachments: [{ assetId: "att-1", intent: "ocr" }],
       });
-      const before = store.listInputAttachments(input.id);
+      const before = store.conversations.listInputAttachments(input.id);
       const compact = vi.fn(async () => ({
         history: [{ type: "assistant", content: "summary without invented OCR" }],
         beforeMessageCount: 2,
@@ -103,8 +113,8 @@ describe("SessionMaintenanceService", () => {
 
       await maintenance.compact("s1");
 
-      expect(store.listInputAttachments(input.id)).toEqual(before);
-      expect(store.listMessageParts("s1").map((part) => part.text).filter(Boolean)).toEqual([
+      expect(store.conversations.listInputAttachments(input.id)).toEqual(before);
+      expect(store.conversations.listMessageParts("s1").map((part) => part.text).filter(Boolean)).toEqual([
         "summary without invented OCR",
         "已压缩上下文",
       ]);

@@ -119,14 +119,14 @@ describe("DurableEventRegistry", () => {
     const path = join(dir, "store.db");
     try {
       const store = new SessionStore({ path });
-      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
-      const cursor = store.latestEventSeq();
-      expect(() => store.appendEvent({
+      store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
+      const cursor = store.conversations.latestEventSeq();
+      expect(() => store.conversations.appendEvent({
         type: "session.run.error",
         sessionId: "s1",
         payload: { runId: "r1", error: 42 },
       })).toThrow("error must be a string");
-      expect(store.latestEventSeq()).toBe(cursor);
+      expect(store.conversations.latestEventSeq()).toBe(cursor);
       store.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -16,19 +16,18 @@ export interface RunInspectionWarning {
 }
 
 export type RunInspectorStore = Pick<SessionStore,
-  "getRun" | "getInput" | "listRunAttempts" | "listMessages" |
-  "listMessageParts" | "listSessionTasks" | "listEvents" | "listProjectionSettlements"
+  "conversations" | "runs" | "listSessionTasks" | "listProjectionSettlements"
 >;
 
 export interface RunInspection {
   runId: string;
   includeContent: boolean;
   sensitiveContentWarning?: string;
-  run: NonNullable<ReturnType<RunInspectorStore["getRun"]>>;
+  run: NonNullable<ReturnType<RunInspectorStore["runs"]["getRun"]>>;
   input?: SessionInputRecord;
   sourceRecovery?: Record<string, unknown>;
-  attempts: ReturnType<RunInspectorStore["listRunAttempts"]>;
-  messages: ReturnType<RunInspectorStore["listMessages"]>;
+  attempts: ReturnType<RunInspectorStore["runs"]["listRunAttempts"]>;
+  messages: ReturnType<RunInspectorStore["conversations"]["listMessages"]>;
   parts: SessionMessagePartRecord[];
   toolCalls: SessionMessagePartRecord[];
   permissions: PermissionRequestRecord[];
@@ -55,15 +54,15 @@ export function inspectDurableRun(
   runId: string,
   includeContent = false,
 ): RunInspection | undefined {
-  const run = store.getRun(runId);
+  const run = store.runs.getRun(runId);
   if (!run) return undefined;
-  const input = run.inputId ? store.getInput(run.inputId) : undefined;
-  const messages = store.listMessages(run.sessionId).filter((row) => row.runId === runId || row.inputId === run.inputId);
+  const input = run.inputId ? store.conversations.getInput(run.inputId) : undefined;
+  const messages = store.conversations.listMessages(run.sessionId).filter((row) => row.runId === runId || row.inputId === run.inputId);
   const messageIds = new Set(messages.map((row) => row.id));
-  const parts = store.listMessageParts(run.sessionId).filter((row) => messageIds.has(row.messageId));
+  const parts = store.conversations.listMessageParts(run.sessionId).filter((row) => messageIds.has(row.messageId));
   const permissionRequests = permissions.list({ sessionId: run.sessionId }).filter((row) => row.runId === runId);
   const childExecutions = store.listSessionTasks(run.sessionId).filter((row) => row.runId === runId || row.metadata.sourceRunId === runId);
-  const attempts = store.listRunAttempts(runId);
+  const attempts = store.runs.listRunAttempts(runId);
   const workflows = workflowQueries
     .listRuns()
     .filter((workflow) => workflow.ownerRunId === runId);
@@ -77,12 +76,12 @@ export function inspectDurableRun(
     ...childExecutions.flatMap((row) => [row.id, row.childSessionId]).filter((value): value is string => !!value),
     ...workflows.map((workflow) => workflow.runId),
   ]);
-  const events = store.listEvents({ sessionId: run.sessionId }).filter((event) => containsReference(event.payload, references));
+  const events = store.conversations.listEvents({ sessionId: run.sessionId }).filter((event) => containsReference(event.payload, references));
   const projectionSettlements = store.listProjectionSettlements().filter((row) =>
     row.rootSessionId === run.sessionId && (containsReference(row.payload, references) || row.status === "pending" || row.status === "retrying"));
   const warnings: RunInspectionWarning[] = [];
   if (run.inputId && !input) warnings.push({ code: "orphan_input", message: `Run points to missing input ${run.inputId}` });
-  if (run.status !== "pending" && run.status !== "running" && store.listRunAttempts(runId).some((row) => row.status === "pending" || row.status === "running")) {
+  if (run.status !== "pending" && run.status !== "running" && store.runs.listRunAttempts(runId).some((row) => row.status === "pending" || row.status === "running")) {
     warnings.push({ code: "active_attempt_on_closed_run", message: "Run is closed but at least one model attempt is still active" });
   }
   for (const event of events) {

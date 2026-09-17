@@ -6,7 +6,7 @@ import type { SessionStore } from "@openharness/services";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 
 export interface SessionPostRunMaintenanceContext {
-  data: Pick<SessionStore, "getSession" | "getRun" | "listSessions" | "listMessages" | "listMessageParts">;
+  data: Pick<SessionStore, "conversations" | "runs" | "sessions">;
   getSettings(cwd: string): Promise<Settings | undefined>;
   personalizationUpdater?: (messages: SessionMessageLike[]) => number;
   sessionMemoryWriter?: (cwd: string, messages: SessionMessageLike[], sessionId: string) => void;
@@ -45,8 +45,8 @@ export class SessionPostRunMaintenance {
     runId: string,
     agent: OpenHarnessAgent,
   ): Promise<void> {
-    const session = this.context.data.getSession(sessionId);
-    const run = this.context.data.getRun(runId);
+    const session = this.context.data.sessions.get(sessionId);
+    const run = this.context.data.runs.getRun(runId);
     if (!session || run?.status !== "completed") return;
 
     const messages = transcriptMessages(this.context.data, sessionId);
@@ -75,8 +75,8 @@ export class SessionPostRunMaintenance {
       await this.bestEffort("session.memory.auto_dream_failed", sessionId, runId, async () => {
         const memoryDir = getProjectMemoryDir(session.cwd);
         const lastAtMs = (this.context.lastConsolidatedAt?.(memoryDir) ?? 0) * 1000;
-        const recentSessionIds = this.context.data
-          .listSessions({ cwd: session.cwd, includeArchived: true })
+        const recentSessionIds = this.context.data.sessions
+          .list({ cwd: session.cwd, includeArchived: true })
           .filter((candidate) => candidate.updatedAt > lastAtMs)
           .map((candidate) => candidate.id);
         await this.context.autoDream?.({
@@ -112,13 +112,13 @@ export class SessionPostRunMaintenance {
 }
 
 function transcriptMessages(
-  store: Pick<SessionStore, "listMessages" | "listMessageParts">,
+  store: Pick<SessionStore, "conversations">,
   sessionId: string,
 ): SessionMessageLike[] {
-  return store.listMessages(sessionId)
+  return store.conversations.listMessages(sessionId)
     .sort((a, b) => a.seq - b.seq)
     .map((message) => {
-      const content = store.listMessageParts(sessionId, { messageId: message.id })
+      const content = store.conversations.listMessageParts(sessionId, { messageId: message.id })
         .sort((a, b) => a.seq - b.seq)
         .map((part) => part.text ?? (typeof part.output === "string" ? part.output : ""))
         .filter(Boolean)

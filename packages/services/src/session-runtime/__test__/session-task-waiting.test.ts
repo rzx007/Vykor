@@ -11,7 +11,7 @@ describe("SessionStore task waiting & notification contracts", () => {
     const store = new SessionStore({ path: join(dir, "store.db") });
 
     try {
-      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      store.sessions.create({ id: "s1", cwd: dir, model: "m" });
 
       // 1. Reserve creates pending task and notifies
       const res = store.reserveSessionTask({
@@ -101,7 +101,7 @@ describe("SessionStore task waiting & notification contracts", () => {
     const store = new SessionStore({ path: join(dir, "store.db") });
 
     try {
-      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      store.sessions.create({ id: "s1", cwd: dir, model: "m" });
       const task = store.createSessionTask({
         sessionId: "s1",
         type: "subagent",
@@ -126,7 +126,7 @@ describe("SessionStore task waiting & notification contracts", () => {
     const store = new SessionStore({ path: join(dir, "store.db") });
 
     try {
-      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      store.sessions.create({ id: "s1", cwd: dir, model: "m" });
       const task = store.createSessionTask({
         sessionId: "s1",
         type: "subagent",

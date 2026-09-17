@@ -668,7 +668,7 @@ describe("OpenHarnessHttpServer", () => {
           uploadModes: ["single"],
         },
       });
-      expect(first.store.getAttachment("att_interrupted")).toMatchObject({
+      expect(first.store.attachments.getAttachment("att_interrupted")).toMatchObject({
         status: "failed",
         failureCode: "attachment_storage_failed",
       });
@@ -886,9 +886,9 @@ describe("OpenHarnessHttpServer", () => {
       });
       const duplicateResponses = await Promise.all([duplicateRequest(), duplicateRequest()]);
       expect(duplicateResponses.map((response) => response.status)).toEqual([202, 202]);
-      expect(first.store.listInputs("concurrent-admission")).toHaveLength(1);
-      expect(first.store.listInputAttachments("same-attachment-input")).toHaveLength(1);
-      expect(first.store.listRuns("concurrent-admission")).toHaveLength(1);
+      expect(first.store.conversations.listInputs("concurrent-admission")).toHaveLength(1);
+      expect(first.store.conversations.listInputAttachments("same-attachment-input")).toHaveLength(1);
+      expect(first.store.runs.listRuns("concurrent-admission")).toHaveLength(1);
 
       const recoverySession = await fetch(`${firstListen.url}/sessions`, {
         method: "POST",
@@ -1065,7 +1065,7 @@ describe("OpenHarnessHttpServer", () => {
         const submit = async (
           suffix: string,
           assetId: string,
-        ): Promise<ReturnType<SessionStore["getRun"]>> => {
+        ): Promise<ReturnType<SessionStore["runs"]["getRun"]>> => {
           const sessionId = `text-routing-${suffix}`;
           const inputId = `input-${suffix}`;
           const created = await fetch(`${baseUrl}/sessions`, {
@@ -1086,10 +1086,10 @@ describe("OpenHarnessHttpServer", () => {
           expect(admitted.status).toBe(202);
           const runId = ((await admitted.json()) as { run: { id: string } }).run.id;
           await waitUntil(() => {
-            const status = server.store.getRun(runId)?.status;
+            const status = server.store.runs.getRun(runId)?.status;
             return status === "completed" || status === "failed" || status === "interrupted";
           }, 30_000);
-          return server.store.getRun(runId);
+          return server.store.runs.getRun(runId);
         };
 
         const utf8 = await upload("notes.txt", "text/plain", "第一行\r\n第二行");
@@ -1463,7 +1463,7 @@ describe("OpenHarnessHttpServer", () => {
             (event.payload?.run as { status?: string } | undefined)?.status ===
               "completed",
         );
-        expect(server.store.getSession(child!.id)?.status).not.toBe("archived");
+        expect(server.store.sessions.get(child!.id)?.status).not.toBe("archived");
       },
       { runtimeFactory },
     );
@@ -1648,12 +1648,12 @@ describe("OpenHarnessHttpServer", () => {
         for (
           let i = 0;
           i < 20 &&
-          server.store.getRun(admitted.run.id)?.status !== "completed";
+          server.store.runs.getRun(admitted.run.id)?.status !== "completed";
           i += 1
         ) {
           await new Promise((resolve) => setTimeout(resolve, 10));
         }
-        expect(server.store.getRun(admitted.run.id)?.status).toBe("completed");
+        expect(server.store.runs.getRun(admitted.run.id)?.status).toBe("completed");
         expect(events).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -1802,15 +1802,15 @@ describe("OpenHarnessHttpServer", () => {
           headers: auth(token),
         });
         // Simulate a previous daemon crash leaving an active run on disk.
-        first.store.createRun({ id: "r-stale", sessionId: "s1" });
-        first.store.updateRun("r-stale", { status: "running" });
-        const staleMessage = first.store.createMessage({
+        first.store.runs.createRun({ id: "r-stale", sessionId: "s1" });
+        first.store.runs.updateRun("r-stale", { status: "running" });
+        const staleMessage = first.store.conversations.createMessage({
           id: "m-stale",
           sessionId: "s1",
           role: "assistant",
           runId: "r-stale",
         });
-        first.store.upsertMessagePart({
+        first.store.conversations.upsertMessagePart({
           id: "part-stale",
           sessionId: "s1",
           messageId: staleMessage.id,
@@ -1818,7 +1818,7 @@ describe("OpenHarnessHttpServer", () => {
           status: "running",
           text: "unfinished",
         });
-        first.store.createPermissionRequest({
+        first.store.permissions.create({
           id: "permission-stale",
           sessionId: "s1",
           runId: "r-stale",
@@ -1831,7 +1831,7 @@ describe("OpenHarnessHttpServer", () => {
           description: "stale child",
           cwd: process.cwd(),
         });
-        first.store.createSession({
+        first.store.sessions.create({
           id: "child-settlement-session",
           parentId: "s1",
           cwd: process.cwd(),
@@ -1873,7 +1873,7 @@ describe("OpenHarnessHttpServer", () => {
             new Error("daemon crashed before child task completion persisted"),
           ),
         );
-        first.store.admitPrompt({
+        first.store.conversationTransactions.admitPrompt({
           id: "input-orphaned-before-restart",
           sessionId: "s1",
           delivery: "steer",
@@ -2010,23 +2010,23 @@ describe("OpenHarnessHttpServer", () => {
 
     await withServer(
       async ({ baseUrl, token, server }) => {
-        const session = server.store.createSession({
+        const session = server.store.sessions.create({
           id: "s1",
           cwd: process.cwd(),
           model: "m",
           metadata: { runtime: { model: "m" } },
         });
-        const input = server.store.admitPrompt({
+        const input = server.store.conversationTransactions.admitPrompt({
           id: "input-before-restart",
           sessionId: session.id,
           content: "finish the report",
         });
-        const interrupted = server.store.createRun({
+        const interrupted = server.store.runs.createRun({
           id: "run-before-restart",
           sessionId: session.id,
           inputId: input.id,
         });
-        server.store.updateRun(interrupted.id, {
+        server.store.runs.updateRun(interrupted.id, {
           status: "interrupted",
           error: "Daemon restarted before the run completed",
         });
@@ -2097,7 +2097,7 @@ describe("OpenHarnessHttpServer", () => {
           },
         );
         expect(duplicate.status).toBe(409);
-        expect(server.store.getRun("run-before-restart")?.status).toBe(
+        expect(server.store.runs.getRun("run-before-restart")?.status).toBe(
           "interrupted",
         );
       },
@@ -2122,31 +2122,31 @@ describe("OpenHarnessHttpServer", () => {
         logger: (event) => logs.push(event),
       });
       await first.listen();
-      const recoverySession = first.store.createSession({
+      const recoverySession = first.store.sessions.create({
         id: "recover",
         cwd: process.cwd(),
         model: "m",
         metadata: { runtime: { model: "m" } },
       });
-      first.store.createSession({
+      first.store.sessions.create({
         id: "parallel",
         cwd: process.cwd(),
         model: "m",
         metadata: { runtime: { model: "m" } },
       });
-      const sourceInput = first.store.admitPrompt({
+      const sourceInput = first.store.conversationTransactions.admitPrompt({
         id: "source-input",
         sessionId: recoverySession.id,
         content: "recover after restart",
         metadata: { traceId: recoveryTraceId },
       });
-      const sourceRun = first.store.createRun({
+      const sourceRun = first.store.runs.createRun({
         id: "source-run",
         sessionId: recoverySession.id,
         inputId: sourceInput.id,
         metadata: { traceId: recoveryTraceId },
       });
-      first.store.updateRun(sourceRun.id, {
+      first.store.runs.updateRun(sourceRun.id, {
         status: "interrupted",
         error: "Daemon restarted before the run completed",
       });
@@ -2275,13 +2275,13 @@ describe("OpenHarnessHttpServer", () => {
       };
       for (
         let i = 0;
-        i < 20 && second.store.getRun(parallel.run.id)?.status !== "completed";
+        i < 20 && second.store.runs.getRun(parallel.run.id)?.status !== "completed";
         i += 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
-      expect(second.store.getRun(parallel.run.id)?.status).toBe("completed");
-      expect(second.store.getRun(resumed.run.id)?.status).toBe("running");
+      expect(second.store.runs.getRun(parallel.run.id)?.status).toBe("completed");
+      expect(second.store.runs.getRun(resumed.run.id)?.status).toBe("running");
 
       const reply = await fetch(
         `${listen.url}/permissions/${pending.requests[0]!.id}/reply`,
@@ -2302,12 +2302,12 @@ describe("OpenHarnessHttpServer", () => {
       expect(reply.status).toBe(200);
       for (
         let i = 0;
-        i < 20 && second.store.getRun(resumed.run.id)?.status !== "completed";
+        i < 20 && second.store.runs.getRun(resumed.run.id)?.status !== "completed";
         i += 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
-      expect(second.store.getRun(resumed.run.id)?.status).toBe("completed");
+      expect(second.store.runs.getRun(resumed.run.id)?.status).toBe("completed");
       expect(logs).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -2381,14 +2381,14 @@ describe("OpenHarnessHttpServer", () => {
     try {
       const first = new OpenHarnessHttpServer({ storePath });
       await first.application.ready();
-      const parent = first.store.createSession({
+      const parent = first.store.sessions.create({
         id: "parent",
         cwd: projectCwd,
         model: "m",
         title: "parent",
         metadata: { runtime: { model: "m" } },
       });
-      const child = first.store.createSession({
+      const child = first.store.sessions.create({
         id: "child",
         parentId: parent.id,
         cwd: projectCwd,
@@ -2396,11 +2396,11 @@ describe("OpenHarnessHttpServer", () => {
         title: "child",
         metadata: { runtime: { model: "m" } },
       });
-      const staleChildRun = first.store.createRun({
+      const staleChildRun = first.store.runs.createRun({
         id: "child-run",
         sessionId: child.id,
       });
-      first.store.updateRun(staleChildRun.id, { status: "running" });
+      first.store.runs.updateRun(staleChildRun.id, { status: "running" });
       first.application.workflows.save(
         createRunningSnapshot(daemonRunId, parent.id),
       );
@@ -2417,7 +2417,7 @@ describe("OpenHarnessHttpServer", () => {
           summary: "Daemon restarted before the workflow completed",
         });
         expect(recovered.runningTaskIds).toEqual([]);
-        expect(second.store.getRun(staleChildRun.id)).toMatchObject({
+        expect(second.store.runs.getRun(staleChildRun.id)).toMatchObject({
           status: "interrupted",
         });
         expect(
@@ -3829,7 +3829,7 @@ describe("OpenHarnessHttpServer", () => {
           },
           async close() {
             lifecycle.push(
-              `close:${context.session.id}:${serverRef?.store.getSession(context.session.id)?.status}`,
+              `close:${context.session.id}:${serverRef?.store.sessions.get(context.session.id)?.status}`,
             );
           },
         };
@@ -3885,7 +3885,7 @@ describe("OpenHarnessHttpServer", () => {
         });
         for (let i = 0; i < 50; i++) {
           const running = ["child", "grandchild"].every((id) =>
-            server.store.listRuns(id).some((run) => run.status === "running"),
+            server.store.runs.listRuns(id).some((run) => run.status === "running"),
           );
           if (running) break;
           await new Promise((resolve) => setTimeout(resolve, 10));
@@ -3897,9 +3897,9 @@ describe("OpenHarnessHttpServer", () => {
         });
 
         expect(archived.status).toBe(200);
-        expect(server.store.getSession("parent")?.status).toBe("archived");
-        expect(server.store.getSession("child")?.status).toBe("archived");
-        expect(server.store.getSession("grandchild")?.status).toBe("archived");
+        expect(server.store.sessions.get("parent")?.status).toBe("archived");
+        expect(server.store.sessions.get("child")?.status).toBe("archived");
+        expect(server.store.sessions.get("grandchild")?.status).toBe("archived");
         for (const id of ["child", "grandchild"]) {
           const interruptIndex = lifecycle.indexOf(`interrupt:${id}`);
           const closeIndex = lifecycle.findIndex((event) =>
@@ -3967,7 +3967,7 @@ describe("OpenHarnessHttpServer", () => {
           headers: auth(token),
         });
         await abortObserved.promise;
-        expect(server.store.getSession("s1")?.status).toBe("closing");
+        expect(server.store.sessions.get("s1")?.status).toBe("closing");
 
         const rejected = await fetch(`${baseUrl}/sessions/s1/prompts`, {
           method: "POST",
@@ -3978,9 +3978,9 @@ describe("OpenHarnessHttpServer", () => {
 
         releaseRun.resolve();
         expect((await archive).status).toBe(200);
-        expect(server.store.getSession("s1")?.status).toBe("archived");
+        expect(server.store.sessions.get("s1")?.status).toBe("archived");
         expect(
-          server.store.listInputs("s1").map((input) => input.content),
+          server.store.conversations.listInputs("s1").map((input) => input.content),
         ).toEqual(["active"]);
       },
       { runtimeFactory },
@@ -4014,7 +4014,7 @@ describe("OpenHarnessHttpServer", () => {
       expect(first.status).toBe(202);
       expect(second.status).toBe(202);
       expect(secondBody.input.id).toBe(firstBody.input.id);
-      expect(server.store.listInputs("s1")).toHaveLength(1);
+      expect(server.store.conversations.listInputs("s1")).toHaveLength(1);
 
       const conflict = await fetch(`${baseUrl}/sessions/s1/prompts`, {
         method: "POST",
@@ -4022,7 +4022,7 @@ describe("OpenHarnessHttpServer", () => {
         body: JSON.stringify({ ...request, content: "a different operation" }),
       });
       expect(conflict.status).toBe(409);
-      expect(server.store.listInputs("s1")).toHaveLength(1);
+      expect(server.store.conversations.listInputs("s1")).toHaveLength(1);
     });
   });
 
@@ -4078,17 +4078,17 @@ describe("OpenHarnessHttpServer", () => {
           headers: auth(token),
         });
         await abortObserved.promise;
-        expect(server.store.getSession("s1")?.status).toBe("running");
+        expect(server.store.sessions.get("s1")?.status).toBe("running");
 
         releaseRun.resolve();
         for (
           let i = 0;
-          i < 50 && server.store.getSession("s1")?.status !== "idle";
+          i < 50 && server.store.sessions.get("s1")?.status !== "idle";
           i++
         ) {
           await new Promise((resolve) => setTimeout(resolve, 10));
         }
-        expect(server.store.getSession("s1")?.status).toBe("idle");
+        expect(server.store.sessions.get("s1")?.status).toBe("idle");
       },
       { runtimeFactory },
     );
@@ -4151,7 +4151,7 @@ describe("OpenHarnessHttpServer", () => {
         expect(patched.status).toBe(409);
         expect(
           (
-            server.store.getSession("s1")?.metadata.runtime as
+            server.store.sessions.get("s1")?.metadata.runtime as
               Record<string, unknown> | undefined
           )?.permissionMode,
         ).toBe("default");

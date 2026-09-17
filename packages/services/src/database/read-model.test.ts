@@ -15,13 +15,13 @@ describe("loadSessionReadModel", () => {
     const path = join(directory, "sessions.db");
     try {
       const store = new SessionStore({ path });
-      store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
-      const input = store.admitPrompt({
+      store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
+      const input = store.conversationTransactions.admitPrompt({
         id: "i1",
         sessionId: "s1",
         content: "hello",
       });
-      store.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
+      store.runs.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
       store.close();
 
       const database = SessionDatabase.open({ path });

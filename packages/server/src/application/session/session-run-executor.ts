@@ -31,8 +31,7 @@ const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
   data: Pick<SessionStore,
-    | "getSession" | "getInput" | "getRun" | "transaction" | "updateRun"
-    | "appendEvent" | "settleActiveRunAttempts" | "listMessageParts" | "listMessages"
+    "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction"
   >;
   attachments: Pick<SessionStore["attachments"],
     "acquireAttachmentLeases" | "renewAttachmentLeases" | "releaseAttachmentLeases"
@@ -96,13 +95,11 @@ export class SessionRunExecutor {
     let cleanupAttachmentResources: (() => Promise<void>) | undefined;
     let cleanupAttachmentLease: (() => void) | undefined;
     try {
-      const session = this.context.data.getSession(sessionId);
+      const session = this.context.data.sessions.get(sessionId);
       if (!session) throw new Error(`Session not found: ${sessionId}`);
-      const admitted = this.context.data.getInput(inputId);
+      const admitted = this.context.data.conversations.getInput(inputId);
       if (!admitted) throw new Error(`Session input not found: ${inputId}`);
-      const storedRun = typeof this.context.data.getRun === "function"
-        ? this.context.data.getRun(runId)
-        : undefined;
+      const storedRun = this.context.data.runs.getRun(runId);
       const hasStructuredContext = admitted.items.some((item) => item.type === "skill" || item.type === "context" || (item.type === "capability" && item.kind === "plugin_agent"));
       const hasExplicitSkills = admitted.items.some((item) => item.type === "skill");
 
@@ -155,7 +152,11 @@ export class SessionRunExecutor {
             hasExplicitSkills
               ? await resolveSkillCatalog(session, this.context.resolveSkillCatalog)
               : { resolvePath: () => undefined },
-            conversationContextCatalog(this.context.data, sessionId),
+            conversationContextCatalog({
+              getSession: (id) => this.context.data.sessions.get(id),
+              listMessages: (id) => this.context.data.conversations.listMessages(id),
+              listMessageParts: (id) => this.context.data.conversations.listMessageParts(id),
+            }, sessionId),
             capabilityView,
           )
         : undefined;
@@ -191,7 +192,7 @@ export class SessionRunExecutor {
             decisions: routed.decisions,
             status: "completed",
           });
-          this.context.data.updateRun(runId, {
+          this.context.data.runs.updateRun(runId, {
             metadata: {
               attachmentRouting: {
                 status: "completed",
@@ -275,7 +276,7 @@ export class SessionRunExecutor {
           cleanupError = closeError;
         }
       }
-      const current = this.context.data.getRun(runId);
+      const current = this.context.data.runs.getRun(runId);
       if (cleanupError) {
         this.context.log({
           level: "error",
@@ -300,7 +301,7 @@ export class SessionRunExecutor {
       const before = this.context.events.checkpoint();
       this.context.data.transaction(() => {
         if (routingError) {
-          const admitted = this.context.data.getInput(inputId);
+          const admitted = this.context.data.conversations.getInput(inputId);
           if (admitted) {
             this.context.transcriptProjection.projectAttachmentTransformations({
               sessionId,
@@ -318,7 +319,7 @@ export class SessionRunExecutor {
           runId,
           interrupted ? "interrupted" : "failed",
         );
-        this.context.data.appendEvent({
+        this.context.data.conversations.appendEvent({
           type: interrupted ? "session.run.interrupted" : "session.run.error",
           sessionId,
           payload: {
@@ -328,14 +329,12 @@ export class SessionRunExecutor {
             ...(routingError ? { errorKind: routingError.code } : {}),
           },
         });
-        if (typeof this.context.data.settleActiveRunAttempts === "function") {
-          this.context.data.settleActiveRunAttempts(
-            runId,
-            interrupted ? "cancelled" : "failed",
-            message,
-          );
-        }
-        this.context.data.updateRun(runId, {
+        this.context.data.conversationTransactions.settleActiveRunAttempts(
+          runId,
+          interrupted ? "cancelled" : "failed",
+          message,
+        );
+        this.context.data.runs.updateRun(runId, {
           status: interrupted ? "interrupted" : "failed",
           error: message,
           ...(error instanceof PluginPreparationError ? {

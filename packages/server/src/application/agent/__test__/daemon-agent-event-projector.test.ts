@@ -3,6 +3,36 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
 
+function projectorStore(flat: Record<string, any>) {
+  return {
+    ...flat,
+    sessions: {
+      get: flat.getSession,
+      create: flat.createSession,
+      archive: flat.archiveSession,
+    },
+    conversations: {
+      getInput: flat.getInput,
+      createMessage: flat.createMessage,
+      upsertMessagePart: flat.upsertMessagePart,
+      appendEvent: flat.appendEvent,
+      listEvents: flat.listEvents,
+    },
+    conversationTransactions: {
+      admitPrompt: flat.admitPrompt,
+      settleActiveRunAttempts: flat.settleActiveRunAttempts,
+    },
+    runs: {
+      getRun: flat.getRun,
+      createRun: flat.createRun,
+      updateRun: flat.updateRun,
+      createRunAttempt: flat.createRunAttempt,
+      updateRunAttempt: flat.updateRunAttempt,
+      listRunAttempts: flat.listRunAttempts,
+    },
+  } as any;
+}
+
 describe("DaemonAgentEventProjector", () => {
   it("records a failed child startup run without ending the root run", async () => {
     const sessions = new Map<string, any>([["parent", { id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } } }]]);
@@ -10,7 +40,7 @@ describe("DaemonAgentEventProjector", () => {
     const runs = new Map<string, any>([["root-run", { id: "root-run", sessionId: "parent", status: "running" }]]);
     let task: any;
     const projector = new DaemonAgentEventProjector({
-      store: {
+      store: projectorStore({
         getSession: (id: string) => sessions.get(id),
         createSession: (input: any) => { sessions.set(input.id, input); return input; },
         getSessionTask: () => task,
@@ -21,7 +51,7 @@ describe("DaemonAgentEventProjector", () => {
         updateRun: (id: string, patch: any) => Object.assign(runs.get(id), patch),
         appendEvent: () => {},
         transaction: (work: () => unknown) => work(),
-      } as any,
+      }),
       rootAgent: {} as any, transcriptProjection: {} as any,
       executionProjector: { createBridge: () => ({
         registerChildExecution: (input: any) => { task = { ...input, status: "pending" }; return task; },
@@ -55,12 +85,12 @@ describe("DaemonAgentEventProjector", () => {
     };
     const updateRun = vi.fn();
     const projector = new DaemonAgentEventProjector({
-      store: {
+      store: projectorStore({
         getRun: () => run,
         updateRun,
         appendEvent: vi.fn(),
         listEvents: () => [],
-      } as any,
+      }),
       rootAgent: {} as any,
       transcriptProjection: {} as any,
       executionProjector: {} as any,
@@ -127,7 +157,7 @@ describe("DaemonAgentEventProjector", () => {
       attachments: [],
     };
     const projector = new DaemonAgentEventProjector({
-      store: {
+      store: projectorStore({
         transaction: (work: () => unknown) => work(),
         getInput: () => input,
         getRun: () => ({
@@ -136,7 +166,7 @@ describe("DaemonAgentEventProjector", () => {
           inputId: "input-1",
           status: "pending",
         }),
-      } as any,
+      }),
       events: {
         checkpoint: () => 0,
         publishSince: () => {},
@@ -181,14 +211,14 @@ describe("DaemonAgentEventProjector", () => {
     const items = [{ type: "skill", name: "review", path: "/review/SKILL.md" }];
     let persisted: unknown;
     const projector = new DaemonAgentEventProjector({
-      store: {
+      store: projectorStore({
         transaction: (work: () => unknown) => work(),
         getInput: () => undefined,
         admitPrompt: (input: unknown) => {
           persisted = input;
           return input;
         },
-      } as any,
+      }),
       events: {
         checkpoint: () => 0,
         publishSince: () => {},
@@ -758,7 +788,7 @@ describe("DaemonAgentEventProjector", () => {
   it("rejects child creation after the parent session starts closing", async () => {
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: {
+      store: projectorStore({
         getSession: vi.fn(() => ({
           id: "parent",
           cwd: "/repo",
@@ -766,7 +796,7 @@ describe("DaemonAgentEventProjector", () => {
           status: "closing",
           metadata: { runtime: { model: "gpt" } },
         })),
-      } as any,
+      }),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,
@@ -885,13 +915,13 @@ describe("DaemonAgentEventProjector", () => {
       projectorId: "daemon-agent:agent-1",
       rootSessionId: "parent",
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: {
+      store: projectorStore({
         listProjectionSettlements: vi.fn(() => []),
         getSession: vi.fn(() => undefined),
         createProjectionSettlement: vi.fn(() => {
           throw new Error("sqlite unavailable");
         }),
-      } as any,
+      }),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,
@@ -931,7 +961,7 @@ describe("DaemonAgentEventProjector", () => {
     const updateRun = vi.fn();
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: {
+      store: projectorStore({
         transaction: <T>(work: () => T) => work(),
         getInput: vi.fn(() => ({
           id: "input-1",
@@ -945,7 +975,7 @@ describe("DaemonAgentEventProjector", () => {
           status: "failed",
         })),
         updateRun,
-      } as any,
+      }),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,
@@ -983,7 +1013,7 @@ describe("DaemonAgentEventProjector", () => {
     });
     const projector = new DaemonAgentEventProjector({
       rootAgent: { children: { get: vi.fn() } } as any,
-      store: { appendEvent, listEvents: vi.fn(() => durableEvents) } as any,
+      store: projectorStore({ appendEvent, listEvents: vi.fn(() => durableEvents) }),
       transcriptProjection: {} as any,
       executionProjector: {} as any,
       liveChildren: {} as any,

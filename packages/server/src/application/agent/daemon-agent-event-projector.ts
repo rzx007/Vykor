@@ -49,13 +49,10 @@ export interface DaemonAgentEventProjectorContext {
   rootSessionId?: string;
   rootAgent: OpenHarnessAgent;
   store: Pick<SessionStore,
-    "admitPrompt" | "appendEvent" | "archiveSession" | "createMessage" |
-    "createProjectionSettlement" | "createRun" | "createRunAttempt" | "createSession" |
-    "failProjectionSettlement" | "getInput" | "getProjectionSettlement" | "getRun" |
-    "getSession" | "getSessionTask" | "listEvents" | "listProjectionSettlements" |
-    "listRunAttempts" | "markProjectionSettlementRetrying" | "resolveProjectionSettlement" |
-    "settleActiveRunAttempts" | "transaction" | "updateRun" | "updateRunAttempt" |
-    "updateSessionTask" | "upsertMessagePart"
+    "conversations" | "conversationTransactions" | "runs" | "sessions" |
+    "createProjectionSettlement" | "failProjectionSettlement" | "getProjectionSettlement" |
+    "getSessionTask" | "listProjectionSettlements" | "markProjectionSettlementRetrying" |
+    "resolveProjectionSettlement" | "transaction" | "updateSessionTask"
   >;
   transcriptProjection: SessionTranscriptProjection;
   executionProjector: Pick<SessionExecutionProjector, "createBridge">;
@@ -146,12 +143,12 @@ export class DaemonAgentEventProjector {
         return;
       case "domain.event":
         if (event.data.name === "goal.assessment" && event.context.runId) {
-          const run = this.context.store.getRun(event.context.runId);
+          const run = this.context.store.runs.getRun(event.context.runId);
           const payload = event.data.payload;
           if (run && run.sessionId === event.context.sessionId && typeof run.metadata.goalId === "string" && typeof run.metadata.goalRevision === "number" && run.status === "running" && !run.metadata.goalSettled && payload?.goalId === run.metadata.goalId && payload?.revision === run.metadata.goalRevision && payload?.runId === run.id) {
             try {
               const assessment = parseGoalAssessment(payload, { goalId: run.metadata.goalId, revision: run.metadata.goalRevision, runId: run.id });
-              this.context.store.updateRun(run.id, { metadata: { goalAssessment: assessment } });
+              this.context.store.runs.updateRun(run.id, { metadata: { goalAssessment: assessment } });
             } catch { /* Invalid or unbound suggestions cannot change the durable goal. */ }
           }
         }
@@ -159,12 +156,12 @@ export class DaemonAgentEventProjector {
           const phase = event.data.payload?.phase;
           if (phase === "compact_start" || phase === "compact_end" || phase === "compact_failed") {
             const presentationPhase = phase === "compact_start" ? "started" : phase === "compact_end" ? "completed" : "failed";
-            const message = this.context.store.createMessage({
+            const message = this.context.store.conversations.createMessage({
               sessionId: event.context.sessionId,
               role: "system",
               metadata: { presentation: { kind: "context_compaction", phase: presentationPhase } },
             });
-            this.context.store.upsertMessagePart({
+            this.context.store.conversations.upsertMessagePart({
               sessionId: event.context.sessionId,
               messageId: message.id,
               type: "text",
@@ -192,12 +189,12 @@ export class DaemonAgentEventProjector {
 
   private async projectChildCreated(event: Extract<AgentEvent, { type: "child.created" }>): Promise<void> {
     const { childId, sessionId, spawn, cwd, worktree } = event.data;
-    const parent = this.context.store.getSession(event.context.sessionId);
+    const parent = this.context.store.sessions.get(event.context.sessionId);
     if (!parent) throw new Error(`Parent session not found for child ${childId}: ${event.context.sessionId}`);
     if (parent.status === "closing" || parent.status === "archived") {
       throw new Error(`Parent session is not accepting child agents: ${parent.id}`);
     }
-    const existing = this.context.store.getSession(sessionId);
+    const existing = this.context.store.sessions.get(sessionId);
     if (
       existing &&
       (existing.parentId !== parent.id || existing.cwd !== cwd || existing.metadata.childId !== childId)
@@ -219,7 +216,7 @@ export class DaemonAgentEventProjector {
         ...(spawn.maxTurns !== undefined ? { maxTurns: spawn.maxTurns } : {}),
         ...(isRuntimeEffort(spawn.effort) ? { effort: spawn.effort } : {}),
       };
-      this.context.store.createSession({
+      this.context.store.sessions.create({
         id: sessionId,
         parentId: parent.id,
         cwd,
@@ -284,9 +281,9 @@ export class DaemonAgentEventProjector {
     const before = this.context.events.checkpoint();
     try {
       this.context.store.transaction(() => {
-        let input = this.context.store.getInput(inputId);
+        let input = this.context.store.conversations.getInput(inputId);
         if (!input) {
-          input = this.context.store.admitPrompt({
+          input = this.context.store.conversationTransactions.admitPrompt({
             id: inputId,
             sessionId,
             delivery: event.data.delivery,
@@ -299,11 +296,11 @@ export class DaemonAgentEventProjector {
             : input.content === content;
           const promotion = isRecord(metadata.promotion) ? metadata.promotion : undefined;
           const queuedRun = typeof promotion?.queuedRunId === "string"
-            ? this.context.store.getRun(promotion.queuedRunId)
+            ? this.context.store.runs.getRun(promotion.queuedRunId)
             : undefined;
           const executingRun =
             input.attachments?.length && runId
-              ? this.context.store.getRun(runId)
+              ? this.context.store.runs.getRun(runId)
               : undefined;
           const attachmentRouting = isRecord(executingRun?.metadata.attachmentRouting)
             ? executingRun.metadata.attachmentRouting
@@ -359,7 +356,7 @@ export class DaemonAgentEventProjector {
     const sessionId = event.context.sessionId;
     const runId = required(event.context.runId, "runId", event.type);
     const inputId = required(event.context.inputId, "inputId", event.type);
-    const input = this.context.store.getInput(inputId);
+    const input = this.context.store.conversations.getInput(inputId);
     if (!input) throw new Error(`Agent run input not found: ${inputId}`);
     if (this.transcripts.has(runId)) {
       await this.bindChildTaskRun(event, runId);
@@ -368,9 +365,9 @@ export class DaemonAgentEventProjector {
 
     const before = this.context.events.checkpoint();
     const transcript = this.context.store.transaction(() => {
-      const existing = this.context.store.getRun(runId);
+      const existing = this.context.store.runs.getRun(runId);
       if (!existing) {
-        this.context.store.createRun({
+        this.context.store.runs.createRun({
           id: runId,
           sessionId,
           inputId,
@@ -384,24 +381,20 @@ export class DaemonAgentEventProjector {
       } else if (existing.status === "completed" || existing.status === "failed" || existing.status === "interrupted") {
         throw new Error(`Agent run is already terminal: ${runId}`);
       }
-      this.context.store.updateRun(runId, { status: "running" });
-      const supportsAttempts = typeof this.context.store.listRunAttempts === "function" &&
-        typeof this.context.store.createRunAttempt === "function" &&
-        typeof this.context.store.updateRunAttempt === "function" &&
-        typeof this.context.store.getSession === "function";
-      const existingAttempts = supportsAttempts ? this.context.store.listRunAttempts(runId) : [];
-      if (supportsAttempts && existingAttempts.length === 0) {
-        const session = this.context.store.getSession(sessionId);
+      this.context.store.runs.updateRun(runId, { status: "running" });
+      const existingAttempts = this.context.store.runs.listRunAttempts(runId);
+      if (existingAttempts.length === 0) {
+        const session = this.context.store.sessions.get(sessionId);
         if (!session) throw new Error(`Agent run session not found: ${sessionId}`);
         const runtime = readSessionRuntimeConfig(session);
-        const attempt = this.context.store.createRunAttempt({
+        const attempt = this.context.store.runs.createRunAttempt({
           id: `attempt_${runId}_1`,
           runId,
           sequence: 1,
           provider: runtime.provider,
           model: runtime.model,
         });
-        this.context.store.updateRunAttempt(attempt.id, { status: "running" });
+        this.context.store.runs.updateRunAttempt(attempt.id, { status: "running" });
       }
       return this.context.transcriptProjection.beginRun(sessionId, inputId, runId, input);
     });
@@ -487,19 +480,17 @@ export class DaemonAgentEventProjector {
           );
         }
         if (error) {
-          this.context.store.appendEvent({
+          this.context.store.conversations.appendEvent({
             type: interrupted ? "session.run.interrupted" : "session.run.error",
             sessionId: event.context.sessionId,
             payload: { runId, traceId: event.context.traceId, error },
           });
         }
-        if (typeof this.context.store.settleActiveRunAttempts === "function") {
-          this.context.store.settleActiveRunAttempts(
-            runId,
-            interrupted ? "cancelled" : failed ? "failed" : "completed",
-            error,
-          );
-        }
+        this.context.store.conversationTransactions.settleActiveRunAttempts(
+          runId,
+          interrupted ? "cancelled" : failed ? "failed" : "completed",
+          error,
+        );
         if (interrupted || failed) {
           this.context.transcriptProjection.finalizeRunParts(
             event.context.sessionId,
@@ -507,7 +498,7 @@ export class DaemonAgentEventProjector {
             interrupted ? "interrupted" : "failed",
           );
         }
-        this.context.store.updateRun(runId, {
+        this.context.store.runs.updateRun(runId, {
           status: interrupted ? "interrupted" : failed ? "failed" : "completed",
           ...(error ? { error } : {}),
           ...(event.type === "run.completed" && event.data.stopReason
@@ -547,13 +538,12 @@ export class DaemonAgentEventProjector {
 
   private appendRuntimeEvent(event: AgentEvent, payload?: Record<string, unknown>, type = `agent.${event.type}`): void {
     if (
-      typeof this.context.store.listEvents === "function" &&
-      this.context.store.listEvents({ sessionId: event.context.sessionId }).some(
+      this.context.store.conversations.listEvents({ sessionId: event.context.sessionId }).some(
         (candidate) => candidate.type === type && candidate.payload.frameworkEventId === event.id,
       )
     ) return;
     const before = this.context.events.checkpoint();
-    this.context.store.appendEvent({
+    this.context.store.conversations.appendEvent({
       type,
       sessionId: event.context.sessionId,
       payload: { frameworkEventId: event.id, ...payload },
@@ -565,20 +555,18 @@ export class DaemonAgentEventProjector {
     const message = error instanceof Error ? error.message : String(error);
     const runId = event.context.runId;
     if (runId) {
-      const run = this.context.store.getRun(runId);
+      const run = this.context.store.runs.getRun(runId);
       if (run && (run.status === "pending" || run.status === "running")) {
         const before = this.context.events.checkpoint();
         this.context.store.transaction(() => {
           this.context.transcriptProjection.finalizeRunParts(event.context.sessionId, runId, "failed");
-          this.context.store.appendEvent({
+          this.context.store.conversations.appendEvent({
             type: "session.run.error",
             sessionId: event.context.sessionId,
             payload: { runId, traceId: event.context.traceId, error: message, projectionFailure: true },
           });
-          if (typeof this.context.store.settleActiveRunAttempts === "function") {
-            this.context.store.settleActiveRunAttempts(runId, "failed", message);
-          }
-          this.context.store.updateRun(runId, { status: "failed", error: message });
+          this.context.store.conversationTransactions.settleActiveRunAttempts(runId, "failed", message);
+          this.context.store.runs.updateRun(runId, { status: "failed", error: message });
         });
         this.context.events.publishSince(before);
       }
@@ -601,16 +589,16 @@ export class DaemonAgentEventProjector {
     this.children.delete(childId);
 
     const task = this.context.store.getSessionTask(childId);
-    const parent = this.context.store.getSession(event.context.sessionId);
+    const parent = this.context.store.sessions.get(event.context.sessionId);
     if (task && parent && (task.status === "pending" || task.status === "running")) {
       const bridge = this.context.executionProjector.createBridge({ id: parent.id, cwd: parent.cwd });
       await bridge.completeChildExecution(task.id, { status: "failed", output: message });
     }
 
-    const child = this.context.store.getSession(childSessionId);
+    const child = this.context.store.sessions.get(childSessionId);
     if (child && child.status !== "archived") {
       const before = this.context.events.checkpoint();
-      this.context.store.archiveSession(childSessionId);
+      this.context.store.sessions.archive(childSessionId);
       this.context.events.publishSince(before);
     }
   }
@@ -625,14 +613,12 @@ export class DaemonAgentEventProjector {
 
   private projectUsage(event: Extract<AgentEvent, { type: "usage.updated" }>): void {
     this.projectStream(event, { type: "usage", usage: event.data.usage });
-    if (typeof this.context.store.listRunAttempts !== "function" ||
-      typeof this.context.store.updateRunAttempt !== "function") return;
     const runId = required(event.context.runId, "runId", event.type);
-    const attempt = this.context.store.listRunAttempts(runId)
+    const attempt = this.context.store.runs.listRunAttempts(runId)
       .filter((candidate) => candidate.status === "pending" || candidate.status === "running")
       .at(-1);
     if (!attempt) return;
-    this.context.store.updateRunAttempt(attempt.id, {
+    this.context.store.runs.updateRunAttempt(attempt.id, {
       inputTokens: (attempt.inputTokens ?? 0) + event.data.usage.inputTokens,
       outputTokens: (attempt.outputTokens ?? 0) + event.data.usage.outputTokens,
     });
@@ -781,15 +767,15 @@ export class DaemonAgentEventProjector {
         const runId = `run_startup_${state.childId}`;
         const before = this.context.events.checkpoint();
         this.context.store.transaction(() => {
-          if (!this.context.store.getInput(inputId)) this.context.store.admitPrompt({
+          if (!this.context.store.conversations.getInput(inputId)) this.context.store.conversationTransactions.admitPrompt({
             id: inputId, sessionId: state.sessionId, delivery: "queue",
             items: [{ type: "text", text: state.prompt }],
           });
-          if (!this.context.store.getRun(runId)) this.context.store.createRun({
+          if (!this.context.store.runs.getRun(runId)) this.context.store.runs.createRun({
             id: runId, sessionId: state.sessionId, inputId,
             metadata: { parentRunId: state.parentRunId },
           });
-          this.context.store.updateRun(runId, { status: "failed", error: event.data.result.error ?? event.data.result.output });
+          this.context.store.runs.updateRun(runId, { status: "failed", error: event.data.result.error ?? event.data.result.output });
         });
         this.context.events.publishSince(before);
         await state.bridge.bindChildExecutionRun(state.taskId, runId);

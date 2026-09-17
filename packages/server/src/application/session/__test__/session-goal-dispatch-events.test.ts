@@ -65,7 +65,7 @@ describe("SessionGoalService dispatch event boundary", () => {
       });
       const controller = new AbortController();
       const iterator = eventService
-        .subscribe({ after: store.latestEventSeq(), signal: controller.signal })
+        .subscribe({ after: store.conversations.latestEventSeq(), signal: controller.signal })
         .stream[Symbol.asyncIterator]();
       const nextEvent = iterator.next();
 

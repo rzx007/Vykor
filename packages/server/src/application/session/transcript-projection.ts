@@ -39,10 +39,7 @@ export type AppliedTranscriptStreamEvent = {
  */
 export class SessionTranscriptProjection {
   constructor(
-    private readonly store: Pick<
-      SessionStore,
-      "appendMessagePartDelta" | "createMessage" | "listMessageParts" | "listMessages" | "updateRun" | "upsertMessagePart"
-    >,
+    private readonly store: Pick<SessionStore, "conversations" | "incrementalOutput" | "runs">,
   ) {}
 
   beginRun(
@@ -51,11 +48,11 @@ export class SessionTranscriptProjection {
     runId: string,
     input: SessionInputRecord,
   ): ActiveTranscriptProjectionState {
-    const existingUserMessage = this.store
+    const existingUserMessage = this.store.conversations
       .listMessages(sessionId)
       .find((message) => message.inputId === inputId);
     if (!existingUserMessage) {
-      const userMessage = this.store.createMessage({
+      const userMessage = this.store.conversations.createMessage({
         sessionId,
         role: "user",
         runId,
@@ -81,11 +78,11 @@ export class SessionTranscriptProjection {
     status: Extract<SessionMessagePartStatus, "completed" | "failed">;
     errorCode?: string;
   }): void {
-    let userMessage = this.store
+    let userMessage = this.store.conversations
       .listMessages(input.sessionId)
       .find((message) => message.inputId === input.inputId);
     if (!userMessage) {
-      userMessage = this.store.createMessage({
+      userMessage = this.store.conversations.createMessage({
         sessionId: input.sessionId,
         role: "user",
         runId: input.runId,
@@ -94,7 +91,7 @@ export class SessionTranscriptProjection {
       this.projectUserInput(userMessage.id, input.input);
     }
     for (const decision of input.decisions) {
-      this.store.upsertMessagePart({
+      this.store.conversations.upsertMessagePart({
         id: `attachment-transform:${input.runId}:${decision.assetId}`,
         sessionId: input.sessionId,
         messageId: userMessage.id,
@@ -118,8 +115,8 @@ export class SessionTranscriptProjection {
     delete state.assistantMessageId;
     state.assistantTurnCompleted = true;
     for (const steered of pending) {
-      if (this.store.listMessages(state.sessionId).some((message) => message.inputId === steered.id)) continue;
-      const userMessage = this.store.createMessage({
+      if (this.store.conversations.listMessages(state.sessionId).some((message) => message.inputId === steered.id)) continue;
+      const userMessage = this.store.conversations.createMessage({
         sessionId: state.sessionId,
         role: "user",
         runId: state.runId,
@@ -141,7 +138,7 @@ export class SessionTranscriptProjection {
       case "text_delta": {
         const messageId = this.ensureAssistantMessage(state, true);
         if (!state.activeTextPartId) {
-          const part = this.store.upsertMessagePart({
+          const part = this.store.conversations.upsertMessagePart({
             sessionId: state.sessionId,
             messageId,
             type: "text",
@@ -153,7 +150,7 @@ export class SessionTranscriptProjection {
           state.activeTextPhase = event.phase;
         }
         return {
-          liveEvent: this.store.appendMessagePartDelta({
+          liveEvent: this.store.incrementalOutput.appendMessagePartDelta({
             sessionId: state.sessionId,
             messageId,
             partId: state.activeTextPartId,
@@ -165,7 +162,7 @@ export class SessionTranscriptProjection {
       case "tool_use_start": {
         this.completeOpenTextPart(state, "completed", "commentary");
         const messageId = this.ensureAssistantMessage(state, true);
-        const part = this.store.upsertMessagePart({
+        const part = this.store.conversations.upsertMessagePart({
           id: event.toolUse.id,
           sessionId: state.sessionId,
           messageId,
@@ -192,7 +189,7 @@ export class SessionTranscriptProjection {
         const active = state.toolParts.get(event.toolUseId);
         const messageId = active?.messageId ?? this.ensureAssistantMessage(state);
         const attachmentOcr = recordValue(event.result.metadata?.attachmentOcr);
-        this.store.upsertMessagePart({
+        this.store.conversations.upsertMessagePart({
           id: active?.partId ?? event.toolUseId,
           sessionId: state.sessionId,
           messageId,
@@ -224,7 +221,7 @@ export class SessionTranscriptProjection {
           for (const [index, image] of generatedImageAssets(
             event.result.metadata?.generatedImages,
           ).entries()) {
-            this.store.upsertMessagePart({
+            this.store.conversations.upsertMessagePart({
               id: `generated-attachment:${event.toolUseId}:${index}`,
               sessionId: state.sessionId,
               messageId,
@@ -246,7 +243,7 @@ export class SessionTranscriptProjection {
         return { completedToolName: active?.toolName };
       }
       case "usage": {
-        this.store.updateRun(state.runId, { metadata: { usage: event.usage } });
+        this.store.runs.updateRun(state.runId, { metadata: { usage: event.usage } });
         return {};
       }
       case "complete": {
@@ -256,13 +253,13 @@ export class SessionTranscriptProjection {
           state.activeTextPhase ?? "final_answer",
         );
         state.assistantTurnCompleted = true;
-        this.store.updateRun(state.runId, { metadata: { stopReason: event.stopReason } });
+        this.store.runs.updateRun(state.runId, { metadata: { stopReason: event.stopReason } });
         return {};
       }
       case "error": {
         const messageId = this.ensureAssistantMessage(state, true);
         this.completeOpenTextPart(state, "failed");
-        this.store.upsertMessagePart({
+        this.store.conversations.upsertMessagePart({
           sessionId: state.sessionId,
           messageId,
           type: "error",
@@ -280,7 +277,7 @@ export class SessionTranscriptProjection {
     phase?: AssistantMessagePhase,
   ): void {
     if (!state.assistantMessageId || !state.activeTextPartId) return;
-    this.store.upsertMessagePart({
+    this.store.conversations.upsertMessagePart({
       id: state.activeTextPartId,
       sessionId: state.sessionId,
       messageId: state.assistantMessageId,
@@ -299,14 +296,14 @@ export class SessionTranscriptProjection {
     status: Extract<SessionMessagePartStatus, "failed" | "interrupted">,
   ): void {
     const messageIds = new Set(
-      this.store
+      this.store.conversations
         .listMessages(sessionId)
         .filter((message) => message.runId === runId)
         .map((message) => message.id),
     );
-    for (const part of this.store.listMessageParts(sessionId)) {
+    for (const part of this.store.conversations.listMessageParts(sessionId)) {
       if (!messageIds.has(part.messageId) || part.status !== "running") continue;
-      this.store.upsertMessagePart({
+      this.store.conversations.upsertMessagePart({
         id: part.id,
         sessionId,
         messageId: part.messageId,
@@ -330,7 +327,7 @@ export class SessionTranscriptProjection {
       state.assistantTurnCompleted = false;
     }
     if (state.assistantMessageId) return state.assistantMessageId;
-    const message = this.store.createMessage({
+    const message = this.store.conversations.createMessage({
       sessionId: state.sessionId,
       role: "assistant",
       runId: state.runId,
@@ -341,7 +338,7 @@ export class SessionTranscriptProjection {
 
   private projectUserInput(messageId: string, input: SessionInputRecord): void {
     if (input.content.trim().length > 0) {
-      this.store.upsertMessagePart({
+      this.store.conversations.upsertMessagePart({
         sessionId: input.sessionId,
         messageId,
         type: "text",
@@ -353,7 +350,7 @@ export class SessionTranscriptProjection {
     for (const attachment of [...input.attachments].sort(
       (a, b) => a.seq - b.seq,
     )) {
-      this.store.upsertMessagePart({
+      this.store.conversations.upsertMessagePart({
         sessionId: input.sessionId,
         messageId,
         type: "attachment",

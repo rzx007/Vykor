@@ -11,9 +11,8 @@ import { inspectDurableRun, listProjectionDiagnostics } from "./run-inspector.js
 
 export interface DaemonControlServiceContext {
   store: Pick<SessionStore,
-    "getSession" | "listSessions" | "getRun" | "listRuns" | "listSessionTasks" |
-    "listRunAttempts" | "getInput" | "listMessages" | "listMessageParts" |
-    "listEvents" | "listProjectionSettlements"
+    "conversations" | "runs" | "sessions" | "listSessionTasks" |
+    "listProjectionSettlements"
   >;
   permissions: Pick<SessionStore["permissions"], "list">;
   workflows: Pick<SessionStore["workflows"], "listRuns">;
@@ -50,20 +49,14 @@ export class DaemonControlService {
   }
 
   runtimeSnapshot(): OpenHarnessRuntimeSnapshot {
-    const sessions = this.context.store.listSessions({ includeArchived: true });
-    const runs = sessions.flatMap((session) => this.context.store.listRuns(session.id));
+    const sessions = this.context.store.sessions.list({ includeArchived: true });
+    const runs = sessions.flatMap((session) => this.context.store.runs.listRuns(session.id));
     const tasks = sessions.flatMap((session) => this.context.store.listSessionTasks(session.id));
     const workflows = this.context.workflows.listRuns();
     const permissions = this.context.permissions.list();
     const projectionSettlements = this.context.store.listProjectionSettlements();
-    const attempts =
-      typeof this.context.store.listRunAttempts === "function"
-        ? runs.flatMap((run) => this.context.store.listRunAttempts(run.id))
-        : [];
-    const parts =
-      typeof this.context.store.listMessageParts === "function"
-        ? sessions.flatMap((session) => this.context.store.listMessageParts(session.id))
-        : [];
+    const attempts = runs.flatMap((run) => this.context.store.runs.listRunAttempts(run.id));
+    const parts = sessions.flatMap((session) => this.context.store.conversations.listMessageParts(session.id));
     const activeRunCount = sessions.filter(
       (session) => this.runControl.activeRunId(session.id) !== undefined,
     ).length;
@@ -182,11 +175,11 @@ export class DaemonControlService {
   }
 
   sessionExists(sessionId: string): boolean {
-    return this.context.store.getSession(sessionId) !== undefined;
+    return this.context.store.sessions.get(sessionId) !== undefined;
   }
 
   async inspectRuntimeHooks(sessionId: string): Promise<HookInfo[]> {
-    const session = this.context.store.getSession(sessionId);
+    const session = this.context.store.sessions.get(sessionId);
     if (!session) return [];
     const lease = this.context.operationGate.enter({
       sessionId,

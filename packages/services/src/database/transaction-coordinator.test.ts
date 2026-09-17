@@ -19,9 +19,9 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
 
       try {
         // Initial setup
-        const s1 = store.createSession({ id: "s1", cwd: dir, model: "m" });
-        const m1 = store.createMessage({ id: "m1", sessionId: "s1", role: "user" });
-        const p1 = store.upsertMessagePart({
+        const s1 = store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+        const m1 = store.conversations.createMessage({ id: "m1", sessionId: "s1", role: "user" });
+        const p1 = store.conversations.upsertMessagePart({
           id: "p1",
           sessionId: "s1",
           messageId: "m1",
@@ -29,8 +29,8 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
           text: "hello",
         });
 
-        const initialSessionUpdatedAt = store.getSession("s1")!.updatedAt;
-        const initialEventCount = store.listEvents({ sessionId: "s1" }).length;
+        const initialSessionUpdatedAt = store.sessions.get("s1")!.updatedAt;
+        const initialEventCount = store.conversations.listEvents({ sessionId: "s1" }).length;
         const initialPartText = p1.text;
 
         const hooks: TransactionCoordinatorHooks = {
@@ -50,13 +50,13 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
         expect(() =>
           coordinator.atomic(() => {
             // 1. Modify session
-            store.updateSession("s1", { title: "New Title" });
+            store.sessions.update("s1", { title: "New Title" });
 
             // 2. Append event
-            store.appendEvent({
+            store.conversations.appendEvent({
               type: "session.updated",
               sessionId: "s1",
-              payload: { session: store.getSession("s1")! },
+              payload: { session: store.sessions.get("s1")! },
             });
 
             // 3. Mark part dirty
@@ -73,12 +73,12 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
         expect(deferredCalled).toBe(false);
 
         // Assert 2: In-memory session state rolled back
-        const inMemorySession = store.getSession("s1")!;
+        const inMemorySession = store.sessions.get("s1")!;
         expect(inMemorySession.title).toBe("");
         expect(inMemorySession.updatedAt).toBe(initialSessionUpdatedAt);
 
         // Assert 3: In-memory events rolled back
-        expect(store.listEvents({ sessionId: "s1" }).length).toBe(initialEventCount);
+        expect(store.conversations.listEvents({ sessionId: "s1" }).length).toBe(initialEventCount);
 
         // Assert 4: In-memory dirty parts rolled back
         expect((store as any).deltaCheckpoint.dirtyPartIds()).toEqual([]);
@@ -87,11 +87,11 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
         store.close();
         store = new SessionStore({ path: dbPath });
 
-        const reloadedSession = store.getSession("s1")!;
+        const reloadedSession = store.sessions.get("s1")!;
         expect(reloadedSession.title).toBe("");
         expect(reloadedSession.updatedAt).toBe(initialSessionUpdatedAt);
-        expect(store.listEvents({ sessionId: "s1" }).length).toBe(initialEventCount);
-        expect(store.listMessageParts("s1")[0]?.text).toBe(initialPartText);
+        expect(store.conversations.listEvents({ sessionId: "s1" }).length).toBe(initialEventCount);
+        expect(store.conversations.listMessageParts("s1")[0]?.text).toBe(initialPartText);
       } finally {
         store.close();
         rmSync(dir, { recursive: true, force: true });
@@ -105,7 +105,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
     const store = new SessionStore({ path: dbPath });
 
     try {
-      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      store.sessions.create({ id: "s1", cwd: dir, model: "m" });
       const coordinator = new TransactionCoordinator({
         storage: (store as any).storage,
         persistChanges: () => (store as any).persistChanges(),
@@ -119,7 +119,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
         });
 
         coordinator.atomic(() => {
-          store.updateSession("s1", { title: "Nested Title" });
+          store.sessions.update("s1", { title: "Nested Title" });
           coordinator.deferUntilCommit(() => {
             deferredOrders.push("inner");
           });
@@ -131,7 +131,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
 
       // Outermost commit flushed all deferred callbacks in order
       expect(deferredOrders).toEqual(["outer", "inner"]);
-      expect(store.getSession("s1")!.title).toBe("Nested Title");
+      expect(store.sessions.get("s1")!.title).toBe("Nested Title");
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
@@ -144,7 +144,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
     let store = new SessionStore({ path: dbPath });
 
     try {
-      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      store.sessions.create({ id: "s1", cwd: dir, model: "m" });
       const coordinator = new TransactionCoordinator({
         storage: (store as any).storage,
         persistChanges: () => (store as any).persistChanges(),
@@ -152,17 +152,17 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
 
       expect(() =>
         coordinator.atomic(() => {
-          store.updateSession("s1", { title: "Committed Title" });
+          store.sessions.update("s1", { title: "Committed Title" });
           coordinator.deferUntilCommit(() => {
             throw new Error("after commit failed");
           });
         }),
       ).toThrow("after commit failed");
 
-      expect(store.getSession("s1")?.title).toBe("Committed Title");
+      expect(store.sessions.get("s1")?.title).toBe("Committed Title");
       store.close();
       store = new SessionStore({ path: dbPath });
-      expect(store.getSession("s1")?.title).toBe("Committed Title");
+      expect(store.sessions.get("s1")?.title).toBe("Committed Title");
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
@@ -175,7 +175,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
     let store = new SessionStore({ path: dbPath });
 
     try {
-      store.createSession({ id: "s1", cwd: dir, model: "m" });
+      store.sessions.create({ id: "s1", cwd: dir, model: "m" });
       const coordinator = new TransactionCoordinator({
         storage: (store as any).storage,
         persistChanges: () => (store as any).persistChanges(),
@@ -183,7 +183,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
 
       expect(() =>
         coordinator.atomic(() => {
-          store.updateSession("s1", { title: "Outer Change" });
+          store.sessions.update("s1", { title: "Outer Change" });
           try {
             coordinator.atomic(() => {
               throw new Error("nested failed");
@@ -194,10 +194,10 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
         }),
       ).not.toThrow();
 
-      expect(store.getSession("s1")?.title).toBe("Outer Change");
+      expect(store.sessions.get("s1")?.title).toBe("Outer Change");
       store.close();
       store = new SessionStore({ path: dbPath });
-      expect(store.getSession("s1")?.title).toBe("Outer Change");
+      expect(store.sessions.get("s1")?.title).toBe("Outer Change");
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });

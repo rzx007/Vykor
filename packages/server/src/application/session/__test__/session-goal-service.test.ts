@@ -30,13 +30,13 @@ function harness(
 ) {
   const directory = mkdtempSync(join(tmpdir(), "ohs-goal-lifecycle-"));
   const store = new SessionStore({ path: join(directory, "store.db") });
-  store.createSession({ id: "s1", cwd: process.cwd(), model: "m", metadata: { runtime: { model: "m" } } });
+  store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m", metadata: { runtime: { model: "m" } } });
   cleanup.push(() => {
     store.close();
     rmSync(directory, { recursive: true, force: true });
   });
   const events = {
-    checkpoint: () => store.listEvents().at(-1)?.seq ?? 0,
+    checkpoint: () => store.conversations.listEvents().at(-1)?.seq ?? 0,
     publishSince: vi.fn(),
   };
   let service: SessionGoalService;
@@ -66,9 +66,9 @@ function harness(
       traceIdForRun: () => "goal-test", log: () => {},
     }) : {
       execute: async ({ runId }, context) => {
-        store.updateRun(runId, { status: "running" });
+        store.runs.updateRun(runId, { status: "running" });
         if (execute) await execute(store, runId, context.signal);
-        else store.updateRun(runId, { status: "completed" });
+        else store.runs.updateRun(runId, { status: "completed" });
       },
     },
   });
@@ -110,8 +110,8 @@ function harness(
 }
 
 function assessment(store: SessionStore, runId: string, value: Record<string, unknown>, status: "completed" | "failed" = "completed") {
-  const run = store.getRun(runId)!;
-  store.updateRun(runId, {
+  const run = store.runs.getRun(runId)!;
+  store.runs.updateRun(runId, {
     status,
     ...(status === "failed" ? { error: "verification failed" } : {}),
     metadata: {
@@ -140,18 +140,18 @@ describe("SessionGoalService durable lifecycle", () => {
     const { service, store, engine, disablePlugins } = harness();
     const original = operation === "update"
       ? await service.create("s1", { requestId: "original", objective: "original" }) : undefined;
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const input = { requestId: "accepted-plugin", objective: "review", items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] };
-    const revision = original ? store.getGoal(original.id)!.revision : 0;
+    const revision = original ? store.goals.getGoal(original.id)!.revision : 0;
     const request = (objective = input.objective) => original
       ? service.update("s1", original.id, { ...input, objective, expectedRevision: revision })
       : service.create("s1", { ...input, objective });
     const accepted = await request();
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    const runs = store.listRuns("s1");
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    const runs = store.runs.listRuns("s1");
     disablePlugins();
     await expect(request()).resolves.toEqual(accepted);
-    expect(store.listRuns("s1")).toEqual(runs);
+    expect(store.runs.listRuns("s1")).toEqual(runs);
     await expect(request("different request")).rejects.toThrow("session_goal_request_conflict");
   });
 
@@ -159,39 +159,39 @@ describe("SessionGoalService durable lifecycle", () => {
     const { service, store, engine, disablePlugins } = harness();
     const original = operation === "update"
       ? await service.create("s1", { requestId: "original", objective: "original" }) : undefined;
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const input = { requestId: "recover-plugin", objective: "review", items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] };
-    const revision = original ? store.getGoal(original.id)!.revision : 0;
+    const revision = original ? store.goals.getGoal(original.id)!.revision : 0;
     const request = () => original
       ? service.update("s1", original.id, { ...input, expectedRevision: revision })
       : service.create("s1", input);
     vi.spyOn(engine, "dispatchPersistedRun").mockImplementationOnce(() => { throw new Error("dispatch failed"); });
     await expect(request()).rejects.toThrow("dispatch failed");
-    const persisted = store.findRunByInput(input.requestId)!;
-    const count = store.listRuns("s1").length;
+    const persisted = store.runs.findRunByInput(input.requestId)!;
+    const count = store.runs.listRuns("s1").length;
     disablePlugins();
     await expect(request()).resolves.toMatchObject({ pluginId });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.listRuns("s1")).toHaveLength(count);
-    expect(store.findRunByInput(input.requestId)).toMatchObject({ id: persisted.id, status: "completed", metadata: { pluginId } });
-    expect(store.getGoalRequest(input.requestId)?.status).toBe("completed");
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.runs.listRuns("s1")).toHaveLength(count);
+    expect(store.runs.findRunByInput(input.requestId)).toMatchObject({ id: persisted.id, status: "completed", metadata: { pluginId } });
+    expect(store.goals.getGoalRequest(input.requestId)?.status).toBe("completed");
   });
 
   it("retains the admitted replacement plugin when an edit resumes after stopping failed", async () => {
     const { service, store, engine, disablePlugins } = harness();
     const original = await service.create("s1", { requestId: "original", objective: "original" });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const input = {
-      requestId: "recover-stopping", expectedRevision: store.getGoal(original.id)!.revision, objective: "research",
+      requestId: "recover-stopping", expectedRevision: store.goals.getGoal(original.id)!.revision, objective: "research",
       items: [{ type: "capability" as const, kind: "plugin" as const, pluginId: "dev.openharness.research", displayName: "Research" }],
     };
     vi.spyOn(engine, "waitForRuns").mockRejectedValueOnce(new Error("stop failed"));
     await expect(service.update("s1", original.id, input)).rejects.toThrow("stop failed");
     disablePlugins();
     await expect(service.update("s1", original.id, input)).resolves.toMatchObject({ pluginId: "dev.openharness.research" });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.findRunByInput(input.requestId)?.metadata.pluginId).toBe("dev.openharness.research");
-    expect(store.listRuns("s1")).toHaveLength(2);
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.runs.findRunByInput(input.requestId)?.metadata.pluginId).toBe("dev.openharness.research");
+    expect(store.runs.listRuns("s1")).toHaveLength(2);
   });
 
   it("carries an admitted plugin through initial and continuation runs", async () => {
@@ -220,16 +220,16 @@ describe("SessionGoalService durable lifecycle", () => {
         displayName: "Quality",
       }],
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status, store.getGoal(goal.id)?.reason).toBe("waiting_user"));
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status, store.goals.getGoal(goal.id)?.reason).toBe("waiting_user"));
     expect(goal).toMatchObject({ pluginId });
-    const runs = store.listRuns("s1");
+    const runs = store.runs.listRuns("s1");
     expect(runs).toHaveLength(2);
     expect(runs.map((run) => run.metadata.goalRunKind)).toEqual(["initial", "continuation"]);
     for (const run of runs) {
       expect(run.metadata.pluginId).toBe(pluginId);
-      expect(store.getInput(run.inputId!)?.metadata.pluginId).toBe(pluginId);
+      expect(store.conversations.getInput(run.inputId!)?.metadata.pluginId).toBe(pluginId);
     }
-    expect(store.getGoal(goal.id)).not.toHaveProperty("snapshot");
+    expect(store.goals.getGoal(goal.id)).not.toHaveProperty("snapshot");
     expect(views.map((view) => [...view.tools.keys()])).toEqual([["BeforeUpdate"], ["AfterUpdate"]]);
     expect(views[0]).not.toBe(views[1]);
   });
@@ -248,14 +248,14 @@ describe("SessionGoalService durable lifecycle", () => {
       requestId: "plugin-becomes-unavailable", objective: "review",
       items: [{ type: "capability", kind: "plugin", pluginId, displayName: "Quality" }],
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("paused"));
-    const runs = store.listRuns("s1");
-    expect(submitted, store.getGoal(goal.id)?.reason).toBe(1);
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("paused"));
+    const runs = store.runs.listRuns("s1");
+    expect(submitted, store.goals.getGoal(goal.id)?.reason).toBe(1);
     expect(runs).toHaveLength(2);
     expect(runs[1]).toMatchObject({ status: "failed", metadata: { pluginId } });
-    expect(store.getGoal(goal.id)).toMatchObject({ pluginId, reason: runs[1]!.error });
+    expect(store.goals.getGoal(goal.id)).toMatchObject({ pluginId, reason: runs[1]!.error });
     expect(runs[1]!.error).toContain(pluginId);
-    expect(store.getInput(runs[1]!.inputId!)?.metadata.pluginId).toBe(pluginId);
+    expect(store.conversations.getInput(runs[1]!.inputId!)?.metadata.pluginId).toBe(pluginId);
   });
 
   it("rejects an unavailable plugin Agent before updating a Goal", async () => {
@@ -264,8 +264,8 @@ describe("SessionGoalService durable lifecycle", () => {
       requestId: "ordinary-goal-create",
       objective: "ordinary goal",
     });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    const beforeUpdate = store.getGoal(created.id)!;
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    const beforeUpdate = store.goals.getGoal(created.id)!;
 
     await expect(service.update("s1", created.id, {
       requestId: "plugin-goal-update",
@@ -280,12 +280,12 @@ describe("SessionGoalService durable lifecycle", () => {
       }],
     })).rejects.toThrow("session_plugin_capability_unavailable");
 
-    expect(store.getGoal(created.id)).toMatchObject({
+    expect(store.goals.getGoal(created.id)).toMatchObject({
       objective: "ordinary goal",
       revision: beforeUpdate.revision,
     });
-    expect(store.getInput("plugin-goal-update")).toBeUndefined();
-    expect(store.getGoalRequest("plugin-goal-update")).toBeUndefined();
+    expect(store.conversations.getInput("plugin-goal-update")).toBeUndefined();
+    expect(store.goals.getGoalRequest("plugin-goal-update")).toBeUndefined();
   });
 
   it("uses trusted Skill ownership even when its source claims user", async () => {
@@ -296,9 +296,9 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "use plugin skill",
       items: [{ type: "skill", source: "user", ...pluginSkill }],
     });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(goal).toMatchObject({ pluginId });
-    expect(store.getInput("forged-plugin-skill-create")?.metadata.pluginId).toBe(pluginId);
+    expect(store.conversations.getInput("forged-plugin-skill-create")?.metadata.pluginId).toBe(pluginId);
   });
 
   it("changes plugin selection on explicit edit and retains it on text edit and resume", async () => {
@@ -307,8 +307,8 @@ describe("SessionGoalService durable lifecycle", () => {
       requestId: "ordinary-goal-for-skill-update",
       objective: "ordinary goal",
     });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    const beforeUpdate = store.getGoal(created.id)!;
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    const beforeUpdate = store.goals.getGoal(created.id)!;
 
     const edited = await service.update("s1", created.id, {
       requestId: "implicit-plugin-skill-update",
@@ -317,37 +317,37 @@ describe("SessionGoalService durable lifecycle", () => {
       items: [{ type: "skill", ...pluginSkill }],
     });
     expect(edited).toMatchObject({ pluginId });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const textEdited = await service.update("s1", created.id, {
-      requestId: "text-edit", expectedRevision: store.getGoal(created.id)!.revision,
+      requestId: "text-edit", expectedRevision: store.goals.getGoal(created.id)!.revision,
       objective: "clarified objective", items: [{ type: "text", text: "clarified" }],
     });
     expect(textEdited).toMatchObject({ pluginId });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const resumed = await service.action("s1", created.id, {
-      requestId: "resume-plugin", expectedRevision: store.getGoal(created.id)!.revision,
+      requestId: "resume-plugin", expectedRevision: store.goals.getGoal(created.id)!.revision,
       action: "resume",
     });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(resumed).toMatchObject({ pluginId });
     for (const id of ["implicit-plugin-skill-update", "text-edit", "resume-plugin"]) {
-      expect(store.getInput(id)?.metadata.pluginId).toBe(pluginId);
-      expect(store.findRunByInput(id)?.metadata.pluginId).toBe(pluginId);
+      expect(store.conversations.getInput(id)?.metadata.pluginId).toBe(pluginId);
+      expect(store.runs.findRunByInput(id)?.metadata.pluginId).toBe(pluginId);
     }
     const switched = await service.update("s1", created.id, {
-      requestId: "switch-plugin", expectedRevision: store.getGoal(created.id)!.revision,
+      requestId: "switch-plugin", expectedRevision: store.goals.getGoal(created.id)!.revision,
       objective: "research instead",
       items: [{ type: "capability", kind: "plugin", pluginId: "dev.openharness.research", displayName: "Research" }],
     });
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(switched).toMatchObject({ pluginId: "dev.openharness.research" });
-    expect(store.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
+    expect(store.runs.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
     await service.action("s1", created.id, {
-      requestId: "cancel-plugin", expectedRevision: store.getGoal(created.id)!.revision, action: "cancel",
+      requestId: "cancel-plugin", expectedRevision: store.goals.getGoal(created.id)!.revision, action: "cancel",
     });
-    expect(store.getGoal(created.id)?.status).toBe("cancelled");
-    expect(store.getInput("resume-plugin")?.metadata.pluginId).toBe(pluginId);
-    expect(store.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
+    expect(store.goals.getGoal(created.id)?.status).toBe("cancelled");
+    expect(store.conversations.getInput("resume-plugin")?.metadata.pluginId).toBe(pluginId);
+    expect(store.runs.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
   });
 
   it("keeps a pause request pending until cleanup finishes and shares concurrent retries", async () => {
@@ -359,7 +359,7 @@ describe("SessionGoalService durable lifecycle", () => {
     const { service, store, engine } = harness(async (store, runId, signal) => {
       activeSignal = signal;
       await cleanupGate;
-      store.updateRun(runId, {
+      store.runs.updateRun(runId, {
         status: signal.aborted ? "interrupted" : "completed",
       });
     });
@@ -377,26 +377,26 @@ describe("SessionGoalService durable lifecycle", () => {
     const second = service.action("s1", created.id, command);
     expect(second).toBe(first);
     await vi.waitFor(() => expect(activeSignal?.aborted).toBe(true));
-    expect(store.getGoalRequest(command.requestId)?.status).toBe("pending");
-    expect(store.getGoal(created.id)?.currentRunId).toBeDefined();
+    expect(store.goals.getGoalRequest(command.requestId)?.status).toBe("pending");
+    expect(store.goals.getGoal(created.id)?.currentRunId).toBeDefined();
     release();
     const stopped = await first;
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(stopped.status).toBe("paused");
     expect(stopped.currentRunId).toBeUndefined();
-    expect(store.getGoalRequest(command.requestId)?.status).toBe("completed");
+    expect(store.goals.getGoalRequest(command.requestId)?.status).toBe("completed");
     expect(await service.action("s1", created.id, command)).toEqual(stopped);
   });
 
   it.each([false, true])("automatically completes after a verified continuation (plugin=%s)", async (withPlugin) => {
     let turns = 0;
     const { service, store, engine } = harness(async (store, runId) => {
-      const message = store.createMessage({
+      const message = store.conversations.createMessage({
         sessionId: "s1",
         role: "assistant",
         runId,
       });
-      const part = store.upsertMessagePart({
+      const part = store.conversations.upsertMessagePart({
         sessionId: "s1",
         messageId: message.id,
         type: "tool",
@@ -430,14 +430,14 @@ describe("SessionGoalService durable lifecycle", () => {
       maxAutoTurns: 1,
       ...(withPlugin ? { items: [{ type: "capability" as const, kind: "plugin" as const, pluginId, displayName: "Quality" }] } : {}),
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("completed"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.listRuns("s1")).toHaveLength(2);
-    expect(store.getGoal(goal.id)?.autoTurnsUsed).toBe(1);
-    expect(store.getGoal(goal.id)?.pluginId).toBe(withPlugin ? pluginId : undefined);
-    for (const run of store.listRuns("s1")) {
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("completed"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.runs.listRuns("s1")).toHaveLength(2);
+    expect(store.goals.getGoal(goal.id)?.autoTurnsUsed).toBe(1);
+    expect(store.goals.getGoal(goal.id)?.pluginId).toBe(withPlugin ? pluginId : undefined);
+    for (const run of store.runs.listRuns("s1")) {
       expect(run.metadata.pluginId).toBe(withPlugin ? pluginId : undefined);
-      expect(store.getInput(run.inputId!)?.metadata.pluginId).toBe(withPlugin ? pluginId : undefined);
+      expect(store.conversations.getInput(run.inputId!)?.metadata.pluginId).toBe(withPlugin ? pluginId : undefined);
     }
   });
 
@@ -468,12 +468,12 @@ describe("SessionGoalService durable lifecycle", () => {
       items: [{ type: "text", text: "先回答这个问题" }],
     });
     release();
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("waiting_user"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(executed).toEqual([store.findRunByInput("priority")!.id, user.run!.id]);
-    expect(store.getRun(user.run!.id)?.metadata.goalRunKind).toBe("user");
-    expect(store.getGoal(goal.id)?.autoTurnsUsed).toBe(0);
-    expect(store.getGoal(goal.id)?.wait).toMatchObject({
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("waiting_user"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(executed).toEqual([store.runs.findRunByInput("priority")!.id, user.run!.id]);
+    expect(store.runs.getRun(user.run!.id)?.metadata.goalRunKind).toBe("user");
+    expect(store.goals.getGoal(goal.id)?.autoTurnsUsed).toBe(0);
+    expect(store.goals.getGoal(goal.id)?.wait).toMatchObject({
       question: "采用用户刚提出的选项吗？",
     });
   });
@@ -485,9 +485,9 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "有限续跑",
       maxAutoTurns: 1,
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("paused"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    const paused = store.getGoal(goal.id)!;
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("paused"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    const paused = store.goals.getGoal(goal.id)!;
     expect(paused.autoTurnsUsed).toBe(1);
     await expect(
       service.action("s1", goal.id, {
@@ -496,12 +496,12 @@ describe("SessionGoalService durable lifecycle", () => {
         expectedRevision: paused.revision,
       }),
     ).rejects.toThrow("增加");
-    const permission = store.createPermissionRequest({
+    const permission = store.permissions.create({
       sessionId: "s1",
       toolName: "Bash",
       payload: {},
     });
-    const waiting = store.updateGoal(goal.id, {
+    const waiting = store.goals.updateGoal(goal.id, {
       expectedRevision: paused.revision,
       status: "waiting_user",
       wait: { kind: "approval", permissionRequestId: permission.id },
@@ -514,7 +514,7 @@ describe("SessionGoalService durable lifecycle", () => {
         additionalAutoTurns: 2,
       }),
     ).rejects.toThrow("批准");
-    expect(store.getGoal(goal.id)?.status).toBe("waiting_user");
+    expect(store.goals.getGoal(goal.id)?.status).toBe("waiting_user");
   });
 
   it("rolls back the goal and input when attachment admission fails, then permits the same request to retry", async () => {
@@ -525,12 +525,12 @@ describe("SessionGoalService durable lifecycle", () => {
       attachments: [{ assetId: "missing", intent: "context" as const }],
     };
     await expect(service.create("s1", input)).rejects.toThrow();
-    expect(store.getCurrentGoal("s1")).toBeUndefined();
-    expect(store.getInput(input.requestId)).toBeUndefined();
-    expect(store.listRuns("s1")).toHaveLength(0);
-    expect(store.getGoalRequest(input.requestId)?.goalId).toBeUndefined();
+    expect(store.goals.getCurrentGoal("s1")).toBeUndefined();
+    expect(store.conversations.getInput(input.requestId)).toBeUndefined();
+    expect(store.runs.listRuns("s1")).toHaveLength(0);
+    expect(store.goals.getGoalRequest(input.requestId)?.goalId).toBeUndefined();
     await expect(service.create("s1", input)).rejects.toThrow();
-    expect(store.listRuns("s1")).toHaveLength(0);
+    expect(store.runs.listRuns("s1")).toHaveLength(0);
   });
 
   it("replays committed admission after a dispatch failure without creating a second goal, input or run", async () => {
@@ -541,13 +541,13 @@ describe("SessionGoalService durable lifecycle", () => {
     });
     const input = { requestId: "create-once", objective: "完成目标" };
     await expect(service.create("s1", input)).rejects.toThrow("dispatch unavailable");
-    expect(store.listRuns("s1")).toHaveLength(1);
-    const goalId = store.getCurrentGoal("s1")!.id;
+    expect(store.runs.listRuns("s1")).toHaveLength(1);
+    const goalId = store.goals.getCurrentGoal("s1")!.id;
     const goal = await service.create("s1", input);
     expect(goal.id).toBe(goalId);
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.listRuns("s1")).toHaveLength(1);
-    expect(store.getGoalRequest(input.requestId)?.status).toBe("completed");
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.runs.listRuns("s1")).toHaveLength(1);
+    expect(store.goals.getGoalRequest(input.requestId)?.status).toBe("completed");
     expect(await service.create("s1", input)).toEqual(goal);
     await expect(service.create("s1", { ...input, objective: "不同目标" })).rejects.toMatchObject({ status: 409 });
   });
@@ -558,17 +558,17 @@ describe("SessionGoalService durable lifecycle", () => {
       requestId: "three-rounds",
       objective: "完成并验证",
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("blocked"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.getGoal(goal.id)).toMatchObject({
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("blocked"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.goals.getGoal(goal.id)).toMatchObject({
       autoTurnsUsed: 2,
       noProgressCount: 3,
     });
-    expect(store.getGoal(goal.id)?.currentRunId).toBeUndefined();
-    expect(store.listRuns("s1")).toHaveLength(3);
-    const last = store.listRuns("s1").at(-1)!;
+    expect(store.goals.getGoal(goal.id)?.currentRunId).toBeUndefined();
+    expect(store.runs.listRuns("s1")).toHaveLength(3);
+    const last = store.runs.listRuns("s1").at(-1)!;
     await service.settleRun("s1", last.id);
-    expect(store.listRuns("s1")).toHaveLength(3);
+    expect(store.runs.listRuns("s1")).toHaveLength(3);
   });
 
   it("does not block until the same blocker repeats for three goal turns", async () => {
@@ -591,10 +591,10 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "等待同一阻塞三轮",
       maxAutoTurns: 5,
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("blocked"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.listRuns("s1")).toHaveLength(4);
-    expect(store.getGoal(goal.id)).toMatchObject({
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("blocked"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.runs.listRuns("s1")).toHaveLength(4);
+    expect(store.goals.getGoal(goal.id)).toMatchObject({
       noProgressCount: 3,
       blockerKey: "missing-b",
     });
@@ -620,10 +620,10 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "连续同一 blockerKey 阻塞三轮",
       maxAutoTurns: 5,
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("blocked"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.listRuns("s1")).toHaveLength(3);
-    expect(store.getGoal(goal.id)).toMatchObject({
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("blocked"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.runs.listRuns("s1")).toHaveLength(3);
+    expect(store.goals.getGoal(goal.id)).toMatchObject({
       noProgressCount: 3,
       blockerKey: "missing-a",
       status: "blocked",
@@ -662,16 +662,16 @@ describe("SessionGoalService durable lifecycle", () => {
         requestId: "verified-wait",
         objective: "等待构建后检查",
       });
-      await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-      expect(store.getGoal(goal.id)).toMatchObject({
+      await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+      expect(store.goals.getGoal(goal.id)).toMatchObject({
         status: "active",
         wait: { kind: "external", handleId: "build-run" },
         autoTurnsUsed: 0,
       });
       check = "completed";
       await vi.advanceTimersByTimeAsync(1_000);
-      await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-      expect(store.getGoal(goal.id)).toMatchObject({
+      await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+      expect(store.goals.getGoal(goal.id)).toMatchObject({
         status: "waiting_user",
         autoTurnsUsed: 1,
       });
@@ -689,9 +689,9 @@ describe("SessionGoalService durable lifecycle", () => {
       requestId: "failed-run",
       objective: "验证目标",
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("paused"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.getGoal(goal.id)?.reason).toBe("verification failed");
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("paused"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.goals.getGoal(goal.id)?.reason).toBe("verification failed");
   });
 
   it("continues instead of completing while audited work remains", async () => {
@@ -723,9 +723,9 @@ describe("SessionGoalService durable lifecycle", () => {
       objective: "实现并补充文档",
       maxAutoTurns: 1,
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("waiting_user"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    expect(store.listRuns("s1")).toHaveLength(2);
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("waiting_user"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    expect(store.runs.listRuns("s1")).toHaveLength(2);
   });
 
   it("requires the matching question to confirm subjective completion and replays confirmation once", async () => {
@@ -747,9 +747,9 @@ describe("SessionGoalService durable lifecycle", () => {
       requestId: "subjective",
       objective: "让页面更舒服",
     });
-    await vi.waitFor(() => expect(store.getGoal(created.id)?.status).toBe("waiting_user"));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
-    const goal = store.getGoal(created.id)!;
+    await vi.waitFor(() => expect(store.goals.getGoal(created.id)?.status).toBe("waiting_user"));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+    const goal = store.goals.getGoal(created.id)!;
     await expect(
       service.action("s1", goal.id, {
         requestId: "bad-confirm",
@@ -767,7 +767,7 @@ describe("SessionGoalService durable lifecycle", () => {
     const completed = await service.action("s1", goal.id, input);
     expect(completed.status).toBe("completed");
     expect(await service.action("s1", goal.id, input)).toEqual(completed);
-    expect(store.getGoal(goal.id)?.revision).toBe(completed.revision);
+    expect(store.goals.getGoal(goal.id)?.revision).toBe(completed.revision);
   });
 
   it("waits for goal cleanup during edits and preserves ordinary queued user work", async () => {
@@ -782,7 +782,7 @@ describe("SessionGoalService durable lifecycle", () => {
       if (first) {
         first = false;
         await gate;
-        store.updateRun(runId, {
+        store.runs.updateRun(runId, {
           status: signal.aborted ? "interrupted" : "completed",
         });
       } else
@@ -805,16 +805,16 @@ describe("SessionGoalService durable lifecycle", () => {
       expectedRevision: goal.revision,
       objective: "新目标",
     });
-    await vi.waitFor(() => expect(store.getGoal(goal.id)?.status).toBe("paused"));
-    expect(store.getGoal(goal.id)?.objective).toBe("旧目标");
-    expect(store.getRun(ordinary.run!.id)?.status).toBe("pending");
+    await vi.waitFor(() => expect(store.goals.getGoal(goal.id)?.status).toBe("paused"));
+    expect(store.goals.getGoal(goal.id)?.objective).toBe("旧目标");
+    expect(store.runs.getRun(ordinary.run!.id)?.status).toBe("pending");
     release();
     const updated = await edit;
     expect(updated.objective).toBe("新目标");
-    await vi.waitFor(() => expect(store.listRuns("s1").every((run) => run.status !== "pending" && run.status !== "running")).toBe(true));
-    await engine.waitForRuns(store.listRuns("s1").map((run) => run.id));
+    await vi.waitFor(() => expect(store.runs.listRuns("s1").every((run) => run.status !== "pending" && run.status !== "running")).toBe(true));
+    await engine.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     expect(executed).toContain(ordinary.run!.id);
-    expect(store.getRun(ordinary.run!.id)?.status).toBe("completed");
+    expect(store.runs.getRun(ordinary.run!.id)?.status).toBe("completed");
     expect(
       await service.update("s1", goal.id, {
         requestId: "edit-once",

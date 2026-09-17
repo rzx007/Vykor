@@ -311,7 +311,7 @@ describe("DaemonApplication", () => {
         content: new Blob(["attachment visible through the child tool"]).stream(),
       });
       assetId = attachment.id;
-      store.admitPrompt({
+      store.conversationTransactions.admitPrompt({
         id: "root-attachment-input",
         sessionId: rootSession.id,
         content: "",
@@ -419,7 +419,7 @@ describe("DaemonApplication", () => {
         declaredMediaType: "text/plain",
         content: new Blob(["attachment checkpoint detail"]).stream(),
       });
-      store.admitPrompt({
+      store.conversationTransactions.admitPrompt({
         id: "attachment-catalog-input",
         sessionId: session.id,
         content: "",
@@ -566,7 +566,7 @@ describe("DaemonApplication", () => {
         declaredMediaType: "image/png",
         content: new Blob([png]).stream(),
       });
-      store.admitPrompt({ sessionId: session.id, content: "", attachments: [{ assetId: asset.id }] });
+      store.conversationTransactions.admitPrompt({ sessionId: session.id, content: "", attachments: [{ assetId: asset.id }] });
       // Admission still owns its internal compatibility lookup; block it after setup.
       const legacyGet = vi.spyOn(store, "getAttachment").mockImplementation(() => {
         throw new Error("legacy attachment entry: getAttachment");

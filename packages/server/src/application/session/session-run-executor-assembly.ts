@@ -12,7 +12,10 @@ import { SessionRunExecutor, type SessionRunExecutorContext } from "./session-ru
 export interface SessionRunExecutorAssemblyOptions extends Omit<SessionRunExecutorContext,
   "data" | "attachments" | "resolveSkillCatalog" | "routeAttachments" | "resolveCapabilities"
 > {
-  store: SessionStore;
+  store: Pick<SessionStore,
+    "attachments" | "conversations" | "conversationTransactions" |
+    "runs" | "sessions" | "transaction"
+  >;
   attachmentApplication: Pick<AttachmentApplicationService, "resolveReadyContentPath" | "readReadyText">;
   resolveSessionSettings(cwd: string): Promise<Settings | undefined>;
 }
@@ -31,9 +34,13 @@ export function assembleSessionRunExecutor(options: SessionRunExecutorAssemblyOp
     return (await discoverOpenHarnessExtensions(session.cwd, settings)).skillRegistry;
   };
   const materializeSteerInput = async (sessionId: string, items: readonly SessionUserInputItem[]) => {
-    const session = options.store.getSession(sessionId);
+    const session = options.store.sessions.get(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
-    return materializeSessionInput(items, await resolveSkillCatalog(session), conversationContextCatalog(options.store, sessionId)).instruction;
+    return materializeSessionInput(items, await resolveSkillCatalog(session), conversationContextCatalog({
+      getSession: (id) => options.store.sessions.get(id),
+      listMessages: (id) => options.store.conversations.listMessages(id),
+      listMessageParts: (id) => options.store.conversations.listMessageParts(id),
+    }, sessionId)).instruction;
   };
   const executor = new SessionRunExecutor({
     ...options,

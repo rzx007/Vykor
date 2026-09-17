@@ -13,8 +13,8 @@ function withRepository(
   const directory = mkdtempSync(join(tmpdir(), "ohs-goal-repository-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   try {
-    store.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
-    store.createSession({ id: "s2", cwd: process.cwd(), model: "m" });
+    store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
+    store.sessions.create({ id: "s2", cwd: process.cwd(), model: "m" });
     test(new GoalRepository((store as any).storage), store);
   } finally {
     store.close();
@@ -200,7 +200,7 @@ describe("GoalRepository", () => {
 
   it("upserts assessments and deduplicates continuations", () => {
     withRepository((repository, store) => {
-      const goal = store.createGoal({
+      const goal = store.goals.createGoal({
         id: "goal-1",
         sessionId: "s1",
         objective: "finish",

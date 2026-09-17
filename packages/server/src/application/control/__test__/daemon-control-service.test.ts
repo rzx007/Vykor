@@ -96,8 +96,8 @@ describe("DaemonControlService", () => {
     try {
       expect(application.runAdmission).toBeDefined();
       expect(application.runControl).toBeDefined();
-      store.createSession({ id: "s1", cwd: directory, model: "test" });
-      store.createRun({ id: "r1", sessionId: "s1" });
+      store.sessions.create({ id: "s1", cwd: directory, model: "test" });
+      store.runs.createRun({ id: "r1", sessionId: "s1" });
       const spec = { mode: "sequential" as const, tasks: [{ id: "one" }] };
       application.workflows.save(createWorkflowRunSnapshot({
         runId: "workflow-1", ownerRun: "r1", status: "completed", summary: "done",

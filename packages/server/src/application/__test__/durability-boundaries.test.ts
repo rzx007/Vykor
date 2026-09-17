@@ -122,7 +122,7 @@ describe("durable application long-running boundaries", () => {
   it("stores Workflow facts directly in SQLite", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     const workflows = workflowRepository(store);
     workflows.save(workflowSnapshot("workflow-1", "session-1", "completed"));
     expect(workflows.load("workflow-1")).toMatchObject({
@@ -137,7 +137,7 @@ describe("durable application long-running boundaries", () => {
     const store = new SessionStore({
       path: join(dir, "source", "sessions.db"),
     });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     store.acquireApplicationOwner({
       ownerId: "source",
       pid: 1,
@@ -148,13 +148,13 @@ describe("durable application long-running boundaries", () => {
     writeFileSync(join(memory, "fact.md"), "durable fact", "utf-8");
     const attachmentBytes = "attachment bytes";
     const attachmentHash = createHash("sha256").update(attachmentBytes).digest("hex");
-    store.createImportingAttachment({
+    store.attachments.createImportingAttachment({
       id: "att-backup",
       displayName: "附件.txt",
       stagingName: "att-backup.part",
       createdAt: 1,
     });
-    store.markAttachmentReady("att-backup", {
+    store.attachments.markAttachmentReady("att-backup", {
       sha256: attachmentHash,
       sizeBytes: Buffer.byteLength(attachmentBytes),
       mediaType: "text/plain",
@@ -253,13 +253,13 @@ describe("durable application long-running boundaries", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
     try {
-      store.createImportingAttachment({
+      store.attachments.createImportingAttachment({
         id: "att-missing",
         displayName: "missing.txt",
         stagingName: "att-missing.part",
         createdAt: 1,
       });
-      store.markAttachmentReady("att-missing", {
+      store.attachments.markAttachmentReady("att-missing", {
         sha256: "f".repeat(64),
         sizeBytes: 7,
         mediaType: "text/plain",
@@ -279,7 +279,7 @@ describe("durable application long-running boundaries", () => {
   it("retention keeps active Workflow facts and records an audit", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     const workflows = workflowRepository(store);
     const running = workflowSnapshot("running-1", "session-1", "running");
     running.updatedAt = 1;
@@ -305,7 +305,7 @@ describe("durable application long-running boundaries", () => {
   it("wakes Workflow waiters from repository changes without Store polling", async () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     const workflows = workflowRepository(store);
     const running = workflowSnapshot("wait-1", "session-1", "running");
     workflows.save(running);
@@ -320,7 +320,7 @@ describe("durable application long-running boundaries", () => {
   it("does not miss a Workflow change between the first read and listener registration", async () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     const workflows = workflowRepository(store);
     const running = workflowSnapshot("race-1", "session-1", "running");
     running.updatedAt = 100;
@@ -346,7 +346,7 @@ describe("durable application long-running boundaries", () => {
   it.each(["after registration", "during first load"])("wakes a Workflow waiter for an event-only change %s before timeout", async (timing) => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     const workflows = workflowRepository(store);
     const running = workflowSnapshot("event-wait-1", "session-1", "running");
     workflows.save(running);
@@ -382,13 +382,13 @@ describe("durable application long-running boundaries", () => {
   it("keeps a Workflow event but does not notify after session event mirroring fails", async () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     const onDurableEvent = vi.fn();
     const workflows = new SessionWorkflowRunRepository({
       workflows: store.workflows,
       path: store.path,
       events: {
-        latestEventSeq: () => store.latestEventSeq(),
+        latestEventSeq: () => store.conversations.latestEventSeq(),
         appendEvent: () => { throw new Error("mirror failed"); },
       },
       onDurableEvent,
@@ -414,7 +414,7 @@ describe("durable application long-running boundaries", () => {
   it("rejects a duplicate Workflow claim in the same Application", () => {
     const dir = temporaryDirectory();
     const store = new SessionStore({ path: join(dir, "sessions.db") });
-    store.createSession({ id: "session-1", cwd: dir, model: "test" });
+    store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
     const workflows = workflowRepository(store);
     workflows.save(workflowSnapshot("claimed-1", "session-1", "running"));
     workflows.claim("claimed-1");

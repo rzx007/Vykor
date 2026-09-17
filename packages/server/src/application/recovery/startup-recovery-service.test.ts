@@ -14,8 +14,8 @@ describe("StartupRecoveryService", () => {
     const databasePath = join(directory, "store.db");
     let store = new SessionStore({ path: databasePath });
     cleanup.push(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
-    store.createSession({ id: "s1", cwd: directory, model: "test" });
-    store.createRun({ id: "r1", sessionId: "s1", status: "running" });
+    store.sessions.create({ id: "s1", cwd: directory, model: "test" });
+    store.runs.createRun({ id: "r1", sessionId: "s1", status: "running" });
     const order: string[] = [];
     const recovery = new StartupRecoveryService({
       recoverProjectionSettlements: () => { order.push("projection"); },
@@ -31,9 +31,9 @@ describe("StartupRecoveryService", () => {
     await recovery.run();
     store.close();
     store = new SessionStore({ path: databasePath });
-    expect(store.getRun("r1")?.status).toBe("interrupted");
+    expect(store.runs.getRun("r1")?.status).toBe("interrupted");
     await recovery.run();
-    expect(store.getRun("r1")?.status).toBe("interrupted");
+    expect(store.runs.getRun("r1")?.status).toBe("interrupted");
     expect(order.slice(0, 6)).toEqual(["projection", "runs", "goals", "inputs", "permissions", "sessions"]);
     expect(order.filter((entry) => entry === "workflows")).toHaveLength(2);
   });

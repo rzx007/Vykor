@@ -19,13 +19,13 @@ describe("RunRepository read operations", () => {
         "Session not found: missing-session",
       );
 
-      store.createSession({ id: "s1", cwd: directory, model: "m" });
-      const in1 = store.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "1" }] });
-      const in2 = store.admitPrompt({ id: "i2", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "2" }] });
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      const in1 = store.conversationTransactions.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "1" }] });
+      const in2 = store.conversationTransactions.admitPrompt({ id: "i2", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "2" }] });
 
-      const r1 = store.createRun({ id: "r1", sessionId: "s1", inputId: "i1", metadata: { custom: "val" } });
-      const r2 = store.createRun({ id: "r2", sessionId: "s1", inputId: "i1" });
-      const r3 = store.createRun({ id: "r3", sessionId: "s1", inputId: "i2" });
+      const r1 = store.runs.createRun({ id: "r1", sessionId: "s1", inputId: "i1", metadata: { custom: "val" } });
+      const r2 = store.runs.createRun({ id: "r2", sessionId: "s1", inputId: "i1" });
+      const r3 = store.runs.createRun({ id: "r3", sessionId: "s1", inputId: "i2" });
 
       // getRun returns clone
       const fetchedR1 = repository.getRun("r1");
@@ -43,8 +43,8 @@ describe("RunRepository read operations", () => {
       expect(repository.findRunByInput("i1")?.id).toBe("r1");
 
       // Promoted run through message
-      const in3 = store.admitPrompt({ id: "i3", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "3" }] });
-      store.createMessage({
+      const in3 = store.conversationTransactions.admitPrompt({ id: "i3", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "3" }] });
+      store.conversations.createMessage({
         id: "m_promoted",
         sessionId: "s1",
         role: "assistant",
@@ -69,12 +69,12 @@ describe("RunRepository read operations", () => {
         "Session run not found: missing-run",
       );
 
-      store.createSession({ id: "s1", cwd: directory, model: "m" });
-      const input = store.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "1" }] });
-      store.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      const input = store.conversationTransactions.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "1" }] });
+      store.runs.createRun({ id: "r1", sessionId: "s1", inputId: input.id });
 
-      store.createRunAttempt({ id: "att2", runId: "r1", sequence: 2 });
-      store.createRunAttempt({ id: "att1", runId: "r1", sequence: 1 });
+      store.runs.createRunAttempt({ id: "att2", runId: "r1", sequence: 2 });
+      store.runs.createRunAttempt({ id: "att1", runId: "r1", sequence: 1 });
 
       // listRunAttempts sorted by sequence asc
       const attempts = repository.listRunAttempts("r1");
@@ -105,7 +105,7 @@ describe("RunRepository read operations", () => {
         repository.findSessionExecutionByRuntimeId("missing-session", "exec-1"),
       ).toThrow("Session not found: missing-session");
 
-      store.createSession({ id: "s1", cwd: directory, model: "m" });
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
 
       const t1 = store.createSessionTask({
         id: "t1",
@@ -164,9 +164,9 @@ describe("RunRepository write operations", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: directory, model: "m" });
-        store.createSession({ id: "s2", cwd: directory, model: "m" });
-        const input1 = store.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "prompt" }] });
+        store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+        store.sessions.create({ id: "s2", cwd: directory, model: "m" });
+        const input1 = store.conversationTransactions.admitPrompt({ id: "i1", sessionId: "s1", delivery: "queue", items: [{ type: "text", text: "prompt" }] });
 
         // 1. Input/session alignment check
         expect(() =>
@@ -174,7 +174,7 @@ describe("RunRepository write operations", () => {
         ).toThrow("Session input does not belong to session: i1");
 
         // 2. Create run with default status pending, session becomes running
-        const before = store.getSession("s1")!.updatedAt;
+        const before = store.sessions.get("s1")!.updatedAt;
         const r1 = repository.createRun({
           id: "r1",
           sessionId: "s1",
@@ -183,15 +183,15 @@ describe("RunRepository write operations", () => {
         });
         expect(r1.id).toBe("r1");
         expect(r1.status).toBe("pending");
-        expect(store.getSession("s1")!.status).toBe("running");
-        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
+        expect(store.sessions.get("s1")!.status).toBe("running");
+        expect(store.sessions.get("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
 
         // returns clone
         r1.status = "failed";
         expect(repository.getRun("r1")!.status).toBe("pending");
 
         // Event emitted
-        const events = store.listEvents({ sessionId: "s1" });
+        const events = store.conversations.listEvents({ sessionId: "s1" });
         const createdEvent = events.find((e) => e.type === "session.run.created");
         expect(createdEvent).toBeDefined();
         expect(createdEvent!.payload).toMatchObject({ run: { id: "r1" } });
@@ -211,7 +211,7 @@ describe("RunRepository write operations", () => {
         expect(running.metadata).toEqual({ initial: true, step: 1 });
 
         // Event emitted with previousStatus
-        const events2 = store.listEvents({ sessionId: "s1" });
+        const events2 = store.conversations.listEvents({ sessionId: "s1" });
         const updatedEvent = events2.find(
           (e) => e.type === "session.run.updated" && (e.payload as any).previousStatus === "pending",
         );
@@ -221,7 +221,7 @@ describe("RunRepository write operations", () => {
         const completed = repository.updateRun("r1", { status: "completed" });
         expect(completed.status).toBe("completed");
         expect(completed.finishedAt).toBeDefined();
-        expect(store.getSession("s1")!.status).toBe("idle");
+        expect(store.sessions.get("s1")!.status).toBe("idle");
 
         // 6. Terminal guard
         expect(() => repository.updateRun("r1", { status: "running" })).toThrow(
@@ -243,7 +243,7 @@ describe("RunRepository write operations", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: directory, model: "m" });
+        store.sessions.create({ id: "s1", cwd: directory, model: "m" });
         const r1 = repository.createRun({ id: "r1", sessionId: "s1" });
 
         // 1. Create first attempt auto sequence
@@ -261,7 +261,7 @@ describe("RunRepository write operations", () => {
         expect(repository.getRunAttempt("a1")!.status).toBe("pending");
 
         // Event emitted
-        const events = store.listEvents({ sessionId: "s1" });
+        const events = store.conversations.listEvents({ sessionId: "s1" });
         const createdEvent = events.find((e) => e.type === "session.run_attempt.created");
         expect(createdEvent).toBeDefined();
         expect(createdEvent!.payload).toMatchObject({ attempt: { id: "a1", sequence: 1 } });
@@ -287,7 +287,7 @@ describe("RunRepository write operations", () => {
         expect(updatedA1.outputTokens).toBe(80);
 
         // Event emitted with previousStatus
-        const events2 = store.listEvents({ sessionId: "s1" });
+        const events2 = store.conversations.listEvents({ sessionId: "s1" });
         const updatedEvent = events2.find(
           (e) => e.type === "session.run_attempt.updated" && (e.payload as any).previousStatus === "running",
         );
@@ -319,9 +319,9 @@ describe("RunRepository write operations", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: directory, model: "m" });
-        store.createSession({ id: "s2", cwd: directory, model: "m" });
-        store.createSession({ id: "child_s1", parentId: "s1", cwd: directory, model: "m" });
+        store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+        store.sessions.create({ id: "s2", cwd: directory, model: "m" });
+        store.sessions.create({ id: "child_s1", parentId: "s1", cwd: directory, model: "m" });
         const r1 = repository.createRun({ id: "r1", sessionId: "s1" });
         const r2 = repository.createRun({ id: "r2", sessionId: "s2" });
 
@@ -359,7 +359,7 @@ describe("RunRepository write operations", () => {
         ).toThrow("Task run does not belong to task session: r2");
 
         // 4. Default running status, startedAt set, clone returned, event emitted
-        const before = store.getSession("s1")!.updatedAt;
+        const before = store.sessions.get("s1")!.updatedAt;
         const task1 = repository.createSessionTask({
           id: "t1",
           sessionId: "s1",
@@ -374,7 +374,7 @@ describe("RunRepository write operations", () => {
         });
         expect(task1.status).toBe("running");
         expect(task1.startedAt).toBeDefined();
-        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
+        expect(store.sessions.get("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
 
         // duplicate request check
         expect(() =>
@@ -404,7 +404,7 @@ describe("RunRepository write operations", () => {
         expect(repository.getSessionTask("t1")!.status).toBe("running");
 
         // event emitted
-        const events = store.listEvents({ sessionId: "s1" });
+        const events = store.conversations.listEvents({ sessionId: "s1" });
         const createdEvent = events.find((e) => e.type === "session.task.created");
         expect(createdEvent).toBeDefined();
         expect(createdEvent!.payload).toMatchObject({ task: { id: "t1" } });
@@ -461,7 +461,7 @@ describe("RunRepository write operations", () => {
         expect(updated.metadata).toEqual({ extra: true });
 
         // Event emitted with previousStatus
-        const events2 = store.listEvents({ sessionId: "s1" });
+        const events2 = store.conversations.listEvents({ sessionId: "s1" });
         const updatedEvent = events2.find(
           (e) =>
             e.type === "session.task.updated" &&

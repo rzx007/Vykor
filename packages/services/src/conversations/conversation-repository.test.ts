@@ -21,25 +21,25 @@ describe("ConversationRepository read operations", () => {
         "Session not found: missing-session",
       );
 
-      store.createSession({ id: "s1", cwd: directory, model: "m" });
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
 
       expect(repository.getInput("i1")).toBeUndefined();
 
-      store.createImportingAttachment({
+      store.attachments.createImportingAttachment({
         id: "att1",
         displayName: "doc.txt",
         declaredMediaType: "text/plain",
         stagingName: "doc.part",
         createdAt: 10,
       });
-      store.markAttachmentReady("att1", {
+      store.attachments.markAttachmentReady("att1", {
         sha256: "a".repeat(64),
         sizeBytes: 50,
         mediaType: "text/plain",
         updatedAt: 11,
       });
 
-      const in1 = store.admitPrompt({
+      const in1 = store.conversationTransactions.admitPrompt({
         id: "i1",
         sessionId: "s1",
         delivery: "queue",
@@ -47,7 +47,7 @@ describe("ConversationRepository read operations", () => {
         items: [{ type: "text", text: "hello" }],
       });
 
-      const in2 = store.admitPrompt({
+      const in2 = store.conversationTransactions.admitPrompt({
         id: "i2",
         sessionId: "s1",
         delivery: "queue",
@@ -92,16 +92,16 @@ describe("ConversationRepository read operations", () => {
       expect(() => repository.listMessages("missing")).toThrow("Session not found: missing");
       expect(() => repository.listMessageParts("missing")).toThrow("Session not found: missing");
 
-      store.createSession({ id: "s1", cwd: directory, model: "m" });
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
 
-      store.createMessage({ id: "m1", sessionId: "s1", role: "user" });
-      store.createMessage({ id: "m2", sessionId: "s1", role: "assistant" });
-      store.createMessage({ id: "m3", sessionId: "s1", role: "user" });
+      store.conversations.createMessage({ id: "m1", sessionId: "s1", role: "user" });
+      store.conversations.createMessage({ id: "m2", sessionId: "s1", role: "assistant" });
+      store.conversations.createMessage({ id: "m3", sessionId: "s1", role: "user" });
 
-      store.upsertMessagePart({ id: "p1", sessionId: "s1", messageId: "m1", type: "text", text: "part 1" });
-      store.upsertMessagePart({ id: "p2", sessionId: "s1", messageId: "m1", type: "text", text: "part 2" });
-      store.upsertMessagePart({ id: "p3", sessionId: "s1", messageId: "m2", type: "text", text: "part 3" });
-      store.upsertMessagePart({ id: "p4", sessionId: "s1", messageId: "m3", type: "text", text: "part 4" });
+      store.conversations.upsertMessagePart({ id: "p1", sessionId: "s1", messageId: "m1", type: "text", text: "part 1" });
+      store.conversations.upsertMessagePart({ id: "p2", sessionId: "s1", messageId: "m1", type: "text", text: "part 2" });
+      store.conversations.upsertMessagePart({ id: "p3", sessionId: "s1", messageId: "m2", type: "text", text: "part 3" });
+      store.conversations.upsertMessagePart({ id: "p4", sessionId: "s1", messageId: "m3", type: "text", text: "part 4" });
 
       // listMessages
       expect(repository.listMessages("s1").map((m) => m.id)).toEqual(["m1", "m2", "m3"]);
@@ -128,8 +128,8 @@ describe("ConversationRepository read operations", () => {
     try {
       const repository = new ConversationRepository((store as any).storage);
 
-      store.createSession({ id: "s1", cwd: directory, model: "m" });
-      store.createSession({ id: "s2", cwd: directory, model: "m" });
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      store.sessions.create({ id: "s2", cwd: directory, model: "m" });
 
       const initialSeq = repository.latestEventSeq();
       expect(initialSeq).toBeGreaterThanOrEqual(2); // session.created events
@@ -161,8 +161,8 @@ describe("ConversationRepository read operations", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: directory, model: "m" });
-        const before = store.getSession("s1")!.updatedAt;
+        store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+        const before = store.sessions.get("s1")!.updatedAt;
 
         // 1. Create message
         const m1 = repository.createMessage({
@@ -174,7 +174,7 @@ describe("ConversationRepository read operations", () => {
         expect(m1.id).toBe("m1");
         expect(m1.seq).toBe(1);
         expect(m1.role).toBe("user");
-        expect(store.getSession("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
+        expect(store.sessions.get("s1")!.updatedAt).toBeGreaterThanOrEqual(before);
 
         // returns clone
         m1.role = "assistant";
@@ -218,8 +218,8 @@ describe("ConversationRepository read operations", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: directory, model: "m" });
-        store.createSession({ id: "s2", cwd: directory, model: "m" });
+        store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+        store.sessions.create({ id: "s2", cwd: directory, model: "m" });
         repository.createMessage({ id: "m1", sessionId: "s1", role: "user" });
 
         // 1. Session alignment check
@@ -290,7 +290,7 @@ describe("ConversationRepository read operations", () => {
           save: () => (store as any).save(),
         });
 
-        store.createSession({ id: "s1", cwd: directory, model: "m" });
+        store.sessions.create({ id: "s1", cwd: directory, model: "m" });
 
         // 1. Registry validation error
         expect(() =>

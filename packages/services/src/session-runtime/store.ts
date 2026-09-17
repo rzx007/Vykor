@@ -245,7 +245,7 @@ export class SessionStore {
     const deltaCheckpoint = new DeltaCheckpoint({
       intervalMs: deltaFlushIntervalMs,
       bytes: deltaFlushBytes,
-      flush: () => this.flushMessagePartDeltas(),
+      flush: () => this.incrementalOutput.flushMessagePartDeltas(),
     });
     this.eventRegistry = options.eventRegistry ?? defaultDurableEventRegistry;
     this.attachmentLimits = parseAttachmentLimits({
@@ -273,7 +273,7 @@ export class SessionStore {
       this.coordinator = new TransactionCoordinator({
         storage: this.storage,
         persistChanges: () => this.persistChanges(),
-        flushDeltas: () => this.flushMessagePartDeltas(),
+        flushDeltas: () => this.incrementalOutput.flushMessagePartDeltas(),
         hooks: options.transactionHooks,
       });
       this.projects = new ProjectRepository(this.storage);
@@ -292,27 +292,27 @@ export class SessionStore {
       this.sessions = new SessionRepository({
         storage: this.storage,
         projects: this.projects,
-        appendEvent: (input) => this.appendEvent(input),
+        appendEvent: (input) => this.conversations.appendEvent(input),
         save: () => this.save(),
       });
       this.runs = new RunRepository({
         storage: this.storage,
-        appendEvent: (input) => this.appendEvent(input),
+        appendEvent: (input) => this.conversations.appendEvent(input),
         save: () => this.save(),
       });
       this.permissions = new PermissionRepository({
         storage: this.storage,
         assertSession: (sessionId) => assertSession(this.state, sessionId),
-        getRun: (runId) => this.getRun(runId),
-        appendEvent: (input) => this.appendEvent(input),
+        getRun: (runId) => this.runs.getRun(runId),
+        appendEvent: (input) => this.conversations.appendEvent(input),
       });
       this.attachments = new AttachmentTransactions({
         storage: this.storage,
         repository: new AttachmentRepository(this.storage),
         countAttachmentReferences: (assetId) =>
-          this.countAttachmentReferences(assetId),
+          this.conversations.countAttachmentReferences(assetId),
         countInputAttachmentReferences: (assetId) =>
-          this.countInputAttachmentReferences(assetId),
+          this.conversations.countInputAttachmentReferences(assetId),
       });
       const goalRepository = new GoalRepository(this.storage);
       this.goals = new GoalTransactions({
@@ -320,8 +320,8 @@ export class SessionStore {
         repository: goalRepository,
         assertSession: (sessionId) => assertSession(this.state, sessionId),
         assertMutableSession,
-        getRun: (runId) => this.getRun(runId),
-        appendEvent: (input) => this.appendEvent(input),
+        getRun: (runId) => this.runs.getRun(runId),
+        appendEvent: (input) => this.conversations.appendEvent(input),
       });
       this.conversationTransactions = new ConversationTransactions({
         storage: this.storage,
@@ -350,194 +350,9 @@ export class SessionStore {
     }
   }
 
-  createImportingAttachment(
-    input: CreateImportingAttachmentInput,
-  ): AttachmentAssetRecord {
-    return this.attachments.createImportingAttachment(input);
-  }
-
-  markAttachmentReady(
-    id: string,
-    input: MarkAttachmentReadyInput,
-  ): AttachmentAssetRecord {
-    return this.attachments.markAttachmentReady(id, input);
-  }
-
-  failAttachmentImport(
-    id: string,
-    failureCode: string,
-    updatedAt = now(),
-  ): AttachmentAssetRecord {
-    return this.attachments.failAttachmentImport(id, failureCode, updatedAt);
-  }
-
-  getAttachment(
-    id: string,
-    options: { includeDeleted?: boolean } = {},
-  ): AttachmentAssetRecord | undefined {
-    return this.attachments.getAttachment(id, options);
-  }
-
-  findReadyAttachmentByHash(sha256: string): AttachmentAssetRecord | undefined {
-    return this.attachments.findReadyAttachmentByHash(sha256);
-  }
-
-  listAttachments(
-    options: { includeDeleted?: boolean } = {},
-  ): AttachmentAssetRecord[] {
-    return this.attachments.listAttachments(options);
-  }
-
-  listImportingAttachments(): ImportingAttachmentRecord[] {
-    return this.attachments.listImportingAttachments();
-  }
-
-  createAttachmentRepresentation(
-    input: CreateAttachmentRepresentationInput,
-  ): AttachmentRepresentationRecord {
-    return this.attachments.createAttachmentRepresentation(input);
-  }
-
-  getAttachmentRepresentation(
-    id: string,
-  ): AttachmentRepresentationRecord | undefined {
-    return this.attachments.getAttachmentRepresentation(id);
-  }
-
-  listAttachmentRepresentations(
-    assetId: string,
-  ): AttachmentRepresentationRecord[] {
-    return this.attachments.listAttachmentRepresentations(assetId);
-  }
-
-  acquireAttachmentLeases(
-    input: AcquireAttachmentLeasesInput,
-  ): AttachmentLeaseRecord[] {
-    return this.attachments.acquireAttachmentLeases(input);
-  }
-
-  renewAttachmentLeases(input: {
-    ownerKind: AttachmentLeaseRecord["ownerKind"];
-    ownerId: string;
-    timestamp: number;
-    expiresAt: number;
-  }): number {
-    return this.attachments.renewAttachmentLeases(input);
-  }
-
-  releaseAttachmentLeases(
-    ownerKind: AttachmentLeaseRecord["ownerKind"],
-    ownerId: string,
-  ): number {
-    return this.attachments.releaseAttachmentLeases(ownerKind, ownerId);
-  }
-
-  listActiveAttachmentLeases(timestamp = now()): AttachmentLeaseRecord[] {
-    return this.attachments.listActiveAttachmentLeases(timestamp);
-  }
-
-  listAttachmentLeases(): AttachmentLeaseRecord[] {
-    return this.attachments.listAttachmentLeases();
-  }
-
-  deleteExpiredAttachmentLeases(timestamp = now()): number {
-    return this.attachments.deleteExpiredAttachmentLeases(timestamp);
-  }
-
-  purgeDeletedAttachment(
-    assetId: string,
-    timestamp = now(),
-  ): AttachmentAssetRecord | undefined {
-    return this.attachments.purgeDeletedAttachment(assetId, timestamp);
-  }
-
-  findCompletedAttachmentRepresentation(
-    assetId: string,
-    kind: AttachmentRepresentationKind,
-    cacheKey: string,
-  ): AttachmentRepresentationRecord | undefined {
-    return this.attachments.findCompletedAttachmentRepresentation(assetId, kind, cacheKey);
-  }
-
-  completeAttachmentRepresentation(
-    id: string,
-    input: {
-      text: string;
-      metadata: Record<string, unknown>;
-      updatedAt?: number;
-    },
-  ): AttachmentRepresentationRecord {
-    return this.attachments.completeAttachmentRepresentation(id, input);
-  }
-
-  failAttachmentRepresentation(
-    id: string,
-    error: string,
-    updatedAt = now(),
-  ): AttachmentRepresentationRecord {
-    return this.attachments.failAttachmentRepresentation(id, error, updatedAt);
-  }
-
-  softDeleteAttachment(id: string, deletedAt = now()): AttachmentAssetRecord {
-    return this.attachments.softDeleteAttachment(id, deletedAt);
-  }
-
-  softDeleteUnreferencedAttachment(
-    id: string,
-    deletedAt = now(),
-  ): AttachmentAssetRecord {
-    return this.attachments.softDeleteUnreferencedAttachment(id, deletedAt);
-  }
-
-  /**
-   * Groups synchronous store mutations into one durable commit. Both SQLite
-   * rows and the in-memory read model return to their previous state on error.
-   */
+  /** Atomically commits a deliberately cross-domain storage operation. */
   transaction<T>(work: () => T): T {
     return this.coordinator.atomic(work);
-  }
-
-  createSession(input: CreateSessionInput): SessionRecord {
-    return this.sessions.create(input);
-  }
-
-  getSession(sessionId: string): SessionRecord | undefined {
-    return this.sessions.get(sessionId);
-  }
-
-  listSessions(options: ListSessionsOptions = {}): SessionRecord[] {
-    return this.sessions.list(options);
-  }
-
-  listChildSessions(
-    parentId: string,
-    options: { includeArchived?: boolean } = {},
-  ): SessionRecord[] {
-    return this.sessions.listChildren(parentId, options);
-  }
-
-  deleteSessionTree(sessionId: string): string[] {
-    return this.conversationTransactions.deleteSessionTree(sessionId);
-  }
-
-  archiveSession(sessionId: string): SessionRecord {
-    return this.sessions.archive(sessionId);
-  }
-
-  /** Prevent further mutation while the server joins interrupted work. */
-  beginArchive(sessionId: string): SessionRecord {
-    return this.sessions.beginArchive(sessionId);
-  }
-
-  updateSession(sessionId: string, input: UpdateSessionInput): SessionRecord {
-    return this.sessions.update(sessionId, input);
-  }
-
-  admitPrompt(
-    input: StoreAdmitPromptInput,
-    options: { attachmentLimits?: Partial<AttachmentLimits> } = {},
-  ): SessionInputRecord {
-    return this.conversationTransactions.admitPrompt(input, options);
   }
 
   async backupDatabase(destination: string): Promise<void> {
@@ -579,7 +394,7 @@ export class SessionStore {
   }): number {
     const seq = this.workflows.appendEvent(input);
     if (input.sessionId) {
-      this.appendEvent({
+      this.conversations.appendEvent({
         type: `workflow.${input.type}`,
         sessionId: input.sessionId,
         payload: {
@@ -876,69 +691,6 @@ export class SessionStore {
   }
 
   /** Atomically persists a queued prompt and the one root run that owns it. */
-  admitPromptWithRun(
-    input: AdmitPromptWithRunInput,
-    options: { attachmentLimits?: Partial<AttachmentLimits> } = {},
-  ): {
-    input: SessionInputRecord;
-    run: SessionRunRecord;
-  } {
-    return this.conversationTransactions.admitPromptWithRun(input, options);
-  }
-
-  /**
-   * Atomically replaces the visible transcript and admits the replacement
-   * prompt. A daemon crash can therefore never persist only the destructive
-   * half of an edit.
-   */
-  replaceTranscriptAndAdmitPrompt(input: {
-    transcript: ReplaceTranscriptInput;
-    admission: AdmitPromptWithRunInput;
-    createRun: boolean;
-  }): {
-    transcript: {
-      messages: SessionMessageRecord[];
-      parts: SessionMessagePartRecord[];
-    };
-    input: SessionInputRecord;
-    run?: SessionRunRecord;
-  } {
-    return this.conversationTransactions.replaceTranscriptAndAdmitPrompt(input);
-  }
-
-  createReplayRun(
-    inputId: string,
-    input: { id?: string; metadata?: Record<string, unknown> } = {},
-  ): SessionRunRecord {
-    return this.conversationTransactions.createReplayRun(inputId, input);
-  }
-
-  replaceLatestPromptWithAdmission(input: {
-    sessionId: string;
-    sourceMessageId: string;
-    admission: AdmitPromptWithRunInput;
-    createRun: boolean;
-  }): {
-    transcript: {
-      messages: SessionMessageRecord[];
-      parts: SessionMessagePartRecord[];
-    };
-    input: SessionInputRecord;
-    run?: SessionRunRecord;
-  } {
-    return this.conversationTransactions.replaceLatestPromptWithAdmission(input);
-  }
-
-  forkSessionWithHistory(input: {
-    sourceSessionId: string;
-    beforeMessageId?: string;
-    afterMessageId?: string;
-    session: CreateSessionInput;
-  }): SessionRecord {
-    return this.conversationTransactions.forkSessionWithHistory(input);
-  }
-
-  /** Respect renamed titles; use the first prompt only for initial placeholder titles. */
   resolveSessionListTitle(sessionId: string): string {
     const session = assertSession(this.state, sessionId);
     const stored = session.title.trim();
@@ -951,87 +703,6 @@ export class SessionStore {
     if (fromPrompt) return fromPrompt;
     if (stored) return stored;
     return session.id.slice(0, 8);
-  }
-
-  getInput(inputId: string): SessionInputRecord | undefined {
-    return this.conversations.getInput(inputId);
-  }
-
-  listInputAttachments(inputId: string): SessionInputAttachmentRecord[] {
-    return this.conversations.listInputAttachments(inputId);
-  }
-
-  listSessionInputAttachments(
-    sessionId: string,
-  ): SessionInputAttachmentRecord[] {
-    return this.conversations.listSessionInputAttachments(sessionId);
-  }
-
-  countInputAttachmentReferences(assetId: string): number {
-    return this.conversations.countInputAttachmentReferences(assetId);
-  }
-
-  countAttachmentReferences(assetId: string): number {
-    return this.conversations.countAttachmentReferences(assetId);
-  }
-
-  listInputs(sessionId: string): SessionInputRecord[] {
-    return this.conversations.listInputs(sessionId);
-  }
-
-  createMessage(input: CreateMessageInput): SessionMessageRecord {
-    return this.conversations.createMessage(input);
-  }
-
-  listMessages(
-    sessionId: string,
-    options: ListMessagesOptions = {},
-  ): SessionMessageRecord[] {
-    return this.conversations.listMessages(sessionId, options);
-  }
-
-  /**
-   * Replace a session transcript atomically (used by /compact).
-   * Emits a single `session.transcript.replaced` event with the new messages/parts.
-   */
-  replaceTranscript(input: ReplaceTranscriptInput): {
-    messages: SessionMessageRecord[];
-    parts: SessionMessagePartRecord[];
-  } {
-    return this.conversationTransactions.replaceTranscript(input);
-  }
-
-  upsertMessagePart(input: UpsertMessagePartInput): SessionMessagePartRecord {
-    return this.conversations.upsertMessagePart(input);
-  }
-
-  appendMessagePartDelta(
-    input: AppendMessagePartDeltaInput,
-  ): SessionEventRecord {
-    return this.incrementalOutput.appendMessagePartDelta(input);
-  }
-
-  flushMessagePartDeltas(): void {
-    this.incrementalOutput.flushMessagePartDeltas();
-  }
-
-  listMessageParts(
-    sessionId: string,
-    options: ListMessagePartsOptions = {},
-  ): SessionMessagePartRecord[] {
-    return this.conversations.listMessageParts(sessionId, options);
-  }
-
-  appendEvent(input: AppendEventInput): SessionEventRecord {
-    return this.conversations.appendEvent(input);
-  }
-
-  listEvents(options: ListEventsOptions = {}): SessionEventRecord[] {
-    return this.conversations.listEvents(options);
-  }
-
-  latestEventSeq(): number {
-    return this.conversations.latestEventSeq();
   }
 
   createProjectionSettlement(
@@ -1196,121 +867,6 @@ export class SessionStore {
     return this.getProjectionSettlement(id)!;
   }
 
-  createGoal(input: CreateSessionGoalStoreInput): SessionGoal {
-    return this.goals.createGoal(input);
-  }
-
-  getGoalRequest(requestId: string): SessionGoalRequestRecord | undefined {
-    return this.goals.getGoalRequest(requestId);
-  }
-
-  beginGoalRequest(input: {
-    requestId: string;
-    sessionId: string;
-    fingerprint: string;
-  }): SessionGoalRequestRecord {
-    return this.goals.beginGoalRequest(input);
-  }
-
-  settleGoalRequest(
-    requestId: string,
-    input: {
-      status: "pending" | "completed" | "failed";
-      goalId?: string;
-      result?: Record<string, unknown>;
-      error?: string;
-    },
-  ): SessionGoalRequestRecord {
-    return this.goals.settleGoalRequest(requestId, input);
-  }
-
-  recordGoalAssessment(input: {
-    goalId: string;
-    revision: number;
-    runId: string;
-    assessment: Record<string, unknown>;
-  }): void {
-    this.goals.recordGoalAssessment(input);
-  }
-
-  goalEvidenceSignatures(goalId: string): string[] {
-    return this.goals.goalEvidenceSignatures(goalId);
-  }
-
-  recordGoalContinuation(input: {
-    goalId: string;
-    revision: number;
-    previousRunId: string;
-    inputId: string;
-    runId: string;
-  }): boolean {
-    return this.goals.recordGoalContinuation(input);
-  }
-
-  pauseActiveGoalsOnStartup(): number {
-    return this.goals.pauseActiveGoalsOnStartup();
-  }
-
-  markGoalContinuation(
-    runId: string,
-    status: "dispatched" | "cancelled",
-  ): void {
-    this.goals.markGoalContinuation(runId, status);
-  }
-
-  finishGoalRun(runId: string): void {
-    this.goals.finishGoalRun(runId);
-  }
-
-  startGoalRun(
-    goalId: string,
-    revision: number,
-    runId: string,
-    automatic: boolean,
-  ): boolean {
-    return this.goals.startGoalRun(goalId, revision, runId, automatic);
-  }
-
-  getGoal(id: string): SessionGoal | undefined {
-    return this.goals.getGoal(id);
-  }
-
-  getCurrentGoal(sessionId: string): SessionGoal | undefined {
-    return this.goals.getCurrentGoal(sessionId);
-  }
-
-  updateGoal(id: string, input: UpdateSessionGoalStoreInput): SessionGoal {
-    return this.goals.updateGoal(id, input);
-  }
-
-  createRun(input: CreateRunInput): SessionRunRecord {
-    return this.runs.createRun(input);
-  }
-
-  updateRun(runId: string, input: UpdateRunInput): SessionRunRecord {
-    return this.runs.updateRun(runId, input);
-  }
-
-  getRun(runId: string): SessionRunRecord | undefined {
-    return this.runs.getRun(runId);
-  }
-
-  findRunByInput(inputId: string): SessionRunRecord | undefined {
-    return this.runs.findRunByInput(inputId);
-  }
-
-  listRunsByInput(inputId: string): SessionRunRecord[] {
-    return this.runs.listRunsByInput(inputId);
-  }
-
-  findOwningRunByInput(inputId: string): SessionRunRecord | undefined {
-    return this.runs.findOwningRunByInput(inputId);
-  }
-
-  listRuns(sessionId: string): SessionRunRecord[] {
-    return this.runs.listRuns(sessionId);
-  }
-
   createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
     const task = this.runs.createSessionTask(input);
     this.deferSessionTaskNotification(task.id);
@@ -1450,38 +1006,6 @@ export class SessionStore {
     this.storage.deferUntilCommit?.(() => this.notifySessionTask(taskId));
   }
 
-  createRunAttempt(input: CreateRunAttemptInput): SessionRunAttemptRecord {
-    return this.runs.createRunAttempt(input);
-  }
-
-  updateRunAttempt(
-    attemptId: string,
-    input: UpdateRunAttemptInput,
-  ): SessionRunAttemptRecord {
-    return this.runs.updateRunAttempt(attemptId, input);
-  }
-
-  getRunAttempt(attemptId: string): SessionRunAttemptRecord | undefined {
-    return this.runs.getRunAttempt(attemptId);
-  }
-
-  listRunAttempts(runId: string): SessionRunAttemptRecord[] {
-    return this.runs.listRunAttempts(runId);
-  }
-
-  settleActiveRunAttempts(
-    runId: string,
-    status: "completed" | "failed" | "cancelled",
-    error?: string,
-  ): number {
-    return this.conversationTransactions.settleActiveRunAttempts(runId, status, error);
-  }
-
-  /**
-   * A durable input without either a primary run or transcript ownership may
-   * have been left between admission and live delivery by a previous daemon.
-   * Give it a terminal owner without replaying the model or any tool effect.
-   */
   terminalizeUnownedInputs(
     reason = "Daemon restarted before the input was assigned to a run",
   ): number {
@@ -1498,31 +1022,6 @@ export class SessionStore {
   /** Complete an archive that was interrupted by a daemon process exit. */
   finalizeClosingSessions(): number {
     return this.conversationTransactions.finalizeClosingSessions();
-  }
-
-  createPermissionRequest(
-    input: CreatePermissionRequestInput,
-  ): PermissionRequestRecord {
-    return this.permissions.create(input);
-  }
-
-  replyPermission(input: ReplyPermissionInput): PermissionRequestRecord {
-    return this.permissions.reply(input);
-  }
-
-  getPermissionRequest(requestId: string): PermissionRequestRecord | undefined {
-    return this.permissions.get(requestId);
-  }
-
-  listPermissionRequests(
-    options: ListPermissionRequestsOptions = {},
-  ): PermissionRequestRecord[] {
-    return this.permissions.list(options);
-  }
-
-  /** Read one session's canonical aggregate at a single event cursor. */
-  getSessionState(sessionId: string): SessionStateSnapshot {
-    return this.conversationTransactions.getSessionState(sessionId);
   }
 
   private appendEventInMemory(
