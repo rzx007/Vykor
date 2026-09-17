@@ -6,6 +6,7 @@ import { getDetachedProcessSupervisor, resetExecutionRuntimes, DetachedProcessSu
 import { resolveSandboxPolicy } from "@openharness/sandbox";
 
 const NODE = process.execPath;
+const NODE_COMMAND = JSON.stringify(NODE);
 let testConfigDir: string;
 let previousConfigDir: string | undefined;
 
@@ -245,7 +246,7 @@ describe("DetachedProcessSupervisor real execution", () => {
   it("runs a shell task and captures output to the log file", async () => {
     const mgr = makeManager();
     const task = await mgr.startShellExecution(
-      `${NODE} -e "process.stdout.write('hello-shell')"`,
+      `${NODE_COMMAND} -e "process.stdout.write('hello-shell')"`,
       "echo via node",
       process.cwd(),
     );
@@ -320,7 +321,7 @@ describe("DetachedProcessSupervisor real execution", () => {
       seen.push(`${t.id}:${t.status}`);
     });
     const task = await mgr.startShellExecution(
-      `${NODE} -e "process.exit(0)"`,
+      `${NODE_COMMAND} -e "process.exit(0)"`,
       "completes",
       process.cwd(),
     );
@@ -335,7 +336,7 @@ describe("DetachedProcessSupervisor real execution", () => {
       count++;
     });
     unregister();
-    await mgr.startShellExecution(`${NODE} -e "process.exit(0)"`, "x", process.cwd());
+    await mgr.startShellExecution(`${NODE_COMMAND} -e "process.exit(0)"`, "x", process.cwd());
     await new Promise((r) => setTimeout(r, 300));
     expect(count).toBe(0);
   });
@@ -345,7 +346,7 @@ describe("DetachedProcessSupervisor real execution", () => {
     const seen: string[] = [];
     mgr.registerCompletionListener((t) => seen.push(t.status));
     const task = await mgr.startShellExecution(
-      `${NODE} -e "setInterval(()=>{},1000)"`,
+      `${NODE_COMMAND} -e "setInterval(()=>{},1000)"`,
       "long runner",
       process.cwd(),
     );
@@ -479,7 +480,7 @@ describe("DetachedProcessSupervisor real execution", () => {
   it("aclose terminates all running tasks", async () => {
     const mgr = new DetachedProcessSupervisor(tempTasksDir());
     const t1 = await mgr.startShellExecution(
-      `${NODE} -e "setInterval(()=>{},1000)"`,
+      `${NODE_COMMAND} -e "setInterval(()=>{},1000)"`,
       "runner 1",
       process.cwd(),
     );
@@ -500,7 +501,7 @@ describe("DetachedProcessSupervisor real execution", () => {
   it("writeInput rejects for a non-agent task whose process has exited", async () => {
     const mgr = makeManager();
     const task = await mgr.startShellExecution(
-      `${NODE} -e "process.exit(0)"`,
+      `${NODE_COMMAND} -e "process.exit(0)"`,
       "short",
       process.cwd(),
     );
@@ -529,7 +530,7 @@ describe("DetachedProcessSupervisor.awaitExecution", () => {
   it("returns immediately for an already-terminal task with its output/status", async () => {
     const mgr = makeManager();
     const task = await mgr.startShellExecution(
-      `${NODE} -e "process.stdout.write('done-out'); process.exit(0)"`,
+      `${NODE_COMMAND} -e "process.stdout.write('done-out'); process.exit(0)"`,
       "fast",
       process.cwd(),
     );
@@ -559,7 +560,7 @@ describe("DetachedProcessSupervisor.awaitExecution", () => {
     const mgr = makeManager();
     // Sleep briefly, then emit output and exit — task is running at await time.
     const task = await mgr.startShellExecution(
-      `${NODE} -e "setTimeout(()=>{process.stdout.write('late-out');process.exit(0);},300)"`,
+      `${NODE_COMMAND} -e "setTimeout(()=>{process.stdout.write('late-out');process.exit(0);},300)"`,
       "slow",
       process.cwd(),
     );
@@ -574,7 +575,7 @@ describe("DetachedProcessSupervisor.awaitExecution", () => {
   it("returns timedOut:true for a long-running task that exceeds timeoutMs", async () => {
     const mgr = makeManager();
     const task = await mgr.startShellExecution(
-      `${NODE} -e "setInterval(()=>{},1000)"`,
+      `${NODE_COMMAND} -e "setInterval(()=>{},1000)"`,
       "long",
       process.cwd(),
     );
@@ -588,7 +589,7 @@ describe("DetachedProcessSupervisor.awaitExecution", () => {
   it("does not resolve early before the timeout when the task keeps running", async () => {
     const mgr = makeManager();
     const task = await mgr.startShellExecution(
-      `${NODE} -e "setInterval(()=>{},1000)"`,
+      `${NODE_COMMAND} -e "setInterval(()=>{},1000)"`,
       "long2",
       process.cwd(),
     );
@@ -612,7 +613,7 @@ describe("DetachedProcessSupervisor.registerExecutionListener", () => {
       events.push({ id: t.id, event, status: t.status });
     });
     const task = await mgr.startShellExecution(
-      `${NODE} -e "process.exit(0)"`,
+      `${NODE_COMMAND} -e "process.exit(0)"`,
       "create-event",
       process.cwd(),
     );
@@ -628,7 +629,7 @@ describe("DetachedProcessSupervisor.registerExecutionListener", () => {
       events.push({ id: t.id, event, status: t.status });
     });
     const task = await mgr.startShellExecution(
-      `${NODE} -e "process.exit(0)"`,
+      `${NODE_COMMAND} -e "process.exit(0)"`,
       "complete-event",
       process.cwd(),
     );
@@ -644,7 +645,7 @@ describe("DetachedProcessSupervisor.registerExecutionListener", () => {
       count++;
     });
     unregister();
-    await mgr.startShellExecution(`${NODE} -e "process.exit(0)"`, "x", process.cwd());
+    await mgr.startShellExecution(`${NODE_COMMAND} -e "process.exit(0)"`, "x", process.cwd());
     await new Promise((r) => setTimeout(r, 300));
     expect(count).toBe(0);
   });
@@ -659,7 +660,7 @@ describe("DetachedProcessSupervisor.registerExecutionListener", () => {
       if (event === "created") seen.push(t.id);
     });
     const task = await mgr.startShellExecution(
-      `${NODE} -e "process.exit(0)"`,
+      `${NODE_COMMAND} -e "process.exit(0)"`,
       "isolate",
       process.cwd(),
     );
