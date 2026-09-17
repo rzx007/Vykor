@@ -86,7 +86,7 @@ describe("CustomProviderDialog credentials", () => {
 
     expect(document.body.textContent).toContain("{{sessionId}}")
     expect(document.body.textContent).toContain("{{userAgent}}")
-    expect(document.body.textContent).toContain("明文保存在 settings.json")
+    expect(document.body.textContent).toContain("明文写入 settings.json")
     expect(
       document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 名称"]')?.value
     ).toBe("X-Session")

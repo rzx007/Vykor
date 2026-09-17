@@ -40,7 +40,7 @@ describe("ProviderConnectionDialog", () => {
 
     expect(document.body.textContent).toContain("{{sessionId}}")
     expect(document.body.textContent).toContain("{{userAgent}}")
-    expect(document.body.textContent).toContain("明文保存在 settings.json")
+    expect(document.body.textContent).toContain("明文写入 settings.json")
   })
 
   it("submits headers with the api key for catalog providers", async () => {

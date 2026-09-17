@@ -8,7 +8,7 @@ export type HeadersFromRowsResult =
   { ok: true; headers: Record<string, string> } | { ok: false; message: string }
 
 export const REQUEST_HEADER_DESCRIPTION =
-  "用于租户或网关路由信息。值可以使用 {{sessionId}} 和 {{userAgent}}，发送请求时会替换为当前会话和客户端标识。请求头会明文保存在 settings.json，请勿填写 API Key 或 Bearer Token。"
+  "支持 {{sessionId}}、{{userAgent}}；明文写入 settings.json，勿填密钥。"
 
 export function rowsFromHeaders(headers?: Record<string, string>): RequestHeaderRow[] {
   return Object.entries(headers ?? {}).map(([name, value], index) => ({

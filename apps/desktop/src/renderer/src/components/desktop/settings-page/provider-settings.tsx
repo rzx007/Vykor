@@ -54,7 +54,6 @@ import type {
   DesktopProviderInfo,
   DesktopProviderSnapshot,
 } from "@shared/provider-types"
-import { CatalogProviderHeadersDialog } from "./catalog-provider-headers-dialog"
 import { scheduleProviderNoticeDismissal } from "./provider-feedback"
 import {
   ProviderConnectionDialog,
@@ -112,7 +111,6 @@ export function ProviderSettings(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [connectTarget, setConnectTarget] = useState<DesktopProviderInfo | null>(null)
-  const [catalogHeadersTarget, setCatalogHeadersTarget] = useState<DesktopProviderInfo | null>(null)
   const [disconnectTarget, setDisconnectTarget] = useState<DesktopProviderInfo | null>(null)
   const [moreProvidersOpen, setMoreProvidersOpen] = useState(false)
   const [providerQuery, setProviderQuery] = useState("")
@@ -268,23 +266,6 @@ export function ProviderSettings(): React.JSX.Element {
     setConnectTarget(provider)
   }
 
-  const saveCatalogHeaders = (headers: Record<string, string>): void => {
-    if (!catalogHeadersTarget || busyProvider) return
-    const target = catalogHeadersTarget
-    void runMutation(
-      target.name,
-      () =>
-        window.desktop.providers.updateCatalogHeaders({
-          provider: target.name,
-          headers,
-        }),
-      `已更新 ${providerDisplayName(target)} 的请求头。`
-    ).then((succeeded) => {
-      if (!succeeded) return
-      setCatalogHeadersTarget(null)
-    })
-  }
-
   const disconnect = (): void => {
     if (!disconnectTarget || busyProvider) return
     const target = disconnectTarget
@@ -399,7 +380,6 @@ export function ProviderSettings(): React.JSX.Element {
           onActivate={activate}
           onConnect={openConnectDialog}
           onDisconnect={setDisconnectTarget}
-          onEditCatalogHeaders={setCatalogHeadersTarget}
           onAddCustom={() => {
             setCustomEditTarget(null)
             setCustomDialogOpen(true)
@@ -447,18 +427,6 @@ export function ProviderSettings(): React.JSX.Element {
         }}
         onSubmit={connect}
       />
-
-      {catalogHeadersTarget ? (
-        <CatalogProviderHeadersDialog
-          provider={catalogHeadersTarget}
-          busy={busyProvider !== null}
-          onOpenChange={(open) => {
-            if (open || busyProvider) return
-            setCatalogHeadersTarget(null)
-          }}
-          onSubmit={saveCatalogHeaders}
-        />
-      ) : null}
 
       <AlertDialog
         open={disconnectTarget !== null}
@@ -562,7 +530,6 @@ function ProviderListCard({
   onActivate,
   onConnect,
   onDisconnect,
-  onEditCatalogHeaders,
   onAddCustom,
   onEditCustom,
   onRemoveCustom,
@@ -575,7 +542,6 @@ function ProviderListCard({
   onActivate: (provider: DesktopProviderInfo) => void
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
-  onEditCatalogHeaders: (provider: DesktopProviderInfo) => void
   onAddCustom: () => void
   onEditCustom: (provider: DesktopProviderInfo) => void
   onRemoveCustom: (provider: DesktopProviderInfo) => void
@@ -595,7 +561,6 @@ function ProviderListCard({
           onActivate={onActivate}
           onConnect={onConnect}
           onDisconnect={onDisconnect}
-          onEditCatalogHeaders={onEditCatalogHeaders}
           onEditCustom={onEditCustom}
           onRemoveCustom={onRemoveCustom}
         />
@@ -609,7 +574,6 @@ function ProviderListCard({
           onActivate={onActivate}
           onConnect={onConnect}
           onDisconnect={onDisconnect}
-          onEditCatalogHeaders={onEditCatalogHeaders}
           onEditCustom={onEditCustom}
           onRemoveCustom={onRemoveCustom}
         />
@@ -741,7 +705,6 @@ function ProviderGroup({
   onActivate,
   onConnect,
   onDisconnect,
-  onEditCatalogHeaders,
   onEditCustom,
   onRemoveCustom,
 }: {
@@ -753,7 +716,6 @@ function ProviderGroup({
   onActivate: (provider: DesktopProviderInfo) => void
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
-  onEditCatalogHeaders: (provider: DesktopProviderInfo) => void
   onEditCustom: (provider: DesktopProviderInfo) => void
   onRemoveCustom: (provider: DesktopProviderInfo) => void
 }): React.JSX.Element {
@@ -780,7 +742,6 @@ function ProviderGroup({
                 onActivate={() => onActivate(provider)}
                 onConnect={() => onConnect(provider)}
                 onDisconnect={() => onDisconnect(provider)}
-                onEditCatalogHeaders={() => onEditCatalogHeaders(provider)}
                 onEditCustom={() => onEditCustom(provider)}
                 onRemoveCustom={() => onRemoveCustom(provider)}
               />
@@ -799,7 +760,6 @@ function ProviderRow({
   onActivate,
   onConnect,
   onDisconnect,
-  onEditCatalogHeaders,
   onEditCustom,
   onRemoveCustom,
 }: {
@@ -809,7 +769,6 @@ function ProviderRow({
   onActivate: () => void
   onConnect: () => void
   onDisconnect: () => void
-  onEditCatalogHeaders: () => void
   onEditCustom: () => void
   onRemoveCustom: () => void
 }): React.JSX.Element {
@@ -859,17 +818,6 @@ function ProviderRow({
             {provider.active ? "重新连接" : "连接"}
           </Button>
         )}
-        {provider.source === "catalog" && provider.connected ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={locked}
-            onClick={onEditCatalogHeaders}
-          >
-            请求头
-          </Button>
-        ) : null}
         {provider.credentialSource === "credentials" && !provider.active && !provider.custom ? (
           <Button type="button" size="sm" variant="ghost" disabled={locked} onClick={onDisconnect}>
             断开
