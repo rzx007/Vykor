@@ -1,6 +1,6 @@
 # Daemon Application Architecture
 
-> 状态：当前实现的权威运行索引。查询 prompt、steer、interrupt、permission、child、compact/remember/usage 等流程时，从本文进入；跨层终态和失败语义见 [Agent Lifecycle Contract](./agent-lifecycle-contract.md)。
+> 状态：当前实现的权威运行索引。最后核对：2026-09-17。查询 prompt、steer、interrupt、permission、child、compact/remember/usage 等流程时，从本文进入；存储边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)，跨层终态和失败语义见 [Agent Lifecycle Contract](./agent-lifecycle-contract.md)。
 
 ## 总体模型
 
@@ -17,11 +17,11 @@ daemon 直接依赖 `@openharness/agent-runtime`，不经过 runtime adapter。f
 ```mermaid
 flowchart TD
   Surface["TUI / Web / Desktop / print"]
-  Client["OpenHarnessClient"]
+  Client["OpenHarnessClient Resources"]
   Routes["HTTP routes"]
-  Daemon["DaemonApplication"]
-  App["SessionInteractionService"]
-  Engine["RunAdmissionService / RunControlService"]
+  App["Query / Command / Interaction / Run Control"]
+  Runner["SessionOperationRunner"]
+  Engine["RunAdmissionService"]
   Lane["SessionRunCoordinator"]
   Executor["SessionRunExecutor"]
   Pool["AgentPool"]
@@ -30,10 +30,10 @@ flowchart TD
   Events["AgentEventBus"]
   Projector["DaemonAgentEventProjector"]
   Transcript["SessionTranscriptProjection"]
-  Store["SessionStore"]
+  Store["Repository / Transaction + SQLite"]
   SSE["SessionEventPublisher / SSE"]
 
-  Surface --> Client --> Routes --> Daemon --> App --> Engine --> Lane --> Executor
+  Surface --> Client --> Routes --> App --> Runner --> Engine --> Lane --> Executor
   Executor --> Pool --> Agent --> QE
   Agent --> Events --> Projector --> Transcript --> Store --> SSE --> Client
   Projector --> Store
@@ -42,15 +42,16 @@ flowchart TD
 准确表述是：
 
 ```text
-Surface -> Client -> routes -> DaemonApplication-owned service
-  -> SessionRunEngine (admission)
+Surface -> Client Resource -> route -> application service
+  -> SessionOperationRunner (ready + session lane + operation lease + checkpoint)
+  -> RunAdmissionService
   -> SessionRunCoordinator (per-session lane)
   -> SessionRunExecutor (one admitted root run)
   -> AgentPool -> OpenHarnessAgent -> QueryEngine
 
 OpenHarnessAgent onEvent sink
   -> DaemonAgentEventProjector.apply(event)
-  -> transcript/session/run/task/event durable state
+  -> Repository / Transaction -> transcript/session/run/task/event durable state
   -> SSE
 ```
 
@@ -58,7 +59,7 @@ OpenHarnessAgent onEvent sink
 
 ## Composition 与 transport
 
-`packages/server/src/application/daemon-application.ts` 是 daemon durable application 的唯一 composition root。它组装 store recovery、permission broker、Agent loader/pool、event projection、run engine、Workflow、Scheduled Tasks、Application / Query / Maintenance / Control。
+`packages/server/src/application/daemon-application.ts` 是 daemon durable application 的唯一 composition root。它组装 store recovery、permission broker、Agent loader/pool、event projection、run engine、Workflow、Scheduled Tasks，以及 Query / Command / Interaction / Maintenance / Control 等应用服务。它暴露这些服务，但不亲自实现它们的业务动作。
 
 `packages/server/src/http/server.ts` 只负责 Hono、鉴权、CORS、route mounting、HTTP listener 和 SSE client lifecycle。HTTP transport 不再创建或持有 AgentPool、run engine、projector 等内部组件。
 
@@ -99,6 +100,8 @@ OpenHarnessAgent onEvent sink
 
 routes 在 `packages/server/src/http/server.ts` 组装；应用对象来自 `DaemonApplication`。
 
+Session 写操作共享 `SessionOperationRunner`。它先等待同 session 前一个操作结束，再检查 Application ready、读取 session、取得 `DaemonOperationGate` shared lease 和事件 checkpoint。业务工作完成或失败后只发布 checkpoint 之后已经提交的事件，最后释放 lease；发布失败不会掩盖原始业务错误。
+
 | 服务                        | 文件                                  | 负责                                                               |
 | --------------------------- | ------------------------------------- | ------------------------------------------------------------------ |
 | `SessionCommandService`     | `application/session/session-command-service.ts`     | create/update/archive/delete/fork                                 |
@@ -128,7 +131,8 @@ routes 在 `packages/server/src/http/server.ts` 组装；应用对象来自 `Dae
 ```mermaid
 sequenceDiagram
   participant UI as useServerSync
-  participant C as OpenHarnessClient
+  participant C as client.sessions
+  participant R as SessionOperationRunner
   participant A as SessionInteractionService
   participant E as RunAdmissionService
   participant L as SessionRunCoordinator
@@ -137,11 +141,12 @@ sequenceDiagram
   participant G as OpenHarnessAgent
   participant Q as QueryEngine
   participant D as DaemonAgentEventProjector
-  participant S as SessionStore/SSE
+  participant S as Repository/Transaction + SSE
 
-  UI->>C: admitPrompt(sessionId, hi)
+  UI->>C: admitPrompt(sessionId, { content: hi })
   C->>A: POST /sessions/:id/prompts
-  A->>E: admitPromptAndMaybeRun
+  A->>R: run(sessionId, work)
+  R->>E: admitPromptAndMaybeRun
   E->>S: durable input + pending run
   E->>L: enqueue(sessionId, runId)
   L->>X: execute(workContext)
@@ -166,10 +171,12 @@ sequenceDiagram
 
 ```text
 apps/frontend/src/hooks/useServerSync.ts
-packages/client/src/transport/http-client.ts
+packages/client/src/resources/session-resource.ts
+packages/client/src/transport/http-transport.ts
 packages/server/src/http/routes/run-execution.ts
-packages/server/src/application/daemon-application.ts
 packages/server/src/application/session/session-interaction-service.ts
+packages/server/src/application/session/session-operation-runner.ts
+packages/server/src/application/session/run-admission-service.ts
 packages/server/src/application/session/session-run-engine.ts
 packages/server/src/runtime/run-coordinator.ts
 packages/server/src/application/session/session-run-executor.ts
@@ -182,7 +189,7 @@ packages/server/src/application/agent/daemon-agent-event-projector.ts
 
 ## 带结构化 Skill 的 prompt
 
-带 Skill 的 prompt 不建立第二条 Run 链。客户端仍调用 `admitPrompt`，区别只是 input 的 `items` 中含 `{ type: "skill", name, path }`。
+带 Skill 的 prompt 不建立第二条 Run 链。客户端仍调用 `client.sessions.admitPrompt()`，区别只是 input 的 `items` 中含 `{ type: "skill", name, path }`。
 
 `SessionRunExecutor` 在 `submitMessage` 前按 session cwd 重新取得 Skill registry，用当前 catalog 校验每个 name/path，再由 `session-input-materializer.ts` 生成明确的 Skill 工具调用要求。materializer 不读取 `SKILL.md`；模型调用原生 `Skill { name, path }` 后才取得 Skill file、Skill root 和正文。此后 AgentEvent、durable projection、SSE 和 terminal settlement 与上面的普通 prompt 完全相同。
 
@@ -254,7 +261,7 @@ projector 按 root event source 单调 `sequence` 保存已成功应用的水位
 
 Settlement 保存的是可序列化修复说明，不是旧进程的 Handle。Daemon 对外 ready 前先修复 Settlement，再执行普通的 active Run/Task/Permission 重启收束：terminal child 可以补齐真实结果；live-only child 创建或路由失败只能把 Run/Task 标为 failed，并归档半初始化 child Session。每次原始失败、下一相关事件和显式 recovery 都只尝试一次，不运行无限重试循环。`/debug/runtime` 的 `projectionSettlements.pending` 显示仍需处理的数量；正常完成或正常 shutdown 应为 `0`。
 
-input/run/stream/terminal 的多步 durable 归约使用 `SessionStore.transaction()`，SQLite 与内存 read model 同时提交或同时回滚，transcript projection state 也在失败时恢复。input/run/child identity 使用 create-or-validate：input 会比较去除 traceId 后的完整 metadata，既有 child session 必须匹配 parent/cwd/childId，terminal run 不允许被 `run.started` 重开。当前 framework event source 不跨进程 replay，daemon restart 仍走 durable recovery，不恢复 live event stream。
+input/run/stream/terminal 的多步 durable 归约通过具名 Transaction 和共享 `TransactionCoordinator` 提交，SQLite 与内存 read model 同时提交或同时回滚，transcript projection state 也在失败时恢复。input/run/child identity 使用 create-or-validate：input 会比较去除 traceId 后的完整 metadata，既有 child session 必须匹配 parent/cwd/childId，terminal run 不允许被 `run.started` 重开。当前 framework event source 不跨进程 replay，daemon restart 仍走 durable recovery，不恢复 live event stream。
 
 每个真正进入 `run.started` 的新 Run 会建立一条 durable Run Attempt。Attempt 保存独立的 sequence、provider、model、状态、token 用量和起止时间；当前 Provider 内部的连接/传输 retry 仍属于同一 Attempt。Run terminal 之前必须先把活动 Attempt 收束为 completed、failed 或 cancelled。Daemon 重启不会重新调用模型，而是把 pending/running Attempt 标为 cancelled。Attempt 同时进入 session snapshot 和 durable replay event，客户端可以按 Run ID 关联展示。
 
@@ -423,7 +430,7 @@ Jobs 层只读取和控制这份 Workflow 状态，不复制第二份快照。Wo
 
 ```json
 {
-  "protocol": { "version": 2 }
+  "protocol": { "version": 4 }
 }
 ```
 
@@ -470,7 +477,7 @@ shutdown 先把 `DaemonOperationGate` 置为 closing 并等待现有 shared/barr
 - durable run 一旦 completed/failed/interrupted 就不可重新进入 running；child task 可绑定新的 run 并显式 reopen。
 - 一个 terminal Run 不得留下 pending/running Attempt。
 - 每个 pool-owned session 最多一个 root agent generation；closing entry 在旧实例完整释放前阻止 replacement，每个 agent 最多一个 active root run。
-- `SessionStore.transaction()` 同时保护 SQLite 与内存 read model；存储失败后不得暴露未提交实体。
+- 具名 Transaction 通过共享 `TransactionCoordinator` 同时保护 SQLite 与内存 read model；存储失败后不得暴露未提交实体。
 - text delta 立即 live publish，并按 `150ms/8KB` checkpoint durable part；异常退出只允许丢失一个有界尾窗，正常 terminal/close 必须完整。
 - SSE 序号跨 daemon restart 单调不复用；transient delta 不进入 durable replay log 或 client durable event index。
 - required event projection 先于 `run.result` settlement。

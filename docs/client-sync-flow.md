@@ -1,119 +1,155 @@
 # Client Sync Flow
 
-> 状态：当前 TUI、Web、Desktop 共用客户端同步的权威说明。最后核对：2026-08-23。
+> 状态：当前 TUI、Web、Desktop 共用客户端同步的权威说明。最后核对：2026-09-17。
 
-客户端只负责发动作、接事实和渲染，不拥有 Agent Runtime，也不直接读 daemon 的 SQLite。
+## 边界
 
-```text
-TUI / Web / Desktop / IDE
-  -> @openharness/client 发 HTTP action
-  -> daemon 准入并持久化
-  -> snapshot + SSE event
-  -> 同一个 reducer 收敛为界面状态
-```
+`@openharness/client` 负责四件事：
 
-Bot 不走浏览器 reducer，但同样必须进入 daemon 的 Session/Input/Run；见 [Channels Flow](./channels-flow.md)。
+1. 在首个业务请求前确认 Client 与 daemon 使用同一个协议版本；
+2. 通过领域 Resource 发起 typed HTTP 请求；
+3. 读取 session snapshot，并从对应 cursor 继续接收 SSE；
+4. 用共享 reducer 把 replay/live event 合并成客户端可展示状态。
 
-## 公共包分工
+Client 不运行 Agent、不读 SQLite、不决定 prompt 是 steer 还是 queue，也不保存第二份服务端业务真相。
 
-```text
-packages/client/src
-  transport/http-client.ts       typed HTTP API、协议检查、SSE 解析
-  state/reducer.ts               snapshot/event -> client state
-  state/sync.ts                  首次同步、回放、断线重连
-  commands/session-commands.ts   不依赖 React 的命令分发
-  types/index.ts                 对上层产品公开的类型
-```
+## 公开入口
 
-上层产品可以保存当前路由、选中项和可丢弃的展示缓存；不能保存第二份 Session、Run、Permission 或 Workflow 权威状态。
-
-## 一次 attach 怎样完成
-
-有明确 sessionId 时，`syncEvents()` 按以下顺序工作：
-
-1. 调用 `GET /sessions/:sessionId/state` 取得一个原子 snapshot。
-2. 一次装入 Session、Input、Message、Part、Run、Run Attempt、Task、Permission 和 snapshot cursor。
-3. 从该 cursor 打开 `GET /events/stream`。
-4. 对后续 SSE 逐条执行同一个 reducer。
-5. 连接中断后，从最后成功应用的 cursor 重连；服务端回放缺失事件，再进入 live。
-
-snapshot 解决“首屏必须从完整状态开始”，cursor 解决“snapshot 之后不能漏事件”。客户端不能先订阅 live 再分别请求十几类列表拼状态。
-
-全局 dashboard 没有指定 sessionId 时，可以使用 `GET /events` 回放后再接 SSE。
-
-## 客户端状态
-
-每个 session bucket 当前包含：
+`OpenHarnessClient` 只组装 `protocol` 和领域 Resource：
 
 ```ts
-type SessionBucket = {
-  session?: SessionRecord;
-  inputs: SessionInputRecord[];
-  messages: SessionMessageRecord[];
-  partsByMessageId: Record<string, SessionMessagePartRecord[]>;
-  runs: Record<string, SessionRunRecord>;
-  attempts: Record<string, SessionRunAttemptRecord>;
-  tasks: Record<string, SessionExecutionRecord>;
-  permissions: Record<string, PermissionRequestRecord>;
-};
+const client = new OpenHarnessClient({ baseUrl, token });
+
+const session = await client.sessions.create(input);
+await client.sessions.admitPrompt(session.id, { content: "hello" });
+await client.permissions.reply(requestId, { decision: "allow" });
+const jobs = await client.jobs.list();
 ```
 
-顶层 `OpenHarnessClientState` 还保存 session 列表、`eventsBySeq`、`transientCursor` 和 `lastSeq`。TUI transcript 只从 Message + Part 派生，不扫描 `runtime.*` 日志猜文本。
+当前资源包括 system、providers、auth、projects、plugins、development、sessions、attachments、permissions、schedules、jobs、terminals、channels 和 events。底层 transport 类仍可作为 SDK 构件导入，但 `OpenHarnessClient` 实例不暴露 transport 属性；产品代码不应绕过 Resource 直接拼业务 endpoint。
 
-## Reducer 处理的事件
+## 首个请求前的协议握手
 
-| 事件 | 状态变化 |
-|---|---|
-| `session.created`、`session.updated`、`session.archived` | 新增、更新或归档 Session |
-| `session.input.admitted` | 写入 Input |
-| `session.message.created` | 写入 Message 外壳 |
-| `session.transcript.replaced` | rewind 等操作后整体替换 transcript |
-| `session.message.part.updated` | 写入 Part 权威快照 |
-| `session.message.part.delta` | 给 text/reasoning Part 追加临时增量 |
-| `session.run.created`、`session.run.updated` | 写入 Run |
-| `session.run_attempt.created`、`session.run_attempt.updated` | 写入 Run Attempt |
-| `session.task.created`、`session.task.updated` | 写入 Task/Session Execution |
-| `permission.asked`、`permission.replied` | 写入 Permission Request |
+`HttpTransport` 把 `/health` 和 `/capabilities` 视为握手例外。首次普通业务请求的顺序是：
 
-durable event 按 `seq` 去重；message、input 和 part 按各自 `seq` 排序。`session.message.part.delta` 是临时流式事件，不放进 durable `eventsBySeq`，但用 `transientCursor` 防止重连后重复追加。
+```text
+Resource method
+  -> HttpTransport.ensureProtocol()
+  -> GET /capabilities
+  -> checkProtocolCompatibility({ version: 4 })
+  -> 成功后缓存握手结果
+  -> 业务请求携带 x-openharness-protocol-version: 4
+```
 
-每条事件必须使用当前 `SESSION_EVENT_SCHEMA_VERSION`。客户端看到未知版本会抛出 `UnsupportedSessionEventSchemaVersionError`，并且不推进 cursor。升级协议时应同步升级客户端和服务端，不跳过未知事件继续运行。
+版本必须完全相等。缺少版本、版本不是 4 或响应格式错误都会在业务请求前失败；Client 不尝试 min/max 范围协商，也不降级到旧协议。
 
-## Prompt 提交与安全重试
+## 单个 Session 的 snapshot-first attach
 
-可靠客户端在第一次发送前调用 `createPromptRequestId()`，并把同一个 `id` 保留到传输结果明确为止。相同 ID、相同内容的重试只返回第一次准入结果；相同 ID 配不同 content、delivery 或 metadata 返回 `409`。
+`SessionSyncController` 是无 UI 框架依赖的同步控制器。给定 `sessionId` 时，它先建立完整基线，再接 live stream：
 
-`OpenHarnessClient.admitPrompt()` 在调用方没有给 ID 时会生成一个。直接调用 HTTP 时 body `id` 也是可选的，由服务端生成；这种写法适合不需要恢复“响应是否丢失”的简单调用。如果调用方要求可靠重试，就必须自己提供并保存 ID。这是当前协议本身的行为，不是旧字段兼容路径。
+```text
+client.sessions.getState(sessionId)
+  -> session / inputs / messages / parts
+  -> runs / attempts / tasks / permissions
+  -> snapshot.cursor
+  -> applySessionSnapshot()
+  -> client.events.stream({ sessionId, cursor })
+```
 
-## Permission
+snapshot 和 cursor 在服务端同一个原子读取中产生，因此不会出现“状态读取完、订阅前刚好漏掉一个事件”的窗口。Controller 使用 `max(initialCursor, snapshot.cursor, state.lastSeq)` 作为下一次 SSE 起点。
 
-Permission 已持久化，UI 不需要把一个本地 Promise 当作事实：
+## 全局同步
 
-1. 从 bucket 中读取 `status === "pending"` 的请求。
-2. 展示确认界面。
-3. 调用 `POST /permissions/:requestId/reply`。
-4. 等待 `permission.replied` 更新所有已 attach 客户端。
+没有 `sessionId` 时，Controller 从当前 cursor 调用 `client.events.list()` 回放 durable event，然后订阅 `client.events.stream()`。这适合 session 列表、全局任务或其他跨 session 状态。
 
-因此 TUI 退出后，可以由 Desktop 或 Web 回答同一条 pending Permission。
+调用方如果传入非零 cursor，必须同时传入与该 cursor 对应的 `initialState`。只有 cursor 没有状态会跳过历史，Controller 会直接拒绝这种组合。
 
-## Jobs 为什么单独刷新
+## SSE gap、重连和去重
 
-Jobs 是对 Terminal、shell、Agent、dream、Workflow 等长期工作的统一观察视图。当前 Session SSE reducer 不处理 Job 事件；TUI 在以下时机调用 Jobs HTTP API 读取 producer 的权威快照：
+收到 live event 后，Controller 比较 `event.seq` 与当前 cursor：
 
-- 激活 session；
-- 打开 Jobs Panel 或手动刷新；
-- 成功创建 background shell；
-- 完成 send/cancel 等控制动作；
-- 主 Run 进入终态。
+```text
+event.seq == cursor + 1
+  -> 直接 applyEvent()
 
-这个 `JobRemoteState` 是可丢弃的 UI 缓存，不写回 SessionStore。刷新失败会保留已有列表并显示辅助错误，不会结束 Agent Run。这里没有所谓 phase 1/phase 2 承诺；如果以后增加 Job SSE，必须先扩展协议版本、client reducer 和契约测试。
+event.seq > cursor + 1
+  -> client.events.list({ cursor }) 补 durable gap
+  -> 按序 applyEvent()
+  -> 再应用当前 live event
+```
 
-## 当前传输边界
+stream 正常结束或遇到可恢复网络错误时，状态进入 `reconnecting`，按指数退避等待，再从 `state.lastSeq` 建立新连接。Abort 会结束循环；不支持的 event schema version 属于不可恢复错误，状态进入 `error`，不会靠跳过事件继续。
 
-- 动作使用 HTTP，事实流使用 SSE；目前没有 WebSocket 双向协议。
-- TUI 通过 `apps/frontend/src/hooks/useServerSync.ts` 接线，但同步语义属于 `@openharness/client`，不能复制到 React hook。
-- 浏览器构建不能依赖 Node polyfill。
-- 斜杠命令走 `dispatchSessionCommand`，不直接绑 TUI 组件。
-- `delivery: "steer"` 的 durable 准入和 replacement run 由 daemon 负责，客户端只提交动作并接收结果。
+Reducer 以 durable `seq` 去重。text delta 是 transient event：它会立即追加显示，但不进入 durable `eventsBySeq`，只推进 `transientCursor`，避免重连时重复文字。part complete、Tool 边界和 Run terminal 会把完整正文持久化，后续 snapshot 可以恢复。
 
-公开方法、错误形状和精确协议版本见 [Protocol Contract](./protocol-contract.md)，测试入口见 [契约与测试索引](./contract-test-index.md)。
+## 状态放在哪里
+
+顶层 `OpenHarnessClientState` 保存：
+
+- session 列表和按 session 分桶的 Input、Message、Part、Run、Attempt、Task、Permission；
+- `eventsBySeq` 和 `lastSeq`，用于 durable replay 去重；
+- `transientCursor`，用于 live-only delta 去重；
+- reducer 派生所需的连接无关状态。
+
+TUI transcript 只从 Message + Part 派生，不扫描 `runtime.*` 日志猜文本。Frontend 或 Desktop 可以在这份状态外保存选中项、草稿、面板和连接提示，但不能把本地 UI 状态写成服务端 Run 真相。
+
+## Prompt ID 与可靠重试
+
+`client.sessions.admitPrompt()` 在调用方未提供 `id` 时生成一个 request ID，随后把它放入请求 body。服务端 HTTP body 中 `id` 仍是可选字段，可以为简单调用生成 ID。
+
+需要可靠重试的调用方必须自己生成并持久保存稳定 ID：
+
+```ts
+const id = createPromptRequestId();
+await client.sessions.admitPrompt(sessionId, { id, content });
+// 网络结果不确定时，使用同一个 id 重试。
+```
+
+同一个 ID 和相同内容可以安全重试；同一个 ID 携带不同内容会被拒绝。自动生成 ID 适合不需要恢复“响应是否丢失”的一次性调用，不构成跨进程重试保证。
+
+## UI 接线
+
+```text
+Frontend / Desktop
+  -> 创建 SessionSyncController
+  -> onStatusChange 更新连接提示
+  -> onUpdate 接收 snapshot / replay / live / reconnecting
+  -> 把 controller.currentState 交给 selector 和组件
+  -> 切换 session 或卸载时 abort 旧 generation
+```
+
+generation fencing 防止旧 session 的迟到事件写进新页面。Frontend hook 和 Desktop Main subscription service 共用 Controller，不各自实现 stream pump、cursor、gap catch-up 或重连计时器。
+
+## 结果怎样回到界面
+
+一次业务动作的 HTTP response 只说明该动作已经被 daemon 接受或完成相应同步步骤。持续输出和最终 durable 状态通过 SSE 回到 reducer：
+
+```text
+Resource response
+  + snapshot/replay/live SSE
+  -> shared reducer
+  -> selectors
+  -> TUI / Web / Desktop components
+```
+
+产品界面不应在收到 HTTP response 后手工拼一份 Message 或 Run；否则下一次 snapshot 会与本地副本冲突。
+
+## 失败语义
+
+- 协议不兼容：`IncompatibleProtocolError`，不发送业务请求；
+- HTTP 已知错误：转换为 `OpenHarnessApiError`，保留状态码和结构化 payload；
+- 网络/SSE 暂时失败：Controller 进入 reconnecting 并从 `lastSeq` 继续；
+- event schema 不支持：进入 error，要求升级 Client；
+- generation 已过期或 signal aborted：丢弃迟到结果，不更新当前界面；
+- prompt 响应未知：只有保存过稳定 request ID 的调用方才能可靠重试。
+
+## 验证入口
+
+- `packages/client/src/transport/__test__/protocol-handshake.test.ts`：握手和版本 header；
+- `packages/client/src/state/__test__/session-sync-controller.test.ts`：snapshot、gap、重连、abort 和 generation；
+- `packages/client/src/state/__test__/reducer.test.ts`：durable/transient event 合并；
+- `packages/client/src/__test__/public-api.test.ts`：公共导出与禁止 facade；
+- `tests/client-public-api/`：跨包编译契约；
+- `scripts/client-public-api-contract.json`：当前公共面事实源。
+
+服务端请求与投影流程见 [Daemon Application Architecture](./daemon-application-architecture.md)，协议错误和 breaking change 规则见 [Protocol Contract](./protocol-contract.md)。

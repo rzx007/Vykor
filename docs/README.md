@@ -86,6 +86,7 @@
 
 - [架构重组迁移状态](./architecture-migration-status.md)：按业务域重组的当前阶段、退场调用基线和下一步。
 - [Daemon Application Architecture](./daemon-application-architecture.md)：Session、Input、Run、Permission、Workflow、Owner、恢复和关闭的总入口。
+- [Session Runtime 存储架构](./session-runtime-storage-architecture.md)：SQLite、Repository、Transaction、`SessionStore`、owner lease 和提交/回滚边界。
 - [Durable Execution Data Model](./durable-execution-data-model.md)：所有运行记录的固定格式、关系、终态和版本。
 - [Protocol Contract](./protocol-contract.md)：协议版本、请求错误、snapshot、SSE 和升级规则。
 - [Client Sync Flow](./client-sync-flow.md)：HTTP client、snapshot、SSE、cursor 和 reducer。

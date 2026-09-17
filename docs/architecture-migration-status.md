@@ -4,7 +4,7 @@
 
 ## 如何使用本文
 
-本文回答三件事：这次按业务域重组最终完成了什么、当前代码边界是什么、以后靠哪些自动化检查防止退回万能入口。系统怎样运行仍以 [架构总览](./architecture-overview.md)、[Daemon Application Architecture](./daemon-application-architecture.md) 和 [Client Sync Flow](./client-sync-flow.md) 为准；当前 Session Runtime 存储架构将在配套文档中单独说明。
+本文回答三件事：这次按业务域重组最终完成了什么、当前代码边界是什么、以后靠哪些自动化检查防止退回万能入口。系统怎样运行仍以 [架构总览](./architecture-overview.md)、[Daemon Application Architecture](./daemon-application-architecture.md)、[Client Sync Flow](./client-sync-flow.md) 和 [Session Runtime 存储架构](./session-runtime-storage-architecture.md) 为准。
 
 实施期间的规格和计划保留在 `docs/superpowers/`，只用于追溯当时的决策与迁移顺序。它们与当前代码冲突时，以当前代码、测试和本文链接的权威文档为准。
 

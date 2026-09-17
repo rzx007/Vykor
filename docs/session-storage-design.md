@@ -2,7 +2,7 @@
 
 > 状态：历史设计。本文描述已经退场的项目级 JSON snapshot，不是当前 daemon 存储契约。
 >
-> daemon 的权威 `SessionStore` 位于 `packages/services/src/session-runtime`，包含 session/input/message/part/event/run/task/permission request，使用 daemon 独占的 SQLite。当前流程见 [Daemon Application Architecture](./daemon-application-architecture.md)；固定记录格式见 [Durable Execution Data Model](./durable-execution-data-model.md)。
+> 当前 SQLite、Repository、Transaction 与 `SessionStore` 边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)；请求流程见 [Daemon Application Architecture](./daemon-application-architecture.md)，固定记录格式见 [Durable Execution Data Model](./durable-execution-data-model.md)。
 
 ## 历史背景
 
