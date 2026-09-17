@@ -129,7 +129,7 @@ describe("SessionRepository read operations", () => {
         const repository = new SessionRepository({
           storage: (store as any).storage,
           projects: (store as any).projects,
-          appendEvent: (input) => (store as any).appendEvent(input),
+          appendEvent: (input) => store.conversations.appendEvent(input),
           save: () => (store as any).save(),
         });
 
@@ -183,7 +183,7 @@ describe("SessionRepository read operations", () => {
         const repository = new SessionRepository({
           storage: (store as any).storage,
           projects: (store as any).projects,
-          appendEvent: (input) => (store as any).appendEvent(input),
+          appendEvent: (input) => store.conversations.appendEvent(input),
           save: () => (store as any).save(),
         });
 

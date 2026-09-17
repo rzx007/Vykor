@@ -86,7 +86,7 @@ describe("SessionStore goals", () => {
       expect(() => store.goals.updateGoal(goal.id, { expectedRevision: 0, status: "active" })).toThrowError("session_goal_revision_conflict")
       store.close()
       const reloaded = new SessionStore({ path })
-      expect(reloaded.getGoal(goal.id)).toMatchObject({ status: "paused", revision: 1 })
+      expect(reloaded.goals.getGoal(goal.id)).toMatchObject({ status: "paused", revision: 1 })
       reloaded.close()
     } finally {
       rmSync(directory, { recursive: true, force: true })

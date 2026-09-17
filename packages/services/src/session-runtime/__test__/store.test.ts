@@ -113,7 +113,7 @@ describe("SessionStore", () => {
       store.close();
 
       const reloaded = new SessionStore({ path });
-      expect(reloaded.getInput("i1")).toMatchObject({
+      expect(reloaded.conversations.getInput("i1")).toMatchObject({
         items: admitted.items,
         content: "use $review @Quality @Reviewer",
         metadata: { pluginId: "dev.quality" },
@@ -537,7 +537,7 @@ describe("SessionStore", () => {
 
       store.close();
       const reloaded = new SessionStore({ path });
-      expect(reloaded.getInput("with-files")?.attachments).toEqual(
+      expect(reloaded.conversations.getInput("with-files")?.attachments).toEqual(
         admitted.attachments,
       );
       reloaded.close();
@@ -678,7 +678,7 @@ describe("SessionStore", () => {
 
       store.close();
       const reloaded = new SessionStore({ path });
-      const inputs = reloaded.listInputs("scale-session");
+      const inputs = reloaded.conversations.listInputs("scale-session");
       expect(inputs).toHaveLength(200);
       expect(inputs.every((input) => input.attachments.length === 2)).toBe(true);
       expect(inputs[199]?.attachments.map((reference) => reference.assetId)).toEqual([
@@ -844,7 +844,7 @@ describe("SessionStore", () => {
 
       store.close();
       const reloaded = new SessionStore({ path });
-      expect(reloaded.getAttachment("att-ready")).toEqual(ready);
+      expect(reloaded.attachments.getAttachment("att-ready")).toEqual(ready);
       reloaded.close();
     });
   });
@@ -1104,35 +1104,38 @@ describe("SessionStore", () => {
       store.close();
 
       const reloaded = new SessionStore({ path });
-      expect(reloaded.schedules.getTask(task.id)).toMatchObject({
-        name: "weekday-review",
-        destination: "standalone",
-        executionMode: "worktree",
-        projectPaths: [process.cwd()],
-        skillNames: ["review"],
-        runCount: 1,
-        nextRunAt: 300,
-      });
-      expect(
-        reloaded.schedules.listRuns({ taskId: task.id, unread: true }),
-      ).toMatchObject([
-        {
-          id: "scheduled-run-1",
-          status: "succeeded",
-          sessionId: "session-1",
-          runId: "agent-run-1",
-          summary: "No high-risk changes.",
-          unread: true,
-        },
-      ]);
-      expect(reloaded.schedules.listTasks().map((item) => item.id)).toContain(
-        task.id,
-      );
-      expect(reloaded.schedules.runs.getRun(run.id)?.id).toBe(run.id);
-      expect(reloaded.schedules.deleteTask(task.id)).toBe(true);
-      expect(reloaded.schedules.getTask(task.id)).toBeUndefined();
-      expect(reloaded.schedules.runs.getRun(run.id)).toBeUndefined();
-      reloaded.close();
+      try {
+        expect(reloaded.schedules.getTask(task.id)).toMatchObject({
+          name: "weekday-review",
+          destination: "standalone",
+          executionMode: "worktree",
+          projectPaths: [process.cwd()],
+          skillNames: ["review"],
+          runCount: 1,
+          nextRunAt: 300,
+        });
+        expect(
+          reloaded.schedules.listRuns({ taskId: task.id, unread: true }),
+        ).toMatchObject([
+          {
+            id: "scheduled-run-1",
+            status: "succeeded",
+            sessionId: "session-1",
+            runId: "agent-run-1",
+            summary: "No high-risk changes.",
+            unread: true,
+          },
+        ]);
+        expect(reloaded.schedules.listTasks().map((item) => item.id)).toContain(
+          task.id,
+        );
+        expect(reloaded.schedules.getRun(run.id)?.id).toBe(run.id);
+        expect(reloaded.schedules.deleteTask(task.id)).toBe(true);
+        expect(reloaded.schedules.getTask(task.id)).toBeUndefined();
+        expect(reloaded.schedules.getRun(run.id)).toBeUndefined();
+      } finally {
+        reloaded.close();
+      }
     });
   });
 
@@ -1449,7 +1452,7 @@ describe("SessionStore", () => {
         "session.input.admitted",
       );
       const failedReload = new SessionStore({ path });
-      expect(failedReload.getInput("atomic-input")).toBeUndefined();
+      expect(failedReload.conversations.getInput("atomic-input")).toBeUndefined();
       expect(failedReload.runs.getRun("atomic-run")).toBeUndefined();
       failedReload.close();
 
@@ -1588,7 +1591,7 @@ describe("SessionStore", () => {
       expect(store.terminalizeUnownedInputs("daemon restarted")).toBe(0);
 
       const reloaded = new SessionStore({ path });
-      expect(reloaded.findRunByInput("orphan-input")).toMatchObject({
+      expect(reloaded.runs.findRunByInput("orphan-input")).toMatchObject({
         status: "interrupted",
         error: "daemon restarted",
       });
@@ -2116,7 +2119,7 @@ describe("SessionStore", () => {
         path,
         eventRegistry: fixtureEventRegistry,
       });
-      const durable = reloaded.appendEvent({
+      const durable = reloaded.conversations.appendEvent({
         type: "daemon.after-restart",
         sessionId: "s1",
       });
@@ -2232,45 +2235,48 @@ describe("SessionStore", () => {
       store.runs.updateRun(run.id, { status: "completed" });
 
       const reloaded = new SessionStore({ path });
-      expect(reloaded.runs.getRun("r1")!.status).toBe("completed");
-      expect(reloaded.runs.listRunAttempts("r1")).toMatchObject([
-        {
-          id: "attempt-r1-1",
-          sequence: 1,
-          status: "completed",
-          provider: "openrouter",
-          model: "m",
-        },
-      ]);
-      expect(reloaded.conversations.listMessageParts("s1")).toMatchObject([
-        {
-          id: "part-tool",
-          status: "completed",
-          toolName: "Write",
-          output: { content: [{ type: "text", text: "ok" }] },
-        },
-      ]);
-      expect(reloaded.getPermissionRequest("p1")).toMatchObject({
-        status: "approved",
-        decision: "once",
-        decidedByClientId: "tui-1",
-      });
-      expect(
-        reloaded.listPermissionRequests({
-          sessionId: "s1",
+      try {
+        expect(reloaded.runs.getRun("r1")!.status).toBe("completed");
+        expect(reloaded.runs.listRunAttempts("r1")).toMatchObject([
+          {
+            id: "attempt-r1-1",
+            sequence: 1,
+            status: "completed",
+            provider: "openrouter",
+            model: "m",
+          },
+        ]);
+        expect(reloaded.conversations.listMessageParts("s1")).toMatchObject([
+          {
+            id: "part-tool",
+            status: "completed",
+            toolName: "Write",
+            output: { content: [{ type: "text", text: "ok" }] },
+          },
+        ]);
+        expect(reloaded.permissions.get("p1")).toMatchObject({
           status: "approved",
-        }),
-      ).toMatchObject([{ id: "p1", toolName: "shell" }]);
-      expect(reloaded.conversations.listEvents().map((event) => event.type)).toContain(
-        "permission.replied",
-      );
-      expect(reloaded.conversations.listEvents().map((event) => event.type)).toContain(
-        "session.message.part.updated",
-      );
-      expect(reloaded.conversations.listEvents().map((event) => event.type)).toContain(
-        "session.run_attempt.updated",
-      );
-      reloaded.close();
+          decision: "once",
+          decidedByClientId: "tui-1",
+        });
+        expect(
+          reloaded.permissions.list({
+            sessionId: "s1",
+            status: "approved",
+          }),
+        ).toMatchObject([{ id: "p1", toolName: "shell" }]);
+        expect(reloaded.conversations.listEvents().map((event) => event.type)).toContain(
+          "permission.replied",
+        );
+        expect(reloaded.conversations.listEvents().map((event) => event.type)).toContain(
+          "session.message.part.updated",
+        );
+        expect(reloaded.conversations.listEvents().map((event) => event.type)).toContain(
+          "session.run_attempt.updated",
+        );
+      } finally {
+        reloaded.close();
+      }
     });
   });
 

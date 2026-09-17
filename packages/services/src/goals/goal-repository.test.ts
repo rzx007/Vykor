@@ -28,7 +28,7 @@ describe("GoalRepository", () => {
     const path = join(directory, "sessions.db");
     try {
       const first = new SessionStore({ path });
-      first.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      first.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
       const goal = first.goals.createGoal({
         id: "goal-related",
         sessionId: "s1",
@@ -118,7 +118,7 @@ describe("GoalRepository", () => {
     const path = join(directory, "sessions.db");
     try {
       const first = new SessionStore({ path });
-      first.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      first.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
       const goal = first.goals.createGoal({
         id: "goal-reload",
         sessionId: "s1",

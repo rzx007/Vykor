@@ -79,10 +79,10 @@ describe("ProjectRepository mutations", () => {
         first.acquireApplicationOwner({ ownerId: "first", pid: 1, now: 1, staleAfterMs: 1_000 });
         const projectPath = join(directory, "project");
         const project = first.projects.inspect(projectPath);
-        first.createSession({ id: "session", cwd: projectPath, projectId: project.id, model: "test" });
+        first.sessions.create({ id: "session", cwd: projectPath, projectId: project.id, model: "test" });
         const before = first.projects.list({ includeArchived: true });
         const locations = storage.database.connection.prepare("SELECT * FROM project_location").all();
-        const session = first.getSession("session");
+        const session = first.sessions.get("session");
         const takeOver = () => second.acquireApplicationOwner({ ownerId: "second", pid: 2, now: 2_000, staleAfterMs: 1_000 });
         if (timing === "before owner check") takeOver();
         else storage.assertWritable = () => {
@@ -95,7 +95,7 @@ describe("ProjectRepository mutations", () => {
         );
         expect(second.projects.list({ includeArchived: true })).toEqual(before);
         expect(storage.database.connection.prepare("SELECT * FROM project_location").all()).toEqual(locations);
-        expect(first.getSession("session")).toEqual(session);
+        expect(first.sessions.get("session")).toEqual(session);
         expect(storage.database.connection.prepare("SELECT cwd FROM session WHERE id = 'session'").get()).toEqual({ cwd: projectPath });
       } finally {
         storage.assertWritable = assertWritable;

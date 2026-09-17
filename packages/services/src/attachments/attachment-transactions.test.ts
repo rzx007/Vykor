@@ -148,7 +148,7 @@ describe("AttachmentTransactions", () => {
       store.close();
       const reopened = new SessionStore({ path });
       try {
-        expect(reopened.getAttachment("a")).toEqual(first);
+        expect(reopened.attachments.getAttachment("a")).toEqual(first);
         expect(
           reopened.attachments.getAttachment("b", { includeDeleted: true }),
         ).toEqual({
@@ -368,7 +368,7 @@ describe("AttachmentTransactions", () => {
     });
   });
 
-  it("fences every write and compatibility entry after owner takeover, including no-op batches", () => {
+  it("fences every attachment write after owner takeover, including no-op batches", () => {
     withStore((store, path) => {
       store.acquireApplicationOwner({
         ownerId: "first",
@@ -392,7 +392,7 @@ describe("AttachmentTransactions", () => {
           staleAfterMs: 100,
           now: 1101,
         });
-        for (const api of [store.attachments, store]) {
+        for (const api of [store.attachments]) {
           const writes = [
             () =>
               api.createImportingAttachment({

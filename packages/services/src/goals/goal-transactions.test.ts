@@ -44,7 +44,7 @@ describe("GoalTransactions", () => {
       ).toThrow("forced goal event failure");
       expect(store.goals.getGoal("goal-1")).toBeUndefined();
       expect(
-        store
+        store.conversations
           .listEvents()
           .some((event) => event.type === "session.goal.created"),
       ).toBe(false);
@@ -136,7 +136,7 @@ describe("GoalTransactions", () => {
       expect(internals.mutations.inputs.size).toBe(0);
       expect(internals.mutations.runs.size).toBe(0);
       expect(
-        store
+        store.conversations
           .listEvents()
           .some((event) => event.type.startsWith("session.goal")),
       ).toBe(false);
@@ -145,10 +145,10 @@ describe("GoalTransactions", () => {
       const reopened = new SessionStore({ path });
       try {
         expect(reopened.goals.getGoal("goal-outer")).toBeUndefined();
-        expect(reopened.getInput("input-outer")).toBeUndefined();
-        expect(reopened.getRun("run-outer")).toBeUndefined();
+        expect(reopened.conversations.getInput("input-outer")).toBeUndefined();
+        expect(reopened.runs.getRun("run-outer")).toBeUndefined();
         expect(
-          reopened
+          reopened.conversations
             .listEvents()
             .some((event) => event.type.startsWith("session.goal")),
         ).toBe(false);
@@ -173,7 +173,7 @@ describe("GoalTransactions", () => {
         staleAfterMs: 100,
         now: 1_000,
       });
-      first.createSession({ id: "s1", cwd: process.cwd(), model: "m" });
+      first.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
       const goal = first.goals.createGoal({
         id: "goal-1",
         sessionId: "s1",

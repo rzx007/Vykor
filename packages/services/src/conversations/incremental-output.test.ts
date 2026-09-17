@@ -31,9 +31,9 @@ describe("IncrementalOutput", () => {
       await store.backupDatabase(backupPath);
       const backup = new SessionStore({ path: backupPath });
       try {
-        expect(backup.listMessageParts("s")[0]).toMatchObject({ text: "backup tail", updatedAt: expected.part.updatedAt });
-        expect(backup.listMessages("s")[0]!.updatedAt).toBe(expected.message.updatedAt);
-        expect(backup.getSession("s")!.updatedAt).toBe(expected.session.updatedAt);
+        expect(backup.conversations.listMessageParts("s")[0]).toMatchObject({ text: "backup tail", updatedAt: expected.part.updatedAt });
+        expect(backup.conversations.listMessages("s")[0]!.updatedAt).toBe(expected.message.updatedAt);
+        expect(backup.sessions.get("s")!.updatedAt).toBe(expected.session.updatedAt);
       } finally { backup.close(); }
     } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
   });
@@ -53,9 +53,9 @@ describe("IncrementalOutput", () => {
     store.close();
     const reopened = new SessionStore({ path });
     try {
-      expect(reopened.listMessageParts("s")[0]).toMatchObject({ text: `${status} tail`, updatedAt: part.updatedAt });
-      expect(reopened.listMessages("s")[0]!.updatedAt).toBe(message.updatedAt);
-      expect(reopened.getSession("s")!.updatedAt).toBe(session.updatedAt);
+      expect(reopened.conversations.listMessageParts("s")[0]).toMatchObject({ text: `${status} tail`, updatedAt: part.updatedAt });
+      expect(reopened.conversations.listMessages("s")[0]!.updatedAt).toBe(message.updatedAt);
+      expect(reopened.sessions.get("s")!.updatedAt).toBe(session.updatedAt);
     }
     finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
   });
@@ -85,11 +85,11 @@ describe("IncrementalOutput", () => {
     store.close();
     const reopened = new SessionStore({ path });
     try {
-      expect(reopened.getRun("run")!.status).toBe("interrupted");
-      expect(reopened.getRunAttempt("attempt")!.status).toBe("cancelled");
-      expect(reopened.listMessageParts("s").find(({ id }) => id === "run-part")).toMatchObject({ text: "interrupt tail", status: "interrupted", updatedAt: part.updatedAt });
-      expect(reopened.listMessages("s").find(({ id }) => id === "run-message")!.updatedAt).toBe(persistedMessage.updatedAt);
-      expect(reopened.getSession("s")!.updatedAt).toBe(session.updatedAt);
+      expect(reopened.runs.getRun("run")!.status).toBe("interrupted");
+      expect(reopened.runs.getRunAttempt("attempt")!.status).toBe("cancelled");
+      expect(reopened.conversations.listMessageParts("s").find(({ id }) => id === "run-part")).toMatchObject({ text: "interrupt tail", status: "interrupted", updatedAt: part.updatedAt });
+      expect(reopened.conversations.listMessages("s").find(({ id }) => id === "run-message")!.updatedAt).toBe(persistedMessage.updatedAt);
+      expect(reopened.sessions.get("s")!.updatedAt).toBe(session.updatedAt);
     } finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -101,8 +101,8 @@ describe("IncrementalOutput", () => {
     store.close();
     const reopened = new SessionStore({ path });
     try {
-      expect(reopened.listMessages("s")).toHaveLength(1);
-      expect(reopened.listMessageParts("s").map(({ text }) => text)).toEqual(["new summary"]);
+      expect(reopened.conversations.listMessages("s")).toHaveLength(1);
+      expect(reopened.conversations.listMessageParts("s").map(({ text }) => text)).toEqual(["new summary"]);
     } finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -184,9 +184,9 @@ describe("IncrementalOutput", () => {
       store.close();
       const reopened = new SessionStore({ path });
       try {
-        expect(reopened.listMessageParts("s")[0]).toMatchObject({ text: "tail", updatedAt: part.updatedAt });
-        expect(reopened.listMessages("s")[0]!.updatedAt).toBe(message.updatedAt);
-        expect(reopened.getSession("s")!.updatedAt).toBe(session.updatedAt);
+        expect(reopened.conversations.listMessageParts("s")[0]).toMatchObject({ text: "tail", updatedAt: part.updatedAt });
+        expect(reopened.conversations.listMessages("s")[0]!.updatedAt).toBe(message.updatedAt);
+        expect(reopened.sessions.get("s")!.updatedAt).toBe(session.updatedAt);
       } finally { reopened.close(); }
     } finally {
       try { store.close(); } catch {}
@@ -215,7 +215,7 @@ describe("IncrementalOutput", () => {
     store.incrementalOutput.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "closed" });
     store.close();
     const reopened = new SessionStore({ path });
-    try { expect(reopened.listMessageParts("s")[0]!.text).toBe("closed"); }
+    try { expect(reopened.conversations.listMessageParts("s")[0]!.text).toBe("closed"); }
     finally { reopened.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 

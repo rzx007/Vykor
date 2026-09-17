@@ -160,7 +160,7 @@ describe("RunRepository write operations", () => {
       try {
         const repository = new RunRepository({
           storage: (store as any).storage,
-          appendEvent: (input) => (store as any).appendEvent(input),
+          appendEvent: (input) => store.conversations.appendEvent(input),
           save: () => (store as any).save(),
         });
 
@@ -239,7 +239,7 @@ describe("RunRepository write operations", () => {
       try {
         const repository = new RunRepository({
           storage: (store as any).storage,
-          appendEvent: (input) => (store as any).appendEvent(input),
+          appendEvent: (input) => store.conversations.appendEvent(input),
           save: () => (store as any).save(),
         });
 
@@ -315,7 +315,7 @@ describe("RunRepository write operations", () => {
       try {
         const repository = new RunRepository({
           storage: (store as any).storage,
-          appendEvent: (input) => (store as any).appendEvent(input),
+          appendEvent: (input) => store.conversations.appendEvent(input),
           save: () => (store as any).save(),
         });
 
