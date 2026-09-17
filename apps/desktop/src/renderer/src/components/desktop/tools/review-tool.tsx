@@ -101,39 +101,42 @@ export function ReviewTool({
   const handledOpenRequestRef = useRef<number | null>(null)
   const lastTurnFilePaths = useMemo(() => collectLastTurnFilePaths(sessionView), [sessionView])
 
-  const loadChanges = useCallback(async ({ force = false }: { force?: boolean } = {}): Promise<void> => {
-    if (!selectedProjectPath) {
-      setChanges(null)
-      setLoadState("idle")
-      return
-    }
+  const loadChanges = useCallback(
+    async ({ force = false }: { force?: boolean } = {}): Promise<void> => {
+      if (!selectedProjectPath) {
+        setChanges(null)
+        setLoadState("idle")
+        return
+      }
 
-    setLoadState("loading")
-    setError(null)
-    try {
-      const result = await queryGitChanges(
-        {
-          rootPath: selectedProjectPath,
-          scope: gitScopeForRange(reviewRange),
-        },
-        { force }
-      )
-      const visibleResult =
-        reviewRange === "last-turn"
-          ? filterChangesByPaths(result, lastTurnFilePaths, selectedProjectPath)
-          : result
-      setChanges(visibleResult)
-      setActivePath((current) =>
-        current && visibleResult.files.some((file) => file.path === current)
-          ? current
-          : (visibleResult.files[0]?.path ?? null)
-      )
-      setLoadState("ready")
-    } catch (loadError) {
-      setError(errorMessage(loadError))
-      setLoadState("error")
-    }
-  }, [lastTurnFilePaths, reviewRange, selectedProjectPath])
+      setLoadState("loading")
+      setError(null)
+      try {
+        const result = await queryGitChanges(
+          {
+            rootPath: selectedProjectPath,
+            scope: gitScopeForRange(reviewRange),
+          },
+          { force }
+        )
+        const visibleResult =
+          reviewRange === "last-turn"
+            ? filterChangesByPaths(result, lastTurnFilePaths, selectedProjectPath)
+            : result
+        setChanges(visibleResult)
+        setActivePath((current) =>
+          current && visibleResult.files.some((file) => file.path === current)
+            ? current
+            : (visibleResult.files[0]?.path ?? null)
+        )
+        setLoadState("ready")
+      } catch (loadError) {
+        setError(errorMessage(loadError))
+        setLoadState("error")
+      }
+    },
+    [lastTurnFilePaths, reviewRange, selectedProjectPath]
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

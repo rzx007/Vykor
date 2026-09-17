@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DesktopGitChangesInput } from "@shared/git-types"
-import {
-  queryGitChanges,
-  resetGitChangesQueryCacheForTests,
-} from "./git-changes-query"
+import { queryGitChanges, resetGitChangesQueryCacheForTests } from "./git-changes-query"
 
 const emptyResult = (rootPath: string) => ({
   rootPath,
@@ -21,9 +18,12 @@ describe("queryGitChanges", () => {
 
   it("shares an in-flight request for normalized root and scope", async () => {
     let resolveRequest!: (value: ReturnType<typeof emptyResult>) => void
-    const changes = vi.fn(() => new Promise<ReturnType<typeof emptyResult>>((resolve) => {
-      resolveRequest = resolve
-    }))
+    const changes = vi.fn(
+      () =>
+        new Promise<ReturnType<typeof emptyResult>>((resolve) => {
+          resolveRequest = resolve
+        })
+    )
     Object.defineProperty(window, "desktop", {
       configurable: true,
       value: { git: { changes } },
@@ -74,7 +74,8 @@ describe("queryGitChanges", () => {
 
   it("shares concurrent forced refreshes and does not cache failures", async () => {
     const failure = new Error("git failed")
-    const changes = vi.fn()
+    const changes = vi
+      .fn()
       .mockRejectedValueOnce(failure)
       .mockResolvedValueOnce(emptyResult("D:/repo"))
     Object.defineProperty(window, "desktop", {
@@ -87,7 +88,12 @@ describe("queryGitChanges", () => {
 
     resetGitChangesQueryCacheForTests()
     let resolveRequest!: (value: ReturnType<typeof emptyResult>) => void
-    changes.mockImplementation(() => new Promise((resolve) => { resolveRequest = resolve }))
+    changes.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve
+        })
+    )
     const first = queryGitChanges(input, { force: true })
     const second = queryGitChanges(input, { force: true })
     expect(changes).toHaveBeenCalledTimes(3)

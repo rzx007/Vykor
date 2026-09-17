@@ -2,10 +2,6 @@ import { useEffect } from "react"
 
 import { attachDesktopSessionEvents } from "@renderer/stores/desktop-session"
 
-export function shouldAttachDesktopSessionEvents(pathname: string): boolean {
-  return pathname !== "/pet"
-}
-
 export function DesktopSessionEventBridge({ enabled }: { enabled: boolean }): null {
   useEffect(() => {
     if (!enabled) return

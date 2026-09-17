@@ -11,10 +11,11 @@ vi.mock("@renderer/components/appearance/appearance-provider", () => ({
   useAppearance: () => ({ resolvedTheme: "light" }),
 }))
 vi.mock("@renderer/stores/desktop-session", () => ({
-  useDesktopSessionStore: (selector: (state: unknown) => unknown) => selector({
-    selectedProject: { path: "D:/repo" },
-    sessionView: null,
-  }),
+  useDesktopSessionStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      selectedProject: { path: "D:/repo" },
+      sessionView: null,
+    }),
 }))
 
 import { ReviewTool } from "./review-tool"
@@ -41,7 +42,10 @@ afterEach(() => {
 
 it("forces a fresh query from the refresh button and keeps errors visible", async () => {
   mocks.queryGitChanges.mockResolvedValue({
-    rootPath: "D:/repo", files: [], totalAdditions: 0, totalDeletions: 0,
+    rootPath: "D:/repo",
+    files: [],
+    totalAdditions: 0,
+    totalDeletions: 0,
   })
   await act(async () => {
     root.render(<ReviewTool />)
@@ -50,10 +54,14 @@ it("forces a fresh query from the refresh button and keeps errors visible", asyn
     await new Promise((resolve) => window.setTimeout(resolve, 10))
     await Promise.resolve()
   })
-  expect(mocks.queryGitChanges).toHaveBeenNthCalledWith(1, {
-    rootPath: "D:/repo",
-    scope: "uncommitted",
-  }, { force: false })
+  expect(mocks.queryGitChanges).toHaveBeenNthCalledWith(
+    1,
+    {
+      rootPath: "D:/repo",
+      scope: "uncommitted",
+    },
+    { force: false }
+  )
 
   mocks.queryGitChanges.mockRejectedValueOnce(new Error("refresh failed"))
   const refresh = container.querySelector<HTMLButtonElement>('[aria-label="刷新改动"]')
@@ -62,9 +70,12 @@ it("forces a fresh query from the refresh button and keeps errors visible", asyn
     await Promise.resolve()
     await Promise.resolve()
   })
-  expect(mocks.queryGitChanges).toHaveBeenLastCalledWith({
-    rootPath: "D:/repo",
-    scope: "uncommitted",
-  }, { force: true })
+  expect(mocks.queryGitChanges).toHaveBeenLastCalledWith(
+    {
+      rootPath: "D:/repo",
+      scope: "uncommitted",
+    },
+    { force: true }
+  )
   expect(container.textContent).toContain("refresh failed")
 })

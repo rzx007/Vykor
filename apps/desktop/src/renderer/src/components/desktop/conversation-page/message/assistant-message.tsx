@@ -404,9 +404,7 @@ export function ChangedFilesSummary({
     () =>
       files
         .map((file) =>
-          normalizeReviewPath(
-            toProjectRelativePath(file.path, selectedProjectPath) ?? file.path
-          )
+          normalizeReviewPath(toProjectRelativePath(file.path, selectedProjectPath) ?? file.path)
         )
         .join("\n"),
     [files, selectedProjectPath]
@@ -453,9 +451,7 @@ export function ChangedFilesSummary({
       files.map((file) => {
         const stats =
           gitStatsByPath[
-            normalizeReviewPath(
-              toProjectRelativePath(file.path, selectedProjectPath) ?? file.path
-            )
+            normalizeReviewPath(toProjectRelativePath(file.path, selectedProjectPath) ?? file.path)
           ]
         return stats ? { ...file, ...stats, hasStats: true } : file
       }),

@@ -1,9 +1,7 @@
 import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router"
 
-import {
-  DesktopSessionEventBridge,
-  shouldAttachDesktopSessionEvents,
-} from "@renderer/components/desktop/desktop-session-event-bridge"
+import { DesktopSessionEventBridge } from "@renderer/components/desktop/desktop-session-event-bridge"
+import { shouldAttachDesktopSessionEvents } from "@renderer/components/desktop/desktop-session-event-bridge-path"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"

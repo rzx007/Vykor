@@ -18,10 +18,8 @@ vi.mock("@renderer/stores/desktop-session", () => ({
   attachDesktopSessionEvents: sessionEvents.attach,
 }))
 
-import {
-  DesktopSessionEventBridge,
-  shouldAttachDesktopSessionEvents,
-} from "./desktop-session-event-bridge"
+import { DesktopSessionEventBridge } from "./desktop-session-event-bridge"
+import { shouldAttachDesktopSessionEvents } from "./desktop-session-event-bridge-path"
 
 describe("DesktopSessionEventBridge", () => {
   let container: HTMLDivElement
