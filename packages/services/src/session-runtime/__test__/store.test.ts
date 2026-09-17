@@ -77,7 +77,7 @@ function createReadyAttachment(
 }
 
 describe("SessionStore", () => {
-  it("persists structured plugin input items and failed runs across disk reopen, rejecting legacy input rows", () => {
+  it("persists structured plugin input items and failed runs across disk reopen with required item JSON", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-structured-input-"));
     const path = join(directory, "store.db");
     try {
@@ -125,11 +125,13 @@ describe("SessionStore", () => {
       reloaded.close();
 
       const database = new Database(path);
-      database.prepare("UPDATE session_input SET items_json = NULL WHERE id = ?").run("i1");
-      database.close();
-      expect(() => new SessionStore({ path })).toThrowError(
-        /legacy_session_input_unsupported/,
-      );
+      try {
+        expect(
+          () => database.prepare("UPDATE session_input SET items_json = NULL WHERE id = ?").run("i1"),
+        ).toThrowError(/NOT NULL constraint failed: session_input\.items_json/);
+      } finally {
+        database.close();
+      }
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

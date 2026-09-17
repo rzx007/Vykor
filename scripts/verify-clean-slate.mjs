@@ -73,6 +73,21 @@ async function checkForbidden(root, options = {}) {
       }
     }
   }
+  for (const file of [
+    "packages/protocol/src/requests.ts",
+    "packages/protocol/src/session.ts",
+  ]) {
+    const source = read(root, file);
+    if (source === undefined) continue;
+    for (const match of source.matchAll(/["']migration["']/g)) {
+      results.push(problem(
+        "forbidden",
+        file,
+        lineOf(source, match.index),
+        'removed scheduled-task creation source: "migration"',
+      ));
+    }
+  }
   return results;
 }
 

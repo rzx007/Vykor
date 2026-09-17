@@ -298,7 +298,7 @@ export interface ScheduledTaskRecord {
   overlapPolicy: ScheduledOverlapPolicy;
   missedRunPolicy: ScheduledMissedRunPolicy;
   stopPolicy?: ScheduledStopPolicy;
-  createdBy: "user" | "agent" | "migration";
+  createdBy: "user" | "agent";
   createdFromSessionId?: string;
   lastRunAt?: number;
   nextRunAt?: number;

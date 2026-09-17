@@ -436,7 +436,7 @@
       "type": "table",
       "name": "session_input",
       "tbl_name": "session_input",
-      "sql": "CREATE TABLE session_input (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL, delivery TEXT NOT NULL,\r\n  content TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL, `items_json` text,\r\n  UNIQUE(session_id, seq)\r\n)"
+      "sql": "CREATE TABLE session_input (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL, delivery TEXT NOT NULL,\r\n  content TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL, `items_json` text NOT NULL,\r\n  UNIQUE(session_id, seq)\r\n)"
     },
     {
       "type": "table",
@@ -2713,7 +2713,7 @@
           "cid": 7,
           "name": "items_json",
           "type": "TEXT",
-          "notnull": 0,
+          "notnull": 1,
           "dflt_value": null,
           "pk": 0
         }

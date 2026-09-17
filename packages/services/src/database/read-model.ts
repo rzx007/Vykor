@@ -286,9 +286,6 @@ export function loadSessionReadModel(
 function hydrateInput(
   row: Record<string, unknown>,
 ): Pick<SessionInputRecord, "items" | "content"> {
-  if (row.items_json === null || row.items_json === undefined) {
-    throw new LegacySessionInputError();
-  }
   if (typeof row.items_json !== "string") {
     throw new Error("invalid_session_input_items");
   }
@@ -296,14 +293,4 @@ function hydrateInput(
     decode(row.items_json) as unknown as SessionUserInputItem[],
   );
   return { items, content: sessionUserInputText(items) };
-}
-
-class LegacySessionInputError extends Error {
-  readonly code = "legacy_session_input_unsupported";
-
-  constructor() {
-    super(
-      "legacy_session_input_unsupported: clear legacy Session data before reopening it",
-    );
-  }
 }

@@ -144,6 +144,8 @@
     "buildNativePluginCompatibilityEnvironment",
     "isLegacyWindowsPowerShell",
     "legacyShellDescriptor",
+    "LegacySessionInputError",
+    "legacy_session_input_unsupported",
     "SessionApplicationService",
     "session-application-service",
     "withSessionOperation"

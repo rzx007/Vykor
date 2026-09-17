@@ -217,7 +217,7 @@ CREATE TABLE `session_goal_request` (`request_id` text PRIMARY KEY NOT NULL, `se
 --> statement-breakpoint
 CREATE TABLE session_input (
   id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL, delivery TEXT NOT NULL,
-  content TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL, `items_json` text,
+  content TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL, `items_json` text NOT NULL,
   UNIQUE(session_id, seq)
 );
 --> statement-breakpoint

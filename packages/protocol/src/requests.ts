@@ -471,7 +471,7 @@ function parseScheduleFields(body: JsonRecord): Partial<CreateScheduledTaskInput
   const createdBy = optionalEnum(
     body,
     "createdBy",
-    ["user", "agent", "migration"] as const,
+    ["user", "agent"] as const,
   );
   const createdFromSessionId = optionalString(body, "createdFromSessionId");
   return {

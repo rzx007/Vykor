@@ -175,6 +175,18 @@ describe("HTTP request parsers", () => {
       }),
       "projectPaths",
     );
+    expectInvalid(
+      () => parseCreateScheduledTaskRequest({
+        name: "review",
+        prompt: "Review changes",
+        recurrence: "tomorrow",
+        recurrenceFormat: "once",
+        timezone: "UTC",
+        destination: "standalone",
+        createdBy: "migration",
+      }),
+      "createdBy",
+    );
   });
 
   it("allows nullable schedule timestamps only on updates", () => {

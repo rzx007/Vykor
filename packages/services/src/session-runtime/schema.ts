@@ -62,7 +62,7 @@ export const sessionInputs = sqliteTable(
     seq: integer("seq").notNull(),
     delivery: text("delivery").notNull(),
     content: text("content").notNull(),
-    itemsJson: text("items_json"),
+    itemsJson: text("items_json").notNull(),
     metadataJson: text("metadata_json").notNull(),
     createdAt: integer("created_at").notNull(),
   },
