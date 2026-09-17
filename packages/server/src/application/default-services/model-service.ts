@@ -16,7 +16,7 @@ import { readCatalogProvider } from "./catalog-provider-mapping.js";
 import {
   modelInputCapabilities,
   normalizeInputSupport,
-} from "../attachment-routing/attachment-capabilities.js";
+} from "../attachments/routing/attachment-capabilities.js";
 
 export function createDefaultModelService(
   ref?: DaemonSettingsRef,

@@ -5,8 +5,8 @@ import { join } from "node:path";
 
 import { classifyAttachmentCandidate } from "@openharness/services";
 
-import type { AttachmentService } from "../attachments/attachment-service.js";
-import type { AttachmentRoutingDecision } from "../attachment-routing/attachment-routing-types.js";
+import type { AttachmentService } from "../attachment-service.js";
+import type { AttachmentRoutingDecision } from "../routing/attachment-routing-types.js";
 
 export interface SessionAttachmentResourcesOptions {
   root: string;

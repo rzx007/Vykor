@@ -15,8 +15,8 @@ import type {
   AttachmentRoutingError,
   NativeAttachmentRouteResult,
   RouteAttachmentBatchInput,
-} from "../attachment-routing/attachment-routing-types.js";
-import type { SessionAttachmentResources } from "../attachment-resource/session-attachment-resources.js";
+} from "../attachments/routing/attachment-routing-types.js";
+import type { SessionAttachmentResources } from "../attachments/resources/session-attachment-resources.js";
 import {
   applyMaterializedSessionInput,
   materializeSessionInput,

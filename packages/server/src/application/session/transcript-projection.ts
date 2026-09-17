@@ -6,7 +6,7 @@ import type {
   SessionInputRecord,
   SessionMessagePartStatus,
 } from "@openharness/protocol";
-import type { AttachmentRoutingDecision } from "../attachment-routing/attachment-routing-types.js";
+import type { AttachmentRoutingDecision } from "../attachments/routing/attachment-routing-types.js";
 
 type ActiveToolPart = {
   partId: string;

@@ -4,8 +4,8 @@ import { readSessionRuntimeConfig, type SessionRecord, type SessionUserInputItem
 import type { SessionStore } from "@openharness/services";
 
 import type { AttachmentService } from "../attachments/attachment-service.js";
-import { AttachmentCapabilityRouter } from "../attachment-routing/attachment-capability-router.js";
-import { resolveRuntimeAttachmentCapabilities } from "../attachment-routing/attachment-capabilities.js";
+import { AttachmentCapabilityRouter } from "../attachments/routing/attachment-capability-router.js";
+import { resolveRuntimeAttachmentCapabilities } from "../attachments/routing/attachment-capabilities.js";
 import { createDefaultModelService } from "../default-services/model-service.js";
 import { conversationContextCatalog } from "./session-conversation-context.js";
 import { materializeSessionInput } from "./session-input-materializer.js";

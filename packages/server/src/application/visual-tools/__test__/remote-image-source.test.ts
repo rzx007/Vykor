@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { isPublicAddress } from "../safe-remote-image.js";
+import { isPublicAddress } from "../remote-image-source.js";
 
-describe("safe remote image address policy", () => {
+describe("remote image source address policy", () => {
   it.each([
     "127.0.0.1",
     "10.1.2.3",

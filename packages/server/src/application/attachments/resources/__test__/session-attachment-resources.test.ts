@@ -9,7 +9,7 @@ import {
 } from "@openharness/services";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { AttachmentService } from "../../attachments/attachment-service.js";
+import { AttachmentService } from "../../attachment-service.js";
 import { SessionAttachmentResources } from "../session-attachment-resources.js";
 
 const roots: string[] = [];

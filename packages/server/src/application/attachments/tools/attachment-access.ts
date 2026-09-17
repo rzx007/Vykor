@@ -4,7 +4,7 @@ import {
   type LocalOcrResult,
 } from "@openharness/services";
 
-import type { AttachmentService } from "../attachments/attachment-service.js";
+import type { AttachmentService } from "../attachment-service.js";
 
 export interface AttachmentSessionResolverQueries {
   getSession(sessionId: string): SessionRecord | undefined;

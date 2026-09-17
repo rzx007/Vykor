@@ -10,7 +10,7 @@ import type {
 import type {
   AttachmentAuthorizationSessionResolver,
   AttachmentOcrService,
-} from "../attachment-tools/attachment-access.js";
+} from "../attachments/tools/attachment-access.js";
 import { createToolAbortScope } from "./tool-abort-scope.js";
 
 const MAX_DESCRIPTION_TOKENS = 1_024;

@@ -5,7 +5,7 @@ import type { AttachmentService } from "../attachments/attachment-service.js";
 import {
   downloadRemoteImage as defaultDownloadRemoteImage,
   type ImportedImageSource,
-} from "../attachment-processing/safe-remote-image.js";
+} from "./remote-image-source.js";
 import { createToolAbortScope } from "./tool-abort-scope.js";
 
 const DEFAULT_MODEL = "agnes-image-2.5-flash";

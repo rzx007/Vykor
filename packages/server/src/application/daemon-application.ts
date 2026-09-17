@@ -84,8 +84,8 @@ import { ProjectApplicationService } from "./project-application-service.js";
 import { ChannelApplicationService } from "./channel/channel-application-service.js";
 import { SessionWorkflowRunRepository } from "./workflow/session-workflow-run-repository.js";
 import { ApplicationRetentionService } from "./retention/application-retention-service.js";
-import { buildCompactAttachmentSection } from "./attachment-resource/compact-attachment-catalog.js";
-import { SessionAttachmentResources } from "./attachment-resource/session-attachment-resources.js";
+import { buildCompactAttachmentSection } from "./attachments/resources/compact-attachment-catalog.js";
+import { SessionAttachmentResources } from "./attachments/resources/session-attachment-resources.js";
 import { sharedContextUsageCache } from "./context-usage-cache.js";
 import {
   assembleSessionContextUsage,
@@ -97,8 +97,8 @@ import {
   createAttachmentAuthorizationSessionResolver,
   createAttachmentOcrService,
   createAttachmentTextReader,
-} from "./attachment-tools/attachment-access.js";
-import { createAttachmentReadTool } from "./attachment-tools/attachment-read-tool.js";
+} from "./attachments/tools/attachment-access.js";
+import { createAttachmentReadTool } from "./attachments/tools/attachment-read-tool.js";
 import {
   createDaemonImageGenerationTool,
   createDaemonImageToTextTool,
