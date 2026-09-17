@@ -1,10 +1,12 @@
 # 架构重构文档收口实现计划
 
+> 执行状态：文字文档已完成；任务 4 的可交互架构图由维护者后续单独调整，不纳入本次收口。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 把 Stage 0–8 重构后的真实代码边界写回当前权威文档、根 README、文档目录和可交互架构图，同时把迁移材料明确降为历史记录。
+**目标：** 把 Stage 0–8 重构后的真实代码边界写回当前权威文档、根 README 和文档目录，同时把迁移材料明确降为历史记录。可交互架构图保留现状，由维护者后续单独调整。
 
-**架构：** 先从当前导出、应用服务、Repository、检查脚本和测试建立事实清单，再分别收口“最终状态”“当前运行架构”“使用入口”三层文字。独立架构图只修改 Archify JSON 图源，并由该图源重新生成 HTML、检查页和截图，历史计划正文不重写。
+**架构：** 先从当前导出、应用服务、Repository、检查脚本和测试建立事实清单，再分别收口“最终状态”“当前运行架构”“使用入口”三层文字。独立架构图的后续修改仍以 Archify JSON 为唯一图源，但不在本次执行范围内；历史计划正文不重写。
 
 **技术栈：** Markdown、Mermaid、Archify architecture JSON/HTML、PowerShell、ripgrep、Node.js 文档与架构检查脚本、Git。
 
@@ -273,7 +275,9 @@ git commit -m "docs: refresh project and architecture entry points"
 
 预期：检查退出码为 0；提交只包含两级 README。
 
-## 任务 4：从统一图源重新生成当前架构图
+## 任务 4：从统一图源重新生成当前架构图（本次不执行）
+
+> 2026-09-17 范围调整：维护者决定后续自行修改架构图。本任务保留为操作参考，本次没有修改或重新生成下列图源与产物。
 
 **文件：**
 - 修改：`docs/openharness-current-architecture.architecture.json`
@@ -345,7 +349,7 @@ git commit -m "docs: regenerate current architecture diagram"
 **文件：**
 - 复查：`README.md`
 - 复查：`docs/README.md`
-- 复查：任务 1–4 修改和创建的全部文件
+- 复查：任务 1–3 修改和创建的全部文件
 - 必要时修改：仅限上述文件中的事实冲突、坏链接或措辞重复
 
 - [ ] **步骤 1：搜索已知过时入口和迁移时态**
@@ -391,8 +395,8 @@ git diff --stat HEAD~4..HEAD
 git log -5 --oneline
 ```
 
-预期：没有未提交变更；最近提交对应收口页、核心架构文档、README/目录和架构图四个独立交付物。
+预期：没有未提交变更；最近提交对应收口页、核心架构文档和 README/目录三个独立交付物。架构图不在本次提交中。
 
 - [ ] **步骤 5：记录最终验证结果**
 
-最终汇报必须列出：修改的权威文档、保留的历史文档、Archify validation/deliver/visual-check 结果、文档检查、架构检查、clean-slate 检查，以及任何真实存在的环境限制。未获得新鲜输出前不得声称完成。
+最终汇报必须列出：修改的权威文档、保留的历史文档、架构图未纳入本次修改的范围决定、文档检查、架构检查、clean-slate 检查，以及任何真实存在的环境限制。未获得新鲜输出前不得声称完成。
