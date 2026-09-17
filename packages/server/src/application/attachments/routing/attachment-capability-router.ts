@@ -3,8 +3,9 @@ import {
   classifyAttachmentCandidate,
   AttachmentTextDecodingError,
   type AttachmentTextEncoding,
-  type ResolvedAttachmentContentPath,
 } from "@openharness/services";
+
+import type { ResolvedAttachmentContentPath } from "../attachment-service.js";
 
 import {
   AttachmentRoutingError,

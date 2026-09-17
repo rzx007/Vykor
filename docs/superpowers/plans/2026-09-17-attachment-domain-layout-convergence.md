@@ -1,6 +1,9 @@
 # Attachment 领域目录收敛实现计划
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
+>
+> **完成记录：** 任务 1–4 已在 `codex/attachment-domain-convergence` 落地：
+> `e6c05146` `f165a8f8` `5a0b3c76` `e3ebcef9`。任务 5 提交本门禁与文档。
 
 **目标：** 将 Attachment 在 Services、Server 和 Desktop 中的多个并列入口收敛为每层一个领域根目录，并把应用编排从 Services 迁回 Server，同时保持协议、数据库、HTTP、IPC 和用户行为不变。
 

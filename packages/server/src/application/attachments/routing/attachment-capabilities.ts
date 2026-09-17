@@ -12,7 +12,7 @@ import type {
   ModelInputCapabilities,
 } from "@openharness/core";
 import type { SessionRuntimeConfig } from "@openharness/protocol";
-import type { ModelProviderInfo } from "../settings-api.js";
+import type { ModelProviderInfo } from "../../settings-api.js";
 
 export function modelInputCapabilities(
   model: Pick<ModelsDevModel, "id" | "modalities">,

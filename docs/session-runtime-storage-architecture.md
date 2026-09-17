@@ -130,6 +130,13 @@ Daemon 对外 ready 前由 Server 的 recovery service 收束上次进程留下�
 4. 涉及请求策略、Run 排队、Agent handle 或错误映射：不进入 Services，分别放到 Server Application、Runtime 或 transport；
 5. 只有一个调用方且没有独立规则：不要预先增加 interface、manager 或通用 context。
 
+Attachment 当前按层各保留一个领域入口：
+
+- Services：`packages/services/src/attachments/` 是唯一根。`persistence/` 放 SQLite 记录、Repository 和原子事务；`storage/` 放内容寻址 Blob、文件名/媒体类型、完整性检查和存储操作互斥；`processing/` 放 OCR 和图片标准化；`content/` 放不依赖存储的内容分类与文本解码。稳定错误放在该根目录。
+- Server：`packages/server/src/application/attachments/attachment-service.ts` 是 daemon 应用用例入口，负责组合事务、Blob Store、限制和存储操作 gate。routing、resources、tools 收在同一根下的子目录。远程图片导入属于 visual tools，不在 Attachment processing。
+- Client：`packages/client/src/resources/attachment-resource.ts` 保持远程 Resource。
+- Desktop：`apps/desktop/src/main/features/attachment/` 继续负责本机交互；上传生命周期与本地文件操作分别在 `attachment-upload-service.ts` 和 `attachment-file-service.ts`，门面只做委派。
+
 特别禁止：
 
 - 在 HTTP route 里直接写 SQLite；

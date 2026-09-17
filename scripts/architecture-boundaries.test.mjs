@@ -8,6 +8,7 @@ import {
   validateLegacyBaseline,
   checkSessionRunEngineComposition,
   checkMaintenanceCapability,
+  checkAttachmentLayout,
 } from "./architecture-boundaries.mjs";
 
 test("services cannot depend on server", () => {
@@ -239,6 +240,34 @@ test("desktop main cannot import desktop renderer", () => {
   assert.deepEqual(
     checkImportBoundary("apps/desktop/src/main/features/session/session-service.ts", "../../renderer/src/stores/desktop-session.js"),
     ["apps/desktop/src/main/features/session/session-service.ts must not depend on Desktop renderer"],
+  );
+});
+
+test("retired attachment layouts are rejected", () => {
+  assert.deepEqual(
+    checkAttachmentLayout("packages/services/src/attachment/attachment-blob-store.ts", "export class AttachmentBlobStore {}"),
+    ["packages/services/src/attachment/attachment-blob-store.ts uses a retired Services attachment root"],
+  );
+  assert.deepEqual(
+    checkAttachmentLayout(
+      "packages/server/src/application/attachment-resource/session-attachment-resources.ts",
+      "export class SessionAttachmentResources {}",
+    ),
+    ["packages/server/src/application/attachment-resource/session-attachment-resources.ts uses a retired Server attachment root"],
+  );
+  assert.deepEqual(
+    checkAttachmentLayout(
+      "packages/server/src/application/attachments/attachment-service.ts",
+      "export class AttachmentApplicationService {}",
+    ),
+    ["AttachmentApplicationService is retired; use Server AttachmentService"],
+  );
+  assert.deepEqual(
+    checkAttachmentLayout(
+      "packages/services/src/attachments/storage/attachment-blob-store.ts",
+      "export class AttachmentService {}",
+    ),
+    [],
   );
 });
 

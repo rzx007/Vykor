@@ -186,6 +186,21 @@ export function checkMaintenanceCapability(source, file) {
     : [];
 }
 
+export function checkAttachmentLayout(path, source) {
+  const errors = [];
+  const normalized = path.replaceAll("\\", "/");
+  if (/packages\/services\/src\/(?:attachment|attachment-processing)(?:\/|$)/.test(normalized)) {
+    errors.push(`${normalized} uses a retired Services attachment root`);
+  }
+  if (/packages\/server\/src\/application\/attachment-(?:processing|resource|routing|tools)(?:\/|$)/.test(normalized)) {
+    errors.push(`${normalized} uses a retired Server attachment root`);
+  }
+  if (/\bAttachmentApplicationService\b/.test(source)) {
+    errors.push("AttachmentApplicationService is retired; use Server AttachmentService");
+  }
+  return errors;
+}
+
 function workspacePackagePaths() {
   return ["packages", "apps"].flatMap((parent) =>
     readdirSync(join(root, parent), { withFileTypes: true })
@@ -232,6 +247,9 @@ function collectArchitectureErrors() {
     ...sourceFiles(join(root, "packages", "services", "src", "conversations")),
     ...sourceFiles(join(root, "packages", "services", "src", "runs")),
     ...sourceFiles(join(root, "packages", "services", "src", "database")),
+    ...sourceFiles(join(root, "packages", "services", "src", "attachments")),
+    ...sourceFiles(join(root, "packages", "services", "src", "attachment")),
+    ...sourceFiles(join(root, "packages", "services", "src", "attachment-processing")),
     ...sourceFiles(join(root, "packages", "server", "src", "http", "routes")),
     ...sourceFiles(join(root, "packages", "server", "src", "application")),
     ...sourceFiles(join(root, "packages", "server", "src", "runtime")),
@@ -249,6 +267,7 @@ function collectArchitectureErrors() {
         errors.push(error);
       }
     }
+    errors.push(...checkAttachmentLayout(rel, content));
     if (!/\.(?:test|spec)\.(?:ts|tsx)$/.test(path)) {
       errors.push(...checkSessionRunEngineComposition(content, rel));
       if (/session-(?:post-run-)?maintenance-service\.ts$/.test(rel.replaceAll("\\", "/"))) {
@@ -263,7 +282,7 @@ function collectArchitectureErrors() {
 function collectLegacyCalls() {
   const storeFiles = [
     ...sourceFiles(join(root, "packages", "server", "src")),
-    ...sourceFiles(join(root, "packages", "services", "src", "attachment")),
+    ...sourceFiles(join(root, "packages", "services", "src", "attachments")),
     ...sourceFiles(join(root, "packages", "tools", "src", "agent", "workflow")),
   ];
   const storeCalls = storeFiles.flatMap((path) =>

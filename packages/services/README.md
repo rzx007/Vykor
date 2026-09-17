@@ -7,6 +7,7 @@
 - **Scheduled recurrence**: 校验一次性时间和 RRULE，并按时区计算下一次运行时间
 - **Repository**: Projects、Schedules、Workflows、Channels、Sessions、Conversations、Runs、Goals、Permissions 和 Attachments 的当前读写入口
 - **Transaction**: prompt 准入、会话树操作、Goal、Attachment 等需要一起提交或一起回滚的操作
+- **Attachment 领域根**: `src/attachments/` 是唯一入口。`persistence/` 管 SQLite 记录，`storage/` 管 Blob 和完整性，`processing/` 管 OCR 与图片标准化，`content/` 管不依赖存储的文本分类。应用用例不在本包，而在 Server 的 `AttachmentService`
 - **Database kernel**: SQLite 打开/关闭、事务协调、增量输出、owner lease、恢复与维护；不提供旧 Store 转发入口
 - **standalone session files**: 只接受当前 schema 的项目级 snapshot 与 transcript 导出；不供 daemon/TUI 保存权威状态
 - **LspClient**: 代码智能服务 (stub；ripgrep 查询走统一 Sandbox argv 入口)
