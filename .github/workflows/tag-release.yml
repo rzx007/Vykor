@@ -148,8 +148,45 @@ jobs:
             apps/desktop/dist/latest-linux.yml
           if-no-files-found: error
 
-  create-tag:
+  verify-clean-slate-artifacts:
     needs: [validate, preflight, build-desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+      - name: Download and merge Windows and Linux Desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify both Desktop artifact sets are present
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          find release-assets -maxdepth 1 -type f -printf '%f\n' > artifact-names.txt
+          node scripts/release-assets.mjs assert-artifacts artifact-names.txt
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Sync workspace versions to the tag
+        run: node scripts/prepare-tag-release.mjs ${{ needs.validate.outputs.tag }}
+      - name: Build CLI and Desktop migration inventories together
+        run: |
+          pnpm --filter @rzx/ohs... build
+          pnpm --filter @openharness/desktop^... build
+          pnpm --filter @openharness/desktop build
+      - name: Require clean-slate bundle inventories before tagging
+        run: pnpm check:clean-slate:artifacts
+
+  create-tag:
+    needs: [validate, preflight, build-desktop, verify-clean-slate-artifacts]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -265,7 +302,7 @@ jobs:
           printf 'Version: %s\nCommit: %s\nTag: %s\n' "$VERSION" "$COMMIT" "$TAG" >> "$GITHUB_STEP_SUMMARY"
 
   notify:
-    needs: [validate, preflight, build-desktop, create-tag, publish-npm, publish-release, finalize]
+    needs: [validate, preflight, build-desktop, verify-clean-slate-artifacts, create-tag, publish-npm, publish-release, finalize]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -284,6 +321,7 @@ jobs:
             Version: ${{ inputs.version }}
             preflight: ${{ needs.preflight.result }}
             build-desktop: ${{ needs.build-desktop.result }}
+            verify-clean-slate-artifacts: ${{ needs.verify-clean-slate-artifacts.result }}
             create-tag: ${{ needs.create-tag.result }}
             publish-npm: ${{ needs.publish-npm.result }}
             publish-release: ${{ needs.publish-release.result }}

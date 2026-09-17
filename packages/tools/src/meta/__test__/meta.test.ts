@@ -313,7 +313,7 @@ describe("listSkillsTool", () => {
     expect(text).toContain("model=hidden");
   });
 
-  it("freshly scans current project skill directories and ignores .claude/skills", async () => {
+  it("freshly scans current project skill directories and ignores unrelated tool directories", async () => {
     const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oh-list-skills-"));
     process.env.OPENHARNESS_CONFIG_DIR = path.join(dir, "config");

@@ -1,7 +1,14 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+
+import {
+  collectForbiddenScanFiles,
+  createForbiddenScanAllow,
+  isForbiddenScanAllowed,
+  normalizeForbiddenScanPath,
+} from "./forbidden-compatibility-scan-policy.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -28,27 +35,7 @@ const categoryLabels = {
   enumValues: "enum-value",
   schemaNames: "schema-name",
 };
-const defaultRoots = ["packages", "apps", "scripts", "tests", "docs", ".github", "package.json"];
-const defaultAllow = [
-  "scripts/forbidden-compatibility-surfaces.json",
-  "scripts/forbidden-compatibility-surfaces.test.mjs",
-  "tests/client-public-api/consumer.ts",
-  "apps/cli/src/index.test.ts",
-  "packages/plugins/src/installation/store.test.ts",
-  "packages/plugins/src/manifest/schema-v1.test.ts",
-  "packages/protocol/src/terminal.type-test.ts",
-  "packages/server/src/http/routes/terminal.test.ts",
-  "packages/skills/src/index.test.ts",
-  "docs/compatibility-surface-audit.md",
-  "docs/superpowers/plans/",
-  "docs/superpowers/specs/",
-];
-const scannedExtension = /\.(?:c?js|mjs|json|md|ts|tsx|ya?ml)$/i;
 const codeExtension = /\.(?:c?js|mjs|ts|tsx)$/i;
-
-function normalizePath(path) {
-  return path.replaceAll("\\", "/");
-}
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -77,24 +64,6 @@ function validateManifest(data, path) {
 export function readForbiddenSurfaces(path = defaultManifestPath) {
   const fullPath = resolve(path);
   return validateManifest(JSON.parse(readFileSync(fullPath, "utf8")), fullPath);
-}
-
-function collectFiles(path) {
-  if (!existsSync(path)) return [];
-  const entries = readdirSync(path, { withFileTypes: true });
-  return entries.flatMap((entry) => {
-    const child = join(path, entry.name);
-    if (entry.isDirectory()) {
-      return ["node_modules", "dist", ".git", ".turbo"].includes(entry.name)
-        ? []
-        : collectFiles(child);
-    }
-    return scannedExtension.test(entry.name) ? [child] : [];
-  });
-}
-
-function isAllowed(rel, allow) {
-  return allow.some((item) => item.endsWith("/") ? rel.startsWith(item) : rel === item);
 }
 
 function matchPatterns(category, name, rel) {
@@ -301,17 +270,12 @@ function locate(source, index) {
 export function scanForbiddenSurfaces(options = {}) {
   const cwd = resolve(options.cwd ?? repoRoot);
   const surfaces = validateManifest(options.surfaces ?? readForbiddenSurfaces(options.manifestPath), "forbidden surfaces");
-  const allow = [...defaultAllow, ...(options.allow ?? [])].map(normalizePath);
-  const roots = options.roots ?? defaultRoots;
-  const files = roots.flatMap((root) => {
-    const path = resolve(cwd, root);
-    if (!existsSync(path)) return [];
-    return scannedExtension.test(path) ? [path] : collectFiles(path);
-  });
+  const allow = createForbiddenScanAllow(options.allow);
+  const files = collectForbiddenScanFiles(cwd, options.roots);
   const errors = [];
   for (const file of files) {
-    const rel = normalizePath(relative(cwd, file));
-    if (isAllowed(rel, allow)) continue;
+    const rel = normalizeForbiddenScanPath(relative(cwd, file));
+    if (isForbiddenScanAllowed(cwd, file, allow)) continue;
     const source = readFileSync(file, "utf8");
     if (codeExtension.test(rel)) {
       errors.push(...scanClientAst(source, rel, surfaces));

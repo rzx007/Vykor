@@ -1,27 +1,19 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  collectForbiddenScanFiles,
+  createForbiddenScanAllow,
+  isForbiddenScanAllowed,
+} from "./forbidden-compatibility-scan-policy.mjs";
+
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultRoot = resolve(dirname(scriptPath), "..");
-const forbiddenRoots = ["packages", "apps", "scripts", "tests", "docs", ".github", "package.json"];
-const forbiddenAllowed = new Set([
-  "scripts/forbidden-compatibility-surfaces.json",
-  "scripts/forbidden-compatibility-surfaces.test.mjs",
+const verifierForbiddenAllow = [
   "scripts/clean-slate-smoke.test.mjs",
   "scripts/verify-clean-slate.mjs",
-  "scripts/verify-clean-slate.test.mjs",
-  "tests/client-public-api/consumer.ts",
-  "apps/cli/src/index.test.ts",
-  "packages/plugins/src/installation/store.test.ts",
-  "packages/plugins/src/manifest/schema-v1.test.ts",
-  "packages/protocol/src/terminal.type-test.ts",
-  "packages/server/src/http/routes/terminal.test.ts",
-  "packages/skills/src/index.test.ts",
-  "packages/tools/src/meta/__test__/meta.test.ts",
-  "docs/compatibility-surface-audit.md",
-]);
-const forbiddenAllowedPrefixes = ["docs/superpowers/plans/", "docs/superpowers/specs/"];
+];
 
 function normalize(path) {
   return path.replaceAll("\\", "/");
@@ -54,11 +46,7 @@ async function checkForbidden(root, options = {}) {
     results = scanForbiddenSurfaces({
       cwd: root,
       manifestPath: manifest,
-      allow: [
-        "scripts/clean-slate-smoke.test.mjs",
-        "scripts/verify-clean-slate.mjs",
-        "scripts/verify-clean-slate.test.mjs",
-      ],
+      allow: verifierForbiddenAllow,
     }).map((entry) => problem("forbidden", entry.file, entry.line, entry.surface));
   } catch {
     results = fallbackForbiddenScan(root, manifest);
@@ -67,9 +55,10 @@ async function checkForbidden(root, options = {}) {
   const explicit = [
     { text: ".claude/skills", label: "removed skill directory" },
   ];
-  for (const file of collectTextFiles(root, forbiddenRoots)) {
+  const allow = createForbiddenScanAllow(verifierForbiddenAllow);
+  for (const file of collectForbiddenScanFiles(root)) {
     const rel = normalize(relative(root, file));
-    if (forbiddenAllowed.has(rel) || forbiddenAllowedPrefixes.some((prefix) => rel.startsWith(prefix))) continue;
+    if (isForbiddenScanAllowed(root, file, allow)) continue;
     const source = readFileSync(file, "utf8");
     for (const item of explicit) {
       let offset = source.indexOf(item.text);
@@ -90,9 +79,10 @@ function fallbackForbiddenScan(root, manifestPath) {
     configFields: "config-field", enumValues: "enum-value", schemaNames: "schema-name",
   };
   const results = [];
-  for (const file of collectTextFiles(root, forbiddenRoots)) {
+  const allow = createForbiddenScanAllow(verifierForbiddenAllow);
+  for (const file of collectForbiddenScanFiles(root)) {
     const rel = normalize(relative(root, file));
-    if (forbiddenAllowed.has(rel) || forbiddenAllowedPrefixes.some((prefix) => rel.startsWith(prefix))) continue;
+    if (isForbiddenScanAllowed(root, file, allow)) continue;
     const source = readFileSync(file, "utf8");
     for (const [category, label] of Object.entries(labels)) {
       for (const name of surfaces[category] ?? []) {
@@ -119,24 +109,6 @@ function fallbackForbiddenScan(root, manifestPath) {
     }
   }
   return results;
-}
-
-function collectTextFiles(root, roots) {
-  const files = [];
-  function visit(path) {
-    if (!existsSync(path)) return;
-    const stat = statSync(path);
-    if (stat.isFile()) {
-      if (/\.(?:[cm]?js|json|md|ts|tsx|ya?ml)$/i.test(path)) files.push(path);
-      return;
-    }
-    for (const entry of readdirSync(path, { withFileTypes: true })) {
-      if (entry.isDirectory() && new Set(["node_modules", ".git", ".turbo", "dist", "out"]).has(entry.name)) continue;
-      visit(join(path, entry.name));
-    }
-  }
-  for (const item of roots) visit(join(root, item));
-  return files;
 }
 
 async function checkContract(root) {
@@ -245,7 +217,7 @@ function checkWorkflow(root) {
   const source = read(root, file);
   if (source === undefined) return [missing("workflow", file)];
   const results = [];
-  const order = ["validate:", "preflight:", "build-desktop:", "create-tag:", "publish-npm:", "publish-release:", "finalize:", "notify:"];
+  const order = ["validate:", "preflight:", "build-desktop:", "verify-clean-slate-artifacts:", "create-tag:", "publish-npm:", "publish-release:", "finalize:", "notify:"];
   let cursor = -1;
   for (const marker of order) {
     const index = source.indexOf(`  ${marker}`);
@@ -260,7 +232,9 @@ function checkWorkflow(root) {
     return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
   };
   for (const [job, pattern, message] of [
-    ["create-tag", /needs:\s*\[[^\]]*preflight[^\]]*build-desktop[^\]]*\]/, "tag creation must depend on checks and Desktop builds"],
+    ["verify-clean-slate-artifacts", /needs:\s*\[[^\]]*preflight[^\]]*build-desktop[^\]]*\]/, "strict bundle verification must depend on checks and both Desktop builds"],
+    ["verify-clean-slate-artifacts", /pnpm check:clean-slate:artifacts/, "strict bundle verification must run before tag creation"],
+    ["create-tag", /needs:\s*\[[^\]]*preflight[^\]]*build-desktop[^\]]*verify-clean-slate-artifacts[^\]]*\]/, "tag creation must depend on checks, Desktop builds and strict bundle verification"],
     ["publish-npm", /needs:\s*\[[^\]]*create-tag[^\]]*\]/, "npm publication must depend on tag creation"],
     ["publish-release", /needs:\s*\[[^\]]*create-tag[^\]]*publish-npm[^\]]*build-desktop[^\]]*\]/, "GitHub Release must depend on tag, npm and artifacts"],
     ["finalize", /needs:\s*\[[^\]]*publish-npm[^\]]*publish-release[^\]]*\]/, "final verification must read back npm and release"],

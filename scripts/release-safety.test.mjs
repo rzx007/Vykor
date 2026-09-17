@@ -96,7 +96,10 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   const workflow = readFileSync(new URL("../.github/workflows/tag-release.yml", import.meta.url), "utf8");
   assert.doesNotMatch(workflow, /release_phase|client-compat|compatibility lifecycle/i);
   assert.match(workflow, /ref:\s*\$\{\{ github\.sha \}\}/);
-  assert.match(workflow, /build-desktop:[\s\S]*create-tag:[\s\S]*needs: \[validate, preflight, build-desktop\]/);
+  assert.match(workflow, /build-desktop:[\s\S]*verify-clean-slate-artifacts:[\s\S]*create-tag:/);
+  assert.match(workflow, /verify-clean-slate-artifacts:[\s\S]*needs: \[validate, preflight, build-desktop\]/);
+  assert.match(workflow, /verify-clean-slate-artifacts:[\s\S]*pattern: desktop-\*[\s\S]*merge-multiple: true[\s\S]*pnpm --filter @rzx\/ohs\.\.\. build[\s\S]*pnpm --filter @openharness\/desktop build[\s\S]*pnpm check:clean-slate:artifacts/);
+  assert.match(workflow, /create-tag:[\s\S]*needs: \[validate, preflight, build-desktop, verify-clean-slate-artifacts\]/);
   assert.match(workflow, /publish-npm:[\s\S]*npm view "@rzx\/ohs@\$\{VERSION\}"/);
   assert.match(workflow, /publish-release:[\s\S]*needs: \[validate, create-tag, publish-npm, build-desktop\]/);
   assert.match(workflow, /gh release upload "\$TAG"[\s\S]*--clobber/);
@@ -104,9 +107,10 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   assert.match(workflow, /gh release view "\$TAG" --json body/);
   assert.match(workflow, /gh release view "\$TAG" --json assets/);
   assert.match(workflow, /notify:[\s\S]*if: always\(\)/);
+  assert.match(workflow, /notify:[\s\S]*needs: \[[^\]]*verify-clean-slate-artifacts[^\]]*\]/);
   assert.deepEqual(
     [...workflow.matchAll(/node scripts\/release-assets\.mjs (write-notes|assert-artifacts)/g)].map((match) => match[1]),
-    ["write-notes", "assert-artifacts", "assert-artifacts"],
+    ["write-notes", "assert-artifacts", "assert-artifacts", "assert-artifacts"],
   );
   assert.doesNotMatch(workflow, /\$\{v\}/);
 });

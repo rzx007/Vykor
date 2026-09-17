@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
+import { scanForbiddenSurfaces } from "./forbidden-compatibility-surfaces.mjs";
 import { verifyCleanSlate } from "./verify-clean-slate.mjs";
 
 function write(root, path, content) {
@@ -66,6 +67,36 @@ test("reports missing bundle outputs as skipped normally and failures in strict 
     const strict = await verifyCleanSlate({ root, requireBuildArtifacts: true });
     assert.ok(strict.some((item) => item.file === "apps/cli/dist/migrations"));
     assert.ok(strict.some((item) => item.file === "apps/desktop/out/session-runtime/migrations"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fallback and official forbidden scans use the same allow and directory policy", async () => {
+  const root = mkdtempSync(join(tmpdir(), "verify-clean-slate-policy-"));
+  try {
+    const manifest = {
+      version: 1,
+      clientMethods: ["oldMethod"], runtimeExports: [], httpRoutes: [], cliCommands: [],
+      cliOptions: [], environmentVariables: [], configFields: [], enumValues: [], schemaNames: [],
+    };
+    write(root, "scripts/forbidden-compatibility-surfaces.json", JSON.stringify(manifest));
+    write(root, "packages/tools/src/meta/__test__/meta.test.ts", "client.oldMethod();\n");
+    write(root, "apps/desktop/out/legacy.ts", "client.oldMethod();\n");
+
+    const officialFiles = scanForbiddenSurfaces({ cwd: root, surfaces: manifest })
+      .map((item) => item.file)
+      .sort();
+    const fallbackFiles = (await verifyCleanSlate({ root, forceFallbackScanner: true }))
+      .filter((item) => item.category === "forbidden" && item.message.includes("oldMethod"))
+      .map((item) => item.file)
+      .sort();
+
+    assert.deepEqual(officialFiles, [
+      "apps/desktop/out/legacy.ts",
+      "packages/tools/src/meta/__test__/meta.test.ts",
+    ]);
+    assert.deepEqual(fallbackFiles, officialFiles);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
