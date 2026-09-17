@@ -22,6 +22,8 @@ test("aggregates every clean-slate violation with category, file and line", asyn
       enumValues: [], schemaNames: ["legacyShellDescriptor"],
     }));
     write(root, "packages/client/src/bad.ts", "client.oldMethod();\nconst option = '--bare';\n");
+    write(root, "docs/current.md", "Use `client.oldMethod()` here.\n");
+    write(root, "package.json", JSON.stringify({ scripts: { old: "tool --bare" } }));
     write(root, "packages/skills/src/bad.ts", "const location = '.claude/skills';\n");
     write(root, "packages/plugins/src/bad.ts", "const manifest = { compatibility: true };\n");
     write(root, "packages/environment/src/bad.ts", "const legacyShellDescriptor = {};\n");
@@ -37,14 +39,33 @@ test("aggregates every clean-slate violation with category, file and line", asyn
     write(root, "scripts/client-public-api-contract.json", JSON.stringify({ version: 1, entries: [] }));
     write(root, "packages/client/src/transport/http-client.ts", "export class OpenHarnessClient { readonly sessions: unknown; }\n");
 
-    const problems = await verifyCleanSlate({ root });
+    const problems = await verifyCleanSlate({ root, forceFallbackScanner: true, requireBuildArtifacts: true });
     const output = problems.map((problem) => `${problem.category} ${problem.file}:${problem.line} ${problem.message}`).join("\n");
     for (const expected of [
       "forbidden", "contract", "migration", "protocol", "workflow", "bundle-inventory",
       "oldMethod", "--bare", ".claude/skills", "compatibility", "legacyShellDescriptor", "0001_old.sql",
+      "docs/current.md", "package.json",
     ]) assert.match(output, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
     assert.ok(problems.length >= 12, output);
     assert.ok(problems.every((problem) => problem.file && Number.isInteger(problem.line)));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reports missing bundle outputs as skipped normally and failures in strict mode", async () => {
+  const root = mkdtempSync(join(tmpdir(), "verify-clean-slate-bundles-"));
+  try {
+    write(root, "apps/cli/build.ts", "cpSync('session-runtime/migrations', 'dist/migrations');\n");
+    write(root, "apps/desktop/electron.vite.config.ts", "// copy-session-migrations session-runtime/migrations\n");
+    const ordinary = await verifyCleanSlate({ root });
+    assert.ok(ordinary.skipped.some((item) => item.file === "apps/cli/dist/migrations"));
+    assert.ok(ordinary.skipped.some((item) => item.file === "apps/desktop/out/session-runtime/migrations"));
+    assert.ok(!ordinary.some((item) => item.message.includes("built migration directory")));
+
+    const strict = await verifyCleanSlate({ root, requireBuildArtifacts: true });
+    assert.ok(strict.some((item) => item.file === "apps/cli/dist/migrations"));
+    assert.ok(strict.some((item) => item.file === "apps/desktop/out/session-runtime/migrations"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

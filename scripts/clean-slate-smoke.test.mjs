@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { runCleanSlateSmoke, validateSmokeInputs } from "./clean-slate-smoke.mjs";
+import {
+  probeCliBundle,
+  probeDesktopMainUserData,
+  runCleanSlateSmoke,
+  validateSmokeInputs,
+} from "./clean-slate-smoke.mjs";
 
 function fixturePaths() {
   const tempRoot = mkdtempSync(join(tmpdir(), "openharness-clean-slate-test-"));
@@ -48,7 +53,7 @@ test("runs the fixed empty-environment sequence and always cleans resources", as
     },
     async startDaemon(context) {
       events.push("daemon:start");
-      assert.ok(context.storePath.startsWith(resolve(paths.desktopUserDataDir)));
+      assert.ok(context.storePath.startsWith(resolve(paths.configDir)));
       daemonOpen = true;
       return { url: "http://127.0.0.1:42345", close: async () => { events.push("daemon:close"); daemonOpen = false; } };
     },
@@ -62,8 +67,12 @@ test("runs the fixed empty-environment sequence and always cleans resources", as
         async getState() { events.push("state"); return { session: { status: "idle" } }; },
       };
     },
-    async runCliProbe() { events.push("cli"); },
-    async verifyDesktopUserData() { events.push("desktop"); },
+    async runCliProbe(_url, context) {
+      assert.equal(context.sessionId, "session-1");
+      assert.equal(context.runId, "run-1");
+      events.push("cli");
+    },
+    async probeDesktopMainUserData() { events.push("desktop"); },
     async assertReleased() { events.push("released"); assert.equal(daemonOpen, false); assert.equal(providerOpen, false); },
   };
 
@@ -76,6 +85,93 @@ test("runs the fixed empty-environment sequence and always cleans resources", as
   assert.equal(result.sessionId, "session-1");
   assert.equal(result.runId, "run-1");
   assert.equal(existsSync(paths.tempRoot), false);
+});
+
+test("CLI probe uses the built CLI for config and daemon resource reads", async () => {
+  const paths = fixturePaths();
+  const cliEntrypoint = join(paths.tempRoot, "cli", "index.js");
+  mkdirSync(join(paths.tempRoot, "cli"), { recursive: true });
+  writeFileSync(cliEntrypoint, "// fixture\n", "utf8");
+  const calls = [];
+  try {
+    await probeCliBundle("http://127.0.0.1:4567", {
+      ...paths,
+      daemonToken: "smoke-daemon-token",
+      sessionId: "session-1",
+      runId: "run-1",
+    }, {
+      cliEntrypoint,
+      spawnCommand: async (_command, args, options) => {
+        calls.push({ args, options });
+        return args.includes("config")
+          ? { code: 0, stderr: "", stdout: JSON.stringify({ model: "smoke-model", provider: "clean-slate-smoke" }) }
+          : { code: 0, stderr: "", stdout: JSON.stringify({ run: { id: "run-1", sessionId: "session-1" } }) };
+      },
+    });
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0].args.slice(1), ["config", "show"]);
+    assert.ok(calls[1].args.includes("http://127.0.0.1:4567"));
+    assert.ok(calls[1].args.includes("run-1"));
+    assert.equal(calls[0].options.cwd, paths.projectDir);
+    assert.equal(calls[0].options.env.OPENHARNESS_CONFIG_DIR, paths.configDir);
+    assert.equal(calls[0].options.env.HOME, join(paths.tempRoot, "home"));
+    assert.equal(calls[0].options.env.USERPROFILE, join(paths.tempRoot, "home"));
+  } finally {
+    rmSync(paths.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI probe blocks when the built CLI is absent", async () => {
+  const paths = fixturePaths();
+  try {
+    await assert.rejects(
+      probeCliBundle("http://127.0.0.1:4567", {
+        ...paths,
+        daemonToken: "smoke-daemon-token",
+        sessionId: "session-1",
+        runId: "run-1",
+      }, { cliEntrypoint: join(paths.tempRoot, "missing-cli.js") }),
+      /built CLI artifact is required/i,
+    );
+  } finally {
+    rmSync(paths.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("Desktop probe calls the production storage path and read/write functions", async () => {
+  const paths = fixturePaths();
+  const calls = [];
+  try {
+    await probeDesktopMainUserData(paths, async () => ({
+      resolveDesktopPreferencesPath(userDataDir) {
+        calls.push(["path", userDataDir]);
+        return join(userDataDir, "desktop-preferences.json");
+      },
+      patchDesktopPreferencesAt(userDataDir, patch) {
+        calls.push(["write", userDataDir, patch]);
+        mkdirSync(userDataDir, { recursive: true });
+        writeFileSync(join(userDataDir, "desktop-preferences.json"), JSON.stringify(patch));
+      },
+      getDesktopPreferencesAt(userDataDir) {
+        calls.push(["read", userDataDir]);
+        return { notificationMode: "never" };
+      },
+    }));
+    assert.deepEqual(calls.map(([kind]) => kind), ["path", "write", "read"]);
+    assert.ok(existsSync(join(paths.desktopUserDataDir, "desktop-preferences.json")));
+  } finally {
+    rmSync(paths.tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("Desktop probe writes and reads through the production storage module", async () => {
+  const paths = fixturePaths();
+  try {
+    await probeDesktopMainUserData(paths);
+    assert.ok(existsSync(join(paths.desktopUserDataDir, "desktop-preferences.json")));
+  } finally {
+    rmSync(paths.tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("closes provider, daemon and temporary root after a failed run", async () => {

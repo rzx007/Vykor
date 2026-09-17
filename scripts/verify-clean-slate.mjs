@@ -4,6 +4,24 @@ import { fileURLToPath } from "node:url";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultRoot = resolve(dirname(scriptPath), "..");
+const forbiddenRoots = ["packages", "apps", "scripts", "tests", "docs", ".github", "package.json"];
+const forbiddenAllowed = new Set([
+  "scripts/forbidden-compatibility-surfaces.json",
+  "scripts/forbidden-compatibility-surfaces.test.mjs",
+  "scripts/clean-slate-smoke.test.mjs",
+  "scripts/verify-clean-slate.mjs",
+  "scripts/verify-clean-slate.test.mjs",
+  "tests/client-public-api/consumer.ts",
+  "apps/cli/src/index.test.ts",
+  "packages/plugins/src/installation/store.test.ts",
+  "packages/plugins/src/manifest/schema-v1.test.ts",
+  "packages/protocol/src/terminal.type-test.ts",
+  "packages/server/src/http/routes/terminal.test.ts",
+  "packages/skills/src/index.test.ts",
+  "packages/tools/src/meta/__test__/meta.test.ts",
+  "docs/compatibility-surface-audit.md",
+]);
+const forbiddenAllowedPrefixes = ["docs/superpowers/plans/", "docs/superpowers/specs/"];
 
 function normalize(path) {
   return path.replaceAll("\\", "/");
@@ -26,11 +44,12 @@ function missing(category, file) {
   return problem(category, file, 1, "required file is missing");
 }
 
-async function checkForbidden(root) {
+async function checkForbidden(root, options = {}) {
   const manifest = join(root, "scripts", "forbidden-compatibility-surfaces.json");
   if (!existsSync(manifest)) return [missing("forbidden", "scripts/forbidden-compatibility-surfaces.json")];
   let results;
   try {
+    if (options.forceFallbackScanner) throw new Error("fallback scanner requested by test");
     const { scanForbiddenSurfaces } = await import("./forbidden-compatibility-surfaces.mjs");
     results = scanForbiddenSurfaces({
       cwd: root,
@@ -48,16 +67,9 @@ async function checkForbidden(root) {
   const explicit = [
     { text: ".claude/skills", label: "removed skill directory" },
   ];
-  const roots = ["packages", "apps", "scripts", "tests", ".github"];
-  const allowed = new Set([
-    "scripts/verify-clean-slate.mjs",
-    "scripts/verify-clean-slate.test.mjs",
-    "packages/skills/src/index.test.ts",
-    "packages/tools/src/meta/__test__/meta.test.ts",
-  ]);
-  for (const file of collectTextFiles(root, roots)) {
+  for (const file of collectTextFiles(root, forbiddenRoots)) {
     const rel = normalize(relative(root, file));
-    if (allowed.has(rel)) continue;
+    if (forbiddenAllowed.has(rel) || forbiddenAllowedPrefixes.some((prefix) => rel.startsWith(prefix))) continue;
     const source = readFileSync(file, "utf8");
     for (const item of explicit) {
       let offset = source.indexOf(item.text);
@@ -77,26 +89,10 @@ function fallbackForbiddenScan(root, manifestPath) {
     cliCommands: "cli-command", cliOptions: "cli-option", environmentVariables: "environment-variable",
     configFields: "config-field", enumValues: "enum-value", schemaNames: "schema-name",
   };
-  const allowed = new Set([
-    "scripts/forbidden-compatibility-surfaces.json",
-    "scripts/forbidden-compatibility-surfaces.test.mjs",
-    "scripts/clean-slate-smoke.test.mjs",
-    "scripts/verify-clean-slate.mjs",
-    "scripts/verify-clean-slate.test.mjs",
-    "tests/client-public-api/consumer.ts",
-    "apps/cli/src/index.test.ts",
-    "packages/plugins/src/installation/store.test.ts",
-    "packages/plugins/src/manifest/schema-v1.test.ts",
-    "packages/protocol/src/terminal.type-test.ts",
-    "packages/server/src/http/routes/terminal.test.ts",
-    "packages/skills/src/index.test.ts",
-    "docs/compatibility-surface-audit.md",
-  ]);
-  const allowedPrefixes = ["docs/superpowers/plans/", "docs/superpowers/specs/"];
   const results = [];
-  for (const file of collectTextFiles(root, ["packages", "apps", "scripts", "tests", ".github"])) {
+  for (const file of collectTextFiles(root, forbiddenRoots)) {
     const rel = normalize(relative(root, file));
-    if (allowed.has(rel) || allowedPrefixes.some((prefix) => rel.startsWith(prefix))) continue;
+    if (forbiddenAllowed.has(rel) || forbiddenAllowedPrefixes.some((prefix) => rel.startsWith(prefix))) continue;
     const source = readFileSync(file, "utf8");
     for (const [category, label] of Object.entries(labels)) {
       for (const name of surfaces[category] ?? []) {
@@ -273,8 +269,11 @@ function checkWorkflow(root) {
   return results;
 }
 
-function inventoryDirectory(root, directory, category) {
-  if (!existsSync(join(root, directory))) return [];
+function inventoryDirectory(root, directory, category, requireBuildArtifacts) {
+  if (!existsSync(join(root, directory))) {
+    const item = problem(category, directory, 1, "built migration directory is missing");
+    return requireBuildArtifacts ? { problems: [item], skipped: [] } : { problems: [], skipped: [item] };
+  }
   const sql = readdirSync(join(root, directory)).filter((name) => name.endsWith(".sql")).sort();
   const results = [];
   if (sql.length !== 1 || sql[0] !== "0000_current_schema.sql") {
@@ -284,34 +283,45 @@ function inventoryDirectory(root, directory, category) {
   if (!journal || JSON.parse(journal).entries?.length !== 1) {
     results.push(problem(category, `${directory}/meta/_journal.json`, 1, "bundled journal must contain one entry"));
   }
-  return results;
+  return { problems: results, skipped: [] };
 }
 
-function checkBundleInventory(root) {
+function checkBundleInventory(root, requireBuildArtifacts) {
   const results = [];
+  const skipped = [];
   requirePattern(results, "bundle-inventory", root, "apps/cli/build.ts", /cpSync\([\s\S]*session-runtime\/migrations[\s\S]*dist\/migrations/, "CLI build must copy the current migration baseline");
   requirePattern(results, "bundle-inventory", root, "apps/desktop/electron.vite.config.ts", /copy-session-migrations[\s\S]*session-runtime\/migrations/, "Desktop build must copy the current migration baseline");
-  results.push(...inventoryDirectory(root, "apps/cli/dist/migrations", "bundle-inventory"));
-  results.push(...inventoryDirectory(root, "apps/desktop/out/session-runtime/migrations", "bundle-inventory"));
-  return results;
+  for (const directory of ["apps/cli/dist/migrations", "apps/desktop/out/session-runtime/migrations"]) {
+    const inventory = inventoryDirectory(root, directory, "bundle-inventory", requireBuildArtifacts);
+    results.push(...inventory.problems);
+    skipped.push(...inventory.skipped);
+  }
+  return { problems: results, skipped };
 }
 
 export async function verifyCleanSlate(options = {}) {
   const root = resolve(options.root ?? defaultRoot);
+  const bundle = checkBundleInventory(root, options.requireBuildArtifacts === true);
   const groups = await Promise.all([
-    checkForbidden(root),
+    checkForbidden(root, options),
     checkContract(root),
     Promise.resolve(checkMigrations(root)),
     Promise.resolve(checkProtocol(root)),
     Promise.resolve(checkWorkflow(root)),
-    Promise.resolve(checkBundleInventory(root)),
+    Promise.resolve(bundle.problems),
   ]);
-  return groups.flat().sort((left, right) => left.category.localeCompare(right.category) || left.file.localeCompare(right.file) || left.line - right.line || left.message.localeCompare(right.message));
+  const problems = groups.flat().sort((left, right) => left.category.localeCompare(right.category) || left.file.localeCompare(right.file) || left.line - right.line || left.message.localeCompare(right.message));
+  Object.defineProperty(problems, "skipped", { value: bundle.skipped, enumerable: false });
+  return problems;
 }
 
 async function main() {
   try {
-    const problems = await verifyCleanSlate();
+    const requireBuildArtifacts = process.argv.includes("--require-build-artifacts");
+    const problems = await verifyCleanSlate({ requireBuildArtifacts });
+    for (const item of problems.skipped) {
+      process.stdout.write(`Clean-slate verifier: SKIPPED [${item.category}] ${item.file}: ${item.message}; rerun with --require-build-artifacts after building\n`);
+    }
     if (problems.length === 0) {
       process.stdout.write("Clean-slate verifier: PASS\n");
       return;

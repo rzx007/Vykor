@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { access, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -92,7 +93,8 @@ export async function runCleanSlateSmoke(options, runtime = createDefaultRuntime
   validateSmokeInputs(options);
   const context = {
     ...options,
-    storePath: join(options.desktopUserDataDir, "session-runtime", "openharness.db"),
+    daemonToken: "clean-slate-smoke-daemon-token",
+    storePath: join(options.configDir, "data", "session-runtime", "openharness.db"),
   };
   let provider;
   let daemon;
@@ -124,8 +126,8 @@ export async function runCleanSlateSmoke(options, runtime = createDefaultRuntime
     const run = await smokeDriver.waitForRun(session.id, admitted.run.id, context);
     if (run.status !== "completed") throw new Error(`Smoke run ended with ${run.status}`);
     const state = await smokeDriver.getState(session.id, context);
-    await runtime.runCliProbe(daemon.url, context);
-    await runtime.verifyDesktopUserData(context);
+    await runtime.runCliProbe(daemon.url, { ...context, sessionId: session.id, runId: run.id });
+    await runtime.probeDesktopMainUserData(context);
     result = {
       protocolVersion: capabilities.protocol.version,
       sessionId: session.id,
@@ -254,6 +256,63 @@ async function spawnCapture(command, args, options, activeChildren = new Set()) 
   });
 }
 
+export async function probeCliBundle(url, context, dependencies = {}) {
+  assertLoopback(url, "CLI daemon URL");
+  const cliEntrypoint = dependencies.cliEntrypoint ?? resolve(repoRoot, "apps/cli/dist/index.js");
+  if (!existsSync(cliEntrypoint)) {
+    throw new Error(`Built CLI artifact is required for strict smoke: ${cliEntrypoint}`);
+  }
+  const spawnCommand = dependencies.spawnCommand ?? spawnCapture;
+  const isolatedHome = join(context.tempRoot, "home");
+  if (!isStrictDescendant(isolatedHome, context.tempRoot)) throw new Error("CLI home must be below the temporary root");
+  const spawnOptions = {
+    cwd: context.projectDir,
+    env: {
+      ...process.env,
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      OPENHARNESS_CONFIG_DIR: context.configDir,
+    },
+  };
+  const configResult = await spawnCommand(process.execPath, [cliEntrypoint, "config", "show"], spawnOptions, dependencies.activeChildren);
+  if (configResult.code !== 0) throw new Error(`CLI config probe failed: ${configResult.stderr.trim() || configResult.stdout.trim()}`);
+  let settings;
+  try {
+    settings = JSON.parse(configResult.stdout);
+  } catch {
+    throw new Error("CLI config probe did not print JSON settings");
+  }
+  if (settings.model !== "smoke-model" || settings.provider !== "clean-slate-smoke") {
+    throw new Error("CLI did not read the temporary smoke configuration");
+  }
+  const inspectResult = await spawnCommand(process.execPath, [
+    cliEntrypoint, "debug", "inspect-run", context.runId, "--json",
+    "--daemon-url", url, "--daemon-token", context.daemonToken,
+  ], spawnOptions, dependencies.activeChildren);
+  if (inspectResult.code !== 0) throw new Error(`CLI resource probe failed: ${inspectResult.stderr.trim() || inspectResult.stdout.trim()}`);
+  if (!inspectResult.stdout.includes(context.runId) || !inspectResult.stdout.includes(context.sessionId)) {
+    throw new Error("CLI resource probe did not read the smoke run and session");
+  }
+}
+
+export async function probeDesktopMainUserData(context, loadStorage = async () => (
+  await import(sourceUrl("apps/desktop/src/main/features/settings/desktop-preferences-storage.ts"))
+)) {
+  await mkdir(context.desktopUserDataDir, { recursive: true });
+  const storage = await loadStorage();
+  const expectedPath = storage.resolveDesktopPreferencesPath(context.desktopUserDataDir);
+  if (!isStrictDescendant(expectedPath, context.desktopUserDataDir)) {
+    throw new Error("Desktop preferences path escaped the temporary userData directory");
+  }
+  storage.patchDesktopPreferencesAt(context.desktopUserDataDir, { notificationMode: "never" });
+  const readBack = storage.getDesktopPreferencesAt(context.desktopUserDataDir);
+  if (readBack.notificationMode !== "never") throw new Error("Desktop preferences smoke write was not readable");
+  const finalPath = await realpath(expectedPath);
+  if (!isStrictDescendant(finalPath, context.desktopUserDataDir)) {
+    throw new Error("Desktop preferences escaped the temporary userData directory");
+  }
+}
+
 export function createDefaultRuntime() {
   const activeChildren = new Set();
   return {
@@ -300,6 +359,7 @@ export function createDefaultRuntime() {
           host: "127.0.0.1",
           port: 0,
           storePath: context.storePath,
+          token: context.daemonToken,
           outsideProjectWorkspaceRoot: context.projectDir,
           executionSurface: "cli_advanced",
           version: "clean-slate-smoke",
@@ -314,9 +374,9 @@ export function createDefaultRuntime() {
       }
     },
     waitForHealth: pollHealth,
-    async createClient(url) {
+    async createClient(url, context) {
       const { OpenHarnessClient } = await import(sourceUrl("packages/client/src/index.ts"));
-      const client = new OpenHarnessClient({ baseUrl: url });
+      const client = new OpenHarnessClient({ baseUrl: url, token: context.daemonToken });
       return {
         capabilities: () => client.protocol.capabilities(),
         createSession: (context) => client.sessions.create({ cwd: context.projectDir, model: "smoke-model", title: "clean-slate-smoke" }),
@@ -334,20 +394,8 @@ export function createDefaultRuntime() {
         getState: (sessionId) => client.sessions.getState(sessionId),
       };
     },
-    async runCliProbe(_url, context) {
-      const result = await spawnCapture(process.execPath, ["--import", "tsx", resolve(repoRoot, "apps/cli/src/index.ts"), "--help"], {
-        cwd: context.projectDir,
-        env: { ...process.env, OPENHARNESS_CONFIG_DIR: context.configDir },
-      }, activeChildren);
-      if (result.code !== 0) throw new Error(`CLI probe failed: ${result.stderr.trim() || result.stdout.trim()}`);
-    },
-    async verifyDesktopUserData(context) {
-      await access(context.storePath);
-      const finalPath = await realpath(context.storePath);
-      if (!isStrictDescendant(finalPath, context.desktopUserDataDir)) {
-        throw new Error("Desktop database escaped the temporary userData directory");
-      }
-    },
+    runCliProbe: (url, context) => probeCliBundle(url, context, { activeChildren }),
+    probeDesktopMainUserData,
     async assertReleased({ daemon, provider }) {
       if (activeChildren.size !== 0) throw new Error(`${activeChildren.size} smoke child process(es) remain active`);
       for (const endpoint of [daemon?.url, provider?.root]) {

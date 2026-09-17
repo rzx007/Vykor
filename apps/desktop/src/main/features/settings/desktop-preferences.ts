@@ -1,73 +1,24 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { join } from "node:path"
 
 import { app } from "electron"
 
 import {
-  isDesktopNotificationMode,
-  normalizeDefaultOpenerId,
-  normalizeDefaultTerminalShellId,
-  type DesktopNotificationMode,
-  type DesktopDaemonOnboardingState,
-  type DesktopInstallIdentity,
-} from "../../../shared/settings-types"
+  getDesktopPreferencesAt,
+  patchDesktopPreferencesAt,
+  resolveDesktopPreferencesPath,
+  type DesktopPreferences,
+  type DesktopPreferencesPatch,
+} from "./desktop-preferences-storage"
 
-export interface DesktopPreferences {
-  notificationMode: DesktopNotificationMode
-  defaultOpenerId?: string
-  defaultTerminalShellId?: string
-  installIdentity?: DesktopInstallIdentity
-  daemonOnboardingState?: DesktopDaemonOnboardingState
-}
-
-type DesktopPreferencesPatch = Omit<Partial<DesktopPreferences>, "defaultTerminalShellId"> & {
-  defaultTerminalShellId?: string | null
-}
-
-const defaults: DesktopPreferences = {
-  notificationMode: "when_unfocused",
-}
+export type { DesktopPreferences } from "./desktop-preferences-storage"
 
 export function getDesktopPreferences(): DesktopPreferences {
-  const filePath = getDesktopPreferencesPath()
-  if (!existsSync(filePath)) return defaults
-
-  try {
-    const raw = JSON.parse(readFileSync(filePath, "utf8")) as Partial<DesktopPreferences>
-    const defaultOpenerId = normalizeDefaultOpenerId(raw.defaultOpenerId)
-    const defaultTerminalShellId = normalizeDefaultTerminalShellId(raw.defaultTerminalShellId)
-    return {
-      notificationMode: isDesktopNotificationMode(raw.notificationMode)
-        ? raw.notificationMode
-        : defaults.notificationMode,
-      ...(defaultOpenerId ? { defaultOpenerId } : {}),
-      ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
-      ...(isInstallIdentity(raw.installIdentity) ? { installIdentity: raw.installIdentity } : {}),
-      ...(isOnboardingState(raw.daemonOnboardingState)
-        ? { daemonOnboardingState: raw.daemonOnboardingState }
-        : {}),
-    }
-  } catch {
-    return defaults
-  }
+  return getDesktopPreferencesAt(app.getPath("userData"))
 }
 
 export function patchDesktopPreferences(patch: DesktopPreferencesPatch): DesktopPreferences {
-  const next = { ...getDesktopPreferences(), ...patch }
-  const defaultOpenerId = normalizeDefaultOpenerId(next.defaultOpenerId)
-  const defaultTerminalShellId = normalizeDefaultTerminalShellId(next.defaultTerminalShellId)
-  const persisted: DesktopPreferences = {
-    notificationMode: next.notificationMode,
-    ...(defaultOpenerId ? { defaultOpenerId } : {}),
-    ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
-    ...(isInstallIdentity(next.installIdentity) ? { installIdentity: next.installIdentity } : {}),
-    ...(isOnboardingState(next.daemonOnboardingState)
-      ? { daemonOnboardingState: next.daemonOnboardingState }
-      : {}),
-  }
-
-  writeFileSync(getDesktopPreferencesPath(), JSON.stringify(persisted, null, 2), "utf8")
-  return persisted
+  return patchDesktopPreferencesAt(app.getPath("userData"), patch)
 }
 
 export function initializeDesktopInstallIdentity(): DesktopPreferences {
@@ -86,14 +37,6 @@ export function initializeDesktopInstallIdentity(): DesktopPreferences {
   })
 }
 
-function isInstallIdentity(value: unknown): value is DesktopInstallIdentity {
-  return value === "new" || value === "existing"
-}
-
-function isOnboardingState(value: unknown): value is DesktopDaemonOnboardingState {
-  return value === "pending" || value === "enabled" || value === "dismissed"
-}
-
 export function getDesktopPreferencesPath(): string {
-  return join(app.getPath("userData"), "desktop-preferences.json")
+  return resolveDesktopPreferencesPath(app.getPath("userData"))
 }
