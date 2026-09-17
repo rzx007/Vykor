@@ -594,8 +594,10 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
                 ...(provider ? { provider } : {}),
                 permissionMode: selectedPermissionMode,
               }
+        // 创建会话
         const session = await window.desktop.sessions.create(sessionInput)
         startedSessionId = session.id
+        // 创建第一个提交
         const firstSubmission: PendingPromptSubmission = {
           id: promptSubmissionId,
           sessionId: session.id,
@@ -606,6 +608,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           phase: "submitting",
           placement: "transcript",
         }
+        // 判断是否拥有当前页面
         let ownsCurrentPage = false
         set((state) => {
           const ownsNewConversationRuntime =
@@ -670,6 +673,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           )
           throw new Error(openError?.error ?? "无法打开新会话")
         }
+        // 发送第一个提交
         await window.desktop.sessions.sendPrompt({
           id: promptSubmissionId,
           sessionId: session.id,
@@ -680,9 +684,11 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
             displayName,
           })),
         })
+        // 清除第一个提交的草稿
         clearFirstPromptDraft(session.id, document, attachmentDrafts)
         const keepLocalAcknowledgement = get().activeSessionId === session.id
         set((state) => {
+          // 更新会话运行时
           const sessionRuntimes = updateSessionRuntime(
             state.sessionRuntimes,
             session.id,
@@ -711,6 +717,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           )
           return { sessionRuntimes }
         })
+        // 设置会话标题
         const title = prompt
           ? formatSessionTitle(prompt)
           : [...(attachments[0]?.displayName || "新对话")].slice(0, 20).join("")

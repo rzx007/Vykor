@@ -54,17 +54,11 @@ import type {
 import { resolveDesktopAttachmentSupport } from "../../../shared/attachment-types"
 import { requireDesktopPluginCapabilities } from "../../../shared/plugin-capabilities"
 import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
-import {
-  buildOutsideProjectRoot,
-  isOutsideProjectWorkspacePath,
-} from "./outside-project-workspace"
+import { buildOutsideProjectRoot, isOutsideProjectWorkspacePath } from "./outside-project-workspace"
 import { workspaceService } from "../workspace/workspace-service"
 import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
-import {
-  SessionSubscriptionService,
-  toDesktopSessionRecord,
-} from "./session-subscription-service"
+import { SessionSubscriptionService, toDesktopSessionRecord } from "./session-subscription-service"
 import {
   requirePermissionMode,
   requireString,
@@ -424,11 +418,14 @@ export class DesktopSessionService {
   }
 
   get clientPromise(): Promise<OpenHarnessClient> | null {
-    return (this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null }).clientPromise
+    return (this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null })
+      .clientPromise
   }
 
   set clientPromise(promise: Promise<OpenHarnessClient> | null) {
-    ;(this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null }).clientPromise = promise
+    ; (
+      this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null }
+    ).clientPromise = promise
   }
 
   private getClient(): Promise<OpenHarnessClient> {

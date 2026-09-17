@@ -1,4 +1,4 @@
-import type { DesktopModel } from "../../../shared/session-types"
+import type { DesktopModel } from "@shared/session-types"
 
 export interface DesktopRuntimeSnapshot {
   models: DesktopModel[]

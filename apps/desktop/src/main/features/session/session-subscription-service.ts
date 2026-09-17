@@ -13,7 +13,6 @@ import { IpcEvents } from "../../../shared/ipc-channels"
 import type {
   CloseDesktopAuxSessionInput,
   DesktopAuxSessionUpdate,
-  DesktopPermissionMode,
   DesktopSessionPart,
   DesktopSessionRecord,
   DesktopSessionView,

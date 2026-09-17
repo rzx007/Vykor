@@ -44,17 +44,14 @@ import type {
   UpdateDesktopSessionGoalInput,
   DesktopSessionGoalActionInput,
   SessionGoal,
-} from "../../../shared/session-types"
-import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
-import { parseDesktopContextUsageSnapshot } from "../../../shared/parse-context-usage-snapshot"
+} from "@shared/session-types"
+import type { DesktopContextUsageSnapshot } from "@shared/context-usage-types"
+import { parseDesktopContextUsageSnapshot } from "@shared/parse-context-usage-snapshot"
 import {
   allocateOutsideProjectWorkspace,
   removeEmptyOutsideProjectWorkspace,
 } from "./outside-project-workspace"
-import {
-  readDesktopMetadata,
-  toDesktopSessionRecord,
-} from "./session-subscription-service"
+import { readDesktopMetadata, toDesktopSessionRecord } from "./session-subscription-service"
 import { app } from "electron"
 
 type SessionOperationsClient = Pick<
@@ -66,7 +63,10 @@ const execFileAsync = promisify(execFile)
 const DESKTOP_SESSION_COMMAND_NAMES = new Set(["/compact", "/goal", "/status", "/skills"])
 
 export class SessionOperations {
-  async inspectProject(client: SessionOperationsClient, inputPath: string): Promise<DesktopProjectDetails> {
+  async inspectProject(
+    client: SessionOperationsClient,
+    inputPath: string
+  ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(inputPath)
     const info = await stat(path)
     if (!info.isDirectory()) throw new Error("选择的项目路径不是目录。")
@@ -97,7 +97,10 @@ export class SessionOperations {
     return { project, git, branch, branches }
   }
 
-  async listCommands(client: SessionOperationsClient, cwdInput: string): Promise<DesktopCommandCatalogEntry[]> {
+  async listCommands(
+    client: SessionOperationsClient,
+    cwdInput: string
+  ): Promise<DesktopCommandCatalogEntry[]> {
     const cwd = resolveRequiredPath(cwdInput)
     const commands = await client.system.listCommands({ cwd })
     return commands.flatMap((command): DesktopCommandCatalogEntry[] => {
@@ -115,22 +118,37 @@ export class SessionOperations {
     return client.system.listContextPlugins({ cwd: resolveRequiredPath(cwdInput) })
   }
 
-  async compactSession(client: SessionOperationsClient, input: CompactDesktopSessionInput): Promise<DesktopCompactSessionResult> {
+  async compactSession(
+    client: SessionOperationsClient,
+    input: CompactDesktopSessionInput
+  ): Promise<DesktopCompactSessionResult> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const result = await client.sessions.compact(sessionId)
     return { messageCount: result.messageCount }
   }
 
-  async getGoal(client: SessionOperationsClient, input: GetDesktopSessionGoalInput): Promise<SessionGoal | null> {
+  async getGoal(
+    client: SessionOperationsClient,
+    input: GetDesktopSessionGoalInput
+  ): Promise<SessionGoal | null> {
     return await client.sessions.getGoal(requireString(input.sessionId, "会话 ID"))
   }
 
-  async createGoal(client: SessionOperationsClient, input: CreateDesktopSessionGoalInput): Promise<SessionGoal> {
+  async createGoal(
+    client: SessionOperationsClient,
+    input: CreateDesktopSessionGoalInput
+  ): Promise<SessionGoal> {
     const { sessionId, ...body } = input
-    return await client.sessions.createGoal(requireString(sessionId, "会话 ID"), parseCreateSessionGoalInput(body))
+    return await client.sessions.createGoal(
+      requireString(sessionId, "会话 ID"),
+      parseCreateSessionGoalInput(body)
+    )
   }
 
-  async updateGoal(client: SessionOperationsClient, input: UpdateDesktopSessionGoalInput): Promise<SessionGoal> {
+  async updateGoal(
+    client: SessionOperationsClient,
+    input: UpdateDesktopSessionGoalInput
+  ): Promise<SessionGoal> {
     const { sessionId, goalId, ...body } = input
     return await client.sessions.updateGoal(
       requireString(sessionId, "会话 ID"),
@@ -139,7 +157,10 @@ export class SessionOperations {
     )
   }
 
-  async goalAction(client: SessionOperationsClient, input: DesktopSessionGoalActionInput): Promise<SessionGoal> {
+  async goalAction(
+    client: SessionOperationsClient,
+    input: DesktopSessionGoalActionInput
+  ): Promise<SessionGoal> {
     const { sessionId, goalId, ...body } = input
     return await client.sessions.applyGoalAction(
       requireString(sessionId, "会话 ID"),
@@ -148,14 +169,18 @@ export class SessionOperations {
     )
   }
 
-  async checkoutProjectBranch(input: CheckoutDesktopProjectBranchInput): Promise<DesktopProjectDetails> {
+  async checkoutProjectBranch(
+    input: CheckoutDesktopProjectBranchInput
+  ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
     const branch = requireGitBranchName(input.branch)
     await execGit(path, ["switch", branch])
     return await this.inspectProject(await this.getEphemeralClient(path), path)
   }
 
-  async createProjectBranch(input: CreateDesktopProjectBranchInput): Promise<DesktopProjectDetails> {
+  async createProjectBranch(
+    input: CreateDesktopProjectBranchInput
+  ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
     const branch = requireGitBranchName(input.branch)
     await execGit(path, ["check-ref-format", "--branch", branch])
@@ -163,7 +188,10 @@ export class SessionOperations {
     return await this.inspectProject(await this.getEphemeralClient(path), path)
   }
 
-  async createSession(client: SessionOperationsClient, input: CreateDesktopSessionInput): Promise<DesktopSessionRecord> {
+  async createSession(
+    client: SessionOperationsClient,
+    input: CreateDesktopSessionInput
+  ): Promise<DesktopSessionRecord> {
     const model = requireString(input.model, "模型")
     const permissionMode = normalizePermissionMode(input.permissionMode)
     const provider = await resolveProviderForModel(client, model, input.provider)
@@ -194,24 +222,38 @@ export class SessionOperations {
     }
   }
 
-  async renameProject(client: SessionOperationsClient, input: RenameDesktopProjectInput): Promise<DesktopProject> {
+  async renameProject(
+    client: SessionOperationsClient,
+    input: RenameDesktopProjectInput
+  ): Promise<DesktopProject> {
     const name = requireString(input.name, "项目名称")
     return await toDesktopProject(await client.projects.rename(input.projectId, name))
   }
 
-  async setProjectPinned(client: SessionOperationsClient, input: PinDesktopProjectInput): Promise<DesktopProject> {
+  async setProjectPinned(
+    client: SessionOperationsClient,
+    input: PinDesktopProjectInput
+  ): Promise<DesktopProject> {
     return await toDesktopProject(await client.projects.setPinned(input.projectId, input.pinned))
   }
 
-  async setProjectDefaultShell(client: SessionOperationsClient, input: SetDefaultDesktopProjectShellInput): Promise<DesktopProject> {
-    return await toDesktopProject(await client.projects.setDefaultShell(input.projectId, input.shell))
+  async setProjectDefaultShell(
+    client: SessionOperationsClient,
+    input: SetDefaultDesktopProjectShellInput
+  ): Promise<DesktopProject> {
+    return await toDesktopProject(
+      await client.projects.setDefaultShell(input.projectId, input.shell)
+    )
   }
 
   async removeProject(client: SessionOperationsClient, projectId: string): Promise<void> {
     await client.projects.archive(requireString(projectId, "Project ID"))
   }
 
-  async resolveProjectDirectory(client: SessionOperationsClient, projectIdInput: string): Promise<string> {
+  async resolveProjectDirectory(
+    client: SessionOperationsClient,
+    projectIdInput: string
+  ): Promise<string> {
     const projectId = requireString(projectIdInput, "Project ID")
     const project = (await client.projects.list()).find((item) => item.id === projectId)
     if (!project) throw new Error(`Project ${projectId} does not exist.`)
@@ -244,7 +286,10 @@ export class SessionOperations {
     })
   }
 
-  async editLatestPrompt(client: SessionOperationsClient, input: EditLatestDesktopPromptInput): Promise<void> {
+  async editLatestPrompt(
+    client: SessionOperationsClient,
+    input: EditLatestDesktopPromptInput
+  ): Promise<void> {
     const id = requireString(input.id, "编辑请求 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
     const items = requirePromptItems(input.items)
@@ -268,7 +313,10 @@ export class SessionOperations {
     })
   }
 
-  async promoteQueuedPrompt(client: SessionOperationsClient, input: PromoteDesktopQueuedPromptInput): Promise<void> {
+  async promoteQueuedPrompt(
+    client: SessionOperationsClient,
+    input: PromoteDesktopQueuedPromptInput
+  ): Promise<void> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const inputId = requireString(input.inputId, "输入 ID")
     const queuedRunId = requireString(input.queuedRunId, "排队运行 ID")
@@ -279,14 +327,20 @@ export class SessionOperations {
     })
   }
 
-  async cancelQueuedPrompt(client: SessionOperationsClient, input: CancelDesktopQueuedPromptInput): Promise<void> {
+  async cancelQueuedPrompt(
+    client: SessionOperationsClient,
+    input: CancelDesktopQueuedPromptInput
+  ): Promise<void> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const inputId = requireString(input.inputId, "输入 ID")
     const queuedRunId = requireString(input.queuedRunId, "排队运行 ID")
     await client.sessions.cancelQueuedPrompt(sessionId, inputId, { queuedRunId })
   }
 
-  async forkSession(client: SessionOperationsClient, input: ForkDesktopSessionInput): Promise<DesktopSessionRecord> {
+  async forkSession(
+    client: SessionOperationsClient,
+    input: ForkDesktopSessionInput
+  ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     return toDesktopSessionRecord(
       await client.sessions.fork(sessionId, {
@@ -296,7 +350,10 @@ export class SessionOperations {
     )
   }
 
-  async interruptSession(client: SessionOperationsClient, input: InterruptDesktopSessionInput): Promise<void> {
+  async interruptSession(
+    client: SessionOperationsClient,
+    input: InterruptDesktopSessionInput
+  ): Promise<void> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const expectedRunId =
       input.expectedRunId === undefined
@@ -307,7 +364,10 @@ export class SessionOperations {
     })
   }
 
-  async replyPermission(client: SessionOperationsClient, input: ReplyDesktopPermissionInput): Promise<void> {
+  async replyPermission(
+    client: SessionOperationsClient,
+    input: ReplyDesktopPermissionInput
+  ): Promise<void> {
     const permissionId = requireString(input.permissionId, "权限请求 ID")
     await client.permissions.reply(permissionId, {
       status: input.status,
@@ -316,7 +376,10 @@ export class SessionOperations {
     })
   }
 
-  async updateSessionModel(client: SessionOperationsClient, input: UpdateDesktopSessionModelInput): Promise<DesktopSessionRecord> {
+  async updateSessionModel(
+    client: SessionOperationsClient,
+    input: UpdateDesktopSessionModelInput
+  ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const model = requireString(input.model, "模型")
     const provider = await resolveProviderForModel(client, model, input.provider)
@@ -332,7 +395,10 @@ export class SessionOperations {
     )
   }
 
-  async updateSessionPermissionMode(client: SessionOperationsClient, input: UpdateDesktopSessionPermissionModeInput): Promise<DesktopSessionRecord> {
+  async updateSessionPermissionMode(
+    client: SessionOperationsClient,
+    input: UpdateDesktopSessionPermissionModeInput
+  ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const permissionMode = requirePermissionMode(input.permissionMode)
     return toDesktopSessionRecord(
@@ -342,7 +408,10 @@ export class SessionOperations {
     )
   }
 
-  async getContextUsage(client: SessionOperationsClient, input: GetDesktopContextUsageInput): Promise<DesktopContextUsageSnapshot> {
+  async getContextUsage(
+    client: SessionOperationsClient,
+    input: GetDesktopContextUsageInput
+  ): Promise<DesktopContextUsageSnapshot> {
     const cwd = requireString(input.cwd, "工作目录")
     const result = await client.system.getContextUsage({
       cwd,
@@ -359,13 +428,19 @@ export class SessionOperations {
     return snapshot
   }
 
-  async renameSession(client: SessionOperationsClient, input: RenameDesktopSessionInput): Promise<DesktopSessionRecord> {
+  async renameSession(
+    client: SessionOperationsClient,
+    input: RenameDesktopSessionInput
+  ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const title = requireString(input.title, "会话名称")
     return toDesktopSessionRecord(await client.sessions.update(sessionId, { title }))
   }
 
-  async setSessionPinned(client: SessionOperationsClient, input: PinDesktopSessionInput): Promise<DesktopSessionRecord> {
+  async setSessionPinned(
+    client: SessionOperationsClient,
+    input: PinDesktopSessionInput
+  ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const session = (await client.sessions.list({ includeArchived: true, limit: 1_000 })).find(
       (item) => item.id === sessionId

@@ -65,10 +65,34 @@ export const sessionIpcContribution: IpcContribution = {
             input as import("../../../shared/session-types").CompactDesktopSessionInput
           ),
       },
-      { channel: IpcChannels.sessionGoalGet, handler: (_event, input) => desktopSessionService.getGoal(input as import("../../../shared/session-types").GetDesktopSessionGoalInput) },
-      { channel: IpcChannels.sessionGoalCreate, handler: (_event, input) => desktopSessionService.createGoal(input as import("../../../shared/session-types").CreateDesktopSessionGoalInput) },
-      { channel: IpcChannels.sessionGoalUpdate, handler: (_event, input) => desktopSessionService.updateGoal(input as import("../../../shared/session-types").UpdateDesktopSessionGoalInput) },
-      { channel: IpcChannels.sessionGoalAction, handler: (_event, input) => desktopSessionService.goalAction(input as import("../../../shared/session-types").DesktopSessionGoalActionInput) },
+      {
+        channel: IpcChannels.sessionGoalGet,
+        handler: (_event, input) =>
+          desktopSessionService.getGoal(
+            input as import("../../../shared/session-types").GetDesktopSessionGoalInput
+          ),
+      },
+      {
+        channel: IpcChannels.sessionGoalCreate,
+        handler: (_event, input) =>
+          desktopSessionService.createGoal(
+            input as import("../../../shared/session-types").CreateDesktopSessionGoalInput
+          ),
+      },
+      {
+        channel: IpcChannels.sessionGoalUpdate,
+        handler: (_event, input) =>
+          desktopSessionService.updateGoal(
+            input as import("../../../shared/session-types").UpdateDesktopSessionGoalInput
+          ),
+      },
+      {
+        channel: IpcChannels.sessionGoalAction,
+        handler: (_event, input) =>
+          desktopSessionService.goalAction(
+            input as import("../../../shared/session-types").DesktopSessionGoalActionInput
+          ),
+      },
       {
         channel: IpcChannels.projectRename,
         handler: (_event, input) =>

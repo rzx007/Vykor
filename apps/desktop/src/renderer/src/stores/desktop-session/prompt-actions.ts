@@ -42,10 +42,18 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
     dismissPromptSubmission(inputId) {
       const sessionId = get().activeSessionId
       if (!sessionId) return
-      replaceRuntime(sessionId, (runtime) => removeOperation({
-        ...runtime,
-        pendingPromptSubmissions: removePendingPromptSubmission(runtime.pendingPromptSubmissions, inputId),
-      }, inputId))
+      replaceRuntime(sessionId, (runtime) =>
+        removeOperation(
+          {
+            ...runtime,
+            pendingPromptSubmissions: removePendingPromptSubmission(
+              runtime.pendingPromptSubmissions,
+              inputId
+            ),
+          },
+          inputId
+        )
+      )
     },
     async sendMessage(content, options) {
       const document = options?.document ?? composerDocument([{ type: "text", text: content }])
@@ -191,7 +199,11 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       }
     },
 
-    async editLatestMessage(sourceMessageId, content, document = composerDocument([{ type: "text", text: content }])) {
+    async editLatestMessage(
+      sourceMessageId,
+      content,
+      document = composerDocument([{ type: "text", text: content }])
+    ) {
       const prompt = selectComposerDocumentText(document)
       const items = document.items
       const current = get()
@@ -209,7 +221,8 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         (!hasMeaningfulItems(items) && attachments.length === 0) ||
         !sourceMessageId ||
         !sessionId
-      ) return
+      )
+        return
 
       const runtime = getSessionRuntime(current, sessionId)
       const edit: PendingPromptEdit =
@@ -394,7 +407,9 @@ function sameInputItems(
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function hasMeaningfulItems(items: readonly import("@shared/session-types").SessionUserInputItem[]): boolean {
+function hasMeaningfulItems(
+  items: readonly import("@shared/session-types").SessionUserInputItem[]
+): boolean {
   return items.some((item) => item.type !== "text" || item.text.trim().length > 0)
 }
 
