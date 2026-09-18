@@ -106,6 +106,8 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   assert.match(workflow, /--verify-inventories[\s\S]*\$\{\{ github\.workspace \}\}\/release-assets\/clean-slate-migrations-win\.json[\s\S]*\$\{\{ github\.workspace \}\}\/release-assets\/clean-slate-migrations-linux\.json/);
   assert.match(workflow, /create-tag:[\s\S]*needs: \[validate, preflight, build-desktop, verify-clean-slate-artifacts\]/);
   assert.match(workflow, /publish-npm:[\s\S]*npm view "@rzx\/ohs@\$\{VERSION\}"/);
+  assert.match(workflow, /publish-npm:[\s\S]*for attempt in \$\(seq 1 12\)[\s\S]*npm view "@rzx\/ohs@\$\{VERSION\}" version/);
+  assert.match(workflow, /publish-npm:[\s\S]*pnpm --filter @rzx\/ohs publish[\s\S]*for attempt in \$\(seq 1 12\)[\s\S]*test "\$ACTUAL" = "\$VERSION"/);
   assert.match(workflow, /publish-release:[\s\S]*needs: \[validate, create-tag, publish-npm, build-desktop\]/);
   assert.match(workflow, /gh release upload "\$TAG"[\s\S]*--clobber/);
   assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--notes-file release-notes\.md/);

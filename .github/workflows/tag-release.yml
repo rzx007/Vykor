@@ -239,12 +239,30 @@ jobs:
         run: |
           node scripts/prepare-tag-release.mjs "v${VERSION}"
           pnpm --filter @rzx/ohs... build
-          PUBLISHED_VERSION="$(npm view "@rzx/ohs@${VERSION}" version 2>/dev/null || true)"
+          PUBLISHED_VERSION=""
+          for attempt in $(seq 1 12); do
+            PUBLISHED_VERSION="$(npm view "@rzx/ohs@${VERSION}" version 2>/dev/null || true)"
+            if [ -n "$PUBLISHED_VERSION" ]; then
+              break
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              sleep 10
+            fi
+          done
           ACTION="$(EXPECTED_VERSION="$VERSION" PUBLISHED_VERSION="$PUBLISHED_VERSION" node --input-type=module -e "import { decideNpmPublish } from './scripts/release-safety.mjs'; process.stdout.write(decideNpmPublish({ expectedVersion:process.env.EXPECTED_VERSION, publishedVersion:process.env.PUBLISHED_VERSION }))")"
           if [ "$ACTION" = "publish" ]; then
             pnpm --filter @rzx/ohs publish --access public --no-git-checks
           fi
-          ACTUAL="$(npm view "@rzx/ohs@${VERSION}" version)"
+          ACTUAL=""
+          for attempt in $(seq 1 12); do
+            ACTUAL="$(npm view "@rzx/ohs@${VERSION}" version 2>/dev/null || true)"
+            if [ "$ACTUAL" = "$VERSION" ]; then
+              break
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              sleep 10
+            fi
+          done
           test "$ACTUAL" = "$VERSION"
 
   publish-release:
