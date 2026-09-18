@@ -228,4 +228,98 @@ describe("ChannelApplicationService contracts", () => {
       statuses: ["pending", "failed"],
     });
   });
+
+  it("classifies conversations by thread: a different thread creates a different session", async () => {
+    const fixture = createFixture();
+    fixture.channels.findConversation.mockReturnValue(undefined);
+    let created = 0;
+    fixture.sessions.createSession.mockImplementation(() => ({ id: `s-${++created}` }));
+    fixture.channels.upsertConversation.mockImplementation((input: any) => ({
+      ...fixture.conversation,
+      id: `conv-${created}`,
+      ...input,
+    }));
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "chat-1",
+      threadId: "thread-1",
+      externalMessageId: "msg-1",
+      content: "one",
+      cwd: "/repo",
+      model: "m",
+    });
+    await service.handleMessage({
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "chat-1",
+      threadId: "thread-2",
+      externalMessageId: "msg-2",
+      content: "two",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    // 同一 group、同一机器人、仅 thread 不同 → 各建一个 Session。
+    expect(fixture.sessions.createSession).toHaveBeenCalledTimes(2);
+    expect(fixture.channels.findConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ chatId: "chat-1", threadId: "thread-1" }),
+    );
+    expect(fixture.channels.findConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ chatId: "chat-1", threadId: "thread-2" }),
+    );
+    expect(fixture.channels.upsertConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ chatId: "chat-1", threadId: "thread-1" }),
+    );
+    expect(fixture.channels.upsertConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ chatId: "chat-1", threadId: "thread-2" }),
+    );
+  });
+
+  it("reuses the mapped session for the same conversation key", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "slack",
+      accountId: "acc-1",
+      chatId: "chat-1",
+      externalMessageId: "msg-reuse",
+      content: "hello",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    expect(fixture.channels.findConversation).toHaveBeenCalledOnce();
+    expect(fixture.sessions.createSession).not.toHaveBeenCalled();
+    expect(fixture.channels.upsertConversation).not.toHaveBeenCalled();
+  });
+
+  it("creates a new session when the mapped session is archived, reusing the conversation id", async () => {
+    const fixture = createFixture();
+    fixture.existingSessions.set("s1", { id: "s1", status: "archived", cwd: "/repo" });
+    fixture.sessions.createSession.mockReturnValue({ id: "s2" });
+    fixture.channels.upsertConversation.mockReturnValue({
+      ...fixture.conversation,
+      sessionId: "s2",
+    });
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "slack",
+      accountId: "acc-1",
+      chatId: "chat-1",
+      externalMessageId: "msg-archived",
+      content: "hello",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    expect(fixture.sessions.createSession).toHaveBeenCalledOnce();
+    expect(fixture.channels.upsertConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: fixture.conversation.id, sessionId: "s2" }),
+    );
+  });
 });

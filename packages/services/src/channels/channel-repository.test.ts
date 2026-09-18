@@ -85,6 +85,66 @@ describe("ChannelRepository", () => {
     }
   });
 
+  it("classifies external conversations by connector, account, chat, and thread", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-channel-classify-"));
+    const path = join(directory, "sessions.db");
+    const store = new SessionStore({ path });
+    try {
+      for (let index = 1; index <= 5; index += 1) {
+        store.sessions.create({ id: `session-${index}`, cwd: directory, model: "m" });
+      }
+
+      const threadOne = store.channels.upsertConversation({
+        id: "conv-thread-1", connector: "feishu", accountId: "app-1",
+        chatId: "chat-1", threadId: "thread-1", sessionId: "session-1",
+      });
+      // 同一个四元组重复 upsert → 还是同一条 conversation。
+      const threadOneAgain = store.channels.upsertConversation({
+        connector: "feishu", accountId: "app-1",
+        chatId: "chat-1", threadId: "thread-1", sessionId: "session-1",
+      });
+      expect(threadOneAgain.id).toBe(threadOne.id);
+
+      // 只换 thread → 另一个 conversation。
+      const threadTwo = store.channels.upsertConversation({
+        id: "conv-thread-2", connector: "feishu", accountId: "app-1",
+        chatId: "chat-1", threadId: "thread-2", sessionId: "session-2",
+      });
+      // 只换机器人账号 → 另一个 conversation。
+      const otherAccount = store.channels.upsertConversation({
+        id: "conv-account-2", connector: "feishu", accountId: "app-2",
+        chatId: "chat-1", threadId: "thread-1", sessionId: "session-3",
+      });
+      // 只换平台 → 另一个 conversation。
+      const otherConnector = store.channels.upsertConversation({
+        id: "conv-slack", connector: "slack", accountId: "app-1",
+        chatId: "chat-1", threadId: "thread-1", sessionId: "session-4",
+      });
+      // 没有 thread（空串）也是独立的分类。
+      const noThread = store.channels.upsertConversation({
+        id: "conv-no-thread", connector: "feishu", accountId: "app-1",
+        chatId: "chat-1", sessionId: "session-5",
+      });
+
+      expect(new Set([
+        threadOne.id, threadTwo.id, otherAccount.id, otherConnector.id, noThread.id,
+      ]).size).toBe(5);
+
+      expect(store.channels.findConversation({
+        connector: "feishu", accountId: "app-1", chatId: "chat-1", threadId: "thread-2",
+      })?.id).toBe(threadTwo.id);
+      expect(store.channels.findConversation({
+        connector: "feishu", accountId: "app-1", chatId: "chat-1", threadId: "thread-1",
+      })?.id).toBe(threadOne.id);
+      expect(store.channels.findConversation({
+        connector: "feishu", accountId: "app-1", chatId: "chat-1",
+      })?.id).toBe(noThread.id);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("round-trips platformMeta and omits absent or corrupt values", () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-channel-meta-"));
     const path = join(directory, "sessions.db");

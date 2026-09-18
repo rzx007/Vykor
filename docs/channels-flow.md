@@ -74,6 +74,24 @@ connector + accountId + chatId + threadId
 
 同一个键一直找到同一个 durable Session，daemon 重启也不会丢。不同群、不同机器人账号或不同 thread 使用不同 Session。若原 Session 已归档，下一条消息会创建新 Session，并把原映射改到新 Session；历史 Session 不会被重新写入。
 
+分类过程长这样：
+
+```mermaid
+flowchart TD
+  M["平台消息事件<br/>connector / accountId / chatId / threadId / externalMessageId"] --> K["分类键 =<br/>connector + accountId + chatId + threadId"]
+  K --> L{"external_conversation 里有这个键吗？"}
+  L -- "没有" --> NS["createSession<br/>title = connector · chatId"]
+  L -- "有，且 Session 未归档" --> EX["复用该 Session"]
+  L -- "有，但 Session 已归档" --> NS
+  NS --> UC["upsertConversation<br/>把这个键指向新 Session"]
+  UC --> ADMIT
+  EX --> ADMIT["admitPrompt<br/>inputId = connector + accountId + externalMessageId"]
+  ADMIT --> RUN["跑 Agent Run"]
+  RUN --> DEL["createDelivery<br/>conversationId 指向 external_conversation.id"]
+```
+
+一句话记住：**分类键决定 Session**（`connector + accountId + chatId + threadId`），**inputId 决定幂等**（`connector + accountId + externalMessageId`），**delivery 挂在该会话上**。飞书的 `accountId` 用的是 `appId`；`threadId` 为空串表示没有话题维度。
+
 ## 重复消息怎么处理
 
 飞书可能重复推送同一条消息。系统用下面三项生成稳定 Input ID：
