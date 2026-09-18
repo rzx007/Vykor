@@ -134,10 +134,13 @@ export class ChannelManager {
       content: msg.content,
       timestamp: msg.timestamp,
       media: [],
+      ...(msg.attachments ? { attachments: msg.attachments } : {}),
+      ...(msg.messageType ? { messageType: msg.messageType } : {}),
       metadata: {
         ...msg.metadata,
         _message_id: msg.id,
         ...(msg.conversationId ? { conversationId: msg.conversationId } : {}),
+        ...(msg.attachments ? { attachments: msg.attachments } : {}),
         ...(msg.platformMeta ?? {}),
       },
       ...(msg.workspaceId
@@ -181,6 +184,44 @@ export class ChannelManager {
           });
         continue;
       }
+
+      // 严格能力校验：当 adapter 声明了 capabilities 时，必须具备所需能力
+      if (adapter.capabilities) {
+        const messageType = msg.messageType ?? "text";
+        let requiredTypeCap: import("../index.js").ChannelCapability | undefined;
+        if (messageType === "text" || messageType === "image" || messageType === "file") {
+          requiredTypeCap = messageType;
+        }
+
+        if (requiredTypeCap && !adapter.capabilities.supports.includes(requiredTypeCap)) {
+          this.opts.onWarning?.(
+            `通道 ${msg.channel} 不支持消息类型 ${messageType}（缺少能力 ${requiredTypeCap}）`,
+          );
+          if (deliveryId) {
+            await this.reportDelivery({
+              deliveryId,
+              status: "failed",
+              error: `Channel ${msg.channel} does not support messageType "${messageType}" (missing capability: ${requiredTypeCap})`,
+            });
+          }
+          continue;
+        }
+
+        if (msg.threadId && !adapter.capabilities.supports.includes("threaded-conversation")) {
+          this.opts.onWarning?.(
+            `通道 ${msg.channel} 不支持消息类型 ${messageType} 的线程消息（缺少能力 threaded-conversation）`,
+          );
+          if (deliveryId) {
+            await this.reportDelivery({
+              deliveryId,
+              status: "failed",
+              error: `Channel ${msg.channel} does not support threaded-conversation (missing capability: threaded-conversation)`,
+            });
+          }
+          continue;
+        }
+      }
+
       try {
         if (
           deliveryId &&
@@ -196,7 +237,11 @@ export class ChannelManager {
           timestamp: new Date(),
           senderType: "system",
           chatId: msg.chatId,
-          replyTo: msg.chatId,
+          replyTo: msg.replyTo ?? msg.chatId,
+          ...(msg.messageType ? { messageType: msg.messageType } : {}),
+          ...(msg.attachments ? { attachments: msg.attachments } : {}),
+          ...(msg.threadId ? { threadId: msg.threadId } : {}),
+          ...(msg.platformMeta ? { platformMeta: msg.platformMeta } : {}),
         });
         if (deliveryId)
           await this.reportDelivery({ deliveryId, status: "sent" });

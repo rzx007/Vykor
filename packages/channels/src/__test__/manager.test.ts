@@ -1,17 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { MessageBus } from "../bus/queue.js";
 import { ChannelManager } from "../core/manager.js";
-import type { ChannelAdapter, ChannelMessage } from "../index.js";
+import type { ChannelAdapter, ChannelAdapterCapabilities, ChannelAttachment, ChannelMessage } from "../index.js";
 
 /** 可注入收发的假 adapter。 */
 function makeAdapter(
   name: string,
-  opts: { failConnect?: boolean; failSend?: boolean } = {},
+  opts: {
+    failConnect?: boolean;
+    failSend?: boolean;
+    capabilities?: ChannelAdapterCapabilities;
+  } = {},
 ) {
   let handler: ((m: ChannelMessage) => void) | undefined;
   const sent: ChannelMessage[] = [];
   const adapter: ChannelAdapter = {
     name,
+    ...(opts.capabilities ? { capabilities: opts.capabilities } : {}),
     async connect() {
       if (opts.failConnect) throw new Error(`${name} boom`);
     },
@@ -285,6 +290,150 @@ describe("ChannelManager", () => {
     });
     await mgr.startAll();
     expect(warnings.some((w) => w.includes("allowFrom"))).toBe(true);
+    await mgr.stopAll();
+  });
+
+  it("preserves inbound attachments through manager and durable metadata", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t");
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+    });
+    await mgr.startAll();
+
+    const attachment: ChannelAttachment = {
+      type: "image",
+      mimeType: "image/png",
+      name: "diagram.png",
+      externalId: "img_v2_001",
+      metadata: { width: 640, height: 480 },
+    };
+
+    fake.emit({ chatId: "chat-1", attachments: [attachment], messageType: "image" });
+    const inbound = await bus.consumeInbound();
+
+    expect(inbound.attachments).toEqual([attachment]);
+    expect(inbound.messageType).toBe("image");
+    expect(inbound.metadata.attachments).toEqual([attachment]);
+    await mgr.stopAll();
+  });
+
+  it("dispatches outbound attachments and routing context to adapter", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("feishu");
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { feishu: ["*"] },
+    });
+    await mgr.startAll();
+
+    const attachment: ChannelAttachment = {
+      type: "image",
+      externalId: "img_v2_001",
+    };
+
+    bus.publishOutbound({
+      channel: "feishu",
+      chatId: "chat-1",
+      content: "",
+      messageType: "image",
+      attachments: [attachment],
+      threadId: "thread-1",
+      platformMeta: { rootMessageId: "root-1" },
+    });
+    await tick();
+
+    expect(fake.sent).toHaveLength(1);
+    expect(fake.sent[0]).toMatchObject({
+      messageType: "image",
+      attachments: [attachment],
+      chatId: "chat-1",
+      threadId: "thread-1",
+      platformMeta: { rootMessageId: "root-1" },
+    });
+    await mgr.stopAll();
+  });
+
+  it("capability gate: 声明只支持 text 的 adapter 收到 image 时拒绝并回写 failed", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t", {
+      capabilities: {
+        supports: ["text"],
+        supportsImages: false,
+        supportsFiles: false,
+      },
+    });
+    const warnings: string[] = [];
+    const results: Array<{ deliveryId: string; status: string; error?: string }> = [];
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+      onWarning: (w) => warnings.push(w),
+      onDeliveryResult: (r) => {
+        results.push(r);
+      },
+    });
+    await mgr.startAll();
+
+    bus.publishOutbound({
+      channel: "t",
+      chatId: "c1",
+      content: "",
+      messageType: "image",
+      attachments: [{ type: "image", externalId: "img-1" }],
+      metadata: { _delivery_id: "del-img" },
+    });
+    await tick();
+    await tick();
+
+    expect(fake.sent).toHaveLength(0);
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        deliveryId: "del-img",
+        status: "failed",
+        error: expect.stringMatching(/image/i),
+      }),
+    );
+    expect(warnings.some((w) => w.includes("t") && w.includes("image"))).toBe(true);
+    await mgr.stopAll();
+  });
+
+  it("capability gate: 声明未包含 threaded-conversation 的 adapter 收到带 threadId 的消息时拒绝", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t", {
+      capabilities: {
+        supports: ["text"],
+      },
+    });
+    const warnings: string[] = [];
+    const results: Array<{ deliveryId: string; status: string; error?: string }> = [];
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+      onWarning: (w) => warnings.push(w),
+      onDeliveryResult: (r) => {
+        results.push(r);
+      },
+    });
+    await mgr.startAll();
+
+    bus.publishOutbound({
+      channel: "t",
+      chatId: "c1",
+      content: "in thread",
+      messageType: "text",
+      threadId: "th-1",
+      metadata: { _delivery_id: "del-thread" },
+    });
+    await tick();
+    await tick();
+
+    expect(fake.sent).toHaveLength(0);
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        deliveryId: "del-thread",
+        status: "failed",
+        error: expect.stringMatching(/threaded-conversation/i),
+      }),
+    );
+    expect(warnings.some((w) => w.includes("threaded-conversation"))).toBe(true);
     await mgr.stopAll();
   });
 });

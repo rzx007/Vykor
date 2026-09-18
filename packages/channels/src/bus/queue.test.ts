@@ -74,6 +74,41 @@ describe("MessageBus", () => {
     expect(MessageBus.sessionKey(a)).toBe("test:c1");
     expect(MessageBus.sessionKey(b)).toBe("thread-9");
   });
+
+  it("inbound 与 outbound 队列均完整保留 attachments 与 messageType", async () => {
+    const bus = new MessageBus();
+    const attachment = {
+      type: "image" as const,
+      mimeType: "image/png",
+      name: "diagram.png",
+      externalId: "img_v2_001",
+      metadata: { width: 640, height: 480 },
+    };
+    bus.publishInbound(
+      inbound("", {
+        attachments: [attachment],
+        messageType: "image",
+      }),
+    );
+    const inMsg = await bus.consumeInbound();
+    expect(inMsg.attachments).toEqual([attachment]);
+    expect(inMsg.messageType).toBe("image");
+
+    bus.publishOutbound({
+      channel: "test",
+      chatId: "c1",
+      content: "",
+      messageType: "image",
+      attachments: [attachment],
+      threadId: "t1",
+      platformMeta: { rootMessageId: "r1" },
+    });
+    const outMsg = await bus.consumeOutbound();
+    expect(outMsg.attachments).toEqual([attachment]);
+    expect(outMsg.messageType).toBe("image");
+    expect(outMsg.threadId).toBe("t1");
+    expect(outMsg.platformMeta).toEqual({ rootMessageId: "r1" });
+  });
 });
 
 describe("isAllowed (ACL, 对齐 Python BaseChannel.is_allowed)", () => {

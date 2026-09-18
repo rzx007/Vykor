@@ -161,4 +161,49 @@ describe("DurableChannelBridge", () => {
     expect(bus.outboundSize).toBe(0);
     await bridge.stop();
   });
+
+  it("preserves inbound attachments into durable application message metadata", async () => {
+    const bus = new MessageBus();
+    const application = port();
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+    });
+    bridge.start();
+
+    const attachment = {
+      type: "image" as const,
+      mimeType: "image/png",
+      name: "test.png",
+      externalId: "img-123",
+      metadata: { width: 100 },
+    };
+
+    bus.publishInbound({
+      channel: "feishu",
+      accountId: "app-1",
+      externalMessageId: "message-1",
+      senderId: "user-1",
+      chatId: "chat-1",
+      content: "question with image",
+      timestamp: new Date(0),
+      media: [],
+      metadata: { initial: true },
+      attachments: [attachment],
+    });
+
+    await vi.waitFor(() => {
+      expect(application.handleChannelMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            initial: true,
+            attachments: [attachment],
+          }),
+        }),
+      );
+    });
+    await bridge.stop();
+  });
 });

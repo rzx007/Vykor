@@ -8,6 +8,8 @@
  * resolver，生产者先到缓冲）；退出用 AbortSignal 而非 wait_for 1s 轮询。
  */
 
+import type { ChannelAttachment } from "../index.js";
+
 export interface InboundMessage {
   channel: string;
   accountId: string;
@@ -21,6 +23,8 @@ export interface InboundMessage {
   timestamp: Date;
   /** 媒体 URL 列表（基础版仅透传，下载留待）。 */
   media: string[];
+  attachments?: ChannelAttachment[];
+  messageType?: "text" | "image" | "file" | "card" | "event" | "unknown";
   /** 通道私有数据。 */
   metadata: Record<string, unknown>;
   /** 会话键覆盖（如线程级会话）。 */
@@ -33,6 +37,10 @@ export interface OutboundMessage {
   content: string;
   replyTo?: string;
   media?: string[];
+  attachments?: ChannelAttachment[];
+  messageType?: "text" | "image" | "file" | "card" | "event" | "unknown";
+  threadId?: string;
+  platformMeta?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 

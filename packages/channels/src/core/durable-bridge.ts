@@ -78,6 +78,10 @@ export class DurableChannelBridge {
   }
 
   private async handle(message: InboundMessage): Promise<void> {
+    const metadata = {
+      ...message.metadata,
+      ...(message.attachments ? { attachments: message.attachments } : {}),
+    };
     const result = await this.deps.application.handleChannelMessage({
       connector: message.channel,
       accountId: message.accountId,
@@ -89,7 +93,7 @@ export class DurableChannelBridge {
       content: message.content,
       cwd: this.deps.cwd,
       model: this.deps.model,
-      metadata: message.metadata,
+      metadata,
     });
     if (
       result.delivery.status === "sent" ||
