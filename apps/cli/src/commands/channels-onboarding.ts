@@ -281,7 +281,9 @@ export async function runChannelsAddFeishu(
   }
 
   const credentials = await d.createCredentials();
+  let previousSecret: string | undefined;
   try {
+    previousSecret = await credentials.get(appId);
     await credentials.set(appId, appSecret);
   } catch (error) {
     d.log(`保存凭据失败：${error instanceof Error ? error.message : String(error)}`);
@@ -309,7 +311,11 @@ export async function runChannelsAddFeishu(
     await d.saveSettings(next);
   } catch (error) {
     try {
-      await credentials.delete(appId);
+      if (previousSecret === undefined) {
+        await credentials.delete(appId);
+      } else {
+        await credentials.set(appId, previousSecret);
+      }
     } catch {
       // 回滚失败只影响残留凭据，不改变主错误；下面照常返回失败。
     }
@@ -349,7 +355,12 @@ export async function runChannelsAllow(
       feishu: { ...feishu, allowFrom },
     },
   };
-  await d.saveSettings(next);
+  try {
+    await d.saveSettings(next);
+  } catch (error) {
+    d.log(`保存配置失败：${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false };
+  }
 
   d.log(`已放行 ${name ?? id}（${id}）。改完重启 channels serve 生效。`);
   return { ok: true };

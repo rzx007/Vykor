@@ -80,7 +80,71 @@ describe("runChannelsAddFeishu", () => {
         channels: { feishu: expect.objectContaining({ enabled: true, appId: "cli_m" }) },
       }),
     );
+    const saved = d.saveSettings.mock.calls[0]?.[0] as {
+      channels?: { feishu?: { allowFrom?: Record<string, string> } };
+    };
+    expect(saved.channels?.feishu?.allowFrom).toEqual({});
+    expect(saved.channels?.feishu?.allowFrom).not.toHaveProperty("ou_me");
     expect(result.ok).toBe(true);
+  });
+
+  it("writes nothing when overwrite is declined", async () => {
+    const d = deps();
+    d.loadSettings.mockResolvedValueOnce({
+      model: "m",
+      channels: { feishu: { enabled: true, appId: "cli_x", allowFrom: {} } },
+    } as never);
+    const result = await runChannelsAddFeishu({
+      createCredentials: () => d.credentials as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : "sec_m"),
+      promptConfirm: async () => false,
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      verify: d.verify as never,
+      log: vi.fn(),
+    } as never);
+
+    expect(result.ok).toBe(false);
+    expect(d.credentials.set).not.toHaveBeenCalled();
+    expect(d.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("restores the previous secret when saveSettings fails", async () => {
+    const d = deps();
+    d.secrets.set("cli_x", "old-secret");
+    d.saveSettings.mockRejectedValueOnce(new Error("disk full"));
+    const result = await runChannelsAddFeishu({
+      createCredentials: () => d.credentials as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : "new-secret"),
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      verify: d.verify as never,
+      log: vi.fn(),
+    } as never);
+
+    expect(result.ok).toBe(false);
+    expect(d.credentials.set).toHaveBeenCalledWith("cli_x", "new-secret");
+    expect(d.credentials.set).toHaveBeenCalledWith("cli_x", "old-secret");
+    expect(d.credentials.delete).not.toHaveBeenCalled();
+  });
+
+  it("removes the new credential when saveSettings fails and none existed", async () => {
+    const d = deps();
+    d.saveSettings.mockRejectedValueOnce(new Error("disk full"));
+    const result = await runChannelsAddFeishu({
+      createCredentials: () => d.credentials as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : "new-secret"),
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      verify: d.verify as never,
+      log: vi.fn(),
+    } as never);
+
+    expect(result.ok).toBe(false);
+    expect(d.credentials.delete).toHaveBeenCalledWith("cli_x");
   });
 
   it("does not write anything when verification fails", async () => {
