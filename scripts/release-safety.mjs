@@ -72,3 +72,7 @@ export function renderStableReleaseNotes({ version, commit, artifacts }) {
     "",
   ].join("\n");
 }
+
+export function normalizeStableReleaseNotes(notes) {
+  return `${String(notes).replace(/\s+$/u, "")}\n`;
+}

@@ -11,6 +11,7 @@ import {
   assertReleaseCommit,
   assertTagAvailable,
   decideNpmPublish,
+  normalizeStableReleaseNotes,
   renderStableReleaseNotes,
 } from "./release-safety.mjs";
 
@@ -62,6 +63,7 @@ test("stable release notes contain immutable release identity and artifacts", ()
   assert.match(notes, new RegExp(sha));
   assert.match(notes, /OpenHarness-1\.2\.3-setup\.exe/);
   assert.doesNotMatch(notes, /compatibility|deprecation|retention|breaking removal/i);
+  assert.equal(normalizeStableReleaseNotes(`${notes}\n\n`), notes);
 });
 
 test("release asset CLI preserves the version in notes and artifact validation", () => {
@@ -111,6 +113,7 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   assert.match(workflow, /publish-release:[\s\S]*needs: \[validate, create-tag, publish-npm, build-desktop\]/);
   assert.match(workflow, /gh release upload "\$TAG"[\s\S]*--clobber/);
   assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--notes-file release-notes\.md/);
+  assert.match(workflow, /normalize-notes release-notes\.md[\s\S]*normalize-notes published-release-notes\.md[\s\S]*diff -u/);
   assert.match(workflow, /gh release view "\$TAG" --json body/);
   assert.match(workflow, /gh release view "\$TAG" --json assets/);
   assert.match(workflow, /notify:[\s\S]*if: always\(\)/);

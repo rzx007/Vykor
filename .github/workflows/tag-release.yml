@@ -293,6 +293,7 @@ jobs:
           find release-assets -maxdepth 1 -type f -printf '%f\n' > artifact-names.txt
           node scripts/release-assets.mjs assert-artifacts artifact-names.txt
           cp release-assets/release-notes.md release-notes.md
+          node scripts/release-assets.mjs normalize-notes release-notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" release-assets/* --clobber
             gh release edit "$TAG" --latest --title "OpenHarness ${VERSION}" --notes-file release-notes.md
@@ -323,6 +324,8 @@ jobs:
           ACTUAL="$(npm view "@rzx/ohs@${VERSION}" version)"
           test "$ACTUAL" = "$VERSION"
           gh release view "$TAG" --json body --jq .body > published-release-notes.md
+          node scripts/release-assets.mjs normalize-notes published-release-notes.md
+          node scripts/release-assets.mjs normalize-notes release-notes.md
           diff -u release-notes.md published-release-notes.md
           gh release view "$TAG" --json assets --jq '.assets[].name' > published-artifacts.txt
           node scripts/release-assets.mjs assert-artifacts published-artifacts.txt
