@@ -1148,7 +1148,10 @@ export class SessionStore {
     for (const id of this.mutations.deletedInputs) deleteInput.run(id);
 
     const upsertSession = this.database.prepare(`
-      INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session (
+        id, parent_id, cwd, title, model, agent, status, metadata_json,
+        created_at, updated_at, archived_at, project_id, cwd_relative
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET parent_id=excluded.parent_id, cwd=excluded.cwd,
         project_id=excluded.project_id, cwd_relative=excluded.cwd_relative,
         title=excluded.title, model=excluded.model, agent=excluded.agent, status=excluded.status,

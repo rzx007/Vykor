@@ -419,6 +419,7 @@ export const channelDeliveries = sqliteTable(
     status: text("status").notNull(),
     attemptCount: integer("attempt_count").notNull().default(0),
     externalDeliveryId: text("external_delivery_id"),
+    platformMetaJson: text("platform_meta_json"),
     error: text("error"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),

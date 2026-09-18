@@ -92,7 +92,7 @@ Input 校验不把 `traceId` 当业务内容，因为一次网络重试可能得
 
 | 数据 | 当前标记 | 行为 |
 |---|---|---|
-| daemon SQLite | `application_storage_format.version = 1` | 非空数据库没有标记或版本不同，启动直接失败 |
+| daemon SQLite | `application_storage_format.version = 3` | 非空数据库没有标记或版本不同，启动直接失败 |
 | Durable Event | `schemaVersion = 1` | registry 只接受当前版本，不在读取时升级 |
 | 项目会话快照 | `schema_version = 1` | 缺失或不同版本直接失败 |
 | Memory Markdown | frontmatter `schema_version: 1` | 缺字段、类型错误、文件名与 ID 不同都失败 |

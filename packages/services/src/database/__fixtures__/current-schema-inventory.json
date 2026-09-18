@@ -4,37 +4,37 @@
       "type": "index",
       "name": "attachment_asset_hash_status_idx",
       "tbl_name": "attachment_asset",
-      "sql": "CREATE INDEX `attachment_asset_hash_status_idx`\r\n  ON `attachment_asset` (`sha256`, `status`)"
+      "sql": "CREATE INDEX `attachment_asset_hash_status_idx` ON `attachment_asset` (`sha256`,`status`)"
     },
     {
       "type": "index",
       "name": "attachment_asset_status_updated_idx",
       "tbl_name": "attachment_asset",
-      "sql": "CREATE INDEX `attachment_asset_status_updated_idx`\r\n  ON `attachment_asset` (`status`, `updated_at`)"
+      "sql": "CREATE INDEX `attachment_asset_status_updated_idx` ON `attachment_asset` (`status`,`updated_at`)"
     },
     {
       "type": "index",
       "name": "attachment_lease_asset_owner_unique",
       "tbl_name": "attachment_lease",
-      "sql": "CREATE UNIQUE INDEX `attachment_lease_asset_owner_unique`\r\n  ON `attachment_lease` (`asset_id`, `owner_kind`, `owner_id`)"
+      "sql": "CREATE UNIQUE INDEX `attachment_lease_asset_owner_unique` ON `attachment_lease` (`asset_id`,`owner_kind`,`owner_id`)"
     },
     {
       "type": "index",
       "name": "attachment_lease_expiry_idx",
       "tbl_name": "attachment_lease",
-      "sql": "CREATE INDEX `attachment_lease_expiry_idx`\r\n  ON `attachment_lease` (`expires_at`, `asset_id`)"
+      "sql": "CREATE INDEX `attachment_lease_expiry_idx` ON `attachment_lease` (`expires_at`,`asset_id`)"
     },
     {
       "type": "index",
       "name": "attachment_representation_asset_idx",
       "tbl_name": "attachment_representation",
-      "sql": "CREATE INDEX `attachment_representation_asset_idx`\r\n  ON `attachment_representation` (`asset_id`, `created_at`)"
+      "sql": "CREATE INDEX `attachment_representation_asset_idx` ON `attachment_representation` (`asset_id`,`created_at`)"
     },
     {
       "type": "index",
       "name": "attachment_representation_asset_kind_cache_unique",
       "tbl_name": "attachment_representation",
-      "sql": "CREATE UNIQUE INDEX `attachment_representation_asset_kind_cache_unique`\r\n  ON `attachment_representation` (`asset_id`, `kind`, `cache_key`)"
+      "sql": "CREATE UNIQUE INDEX `attachment_representation_asset_kind_cache_unique` ON `attachment_representation` (`asset_id`,`kind`,`cache_key`)"
     },
     {
       "type": "index",
@@ -47,30 +47,6 @@
       "name": "channel_delivery_status_idx",
       "tbl_name": "channel_delivery",
       "sql": "CREATE INDEX `channel_delivery_status_idx` ON `channel_delivery` (`status`,`updated_at`)"
-    },
-    {
-      "type": "index",
-      "name": "cron_job_enabled_next_idx",
-      "tbl_name": "cron_job",
-      "sql": "CREATE INDEX `cron_job_enabled_next_idx` ON `cron_job` (`enabled`,`next_run_at`)"
-    },
-    {
-      "type": "index",
-      "name": "cron_job_name_unique",
-      "tbl_name": "cron_job",
-      "sql": "CREATE UNIQUE INDEX `cron_job_name_unique` ON `cron_job` (`name`)"
-    },
-    {
-      "type": "index",
-      "name": "cron_run_job_started_idx",
-      "tbl_name": "cron_run",
-      "sql": "CREATE INDEX `cron_run_job_started_idx` ON `cron_run` (`job_id`,`started_at`)"
-    },
-    {
-      "type": "index",
-      "name": "cron_run_status_idx",
-      "tbl_name": "cron_run",
-      "sql": "CREATE INDEX `cron_run_status_idx` ON `cron_run` (`status`)"
     },
     {
       "type": "index",
@@ -88,25 +64,25 @@
       "type": "index",
       "name": "permission_session_status_idx",
       "tbl_name": "permission_request",
-      "sql": "CREATE INDEX permission_session_status_idx ON permission_request(session_id, status)"
+      "sql": "CREATE INDEX `permission_session_status_idx` ON `permission_request` (`session_id`,`status`)"
     },
     {
       "type": "index",
       "name": "project_location_active_path",
       "tbl_name": "project_location",
-      "sql": "CREATE UNIQUE INDEX `project_location_active_path` ON `project_location` (`normalized_path`) WHERE `status` = 'active'"
+      "sql": "CREATE UNIQUE INDEX `project_location_active_path` ON `project_location` (`normalized_path`) WHERE \"project_location\".\"status\" = 'active'"
     },
     {
       "type": "index",
       "name": "project_location_active_project",
       "tbl_name": "project_location",
-      "sql": "CREATE UNIQUE INDEX `project_location_active_project` ON `project_location` (`project_id`) WHERE `status` = 'active'"
+      "sql": "CREATE UNIQUE INDEX `project_location_active_project` ON `project_location` (`project_id`) WHERE \"project_location\".\"status\" = 'active'"
     },
     {
       "type": "index",
       "name": "project_location_project_idx",
       "tbl_name": "project_location",
-      "sql": "CREATE INDEX `project_location_project_idx` ON `project_location` (`project_id`, `status`)"
+      "sql": "CREATE INDEX `project_location_project_idx` ON `project_location` (`project_id`,`status`)"
     },
     {
       "type": "index",
@@ -154,13 +130,19 @@
       "type": "index",
       "name": "session_cwd_updated_idx",
       "tbl_name": "session",
-      "sql": "CREATE INDEX session_cwd_updated_idx ON session(cwd, updated_at)"
+      "sql": "CREATE INDEX `session_cwd_updated_idx` ON `session` (`cwd`,`updated_at`)"
+    },
+    {
+      "type": "index",
+      "name": "session_event_seq_unique",
+      "tbl_name": "session_event",
+      "sql": "CREATE UNIQUE INDEX `session_event_seq_unique` ON `session_event` (`seq`)"
     },
     {
       "type": "index",
       "name": "session_event_session_seq_idx",
       "tbl_name": "session_event",
-      "sql": "CREATE INDEX session_event_session_seq_idx ON session_event(session_id, seq)"
+      "sql": "CREATE INDEX `session_event_session_seq_idx` ON `session_event` (`session_id`,`seq`)"
     },
     {
       "type": "index",
@@ -184,7 +166,7 @@
       "type": "index",
       "name": "session_goal_session_open_unique",
       "tbl_name": "session_goal",
-      "sql": "CREATE UNIQUE INDEX `session_goal_session_open_unique` ON `session_goal` (`session_id`) WHERE `status` IN ('active','waiting_user','blocked','paused')"
+      "sql": "CREATE UNIQUE INDEX `session_goal_session_open_unique` ON `session_goal` (`session_id`) WHERE \"session_goal\".\"status\" IN ('active','waiting_user','blocked','paused')"
     },
     {
       "type": "index",
@@ -196,43 +178,73 @@
       "type": "index",
       "name": "session_input_attachment_asset_idx",
       "tbl_name": "session_input_attachment",
-      "sql": "CREATE INDEX `session_input_attachment_asset_idx`\r\n  ON `session_input_attachment` (`asset_id`)"
+      "sql": "CREATE INDEX `session_input_attachment_asset_idx` ON `session_input_attachment` (`asset_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_input_attachment_input_asset_unique",
+      "tbl_name": "session_input_attachment",
+      "sql": "CREATE UNIQUE INDEX `session_input_attachment_input_asset_unique` ON `session_input_attachment` (`input_id`,`asset_id`)"
     },
     {
       "type": "index",
       "name": "session_input_attachment_input_seq_idx",
       "tbl_name": "session_input_attachment",
-      "sql": "CREATE INDEX `session_input_attachment_input_seq_idx`\r\n  ON `session_input_attachment` (`input_id`, `seq`)"
+      "sql": "CREATE INDEX `session_input_attachment_input_seq_idx` ON `session_input_attachment` (`input_id`,`seq`)"
+    },
+    {
+      "type": "index",
+      "name": "session_input_attachment_input_seq_unique",
+      "tbl_name": "session_input_attachment",
+      "sql": "CREATE UNIQUE INDEX `session_input_attachment_input_seq_unique` ON `session_input_attachment` (`input_id`,`seq`)"
     },
     {
       "type": "index",
       "name": "session_input_attachment_session_idx",
       "tbl_name": "session_input_attachment",
-      "sql": "CREATE INDEX `session_input_attachment_session_idx`\r\n  ON `session_input_attachment` (`session_id`)"
+      "sql": "CREATE INDEX `session_input_attachment_session_idx` ON `session_input_attachment` (`session_id`)"
     },
     {
       "type": "index",
       "name": "session_input_session_idx",
       "tbl_name": "session_input",
-      "sql": "CREATE INDEX session_input_session_idx ON session_input(session_id)"
+      "sql": "CREATE INDEX `session_input_session_idx` ON `session_input` (`session_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_input_session_seq",
+      "tbl_name": "session_input",
+      "sql": "CREATE UNIQUE INDEX `session_input_session_seq` ON `session_input` (`session_id`,`seq`)"
     },
     {
       "type": "index",
       "name": "session_message_session_idx",
       "tbl_name": "session_message",
-      "sql": "CREATE INDEX session_message_session_idx ON session_message(session_id)"
+      "sql": "CREATE INDEX `session_message_session_idx` ON `session_message` (`session_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_message_session_seq",
+      "tbl_name": "session_message",
+      "sql": "CREATE UNIQUE INDEX `session_message_session_seq` ON `session_message` (`session_id`,`seq`)"
     },
     {
       "type": "index",
       "name": "session_parent_idx",
       "tbl_name": "session",
-      "sql": "CREATE INDEX session_parent_idx ON session(parent_id)"
+      "sql": "CREATE INDEX `session_parent_idx` ON `session` (`parent_id`)"
     },
     {
       "type": "index",
       "name": "session_part_message_idx",
       "tbl_name": "session_message_part",
-      "sql": "CREATE INDEX session_part_message_idx ON session_message_part(message_id)"
+      "sql": "CREATE INDEX `session_part_message_idx` ON `session_message_part` (`message_id`)"
+    },
+    {
+      "type": "index",
+      "name": "session_part_session_seq",
+      "tbl_name": "session_message_part",
+      "sql": "CREATE UNIQUE INDEX `session_part_session_seq` ON `session_message_part` (`session_id`,`seq`)"
     },
     {
       "type": "index",
@@ -256,25 +268,25 @@
       "type": "index",
       "name": "session_run_input_idx",
       "tbl_name": "session_run",
-      "sql": "CREATE INDEX session_run_input_idx ON session_run(input_id)"
+      "sql": "CREATE INDEX `session_run_input_idx` ON `session_run` (`input_id`)"
     },
     {
       "type": "index",
       "name": "session_run_session_idx",
       "tbl_name": "session_run",
-      "sql": "CREATE INDEX session_run_session_idx ON session_run(session_id, created_at)"
+      "sql": "CREATE INDEX `session_run_session_idx` ON `session_run` (`session_id`,`created_at`)"
     },
     {
       "type": "index",
       "name": "session_task_request_identity_idx",
       "tbl_name": "session_task",
-      "sql": "CREATE UNIQUE INDEX `session_task_request_identity_idx`\r\n  ON `session_task` (`session_id`, `request_namespace`, `request_id`)"
+      "sql": "CREATE UNIQUE INDEX `session_task_request_identity_idx` ON `session_task` (`session_id`,`request_namespace`,`request_id`)"
     },
     {
       "type": "index",
       "name": "session_task_session_idx",
       "tbl_name": "session_task",
-      "sql": "CREATE INDEX session_task_session_idx ON session_task(session_id, created_at)"
+      "sql": "CREATE INDEX `session_task_session_idx` ON `session_task` (`session_id`,`created_at`)"
     },
     {
       "type": "index",
@@ -298,205 +310,193 @@
       "type": "table",
       "name": "application_owner",
       "tbl_name": "application_owner",
-      "sql": "CREATE TABLE `application_owner` (\r\n\t`key` text PRIMARY KEY NOT NULL,\r\n\t`owner_id` text NOT NULL,\r\n\t`pid` integer NOT NULL,\r\n\t`generation` integer NOT NULL,\r\n\t`started_at` integer NOT NULL,\r\n\t`heartbeat_at` integer NOT NULL\r\n)"
+      "sql": "CREATE TABLE `application_owner` ( `key` text PRIMARY KEY NOT NULL, `owner_id` text NOT NULL, `pid` integer NOT NULL, `generation` integer NOT NULL, `started_at` integer NOT NULL, `heartbeat_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "application_storage_format",
       "tbl_name": "application_storage_format",
-      "sql": "CREATE TABLE `application_storage_format` (\r\n\t`id` integer PRIMARY KEY NOT NULL CHECK (`id` = 1),\r\n\t`version` integer NOT NULL\r\n)"
+      "sql": "CREATE TABLE `application_storage_format` ( `id` integer PRIMARY KEY NOT NULL, `version` integer NOT NULL, CONSTRAINT \"application_storage_format_singleton\" CHECK(\"application_storage_format\".\"id\" = 1) )"
     },
     {
       "type": "table",
       "name": "attachment_asset",
       "tbl_name": "attachment_asset",
-      "sql": "CREATE TABLE `attachment_asset` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `display_name` text NOT NULL,\r\n  `declared_media_type` text,\r\n  `media_type` text,\r\n  `size_bytes` integer,\r\n  `sha256` text,\r\n  `status` text NOT NULL,\r\n  `staging_name` text,\r\n  `failure_code` text,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL,\r\n  `deleted_at` integer\r\n)"
+      "sql": "CREATE TABLE `attachment_asset` ( `id` text PRIMARY KEY NOT NULL, `display_name` text NOT NULL, `declared_media_type` text, `media_type` text, `size_bytes` integer, `sha256` text, `status` text NOT NULL, `staging_name` text, `failure_code` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `deleted_at` integer )"
     },
     {
       "type": "table",
       "name": "attachment_lease",
       "tbl_name": "attachment_lease",
-      "sql": "CREATE TABLE `attachment_lease` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `asset_id` text NOT NULL,\r\n  `owner_kind` text NOT NULL,\r\n  `owner_id` text NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  `renewed_at` integer NOT NULL,\r\n  `expires_at` integer NOT NULL,\r\n  FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `attachment_lease` ( `id` text PRIMARY KEY NOT NULL, `asset_id` text NOT NULL, `owner_kind` text NOT NULL, `owner_id` text NOT NULL, `created_at` integer NOT NULL, `renewed_at` integer NOT NULL, `expires_at` integer NOT NULL, FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "attachment_representation",
       "tbl_name": "attachment_representation",
-      "sql": "CREATE TABLE `attachment_representation` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `asset_id` text NOT NULL,\r\n  `kind` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `processor` text NOT NULL,\r\n  `processor_version` text NOT NULL,\r\n  `cache_key` text NOT NULL,\r\n  `media_type` text NOT NULL,\r\n  `text` text,\r\n  `error` text,\r\n  `metadata_json` text NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL,\r\n  FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `attachment_representation` ( `id` text PRIMARY KEY NOT NULL, `asset_id` text NOT NULL, `kind` text NOT NULL, `status` text NOT NULL, `processor` text NOT NULL, `processor_version` text NOT NULL, `cache_key` text NOT NULL, `media_type` text NOT NULL, `text` text, `error` text, `metadata_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "channel_delivery",
       "tbl_name": "channel_delivery",
-      "sql": "CREATE TABLE `channel_delivery` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`conversation_id` text NOT NULL,\r\n\t`connector` text NOT NULL,\r\n\t`account_id` text NOT NULL,\r\n\t`chat_id` text NOT NULL,\r\n\t`thread_id` text NOT NULL DEFAULT '',\r\n\t`session_id` text NOT NULL,\r\n\t`input_id` text NOT NULL,\r\n\t`run_id` text NOT NULL,\r\n\t`external_message_id` text NOT NULL,\r\n\t`content` text NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`attempt_count` integer NOT NULL DEFAULT 0,\r\n\t`external_delivery_id` text,\r\n\t`error` text,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\t`sent_at` integer,\r\n\tFOREIGN KEY (`conversation_id`) REFERENCES `external_conversation`(`id`) ON UPDATE no action ON DELETE cascade,\r\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade,\r\n\tFOREIGN KEY (`input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE cascade,\r\n\tFOREIGN KEY (`run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
-    },
-    {
-      "type": "table",
-      "name": "cron_job",
-      "tbl_name": "cron_job",
-      "sql": "CREATE TABLE `cron_job` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`name` text NOT NULL,\r\n\t`expression` text NOT NULL,\r\n\t`command` text NOT NULL,\r\n\t`cwd` text NOT NULL,\r\n\t`timezone` text,\r\n\t`enabled` integer NOT NULL,\r\n\t`last_run_at` integer,\r\n\t`next_run_at` integer,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL\r\n)"
-    },
-    {
-      "type": "table",
-      "name": "cron_run",
-      "tbl_name": "cron_run",
-      "sql": "CREATE TABLE `cron_run` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`job_id` text NOT NULL,\r\n\t`job_name` text NOT NULL,\r\n\t`cause` text NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`output` text,\r\n\t`error` text,\r\n\t`started_at` integer NOT NULL,\r\n\t`finished_at` integer\r\n)"
+      "sql": "CREATE TABLE `channel_delivery` ( `id` text PRIMARY KEY NOT NULL, `conversation_id` text NOT NULL, `connector` text NOT NULL, `account_id` text NOT NULL, `chat_id` text NOT NULL, `thread_id` text DEFAULT '' NOT NULL, `session_id` text NOT NULL, `input_id` text NOT NULL, `run_id` text NOT NULL, `external_message_id` text NOT NULL, `content` text NOT NULL, `status` text NOT NULL, `attempt_count` integer DEFAULT 0 NOT NULL, `external_delivery_id` text, `platform_meta_json` text, `error` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `sent_at` integer, FOREIGN KEY (`conversation_id`) REFERENCES `external_conversation`(`id`) ON UPDATE no action ON DELETE cascade, FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade, FOREIGN KEY (`input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE cascade, FOREIGN KEY (`run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "external_conversation",
       "tbl_name": "external_conversation",
-      "sql": "CREATE TABLE `external_conversation` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`connector` text NOT NULL,\r\n\t`account_id` text NOT NULL,\r\n\t`workspace_id` text,\r\n\t`chat_id` text NOT NULL,\r\n\t`thread_id` text NOT NULL DEFAULT '',\r\n\t`session_id` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\tFOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `external_conversation` ( `id` text PRIMARY KEY NOT NULL, `connector` text NOT NULL, `account_id` text NOT NULL, `workspace_id` text, `chat_id` text NOT NULL, `thread_id` text DEFAULT '' NOT NULL, `session_id` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "permission_request",
       "tbl_name": "permission_request",
-      "sql": "CREATE TABLE permission_request (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, run_id TEXT, tool_name TEXT NOT NULL,\r\n  payload_json TEXT NOT NULL, status TEXT NOT NULL, decision TEXT, decided_by_client_id TEXT,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL\r\n)"
+      "sql": "CREATE TABLE `permission_request` ( `id` text PRIMARY KEY, `session_id` text NOT NULL, `run_id` text, `tool_name` text NOT NULL, `payload_json` text NOT NULL, `status` text NOT NULL, `decision` text, `decided_by_client_id` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "project",
       "tbl_name": "project",
-      "sql": "CREATE TABLE `project` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `name` text NOT NULL,\r\n  `pinned_at` integer,\r\n  `last_opened_at` integer NOT NULL,\r\n  `archived_at` integer,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL\r\n, `default_shell` text)"
+      "sql": "CREATE TABLE `project` ( `id` text PRIMARY KEY NOT NULL, `name` text NOT NULL, `pinned_at` integer, `default_shell` text, `last_opened_at` integer NOT NULL, `archived_at` integer, `created_at` integer NOT NULL, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "project_location",
       "tbl_name": "project_location",
-      "sql": "CREATE TABLE `project_location` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `project_id` text NOT NULL,\r\n  `path` text NOT NULL,\r\n  `normalized_path` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `bound_at` integer NOT NULL,\r\n  `last_verified_at` integer,\r\n  FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `project_location` ( `id` text PRIMARY KEY NOT NULL, `project_id` text NOT NULL, `path` text NOT NULL, `normalized_path` text NOT NULL, `status` text NOT NULL, `bound_at` integer NOT NULL, `last_verified_at` integer, FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "projection_settlement",
       "tbl_name": "projection_settlement",
-      "sql": "CREATE TABLE `projection_settlement` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`projector` text NOT NULL,\r\n\t`root_session_id` text NOT NULL,\r\n\t`event_sequence` integer NOT NULL,\r\n\t`action` text NOT NULL,\r\n\t`payload_json` text NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`attempt_count` integer DEFAULT 0 NOT NULL,\r\n\t`last_error` text,\r\n\t`next_retry_at` integer,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\t`resolved_at` integer\r\n)"
+      "sql": "CREATE TABLE `projection_settlement` ( `id` text PRIMARY KEY NOT NULL, `projector` text NOT NULL, `root_session_id` text NOT NULL, `event_sequence` integer NOT NULL, `action` text NOT NULL, `payload_json` text NOT NULL, `status` text NOT NULL, `attempt_count` integer DEFAULT 0 NOT NULL, `last_error` text, `next_retry_at` integer, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `resolved_at` integer )"
     },
     {
       "type": "table",
       "name": "retention_audit",
       "tbl_name": "retention_audit",
-      "sql": "CREATE TABLE `retention_audit` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`policy` text NOT NULL,\r\n\t`result_json` text NOT NULL,\r\n\t`created_at` integer NOT NULL\r\n)"
+      "sql": "CREATE TABLE `retention_audit` ( `id` text PRIMARY KEY NOT NULL, `policy` text NOT NULL, `result_json` text NOT NULL, `created_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "scheduled_run",
       "tbl_name": "scheduled_run",
-      "sql": "CREATE TABLE `scheduled_run` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `task_id` text NOT NULL,\r\n  `cause` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `scheduled_for` integer NOT NULL,\r\n  `session_id` text,\r\n  `run_id` text,\r\n  `summary` text,\r\n  `error` text,\r\n  `unread` integer NOT NULL,\r\n  `attention_reason` text,\r\n  `created_at` integer NOT NULL,\r\n  `started_at` integer,\r\n  `finished_at` integer,\r\n  `updated_at` integer NOT NULL\r\n)"
+      "sql": "CREATE TABLE `scheduled_run` ( `id` text PRIMARY KEY NOT NULL, `task_id` text NOT NULL, `cause` text NOT NULL, `status` text NOT NULL, `scheduled_for` integer NOT NULL, `session_id` text, `run_id` text, `summary` text, `error` text, `unread` integer NOT NULL, `attention_reason` text, `created_at` integer NOT NULL, `started_at` integer, `finished_at` integer, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "scheduled_task",
       "tbl_name": "scheduled_task",
-      "sql": "CREATE TABLE `scheduled_task` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `name` text NOT NULL,\r\n  `description` text,\r\n  `prompt` text NOT NULL,\r\n  `recurrence` text NOT NULL,\r\n  `recurrence_format` text NOT NULL,\r\n  `timezone` text NOT NULL,\r\n  `status` text NOT NULL,\r\n  `destination` text NOT NULL,\r\n  `session_id` text,\r\n  `project_paths_json` text NOT NULL,\r\n  `execution_mode` text NOT NULL,\r\n  `model` text,\r\n  `effort` text,\r\n  `skill_names_json` text NOT NULL,\r\n  `plugin_names_json` text NOT NULL,\r\n  `permission_profile_json` text NOT NULL,\r\n  `overlap_policy` text NOT NULL,\r\n  `missed_run_policy` text NOT NULL,\r\n  `stop_policy_json` text,\r\n  `created_by` text NOT NULL,\r\n  `created_from_session_id` text,\r\n  `last_run_at` integer,\r\n  `next_run_at` integer,\r\n  `run_count` integer NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  `updated_at` integer NOT NULL\r\n)"
+      "sql": "CREATE TABLE `scheduled_task` ( `id` text PRIMARY KEY NOT NULL, `name` text NOT NULL, `description` text, `prompt` text NOT NULL, `recurrence` text NOT NULL, `recurrence_format` text NOT NULL, `timezone` text NOT NULL, `status` text NOT NULL, `destination` text NOT NULL, `session_id` text, `project_paths_json` text NOT NULL, `execution_mode` text NOT NULL, `model` text, `effort` text, `skill_names_json` text NOT NULL, `plugin_names_json` text NOT NULL, `permission_profile_json` text NOT NULL, `overlap_policy` text NOT NULL, `missed_run_policy` text NOT NULL, `stop_policy_json` text, `created_by` text NOT NULL, `created_from_session_id` text, `last_run_at` integer, `next_run_at` integer, `run_count` integer NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "session",
       "tbl_name": "session",
-      "sql": "CREATE TABLE session (\r\n  id TEXT PRIMARY KEY, parent_id TEXT, cwd TEXT NOT NULL, title TEXT NOT NULL,\r\n  model TEXT NOT NULL, agent TEXT, status TEXT NOT NULL, metadata_json TEXT NOT NULL,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER\r\n, `project_id` text REFERENCES project(id), `cwd_relative` text)"
+      "sql": "CREATE TABLE `session` ( `id` text PRIMARY KEY, `parent_id` text, `project_id` text, `cwd` text NOT NULL, `cwd_relative` text, `title` text NOT NULL, `model` text NOT NULL, `agent` text, `status` text NOT NULL, `metadata_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `archived_at` integer, FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON UPDATE no action ON DELETE no action )"
     },
     {
       "type": "table",
       "name": "session_event",
       "tbl_name": "session_event",
-      "sql": "CREATE TABLE session_event (\r\n  id TEXT PRIMARY KEY, seq INTEGER NOT NULL UNIQUE, type TEXT NOT NULL, session_id TEXT,\r\n  payload_json TEXT NOT NULL, created_at INTEGER NOT NULL\r\n, `schema_version` integer DEFAULT 1 NOT NULL)"
+      "sql": "CREATE TABLE `session_event` ( `id` text PRIMARY KEY, `seq` integer NOT NULL, `type` text NOT NULL, `schema_version` integer DEFAULT 1 NOT NULL, `session_id` text, `payload_json` text NOT NULL, `created_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "session_event_sequence",
       "tbl_name": "session_event_sequence",
-      "sql": "CREATE TABLE session_event_sequence (\r\n  id INTEGER PRIMARY KEY CHECK (id = 1),\r\n  reserved_through INTEGER NOT NULL\r\n)"
+      "sql": "CREATE TABLE `session_event_sequence` ( `id` integer PRIMARY KEY, `reserved_through` integer NOT NULL, CONSTRAINT \"session_event_sequence_singleton\" CHECK(\"session_event_sequence\".\"id\" = 1) )"
     },
     {
       "type": "table",
       "name": "session_goal",
       "tbl_name": "session_goal",
-      "sql": "CREATE TABLE `session_goal` (`id` text PRIMARY KEY NOT NULL, `session_id` text NOT NULL REFERENCES `session`(`id`) ON DELETE cascade, `objective` text NOT NULL, `revision` integer NOT NULL, `status` text NOT NULL, `max_auto_turns` integer NOT NULL, `auto_turns_used` integer NOT NULL, `no_progress_count` integer NOT NULL, `current_run_id` text, `reason` text, `wait_json` text, `evidence_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `blocker_key` text, `last_assessment_json` text, `plugin_id` text)"
+      "sql": "CREATE TABLE `session_goal` ( `id` text PRIMARY KEY NOT NULL, `session_id` text NOT NULL, `objective` text NOT NULL, `plugin_id` text, `revision` integer NOT NULL, `status` text NOT NULL, `max_auto_turns` integer NOT NULL, `auto_turns_used` integer NOT NULL, `no_progress_count` integer NOT NULL, `blocker_key` text, `last_assessment_json` text, `current_run_id` text, `reason` text, `wait_json` text, `evidence_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "session_goal_assessment",
       "tbl_name": "session_goal_assessment",
-      "sql": "CREATE TABLE `session_goal_assessment` (`id` text PRIMARY KEY NOT NULL, `goal_id` text NOT NULL REFERENCES `session_goal`(`id`) ON DELETE cascade, `revision` integer NOT NULL, `run_id` text NOT NULL, `assessment_json` text NOT NULL, `created_at` integer NOT NULL)"
+      "sql": "CREATE TABLE `session_goal_assessment` ( `id` text PRIMARY KEY NOT NULL, `goal_id` text NOT NULL, `revision` integer NOT NULL, `run_id` text NOT NULL, `assessment_json` text NOT NULL, `created_at` integer NOT NULL, FOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "session_goal_continuation",
       "tbl_name": "session_goal_continuation",
-      "sql": "CREATE TABLE `session_goal_continuation` (`id` text PRIMARY KEY NOT NULL, `goal_id` text NOT NULL REFERENCES `session_goal`(`id`) ON DELETE cascade, `revision` integer NOT NULL, `previous_run_id` text NOT NULL, `input_id` text, `run_id` text, `status` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL)"
+      "sql": "CREATE TABLE `session_goal_continuation` ( `id` text PRIMARY KEY NOT NULL, `goal_id` text NOT NULL, `revision` integer NOT NULL, `previous_run_id` text NOT NULL, `input_id` text, `run_id` text, `status` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, FOREIGN KEY (`goal_id`) REFERENCES `session_goal`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "session_goal_request",
       "tbl_name": "session_goal_request",
-      "sql": "CREATE TABLE `session_goal_request` (`request_id` text PRIMARY KEY NOT NULL, `session_id` text NOT NULL REFERENCES `session`(`id`) ON DELETE cascade, `fingerprint` text NOT NULL, `status` text NOT NULL, `goal_id` text, `result_json` text, `error` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL)"
+      "sql": "CREATE TABLE `session_goal_request` ( `request_id` text PRIMARY KEY NOT NULL, `session_id` text NOT NULL, `fingerprint` text NOT NULL, `status` text NOT NULL, `goal_id` text, `result_json` text, `error` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "session_input",
       "tbl_name": "session_input",
-      "sql": "CREATE TABLE session_input (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL, delivery TEXT NOT NULL,\r\n  content TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL, `items_json` text NOT NULL,\r\n  UNIQUE(session_id, seq)\r\n)"
+      "sql": "CREATE TABLE `session_input` ( `id` text PRIMARY KEY, `session_id` text NOT NULL, `seq` integer NOT NULL, `delivery` text NOT NULL, `content` text NOT NULL, `items_json` text NOT NULL, `metadata_json` text NOT NULL, `created_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "session_input_attachment",
       "tbl_name": "session_input_attachment",
-      "sql": "CREATE TABLE `session_input_attachment` (\r\n  `id` text PRIMARY KEY NOT NULL,\r\n  `session_id` text NOT NULL,\r\n  `input_id` text NOT NULL,\r\n  `asset_id` text NOT NULL,\r\n  `seq` integer NOT NULL,\r\n  `intent` text NOT NULL,\r\n  `display_name` text NOT NULL,\r\n  `media_type` text NOT NULL,\r\n  `size_bytes` integer NOT NULL,\r\n  `metadata_json` text NOT NULL,\r\n  `created_at` integer NOT NULL,\r\n  FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade,\r\n  FOREIGN KEY (`input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE cascade,\r\n  FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE restrict,\r\n  CONSTRAINT `session_input_attachment_input_seq_unique` UNIQUE(`input_id`, `seq`),\r\n  CONSTRAINT `session_input_attachment_input_asset_unique` UNIQUE(`input_id`, `asset_id`)\r\n)"
+      "sql": "CREATE TABLE `session_input_attachment` ( `id` text PRIMARY KEY NOT NULL, `session_id` text NOT NULL, `input_id` text NOT NULL, `asset_id` text NOT NULL, `seq` integer NOT NULL, `intent` text NOT NULL, `display_name` text NOT NULL, `media_type` text NOT NULL, `size_bytes` integer NOT NULL, `metadata_json` text NOT NULL, `created_at` integer NOT NULL, FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE cascade, FOREIGN KEY (`input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE cascade, FOREIGN KEY (`asset_id`) REFERENCES `attachment_asset`(`id`) ON UPDATE no action ON DELETE restrict )"
     },
     {
       "type": "table",
       "name": "session_message",
       "tbl_name": "session_message",
-      "sql": "CREATE TABLE session_message (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL,\r\n  run_id TEXT, input_id TEXT, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL,\r\n  updated_at INTEGER NOT NULL, UNIQUE(session_id, seq)\r\n)"
+      "sql": "CREATE TABLE `session_message` ( `id` text PRIMARY KEY, `session_id` text NOT NULL, `seq` integer NOT NULL, `role` text NOT NULL, `run_id` text, `input_id` text, `metadata_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "session_message_part",
       "tbl_name": "session_message_part",
-      "sql": "CREATE TABLE session_message_part (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, message_id TEXT NOT NULL, seq INTEGER NOT NULL,\r\n  type TEXT NOT NULL, status TEXT NOT NULL, text TEXT, tool_use_id TEXT, tool_name TEXT,\r\n  input_json TEXT, output_json TEXT, is_error INTEGER, metadata_json TEXT NOT NULL,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, `asset_id` text, `attachment_intent` text, `display_name` text, `media_type` text, `size_bytes` integer, `transformation_kind` text, `representation_id` text, `processor` text, `transformation_error` text, UNIQUE(session_id, seq)\r\n)"
+      "sql": "CREATE TABLE `session_message_part` ( `id` text PRIMARY KEY, `session_id` text NOT NULL, `message_id` text NOT NULL, `seq` integer NOT NULL, `type` text NOT NULL, `status` text NOT NULL, `text` text, `tool_use_id` text, `tool_name` text, `input_json` text, `output_json` text, `is_error` integer, `asset_id` text, `attachment_intent` text, `display_name` text, `media_type` text, `size_bytes` integer, `transformation_kind` text, `representation_id` text, `processor` text, `transformation_error` text, `metadata_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "session_run",
       "tbl_name": "session_run",
-      "sql": "CREATE TABLE session_run (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, input_id TEXT, status TEXT NOT NULL,\r\n  started_at INTEGER, finished_at INTEGER, error TEXT, metadata_json TEXT NOT NULL,\r\n  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL\r\n)"
+      "sql": "CREATE TABLE `session_run` ( `id` text PRIMARY KEY, `session_id` text NOT NULL, `input_id` text, `status` text NOT NULL, `started_at` integer, `finished_at` integer, `error` text, `metadata_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "session_run_attempt",
       "tbl_name": "session_run_attempt",
-      "sql": "CREATE TABLE `session_run_attempt` (\r\n\t`id` text PRIMARY KEY NOT NULL,\r\n\t`run_id` text NOT NULL,\r\n\t`sequence` integer NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`provider` text,\r\n\t`model` text,\r\n\t`retry_reason` text,\r\n\t`error_kind` text,\r\n\t`error` text,\r\n\t`input_tokens` integer,\r\n\t`output_tokens` integer,\r\n\t`started_at` integer,\r\n\t`finished_at` integer,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL\r\n)"
+      "sql": "CREATE TABLE `session_run_attempt` ( `id` text PRIMARY KEY NOT NULL, `run_id` text NOT NULL, `sequence` integer NOT NULL, `status` text NOT NULL, `provider` text, `model` text, `retry_reason` text, `error_kind` text, `error` text, `input_tokens` integer, `output_tokens` integer, `started_at` integer, `finished_at` integer, `created_at` integer NOT NULL, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "session_task",
       "tbl_name": "session_task",
-      "sql": "CREATE TABLE session_task (\r\n  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, child_session_id TEXT, run_id TEXT,\r\n  type TEXT NOT NULL, status TEXT NOT NULL, description TEXT NOT NULL, cwd TEXT NOT NULL,\r\n  output TEXT, error TEXT, metadata_json TEXT NOT NULL, created_at INTEGER NOT NULL,\r\n  started_at INTEGER, finished_at INTEGER, updated_at INTEGER NOT NULL\r\n, `request_namespace` text, `request_id` text)"
+      "sql": "CREATE TABLE `session_task` ( `id` text PRIMARY KEY, `session_id` text NOT NULL, `request_namespace` text, `request_id` text, `child_session_id` text, `run_id` text, `type` text NOT NULL, `status` text NOT NULL, `description` text NOT NULL, `cwd` text NOT NULL, `output` text, `error` text, `metadata_json` text NOT NULL, `created_at` integer NOT NULL, `started_at` integer, `finished_at` integer, `updated_at` integer NOT NULL )"
     },
     {
       "type": "table",
       "name": "workflow_event",
       "tbl_name": "workflow_event",
-      "sql": "CREATE TABLE `workflow_event` (\r\n\t`seq` integer PRIMARY KEY AUTOINCREMENT NOT NULL,\r\n\t`workflow_run_id` text NOT NULL,\r\n\t`type` text NOT NULL,\r\n\t`event_json` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\tFOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `workflow_event` ( `seq` integer PRIMARY KEY AUTOINCREMENT NOT NULL, `workflow_run_id` text NOT NULL, `type` text NOT NULL, `event_json` text NOT NULL, `created_at` integer NOT NULL, FOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "workflow_execution_claim",
       "tbl_name": "workflow_execution_claim",
-      "sql": "CREATE TABLE `workflow_execution_claim` (\r\n\t`workflow_run_id` text PRIMARY KEY NOT NULL,\r\n\t`owner_id` text NOT NULL,\r\n\t`generation` integer NOT NULL,\r\n\t`claimed_at` integer NOT NULL,\r\n\t`heartbeat_at` integer NOT NULL,\r\n\t`finished_at` integer,\r\n\t`status` text NOT NULL,\r\n\tFOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `workflow_execution_claim` ( `workflow_run_id` text PRIMARY KEY NOT NULL, `owner_id` text NOT NULL, `generation` integer NOT NULL, `claimed_at` integer NOT NULL, `heartbeat_at` integer NOT NULL, `finished_at` integer, `status` text NOT NULL, FOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade )"
     },
     {
       "type": "table",
       "name": "workflow_run",
       "tbl_name": "workflow_run",
-      "sql": "CREATE TABLE `workflow_run` (\r\n\t`run_id` text PRIMARY KEY NOT NULL,\r\n\t`owner_session_id` text,\r\n\t`owner_input_id` text,\r\n\t`owner_run_id` text,\r\n\t`status` text NOT NULL,\r\n\t`termination` text,\r\n\t`snapshot_json` text NOT NULL,\r\n\t`created_at` integer NOT NULL,\r\n\t`updated_at` integer NOT NULL,\r\n\tFOREIGN KEY (`owner_session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE set null,\r\n\tFOREIGN KEY (`owner_input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE set null,\r\n\tFOREIGN KEY (`owner_run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE set null\r\n)"
+      "sql": "CREATE TABLE `workflow_run` ( `run_id` text PRIMARY KEY NOT NULL, `owner_session_id` text, `owner_input_id` text, `owner_run_id` text, `status` text NOT NULL, `termination` text, `snapshot_json` text NOT NULL, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, FOREIGN KEY (`owner_session_id`) REFERENCES `session`(`id`) ON UPDATE no action ON DELETE set null, FOREIGN KEY (`owner_input_id`) REFERENCES `session_input`(`id`) ON UPDATE no action ON DELETE set null, FOREIGN KEY (`owner_run_id`) REFERENCES `session_run`(`id`) ON UPDATE no action ON DELETE set null )"
     },
     {
       "type": "table",
       "name": "workflow_task_attempt",
       "tbl_name": "workflow_task_attempt",
-      "sql": "CREATE TABLE `workflow_task_attempt` (\r\n\t`workflow_run_id` text NOT NULL,\r\n\t`task_id` text NOT NULL,\r\n\t`attempt` integer NOT NULL,\r\n\t`status` text NOT NULL,\r\n\t`payload_json` text NOT NULL,\r\n\t`started_at` integer NOT NULL,\r\n\t`finished_at` integer,\r\n\tPRIMARY KEY (`workflow_run_id`,`task_id`,`attempt`),\r\n\tFOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade\r\n)"
+      "sql": "CREATE TABLE `workflow_task_attempt` ( `workflow_run_id` text NOT NULL, `task_id` text NOT NULL, `attempt` integer NOT NULL, `status` text NOT NULL, `payload_json` text NOT NULL, `started_at` integer NOT NULL, `finished_at` integer, PRIMARY KEY(`workflow_run_id`, `task_id`, `attempt`), FOREIGN KEY (`workflow_run_id`) REFERENCES `workflow_run`(`run_id`) ON UPDATE no action ON DELETE cascade )"
     }
   ],
   "tables": [
@@ -989,7 +989,7 @@
         },
         {
           "cid": 14,
-          "name": "error",
+          "name": "platform_meta_json",
           "type": "TEXT",
           "notnull": 0,
           "dflt_value": null,
@@ -997,6 +997,14 @@
         },
         {
           "cid": 15,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
           "name": "created_at",
           "type": "INTEGER",
           "notnull": 1,
@@ -1004,7 +1012,7 @@
           "pk": 0
         },
         {
-          "cid": 16,
+          "cid": 17,
           "name": "updated_at",
           "type": "INTEGER",
           "notnull": 1,
@@ -1012,7 +1020,7 @@
           "pk": 0
         },
         {
-          "cid": 17,
+          "cid": 18,
           "name": "sent_at",
           "type": "INTEGER",
           "notnull": 0,
@@ -1062,178 +1070,6 @@
           "match": "NONE"
         }
       ]
-    },
-    {
-      "name": "cron_job",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "name",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "expression",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "command",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "cwd",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "timezone",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "enabled",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "last_run_at",
-          "type": "INTEGER",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "next_run_at",
-          "type": "INTEGER",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "created_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "updated_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": []
-    },
-    {
-      "name": "cron_run",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "job_id",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 2,
-          "name": "job_name",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "cause",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "status",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "output",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "error",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "started_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "finished_at",
-          "type": "INTEGER",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": []
     },
     {
       "name": "external_conversation",
@@ -1439,6 +1275,14 @@
         },
         {
           "cid": 3,
+          "name": "default_shell",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
           "name": "last_opened_at",
           "type": "INTEGER",
           "notnull": 1,
@@ -1446,7 +1290,7 @@
           "pk": 0
         },
         {
-          "cid": 4,
+          "cid": 5,
           "name": "archived_at",
           "type": "INTEGER",
           "notnull": 0,
@@ -1454,7 +1298,7 @@
           "pk": 0
         },
         {
-          "cid": 5,
+          "cid": 6,
           "name": "created_at",
           "type": "INTEGER",
           "notnull": 1,
@@ -1462,18 +1306,10 @@
           "pk": 0
         },
         {
-          "cid": 6,
+          "cid": 7,
           "name": "updated_at",
           "type": "INTEGER",
           "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "default_shell",
-          "type": "TEXT",
-          "notnull": 0,
           "dflt_value": null,
           "pk": 0
         }
@@ -2070,78 +1906,6 @@
         },
         {
           "cid": 2,
-          "name": "cwd",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "title",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "model",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "agent",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "status",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "metadata_json",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "created_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "updated_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "archived_at",
-          "type": "INTEGER",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 11,
           "name": "project_id",
           "type": "TEXT",
           "notnull": 0,
@@ -2149,9 +1913,81 @@
           "pk": 0
         },
         {
-          "cid": 12,
+          "cid": 3,
+          "name": "cwd",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
           "name": "cwd_relative",
           "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "title",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "model",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "agent",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "archived_at",
+          "type": "INTEGER",
           "notnull": 0,
           "dflt_value": null,
           "pk": 0
@@ -2199,6 +2035,14 @@
         },
         {
           "cid": 3,
+          "name": "schema_version",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": "1",
+          "pk": 0
+        },
+        {
+          "cid": 4,
           "name": "session_id",
           "type": "TEXT",
           "notnull": 0,
@@ -2206,7 +2050,7 @@
           "pk": 0
         },
         {
-          "cid": 4,
+          "cid": 5,
           "name": "payload_json",
           "type": "TEXT",
           "notnull": 1,
@@ -2214,19 +2058,11 @@
           "pk": 0
         },
         {
-          "cid": 5,
+          "cid": 6,
           "name": "created_at",
           "type": "INTEGER",
           "notnull": 1,
           "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "schema_version",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": "1",
           "pk": 0
         }
       ],
@@ -2283,6 +2119,14 @@
         },
         {
           "cid": 3,
+          "name": "plugin_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
           "name": "revision",
           "type": "INTEGER",
           "notnull": 1,
@@ -2290,7 +2134,7 @@
           "pk": 0
         },
         {
-          "cid": 4,
+          "cid": 5,
           "name": "status",
           "type": "TEXT",
           "notnull": 1,
@@ -2298,7 +2142,7 @@
           "pk": 0
         },
         {
-          "cid": 5,
+          "cid": 6,
           "name": "max_auto_turns",
           "type": "INTEGER",
           "notnull": 1,
@@ -2306,7 +2150,7 @@
           "pk": 0
         },
         {
-          "cid": 6,
+          "cid": 7,
           "name": "auto_turns_used",
           "type": "INTEGER",
           "notnull": 1,
@@ -2314,7 +2158,7 @@
           "pk": 0
         },
         {
-          "cid": 7,
+          "cid": 8,
           "name": "no_progress_count",
           "type": "INTEGER",
           "notnull": 1,
@@ -2322,55 +2166,7 @@
           "pk": 0
         },
         {
-          "cid": 8,
-          "name": "current_run_id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
           "cid": 9,
-          "name": "reason",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "wait_json",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 11,
-          "name": "evidence_json",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 12,
-          "name": "created_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 13,
-          "name": "updated_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 14,
           "name": "blocker_key",
           "type": "TEXT",
           "notnull": 0,
@@ -2378,7 +2174,7 @@
           "pk": 0
         },
         {
-          "cid": 15,
+          "cid": 10,
           "name": "last_assessment_json",
           "type": "TEXT",
           "notnull": 0,
@@ -2386,10 +2182,50 @@
           "pk": 0
         },
         {
-          "cid": 16,
-          "name": "plugin_id",
+          "cid": 11,
+          "name": "current_run_id",
           "type": "TEXT",
           "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "reason",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "wait_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "evidence_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
           "dflt_value": null,
           "pk": 0
         }
@@ -2695,7 +2531,7 @@
         },
         {
           "cid": 5,
-          "name": "metadata_json",
+          "name": "items_json",
           "type": "TEXT",
           "notnull": 1,
           "dflt_value": null,
@@ -2703,16 +2539,16 @@
         },
         {
           "cid": 6,
-          "name": "created_at",
-          "type": "INTEGER",
+          "name": "metadata_json",
+          "type": "TEXT",
           "notnull": 1,
           "dflt_value": null,
           "pk": 0
         },
         {
           "cid": 7,
-          "name": "items_json",
-          "type": "TEXT",
+          "name": "created_at",
+          "type": "INTEGER",
           "notnull": 1,
           "dflt_value": null,
           "pk": 0
@@ -3024,30 +2860,6 @@
         },
         {
           "cid": 12,
-          "name": "metadata_json",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 13,
-          "name": "created_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 14,
-          "name": "updated_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 15,
           "name": "asset_id",
           "type": "TEXT",
           "notnull": 0,
@@ -3055,7 +2867,7 @@
           "pk": 0
         },
         {
-          "cid": 16,
+          "cid": 13,
           "name": "attachment_intent",
           "type": "TEXT",
           "notnull": 0,
@@ -3063,7 +2875,7 @@
           "pk": 0
         },
         {
-          "cid": 17,
+          "cid": 14,
           "name": "display_name",
           "type": "TEXT",
           "notnull": 0,
@@ -3071,7 +2883,7 @@
           "pk": 0
         },
         {
-          "cid": 18,
+          "cid": 15,
           "name": "media_type",
           "type": "TEXT",
           "notnull": 0,
@@ -3079,7 +2891,7 @@
           "pk": 0
         },
         {
-          "cid": 19,
+          "cid": 16,
           "name": "size_bytes",
           "type": "INTEGER",
           "notnull": 0,
@@ -3087,7 +2899,7 @@
           "pk": 0
         },
         {
-          "cid": 20,
+          "cid": 17,
           "name": "transformation_kind",
           "type": "TEXT",
           "notnull": 0,
@@ -3095,7 +2907,7 @@
           "pk": 0
         },
         {
-          "cid": 21,
+          "cid": 18,
           "name": "representation_id",
           "type": "TEXT",
           "notnull": 0,
@@ -3103,7 +2915,7 @@
           "pk": 0
         },
         {
-          "cid": 22,
+          "cid": 19,
           "name": "processor",
           "type": "TEXT",
           "notnull": 0,
@@ -3111,10 +2923,34 @@
           "pk": 0
         },
         {
-          "cid": 23,
+          "cid": 20,
           "name": "transformation_error",
           "type": "TEXT",
           "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 21,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 22,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 23,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
           "dflt_value": null,
           "pk": 0
         }
@@ -3354,110 +3190,6 @@
         },
         {
           "cid": 2,
-          "name": "child_session_id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 3,
-          "name": "run_id",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 4,
-          "name": "type",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 5,
-          "name": "status",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 6,
-          "name": "description",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 7,
-          "name": "cwd",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 8,
-          "name": "output",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 9,
-          "name": "error",
-          "type": "TEXT",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 10,
-          "name": "metadata_json",
-          "type": "TEXT",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 11,
-          "name": "created_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 12,
-          "name": "started_at",
-          "type": "INTEGER",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 13,
-          "name": "finished_at",
-          "type": "INTEGER",
-          "notnull": 0,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 14,
-          "name": "updated_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        },
-        {
-          "cid": 15,
           "name": "request_namespace",
           "type": "TEXT",
           "notnull": 0,
@@ -3465,10 +3197,114 @@
           "pk": 0
         },
         {
-          "cid": 16,
+          "cid": 3,
           "name": "request_id",
           "type": "TEXT",
           "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "child_session_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "run_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "description",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "cwd",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "output",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "error",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 12,
+          "name": "metadata_json",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 13,
+          "name": "created_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 14,
+          "name": "started_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 15,
+          "name": "finished_at",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 16,
+          "name": "updated_at",
+          "type": "INTEGER",
+          "notnull": 1,
           "dflt_value": null,
           "pk": 0
         }
@@ -3791,7 +3627,7 @@
   "format": [
     {
       "id": 1,
-      "version": 2
+      "version": 3
     }
   ]
 }

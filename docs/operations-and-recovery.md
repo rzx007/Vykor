@@ -13,7 +13,7 @@
 
 ```text
 打开 SQLite
-  -> 检查 storage format = 1
+  -> 检查 storage format = 3
   -> 取得 Application Owner 租约
   -> 恢复 Projection Settlement
   -> 收束失去进程的 Run / Attempt / Permission / Child
@@ -117,9 +117,9 @@ Application backup 可以包含：
 - 不会恢复旧 PID、模型连接、Tool 进程或 live child；
 - 第一次启动会取得新的 owner；
 - 仍为活动态的记录会走普通启动恢复；
-- storage format 必须就是当前版本 1。
+- storage format 必须就是当前版本 3。
 
-不要把旧格式数据库的 marker 手工改成 1。marker 只证明数据确实由当前格式创建，不是转换开关。
+不要把旧格式数据库的 marker 手工改成 3。marker 只证明数据确实由当前格式创建，不是转换开关。
 
 ## 破坏性格式切换
 

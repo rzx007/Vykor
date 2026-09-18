@@ -56,7 +56,7 @@ describe("SessionDatabase", () => {
         database.connection
           .prepare("SELECT version FROM application_storage_format WHERE id = 1")
           .get(),
-      ).toEqual({ version: 2 });
+      ).toEqual({ version: 3 });
 
       database.close();
 

@@ -138,7 +138,7 @@ describe("SessionStore", () => {
   });
 
 
-  it("creates a format 2 database with input attachment and typed part columns", () => {
+  it("creates a format 3 database with input attachment and typed part columns", () => {
     withStore((_store, path) => {
       const database = new Database(path, { readonly: true });
       try {
@@ -146,7 +146,7 @@ describe("SessionStore", () => {
           database
             .prepare("SELECT version FROM application_storage_format WHERE id = 1")
             .get(),
-        ).toEqual({ version: 2 });
+        ).toEqual({ version: 3 });
 
         const refIndexes = database
           .prepare(

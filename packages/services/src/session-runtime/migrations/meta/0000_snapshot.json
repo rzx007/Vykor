@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b544ff6a-5bd8-4cf8-8d0e-69ef42c04ee0",
+  "id": "fbf4c5a8-a7f3-4210-b33c-6f322e60b384",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "application_owner": {
@@ -518,6 +518,13 @@
         },
         "external_delivery_id": {
           "name": "external_delivery_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "platform_meta_json": {
+          "name": "platform_meta_json",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

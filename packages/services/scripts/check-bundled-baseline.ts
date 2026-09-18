@@ -40,7 +40,7 @@ try {
         for (let i = 0; i < 2; i++) {
           const db = SessionDatabase.open({ path: ${JSON.stringify(path)} });
           assert.equal(db.connection.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations'").get().n, 32);
-          assert.equal(db.connection.prepare("SELECT version FROM application_storage_format WHERE id = 1").get().version, 2);
+          assert.equal(db.connection.prepare("SELECT version FROM application_storage_format WHERE id = 1").get().version, 3);
           assert.equal(db.connection.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get().n, 1);
           db.close();
         }
