@@ -23,6 +23,9 @@ export function externalConversationFromRow(
 export function channelDeliveryFromRow(
   row: Record<string, unknown>,
 ): ChannelDeliveryRecord {
+  const platformMeta = row.platform_meta_json
+    ? decodePlatformMeta(row.platform_meta_json as string)
+    : undefined;
   return {
     id: row.id as string,
     conversationId: row.conversation_id as string,
@@ -30,6 +33,7 @@ export function channelDeliveryFromRow(
     accountId: row.account_id as string,
     chatId: row.chat_id as string,
     ...(row.thread_id ? { threadId: row.thread_id as string } : {}),
+    ...(platformMeta ? { platformMeta } : {}),
     sessionId: row.session_id as string,
     inputId: row.input_id as string,
     runId: row.run_id as string,
@@ -45,4 +49,43 @@ export function channelDeliveryFromRow(
     updatedAt: row.updated_at as number,
     ...(row.sent_at ? { sentAt: row.sent_at as number } : {}),
   };
+}
+
+export function encodePlatformMeta(
+  value: Record<string, unknown> | undefined,
+): string | null {
+  if (!value) return null;
+  try {
+    const normalized = JSON.parse(JSON.stringify(value)) as unknown;
+    if (
+      !normalized ||
+      typeof normalized !== "object" ||
+      Array.isArray(normalized) ||
+      Object.keys(normalized as Record<string, unknown>).length === 0
+    ) {
+      return null;
+    }
+    return JSON.stringify(normalized);
+  } catch {
+    return null;
+  }
+}
+
+export function decodePlatformMeta(
+  value: string,
+): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed) ||
+      Object.keys(parsed as Record<string, unknown>).length === 0
+    ) {
+      return undefined;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
 }

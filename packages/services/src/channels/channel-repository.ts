@@ -9,6 +9,7 @@ import type {
 import type { StorageContext } from "../database/storage-context.js";
 import {
   channelDeliveryFromRow,
+  encodePlatformMeta,
   externalConversationFromRow,
 } from "./channel-records.js";
 
@@ -37,6 +38,7 @@ export interface CreateChannelDeliveryInput {
   runId: string;
   externalMessageId: string;
   content: string;
+  platformMeta?: Record<string, unknown>;
 }
 
 export interface UpdateChannelDeliveryInput {
@@ -122,13 +124,14 @@ export class ChannelRepository {
     }
     const timestamp = Date.now();
     const id = input.id ?? randomUUID();
+    const platformMetaJson = encodePlatformMeta(input.platformMeta);
     this.storage.database.connection
       .prepare(
         `INSERT INTO channel_delivery
           (id, conversation_id, connector, account_id, chat_id, thread_id,
            session_id, input_id, run_id, external_message_id, content, status,
-           attempt_count, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)`,
+           attempt_count, platform_meta_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)`,
       )
       .run(
         id,
@@ -142,6 +145,7 @@ export class ChannelRepository {
         input.runId,
         input.externalMessageId,
         input.content,
+        platformMetaJson,
         timestamp,
         timestamp,
       );

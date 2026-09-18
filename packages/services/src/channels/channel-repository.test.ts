@@ -83,4 +83,93 @@ describe("ChannelRepository", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("round-trips platformMeta and omits absent or corrupt values", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ohs-channel-meta-"));
+    const path = join(directory, "sessions.db");
+    const store = new SessionStore({ path });
+    try {
+      store.sessions.create({ id: "session-1", cwd: directory, model: "m" });
+      const input = store.conversationTransactions.admitPrompt({
+        id: "input-1",
+        sessionId: "session-1",
+        content: "hello",
+      });
+      const run = store.runs.createRun({
+        id: "run-1",
+        sessionId: "session-1",
+        inputId: input.id,
+      });
+      const conversation = store.channels.upsertConversation({
+        connector: "feishu",
+        accountId: "account-1",
+        chatId: "chat-1",
+        threadId: "thread-1",
+        sessionId: "session-1",
+      });
+
+      const created = store.channels.createDelivery({
+        id: "delivery-meta",
+        conversationId: conversation.id,
+        connector: "feishu",
+        accountId: "account-1",
+        chatId: "chat-1",
+        threadId: "thread-1",
+        sessionId: "session-1",
+        inputId: input.id,
+        runId: run.id,
+        externalMessageId: "external-1",
+        content: "reply",
+        platformMeta: { rootMessageId: "msg_root", chatType: "group" },
+      });
+
+      expect(created.platformMeta).toEqual({
+        rootMessageId: "msg_root",
+        chatType: "group",
+      });
+      expect(store.channels.getDelivery(created.id)?.platformMeta).toEqual({
+        rootMessageId: "msg_root",
+        chatType: "group",
+      });
+      expect(
+        store.channels.listDeliveries({ connector: "feishu" })[0]?.platformMeta,
+      ).toEqual({ rootMessageId: "msg_root", chatType: "group" });
+
+      // absent -> omitted
+      const input2 = store.conversationTransactions.admitPrompt({
+        id: "input-2",
+        sessionId: "session-1",
+        content: "hello2",
+      });
+      const run2 = store.runs.createRun({
+        id: "run-2",
+        sessionId: "session-1",
+        inputId: input2.id,
+      });
+      const noMeta = store.channels.createDelivery({
+        id: "delivery-no-meta",
+        conversationId: conversation.id,
+        connector: "feishu",
+        accountId: "account-1",
+        chatId: "chat-1",
+        threadId: "thread-1",
+        sessionId: "session-1",
+        inputId: input2.id,
+        runId: run2.id,
+        externalMessageId: "external-2",
+        content: "reply2",
+      });
+      expect(noMeta.platformMeta).toBeUndefined();
+
+      // corrupt JSON on read -> omitted, no throw
+      (store as any).storage.database.connection
+        .prepare("UPDATE channel_delivery SET platform_meta_json = ? WHERE id = ?")
+        .run("not-json", created.id);
+      expect(() => store.channels.getDelivery(created.id)).not.toThrow();
+      expect(store.channels.getDelivery(created.id)?.platformMeta).toBeUndefined();
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
