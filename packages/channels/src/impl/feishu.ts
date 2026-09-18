@@ -6,6 +6,8 @@ export interface FeishuConfig {
   encryptKey?: string;
   verificationToken?: string;
   replyAtBotNames?: string[];
+  /** "feishu"（国内，默认）或 "lark"（国际）。 */
+  domain?: "feishu" | "lark";
 }
 
 interface LarkClient {
@@ -75,10 +77,14 @@ export class FeishuAdapter implements ChannelAdapter {
   async connect(): Promise<void> {
     const lark = await import("@larksuiteoapi/node-sdk");
 
+    const sdkDomain =
+      this.config.domain === "lark" ? lark.Domain.Lark : lark.Domain.Feishu;
+
     this.client = new lark.Client({
       appId: this.config.appId,
       appSecret: this.config.appSecret,
       disableTokenCache: false,
+      domain: sdkDomain,
     }) as unknown as LarkClient;
 
     const eventDispatcher = new lark.EventDispatcher({
@@ -92,6 +98,7 @@ export class FeishuAdapter implements ChannelAdapter {
       appId: this.config.appId,
       appSecret: this.config.appSecret,
       loggerLevel: lark.LoggerLevel.info,
+      domain: sdkDomain,
     }) as unknown as LarkWSClient;
 
     await this.wsClient.start({ eventDispatcher });
