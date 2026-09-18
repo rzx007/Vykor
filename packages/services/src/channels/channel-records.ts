@@ -53,6 +53,7 @@ export function channelDeliveryFromRow(
 
 export function encodePlatformMeta(
   value: Record<string, unknown> | undefined,
+  onWarning?: (message: string) => void,
 ): string | null {
   if (!value) return null;
   try {
@@ -67,6 +68,7 @@ export function encodePlatformMeta(
     }
     return JSON.stringify(normalized);
   } catch {
+    onWarning?.("channel delivery platformMeta could not be normalized; storing null");
     return null;
   }
 }

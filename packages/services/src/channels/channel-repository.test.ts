@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SessionStore } from "../session-runtime/store.js";
 import { decodePlatformMeta, encodePlatformMeta } from "./channel-records.js";
@@ -181,9 +181,14 @@ describe("ChannelRepository", () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
     expect(encodePlatformMeta(cyclic)).toBeNull();
+    const onWarning = vi.fn();
     expect(
-      encodePlatformMeta({ big: 1n } as unknown as Record<string, unknown>),
+      encodePlatformMeta({ big: 1n } as unknown as Record<string, unknown>, onWarning),
     ).toBeNull();
+    expect(onWarning).toHaveBeenCalled();
+    expect(onWarning).toHaveBeenCalledWith(
+      "channel delivery platformMeta could not be normalized; storing null",
+    );
 
     expect(decodePlatformMeta('{"rootMessageId":"msg_root"}')).toEqual({
       rootMessageId: "msg_root",

@@ -214,11 +214,18 @@ describe("ChannelApplicationService contracts", () => {
 
   it("returns platformMeta on pending deliveries", () => {
     const fixture = createFixture();
-    fixture.delivery.platformMeta = { rootMessageId: "msg_root" };
     const service = createService(fixture);
+    const withMeta: ChannelDeliveryRecord = {
+      ...fixture.delivery,
+      platformMeta: { rootMessageId: "msg_root" },
+    };
+    fixture.channels.listDeliveries.mockReturnValueOnce([withMeta]);
 
-    expect(service.pendingDeliveries()[0]?.platformMeta).toEqual({
-      rootMessageId: "msg_root",
+    const pending = service.pendingDeliveries();
+    expect(pending).toEqual([withMeta]);
+    expect(pending[0]?.platformMeta).toEqual({ rootMessageId: "msg_root" });
+    expect(fixture.channels.listDeliveries).toHaveBeenCalledWith({
+      statuses: ["pending", "failed"],
     });
   });
 });

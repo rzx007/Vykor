@@ -7,14 +7,8 @@ import { describe, expect, it } from "vitest";
 
 import { SessionDatabase } from "./session-database.js";
 
-// Captured by running all 21 original migrations at a97604ea before their removal.
-const original = JSON.parse(readFileSync(new URL("./__fixtures__/current-schema-inventory.json", import.meta.url), "utf8"));
-const retiredTables = new Set(["cron_job", "cron_run"]);
-const expected = {
-  ...original,
-  schema: original.schema.filter((row: { tbl_name: string }) => !retiredTables.has(row.tbl_name)),
-  tables: original.tables.filter((row: { name: string }) => !retiredTables.has(row.name)),
-};
+// Regenerated from the current single baseline migration (0000_current_schema).
+const expected = JSON.parse(readFileSync(new URL("./__fixtures__/current-schema-inventory.json", import.meta.url), "utf8"));
 
 function inventory(database: Database.Database) {
   const schema = database.prepare(

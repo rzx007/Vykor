@@ -53,7 +53,6 @@ describe("durable Feishu thread reply", () => {
       attemptCount: 0,
       createdAt: 1,
       updatedAt: 1,
-      platformMeta: { rootMessageId },
     };
 
     const application: DurableChannelPort = {
@@ -91,34 +90,36 @@ describe("durable Feishu thread reply", () => {
     await manager.startAll();
     bridge.start();
 
-    await (
-      adapter as unknown as { _handleEvent(d: unknown): Promise<void> }
-    )._handleEvent({
-      message: {
-        message_id: "message-1",
-        chat_id: "chat-1",
-        chat_type: "group",
-        msg_type: "text",
-        content: JSON.stringify({ text: "question" }),
-        create_time: "1710000000000",
-        thread_id: threadId,
-        root_id: rootMessageId,
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
-        mentions: [],
-      },
-    });
+    try {
+      await (
+        adapter as unknown as { _handleEvent(d: unknown): Promise<void> }
+      )._handleEvent({
+        message: {
+          message_id: "message-1",
+          chat_id: "chat-1",
+          chat_type: "group",
+          msg_type: "text",
+          content: JSON.stringify({ text: "question" }),
+          create_time: "1710000000000",
+          thread_id: threadId,
+          root_id: rootMessageId,
+          sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+          mentions: [],
+        },
+      });
 
-    await vi.waitFor(() => {
-      expect(reply).toHaveBeenCalledOnce();
-    });
-    const call = reply.mock.calls[0]![0] as ReplyCall;
-    expect(call.path.message_id).toBe(rootMessageId);
-    expect(call.data.reply_in_thread).toBe(true);
-    expect(call.data.msg_type).toBe("text");
-    expect(call.data.content).toBe(JSON.stringify({ text: "thread answer" }));
-    expect(create).not.toHaveBeenCalled();
-
-    await bridge.stop();
-    await manager.stopAll();
+      await vi.waitFor(() => {
+        expect(reply).toHaveBeenCalledOnce();
+      });
+      const call = reply.mock.calls[0]![0] as ReplyCall;
+      expect(call.path.message_id).toBe(rootMessageId);
+      expect(call.data.reply_in_thread).toBe(true);
+      expect(call.data.msg_type).toBe("text");
+      expect(call.data.content).toBe(JSON.stringify({ text: "thread answer" }));
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      await bridge.stop();
+      await manager.stopAll();
+    }
   });
 });

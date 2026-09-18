@@ -124,7 +124,7 @@ export class ChannelRepository {
     }
     const timestamp = Date.now();
     const id = input.id ?? randomUUID();
-    const platformMetaJson = encodePlatformMeta(input.platformMeta);
+    const platformMetaJson = encodePlatformMeta(input.platformMeta, (message) => console.warn(message));
     this.storage.database.connection
       .prepare(
         `INSERT INTO channel_delivery
