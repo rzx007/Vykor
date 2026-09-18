@@ -197,6 +197,7 @@ export {
   getFeedbackDir,
   getCredentialsFilePath,
   getMcpOAuthFilePath,
+  getChannelCredentialsFilePath,
 } from "./config/paths";
 export { resolveGitRepository, type GitRepositoryInfo } from "./config/git";
 

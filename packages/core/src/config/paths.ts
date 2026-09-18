@@ -18,6 +18,7 @@ export interface ResolvedPaths {
   configFilePath: string;
   credentialsFilePath: string;
   mcpOAuthFilePath: string;
+  channelCredentialsFilePath: string;
 }
 
 let _cached: ResolvedPaths | undefined;
@@ -43,6 +44,7 @@ export function resolvePaths(projectRoot?: string): ResolvedPaths {
     configFilePath: join(configDir, "settings.json"),
     credentialsFilePath: join(configDir, "credentials.json"),
     mcpOAuthFilePath: join(configDir, "mcp-oauth.json"),
+    channelCredentialsFilePath: join(configDir, "channel-credentials.json"),
   };
 
   if (!projectRoot) _cached = paths;
@@ -126,4 +128,8 @@ export function getCredentialsFilePath(): string {
 
 export function getMcpOAuthFilePath(): string {
   return resolvePaths().mcpOAuthFilePath;
+}
+
+export function getChannelCredentialsFilePath(): string {
+  return resolvePaths().channelCredentialsFilePath;
 }
