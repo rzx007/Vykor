@@ -30,17 +30,17 @@ export class ChannelCredentialStore {
   ) {}
 
   async get(appId: string): Promise<string | undefined> {
-    return this.withLock(async () => (await this.read()).credentials[appId]?.appSecret);
+    assertSafeAppId(appId);
+    return this.withLock(async () => {
+      const file = await this.read();
+      if (!Object.prototype.hasOwnProperty.call(file.credentials, appId)) return undefined;
+      return file.credentials[appId]?.appSecret;
+    });
   }
 
   async set(appId: string, secret: string): Promise<void> {
+    assertSafeAppId(appId);
     await this.withLock(async () => {
-      if (!appId) {
-        throw new ChannelCredentialStoreError(
-          "invalid-channel-credential",
-          "Channel app id must be a non-empty string",
-        );
-      }
       if (!secret) {
         throw new ChannelCredentialStoreError(
           "invalid-channel-credential",
@@ -54,9 +54,10 @@ export class ChannelCredentialStore {
   }
 
   async delete(appId: string): Promise<boolean> {
+    assertSafeAppId(appId);
     return this.withLock(async () => {
       const file = await this.read();
-      if (!(appId in file.credentials)) return false;
+      if (!Object.prototype.hasOwnProperty.call(file.credentials, appId)) return false;
       delete file.credentials[appId];
       await this.write(file);
       return true;
@@ -118,8 +119,13 @@ export class ChannelCredentialStore {
     while (true) {
       try {
         const handle = await open(lockPath, "wx", 0o600);
-        await handle.writeFile(JSON.stringify({ pid: process.pid, createdAt: this.clock() }), "utf8");
+        // Once the lock file is opened, the write and the operation share one
+        // try/finally so a write failure can never strand the lock or its fd.
         try {
+          await handle.writeFile(
+            JSON.stringify({ pid: process.pid, createdAt: this.clock() }),
+            "utf8",
+          );
           return await operation();
         } finally {
           await handle.close().catch(() => undefined);
@@ -146,6 +152,21 @@ export class ChannelCredentialStore {
 function isCredentialRecord(value: unknown): value is { appSecret: string } {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   return typeof (value as { appSecret?: unknown }).appSecret === "string";
+}
+
+function assertSafeAppId(appId: unknown): asserts appId is string {
+  if (
+    typeof appId !== "string" ||
+    appId.length === 0 ||
+    appId === "__proto__" ||
+    appId === "constructor" ||
+    appId === "prototype"
+  ) {
+    throw new ChannelCredentialStoreError(
+      "invalid-channel-credential-app-id",
+      `Invalid channel credential app id: ${String(appId)}`,
+    );
+  }
 }
 
 async function isStaleLock(path: string, now: number): Promise<boolean> {

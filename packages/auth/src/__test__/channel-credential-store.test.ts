@@ -47,4 +47,25 @@ describe("ChannelCredentialStore", () => {
     expect(await store.get("cli_b")).toBe("b");
     expect(await store.get("cli_c")).toBe("c");
   });
+
+  it("rejects unsafe credential keys while normal ids round-trip", async () => {
+    const { path } = tempStore();
+    const store = new ChannelCredentialStore(path);
+    await expect(store.set("__proto__", "x")).rejects.toMatchObject({
+      name: "ChannelCredentialStoreError",
+      code: "invalid-channel-credential-app-id",
+    });
+    await expect(store.get("__proto__")).rejects.toMatchObject({
+      name: "ChannelCredentialStoreError",
+    });
+    await expect(store.delete("constructor")).rejects.toMatchObject({
+      name: "ChannelCredentialStoreError",
+    });
+    await expect(store.set("", "x")).rejects.toMatchObject({
+      name: "ChannelCredentialStoreError",
+    });
+    expect(({} as Record<string, unknown>).appSecret).toBeUndefined();
+    await store.set("cli_normal", "ok");
+    expect(await store.get("cli_normal")).toBe("ok");
+  });
 });
