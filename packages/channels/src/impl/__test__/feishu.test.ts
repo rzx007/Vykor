@@ -129,11 +129,9 @@ describe("FeishuAdapter capability model and richer inbound semantics", () => {
         "delivery-status",
         "bot-skip-filter",
       ]),
-      supportsFiles: false,
-      supportsImages: false,
+      supportsFiles: true,
+      supportsImages: true,
     });
-    expect(adapter.capabilities.supports).not.toContain("image");
-    expect(adapter.capabilities.supports).not.toContain("file");
   });
 
   it("maps Feishu events into a richer unified message contract", async () => {

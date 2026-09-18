@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { EventBus } from "../bus/index.js";
+import { FeishuAdapter } from "../impl/feishu.js";
 import type { ChannelAdapterCapabilities, ChannelMessage } from "../index.js";
 
 describe("ChannelMessage contract", () => {
@@ -45,6 +46,24 @@ describe("ChannelMessage contract", () => {
     ]);
     expect(capabilities.supportsFiles).toBe(false);
     expect(capabilities.supportsImages).toBe(false);
+  });
+});
+
+describe("FeishuAdapter capability release gate", () => {
+  it("declares only the media and thread capabilities that are implemented", () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    expect(adapter.capabilities.supports).toEqual(
+      expect.arrayContaining([
+        "text",
+        "image",
+        "file",
+        "mentions",
+        "threaded-conversation",
+        "bot-skip-filter",
+      ]),
+    );
+    expect(adapter.capabilities.supportsImages).toBe(true);
+    expect(adapter.capabilities.supportsFiles).toBe(true);
   });
 });
 

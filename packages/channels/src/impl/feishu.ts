@@ -46,6 +46,8 @@ export class FeishuAdapter implements ChannelAdapter {
   readonly capabilities: ChannelAdapterCapabilities = {
     supports: [
       "text",
+      "image",
+      "file",
       "mentions",
       "threaded-conversation",
       "group-chat",
@@ -55,8 +57,8 @@ export class FeishuAdapter implements ChannelAdapter {
     ],
     maxTextLength: 2000,
     supportsStreaming: false,
-    supportsFiles: false,
-    supportsImages: false,
+    supportsFiles: true,
+    supportsImages: true,
     supportsRichCards: false,
     requiresMentionForGroupReply: false,
   };
