@@ -2,6 +2,7 @@ import { Command } from "commander";
 import type { Settings, ChannelsConfig } from "@openharness/core";
 import type { ChannelAdapter } from "@openharness/channels";
 import { ChannelCredentialStore } from "@openharness/auth";
+import { runChannelsAddFeishu, runChannelsAllow } from "./channels-onboarding.js";
 
 /**
  * `ohs channels` 子命令（D.2，TS 自有接线——Python 的 manager/bridge
@@ -82,6 +83,11 @@ async function runChannelsServe(): Promise<void> {
     sendProgress: settings.channels?.sendProgress,
     sendToolHints: settings.channels?.sendToolHints,
     onWarning: (w) => console.warn(`[channels] ${w}`),
+    onDenied: ({ sender }) => {
+      console.warn(
+        `[channels] 如需放行 ${sender}：ohs channels allow ${sender}（改完重启 channels serve）`,
+      );
+    },
     onDeliveryResult: async ({ deliveryId, status, error }) => {
       await client.channels.recordDelivery(deliveryId, { status, error });
     },
@@ -161,6 +167,30 @@ export function createChannelsCommand(): Command {
     .description("Start enabled channels and bridge them to the agent (long-running)")
     .action(async () => {
       await runChannelsServe();
+    });
+
+  cmd
+    .command("add")
+    .description("Interactive onboarding for a channel (feishu)")
+    .argument("<channel>", "channel to onboard (only feishu is supported)")
+    .action(async (channel: string) => {
+      if (channel !== "feishu") {
+        console.error(`[channels] 暂不支持通道：${channel}（目前仅支持 feishu）。`);
+        process.exitCode = 1;
+        return;
+      }
+      const result = await runChannelsAddFeishu();
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  cmd
+    .command("allow")
+    .description("Add a feishu user/chat id to the allowFrom whitelist")
+    .argument("<id>", "feishu open_id (ou_) or chat_id (oc_)")
+    .option("--name <name>", "display name for the whitelist entry")
+    .action(async (id: string, options: { name?: string }) => {
+      const result = await runChannelsAllow(id, options.name);
+      if (!result.ok) process.exitCode = 1;
     });
 
   cmd

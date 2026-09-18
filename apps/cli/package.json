@@ -51,6 +51,7 @@
     "commander": "catalog:",
     "diff": "catalog:",
     "node-pty": "^1.0.0",
+    "qrcode-terminal": "^0.12.0",
     "react": "catalog:",
     "sharp": "0.34.4"
   },
@@ -80,6 +81,7 @@
     "@openharness/tools": "workspace:*",
     "@types/node": "catalog:",
     "@types/bun": "^1.3.14",
+    "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.21.0",
     "typescript": "^5.7.3",
     "vitest": "catalog:"
