@@ -7,16 +7,22 @@ interface CreateCall {
   data: { receive_id: string; content: string; msg_type: string };
 }
 
+interface ReplyCall {
+  path: { message_id: string };
+  data: { content: string; msg_type: string; reply_in_thread?: boolean };
+}
+
 /** Build a FeishuAdapter with a mocked lark client injected. */
 function makeAdapter() {
   const adapter = new FeishuAdapter({ appId: "app", appSecret: "secret" });
   const create = vi.fn<(call: CreateCall) => Promise<void>>(async () => {});
+  const reply = vi.fn<(call: ReplyCall) => Promise<void>>(async () => {});
   // Inject the mocked client (private field) so send() can run without a real
   // network connection.
   (adapter as unknown as { client: unknown }).client = {
-    im: { message: { create } },
+    im: { message: { create, reply } },
   };
-  return { adapter, create };
+  return { adapter, create, reply };
 }
 
 function baseMessage(overrides: Partial<ChannelMessage> = {}): ChannelMessage {
@@ -546,7 +552,7 @@ describe("FeishuAdapter thread routing (Task 4)", () => {
   });
 
   it("outbound: sends to thread reply API when platformMeta.rootMessageId is present", async () => {
-    const { adapter, create } = makeAdapter();
+    const { adapter, create, reply } = makeAdapter();
     await adapter.send(
       baseMessage({
         replyTo: "oc_chat_001",
@@ -558,18 +564,17 @@ describe("FeishuAdapter thread routing (Task 4)", () => {
       }),
     );
 
-    expect(create).toHaveBeenCalledOnce();
-    const call = create.mock.calls[0]![0] as CreateCall;
-    expect(call.data.receive_id).toBe("oc_chat_001");
+    expect(create).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledOnce();
+    const call = reply.mock.calls[0]![0] as ReplyCall;
+    expect(call.path.message_id).toBe("msg_root");
     expect(call.data.msg_type).toBe("text");
-    // The call must carry the root message id context (thread reply params)
-    expect(call).toMatchObject({
-      data: expect.objectContaining({ root_id: "msg_root" }),
-    });
+    expect(JSON.parse(call.data.content)).toEqual({ text: "thread reply" });
+    expect(call.data.reply_in_thread).toBe(true);
   });
 
   it("outbound: sends to regular chat API when no platformMeta.rootMessageId", async () => {
-    const { adapter, create } = makeAdapter();
+    const { adapter, create, reply } = makeAdapter();
     await adapter.send(
       baseMessage({
         replyTo: "oc_chat_001",
@@ -578,6 +583,8 @@ describe("FeishuAdapter thread routing (Task 4)", () => {
       }),
     );
 
+    expect(reply).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledOnce();
     const call = create.mock.calls[0]![0] as CreateCall;
     // Should NOT include root_id for regular messages
     expect((call.data as Record<string, unknown>).root_id).toBeUndefined();

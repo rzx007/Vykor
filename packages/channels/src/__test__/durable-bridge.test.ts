@@ -206,4 +206,39 @@ describe("DurableChannelBridge", () => {
     });
     await bridge.stop();
   });
+
+  it("preserves the Feishu thread identifier and root message metadata into durable input", async () => {
+    const bus = new MessageBus();
+    const application = port();
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+    });
+    bridge.start();
+
+    bus.publishInbound({
+      channel: "feishu",
+      accountId: "app-1",
+      externalMessageId: "message-1",
+      senderId: "user-1",
+      chatId: "chat-1",
+      threadId: "thread_1",
+      content: "thread question",
+      timestamp: new Date(0),
+      media: [],
+      metadata: { rootMessageId: "msg_root" },
+    });
+
+    await vi.waitFor(() => {
+      expect(application.handleChannelMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread_1",
+          metadata: expect.objectContaining({ rootMessageId: "msg_root" }),
+        }),
+      );
+    });
+    await bridge.stop();
+  });
 });

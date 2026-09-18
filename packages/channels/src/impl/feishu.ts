@@ -19,6 +19,14 @@ interface LarkClient {
           msg_type: string;
         };
       }): Promise<void>;
+      reply(params: {
+        path: { message_id: string };
+        data: {
+          content: string;
+          msg_type: string;
+          reply_in_thread?: boolean;
+        };
+      }): Promise<void>;
     };
   };
 }
@@ -183,7 +191,10 @@ export class FeishuAdapter implements ChannelAdapter {
     const timestampMs = Number(msg.create_time);
     if (!Number.isFinite(timestampMs)) return;
 
-    const threadId = msg.thread_id ?? msg.root_id;
+    // thread_id 与 root_id 语义不同：threadId 只保存 Feishu thread_id，
+    // root_id 只作为 platformMeta.rootMessageId 透传，供出站 thread 回复使用。
+    const threadId = msg.thread_id;
+    const rootMessageId = msg.root_id;
     const senderType =
       msg.sender?.sender_type === "bot"
         ? "bot"
@@ -213,6 +224,7 @@ export class FeishuAdapter implements ChannelAdapter {
       platformMeta: {
         ...(msg.chat_type ? { chatType: msg.chat_type } : {}),
         ...(threadId ? { threadId } : {}),
+        ...(rootMessageId ? { rootMessageId } : {}),
       },
     };
 
@@ -292,6 +304,27 @@ export class FeishuAdapter implements ChannelAdapter {
       }
       default:
         throw new Error("Feishu does not support this outbound message type");
+    }
+
+    // thread 回复只认 platformMeta.rootMessageId；threadId 不能冒充 root message id。
+    const rootMessageId = message.platformMeta?.["rootMessageId"];
+    const rootMessageIdValue =
+      typeof rootMessageId === "string" ? rootMessageId.trim() : "";
+    if (message.threadId && !rootMessageIdValue) {
+      throw new Error(
+        "Feishu threaded message requires platformMeta.rootMessageId",
+      );
+    }
+    if (rootMessageIdValue) {
+      await this.client.im.message.reply({
+        path: { message_id: rootMessageIdValue },
+        data: {
+          content,
+          msg_type: messageType,
+          reply_in_thread: true,
+        },
+      });
+      return;
     }
 
     await this.client.im.message.create({
