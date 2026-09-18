@@ -96,6 +96,9 @@ describe("FeishuRegistration", () => {
     const status = registration.status();
     expect(status.state).toBe("expired");
     expect(status.error?.code).toBe("expired_token");
+
+    timers[0]?.();
+    expect(registration.status().state).toBe("expired");
   });
 
   it("reflects slow_down with the poll interval", async () => {

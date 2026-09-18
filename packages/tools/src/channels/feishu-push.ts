@@ -9,9 +9,21 @@ async function getCachedSettings(): Promise<Settings> {
   return _settingsCache;
 }
 
-async function getTenantToken(appId: string, appSecret: string, signal: AbortSignal): Promise<string> {
+type FeishuDomain = "feishu" | "lark";
+
+/** 飞书/Lark 开放平台 API 基址；lark 地区走 open.larksuite.com。 */
+export function feishuApiBase(domain: FeishuDomain | undefined): string {
+  return domain === "lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
+}
+
+export async function getTenantToken(
+  appId: string,
+  appSecret: string,
+  signal: AbortSignal,
+  base: string,
+): Promise<string> {
   const res = await fetch(
-    "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+    `${base}/open-apis/auth/v3/tenant_access_token/internal`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,9 +38,15 @@ async function getTenantToken(appId: string, appSecret: string, signal: AbortSig
   return data.tenant_access_token;
 }
 
-async function sendToChat(token: string, chatId: string, text: string, signal: AbortSignal): Promise<void> {
+export async function sendToChat(
+  token: string,
+  chatId: string,
+  text: string,
+  signal: AbortSignal,
+  base: string,
+): Promise<void> {
   const res = await fetch(
-    "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
+    `${base}/open-apis/im/v1/messages?receive_id_type=chat_id`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -97,8 +115,9 @@ export const feishuPushTool: ToolDefinition = {
         };
       }
 
-      const token = await getTenantToken(feishu.appId, appSecret, abortScope.signal);
-      await sendToChat(token, chatId, message, abortScope.signal);
+      const base = feishuApiBase(feishu.domain);
+      const token = await getTenantToken(feishu.appId, appSecret, abortScope.signal, base);
+      await sendToChat(token, chatId, message, abortScope.signal, base);
       return { content: [{ type: "text" as const, text: `已发送到「${target}」` }] };
     } catch (err) {
       return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };

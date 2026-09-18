@@ -45,6 +45,7 @@ export interface ChannelsOnboardingDeps {
     choices: readonly { value: string; label: string }[],
   ): Promise<string>;
   promptText(question: string, options?: { defaultValue?: string }): Promise<string>;
+  promptSecret(question: string): Promise<string>;
   promptConfirm(question: string): Promise<boolean>;
   createRegistration(
     onCredentials: (credentials: FeishuRegistrationCredentials) => Promise<void>,
@@ -78,8 +79,47 @@ async function ask(question: string): Promise<string> {
   }
 }
 
-function normalizeDomain(value: string): FeishuDomain {
-  return value.trim().toLowerCase() === "lark" ? "lark" : "feishu";
+/** 读取敏感输入：终端下关掉回显，非 TTY 退化为普通输入（测试不会走到这里）。 */
+async function askSecret(question: string): Promise<string> {
+  if (!process.stdin.isTTY) return ask(question);
+  process.stdout.write(question);
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding("utf8");
+  return new Promise<string>((resolve) => {
+    let value = "";
+    const onData = (chunk: string) => {
+      for (const ch of chunk) {
+        if (ch === "\r" || ch === "\n") {
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.off("data", onData);
+          process.stdout.write("\n");
+          resolve(value);
+          return;
+        }
+        if (ch === "\u0003") {
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.off("data", onData);
+          process.stdout.write("\n");
+          process.exit(130);
+        }
+        if (ch === "\u007f" || ch === "\b") {
+          value = value.slice(0, -1);
+        } else {
+          value += ch;
+        }
+      }
+    };
+    process.stdin.on("data", onData);
+  });
+}
+
+function parseDomain(value: string): FeishuDomain | undefined {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "feishu";
+  return normalized === "feishu" || normalized === "lark" ? normalized : undefined;
 }
 
 function missingConfigLog(extra = ""): string {
@@ -108,6 +148,7 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
       const answer = (await ask(`${question}${suffix}: `)).trim();
       return answer || options?.defaultValue || "";
     },
+    promptSecret: (question) => askSecret(`${question}: `),
     promptConfirm: async (question) => {
       const answer = (await ask(`${question} [y/N] `)).trim().toLowerCase();
       return answer === "y" || answer === "yes";
@@ -248,11 +289,18 @@ export async function runChannelsAddFeishu(
     scannerOpenId = scanned.userId;
   } else {
     appId = (await d.promptText("App ID")).trim();
-    appSecret = (await d.promptText("App Secret")).trim();
-    const domainAnswer = await d.promptText("开放平台地区（feishu 国内 / lark 国际）", {
-      defaultValue: "feishu",
-    });
-    domain = normalizeDomain(domainAnswer);
+    appSecret = (await d.promptSecret("App Secret")).trim();
+    for (;;) {
+      const domainAnswer = await d.promptText("开放平台地区（feishu 国内 / lark 国际）", {
+        defaultValue: "feishu",
+      });
+      const parsed = parseDomain(domainAnswer);
+      if (parsed) {
+        domain = parsed;
+        break;
+      }
+      d.log(`无法识别的地区「${domainAnswer.trim()}」，请输入 feishu 或 lark。`);
+    }
     if (!appId || !appSecret) {
       d.log("App ID 与 App Secret 都不能为空。");
       return { ok: false };
@@ -270,17 +318,27 @@ export async function runChannelsAddFeishu(
 
   const settings = await d.loadSettings();
   const existing = settings.channels?.feishu;
+  const credentials = await d.createCredentials();
+
   if (existing?.enabled && existing.appId) {
-    const overwrite = await d.promptConfirm(
-      `feishu 已配置（appId: ${existing.appId}），是否覆盖？`,
-    );
-    if (!overwrite) {
-      d.log("已取消，未做任何修改。");
+    let existingSecret: string | undefined;
+    try {
+      existingSecret = await credentials.get(existing.appId);
+    } catch (error) {
+      d.log(`读取凭据失败：${error instanceof Error ? error.message : String(error)}`);
       return { ok: false };
+    }
+    if (existingSecret !== undefined) {
+      const overwrite = await d.promptConfirm(
+        `feishu 已配置（appId: ${existing.appId}），是否覆盖？`,
+      );
+      if (!overwrite) {
+        d.log("已取消，未做任何修改。");
+        return { ok: false };
+      }
     }
   }
 
-  const credentials = await d.createCredentials();
   let previousSecret: string | undefined;
   try {
     previousSecret = await credentials.get(appId);
@@ -325,6 +383,8 @@ export async function runChannelsAddFeishu(
 
   d.log(`飞书已接入${name ? `：${name}` : ""}（${appId}）。`);
   if (scannerOpenId) d.log(`已把扫码者 ${scannerOpenId} 加入白名单。`);
+  d.log("运行 ohs channels serve 开始接收和发送消息。");
+  d.log("请在飞书开放平台把事件订阅方式设为「使用长连接接收事件」。");
   return { ok: true, appId, domain, ...(name ? { name } : {}) };
 }
 

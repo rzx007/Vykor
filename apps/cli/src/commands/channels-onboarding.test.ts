@@ -23,6 +23,7 @@ function deps() {
 describe("runChannelsAddFeishu", () => {
   it("scan path writes credentials, config, and scanner whitelist", async () => {
     const d = deps();
+    const log = vi.fn();
     const result = await runChannelsAddFeishu({
       createRegistration: (onCredentials: (c: unknown) => Promise<void>) => {
         void onCredentials({ appId: "cli_x", appSecret: "sec", userId: "ou_me", domain: "feishu" });
@@ -43,7 +44,7 @@ describe("runChannelsAddFeishu", () => {
       saveSettings: d.saveSettings as never,
       verify: d.verify as never,
       renderQr: d.renderQr,
-      log: vi.fn(),
+      log,
     } as never);
 
     expect(d.credentials.set).toHaveBeenCalledWith("cli_x", "sec");
@@ -59,6 +60,9 @@ describe("runChannelsAddFeishu", () => {
         }),
       }),
     );
+    const logs = log.mock.calls.map(([message]) => String(message)).join("\n");
+    expect(logs).toContain("ohs channels serve");
+    expect(logs).toContain("使用长连接接收事件");
     expect(result.ok).toBe(true);
   });
 
@@ -67,8 +71,8 @@ describe("runChannelsAddFeishu", () => {
     const result = await runChannelsAddFeishu({
       createCredentials: () => d.credentials as any,
       promptSelect: async () => "manual",
-      promptText: async (q: string) =>
-        q.includes("App ID") ? "cli_m" : q.includes("Secret") ? "sec_m" : "",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : ""),
+      promptSecret: async () => "sec_m",
       loadSettings: d.loadSettings as any,
       saveSettings: d.saveSettings as any,
       verify: d.verify as any,
@@ -90,6 +94,7 @@ describe("runChannelsAddFeishu", () => {
 
   it("writes nothing when overwrite is declined", async () => {
     const d = deps();
+    d.secrets.set("cli_x", "old-secret");
     d.loadSettings.mockResolvedValueOnce({
       model: "m",
       channels: { feishu: { enabled: true, appId: "cli_x", allowFrom: {} } },
@@ -97,7 +102,8 @@ describe("runChannelsAddFeishu", () => {
     const result = await runChannelsAddFeishu({
       createCredentials: () => d.credentials as never,
       promptSelect: async () => "manual",
-      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : "sec_m"),
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : ""),
+      promptSecret: async () => "sec_m",
       promptConfirm: async () => false,
       loadSettings: d.loadSettings as never,
       saveSettings: d.saveSettings as never,
@@ -110,6 +116,30 @@ describe("runChannelsAddFeishu", () => {
     expect(d.saveSettings).not.toHaveBeenCalled();
   });
 
+  it("skips the overwrite prompt when no credential exists for the configured app", async () => {
+    const d = deps();
+    d.loadSettings.mockResolvedValueOnce({
+      model: "m",
+      channels: { feishu: { enabled: true, appId: "cli_x", allowFrom: {} } },
+    } as never);
+    const promptConfirm = vi.fn(async () => false);
+    const result = await runChannelsAddFeishu({
+      createCredentials: () => d.credentials as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : ""),
+      promptSecret: async () => "sec_m",
+      promptConfirm,
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      verify: d.verify as never,
+      log: vi.fn(),
+    } as never);
+
+    expect(promptConfirm).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(d.saveSettings).toHaveBeenCalled();
+  });
+
   it("restores the previous secret when saveSettings fails", async () => {
     const d = deps();
     d.secrets.set("cli_x", "old-secret");
@@ -117,7 +147,8 @@ describe("runChannelsAddFeishu", () => {
     const result = await runChannelsAddFeishu({
       createCredentials: () => d.credentials as never,
       promptSelect: async () => "manual",
-      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : "new-secret"),
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : ""),
+      promptSecret: async () => "new-secret",
       loadSettings: d.loadSettings as never,
       saveSettings: d.saveSettings as never,
       verify: d.verify as never,
@@ -136,7 +167,8 @@ describe("runChannelsAddFeishu", () => {
     const result = await runChannelsAddFeishu({
       createCredentials: () => d.credentials as never,
       promptSelect: async () => "manual",
-      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : "new-secret"),
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : ""),
+      promptSecret: async () => "new-secret",
       loadSettings: d.loadSettings as never,
       saveSettings: d.saveSettings as never,
       verify: d.verify as never,
@@ -152,7 +184,8 @@ describe("runChannelsAddFeishu", () => {
     const result = await runChannelsAddFeishu({
       createCredentials: () => d.credentials as any,
       promptSelect: async () => "manual",
-      promptText: async (q: string) => (q.includes("App ID") ? "cli_bad" : "bad"),
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_bad" : ""),
+      promptSecret: async () => "bad",
       loadSettings: d.loadSettings as any,
       saveSettings: d.saveSettings as any,
       verify: vi.fn(async () => {
@@ -164,6 +197,81 @@ describe("runChannelsAddFeishu", () => {
     expect(result.ok).toBe(false);
     expect(d.credentials.set).not.toHaveBeenCalled();
     expect(d.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("passes the secret through without logging it", async () => {
+    const d = deps();
+    const log = vi.fn();
+    const secret = "sec_m_secret";
+    const result = await runChannelsAddFeishu({
+      createCredentials: () => d.credentials as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : ""),
+      promptSecret: async () => secret,
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      verify: d.verify as never,
+      log,
+    } as never);
+
+    expect(result.ok).toBe(true);
+    expect(d.credentials.set).toHaveBeenCalledWith("cli_m", secret);
+    const logs = log.mock.calls.map(([message]) => String(message)).join("\n");
+    expect(logs).not.toContain(secret);
+  });
+
+  it("re-prompts when the region is unrecognized", async () => {
+    const d = deps();
+    const regionAnswers = ["moon", "lark"];
+    const promptText = vi.fn(async (q: string) => {
+      if (q.includes("App ID")) return "cli_m";
+      return regionAnswers.shift() ?? "";
+    });
+    const log = vi.fn();
+    const result = await runChannelsAddFeishu({
+      createCredentials: () => d.credentials as never,
+      promptSelect: async () => "manual",
+      promptText,
+      promptSecret: async () => "sec_m",
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      verify: d.verify as never,
+      log,
+    } as never);
+
+    expect(result.ok).toBe(true);
+    expect(promptText).toHaveBeenCalledTimes(3);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("无法识别的地区"));
+    expect(d.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channels: expect.objectContaining({
+          feishu: expect.objectContaining({ domain: "lark" }),
+        }),
+      }),
+    );
+  });
+
+  it("defaults an empty region to feishu", async () => {
+    const d = deps();
+    const result = await runChannelsAddFeishu({
+      createCredentials: () => d.credentials as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : ""),
+      promptSecret: async () => "sec_m",
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      verify: d.verify as never,
+      log: vi.fn(),
+    } as never);
+
+    expect(result.ok).toBe(true);
+    expect(d.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channels: expect.objectContaining({
+          feishu: expect.objectContaining({ domain: "feishu" }),
+        }),
+      }),
+    );
   });
 });
 
@@ -212,5 +320,23 @@ describe("runChannelsAllow", () => {
         }),
       }),
     );
+  });
+
+  it("returns ok:false when saveSettings throws", async () => {
+    const d = deps();
+    d.loadSettings.mockResolvedValueOnce({
+      model: "m",
+      channels: { feishu: { enabled: true, appId: "cli_x", domain: "feishu", allowFrom: {} } },
+    } as never);
+    d.saveSettings.mockRejectedValueOnce(new Error("disk full"));
+    const log = vi.fn();
+    const result = await runChannelsAllow("ou_me", undefined, {
+      loadSettings: d.loadSettings as never,
+      saveSettings: d.saveSettings as never,
+      log,
+    } as never);
+
+    expect(result.ok).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("保存配置失败"));
   });
 });

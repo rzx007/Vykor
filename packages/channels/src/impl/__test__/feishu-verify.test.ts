@@ -66,10 +66,10 @@ describe("verifyFeishuCredentials", () => {
     ).rejects.toThrow(/凭据/);
   });
 
-  it("throws a credential error when the token exchange fails", async () => {
+  it("throws a credential error when the token body reports an error", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse({ code: 10003, msg: "invalid app_secret" }, false));
+      .mockResolvedValueOnce(jsonResponse({ code: 10003, msg: "invalid app_secret" }));
 
     await expect(
       verifyFeishuCredentials({ appId: "cli_x", appSecret: "bad", domain: "feishu", fetchImpl }),
