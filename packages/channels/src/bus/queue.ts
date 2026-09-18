@@ -1,5 +1,5 @@
 /**
- * 消息总线（移植自 Python channels/bus/{events,queue}.py）。
+ * 消息总线。
  *
  * inbound/outbound 双异步队列，解耦通道与引擎：通道收到消息推 inbound，
  * 桥接层处理后推 outbound，由 ChannelManager 分发回通道。
@@ -14,6 +14,7 @@ export interface InboundMessage {
   externalMessageId: string;
   senderId: string;
   chatId: string;
+  conversationId?: string;
   workspaceId?: string;
   threadId?: string;
   content: string;

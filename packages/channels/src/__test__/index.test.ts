@@ -1,5 +1,52 @@
 import { describe, it, expect } from "vitest";
-import { EventBus } from "../src/bus/index.js";
+import { EventBus } from "../bus/index.js";
+import type { ChannelAdapterCapabilities, ChannelMessage } from "../index.js";
+
+describe("ChannelMessage contract", () => {
+  it("carries conversation and platform context", () => {
+    const message: ChannelMessage = {
+      id: "message-1",
+      channel: "feishu",
+      sender: "ou-user",
+      content: "hello",
+      timestamp: new Date(0),
+      conversationId: "conversation-1",
+      chatId: "oc-chat-1",
+      replyTo: "oc-chat-1",
+      threadId: "thread-1",
+      workspaceId: "workspace-1",
+      senderType: "user",
+      messageType: "text",
+      metadata: { source: "test" },
+      platformMeta: { chatType: "group" },
+    };
+
+    expect(message).toMatchObject({
+      conversationId: "conversation-1",
+      chatId: "oc-chat-1",
+      threadId: "thread-1",
+      workspaceId: "workspace-1",
+      messageType: "text",
+    });
+  });
+
+  it("declares capabilities explicitly", () => {
+    const capabilities: ChannelAdapterCapabilities = {
+      supports: ["text", "group-chat", "private-chat", "delivery-status"],
+      supportsFiles: false,
+      supportsImages: false,
+    };
+
+    expect(capabilities.supports).toEqual([
+      "text",
+      "group-chat",
+      "private-chat",
+      "delivery-status",
+    ]);
+    expect(capabilities.supportsFiles).toBe(false);
+    expect(capabilities.supportsImages).toBe(false);
+  });
+});
 
 describe("EventBus", () => {
   it("emits events to registered handlers", () => {

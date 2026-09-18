@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { MessageBus } from "./bus/queue.js";
-import { ChannelManager } from "./manager.js";
-import type { ChannelAdapter, ChannelMessage } from "./index.js";
+import { MessageBus } from "../bus/queue.js";
+import { ChannelManager } from "../core/manager.js";
+import type { ChannelAdapter, ChannelMessage } from "../index.js";
 
 /** 可注入收发的假 adapter。 */
 function makeAdapter(
@@ -50,14 +50,66 @@ describe("ChannelManager", () => {
       allowFrom: { t: ["u1"] },
     });
     await mgr.startAll();
-    fake.emit({ sender: "u1", content: "hello", replyTo: "chat9" });
+    fake.emit({ sender: "u1", content: "hello", chatId: "chat9" });
     const msg = await bus.consumeInbound();
     expect(msg.channel).toBe("t");
     expect(msg.accountId).toBe("default");
     expect(msg.externalMessageId).toBe("m1");
     expect(msg.senderId).toBe("u1");
-    expect(msg.chatId).toBe("chat9"); // replyTo 优先作会话目标
+    expect(msg.chatId).toBe("chat9");
     expect(msg.content).toBe("hello");
+    await mgr.stopAll();
+  });
+
+  it("preserves conversation context and uses a system sender for outbound messages", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t");
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+    });
+    await mgr.startAll();
+
+    fake.emit({
+      sender: "u1",
+      chatId: "chat9",
+      conversationId: "conversation9",
+      workspaceId: "workspace9",
+      threadId: "thread9",
+      metadata: { source: "test" },
+    });
+    const inbound = await bus.consumeInbound();
+    expect(inbound).toMatchObject({
+      conversationId: "conversation9",
+      workspaceId: "workspace9",
+      threadId: "thread9",
+      metadata: {
+        _message_id: "m1",
+        conversationId: "conversation9",
+        source: "test",
+      },
+    });
+
+    bus.publishOutbound({ channel: "t", chatId: "chat9", content: "reply" });
+    await tick();
+    expect(fake.sent[0]).toMatchObject({
+      sender: "system",
+      senderType: "system",
+      chatId: "chat9",
+      replyTo: "chat9",
+    });
+    await mgr.stopAll();
+  });
+
+  it("rejects inbound messages without an explicit chatId", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t");
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["u1"] },
+    });
+    await mgr.startAll();
+    fake.emit({ sender: "u1", replyTo: "legacy-chat" });
+    await tick();
+    expect(bus.inboundSize).toBe(0);
     await mgr.stopAll();
   });
 

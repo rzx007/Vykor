@@ -1,6 +1,6 @@
-import type { ChannelAdapter, ChannelMessage } from "./index.js";
-import { MessageBus, type InboundMessage } from "./bus/queue.js";
-import { isAllowed } from "./bus/acl.js";
+import type { ChannelAdapter, ChannelMessage } from "../index.js";
+import { MessageBus, type InboundMessage } from "../bus/queue.js";
+import { isAllowed } from "../bus/acl.js";
 
 /**
  * 通道管理器（移植自 Python channels/impl/manager.py）。
@@ -118,23 +118,33 @@ export class ChannelManager {
       );
       return;
     }
+    if (!msg.chatId) {
+      this.opts.onWarning?.(
+        `通道 ${channelName} 拒绝没有 chatId 的消息（无法建立会话路由）。`,
+      );
+      return;
+    }
     const inbound: InboundMessage = {
       channel: channelName,
       accountId: this.opts.accountIds?.[channelName] ?? "default",
       externalMessageId: msg.id,
       senderId: msg.sender,
-      // replyTo 是 adapter 解析出的会话目标（群 chat_id / 私聊 open_id），
-      // 作为 chatId 既是回复地址也是 session key 的一半。
-      chatId: msg.replyTo ?? msg.sender,
+      chatId: msg.chatId,
+      ...(msg.conversationId ? { conversationId: msg.conversationId } : {}),
       content: msg.content,
       timestamp: msg.timestamp,
       media: [],
-      metadata: { _message_id: msg.id },
-      ...(typeof msg.metadata?.workspaceId === "string"
-        ? { workspaceId: msg.metadata.workspaceId }
+      metadata: {
+        ...msg.metadata,
+        _message_id: msg.id,
+        ...(msg.conversationId ? { conversationId: msg.conversationId } : {}),
+        ...(msg.platformMeta ?? {}),
+      },
+      ...(msg.workspaceId
+        ? { workspaceId: msg.workspaceId }
         : {}),
-      ...(typeof msg.metadata?.threadId === "string"
-        ? { threadId: msg.metadata.threadId }
+      ...(msg.threadId
+        ? { threadId: msg.threadId }
         : {}),
     };
     this.bus.publishInbound(inbound);
@@ -181,9 +191,11 @@ export class ChannelManager {
         await adapter.send({
           id: `out_${Date.now()}`,
           channel: msg.channel,
-          sender: msg.chatId,
+          sender: "system",
           content: msg.content,
           timestamp: new Date(),
+          senderType: "system",
+          chatId: msg.chatId,
           replyTo: msg.chatId,
         });
         if (deliveryId)

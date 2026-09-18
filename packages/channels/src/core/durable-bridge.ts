@@ -5,7 +5,7 @@ import type {
   RecordChannelDeliveryInput,
 } from "@openharness/protocol";
 
-import { MessageBus, type InboundMessage } from "./bus/queue.js";
+import { MessageBus, type InboundMessage } from "../bus/queue.js";
 
 export interface DurableChannelPort {
   handleChannelMessage(

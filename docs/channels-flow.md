@@ -123,8 +123,8 @@ ohs channels status
 | 组件 | 位置 | 实际负责什么 |
 |---|---|---|
 | CLI 入口 | `apps/cli/src/commands/channels.ts` | 连接 daemon，组装和关闭通道 |
-| DurableChannelBridge | `packages/channels/src/durable-bridge.ts` | 把入站消息交给 daemon，发布已保存回复 |
-| ChannelManager | `packages/channels/src/manager.ts` | 白名单检查、平台收发、回写发送结果 |
+| DurableChannelBridge | `packages/channels/src/core/durable-bridge.ts` | 把入站消息交给 daemon，发布已保存回复 |
+| ChannelManager | `packages/channels/src/core/manager.ts` | 白名单检查、平台收发、回写发送结果 |
 | FeishuAdapter | `packages/channels/src/impl/feishu.ts` | 飞书 WebSocket、真实 message ID、thread ID 和文本发送 |
 | 应用服务 | `packages/server/src/application/channel/channel-application-service.ts` | 映射 Session、幂等准入、等待 Run、保存回复 |
 | HTTP 接入 | `packages/server/src/http/routes/channel.ts` | 把 `/channels/*` 请求转给应用服务 |

@@ -1,5 +1,5 @@
 /**
- * 通道 ACL（移植自 Python BaseChannel.is_allowed）。
+ * 通道 ACL。
  *
  * fail-closed：空/缺失 allowFrom 一律拒绝——远程通道把消息直通引擎，
  * 默认必须显式授权。`"*"` 全放；senderId 支持 `"a|b"` 复合 id 分段匹配

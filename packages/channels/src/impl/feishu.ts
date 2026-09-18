@@ -1,4 +1,4 @@
-import type { ChannelAdapter, ChannelMessage } from "../index";
+import type { ChannelAdapter, ChannelAdapterCapabilities, ChannelMessage } from "../index";
 
 export interface FeishuConfig {
   appId: string;
@@ -35,6 +35,23 @@ interface FeishuMention {
 
 export class FeishuAdapter implements ChannelAdapter {
   name = "feishu";
+  readonly capabilities: ChannelAdapterCapabilities = {
+    supports: [
+      "text",
+      "mentions",
+      "threaded-conversation",
+      "group-chat",
+      "private-chat",
+      "delivery-status",
+      "bot-skip-filter",
+    ],
+    maxTextLength: 2000,
+    supportsStreaming: false,
+    supportsFiles: false,
+    supportsImages: false,
+    supportsRichCards: false,
+    requiresMentionForGroupReply: false,
+  };
 
   private client: LarkClient | null = null;
   private wsClient: LarkWSClient | null = null;
@@ -83,19 +100,19 @@ export class FeishuAdapter implements ChannelAdapter {
       sender?: { sender_id?: { open_id?: string; user_id?: string }; sender_type?: string };
       mentions?: FeishuMention[];
     } })?.message;
-    if (!msg?.chat_id) return;
+    if (!msg?.chat_id || !msg.message_id || !msg.content || !msg.create_time) return;
 
     // bot 消息跳过：飞书在某些配置下会把 bot 自己发的消息也推回来，直接忽略。
     if (msg.sender?.sender_type === "bot") return;
 
-    let text = "";
+    let text: unknown;
     try {
-      const content = msg.content ? JSON.parse(msg.content) : {};
-      text = content.text ?? "";
+      const content = JSON.parse(msg.content) as { text?: unknown };
+      text = content.text;
     } catch {
-      text = String(msg.content ?? "");
+      return;
     }
-    if (!text) return;
+    if (typeof text !== "string" || !text) return;
 
     const isGroupChat = msg.chat_type === "group";
     const mentions = msg.mentions ?? [];
@@ -114,22 +131,44 @@ export class FeishuAdapter implements ChannelAdapter {
     if (!contentText) return;
 
     const senderOpenId = msg.sender?.sender_id?.open_id;
-    const senderId = senderOpenId ?? msg.sender?.sender_id?.user_id ?? msg.chat_id;
+    const senderId = senderOpenId ?? msg.sender?.sender_id?.user_id;
+    if (!senderId) return;
 
     // Reply target: group chats → chat_id，direct chats → sender open_id。
-    const replyTo = isGroupChat ? msg.chat_id : (senderOpenId ?? msg.chat_id);
+    const replyTo = isGroupChat ? msg.chat_id : senderOpenId;
+    if (!replyTo) return;
+
+    const timestampMs = Number(msg.create_time);
+    if (!Number.isFinite(timestampMs)) return;
+
+    const threadId = msg.thread_id ?? msg.root_id;
+    const senderType =
+      msg.sender?.sender_type === "bot"
+        ? "bot"
+        : msg.sender?.sender_type === "user"
+          ? "user"
+          : "unknown";
 
     const inbound: ChannelMessage = {
-      id: msg.message_id ?? `feishu_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: msg.message_id,
       channel: "feishu",
       sender: senderId,
       content: contentText,
-      timestamp: new Date(Number(msg.create_time) || Date.now()),
+      timestamp: new Date(timestampMs),
+      conversationId: msg.chat_id,
+      chatId: msg.chat_id,
       replyTo,
+      threadId,
+      senderType,
+      messageType: "text",
       metadata: {
-        ...(msg.thread_id || msg.root_id
-          ? { threadId: msg.thread_id ?? msg.root_id }
-          : {}),
+        ...(threadId ? { threadId } : {}),
+        ...(msg.chat_id ? { chatId: msg.chat_id } : {}),
+        ...(msg.chat_type ? { chatType: msg.chat_type } : {}),
+      },
+      platformMeta: {
+        ...(msg.chat_type ? { chatType: msg.chat_type } : {}),
+        ...(threadId ? { threadId } : {}),
       },
     };
 
@@ -152,10 +191,10 @@ export class FeishuAdapter implements ChannelAdapter {
     if (!this.client) {
       throw new Error("Feishu client not connected");
     }
-    // The reply target is the inbound conversation, not the synthetic message
-    // id. Prefer `replyTo` (chat_id for groups, sender open_id for direct
-    // chats); fall back to `sender` for adapters that don't set `replyTo`.
-    const receiveId = message.replyTo ?? message.sender;
+    const receiveId = message.replyTo ?? message.chatId;
+    if (!receiveId) {
+      throw new Error("Feishu outbound message requires replyTo or chatId");
+    }
     // Mirror the Python channel's heuristic: chat ids start with "oc_" and use
     // the "chat_id" id-type; everything else is an open_id.
     const receiveIdType = receiveId.startsWith("oc_") ? "chat_id" : "open_id";

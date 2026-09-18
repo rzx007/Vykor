@@ -5,8 +5,8 @@ import type {
   DurableChannelMessageResult,
 } from "@openharness/protocol";
 
-import { MessageBus } from "./bus/queue.js";
-import { DurableChannelBridge, type DurableChannelPort } from "./durable-bridge.js";
+import { MessageBus } from "../bus/queue.js";
+import { DurableChannelBridge, type DurableChannelPort } from "../core/durable-bridge.js";
 
 function delivery(
   patch: Partial<ChannelDeliveryRecord> = {},
