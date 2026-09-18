@@ -133,6 +133,7 @@ import type {
   AttachmentStorageReport,
 } from "@openharness/client"
 import type { DesktopUpdateState } from "./update-types"
+import type { DesktopMcpLoginInput, DesktopMcpLogoutInput, DesktopMcpSnapshot } from "./mcp-types"
 
 export type DesktopAPI = {
   app: {
@@ -238,6 +239,11 @@ export type DesktopAPI = {
     createCustom: (input: CreateDesktopCustomProviderInput) => Promise<DesktopProviderSnapshot>
     updateCustom: (input: UpdateDesktopCustomProviderInput) => Promise<DesktopProviderSnapshot>
     removeCustom: (input: RemoveDesktopCustomProviderInput) => Promise<DesktopProviderSnapshot>
+  }
+  mcp: {
+    snapshot: () => Promise<DesktopMcpSnapshot>
+    login: (input: DesktopMcpLoginInput) => Promise<DesktopMcpSnapshot>
+    logout: (input: DesktopMcpLogoutInput) => Promise<DesktopMcpSnapshot>
   }
   settings: {
     snapshot: () => Promise<DesktopSettingsSnapshot>

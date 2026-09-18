@@ -16,3 +16,4 @@ export * from "./channel/index.js";
 export * from "./backup/application-backup.js";
 export * from "./retention/application-retention-service.js";
 export * from "./workflow/session-workflow-run-repository.js";
+export * from "./mcp-oauth-application-service.js";

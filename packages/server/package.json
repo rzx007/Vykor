@@ -30,6 +30,7 @@
     "@openharness/environment": "workspace:*",
     "@openharness/jobs": "workspace:*",
     "@openharness/memory": "workspace:*",
+    "@openharness/mcp": "workspace:*",
     "@openharness/output-styles": "workspace:*",
     "@openharness/plugin-sources": "workspace:*",
     "@openharness/personalization": "workspace:*",

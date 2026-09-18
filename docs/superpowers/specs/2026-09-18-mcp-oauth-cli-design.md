@@ -271,7 +271,8 @@ OAuth access token 在距离过期不足 30 秒时刷新。同一进程内按 se
 - 两个独立 store/service 实例并发更新不同 server 不丢数据，并发刷新只发送一次 Token 请求。
 - runtime 在只授权 `read` 时遇到 `write` challenge，绝不打开浏览器或发起扩权授权。
 - token response 在请求 `read` 后返回额外 `write` scope 时拒绝保存并尽力撤销。
-- refresh response 在原授权为 `read` 时返回额外 `write` scope，拒绝保存并标记需要重新授权。
+- re0.
+- ++fresh response 在原授权为 `read` 时返回额外 `write` scope，拒绝保存并标记需要重新授权。
 - 首次 401 由 transport 刷新并重发一次，第二次 401 不循环，manager 不重复执行工具调用。
 - discovery、DCR、token、refresh 和 revocation endpoint 挂起时能按阶段超时并清理。
 - 一个 server 授权失败时其他 server 仍能连接。

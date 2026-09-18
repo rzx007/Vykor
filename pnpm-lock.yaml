@@ -951,6 +951,9 @@ importers:
       '@openharness/jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@openharness/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@openharness/memory':
         specifier: workspace:*
         version: link:../memory

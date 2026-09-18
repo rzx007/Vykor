@@ -198,6 +198,13 @@ export const desktopAPI = {
     removeCustom: (input: IpcInvokeMap[typeof IpcChannels.providerCustomRemove]["args"][0]) =>
       invoke(IpcChannels.providerCustomRemove, input),
   },
+  mcp: {
+    snapshot: () => invoke(IpcChannels.mcpSnapshot),
+    login: (input: IpcInvokeMap[typeof IpcChannels.mcpLogin]["args"][0]) =>
+      invoke(IpcChannels.mcpLogin, input),
+    logout: (input: IpcInvokeMap[typeof IpcChannels.mcpLogout]["args"][0]) =>
+      invoke(IpcChannels.mcpLogout, input),
+  },
   settings: {
     snapshot: () => invoke(IpcChannels.settingsSnapshot),
     updateWorkStyle: (input: IpcInvokeMap[typeof IpcChannels.settingsUpdateWorkStyle]["args"][0]) =>

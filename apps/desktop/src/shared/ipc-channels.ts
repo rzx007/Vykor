@@ -124,6 +124,7 @@ import type {
   AttachmentStorageReport,
 } from "@openharness/client"
 import type { DesktopUpdateState } from "./update-types"
+import type { DesktopMcpLoginInput, DesktopMcpLogoutInput, DesktopMcpSnapshot } from "./mcp-types"
 
 export const IpcChannels = {
   appGetInfo: "app:get-info",
@@ -249,6 +250,10 @@ export const IpcChannels = {
   providerCustomCreate: "provider:custom-create",
   providerCustomUpdate: "provider:custom-update",
   providerCustomRemove: "provider:custom-remove",
+
+  mcpSnapshot: "mcp:snapshot",
+  mcpLogin: "mcp:login",
+  mcpLogout: "mcp:logout",
 
   pluginSnapshot: "plugin:snapshot",
   pluginEnable: "plugin:enable",
@@ -382,6 +387,10 @@ export interface IpcInvokeMap {
     args: []
     result: DesktopDaemonAutoStartSnapshot
   }
+
+  [IpcChannels.mcpSnapshot]: { args: []; result: DesktopMcpSnapshot }
+  [IpcChannels.mcpLogin]: { args: [input: DesktopMcpLoginInput]; result: DesktopMcpSnapshot }
+  [IpcChannels.mcpLogout]: { args: [input: DesktopMcpLogoutInput]; result: DesktopMcpSnapshot }
 
   [IpcChannels.sessionBootstrap]: { args: []; result: DesktopBootstrapData }
   [IpcChannels.sessionList]: { args: []; result: DesktopSessionLists }

@@ -3,6 +3,7 @@ import { attachmentIpcContribution } from "./attachment/ipc"
 import { clipboardIpcContribution } from "./clipboard/ipc"
 import { daemonAutoStartIpcContribution } from "./daemon-autostart/ipc"
 import { gitIpcContribution } from "./git/ipc"
+import { mcpIpcContribution } from "./mcp/ipc"
 import { petIpcContribution } from "./pet/ipc"
 import { pluginIpcContribution } from "./plugin/ipc"
 import { providerIpcContribution } from "./provider/ipc"
@@ -26,6 +27,7 @@ export const allIpcContributions: IpcContribution[] = [
   providerIpcContribution,
   clipboardIpcContribution,
   gitIpcContribution,
+  mcpIpcContribution,
   sessionIpcContribution,
   scheduleIpcContribution,
   settingsIpcContribution,
