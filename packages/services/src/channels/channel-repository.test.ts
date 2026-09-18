@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { SessionStore } from "../session-runtime/store.js";
+import { decodePlatformMeta, encodePlatformMeta } from "./channel-records.js";
 
 describe("ChannelRepository", () => {
   it("upserts conversations and keeps delivery retries idempotent", () => {
@@ -171,5 +172,26 @@ describe("ChannelRepository", () => {
       store.close();
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it("handles non-serializable and malformed platformMeta without throwing", () => {
+    expect(encodePlatformMeta(undefined)).toBeNull();
+    expect(encodePlatformMeta({})).toBeNull();
+    expect(encodePlatformMeta({ a: 1, b: "x" })).toBe('{"a":1,"b":"x"}');
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(encodePlatformMeta(cyclic)).toBeNull();
+    expect(
+      encodePlatformMeta({ big: 1n } as unknown as Record<string, unknown>),
+    ).toBeNull();
+
+    expect(decodePlatformMeta('{"rootMessageId":"msg_root"}')).toEqual({
+      rootMessageId: "msg_root",
+    });
+    expect(decodePlatformMeta("not-json")).toBeUndefined();
+    expect(decodePlatformMeta("null")).toBeUndefined();
+    expect(decodePlatformMeta("[]")).toBeUndefined();
+    expect(decodePlatformMeta("1")).toBeUndefined();
+    expect(decodePlatformMeta("{}")).toBeUndefined();
   });
 });
