@@ -117,7 +117,9 @@ Feishu 入站事件
   与随之而来的发布/文档联动。
 
 如果后续把该字段改为必填、或去掉/重命名已有字段，则必须升级协议版本，并同步
-`capabilities.ts`、`verify-clean-slate.mjs` 与相关文档。该取舍需要评审确认。
+`capabilities.ts`、`verify-clean-slate.mjs` 与相关文档。
+
+**决定（已评审确认）：本次保持 `CURRENT_PROTOCOL_VERSION = 4`，不升级。**
 
 ## 5. 字段定义
 
