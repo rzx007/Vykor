@@ -43,6 +43,7 @@ export interface ChannelOperations {
     runId: string;
     externalMessageId?: string;
     content: string;
+    platformMeta?: Record<string, unknown>;
   }): ChannelDeliveryRecord;
   getDelivery(deliveryId: string): ChannelDeliveryRecord | undefined;
   updateDelivery(deliveryId: string, input: RecordChannelDeliveryInput): ChannelDeliveryRecord;
@@ -157,6 +158,7 @@ export class ChannelApplicationService {
       accountId: input.accountId,
       chatId: input.chatId,
       threadId: input.threadId,
+      platformMeta: input.platformMeta,
       sessionId: conversation.sessionId,
       inputId: admission.input.id,
       runId: admission.run.id,

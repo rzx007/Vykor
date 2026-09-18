@@ -188,4 +188,37 @@ describe("ChannelApplicationService contracts", () => {
       statuses: ["pending", "failed"],
     });
   });
+
+  it("forwards input.platformMeta into the channel delivery", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    const input: DurableChannelMessageInput = {
+      connector: "slack",
+      accountId: "acc-1",
+      chatId: "chat-1",
+      externalMessageId: "msg-meta",
+      content: "Hello",
+      cwd: "/repo",
+      platformMeta: { rootMessageId: "msg_root" },
+    };
+
+    await service.handleMessage(input);
+
+    expect(fixture.channels.createDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platformMeta: { rootMessageId: "msg_root" },
+      }),
+    );
+  });
+
+  it("returns platformMeta on pending deliveries", () => {
+    const fixture = createFixture();
+    fixture.delivery.platformMeta = { rootMessageId: "msg_root" };
+    const service = createService(fixture);
+
+    expect(service.pendingDeliveries()[0]?.platformMeta).toEqual({
+      rootMessageId: "msg_root",
+    });
+  });
 });
