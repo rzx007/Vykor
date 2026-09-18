@@ -94,7 +94,9 @@ test("release asset CLI preserves the version in notes and artifact validation",
 
 test("workflow preserves build, publication, verification and rerun ordering", () => {
   const workflow = readFileSync(new URL("../.github/workflows/tag-release.yml", import.meta.url), "utf8");
+  const attributes = readFileSync(new URL("../.gitattributes", import.meta.url), "utf8");
   assert.doesNotMatch(workflow, /release_phase|client-compat|compatibility lifecycle/i);
+  assert.match(attributes, /^packages\/services\/src\/session-runtime\/migrations\/\*\* text eol=lf$/m);
   assert.match(workflow, /ref:\s*\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /build-desktop:[\s\S]*verify-clean-slate-artifacts:[\s\S]*create-tag:/);
   assert.match(workflow, /verify-clean-slate-artifacts:[\s\S]*needs: \[validate, preflight, build-desktop\]/);
