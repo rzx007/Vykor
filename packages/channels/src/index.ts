@@ -80,3 +80,11 @@ export { StdioAdapter } from "./impl/stdio";
 export { HttpAdapter } from "./impl/http";
 export { FeishuAdapter } from "./impl/feishu";
 export type { FeishuConfig } from "./impl/feishu";
+export { FeishuRegistration, FEISHU_ONBOARDING_TENANT_SCOPES } from "./impl/feishu-registration";
+export type {
+  FeishuRegistrationState,
+  FeishuRegistrationStatus,
+  FeishuRegistrationCredentials,
+} from "./impl/feishu-registration";
+export { verifyFeishuCredentials } from "./impl/feishu-verify";
+export type { VerifiedFeishuBot } from "./impl/feishu-verify";
