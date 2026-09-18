@@ -154,3 +154,10 @@ export class AuthManager {
     return this.credentials.get(providerName);
   }
 }
+
+export {
+  McpOAuthCredentialStore,
+  McpOAuthStoreError,
+  shouldReuseCredentialAfterLock,
+  type ExclusiveCredentialOperation,
+} from "./mcp-oauth-credential-store";

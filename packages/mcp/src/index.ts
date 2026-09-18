@@ -2,10 +2,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { McpServerConfig, Settings, ToolDefinition } from "@openharness/core";
+import type { McpRemoteServerConfig, McpServerConfig, Settings, ToolDefinition } from "@openharness/core";
 import type { EnvironmentProcessExecutor } from "@openharness/environment";
 import type { SandboxPolicy } from "@openharness/sandbox";
 import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
+import type { McpOAuthRuntime } from "./oauth/runtime-auth.js";
 
 export type { McpServerConfig };
 
@@ -93,6 +94,7 @@ export class McpClientManager {
     sessionId?: string;
     policy?: SandboxPolicy;
     processExecutor?: EnvironmentProcessExecutor;
+    oauthRuntime?: McpOAuthRuntime;
   } = {}) {}
 
   async connect(name: string, config: McpServerConfig): Promise<McpConnection> {
@@ -106,7 +108,9 @@ export class McpClientManager {
       status: "connecting",
       transport: transportKind,
       authConfigured:
-        transportKind === "stdio" ? !!config.env : !!config.headers,
+        transportKind === "stdio"
+          ? !!config.env
+          : !!config.headers || (transportKind === "http" && !!this.options.oauthRuntime),
       tools: [],
       resources: [],
     };
@@ -120,7 +124,7 @@ export class McpClientManager {
     }
 
     try {
-      const transport = this.createTransport(kind, config);
+      const transport = this.createTransport(name, kind, config);
       this.transports.set(name, transport);
 
       const client = new Client(
@@ -191,14 +195,23 @@ export class McpClientManager {
 
   /** Build the SDK transport for a resolved kind. */
   private createTransport(
+    name: string,
     kind: McpTransportKind,
     config: McpServerConfig
   ): Transport {
     switch (kind) {
       case "http":
+        {
+          const remote = config as McpRemoteServerConfig;
+          const hasExplicitAuthorization = Object.keys(remote.headers ?? {})
+            .some(key => key.toLowerCase() === "authorization");
         return new StreamableHTTPClientTransport(new URL(config.url!), {
           requestInit: { headers: config.headers },
+          fetch: !hasExplicitAuthorization && this.options.oauthRuntime
+            ? this.options.oauthRuntime.createFetch(name, remote)
+            : undefined,
         });
+        }
       case "sse":
         return new SSEClientTransport(new URL(config.url!), {
           requestInit: { headers: config.headers },
@@ -375,3 +388,16 @@ export class McpClientManager {
     return parts.join("\n").trim();
   }
 }
+
+export { McpOAuthError } from "./oauth/errors.js";
+export { assertIssuer, assertOAuthEndpoint, assertScopeSubset, parseScopes } from "./oauth/security.js";
+export { createOAuthCallback, type OAuthCallbackController } from "./oauth/callback.js";
+export { resolveMcpOAuthStatus } from "./oauth/status.js";
+export {
+  loginMcpOAuth,
+  revokeMcpOAuthCredential,
+  type McpOAuthCredentialStore,
+  type McpOAuthLoginDeps,
+} from "./oauth/login.js";
+export { McpOAuthRuntime } from "./oauth/runtime-auth.js";
+export { verifyMcpOAuthConnection } from "./oauth/verify-connection.js";

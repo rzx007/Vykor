@@ -1,5 +1,6 @@
 import type { PermissionMode } from "./permissions";
 import type { HookDefinition } from "./hooks";
+import type { McpOAuthSettings } from "./mcp-oauth";
 
 export interface McpStdioServerConfig {
   type: "stdio";
@@ -9,12 +10,14 @@ export interface McpStdioServerConfig {
   cwd?: string;
   url?: never;
   headers?: never;
+  oauth?: never;
 }
 
 export interface McpRemoteServerConfig {
   type: "http" | "sse";
   url: string;
   headers?: Record<string, string>;
+  oauth?: McpOAuthSettings;
   command?: never;
   args?: never;
   env?: never;

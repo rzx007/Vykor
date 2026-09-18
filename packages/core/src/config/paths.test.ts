@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import {
   PROJECT_CONFIG_DIR_NAME,
   getInstalledPluginStorePath,
+  getMcpOAuthFilePath,
   getMemoryDir,
   getPluginCacheDir,
   getPluginDataDir,
@@ -43,6 +44,19 @@ describe("Native plugin paths", () => {
       expect(getPluginDataDir()).toBe(join(root, "data"));
       expect(getPluginSourcesDir()).toBe(join(root, "sources"));
       expect(getInstalledPluginStorePath()).toBe(join(root, "installed.json"));
+    } finally {
+      if (previous === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
+      else process.env.OPENHARNESS_CONFIG_DIR = previous;
+    }
+  });
+});
+
+describe("MCP OAuth path", () => {
+  it("stores credentials in a separate config file", () => {
+    const previous = process.env.OPENHARNESS_CONFIG_DIR;
+    process.env.OPENHARNESS_CONFIG_DIR = resolve("/tmp/openharness-oauth-test");
+    try {
+      expect(getMcpOAuthFilePath()).toBe(join(process.env.OPENHARNESS_CONFIG_DIR, "mcp-oauth.json"));
     } finally {
       if (previous === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
       else process.env.OPENHARNESS_CONFIG_DIR = previous;

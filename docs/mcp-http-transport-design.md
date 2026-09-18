@@ -1,6 +1,6 @@
 # MCP 连接与鉴权
 
-> 状态：当前实现。HTTP/SSE 传输、headers 鉴权、静态 `McpAuth` 配置与 live reconnect 已接入；完整 MCP OAuth flow 仍未实现。
+> 状态：当前实现。HTTP/SSE 传输、headers 静态鉴权、`McpAuth` live reconnect，以及 Streamable HTTP OAuth CLI 闭环均已接入。
 
 ## 当前入口
 
@@ -12,7 +12,7 @@ MCP 配置来自当前 settings 或已通过校验的插件贡献，交给 `pack
 - `McpServerConfig`（packages/core/src/types/settings.ts）已支持 `type`、stdio 的 `command/args/env`，以及 HTTP/SSE 的 `url/headers`。
 - HTTP/SSE 走 headers 静态鉴权；stdio 走 env 静态鉴权；连接状态记录 `authConfigured`。
 - `McpAuth` 工具已支持配置静态 Bearer、自定义 Header 或 stdio 环境变量，保存 settings 后重连 live MCP server。
-- 完整 OAuth 授权流、token 存储/刷新和过期重试仍未实现。
+- Streamable HTTP 支持 OAuth discovery、DCR、PKCE、callback、独立凭据存储、连接前刷新和单次 401 恢复；SSE/stdio OAuth 不在本阶段范围内。
 
 ## 设计
 
@@ -20,7 +20,7 @@ MCP 配置来自当前 settings 或已通过校验的插件贡献，交给 `pack
 ```ts
 type McpServerConfig =
   | { type: "stdio"; command: string; args?: string[]; env?: Record<string, string>; cwd?: string }
-  | { type: "http" | "sse"; url: string; headers?: Record<string, string> };
+  | { type: "http" | "sse"; url: string; headers?: Record<string, string>; oauth?: { scopes?: string[]; clientId?: string; callbackPort?: number } };
 ```
 
 缺少 `type`、stdio 缺少 `command`、HTTP/SSE 缺少 `url` 都会明确失败。settings、CLI 写入和插件 MCP 文件都只接受这个当前格式。
@@ -47,6 +47,23 @@ type McpServerConfig =
 - `authConfigured`：http+headers→true、stdio+env→true、无→false。
 - resources：Method-not-found→[]、其他错误不崩。
 
+## OAuth CLI
+
+```bash
+ohs mcp add linear --url https://mcp.linear.app/mcp
+ohs mcp login linear --scopes read
+ohs mcp get linear --json
+ohs mcp logout linear
+```
+
+- `add --url` 只保存配置，不自动发起授权；scope 必须在 `login --scopes` 显式确认。
+- `--no-browser` 会打印授权 URL，并允许粘贴完整 callback URL。
+- Token 与动态注册 secret 存在 `$OPENHARNESS_CONFIG_DIR/mcp-oauth.json`，不进入 settings 或命令输出；首版尚未接入系统 keyring。
+- 配置里的显式 `Authorization` Header 优先于 OAuth。存在冲突 Header 时，`mcp login` 会拒绝继续。
+- runtime 不打开浏览器、不执行 DCR、不扩大 scope。首次 401 可刷新并重发底层 HTTP 请求一次；403 `insufficient_scope` 要求用户显式重新登录。
+- 独立 CLI 修改凭据不会主动断开已经运行的 session，新连接会读取最新凭据。
+- OAuth endpoint 默认必须为 HTTPS；只有自动化测试可显式允许 loopback HTTP。
+
 ## 范围外
 
-- 完整 MCP OAuth flow：授权跳转、token 存储/刷新、过期重试。
+- SSE OAuth、stdio OAuth、Desktop 授权 UI 和系统 keyring。

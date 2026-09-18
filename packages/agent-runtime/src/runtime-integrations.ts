@@ -1,5 +1,6 @@
 import type { McpServerConfig, RuntimeBundle, Settings } from "@openharness/core";
-import { McpClientManager } from "@openharness/mcp";
+import { McpClientManager, McpOAuthRuntime } from "@openharness/mcp";
+import { McpOAuthCredentialStore } from "@openharness/auth";
 import { getAllAgentDefinitions } from "@openharness/coordinator";
 import { appendUserProfileUpdate } from "@openharness/prompts";
 import type { ExecutionEnvironmentHandle } from "@openharness/environment";
@@ -50,11 +51,15 @@ export async function installRuntimeIntegrations(
   });
   await installProgrammaticExtensions(options);
 
+  const mcpOAuthRuntime = new McpOAuthRuntime({
+    store: new McpOAuthCredentialStore(),
+  });
   const mcpManager = new McpClientManager({
     cwd: options.executionEnvironment?.workspace.executionRoot ?? options.cwd,
     settings: options.settings,
     sessionId: options.sessionId,
     processExecutor: options.executionEnvironment?.process,
+    oauthRuntime: mcpOAuthRuntime,
   });
   runtime.addCleanup(() => mcpManager.disconnectAll());
   const mcpServers = selectMcpServersForEnvironment(

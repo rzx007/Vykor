@@ -209,4 +209,24 @@ describe("daemon settings", () => {
         .terminal,
     ).toEqual({ localShell: "powershell.exe" });
   });
+
+  it("accepts non-secret MCP OAuth settings and rejects token fields", async () => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
+      mcpServers: {
+        linear: { type: "http", url: "https://mcp.linear.app/mcp", oauth: { scopes: ["read"], callbackPort: 43119 } },
+      },
+    }));
+    await expect(loadSettings()).resolves.toMatchObject({
+      mcpServers: { linear: { oauth: { scopes: ["read"] } } },
+    });
+
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
+      mcpServers: {
+        linear: { type: "http", url: "https://mcp.linear.app/mcp", oauth: { accessToken: "secret" } },
+      },
+    }));
+    await expect(loadSettings()).rejects.toMatchObject({
+      field: "settings.mcpServers.linear.oauth.accessToken",
+    });
+  });
 });

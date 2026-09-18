@@ -17,6 +17,7 @@ export interface ResolvedPaths {
   feedbackDir: string;
   configFilePath: string;
   credentialsFilePath: string;
+  mcpOAuthFilePath: string;
 }
 
 let _cached: ResolvedPaths | undefined;
@@ -41,6 +42,7 @@ export function resolvePaths(projectRoot?: string): ResolvedPaths {
     feedbackDir: join(dataDir, "feedback"),
     configFilePath: join(configDir, "settings.json"),
     credentialsFilePath: join(configDir, "credentials.json"),
+    mcpOAuthFilePath: join(configDir, "mcp-oauth.json"),
   };
 
   if (!projectRoot) _cached = paths;
@@ -120,4 +122,8 @@ export function getFeedbackDir(): string {
 
 export function getCredentialsFilePath(): string {
   return resolvePaths().credentialsFilePath;
+}
+
+export function getMcpOAuthFilePath(): string {
+  return resolvePaths().mcpOAuthFilePath;
 }

@@ -68,6 +68,8 @@ export { HOOK_EVENTS } from "./types/hooks";
 export type {
   Settings,
   McpServerConfig,
+  McpRemoteServerConfig,
+  McpStdioServerConfig,
   MemoryConfig,
   SandboxConfig,
   PermissionSettings,
@@ -81,6 +83,13 @@ export type {
   ModelInputCapabilities,
   WorkStyle,
 } from "./types/settings";
+
+export type {
+  McpOAuthSettings,
+  McpOAuthAuthStatus,
+  McpOAuthCredentialRecord,
+  McpOAuthStoreFile,
+} from "./types/mcp-oauth";
 
 export type { UsageSnapshot, CostTracker as ICostTracker } from "./types/usage";
 
@@ -187,6 +196,7 @@ export {
   getProjectMemoryDir,
   getFeedbackDir,
   getCredentialsFilePath,
+  getMcpOAuthFilePath,
 } from "./config/paths";
 export { resolveGitRepository, type GitRepositoryInfo } from "./config/git";
 

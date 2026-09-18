@@ -11,7 +11,7 @@ OpenHarness 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、W
 - ✅ **多模型支持** — Provider catalog 自动检测（`packages/api` `PROVIDERS`；Anthropic 原生 + OpenAI 兼容 + Codex 订阅），含 `<think>` 块过滤、图片/vision 传递、gpt-5/o 系列 token 字段适配。🟡 暂缺 Copilot 订阅；CLI/`settings.effort` 已有，模型原生 reasoning tokens 仍简化
 - ✅ **工具能力** — 基础 registry 提供文件 / Bash / Web / Grep / MCP / `BackgroundShellCreate` / Agent / 媒体与元工具；runtime host 按能力注入 `Workflow`、`JobList/Read/Wait/Send/Cancel`、`TerminalOpen` 和 5 个 `Schedule*` 工具。bash/grep/glob 健壮性已对齐 v0.1.8（超时保留输出、进程组杀除、gitignore/超长行处理）
 - ✅ **多 Agent 编排** — 内置 7 agent + 用户/插件自定义 agent（`~/.openharness-ts/agents/*.md`），以及统一 Jobs 控制、`Workflow` DAG、sequential/parallel/pipeline、retry、预算、timeline、reconcile/cancel、Workflow 工具/CLI 的 reconciliation follow-up spec 生成和 `ohs workflow` 管理命令。daemon/TUI/print 主路径使用 daemon 内 child session；task、child session 与 child run 的关联通过 daemon 事件持久化，跨客户端可重放。
-- ✅ **MCP 协议** — stdio + HTTP(streamable)/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权、`McpAuth` 配置 Bearer/Header/env 后重连、失败隔离；MCP OAuth 流程待补
+- ✅ **MCP 协议** — stdio + HTTP(streamable)/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权，以及 Streamable HTTP 的 OAuth 2.1 登录、独立凭据存储、刷新、状态查询和失败隔离
 - ✅ **权限系统** — default / plan / full_auto + 工具黑白名单、路径规则、命令拒绝；swarm worker 只读自动放行 + 写操作转 leader 集中裁决；TUI 下 Edit/Write 改文件前显示 unified diff 预览，可本次/整个会话批准
 - ✅ **Hook 生命周期** — 10 类事件、priority 排序、command/http/prompt/agent 四种类型、matcher 过滤、`$ARGUMENTS` 注入+shell 转义
 - ✅ **会话持久化** — TUI / 用户 print / 跨端主线使用 daemon 的 Repository/Transaction + SQLite；单会话通过原子 snapshot + SSE 恢复。daemon 持久化 child session、task 与 child run 的关联；重启会保留审计记录，并将失去进程所有权的 run/task/workflow 明确标记为中断，不会伪造自动续跑。TUI 可用 `/resume` 明确重放某次中断 run 的原始 prompt。
@@ -187,8 +187,13 @@ ohs sandbox check
 
 # MCP server 配置（写入 settings.mcpServers）
 ohs mcp list
-ohs mcp add <name> <command> [args...] [-e KEY=VALUE ...]
-ohs mcp remove <name>
+ohs mcp get linear
+ohs mcp add linear --url https://mcp.linear.app/mcp
+ohs mcp add local -- node server.js
+ohs mcp login linear --scopes read
+ohs mcp login linear --scopes read --no-browser
+ohs mcp logout linear
+ohs mcp remove linear
 
 # 插件
 ohs plugin list
@@ -465,7 +470,7 @@ OpenHarness-ts/
 | **后台工作**   | `BackgroundShellCreate`（创建后台 shell）、`JobList/Read/Wait/Send/Cancel`（统一控制 Terminal、shell、Agent、Workflow）                       |
 | **Agent/团队** | `Agent`（创建 daemon child session 并返回 `jobId`）、`Workflow`（硬调度 DAG）、`TeamCreate/Delete`（团队管理）                                |
 | **调度**       | `ScheduleCreate/Update/Delete/List/RunNow`（创建和管理运行 Agent 的已安排任务；仅 daemon/host 注入 schedules capability 后注册）              |
-| **MCP**        | `McpToolCall/ListMcpResources/ReadMcpResource/McpAuth`（4 个 MCP 工具；`McpAuth` 是静态 Bearer/Header/env 配置，不是 OAuth flow）             |
+| **MCP**        | `McpToolCall/ListMcpResources/ReadMcpResource/McpAuth`（4 个 MCP 工具；`McpAuth` 负责静态 Bearer/Header/env，OAuth 由 `ohs mcp login` 管理）             |
 | **媒体/通道**  | `ImageToText`（视觉 fallback）、`ImageGeneration`（DALL-E 兼容）、`FeishuPush`                                                                |
 | **元工具**     | `TodoWrite、Config、Sleep、Skill、ToolSearch、AskUser、Brief、EnterPlanMode、ExitPlanMode、EnterWorktree、ExitWorktree`                       |
 
@@ -486,7 +491,7 @@ OpenHarness-ts/
 | 模块                    | 说明                                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Coordinator`           | 多 Agent 编排：内置/用户/插件 Agent 定义 + coordinator prompt；硬调度器（`Workflow` / DAG / 持久化恢复 / timeline / budget / reconcile / cancel）。详见 [docs/coordinator-hard-scheduler-flow.md](docs/coordinator-hard-scheduler-flow.md)                                                                               |
-| `McpClientManager`      | MCP 协议客户端：stdio + HTTP/SSE 传输连接外部 MCP Server，headers/env 静态鉴权，动态获取工具和资源；`McpAuth` 可保存 Bearer/Header/env 并重连 live server，MCP OAuth 待补                                                                                                                                                |
+| `McpClientManager`      | MCP 协议客户端：stdio + HTTP/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权及 Streamable HTTP OAuth Token 注入、刷新和单次 401 恢复，动态获取工具和资源                                                                                                                                                |
 | `ChannelAdapter`        | 通信通道：`StdioAdapter`（标准输入输出）、`HttpAdapter`（HTTP Webhook）、`FeishuAdapter`（飞书机器人）                                                                                                                                                                                                                   |
 | `HookExecutor`          | Hook 系统：10 类事件（`session_start/end`、`pre/post_tool_use`、`pre/post_compact`、`user_prompt_submit`、`notification`、`stop`、`subagent_stop`），支持 command/http/prompt/agent 四种类型、priority、matcher、`$ARGUMENTS`                                                                                            |
 | `Swarm`                 | 多 Agent 团队：framework 创建并执行 child agent，daemon 投影 parent task、child session 与 child run。详见 [docs/agent-child-session-flow.md](docs/agent-child-session-flow.md)                                                                                                                                          |
@@ -731,7 +736,7 @@ ohs sandbox check
 }
 ```
 
-> MCP 配置必须显式写 `type`：`stdio` 需要 `command`，`http` / `sse` 需要 `url`。缺字段直接报错，不推断旧格式。HTTP/SSE 用 `headers` 鉴权。
+> MCP 配置必须显式写 `type`：`stdio` 需要 `command`，`http` / `sse` 需要 `url`。缺字段直接报错，不推断旧格式。HTTP/SSE 可用 `headers` 静态鉴权；Streamable HTTP 还可通过 `ohs mcp login` 使用 OAuth。
 
 ### 设置 API Key
 

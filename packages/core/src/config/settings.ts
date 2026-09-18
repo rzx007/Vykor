@@ -380,6 +380,26 @@ function validateSettingsFields(
       "replyAtBotNames",
     ], configPath, "settings.channels");
   }
+  const mcpServers = recordValue(settings.mcpServers);
+  if (mcpServers) {
+    for (const [name, rawServer] of Object.entries(mcpServers)) {
+      const server = recordValue(rawServer);
+      if (!server) continue;
+      assertKnownFields(
+        server,
+        new Set(["type", "command", "args", "env", "cwd", "url", "headers", "oauth"]),
+        `settings.mcpServers.${name}`,
+        configPath,
+      );
+      assertNestedFields(
+        server,
+        "oauth",
+        ["scopes", "clientId", "callbackPort"],
+        configPath,
+        `settings.mcpServers.${name}`,
+      );
+    }
+  }
 }
 
 function assertNestedFields(
