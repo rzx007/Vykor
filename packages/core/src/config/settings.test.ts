@@ -210,6 +210,15 @@ describe("daemon settings", () => {
     ).toEqual({ localShell: "powershell.exe" });
   });
 
+  it("accepts but ignores legacy feishu secret fields", async () => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
+      channels: { feishu: { enabled: true, appId: "cli_x", appSecret: "old", allowFrom: {} } },
+    }));
+    const settings = await loadSettings();
+    expect(settings.channels?.feishu?.appId).toBe("cli_x");
+    expect((settings.channels?.feishu as Record<string, unknown>).appSecret).toBeUndefined();
+  });
+
   it("accepts non-secret MCP OAuth settings and rejects token fields", async () => {
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
       mcpServers: {

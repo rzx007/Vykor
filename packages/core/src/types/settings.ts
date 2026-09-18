@@ -93,10 +93,9 @@ export interface PermissionSettings {
 export interface FeishuChannelSettings {
   enabled: boolean;
   appId: string;
-  appSecret: string;
-  encryptKey?: string;
-  verificationToken?: string;
-  /** ACL 白名单：name→chat_id 映射，空 = 全拒（fail-closed），{ "*": "*" } = 全放。 */
+  /** "feishu"（国内，默认）或 "lark"（国际）。 */
+  domain?: "feishu" | "lark";
+  /** ACL 白名单：name→id 映射，空 = 全拒（fail-closed），{ "*": "*" } = 全放。 */
   allowFrom: Record<string, string>;
   /** 群聊中只响应 @ 这些名字的消息；空 = 群聊全响应。 */
   replyAtBotNames?: string[];

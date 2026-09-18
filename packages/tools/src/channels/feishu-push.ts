@@ -1,5 +1,6 @@
 import { loadSettings, type Settings } from "@openharness/core";
 import type { ToolDefinition } from "@openharness/core";
+import { ChannelCredentialStore } from "@openharness/auth";
 import { createToolAbortScope } from "../abort.js";
 
 let _settingsCache: Settings | undefined;
@@ -49,7 +50,7 @@ export const feishuPushTool: ToolDefinition = {
   name: "FeishuPush",
   description:
     "Push a text message to a Feishu (Lark) chat. " +
-    "Reads app credentials and target mapping from settings.channels.feishu. " +
+    "Reads the app id and target mapping from settings.channels.feishu, and the app secret from the channel credential store. " +
     "Use target names defined in allowFrom (e.g. '个人', '工作群').",
   inputSchema: {
     type: "object",
@@ -72,8 +73,8 @@ export const feishuPushTool: ToolDefinition = {
 
     const settings = await getCachedSettings();
     const feishu = settings.channels?.feishu;
-    if (!feishu?.appId || !feishu?.appSecret) {
-      return { content: [{ type: "text" as const, text: "Error: channels.feishu 未配置 appId/appSecret" }], isError: true };
+    if (!feishu?.appId) {
+      return { content: [{ type: "text" as const, text: "Error: channels.feishu 未配置 appId" }], isError: true };
     }
 
     const allowFrom = feishu.allowFrom ?? {};
@@ -86,9 +87,17 @@ export const feishuPushTool: ToolDefinition = {
       };
     }
 
+    const appSecret = await new ChannelCredentialStore().get(feishu.appId);
+    if (!appSecret) {
+      return {
+        content: [{ type: "text" as const, text: "Error: channels.feishu 缺少凭据，请先运行 ohs channels add feishu" }],
+        isError: true,
+      };
+    }
+
     const abortScope = createToolAbortScope(context.abortSignal, 20_000);
     try {
-      const token = await getTenantToken(feishu.appId, feishu.appSecret, abortScope.signal);
+      const token = await getTenantToken(feishu.appId, appSecret, abortScope.signal);
       await sendToChat(token, chatId, message, abortScope.signal);
       return { content: [{ type: "text" as const, text: `已发送到「${target}」` }] };
     } catch (err) {

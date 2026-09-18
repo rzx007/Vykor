@@ -1147,6 +1147,9 @@ importers:
 
   packages/tools:
     dependencies:
+      '@openharness/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@openharness/coordinator':
         specifier: workspace:*
         version: link:../coordinator

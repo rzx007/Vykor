@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import type { Settings, ChannelsConfig } from "@openharness/core";
 import type { ChannelAdapter } from "@openharness/channels";
+import { ChannelCredentialStore } from "@openharness/auth";
 
 /**
  * `ohs channels` 子命令（D.2，TS 自有接线——Python 的 manager/bridge
@@ -22,6 +23,7 @@ export interface AssembledChannels {
 /** 按 settings.channels 组装启用的 adapter 实例（纯组装，不连接）。 */
 export async function assembleChannelAdapters(
   channels: ChannelsConfig | undefined,
+  credentials: ChannelCredentialStore = new ChannelCredentialStore(),
 ): Promise<AssembledChannels> {
   const adapters: ChannelAdapter[] = [];
   const allowFrom: Record<string, string[]> = {};
@@ -30,16 +32,16 @@ export async function assembleChannelAdapters(
 
   const feishu = channels?.feishu;
   if (feishu?.enabled) {
-    if (!feishu.appId || !feishu.appSecret) {
-      warnings.push("feishu 已启用但缺 appId/appSecret，跳过。");
+    const appSecret = feishu.appId ? await credentials.get(feishu.appId) : undefined;
+    if (!feishu.appId || !appSecret) {
+      warnings.push("feishu 已启用但缺凭据，请先运行 ohs channels add feishu。");
     } else {
       const { FeishuAdapter } = await import("@openharness/channels");
       adapters.push(
         new FeishuAdapter({
           appId: feishu.appId,
-          appSecret: feishu.appSecret,
-          encryptKey: feishu.encryptKey,
-          verificationToken: feishu.verificationToken,
+          appSecret,
+          domain: feishu.domain,
           replyAtBotNames: feishu.replyAtBotNames,
           // ACL 不传给 adapter——集中在 ChannelManager（fail-closed）。
         }),
@@ -60,7 +62,7 @@ async function runChannelsServe(): Promise<void> {
   for (const w of warnings) console.warn(`[channels] ${w}`);
   if (adapters.length === 0) {
     console.error(
-      "[channels] 没有启用任何通道。在 settings.json 配置 channels.feishu（enabled/appId/appSecret/allowFrom）。",
+      "[channels] 没有启用任何通道。在 settings.json 配置 channels.feishu（enabled/appId/allowFrom），并运行 ohs channels add feishu 写入凭据。",
     );
     process.exitCode = 1;
     return;

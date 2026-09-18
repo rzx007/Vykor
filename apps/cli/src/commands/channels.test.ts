@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 const channelMocks = vi.hoisted(() => ({
   health: vi.fn(),
@@ -6,6 +6,8 @@ const channelMocks = vi.hoisted(() => ({
   loadSettings: vi.fn(),
   readDaemonRegistry: vi.fn(),
 }));
+
+const secrets = vi.hoisted(() => new Map<string, string>());
 
 vi.mock("@openharness/core", () => ({ loadSettings: channelMocks.loadSettings }));
 vi.mock("@openharness/server", () => ({ readDaemonRegistry: channelMocks.readDaemonRegistry }));
@@ -15,9 +17,18 @@ vi.mock("@openharness/client", () => ({
     channels = { getStatus: channelMocks.getStatus };
   },
 }));
+vi.mock("@openharness/auth", () => ({
+  ChannelCredentialStore: class {
+    async get(appId: string) { return secrets.get(appId); }
+    async set() {}
+    async delete() { return false; }
+  },
+}));
 import { assembleChannelAdapters, createChannelsCommand } from "./channels.js";
 
 describe("assembleChannelAdapters", () => {
+  afterEach(() => secrets.clear());
+
   it("无配置 → 空组装", async () => {
     const r = await assembleChannelAdapters(undefined);
     expect(r.adapters).toEqual([]);
@@ -26,22 +37,23 @@ describe("assembleChannelAdapters", () => {
 
   it("feishu disabled → 不组装", async () => {
     const r = await assembleChannelAdapters({
-      feishu: { enabled: false, appId: "a", appSecret: "s", allowFrom: { "*": "*" } },
+      feishu: { enabled: false, appId: "a", domain: "feishu", allowFrom: { "*": "*" } },
     });
     expect(r.adapters).toEqual([]);
   });
 
   it("feishu enabled 但缺凭据 → 跳过并告警", async () => {
     const r = await assembleChannelAdapters({
-      feishu: { enabled: true, appId: "", appSecret: "", allowFrom: { "*": "*" } },
+      feishu: { enabled: true, appId: "", domain: "feishu", allowFrom: { "*": "*" } },
     });
     expect(r.adapters).toEqual([]);
-    expect(r.warnings.some((w) => w.includes("appId"))).toBe(true);
+    expect(r.warnings.some((w) => w.includes("凭据"))).toBe(true);
   });
 
   it("feishu enabled 且凭据齐 → 组装 adapter,allowFrom 值列表交给 manager", async () => {
+    secrets.set("cli_x", "sec");
     const r = await assembleChannelAdapters({
-      feishu: { enabled: true, appId: "cli_x", appSecret: "sec", allowFrom: { 个人: "ou_1" } },
+      feishu: { enabled: true, appId: "cli_x", domain: "feishu", allowFrom: { 个人: "ou_1" } },
     });
     expect(r.adapters).toHaveLength(1);
     expect(r.adapters[0]!.name).toBe("feishu");
@@ -49,12 +61,24 @@ describe("assembleChannelAdapters", () => {
     expect(r.accountIds).toEqual({ feishu: "cli_x" });
   });
 
+  it("settings 无 appSecret、凭据文件有 cli_x → 组装成功", async () => {
+    secrets.set("cli_x", "sec");
+    const r = await assembleChannelAdapters({
+      feishu: { enabled: true, appId: "cli_x", domain: "feishu", allowFrom: { 个人: "ou_1" } },
+    });
+    expect(r.warnings).toEqual([]);
+    expect(r.adapters).toHaveLength(1);
+    expect(r.adapters[0]!.name).toBe("feishu");
+    expect(r.accountIds).toEqual({ feishu: "cli_x" });
+  });
+
   it("allowFrom 缺省为空数组(fail-closed 由 manager 兜底)", async () => {
+    secrets.set("cli_x", "sec");
     const r = await assembleChannelAdapters({
       feishu: {
         enabled: true,
         appId: "cli_x",
-        appSecret: "sec",
+        domain: "feishu",
         allowFrom: undefined as unknown as Record<string, string>,
       },
     });
@@ -65,7 +89,7 @@ describe("assembleChannelAdapters", () => {
 describe("channels status", () => {
   it("uses protocol health and channel status resources", async () => {
     channelMocks.loadSettings.mockResolvedValueOnce({
-      channels: { feishu: { enabled: true, appId: "cli_x", appSecret: "sec", allowFrom: {} } },
+      channels: { feishu: { enabled: true, appId: "cli_x", domain: "feishu", allowFrom: {} } },
     });
     channelMocks.readDaemonRegistry.mockReturnValueOnce({ url: "http://127.0.0.1:4000", token: "token" });
     channelMocks.health.mockResolvedValueOnce({ ok: true });
