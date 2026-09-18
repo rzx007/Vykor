@@ -31,6 +31,7 @@ export interface ChannelDeliveryRecord {
   createdAt: number;
   updatedAt: number;
   sentAt?: number;
+  platformMeta?: Record<string, unknown>;
 }
 
 export interface DurableChannelMessageInput {
@@ -45,6 +46,7 @@ export interface DurableChannelMessageInput {
   cwd: string;
   model: string;
   metadata?: Record<string, unknown>;
+  platformMeta?: Record<string, unknown>;
 }
 
 export interface DurableChannelMessageResult {
@@ -79,6 +81,7 @@ export function parseDurableChannelMessageInput(
   value: unknown,
 ): DurableChannelMessageInput {
   const row = record(value);
+  const platformMeta = optionalObject(row, "platformMeta");
   return {
     connector: required(row, "connector"),
     accountId: required(row, "accountId"),
@@ -93,6 +96,7 @@ export function parseDurableChannelMessageInput(
     ...(row.metadata !== undefined
       ? { metadata: record(row.metadata, "metadata") }
       : {}),
+    ...(platformMeta ? { platformMeta } : {}),
   };
 }
 
@@ -131,4 +135,21 @@ function optional(row: Record<string, unknown>, field: string): string | undefin
   if (typeof value !== "string") throw new Error(`${field} must be a string`);
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+/**
+ * 只接受非空普通对象；undefined 视为缺失，null/数组/标量抛错。
+ * 空对象按缺失处理。
+ */
+function optionalObject(
+  row: Record<string, unknown>,
+  field: string,
+): Record<string, unknown> | undefined {
+  const value = row[field];
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field} must be an object`);
+  }
+  const object = value as Record<string, unknown>;
+  return Object.keys(object).length > 0 ? object : undefined;
 }
