@@ -67,9 +67,9 @@ export async function createOAuthCallback(options: {
     }
   };
 
+  let redirectUri = "";
   server = createServer((request, response) => {
-    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-    void consume(new URL(request.url ?? "/", base)).then(
+    void consume(new URL(request.url ?? "/", redirectUri)).then(
       () => {
         response.statusCode = 200;
         response.end("Authorization complete. You may close this window.");
@@ -85,7 +85,7 @@ export async function createOAuthCallback(options: {
     server.listen(options.port ?? 0, "127.0.0.1", () => resolve());
   });
   const address = server.address() as { port: number };
-  const redirectUri = `http://127.0.0.1:${address.port}/oauth/callback`;
+  redirectUri = `http://127.0.0.1:${address.port}/oauth/callback`;
   const timer = setTimeout(() => {
     if (settled) return;
     consumed = true;
