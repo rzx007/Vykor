@@ -50,15 +50,15 @@ Skills、Agents、Hooks、MCP 和 Node Tool 已进入加载闭环。Tool 不会�
 
 Native Plugin 只支持用户级安装；当前 cwd 只作为插件运行时的工作目录，不形成独立安装或独立权限批准。旧的 project/local 记录会被忽略并提示重新以 user scope 安装，不能自动扩大成全局授权。Runtime 加载前先确认非 link 缓存根不是符号链接或目录联接，再重新核对实际 manifest 的 ID、版本和权限，并校验内容摘要；任一项与安装记录不一致都会拒绝激活。启停使用稳定插件 ID，不再修改 Settings。
 
-### Desktop 本地插件包导入
+### Desktop 插件页安装
 
-Desktop 插件页现可选择一个本地 Native Plugin 包，支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`。Source Resolver 只做安全复制、解压和静态校验；Server 再安装为不可变用户快照。无权限时直接安装，申请权限时 Renderer 只显示一次确认，且不会收到插件包绝对路径或摘要。重新导入同一插件 ID 即执行手动更新或修复：既有批准覆盖本次权限时直接安装，新增权限时才重新确认；新快照成功前不切换旧记录，重新安装保留原启停状态。成功、失败和安装结果暂无法确认均为显式反馈，成功后的 Runtime 激活从下一次对话开始。
+Desktop 插件页现可从右上角“添加”菜单导入本地 Native Plugin 包，或从 Git URL 安装。本地包支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`；Git 来源输入 URL 和可选 branch/tag/commit，后台使用系统 `git` 固定到实际 commit，并在安装前移除 `.git` 元数据。Source Resolver 只做安全复制、解压、固定版本和静态校验；Server 再安装为不可变用户快照。无权限时直接安装，申请权限时 Renderer 只显示一次确认，且不会收到插件包绝对路径或摘要。重新导入同一插件 ID 即执行手动更新或修复：既有批准覆盖本次权限时直接安装，新增权限时才重新确认；新快照成功前不切换旧记录，重新安装保留原启停状态。成功、失败和安装结果暂无法确认均为显式反馈，成功后的 Runtime 激活从下一次对话开始。
 
 Plugin Service 会为每个已安装插件计算 `runtimeStatus`，Desktop 列表和详情直接显示这条主状态。当前状态只分为已禁用、等待下次对话生效、已加载、部分能力不可用和加载失败；失败时只给一个建议动作，例如重新导入插件包、重新确认权限或先禁用插件。内部 `diagnostics` 和 Tool Runtime 统计仍保留在详情里，不要求用户理解 cache、digest 或 manifest diff。
 
-作者打包时不需要理解 Source Resolver 的内部细节。当前推荐做法是把完整插件目录压成 `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，包内允许有一层包装目录，但必须只有一个 `.openharness-plugin/plugin.json`。Desktop 导入失败只向用户反馈失败原因和一个动作；具体校验项留在插件详情和诊断里。
+作者打包时不需要理解 Source Resolver 的内部细节。当前推荐做法是把完整插件目录压成 `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，包内允许有一层包装目录，但必须只有一个 `.openharness-plugin/plugin.json`；如果从 Git 安装，仓库 checkout 后也必须满足同一目录规则。Desktop 导入失败只向用户反馈失败原因和一个动作；具体校验项留在插件详情和诊断里。
 
-Desktop 尚不支持自动更新、独立 Repair 命令、版本回滚、旧快照垃圾回收界面、Agent 对话安装、Claude Code/Codex 转换、Git、npm、归档 URL 或 Marketplace。被旧插件页面隐藏的 localStorage 配置仍原样保留，未执行迁移或删除。
+Desktop 尚不支持自动更新、独立 Repair 命令、版本回滚、旧快照垃圾回收界面、Agent 对话安装、Claude Code/Codex 转换、npm、归档 URL 或 Marketplace。被旧插件页面隐藏的 localStorage 配置仍原样保留，未执行迁移或删除。
 
 ## 外部转换
 

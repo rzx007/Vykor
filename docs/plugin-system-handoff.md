@@ -642,7 +642,7 @@ Native Plugin → 在 daemon 主进程注册 Converter
 - Codex Apps、Hooks、技能专用策略和复杂 MCP 配置转换（首版明确报告 unsupported）；
 - Output Styles、Themes、Monitors 插件贡献；
 - Workflows、Channels、Providers、UI 插件贡献；
-- Git、npm 和 archive URL Source Resolver；
+- npm 和 archive URL Source Resolver；
 - Marketplace；
 - 自动依赖安装；
 - 第三方 Converter 的签名、隔离和注册；
@@ -657,9 +657,9 @@ Native Plugin → 在 daemon 主进程注册 Converter
 
 2026-09-09 Desktop 本地 ZIP 阶段已完成：插件页可导入一个本地 Native `.zip`，交互只呈现成功、失败、结果待确认或一次权限确认；Archive Resolver、Native 校验、摘要复核和临时清理由后台完成。Agent 对话安装、转换插件和远程来源后续再规划。详见 [ZIP 导入设计](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)和[实施计划](./superpowers/plans/2026-09-09-desktop-native-plugin-zip-import.md)。
 
-2026-09-14 本地插件包格式补齐 v1 已完成：Desktop 仍只有一个“导入本地插件包”入口，交互不增加复杂度；后台 Source Resolver 在原 ZIP 校验基础上补齐 `.tar`、`.tar.gz` 和 `.tgz`，TAR 解析交给成熟的 `tar` 包，外层继续做路径、类型、大小、数量、压缩比、摘要和临时目录清理校验。Agent 对话安装、Git、npm、归档 URL、Marketplace 和自动更新继续暂缓。
+2026-09-14 本地插件包格式补齐 v1 已完成：Desktop 的本地包入口交互不增加复杂度；后台 Source Resolver 在原 ZIP 校验基础上补齐 `.tar`、`.tar.gz` 和 `.tgz`，TAR 解析交给成熟的 `tar` 包，外层继续做路径、类型、大小、数量、压缩比、摘要和临时目录清理校验。Agent 对话安装、npm、归档 URL、Marketplace 和自动更新继续暂缓。
 
-2026-09-14 Git Source Resolver v1 已完成实现，等待最终验收：Git 来源使用系统 `git` 作为成熟工具，不自研 Git 协议；预览和安装都固定到实际 commit，安装前移除 `.git` 元数据，并复用现有 Native 校验、权限确认和不可变快照。Desktop 入口放在右上角“添加”菜单下，通过一个 Git URL/ref 弹窗完成安装，不在插件页主体常驻表单。该阶段只做 Desktop Git URL 安装，不包含自动更新、npm、archive URL、Marketplace 或自动依赖安装。
+2026-09-14 Git Source Resolver v1 已完成实现与真实仓库验收：Git 来源使用系统 `git` 作为成熟工具，不自研 Git 协议；预览和安装都固定到实际 commit，安装前移除 `.git` 元数据，并复用现有 Native 校验、权限确认和不可变快照。Desktop 入口放在右上角“添加”菜单下，通过一个 Git URL/ref 弹窗完成安装，不在插件页主体常驻表单。验收已用本地真实 Git 仓库证明源仓库删除后不可变快照仍可校验和加载，且快照不含 `.git`、临时 clone 无残留。该阶段只做 Desktop Git URL 安装，不包含自动更新、npm、archive URL、Marketplace 或自动依赖安装。
 
 2026-09-10 补充最小重新安装语义：用户重新导入同一插件 ID 的可信 ZIP，即可手动更新或修复。Server 复用能够覆盖本次请求的既有权限批准，新增权限仍请求一次完整确认；Installer 只在新快照成功后切换记录，并保留原启停状态。自动更新、Repair 命令、版本回滚和垃圾回收仍不在近期范围。详见[核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)和[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)。
 
@@ -674,11 +674,11 @@ Native Plugin → 在 daemon 主进程注册 Converter
 后续不要一次实现所有 Component。建议顺序如下：
 
 1. **Codex Converter**：首版已接入 Converter → Native → Installer，并增加依据真实 manifest 结构独立编写的 fixture；范围和限制见 [Codex 转换器设计](./superpowers/specs/2026-09-09-codex-plugin-converter-design.md)。
-2. **Desktop 本地 Native 插件包导入**：已完成最简导入、后台校验、权限确认和结构化失败反馈；当前支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`。Agent 对话、Claude/Codex 和远程来源仍延后。
+2. **Desktop Native 插件安装入口**：已完成最简导入、后台校验、权限确认和结构化失败反馈；当前支持本地 `.zip`、`.tar`、`.tar.gz`、`.tgz`，以及 Git URL/ref 安装。Agent 对话、Claude/Codex、npm、归档 URL 和 Marketplace 仍延后。
 3. **Native Plugin 运行诊断 v1**：已完成。Plugin Service 返回用户可读的运行主状态，Desktop 列表与详情页直接显示下一步建议。
 4. **作者体验小修**：已完成。开发指南和参考插件 README 已补充打包、重装验证、看诊断和常见失败排查说明。
 5. **声明式贡献**：`output_styles` 已决定暂缓；Themes、Monitors、Workflows 等需要重新开规格后再做。
-6. **Source Resolver**：本地 archive 已完成，Git 来源已完成实现并待验收；后续再依次考虑 npm 和归档 URL。每一种都要做完整性和路径安全测试。
+6. **Source Resolver**：本地 archive 和 Git 来源均已完成实现与验收；后续再依次考虑 npm 和归档 URL。每一种都要做完整性和路径安全测试。
 7. **Marketplace**：建立在 Source Resolver 和统一安装流程之上，不先做另一套假安装 UI。
 8. **Channels 与 Providers**：分别设计认证、生命周期、冲突和隔离，不能复用普通 Tool 的简单注册方式。
 9. **UI contributions**：最后处理，需要明确可用组件、导航、CSP、数据访问、权限和崩溃隔离。

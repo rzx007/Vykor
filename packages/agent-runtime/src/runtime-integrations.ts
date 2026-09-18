@@ -8,10 +8,8 @@ import type {
   OpenHarnessAgentExtension,
   OpenHarnessExtensionDiscovery,
 } from "./extensions.js";
-import {
-  configureDiscoveredExtensions,
-  createExtensionToolRegistry,
-} from "./extensions.js";
+import { createExtensionToolRegistry } from "./extensions.js";
+import { activateDiscoveredPlugins } from "./plugin-activation.js";
 import type { AgentMemoryRuntime } from "./memory-runtime.js";
 import { createMcpAuthHost } from "./mcp-auth.js";
 import { createRememberTool } from "./remember-tool.js";
@@ -37,38 +35,20 @@ export async function installRuntimeIntegrations(
   const { runtime } = options;
   const memory = options.memory;
   const inventory = options.discovery.pluginCapabilityInventory;
-  const pluginServerNames = new Set<string>();
-  for (const { serverName } of inventory.mcpServers.values()) {
-    if (pluginServerNames.has(serverName) || options.mcpServers?.[serverName] || options.settings.mcpServers?.[serverName]) {
-      throw new Error(`MCP server name '${serverName}' conflicts with another owner; independent bindings are required`);
-    }
-    pluginServerNames.add(serverName);
-  }
-  const toolActivations = await configureDiscoveredExtensions(options.discovery, {
+  assertPluginMcpServerNamesAvailable(options);
+  const toolActivations = await activateDiscoveredPlugins({
+    plugins: options.discovery.plugins,
     cwd: options.cwd,
     environmentKind: options.executionEnvironment?.info.kind,
     toolRegistry: runtime.toolRegistry,
     hookExecutor: runtime.hookExecutor,
     addCleanup: (cleanup, cleanupSync) => runtime.addCleanup(cleanup, cleanupSync),
+    onLog: (message) => process.stderr.write(`${message}\n`),
+    onDiagnostic: (diagnostic, plugin) => {
+      process.stderr.write(`[plugins] ${plugin.manifest.id}: ${diagnostic.message}\n`);
+    },
   });
-  for (const extension of options.extensions ?? []) {
-    const registeredNames: string[] = [];
-    try {
-      await extension.setup({
-        cwd: options.cwd,
-        settings: options.settings,
-        skillRegistry: options.discovery.skillRegistry,
-        toolRegistry: createExtensionToolRegistry(
-          runtime.toolRegistry,
-          registeredNames,
-        ),
-        hookExecutor: runtime.hookExecutor,
-      });
-    } catch (error) {
-      for (const name of registeredNames) runtime.toolRegistry.unregister?.(name);
-      throw error;
-    }
-  }
+  await installProgrammaticExtensions(options);
 
   const mcpManager = new McpClientManager({
     cwd: options.executionEnvironment?.workspace.executionRoot ?? options.cwd,
@@ -197,6 +177,35 @@ export async function installRuntimeIntegrations(
   };
 
   return () => mcpManager.getConnections();
+}
+
+function assertPluginMcpServerNamesAvailable(options: InstallRuntimeIntegrationsOptions): void {
+  const pluginServerNames = new Set<string>();
+  for (const { serverName } of options.discovery.pluginCapabilityInventory.mcpServers.values()) {
+    if (pluginServerNames.has(serverName) || options.mcpServers?.[serverName] || options.settings.mcpServers?.[serverName]) {
+      throw new Error(`MCP server name '${serverName}' conflicts with another owner; independent bindings are required`);
+    }
+    pluginServerNames.add(serverName);
+  }
+}
+
+async function installProgrammaticExtensions(options: InstallRuntimeIntegrationsOptions): Promise<void> {
+  const { runtime } = options;
+  for (const extension of options.extensions ?? []) {
+    const registeredNames: string[] = [];
+    try {
+      await extension.setup({
+        cwd: options.cwd,
+        settings: options.settings,
+        skillRegistry: options.discovery.skillRegistry,
+        toolRegistry: createExtensionToolRegistry(runtime.toolRegistry, registeredNames),
+        hookExecutor: runtime.hookExecutor,
+      });
+    } catch (error) {
+      for (const name of registeredNames) runtime.toolRegistry.unregister?.(name);
+      throw error;
+    }
+  }
 }
 
 export function selectMcpServersForEnvironment(

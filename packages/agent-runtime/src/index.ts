@@ -43,6 +43,7 @@ export type { AgentRememberResult } from "./memory-runtime.js";
 export { createRememberTool, type RememberToolOptions } from "./remember-tool.js";
 export type { OpenHarnessAgentExtension, OpenHarnessExtensionContext } from "./extensions.js";
 export { discoverOpenHarnessExtensions } from "./extensions.js";
+export { activateDiscoveredPlugins, type ActivateDiscoveredPluginsOptions } from "./plugin-activation.js";
 export {
   createPluginCapabilityInventory,
   pluginMcpServerId,

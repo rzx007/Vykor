@@ -1,32 +1,11 @@
-import type { AgentDefinition } from "@openharness/coordinator";
-import type {
-  IHookExecutor,
-  McpServerConfig,
-  Settings,
-  IToolRegistry,
-  ToolDefinition,
-} from "@openharness/core";
+import type { IHookExecutor, IToolRegistry, Settings, ToolDefinition } from "@openharness/core";
+import { SkillRegistry } from "@openharness/skills";
 import { GOAL_ASSESSMENT_TOOL_NAME } from "./goal-assessment-tool.js";
-import { getSkillsDir } from "@openharness/core";
-import {
-  discoverInstalledNativePlugins,
-  loadNativePlugin,
-  verifyInstalledNativePlugin,
-  type LoadedNativePlugin,
-} from "@openharness/plugins";
-import {
-  createSkillRegistrySnapshot,
-  SkillRegistry,
-  findProjectSkillDirs,
-  standardUserSkillDirs,
-} from "@openharness/skills";
-import { activateNativePluginTools, type NativeToolActivationResult } from "./native-tools/activate.js";
-import {
-  createPluginCapabilityInventory,
-  selectPluginInstallationWinners,
-  type LoadedPluginInstallation,
-  type PluginCapabilityInventory,
-} from "./plugin-capability-inventory.js";
+import { type OpenHarnessExtensionDiscovery, discoverOpenHarnessExtensions } from "./plugin-discovery.js";
+import { activateDiscoveredPlugins } from "./plugin-activation.js";
+import type { NativeToolActivationResult } from "./native-tools/activate.js";
+export type { OpenHarnessExtensionDiscovery } from "./plugin-discovery.js";
+export { discoverOpenHarnessExtensions } from "./plugin-discovery.js";
 
 export interface ExtensionToolRegistry {
   register(tool: ToolDefinition): void;
@@ -43,71 +22,6 @@ export interface OpenHarnessExtensionContext {
   hookExecutor: IHookExecutor;
 }
 export interface OpenHarnessAgentExtension { setup(context: OpenHarnessExtensionContext): Promise<void> | void; }
-export interface OpenHarnessExtensionDiscovery {
-  skillRegistry: SkillRegistry;
-  plugins: LoadedNativePlugin[];
-  agentDefinitions: AgentDefinition[];
-  warnings: string[];
-  mcpServers: Record<string, McpServerConfig>;
-  pluginCapabilityInventory: PluginCapabilityInventory;
-}
-
-export async function discoverOpenHarnessExtensions(
-  cwd: string,
-  settings: Settings,
-  options: { pluginsEnabled?: boolean } = {},
-): Promise<OpenHarnessExtensionDiscovery> {
-  let plugins: LoadedNativePlugin[] = [];
-  const warnings: string[] = [];
-  const installedPlugins = (settings.plugins?.enabled ?? true) && (options.pluginsEnabled ?? true)
-    ? await discoverInstalledNativePlugins({ cwd })
-    : [];
-  const winnerSelection = selectPluginInstallationWinners(installedPlugins);
-  const loadedInstallations: LoadedPluginInstallation[] = [];
-  for (const record of winnerSelection.winners) {
-    const verified = await verifyInstalledNativePlugin(record);
-    warnings.push(...verified.diagnostics.map((item) => `${record.id}: ${item.message}`));
-    if (verified.status !== "valid") {
-      continue;
-    }
-    const loaded = await loadNativePlugin(verified.plugin);
-    plugins.push(loaded);
-    loadedInstallations.push({ record, plugin: loaded });
-    warnings.push(...loaded.diagnostics.map((item) => `${record.id}: ${item.message}`));
-  }
-  const componentInventory = createPluginCapabilityInventory(loadedInstallations, {
-    reservedMcpServerNames: Object.keys(settings.mcpServers ?? {}),
-  });
-  const pluginCapabilityInventory: PluginCapabilityInventory = {
-    ...componentInventory,
-    diagnostics: [...winnerSelection.diagnostics, ...componentInventory.diagnostics],
-  };
-  warnings.push(...pluginCapabilityInventory.diagnostics.map((item) => item.message));
-  const activeInstallations = loadedInstallations.filter(({ record }) =>
-    pluginCapabilityInventory.plugins.has(record.id));
-  plugins = activeInstallations.map(({ plugin }) => plugin);
-  const skillRegistry = await createSkillRegistrySnapshot({
-    plugins: plugins.flatMap((plugin) => plugin.components.skills?.value ?? []),
-    userDirs: standardUserSkillDirs(),
-    userDir: getSkillsDir(),
-    projectDirs: await findProjectSkillDirs(cwd),
-  });
-  const agentDefinitions = plugins.flatMap((plugin) => plugin.components.agents?.value ?? []);
-  const pluginMcpServers: Record<string, McpServerConfig> = {};
-  for (const plugin of plugins) {
-    for (const [name, server] of Object.entries(plugin.components.mcpServers?.value ?? {})) {
-      pluginMcpServers[name] = server;
-    }
-  }
-  return {
-    skillRegistry,
-    plugins,
-    agentDefinitions,
-    warnings,
-    mcpServers: { ...pluginMcpServers, ...(settings.mcpServers ?? {}) },
-    pluginCapabilityInventory,
-  };
-}
 
 export async function configureDiscoveredExtensions(
   discovery: OpenHarnessExtensionDiscovery,
@@ -119,22 +33,18 @@ export async function configureDiscoveredExtensions(
     addCleanup(cleanup: () => Promise<void> | void, cleanupSync?: () => void): void;
   },
 ): Promise<NativeToolActivationResult[]> {
-  const toolActivations: NativeToolActivationResult[] = [];
-  for (const plugin of discovery.plugins) {
-    for (const hook of plugin.components.hooks?.value ?? []) context.hookExecutor.register(hook);
-    const activation = await activateNativePluginTools(plugin, {
-      cwd: context.cwd,
-      environmentKind: context.environmentKind,
-      toolRegistry: context.toolRegistry,
-      addCleanup: (cleanup, cleanupSync) => context.addCleanup(cleanup, cleanupSync),
-      onLog: (message) => process.stderr.write(`${message}\n`),
-    });
-    toolActivations.push(activation);
-    for (const diagnostic of activation.diagnostics) {
+  return activateDiscoveredPlugins({
+    plugins: discovery.plugins,
+    cwd: context.cwd,
+    environmentKind: context.environmentKind,
+    toolRegistry: context.toolRegistry,
+    hookExecutor: context.hookExecutor,
+    addCleanup: context.addCleanup,
+    onLog: (message) => process.stderr.write(`${message}\n`),
+    onDiagnostic: (diagnostic, plugin) => {
       process.stderr.write(`[plugins] ${plugin.manifest.id}: ${diagnostic.message}\n`);
-    }
-  }
-  return toolActivations;
+    },
+  });
 }
 
 /** Add-only view exposed to programmatic extensions. */

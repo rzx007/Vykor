@@ -104,7 +104,7 @@ Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent�
 - 独立 Repair 命令；
 - 自动更新和版本回滚；
 - Marketplace；
-- Git、npm、archive URL 来源；
+- npm、archive URL 来源；
 - Output Styles 插件贡献；
 - UI 插件贡献；
 - 操作系统级沙箱。
@@ -261,7 +261,7 @@ runtimeStatus:
 
 建议顺序：
 
-1. Git URL + 固定 commit；
+1. Git URL + 固定 commit：已完成实现与真实仓库验收；
 2. npm package + version / integrity；
 3. archive URL + checksum；
 4. Marketplace。
@@ -304,7 +304,8 @@ runtimeStatus:
 - 版本回滚；
 - 旧快照垃圾回收 UI；
 - Marketplace；
-- Git / npm 远程来源；
+- npm 远程来源；
+- Git 来源已完成实现与真实仓库验收；后续不要把它和自动更新混成同一阶段；
 - 第三方 Converter 动态加载；
 - UI 插件贡献；
 - Native LSP 插件贡献；
@@ -328,7 +329,7 @@ runtimeStatus:
 
 ## 10. 下一阶段建议规格标题
 
-2026-09-14 Git Source Resolver v1 已完成实现，等待最终验收：Desktop 插件页右上角“添加”菜单提供“从 Git 安装”，打开弹窗输入 Git URL 和可选 branch/tag/commit。Git 操作使用系统 `git`，不自己实现 clone/fetch/checkout；clone 后固定到实际 commit，移除 `.git`，再走现有 Native 校验、权限确认、不可变快照和 Runtime 诊断链路。本阶段不做自动更新、npm、archive URL、Marketplace 或自动依赖安装。规格见 [Git Source Resolver v1 设计](./superpowers/specs/2026-09-14-git-native-plugin-source-design.md)，计划见 [实现计划](./superpowers/plans/2026-09-14-git-native-plugin-source.md)。
+2026-09-14 Git Source Resolver v1 已完成实现与真实仓库验收：Desktop 插件页右上角“添加”菜单提供“从 Git 安装”，打开弹窗输入 Git URL 和可选 branch/tag/commit。Git 操作使用系统 `git`，不自己实现 clone/fetch/checkout；clone 后固定到实际 commit，移除 `.git`，再走现有 Native 校验、权限确认、不可变快照和 Runtime 诊断链路。验收使用本地真实 Git 仓库贯穿 Desktop、HTTP、Plugin Service 和 Native Installer，并验证源仓库删除后快照仍可校验和加载、快照不含 `.git`、临时 clone 无残留。本阶段不做自动更新、npm、archive URL、Marketplace 或自动依赖安装。规格见 [Git Source Resolver v1 设计](./superpowers/specs/2026-09-14-git-native-plugin-source-design.md)，计划见 [实现计划](./superpowers/plans/2026-09-14-git-native-plugin-source.md)。
 
 如果继续按当前节奏推进，后续规格应按实际选择命名，例如：
 
@@ -342,4 +343,4 @@ docs/superpowers/specs/2026-09-14-agent-native-plugin-package-install-design.md
 docs/superpowers/plans/2026-09-14-agent-native-plugin-package-install.md
 ```
 
-如果暂时不做 Agent 对话安装，下一步可以选择 Git、npm 或归档 URL 中的一个来源。不要把来源扩展、自动更新或新 Component 混在同一阶段，这样边界清楚，也不容易把插件系统重新拖回“大而全”的状态。
+如果暂时不做 Agent 对话安装，下一步可以先验收 Git 来源，或选择 npm / 归档 URL 中的一个来源继续推进。不要把来源扩展、自动更新或新 Component 混在同一阶段，这样边界清楚，也不容易把插件系统重新拖回“大而全”的状态。
