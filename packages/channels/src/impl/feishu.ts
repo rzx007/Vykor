@@ -242,12 +242,64 @@ export class FeishuAdapter implements ChannelAdapter {
     // Mirror the Python channel's heuristic: chat ids start with "oc_" and use
     // the "chat_id" id-type; everything else is an open_id.
     const receiveIdType = receiveId.startsWith("oc_") ? "chat_id" : "open_id";
+    const messageType = message.messageType ?? "text";
+    const attachments = message.attachments ?? [];
+
+    let content: string;
+    switch (messageType) {
+      case "text": {
+        if (attachments.length > 0) {
+          throw new Error("Feishu text message cannot carry attachments");
+        }
+        content = JSON.stringify({ text: message.content });
+        break;
+      }
+      case "image": {
+        const attachment = attachments[0];
+        if (attachments.length !== 1 || !attachment) {
+          throw new Error("Feishu image message requires exactly one attachment");
+        }
+        if (attachment.type !== "image") {
+          throw new Error(
+            `Feishu image message requires an image attachment (type mismatch: ${attachment.type})`,
+          );
+        }
+        if (!attachment.externalId) {
+          throw new Error(
+            "Feishu image message requires attachment.image_key (externalId)",
+          );
+        }
+        content = JSON.stringify({ image_key: attachment.externalId });
+        break;
+      }
+      case "file": {
+        const attachment = attachments[0];
+        if (attachments.length !== 1 || !attachment) {
+          throw new Error("Feishu file message requires exactly one attachment");
+        }
+        if (attachment.type !== "file") {
+          throw new Error(
+            `Feishu file message requires a file attachment (type mismatch: ${attachment.type})`,
+          );
+        }
+        if (!attachment.externalId) {
+          throw new Error(
+            "Feishu file message requires attachment.file_key (externalId)",
+          );
+        }
+        content = JSON.stringify({ file_key: attachment.externalId });
+        break;
+      }
+      default:
+        throw new Error("Feishu does not support this outbound message type");
+    }
+
     await this.client.im.message.create({
       params: { receive_id_type: receiveIdType },
       data: {
         receive_id: receiveId,
-        content: JSON.stringify({ text: message.content }),
-        msg_type: "text",
+        content,
+        msg_type: messageType,
       },
     });
   }

@@ -391,3 +391,324 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     expect(received).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 3: Outbound image/file payload
+// ---------------------------------------------------------------------------
+
+describe("FeishuAdapter.send attachment payload (Task 3)", () => {
+  it("sends image attachment using externalId as image_key with msg_type=image", async () => {
+    const { adapter, create } = makeAdapter();
+    await adapter.send(
+      baseMessage({
+        replyTo: "oc_chat_001",
+        messageType: "image",
+        content: "",
+        attachments: [{ type: "image", externalId: "img_v2_abc" }],
+      }),
+    );
+
+    expect(create).toHaveBeenCalledOnce();
+    const call = create.mock.calls[0]![0] as CreateCall;
+    expect(call.params.receive_id_type).toBe("chat_id");
+    expect(call.data.receive_id).toBe("oc_chat_001");
+    expect(call.data.msg_type).toBe("image");
+    expect(JSON.parse(call.data.content)).toEqual({ image_key: "img_v2_abc" });
+  });
+
+  it("sends file attachment using externalId as file_key with msg_type=file", async () => {
+    const { adapter, create } = makeAdapter();
+    await adapter.send(
+      baseMessage({
+        replyTo: "oc_chat_001",
+        messageType: "file",
+        content: "",
+        attachments: [{ type: "file", externalId: "file_v2_xyz", name: "doc.pdf" }],
+      }),
+    );
+
+    expect(create).toHaveBeenCalledOnce();
+    const call = create.mock.calls[0]![0] as CreateCall;
+    expect(call.data.msg_type).toBe("file");
+    expect(JSON.parse(call.data.content)).toEqual({ file_key: "file_v2_xyz" });
+  });
+
+  it("rejects image send when attachment has no externalId (only data/url)", async () => {
+    const { adapter, create } = makeAdapter();
+    await expect(
+      adapter.send(
+        baseMessage({
+          replyTo: "oc_chat_001",
+          messageType: "image",
+          content: "",
+          attachments: [{ type: "image", url: "https://example.com/img.png" }],
+        }),
+      ),
+    ).rejects.toThrow(/image_key/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects file send when attachment has no externalId", async () => {
+    const { adapter, create } = makeAdapter();
+    await expect(
+      adapter.send(
+        baseMessage({
+          replyTo: "oc_chat_001",
+          messageType: "file",
+          content: "",
+          attachments: [{ type: "file", data: new Uint8Array([1, 2]) }],
+        }),
+      ),
+    ).rejects.toThrow(/file_key/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects image send when attachments array is empty", async () => {
+    const { adapter, create } = makeAdapter();
+    await expect(
+      adapter.send(
+        baseMessage({
+          replyTo: "oc_chat_001",
+          messageType: "image",
+          content: "",
+          attachments: [],
+        }),
+      ),
+    ).rejects.toThrow(/attachment/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects image send when attachment type does not match messageType", async () => {
+    const { adapter, create } = makeAdapter();
+    await expect(
+      adapter.send(
+        baseMessage({
+          replyTo: "oc_chat_001",
+          messageType: "image",
+          content: "",
+          attachments: [{ type: "file", externalId: "file_key_123" }],
+        }),
+      ),
+    ).rejects.toThrow(/type mismatch|image/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("does not send text request when messageType is image", async () => {
+    const { adapter, create } = makeAdapter();
+    await adapter.send(
+      baseMessage({
+        replyTo: "oc_chat_001",
+        messageType: "image",
+        content: "ignored text",
+        attachments: [{ type: "image", externalId: "img_key_999" }],
+      }),
+    );
+    const call = create.mock.calls[0]![0] as CreateCall;
+    // Must NOT fall back to text
+    expect(call.data.msg_type).not.toBe("text");
+    expect(call.data.msg_type).toBe("image");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4: thread/topic routing (inbound and outbound)
+// ---------------------------------------------------------------------------
+
+describe("FeishuAdapter thread routing (Task 4)", () => {
+  it("inbound: stores thread_id as threadId, root_id as platformMeta.rootMessageId — NOT mixed", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_thread_001",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "text",
+        content: JSON.stringify({ text: "hello" }),
+        create_time: "1710000000000",
+        thread_id: "thread_1",
+        root_id: "msg_root",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    });
+
+    expect(received).toHaveLength(1);
+    const msg = received[0]!;
+    // threadId must be thread_id (NOT root_id)
+    expect(msg.threadId).toBe("thread_1");
+    // rootMessageId must be in platformMeta
+    expect(msg.platformMeta?.rootMessageId).toBe("msg_root");
+    // threadId must NOT be root_id
+    expect(msg.threadId).not.toBe("msg_root");
+  });
+
+  it("outbound: sends to thread reply API when platformMeta.rootMessageId is present", async () => {
+    const { adapter, create } = makeAdapter();
+    await adapter.send(
+      baseMessage({
+        replyTo: "oc_chat_001",
+        chatId: "oc_chat_001",
+        threadId: "thread_1",
+        platformMeta: { rootMessageId: "msg_root" },
+        messageType: "text",
+        content: "thread reply",
+      }),
+    );
+
+    expect(create).toHaveBeenCalledOnce();
+    const call = create.mock.calls[0]![0] as CreateCall;
+    expect(call.data.receive_id).toBe("oc_chat_001");
+    expect(call.data.msg_type).toBe("text");
+    // The call must carry the root message id context (thread reply params)
+    expect(call).toMatchObject({
+      data: expect.objectContaining({ root_id: "msg_root" }),
+    });
+  });
+
+  it("outbound: sends to regular chat API when no platformMeta.rootMessageId", async () => {
+    const { adapter, create } = makeAdapter();
+    await adapter.send(
+      baseMessage({
+        replyTo: "oc_chat_001",
+        messageType: "text",
+        content: "normal reply",
+      }),
+    );
+
+    const call = create.mock.calls[0]![0] as CreateCall;
+    // Should NOT include root_id for regular messages
+    expect((call.data as Record<string, unknown>).root_id).toBeUndefined();
+  });
+
+  it("outbound: rejects when threadId is set but platformMeta.rootMessageId is missing", async () => {
+    const { adapter, create } = makeAdapter();
+    await expect(
+      adapter.send(
+        baseMessage({
+          replyTo: "oc_chat_001",
+          threadId: "thread_1",
+          // No platformMeta.rootMessageId
+          messageType: "text",
+          content: "orphan thread",
+        }),
+      ),
+    ).rejects.toThrow(/rootMessageId|root_id/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5: mention/bot boundary and capability gate
+// ---------------------------------------------------------------------------
+
+describe("FeishuAdapter mention and bot boundary (Task 5)", () => {
+  it("group chat without matching @mention does not trigger handler when replyAtBotNames is set", async () => {
+    const adapter = new FeishuAdapter({
+      appId: "a",
+      appSecret: "s",
+      replyAtBotNames: ["Harness"],
+    });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_no_mention",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "text",
+        content: JSON.stringify({ text: "hello" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [], // no mention
+      },
+    });
+
+    expect(received).toHaveLength(0);
+  });
+
+  it("group chat @mention is case-insensitive (harness matches Harness config)", async () => {
+    const adapter = new FeishuAdapter({
+      appId: "a",
+      appSecret: "s",
+      replyAtBotNames: ["Harness"],
+    });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_case_mention",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "text",
+        content: JSON.stringify({ text: "@harness hello" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [{ key: "@harness", name: "harness" }],
+      },
+    });
+
+    expect(received).toHaveLength(1);
+  });
+
+  it("empty text after stripping mention key does not trigger handler", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_empty_after_strip",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "text",
+        content: JSON.stringify({ text: "@bot_key" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [{ key: "@bot_key", name: "bot" }],
+      },
+    });
+
+    expect(received).toHaveLength(0);
+  });
+
+  it("bot sender never triggers handler even with image/file/thread fields", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_bot_image",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "image",
+        content: JSON.stringify({ image_key: "img_key_001" }),
+        create_time: "1710000000000",
+        thread_id: "thread_1",
+        root_id: "msg_root",
+        sender: { sender_id: { open_id: "ou_bot" }, sender_type: "bot" },
+        mentions: [],
+      },
+    });
+
+    expect(received).toHaveLength(0);
+  });
+});
+
+describe("FeishuAdapter capability declaration (Task 5)", () => {
+  it("declares image, file, threaded-conversation, mentions, bot-skip-filter after implementation", () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    expect(adapter.capabilities.supports).toContain("image");
+    expect(adapter.capabilities.supports).toContain("file");
+    expect(adapter.capabilities.supports).toContain("threaded-conversation");
+    expect(adapter.capabilities.supports).toContain("mentions");
+    expect(adapter.capabilities.supports).toContain("bot-skip-filter");
+    expect(adapter.capabilities.supportsImages).toBe(true);
+    expect(adapter.capabilities.supportsFiles).toBe(true);
+  });
+});
