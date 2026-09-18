@@ -112,26 +112,26 @@ describe("MessageBus", () => {
 });
 
 describe("isAllowed (ACL, 对齐 Python BaseChannel.is_allowed)", () => {
-  it("空列表全拒(fail-closed)", () => {
-    expect(isAllowed("anyone", [])).toBe(false);
-    expect(isAllowed("anyone", undefined)).toBe(false);
+  it("匹配发送者", () => {
+    expect(isAllowed({ sender: "ou_1" }, ["ou_1"])).toBe(true);
+    expect(isAllowed({ sender: "ou_2" }, ["ou_1"])).toBe(false);
+  });
+
+  it("匹配会话（群）", () => {
+    expect(isAllowed({ sender: "ou_1", chatId: "oc_g" }, ["oc_g"])).toBe(true);
+    expect(isAllowed({ sender: "ou_1", chatId: "oc_other" }, ["oc_g"])).toBe(false);
+  });
+
+  it("空名单全拒（fail-closed）", () => {
+    expect(isAllowed({ sender: "ou_1" }, [])).toBe(false);
+    expect(isAllowed({ sender: "ou_1", chatId: "oc_g" }, undefined)).toBe(false);
   });
 
   it('"*" 全放', () => {
-    expect(isAllowed("anyone", ["*"])).toBe(true);
+    expect(isAllowed({ sender: "anyone", chatId: "oc_g" }, ["*"])).toBe(true);
   });
 
-  it("整串匹配", () => {
-    expect(isAllowed("u1", ["u1", "u2"])).toBe(true);
-    expect(isAllowed("u3", ["u1", "u2"])).toBe(false);
-  });
-
-  it('senderId 按 "|" 分段任一命中即放行', () => {
-    expect(isAllowed("open_id_x|union_id_y", ["union_id_y"])).toBe(true);
-    expect(isAllowed("open_id_x|union_id_y", ["nope"])).toBe(false);
-  });
-
-  it("数字 senderId 字符串化比较", () => {
-    expect(isAllowed(12345 as unknown as string, ["12345"])).toBe(true);
+  it("发送者支持复合 id 分段", () => {
+    expect(isAllowed({ sender: "open|union" }, ["union"])).toBe(true);
   });
 });

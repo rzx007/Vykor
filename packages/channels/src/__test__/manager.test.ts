@@ -118,6 +118,21 @@ describe("ChannelManager", () => {
     await mgr.stopAll();
   });
 
+  it("ACL 拒绝时调用 onDenied 并带 sender/chatId", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t");
+    const denied: Array<{ channel: string; sender: string; chatId: string }> = [];
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["ou_allowed"] },
+      onDenied: (info) => denied.push(info),
+    });
+    await mgr.startAll();
+    fake.emit({ sender: "ou_intruder", chatId: "oc_g1" });
+    await tick();
+    expect(denied).toEqual([{ channel: "t", sender: "ou_intruder", chatId: "oc_g1" }]);
+    await mgr.stopAll();
+  });
+
   it("ACL 拒绝:不在 allowFrom 或列表为空都不进 bus", async () => {
     const bus = new MessageBus();
     const fake = makeAdapter("t");

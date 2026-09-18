@@ -20,6 +20,8 @@ export interface ChannelManagerOptions {
   /** 是否转发 _tool_hint 出站消息（默认 true，对齐 Python send_tool_hints）。 */
   sendToolHints?: boolean;
   onWarning?: (message: string) => void;
+  /** ACL 拒绝时的结构化回调（用于提示用户加入白名单）。 */
+  onDenied?: (info: { channel: string; sender: string; chatId: string }) => void;
   /** 每个 connector 的机器人账号标识；同一平台多个机器人不会串 Session。 */
   accountIds?: Record<string, string>;
   onDeliveryResult?: (result: {
@@ -113,10 +115,13 @@ export class ChannelManager {
 
   private handleInbound(channelName: string, msg: ChannelMessage): void {
     const allowList = this.opts.allowFrom[channelName];
-    if (!isAllowed(msg.sender, allowList)) {
+    if (!isAllowed({ sender: msg.sender, ...(msg.chatId ? { chatId: msg.chatId } : {}) }, allowList)) {
       this.opts.onWarning?.(
         `通道 ${channelName} 拒绝来自 ${msg.sender} 的消息（不在 allowFrom）。`,
       );
+      if (msg.chatId) {
+        this.opts.onDenied?.({ channel: channelName, sender: msg.sender, chatId: msg.chatId });
+      }
       return;
     }
     if (!msg.chatId) {
