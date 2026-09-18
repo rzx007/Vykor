@@ -90,18 +90,15 @@ async function simulateInbound(
     sender_type?: string;
     chat_type?: string;
     content?: string;
+    msg_type?: string;
   } = {},
 ): Promise<void> {
-  // Access the private event handler registered during connect() via the
-  // internal `_testInjectEvent` helper we'll expose, OR directly call the
-  // internal handler by reaching into the closure via the test helper below.
-  // Since we can't call connect() (needs real Lark SDK), we expose a
-  // package-private test method on the adapter.
   const data = {
     message: {
       message_id: overrides.message_id ?? `msg_${Math.random().toString(36).slice(2)}`,
       chat_id: "oc_chat_001",
       chat_type: overrides.chat_type ?? "p2p",
+      msg_type: overrides.msg_type ?? "text",
       content: JSON.stringify({ text: overrides.content ?? "hello" }),
       create_time: String(Date.now()),
       sender: {
@@ -241,5 +238,156 @@ describe("FeishuAdapter capability model and richer inbound semantics", () => {
     await simulateInbound(adapter, { message_id: "msg_a", content: "a" });
     await simulateInbound(adapter, { message_id: "msg_b", content: "b" });
     expect(received).toHaveLength(2);
+  });
+});
+
+describe("FeishuAdapter inbound attachments (image and file)", () => {
+  it("maps valid inbound image events to ChannelAttachment and messageType=image", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    const imageEvent = {
+      message: {
+        message_id: "msg_image",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "image",
+        content: JSON.stringify({ image_key: "img_v2_001" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    };
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent(imageEvent);
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toMatchObject({
+      id: "msg_image",
+      messageType: "image",
+      content: "",
+      chatId: "oc_chat_001",
+      attachments: [
+        {
+          type: "image",
+          externalId: "img_v2_001",
+        },
+      ],
+    });
+  });
+
+  it("maps valid inbound file events to ChannelAttachment with name and messageType=file", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    const fileEvent = {
+      message: {
+        message_id: "msg_file",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "file",
+        content: JSON.stringify({ file_key: "file_v2_001", file_name: "report.pdf" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    };
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent(fileEvent);
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toMatchObject({
+      id: "msg_file",
+      messageType: "file",
+      content: "",
+      chatId: "oc_chat_001",
+      attachments: [
+        {
+          type: "file",
+          externalId: "file_v2_001",
+          name: "report.pdf",
+        },
+      ],
+    });
+  });
+
+  it("rejects image events missing image_key", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_img_missing",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "image",
+        content: JSON.stringify({}),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    });
+
+    expect(received).toHaveLength(0);
+  });
+
+  it("rejects file events missing file_key", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_file_missing",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "file",
+        content: JSON.stringify({ file_name: "only_name.pdf" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    });
+
+    expect(received).toHaveLength(0);
+  });
+
+  it("rejects unknown msg_type and malformed attachment JSON", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    // Unknown msg_type
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_unknown_type",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "audio",
+        content: JSON.stringify({ audio_key: "aud_1" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    });
+
+    // Malformed JSON
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_bad_json",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "image",
+        content: "not a json",
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    });
+
+    expect(received).toHaveLength(0);
   });
 });

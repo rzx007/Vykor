@@ -1,4 +1,4 @@
-import type { ChannelAdapter, ChannelAdapterCapabilities, ChannelMessage } from "../index";
+import type { ChannelAdapter, ChannelAdapterCapabilities, ChannelAttachment, ChannelMessage } from "../index.js";
 
 export interface FeishuConfig {
   appId: string;
@@ -95,6 +95,7 @@ export class FeishuAdapter implements ChannelAdapter {
       thread_id?: string;
       chat_id?: string;
       chat_type?: string;
+      msg_type?: string;
       content?: string;
       create_time?: string;
       sender?: { sender_id?: { open_id?: string; user_id?: string }; sender_type?: string };
@@ -105,14 +106,54 @@ export class FeishuAdapter implements ChannelAdapter {
     // bot 消息跳过：飞书在某些配置下会把 bot 自己发的消息也推回来，直接忽略。
     if (msg.sender?.sender_type === "bot") return;
 
-    let text: unknown;
+    const msgType = msg.msg_type ?? "text";
+    let messageType: "text" | "image" | "file";
+    let contentText = "";
+    let attachments: ChannelAttachment[] | undefined;
+
+    let parsedContent: Record<string, unknown>;
     try {
-      const content = JSON.parse(msg.content) as { text?: unknown };
-      text = content.text;
+      parsedContent = JSON.parse(msg.content) as Record<string, unknown>;
+      if (!parsedContent || typeof parsedContent !== "object") return;
     } catch {
       return;
     }
-    if (typeof text !== "string" || !text) return;
+
+    if (msgType === "text") {
+      const text = parsedContent.text;
+      if (typeof text !== "string" || !text) return;
+      messageType = "text";
+      contentText = text;
+    } else if (msgType === "image") {
+      const imageKey = parsedContent.image_key;
+      if (typeof imageKey !== "string" || !imageKey.trim()) return;
+      messageType = "image";
+      contentText = "";
+      attachments = [
+        {
+          type: "image",
+          externalId: imageKey.trim(),
+        },
+      ];
+    } else if (msgType === "file") {
+      const fileKey = parsedContent.file_key;
+      if (typeof fileKey !== "string" || !fileKey.trim()) return;
+      const fileName =
+        typeof parsedContent.file_name === "string" && parsedContent.file_name.trim()
+          ? parsedContent.file_name.trim()
+          : undefined;
+      messageType = "file";
+      contentText = "";
+      attachments = [
+        {
+          type: "file",
+          externalId: fileKey.trim(),
+          ...(fileName ? { name: fileName } : {}),
+        },
+      ];
+    } else {
+      return;
+    }
 
     const isGroupChat = msg.chat_type === "group";
     const mentions = msg.mentions ?? [];
@@ -123,12 +164,13 @@ export class FeishuAdapter implements ChannelAdapter {
 
     if (!isAtBot && isGroupChat) return;
 
-    let contentText = text;
-    for (const m of mentions) {
-      if (m.key) contentText = contentText.replace(m.key, "").trim();
+    if (messageType === "text") {
+      for (const m of mentions) {
+        if (m.key) contentText = contentText.replace(m.key, "").trim();
+      }
+      contentText = contentText.replace(/\s+/g, " ").trim();
+      if (!contentText) return;
     }
-    contentText = contentText.replace(/\s+/g, " ").trim();
-    if (!contentText) return;
 
     const senderOpenId = msg.sender?.sender_id?.open_id;
     const senderId = senderOpenId ?? msg.sender?.sender_id?.user_id;
@@ -160,9 +202,11 @@ export class FeishuAdapter implements ChannelAdapter {
       replyTo,
       threadId,
       senderType,
-      messageType: "text",
+      messageType,
+      ...(attachments ? { attachments } : {}),
       metadata: {
         ...(threadId ? { threadId } : {}),
+        ...(attachments ? { attachments } : {}),
         ...(msg.chat_id ? { chatId: msg.chat_id } : {}),
         ...(msg.chat_type ? { chatType: msg.chat_type } : {}),
       },
