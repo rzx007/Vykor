@@ -28,6 +28,42 @@ describe("verifyFeishuCredentials", () => {
     expect(fetchImpl.mock.calls[0]![0]).toBe(
       "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
     );
+    const init = fetchImpl.mock.calls[0]![1]!;
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ app_id: "cli_x", app_secret: "sec" }));
+    expect((init.headers as Record<string, string>)["content-type"]).toContain("application/json");
+  });
+
+  it("throws a network error when the token request rejects", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockRejectedValueOnce(new TypeError("fetch failed"));
+
+    await expect(
+      verifyFeishuCredentials({ appId: "cli_x", appSecret: "sec", domain: "feishu", fetchImpl }),
+    ).rejects.toThrow(/网络/);
+  });
+
+  it("throws a credential error when the token response is not ok", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ code: 10003, msg: "invalid app_secret" }, false));
+
+    await expect(
+      verifyFeishuCredentials({ appId: "cli_x", appSecret: "bad", domain: "feishu", fetchImpl }),
+    ).rejects.toThrow(/凭据/);
+  });
+
+  it("throws a credential error when the token body is not an object", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => null,
+      } as unknown as Response);
+
+    await expect(
+      verifyFeishuCredentials({ appId: "cli_x", appSecret: "sec", domain: "feishu", fetchImpl }),
+    ).rejects.toThrow(/凭据/);
   });
 
   it("throws a credential error when the token exchange fails", async () => {

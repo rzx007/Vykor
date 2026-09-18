@@ -19,6 +19,35 @@ function apiBase(domain: FeishuDomain): string {
   return domain === "lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
 }
 
+class FeishuHttpError extends Error {
+  constructor() {
+    super("feishu http error");
+    this.name = "FeishuHttpError";
+  }
+}
+
+class FeishuInvalidBodyError extends Error {
+  constructor() {
+    super("feishu invalid body");
+    this.name = "FeishuInvalidBodyError";
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function readJson(response: Response): Promise<Record<string, unknown>> {
+  if (!response.ok) {
+    throw new FeishuHttpError();
+  }
+  const parsed: unknown = await response.json();
+  if (!isPlainObject(parsed)) {
+    throw new FeishuInvalidBodyError();
+  }
+  return parsed;
+}
+
 async function postJson(
   fetchImpl: typeof fetch,
   url: string,
@@ -31,7 +60,7 @@ async function postJson(
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
-  return (await response.json()) as Record<string, unknown>;
+  return readJson(response);
 }
 
 async function getJson(
@@ -45,7 +74,7 @@ async function getJson(
     headers: { authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(timeoutMs),
   });
-  return (await response.json()) as Record<string, unknown>;
+  return readJson(response);
 }
 
 export async function verifyFeishuCredentials(
@@ -63,7 +92,10 @@ export async function verifyFeishuCredentials(
       { app_id: input.appId, app_secret: input.appSecret },
       timeoutMs,
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof FeishuHttpError || error instanceof FeishuInvalidBodyError) {
+      throw new Error("飞书凭据校验失败：appId 或 appSecret 不正确，或地区选择不对。");
+    }
     throw new Error("无法连接飞书验证凭据（网络问题）。");
   }
   if (tokenBody.code !== 0 || typeof tokenBody.tenant_access_token !== "string") {
