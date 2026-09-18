@@ -62,7 +62,7 @@
 |---|---|
 | Workflow 按依赖、并发、重试和预算调度，状态可持久恢复 | [scheduler.test.ts](../packages/coordinator/src/workflow/__test__/scheduler.test.ts)、[store.test.ts](../packages/coordinator/src/workflow/__test__/store.test.ts) |
 | Jobs 对不同 producer 提供同一 read/wait/send/cancel 语义 | [jobs index.test.ts](../packages/jobs/src/index.test.ts)、[daemon-job-service.test.ts](../packages/server/src/jobs/daemon-job-service.test.ts)、[job route.test.ts](../packages/server/src/http/routes/job.test.ts) |
-| Channel 消息幂等进入 durable Session/Run，投递状态可重试 | [durable-bridge.test.ts](../packages/channels/src/durable-bridge.test.ts)、[channel routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
+| Channel 消息幂等进入 durable Session/Run，投递状态可重试 | [durable-bridge.test.ts](../packages/channels/src/__test__/durable-bridge.test.ts)、[channel routes.test.ts](../packages/server/src/http/routes/__test__/routes.test.ts) |
 | CLI print 使用 daemon 持久状态，不创建第二套 runtime | [print-session.integration.test.ts](../apps/cli/src/print-session.integration.test.ts) |
 | TUI 只通过共享 client 同步 Session，Jobs 缓存失败不破坏 Run | [useServerSync.test.tsx](../apps/frontend/src/hooks/useServerSync.test.tsx)、[job-remote-state.test.ts](../apps/frontend/src/jobs/job-remote-state.test.ts) |
 

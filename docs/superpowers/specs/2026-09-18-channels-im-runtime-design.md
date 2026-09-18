@@ -266,7 +266,7 @@ export interface ChannelAdapterCapabilities {
 - failed：明确失败
 - unknown：发送请求已发出，但平台未给出最终确认
 
-这个语义要与当前 [packages/channels/src/manager.ts](packages/channels/src/manager.ts) 的 onDeliveryResult 协定保持一致。
+这个语义要与当前 [packages/channels/src/core/manager.ts](../../../packages/channels/src/core/manager.ts) 的 onDeliveryResult 协定保持一致。
 
 ## 9. inbound / outbound 契约
 
