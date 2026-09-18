@@ -323,7 +323,7 @@ export async function runChannelsAddFeishu(
   if (existing?.enabled && existing.appId) {
     let existingSecret: string | undefined;
     try {
-      existingSecret = await credentials.get(existing.appId);
+      existingSecret = await credentials.get(appId);
     } catch (error) {
       d.log(`读取凭据失败：${error instanceof Error ? error.message : String(error)}`);
       return { ok: false };

@@ -102,7 +102,7 @@ describe("runChannelsAddFeishu", () => {
     const result = await runChannelsAddFeishu({
       createCredentials: () => d.credentials as never,
       promptSelect: async () => "manual",
-      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : ""),
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : ""),
       promptSecret: async () => "sec_m",
       promptConfirm: async () => false,
       loadSettings: d.loadSettings as never,
@@ -116,8 +116,9 @@ describe("runChannelsAddFeishu", () => {
     expect(d.saveSettings).not.toHaveBeenCalled();
   });
 
-  it("skips the overwrite prompt when no credential exists for the configured app", async () => {
+  it("does not prompt when a different existing appId has a credential but the new appId has none", async () => {
     const d = deps();
+    d.secrets.set("cli_x", "old-secret");
     d.loadSettings.mockResolvedValueOnce({
       model: "m",
       channels: { feishu: { enabled: true, appId: "cli_x", allowFrom: {} } },
@@ -137,6 +138,7 @@ describe("runChannelsAddFeishu", () => {
 
     expect(promptConfirm).not.toHaveBeenCalled();
     expect(result.ok).toBe(true);
+    expect(d.credentials.set).toHaveBeenCalledWith("cli_m", "sec_m");
     expect(d.saveSettings).toHaveBeenCalled();
   });
 
