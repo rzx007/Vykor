@@ -93,6 +93,7 @@ export class DurableChannelBridge {
       content: message.content,
       cwd: this.deps.cwd,
       model: this.deps.model,
+      platformMeta: message.platformMeta,
       metadata,
     });
     if (
@@ -134,8 +135,9 @@ export class DurableChannelBridge {
       channel: delivery.connector,
       chatId: delivery.chatId,
       content: delivery.content,
-      // 线程语义必须透传：缺失时不得静默降级成普通 chat。
-      // rootMessageId 不在 durable delivery 协议内，Feishu 会据此 fail-closed。
+      // 平台路由上下文必须透传：缺失时不得静默降级成普通 chat。
+      ...(delivery.platformMeta ? { platformMeta: delivery.platformMeta } : {}),
+      // 线程标识单独透传；rootMessageId 在 platformMeta 内。
       ...(delivery.threadId ? { threadId: delivery.threadId } : {}),
       metadata: {
         _delivery_id: delivery.id,

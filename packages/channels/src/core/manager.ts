@@ -150,6 +150,7 @@ export class ChannelManager {
       ...(msg.threadId
         ? { threadId: msg.threadId }
         : {}),
+      ...(msg.platformMeta ? { platformMeta: msg.platformMeta } : {}),
     };
     this.bus.publishInbound(inbound);
   }

@@ -265,4 +265,67 @@ describe("DurableChannelBridge", () => {
     });
     await bridge.stop();
   });
+
+  it("passes inbound platformMeta to the durable application", async () => {
+    const bus = new MessageBus();
+    const application = port();
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+    });
+    bridge.start();
+
+    bus.publishInbound({
+      channel: "feishu",
+      accountId: "app-1",
+      externalMessageId: "message-1",
+      senderId: "user-1",
+      chatId: "chat-1",
+      content: "question",
+      timestamp: new Date(0),
+      media: [],
+      metadata: {},
+      platformMeta: { rootMessageId: "msg_root" },
+    });
+
+    await vi.waitFor(() => {
+      expect(application.handleChannelMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          platformMeta: { rootMessageId: "msg_root" },
+        }),
+      );
+    });
+    await bridge.stop();
+  });
+
+  it("forwards delivery platformMeta to outbound so the thread root survives", async () => {
+    const bus = new MessageBus();
+    const application = port({
+      listPendingChannelDeliveries: vi.fn(async () => [
+        delivery({
+          id: "delivery-root",
+          content: "thread reply",
+          threadId: "thread_1",
+          platformMeta: { rootMessageId: "msg_root" },
+        }),
+      ]),
+    });
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+      connectors: ["feishu"],
+    });
+    bridge.start();
+
+    await expect(bus.consumeOutbound()).resolves.toMatchObject({
+      content: "thread reply",
+      threadId: "thread_1",
+      platformMeta: { rootMessageId: "msg_root" },
+    });
+    await bridge.stop();
+  });
 });

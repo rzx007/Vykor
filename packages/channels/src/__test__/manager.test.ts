@@ -497,4 +497,25 @@ describe("ChannelManager", () => {
     expect(inbound.metadata.rootMessageId).toBe("msg_root");
     await mgr.stopAll();
   });
+
+  it("preserves platformMeta on the inbound message", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t");
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+    });
+    await mgr.startAll();
+
+    fake.emit({
+      chatId: "chat-1",
+      platformMeta: { rootMessageId: "msg_root", chatType: "group" },
+    });
+    const inbound = await bus.consumeInbound();
+
+    expect(inbound.platformMeta).toEqual({
+      rootMessageId: "msg_root",
+      chatType: "group",
+    });
+    await mgr.stopAll();
+  });
 });

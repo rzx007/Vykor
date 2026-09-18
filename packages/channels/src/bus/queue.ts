@@ -25,6 +25,7 @@ export interface InboundMessage {
   media: string[];
   attachments?: ChannelAttachment[];
   messageType?: "text" | "image" | "file" | "card" | "event" | "unknown";
+  platformMeta?: Record<string, unknown>;
   /** 通道私有数据。 */
   metadata: Record<string, unknown>;
   /** 会话键覆盖（如线程级会话）。 */
