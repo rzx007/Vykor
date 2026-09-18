@@ -64,6 +64,9 @@ describe("FeishuAdapter capability release gate", () => {
     );
     expect(adapter.capabilities.supportsImages).toBe(true);
     expect(adapter.capabilities.supportsFiles).toBe(true);
+    expect(adapter.capabilities.supports).not.toContain("stream");
+    expect(adapter.capabilities.supports).not.toContain("rich-card");
+    expect(adapter.capabilities.supports).not.toContain("acknowledgement");
   });
 });
 

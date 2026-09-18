@@ -394,6 +394,26 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
 
     expect(received).toHaveLength(0);
   });
+
+  it("rejects text-like content when msg_type is missing instead of defaulting to text", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_no_type",
+        chat_id: "oc_chat_001",
+        chat_type: "p2p",
+        content: JSON.stringify({ text: "hello" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [],
+      },
+    });
+
+    expect(received).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -433,6 +453,8 @@ describe("FeishuAdapter.send attachment payload (Task 3)", () => {
 
     expect(create).toHaveBeenCalledOnce();
     const call = create.mock.calls[0]![0] as CreateCall;
+    expect(call.params.receive_id_type).toBe("chat_id");
+    expect(call.data.receive_id).toBe("oc_chat_001");
     expect(call.data.msg_type).toBe("file");
     expect(JSON.parse(call.data.content)).toEqual({ file_key: "file_v2_xyz" });
   });
@@ -493,7 +515,22 @@ describe("FeishuAdapter.send attachment payload (Task 3)", () => {
           attachments: [{ type: "file", externalId: "file_key_123" }],
         }),
       ),
-    ).rejects.toThrow(/type mismatch|image/i);
+    ).rejects.toThrow(/type mismatch/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects text send that carries attachments instead of falling back", async () => {
+    const { adapter, create } = makeAdapter();
+    await expect(
+      adapter.send(
+        baseMessage({
+          replyTo: "oc_chat_001",
+          messageType: "text",
+          content: "hello",
+          attachments: [{ type: "image", externalId: "img_key_999" }],
+        }),
+      ),
+    ).rejects.toThrow(/attachment/i);
     expect(create).not.toHaveBeenCalled();
   });
 
@@ -589,7 +626,7 @@ describe("FeishuAdapter thread routing (Task 4)", () => {
   });
 
   it("outbound: rejects when threadId is set but platformMeta.rootMessageId is missing", async () => {
-    const { adapter, create } = makeAdapter();
+    const { adapter, create, reply } = makeAdapter();
     await expect(
       adapter.send(
         baseMessage({
@@ -602,6 +639,7 @@ describe("FeishuAdapter thread routing (Task 4)", () => {
       ),
     ).rejects.toThrow(/rootMessageId|root_id/i);
     expect(create).not.toHaveBeenCalled();
+    expect(reply).not.toHaveBeenCalled();
   });
 });
 
@@ -679,6 +717,28 @@ describe("FeishuAdapter mention and bot boundary (Task 5)", () => {
     });
 
     expect(received).toHaveLength(0);
+  });
+
+  it("strips every occurrence of the mention key, not just the first", async () => {
+    const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
+    const received: ChannelMessage[] = [];
+    adapter.onMessage((m) => received.push(m));
+
+    await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      message: {
+        message_id: "msg_repeat_mention",
+        chat_id: "oc_chat_001",
+        chat_type: "group",
+        msg_type: "text",
+        content: JSON.stringify({ text: "@bot_key hi @bot_key" }),
+        create_time: "1710000000000",
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
+        mentions: [{ key: "@bot_key", name: "bot" }],
+      },
+    });
+
+    expect(received).toHaveLength(1);
+    expect(received[0]?.content).toBe("hi");
   });
 
   it("bot sender never triggers handler even with image/file/thread fields", async () => {

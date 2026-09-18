@@ -241,4 +241,28 @@ describe("DurableChannelBridge", () => {
     });
     await bridge.stop();
   });
+
+  it("forwards the delivery threadId to outbound so thread replies do not degrade to chat", async () => {
+    const bus = new MessageBus();
+    const application = port({
+      listPendingChannelDeliveries: vi.fn(async () => [
+        delivery({ id: "delivery-thread", content: "thread reply", threadId: "thread_1" }),
+      ]),
+    });
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+      connectors: ["feishu"],
+    });
+    bridge.start();
+
+    await expect(bus.consumeOutbound()).resolves.toMatchObject({
+      content: "thread reply",
+      threadId: "thread_1",
+      metadata: { _delivery_id: "delivery-thread" },
+    });
+    await bridge.stop();
+  });
 });

@@ -436,4 +436,65 @@ describe("ChannelManager", () => {
     expect(warnings.some((w) => w.includes("threaded-conversation"))).toBe(true);
     await mgr.stopAll();
   });
+
+  it("capability gate: 只有 platformMeta.rootMessageId（没有 threadId）也要走 threaded-conversation 校验", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t", {
+      capabilities: {
+        supports: ["text"],
+      },
+    });
+    const warnings: string[] = [];
+    const results: Array<{ deliveryId: string; status: string; error?: string }> = [];
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+      onWarning: (w) => warnings.push(w),
+      onDeliveryResult: (r) => {
+        results.push(r);
+      },
+    });
+    await mgr.startAll();
+
+    bus.publishOutbound({
+      channel: "t",
+      chatId: "c1",
+      content: "root only",
+      messageType: "text",
+      platformMeta: { rootMessageId: "msg_root" },
+      metadata: { _delivery_id: "del-root" },
+    });
+    await tick();
+    await tick();
+
+    expect(fake.sent).toHaveLength(0);
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        deliveryId: "del-root",
+        status: "failed",
+        error: expect.stringMatching(/threaded-conversation/i),
+      }),
+    );
+    expect(warnings.some((w) => w.includes("threaded-conversation"))).toBe(true);
+    await mgr.stopAll();
+  });
+
+  it("preserves platformMeta.rootMessageId into inbound metadata", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t");
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+    });
+    await mgr.startAll();
+
+    fake.emit({
+      chatId: "chat-1",
+      threadId: "thread-1",
+      platformMeta: { rootMessageId: "msg_root" },
+    });
+    const inbound = await bus.consumeInbound();
+
+    expect(inbound.threadId).toBe("thread-1");
+    expect(inbound.metadata.rootMessageId).toBe("msg_root");
+    await mgr.stopAll();
+  });
 });

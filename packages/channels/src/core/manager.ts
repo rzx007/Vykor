@@ -39,6 +39,7 @@ export class ChannelManager {
   private readonly status = new Map<string, ChannelStatus>();
   private dispatchAbort: AbortController | null = null;
   private dispatchDone: Promise<void> | null = null;
+  private outboundSeq = 0;
 
   constructor(
     adapters: ChannelAdapter[],
@@ -207,7 +208,11 @@ export class ChannelManager {
           continue;
         }
 
-        if (msg.threadId && !adapter.capabilities.supports.includes("threaded-conversation")) {
+        const rootMessageId = msg.platformMeta?.["rootMessageId"];
+        const requiresThreading =
+          Boolean(msg.threadId) ||
+          (typeof rootMessageId === "string" && rootMessageId.trim() !== "");
+        if (requiresThreading && !adapter.capabilities.supports.includes("threaded-conversation")) {
           this.opts.onWarning?.(
             `通道 ${msg.channel} 不支持消息类型 ${messageType} 的线程消息（缺少能力 threaded-conversation）`,
           );
@@ -230,7 +235,7 @@ export class ChannelManager {
           continue;
         }
         await adapter.send({
-          id: `out_${Date.now()}`,
+          id: `out_${++this.outboundSeq}`,
           channel: msg.channel,
           sender: "system",
           content: msg.content,

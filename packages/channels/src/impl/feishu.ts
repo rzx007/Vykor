@@ -116,7 +116,8 @@ export class FeishuAdapter implements ChannelAdapter {
     // bot 消息跳过：飞书在某些配置下会把 bot 自己发的消息也推回来，直接忽略。
     if (msg.sender?.sender_type === "bot") return;
 
-    const msgType = msg.msg_type ?? "text";
+    // 严格契约：不把缺失/未知的 msg_type 默认成 text，必须显式声明。
+    const msgType = msg.msg_type;
     let messageType: "text" | "image" | "file";
     let contentText = "";
     let attachments: ChannelAttachment[] | undefined;
@@ -176,7 +177,7 @@ export class FeishuAdapter implements ChannelAdapter {
 
     if (messageType === "text") {
       for (const m of mentions) {
-        if (m.key) contentText = contentText.replace(m.key, "").trim();
+        if (m.key) contentText = contentText.split(m.key).join("").trim();
       }
       contentText = contentText.replace(/\s+/g, " ").trim();
       if (!contentText) return;

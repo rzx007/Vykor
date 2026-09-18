@@ -134,6 +134,9 @@ export class DurableChannelBridge {
       channel: delivery.connector,
       chatId: delivery.chatId,
       content: delivery.content,
+      // 线程语义必须透传：缺失时不得静默降级成普通 chat。
+      // rootMessageId 不在 durable delivery 协议内，Feishu 会据此 fail-closed。
+      ...(delivery.threadId ? { threadId: delivery.threadId } : {}),
       metadata: {
         _delivery_id: delivery.id,
         _session_id: delivery.sessionId,
