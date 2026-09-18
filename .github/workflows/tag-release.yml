@@ -182,8 +182,8 @@ jobs:
         run: >-
           pnpm --filter @openharness/desktop exec node scripts/verify-migration-artifact.mjs
           --verify-inventories
-          release-assets/clean-slate-migrations-win.json
-          release-assets/clean-slate-migrations-linux.json
+          ${{ github.workspace }}/release-assets/clean-slate-migrations-win.json
+          ${{ github.workspace }}/release-assets/clean-slate-migrations-linux.json
       - name: Sync workspace versions to the tag
         run: node scripts/prepare-tag-release.mjs ${{ needs.validate.outputs.tag }}
       - name: Build CLI and Desktop migration inventories together

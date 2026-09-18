@@ -101,6 +101,7 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   assert.match(workflow, /verify-clean-slate-artifacts:[\s\S]*pattern: desktop-\*[\s\S]*merge-multiple: true[\s\S]*pnpm --filter @rzx\/ohs\.\.\. build[\s\S]*pnpm --filter @openharness\/desktop build[\s\S]*pnpm check:clean-slate:artifacts/);
   assert.match(workflow, /build-desktop:[\s\S]*verify-migration-artifact\.mjs --write-inventory \$\{\{ matrix\.target \}\}[\s\S]*clean-slate-migrations-\*\.json/);
   assert.match(workflow, /verify-clean-slate-artifacts:[\s\S]*verify-migration-artifact\.mjs[\s\S]*--verify-inventories[\s\S]*clean-slate-migrations-win\.json[\s\S]*clean-slate-migrations-linux\.json/);
+  assert.match(workflow, /--verify-inventories[\s\S]*\$\{\{ github\.workspace \}\}\/release-assets\/clean-slate-migrations-win\.json[\s\S]*\$\{\{ github\.workspace \}\}\/release-assets\/clean-slate-migrations-linux\.json/);
   assert.match(workflow, /create-tag:[\s\S]*needs: \[validate, preflight, build-desktop, verify-clean-slate-artifacts\]/);
   assert.match(workflow, /publish-npm:[\s\S]*npm view "@rzx\/ohs@\$\{VERSION\}"/);
   assert.match(workflow, /publish-release:[\s\S]*needs: \[validate, create-tag, publish-npm, build-desktop\]/);
