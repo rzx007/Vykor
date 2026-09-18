@@ -261,7 +261,6 @@ async function loadSettingsFile(configPath: string): Promise<Partial<Settings> |
     }
     const settings = parsed as Record<string, unknown>;
     validateSettingsFields(settings, configPath);
-    stripLegacyFeishuSecretFields(settings);
     return settings as Partial<Settings>;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
@@ -430,16 +429,6 @@ function assertKnownFields(
       throw new SettingsFileError(`${prefix}.${key}`, configPath);
     }
   }
-}
-
-const LEGACY_FEISHU_SECRET_FIELDS = ["appSecret", "encryptKey", "verificationToken"] as const;
-
-/** 旧版 settings.json 把飞书密钥放在 channels.feishu；现在密钥只存凭据文件，加载时丢弃这些字段。 */
-function stripLegacyFeishuSecretFields(settings: Record<string, unknown>): void {
-  const channels = recordValue(settings.channels);
-  const feishu = channels ? recordValue(channels.feishu) : undefined;
-  if (!feishu) return;
-  for (const field of LEGACY_FEISHU_SECRET_FIELDS) delete feishu[field];
 }
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {

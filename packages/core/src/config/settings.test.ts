@@ -210,13 +210,14 @@ describe("daemon settings", () => {
     ).toEqual({ localShell: "powershell.exe" });
   });
 
-  it("accepts but ignores legacy feishu secret fields", async () => {
+  it("accepts legacy feishu secret fields without deleting them", async () => {
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
       channels: { feishu: { enabled: true, appId: "cli_x", appSecret: "old", allowFrom: {} } },
     }));
     const settings = await loadSettings();
     expect(settings.channels?.feishu?.appId).toBe("cli_x");
-    expect((settings.channels?.feishu as Record<string, unknown>).appSecret).toBeUndefined();
+    // 运行时不再读取这些旧字段（密钥只存凭据文件），但加载时也不应删除磁盘上的值。
+    expect((settings.channels?.feishu as Record<string, unknown>).appSecret).toBe("old");
   });
 
   it("accepts non-secret MCP OAuth settings and rejects token fields", async () => {

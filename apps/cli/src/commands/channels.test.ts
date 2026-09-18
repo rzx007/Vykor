@@ -19,7 +19,11 @@ vi.mock("@openharness/client", () => ({
 }));
 vi.mock("@openharness/auth", () => ({
   ChannelCredentialStore: class {
-    async get(appId: string) { return secrets.get(appId); }
+    async get(appId: string) {
+      // 空 appId 会让真实 store 抛出（不安全键），这里模拟该行为以证明组装阶段已提前短路。
+      if (appId === "") throw new Error("empty appId");
+      return secrets.get(appId);
+    }
     async set() {}
     async delete() { return false; }
   },
@@ -42,9 +46,17 @@ describe("assembleChannelAdapters", () => {
     expect(r.adapters).toEqual([]);
   });
 
-  it("feishu enabled 但缺凭据 → 跳过并告警", async () => {
+  it("feishu enabled 但 appId 为空 → 走告警分支且不调用 store.get('')", async () => {
     const r = await assembleChannelAdapters({
       feishu: { enabled: true, appId: "", domain: "feishu", allowFrom: { "*": "*" } },
+    });
+    expect(r.adapters).toEqual([]);
+    expect(r.warnings.some((w) => w.includes("凭据"))).toBe(true);
+  });
+
+  it("feishu enabled 但缺凭据 → 跳过并告警", async () => {
+    const r = await assembleChannelAdapters({
+      feishu: { enabled: true, appId: "cli_missing", domain: "feishu", allowFrom: { "*": "*" } },
     });
     expect(r.adapters).toEqual([]);
     expect(r.warnings.some((w) => w.includes("凭据"))).toBe(true);

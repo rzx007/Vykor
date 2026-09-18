@@ -87,16 +87,16 @@ export const feishuPushTool: ToolDefinition = {
       };
     }
 
-    const appSecret = await new ChannelCredentialStore().get(feishu.appId);
-    if (!appSecret) {
-      return {
-        content: [{ type: "text" as const, text: "Error: channels.feishu 缺少凭据，请先运行 ohs channels add feishu" }],
-        isError: true,
-      };
-    }
-
     const abortScope = createToolAbortScope(context.abortSignal, 20_000);
     try {
+      const appSecret = await new ChannelCredentialStore().get(feishu.appId);
+      if (!appSecret) {
+        return {
+          content: [{ type: "text" as const, text: "Error: channels.feishu 缺少凭据，请先运行 ohs channels add feishu" }],
+          isError: true,
+        };
+      }
+
       const token = await getTenantToken(feishu.appId, appSecret, abortScope.signal);
       await sendToChat(token, chatId, message, abortScope.signal);
       return { content: [{ type: "text" as const, text: `已发送到「${target}」` }] };
