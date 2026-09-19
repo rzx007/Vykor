@@ -75,6 +75,10 @@ export interface DaemonAgentLoaderOptions {
     session: SessionRecord,
     settings: Settings,
   ): Promise<ExecutionEnvironmentHandle>;
+  resolveReasoningEfforts?(input: {
+    provider?: string;
+    model?: string;
+  }): Promise<string[] | undefined> | string[] | undefined;
   settings?: Settings;
   getSettings?: () => Settings;
   getSettingsForCwd?: (cwd: string) => Promise<Settings> | Settings;
@@ -148,13 +152,29 @@ export function createDaemonAgentLoader(
     const executionEnvironment = settings && options.acquireEnvironment
       ? await options.acquireEnvironment(session, settings)
       : undefined;
+    const configuration = agentConfigurationFromSession(session, settings);
+    let declaredEfforts: string[] | undefined;
+    try {
+      declaredEfforts = await options.resolveReasoningEfforts?.({
+        provider: configuration.provider,
+        model: configuration.model,
+      });
+    } catch {
+      declaredEfforts = undefined;
+    }
+    const chosenEffort = configuration.effort;
+    const reasoningEffort =
+      chosenEffort && declaredEfforts?.includes(chosenEffort)
+        ? chosenEffort
+        : undefined;
     const agentOptions: OpenHarnessAgentOptions = {
       ...(settings ? { settings } : {}),
       cwd: session.cwd,
       sessionId: session.id,
       ...(options.executionSurface ? { executionSurface: options.executionSurface } : {}),
       ...(executionEnvironment ? { executionEnvironment } : {}),
-      ...agentConfigurationFromSession(session, settings),
+      ...configuration,
+      reasoningEffort,
       capabilityOverrides: {
         ...(options.schedules ? { schedules: options.schedules } : {}),
         ...(terminal ? { terminal } : {}),
@@ -255,7 +275,6 @@ function agentConfigurationFromSession(
     apiFormat: settings?.apiFormat,
     permissionMode: settings?.permission?.mode,
     maxTurns: settings?.maxTurns,
-    effort: settings?.effort,
     sessionMode: "direct",
     pluginsEnabled: settings?.plugins?.enabled ?? true,
   });

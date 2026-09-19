@@ -399,4 +399,40 @@ describe("createDaemonAgentLoader", () => {
     expect((failure as AggregateError).errors).toEqual([historyError, closeError]);
     expect(agent.close).toHaveBeenCalledOnce();
   });
+
+  it("sends reasoning effort only when the model declares the chosen tier", async () => {
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
+    const loader = createDaemonAgentLoader({
+      settings: { model: "default-model" } as any,
+      createAgent,
+      resolveReasoningEfforts: async () => ["low", "high", "max"],
+    })!;
+
+    await loader({ session, history: [], parts: [] });
+    expect(createAgent.mock.calls[0]![0].options.reasoningEffort).toBe("high");
+
+    createAgent.mockClear();
+    const undeclared = { ...session, metadata: { runtime: { model: "m", effort: "xhigh" } } };
+    await loader({ session: undeclared, history: [], parts: [] });
+    expect(createAgent.mock.calls[0]![0].options.reasoningEffort).toBeUndefined();
+
+    createAgent.mockClear();
+    const noSelection = { ...session, metadata: { runtime: { model: "m" } } };
+    await loader({ session: noSelection, history: [], parts: [] });
+    expect(createAgent.mock.calls[0]![0].options.reasoningEffort).toBeUndefined();
+  });
+
+  it("degrades to no reasoning effort when the resolver throws", async () => {
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
+    const loader = createDaemonAgentLoader({
+      settings: { model: "default-model" } as any,
+      createAgent,
+      resolveReasoningEfforts: async () => {
+        throw new Error("catalog offline");
+      },
+    })!;
+
+    await loader({ session, history: [], parts: [] });
+    expect(createAgent.mock.calls[0]![0].options.reasoningEffort).toBeUndefined();
+  });
 });

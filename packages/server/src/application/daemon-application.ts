@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 
 import type { AgentBackgroundShellHost, Settings } from "@openharness/core";
 import type { ChannelConfigStore } from "@openharness/auth";
+import { createModelCatalogService } from "@openharness/api";
 import { fileReadTool } from "@openharness/tools";
 import {
   type ObservableJobProducer,
@@ -32,6 +33,7 @@ import {
 } from "@openharness/services";
 
 import { AttachmentService } from "./attachments/attachment-service.js";
+import { catalogModelReasoningEfforts } from "./default-services/catalog-provider-mapping.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
 import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
@@ -195,6 +197,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly workflows: SessionWorkflowRunRepository;
   readonly retention: ApplicationRetentionService;
   private readonly attachmentResources: SessionAttachmentResources;
+  private readonly modelCatalog: ReturnType<typeof createModelCatalogService>;
 
   private readonly eventPublisher: SessionEventPublisher;
   private readonly transcriptProjection: SessionTranscriptProjection;
@@ -217,6 +220,7 @@ export class DaemonApplication implements DurableAgentApplication {
   constructor(private readonly options: DaemonApplicationOptions) {
     const { store } = options;
     this.store = store;
+    this.modelCatalog = createModelCatalogService();
     // 同一份会话库同时只允许一个 daemon 当主人。心跳断了，别人才能接管。
     this.ownerLease = store.acquireApplicationOwner({
       ownerId: options.ownerId ?? `daemon:${process.pid}:${randomUUID()}`,
@@ -397,6 +401,11 @@ export class DaemonApplication implements DurableAgentApplication {
         settings: options.settings,
         getSettings: options.getSettings,
         getSettingsForCwd: options.getSettingsForCwd,
+        resolveReasoningEfforts: async ({ provider, model }) => {
+          if (!provider || !model) return undefined;
+          const catalog = await this.modelCatalog.load();
+          return catalogModelReasoningEfforts(catalog, provider, model);
+        },
         createAgent: options.createAgent,
         acquireEnvironment: acquireSessionEnvironment,
         createTerminal:

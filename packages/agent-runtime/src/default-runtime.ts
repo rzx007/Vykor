@@ -232,6 +232,7 @@ export async function createOpenHarnessRuntime(
     maxTurns: configuration.maxTurns ?? settings.maxTurns,
     systemPrompt,
     model: runtimeModel,
+    reasoningEffort: configuration.reasoningEffort,
     cwd,
     sessionId: options.sessionId,
     settings,

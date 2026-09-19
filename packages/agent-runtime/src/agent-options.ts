@@ -54,6 +54,7 @@ export interface OpenHarnessAgentConfiguration {
   roleAllowedTools?: string[];
   disallowedTools?: string[];
   effort?: Settings["effort"];
+  reasoningEffort?: string;
   fastMode?: boolean;
   /** Per-agent override for the installed Native Plugin master switch. */
   pluginsEnabled?: boolean;
