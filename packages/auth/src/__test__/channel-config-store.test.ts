@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -46,9 +46,13 @@ describe("ChannelConfigStore", () => {
 
   it("normalizes a missing domain to feishu", async () => {
     const path = tempPath();
-    await new ChannelConfigStore(path).setFeishu({ ...feishu, domain: "feishu" });
-    const raw = JSON.parse(readFileSync(path, "utf8")) as { version: number };
-    expect(raw.version).toBe(2);
+    const { domain: _omitted, ...withoutDomain } = feishu;
+    void _omitted;
+    await new ChannelConfigStore(path).setFeishu(
+      withoutDomain as unknown as Parameters<ChannelConfigStore["setFeishu"]>[0],
+    );
+    const result = await new ChannelConfigStore(path).getFeishu();
+    expect(result?.domain).toBe("feishu");
   });
 
   it("updateFeishu creates, mutates, and deletes", async () => {
