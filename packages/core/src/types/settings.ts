@@ -148,7 +148,7 @@ export interface Settings {
   outputStyle?: string;
   workStyle?: WorkStyle;
   fastMode?: boolean;
-  effort?: "low" | "medium" | "high";
+  effort?: string;
   passes?: number;
   /** Root-tree child-agent limits. Omitted fields use runtime defaults. */
   childBudget?: Partial<import("./runtime").AgentChildBudget>;

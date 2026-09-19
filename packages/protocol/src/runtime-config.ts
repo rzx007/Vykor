@@ -10,7 +10,7 @@ export type SessionRuntimeConfig = {
   apiFormat?: SessionApiFormat;
   permissionMode?: "default" | "plan" | "full_auto";
   maxTurns?: number;
-  effort?: "low" | "medium" | "high";
+  effort?: string;
   sessionMode?: "direct" | "coordinator";
   systemPrompt?: string;
   allowedTools?: string[];
@@ -42,8 +42,10 @@ function permissionModeValue(value: unknown): SessionRuntimeConfig["permissionMo
   return value === "default" || value === "plan" || value === "full_auto" ? value : undefined;
 }
 
-function effortValue(value: unknown): SessionRuntimeConfig["effort"] | undefined {
-  return value === "low" || value === "medium" || value === "high" ? value : undefined;
+function effortValue(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : "";
 }
 
 function sessionModeValue(value: unknown): SessionRuntimeConfig["sessionMode"] | undefined {
