@@ -113,8 +113,8 @@ function permissionMode(mode: "read_only" | "workspace_write" | "full_access") {
   return mode === "read_only" ? "plan" as const : mode === "full_access" ? "full_auto" as const : "default" as const;
 }
 
-function isEffort(value: string | undefined): value is "low" | "medium" | "high" {
-  return value === "low" || value === "medium" || value === "high";
+function isEffort(value: string | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function scheduledPrompt(task: Pick<ScheduledTaskRecord, "prompt" | "skillNames" | "pluginNames">): string {

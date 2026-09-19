@@ -85,6 +85,27 @@ describe("ScheduledTaskExecutor", () => {
     expect(admitPrompt).toHaveBeenCalledOnce();
   });
 
+  it("forwards a non-enum reasoning effort into the standalone runtime", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ohs-scheduled-effort-"));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const createSession = vi.fn((input) => ({ id: "s1", status: "idle", ...input }));
+    const executor = new ScheduledTaskExecutor({
+      outsideProjectWorkspaceRoot: root,
+      settings: { model: "test" } as any,
+      sessionQueries: { getSession: vi.fn() },
+      sessionCommands: { createSession },
+      sessionInteractions: { admitPrompt: vi.fn(async () => ({ run: { id: "r1" } })) },
+      runControl: { awaitRun: vi.fn(async () => ({ status: "completed", output: "done" })) },
+    });
+    await executor.execute({
+      id: "task-1", name: "Daily", prompt: "work", projectPaths: [], destination: "standalone",
+      executionMode: "direct", model: "test", effort: "xhigh", skillNames: [], pluginNames: [],
+      permissionProfile: { mode: "workspace_write", network: false },
+    } as any, { id: "scheduled-1", scheduledFor: Date.now() } as any, vi.fn());
+
+    expect(createSession.mock.calls[0]![0].metadata.runtime.effort).toBe("xhigh");
+  });
+
   it("cleans an allocated standalone workspace when worktree mode has no project", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ohs-scheduled-cleanup-"));
     const workspace = join(directory, "allocated");
