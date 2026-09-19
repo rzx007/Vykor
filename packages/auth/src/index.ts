@@ -161,7 +161,6 @@ export {
   shouldReuseCredentialAfterLock,
   type ExclusiveCredentialOperation,
 } from "./mcp-oauth-credential-store";
-export { ChannelCredentialStore, ChannelCredentialStoreError } from "./channel-credential-store";
 export {
   ChannelConfigStore,
   ChannelConfigStoreError,
