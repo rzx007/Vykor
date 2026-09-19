@@ -302,6 +302,29 @@ describe("ChannelManager", () => {
     await mgr.stopAll();
   });
 
+  it("渠道策略按 flag 回退全局:未列出的 flag 用全局值(整体回退会误放 progress)", async () => {
+    const bus = new MessageBus();
+    const a = makeAdapter("a");
+    const b = makeAdapter("b");
+    const mgr = new ChannelManager([a.adapter, b.adapter], bus, {
+      allowFrom: { a: ["*"], b: ["*"] },
+      sendProgress: false,
+      channelPolicies: { a: { sendToolHints: true } },
+    });
+    await mgr.startAll();
+    bus.publishOutbound({ channel: "a", chatId: "c", content: "p", metadata: { _progress: true } });
+    bus.publishOutbound({ channel: "a", chatId: "c", content: "h", metadata: { _progress: true, _tool_hint: true } });
+    bus.publishOutbound({ channel: "b", chatId: "c", content: "p", metadata: { _progress: true } });
+    bus.publishOutbound({ channel: "b", chatId: "c", content: "h", metadata: { _progress: true, _tool_hint: true } });
+    await tick();
+    // 全局关 progress → 两个渠道都丢 _progress；tool hint 默认放行。
+    // a 只显式设了 sendToolHints，其 sendProgress 必须按 flag 回退到全局 false；
+    // b 未列在 channelPolicies，两个 flag 都回退到全局（hint 全局未设 → 默认放行）。
+    expect(a.sent.map((m) => m.content)).toEqual(["h"]);
+    expect(b.sent.map((m) => m.content)).toEqual(["h"]);
+    await mgr.stopAll();
+  });
+
   it("startAll 重入保护:二次调用不另起分发循环", async () => {
     const bus = new MessageBus();
     const fake = makeAdapter("t");
