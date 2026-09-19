@@ -14,7 +14,7 @@
    - `ohs channels add feishu`（扫码优先、手填兜底）、`ohs channels allow`、`status`、`serve`；
    - 渠道配置与密钥统一到 `~/.openharness-ts/channel-credentials.json`；`settings.json` 不再承载 `channels`（该统一在 `docs/superpowers/specs/2026-09-19-channel-config-unification-design.md` 落地）；
    - ACL 改为“发送者或会话任一命中”；
-   - 提交：`12b4d907`..`1323936a`、`642df4bb`、`6f0220f4`。
+   - 提交：`12b4d907`..`1323936a`、`642df4bb`、`6f0220f4`；渠道配置统一见 `50298128`..`9d595dc4`。
 
 ## 可复用的核心（不要重写）
 
@@ -25,7 +25,7 @@
 - `packages/channels/src/bus/acl.ts` + `core/manager.ts` 的 `onDenied`
 - CLI 编排参考：`apps/cli/src/commands/channels-onboarding.ts`
 
-Desktop 新增设置板块参考 MCP 设置：`apps/desktop/src/renderer/src/components/desktop/settings-page/mcp-settings.tsx` 及 `shared/ipc-channels.ts`、`shared/desktop-api-contract.ts`、`preload/desktop-api.ts`、`main/features/mcp/{ipc.ts,mcp-service.ts}`、`main/features/index.ts`。非敏感配置/状态：`packages/client/src/resources/system-resource.ts`、`channel-resource.ts`。
+Desktop 新增设置板块参考 MCP 设置：`apps/desktop/src/renderer/src/components/desktop/settings-page/mcp-settings.tsx` 及 `shared/ipc-channels.ts`、`shared/desktop-api-contract.ts`、`preload/desktop-api.ts`、`main/features/mcp/{ipc.ts,mcp-service.ts}`、`main/features/index.ts`。渠道配置不在 server 的 settings API 里（`system-resource.ts` 只覆盖 settings）；Desktop 主进程直接读写 `channel-credentials.json`（同一台机器）。连接状态用 `channel-resource.ts` 的 `getStatus`。
 
 ## 必须先定清楚的决策
 
@@ -72,13 +72,15 @@ git diff --check
 
 - Desktop「渠道接入」板块可用：扫码/手填 → 校验 → 写凭据与配置 → 显示连接状态。
 - 默认白名单 = 接入者本人；可加人/加群；被拒有提示。
-- 密钥不进 `settings.json`、不回显。
+- 渠道配置（含密钥）只在 `channel-credentials.json`；`settings.json` 不再有 `channels`；密钥不回显。
 - 上述测试/类型/构建/docs 校验全部通过。
 - 若选 B，额外证明 Desktop 能启停连接且不影响其他 Session。
 
 ## 参考文档
 
 - `docs/channels-flow.md`（渠道权威流程 + 会话分类图）
+- `docs/superpowers/specs/2026-09-19-channel-config-unification-design.md`
+- `docs/superpowers/plans/2026-09-19-channel-config-unification.md`
 - `docs/superpowers/specs/2026-09-18-feishu-cli-onboarding-design.md`
 - `docs/superpowers/plans/2026-09-18-feishu-cli-onboarding.md`
 - `docs/superpowers/specs/2026-09-18-channels-im-runtime-design.md`
