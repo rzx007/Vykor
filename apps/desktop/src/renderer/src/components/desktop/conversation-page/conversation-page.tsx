@@ -105,6 +105,7 @@ function ConversationPane({
   const selectedModel = useDesktopSessionStore((state) => state.selectedModel)
   const selectedProvider = useDesktopSessionStore((state) => state.selectedProvider)
   const selectedPermissionMode = useDesktopSessionStore((state) => state.selectedPermissionMode)
+  const selectedEffort = useDesktopSessionStore((state) => state.selectedEffort)
   const workspaceMode = useDesktopSessionStore((state) => state.workspaceMode)
   const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
   const selectedProjectGit = useDesktopSessionStore((state) => state.selectedProjectGit)
@@ -138,10 +139,12 @@ function ConversationPane({
   const createAndCheckoutBranch = useDesktopSessionStore((state) => state.createAndCheckoutBranch)
   const selectModel = useDesktopSessionStore((state) => state.selectModel)
   const selectPermissionMode = useDesktopSessionStore((state) => state.selectPermissionMode)
+  const selectEffort = useDesktopSessionStore((state) => state.selectEffort)
   const updateSessionModel = useDesktopSessionStore((state) => state.updateSessionModel)
   const updateSessionPermissionMode = useDesktopSessionStore(
     (state) => state.updateSessionPermissionMode
   )
+  const updateSessionEffort = useDesktopSessionStore((state) => state.updateSessionEffort)
   const refreshContextUsage = useDesktopSessionStore((state) => state.refreshContextUsage)
   const resyncActiveSessionSnapshot = useDesktopSessionStore(
     (state) => state.resyncActiveSessionSnapshot
@@ -464,6 +467,7 @@ function ConversationPane({
           selectedModel={selectedModel}
           selectedProvider={selectedProvider}
           selectedPermissionMode={selectedPermissionMode}
+          effort={selectedEffort}
           operationError={composerValidationError ?? newConversationError ?? pluginCatalogError}
           goalError={goalComposer.error}
           onDismissGoalError={() => dismissGoalError(composerScope)}
@@ -497,6 +501,10 @@ function ConversationPane({
           onCreateAndCheckoutBranch={createAndCheckoutBranch}
           onSelectModel={(model) => void selectModel(model)}
           onSelectPermissionMode={(permissionMode) => void selectPermissionMode(permissionMode)}
+          onSelectEffort={(effort) => {
+            if (activeSessionId) void updateSessionEffort(activeSessionId, effort)
+            else selectEffort(effort)
+          }}
           onTogglePanel={onTogglePanel}
           contextUsage={contextUsageSnapshot}
           onOpenContextUsage={() => void refreshContextUsage({ refresh: true })}
@@ -617,6 +625,7 @@ function ConversationPane({
                 selectedProvider={selectedProvider}
                 modelLabel={modelLabel}
                 permissionMode={selectedPermissionMode}
+                effort={selectedEffort}
                 skills={skillCommands}
                 plugins={pluginCatalog}
                 pluginMentionsEnabled={pluginMentionsEnabled}
@@ -658,6 +667,10 @@ function ConversationPane({
                   if (activeSessionId)
                     void updateSessionPermissionMode(activeSessionId, permissionMode)
                   else selectPermissionMode(permissionMode)
+                }}
+                onSelectEffort={(effort) => {
+                  if (activeSessionId) void updateSessionEffort(activeSessionId, effort)
+                  else selectEffort(effort)
                 }}
               />
             </div>

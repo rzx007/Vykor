@@ -115,10 +115,10 @@ export function formatInput(model: DesktopModel): string {
   return "文本（图像能力未知）"
 }
 
-function formatReasoning(value: boolean | undefined): string {
-  if (value === true) return "支持推理"
-  if (value === false) return "不支持推理"
-  return "—"
+export function formatReasoning(model: DesktopModel): string {
+  if (model.reasoning !== true) return model.reasoning === false ? "不支持推理" : "—"
+  const efforts = model.reasoningEfforts
+  return efforts && efforts.length > 0 ? `支持推理（${efforts.join(" / ")}）` : "支持推理"
 }
 
 function ModelSearchField({
@@ -154,7 +154,7 @@ function ModelHoverDetails({ model }: { model: DesktopModel }): React.JSX.Elemen
     { label: "模型", value: model.label },
     { label: "提供商", value: model.provider },
     { label: "输入", value: formatInput(model) },
-    { label: "推理", value: formatReasoning(model.reasoning) },
+    { label: "推理", value: formatReasoning(model) },
     { label: "上下文", value: formatContextWindow(model.contextWindow) },
     { label: "最大输出", value: formatContextWindow(model.outputLimit) },
   ]

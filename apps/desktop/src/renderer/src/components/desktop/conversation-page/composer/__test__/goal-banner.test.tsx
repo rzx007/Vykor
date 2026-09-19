@@ -96,12 +96,14 @@ it("offers submit while editing a running goal and disables mode exit during sub
     selectedProvider: null,
     modelLabel: "test",
     permissionMode: "default" as const,
+    effort: null,
     canSubmit: true,
     onDraftChange: vi.fn(),
     onSubmit: vi.fn(),
     onGoalModeChange: vi.fn(),
     onSelectModel: vi.fn(),
     onSelectPermissionMode: vi.fn(),
+    onSelectEffort: vi.fn(),
   }
   const markup = renderToStaticMarkup(createElement(Composer, props))
   expect(markup).toContain('aria-label="发送"')

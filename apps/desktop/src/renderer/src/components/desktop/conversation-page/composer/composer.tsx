@@ -18,6 +18,7 @@ import { ComposerAttachments } from "./composer-attachments"
 import { readComposerDrop } from "./composer-file-input"
 import { ComposerIconButton, ComposerSendButton, PermissionModeMenu } from "./controls"
 import { ContextUsageControl } from "./context-usage-control"
+import { EffortPicker, resolveEffortTiers } from "./effort-picker"
 import { ModelPicker } from "./model-picker"
 import { RichPromptInput } from "./rich-prompt-input"
 import type { ComposerSkill } from "./rich-prompt-input"
@@ -36,6 +37,7 @@ export function Composer({
   selectedProvider,
   modelLabel,
   permissionMode,
+  effort,
   skills = [],
   plugins = [],
   pluginMentionsEnabled = defaultPluginMentionsEnabled,
@@ -58,6 +60,7 @@ export function Composer({
   onInterrupt,
   onSelectModel,
   onSelectPermissionMode,
+  onSelectEffort,
   attachments = [],
   attachmentInteractionEnabled = false,
   attachmentReadOnly = false,
@@ -77,6 +80,7 @@ export function Composer({
   selectedProvider: string | null
   modelLabel: string
   permissionMode: DesktopPermissionMode
+  effort: string | null
   skills?: readonly ComposerSkill[]
   plugins?: readonly DesktopPluginCatalogEntry[]
   pluginMentionsEnabled?: boolean
@@ -99,6 +103,7 @@ export function Composer({
   onInterrupt?: () => void
   onSelectModel: (model: DesktopModel) => void
   onSelectPermissionMode: (mode: DesktopPermissionMode) => void
+  onSelectEffort: (effort: string) => void
   attachments?: readonly DesktopAttachmentDraft[]
   attachmentInteractionEnabled?: boolean
   attachmentReadOnly?: boolean
@@ -109,7 +114,7 @@ export function Composer({
   onRetryAttachment?: (draftId: string) => void
   onRemoveAttachment?: (draftId: string) => void
 }): React.JSX.Element {
-  const [activePicker, setActivePicker] = useState<"model" | "permission" | null>(null)
+  const [activePicker, setActivePicker] = useState<"model" | "permission" | "effort" | null>(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const permissionLabel = resolvePermissionModeLabel(permissionMode)
@@ -307,6 +312,16 @@ export function Composer({
             />
           </PopoverContent>
         </Popover>
+        <EffortPicker
+          open={activePicker === "effort"}
+          onOpenChange={(open) => setActivePicker(open ? "effort" : null)}
+          tiers={resolveEffortTiers(models, selectedModel, selectedProvider)}
+          value={effort}
+          onSelect={(nextEffort) => {
+            onSelectEffort(nextEffort)
+            closePicker()
+          }}
+        />
         <div className="ml-auto flex min-w-0 items-center gap-0.5">
           <ModelPicker
             open={activePicker === "model"}

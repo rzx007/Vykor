@@ -46,6 +46,7 @@ export function NewConversationStart({
   selectedModel,
   selectedProvider,
   selectedPermissionMode,
+  effort,
   operationError,
   skills,
   plugins = [],
@@ -76,6 +77,7 @@ export function NewConversationStart({
   onCreateAndCheckoutBranch,
   onSelectModel,
   onSelectPermissionMode,
+  onSelectEffort,
   onTogglePanel,
   contextUsage = null,
   onOpenContextUsage,
@@ -94,6 +96,7 @@ export function NewConversationStart({
   selectedModel: string | null
   selectedProvider: string | null
   selectedPermissionMode: DesktopPermissionMode
+  effort: string | null
   operationError: string | null
   skills: readonly ComposerSkill[]
   plugins?: readonly DesktopPluginCatalogEntry[]
@@ -124,6 +127,7 @@ export function NewConversationStart({
   onCreateAndCheckoutBranch: (branch: string) => Promise<void>
   onSelectModel: (model: DesktopModel) => void
   onSelectPermissionMode: (mode: DesktopPermissionMode) => void
+  onSelectEffort: (effort: string) => void
   onTogglePanel: () => void
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void
@@ -431,6 +435,7 @@ export function NewConversationStart({
             selectedProvider={selectedProvider}
             modelLabel={modelLabel}
             permissionMode={selectedPermissionMode}
+            effort={effort}
             skills={skills}
             plugins={plugins}
             pluginMentionsEnabled={pluginMentionsEnabled}
@@ -459,6 +464,7 @@ export function NewConversationStart({
             onRemoveAttachment={onRemoveAttachment}
             onSelectModel={onSelectModel}
             onSelectPermissionMode={onSelectPermissionMode}
+            onSelectEffort={onSelectEffort}
             contextUsage={contextUsage}
             onOpenContextUsage={onOpenContextUsage}
           />

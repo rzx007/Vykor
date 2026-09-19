@@ -27,9 +27,10 @@ afterEach(async () => {
 })
 async function render(draft: ComposerDocument = { version: 1, items: [] }, enabled?: boolean, id = "plugin-test") {
   await act(async () => root.render(createElement(Composer, {
-    id, draft, sending: false, models: [], selectedModel: null, selectedProvider: null,
+    id, draft, sending: false, models: [], selectedModel: null, selectedProvider: null, effort: null,
     modelLabel: "Model", permissionMode: "default", plugins: [plugin], pluginMentionsEnabled: enabled,
     onDraftChange: () => {}, onSubmit: () => {}, onSelectModel: () => {}, onSelectPermissionMode: () => {},
+    onSelectEffort: () => {},
   })))
 }
 const editor = () => getNearestEditorFromDOMNode(container.querySelector('[role="textbox"]')!)!
