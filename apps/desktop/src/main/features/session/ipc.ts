@@ -21,6 +21,7 @@ import type {
   SetDefaultDesktopPermissionModeInput,
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
+  UpdateDesktopSessionEffortInput,
   GetDesktopContextUsageInput,
 } from "../../../shared/session-types"
 import type { IpcContribution } from "../../core/ipc/types"
@@ -212,6 +213,11 @@ export const sessionIpcContribution: IpcContribution = {
           desktopSessionService.updateSessionPermissionMode(
             input as UpdateDesktopSessionPermissionModeInput
           ),
+      },
+      {
+        channel: IpcChannels.sessionUpdateEffort,
+        handler: (_event, input) =>
+          desktopSessionService.updateSessionEffort(input as UpdateDesktopSessionEffortInput),
       },
       {
         channel: IpcChannels.sessionGetContextUsage,

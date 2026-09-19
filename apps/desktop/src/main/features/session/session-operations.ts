@@ -38,6 +38,7 @@ import type {
   SessionUserInputItem,
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
+  UpdateDesktopSessionEffortInput,
   GetDesktopContextUsageInput,
   GetDesktopSessionGoalInput,
   CreateDesktopSessionGoalInput,
@@ -212,6 +213,7 @@ export class SessionOperations {
             model,
             ...(provider ? { provider } : {}),
             ...(permissionMode ? { permissionMode } : {}),
+            ...(input.effort?.trim() ? { effort: input.effort.trim() } : {}),
           },
         },
       })
@@ -404,6 +406,19 @@ export class SessionOperations {
     return toDesktopSessionRecord(
       await client.sessions.update(sessionId, {
         metadata: { runtime: { permissionMode } },
+      })
+    )
+  }
+
+  async updateSessionEffort(
+    client: SessionOperationsClient,
+    input: UpdateDesktopSessionEffortInput
+  ): Promise<DesktopSessionRecord> {
+    const sessionId = requireString(input.sessionId, "会话 ID")
+    const effort = typeof input.effort === "string" ? input.effort.trim() : ""
+    return toDesktopSessionRecord(
+      await client.sessions.update(sessionId, {
+        metadata: { runtime: { effort } },
       })
     )
   }

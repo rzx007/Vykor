@@ -103,6 +103,13 @@ export function sessionPermissionMode(
   return mode === "default" || mode === "plan" || mode === "full_auto" ? mode : fallback
 }
 
+export function sessionEffort(session: DesktopSessionRecord): string | null {
+  const runtime = session.metadata["runtime"]
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) return null
+  const effort = (runtime as Record<string, unknown>)["effort"]
+  return typeof effort === "string" && effort.trim() ? effort.trim() : null
+}
+
 export function sessionProvider(
   session: DesktopSessionRecord,
   fallback: string | null = null

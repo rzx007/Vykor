@@ -14,6 +14,7 @@ import {
   resetDesktopSessionStore,
   sessionRuntime,
 } from "./store-test-fixtures"
+import { sessionEffort } from "./helpers"
 import { useDesktopSessionStore } from "./store"
 import type { DesktopSessionRuntime } from "./types"
 import { composerDocument, emptyComposerDocument } from "./composer-document"
@@ -1323,6 +1324,36 @@ describe("desktop session actions", () => {
 
     resolvePrompt()
     await starting
+  })
+
+  it("persists a session reasoning effort through sessions.updateEffort", async () => {
+    const session = emptySessionView("session-1").session
+    const updateEffort = vi.fn(async () => ({
+      ...session,
+      metadata: { runtime: { model: "m", effort: "max" } },
+    }))
+    vi.stubGlobal("window", { desktop: { sessions: { updateEffort } } })
+    useDesktopSessionStore.setState({ activeSessionId: "session-1" })
+
+    await useDesktopSessionStore.getState().updateSessionEffort("session-1", "max")
+
+    expect(updateEffort).toHaveBeenCalledWith({ sessionId: "session-1", effort: "max" })
+    expect(useDesktopSessionStore.getState().selectedEffort).toBe("max")
+  })
+
+  it("reads the three effort states from session metadata", () => {
+    const session = emptySessionView("session-effort").session
+    expect(sessionEffort({ ...session, metadata: {} })).toBeNull()
+    expect(sessionEffort({ ...session, metadata: { runtime: { effort: "" } } })).toBeNull()
+    expect(sessionEffort({ ...session, metadata: { runtime: { effort: "high" } } })).toBe("high")
+  })
+
+  it("normalizes the selected effort and clears it for blank input", () => {
+    useDesktopSessionStore.getState().selectEffort(" high ")
+    expect(useDesktopSessionStore.getState().selectedEffort).toBe("high")
+
+    useDesktopSessionStore.getState().selectEffort("   ")
+    expect(useDesktopSessionStore.getState().selectedEffort).toBeNull()
   })
 })
 function onlyPendingPromptSubmission(

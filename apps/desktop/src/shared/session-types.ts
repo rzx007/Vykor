@@ -295,6 +295,7 @@ interface CreateDesktopSessionBaseInput {
   model: string
   provider?: string
   permissionMode?: DesktopPermissionMode
+  effort?: string
 }
 
 export type CreateDesktopSessionInput = CreateDesktopSessionBaseInput &
@@ -398,6 +399,11 @@ export interface UpdateDesktopSessionModelInput {
 export interface UpdateDesktopSessionPermissionModeInput {
   sessionId: string
   permissionMode: DesktopPermissionMode
+}
+
+export interface UpdateDesktopSessionEffortInput {
+  sessionId: string
+  effort: string
 }
 
 export interface GetDesktopContextUsageInput {

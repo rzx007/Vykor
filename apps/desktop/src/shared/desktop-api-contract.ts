@@ -42,6 +42,7 @@ import type {
   SessionGoal,
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
+  UpdateDesktopSessionEffortInput,
   GetDesktopContextUsageInput,
 } from "./session-types"
 import type { DesktopContextUsageSnapshot } from "./context-usage-types"
@@ -367,6 +368,7 @@ export type DesktopAPI = {
     updatePermissionMode: (
       input: UpdateDesktopSessionPermissionModeInput
     ) => Promise<DesktopSessionRecord>
+    updateEffort: (input: UpdateDesktopSessionEffortInput) => Promise<DesktopSessionRecord>
     getContextUsage: (input: GetDesktopContextUsageInput) => Promise<DesktopContextUsageSnapshot>
     rename: (input: RenameDesktopSessionInput) => Promise<DesktopSessionRecord>
     setPinned: (input: PinDesktopSessionInput) => Promise<DesktopSessionRecord>

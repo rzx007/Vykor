@@ -44,6 +44,7 @@ import type {
   SetDefaultDesktopPermissionModeInput,
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
+  UpdateDesktopSessionEffortInput,
   GetDesktopContextUsageInput,
   GetDesktopSessionGoalInput,
   CreateDesktopSessionGoalInput,
@@ -365,6 +366,11 @@ export class DesktopSessionService {
   ): Promise<DesktopSessionRecord> {
     const client = await this.getClient()
     return await this.operations.updateSessionPermissionMode(client, input)
+  }
+
+  async updateSessionEffort(input: UpdateDesktopSessionEffortInput): Promise<DesktopSessionRecord> {
+    const client = await this.getClient()
+    return await this.operations.updateSessionEffort(client, input)
   }
 
   async getContextUsage(input: GetDesktopContextUsageInput): Promise<DesktopContextUsageSnapshot> {

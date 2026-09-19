@@ -31,6 +31,7 @@ import type {
   SetDefaultDesktopPermissionModeInput,
   UpdateDesktopSessionModelInput,
   UpdateDesktopSessionPermissionModeInput,
+  UpdateDesktopSessionEffortInput,
   GetDesktopSessionGoalInput,
   CreateDesktopSessionGoalInput,
   UpdateDesktopSessionGoalInput,
@@ -200,6 +201,7 @@ export const IpcChannels = {
   sessionSetDefaultPermissionMode: "session:set-default-permission-mode",
   sessionUpdateModel: "session:update-model",
   sessionUpdatePermissionMode: "session:update-permission-mode",
+  sessionUpdateEffort: "session:update-effort",
   sessionGetContextUsage: "session:get-context-usage",
   sessionRename: "session:rename",
   sessionSetPinned: "session:set-pinned",
@@ -545,6 +547,10 @@ export interface IpcInvokeMap {
   }
   [IpcChannels.sessionUpdatePermissionMode]: {
     args: [input: UpdateDesktopSessionPermissionModeInput]
+    result: DesktopSessionRecord
+  }
+  [IpcChannels.sessionUpdateEffort]: {
+    args: [input: UpdateDesktopSessionEffortInput]
     result: DesktopSessionRecord
   }
   [IpcChannels.sessionGetContextUsage]: {

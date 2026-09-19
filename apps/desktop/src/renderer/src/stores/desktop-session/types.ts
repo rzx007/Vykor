@@ -132,6 +132,8 @@ export interface SessionActions {
     sessionId: string,
     permissionMode: DesktopPermissionMode
   ) => Promise<void>
+  updateSessionEffort: (sessionId: string, effort: string) => Promise<void>
+  selectEffort: (effort: string) => void
   openSession: (sessionId: string) => Promise<void>
   resyncActiveSessionSnapshot: () => Promise<void>
   startConversationFrom: (session: DesktopSessionRecord) => Promise<void>
@@ -247,6 +249,7 @@ export interface DesktopSessionState
   selectedModel: string | null
   selectedProvider: string | null
   selectedPermissionMode: DesktopPermissionMode
+  selectedEffort: string | null
   workspaceMode: DesktopWorkspaceMode
   outsideProjectWorkspaceRoot: string
   selectedProject: DesktopProject | null

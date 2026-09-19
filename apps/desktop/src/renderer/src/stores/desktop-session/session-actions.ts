@@ -7,6 +7,7 @@ import {
   formatSessionTitle,
   isSessionPinned,
   resolveSessionWorkspace,
+  sessionEffort,
   sessionPermissionMode,
   sessionProvider,
   upsertProject,
@@ -357,6 +358,23 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       }))
     },
 
+    async updateSessionEffort(sessionId, effort) {
+      const session = await window.desktop.sessions.updateEffort({ sessionId, effort })
+      set((state) => ({
+        sessions: upsertSession(state.sessions, session),
+        selectedEffort:
+          state.activeSessionId === sessionId ? sessionEffort(session) : state.selectedEffort,
+        sessionView:
+          state.sessionView?.session.id === sessionId
+            ? { ...state.sessionView, session }
+            : state.sessionView,
+      }))
+    },
+
+    selectEffort(effort) {
+      set({ selectedEffort: effort.trim() ? effort.trim() : null })
+    },
+
     async openSession(sessionId) {
       if (!sessionId) return
       advancePrimaryNavigation()
@@ -546,6 +564,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         defaultModel,
         defaultProvider,
         selectedPermissionMode,
+        selectedEffort,
       } = get()
       const model = selectedModel ?? defaultModel
       const provider = selectedProvider ?? defaultProvider
@@ -588,11 +607,13 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
                 model,
                 ...(provider ? { provider } : {}),
                 permissionMode: selectedPermissionMode,
+                ...(selectedEffort ? { effort: selectedEffort } : {}),
               }
             : {
                 model,
                 ...(provider ? { provider } : {}),
                 permissionMode: selectedPermissionMode,
+                ...(selectedEffort ? { effort: selectedEffort } : {}),
               }
         // 创建会话
         const session = await window.desktop.sessions.create(sessionInput)

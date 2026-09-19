@@ -61,6 +61,7 @@ export function createInitialState(): Omit<
     selectedModel: null,
     selectedProvider: null,
     selectedPermissionMode: "default" as const,
+    selectedEffort: null,
     workspaceMode: "project" as const,
     outsideProjectWorkspaceRoot: "",
     selectedProject: null,
