@@ -1,13 +1,6 @@
-import { loadSettings, type Settings } from "@openharness/core";
 import type { ToolDefinition } from "@openharness/core";
-import { ChannelCredentialStore } from "@openharness/auth";
+import { ChannelConfigStore } from "@openharness/auth";
 import { createToolAbortScope } from "../abort.js";
-
-let _settingsCache: Settings | undefined;
-async function getCachedSettings(): Promise<Settings> {
-  if (!_settingsCache) _settingsCache = await loadSettings();
-  return _settingsCache;
-}
 
 type FeishuDomain = "feishu" | "lark";
 
@@ -68,7 +61,7 @@ export const feishuPushTool: ToolDefinition = {
   name: "FeishuPush",
   description:
     "Push a text message to a Feishu (Lark) chat. " +
-    "Reads the app id and target mapping from settings.channels.feishu, and the app secret from the channel credential store. " +
+    "Reads the app id, app secret and target mapping from the feishu channel config in channel-credentials.json. " +
     "Use target names defined in allowFrom (e.g. '个人', '工作群').",
   inputSchema: {
     type: "object",
@@ -76,7 +69,7 @@ export const feishuPushTool: ToolDefinition = {
       target: {
         type: "string",
         description:
-          "Target name as defined in settings.channels.feishu.allowFrom (e.g. '个人' or '工作群').",
+          "Target name as defined in the feishu channel config's allowFrom in channel-credentials.json (e.g. '个人' or '工作群').",
       },
       message: {
         type: "string",
@@ -89,34 +82,29 @@ export const feishuPushTool: ToolDefinition = {
     const target = input.target as string;
     const message = input.message as string;
 
-    const settings = await getCachedSettings();
-    const feishu = settings.channels?.feishu;
-    if (!feishu?.appId) {
-      return { content: [{ type: "text" as const, text: "Error: channels.feishu 未配置 appId" }], isError: true };
-    }
-
-    const allowFrom = feishu.allowFrom ?? {};
-    const chatId = allowFrom[target];
-    if (!chatId) {
-      const available = Object.keys(allowFrom).join("、") || "（未配置）";
-      return {
-        content: [{ type: "text" as const, text: `Error: 目标「${target}」不存在。可用目标：${available}` }],
-        isError: true,
-      };
-    }
-
     const abortScope = createToolAbortScope(context.abortSignal, 20_000);
     try {
-      const appSecret = await new ChannelCredentialStore().get(feishu.appId);
-      if (!appSecret) {
+      const feishu = await new ChannelConfigStore().getFeishu();
+      if (!feishu?.appId) {
         return {
-          content: [{ type: "text" as const, text: "Error: channels.feishu 缺少凭据，请先运行 ohs channels add feishu" }],
+          content: [
+            { type: "text" as const, text: "Error: 渠道未配置，请先运行 ohs channels add feishu" },
+          ],
+          isError: true,
+        };
+      }
+
+      const chatId = feishu.allowFrom[target];
+      if (!chatId) {
+        const available = Object.keys(feishu.allowFrom).join("、") || "（未配置）";
+        return {
+          content: [{ type: "text" as const, text: `Error: 目标「${target}」不存在。可用目标：${available}` }],
           isError: true,
         };
       }
 
       const base = feishuApiBase(feishu.domain);
-      const token = await getTenantToken(feishu.appId, appSecret, abortScope.signal, base);
+      const token = await getTenantToken(feishu.appId, feishu.appSecret, abortScope.signal, base);
       await sendToChat(token, chatId, message, abortScope.signal, base);
       return { content: [{ type: "text" as const, text: `已发送到「${target}」` }] };
     } catch (err) {
