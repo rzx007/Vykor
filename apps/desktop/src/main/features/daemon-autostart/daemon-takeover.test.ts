@@ -14,10 +14,7 @@ vi.mock("./daemon-autostart-service", () => ({
 }))
 
 import { isDesktopManagedRegistry, isLoopbackDaemonUrl } from "./daemon-surface"
-import {
-  stopNonDesktopDaemon,
-  waitForDesktopManagedRegistry,
-} from "./daemon-takeover"
+import { stopNonDesktopDaemon, waitForDesktopManagedRegistry } from "./daemon-takeover"
 
 function registry(overrides: Partial<DaemonRegistry> = {}): DaemonRegistry {
   return {
@@ -48,7 +45,9 @@ describe("daemon takeover helpers", () => {
   })
 
   it("refuses to stop a non-loopback daemon", async () => {
-    await expect(stopNonDesktopDaemon(registry({ url: "http://10.0.0.5:1" }))).rejects.toThrow(/loopback/i)
+    await expect(stopNonDesktopDaemon(registry({ url: "http://10.0.0.5:1" }))).rejects.toThrow(
+      /loopback/i
+    )
     expect(host.stopDaemonProcess).not.toHaveBeenCalled()
   })
 
@@ -70,7 +69,7 @@ describe("daemon takeover helpers", () => {
   it("times out when no desktop-managed registry appears", async () => {
     host.readDaemonRegistry.mockReturnValue(registry())
     await expect(
-      waitForDesktopManagedRegistry({ isHealthy: async () => true, timeoutMs: 50 }),
+      waitForDesktopManagedRegistry({ isHealthy: async () => true, timeoutMs: 50 })
     ).rejects.toThrow(/did not become ready/i)
   })
 })

@@ -65,7 +65,7 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
       storePath: server.store.path,
       version: app.getVersion(),
       executionSurface: "desktop_managed",
-    }),
+    })
   )
 
   await new Promise<void>((resolve) => {
@@ -80,7 +80,7 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
 
 export async function registeredDaemonHealthy(
   readRegistry: () => DaemonRegistry | undefined = readDaemonRegistry,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = fetch
 ): Promise<boolean> {
   const registry = readRegistry()
   if (!registry || !isDesktopManagedRegistry(registry)) return false

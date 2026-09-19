@@ -23,7 +23,7 @@ export interface DesktopServiceReconciler {
 
 export async function reconcileDesktopManagedService(
   registry: DaemonRegistry,
-  service: DesktopServiceReconciler = createDesktopDaemonSystemService(),
+  service: DesktopServiceReconciler = createDesktopDaemonSystemService()
 ): Promise<void> {
   service.uninstall()
   if (isLoopbackDaemonUrl(registry.url)) {
@@ -39,7 +39,7 @@ export async function waitForDesktopManagedRegistry(
     timeoutMs?: number
     readRegistry?: () => DaemonRegistry | undefined
     isHealthy?: (registry: DaemonRegistry) => Promise<boolean>
-  } = {},
+  } = {}
 ): Promise<DaemonRegistry> {
   const readRegistry = options.readRegistry ?? readDaemonRegistry
   const isHealthy = options.isHealthy ?? defaultRegistryHealthy

@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest"
 import type { DaemonRegistry } from "@openharness/server/daemon-host"
 
 vi.mock("electron", () => ({
-  app: { isPackaged: true, getAppPath: () => "D:/app", getVersion: () => "1.0.0", getPath: () => "D:/documents" },
+  app: {
+    isPackaged: true,
+    getAppPath: () => "D:/app",
+    getVersion: () => "1.0.0",
+    getPath: () => "D:/documents",
+  },
 }))
 import { registeredDaemonHealthy, resolveDesktopDaemonMode } from "./daemon-entry"
 
@@ -25,7 +30,7 @@ describe("desktop daemon entry", () => {
     }
     const healthy = await registeredDaemonHealthy(
       () => registry,
-      async () => new Response("{}", { status: 200 }),
+      async () => new Response("{}", { status: 200 })
     )
     expect(healthy).toBe(false)
   })
@@ -42,7 +47,7 @@ describe("desktop daemon entry", () => {
     }
     const healthy = await registeredDaemonHealthy(
       () => registry,
-      async () => new Response("{}", { status: 200 }),
+      async () => new Response("{}", { status: 200 })
     )
     expect(healthy).toBe(true)
   })

@@ -3,7 +3,7 @@ import type { DaemonRegistry } from "@openharness/server/daemon-host"
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
 
 export function isDesktopManagedRegistry(
-  registry: Pick<DaemonRegistry, "executionSurface">,
+  registry: Pick<DaemonRegistry, "executionSurface">
 ): boolean {
   return registry.executionSurface === "desktop_managed"
 }

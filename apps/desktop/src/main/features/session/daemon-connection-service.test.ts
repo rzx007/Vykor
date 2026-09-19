@@ -153,7 +153,7 @@ describe("DaemonConnectionService ownership safety", () => {
     expect(stop).toHaveBeenCalledOnce()
     expect(daemonHost.startOpenHarnessDaemon).toHaveBeenCalledOnce()
     expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledWith(
-      expect.objectContaining({ executionSurface: "desktop_managed" }),
+      expect.objectContaining({ executionSurface: "desktop_managed" })
     )
   })
 

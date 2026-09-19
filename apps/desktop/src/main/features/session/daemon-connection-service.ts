@@ -195,7 +195,7 @@ export class DaemonConnectionService {
           storePath: server.store.path,
           version: app.getVersion(),
           executionSurface: "desktop_managed",
-        }),
+        })
       )
       this.setDaemonStatus("ready", "内置 daemon 已启动", { url: listen.url })
       return new OpenHarnessClient({ baseUrl: listen.url, token })
@@ -212,7 +212,7 @@ export class DaemonConnectionService {
       controller.signal.addEventListener(
         "abort",
         () => reject(new Error(`daemon verification timed out after ${this.verifyTimeoutMs}ms`)),
-        { once: true },
+        { once: true }
       )
     })
     try {
