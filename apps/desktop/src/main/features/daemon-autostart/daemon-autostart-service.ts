@@ -2,6 +2,7 @@ import { dirname } from "node:path"
 
 import {
   createDaemonAutoStartController,
+  DaemonSystemService,
   type DaemonAutoStartController,
 } from "@openharness/server/daemon-host"
 import { app } from "electron"
@@ -69,15 +70,17 @@ export class DaemonAutoStartService {
   }
 }
 
-export function createDesktopDaemonAutoStartController(): DaemonAutoStartController {
+export function createDesktopDaemonSystemService(): DaemonSystemService {
   const flag = process.platform === "win32" ? "--daemon-watchdog" : "--daemon-service"
   const args = app.isPackaged ? [flag] : [app.getAppPath(), flag]
+  return new DaemonSystemService({
+    invocation: { command: process.execPath, args, cwd: dirname(process.execPath) },
+  })
+}
+
+export function createDesktopDaemonAutoStartController(): DaemonAutoStartController {
   return createDaemonAutoStartController({
-    invocation: {
-      command: process.execPath,
-      args,
-      cwd: dirname(process.execPath),
-    },
+    invocation: createDesktopDaemonSystemService().invocation(),
   })
 }
 
