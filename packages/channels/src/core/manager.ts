@@ -19,6 +19,8 @@ export interface ChannelManagerOptions {
   sendProgress?: boolean;
   /** 是否转发 _tool_hint 出站消息（默认 true，对齐 Python send_tool_hints）。 */
   sendToolHints?: boolean;
+  /** 按通道名的出站策略；缺省的通道按 sendProgress/sendToolHints 默认值处理。 */
+  channelPolicies?: Record<string, { sendProgress?: boolean; sendToolHints?: boolean }>;
   onWarning?: (message: string) => void;
   /** ACL 拒绝时的结构化回调（用于提示用户加入白名单）。 */
   onDenied?: (info: { channel: string; sender: string; chatId: string }) => void;
@@ -171,9 +173,12 @@ export class ChannelManager {
 
       const meta = msg.metadata ?? {};
       if (meta["_progress"]) {
+        const policy = this.opts.channelPolicies?.[msg.channel];
+        const sendProgress = policy?.sendProgress ?? this.opts.sendProgress;
+        const sendToolHints = policy?.sendToolHints ?? this.opts.sendToolHints;
         const isToolHint = Boolean(meta["_tool_hint"]);
-        if (isToolHint && this.opts.sendToolHints === false) continue;
-        if (!isToolHint && this.opts.sendProgress === false) continue;
+        if (isToolHint && sendToolHints === false) continue;
+        if (!isToolHint && sendProgress === false) continue;
       }
 
       const adapter = this.adapters.get(msg.channel);

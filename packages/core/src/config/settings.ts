@@ -298,7 +298,6 @@ const TOP_LEVEL_SETTINGS_FIELDS = new Set([
   "terminal",
   "mcpServers",
   "plugins",
-  "channels",
   "daemon",
   "theme",
   "outputStyle",
@@ -367,21 +366,6 @@ function validateSettingsFields(
     "maxActiveChildren",
     "maxTotalChildren",
   ], configPath);
-  assertNestedFields(settings, "channels", ["sendProgress", "sendToolHints", "feishu"], configPath);
-  const channels = recordValue(settings.channels);
-  if (channels) {
-    assertNestedFields(channels, "feishu", [
-      "enabled",
-      "appId",
-      "domain",
-      "allowFrom",
-      "replyAtBotNames",
-      // 旧字段：接受但忽略，避免旧 settings.json 触发 SettingsFileError。
-      "appSecret",
-      "encryptKey",
-      "verificationToken",
-    ], configPath, "settings.channels");
-  }
   const mcpServers = recordValue(settings.mcpServers);
   if (mcpServers) {
     for (const [name, rawServer] of Object.entries(mcpServers)) {

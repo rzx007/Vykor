@@ -210,14 +210,28 @@ describe("daemon settings", () => {
     ).toEqual({ localShell: "powershell.exe" });
   });
 
-  it("accepts legacy feishu secret fields without deleting them", async () => {
+  it("rejects the removed channels field", async () => {
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
-      channels: { feishu: { enabled: true, appId: "cli_x", appSecret: "old", allowFrom: {} } },
+      channels: { feishu: { enabled: true, appId: "cli_x", allowFrom: {} } },
     }));
-    const settings = await loadSettings();
-    expect(settings.channels?.feishu?.appId).toBe("cli_x");
-    // 运行时不再读取这些旧字段（密钥只存凭据文件），但加载时也不应删除磁盘上的值。
-    expect((settings.channels?.feishu as Record<string, unknown>).appSecret).toBe("old");
+    await expect(loadSettings()).rejects.toMatchObject({
+      name: "SettingsFileError",
+      field: "settings.channels",
+    });
+  });
+
+  it("rejects the removed channels field in project settings", async () => {
+    const projectRoot = join(configDir, "channels-project");
+    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    mkdirSync(projectConfigDir, { recursive: true });
+    writeFileSync(join(projectConfigDir, "settings.json"), JSON.stringify({
+      channels: { feishu: { enabled: true, appId: "x", allowFrom: {} } },
+    }));
+    await expect(
+      loadSettings(undefined, { includeProject: true, projectRoot }),
+    ).rejects.toMatchObject({
+      field: "settings.channels",
+    });
   });
 
   it("accepts non-secret MCP OAuth settings and rejects token fields", async () => {

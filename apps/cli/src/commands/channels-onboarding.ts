@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline/promises";
 
-import type { Settings } from "@openharness/core";
+import type { FeishuChannelConfig } from "@openharness/auth";
 import type {
   FeishuRegistrationCredentials,
   FeishuRegistrationStatus,
@@ -33,10 +33,12 @@ export interface RegistrationLike {
   cancel(): FeishuRegistrationStatus;
 }
 
-export interface CredentialStoreLike {
-  get(appId: string): Promise<string | undefined>;
-  set(appId: string, secret: string): Promise<void>;
-  delete(appId: string): Promise<boolean>;
+export interface ChannelConfigStoreLike {
+  getFeishu(): Promise<FeishuChannelConfig | undefined>;
+  setFeishu(config: FeishuChannelConfig): Promise<void>;
+  updateFeishu(
+    mutate: (current: FeishuChannelConfig | undefined) => FeishuChannelConfig | undefined,
+  ): Promise<FeishuChannelConfig | undefined>;
 }
 
 export interface ChannelsOnboardingDeps {
@@ -50,17 +52,14 @@ export interface ChannelsOnboardingDeps {
   createRegistration(
     onCredentials: (credentials: FeishuRegistrationCredentials) => Promise<void>,
   ): RegistrationLike | Promise<RegistrationLike>;
-  createCredentials(): CredentialStoreLike | Promise<CredentialStoreLike>;
+  createChannels(): ChannelConfigStoreLike | Promise<ChannelConfigStoreLike>;
   verify(input: { appId: string; appSecret: string; domain: FeishuDomain }): Promise<VerifiedFeishuBot>;
-  loadSettings(): Promise<Settings>;
-  saveSettings(settings: Settings): Promise<void>;
   renderQr(url: string): void | Promise<void>;
   log(message: string): void;
 }
 
 export interface ChannelsAllowDeps {
-  loadSettings(): Promise<Settings>;
-  saveSettings(settings: Settings): Promise<void>;
+  createChannels(): ChannelConfigStoreLike | Promise<ChannelConfigStoreLike>;
   log(message: string): void;
 }
 
@@ -157,21 +156,13 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
       const { FeishuRegistration } = await import("@openharness/channels");
       return new FeishuRegistration({ onCredentials });
     },
-    createCredentials: async () => {
-      const { ChannelCredentialStore } = await import("@openharness/auth");
-      return new ChannelCredentialStore();
+    createChannels: async () => {
+      const { ChannelConfigStore } = await import("@openharness/auth");
+      return new ChannelConfigStore();
     },
     verify: async (input) => {
       const { verifyFeishuCredentials } = await import("@openharness/channels");
       return verifyFeishuCredentials(input);
-    },
-    loadSettings: async () => {
-      const { loadSettings } = await import("@openharness/core");
-      return loadSettings();
-    },
-    saveSettings: async (settings) => {
-      const { saveSettings } = await import("@openharness/core");
-      await saveSettings(settings);
     },
     renderQr: async (url) => {
       if (!process.stdout.isTTY) return;
@@ -187,13 +178,9 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
 
 export function createDefaultAllowDeps(): ChannelsAllowDeps {
   return {
-    loadSettings: async () => {
-      const { loadSettings } = await import("@openharness/core");
-      return loadSettings();
-    },
-    saveSettings: async (settings) => {
-      const { saveSettings } = await import("@openharness/core");
-      await saveSettings(settings);
+    createChannels: async () => {
+      const { ChannelConfigStore } = await import("@openharness/auth");
+      return new ChannelConfigStore();
     },
     log: (message) => console.log(message),
   };
@@ -316,67 +303,41 @@ export async function runChannelsAddFeishu(
     return { ok: false };
   }
 
-  const settings = await d.loadSettings();
-  const existing = settings.channels?.feishu;
-  const credentials = await d.createCredentials();
-
-  if (existing?.enabled && existing.appId) {
-    let existingSecret: string | undefined;
-    try {
-      existingSecret = await credentials.get(appId);
-    } catch (error) {
-      d.log(`读取凭据失败：${error instanceof Error ? error.message : String(error)}`);
-      return { ok: false };
-    }
-    if (existingSecret !== undefined) {
-      const overwrite = await d.promptConfirm(
-        `feishu 已配置（appId: ${existing.appId}），是否覆盖？`,
-      );
-      if (!overwrite) {
-        d.log("已取消，未做任何修改。");
-        return { ok: false };
-      }
-    }
+  let store: ChannelConfigStoreLike;
+  let existing: FeishuChannelConfig | undefined;
+  try {
+    store = await d.createChannels();
+    existing = await store.getFeishu();
+  } catch (error) {
+    d.log(`读取渠道配置失败：${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false };
   }
 
-  let previousSecret: string | undefined;
-  try {
-    previousSecret = await credentials.get(appId);
-    await credentials.set(appId, appSecret);
-  } catch (error) {
-    d.log(`保存凭据失败：${error instanceof Error ? error.message : String(error)}`);
-    return { ok: false };
+  if (existing?.appId) {
+    const overwrite = await d.promptConfirm(
+      `feishu 已配置（appId: ${existing.appId}），是否覆盖？`,
+    );
+    if (!overwrite) {
+      d.log("已取消，未做任何修改。");
+      return { ok: false };
+    }
   }
 
   const allowFrom: Record<string, string> = { ...existing?.allowFrom };
   if (scannerOpenId) allowFrom[scannerOpenId] = scannerOpenId;
 
-  const next: Settings = {
-    ...settings,
-    channels: {
-      ...settings.channels,
-      feishu: {
-        ...existing,
-        enabled: true,
-        appId,
-        domain,
-        allowFrom,
-      },
-    },
+  const next: FeishuChannelConfig = {
+    ...existing,
+    enabled: true,
+    appId,
+    appSecret,
+    domain,
+    allowFrom,
   };
 
   try {
-    await d.saveSettings(next);
+    await store.setFeishu(next);
   } catch (error) {
-    try {
-      if (previousSecret === undefined) {
-        await credentials.delete(appId);
-      } else {
-        await credentials.set(appId, previousSecret);
-      }
-    } catch {
-      // 回滚失败只影响残留凭据，不改变主错误；下面照常返回失败。
-    }
     d.log(`保存配置失败：${error instanceof Error ? error.message : String(error)}`);
     return { ok: false };
   }
@@ -400,23 +361,30 @@ export async function runChannelsAllow(
     return { ok: false };
   }
 
-  const settings = await d.loadSettings();
-  const feishu = settings.channels?.feishu;
+  let store: ChannelConfigStoreLike;
+  let feishu: FeishuChannelConfig | undefined;
+  try {
+    store = await d.createChannels();
+    feishu = await store.getFeishu();
+  } catch (error) {
+    d.log(`读取渠道配置失败：${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false };
+  }
   if (!feishu?.appId) {
     d.log(missingConfigLog());
     return { ok: false };
   }
 
-  const allowFrom = { ...feishu.allowFrom, [name ?? id]: id };
-  const next: Settings = {
-    ...settings,
-    channels: {
-      ...settings.channels,
-      feishu: { ...feishu, allowFrom },
-    },
-  };
   try {
-    await d.saveSettings(next);
+    const updated = await store.updateFeishu((current) =>
+      current
+        ? { ...current, allowFrom: { ...current.allowFrom, [name ?? id]: id } }
+        : current,
+    );
+    if (updated === undefined) {
+      d.log("保存配置失败：渠道配置已不存在。");
+      return { ok: false };
+    }
   } catch (error) {
     d.log(`保存配置失败：${error instanceof Error ? error.message : String(error)}`);
     return { ok: false };

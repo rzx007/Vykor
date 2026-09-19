@@ -15,7 +15,7 @@ ohs channels add feishu
 - 默认走**扫码创建应用**：终端显示二维码与授权链接，用飞书 App 扫码确认后，SDK 直接返回新应用的 `appId`/`appSecret`。
 - 也可选择**手填** `App ID` / `App Secret`，并选地区（国内 `feishu` / 国际 `lark`）。
 - 两种方式都会**当场校验**（换 tenant access token）；校验失败不会写入任何配置。
-- 密钥写入独立凭据文件 `~/.openharness-ts/channel-credentials.json`（POSIX `0600`），**不再放进 `settings.json`**。
+- 渠道配置与密钥一起写入 `~/.openharness-ts/channel-credentials.json`（v2，POSIX `0600`）；`settings.json` 不再承载 `channels`。
 - 扫码路径默认把**扫码者本人**加入白名单；其他人或群用 `ohs channels allow <ou_...|oc_...>` 添加（改完需重启 `ohs channels serve`）。
 
 ## 一条消息实际怎么走
@@ -37,7 +37,7 @@ ohs channels add feishu
 
 ```text
 ohs channels serve
-  -> 读取 settings 与凭据文件
+  -> 读取 channel-credentials.json 里的渠道配置
   -> 组装 FeishuAdapter 和白名单
   -> 连接已有 daemon；本机没有 daemon 时按 CLI 的统一规则启动
   -> 创建 MessageBus、ChannelManager、DurableChannelBridge
@@ -47,29 +47,30 @@ ohs channels serve
 
 `channels serve` 不直接创建 standalone Agent。它通过 `OpenHarnessClient` 调 daemon 的 `/channels/*` 接口，所以 Bot 创建的 Session 和 transcript 能被 TUI、Desktop 或其他客户端直接看到和继续使用。
 
-非敏感配置放在 `settings.json`：
+渠道配置（含密钥）全部放在 `~/.openharness-ts/channel-credentials.json`（v2）：
 
 ```json
 {
-  "_formatVersion": 1,
+  "version": 2,
   "channels": {
-    "sendProgress": true,
-    "sendToolHints": true,
     "feishu": {
       "enabled": true,
       "appId": "cli_...",
+      "appSecret": "secret_...",
       "domain": "feishu",
       "allowFrom": {
         "个人": "ou_xxx",
         "工作群": "oc_xxx"
       },
-      "replyAtBotNames": ["OpenHarness"]
+      "replyAtBotNames": ["OpenHarness"],
+      "sendProgress": true,
+      "sendToolHints": true
     }
   }
 }
 ```
 
-密钥单独放在 `~/.openharness-ts/channel-credentials.json`，按 `appId` 存 `appSecret`，权限为 POSIX `0600`（Windows 依赖用户目录 ACL）。
+`settings.json` 不再有 `channels` 字段，出现即报错（`SettingsFileError`）。`channel-credentials.json` 权限为 POSIX `0600`（Windows 依赖用户目录 ACL）。旧的 v1 凭据文件（只有 `appSecret`）会被当作“未配置渠道”，需要用 `ohs channels add feishu` 重新写入 v2。上面示例里的 `sendProgress` / `sendToolHints` 省略时默认按 `true` 处理。
 
 `allowFrom` 为空时默认全部拒绝。白名单检查仍在 `ChannelManager`：**发送者或会话（群）任一命中即放行**，所以 `ou_...` 放行某个人、`oc_...` 放行某个群。未通过的消息不会进入 daemon。
 
@@ -167,7 +168,7 @@ ohs channels status
 | 接入向导 | `apps/cli/src/commands/channels-onboarding.ts` | `add`/`allow`：扫码或手填、校验、写凭据与配置 |
 | 飞书接入核心 | `packages/channels/src/impl/feishu-registration.ts` | 包 `registerApp` 的扫码创建应用状态机 |
 | 凭据校验 | `packages/channels/src/impl/feishu-verify.ts` | 换 tenant token 校验凭据，尽力取机器人信息 |
-| 凭据存储 | `packages/auth/src/channel-credential-store.ts` | 读写 `channel-credentials.json` |
+| 渠道配置存储 | `packages/auth/src/channel-config-store.ts` | 读写 `channel-credentials.json`（含渠道配置与密钥） |
 | DurableChannelBridge | `packages/channels/src/core/durable-bridge.ts` | 把入站消息交给 daemon，发布已保存回复 |
 | ChannelManager | `packages/channels/src/core/manager.ts` | 白名单检查、平台收发、回写发送结果 |
 | FeishuAdapter | `packages/channels/src/impl/feishu.ts` | 飞书 WebSocket、image/file 入站、thread/topic、真实 message ID 与出站发送 |

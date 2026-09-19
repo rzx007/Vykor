@@ -90,26 +90,6 @@ export interface PermissionSettings {
   autoApproveTools?: string[];
 }
 
-export interface FeishuChannelSettings {
-  enabled: boolean;
-  appId: string;
-  /** "feishu"（国内，默认）或 "lark"（国际）。 */
-  domain?: "feishu" | "lark";
-  /** ACL 白名单：name→id 映射，空 = 全拒（fail-closed），{ "*": "*" } = 全放。 */
-  allowFrom: Record<string, string>;
-  /** 群聊中只响应 @ 这些名字的消息；空 = 群聊全响应。 */
-  replyAtBotNames?: string[];
-}
-
-/** 通道配置（D.2）。结构对齐 Python ChannelConfigs，仅含已实现的通道。 */
-export interface ChannelsConfig {
-  /** 转发进度类出站消息（默认 true）。 */
-  sendProgress?: boolean;
-  /** 转发工具提示类出站消息（默认 true）。 */
-  sendToolHints?: boolean;
-  feishu?: FeishuChannelSettings;
-}
-
 export interface DaemonConfig {
   /** Start the local daemon after sign-in and restore it after unexpected exits. */
   autoStart: boolean;
@@ -163,7 +143,6 @@ export interface Settings {
     /** Master switch for all installed Native Plugin contributions. Defaults to true. */
     enabled: boolean;
   };
-  channels?: ChannelsConfig;
   daemon?: DaemonConfig;
   theme?: string;
   outputStyle?: string;
