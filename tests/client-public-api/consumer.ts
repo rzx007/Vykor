@@ -28,6 +28,9 @@ import {
   type TerminalSessionInfo,
   type DurableChannelMessageInput,
   type DurableChannelMessageResult,
+  type ChannelRuntimeStatus,
+  type FeishuChannelSnapshot,
+  type FeishuRegistrationSnapshot,
   type ListEventsOptions,
   type SessionEventRecord,
   type OpenHarnessServerHealth,
@@ -124,6 +127,13 @@ export async function consumePublicApi(client: OpenHarnessClient): Promise<void>
     model: "claude-3-5-sonnet",
   };
   const channelRes: DurableChannelMessageResult = await client.channels.handleMessage(channelMsg);
+  const channelRuntime: ChannelRuntimeStatus = await client.channels.runtimeStatus();
+  const feishuSnapshot: FeishuChannelSnapshot = await client.channels.getFeishu();
+  const feishuRegistration: FeishuRegistrationSnapshot =
+    await client.channels.feishuRegistrationStatus();
+  void channelRuntime;
+  void feishuSnapshot;
+  void feishuRegistration;
 
   // Events Resource
   const eventOptions: ListEventsOptions = {

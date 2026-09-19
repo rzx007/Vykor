@@ -283,6 +283,58 @@
       "kind": "type-export"
     },
     {
+      "name": "ChannelConnectorRuntimeStatus",
+      "kind": "type-export"
+    },
+    {
+      "name": "ChannelDenialNotice",
+      "kind": "type-export"
+    },
+    {
+      "name": "ChannelDomain",
+      "kind": "type-export"
+    },
+    {
+      "name": "ChannelRuntimeControlInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "ChannelRuntimeState",
+      "kind": "type-export"
+    },
+    {
+      "name": "ChannelRuntimeStatus",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuAllowInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuChannelSnapshot",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuConnectInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuPatchInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuRegistrationSnapshot",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuRegistrationStartInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuRegistrationState",
+      "kind": "type-export"
+    },
+    {
       "name": "ClientProtocolSupport",
       "kind": "type-export"
     },
