@@ -52,6 +52,7 @@ async function runServe(options: ServeOptions): Promise<void> {
   const {
     clearDaemonRegistry,
     createBearerToken,
+    createDaemonRegistryEntry,
     readDaemonRegistry,
     startOpenHarnessDaemon,
     writeDaemonRegistry,
@@ -69,14 +70,16 @@ async function runServe(options: ServeOptions): Promise<void> {
   });
 
   if (options.register) {
-    writeDaemonRegistry({
-      url: listen.url,
-      pid: process.pid,
-      token,
-      storePath: server.store.path,
-      startedAt: Date.now(),
-      version: VERSION,
-    });
+    writeDaemonRegistry(
+      createDaemonRegistryEntry({
+        url: listen.url,
+        pid: process.pid,
+        token,
+        storePath: server.store.path,
+        version: VERSION,
+        executionSurface: "cli_advanced",
+      }),
+    );
   }
 
   console.log(`[daemon] listening ${listen.url}`);

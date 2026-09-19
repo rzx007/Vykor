@@ -12,10 +12,12 @@ export * from "./system-service.js";
 export {
   clearDaemonRegistry,
   createBearerToken,
+  createDaemonRegistryEntry,
   getDaemonRegistryPath,
   getDefaultSessionStorePath,
   readDaemonRegistry,
   writeDaemonRegistry,
+  type DaemonExecutionSurface,
   type DaemonRegistry,
 } from "../daemon/paths.js";
 export {
