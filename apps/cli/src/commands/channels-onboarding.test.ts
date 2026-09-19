@@ -101,6 +101,40 @@ describe("runChannelsAddFeishu", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("preserves existing channel options when overwriting the same appId", async () => {
+    const d = deps();
+    d.config = {
+      enabled: true,
+      appId: "cli_x",
+      appSecret: "old",
+      domain: "feishu",
+      allowFrom: {},
+      replyAtBotNames: ["Harness"],
+      sendProgress: false,
+      sendToolHints: false,
+    };
+    const result = await runChannelsAddFeishu({
+      createChannels: () => d.store as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_x" : ""),
+      promptSecret: async () => "new-secret",
+      promptConfirm: async () => true,
+      verify: d.verify as never,
+      log: vi.fn(),
+    } as never);
+
+    expect(result.ok).toBe(true);
+    expect(d.store.setFeishu).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appId: "cli_x",
+        appSecret: "new-secret",
+        replyAtBotNames: ["Harness"],
+        sendProgress: false,
+        sendToolHints: false,
+      }),
+    );
+  });
+
   it("writes nothing when overwrite is declined", async () => {
     const d = deps();
     d.config = {
