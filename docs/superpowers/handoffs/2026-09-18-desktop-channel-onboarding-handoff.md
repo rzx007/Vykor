@@ -20,7 +20,7 @@
 
 - `packages/channels/src/impl/feishu-registration.ts`（扫码状态机，`onCredentials` 回调）
 - `packages/channels/src/impl/feishu-verify.ts`（凭据校验）
-- `packages/auth/src/channel-credential-store.ts`（密钥文件读写）
+- `packages/auth/src/channel-config-store.ts`（`ChannelConfigStore`：读写 `channel-credentials.json`，现含渠道配置与密钥）
 - `packages/core`：`getChannelCredentialsFilePath`
 - `packages/channels/src/bus/acl.ts` + `core/manager.ts` 的 `onDenied`
 - CLI 编排参考：`apps/cli/src/commands/channels-onboarding.ts`
@@ -40,7 +40,7 @@ Desktop 新增设置板块参考 MCP 设置：`apps/desktop/src/renderer/src/com
 
 - 不降级、不伪造；缺字段直接拒绝。
 - 密钥只落 `channel-credentials.json`，任何输出都不回显。
-- 不引入兼容性 fallback；旧明文 `appSecret` 不迁移、不读取（白名单保留旧键以免旧配置加载崩）。
+- 不引入兼容性 fallback；旧 `settings.channels` 不再容忍（出现即 `SettingsFileError`，需手动删除）；旧 v1 `channel-credentials.json` 视为“未配置渠道”。
 - 白名单空 = 全拒（fail-closed）。
 - 复用上一阶段核心，桌面与 CLI 共用同一核心。
 - 不擅改 `@openharness/protocol` durable 类型。
