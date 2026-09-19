@@ -88,6 +88,24 @@ ensureLocalDaemon
 
 如果当前 CLI 比正在运行的 daemon 更新，已安装系统服务会先刷新自己的启动命令，再启动新 daemon。这样不会出现“系统服务一份、TUI 又偷偷启动一份”的情况。
 
+## 启动模式与桌面接管
+
+daemon 写入的 `registry.json` 会记录它是被谁、以什么模式启动的：
+
+- `executionSurface: "desktop_managed"`：Desktop 内置 daemon 和 Desktop 系统服务 daemon。支持沙箱执行环境与「环境终端」。
+- `executionSurface: "cli_advanced"`：CLI 的 `ohs serve`（以及 `ohs`、`ohs daemon start`、`ohs channels serve` 按需拉起的 daemon）。只支持本机终端。
+
+连接规则：
+
+- CLI 各入口继续「有 ready daemon 就复用」，不因启动模式不同而重启。
+- Desktop 只复用 `desktop_managed` 的 daemon。若注册的是 CLI daemon：
+  - `daemon.autoStart` 关闭：停掉该 daemon（SIGTERM → 5 秒 → 强制结束），清空 registry，启动内置桌面 daemon。
+  - `daemon.autoStart` 开启：卸载当前系统服务，停掉残留进程，安装桌面入口的系统服务（Windows `--daemon-watchdog`，macOS/Linux `--daemon-service`），等桌面托管 daemon 就绪后连接。
+
+Desktop 服务/watchdog 的健康检查同样要求 registry 是 `desktop_managed`，否则视为不可复用；接管前会先停掉存活的 CLI daemon，避免两个 daemon 争抢同一会话库。
+
+只在 registry 指向本机（loopback）地址时才执行停止操作；远程或无法确认的地址直接报错。
+
 ## 崩溃和正常停止
 
 - daemon 崩溃：macOS 和 Linux 会在几秒内重启；Windows 会在下一次每分钟健康检查时启动。
