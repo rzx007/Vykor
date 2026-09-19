@@ -1,3 +1,4 @@
+import { ChannelConfigStore } from "@openharness/auth";
 import { loadSettings } from "@openharness/core";
 
 import {
@@ -13,6 +14,7 @@ import {
 export type OpenHarnessDaemonOptions = Pick<
   OpenHarnessServerOptions,
   | "allowedOrigins"
+  | "channelConfigStore"
   | "host"
   | "logger"
   | "outsideProjectWorkspaceRoot"
@@ -37,6 +39,7 @@ export async function startOpenHarnessDaemon(
   const startupAgentEnvironment = settingsRef.current.agentEnvironment;
   return await startOpenHarnessServer({
     ...options,
+    channelConfigStore: options.channelConfigStore ?? new ChannelConfigStore(),
     settings: settingsRef.current,
     getSettings: () => settingsRef.current,
     getSettingsForCwd: async (cwd) => ({

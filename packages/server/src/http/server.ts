@@ -3,6 +3,7 @@ import { Hono, type Context } from "hono";
 
 import { SessionStore } from "@openharness/services";
 import type { Settings } from "@openharness/core";
+import type { ChannelConfigStore } from "@openharness/auth";
 import type { AttachmentLimits } from "@openharness/protocol";
 
 import type { CommandCatalogProvider } from "../commands/commands.js";
@@ -46,6 +47,7 @@ import { createAuthRoutes } from "./routes/auth.js";
 import { createAttachmentRoutes } from "./routes/attachment.js";
 import { createBackgroundShellRoutes } from "./routes/background-shell.js";
 import { createChannelRoutes } from "./routes/channel.js";
+import { createChannelControlRoutes } from "./routes/channel-control.js";
 import { createScheduleRoutes } from "./routes/schedules.js";
 import { HttpEventHub } from "./routes/events.js";
 import { createGitRoutes } from "./routes/git.js";
@@ -107,6 +109,8 @@ export interface OpenHarnessServerOptions {
   getSettingsForCwd?: (cwd: string) => Promise<Settings>;
   executionSurface?: "desktop_managed" | "cli_advanced";
   outsideProjectWorkspaceRoot?: string;
+  /** 生产 daemon 注入渠道配置 store；不提供时不启用渠道运行时（测试/嵌入式无渠道）。 */
+  channelConfigStore?: ChannelConfigStore;
   /** Test/embedding seam. Production daemon creation uses createDefaultNodeAgent directly. */
   createAgent?: CreateDaemonAgent;
   services?: OpenHarnessServerServices;
@@ -168,6 +172,9 @@ export class OpenHarnessHttpServer {
         executionSurface: options.executionSurface,
         outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
         createAgent: options.createAgent,
+        ...(options.channelConfigStore
+          ? { channelConfigStore: options.channelConfigStore }
+          : {}),
         log: (event) => this.log(event),
       });
     this.ownsApplication = options.application
@@ -368,6 +375,18 @@ export class OpenHarnessHttpServer {
     );
     this.app.route("/git", createGitRoutes({ gitService: this.services.git }));
     this.app.route("/channels", createChannelRoutes(this.application.channels));
+    this.app.route(
+      "/channels",
+      createChannelControlRoutes({
+        ...(this.application.channelRuntime
+          ? { runtime: this.application.channelRuntime }
+          : {}),
+        ...(this.application.channelOnboarding
+          ? { onboarding: this.application.channelOnboarding }
+          : {}),
+        tokenConfigured: Boolean(this.token),
+      }),
+    );
     this.app.route(
       "/schedules",
       createScheduleRoutes({ schedules: this.application.schedules }),

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 
 import type { AgentBackgroundShellHost, Settings } from "@openharness/core";
+import type { ChannelConfigStore } from "@openharness/auth";
 import { fileReadTool } from "@openharness/tools";
 import {
   type ObservableJobProducer,
@@ -82,6 +83,8 @@ import { StartupRecoveryService } from "./recovery/startup-recovery-service.js";
 import { ApplicationEventService } from "./events/application-event-service.js";
 import { ProjectApplicationService } from "./project-application-service.js";
 import { ChannelApplicationService } from "./channel/channel-application-service.js";
+import { ChannelOnboardingService } from "./channel/channel-onboarding-service.js";
+import { ChannelRuntimeService } from "../daemon/channel-runtime-service.js";
 import { SessionWorkflowRunRepository } from "./workflow/session-workflow-run-repository.js";
 import { ApplicationRetentionService } from "./retention/application-retention-service.js";
 import { buildCompactAttachmentSection } from "./attachments/resources/compact-attachment-catalog.js";
@@ -118,6 +121,8 @@ export interface DaemonApplicationOptions {
   /** Root used for scheduled conversations that intentionally run outside a project. */
   outsideProjectWorkspaceRoot?: string;
   createAgent?: CreateDaemonAgent;
+  /** 提供后 daemon 才构造渠道运行时与接入服务；未提供时渠道路由返回 503。 */
+  channelConfigStore?: ChannelConfigStore;
   createTerminal?(session: SessionRecord): ObservableJobProducer<AgentTerminalHost>;
   createBackgroundShell?(session: SessionRecord): ObservableJobProducer<AgentBackgroundShellHost>;
   log(event: ObservabilityEvent): void;
@@ -148,6 +153,8 @@ export interface DurableAgentApplication {
   readonly projects: ProjectApplicationService;
   readonly events: ApplicationEventService;
   readonly channels: ChannelApplicationService;
+  readonly channelRuntime?: ChannelRuntimeService;
+  readonly channelOnboarding?: ChannelOnboardingService;
   readonly workflows: SessionWorkflowRunRepository;
   readonly retention: ApplicationRetentionService;
   ready(): Promise<void>;
@@ -183,6 +190,8 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly projects: ProjectApplicationService;
   readonly events: ApplicationEventService;
   readonly channels: ChannelApplicationService;
+  readonly channelRuntime?: ChannelRuntimeService;
+  readonly channelOnboarding?: ChannelOnboardingService;
   readonly workflows: SessionWorkflowRunRepository;
   readonly retention: ApplicationRetentionService;
   private readonly attachmentResources: SessionAttachmentResources;
@@ -748,6 +757,35 @@ export class DaemonApplication implements DurableAgentApplication {
         runControl: this.runControl,
         log: options.log,
       });
+      if (options.channelConfigStore) {
+        const channelConfig = options.channelConfigStore;
+        this.channelRuntime = new ChannelRuntimeService({
+          application: {
+            handleMessage: (input) => this.channels.handleMessage(input),
+            pendingDeliveries: async (listOptions) =>
+              this.channels.pendingDeliveries(listOptions),
+            recordDelivery: async (id, input) =>
+              this.channels.recordDelivery(id, input),
+          },
+          config: { getFeishu: () => channelConfig.getFeishu() },
+          getSettings: () => options.getSettings?.() ?? options.settings,
+          logger: options.log,
+        });
+        this.channelOnboarding = new ChannelOnboardingService({
+          config: channelConfig,
+          onConfigChanged: async () => {
+            await this.channelRuntime?.applyFeishuConfig(
+              await channelConfig.getFeishu(),
+            );
+          },
+          readBotName: () =>
+            this.channelRuntime
+              ?.status()
+              .connectors.find((connector) => connector.connector === "feishu")
+              ?.botName,
+          logger: options.log,
+        });
+      }
       /**
        * 定时任务服务：
        * 1. 管理定时任务的创建、更新和删除
@@ -810,6 +848,8 @@ export class DaemonApplication implements DurableAgentApplication {
 
   async ready(): Promise<void> {
     await this.startupRecovery;
+    // 后台自动连接 enabled 渠道：不阻塞 listen，也不 reject。
+    void this.channelRuntime?.startEnabled();
   }
 
   close(): Promise<void> {
@@ -833,6 +873,12 @@ export class DaemonApplication implements DurableAgentApplication {
     }
     try {
       await this.schedules.shutdown();
+    } catch (error) {
+      failures.push(error);
+    }
+    // 先有界排空渠道（断入站 + 等 drain），再中断/排空 Run。
+    try {
+      await this.channelRuntime?.shutdown();
     } catch (error) {
       failures.push(error);
     }
