@@ -1,14 +1,14 @@
 import { Command } from "commander";
-import type { Settings, ChannelsConfig } from "@openharness/core";
+import type { Settings } from "@openharness/core";
 import type { ChannelAdapter } from "@openharness/channels";
-import { ChannelCredentialStore } from "@openharness/auth";
+import { ChannelConfigStore } from "@openharness/auth";
 import { runChannelsAddFeishu, runChannelsAllow } from "./channels-onboarding.js";
 
 /**
  * `ohs channels` 子命令（D.2，TS 自有接线——Python 的 manager/bridge
  * 是库，消费方 ohmo 不移植，TS 按 swarm 既例直接接进 CLI）。
  *
- * serve：长驻进程。settings.channels 组装 adapters → MessageBus +
+ * serve：长驻进程。ChannelConfigStore 组装 adapters → MessageBus +
  * ChannelManager + ChannelBridge 跑通「通道消息 → 引擎 → 回复」，
  * SIGINT/SIGTERM 优雅退出。
  */
@@ -18,30 +18,31 @@ export interface AssembledChannels {
   /** 按通道名的 ACL 白名单（交给 manager 集中过滤，fail-closed）。 */
   allowFrom: Record<string, string[]>;
   accountIds: Record<string, string>;
+  /** 按通道名的出站策略（_progress/_tool_hint 转发开关）。 */
+  policies: Record<string, { sendProgress?: boolean; sendToolHints?: boolean }>;
   warnings: string[];
 }
 
-/** 按 settings.channels 组装启用的 adapter 实例（纯组装，不连接）。 */
+/** 从统一渠道配置 store 组装启用的 adapter 实例（纯组装，不连接）。 */
 export async function assembleChannelAdapters(
-  channels: ChannelsConfig | undefined,
-  credentials: ChannelCredentialStore = new ChannelCredentialStore(),
+  store: ChannelConfigStore = new ChannelConfigStore(),
 ): Promise<AssembledChannels> {
   const adapters: ChannelAdapter[] = [];
   const allowFrom: Record<string, string[]> = {};
-  const warnings: string[] = [];
   const accountIds: Record<string, string> = {};
+  const policies: Record<string, { sendProgress?: boolean; sendToolHints?: boolean }> = {};
+  const warnings: string[] = [];
 
-  const feishu = channels?.feishu;
+  const feishu = await store.getFeishu();
   if (feishu?.enabled) {
-    const appSecret = feishu.appId ? await credentials.get(feishu.appId) : undefined;
-    if (!feishu.appId || !appSecret) {
+    if (!feishu.appId || !feishu.appSecret) {
       warnings.push("feishu 已启用但缺凭据，请先运行 ohs channels add feishu。");
     } else {
       const { FeishuAdapter } = await import("@openharness/channels");
       adapters.push(
         new FeishuAdapter({
           appId: feishu.appId,
-          appSecret,
+          appSecret: feishu.appSecret,
           domain: feishu.domain,
           replyAtBotNames: feishu.replyAtBotNames,
           // ACL 不传给 adapter——集中在 ChannelManager（fail-closed）。
@@ -49,21 +50,27 @@ export async function assembleChannelAdapters(
       );
       allowFrom["feishu"] = Object.values(feishu.allowFrom ?? {});
       accountIds["feishu"] = feishu.appId;
+      policies["feishu"] = {
+        ...(feishu.sendProgress !== undefined ? { sendProgress: feishu.sendProgress } : {}),
+        ...(feishu.sendToolHints !== undefined ? { sendToolHints: feishu.sendToolHints } : {}),
+      };
     }
   }
 
-  return { adapters, allowFrom, accountIds, warnings };
+  return { adapters, allowFrom, accountIds, policies, warnings };
 }
 
 async function runChannelsServe(): Promise<void> {
   const { loadSettings } = await import("@openharness/core");
   const settings: Settings = await loadSettings({});
 
-  const { adapters, allowFrom, accountIds, warnings } = await assembleChannelAdapters(settings.channels);
+  const store = new ChannelConfigStore();
+  const { adapters, allowFrom, accountIds, policies, warnings } =
+    await assembleChannelAdapters(store);
   for (const w of warnings) console.warn(`[channels] ${w}`);
   if (adapters.length === 0) {
     console.error(
-      "[channels] 没有启用任何通道。在 settings.json 配置 channels.feishu（enabled/appId/allowFrom），并运行 ohs channels add feishu 写入凭据。",
+      "[channels] 没有启用任何通道。运行 ohs channels add feishu 完成配置后重试。",
     );
     process.exitCode = 1;
     return;
@@ -80,8 +87,7 @@ async function runChannelsServe(): Promise<void> {
   const manager = new ChannelManager(adapters, bus, {
     allowFrom,
     accountIds,
-    sendProgress: settings.channels?.sendProgress,
-    sendToolHints: settings.channels?.sendToolHints,
+    channelPolicies: policies,
     onWarning: (w) => console.warn(`[channels] ${w}`),
     onDenied: ({ sender }) => {
       console.warn(
@@ -197,9 +203,8 @@ export function createChannelsCommand(): Command {
     .command("status")
     .description("Show configured channels")
     .action(async () => {
-      const { loadSettings } = await import("@openharness/core");
-      const settings: Settings = await loadSettings({});
-      const feishu = settings.channels?.feishu;
+      const store = new ChannelConfigStore();
+      const feishu = await store.getFeishu();
       if (!feishu) {
         console.log("channels: (none configured)");
         return;

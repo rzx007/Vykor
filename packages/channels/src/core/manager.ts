@@ -19,6 +19,8 @@ export interface ChannelManagerOptions {
   sendProgress?: boolean;
   /** 是否转发 _tool_hint 出站消息（默认 true，对齐 Python send_tool_hints）。 */
   sendToolHints?: boolean;
+  /** 按通道名的出站策略；缺省的通道按 sendProgress/sendToolHints 默认值处理。 */
+  channelPolicies?: Record<string, { sendProgress?: boolean; sendToolHints?: boolean }>;
   onWarning?: (message: string) => void;
   /** ACL 拒绝时的结构化回调（用于提示用户加入白名单）。 */
   onDenied?: (info: { channel: string; sender: string; chatId: string }) => void;
