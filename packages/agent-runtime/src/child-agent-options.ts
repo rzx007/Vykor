@@ -24,6 +24,12 @@ export function deriveChildAgentOptions(
   input: DeriveChildAgentOptionsInput,
 ): OpenHarnessAgentOptions {
   const { configuration, child } = input;
+  const childModel = child.model ?? configuration.model;
+  const childEffort = isSupportedEffort(child.effort)
+    ? child.effort
+    : configuration.effort;
+  const inheritsModel = childModel === configuration.model;
+  const effortUnchanged = childEffort === configuration.effort;
   return {
     ...configuration,
     settings: input.settings,
@@ -39,9 +45,10 @@ export function deriveChildAgentOptions(
       child.disallowedTools,
     ),
     maxTurns: child.maxTurns ?? configuration.maxTurns,
-    effort: isSupportedEffort(child.effort)
-      ? child.effort
-      : configuration.effort,
+    effort: childEffort,
+    reasoningEffort: inheritsModel && effortUnchanged
+      ? configuration.reasoningEffort
+      : undefined,
     tools: configuration.tools,
     toolOverrides: configuration.toolOverrides,
     trustedToolOverrides: configuration.trustedToolOverrides,
@@ -56,7 +63,7 @@ export function deriveChildAgentOptions(
 function isSupportedEffort(
   effort: string | undefined,
 ): effort is NonNullable<OpenHarnessAgentConfiguration["effort"]> {
-  return effort === "low" || effort === "medium" || effort === "high";
+  return typeof effort === "string" && effort.trim().length > 0;
 }
 
 function mergeToolLists(

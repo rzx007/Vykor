@@ -108,7 +108,7 @@ describe("deriveChildAgentOptions", () => {
     expect(options.trustedToolOverrides).toEqual(["Read"]);
   });
 
-  it("inherits parent runtime choices and ignores unsupported child effort values", () => {
+  it("inherits parent runtime choices and accepts any non-empty child effort string", () => {
     const options = deriveChildAgentOptions({
       configuration: {
         model: "parent-model",
@@ -134,9 +134,61 @@ describe("deriveChildAgentOptions", () => {
       systemPrompt: "parent prompt",
       permissionMode: "full_auto",
       maxTurns: 12,
-      effort: "low",
+      effort: "ultra",
     });
     expect(options.roleAllowedTools).toBeUndefined();
     expect(options.disallowedTools).toBeUndefined();
+  });
+
+  it("inherits reasoning effort only when the model and effort are unchanged", () => {
+    const base = {
+      configuration: {
+        model: "m",
+        reasoningEffort: "high",
+        effort: "high",
+      } as any,
+      settings: {} as any,
+      child: {
+        description: "d",
+        prompt: "p",
+        agent: "a",
+        cwd: "/repo",
+      } as any,
+      cwd: "/repo",
+      sessionId: "s",
+    };
+
+    expect(
+      deriveChildAgentOptions({ ...base, child: { ...base.child, model: "m" } }).reasoningEffort,
+    ).toBe("high");
+    expect(
+      deriveChildAgentOptions({ ...base, child: { ...base.child, model: "other" } }).reasoningEffort,
+    ).toBeUndefined();
+    expect(
+      deriveChildAgentOptions({ ...base, child: { ...base.child, effort: "low" } }).reasoningEffort,
+    ).toBeUndefined();
+  });
+
+  it("drops the parent reasoning effort when the child switches models", () => {
+    const options = deriveChildAgentOptions({
+      configuration: {
+        model: "parent-model",
+        reasoningEffort: "provider-tier",
+        effort: "high",
+      },
+      settings: {} as any,
+      child: {
+        description: "Inspect",
+        prompt: "Inspect",
+        agent: "worker",
+        cwd: "/repo/requested",
+        model: "child-model",
+      },
+      cwd: "/repo/leased",
+      sessionId: "child-session",
+    });
+
+    expect(options.reasoningEffort).toBeUndefined();
+    expect(options.effort).toBe("high");
   });
 });
