@@ -7,6 +7,21 @@ import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import type { Plugin } from "vite"
 
+// `ws`（经飞书 SDK）把这两个原生加速模块包在 try/catch 里按需 require。
+// 它们是可选的：打包器必须原样外置，否则会因为解析不到而让渠道连接失败。
+function externalOptionalWsDeps(): Plugin {
+  return {
+    name: "external-optional-ws-deps",
+    enforce: "pre",
+    resolveId(source) {
+      if (source === "bufferutil" || source === "utf-8-validate") {
+        return { id: source, external: true }
+      }
+      return null
+    },
+  }
+}
+
 function copySessionMigrations(): Plugin {
   return {
     name: "copy-session-migrations",
@@ -35,7 +50,7 @@ export default defineConfig({
         "@shared": resolve("src/shared"),
       },
     },
-    plugins: [copySessionMigrations()],
+    plugins: [externalOptionalWsDeps(), copySessionMigrations()],
     build: {
       externalizeDeps: {
         // workspace 包打进主进程 bundle，安装包就不必再拷整棵 monorepo 依赖树

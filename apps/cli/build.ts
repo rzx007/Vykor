@@ -15,6 +15,9 @@ const cliExternals = [...new Set([
   "node-pty",
   // Native addon: sharp loads @img/sharp-<platform> from its own package directory.
   "sharp",
+  // `ws`（经飞书 SDK）按需 require 的可选原生加速模块；缺失时 ws 自己回退。
+  "bufferutil",
+  "utf-8-validate",
 ])].filter((d) => !d.startsWith("@openharness/"));
 const frontendExternals = [...new Set([
   ...Object.keys(frontendPkg.dependencies || {}),
