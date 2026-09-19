@@ -1,4 +1,8 @@
-import type { ModelsDevCatalog, ModelsDevProvider } from "@openharness/api";
+import type {
+  ModelsDevCatalog,
+  ModelsDevModel,
+  ModelsDevProvider,
+} from "@openharness/api";
 
 const CATALOG_PROVIDER_ALIASES: Record<string, string[]> = {
   bedrock: ["amazon-bedrock"],
@@ -42,4 +46,30 @@ function catalogProviderKeys(providerName: string): string[] {
     providerName,
     ...(CATALOG_PROVIDER_ALIASES[providerName] ?? []),
   ].filter((item, index, items) => item && items.indexOf(item) === index);
+}
+
+export function reasoningEffortsFromModel(
+  model: Pick<ModelsDevModel, "reasoning_options">,
+): string[] | undefined {
+  const option = model.reasoning_options?.find((item) => item.type === "effort");
+  const values = option?.values?.filter(
+    (item): item is string => typeof item === "string" && item.trim().length > 0,
+  );
+  return values && values.length > 0 ? values : undefined;
+}
+
+export function catalogModelReasoningEfforts(
+  catalog: ModelsDevCatalog,
+  providerName: string | undefined,
+  modelId: string,
+): string[] | undefined {
+  if (!providerName) return undefined;
+  const provider = readCatalogProvider(catalog, providerName);
+  if (!provider?.models) return undefined;
+  const entry = Object.entries(provider.models).find(([key, model]) => {
+    const id =
+      typeof model.id === "string" && model.id.trim() ? model.id.trim() : key;
+    return id === modelId;
+  });
+  return entry ? reasoningEffortsFromModel(entry[1]) : undefined;
 }

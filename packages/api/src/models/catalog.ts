@@ -16,6 +16,13 @@ export interface ModelsDevCost {
   cache_write?: number;
 }
 
+export interface ModelsDevReasoningOption {
+  type?: string;
+  values?: Array<string | null>;
+  min?: number;
+  max?: number;
+}
+
 export interface ModelsDevModel {
   id?: string;
   name?: string;
@@ -23,6 +30,7 @@ export interface ModelsDevModel {
   release_date?: string;
   attachment?: boolean;
   reasoning?: boolean;
+  reasoning_options?: ModelsDevReasoningOption[];
   temperature?: boolean;
   tool_call?: boolean;
   cost?: ModelsDevCost;

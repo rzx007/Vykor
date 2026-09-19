@@ -81,6 +81,7 @@ export interface ModelInfo {
   contextWindow?: number;
   outputLimit?: number;
   reasoning?: boolean;
+  reasoningEfforts?: string[];
   vision?: boolean;
   inputModalities?: string[];
   inputCapabilities?: ModelInputCapabilities;

@@ -13,7 +13,10 @@ import type {
   ModelService,
 } from "../settings-api.js";
 import { readCurrentSettings, type DaemonSettingsRef } from "./shared.js";
-import { readCatalogProvider } from "./catalog-provider-mapping.js";
+import {
+  readCatalogProvider,
+  reasoningEffortsFromModel,
+} from "./catalog-provider-mapping.js";
 import {
   modelInputCapabilities,
   normalizeInputSupport,
@@ -128,6 +131,7 @@ function toModelInfo(
   const inputModalities = model.modalities?.input?.filter(
     (item) => item.trim().length > 0,
   );
+  const reasoningEfforts = reasoningEffortsFromModel(model);
   return {
     id,
     label: model.name ?? model.id ?? id,
@@ -143,6 +147,7 @@ function toModelInfo(
     ...(typeof model.reasoning === "boolean"
       ? { reasoning: model.reasoning }
       : {}),
+    ...(reasoningEfforts ? { reasoningEfforts } : {}),
     ...(typeof modelVision(model) === "boolean"
       ? { vision: modelVision(model) }
       : {}),

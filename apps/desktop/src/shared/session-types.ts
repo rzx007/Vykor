@@ -45,6 +45,7 @@ export interface DesktopModel {
   contextWindow?: number
   outputLimit?: number
   reasoning?: boolean
+  reasoningEfforts?: string[]
   vision?: boolean
   inputModalities?: string[]
   inputCapabilities?: { image: "native" | "unsupported" | "unknown" }

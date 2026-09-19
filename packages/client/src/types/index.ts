@@ -373,6 +373,7 @@ export interface ModelInfo {
   contextWindow?: number;
   outputLimit?: number;
   reasoning?: boolean;
+  reasoningEfforts?: string[];
   vision?: boolean;
   inputModalities?: string[];
   inputCapabilities?: { image: "native" | "unsupported" | "unknown" };
