@@ -12,7 +12,7 @@
 2. durable 出站平台上下文：rootMessageId 一路带到 adapter，线程回复可用。
 3. 飞书 CLI 扫码接入：
    - `ohs channels add feishu`（扫码优先、手填兜底）、`ohs channels allow`、`status`、`serve`；
-   - 密钥移到 `~/.openharness-ts/channel-credentials.json`；settings 只留 `enabled/appId/domain/allowFrom/replyAtBotNames`；
+   - 渠道配置与密钥统一到 `~/.openharness-ts/channel-credentials.json`；`settings.json` 不再承载 `channels`（该统一在 `docs/superpowers/specs/2026-09-19-channel-config-unification-design.md` 落地）；
    - ACL 改为“发送者或会话任一命中”；
    - 提交：`12b4d907`..`1323936a`、`642df4bb`、`6f0220f4`。
 
@@ -21,7 +21,7 @@
 - `packages/channels/src/impl/feishu-registration.ts`（扫码状态机，`onCredentials` 回调）
 - `packages/channels/src/impl/feishu-verify.ts`（凭据校验）
 - `packages/auth/src/channel-credential-store.ts`（密钥文件读写）
-- `packages/core`：`getChannelCredentialsFilePath`、`FeishuChannelSettings`
+- `packages/core`：`getChannelCredentialsFilePath`
 - `packages/channels/src/bus/acl.ts` + `core/manager.ts` 的 `onDenied`
 - CLI 编排参考：`apps/cli/src/commands/channels-onboarding.ts`
 

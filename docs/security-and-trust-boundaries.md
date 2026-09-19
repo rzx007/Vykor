@@ -90,7 +90,7 @@ API key 和订阅凭据留在 Node 宿主的 Credential Storage 或环境中：
 - 命中的是**发送者或会话**：`ou_...` 放行某个人，`oc_...` 放行某个群；
 - connector、account、chat 和 thread 共同决定 Session 映射；
 - 平台 message ID 用于幂等，不作为身份认证本身；
-- adapter secret 只用于连接平台，不应该出现在 Agent prompt；飞书密钥存在独立凭据文件 `channel-credentials.json`（POSIX `0600`），不放进 `settings.json`；
+- adapter secret 只用于连接平台，不应该出现在 Agent prompt；飞书的渠道配置与密钥同放在 `channel-credentials.json`（POSIX `0600`；Windows 依赖用户目录 ACL），不放进 `settings.json`；
 - 主动推送工具仍只能使用设置中已有的命名目标。
 
 通过 ACL 后，消息仍受普通 Permission、Sandbox 和 Run 规则约束。

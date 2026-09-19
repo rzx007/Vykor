@@ -238,7 +238,8 @@
   分发、单通道失败不拖垮）、`ChannelBridge`（inbound → `agent.submitMessage`
   聚合 text_delta → outbound）。
 - ✅ 接线（TS 自有，Python 侧是 ohmo 消费的库）：`ohs channels serve|status`
-  长驻模式 + `settings.channels` 配置段；飞书基础版（文本收发 + @bot 过滤，
+  长驻模式；渠道配置（含密钥）在 `channel-credentials.json`，`settings.json`
+  不再承载 `channels`；飞书基础版（文本收发 + @bot 过滤，
   ACL 上移 manager）。微信不做（用户裁决，Python 本无）。serve 无头模式
   只读工具自动放行（写/Bash 仍拒）；`settings.permission.autoApproveTools`
   顺带接线。详见 `docs/channels-flow.md`。

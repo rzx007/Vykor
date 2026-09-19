@@ -236,7 +236,7 @@ Session runtime history 存 daemon 会话的完整运行状态，包括 sessions
 | Session Memory checkpoint | 否 | 否 | 是 | 否 |
 | Session runtime history | 否 | 否 | 否 | 恢复/查询时读取 |
 | `credentials.json` | 否 | 否 | 否 | provider/auth 使用 |
-| `channel-credentials.json` | 否 | 否 | 否 | 飞书接入凭据，不进上下文 |
+| `channel-credentials.json` | 否 | 否 | 否 | 飞书渠道配置与密钥，不进上下文 |
 
 ## 建议的排查顺序
 
