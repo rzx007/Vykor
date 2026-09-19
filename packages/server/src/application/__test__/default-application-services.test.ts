@@ -459,7 +459,17 @@ describe("default daemon application services", () => {
           env: ["REMOTE_API_KEY"],
           api: "https://remote.example/v1",
           npm: "@ai-sdk/openai-compatible",
-          models: { "remote-chat": { name: "Remote Chat" } },
+          models: {
+            "remote-chat": {
+              name: "Remote Chat",
+              reasoning: true,
+              modalities: {
+                input: ["text", "image"],
+                output: ["text"],
+              },
+              limit: { context: 1_000_000, output: 384_000 },
+            },
+          },
         },
         oauth: {
           name: "OAuth AI",
@@ -521,6 +531,24 @@ describe("default daemon application services", () => {
         hasKey: true,
       }),
     );
+
+    const connectedModels = await createDefaultModelService(ref).list();
+    expect(connectedModels).toContainEqual({
+      name: "remote",
+      displayName: "Remote AI",
+      models: [
+        expect.objectContaining({
+          id: "remote-chat",
+          label: "Remote Chat",
+          providerName: "remote",
+          reasoning: true,
+          contextWindow: 1_000_000,
+          outputLimit: 384_000,
+          inputModalities: ["text", "image"],
+          inputCapabilities: { image: "native" },
+        }),
+      ],
+    });
 
     await providers.disconnectCatalog!("remote");
     expect(ref.current.customProviders).toEqual([]);

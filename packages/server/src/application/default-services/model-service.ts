@@ -2,6 +2,7 @@ import {
   PROVIDERS,
   createModelCatalogService,
   findByName,
+  type ModelsDevCatalog,
   type ModelsDevModel,
 } from "@openharness/api";
 import { CredentialStorage, describeCodexAuthState } from "@openharness/auth";
@@ -52,19 +53,34 @@ export function createDefaultModelService(
 
       const current = ref ? await readCurrentSettings(ref) : undefined;
       for (const provider of current?.customProviders ?? []) {
+        const catalogModels =
+          provider.source === "models.dev"
+            ? indexCatalogModels(catalog, provider.id)
+            : undefined;
         result.push({
           name: provider.id,
           displayName: provider.displayName,
-          models: provider.models.map((model) => ({
-            id: model.id,
-            label: model.displayName,
-            provider: provider.displayName,
-            providerName: provider.id,
-            status: "active",
-            inputCapabilities: {
-              image: normalizeInputSupport(model.imageInputSupport),
-            },
-          })),
+          models: provider.models.map((model) => {
+            const catalogModel = catalogModels?.get(model.id);
+            if (catalogModel) {
+              return toModelInfo(
+                provider.id,
+                provider.displayName,
+                model.id,
+                catalogModel,
+              );
+            }
+            return {
+              id: model.id,
+              label: model.displayName,
+              provider: provider.displayName,
+              providerName: provider.id,
+              status: "active" as const,
+              inputCapabilities: {
+                image: normalizeInputSupport(model.imageInputSupport),
+              },
+            };
+          }),
         });
       }
 
@@ -85,6 +101,22 @@ function modelVision(model: ModelsDevModel): boolean | undefined {
   return (
     input.includes("image") || input.includes("pdf") || input.includes("video")
   );
+}
+
+/** Index catalog models the same way direct-api-key providers expose their ids. */
+function indexCatalogModels(
+  catalog: ModelsDevCatalog,
+  providerName: string,
+): Map<string, ModelsDevModel> | undefined {
+  const provider = readCatalogProvider(catalog, providerName);
+  if (!provider?.models) return undefined;
+  const map = new Map<string, ModelsDevModel>();
+  for (const [key, model] of Object.entries(provider.models)) {
+    const id =
+      typeof model.id === "string" && model.id.trim() ? model.id.trim() : key;
+    map.set(id, model);
+  }
+  return map;
 }
 
 function toModelInfo(
