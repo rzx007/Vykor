@@ -94,16 +94,16 @@ describe("durable Feishu thread reply", () => {
       await (
         adapter as unknown as { _handleEvent(d: unknown): Promise<void> }
       )._handleEvent({
+        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         message: {
           message_id: "message-1",
           chat_id: "chat-1",
           chat_type: "group",
-          msg_type: "text",
+          message_type: "text",
           content: JSON.stringify({ text: "question" }),
           create_time: "1710000000000",
           thread_id: threadId,
           root_id: rootMessageId,
-          sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
           mentions: [],
         },
       });

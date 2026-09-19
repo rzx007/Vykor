@@ -106,25 +106,36 @@ export class FeishuAdapter implements ChannelAdapter {
 
   /** 处理 im.message.receive_v1 事件。提取为方法便于单元测试直接调用。 */
   async _handleEvent(data: unknown): Promise<void> {
-    const msg = (data as { message?: {
-      message_id?: string;
-      root_id?: string;
-      thread_id?: string;
-      chat_id?: string;
-      chat_type?: string;
-      msg_type?: string;
-      content?: string;
-      create_time?: string;
-      sender?: { sender_id?: { open_id?: string; user_id?: string }; sender_type?: string };
-      mentions?: FeishuMention[];
-    } })?.message;
+    // 飞书 im.message.receive_v1 事件里 sender 与 message 是同级字段；
+    // SDK 扁平化后就是 data.sender 与 data.message，sender 不在 message 里面。
+    const payload = data as {
+      sender?: {
+        sender_id?: { open_id?: string; user_id?: string };
+        sender_type?: string;
+      };
+      message?: {
+        message_id?: string;
+        root_id?: string;
+        thread_id?: string;
+        chat_id?: string;
+        chat_type?: string;
+        message_type?: string;
+        content?: string;
+        create_time?: string;
+        mentions?: FeishuMention[];
+      };
+    };
+    const msg = payload?.message;
+    const sender = payload?.sender;
     if (!msg?.chat_id || !msg.message_id || !msg.content || !msg.create_time) return;
 
     // bot 消息跳过：飞书在某些配置下会把 bot 自己发的消息也推回来，直接忽略。
-    if (msg.sender?.sender_type === "bot") return;
+    if (sender?.sender_type === "bot") return;
 
-    // 严格契约：不把缺失/未知的 msg_type 默认成 text，必须显式声明。
-    const msgType = msg.msg_type;
+    // 严格契约：不把缺失/未知的 message_type 默认成 text，必须显式声明。
+    // 飞书 im.message.receive_v1 事件用 message.message_type（不是 msg_type，
+    // msg_type 只出现在出站发送 API 的请求体里）。
+    const msgType = msg.message_type;
     let messageType: "text" | "image" | "file";
     let contentText = "";
     let attachments: ChannelAttachment[] | undefined;
@@ -190,8 +201,8 @@ export class FeishuAdapter implements ChannelAdapter {
       if (!contentText) return;
     }
 
-    const senderOpenId = msg.sender?.sender_id?.open_id;
-    const senderId = senderOpenId ?? msg.sender?.sender_id?.user_id;
+    const senderOpenId = sender?.sender_id?.open_id;
+    const senderId = senderOpenId ?? sender?.sender_id?.user_id;
     if (!senderId) return;
 
     // Reply target: group chats → chat_id，direct chats → sender open_id。
@@ -206,9 +217,9 @@ export class FeishuAdapter implements ChannelAdapter {
     const threadId = msg.thread_id;
     const rootMessageId = msg.root_id;
     const senderType =
-      msg.sender?.sender_type === "bot"
+      sender?.sender_type === "bot"
         ? "bot"
-        : msg.sender?.sender_type === "user"
+        : sender?.sender_type === "user"
           ? "user"
           : "unknown";
 
