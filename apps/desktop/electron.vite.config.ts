@@ -7,21 +7,6 @@ import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import type { Plugin } from "vite"
 
-// `ws`（经飞书 SDK）把这两个原生加速模块包在 try/catch 里按需 require。
-// 它们是可选的：打包器必须原样外置，否则会因为解析不到而让渠道连接失败。
-function externalOptionalWsDeps(): Plugin {
-  return {
-    name: "external-optional-ws-deps",
-    enforce: "pre",
-    resolveId(source) {
-      if (source === "bufferutil" || source === "utf-8-validate") {
-        return { id: source, external: true }
-      }
-      return null
-    },
-  }
-}
-
 function copySessionMigrations(): Plugin {
   return {
     name: "copy-session-migrations",
@@ -50,7 +35,7 @@ export default defineConfig({
         "@shared": resolve("src/shared"),
       },
     },
-    plugins: [externalOptionalWsDeps(), copySessionMigrations()],
+    plugins: [copySessionMigrations()],
     build: {
       externalizeDeps: {
         // workspace 包打进主进程 bundle，安装包就不必再拷整棵 monorepo 依赖树
@@ -61,8 +46,15 @@ export default defineConfig({
           "@openharness/terminal",
           "@openharness/terminal-node",
         ],
-        // 原生模块不能打进 JS，运行时从 node_modules 加载
-        include: ["better-sqlite3", "electron-log", "electron-updater", "node-pty"],
+        // 原生模块不能打进 JS；飞书 SDK 整体外置，让它的依赖（protobufjs/ws 等）
+        // 由 SDK 自己的 node_modules 解析，避免子路径 require 在 bundle 里解析不到。
+        include: [
+          "@larksuiteoapi/node-sdk",
+          "better-sqlite3",
+          "electron-log",
+          "electron-updater",
+          "node-pty",
+        ],
       },
     },
   },

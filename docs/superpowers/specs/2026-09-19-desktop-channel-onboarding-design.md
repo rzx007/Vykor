@@ -69,7 +69,8 @@
 - `ChannelOnboardingService`：持有 `ChannelConfigStore`，负责扫码注册、手填校验、写配置、白名单增删、启停持久化。
 - 两者挂在 `DaemonApplication` 上，通过 HTTP 路由 `/channels/runtime/*` 与 `/channels/feishu/*` 暴露；`DurableAgentApplication` 接口新增这两个只读字段。
 - Desktop 通过 `OpenHarnessClient.channels`（扩展后的 `ChannelResource`）访问；CLI 同理。
-- `@openharness/channels` 在 server 内**动态 import**：渠道未启用时 server 启动路径不加载 lark SDK。注意这**不保证** SDK 不随 Desktop 安装包分发——它仍可能作为懒加载 chunk 被打进 `out/main`。取舍与验证见 §14 风险表。
+- `@openharness/channels` 在 server 内**动态 import**：渠道未启用时 server 启动路径不加载 lark SDK。
+- Desktop 主进程把 `@larksuiteoapi/node-sdk` **整体外置**（`apps/desktop/package.json` dependencies + `electron.vite.config.ts` 的 `externalizeDeps.include`）：`out/main` 只保留 `import("@larksuiteoapi/node-sdk")`，SDK 及其依赖（protobufjs/ws/axios/…）由 SDK 自己的 `node_modules` 在运行时解析，随安装包放进 `app.asar/node_modules`。这样避免把 SDK 内联后出现 `protobufjs/minimal` 等子路径解析失败。
 
 依赖方向：`packages/server` 已依赖 `@openharness/auth`；新增依赖 `@openharness/channels`（后者只依赖 `@openharness/protocol` 与 lark SDK，无环）。Desktop 的主进程边界脚本只允许 `@openharness/client` 与 `@openharness/server`，因此 Desktop **不新增** workspace 依赖，只走 HTTP。
 
@@ -462,7 +463,7 @@ git diff --check
 | 风险 | 缓解 |
 |---|---|
 | 旧 `serve` 未同步改委托，出现双连接 | Stage 1 与 CLI 委托同批交付；`serve` 委托后由 daemon 单点持有；lane/generation 保证进程内唯一 |
-| Desktop 打包仍可能包含 lark SDK（动态 import 只是懒加载 chunk） | 先测量：构建后检查 `out/main` chunk；若体积不可接受，把 `@larksuiteoapi/node-sdk` 加入 `apps/desktop/package.json` dependencies 与 `electron.vite.config.ts` 的 `externalizeDeps.include`（边界脚本只限制 `@openharness/*`，允许第三方包）并随包分发。spec 明确“不打包”不是本设计的承诺 |
+| Desktop 内联飞书 SDK 会导致其内部子路径 require（如 `protobufjs/minimal`）在运行时解析失败 | 已决定**整体外置** `@larksuiteoapi/node-sdk`：加入 Desktop dependencies 与 `externalizeDeps.include`，SDK 随安装包进入 `app.asar/node_modules`，由它自己的 node_modules 解析 protobufjs/ws 等；主进程 JS 产物减少约 5.6MB |
 | daemon 停机中断在途 Run / 回复可能未发出 | 有界 drain + durable pending；文档明说该语义；`recoverPending` 在下次 start 恢复 |
 | 注册中途 daemon 重启丢注册态 | `status()=idle`；客户端识别 `registration_lost` 并提示重开；注册是短流程 |
 | cwd 路径碰撞或非法字符 | hash 后缀 + win32 归一 + 保留名前缀；每会话键稳定映射；专项测试 |
