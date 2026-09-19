@@ -303,8 +303,15 @@ export async function runChannelsAddFeishu(
     return { ok: false };
   }
 
-  const store = await d.createChannels();
-  const existing = await store.getFeishu();
+  let store: ChannelConfigStoreLike;
+  let existing: FeishuChannelConfig | undefined;
+  try {
+    store = await d.createChannels();
+    existing = await store.getFeishu();
+  } catch (error) {
+    d.log(`读取渠道配置失败：${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false };
+  }
 
   if (existing?.appId) {
     const overwrite = await d.promptConfirm(
@@ -354,19 +361,30 @@ export async function runChannelsAllow(
     return { ok: false };
   }
 
-  const store = await d.createChannels();
-  const feishu = await store.getFeishu();
+  let store: ChannelConfigStoreLike;
+  let feishu: FeishuChannelConfig | undefined;
+  try {
+    store = await d.createChannels();
+    feishu = await store.getFeishu();
+  } catch (error) {
+    d.log(`读取渠道配置失败：${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false };
+  }
   if (!feishu?.appId) {
     d.log(missingConfigLog());
     return { ok: false };
   }
 
   try {
-    await store.updateFeishu((current) =>
+    const updated = await store.updateFeishu((current) =>
       current
         ? { ...current, allowFrom: { ...current.allowFrom, [name ?? id]: id } }
         : current,
     );
+    if (updated === undefined) {
+      d.log("保存配置失败：渠道配置已不存在。");
+      return { ok: false };
+    }
   } catch (error) {
     d.log(`保存配置失败：${error instanceof Error ? error.message : String(error)}`);
     return { ok: false };

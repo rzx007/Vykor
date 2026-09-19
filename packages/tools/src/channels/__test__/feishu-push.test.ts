@@ -131,4 +131,39 @@ describe("FeishuPush tool", () => {
       content: JSON.stringify({ text: "hello" }),
     });
   });
+
+  it("treats a disabled channel as not configured", async () => {
+    getFeishu.mockResolvedValue({
+      enabled: false,
+      appId: "cli_x",
+      appSecret: "sec",
+      domain: "feishu",
+      allowFrom: { 个人: "ou_1" },
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await feishuPushTool.execute({ target: "个人", message: "hi" }, context);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toContain("ohs channels add feishu");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not treat prototype names as configured targets", async () => {
+    getFeishu.mockResolvedValue({
+      enabled: true,
+      appId: "cli_x",
+      appSecret: "sec",
+      domain: "feishu",
+      allowFrom: {},
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await feishuPushTool.execute({ target: "toString", message: "hi" }, context);
+
+    expect(result.isError).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

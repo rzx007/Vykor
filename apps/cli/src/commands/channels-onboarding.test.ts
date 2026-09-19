@@ -255,6 +255,23 @@ describe("runChannelsAddFeishu", () => {
       expect.objectContaining({ domain: "feishu" }),
     );
   });
+
+  it("returns ok:false with a friendly message when reading the channel config fails", async () => {
+    const d = deps();
+    d.store.getFeishu.mockRejectedValueOnce(new Error("corrupt json"));
+    const log = vi.fn();
+    const result = await runChannelsAddFeishu({
+      createChannels: () => d.store as never,
+      promptSelect: async () => "manual",
+      promptText: async (q: string) => (q.includes("App ID") ? "cli_m" : ""),
+      promptSecret: async () => "sec_m",
+      verify: d.verify as never,
+      log,
+    } as never);
+
+    expect(result.ok).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("读取渠道配置失败"));
+  });
 });
 
 describe("runChannelsAllow", () => {
@@ -297,6 +314,33 @@ describe("runChannelsAllow", () => {
     const d = deps();
     d.config = configuredFeishu;
     d.store.updateFeishu.mockRejectedValueOnce(new Error("disk full"));
+    const log = vi.fn();
+    const result = await runChannelsAllow("ou_me", undefined, {
+      createChannels: () => d.store as never,
+      log,
+    } as never);
+
+    expect(result.ok).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("保存配置失败"));
+  });
+
+  it("returns ok:false with a friendly message when reading the channel config fails", async () => {
+    const d = deps();
+    d.store.getFeishu.mockRejectedValueOnce(new Error("corrupt json"));
+    const log = vi.fn();
+    const result = await runChannelsAllow("ou_me", undefined, {
+      createChannels: () => d.store as never,
+      log,
+    } as never);
+
+    expect(result.ok).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("读取渠道配置失败"));
+  });
+
+  it("returns ok:false when the config vanishes before the update", async () => {
+    const d = deps();
+    d.config = configuredFeishu;
+    d.store.updateFeishu.mockResolvedValueOnce(undefined);
     const log = vi.fn();
     const result = await runChannelsAllow("ou_me", undefined, {
       createChannels: () => d.store as never,

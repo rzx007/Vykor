@@ -220,6 +220,20 @@ describe("daemon settings", () => {
     });
   });
 
+  it("rejects the removed channels field in project settings", async () => {
+    const projectRoot = join(configDir, "channels-project");
+    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    mkdirSync(projectConfigDir, { recursive: true });
+    writeFileSync(join(projectConfigDir, "settings.json"), JSON.stringify({
+      channels: { feishu: { enabled: true, appId: "x", allowFrom: {} } },
+    }));
+    await expect(
+      loadSettings(undefined, { includeProject: true, projectRoot }),
+    ).rejects.toMatchObject({
+      field: "settings.channels",
+    });
+  });
+
   it("accepts non-secret MCP OAuth settings and rejects token fields", async () => {
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
       mcpServers: {

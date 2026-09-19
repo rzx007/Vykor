@@ -1,8 +1,7 @@
 import type { ToolDefinition } from "@openharness/core";
 import { ChannelConfigStore } from "@openharness/auth";
+import type { FeishuDomain } from "@openharness/auth";
 import { createToolAbortScope } from "../abort.js";
-
-type FeishuDomain = "feishu" | "lark";
 
 /** 飞书/Lark 开放平台 API 基址；lark 地区走 open.larksuite.com。 */
 export function feishuApiBase(domain: FeishuDomain | undefined): string {
@@ -85,7 +84,7 @@ export const feishuPushTool: ToolDefinition = {
     const abortScope = createToolAbortScope(context.abortSignal, 20_000);
     try {
       const feishu = await new ChannelConfigStore().getFeishu();
-      if (!feishu?.appId) {
+      if (!feishu?.appId || feishu.enabled === false) {
         return {
           content: [
             { type: "text" as const, text: "Error: 渠道未配置，请先运行 ohs channels add feishu" },
@@ -94,7 +93,9 @@ export const feishuPushTool: ToolDefinition = {
         };
       }
 
-      const chatId = feishu.allowFrom[target];
+      const chatId = Object.prototype.hasOwnProperty.call(feishu.allowFrom, target)
+        ? feishu.allowFrom[target]
+        : undefined;
       if (!chatId) {
         const available = Object.keys(feishu.allowFrom).join("、") || "（未配置）";
         return {
