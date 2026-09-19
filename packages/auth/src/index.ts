@@ -162,3 +162,8 @@ export {
   type ExclusiveCredentialOperation,
 } from "./mcp-oauth-credential-store";
 export { ChannelCredentialStore, ChannelCredentialStoreError } from "./channel-credential-store";
+export {
+  ChannelConfigStore,
+  ChannelConfigStoreError,
+} from "./channel-config-store";
+export type { FeishuChannelConfig, ChannelConfigFile, FeishuDomain } from "./channel-config-store";
