@@ -795,8 +795,8 @@ export class DaemonAgentEventProjector {
   }
 }
 
-function isRuntimeEffort(value: unknown): value is "low" | "medium" | "high" {
-  return value === "low" || value === "medium" || value === "high";
+function isRuntimeEffort(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function snapshotTranscript(state: ActiveTranscriptProjectionState): ActiveTranscriptProjectionState {

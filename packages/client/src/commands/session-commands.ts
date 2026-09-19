@@ -770,8 +770,8 @@ export async function dispatchSessionCommand(
       emit(`Current effort: ${String(settings.effort ?? "medium")}`);
       return "handled";
     }
-    if (level !== "low" && level !== "medium" && level !== "high") {
-      emit("Invalid effort. Use: low, medium, or high");
+    if (!level.trim()) {
+      emit("Invalid effort. Provide a non-empty reasoning effort value");
       return "handled";
     }
     await client.system.patchSettings({ effort: level });

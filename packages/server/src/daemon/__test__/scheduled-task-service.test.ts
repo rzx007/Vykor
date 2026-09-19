@@ -354,10 +354,28 @@ describe("ScheduledTaskService", () => {
         destination: "chat",
         sessionId: "chat-1",
         model: "",
-        effort: "",
         permissionProfile: { mode: "workspace_write" },
       }),
     ).not.toThrow();
+  });
+
+  it("accepts non-enum effort values and rejects an empty effort", () => {
+    const { service } = createHarness();
+    const task = service.createTask({
+      name: "effort-briefing",
+      prompt: "Run with a high reasoning effort.",
+      recurrence: "2099-01-01T00:00:00Z",
+      recurrenceFormat: "once",
+      timezone: "UTC",
+      destination: "standalone",
+      projectPaths: [],
+      effort: "xhigh",
+    });
+    expect(task.effort).toBe("xhigh");
+
+    expect(() => service.updateTask(task.id, { effort: "" })).toThrow(
+      "Unknown scheduled task effort",
+    );
   });
 
   it("runs one missed occurrence after daemon recovery when requested", async () => {

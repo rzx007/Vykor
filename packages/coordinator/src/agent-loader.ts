@@ -17,7 +17,6 @@ import type { AgentDefinition } from "./index.js";
 export const AGENT_COLORS: ReadonlySet<string> = new Set([
   "red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", "white", "gray",
 ]);
-export const EFFORT_LEVELS: ReadonlySet<string> = new Set(["low", "medium", "high"]);
 export const PERMISSION_MODES: ReadonlySet<string> = new Set([
   "default", "acceptEdits", "bypassPermissions", "plan", "dontAsk",
 ]);
@@ -134,8 +133,8 @@ export function buildAgentDefinition(
   const effortRaw = fm.effort;
   if (typeof effortRaw === "number") {
     effort = Number.isInteger(effortRaw) && effortRaw > 0 ? effortRaw : undefined;
-  } else {
-    effort = pickEnum(effortRaw, EFFORT_LEVELS);
+  } else if (typeof effortRaw === "string" && effortRaw.trim()) {
+    effort = effortRaw.trim();
   }
 
   const mcpRaw = fm.mcpServers;

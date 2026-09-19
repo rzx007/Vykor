@@ -118,17 +118,26 @@ describe("loadAgentsDir", () => {
     expect(agent!.systemPrompt).toBe("Just a prompt.");
   });
 
-  it("silently drops invalid enum values (color/effort/memory/permissionMode)", () => {
+  it("silently drops invalid enum values (color/memory/permissionMode)", () => {
     writeAgent(
       "weird",
-      ["---", "name: weird", "color: rainbow", "effort: extreme", "memory: galaxy", "permissionMode: yolo", "maxTurns: -3", "---", "x"].join("\n"),
+      ["---", "name: weird", "color: rainbow", "memory: galaxy", "permissionMode: yolo", "maxTurns: -3", "---", "x"].join("\n"),
     );
     const [agent] = loadAgentsDir(tmp);
     expect(agent!.color).toBeUndefined();
-    expect(agent!.effort).toBeUndefined();
     expect(agent!.memory).toBeUndefined();
     expect(agent!.permissionMode).toBeUndefined();
     expect(agent!.maxTurns).toBeUndefined();
+  });
+
+  it("accepts free-form effort strings and positive integers, dropping empties", () => {
+    writeAgent("effort-str", ["---", "name: e1", "effort: xhigh", "---", "x"].join("\n"));
+    writeAgent("effort-num", ["---", "name: e2", "effort: 3", "---", "x"].join("\n"));
+    writeAgent("effort-empty", ["---", "name: e3", 'effort: ""', "---", "x"].join("\n"));
+    const byName = Object.fromEntries(loadAgentsDir(tmp).map((a) => [a.name, a]));
+    expect(byName.e1!.effort).toBe("xhigh");
+    expect(byName.e2!.effort).toBe(3);
+    expect(byName.e3!.effort).toBeUndefined();
   });
 
   it("skips unreadable files and missing dirs without crashing", () => {
