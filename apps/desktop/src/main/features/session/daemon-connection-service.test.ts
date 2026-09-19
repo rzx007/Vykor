@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { DaemonRegistry } from "@openharness/server/daemon-host"
 
 const clientState = vi.hoisted(() => ({ fail: false, hang: false }))
 
@@ -7,7 +8,9 @@ const daemonHost = vi.hoisted(() => ({
   writeDaemonRegistry: vi.fn(),
   clearDaemonRegistry: vi.fn(),
   createBearerToken: vi.fn(() => "token"),
+  createDaemonRegistryEntry: vi.fn((input: unknown) => input),
   startOpenHarnessDaemon: vi.fn(),
+  shouldStartManagedDaemon: vi.fn(async () => false),
 }))
 
 vi.mock("electron", () => ({
@@ -16,6 +19,15 @@ vi.mock("electron", () => ({
 }))
 
 vi.mock("@openharness/server/daemon-host", () => daemonHost)
+
+vi.mock("../daemon-autostart/daemon-surface", () => ({
+  isDesktopManagedRegistry: (r: { executionSurface?: string }) =>
+    r.executionSurface === "desktop_managed",
+}))
+vi.mock("../daemon-autostart/daemon-takeover", () => ({
+  stopNonDesktopDaemon: vi.fn(async () => undefined),
+  reconcileDesktopManagedService: vi.fn(async () => undefined),
+}))
 
 vi.mock("@openharness/client", () => ({
   OpenHarnessClient: class {
@@ -36,14 +48,16 @@ vi.mock("@openharness/client", () => ({
 
 import { DaemonConnectionService } from "./daemon-connection-service"
 
-function registry(pid = 4242) {
+function registry(overrides: Partial<DaemonRegistry> = {}): DaemonRegistry {
   return {
     url: "http://127.0.0.1:5555",
-    pid,
+    pid: 4242,
     token: "tok",
     storePath: "D:/db",
     startedAt: 1,
     version: "1.0.0",
+    executionSurface: "desktop_managed",
+    ...overrides,
   }
 }
 
@@ -83,7 +97,7 @@ describe("DaemonConnectionService ownership safety", () => {
     expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledTimes(1)
   })
 
-  it("connects to a healthy registered daemon without starting an embedded one", async () => {
+  it("connects to a healthy desktop-managed daemon without starting an embedded one", async () => {
     daemonHost.readDaemonRegistry.mockReturnValue(registry())
 
     const service = new DaemonConnectionService({ pidAlive: () => true })
@@ -121,6 +135,42 @@ describe("DaemonConnectionService ownership safety", () => {
     const service = new DaemonConnectionService({ pidAlive: () => true, verifyTimeoutMs: 20 })
 
     await expect(service.getClient()).rejects.toThrow(/timed out/i)
+    expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+  })
+
+  it("restarts an ephemeral CLI daemon when autoStart is off", async () => {
+    daemonHost.readDaemonRegistry.mockReturnValue(registry({ executionSurface: "cli_advanced" }))
+    daemonHost.startOpenHarnessDaemon.mockResolvedValue(embedded)
+    const stop = vi.fn(async () => undefined)
+
+    const service = new DaemonConnectionService({
+      pidAlive: () => true,
+      shouldAutoStart: async () => false,
+      stopNonDesktopDaemon: stop,
+    })
+
+    await expect(service.getClient()).resolves.toBeDefined()
+    expect(stop).toHaveBeenCalledOnce()
+    expect(daemonHost.startOpenHarnessDaemon).toHaveBeenCalledOnce()
+    expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledWith(
+      expect.objectContaining({ executionSurface: "desktop_managed" })
+    )
+  })
+
+  it("reconciles the OS service when autoStart is on", async () => {
+    const reconcile = vi.fn(async () => undefined)
+    daemonHost.readDaemonRegistry
+      .mockReturnValueOnce(registry({ executionSurface: "cli_advanced" }))
+      .mockReturnValue(registry())
+
+    const service = new DaemonConnectionService({
+      pidAlive: () => true,
+      shouldAutoStart: async () => true,
+      reconcileDesktopService: reconcile,
+    })
+
+    await expect(service.getClient()).resolves.toBeDefined()
+    expect(reconcile).toHaveBeenCalledOnce()
     expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
   })
 })

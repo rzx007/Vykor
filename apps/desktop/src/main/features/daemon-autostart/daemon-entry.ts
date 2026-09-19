@@ -3,12 +3,18 @@ import { spawn } from "node:child_process"
 import {
   clearDaemonRegistry,
   createBearerToken,
+  createDaemonRegistryEntry,
   readDaemonRegistry,
   startOpenHarnessDaemon,
+  stopDaemonProcess,
   writeDaemonRegistry,
   shouldStartManagedDaemon,
+  type DaemonRegistry,
 } from "@openharness/server/daemon-host"
 import { app } from "electron"
+
+import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
+import { isDesktopManagedRegistry, isLoopbackDaemonUrl } from "./daemon-surface"
 
 export type DesktopDaemonMode = "service" | "watchdog"
 
@@ -35,6 +41,12 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
   while (await registeredDaemonHealthy()) {
     await delay(2_000)
   }
+  const stale = readDaemonRegistry()
+  if (stale && !isDesktopManagedRegistry(stale) && isLoopbackDaemonUrl(stale.url)) {
+    await stopDaemonProcess(stale.pid).catch((error) => {
+      console.warn("[daemon] failed to stop non-desktop daemon", error)
+    })
+  }
   clearDaemonRegistry()
   const token = createBearerToken()
   const { server, listen } = await startOpenHarnessDaemon({
@@ -43,15 +55,18 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
     token,
     version: app.getVersion(),
     executionSurface: "desktop_managed",
+    outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
   })
-  writeDaemonRegistry({
-    url: listen.url,
-    pid: process.pid,
-    token,
-    storePath: server.store.path,
-    startedAt: Date.now(),
-    version: app.getVersion(),
-  })
+  writeDaemonRegistry(
+    createDaemonRegistryEntry({
+      url: listen.url,
+      pid: process.pid,
+      token,
+      storePath: server.store.path,
+      version: app.getVersion(),
+      executionSurface: "desktop_managed",
+    })
+  )
 
   await new Promise<void>((resolve) => {
     const close = (): void => {
@@ -63,11 +78,14 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
   })
 }
 
-async function registeredDaemonHealthy(): Promise<boolean> {
-  const registry = readDaemonRegistry()
-  if (!registry) return false
+export async function registeredDaemonHealthy(
+  readRegistry: () => DaemonRegistry | undefined = readDaemonRegistry,
+  fetchImpl: typeof fetch = fetch
+): Promise<boolean> {
+  const registry = readRegistry()
+  if (!registry || !isDesktopManagedRegistry(registry)) return false
   try {
-    const response = await fetch(`${registry.url}/health`, {
+    const response = await fetchImpl(`${registry.url}/health`, {
       headers: { authorization: `Bearer ${registry.token}` },
       signal: AbortSignal.timeout(1_500),
     })

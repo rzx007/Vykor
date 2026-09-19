@@ -140,9 +140,11 @@ export {
 export {
   clearDaemonRegistry,
   createBearerToken,
+  createDaemonRegistryEntry,
   getDaemonRegistryPath,
   getDefaultSessionStorePath,
   readDaemonRegistry,
   writeDaemonRegistry,
+  type DaemonExecutionSurface,
   type DaemonRegistry,
 } from "./daemon/index.js";

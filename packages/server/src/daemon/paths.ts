@@ -4,6 +4,8 @@ import { dirname, join } from "node:path";
 
 import { getDataDir } from "@openharness/core";
 
+export type DaemonExecutionSurface = "desktop_managed" | "cli_advanced";
+
 export interface DaemonRegistry {
   url: string;
   pid: number;
@@ -11,6 +13,27 @@ export interface DaemonRegistry {
   storePath: string;
   startedAt: number;
   version: string;
+  executionSurface?: DaemonExecutionSurface;
+}
+
+export function createDaemonRegistryEntry(input: {
+  url: string;
+  pid: number;
+  token: string;
+  storePath: string;
+  version: string;
+  executionSurface: DaemonExecutionSurface;
+  startedAt?: number;
+}): DaemonRegistry {
+  return {
+    url: input.url,
+    pid: input.pid,
+    token: input.token,
+    storePath: input.storePath,
+    startedAt: input.startedAt ?? Date.now(),
+    version: input.version,
+    executionSurface: input.executionSurface,
+  };
 }
 
 export function getDefaultSessionStorePath(): string {

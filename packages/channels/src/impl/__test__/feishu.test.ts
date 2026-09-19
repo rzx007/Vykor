@@ -96,21 +96,21 @@ async function simulateInbound(
     sender_type?: string;
     chat_type?: string;
     content?: string;
-    msg_type?: string;
+    message_type?: string;
   } = {},
 ): Promise<void> {
   const data = {
+    sender: {
+      sender_id: { open_id: "ou_sender", user_id: "u1" },
+      sender_type: overrides.sender_type ?? "user",
+    },
     message: {
       message_id: overrides.message_id ?? `msg_${Math.random().toString(36).slice(2)}`,
       chat_id: "oc_chat_001",
       chat_type: overrides.chat_type ?? "p2p",
-      msg_type: overrides.msg_type ?? "text",
+      message_type: overrides.message_type ?? "text",
       content: JSON.stringify({ text: overrides.content ?? "hello" }),
       create_time: String(Date.now()),
-      sender: {
-        sender_id: { open_id: "ou_sender", user_id: "u1" },
-        sender_type: overrides.sender_type ?? "user",
-      },
       mentions: [],
     },
   };
@@ -197,12 +197,12 @@ describe("FeishuAdapter capability model and richer inbound semantics", () => {
     adapter.onMessage((message) => received.push(message));
 
     await (adapter as unknown as { _handleEvent(data: unknown): Promise<void> })._handleEvent({
+      sender: { sender_type: "user" },
       message: {
         chat_id: "oc_chat_001",
         chat_type: "group",
         content: JSON.stringify({ text: "hello" }),
         create_time: String(Date.now()),
-        sender: { sender_type: "user" },
         mentions: [],
       },
     });
@@ -217,16 +217,16 @@ describe("FeishuAdapter capability model and richer inbound semantics", () => {
 
     await simulateInbound(adapter, { content: "hello" });
     await (adapter as unknown as { _handleEvent(data: unknown): Promise<void> })._handleEvent({
+      sender: {
+        sender_id: { open_id: "ou_sender" },
+        sender_type: "user",
+      },
       message: {
         message_id: "msg_invalid_time",
         chat_id: "oc_chat_001",
         chat_type: "group",
         content: JSON.stringify({ text: "hello" }),
         create_time: "not-a-timestamp",
-        sender: {
-          sender_id: { open_id: "ou_sender" },
-          sender_type: "user",
-        },
         mentions: [],
       },
     });
@@ -252,14 +252,14 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     adapter.onMessage((m) => received.push(m));
 
     const imageEvent = {
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_image",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "image",
+        message_type: "image",
         content: JSON.stringify({ image_key: "img_v2_001" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     };
@@ -287,14 +287,14 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     adapter.onMessage((m) => received.push(m));
 
     const fileEvent = {
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_file",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "file",
+        message_type: "file",
         content: JSON.stringify({ file_key: "file_v2_001", file_name: "report.pdf" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     };
@@ -323,14 +323,14 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_img_missing",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "image",
+        message_type: "image",
         content: JSON.stringify({}),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     });
@@ -344,14 +344,14 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_file_missing",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "file",
+        message_type: "file",
         content: JSON.stringify({ file_name: "only_name.pdf" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     });
@@ -359,35 +359,35 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     expect(received).toHaveLength(0);
   });
 
-  it("rejects unknown msg_type and malformed attachment JSON", async () => {
+  it("rejects unknown message_type and malformed attachment JSON", async () => {
     const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
     const received: ChannelMessage[] = [];
     adapter.onMessage((m) => received.push(m));
 
-    // Unknown msg_type
+    // Unknown message_type
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_unknown_type",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "audio",
+        message_type: "audio",
         content: JSON.stringify({ audio_key: "aud_1" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     });
 
     // Malformed JSON
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_bad_json",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "image",
+        message_type: "image",
         content: "not a json",
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     });
@@ -395,19 +395,19 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     expect(received).toHaveLength(0);
   });
 
-  it("rejects text-like content when msg_type is missing instead of defaulting to text", async () => {
+  it("rejects text-like content when message_type is missing instead of defaulting to text", async () => {
     const adapter = new FeishuAdapter({ appId: "a", appSecret: "s" });
     const received: ChannelMessage[] = [];
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_no_type",
         chat_id: "oc_chat_001",
         chat_type: "p2p",
         content: JSON.stringify({ text: "hello" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     });
@@ -562,16 +562,16 @@ describe("FeishuAdapter thread routing (Task 4)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_thread_001",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "text",
+        message_type: "text",
         content: JSON.stringify({ text: "hello" }),
         create_time: "1710000000000",
         thread_id: "thread_1",
         root_id: "msg_root",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [],
       },
     });
@@ -658,14 +658,14 @@ describe("FeishuAdapter mention and bot boundary (Task 5)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_no_mention",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "text",
+        message_type: "text",
         content: JSON.stringify({ text: "hello" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [], // no mention
       },
     });
@@ -683,14 +683,14 @@ describe("FeishuAdapter mention and bot boundary (Task 5)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_case_mention",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "text",
+        message_type: "text",
         content: JSON.stringify({ text: "@harness hello" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [{ key: "@harness", name: "harness" }],
       },
     });
@@ -704,14 +704,14 @@ describe("FeishuAdapter mention and bot boundary (Task 5)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_empty_after_strip",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "text",
+        message_type: "text",
         content: JSON.stringify({ text: "@bot_key" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [{ key: "@bot_key", name: "bot" }],
       },
     });
@@ -725,14 +725,14 @@ describe("FeishuAdapter mention and bot boundary (Task 5)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
       message: {
         message_id: "msg_repeat_mention",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "text",
+        message_type: "text",
         content: JSON.stringify({ text: "@bot_key hi @bot_key" }),
         create_time: "1710000000000",
-        sender: { sender_id: { open_id: "ou_sender" }, sender_type: "user" },
         mentions: [{ key: "@bot_key", name: "bot" }],
       },
     });
@@ -747,16 +747,16 @@ describe("FeishuAdapter mention and bot boundary (Task 5)", () => {
     adapter.onMessage((m) => received.push(m));
 
     await (adapter as unknown as { _handleEvent(d: unknown): Promise<void> })._handleEvent({
+      sender: { sender_id: { open_id: "ou_bot" }, sender_type: "bot" },
       message: {
         message_id: "msg_bot_image",
         chat_id: "oc_chat_001",
         chat_type: "group",
-        msg_type: "image",
+        message_type: "image",
         content: JSON.stringify({ image_key: "img_key_001" }),
         create_time: "1710000000000",
         thread_id: "thread_1",
         root_id: "msg_root",
-        sender: { sender_id: { open_id: "ou_bot" }, sender_type: "bot" },
         mentions: [],
       },
     });

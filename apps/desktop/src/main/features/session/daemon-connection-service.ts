@@ -4,11 +4,19 @@ import { type OpenHarnessHttpServer } from "@openharness/server"
 import {
   clearDaemonRegistry,
   createBearerToken,
+  createDaemonRegistryEntry,
   readDaemonRegistry,
+  shouldStartManagedDaemon,
   startOpenHarnessDaemon,
   writeDaemonRegistry,
+  type DaemonRegistry,
 } from "@openharness/server/daemon-host"
 
+import { isDesktopManagedRegistry } from "../daemon-autostart/daemon-surface"
+import {
+  reconcileDesktopManagedService,
+  stopNonDesktopDaemon,
+} from "../daemon-autostart/daemon-takeover"
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type { DesktopDaemonStatus, DesktopDaemonStatusPhase } from "../../../shared/session-types"
 import { buildOutsideProjectRoot } from "./outside-project-workspace"
@@ -27,6 +35,12 @@ export interface DaemonConnectionServiceOptions {
   pidAlive?: (pid: number) => boolean
   /** How long to wait for a registered daemon to answer before giving up. */
   verifyTimeoutMs?: number
+  /** Whether the OS auto-start service is enabled (daemon.autoStart). */
+  shouldAutoStart?: () => Promise<boolean>
+  /** Stop a live, non-desktop-managed local daemon. */
+  stopNonDesktopDaemon?: (registry: DaemonRegistry) => Promise<void>
+  /** Reconcile the OS service so it starts a desktop-managed daemon. */
+  reconcileDesktopService?: (registry: DaemonRegistry) => Promise<void>
 }
 
 export class DaemonConnectionService {
@@ -36,10 +50,16 @@ export class DaemonConnectionService {
   private daemonStatus: DesktopDaemonStatus = createDaemonStatus("idle", "等待连接 daemon")
   private readonly pidAlive: (pid: number) => boolean
   private readonly verifyTimeoutMs: number
+  private readonly shouldAutoStart: () => Promise<boolean>
+  private readonly stopNonDesktopDaemon: (registry: DaemonRegistry) => Promise<void>
+  private readonly reconcileDesktopService: (registry: DaemonRegistry) => Promise<void>
 
   constructor(options: DaemonConnectionServiceOptions = {}) {
     this.pidAlive = options.pidAlive ?? isPidAlive
     this.verifyTimeoutMs = options.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS
+    this.shouldAutoStart = options.shouldAutoStart ?? (async () => await shouldStartManagedDaemon())
+    this.stopNonDesktopDaemon = options.stopNonDesktopDaemon ?? stopNonDesktopDaemon
+    this.reconcileDesktopService = options.reconcileDesktopService ?? reconcileDesktopManagedService
   }
 
   getDaemonStatus(): DesktopDaemonStatus {
@@ -81,7 +101,7 @@ export class DaemonConnectionService {
   }
 
   private async connect(): Promise<OpenHarnessClient> {
-    let registry: ReturnType<typeof readDaemonRegistry> = undefined
+    let registry: DaemonRegistry | undefined
     try {
       this.setDaemonStatus("discovering", "正在查找 daemon")
       registry = readDaemonRegistry()
@@ -90,13 +110,13 @@ export class DaemonConnectionService {
       registry = undefined
     }
 
+    let verified: OpenHarnessClient | undefined
     if (registry) {
       try {
         this.setDaemonStatus("connecting", "正在连接已运行的 daemon", { url: registry.url })
         const client = new OpenHarnessClient({ baseUrl: registry.url, token: registry.token })
         await this.verifyDaemon(client)
-        this.setDaemonStatus("ready", "daemon 已连接", { url: registry.url })
-        return client
+        verified = client
       } catch (error) {
         const detail = errorMessage(error)
         if (this.pidAlive(registry.pid)) {
@@ -118,7 +138,39 @@ export class DaemonConnectionService {
       }
     }
 
+    if (verified && registry) {
+      if (isDesktopManagedRegistry(registry)) {
+        this.setDaemonStatus("ready", "daemon 已连接", { url: registry.url })
+        return verified
+      }
+      return await this.takeOverNonDesktopDaemon(registry)
+    }
+
     return await this.startEmbeddedDaemon()
+  }
+
+  private async takeOverNonDesktopDaemon(registry: DaemonRegistry): Promise<OpenHarnessClient> {
+    try {
+      if (await this.shouldAutoStart()) {
+        this.setDaemonStatus("starting", "正在将 daemon 切换为桌面托管服务", { url: registry.url })
+        await this.reconcileDesktopService(registry)
+        const next = readDaemonRegistry()
+        if (!next || !isDesktopManagedRegistry(next)) {
+          throw new Error("Desktop-managed daemon was not registered after service reconciliation")
+        }
+        this.setDaemonStatus("ready", "daemon 已连接", { url: next.url })
+        return new OpenHarnessClient({ baseUrl: next.url, token: next.token })
+      }
+      this.setDaemonStatus("starting", "正在重启为桌面托管 daemon", { url: registry.url })
+      await this.stopNonDesktopDaemon(registry)
+      return await this.startEmbeddedDaemon()
+    } catch (error) {
+      this.setDaemonStatus("error", "daemon 桌面接管失败", {
+        url: registry.url,
+        detail: errorMessage(error),
+      })
+      throw error
+    }
   }
 
   private async startEmbeddedDaemon(): Promise<OpenHarnessClient> {
@@ -135,14 +187,16 @@ export class DaemonConnectionService {
       })
       this.embeddedServer = server
       this.embeddedUrl = listen.url
-      writeDaemonRegistry({
-        url: listen.url,
-        pid: process.pid,
-        token,
-        storePath: server.store.path,
-        startedAt: Date.now(),
-        version: app.getVersion(),
-      })
+      writeDaemonRegistry(
+        createDaemonRegistryEntry({
+          url: listen.url,
+          pid: process.pid,
+          token,
+          storePath: server.store.path,
+          version: app.getVersion(),
+          executionSurface: "desktop_managed",
+        })
+      )
       this.setDaemonStatus("ready", "内置 daemon 已启动", { url: listen.url })
       return new OpenHarnessClient({ baseUrl: listen.url, token })
     } catch (error) {
@@ -158,7 +212,7 @@ export class DaemonConnectionService {
       controller.signal.addEventListener(
         "abort",
         () => reject(new Error(`daemon verification timed out after ${this.verifyTimeoutMs}ms`)),
-        { once: true },
+        { once: true }
       )
     })
     try {
