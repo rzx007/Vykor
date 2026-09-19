@@ -151,6 +151,25 @@ describe("ChannelRuntimeService", () => {
     });
   });
 
+  it("marks an error when connecting exceeds the timeout", async () => {
+    const { service, created } = makeService({
+      connectTimeoutMs: 10,
+      createRuntime: async (input) => {
+        const { handle, calls } = fakeHandle({
+          start: () => new Promise<void>(() => {}),
+        });
+        created.push({ handle, calls, input });
+        return handle;
+      },
+    });
+    await service.start("feishu");
+    expect(service.status().connectors[0]).toMatchObject({
+      state: "error",
+      lastError: expect.stringMatching(/连接超时/),
+    });
+    expect(created[0]!.calls.stop).toBe(1);
+  });
+
   it("does not connect when shutdown races an in-flight start", async () => {
     let release!: () => void;
     const { service, created } = makeService({

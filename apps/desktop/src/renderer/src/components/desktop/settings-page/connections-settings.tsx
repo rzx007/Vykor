@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import type { ChannelDenialNotice } from "@openharness/client"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
@@ -48,7 +48,6 @@ export function ConnectionsSettings(): React.JSX.Element {
   const [allowId, setAllowId] = useState("")
   const [allowName, setAllowName] = useState("")
   const [removeOpen, setRemoveOpen] = useState(false)
-  const pollInFlight = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -73,11 +72,6 @@ export function ConnectionsSettings(): React.JSX.Element {
     let timer: ReturnType<typeof setTimeout>
     let delay = POLL_INTERVAL_MS
     const poll = async (): Promise<void> => {
-      if (pollInFlight.current) {
-        timer = setTimeout(poll, delay)
-        return
-      }
-      pollInFlight.current = true
       try {
         const delta = await window.desktop.connections.runtimeStatus()
         if (cancelled) return
@@ -89,7 +83,6 @@ export function ConnectionsSettings(): React.JSX.Element {
       } catch {
         delay = Math.min(delay * 2, MAX_POLL_INTERVAL_MS)
       } finally {
-        pollInFlight.current = false
         if (!cancelled) timer = setTimeout(poll, delay)
       }
     }

@@ -68,6 +68,8 @@ export interface ChannelRuntimeServiceOptions {
   }): Promise<{ name?: string }>;
   workspaceRoot?: string;
   drainTimeoutMs?: number;
+  /** 单个 connector 建立连接的硬上限；超时落 state=error，避免卡住 lane。 */
+  connectTimeoutMs?: number;
   /** shutdown 等待 lane 的硬上限；超时后不再等，避免 daemon 关不掉。 */
   shutdownTimeoutMs?: number;
   logger?(event: ObservabilityEvent): void;
@@ -113,6 +115,7 @@ export class ChannelRuntimeService {
   private readonly bootId = randomUUID();
   private readonly workspaceRoot: string;
   private readonly drainTimeoutMs: number;
+  private readonly connectTimeoutMs: number;
   private readonly shutdownTimeoutMs: number;
   private readonly now: () => number;
   private denialSeq = 0;
@@ -121,6 +124,7 @@ export class ChannelRuntimeService {
   constructor(private readonly options: ChannelRuntimeServiceOptions) {
     this.workspaceRoot = options.workspaceRoot ?? getChannelWorkspaceRoot();
     this.drainTimeoutMs = options.drainTimeoutMs ?? 5000;
+    this.connectTimeoutMs = options.connectTimeoutMs ?? 20000;
     this.shutdownTimeoutMs = options.shutdownTimeoutMs ?? 15000;
     this.now = options.now ?? Date.now;
     this.ensureEntry(CONNECTOR, undefined);
@@ -381,7 +385,11 @@ export class ChannelRuntimeService {
       return;
     }
     try {
-      await handle.start();
+      await withTimeout(
+        handle.start(),
+        this.connectTimeoutMs,
+        `连接超时（${this.connectTimeoutMs}ms）`,
+      );
     } catch (error) {
       this.patchStatus(entry, { state: "error", lastError: messageOf(error) });
       await handle.stop().catch(() => undefined);
@@ -641,4 +649,21 @@ function sanitizeSegment(value: string): string {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** 给一个 promise 加硬超时；超时后原 promise 仍在后台，但不再阻塞调用方。 */
+function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
