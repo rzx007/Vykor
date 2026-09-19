@@ -945,6 +945,9 @@ importers:
       '@openharness/auth':
         specifier: workspace:*
         version: link:../auth
+      '@openharness/channels':
+        specifier: workspace:*
+        version: link:../channels
       '@openharness/coordinator':
         specifier: workspace:*
         version: link:../coordinator

@@ -25,6 +25,7 @@
     "@openharness/agent-runtime": "workspace:*",
     "@openharness/api": "workspace:*",
     "@openharness/auth": "workspace:*",
+    "@openharness/channels": "workspace:*",
     "@openharness/coordinator": "workspace:*",
     "@openharness/core": "workspace:*",
     "@openharness/environment": "workspace:*",
