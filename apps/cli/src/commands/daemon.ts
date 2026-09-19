@@ -7,6 +7,7 @@ import {
   probeDaemonRegistry,
   terminateDaemonProcess,
 } from "../daemon-lifecycle.js";
+import { stopDaemonProcess } from "@openharness/server/daemon-host";
 import {
   loadDaemonAutoStart,
   reconcileDaemonAutoStart,
@@ -208,7 +209,7 @@ export function createDaemonCommand(): Command {
 
       if (existing && existingStatus === "stale") {
         terminateDaemonProcess(existing.pid);
-        await waitForProcessExit(existing.pid);
+        await stopDaemonProcess(existing.pid);
       }
       clearDaemonRegistry();
 
@@ -274,7 +275,7 @@ export function createDaemonCommand(): Command {
           daemonPidAlive(existing.pid)
         ) {
           terminateDaemonProcess(existing.pid);
-          await waitForProcessExit(existing.pid);
+          await stopDaemonProcess(existing.pid);
         }
       }
       clearDaemonRegistry();
@@ -300,7 +301,7 @@ export function createDaemonCommand(): Command {
       await createCliDaemonAutoStartController(entry).disable();
       if (registry && daemonPidAlive(registry.pid)) {
         terminateDaemonProcess(registry.pid);
-        await waitForProcessExit(registry.pid);
+        await stopDaemonProcess(registry.pid);
       }
       clearDaemonRegistry();
       console.log("Daemon system service uninstalled.");
@@ -331,7 +332,7 @@ export function createDaemonCommand(): Command {
       if (status === "ready") return;
       if (registry && status === "stale") {
         terminateDaemonProcess(registry.pid);
-        await waitForProcessExit(registry.pid);
+        await stopDaemonProcess(registry.pid);
       }
       clearDaemonRegistry();
       const spawned = spawnDaemonProcess(entry, [serveCommand, ...serveArgs]);
@@ -382,7 +383,7 @@ export function createDaemonCommand(): Command {
         service.stop();
         if (registry && daemonPidAlive(registry.pid)) {
           terminateDaemonProcess(registry.pid);
-          await waitForProcessExit(registry.pid);
+          await stopDaemonProcess(registry.pid);
         }
         if (registry)
           console.log(
@@ -426,12 +427,4 @@ async function waitForReadyDaemon(
   throw new Error(
     "The OpenHarness daemon did not become ready within 10 seconds",
   );
-}
-
-async function waitForProcessExit(pid: number): Promise<void> {
-  for (let attempt = 0; attempt < 50 && daemonPidAlive(pid); attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  if (daemonPidAlive(pid))
-    throw new Error(`Daemon process did not stop: ${pid}`);
 }

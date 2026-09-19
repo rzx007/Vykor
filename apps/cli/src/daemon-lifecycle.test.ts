@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DaemonRegistry } from "@openharness/server";
 
@@ -64,5 +64,19 @@ describe("probeDaemonRegistry", () => {
       fetch: async () => response({ error: "Unauthorized" }, 401),
     });
     expect(status).toBe("unreachable");
+  });
+
+  it("treats an EPERM pid as alive and still probes /health", async () => {
+    const spy = vi.spyOn(process, "kill").mockImplementation(() => {
+      const error = new Error("not permitted") as NodeJS.ErrnoException;
+      error.code = "EPERM";
+      throw error;
+    });
+    const status = await probeDaemonRegistry(registry(), {
+      fetch: async () => response({ ok: true, version: "0.1.0" }),
+      expectedVersion: "0.1.0",
+    });
+    expect(status).toBe("ready");
+    spy.mockRestore();
   });
 });

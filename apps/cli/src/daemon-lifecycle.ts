@@ -1,4 +1,10 @@
+import {
+  daemonPidAlive,
+  terminateDaemonProcess,
+} from "@openharness/server/daemon-host";
 import type { DaemonRegistry } from "@openharness/server";
+
+export { daemonPidAlive, terminateDaemonProcess };
 
 export type DaemonProbeStatus = "ready" | "stale" | "unreachable";
 export type DaemonProbeFetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
@@ -9,15 +15,6 @@ export interface DaemonProbeOptions {
   timeoutMs?: number;
   expectedVersion?: string;
   minimumStartedAt?: number;
-}
-
-export function daemonPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export async function probeDaemonRegistry(
@@ -47,14 +44,5 @@ export async function probeDaemonRegistry(
     return "unreachable";
   } finally {
     clearTimeout(timer);
-  }
-}
-
-export function terminateDaemonProcess(pid: number): boolean {
-  try {
-    process.kill(pid, "SIGTERM");
-    return true;
-  } catch {
-    return false;
   }
 }

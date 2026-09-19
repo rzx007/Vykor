@@ -10,6 +10,13 @@ export {
 } from "./auto-start-controller.js";
 export * from "./system-service.js";
 export {
+  daemonPidAlive,
+  forceKillDaemonProcess,
+  stopDaemonProcess,
+  terminateDaemonProcess,
+  waitForProcessExit,
+} from "./lifecycle.js";
+export {
   clearDaemonRegistry,
   createBearerToken,
   createDaemonRegistryEntry,
