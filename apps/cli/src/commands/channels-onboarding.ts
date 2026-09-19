@@ -1,17 +1,15 @@
 import { createInterface } from "node:readline/promises";
 
-import type { FeishuChannelConfig } from "@openharness/auth";
 import type {
-  FeishuRegistrationCredentials,
-  FeishuRegistrationStatus,
-  VerifiedFeishuBot,
-} from "@openharness/channels";
+  FeishuChannelSnapshot,
+  FeishuRegistrationSnapshot,
+} from "@openharness/client";
 
 /**
  * `ohs channels add feishu` / `ohs channels allow` 的向导逻辑。
  *
- * 所有会产生副作用或需要交互的能力都通过 deps 注入：
- * 真实运行用动态 import 拼默认实现，测试注入假对象即可全程不碰网络/终端。
+ * 配置与接入都由 daemon 负责（唯一写入者），这里只做终端交互与编排：
+ * 通过注入的 client 调 daemon 的 `/channels/feishu/*` 接口。
  */
 
 type FeishuDomain = "feishu" | "lark";
@@ -27,18 +25,22 @@ export interface ChannelsAllowResult {
   ok: boolean;
 }
 
-export interface RegistrationLike {
-  start(options?: { domain?: FeishuDomain }): FeishuRegistrationStatus;
-  status(): FeishuRegistrationStatus;
-  cancel(): FeishuRegistrationStatus;
-}
-
-export interface ChannelConfigStoreLike {
-  getFeishu(): Promise<FeishuChannelConfig | undefined>;
-  setFeishu(config: FeishuChannelConfig): Promise<void>;
-  updateFeishu(
-    mutate: (current: FeishuChannelConfig | undefined) => FeishuChannelConfig | undefined,
-  ): Promise<FeishuChannelConfig | undefined>;
+/** daemon 渠道接口的最小客户端面（便于测试注入）。 */
+export interface ChannelsClientLike {
+  channels: {
+    startFeishuRegistration(input?: {
+      domain?: FeishuDomain;
+    }): Promise<FeishuRegistrationSnapshot>;
+    feishuRegistrationStatus(): Promise<FeishuRegistrationSnapshot>;
+    cancelFeishuRegistration(): Promise<FeishuRegistrationSnapshot>;
+    getFeishu(): Promise<FeishuChannelSnapshot>;
+    connectFeishu(input: {
+      appId: string;
+      appSecret: string;
+      domain?: FeishuDomain;
+    }): Promise<{ feishu: FeishuChannelSnapshot }>;
+    addFeishuAllow(input: { id: string; name?: string }): Promise<FeishuChannelSnapshot>;
+  };
 }
 
 export interface ChannelsOnboardingDeps {
@@ -49,17 +51,13 @@ export interface ChannelsOnboardingDeps {
   promptText(question: string, options?: { defaultValue?: string }): Promise<string>;
   promptSecret(question: string): Promise<string>;
   promptConfirm(question: string): Promise<boolean>;
-  createRegistration(
-    onCredentials: (credentials: FeishuRegistrationCredentials) => Promise<void>,
-  ): RegistrationLike | Promise<RegistrationLike>;
-  createChannels(): ChannelConfigStoreLike | Promise<ChannelConfigStoreLike>;
-  verify(input: { appId: string; appSecret: string; domain: FeishuDomain }): Promise<VerifiedFeishuBot>;
+  createClient(): Promise<ChannelsClientLike>;
   renderQr(url: string): void | Promise<void>;
   log(message: string): void;
 }
 
 export interface ChannelsAllowDeps {
-  createChannels(): ChannelConfigStoreLike | Promise<ChannelConfigStoreLike>;
+  createClient(): Promise<ChannelsClientLike>;
   log(message: string): void;
 }
 
@@ -121,11 +119,22 @@ function parseDomain(value: string): FeishuDomain | undefined {
   return normalized === "feishu" || normalized === "lark" ? normalized : undefined;
 }
 
-function missingConfigLog(extra = ""): string {
-  return `尚未配置飞书通道，请先运行 ohs channels add feishu。${extra}`;
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
-/** 真实环境默认依赖：交互用 readline，其余能力延迟 import，测试不触发。 */
+function missingConfigLog(): string {
+  return "尚未配置飞书通道，请先运行 ohs channels add feishu。";
+}
+
+function tailLog(): string[] {
+  return [
+    "运行 ohs channels serve 开始接收和发送消息。",
+    "请在飞书开放平台把事件订阅方式设为「使用长连接接收事件」。",
+  ];
+}
+
+/** 真实环境默认依赖：交互用 readline，client 延迟 import，测试不触发。 */
 export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
   return {
     promptSelect: async (message, choices) => {
@@ -152,17 +161,11 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
       const answer = (await ask(`${question} [y/N] `)).trim().toLowerCase();
       return answer === "y" || answer === "yes";
     },
-    createRegistration: async (onCredentials) => {
-      const { FeishuRegistration } = await import("@openharness/channels");
-      return new FeishuRegistration({ onCredentials });
-    },
-    createChannels: async () => {
-      const { ChannelConfigStore } = await import("@openharness/auth");
-      return new ChannelConfigStore();
-    },
-    verify: async (input) => {
-      const { verifyFeishuCredentials } = await import("@openharness/channels");
-      return verifyFeishuCredentials(input);
+    createClient: async () => {
+      const { ensureLocalDaemon } = await import("../ensure-daemon.js");
+      const daemon = await ensureLocalDaemon();
+      const { OpenHarnessClient } = await import("@openharness/client");
+      return new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
     },
     renderQr: async (url) => {
       if (!process.stdout.isTTY) return;
@@ -178,9 +181,11 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
 
 export function createDefaultAllowDeps(): ChannelsAllowDeps {
   return {
-    createChannels: async () => {
-      const { ChannelConfigStore } = await import("@openharness/auth");
-      return new ChannelConfigStore();
+    createClient: async () => {
+      const { ensureLocalDaemon } = await import("../ensure-daemon.js");
+      const daemon = await ensureLocalDaemon();
+      const { OpenHarnessClient } = await import("@openharness/client");
+      return new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
     },
     log: (message) => console.log(message),
   };
@@ -188,42 +193,49 @@ export function createDefaultAllowDeps(): ChannelsAllowDeps {
 
 async function runScan(
   deps: ChannelsOnboardingDeps,
-): Promise<FeishuRegistrationCredentials | undefined> {
-  let scanned: FeishuRegistrationCredentials | undefined;
-  const registration = await deps.createRegistration(async (credentials) => {
-    scanned = credentials;
-  });
+  client: ChannelsClientLike,
+): Promise<{ appId?: string; warning?: string } | undefined> {
+  const deadline = Date.now() + 10 * 60_000;
+  let lastRendered: string | undefined;
 
-  const onSigint = () => registration.cancel();
+  const renderIfNeeded = async (snapshot: FeishuRegistrationSnapshot): Promise<void> => {
+    const url = snapshot.qrUrl;
+    if (!url || url === lastRendered) return;
+    lastRendered = url;
+    deps.log("请用飞书扫码，或打开下面的链接完成授权：");
+    deps.log(url);
+    await deps.renderQr(url);
+  };
+
+  const onSigint = () => {
+    void client.channels.cancelFeishuRegistration().catch(() => undefined);
+  };
   process.on("SIGINT", onSigint);
   try {
-    const deadline = Date.now() + 10 * 60_000;
-    let lastRendered: string | undefined;
-    let snapshot = registration.start({ domain: "feishu" });
-
-    const renderIfNeeded = async (url: string | undefined): Promise<void> => {
-      if (!url || url === lastRendered) return;
-      lastRendered = url;
-      deps.log("请用飞书扫码，或打开下面的链接完成授权：");
-      deps.log(url);
-      await deps.renderQr(url);
-    };
-
-    await renderIfNeeded(snapshot.qrUrl);
+    await renderIfNeeded(
+      await client.channels.startFeishuRegistration({ domain: "feishu" }),
+    );
 
     for (;;) {
-      const current = registration.status();
-      if (current.state === "succeeded") break;
+      const current = await client.channels.feishuRegistrationStatus();
+      if (current.state === "succeeded") {
+        const feishu = await client.channels.getFeishu();
+        return {
+          ...(feishu.appId ? { appId: feishu.appId } : {}),
+          ...(current.warning ? { warning: current.warning } : {}),
+        };
+      }
 
       if (current.state === "expired") {
         const refresh = await deps.promptConfirm("二维码已过期，是否重新生成？");
         if (!refresh) {
-          registration.cancel();
+          await client.channels.cancelFeishuRegistration();
           deps.log("已取消飞书接入。");
           return undefined;
         }
-        snapshot = registration.start({ domain: current.domain });
-        await renderIfNeeded(snapshot.qrUrl);
+        await renderIfNeeded(
+          await client.channels.startFeishuRegistration({ domain: current.domain }),
+        );
         continue;
       }
 
@@ -232,10 +244,10 @@ async function runScan(
         return undefined;
       }
 
-      await renderIfNeeded(current.qrUrl);
+      await renderIfNeeded(current);
 
       if (Date.now() > deadline) {
-        registration.cancel();
+        await client.channels.cancelFeishuRegistration();
         deps.log("等待扫码超时，已取消。请重新运行 ohs channels add feishu。");
         return undefined;
       }
@@ -244,12 +256,6 @@ async function runScan(
   } finally {
     process.off("SIGINT", onSigint);
   }
-
-  if (!scanned) {
-    deps.log("扫码流程结束，但没有拿到应用凭据。");
-    return undefined;
-  }
-  return scanned;
 }
 
 export async function runChannelsAddFeishu(
@@ -262,58 +268,54 @@ export async function runChannelsAddFeishu(
     { value: "manual", label: "手动输入 App ID / App Secret" },
   ]);
 
-  let appId: string;
-  let appSecret: string;
-  let domain: FeishuDomain;
-  let scannerOpenId: string | undefined;
+  let client: ChannelsClientLike;
+  try {
+    client = await d.createClient();
+  } catch (error) {
+    d.log(`连接 daemon 失败：${messageOf(error)}`);
+    return { ok: false };
+  }
 
   if (method === "scan") {
-    const scanned = await runScan(d);
+    const scanned = await runScan(d, client);
     if (!scanned) return { ok: false };
-    appId = scanned.appId;
-    appSecret = scanned.appSecret;
-    domain = scanned.domain;
-    scannerOpenId = scanned.userId;
-  } else {
-    appId = (await d.promptText("App ID")).trim();
-    appSecret = (await d.promptSecret("App Secret")).trim();
-    for (;;) {
-      const domainAnswer = await d.promptText("开放平台地区（feishu 国内 / lark 国际）", {
-        defaultValue: "feishu",
-      });
-      const parsed = parseDomain(domainAnswer);
-      if (parsed) {
-        domain = parsed;
-        break;
-      }
-      d.log(`无法识别的地区「${domainAnswer.trim()}」，请输入 feishu 或 lark。`);
-    }
-    if (!appId || !appSecret) {
-      d.log("App ID 与 App Secret 都不能为空。");
-      return { ok: false };
-    }
+    d.log(`飞书已接入${scanned.appId ? `（${scanned.appId}）` : ""}。`);
+    if (scanned.warning) d.log(`注意：${scanned.warning}`);
+    for (const line of tailLog()) d.log(line);
+    return {
+      ok: true,
+      ...(scanned.appId ? { appId: scanned.appId } : {}),
+      domain: "feishu",
+    };
   }
 
-  let name: string | undefined;
-  try {
-    const verified = await d.verify({ appId, appSecret, domain });
-    name = verified.name;
-  } catch (error) {
-    d.log(`凭据校验失败：${error instanceof Error ? error.message : String(error)}`);
+  const appId = (await d.promptText("App ID")).trim();
+  const appSecret = (await d.promptSecret("App Secret")).trim();
+  let domain: FeishuDomain;
+  for (;;) {
+    const domainAnswer = await d.promptText("开放平台地区（feishu 国内 / lark 国际）", {
+      defaultValue: "feishu",
+    });
+    const parsed = parseDomain(domainAnswer);
+    if (parsed) {
+      domain = parsed;
+      break;
+    }
+    d.log(`无法识别的地区「${domainAnswer.trim()}」，请输入 feishu 或 lark。`);
+  }
+  if (!appId || !appSecret) {
+    d.log("App ID 与 App Secret 都不能为空。");
     return { ok: false };
   }
 
-  let store: ChannelConfigStoreLike;
-  let existing: FeishuChannelConfig | undefined;
+  let existing: FeishuChannelSnapshot;
   try {
-    store = await d.createChannels();
-    existing = await store.getFeishu();
+    existing = await client.channels.getFeishu();
   } catch (error) {
-    d.log(`读取渠道配置失败：${error instanceof Error ? error.message : String(error)}`);
+    d.log(`读取渠道配置失败：${messageOf(error)}`);
     return { ok: false };
   }
-
-  if (existing?.appId) {
+  if (existing.configured && existing.appId) {
     const overwrite = await d.promptConfirm(
       `feishu 已配置（appId: ${existing.appId}），是否覆盖？`,
     );
@@ -323,30 +325,15 @@ export async function runChannelsAddFeishu(
     }
   }
 
-  const allowFrom: Record<string, string> = { ...existing?.allowFrom };
-  if (scannerOpenId) allowFrom[scannerOpenId] = scannerOpenId;
-
-  const next: FeishuChannelConfig = {
-    ...existing,
-    enabled: true,
-    appId,
-    appSecret,
-    domain,
-    allowFrom,
-  };
-
   try {
-    await store.setFeishu(next);
+    const { feishu } = await client.channels.connectFeishu({ appId, appSecret, domain });
+    d.log(`飞书已接入（${feishu.appId ?? appId}）。`);
+    for (const line of tailLog()) d.log(line);
+    return { ok: true, appId: feishu.appId ?? appId, domain };
   } catch (error) {
-    d.log(`保存配置失败：${error instanceof Error ? error.message : String(error)}`);
+    d.log(`凭据校验失败：${messageOf(error)}`);
     return { ok: false };
   }
-
-  d.log(`飞书已接入${name ? `：${name}` : ""}（${appId}）。`);
-  if (scannerOpenId) d.log(`已把扫码者 ${scannerOpenId} 加入白名单。`);
-  d.log("运行 ohs channels serve 开始接收和发送消息。");
-  d.log("请在飞书开放平台把事件订阅方式设为「使用长连接接收事件」。");
-  return { ok: true, appId, domain, ...(name ? { name } : {}) };
 }
 
 export async function runChannelsAllow(
@@ -361,35 +348,33 @@ export async function runChannelsAllow(
     return { ok: false };
   }
 
-  let store: ChannelConfigStoreLike;
-  let feishu: FeishuChannelConfig | undefined;
+  let client: ChannelsClientLike;
   try {
-    store = await d.createChannels();
-    feishu = await store.getFeishu();
+    client = await d.createClient();
   } catch (error) {
-    d.log(`读取渠道配置失败：${error instanceof Error ? error.message : String(error)}`);
+    d.log(`连接 daemon 失败：${messageOf(error)}`);
     return { ok: false };
   }
-  if (!feishu?.appId) {
+
+  let feishu: FeishuChannelSnapshot;
+  try {
+    feishu = await client.channels.getFeishu();
+  } catch (error) {
+    d.log(`读取渠道配置失败：${messageOf(error)}`);
+    return { ok: false };
+  }
+  if (!feishu.configured) {
     d.log(missingConfigLog());
     return { ok: false };
   }
 
   try {
-    const updated = await store.updateFeishu((current) =>
-      current
-        ? { ...current, allowFrom: { ...current.allowFrom, [name ?? id]: id } }
-        : current,
-    );
-    if (updated === undefined) {
-      d.log("保存配置失败：渠道配置已不存在。");
-      return { ok: false };
-    }
+    await client.channels.addFeishuAllow({ id, ...(name ? { name } : {}) });
   } catch (error) {
-    d.log(`保存配置失败：${error instanceof Error ? error.message : String(error)}`);
+    d.log(`保存配置失败：${messageOf(error)}`);
     return { ok: false };
   }
 
-  d.log(`已放行 ${name ?? id}（${id}）。改完重启 channels serve 生效。`);
+  d.log(`已放行 ${name ?? id}（${id}），即时生效。`);
   return { ok: true };
 }

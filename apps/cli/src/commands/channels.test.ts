@@ -1,104 +1,131 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-const channelMocks = vi.hoisted(() => ({
+const mocks = vi.hoisted(() => ({
   health: vi.fn(),
+  getFeishu: vi.fn(),
+  runtimeStatus: vi.fn(),
   getStatus: vi.fn(),
   readDaemonRegistry: vi.fn(),
 }));
 
-const configured = vi.hoisted(() => ({ feishu: undefined as unknown }));
-
-vi.mock("@openharness/core", () => ({}));
-vi.mock("@openharness/server", () => ({ readDaemonRegistry: channelMocks.readDaemonRegistry }));
+vi.mock("@openharness/server", () => ({
+  readDaemonRegistry: mocks.readDaemonRegistry,
+}));
 vi.mock("@openharness/client", () => ({
   OpenHarnessClient: class {
-    protocol = { health: channelMocks.health };
-    channels = { getStatus: channelMocks.getStatus };
+    protocol = { health: mocks.health };
+    channels = {
+      getFeishu: mocks.getFeishu,
+      runtimeStatus: mocks.runtimeStatus,
+      getStatus: mocks.getStatus,
+    };
   },
 }));
-vi.mock("@openharness/auth", () => ({
-  ChannelConfigStore: class {
-    async getFeishu() {
-      return configured.feishu;
-    }
-    async setFeishu() {}
-    async updateFeishu() {
-      return configured.feishu;
-    }
-    async deleteFeishu() {
-      return false;
-    }
-  },
-}));
-import { assembleChannelAdapters, createChannelsCommand } from "./channels.js";
 
-const baseFeishu = {
-  enabled: true,
-  appId: "cli_x",
-  appSecret: "sec",
-  domain: "feishu" as const,
-  allowFrom: { 个人: "ou_1" } as Record<string, string>,
+import { createChannelsCommand, followChannelRuntime } from "./channels.js";
+
+const runningStatus = {
+  bootId: "boot-1",
+  connectors: [{ connector: "feishu", enabled: true, state: "running" as const }],
+  recentDenials: [{ connector: "feishu", sender: "ou_x", chatId: "chat-1", at: 1, seq: 1 }],
 };
 
-describe("assembleChannelAdapters", () => {
-  afterEach(() => {
-    configured.feishu = undefined;
-  });
-
-  it("无配置 → 空组装", async () => {
-    const r = await assembleChannelAdapters();
-    expect(r.adapters).toEqual([]);
-    expect(r.warnings).toEqual([]);
-    expect(r.policies).toEqual({});
-  });
-
-  it("feishu disabled → 不组装", async () => {
-    configured.feishu = { ...baseFeishu, enabled: false };
-    const r = await assembleChannelAdapters();
-    expect(r.adapters).toEqual([]);
-  });
-
-  it("feishu enabled → 组装 adapter, allowFrom/accountIds/policies 一并组装", async () => {
-    configured.feishu = { ...baseFeishu, sendProgress: false, sendToolHints: true };
-    const r = await assembleChannelAdapters();
-    expect(r.adapters).toHaveLength(1);
-    expect(r.adapters[0]!.name).toBe("feishu");
-    expect(r.allowFrom).toEqual({ feishu: ["ou_1"] });
-    expect(r.accountIds).toEqual({ feishu: "cli_x" });
-    expect(r.policies).toEqual({ feishu: { sendProgress: false, sendToolHints: true } });
-  });
-
-  it("feishu enabled 但缺 appSecret → 跳过并告警", async () => {
-    configured.feishu = { ...baseFeishu, appSecret: "" };
-    const r = await assembleChannelAdapters();
-    expect(r.adapters).toEqual([]);
-    expect(r.warnings.some((w) => w.includes("凭据"))).toBe(true);
-  });
-
-  it("allowFrom 缺省为空数组(fail-closed 由 manager 兜底)", async () => {
-    configured.feishu = {
-      ...baseFeishu,
-      allowFrom: undefined as unknown as Record<string, string>,
+describe("followChannelRuntime", () => {
+  it("starts the runtime, prints new denials once, and stops on abort", async () => {
+    const controller = new AbortController();
+    const client = {
+      channels: {
+        startRuntime: vi.fn(async () => runningStatus),
+        stopRuntime: vi.fn(async () => runningStatus),
+        runtimeStatus: vi.fn(async () => {
+          controller.abort();
+          return runningStatus;
+        }),
+      },
     };
-    const r = await assembleChannelAdapters();
-    expect(r.allowFrom).toEqual({ feishu: [] });
+    const log = vi.fn();
+    const warn = vi.fn();
+
+    await followChannelRuntime({
+      client,
+      signal: controller.signal,
+      intervalMs: 1,
+      log,
+      warn,
+    });
+
+    expect(client.channels.startRuntime).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("feishu: running"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ou_x"));
+    expect(client.channels.stopRuntime).toHaveBeenCalledOnce();
+  });
+
+  it("does not replay denials below the high-water mark", async () => {
+    const controller = new AbortController();
+    const calls = { count: 0 };
+    const client = {
+      channels: {
+        startRuntime: vi.fn(async () => runningStatus),
+        stopRuntime: vi.fn(async () => runningStatus),
+        runtimeStatus: vi.fn(async () => {
+          calls.count += 1;
+          if (calls.count >= 2) controller.abort();
+          return runningStatus;
+        }),
+      },
+    };
+    const warn = vi.fn();
+
+    await followChannelRuntime({
+      client,
+      signal: controller.signal,
+      intervalMs: 1,
+      log: vi.fn(),
+      warn,
+    });
+
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("channels status", () => {
-  it("uses protocol health and channel status resources", async () => {
-    configured.feishu = { ...baseFeishu, allowFrom: {} };
-    channelMocks.readDaemonRegistry.mockReturnValueOnce({ url: "http://127.0.0.1:4000", token: "token" });
-    channelMocks.health.mockResolvedValueOnce({ ok: true });
-    channelMocks.getStatus.mockResolvedValueOnce({ conversations: [], deliveries: [] });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mocks.readDaemonRegistry.mockReset();
+    mocks.health.mockReset();
+    mocks.getFeishu.mockReset();
+    mocks.runtimeStatus.mockReset();
+    mocks.getStatus.mockReset();
+  });
+
+  it("reports unconfigured when the daemon is not running", async () => {
+    mocks.readDaemonRegistry.mockReturnValueOnce(undefined);
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    try {
-      await createChannelsCommand().parseAsync(["status"], { from: "user" });
-      expect(channelMocks.health).toHaveBeenCalledOnce();
-      expect(channelMocks.getStatus).toHaveBeenCalledWith({ connector: "feishu", limit: 10 });
-      expect(log).toHaveBeenCalledWith(expect.stringContaining("daemon: ready"));
-    } finally {
-      log.mockRestore();
-    }
+    await createChannelsCommand().parseAsync(["status"], { from: "user" });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("daemon: not running"));
+  });
+
+  it("reads config and runtime state from the daemon", async () => {
+    mocks.readDaemonRegistry.mockReturnValueOnce({
+      url: "http://127.0.0.1:4000",
+      token: "token",
+    });
+    mocks.health.mockResolvedValueOnce({ ok: true });
+    mocks.getFeishu.mockResolvedValueOnce({
+      configured: true,
+      enabled: true,
+      appId: "cli_x",
+      allowFrom: [{ name: "me", id: "ou_1" }],
+    });
+    mocks.runtimeStatus.mockResolvedValueOnce(runningStatus);
+    mocks.getStatus.mockResolvedValueOnce({ conversations: [], deliveries: [] });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await createChannelsCommand().parseAsync(["status"], { from: "user" });
+
+    expect(mocks.health).toHaveBeenCalledOnce();
+    expect(mocks.getStatus).toHaveBeenCalledWith({ connector: "feishu", limit: 10 });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("runtime: running"));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("daemon: ready"));
   });
 });

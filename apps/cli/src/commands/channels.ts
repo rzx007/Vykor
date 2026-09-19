@@ -1,167 +1,179 @@
 import { Command } from "commander";
-import type { Settings } from "@openharness/core";
-import type { ChannelAdapter } from "@openharness/channels";
-import { ChannelConfigStore } from "@openharness/auth";
+
+import type { ChannelRuntimeStatus } from "@openharness/client";
 import { runChannelsAddFeishu, runChannelsAllow } from "./channels-onboarding.js";
 
 /**
- * `ohs channels` 子命令（D.2，TS 自有接线——Python 的 manager/bridge
- * 是库，消费方 ohmo 不移植，TS 按 swarm 既例直接接进 CLI）。
- *
- * serve：长驻进程。ChannelConfigStore 组装 adapters → MessageBus +
- * ChannelManager + ChannelBridge 跑通「通道消息 → 引擎 → 回复」，
- * SIGINT/SIGTERM 优雅退出。
+ * `ohs channels` 子命令（D.2）。渠道长连接与配置都归 daemon 所有，
+ * CLI 只是客户端：serve/status 读 daemon，add/allow 委托 daemon 写配置。
  */
 
-export interface AssembledChannels {
-  adapters: ChannelAdapter[];
-  /** 按通道名的 ACL 白名单（交给 manager 集中过滤，fail-closed）。 */
-  allowFrom: Record<string, string[]>;
-  accountIds: Record<string, string>;
-  /** 按通道名的出站策略（_progress/_tool_hint 转发开关）。 */
-  policies: Record<string, { sendProgress?: boolean; sendToolHints?: boolean }>;
-  warnings: string[];
+/** serve 跟随所需的最小客户端面（便于测试注入）。 */
+export interface ChannelsRuntimeClientLike {
+  channels: {
+    startRuntime(input?: { connector?: string }): Promise<ChannelRuntimeStatus>;
+    stopRuntime(input?: { connector?: string }): Promise<ChannelRuntimeStatus>;
+    runtimeStatus(): Promise<ChannelRuntimeStatus>;
+  };
 }
 
-/** 从统一渠道配置 store 组装启用的 adapter 实例（纯组装，不连接）。 */
-export async function assembleChannelAdapters(
-  store: ChannelConfigStore = new ChannelConfigStore(),
-): Promise<AssembledChannels> {
-  const adapters: ChannelAdapter[] = [];
-  const allowFrom: Record<string, string[]> = {};
-  const accountIds: Record<string, string> = {};
-  const policies: Record<string, { sendProgress?: boolean; sendToolHints?: boolean }> = {};
-  const warnings: string[] = [];
+export interface RuntimeFollowerOptions {
+  client: ChannelsRuntimeClientLike;
+  signal: AbortSignal;
+  intervalMs?: number;
+  log(message: string): void;
+  warn(message: string): void;
+}
 
-  const feishu = await store.getFeishu();
-  if (feishu?.enabled) {
-    if (!feishu.appId || !feishu.appSecret) {
-      warnings.push("feishu 已启用但缺凭据，请先运行 ohs channels add feishu。");
-    } else {
-      const { FeishuAdapter } = await import("@openharness/channels");
-      adapters.push(
-        new FeishuAdapter({
-          appId: feishu.appId,
-          appSecret: feishu.appSecret,
-          domain: feishu.domain,
-          replyAtBotNames: feishu.replyAtBotNames,
-          // ACL 不传给 adapter——集中在 ChannelManager（fail-closed）。
-        }),
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function connectorLabel(status: ChannelRuntimeStatus): string {
+  return status.connectors
+    .map((connector) => {
+      const suffix = connector.lastError ? ` (${connector.lastError})` : "";
+      return `${connector.connector}: ${connector.state}${suffix}`;
+    })
+    .join(", ");
+}
+
+/** 启动 daemon 渠道运行时并跟随状态/拒绝，直到 signal 中止后停止。 */
+export async function followChannelRuntime(
+  options: RuntimeFollowerOptions,
+): Promise<void> {
+  const intervalMs = options.intervalMs ?? 1000;
+  const { client, signal } = options;
+  await client.channels.startRuntime();
+  options.log("[channels] 渠道由 daemon 托管，Ctrl+C 退出。");
+
+  let bootId: string | undefined;
+  let highWater = -1;
+  const lastStates = new Map<string, string>();
+
+  try {
+    while (!signal.aborted) {
+      const status = await client.channels.runtimeStatus();
+      if (status.bootId !== bootId) {
+        bootId = status.bootId;
+        highWater = -1;
+        lastStates.clear();
+      }
+      for (const connector of status.connectors) {
+        if (lastStates.get(connector.connector) === connector.state) continue;
+        lastStates.set(connector.connector, connector.state);
+        options.log(`[channels] ${connectorLabel({ ...status, connectors: [connector] })}`);
+      }
+      const fresh = status.recentDenials.filter((denial) => denial.seq > highWater);
+      if (fresh.length > 0) {
+        highWater = Math.max(highWater, ...fresh.map((denial) => denial.seq));
+        for (const denial of fresh) {
+          options.warn(
+            `[channels] 拒绝来自 ${denial.sender} 的消息（${denial.chatId}）：ohs channels allow ${denial.sender}`,
+          );
+        }
+      }
+      await delay(intervalMs, signal);
+    }
+  } finally {
+    try {
+      await client.channels.stopRuntime();
+      options.log("[channels] 已停止（临时）；重启 daemon 后 enabled 渠道会自动恢复。");
+    } catch (error) {
+      options.warn(
+        `[channels] 停止渠道失败：${error instanceof Error ? error.message : String(error)}`,
       );
-      allowFrom["feishu"] = Object.values(feishu.allowFrom ?? {});
-      accountIds["feishu"] = feishu.appId;
-      policies["feishu"] = {
-        ...(feishu.sendProgress !== undefined ? { sendProgress: feishu.sendProgress } : {}),
-        ...(feishu.sendToolHints !== undefined ? { sendToolHints: feishu.sendToolHints } : {}),
-      };
     }
   }
-
-  return { adapters, allowFrom, accountIds, policies, warnings };
 }
 
-async function runChannelsServe(): Promise<void> {
-  const { loadSettings } = await import("@openharness/core");
-  const settings: Settings = await loadSettings({});
-
-  const store = new ChannelConfigStore();
-  const { adapters, allowFrom, accountIds, policies, warnings } =
-    await assembleChannelAdapters(store);
-  for (const w of warnings) console.warn(`[channels] ${w}`);
-  if (adapters.length === 0) {
-    console.error(
-      "[channels] 没有启用任何通道。运行 ohs channels add feishu 完成配置后重试。",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  if (!settings.model) throw new Error("channels serve requires a configured model");
+async function createDefaultRuntimeClient(): Promise<ChannelsRuntimeClientLike> {
   const { ensureLocalDaemon } = await import("../ensure-daemon.js");
   const daemon = await ensureLocalDaemon();
   const { OpenHarnessClient } = await import("@openharness/client");
-  const client = new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+  return new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+}
 
-  const { MessageBus, ChannelManager, DurableChannelBridge } = await import("@openharness/channels");
-  const bus = new MessageBus();
-  const manager = new ChannelManager(adapters, bus, {
-    allowFrom,
-    accountIds,
-    channelPolicies: policies,
-    onWarning: (w) => console.warn(`[channels] ${w}`),
-    onDenied: ({ sender }) => {
-      console.warn(
-        `[channels] 如需放行 ${sender}：ohs channels allow ${sender}（改完重启 channels serve）`,
-      );
-    },
-    onDeliveryResult: async ({ deliveryId, status, error }) => {
-      await client.channels.recordDelivery(deliveryId, { status, error });
-    },
-  });
-  const bridge = new DurableChannelBridge({
-    application: {
-      handleChannelMessage: (input, opts) => client.channels.handleMessage(input, opts),
-      listPendingChannelDeliveries: (opts) => client.channels.listPendingDeliveries(opts),
-      recordChannelDelivery: (id, input) => client.channels.recordDelivery(id, input),
-    },
-    bus,
-    cwd: process.cwd(),
-    model: settings.model,
-    connectors: adapters.map((adapter) => adapter.name),
-    onWarning: (w) => console.warn(`[channels] ${w}`),
-  });
-
-  let removeSignalHandlers = () => {};
+async function runChannelsServe(): Promise<void> {
+  const client = await createDefaultRuntimeClient();
+  const controller = new AbortController();
+  let stopping = false;
+  const shutdown = () => {
+    if (stopping) {
+      console.error("\n[channels] 强制退出。");
+      process.exit(130);
+    }
+    stopping = true;
+    console.log("\n[channels] 正在停止…(再按一次 Ctrl+C 强制退出)");
+    controller.abort();
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
   try {
-    bridge.start();
-    await manager.startAll();
-
-    const status = manager.getStatus();
-    for (const [name, s] of Object.entries(status)) {
-      console.log(
-        `[channels] ${name}: ${s.running ? "running" : `failed${s.lastError ? ` (${s.lastError})` : ""}`}`,
-      );
-    }
-    if (Object.values(status).every((s) => !s.running)) {
-      console.error("[channels] 所有通道启动失败，退出。");
-      process.exitCode = 1;
-      return;
-    }
-    console.log(`[channels] 已连接 daemon ${daemon.url}，桥接已就绪，Ctrl+C 退出。`);
-
-    await new Promise<void>((resolve) => {
-      let stopping = false;
-      const shutdown = () => {
-        if (stopping) {
-          console.error("\n[channels] 强制退出。");
-          process.exit(130);
-        }
-        stopping = true;
-        console.log("\n[channels] 正在停止…(再按一次 Ctrl+C 强制退出)");
-        resolve();
-      };
-      removeSignalHandlers = () => {
-        process.off("SIGINT", shutdown);
-        process.off("SIGTERM", shutdown);
-      };
-      process.on("SIGINT", shutdown);
-      process.on("SIGTERM", shutdown);
+    await followChannelRuntime({
+      client,
+      signal: controller.signal,
+      log: (message) => console.log(message),
+      warn: (message) => console.warn(message),
     });
   } finally {
-    const failures: unknown[] = [];
-    for (const cleanup of [
-      () => bridge.stop(),
-      () => manager.stopAll(),
-    ]) {
-      try {
-        await cleanup();
-      } catch (error) {
-        failures.push(error);
-      }
+    process.off("SIGINT", shutdown);
+    process.off("SIGTERM", shutdown);
+  }
+}
+
+async function runChannelsStatus(): Promise<void> {
+  const { readDaemonRegistry } = await import("@openharness/server");
+  const daemon = readDaemonRegistry();
+  if (!daemon) {
+    console.log("daemon: not running；无法读取渠道配置");
+    return;
+  }
+  const { OpenHarnessClient } = await import("@openharness/client");
+  const client = new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+  try {
+    await client.protocol.health();
+    const feishu = await client.channels.getFeishu();
+    const runtime = await client.channels.runtimeStatus();
+    const connector = runtime.connectors.find((item) => item.connector === "feishu");
+    const acl =
+      feishu.allowFrom.length === 0
+        ? "allowFrom empty — ALL DENIED"
+        : `allowFrom: ${feishu.allowFrom.map((entry) => `${entry.name}(${entry.id})`).join(", ")}`;
+    console.log(
+      `feishu: ${feishu.configured ? (feishu.enabled ? "enabled" : "disabled") : "not configured"} (${acl})`,
+    );
+    console.log(
+      `runtime: ${connector?.state ?? "unknown"}${connector?.lastError ? ` (${connector.lastError})` : ""}`,
+    );
+    if (feishu.botName) console.log(`bot: ${feishu.botName}`);
+    const status = await client.channels.getStatus({ connector: "feishu", limit: 10 });
+    console.log(
+      `daemon: ready (${daemon.url}); conversations: ${status.conversations.length}; recent deliveries: ${status.deliveries.length}`,
+    );
+    for (const delivery of status.deliveries.slice(0, 5)) {
+      console.log(
+        `delivery ${delivery.id}: ${delivery.status}, chat=${delivery.chatId}, run=${delivery.runId}`,
+      );
     }
-    removeSignalHandlers();
-    if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) throw new AggregateError(failures, "Channel shutdown failed");
+  } catch (error) {
+    console.log(
+      `daemon: unavailable (${error instanceof Error ? error.message : String(error)})`,
+    );
   }
 }
 
@@ -170,7 +182,7 @@ export function createChannelsCommand(): Command {
 
   cmd
     .command("serve")
-    .description("Start enabled channels and bridge them to the agent (long-running)")
+    .description("Start enabled channels in the daemon and follow their status (long-running)")
     .action(async () => {
       await runChannelsServe();
     });
@@ -203,45 +215,7 @@ export function createChannelsCommand(): Command {
     .command("status")
     .description("Show configured channels")
     .action(async () => {
-      const store = new ChannelConfigStore();
-      const feishu = await store.getFeishu();
-      if (!feishu) {
-        console.log("channels: (none configured)");
-        return;
-      }
-      const entries = Object.entries(feishu.allowFrom ?? {});
-      const acl =
-        entries.length === 0
-          ? "allowFrom empty — ALL DENIED"
-          : `allowFrom: ${entries.map(([n, id]) => `${n}(${id})`).join(", ")}`;
-      console.log(`feishu: ${feishu.enabled ? "enabled" : "disabled"} (${acl})`);
-      const { readDaemonRegistry } = await import("@openharness/server");
-      const daemon = readDaemonRegistry();
-      if (!daemon) {
-        console.log("daemon: not running; conversation mappings unavailable");
-        return;
-      }
-      try {
-        const { OpenHarnessClient } = await import("@openharness/client");
-        const client = new OpenHarnessClient({
-          baseUrl: daemon.url,
-          token: daemon.token,
-        });
-        await client.protocol.health();
-        const status = await client.channels.getStatus({ connector: "feishu", limit: 10 });
-        console.log(
-          `daemon: ready (${daemon.url}); conversations: ${status.conversations.length}; recent deliveries: ${status.deliveries.length}`,
-        );
-        for (const delivery of status.deliveries.slice(0, 5)) {
-          console.log(
-            `delivery ${delivery.id}: ${delivery.status}, chat=${delivery.chatId}, run=${delivery.runId}`,
-          );
-        }
-      } catch (error) {
-        console.log(
-          `daemon: unavailable (${error instanceof Error ? error.message : String(error)})`,
-        );
-      }
+      await runChannelsStatus();
     });
 
   return cmd;
