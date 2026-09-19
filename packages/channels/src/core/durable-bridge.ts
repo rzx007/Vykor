@@ -35,7 +35,7 @@ export class DurableChannelBridge {
     private readonly deps: {
       application: DurableChannelPort;
       bus: MessageBus;
-      cwd: string;
+      cwd: string | ((message: InboundMessage) => string | Promise<string>);
       model: string;
       connectors?: string[];
       onWarning?: (message: string) => void;
@@ -48,12 +48,33 @@ export class DurableChannelBridge {
     this.done = this.run(this.abort.signal);
   }
 
-  /** 停止收新消息，但让已经交给 durable application 的消息处理完。 */
-  async stop(): Promise<void> {
+  /**
+   * 停止收新消息，但让已经交给 durable application 的消息处理完。
+   * 传 `drainTimeoutMs` 时有界等待：超时即返回，不阻塞停机；未完成的 handle
+   * 仍在后台收尾，其 durable delivery 留待下次启动恢复。
+   */
+  async stop(options: { drainTimeoutMs?: number } = {}): Promise<void> {
+    const done = this.done;
     this.abort?.abort();
-    await this.done?.catch(() => {});
     this.abort = null;
     this.done = null;
+    if (!done) return;
+    const settled = done.catch(() => {});
+    if (options.drainTimeoutMs === undefined) {
+      await settled;
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        settled,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, options.drainTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private async run(signal: AbortSignal): Promise<void> {
@@ -78,6 +99,8 @@ export class DurableChannelBridge {
   }
 
   private async handle(message: InboundMessage): Promise<void> {
+    const cwd =
+      typeof this.deps.cwd === "function" ? await this.deps.cwd(message) : this.deps.cwd;
     const metadata = {
       ...message.metadata,
       ...(message.attachments ? { attachments: message.attachments } : {}),
@@ -91,7 +114,7 @@ export class DurableChannelBridge {
       externalMessageId: message.externalMessageId,
       senderId: message.senderId,
       content: message.content,
-      cwd: this.deps.cwd,
+      cwd,
       model: this.deps.model,
       platformMeta: message.platformMeta,
       metadata,

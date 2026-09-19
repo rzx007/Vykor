@@ -575,4 +575,33 @@ describe("ChannelManager", () => {
     });
     await mgr.stopAll();
   });
+
+  it("stopInbound disconnects adapters but keeps dispatching queued outbound", async () => {
+    const bus = new MessageBus();
+    const sent: string[] = [];
+    let disconnectCalls = 0;
+    const adapter: ChannelAdapter = {
+      name: "t",
+      async connect() {},
+      async disconnect() {
+        disconnectCalls += 1;
+      },
+      async send(message) {
+        sent.push(message.content);
+      },
+      onMessage() {},
+    };
+    const mgr = new ChannelManager([adapter], bus, { allowFrom: { t: ["*"] } });
+    await mgr.startAll();
+
+    bus.publishOutbound({ channel: "t", chatId: "c", content: "before" });
+    await tick();
+    await mgr.stopInbound();
+    bus.publishOutbound({ channel: "t", chatId: "c", content: "after" });
+    await tick();
+
+    expect(disconnectCalls).toBe(1);
+    expect(sent).toEqual(["before", "after"]);
+    await mgr.stopAll();
+  });
 });

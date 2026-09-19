@@ -329,3 +329,61 @@ describe("DurableChannelBridge", () => {
     await bridge.stop();
   });
 });
+
+describe("DurableChannelBridge cwd resolver and bounded stop", () => {
+  function inbound() {
+    return {
+      channel: "feishu",
+      accountId: "app-1",
+      externalMessageId: "message-1",
+      senderId: "user-1",
+      chatId: "chat-1",
+      content: "question",
+      timestamp: new Date(0),
+      media: [],
+      metadata: {},
+    };
+  }
+
+  it("resolves cwd per message, including async resolvers", async () => {
+    const bus = new MessageBus();
+    const application = port();
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: async (message) => `D:/channels/${message.chatId}`,
+      model: "model-1",
+    });
+    bridge.start();
+    bus.publishInbound(inbound());
+
+    await vi.waitFor(() => {
+      expect(application.handleChannelMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: "D:/channels/chat-1" }),
+      );
+    });
+    await bridge.stop();
+  });
+
+  it("stop returns within the drain bound when a handler never settles", async () => {
+    const bus = new MessageBus();
+    const application = port({
+      handleChannelMessage: vi.fn(() => new Promise<never>(() => {})),
+    });
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+    });
+    bridge.start();
+    bus.publishInbound(inbound());
+
+    await vi.waitFor(() => {
+      expect(application.handleChannelMessage).toHaveBeenCalledOnce();
+    });
+    const startedAt = Date.now();
+    await bridge.stop({ drainTimeoutMs: 20 });
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+  });
+});

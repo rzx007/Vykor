@@ -91,12 +91,8 @@ export class ChannelManager {
     }
   }
 
-  async stopAll(): Promise<void> {
-    this.dispatchAbort?.abort();
-    await this.dispatchDone?.catch(() => {});
-    this.dispatchAbort = null;
-    this.dispatchDone = null;
-
+  /** 只断开入站（适配器），保留出站分发循环，让已入队的回复还能发出。 */
+  async stopInbound(): Promise<void> {
     for (const [name, adapter] of this.adapters) {
       try {
         await adapter.disconnect();
@@ -105,6 +101,15 @@ export class ChannelManager {
       }
       this.status.set(name, { ...this.status.get(name)!, running: false });
     }
+  }
+
+  async stopAll(): Promise<void> {
+    this.dispatchAbort?.abort();
+    await this.dispatchDone?.catch(() => {});
+    this.dispatchAbort = null;
+    this.dispatchDone = null;
+
+    await this.stopInbound();
   }
 
   getStatus(): Record<string, ChannelStatus> {
