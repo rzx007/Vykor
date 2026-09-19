@@ -107,7 +107,8 @@ export function parseFeishuConnectInput(value: unknown): FeishuConnectInput {
   const domain = optionalDomain(row);
   return {
     appId: required(row, "appId"),
-    appSecret: required(row, "appSecret"),
+    // 密钥不做 trim：前后空白可能是有意义的字符。
+    appSecret: requiredRaw(row, "appSecret"),
     ...(domain ? { domain } : {}),
   };
 }
@@ -170,6 +171,15 @@ function record(value: unknown, field = "request body"): Record<string, unknown>
 function required(row: Record<string, unknown>, field: string): string {
   const value = optional(row, field);
   if (!value) throw new Error(`${field} is required`);
+  return value;
+}
+
+/** 与 required 相同，但不 trim（用于密钥这类对空白敏感的字段）。 */
+function requiredRaw(row: Record<string, unknown>, field: string): string {
+  const value = row[field];
+  if (value === undefined || value === null) throw new Error(`${field} is required`);
+  if (typeof value !== "string") throw new Error(`${field} must be a string`);
+  if (value.length === 0) throw new Error(`${field} is required`);
   return value;
 }
 

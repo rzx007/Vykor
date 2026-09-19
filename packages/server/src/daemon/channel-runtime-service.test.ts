@@ -127,13 +127,61 @@ describe("ChannelRuntimeService", () => {
     expect(service.status().connectors[0]).toMatchObject({ state: "stopped", enabled: false });
   });
 
-  it("marks an error when the model is missing", async () => {
+  it("records an error (without throwing) when the model is missing", async () => {
     const { service } = makeService({ getSettings: () => ({}) as Settings });
-    await expect(service.start("feishu")).rejects.toThrow(/未配置模型/);
+    await service.start("feishu");
     expect(service.status().connectors[0]).toMatchObject({
       state: "error",
       lastError: expect.stringMatching(/模型/),
     });
+  });
+
+  it("never rejects startEnabled even when the config store throws", async () => {
+    const { service } = makeService({
+      config: {
+        getFeishu: async () => {
+          throw new Error("corrupt config");
+        },
+      },
+    });
+    await expect(service.startEnabled()).resolves.toBeUndefined();
+    expect(service.status().connectors[0]).toMatchObject({
+      state: "error",
+      lastError: expect.stringMatching(/corrupt config/),
+    });
+  });
+
+  it("does not connect when shutdown races an in-flight start", async () => {
+    let release!: () => void;
+    const { service, created } = makeService({
+      createRuntime: async (input) => {
+        const { handle, calls } = fakeHandle({
+          start: () => new Promise<void>((resolve) => (release = resolve)),
+        });
+        created.push({ handle, calls, input });
+        return handle;
+      },
+    });
+    const starting = service.start("feishu");
+    await vi.waitFor(() => {
+      expect(typeof release).toBe("function");
+    });
+    const stopping = service.shutdown();
+    release();
+    await starting;
+    await stopping;
+    expect(service.status().connectors[0]?.state).toBe("stopped");
+    expect(created[0]!.calls.stop).toBe(1);
+  });
+
+  it("converges to stopped when stop follows a queued start", async () => {
+    const { service, created } = makeService();
+    const starting = service.start();
+    const stopping = service.stop();
+    await Promise.all([starting, stopping]);
+    expect(created).toHaveLength(1);
+    expect(created[0]!.calls.stop).toBe(1);
+    expect(service.status().connectors[0]?.state).toBe("stopped");
   });
 
   it("rejects start when no connector is configured", async () => {

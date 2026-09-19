@@ -43,6 +43,7 @@ export class ChannelManager {
   private readonly status = new Map<string, ChannelStatus>();
   private dispatchAbort: AbortController | null = null;
   private dispatchDone: Promise<void> | null = null;
+  private acceptingInbound = true;
   private outboundSeq = 0;
 
   constructor(
@@ -73,6 +74,7 @@ export class ChannelManager {
       }
     }
 
+    this.acceptingInbound = true;
     this.dispatchAbort = new AbortController();
     this.dispatchDone = this.dispatchOutbound(this.dispatchAbort.signal);
 
@@ -91,14 +93,14 @@ export class ChannelManager {
     }
   }
 
-  /** 只断开入站（适配器），保留出站分发循环，让已入队的回复还能发出。 */
+  /**
+   * 停止接收入站：只丢弃后续平台事件，**不关闭传输**。
+   * 这样出站分发循环仍能把在途 Run 产生的回复发出去（排空），
+   * 真正的断开发生在 stopAll()。
+   */
   async stopInbound(): Promise<void> {
-    for (const [name, adapter] of this.adapters) {
-      try {
-        await adapter.disconnect();
-      } catch {
-        // 停止失败只影响该通道
-      }
+    this.acceptingInbound = false;
+    for (const name of this.adapters.keys()) {
       this.status.set(name, { ...this.status.get(name)!, running: false });
     }
   }
@@ -109,7 +111,15 @@ export class ChannelManager {
     this.dispatchAbort = null;
     this.dispatchDone = null;
 
-    await this.stopInbound();
+    this.acceptingInbound = false;
+    for (const [name, adapter] of this.adapters) {
+      try {
+        await adapter.disconnect();
+      } catch {
+        // 停止失败只影响该通道
+      }
+      this.status.set(name, { ...this.status.get(name)!, running: false });
+    }
   }
 
   getStatus(): Record<string, ChannelStatus> {
@@ -121,6 +131,7 @@ export class ChannelManager {
   }
 
   private handleInbound(channelName: string, msg: ChannelMessage): void {
+    if (!this.acceptingInbound) return;
     const allowList = this.opts.allowFrom[channelName];
     if (!isAllowed({ sender: msg.sender, ...(msg.chatId ? { chatId: msg.chatId } : {}) }, allowList)) {
       this.opts.onWarning?.(

@@ -103,6 +103,19 @@ describe("channel control routes", () => {
     expect(response.status).toBe(409);
   });
 
+  it("maps an unknown connector on start to 409", async () => {
+    const runtime = fakeRuntime({
+      start: vi.fn(async () => {
+        throw new ChannelRuntimeError("unknown_connector", "未知通道: x");
+      }),
+    });
+    const response = await app({ runtime }).request(
+      "/runtime/start",
+      json({ connector: "x" }),
+    );
+    expect(response.status).toBe(409);
+  });
+
   it("rejects an empty patch body", async () => {
     const response = await app({
       runtime: fakeRuntime(),

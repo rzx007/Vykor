@@ -195,7 +195,7 @@ describe("ChannelOnboardingService", () => {
 
   it("keeps registration succeeded when the runtime callback fails", async () => {
     const store = await seededStore();
-    const setSpy = vi.spyOn(store, "setFeishu");
+    const writeSpy = vi.spyOn(store, "updateFeishu");
     const { service, fake } = makeService({
       store,
       onConfigChanged: () => {
@@ -209,7 +209,7 @@ describe("ChannelOnboardingService", () => {
       userId: "ou_scanner",
       domain: "feishu",
     });
-    expect(setSpy).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(service.registrationStatus().state).toBe("succeeded");
     expect(await store.getFeishu()).toBeDefined();
   });
@@ -251,6 +251,31 @@ describe("ChannelOnboardingService", () => {
       botName: "Harness Bot",
       allowFrom: [{ name: "me", id: "ou_me" }],
     });
+  });
+
+  it("rejects unsafe allowlist names", async () => {
+    const store = await seededStore(feishu());
+    const { service } = makeService({ store });
+    await expect(service.allowAdd({ id: "ou_x", name: "__proto__" })).rejects.toMatchObject({
+      code: "invalid_input",
+    });
+  });
+
+  it("creates a single registration instance for concurrent starts", async () => {
+    const fake = fakeRegistration();
+    let factoryCalls = 0;
+    const service = new ChannelOnboardingService({
+      config: makeStore(),
+      onConfigChanged: () => {},
+      createRegistration: (onCredentials) => {
+        factoryCalls += 1;
+        fake.setOnCredentials(onCredentials);
+        return fake.registration;
+      },
+    });
+    await Promise.all([service.startRegistration(), service.startRegistration()]);
+    expect(factoryCalls).toBe(1);
+    expect(service.registrationStatus().attempt).toBe(2);
   });
 
   it("removes the channel and reports unconfigured", async () => {

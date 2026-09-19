@@ -576,10 +576,11 @@ describe("ChannelManager", () => {
     await mgr.stopAll();
   });
 
-  it("stopInbound disconnects adapters but keeps dispatching queued outbound", async () => {
+  it("stopInbound drops new inbound but keeps the transport for outbound drain", async () => {
     const bus = new MessageBus();
     const sent: string[] = [];
     let disconnectCalls = 0;
+    let handler: ((message: ChannelMessage) => void) | undefined;
     const adapter: ChannelAdapter = {
       name: "t",
       async connect() {},
@@ -589,7 +590,9 @@ describe("ChannelManager", () => {
       async send(message) {
         sent.push(message.content);
       },
-      onMessage() {},
+      onMessage(next) {
+        handler = next;
+      },
     };
     const mgr = new ChannelManager([adapter], bus, { allowFrom: { t: ["*"] } });
     await mgr.startAll();
@@ -597,11 +600,23 @@ describe("ChannelManager", () => {
     bus.publishOutbound({ channel: "t", chatId: "c", content: "before" });
     await tick();
     await mgr.stopInbound();
+    handler?.({
+      id: "m2",
+      channel: "t",
+      sender: "u1",
+      content: "late",
+      timestamp: new Date(0),
+      chatId: "c",
+    });
+    await tick();
+    expect(bus.inboundSize).toBe(0);
+
     bus.publishOutbound({ channel: "t", chatId: "c", content: "after" });
     await tick();
-
-    expect(disconnectCalls).toBe(1);
     expect(sent).toEqual(["before", "after"]);
+    expect(disconnectCalls).toBe(0);
+
     await mgr.stopAll();
+    expect(disconnectCalls).toBe(1);
   });
 });

@@ -68,6 +68,8 @@ export interface ChannelRuntimeServiceOptions {
   }): Promise<{ name?: string }>;
   workspaceRoot?: string;
   drainTimeoutMs?: number;
+  /** shutdown 等待 lane 的硬上限；超时后不再等，避免 daemon 关不掉。 */
+  shutdownTimeoutMs?: number;
   logger?(event: ObservabilityEvent): void;
   now?(): number;
 }
@@ -91,7 +93,6 @@ interface ConnectorEntry {
   acl: { allowFrom: string[] };
   policy: { sendProgress?: boolean; sendToolHints?: boolean };
   status: ChannelConnectorRuntimeStatus;
-  generation: number;
   lane: Promise<void>;
   handle: ConnectorRuntimeHandle | null;
 }
@@ -112,6 +113,7 @@ export class ChannelRuntimeService {
   private readonly bootId = randomUUID();
   private readonly workspaceRoot: string;
   private readonly drainTimeoutMs: number;
+  private readonly shutdownTimeoutMs: number;
   private readonly now: () => number;
   private denialSeq = 0;
   private closed = false;
@@ -119,6 +121,7 @@ export class ChannelRuntimeService {
   constructor(private readonly options: ChannelRuntimeServiceOptions) {
     this.workspaceRoot = options.workspaceRoot ?? getChannelWorkspaceRoot();
     this.drainTimeoutMs = options.drainTimeoutMs ?? 5000;
+    this.shutdownTimeoutMs = options.shutdownTimeoutMs ?? 15000;
     this.now = options.now ?? Date.now;
     this.ensureEntry(CONNECTOR, undefined);
   }
@@ -142,33 +145,30 @@ export class ChannelRuntimeService {
     };
   }
 
-  /** daemon ready 后后台调用；逐 connector 捕获错误，绝不 reject。 */
+  /** daemon ready 后后台调用；任何错误都只落 status，绝不 reject。 */
   async startEnabled(): Promise<void> {
     if (this.closed) return;
-    const entry = this.ensureEntry(CONNECTOR, undefined);
-    const config = await this.readConfig(entry);
-    if (!config?.enabled) return;
-    await this.start(CONNECTOR).catch((error) => {
+    try {
+      await this.start();
+    } catch (error) {
       this.options.logger?.({
         level: "warn",
         event: "channel.runtime.start_failed",
         error: messageOf(error),
       });
-    });
+    }
   }
 
   async start(connector?: string): Promise<void> {
     this.assertOpen();
     if (connector) {
-      await this.enqueue(connector, () => this.startInternal(connector));
+      await this.enqueue(connector, () => this.startInternal(connector, true));
       return;
     }
-    for (const name of [...this.entries.keys()]) {
-      const entry = this.entries.get(name)!;
-      const config = await this.readConfig(entry);
-      if (!config?.enabled) continue;
-      await this.enqueue(name, () => this.startInternal(name));
-    }
+    // 先同步入 lane，再等待；否则 stop/shutdown 可能插到 start 前面。
+    const names = [...this.entries.keys()];
+    const runs = names.map((name) => this.enqueue(name, () => this.startInternal(name, false)));
+    await Promise.all(runs);
   }
 
   async stop(connector?: string): Promise<void> {
@@ -194,9 +194,11 @@ export class ChannelRuntimeService {
     const entry = this.ensureEntry(CONNECTOR, config);
     const fingerprint = connectionFingerprint(config);
     const changed = fingerprint !== entry.fingerprint;
+    const previous = entry.config;
     this.applyConfig(entry, config);
     entry.fingerprint = fingerprint;
     if (!changed) return;
+    if (previous) this.botNames.delete(botNameKey(previous));
     const task = config?.enabled
       ? () => this.restartInternal(CONNECTOR)
       : () => this.stopInternal(CONNECTOR);
@@ -213,7 +215,15 @@ export class ChannelRuntimeService {
     if (this.closed) return;
     this.closed = true;
     for (const name of [...this.entries.keys()]) {
-      await this.enqueue(name, () => this.stopInternal(name)).catch(() => undefined);
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, this.shutdownTimeoutMs);
+        this.enqueue(name, () => this.stopInternal(name))
+          .catch(() => undefined)
+          .finally(() => {
+            clearTimeout(timer);
+            resolve();
+          });
+      });
     }
   }
 
@@ -240,7 +250,6 @@ export class ChannelRuntimeService {
         ...(config?.appId ? { accountId: config.appId } : {}),
         ...(config?.domain ? { domain: config.domain } : {}),
       },
-      generation: 0,
       lane: Promise.resolve(),
       handle: null,
     };
@@ -322,50 +331,65 @@ export class ChannelRuntimeService {
     entry.status = next;
   }
 
-  private async startInternal(name: string): Promise<void> {
+  private async startInternal(name: string, strict: boolean): Promise<void> {
     const entry = this.mustEntry(name);
-    const config = await this.readConfig(entry);
+    if (this.closed) {
+      this.patchStatus(entry, { state: "stopped", startedAt: undefined });
+      return;
+    }
+    let config: FeishuChannelConfig | undefined;
+    try {
+      config = await this.readConfig(entry);
+    } catch (error) {
+      this.patchStatus(entry, { state: "error", lastError: messageOf(error) });
+      if (strict) throw error;
+      return;
+    }
+    if (this.closed) {
+      this.patchStatus(entry, { state: "stopped", startedAt: undefined });
+      return;
+    }
     if (!config) {
       this.patchStatus(entry, { state: "stopped" });
-      throw new ChannelRuntimeError("not_configured", `渠道未配置: ${name}`);
+      if (strict) throw new ChannelRuntimeError("not_configured", `渠道未配置: ${name}`);
+      return;
     }
     if (!config.enabled) {
       this.patchStatus(entry, { state: "stopped" });
-      throw new ChannelRuntimeError("not_enabled", `渠道未启用: ${name}`);
+      if (strict) throw new ChannelRuntimeError("not_enabled", `渠道未启用: ${name}`);
+      return;
     }
     if (entry.handle) return;
     entry.fingerprint = connectionFingerprint(config);
     const model = this.options.getSettings()?.model;
     if (!model) {
+      // 运行期问题只落 status，不抛：HTTP 返回 200 + state=error。
       this.patchStatus(entry, { state: "error", lastError: "未配置模型" });
-      throw new Error("未配置模型");
+      return;
     }
-    const generation = (entry.generation += 1);
     this.patchStatus(entry, { state: "starting", lastError: undefined, startedAt: undefined });
     let handle: ConnectorRuntimeHandle;
     try {
       handle = await this.createRuntime(entry, config, model);
     } catch (error) {
-      if (entry.generation === generation) {
-        this.patchStatus(entry, { state: "error", lastError: messageOf(error) });
-      }
-      throw error;
+      this.patchStatus(entry, { state: "error", lastError: messageOf(error) });
+      return;
     }
-    if (entry.generation !== generation) {
+    if (this.closed) {
       await handle.stop().catch(() => undefined);
+      this.patchStatus(entry, { state: "stopped", startedAt: undefined });
       return;
     }
     try {
       await handle.start();
     } catch (error) {
-      if (entry.generation === generation) {
-        this.patchStatus(entry, { state: "error", lastError: messageOf(error) });
-      }
+      this.patchStatus(entry, { state: "error", lastError: messageOf(error) });
       await handle.stop().catch(() => undefined);
-      throw error;
+      return;
     }
-    if (entry.generation !== generation) {
+    if (this.closed) {
       await handle.stop().catch(() => undefined);
+      this.patchStatus(entry, { state: "stopped", startedAt: undefined });
       return;
     }
     entry.handle = handle;
@@ -374,12 +398,11 @@ export class ChannelRuntimeService {
       startedAt: this.now(),
       lastError: undefined,
     });
-    void this.probeBotName(config);
+    void this.probeBotName(entry, config);
   }
 
   private async stopInternal(name: string): Promise<void> {
     const entry = this.mustEntry(name);
-    entry.generation += 1;
     const handle = entry.handle;
     entry.handle = null;
     if (!handle) {
@@ -395,7 +418,7 @@ export class ChannelRuntimeService {
 
   private async restartInternal(name: string): Promise<void> {
     await this.stopInternal(name);
-    await this.startInternal(name);
+    await this.startInternal(name, true);
   }
 
   private createRuntime(
@@ -548,7 +571,10 @@ export class ChannelRuntimeService {
     }
   }
 
-  private async probeBotName(config: FeishuChannelConfig): Promise<void> {
+  private async probeBotName(
+    entry: ConnectorEntry,
+    config: FeishuChannelConfig,
+  ): Promise<void> {
     const key = botNameKey(config);
     if (this.botNames.has(key)) return;
     const verify =
@@ -564,8 +590,9 @@ export class ChannelRuntimeService {
         domain: config.domain,
       });
       if (verified.name) this.botNames.set(key, verified.name);
-    } catch {
-      // botName 仅用于展示，取不到不影响运行。
+    } catch (error) {
+      // botName 仅用于展示，取不到不影响运行，但把原因记下来。
+      this.patchStatus(entry, { lastError: `机器人信息获取失败: ${messageOf(error)}` });
     }
   }
 }

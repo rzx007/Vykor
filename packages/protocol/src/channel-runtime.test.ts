@@ -47,6 +47,13 @@ describe("parseFeishuConnectInput", () => {
       parseFeishuConnectInput({ appId: "cli_x", appSecret: "sec", domain: "x" }),
     ).toThrow(/domain must be feishu or lark/);
   });
+
+  it("does not trim the secret", () => {
+    expect(parseFeishuConnectInput({ appId: " cli_x ", appSecret: " sec " })).toEqual({
+      appId: "cli_x",
+      appSecret: " sec ",
+    });
+  });
 });
 
 describe("parseFeishuAllowInput", () => {

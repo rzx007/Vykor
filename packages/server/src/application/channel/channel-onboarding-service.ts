@@ -46,10 +46,17 @@ export class ChannelOnboardingError extends Error {
 const CONNECTOR = "feishu";
 const MISSING_OPEN_ID_WARNING =
   "未获取到扫码者 open_id，白名单为空，所有消息都会被拒绝";
+const UNSAFE_ALLOW_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-/** daemon 侧唯一写 channel-credentials.json 的入口：接入、校验、白名单、启停。 */
+/**
+ * daemon 侧唯一写 channel-credentials.json 的入口：接入、校验、白名单、启停。
+ *
+ * 所有读-改-写都走 `ChannelConfigStore.updateFeishu`，在文件锁内完成，
+ * 避免并发请求互相覆盖。
+ */
 export class ChannelOnboardingService {
   private registration: RegistrationLike | undefined;
+  private registrationPromise: Promise<RegistrationLike> | null = null;
   private registrationWarning: string | undefined;
   private lastAttempt = 0;
   private lastDomain: "feishu" | "lark" = "feishu";
@@ -71,21 +78,25 @@ export class ChannelOnboardingService {
     } catch (error) {
       throw new ChannelOnboardingError("verify_failed", messageOf(error));
     }
-    const existing = await this.options.config.getFeishu();
-    const sameApp = existing?.appId === input.appId;
-    const next: FeishuChannelConfig = {
-      enabled: true,
-      appId: input.appId,
-      appSecret: input.appSecret,
-      domain,
-      allowFrom: sameApp ? { ...existing?.allowFrom } : {},
-      ...(existing?.replyAtBotNames ? { replyAtBotNames: existing.replyAtBotNames } : {}),
-      ...(existing?.sendProgress !== undefined ? { sendProgress: existing.sendProgress } : {}),
-      ...(existing?.sendToolHints !== undefined
-        ? { sendToolHints: existing.sendToolHints }
-        : {}),
-    };
-    await this.options.config.setFeishu(next);
+    const next = await this.options.config.updateFeishu((current) => {
+      const sameApp = current?.appId === input.appId;
+      return {
+        enabled: true,
+        appId: input.appId,
+        appSecret: input.appSecret,
+        domain,
+        allowFrom: sameApp ? { ...current?.allowFrom } : {},
+        ...(current?.replyAtBotNames
+          ? { replyAtBotNames: current.replyAtBotNames }
+          : {}),
+        ...(current?.sendProgress !== undefined
+          ? { sendProgress: current.sendProgress }
+          : {}),
+        ...(current?.sendToolHints !== undefined
+          ? { sendToolHints: current.sendToolHints }
+          : {}),
+      };
+    });
     await this.notifyConfigChanged();
     return this.toSnapshot(next);
   }
@@ -95,15 +106,15 @@ export class ChannelOnboardingService {
     sendProgress?: boolean;
     sendToolHints?: boolean;
   }): Promise<FeishuChannelSnapshot> {
-    const existing = await this.options.config.getFeishu();
-    if (!existing) throw new ChannelOnboardingError("not_configured", "渠道未配置");
-    const next: FeishuChannelConfig = {
-      ...existing,
-      ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-      ...(input.sendProgress !== undefined ? { sendProgress: input.sendProgress } : {}),
-      ...(input.sendToolHints !== undefined ? { sendToolHints: input.sendToolHints } : {}),
-    };
-    await this.options.config.setFeishu(next);
+    const next = await this.options.config.updateFeishu((current) => {
+      if (!current) throw new ChannelOnboardingError("not_configured", "渠道未配置");
+      return {
+        ...current,
+        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        ...(input.sendProgress !== undefined ? { sendProgress: input.sendProgress } : {}),
+        ...(input.sendToolHints !== undefined ? { sendToolHints: input.sendToolHints } : {}),
+      };
+    });
     await this.notifyConfigChanged();
     return this.toSnapshot(next);
   }
@@ -115,41 +126,32 @@ export class ChannelOnboardingService {
   }
 
   async allowAdd(input: { id: string; name?: string }): Promise<FeishuChannelSnapshot> {
-    const existing = await this.options.config.getFeishu();
-    if (!existing) throw new ChannelOnboardingError("not_configured", "渠道未配置");
-    const key = input.name?.trim() || input.id;
-    const next: FeishuChannelConfig = {
-      ...existing,
-      allowFrom: { ...existing.allowFrom, [key]: input.id },
-    };
-    await this.options.config.setFeishu(next);
+    const key = requireAllowKey(input.name?.trim() || input.id);
+    const next = await this.options.config.updateFeishu((current) => {
+      if (!current) throw new ChannelOnboardingError("not_configured", "渠道未配置");
+      return { ...current, allowFrom: { ...current.allowFrom, [key]: input.id } };
+    });
     await this.notifyConfigChanged();
     return this.toSnapshot(next);
   }
 
   async allowRemove(key: string): Promise<FeishuChannelSnapshot> {
-    const existing = await this.options.config.getFeishu();
-    if (!existing) throw new ChannelOnboardingError("not_configured", "渠道未配置");
-    const allowFrom = { ...existing.allowFrom };
-    delete allowFrom[key];
-    const next: FeishuChannelConfig = { ...existing, allowFrom };
-    await this.options.config.setFeishu(next);
+    const next = await this.options.config.updateFeishu((current) => {
+      if (!current) throw new ChannelOnboardingError("not_configured", "渠道未配置");
+      const allowFrom = { ...current.allowFrom };
+      delete allowFrom[key];
+      return { ...current, allowFrom };
+    });
     await this.notifyConfigChanged();
     return this.toSnapshot(next);
   }
 
-  async startRegistration(input: { domain?: "feishu" | "lark" } = {}): Promise<FeishuRegistrationSnapshot> {
-    if (!this.registration) {
-      const create =
-        this.options.createRegistration ??
-        (async (onCredentials) => {
-          const { FeishuRegistration } = await import("@openharness/channels");
-          return new FeishuRegistration({ onCredentials });
-        });
-      this.registration = await create((credentials) => this.onCredentials(credentials));
-    }
+  async startRegistration(
+    input: { domain?: "feishu" | "lark" } = {},
+  ): Promise<FeishuRegistrationSnapshot> {
+    const registration = await this.ensureRegistration();
     this.registrationWarning = undefined;
-    this.registration.start({ domain: input.domain ?? "feishu" });
+    registration.start({ domain: input.domain ?? "feishu" });
     return this.registrationSnapshot();
   }
 
@@ -164,27 +166,45 @@ export class ChannelOnboardingService {
 
   // ---------------------------------------------------------------------------
 
+  private async ensureRegistration(): Promise<RegistrationLike> {
+    if (this.registration) return this.registration;
+    this.registrationPromise ??= (async () => {
+      const create =
+        this.options.createRegistration ??
+        (async (onCredentials: (credentials: FeishuRegistrationCredentials) => Promise<void>) => {
+          const { FeishuRegistration } = await import("@openharness/channels");
+          return new FeishuRegistration({ onCredentials });
+        });
+      return await create((credentials) => this.onCredentials(credentials));
+    })();
+    try {
+      this.registration = await this.registrationPromise;
+      return this.registration;
+    } catch (error) {
+      this.registrationPromise = null;
+      throw error;
+    }
+  }
+
   private async onCredentials(
     credentials: FeishuRegistrationCredentials,
   ): Promise<void> {
-    const existing = await this.options.config.getFeishu();
     const allowFrom: Record<string, string> = {};
     if (credentials.userId) allowFrom[credentials.userId] = credentials.userId;
     this.registrationWarning = credentials.userId ? undefined : MISSING_OPEN_ID_WARNING;
     // 扫码走 createOnly，appId 必然变化：清空旧应用白名单，只保留扫码者本人。
-    const next: FeishuChannelConfig = {
+    await this.options.config.updateFeishu((current) => ({
       enabled: true,
       appId: credentials.appId,
       appSecret: credentials.appSecret,
       domain: credentials.domain,
       allowFrom,
-      ...(existing?.replyAtBotNames ? { replyAtBotNames: existing.replyAtBotNames } : {}),
-      ...(existing?.sendProgress !== undefined ? { sendProgress: existing.sendProgress } : {}),
-      ...(existing?.sendToolHints !== undefined
-        ? { sendToolHints: existing.sendToolHints }
+      ...(current?.replyAtBotNames ? { replyAtBotNames: current.replyAtBotNames } : {}),
+      ...(current?.sendProgress !== undefined ? { sendProgress: current.sendProgress } : {}),
+      ...(current?.sendToolHints !== undefined
+        ? { sendToolHints: current.sendToolHints }
         : {}),
-    };
-    await this.options.config.setFeishu(next);
+    }));
     await this.notifyConfigChanged();
   }
 
@@ -251,6 +271,14 @@ export class ChannelOnboardingService {
       ...(config.sendToolHints !== undefined ? { sendToolHints: config.sendToolHints } : {}),
     };
   }
+}
+
+function requireAllowKey(key: string): string {
+  const trimmed = key.trim();
+  if (!trimmed || UNSAFE_ALLOW_KEYS.has(trimmed)) {
+    throw new ChannelOnboardingError("invalid_input", "白名单备注名无效");
+  }
+  return trimmed;
 }
 
 function messageOf(error: unknown): string {

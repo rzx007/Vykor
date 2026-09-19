@@ -4,6 +4,7 @@ import {
   parseFeishuConnectInput,
   parseFeishuPatchInput,
   parseFeishuRegistrationStartInput,
+  ProtocolValidationError,
 } from "@openharness/protocol";
 import { Hono } from "hono";
 
@@ -37,17 +38,29 @@ function isValidationMessage(message: string): boolean {
   );
 }
 
-function controlError(error: unknown): Response {
+function controlError(
+  error: unknown,
+  options: { unknownConnectorStatus?: number } = {},
+): Response {
   if (error instanceof ChannelRuntimeError) {
     const status =
-      error.code === "unknown_connector" ? 404 : error.code === "closed" ? 503 : 409;
+      error.code === "unknown_connector"
+        ? (options.unknownConnectorStatus ?? 404)
+        : error.code === "closed"
+          ? 503
+          : 409;
     return errorResponse(status, error.message);
   }
   if (error instanceof ChannelOnboardingError) {
     const status = error.code === "not_configured" ? 409 : 400;
     return errorResponse(status, error.message);
   }
-  if (error instanceof SyntaxError) return protocolValidationErrorResponse(error);
+  if (error instanceof ProtocolValidationError || error instanceof SyntaxError) {
+    return protocolValidationErrorResponse(error);
+  }
+  if (error instanceof Error && error.name === "ChannelConfigStoreError") {
+    return errorResponse(400, error.message);
+  }
   const message = error instanceof Error ? error.message : String(error);
   if (isValidationMessage(message)) return protocolValidationErrorResponse(error);
   return applicationErrorResponse(error);
@@ -79,7 +92,8 @@ export function createChannelControlRoutes(
         await context.runtime!.start(parseChannelRuntimeControlInput(await readJson(c)).connector);
         return jsonResponse(context.runtime!.status());
       } catch (error) {
-        return controlError(error);
+        // 启动时未知 connector 视为可操作冲突（409），停止才是 404。
+        return controlError(error, { unknownConnectorStatus: 409 });
       }
     })
     .post("/runtime/stop", async (c) => {
