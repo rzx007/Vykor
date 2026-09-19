@@ -236,6 +236,7 @@ Session runtime history 存 daemon 会话的完整运行状态，包括 sessions
 | Session Memory checkpoint | 否 | 否 | 是 | 否 |
 | Session runtime history | 否 | 否 | 否 | 恢复/查询时读取 |
 | `credentials.json` | 否 | 否 | 否 | provider/auth 使用 |
+| `channel-credentials.json` | 否 | 否 | 否 | 飞书接入凭据，不进上下文 |
 
 ## 建议的排查顺序
 
@@ -254,5 +255,5 @@ Session runtime history 存 daemon 会话的完整运行状态，包括 sessions
 
 - 新增一种会影响模型上下文的来源时，必须在本文增加一行。
 - 新增自动写入逻辑时，必须说明是否 best-effort、是否需要 LLM、是否会写敏感信息。
-- 凭据、token、API key 只能走 `credentials.json` 或 provider 环境变量，不能写入任何 prompt 文件或 memory。
+- 凭据、token、API key 只能走 `credentials.json`、飞书 `channel-credentials.json` 或 provider 环境变量，不能写入任何 prompt 文件或 memory。
 - 用户长期偏好进 `USER.md`，项目规则进 Project Instructions，环境事实进 local rules，项目决策进 Project Memory，会话连续性进 Session Memory checkpoint。

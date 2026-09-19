@@ -12,6 +12,7 @@
 |---|---|---|---|
 | override config | `<OPENHARNESS_CONFIG_DIR>\settings.json` | `OPENHARNESS_CONFIG_DIR` | 删除后不可恢复；配置会回到默认值 |
 | override credentials | `<OPENHARNESS_CONFIG_DIR>\credentials.json` | `OPENHARNESS_CONFIG_DIR` | 删除后不可恢复；需要重新登录 |
+| channel credentials | `<OPENHARNESS_CONFIG_DIR>\channel-credentials.json` | `OPENHARNESS_CONFIG_DIR` | 删除后不可恢复；需要重新 `ohs channels add feishu` |
 | override profile | `<OPENHARNESS_CONFIG_DIR>\USER.md` | `OPENHARNESS_CONFIG_DIR` | 删除后不可恢复 |
 | override runtime data | `<OPENHARNESS_CONFIG_DIR>\data` | `OPENHARNESS_CONFIG_DIR` | Session、Run、日志和任务不可恢复 |
 | override plugins | `<OPENHARNESS_CONFIG_DIR>\plugins` | `OPENHARNESS_CONFIG_DIR` | 安装状态与 cache 不可恢复 |
@@ -47,6 +48,7 @@ $AllowedRoots = @(
 $Candidates = @(
   @{ Name = 'settings'; InputPath = (Join-Path $ConfigRoot 'settings.json'); AllowedRoot = $ConfigRoot; Recoverable = $false },
   @{ Name = 'credentials'; InputPath = (Join-Path $ConfigRoot 'credentials.json'); AllowedRoot = $ConfigRoot; Recoverable = $false },
+  @{ Name = 'channel-credentials'; InputPath = (Join-Path $ConfigRoot 'channel-credentials.json'); AllowedRoot = $ConfigRoot; Recoverable = $false },
   @{ Name = 'profile'; InputPath = (Join-Path $ConfigRoot 'USER.md'); AllowedRoot = $ConfigRoot; Recoverable = $false },
   @{ Name = 'runtime-data'; InputPath = (Join-Path $ConfigRoot 'data'); AllowedRoot = $ConfigRoot; Recoverable = $false },
   @{ Name = 'plugins'; InputPath = (Join-Path $ConfigRoot 'plugins'); AllowedRoot = $ConfigRoot; Recoverable = $false },

@@ -16,7 +16,7 @@ OpenHarness 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、W
 - ✅ **Hook 生命周期** — 10 类事件、priority 排序、command/http/prompt/agent 四种类型、matcher 过滤、`$ARGUMENTS` 注入+shell 转义
 - ✅ **会话持久化** — TUI / 用户 print / 跨端主线使用 daemon 的 Repository/Transaction + SQLite；单会话通过原子 snapshot + SSE 恢复。daemon 持久化 child session、task 与 child run 的关联；重启会保留审计记录，并将失去进程所有权的 run/task/workflow 明确标记为中断，不会伪造自动续跑。TUI 可用 `/resume` 明确重放某次中断 run 的原始 prompt。
 - ✅ **插件系统** — Runtime 只加载版本化 OpenHarness Native Plugin；Skills、Agents、Hooks、MCP 通过统一 manifest、安装状态和版本 cache 激活。Claude Code 插件先经独立 Converter 生成带 plan/report/provenance 的 Native Plugin；第三方 Tool 在隔离 Runtime 完成前不会执行
-- ✅ **Channels Agent 桥接** — `MessageBus` 双队列 + `ChannelManager`（fail-closed ACL 集中过滤）+ `DurableChannelBridge` 接 daemon；`ohs channels serve` 长驻模式跑通飞书对话（文本 + @bot 过滤）。Telegram/Discord/Slack、媒体、长消息分片待补。详见 [docs/channels-flow.md](docs/channels-flow.md)
+- ✅ **Channels Agent 桥接** — `MessageBus` 双队列 + `ChannelManager`（fail-closed ACL 集中过滤）+ `DurableChannelBridge` 接 daemon；`ohs channels add feishu` 支持扫码/手填接入，`ohs channels serve` 长驻跑通飞书对话（文本、image/file、thread/topic、@bot 过滤）。Telegram/Discord/Slack、媒体上传、长消息分片待补。详见 [docs/channels-flow.md](docs/channels-flow.md)
 - ✅ **TUI 前端** — opentui + React 19 终端 UI（Bun 运行时）：经 `@openharness/client` attach daemon，Markdown 渲染 + 代码块语法高亮、output style 热切换（minimal 极简工具行）、tool 行分组折叠、Edit/Write 权限框 unified diff 预览（`[y]`本次/`[a]`整个会话/`[n]`拒绝）。统一 Jobs Panel 展示和控制 Terminal、后台 shell、child Agent、dream 与 Workflow；Workflow Steps 在所选 Workflow Job 的详情中展示，不再保留独立的后台 Task/Swarm/Workflow Runs 执行面板
 - 🟢 **Daemon Application** — 主线具备 `ohs serve` / `ohs daemon start/status/stop`、Hono HTTP API、durable session/transcript、SSE、单 session 串行 run lane、持久化 PermissionBroker、child durable projection 和共享 `@openharness/client` reducer。`DaemonApplication` 集中组装 durable 应用，HTTP server 只负责 transport；`AgentPool` 按 session 缓存真实 `OpenHarnessAgent`。权威导览见 [docs/daemon-application-architecture.md](docs/daemon-application-architecture.md)，framework 见 [docs/agent-runtime-framework-architecture.md](docs/agent-runtime-framework-architecture.md)，客户端同步见 [docs/client-sync-flow.md](docs/client-sync-flow.md)。
 - ✅ **Terminal** — daemon 统一持有终端 runtime，Desktop 右侧 Panel 与 Agent 终端跟随同一个 Native/WSL 会话环境；支持多终端、输出快照恢复、REST/SSE 传输和对话卡片挂接。模型用 `TerminalOpen` 创建持久终端，后续统一通过 `JobList/Read/Wait/Send/Cancel` 观察和控制。
@@ -213,7 +213,9 @@ ohs workflow reconcile [runId] [--action-ids <ids>] [--budget-preset <preset>]
 ohs workflow cancel [runId] [--reason <reason>]
 
 # Channels 长驻桥接（当前实现：feishu）
+ohs channels add feishu
 ohs channels status
+ohs channels allow <ou_...|oc_...> [--name <备注>]
 ohs channels serve
 
 # Daemon / shared session runtime（TUI/Web/Desktop 的共同后端）

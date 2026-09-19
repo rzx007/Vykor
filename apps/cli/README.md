@@ -93,7 +93,7 @@ ohs daemon start|status|stop|install|uninstall
 ohs config show
 ohs config set <key> <value>
 ohs workflow list|status|validate|template|reconcile|cancel
-ohs channels status|serve
+ohs channels add|allow|status|serve
 ```
 
 开启登录后自动拉起 daemon（可选）：

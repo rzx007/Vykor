@@ -87,9 +87,10 @@ API key 和订阅凭据留在 Node 宿主的 Credential Storage 或环境中：
 外部平台消息在进入 daemon 前由 `ChannelManager` 检查 `allowFrom`：
 
 - 缺失或空名单时全部拒绝；
+- 命中的是**发送者或会话**：`ou_...` 放行某个人，`oc_...` 放行某个群；
 - connector、account、chat 和 thread 共同决定 Session 映射；
 - 平台 message ID 用于幂等，不作为身份认证本身；
-- adapter secret 只用于连接平台，不应该出现在 Agent prompt；
+- adapter secret 只用于连接平台，不应该出现在 Agent prompt；飞书密钥存在独立凭据文件 `channel-credentials.json`（POSIX `0600`），不放进 `settings.json`；
 - 主动推送工具仍只能使用设置中已有的命名目标。
 
 通过 ACL 后，消息仍受普通 Permission、Sandbox 和 Run 规则约束。
@@ -118,7 +119,7 @@ Claude Code 等外部插件由独立 Converter 离线读取。detect、inspect�
 
 - daemon 是否使用随机 token，远程连接是否走受保护网络？
 - 浏览器 Origin 是否限制到实际产品地址？
-- 数据库、配置和 credential 文件权限是否只给运行用户？
+- 数据库、配置和 credential 文件（含飞书 `channel-credentials.json`）权限是否只给运行用户？
 - `allowFrom` 是否明确配置，空名单是否保持 fail-closed？
 - 危险 Tool 是否有 deny、Permission 和 Sandbox 三层约束？
 - 日志和错误响应是否不含 secret 与正文？
