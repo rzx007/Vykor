@@ -123,6 +123,12 @@ describe("DesktopChannelService", () => {
     expect(JSON.stringify(snapshot)).not.toContain("appSecret")
   })
 
+  it("generates a real PNG data URL with the default qrcode implementation", async () => {
+    const service = new DesktopChannelService({ getClient: async () => makeClient() })
+    const snapshot = await service.startRegistration()
+    expect(snapshot.qrDataUrl).toMatch(/^data:image\/png;base64,/)
+  })
+
   it("still returns the snapshot when QR generation fails", async () => {
     const service = makeService(makeClient(), async () => {
       throw new Error("qr boom")
