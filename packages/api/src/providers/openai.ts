@@ -187,6 +187,12 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       temperature: params.temperature,
       stream: true,
       stream_options: tools ? undefined : { include_usage: true },
+      ...(params.reasoningEffort
+        ? {
+            reasoning_effort:
+              params.reasoningEffort as OpenAI.ChatCompletionCreateParamsStreaming["reasoning_effort"],
+          }
+        : {}),
       tools,
     };
 

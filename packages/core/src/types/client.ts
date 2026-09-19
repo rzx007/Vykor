@@ -9,6 +9,7 @@ export interface StreamMessageParams {
   tools?: ToolDefinition[];
   maxTokens?: number;
   temperature?: number;
+  reasoningEffort?: string;
   abortSignal?: AbortSignal;
 }
 

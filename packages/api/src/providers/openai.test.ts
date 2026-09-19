@@ -365,3 +365,37 @@ describe("OpenAICompatibleClient cancellation", () => {
     }
   });
 });
+
+describe("OpenAICompatibleClient reasoning effort", () => {
+  function streamingClient() {
+    const create = vi.fn(async (_params: unknown) => ({
+      async *[Symbol.asyncIterator]() {},
+    }));
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gw.example/v1" });
+    client.client = { chat: { completions: { create } } } as any;
+    return { client, create };
+  }
+
+  it("sends reasoning_effort when provided", async () => {
+    const { client, create } = streamingClient();
+    for await (const _ of client.streamMessage({
+      model: "deepseek-v4.1-flash",
+      messages: [{ type: "user", content: "hi" }],
+      reasoningEffort: "max",
+    })) {}
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoning_effort: "max" }),
+      expect.anything(),
+    );
+  });
+
+  it("omits reasoning_effort when not provided", async () => {
+    const { client, create } = streamingClient();
+    for await (const _ of client.streamMessage({
+      model: "deepseek-v4.1-flash",
+      messages: [{ type: "user", content: "hi" }],
+    })) {}
+    const params = create.mock.calls[0]![0] as Record<string, unknown>;
+    expect("reasoning_effort" in params).toBe(false);
+  });
+});

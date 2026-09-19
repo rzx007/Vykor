@@ -496,6 +496,7 @@ export interface QueryEngineOptions {
   systemPrompt?: string;
   model?: string;
   maxTokens?: number;
+  reasoningEffort?: string;
   /** Default 300000 ms; can also be set with OPENHARNESS_TOOL_TIMEOUT_MS. */
   toolTimeoutMs?: number;
   settings?: Settings;

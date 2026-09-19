@@ -173,6 +173,7 @@ export class QueryEngine implements IQueryEngine {
   private schedules: AgentScheduleEffects | undefined;
   private cwd: string;
   private sessionId: string | undefined;
+  private reasoningEffort: string | undefined;
 
   constructor(
     private apiClient: StreamingMessageClient,
@@ -198,6 +199,7 @@ export class QueryEngine implements IQueryEngine {
     this.memoryRetriever = options.memoryRetriever;
     this.cwd = options.cwd ?? process.cwd();
     this.sessionId = options.sessionId;
+    this.reasoningEffort = options.reasoningEffort;
   }
 
   /**
@@ -367,6 +369,7 @@ export class QueryEngine implements IQueryEngine {
         messages: this.messages,
         system,
         tools: tools.length > 0 ? tools : undefined,
+        ...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {}),
         abortSignal: options.signal,
       });
       forceFinalResponse = false;
