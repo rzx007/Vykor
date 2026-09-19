@@ -32,15 +32,11 @@
 /* "Microsoft YaHei UI", "Microsoft YaHei",  */
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans:
-    'Inter Variable', 'Noto Sans JP Variable', 'Noto Sans TC Variable', 'Noto Sans JP', 'Noto Sans TC',
-    ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", sans-serif;
   --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-
   --font-display:
     'Manrope Variable', 'Noto Sans JP Variable', 'Noto Sans TC Variable', 'Noto Sans JP', 'Noto Sans TC',
     ui-sans-serif, system-ui, sans-serif;
-
   --text-xs: var(--ui-font-size-xs);
   --text-sm: var(--ui-font-size);
   --text-base: var(--ui-font-size-lg);
