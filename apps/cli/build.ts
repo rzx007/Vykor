@@ -1,6 +1,8 @@
 /// <reference types="bun" />
 import { cpSync, readFileSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 const frontendPkg = JSON.parse(readFileSync("../frontend/package.json", "utf-8"));
@@ -41,6 +43,21 @@ if (!cliResult.success) {
   for (const log of cliResult.logs) {
     console.error(log);
   }
+  process.exit(1);
+}
+
+// OCR loads these from node_modules at runtime, so a missing install must fail
+// the build rather than the first OCR call.
+const distRequire = createRequire(pathToFileURL(resolve("dist/index.js")));
+try {
+  const lightOcrEntry = distRequire.resolve("@arcships/light-ocr");
+  createRequire(lightOcrEntry).resolve(
+    "@arcships/light-ocr-model-ppocrv6-small/bundle/manifest.json",
+  );
+} catch (error) {
+  console.error(
+    `CLI bundle cannot resolve the OCR runtime from dist: ${error instanceof Error ? error.message : String(error)}`,
+  );
   process.exit(1);
 }
 

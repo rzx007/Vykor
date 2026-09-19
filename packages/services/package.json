@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@openharness/environment": "workspace:*",
-    "@arcships/light-ocr": "0.5.7",
+    "@arcships/light-ocr": "catalog:",
     "@openharness/core": "workspace:*",
     "@openharness/memory": "workspace:*",
     "@openharness/protocol": "workspace:*",

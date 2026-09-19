@@ -145,7 +145,8 @@ export class LightOcrEngine {
 }
 
 async function loadLightOcrLibrary(): Promise<LightOcrEngineLibrary> {
-  return await import("@arcships/light-ocr");
+  const require = createNodeRequire(import.meta.url);
+  return require(require.resolve("@arcships/light-ocr")) as LightOcrEngineLibrary;
 }
 
 function resolveBundledModelPath(): string {

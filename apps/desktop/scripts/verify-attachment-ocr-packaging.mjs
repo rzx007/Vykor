@@ -8,6 +8,7 @@ const workspaceRoot = resolve(desktopRoot, "../..")
 const packageJson = JSON.parse(await readFile(join(desktopRoot, "package.json"), "utf8"))
 const builder = await readFile(join(desktopRoot, "electron-builder.yml"), "utf8")
 const lock = await readFile(join(workspaceRoot, "pnpm-lock.yaml"), "utf8")
+const catalog = await readFile(join(workspaceRoot, "pnpm-workspace.yaml"), "utf8")
 const verifyArtifact = process.argv.includes("--artifact")
 
 const failures = []
@@ -15,7 +16,13 @@ for (const [name, version] of [
   ["@arcships/light-ocr", "0.5.7"],
   ["sharp", "0.34.4"],
 ]) {
-  if (packageJson.dependencies?.[name] !== version)
+  const declared = packageJson.dependencies?.[name]
+  if (declared === "catalog:") {
+    if (catalogVersion(name) !== version)
+      failures.push(`${name}@${version} must be pinned in the workspace catalog`)
+    continue
+  }
+  if (declared !== version)
     failures.push(`${name}@${version} must be a Desktop production dependency`)
 }
 for (const marker of [
@@ -133,6 +140,11 @@ async function findUnpackedModules(directory) {
     if (found) return found
   }
   return undefined
+}
+
+function catalogVersion(name) {
+  const match = new RegExp(`^\\s+'${name}':\\s*(\\S+)\\s*$`, "m").exec(catalog)
+  return match?.[1]
 }
 
 function ocrNativePackage() {

@@ -44,6 +44,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@arcships/light-ocr": "catalog:",
     "@opentui/core": "catalog:",
     "@opentui/react": "catalog:",
     "better-sqlite3": "^13.0.2",

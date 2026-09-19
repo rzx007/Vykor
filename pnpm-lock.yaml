@@ -9,6 +9,9 @@ catalogs:
     '@anthropic-ai/sdk':
       specifier: ^0.40.0
       version: 0.40.1
+    '@arcships/light-ocr':
+      specifier: 0.5.7
+      version: 0.5.7
     '@hono/node-server':
       specifier: ^1.19.13
       version: 1.19.13
@@ -86,6 +89,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@arcships/light-ocr':
+        specifier: 'catalog:'
+        version: 0.5.7
       '@opentui/core':
         specifier: 'catalog:'
         version: 0.4.5(typescript@5.9.3)(web-tree-sitter@0.25.10)
@@ -208,7 +214,7 @@ importers:
   apps/desktop:
     dependencies:
       '@arcships/light-ocr':
-        specifier: 0.5.7
+        specifier: 'catalog:'
         version: 0.5.7
       better-sqlite3:
         specifier: ^13.0.2
@@ -1025,7 +1031,7 @@ importers:
   packages/services:
     dependencies:
       '@arcships/light-ocr':
-        specifier: 0.5.7
+        specifier: 'catalog:'
         version: 0.5.7
       '@openharness/core':
         specifier: workspace:*

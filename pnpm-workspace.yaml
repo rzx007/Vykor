@@ -4,6 +4,7 @@ packages:
 
 catalog:
   '@anthropic-ai/sdk': ^0.40.0
+  '@arcships/light-ocr': 0.5.7
   '@hono/node-server': ^1.19.13
   '@modelcontextprotocol/sdk': ^1.29.0
   '@opentui/core': ^0.4.5
