@@ -28,6 +28,46 @@ describe("LightOcrEngine", () => {
     });
   });
 
+  it("falls back to the CPU provider when the default engine creation fails", async () => {
+    const recognizeEncoded = vi.fn(async () => ({ lines: [], timing: { totalMs: 1 } }));
+    const createEngine = vi.fn(async (options: { execution?: { provider?: string } }) => {
+      if (options.execution?.provider !== "cpu") {
+        throw new Error("ONNX Runtime WebGPU provider setup failed");
+      }
+      return { recognizeEncoded, close: async () => undefined, info: {} };
+    });
+    const engine = new LightOcrEngine({
+      loadLibrary: async () => ({ createEngine }),
+      queueCapacity: 1,
+    });
+
+    await expect(engine.recognize(new Uint8Array([1]), {})).resolves.toMatchObject({ lines: [] });
+    expect(createEngine).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ bundlePath: expect.any(String) }),
+    );
+    expect(createEngine).toHaveBeenLastCalledWith(
+      expect.objectContaining({ execution: { provider: "cpu" } }),
+    );
+    await engine.close();
+  });
+
+  it("retries engine creation after a failure instead of caching the rejection", async () => {
+    const recognizeEncoded = vi.fn(async () => ({ lines: [], timing: { totalMs: 1 } }));
+    const createEngine = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("transient engine creation failure"))
+      .mockResolvedValue({ recognizeEncoded, close: async () => undefined, info: {} });
+    const engine = new LightOcrEngine({ createEngine, queueCapacity: 1 });
+
+    await expect(engine.recognize(new Uint8Array([1]), {})).rejects.toThrow(
+      "transient engine creation failure",
+    );
+    await expect(engine.recognize(new Uint8Array([2]), {})).resolves.toMatchObject({ lines: [] });
+    expect(createEngine).toHaveBeenCalledTimes(2);
+    await engine.close();
+  });
+
   it("cancels a queued request without starting recognition", async () => {
     let release!: () => void;
     const first = new Promise<void>((resolve) => { release = resolve; });

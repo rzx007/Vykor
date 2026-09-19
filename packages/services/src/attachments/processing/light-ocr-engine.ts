@@ -7,8 +7,17 @@ import { LocalOcrError, normalizeLocalOcrError } from "./local-ocr-errors.js";
 
 type EngineLike = Pick<OcrEngine, "recognizeEncoded" | "close"> & { readonly info: unknown };
 
+export interface LightOcrEngineLibrary {
+  createEngine(options: {
+    queueCapacity: number;
+    bundlePath: string;
+    execution?: { provider: "cpu" };
+  }): Promise<EngineLike>;
+}
+
 export interface LightOcrEngineOptions {
   createEngine?: () => Promise<EngineLike>;
+  loadLibrary?: () => Promise<LightOcrEngineLibrary>;
   queueCapacity?: number;
 }
 
@@ -38,11 +47,24 @@ export class LightOcrEngine {
   constructor(options: LightOcrEngineOptions = {}) {
     this.queueCapacity = options.queueCapacity ?? 4;
     this.createEngine = options.createEngine ?? (async () => {
-      const library = await import("@arcships/light-ocr");
-      return await library.createEngine({
-        queueCapacity: this.queueCapacity,
-        bundlePath: resolveBundledModelPath(),
-      });
+      const library = await (options.loadLibrary ?? loadLightOcrLibrary)();
+      const bundlePath = resolveBundledModelPath();
+      try {
+        return await library.createEngine({ queueCapacity: this.queueCapacity, bundlePath });
+      } catch (error) {
+        // The desktop daemon runs inside Electron's main process, where the
+        // default GPU (WebGPU/Dawn) provider cannot initialize. The CPU
+        // provider is always available, so retry once with it.
+        try {
+          return await library.createEngine({
+            queueCapacity: this.queueCapacity,
+            bundlePath,
+            execution: { provider: "cpu" },
+          });
+        } catch {
+          throw error;
+        }
+      }
     });
   }
 
@@ -83,6 +105,18 @@ export class LightOcrEngine {
     return this.closePromise;
   }
 
+  private async acquireEngine(): Promise<EngineLike> {
+    this.enginePromise ??= this.createEngine();
+    try {
+      return await this.enginePromise;
+    } catch (error) {
+      // Do not cache a rejected creation: a transient failure must not disable
+      // OCR for the rest of the process lifetime.
+      this.enginePromise = undefined;
+      throw error;
+    }
+  }
+
   private async pump(): Promise<void> {
     if (this.active || this.closed) return;
     const item = this.waiting.shift();
@@ -90,8 +124,7 @@ export class LightOcrEngine {
     this.active = true;
     try {
       if (item.options.signal?.aborted) throw new LocalOcrError("ocr_cancelled", "OCR was cancelled");
-      this.enginePromise ??= this.createEngine();
-      const engine = await this.enginePromise;
+      const engine = await this.acquireEngine();
       const result = await engine.recognizeEncoded(item.bytes, item.options) as OcrResult;
       const info = engine.info as { model?: { profile?: string }; modelBundleId?: string };
       item.resolve({
@@ -109,6 +142,10 @@ export class LightOcrEngine {
       void this.pump();
     }
   }
+}
+
+async function loadLightOcrLibrary(): Promise<LightOcrEngineLibrary> {
+  return await import("@arcships/light-ocr");
 }
 
 function resolveBundledModelPath(): string {
