@@ -243,4 +243,19 @@ describe("goal actions", () => {
     expect(window.desktop.sessions.create).not.toHaveBeenCalled()
     expect(window.desktop.sessions.createGoal).not.toHaveBeenCalled()
   })
+
+  it("carries the selected effort into a goal-created session", async () => {
+    const scope = NEW_CONVERSATION_SCOPE
+    draft(scope, "目标正文")
+    useDesktopSessionStore.getState().setGoalMode(scope, true)
+    useDesktopSessionStore.getState().selectEffort("high")
+
+    await useDesktopSessionStore.getState().submitGoal(scope)
+
+    expect(window.desktop.sessions.create).toHaveBeenCalledWith({
+      model: "test",
+      permissionMode: "default",
+      effort: "high",
+    })
+  })
 })

@@ -1355,6 +1355,29 @@ describe("desktop session actions", () => {
     useDesktopSessionStore.getState().selectEffort("   ")
     expect(useDesktopSessionStore.getState().selectedEffort).toBeNull()
   })
+
+  it("syncs the selected effort from the applied session view", () => {
+    const view = emptySessionView("session-effort-view")
+    view.session.metadata = { runtime: { effort: "high" } }
+    useDesktopSessionStore.setState({ activeSessionId: view.session.id })
+
+    useDesktopSessionStore.getState().applySessionUpdate(view)
+
+    expect(useDesktopSessionStore.getState().selectedEffort).toBe("high")
+  })
+
+  it("syncs the selected effort when opening a session", async () => {
+    const session = {
+      ...emptySessionView("session-effort-open").session,
+      metadata: { runtime: { effort: "high" } },
+    }
+    const open = vi.fn(async () => ({ ...emptySessionView("session-effort-open", 1), session }))
+    vi.stubGlobal("window", { desktop: { sessions: { open } } })
+
+    await useDesktopSessionStore.getState().openSession("session-effort-open")
+
+    expect(useDesktopSessionStore.getState().selectedEffort).toBe("high")
+  })
 })
 function onlyPendingPromptSubmission(
   sessionId?: string
@@ -1418,6 +1441,7 @@ describe("desktop session store outside-project mode", () => {
       defaultModel: "deepseek-chat",
       defaultProvider: "deepseek",
       selectedPermissionMode: "default",
+      selectedEffort: null,
       activeSessionId: null,
       sessionView: null,
     })
@@ -1494,6 +1518,7 @@ describe("desktop session store outside-project mode", () => {
       defaultModel: "deepseek-chat",
       defaultProvider: "deepseek",
       selectedPermissionMode: "default",
+      selectedEffort: null,
       activeSessionId: null,
       sessionView: null,
     })
@@ -1623,6 +1648,7 @@ describe("desktop session store outside-project mode", () => {
       defaultModel: "test-model",
       defaultProvider: null,
       selectedPermissionMode: "default",
+      selectedEffort: null,
       activeSessionId: null,
       sessionView: null,
     })

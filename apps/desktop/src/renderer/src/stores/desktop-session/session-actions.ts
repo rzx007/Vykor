@@ -137,6 +137,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           selectedModel: view.session.model,
           selectedProvider: sessionProvider(view.session, state.defaultProvider),
           selectedPermissionMode: sessionPermissionMode(view.session, state.defaultPermissionMode),
+          selectedEffort: sessionEffort(view.session),
           sessions:
             view.session.status === "archived"
               ? state.sessions.filter((session) => session.id !== view.session.id)
@@ -239,6 +240,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         selectedModel: state.defaultModel,
         selectedProvider: state.defaultProvider,
         selectedPermissionMode: state.defaultPermissionMode,
+        selectedEffort: null,
         newConversationRuntime,
         sessionRuntimes: releaseActiveSessionAcknowledgements(state),
       }))
@@ -412,6 +414,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         selectedModel: session.model,
         selectedProvider: sessionProvider(session, get().defaultProvider),
         selectedPermissionMode: sessionPermissionMode(session, get().defaultPermissionMode),
+        selectedEffort: sessionEffort(session),
         selectedProjectGit: false,
         selectedProjectGitCheckedAt: null,
         branch: null,
@@ -494,6 +497,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         selectedPermissionMode: isActive
           ? sessionPermissionMode(existing, state.defaultPermissionMode)
           : state.selectedPermissionMode,
+        selectedEffort: isActive ? sessionEffort(existing) : state.selectedEffort,
       }))
       if (isActive) {
         clearPersistedActiveSessionId()
@@ -528,6 +532,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         selectedPermissionMode: isActive
           ? sessionPermissionMode(existing, state.defaultPermissionMode)
           : state.selectedPermissionMode,
+        selectedEffort: isActive ? sessionEffort(existing) : state.selectedEffort,
       }))
       if (isActive) {
         clearPersistedActiveSessionId()

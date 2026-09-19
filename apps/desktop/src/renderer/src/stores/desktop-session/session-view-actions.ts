@@ -1,5 +1,6 @@
 import {
   isPlaceholderTitle,
+  sessionEffort,
   sessionPermissionMode,
   sessionProvider,
   upsertSession,
@@ -47,6 +48,7 @@ export function createApplySessionUpdate(
         selectedModel: session.model,
         selectedProvider: sessionProvider(session, state.defaultProvider),
         selectedPermissionMode: sessionPermissionMode(session, state.defaultPermissionMode),
+        selectedEffort: sessionEffort(session),
         sessions:
           session.status === "archived"
             ? state.sessions.filter((item) => item.id !== session.id)

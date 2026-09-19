@@ -180,6 +180,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
             model: state.selectedModel,
             ...(state.selectedProvider ? { provider: state.selectedProvider } : {}),
             permissionMode: state.selectedPermissionMode,
+            ...(state.selectedEffort ? { effort: state.selectedEffort } : {}),
           }
           const session = await window.desktop.sessions.create(
             state.workspaceMode === "project" && state.selectedProject
