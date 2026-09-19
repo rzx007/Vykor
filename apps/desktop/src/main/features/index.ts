@@ -1,5 +1,6 @@
 import type { IpcContribution } from "../core/ipc/types"
 import { attachmentIpcContribution } from "./attachment/ipc"
+import { channelIpcContribution } from "./channels/ipc"
 import { clipboardIpcContribution } from "./clipboard/ipc"
 import { daemonAutoStartIpcContribution } from "./daemon-autostart/ipc"
 import { gitIpcContribution } from "./git/ipc"
@@ -28,6 +29,7 @@ export const allIpcContributions: IpcContribution[] = [
   clipboardIpcContribution,
   gitIpcContribution,
   mcpIpcContribution,
+  channelIpcContribution,
   sessionIpcContribution,
   scheduleIpcContribution,
   settingsIpcContribution,

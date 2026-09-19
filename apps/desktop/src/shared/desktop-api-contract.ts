@@ -134,6 +134,16 @@ import type {
 } from "@openharness/client"
 import type { DesktopUpdateState } from "./update-types"
 import type { DesktopMcpLoginInput, DesktopMcpLogoutInput, DesktopMcpSnapshot } from "./mcp-types"
+import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@openharness/client"
+import type {
+  DesktopConnectionsSnapshot,
+  DesktopFeishuAllowInput,
+  DesktopFeishuConnectInput,
+  DesktopFeishuPatchInput,
+  DesktopFeishuRegistrationSnapshot,
+  DesktopFeishuRegistrationStartInput,
+  DesktopRuntimeDelta,
+} from "./channel-types"
 
 export type DesktopAPI = {
   app: {
@@ -244,6 +254,29 @@ export type DesktopAPI = {
     snapshot: () => Promise<DesktopMcpSnapshot>
     login: (input: DesktopMcpLoginInput) => Promise<DesktopMcpSnapshot>
     logout: (input: DesktopMcpLogoutInput) => Promise<DesktopMcpSnapshot>
+  }
+  connections: {
+    snapshot: () => Promise<DesktopConnectionsSnapshot>
+    runtimeStatus: () => Promise<DesktopRuntimeDelta>
+    connect: (
+      input: DesktopFeishuConnectInput
+    ) => Promise<{ feishu: FeishuChannelSnapshot; runtime: ChannelRuntimeStatus }>
+    patch: (
+      input: DesktopFeishuPatchInput
+    ) => Promise<{ feishu: FeishuChannelSnapshot; runtime: ChannelRuntimeStatus }>
+    remove: () => Promise<{
+      feishu: FeishuChannelSnapshot
+      runtime: ChannelRuntimeStatus
+    }>
+    allowAdd: (input: DesktopFeishuAllowInput) => Promise<FeishuChannelSnapshot>
+    allowRemove: (key: string) => Promise<FeishuChannelSnapshot>
+    startRegistration: (
+      input: DesktopFeishuRegistrationStartInput
+    ) => Promise<DesktopFeishuRegistrationSnapshot>
+    registrationStatus: () => Promise<DesktopFeishuRegistrationSnapshot>
+    cancelRegistration: () => Promise<DesktopFeishuRegistrationSnapshot>
+    startRuntime: () => Promise<ChannelRuntimeStatus>
+    stopRuntime: () => Promise<ChannelRuntimeStatus>
   }
   settings: {
     snapshot: () => Promise<DesktopSettingsSnapshot>

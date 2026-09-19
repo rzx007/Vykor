@@ -32,6 +32,7 @@
     "electron-log": "^5.4.4",
     "electron-updater": "^6.3.9",
     "node-pty": "^1.0.0",
+    "qrcode": "^1.5.4",
     "sharp": "0.34.4"
   },
   "devDependencies": {
@@ -59,6 +60,7 @@
     "@tanstack/react-virtual": "^3.14.9",
     "@tanstack/router-plugin": "^1.168.30",
     "@types/node": "^22.19.1",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

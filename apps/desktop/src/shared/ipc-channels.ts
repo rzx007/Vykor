@@ -125,6 +125,16 @@ import type {
 } from "@openharness/client"
 import type { DesktopUpdateState } from "./update-types"
 import type { DesktopMcpLoginInput, DesktopMcpLogoutInput, DesktopMcpSnapshot } from "./mcp-types"
+import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@openharness/client"
+import type {
+  DesktopConnectionsSnapshot,
+  DesktopFeishuAllowInput,
+  DesktopFeishuConnectInput,
+  DesktopFeishuPatchInput,
+  DesktopFeishuRegistrationSnapshot,
+  DesktopFeishuRegistrationStartInput,
+  DesktopRuntimeDelta,
+} from "./channel-types"
 
 export const IpcChannels = {
   appGetInfo: "app:get-info",
@@ -254,6 +264,19 @@ export const IpcChannels = {
   mcpSnapshot: "mcp:snapshot",
   mcpLogin: "mcp:login",
   mcpLogout: "mcp:logout",
+
+  connectionsSnapshot: "connections:snapshot",
+  connectionsRuntimeStatus: "connections:runtime-status",
+  connectionsFeishuConnect: "connections:feishu-connect",
+  connectionsFeishuPatch: "connections:feishu-patch",
+  connectionsFeishuRemove: "connections:feishu-remove",
+  connectionsFeishuAllowAdd: "connections:feishu-allow-add",
+  connectionsFeishuAllowRemove: "connections:feishu-allow-remove",
+  connectionsFeishuRegistrationStart: "connections:feishu-registration-start",
+  connectionsFeishuRegistrationStatus: "connections:feishu-registration-status",
+  connectionsFeishuRegistrationCancel: "connections:feishu-registration-cancel",
+  connectionsRuntimeStart: "connections:runtime-start",
+  connectionsRuntimeStop: "connections:runtime-stop",
 
   pluginSnapshot: "plugin:snapshot",
   pluginEnable: "plugin:enable",
@@ -391,6 +414,43 @@ export interface IpcInvokeMap {
   [IpcChannels.mcpSnapshot]: { args: []; result: DesktopMcpSnapshot }
   [IpcChannels.mcpLogin]: { args: [input: DesktopMcpLoginInput]; result: DesktopMcpSnapshot }
   [IpcChannels.mcpLogout]: { args: [input: DesktopMcpLogoutInput]; result: DesktopMcpSnapshot }
+
+  [IpcChannels.connectionsSnapshot]: { args: []; result: DesktopConnectionsSnapshot }
+  [IpcChannels.connectionsRuntimeStatus]: { args: []; result: DesktopRuntimeDelta }
+  [IpcChannels.connectionsFeishuConnect]: {
+    args: [input: DesktopFeishuConnectInput]
+    result: { feishu: FeishuChannelSnapshot; runtime: ChannelRuntimeStatus }
+  }
+  [IpcChannels.connectionsFeishuPatch]: {
+    args: [input: DesktopFeishuPatchInput]
+    result: { feishu: FeishuChannelSnapshot; runtime: ChannelRuntimeStatus }
+  }
+  [IpcChannels.connectionsFeishuRemove]: {
+    args: []
+    result: { feishu: FeishuChannelSnapshot; runtime: ChannelRuntimeStatus }
+  }
+  [IpcChannels.connectionsFeishuAllowAdd]: {
+    args: [input: DesktopFeishuAllowInput]
+    result: FeishuChannelSnapshot
+  }
+  [IpcChannels.connectionsFeishuAllowRemove]: {
+    args: [key: string]
+    result: FeishuChannelSnapshot
+  }
+  [IpcChannels.connectionsFeishuRegistrationStart]: {
+    args: [input: DesktopFeishuRegistrationStartInput]
+    result: DesktopFeishuRegistrationSnapshot
+  }
+  [IpcChannels.connectionsFeishuRegistrationStatus]: {
+    args: []
+    result: DesktopFeishuRegistrationSnapshot
+  }
+  [IpcChannels.connectionsFeishuRegistrationCancel]: {
+    args: []
+    result: DesktopFeishuRegistrationSnapshot
+  }
+  [IpcChannels.connectionsRuntimeStart]: { args: []; result: ChannelRuntimeStatus }
+  [IpcChannels.connectionsRuntimeStop]: { args: []; result: ChannelRuntimeStatus }
 
   [IpcChannels.sessionBootstrap]: { args: []; result: DesktopBootstrapData }
   [IpcChannels.sessionList]: { args: []; result: DesktopSessionLists }

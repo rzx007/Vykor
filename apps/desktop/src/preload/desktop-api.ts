@@ -205,6 +205,25 @@ export const desktopAPI = {
     logout: (input: IpcInvokeMap[typeof IpcChannels.mcpLogout]["args"][0]) =>
       invoke(IpcChannels.mcpLogout, input),
   },
+  connections: {
+    snapshot: () => invoke(IpcChannels.connectionsSnapshot),
+    runtimeStatus: () => invoke(IpcChannels.connectionsRuntimeStatus),
+    connect: (input: IpcInvokeMap[typeof IpcChannels.connectionsFeishuConnect]["args"][0]) =>
+      invoke(IpcChannels.connectionsFeishuConnect, input),
+    patch: (input: IpcInvokeMap[typeof IpcChannels.connectionsFeishuPatch]["args"][0]) =>
+      invoke(IpcChannels.connectionsFeishuPatch, input),
+    remove: () => invoke(IpcChannels.connectionsFeishuRemove),
+    allowAdd: (input: IpcInvokeMap[typeof IpcChannels.connectionsFeishuAllowAdd]["args"][0]) =>
+      invoke(IpcChannels.connectionsFeishuAllowAdd, input),
+    allowRemove: (key: string) => invoke(IpcChannels.connectionsFeishuAllowRemove, key),
+    startRegistration: (
+      input: IpcInvokeMap[typeof IpcChannels.connectionsFeishuRegistrationStart]["args"][0]
+    ) => invoke(IpcChannels.connectionsFeishuRegistrationStart, input),
+    registrationStatus: () => invoke(IpcChannels.connectionsFeishuRegistrationStatus),
+    cancelRegistration: () => invoke(IpcChannels.connectionsFeishuRegistrationCancel),
+    startRuntime: () => invoke(IpcChannels.connectionsRuntimeStart),
+    stopRuntime: () => invoke(IpcChannels.connectionsRuntimeStop),
+  },
   settings: {
     snapshot: () => invoke(IpcChannels.settingsSnapshot),
     updateWorkStyle: (input: IpcInvokeMap[typeof IpcChannels.settingsUpdateWorkStyle]["args"][0]) =>
