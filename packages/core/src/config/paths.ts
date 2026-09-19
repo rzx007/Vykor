@@ -133,3 +133,8 @@ export function getMcpOAuthFilePath(): string {
 export function getChannelCredentialsFilePath(): string {
   return resolvePaths().channelCredentialsFilePath;
 }
+
+/** 渠道会话专用工作区根目录；可用 OPENHARNESS_CHANNELS_DIR 覆盖。 */
+export function getChannelWorkspaceRoot(): string {
+  return process.env.OPENHARNESS_CHANNELS_DIR ?? join(getConfigDir(), "channels");
+}

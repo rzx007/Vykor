@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 
 import {
   PROJECT_CONFIG_DIR_NAME,
+  getChannelWorkspaceRoot,
   getInstalledPluginStorePath,
   getMcpOAuthFilePath,
   getMemoryDir,
@@ -60,6 +61,27 @@ describe("MCP OAuth path", () => {
     } finally {
       if (previous === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
       else process.env.OPENHARNESS_CONFIG_DIR = previous;
+    }
+  });
+});
+
+describe("getChannelWorkspaceRoot", () => {
+  it("defaults under the config dir and honors OPENHARNESS_CHANNELS_DIR", () => {
+    const previousConfig = process.env.OPENHARNESS_CONFIG_DIR;
+    const previousChannels = process.env.OPENHARNESS_CHANNELS_DIR;
+    process.env.OPENHARNESS_CONFIG_DIR = resolve("/tmp/openharness-channels-test");
+    delete process.env.OPENHARNESS_CHANNELS_DIR;
+    try {
+      expect(getChannelWorkspaceRoot()).toBe(
+        join(resolve("/tmp/openharness-channels-test"), "channels"),
+      );
+      process.env.OPENHARNESS_CHANNELS_DIR = resolve("/tmp/openharness-channels-workspace");
+      expect(getChannelWorkspaceRoot()).toBe(resolve("/tmp/openharness-channels-workspace"));
+    } finally {
+      if (previousConfig === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
+      else process.env.OPENHARNESS_CONFIG_DIR = previousConfig;
+      if (previousChannels === undefined) delete process.env.OPENHARNESS_CHANNELS_DIR;
+      else process.env.OPENHARNESS_CHANNELS_DIR = previousChannels;
     }
   });
 });
