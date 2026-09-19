@@ -1,6 +1,7 @@
 # 交接：Desktop 渠道接入板块
 
-> 状态：待接手。这是给下一位同事的交接说明，可直接作为新会话的起始 prompt。
+> 状态：历史。已完成；实现与决策以 `docs/superpowers/specs/2026-09-19-desktop-channel-onboarding-design.md` 与 `docs/superpowers/plans/2026-09-19-desktop-channel-onboarding.md` 为准。
+> 注意：本交接文档中“Desktop 主进程直接读写 `channel-credentials.json`”的决策已被取代——渠道配置与接入由 daemon 全权负责（唯一写入者），Desktop/CLI 只走 API。
 
 ## 背景一句话
 
