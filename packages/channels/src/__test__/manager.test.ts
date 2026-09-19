@@ -283,6 +283,25 @@ describe("ChannelManager", () => {
     await mgr.stopAll();
   });
 
+  it("按渠道应用 sendProgress/sendToolHints 策略", async () => {
+    const bus = new MessageBus();
+    const a = makeAdapter("a");
+    const b = makeAdapter("b");
+    const mgr = new ChannelManager([a.adapter, b.adapter], bus, {
+      allowFrom: { a: ["*"], b: ["*"] },
+      channelPolicies: { a: { sendProgress: false }, b: { sendToolHints: false } },
+    });
+    await mgr.startAll();
+    bus.publishOutbound({ channel: "a", chatId: "c", content: "p", metadata: { _progress: true } });
+    bus.publishOutbound({ channel: "a", chatId: "c", content: "h", metadata: { _progress: true, _tool_hint: true } });
+    bus.publishOutbound({ channel: "b", chatId: "c", content: "p", metadata: { _progress: true } });
+    bus.publishOutbound({ channel: "b", chatId: "c", content: "h", metadata: { _progress: true, _tool_hint: true } });
+    await tick();
+    expect(a.sent.map((m) => m.content)).toEqual(["h"]); // a 关 progress、放 tool hint
+    expect(b.sent.map((m) => m.content)).toEqual(["p"]); // b 关 tool hint、放 progress
+    await mgr.stopAll();
+  });
+
   it("startAll 重入保护:二次调用不另起分发循环", async () => {
     const bus = new MessageBus();
     const fake = makeAdapter("t");

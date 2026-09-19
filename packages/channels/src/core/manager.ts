@@ -173,9 +173,12 @@ export class ChannelManager {
 
       const meta = msg.metadata ?? {};
       if (meta["_progress"]) {
+        const policy = this.opts.channelPolicies?.[msg.channel];
+        const sendProgress = policy?.sendProgress ?? this.opts.sendProgress;
+        const sendToolHints = policy?.sendToolHints ?? this.opts.sendToolHints;
         const isToolHint = Boolean(meta["_tool_hint"]);
-        if (isToolHint && this.opts.sendToolHints === false) continue;
-        if (!isToolHint && this.opts.sendProgress === false) continue;
+        if (isToolHint && sendToolHints === false) continue;
+        if (!isToolHint && sendProgress === false) continue;
       }
 
       const adapter = this.adapters.get(msg.channel);
