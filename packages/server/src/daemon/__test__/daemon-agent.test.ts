@@ -29,6 +29,9 @@ vi.mock("@openharness/agent-runtime", () => ({
 import { createDaemonAgentLoader } from "../daemon-agent.js";
 import { getCoordinatorUserContext } from "@openharness/coordinator";
 import { createDefaultNodeAgentWithInternals } from "../../../../agent-runtime/src/default-agent.js";
+import { AgentPool } from "../../application/agent/agent-pool.js";
+import { SessionCommandService } from "../../application/session/session-command-service.js";
+import { DaemonOperationGate } from "../../application/control/daemon-operation-gate.js";
 
 const session = {
   id: "session-1",
@@ -434,5 +437,78 @@ describe("createDaemonAgentLoader", () => {
 
     await loader({ session, history: [], parts: [] });
     expect(createAgent.mock.calls[0]![0].options.reasoningEffort).toBeUndefined();
+  });
+
+  it("closes the warm Agent when the session effort changes so the next acquire recomputes the sent value", async () => {
+    let record = {
+      id: "session-effort",
+      cwd: "/repo",
+      title: "Session",
+      model: "gpt-test",
+      status: "idle" as const,
+      metadata: { runtime: { model: "gpt-test", effort: "low" } },
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const agents: Array<{ close: ReturnType<typeof vi.fn> }> = [];
+    const createAgent = vi.fn(async () => {
+      const agent = {
+        state: "idle",
+        children: { list: () => [] },
+        loadHistory: vi.fn(),
+        close: vi.fn(async () => {}),
+      };
+      agents.push(agent);
+      return agent as any;
+    });
+    const resolveReasoningEfforts = vi.fn(async () => ["low", "high", "max"]);
+    const loadAgent = createDaemonAgentLoader({
+      settings: { model: "default-model" } as any,
+      createAgent,
+      resolveReasoningEfforts,
+    })!;
+    const store = {
+      getSession: vi.fn(() => record),
+      listMessages: vi.fn(() => []),
+      listMessageParts: vi.fn(() => []),
+      listSessions: vi.fn(() => [record]),
+      updateSession: vi.fn((_id: string, input: any) => {
+        record = { ...record, ...input, metadata: input.metadata ?? record.metadata };
+        return record;
+      }),
+    };
+    const pool = new AgentPool({ store, loadAgent } as any);
+    const service = new SessionCommandService({
+      sessions: store as any,
+      transactions: {
+        transaction: (work: any) => work(),
+        createMessage: vi.fn(() => ({ id: "m" })) as any,
+        upsertMessagePart: vi.fn() as any,
+      },
+      runtimeControl: {
+        closeAgent: (id) => pool.close(id),
+        hasActiveWorkForSession: (id) => pool.hasActiveWorkForSession(id),
+        interruptSession: () => ({ queuedRunIds: [] }),
+        waitForRuns: async () => {},
+        hasRunWork: () => false,
+        interruptLiveChild: async () => false,
+        hasLiveChild: () => false,
+      },
+      operationGate: new DaemonOperationGate(),
+      events: { checkpoint: () => 0, publishSince: () => {} },
+    });
+
+    await pool.acquireSession(record.id);
+    expect(createAgent).toHaveBeenCalledOnce();
+    expect(createAgent.mock.calls[0]![0].options.reasoningEffort).toBe("low");
+
+    await service.updateSession(record.id, { metadata: { runtime: { effort: "high" } } });
+
+    expect(agents[0]!.close).toHaveBeenCalledOnce();
+    expect(await pool.get(record.id)).toBeUndefined();
+
+    await pool.acquireSession(record.id);
+    expect(createAgent).toHaveBeenCalledTimes(2);
+    expect(createAgent.mock.calls[1]![0].options.reasoningEffort).toBe("high");
   });
 });

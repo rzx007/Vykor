@@ -29,6 +29,14 @@ describe("reasoning effort derivation", () => {
     ).toEqual(["low", "high", "max"]);
   });
 
+  it("trims whitespace around effort values so they match the trimmed sent value", () => {
+    expect(
+      reasoningEffortsFromModel({
+        reasoning_options: [{ type: "effort", values: [" low ", "high"] }],
+      } as never),
+    ).toEqual(["low", "high"]);
+  });
+
   it("returns undefined when there is no effort option", () => {
     expect(reasoningEffortsFromModel({ reasoning_options: [{ type: "toggle" }] } as never)).toBeUndefined();
     expect(reasoningEffortsFromModel({} as never)).toBeUndefined();

@@ -3,7 +3,7 @@ import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 import { CompactService } from "./compact-service.js";
 import { loadSettings, saveProjectSettings, saveSettings } from "../config/settings.js";
-import type { StreamEvent, ToolDefinition } from "../index.js";
+import type { StreamEvent, StreamMessageParams, ToolDefinition } from "../index.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -140,6 +140,49 @@ describe("QueryEngine", () => {
 
     expect(collected.some((e) => e.type === "text_delta")).toBe(true);
     expect(collected.some((e) => e.type === "complete")).toBe(true);
+  });
+
+  it("passes reasoningEffort into streamMessage params when configured", async () => {
+    const received: StreamMessageParams[] = [];
+    const client = {
+      streamMessage: async function* (params: StreamMessageParams) {
+        received.push(params);
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    const engine = new QueryEngine(
+      client,
+      new ToolRegistry(),
+      createMockPermissionChecker(),
+      createMockHookExecutor(),
+      { reasoningEffort: "high" },
+    );
+
+    for await (const _ of engine.submitMessage("hi")) {}
+
+    expect(received).toHaveLength(1);
+    expect(received[0]!.reasoningEffort).toBe("high");
+  });
+
+  it("omits the reasoningEffort key from streamMessage params when not configured", async () => {
+    const received: StreamMessageParams[] = [];
+    const client = {
+      streamMessage: async function* (params: StreamMessageParams) {
+        received.push(params);
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    const engine = new QueryEngine(
+      client,
+      new ToolRegistry(),
+      createMockPermissionChecker(),
+      createMockHookExecutor(),
+    );
+
+    for await (const _ of engine.submitMessage("hi")) {}
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).not.toHaveProperty("reasoningEffort");
   });
 
   it("returns history after submit", async () => {

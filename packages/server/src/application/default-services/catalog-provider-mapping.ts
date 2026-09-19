@@ -52,9 +52,9 @@ export function reasoningEffortsFromModel(
   model: Pick<ModelsDevModel, "reasoning_options">,
 ): string[] | undefined {
   const option = model.reasoning_options?.find((item) => item.type === "effort");
-  const values = option?.values?.filter(
-    (item): item is string => typeof item === "string" && item.trim().length > 0,
-  );
+  const values = option?.values
+    ?.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim());
   return values && values.length > 0 ? values : undefined;
 }
 
