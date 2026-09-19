@@ -104,13 +104,23 @@ export function ConnectionsSettings(): React.JSX.Element {
     if (!registration) return
     const active = ["starting", "qr_ready", "polling", "slow_down", "domain_switched"]
     if (!active.includes(registration.state)) return
-    const timer = setTimeout(() => {
-      void window.desktop.connections
-        .registrationStatus()
-        .then((value) => setRegistration(value))
-        .catch((cause: unknown) => setError(errorMessage(cause)))
-    }, 1000)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const poll = async (): Promise<void> => {
+      try {
+        const value = await window.desktop.connections.registrationStatus()
+        if (!cancelled) setRegistration(value)
+      } catch (cause) {
+        if (!cancelled) setError(errorMessage(cause))
+      } finally {
+        if (!cancelled) timer = setTimeout(poll, 1000)
+      }
+    }
+    timer = setTimeout(poll, 1000)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [registration])
 
   const refresh = async (): Promise<void> => {
@@ -145,8 +155,11 @@ export function ConnectionsSettings(): React.JSX.Element {
   }
 
   const submitManual = (): void => {
+    // 立即清掉明文密钥：无论成功失败都不在组件状态里保留。
+    const input = { ...manual }
+    setManual((current) => ({ ...current, appSecret: "" }))
     void run("manual", async () => {
-      const { feishu, runtime } = await window.desktop.connections.connect(manual)
+      const { feishu, runtime } = await window.desktop.connections.connect(input)
       setSnapshot((current) => (current ? { feishu, runtime } : current))
       setMethod(null)
       setManual({ appId: "", appSecret: "", domain: "feishu" })
@@ -226,6 +239,11 @@ export function ConnectionsSettings(): React.JSX.Element {
               <span className="text-xs text-muted-foreground">机器人：{feishu.botName}</span>
             ) : null}
           </div>
+          {feishu?.replyAtBotNames?.length ? (
+            <p className="text-xs text-muted-foreground">
+              群聊 @ 机器人名：{feishu.replyAtBotNames.join("、")}
+            </p>
+          ) : null}
           {connector?.lastError ? (
             <p className="text-xs text-destructive">{connector.lastError}</p>
           ) : null}
@@ -252,6 +270,19 @@ export function ConnectionsSettings(): React.JSX.Element {
               }
             >
               重试连接
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy !== null || connector?.state !== "running"}
+              onClick={() =>
+                void run("runtime", async () => {
+                  await window.desktop.connections.stopRuntime()
+                  await refresh()
+                })
+              }
+            >
+              临时停止
             </Button>
             <Button
               size="sm"
@@ -293,6 +324,18 @@ export function ConnectionsSettings(): React.JSX.Element {
                       alt="飞书接入二维码"
                       className="size-40 rounded-md bg-white p-2"
                     />
+                  ) : registration.qrUrl ? (
+                    <p className="text-xs text-destructive">二维码生成失败，请使用授权链接继续。</p>
+                  ) : null}
+                  {registration.qrUrl ? (
+                    <a
+                      href={registration.qrUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary underline"
+                    >
+                      在浏览器打开授权链接
+                    </a>
                   ) : null}
                   {registration.warning ? (
                     <p className="text-xs text-destructive">{registration.warning}</p>

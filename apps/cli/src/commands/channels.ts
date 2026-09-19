@@ -58,19 +58,34 @@ export async function followChannelRuntime(
 ): Promise<void> {
   const intervalMs = options.intervalMs ?? 1000;
   const { client, signal } = options;
-  await client.channels.startRuntime();
-  options.log("[channels] 渠道由 daemon 托管，Ctrl+C 退出。");
+  try {
+    await client.channels.startRuntime();
+    options.log("[channels] 渠道由 daemon 托管，Ctrl+C 退出。");
+  } catch (error) {
+    options.warn(`[channels] 启动渠道失败：${messageOf(error)}`);
+    return;
+  }
 
   let bootId: string | undefined;
   let highWater = -1;
   const lastStates = new Map<string, string>();
+  let backoff = intervalMs;
 
   try {
     while (!signal.aborted) {
-      const status = await client.channels.runtimeStatus();
+      let status: ChannelRuntimeStatus;
+      try {
+        status = await client.channels.runtimeStatus();
+        backoff = intervalMs;
+      } catch (error) {
+        options.warn(`[channels] 读取渠道状态失败：${messageOf(error)}`);
+        await delay(Math.min(backoff * 2, 30_000), signal);
+        continue;
+      }
       if (status.bootId !== bootId) {
+        // 首次成功轮询 / daemon 重启：只建基线，不重放历史拒绝。
         bootId = status.bootId;
-        highWater = -1;
+        highWater = maxDenialSeq(status);
         lastStates.clear();
       }
       for (const connector of status.connectors) {
@@ -87,7 +102,7 @@ export async function followChannelRuntime(
           );
         }
       }
-      await delay(intervalMs, signal);
+      await delay(backoff, signal);
     }
   } finally {
     try {
@@ -99,6 +114,14 @@ export async function followChannelRuntime(
       );
     }
   }
+}
+
+function maxDenialSeq(status: ChannelRuntimeStatus): number {
+  return status.recentDenials.reduce((max, denial) => Math.max(max, denial.seq), -1);
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function createDefaultRuntimeClient(): Promise<ChannelsRuntimeClientLike> {
@@ -138,7 +161,12 @@ async function runChannelsServe(): Promise<void> {
 
 async function runChannelsStatus(): Promise<void> {
   const { readDaemonRegistry } = await import("@openharness/server");
-  const daemon = readDaemonRegistry();
+  let daemon: ReturnType<typeof readDaemonRegistry>;
+  try {
+    daemon = readDaemonRegistry();
+  } catch {
+    daemon = undefined;
+  }
   if (!daemon) {
     console.log("daemon: not running；无法读取渠道配置");
     return;

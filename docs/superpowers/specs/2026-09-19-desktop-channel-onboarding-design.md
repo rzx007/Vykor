@@ -99,8 +99,10 @@ daemon ready()
   → 任一 connector 失败不影响其他 connector，也不影响 daemon ready
 
 daemon close()
-  → channelRuntime.shutdown()：标记 closed → 先断入站（manager.stopInbound()）
-    → bridge.stop({drainTimeoutMs}) 有界等待在途消息 → manager.stopAll()
+  → channelRuntime.shutdown()：标记 closed
+    → 先停止接收入站（manager.stopInbound() 只丢弃新事件、不关闭传输，
+      这样在途 Run 的回复仍能在排空窗口发出）
+    → bridge.stop({drainTimeoutMs}) 有界等待在途消息 → manager.stopAll()（真正断开）
   → control.shutdown()：再中断/排空 Run（在此之前的渠道排空不被 Run 中断打断）
   → 释放 owner / 关 store
 ```
@@ -283,7 +285,9 @@ export interface ChannelRuntimeServiceOptions {
 - 每个 connector 维护单调 `generation`；操作开始时捕获 generation，完成或失败时若 generation 已变化，则丢弃结果并补偿（断开自己刚建立的 adapter、清掉 bus/bridge，不写 status）。
 - `state` 按 `stopped | starting | running | stopping | error` 流转；除 `startEnabled()` 在入 lane 前**同步**置 `starting`（避免与 Desktop 首轮 status 抢跑道）这一处例外，其余状态变更都在 lane 内进行。
 - `shutdown()` 先把服务标 `closed`：之后 `start/restart` 返回 409；已在 lane 中的 start 完成后立即被停掉。
-- `startEnabled()` **不得 reject**：逐 connector 捕获错误；进入 lane 前同步置 `starting`，避免与 Desktop 首轮 status 抢跑道。
+- `startEnabled()` **不得 reject**：任何错误（含配置读取失败）都只落 `state=error + lastError`，绝不 reject。
+- 显式 `start` 只对「未配置/未启用/未知 connector/已关闭」抛类型化错误；模型缺失、凭据失效、连接失败等运行期问题只落 `state=error + lastError`，HTTP 返回 200。
+- `shutdown()` 对每个 connector 的 lane 等待有硬上限（默认 15s），超时不再等待，避免 daemon 关不掉。
 - `restart(connector)` = 同一 lane 内先 stop 后 start，绝不并发。
 - `stop()` 幂等；若 lane 内已有 start 排队，stop 排在其后，最终状态必须停。
 

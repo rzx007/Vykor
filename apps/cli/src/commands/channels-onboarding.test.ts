@@ -93,6 +93,25 @@ describe("runChannelsAddFeishu", () => {
     expect(logs).toContain("白名单为空");
   });
 
+  it("reports a lost registration when the daemon forgets an active scan", async () => {
+    const client = fakeClient({
+      feishuRegistrationStatus: vi.fn(async () => ({
+        state: "idle",
+        attempt: 1,
+        domain: "feishu",
+      })),
+    });
+    const log = vi.fn();
+    const result = await runChannelsAddFeishu({
+      createClient: async () => client,
+      promptSelect: async () => "scan",
+      renderQr: vi.fn(),
+      log,
+    } as never);
+    expect(result.ok).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("注册状态已丢失"));
+  });
+
   it("manual path connects through the daemon", async () => {
     const client = fakeClient();
     const result = await runChannelsAddFeishu({

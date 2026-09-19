@@ -31,15 +31,21 @@ const runningStatus = {
 };
 
 describe("followChannelRuntime", () => {
-  it("starts the runtime, prints new denials once, and stops on abort", async () => {
+  it("baselines existing denials, prints only newer ones, and stops on abort", async () => {
     const controller = new AbortController();
+    const existing = runningStatus.recentDenials[0]!;
+    const newer = { ...existing, seq: 2, sender: "ou_y" };
+    let calls = 0;
     const client = {
       channels: {
         startRuntime: vi.fn(async () => runningStatus),
         stopRuntime: vi.fn(async () => runningStatus),
         runtimeStatus: vi.fn(async () => {
+          calls += 1;
+          if (calls === 1) return runningStatus;
+          if (calls === 2) return { ...runningStatus, recentDenials: [existing, newer] };
           controller.abort();
-          return runningStatus;
+          return { ...runningStatus, recentDenials: [existing, newer] };
         }),
       },
     };
@@ -56,20 +62,22 @@ describe("followChannelRuntime", () => {
 
     expect(client.channels.startRuntime).toHaveBeenCalledOnce();
     expect(log).toHaveBeenCalledWith(expect.stringContaining("feishu: running"));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ou_x"));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ou_y"));
     expect(client.channels.stopRuntime).toHaveBeenCalledOnce();
   });
 
-  it("does not replay denials below the high-water mark", async () => {
+  it("keeps polling through a transient status error", async () => {
     const controller = new AbortController();
-    const calls = { count: 0 };
+    let calls = 0;
     const client = {
       channels: {
         startRuntime: vi.fn(async () => runningStatus),
         stopRuntime: vi.fn(async () => runningStatus),
         runtimeStatus: vi.fn(async () => {
-          calls.count += 1;
-          if (calls.count >= 2) controller.abort();
+          calls += 1;
+          if (calls === 1) throw new Error("daemon restarting");
+          controller.abort();
           return runningStatus;
         }),
       },
@@ -84,7 +92,8 @@ describe("followChannelRuntime", () => {
       warn,
     });
 
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("读取渠道状态失败"));
+    expect(client.channels.stopRuntime).toHaveBeenCalledOnce();
   });
 });
 

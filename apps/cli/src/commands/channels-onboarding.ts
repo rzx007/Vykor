@@ -191,16 +191,30 @@ export function createDefaultAllowDeps(): ChannelsAllowDeps {
   };
 }
 
+const ACTIVE_REGISTRATION_STATES = [
+  "starting",
+  "qr_ready",
+  "polling",
+  "slow_down",
+  "domain_switched",
+];
+
 async function runScan(
   deps: ChannelsOnboardingDeps,
   client: ChannelsClientLike,
 ): Promise<{ appId?: string; warning?: string } | undefined> {
   const deadline = Date.now() + 10 * 60_000;
   let lastRendered: string | undefined;
+  let lastAttempt = -1;
+  let sawActive = false;
+  let aborted = false;
 
   const renderIfNeeded = async (snapshot: FeishuRegistrationSnapshot): Promise<void> => {
     const url = snapshot.qrUrl;
-    if (!url || url === lastRendered) return;
+    if (!url) return;
+    // attempt 变化也要重渲染：同 URL 的新一轮注册不能复用旧二维码。
+    if (snapshot.attempt === lastAttempt && url === lastRendered) return;
+    lastAttempt = snapshot.attempt;
     lastRendered = url;
     deps.log("请用飞书扫码，或打开下面的链接完成授权：");
     deps.log(url);
@@ -208,15 +222,20 @@ async function runScan(
   };
 
   const onSigint = () => {
+    aborted = true;
     void client.channels.cancelFeishuRegistration().catch(() => undefined);
   };
   process.on("SIGINT", onSigint);
   try {
-    await renderIfNeeded(
-      await client.channels.startFeishuRegistration({ domain: "feishu" }),
-    );
+    const initial = await client.channels.startFeishuRegistration({ domain: "feishu" });
+    if (ACTIVE_REGISTRATION_STATES.includes(initial.state)) sawActive = true;
+    await renderIfNeeded(initial);
 
     for (;;) {
+      if (aborted) {
+        deps.log("已取消飞书接入。");
+        return undefined;
+      }
       const current = await client.channels.feishuRegistrationStatus();
       if (current.state === "succeeded") {
         const feishu = await client.channels.getFeishu();
@@ -224,6 +243,11 @@ async function runScan(
           ...(feishu.appId ? { appId: feishu.appId } : {}),
           ...(current.warning ? { warning: current.warning } : {}),
         };
+      }
+
+      if (current.state === "idle" && sawActive) {
+        deps.log("注册状态已丢失（daemon 可能重启），请重新运行 ohs channels add feishu。");
+        return undefined;
       }
 
       if (current.state === "expired") {
@@ -244,6 +268,7 @@ async function runScan(
         return undefined;
       }
 
+      if (ACTIVE_REGISTRATION_STATES.includes(current.state)) sawActive = true;
       await renderIfNeeded(current);
 
       if (Date.now() > deadline) {
@@ -277,7 +302,13 @@ export async function runChannelsAddFeishu(
   }
 
   if (method === "scan") {
-    const scanned = await runScan(d, client);
+    let scanned: { appId?: string; warning?: string } | undefined;
+    try {
+      scanned = await runScan(d, client);
+    } catch (error) {
+      d.log(`飞书接入失败：${messageOf(error)}`);
+      return { ok: false };
+    }
     if (!scanned) return { ok: false };
     d.log(`飞书已接入${scanned.appId ? `（${scanned.appId}）` : ""}。`);
     if (scanned.warning) d.log(`注意：${scanned.warning}`);
@@ -343,7 +374,7 @@ export async function runChannelsAllow(
 ): Promise<ChannelsAllowResult> {
   const d: ChannelsAllowDeps = { ...createDefaultAllowDeps(), ...deps };
 
-  if (!/^(ou_|oc_)/.test(id)) {
+  if (!/^(?:ou|oc)_[A-Za-z0-9_-]+$/.test(id)) {
     d.log(`无效的飞书 ID：${id}（应以 ou_ 或 oc_ 开头）。`);
     return { ok: false };
   }

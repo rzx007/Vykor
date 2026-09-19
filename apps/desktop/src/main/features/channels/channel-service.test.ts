@@ -81,26 +81,34 @@ function makeService(client: DesktopChannelClient, qr?: (url: string) => Promise
 }
 
 describe("DesktopChannelService", () => {
-  it("composes the snapshot and only reports denials above the high-water mark", async () => {
-    const service = makeService(makeClient())
+  it("baselines existing denials and only reports newer ones", async () => {
+    let denials = [denial]
+    const client = makeClient({
+      runtimeStatus: vi.fn(async () => runtime({ recentDenials: denials })),
+    })
+    const service = makeService(client)
     await service.snapshot()
-    const first = await service.runtimeStatus()
-    expect(first.newDenials).toEqual([denial])
-    const second = await service.runtimeStatus()
-    expect(second.newDenials).toEqual([])
+    // 挂载前已存在的拒绝不算“新”，但也不会被 snapshot 消费掉。
+    expect((await service.runtimeStatus()).newDenials).toEqual([])
+    const newer = { ...denial, seq: 2, sender: "ou_y" }
+    denials = [denial, newer]
+    expect((await service.runtimeStatus()).newDenials).toEqual([newer])
+    expect((await service.runtimeStatus()).newDenials).toEqual([])
   })
 
   it("rebuilds the denial baseline when the daemon bootId changes", async () => {
     let bootId = "boot-1"
+    let denials = [denial]
     const client = makeClient({
-      runtimeStatus: vi.fn(async () => runtime({ bootId, recentDenials: [denial] })),
+      runtimeStatus: vi.fn(async () => runtime({ bootId, recentDenials: denials })),
     })
     const service = makeService(client)
     await service.snapshot()
-    expect((await service.runtimeStatus()).newDenials).toEqual([denial]);
     bootId = "boot-2"
     expect((await service.runtimeStatus()).newDenials).toEqual([])
-    expect((await service.runtimeStatus()).newDenials).toEqual([denial])
+    const newer = { ...denial, seq: 2, sender: "ou_y" }
+    denials = [denial, newer]
+    expect((await service.runtimeStatus()).newDenials).toEqual([newer])
   })
 
   it("attaches a generated QR data URL without leaking the secret", async () => {

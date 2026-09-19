@@ -55,6 +55,7 @@ export interface DesktopChannelServiceOptions {
 export class DesktopChannelService {
   private bootId: string | undefined
   private highWater = -1
+  private qrCache: { key: string; dataUrl: string } | undefined
 
   constructor(private readonly options: DesktopChannelServiceOptions) {}
 
@@ -64,14 +65,15 @@ export class DesktopChannelService {
       client.channels.getFeishu(),
       client.channels.runtimeStatus(),
     ])
-    this.trackDenials(runtime)
+    // 只建基线，不消费：挂载/刷新不能吞掉待提示的拒绝。
+    this.baseline(runtime)
     return { feishu, runtime }
   }
 
   async runtimeStatus(): Promise<DesktopRuntimeDelta> {
     const client = await this.options.getClient()
     const runtime = await client.channels.runtimeStatus()
-    return { runtime, newDenials: this.trackDenials(runtime) }
+    return { runtime, newDenials: this.consumeDenials(runtime) }
   }
 
   async connect(input: DesktopFeishuConnectInput) {
@@ -119,10 +121,16 @@ export class DesktopChannelService {
     return await this.withQrDataUrl(await client.channels.cancelFeishuRegistration())
   }
 
-  private trackDenials(runtime: ChannelRuntimeStatus): ChannelDenialNotice[] {
+  private baseline(runtime: ChannelRuntimeStatus): void {
+    if (runtime.bootId === this.bootId) return
+    this.bootId = runtime.bootId
+    this.highWater = maxDenialSeq(runtime)
+  }
+
+  private consumeDenials(runtime: ChannelRuntimeStatus): ChannelDenialNotice[] {
     if (runtime.bootId !== this.bootId) {
       this.bootId = runtime.bootId
-      this.highWater = -1
+      this.highWater = maxDenialSeq(runtime)
       return []
     }
     const fresh = runtime.recentDenials.filter((denial) => denial.seq > this.highWater)
@@ -136,14 +144,24 @@ export class DesktopChannelService {
     snapshot: FeishuRegistrationSnapshot
   ): Promise<DesktopFeishuRegistrationSnapshot> {
     if (!snapshot.qrUrl) return snapshot
+    const key = `${snapshot.attempt}|${snapshot.qrUrl}`
+    if (this.qrCache?.key === key) {
+      return { ...snapshot, qrDataUrl: this.qrCache.dataUrl }
+    }
     try {
       const generate = this.options.generateQrDataUrl ?? defaultGenerateQrDataUrl
       const qrDataUrl = await generate(snapshot.qrUrl)
+      this.qrCache = { key, dataUrl: qrDataUrl }
       return { ...snapshot, qrDataUrl }
     } catch {
+      // 生成失败时不带 data URL 返回，客户端可退回展示授权链接。
       return snapshot
     }
   }
+}
+
+function maxDenialSeq(runtime: ChannelRuntimeStatus): number {
+  return runtime.recentDenials.reduce((max, denial) => Math.max(max, denial.seq), -1)
 }
 
 async function defaultGenerateQrDataUrl(url: string): Promise<string> {
