@@ -124,7 +124,7 @@ it("loads changes for an outside-project session instead of showing the empty st
     await Promise.resolve()
   })
 
-  expect(container.textContent).not.toContain("选择一个项目后可以查看文件 diff。")
+  expect(container.textContent).not.toContain("当前工作目录不可用。")
   expect(mocks.queryGitChanges).toHaveBeenCalledWith(
     {
       rootPath: "D:/repo",
