@@ -13,6 +13,7 @@ import {
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";
+import type { ChannelAttachmentDownload } from "../../daemon/channel-runtime-service.js";
 import type { SessionCommandService } from "../session/session-command-service.js";
 import type { SessionInteractionService } from "../session/session-interaction-service.js";
 import type { RunControlService } from "../session/run-control-service.js";
@@ -79,13 +80,6 @@ export interface AttachmentImportPort {
   }): Promise<{ id: string }>;
 }
 
-/** 平台附件下载结果：字节流 + 可选文件名/类型。 */
-export interface ChannelAttachmentDownload {
-  stream: ReadableStream<Uint8Array>;
-  name?: string;
-  mimeType?: string;
-}
-
 const INBOUND_ATTACHMENT_TYPES = new Set(["image", "file"]);
 
 /** 从 metadata.attachments 里只取可信字段；忽略 data/url，绝不自行 fetch。 */
@@ -148,7 +142,11 @@ export class ChannelApplicationService {
         conversation.sessionId,
         {
           id: inputId,
-          items: [{ type: "text", text: input.content }],
+          // 空正文（图片/文件消息）不要塞空 text item：它会被归一化丢弃，
+          // 导致重投递时 items 与首次存储不一致 → 误判 prompt_id_conflict。
+          items: input.content
+            ? [{ type: "text", text: input.content }]
+            : [],
           delivery: "queue",
           ...(attachments.length > 0 ? { attachments } : {}),
           metadata: {
@@ -252,7 +250,8 @@ export class ChannelApplicationService {
       const download = await this.context.downloadChannelAttachment(
         input.externalMessageId,
         descriptor,
-      );      if (!download) {
+      );
+      if (!download) {
         throw new ApplicationError(
           502,
           `Channel attachment download unavailable for ${input.externalMessageId}/${descriptor.externalId}`,

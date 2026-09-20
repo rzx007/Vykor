@@ -25,6 +25,7 @@ import { AttachmentBlobStore, LightOcrEngine, SessionStore } from "@openharness/
 
 import type { CreateDaemonAgent } from "../../daemon/daemon-agent.js";
 import { AttachmentService } from "../attachments/attachment-service.js";
+import { ChannelApplicationService } from "../channel/channel-application-service.js";
 import { DaemonApplication } from "../daemon-application.js";
 
 const createEchoAgent: CreateDaemonAgent = async (context) => {
@@ -700,6 +701,69 @@ describe("DaemonApplication", () => {
       );
     } finally {
       await application.close().catch(() => {});
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("重投递带附件的渠道消息时不重复导入、不触发 prompt_id_conflict", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "openharness-channel-attachment-redelivery-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const application = new DaemonApplication({
+      store,
+      createAgent: createEchoAgent,
+      log: () => {},
+    });
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    let downloadCount = 0;
+    let importCount = 0;
+    const channels = new ChannelApplicationService({
+      sessionQueries: {
+        getInput: (inputId) => application.store.conversations.getInput(inputId),
+        getSession: (sessionId) => application.store.sessions.get(sessionId),
+      },
+      channels: application.store.channels,
+      sessionCommands: application.commands,
+      sessionInteractions: application.interactions,
+      runControl: application.runControl,
+      log: () => {},
+      attachments: {
+        import: async (input) => {
+          importCount += 1;
+          return application.attachments.import(input);
+        },
+      },
+      downloadChannelAttachment: async () => {
+        downloadCount += 1;
+        return {
+          stream: new Blob([bytes]).stream(),
+          mimeType: "image/png",
+        };
+      },
+    });
+    const message = {
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "chat-attachment",
+      externalMessageId: "msg-attachment-1",
+      senderId: "user-1",
+      content: "",
+      cwd: process.cwd(),
+      model: "test-model",
+      metadata: { attachments: [{ type: "image", externalId: "img_v2_9" }] },
+    };
+    try {
+      await application.ready();
+      const first = await channels.handleMessage({ ...message });
+      const second = await channels.handleMessage({ ...message });
+
+      expect(second.duplicate).toBe(true);
+      expect(second.delivery.runId).toBe(first.delivery.runId);
+      // 只下载/导入一次；重投递复用首次的附件引用。
+      expect(downloadCount).toBe(1);
+      expect(importCount).toBe(1);
+    } finally {
+      await application.close();
       store.close();
       rmSync(dir, { recursive: true, force: true });
     }

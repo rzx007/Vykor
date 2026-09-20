@@ -70,6 +70,8 @@ describe("ChannelApplicationService contracts", () => {
       existingSessions,
       conversation,
       delivery,
+      attachments: { import: vi.fn() },
+      downloadChannelAttachment: vi.fn(),
     };
   }
 
@@ -81,6 +83,8 @@ describe("ChannelApplicationService contracts", () => {
       sessionInteractions: fixture.sessions as any,
       runControl: fixture.sessions as any,
       log: fixture.log,
+      attachments: fixture.attachments as any,
+      downloadChannelAttachment: fixture.downloadChannelAttachment as any,
     });
   }
 
@@ -577,6 +581,55 @@ describe("ChannelApplicationService inbound attachments", () => {
     expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
       "s1",
       expect.not.objectContaining({ attachments: expect.anything() }),
+    );
+  });
+
+  it("does not download or import when an attachment descriptor lacks a usable externalId", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage(
+      imageInput({
+        metadata: { attachments: [{ type: "image" }] },
+      }),
+    );
+
+    expect(fixture.downloadChannelAttachment).not.toHaveBeenCalled();
+    expect(fixture.attachments.import).not.toHaveBeenCalled();
+    // 无正文、无可信附件 → 交给准入层以“无内容”失败，不会当纯文本。
+    expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
+      "s1",
+      expect.not.objectContaining({ attachments: expect.anything() }),
+    );
+  });
+
+  it("skips unknown attachment types (no download) and admits with no attachments", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage(
+      imageInput({
+        metadata: { attachments: [{ type: "audio", externalId: "audio_key" }] },
+      }),
+    );
+
+    expect(fixture.downloadChannelAttachment).not.toHaveBeenCalled();
+    expect(fixture.attachments.import).not.toHaveBeenCalled();
+    expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
+      "s1",
+      expect.not.objectContaining({ attachments: expect.anything() }),
+    );
+  });
+
+  it("passes no text item for an attachment-only message (avoid empty-item normalization mismatch)", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage(imageInput());
+
+    expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({ items: [] }),
     );
   });
 });
