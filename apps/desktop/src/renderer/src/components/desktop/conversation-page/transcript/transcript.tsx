@@ -8,6 +8,7 @@ import { buildConversationEntries } from "../message/conversation-turn-model"
 import { ContextCompactionDivider } from "../message/context-compaction-divider"
 import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
+import { selectRunNotices } from "./run-notices"
 import { Marker, MarkerContent, MarkerIcon } from "@renderer/components/ui/marker"
 import { MessageScrollerItem } from "@renderer/components/ui/message-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
@@ -64,9 +65,9 @@ export function ConversationTranscript({
     .flatMap((entry) =>
       entry.type === "turn" && entry.turn.userMessage ? [entry.turn.userMessage] : []
     )[0]
-  const failedRuns = runs.filter((run) => run.status === "failed")
+  const noticeRuns = selectRunNotices(runs)
 
-  if (messages.length === 0 && !running && failedRuns.length === 0) {
+  if (messages.length === 0 && !running && noticeRuns.length === 0) {
     return (
       <MessageScrollerItem>
         <div className="flex min-h-80 items-center justify-center text-sm text-ui-muted">
@@ -103,7 +104,7 @@ export function ConversationTranscript({
             </MessageScrollerItem>
           )
         }
-        const turnFailures = failedRuns.filter(
+        const turnFailures = noticeRuns.filter(
           (run) =>
             entry.turn.runIds.includes(run.id) ||
             (Boolean(run.inputId) && run.inputId === entry.turn.inputId)
