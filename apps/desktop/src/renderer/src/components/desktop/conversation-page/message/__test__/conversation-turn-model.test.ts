@@ -157,6 +157,106 @@ describe("conversation turn model", () => {
     expect(turns.map((turn) => turn.id)).toEqual(["orphan-input"])
     expect(turns[0]?.runIds).toEqual(["orphan-run"])
   })
+
+  it("merges an auto-compaction divider pair inside the turn that triggered it", () => {
+    const messages = [
+      message("user", 1, { inputId: "input-1", runId: "run-1" }),
+      compactionMessage("started", 2),
+      compactionMessage("completed", 3),
+      message("assistant", 4, { inputId: "input-1", runId: "run-1" }),
+      message("assistant", 5, { inputId: "input-1", runId: "run-1" }),
+    ]
+    const parts = messages.map((item) => part(item.id, item.seq, `${item.role}-${item.seq}`))
+    const entries = buildConversationEntries(messages, parts, [run("run-1", "input-1")])
+
+    expect(entries).toHaveLength(1)
+    if (entries[0]?.type !== "turn") throw new Error("Expected a conversation turn")
+    const blocks = entries[0].turn.blocks
+    expect(blocks.map((block) => block.kind)).toEqual(["divider", "assistant"])
+    if (blocks[0]?.kind !== "divider") throw new Error("Expected a divider block")
+    expect(blocks[0].phase).toBe("completed")
+    expect(blocks[0].message.seq).toBe(2)
+    if (blocks[1]?.kind !== "assistant") throw new Error("Expected an assistant block")
+    expect(blocks[1].messages.map((item) => item.seq)).toEqual([4, 5])
+  })
+
+  it("places a mid-turn compaction divider between assistant segments", () => {
+    const messages = [
+      message("user", 1, { inputId: "input-1", runId: "run-1" }),
+      message("assistant", 2, { inputId: "input-1", runId: "run-1" }),
+      compactionMessage("started", 3),
+      compactionMessage("completed", 4),
+      message("assistant", 5, { inputId: "input-1", runId: "run-1" }),
+    ]
+    const parts = messages.map((item) => part(item.id, item.seq, `${item.role}-${item.seq}`))
+    const entries = buildConversationEntries(messages, parts, [run("run-1", "input-1")])
+
+    if (entries[0]?.type !== "turn") throw new Error("Expected a conversation turn")
+    const blocks = entries[0].turn.blocks
+    expect(blocks.map((block) => block.kind)).toEqual(["assistant", "divider", "assistant"])
+    if (blocks[0]?.kind !== "assistant" || blocks[2]?.kind !== "assistant") {
+      throw new Error("Expected assistant blocks around the divider")
+    }
+    expect(blocks[0].messages.map((item) => item.seq)).toEqual([2])
+    expect(blocks[2].messages.map((item) => item.seq)).toEqual([5])
+  })
+
+  it("marks an unmatched started divider as interrupted when no run is active", () => {
+    const messages = [
+      message("user", 1, { inputId: "input-1", runId: "run-1" }),
+      compactionMessage("started", 2),
+    ]
+    const entries = buildConversationEntries(messages, [], [])
+    if (entries[0]?.type !== "turn") throw new Error("Expected a conversation turn")
+    const divider = entries[0].turn.blocks[0]
+    if (divider?.kind !== "divider") throw new Error("Expected a divider block")
+    expect(divider.phase).toBe("interrupted")
+  })
+
+  it("keeps an unmatched started divider as started while a run is active", () => {
+    const messages = [
+      message("user", 1, { inputId: "input-1", runId: "run-1" }),
+      compactionMessage("started", 2),
+    ]
+    const active = { ...run("run-1", "input-1"), status: "running" as const }
+    const entries = buildConversationEntries(messages, [], [active])
+    if (entries[0]?.type !== "turn") throw new Error("Expected a conversation turn")
+    const divider = entries[0].turn.blocks[0]
+    if (divider?.kind !== "divider") throw new Error("Expected a divider block")
+    expect(divider.phase).toBe("started")
+  })
+
+  it("keeps a compaction divider at the end of the finished turn when it arrives after the turn", () => {
+    const messages = [
+      message("user", 1, { inputId: "input-1", runId: "run-1" }),
+      message("assistant", 2, { inputId: "input-1", runId: "run-1" }),
+      compactionMessage("started", 3),
+      compactionMessage("completed", 4),
+    ]
+    const entries = buildConversationEntries(messages, [], [run("run-1", "input-1")])
+    if (entries[0]?.type !== "turn") throw new Error("Expected a conversation turn")
+    expect(entries[0].turn.blocks.map((block) => block.kind)).toEqual(["assistant", "divider"])
+  })
+
+  it("keeps non-compaction system messages as top-level entries", () => {
+    const modelSwitch = {
+      ...message("system", 2),
+      metadata: { presentation: { kind: "model_switch", fromModel: "a", toModel: "b" } },
+    }
+    const entries = buildConversationEntries(
+      [
+        message("user", 1, { inputId: "input-1", runId: "run-1" }),
+        modelSwitch,
+        message("assistant", 3, { inputId: "input-1", runId: "run-1" }),
+      ],
+      [],
+      [run("run-1", "input-1")]
+    )
+    expect(entries.map((entry) => entry.type)).toEqual(["turn", "system"])
+    const system = entries[1]
+    if (system?.type !== "system") throw new Error("Expected a system entry")
+    expect(system.system.compactionPhase).toBeUndefined()
+  })
 })
 
 function message(
@@ -200,5 +300,15 @@ function run(id: string, inputId: string): DesktopSessionRun {
     metadata: {},
     createdAt: 1,
     updatedAt: 1,
+  }
+}
+
+function compactionMessage(
+  phase: "started" | "completed" | "failed",
+  seq: number
+): DesktopSessionMessage {
+  return {
+    ...message("system", seq),
+    metadata: { presentation: { kind: "context_compaction", phase } },
   }
 }
