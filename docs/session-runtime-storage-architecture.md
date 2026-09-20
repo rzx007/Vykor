@@ -118,7 +118,7 @@ packages/services/src/session-runtime/migrations/meta/0001_snapshot.json
 packages/services/src/session-runtime/migrations/meta/_journal.json
 ```
 
-迁移目录以 `0000_current_schema.sql` 为基线，其后为增量迁移；journal 与 `.sql` 文件一一对应。启动先按基线快照接管基线前旧库，再无条件应用增量迁移；不做字段猜测或读取时降级。
+迁移目录以 `0000_current_schema.sql` 为基线，其后为增量迁移；journal 与 `.sql` 文件一一对应。每次打开都应用迁移链；不做旧库接管或字段猜测，与当前基线不匹配的库删除重建。
 
 Daemon 对外 ready 前由 Server 的 recovery service 收束上次进程留下的 active Run、Attempt、Task、Permission、closing Session、Workflow claim 和 Projection Settlement。Services 提供原子存储能力，但不决定 HTTP 错误、Run 排队或是否重新调用模型。
 

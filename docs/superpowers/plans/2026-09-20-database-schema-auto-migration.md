@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 让 daemon SQLite 在启动时自动应用增量迁移，并对基线前旧库做一次性快照对账接管，使飞书回复不再因 schema 落后而静默失败。
+> **修订（v4）：本计划中的「旧库接管层」已被移除。** 删除 `legacy-adoption.ts` 及其测试；`migrations.ts` 只做「每次打开 `drizzle.migrate()`」，失败时带库路径与「删除重建」提示。理由：项目仍在快速迭代、无外部用户，任何与当前基线不匹配的旧库删除重建即可。Task 1（接管模块）与 Task 7 中的旧库 E2E 已作废；Task 2–6（增量迁移链、删 `application_storage_format`、门禁、文档）仍然有效。当前实现以 spec v4 §0/§4 为准。
 
-**Architecture:** 在 `SessionDatabase.open` 的迁移入口里，先按基线快照 `0000_snapshot.json` 对账旧库（补列 / 建索引 / 删废弃表 / 重置 `__drizzle_migrations`），再无条件下调用 `drizzle.migrate()` 应用 `0001+`。删除 `application_storage_format`，迁移状态完全交给 `__drizzle_migrations`。
+**Goal:** 让 daemon SQLite 在启动时自动应用增量迁移，使飞书回复不再因 schema 落后而静默失败。
+
+**Architecture:** `SessionDatabase.open` 每次打开都调用 `drizzle.migrate()` 应用 `0000` 基线 + `0001+` 增量；不做旧库接管。删除 `application_storage_format`，迁移状态完全交给 `__drizzle_migrations`。
 
 **Tech Stack:** TypeScript、better-sqlite3 13、drizzle-orm 0.45 / drizzle-kit 0.31、vitest、Node 24。
 

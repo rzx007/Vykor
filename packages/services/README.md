@@ -15,7 +15,7 @@
 
 外部工作负载进程不在 services 内直接 `spawn/exec`：`DetachedProcessSupervisor`、autodream 和 LSP 查询统一委托 `@openharness/sandbox`。framework child Agent 的回调句柄只放在 `ChildAgentExecutionRegistry`；跨端执行投影与 Scheduled Task 状态仍由 daemon `SessionStore` 持久化。
 
-数据库包含基线 `0000_current_schema.sql` 及其后的增量迁移。从空目录一次建立当前 schema，二次打开幂等；基线前旧库在启动时按基线快照一次性接管补齐（补列、建索引、清理废弃表），再应用增量迁移。
+数据库包含基线 `0000_current_schema.sql` 及其后的增量迁移。从空目录一次建立当前 schema，之后每次打开都应用迁移链。不做旧库接管：与当前基线不匹配的库会带提示失败，删除后重建即可。
 
 ## 测试
 

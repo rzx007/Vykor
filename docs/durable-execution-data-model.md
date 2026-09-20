@@ -86,13 +86,13 @@ Input 校验不把 `traceId` 当业务内容，因为一次网络重试可能得
 
 `SessionStore.transaction()` 同时提交 SQLite 和内存 read model。失败时两边都回滚。文本 delta 是例外：它先通过 live SSE 显示，再按时间或大小 checkpoint；Tool 边界、Run 终态和 store close 会强制落盘。
 
-## 版本规则：当前格式与基线接管
+## 版本规则：当前格式与迁移链
 
-本项目对基线前旧库做快照驱动的接管补齐，并自动应用增量迁移；不做字段猜测或跨世代数据转换。
+本项目在每次打开时应用迁移链（基线 + 增量）；不做旧库接管、字段猜测或跨世代数据转换。与当前基线不匹配的库删除重建。
 
 | 数据 | 当前标记 | 行为 |
 |---|---|---|
-| daemon SQLite | `__drizzle_migrations` 水位线 | 启动接管基线前旧库并应用增量迁移；基线 hash 缺失视为旧库 |
+| daemon SQLite | `__drizzle_migrations` 水位线 | 每次打开应用迁移链；水位线早于基线的库会失败，需删除重建 |
 | Durable Event | `schemaVersion = 1` | registry 只接受当前版本，不在读取时升级 |
 | 项目会话快照 | `schema_version = 1` | 缺失或不同版本直接失败 |
 | Memory Markdown | frontmatter `schema_version: 1` | 缺字段、类型错误、文件名与 ID 不同都失败 |
@@ -101,7 +101,7 @@ Input 校验不把 `traceId` 当业务内容，因为一次网络重试可能得
 | settings | `_formatVersion: 1` | 缺失、不同版本或旧字段直接失败 |
 | Agent 定义 | YAML frontmatter 当前 camelCase 字段 | YAML 无效直接失败，不回退到逐行猜测 |
 
-数据库 migrations 建立新库并对已存在库应用增量迁移；基线前旧库先按基线快照接管补齐。不做字段猜测、别名或读取时降级。
+数据库 migrations 建立新库并对已存在库应用增量迁移。不做旧库接管、字段猜测、别名或读取时降级。
 
 ## 重启后怎样处理活动记录
 

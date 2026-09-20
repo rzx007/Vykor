@@ -1,6 +1,16 @@
 # 数据库 schema 自动迁移设计
 
-> 状态：设计稿（v3，已过两轮文档审核）。实现计划见 `../plans/2026-09-20-database-schema-auto-migration.md`（待写）。
+> 状态：设计稿（v4）。实现计划见 `../plans/2026-09-20-database-schema-auto-migration.md`。
+
+## 0. 修订记录（v4：移除旧库接管层）
+
+v3 曾包含一层「旧库接管」兼容逻辑（`legacy-adoption.ts`：按基线快照补齐旧库结构、清理废弃表）。v4 **已将其移除**：
+
+- 项目仍在快速迭代、没有需要保留历史的外部用户；任何与当前迁移基线不匹配的旧库直接删除重建即可。
+- 保留的是**增量迁移链**：`applySessionMigrations` 每次打开都调用 `drizzle.migrate()`，应用 `0000` 基线 + `0001+` 增量。
+- 迁移失败时带提示报错（含库路径与「删除重建」指引），不再做任何自动对账。
+
+因此本文档中 §2.1 的接管目标、§4 的接管步骤、§5 的「旧库接管算法」、以及 §7/§9/§10 中与接管相关的条目**均已作废**，仅作历史记录保留；当前实现以 §4 的简化流程为准。
 
 ## 1. 背景与问题
 
@@ -37,11 +47,9 @@
 ### 2.1 目标
 
 - schema 发生变更时，启动自动迁移到最新，无需删库。
-- 对「基线前创建、但表结构仍属当前基线世代」的旧库做一次性接管对账，补齐到基线，再走正常增量迁移。
-  （更老的 clean-slate 之前世代若缺整表，不在接管范围，见 §5 / §8。）
 - 建立可长期使用的增量迁移链（`drizzle-kit generate` 产出 `0001+`）。
 - 移除已失去意义的 `application_storage_format` 标记，迁移状态完全交给 drizzle 的 `__drizzle_migrations`。
-- 接管时按 allowlist 清理已知废弃表（`cron_job` / `cron_run`），未识别的表保留不动。
+- **不做旧库接管**：与当前基线不匹配的库带提示失败，删除重建即可（见 §0）。
 
 ### 2.2 非目标
 
@@ -56,7 +64,7 @@
 
 `2026-09-18-channel-durable-delivery-platform-context-design.md:47` 曾把
 「通用增量数据库迁移机制」列为非目标，沿用 clean-slate 基线约定。
-本设计**取代**该非目标：`0000` 继续作为新库起点，但在此之上新增自动迁移与旧库接管。
+本设计**取代**该非目标：`0000` 继续作为新库起点，但在此之上新增增量迁移链（v4 已移除旧库接管，见 §0）。
 
 ## 3. 现状机制（as-is）
 
@@ -91,26 +99,17 @@
 ```text
 SessionDatabase.open
   -> applySessionMigrations（替换现有「非空即返回」）
-       1. folder = resolveMigrationsFolder()
-       2. migrations = readMigrationFiles(folder)；baseline = migrations[0]
-       3. adoptLegacyDatabase(db, { baseline, folder })
-            条件：库非空 且（__drizzle_migrations 不存在 或 不含 baseline.hash）
-            动作：按 0000_snapshot.json 对账 → 只写入 baseline 一行
-       4. migrate()：无条件执行 → 应用 0001+ 并写入其行
+       folder = resolveMigrationsFolder()
+       migrate()：每次打开都执行 → 应用 0000 基线 + 0001+
+       失败时：带库路径与「删除重建」提示报错
 ```
 
 - 每次打开都 `migrate()`。
 - `resolveMigrationsFolder()` 保留现有回退：源码/Desktop 用 `../session-runtime/migrations`，
   CLI 打包后回退到 `./migrations`。
-- 接管幂等：baseline.hash 已在表中即跳过。
-- **对账目标是基线快照 `0000_snapshot.json`**（不是最新快照），从而让 `migrate()` 正常执行 `0001+`，
-  不跳过未来迁移的数据 / DDL 逻辑。
-- 接管时**先清空 `__drizzle_migrations` 中旧链遗留的所有行**，再写入 baseline 一行；
-  之后 `migrate()` 写入 `0001+` 各行。因此采用后 `__drizzle_migrations` 行数 == 迁移数。
-  （真实旧库已有旧基线行，若不清空会残留为第 3 行；drizzle 虽只用 `MAX(created_at)` 容忍，
-  但会破坏本不变量与测试断言。）
+- **不做旧库接管**：与当前基线不匹配的库由 drizzle 报错，外层包装成含库路径与「删除重建」指引的错误。
 
-## 5. 旧库接管算法（基于 `meta/0000_snapshot.json`）
+## 5. 旧库接管算法（v4 已移除，以下仅作历史记录）
 
 **快照结构**
 
@@ -166,8 +165,7 @@ SessionDatabase.open
 
 **核心**
 
-- `packages/services/src/database/migrations.ts`：替换入口（**不替换则接管算法不可达**）。
-- 新增 `packages/services/src/database/legacy-adoption.ts`：快照对账 + `LegacyAdoptionError`。
+- `packages/services/src/database/migrations.ts`：替换入口，改为每次打开都 `drizzle.migrate()`（v4 起不再接管旧库）。
 - `packages/services/src/session-runtime/schema.ts`：删 `applicationStorageFormat`。
 - 新增 `0001_*.sql` / `meta/0001_snapshot.json`，更新 `meta/_journal.json`。
 
@@ -180,7 +178,7 @@ SessionDatabase.open
   `:28-33` 改为「文件集含 `0000` + `0001`，每个 `.sql` 逐字节比对源目录，journal 长度 == 文件数」；
   `:40-46` 双次打开断言 `__drizzle_migrations` 行数 == 迁移数（新库 = 2）、表数 31，去掉 version 断言。
 - `packages/services/src/database/session-database.test.ts`：`inventory()` 去掉 `format` 字段；
-  单基线断言改为「文件数 == journal 数」；新增旧库接管用例。
+  单基线断言改为「文件数 == journal 数」。
 - `packages/services/src/session-runtime/__test__/store.test.ts:141-149`：删除 version 断言，
   改为断言 `application_storage_format` 不存在。
 - `packages/services/src/database/__fixtures__/current-schema-inventory.json`：
@@ -223,9 +221,7 @@ SessionDatabase.open
 
 - 新库：打开后应用全部迁移；`application_storage_format` 不存在；表数 31；
   `__drizzle_migrations` == 2 行；schema 与夹具一致。
-- 旧库（模拟真实旧库：缺 `platform_meta_json`、含废弃表、`__drizzle_migrations` 有旧链遗留行且无 baseline hash）：
-  打开后列补齐、废弃表删除、旧遗留行被清、baseline 打标、`0001` 生效；
-  最终 `__drizzle_migrations` == 2 行；再次打开幂等。
+- 旧库：v4 起不做接管；与当前基线不匹配的库在打开时带提示失败，删除重建。（历史：v3 曾自动接管，见 §0。）
 - 现网库（本机）：启动后 `channel_delivery.platform_meta_json` 存在、
   `cron_job` / `cron_run` 与 `application_storage_format` 被删、`__drizzle_migrations` 含 baseline 行；
   飞书发消息得到回复。
@@ -234,9 +230,8 @@ SessionDatabase.open
 
 ## 10. 测试计划
 
-- `legacy-adoption.test.ts`：补列 / 建索引（含 partial `where`）/ 删表 / 打标 / 幂等；
-  `notNull 无默认`、缺整表、缺 PK 列、索引定义冲突 → 抛 `LegacyAdoptionError`。
 - `session-database.test.ts`：新库全量迁移 + 二次打开不重复执行。
+- （v4 已删除 `legacy-adoption.test.ts`；旧库接管相关测试随之移除。）
 - `verify-clean-slate.test.mjs` / `verify-migration-artifact.test.mjs`：多迁移与不匹配场景。
 - 手工 E2E：用本机旧库启动，发飞书消息验证回复。
 
@@ -271,3 +266,11 @@ SessionDatabase.open
 | §2.1「补齐到当前基线」范围过大 | §2.1 收窄为「基线世代旧库」，缺整表走 §5 报错 |
 | 真实旧库 E2E：`session_input.items_json` 在旧库可空、基线 `NOT NULL` | §5：已存在列只严格比较 `type`，忽略 `notNull` 差异（SQLite 不能原地改 NOT NULL，运行时由应用层保证）；新增两条单测 |
 | 「多余表全部 DROP」会误删未知表 | §5 / §2.1 / §8：改为只删 `OBSOLETE_TABLES` allowlist（`cron_job` / `cron_run`）中的表，未识别的表保留；新增 allowlist 单测 |
+
+### 11.2 修订（v4：移除旧库接管层）
+
+| 变更 | 说明 |
+|---|---|
+| 删除旧库接管层 | 删除 `legacy-adoption.ts` 及其测试；`migrations.ts` 只做「每次打开 `migrate()`」，失败带库路径与「删除重建」提示。理由：无外部用户、快速迭代（见 §0）。 |
+| 文档回退 | 所有「自动接管旧库 / 快照对账」表述改为「不接管、删除重建」。 |
+| 保留 | 增量迁移链、`0001` 删 `application_storage_format`、`verify-clean-slate` 迁移链门禁、动态打包清单。 |

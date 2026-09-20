@@ -57,7 +57,7 @@
 - HTTP 协议版本是 `4`，请求头是 `x-openharness-protocol-version`。
 - `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 4 的版本。
 - SQLite 以 `packages/services/src/session-runtime/migrations/0000_current_schema.sql` 为基线，其后为 `drizzle-kit generate` 产出的增量迁移链。
-- 启动先接管基线前旧库（按基线快照补齐列/索引、清理废弃表），再无条件下应用增量迁移；不做字段猜测或读取时降级。
+- 每次打开都应用迁移链（基线 + 增量）；不做旧库接管或字段猜测，与当前基线不匹配的库删除重建。
 - Native Plugin 只接受严格 v1 manifest，安装 scope 只有 `user` 与 `managed`；外部格式先通过 `@openharness/plugin-converters` 显式转换。
 - 项目 Skill 目录只有 `.agents/skills` 与 `.openharness-ts/skills`；用户 Skill 默认位于 `~/.openharness-ts/skills`。
 
@@ -69,7 +69,7 @@
 - 对外暴露的底层 Client transport；
 - `SessionStore` 和 Application 层只做一跳转发的平铺业务方法；
 - 旧 Client 字段名、旧插件 scope/manifest、旧 Skill 目录和旧 shell fallback；
-- 旧 schema 的读取时升级与字段猜测；仅保留快照驱动的基线接管（见数据库 schema 自动迁移设计）。
+- 旧 schema 的读取时升级、旧库接管与字段猜测；当前只应用迁移链，不匹配则删除重建。
 - 为“至少保留一轮发行”准备的多次发布、deprecated 周期和删除授权流程。
 
 OpenAI-compatible Provider、外部插件导入、平台 shell 选择、可靠重试、取消、事务回滚和崩溃恢复仍是当前产品能力。它们解决真实运行问题，不属于兼容层。

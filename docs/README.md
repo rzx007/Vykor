@@ -206,13 +206,13 @@
 
 ## 当前格式策略
 
-项目已经删除旧 API 别名、re-export façade、字段别名和旧数据读取路径。当前版本只接受当前接口；数据格式以当前迁移基线为准，基线前旧库会在启动时由基线快照接管并迁移到当前格式：
+项目已经删除旧 API 别名、re-export façade、字段别名和旧数据读取路径。当前版本只接受当前接口；数据格式以当前迁移基线为准，每次打开都会应用迁移链，与基线不匹配的旧库不做兼容：
 
-- SQLite 迁移以 `0000_current_schema.sql` 为基线，其后为增量迁移链，启动时按 `__drizzle_migrations` 水位线自动应用；
-- 基线前旧库由基线快照一次性接管补齐（只做可加性变更：补列、建索引、清理废弃表），再应用增量迁移；不做字段猜测或读取时降级；
+- SQLite 迁移以 `0000_current_schema.sql` 为基线，其后为增量迁移链，每次打开按 `__drizzle_migrations` 水位线应用；
+- 不做旧库接管、字段猜测或读取时降级；与当前基线不匹配的库删除重建即可；
 - event、settings、Session snapshot、Memory 和 Swarm 文件都有明确版本标记；
 - 需要版本标记的数据缺失标记或版本不同时直接失败；声明为必填的字段缺失或字段名过时时直接失败；
-- schema 演进与旧库接管见 [Operations and Recovery](./operations-and-recovery.md#schema-演进与旧库接管)。
+- schema 演进见 [Operations and Recovery](./operations-and-recovery.md#schema-演进)。
 
 ## 写文档时的约定
 

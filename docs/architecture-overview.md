@@ -145,7 +145,7 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 - 在 Client transport 中加入 endpoint 业务判断；
 - 在 `SessionStore`、`DaemonApplication` 或新的 Manager/Context 中重新聚合全部业务；
 - 在 Runtime 中读取 SQLite 或产品设置文件；
-- 从旧字段、旧目录猜测当前格式；旧库只允许按基线快照接管补齐结构。
+- 从旧字段、旧目录或旧数据库猜测当前格式；与当前迁移基线不匹配的库必须删除重建。
 - 先发布 SSE，再尝试提交数据库。
 
 这些约束由 `pnpm check:architecture` 和 `pnpm check:clean-slate` 持续检查。

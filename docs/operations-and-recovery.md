@@ -7,13 +7,13 @@
 - 同一个数据目录同一时刻只允许一个 Durable Application 写入。
 - 重启只恢复记录，不复活已经消失的模型请求、Tool 进程或 live Handle。
 - 看见 `running` 不代表一定还在跑；必须同时检查 Application owner 和 live runtime。
-- 基线前旧库由快照驱动的接管自动补齐结构，再应用增量迁移；不要手改 __drizzle_migrations。
+- 每次打开应用迁移链；不做旧库接管。与当前基线不匹配的库会带提示失败，删除重建即可；不要手改 __drizzle_migrations。
 
 ## 启动到 ready 的顺序
 
 ```text
 打开 SQLite
-  -> 接管基线前旧库并应用增量迁移
+  -> 应用迁移链（基线 + 增量）
   -> 取得 Application Owner 租约
   -> 恢复 Projection Settlement
   -> 收束失去进程的 Run / Attempt / Permission / Child
@@ -119,15 +119,13 @@ Application backup 可以包含：
 - 仍为活动态的记录会走普通启动恢复；
 - 迁移链必须完整：基线 `0000_current_schema.sql` 与其后增量迁移的 journal 与文件一一对应。
 
-旧库由快照驱动的接管处理，不要手工改 `__drizzle_migrations`；接管只补齐基线快照的结构，不做字段猜测。
+不要手工改 `__drizzle_migrations`；与当前基线不匹配的库不做兼容，删除重建即可。
 
-## schema 演进与旧库接管
+## schema 演进
 
-- 迁移链以 `0000_current_schema.sql` 为基线，其后为增量迁移；启动时按 `__drizzle_migrations` 水位线应用。
-- 基线前旧库（表结构属于当前基线世代、但缺列/索引或含废弃表）由快照对账一次性接管补齐，再应用增量迁移。
-- 接管只做可加性变更：缺列补列、缺索引建索引、删除基线中不存在的表；改名/改类型/数据变换必须写显式迁移文件。
-- 缺整表、缺主键列、列或索引定义冲突会明确失败，不做猜测。
-- 需要继续使用更早世代的旧数据时，改用对应旧版本运行并按需导出；新版本不负责跨世代转换。
+- 迁移链以 `0000_current_schema.sql` 为基线，其后为增量迁移；每次打开时按 `__drizzle_migrations` 水位线应用。
+- 不做旧库接管：与当前基线不匹配的库会在启动时带提示失败，删除重建即可。
+- 改名/改类型/数据变换等不可加性变更必须写显式迁移文件。
 
 ## Native Plugin 恢复
 
