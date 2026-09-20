@@ -74,4 +74,59 @@ describe("syncEvents reconnect", () => {
     expect(sources).toEqual(["snapshot", "reconnecting", "snapshot"])
     expect(getState).toHaveBeenCalledTimes(2)
   })
+
+  it("keeps reconnecting when the resync snapshot fails", async () => {
+    const getState = vi
+      .fn<() => Promise<SessionStateSnapshot>>()
+      .mockResolvedValueOnce(snapshot(1))
+      .mockRejectedValueOnce(new Error("snapshot boom"))
+      .mockResolvedValue(snapshot(1))
+    const client = {
+      sessions: { getState },
+      events: { list: vi.fn(async () => []), stream: vi.fn(() => emptyStream()) },
+    }
+
+    const sources: string[] = []
+    for await (const update of syncEvents(client as never, {
+      sessionId: "s1",
+      reconnectDelayMs: () => 0,
+    })) {
+      sources.push(update.source)
+      if (sources.length >= 4) break
+    }
+
+    expect(sources).toEqual(["snapshot", "reconnecting", "reconnecting", "snapshot"])
+    expect(getState).toHaveBeenCalledTimes(3)
+  })
+
+  it("keeps reconnecting when consecutive resync snapshots fail", async () => {
+    const getState = vi
+      .fn<() => Promise<SessionStateSnapshot>>()
+      .mockResolvedValueOnce(snapshot(1))
+      .mockRejectedValueOnce(new Error("snapshot boom"))
+      .mockRejectedValueOnce(new Error("snapshot boom"))
+      .mockResolvedValue(snapshot(1))
+    const client = {
+      sessions: { getState },
+      events: { list: vi.fn(async () => []), stream: vi.fn(() => emptyStream()) },
+    }
+
+    const sources: string[] = []
+    for await (const update of syncEvents(client as never, {
+      sessionId: "s1",
+      reconnectDelayMs: () => 0,
+    })) {
+      sources.push(update.source)
+      if (sources.length >= 5) break
+    }
+
+    expect(sources).toEqual([
+      "snapshot",
+      "reconnecting",
+      "reconnecting",
+      "reconnecting",
+      "snapshot",
+    ])
+    expect(getState).toHaveBeenCalledTimes(4)
+  })
 })

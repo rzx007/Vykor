@@ -95,6 +95,23 @@ async function* liveWithReconnect(
   let attempt = 0;
   const delayMs = options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
 
+  const applyResync = async (): Promise<"resynced" | "resumed" | "aborted"> => {
+    if (!resync) {
+      cursor = state.lastSeq;
+      return "resumed";
+    }
+    try {
+      const refreshed = await resync(state);
+      state = refreshed.state;
+      cursor = Math.max(refreshed.cursor, state.lastSeq);
+      return "resynced";
+    } catch (error) {
+      if (isAbortError(error) || options.signal?.aborted) return "aborted";
+      cursor = state.lastSeq;
+      return "resumed";
+    }
+  };
+
   while (!options.signal?.aborted) {
     try {
       for await (const event of client.events.stream({
@@ -129,28 +146,18 @@ async function* liveWithReconnect(
       yield { state, source: "reconnecting" };
       if (!(await waitForReconnect(delayMs(attempt), options.signal))) return;
       attempt += 1;
-      if (resync) {
-        const refreshed = await resync(state);
-        state = refreshed.state;
-        cursor = refreshed.cursor;
-        yield { state, source: "snapshot" };
-      } else {
-        cursor = state.lastSeq;
-      }
+      const outcome = await applyResync();
+      if (outcome === "aborted") return;
+      if (outcome === "resynced") yield { state, source: "snapshot" };
     } catch (error) {
       if (error instanceof UnsupportedSessionEventSchemaVersionError) throw error;
       if (isAbortError(error) || options.signal?.aborted) return;
       yield { state, source: "reconnecting" };
       if (!(await waitForReconnect(delayMs(attempt), options.signal))) return;
       attempt += 1;
-      if (resync) {
-        const refreshed = await resync(state);
-        state = refreshed.state;
-        cursor = refreshed.cursor;
-        yield { state, source: "snapshot" };
-      } else {
-        cursor = state.lastSeq;
-      }
+      const outcome = await applyResync();
+      if (outcome === "aborted") return;
+      if (outcome === "resynced") yield { state, source: "snapshot" };
     }
   }
 }
