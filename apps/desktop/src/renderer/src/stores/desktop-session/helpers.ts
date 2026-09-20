@@ -134,11 +134,8 @@ export function projectFromSession(session: DesktopSessionRecord): DesktopProjec
   const normalized = session.cwd.replace(/[\\/]+$/, "")
   const directoryName = normalized.split(/[\\/]/).pop() || session.cwd
   const title = session.title?.trim()
-  // 项目外/渠道会话的工作区名用会话标题，避免右侧工具显示 `oc_...-hash` 目录名。
-  const name =
-    title && (isChannelSession(session) || session.workspaceMode === "outside_project")
-      ? title
-      : directoryName
+  // 渠道会话的工作区名用会话标题，避免右侧工具显示 `oc_...-hash` 目录名。
+  const name = title && isChannelSession(session) ? title : directoryName
   return {
     id: session.projectId ?? session.cwd,
     name,
