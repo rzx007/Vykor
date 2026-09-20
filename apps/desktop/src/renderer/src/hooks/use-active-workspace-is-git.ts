@@ -26,10 +26,7 @@ export function useActiveWorkspaceIsGit(): boolean | null {
   const [probed, setProbed] = useState<{ path: string; value: boolean } | null>(null)
 
   useEffect(() => {
-    if (isProjectSession || !workspacePath) {
-      setProbed(null)
-      return
-    }
+    if (isProjectSession || !workspacePath) return
     let cancelled = false
     void probeWorkspaceGit(workspacePath).then((value) => {
       if (!cancelled) setProbed({ path: workspacePath, value })
