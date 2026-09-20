@@ -5,7 +5,9 @@ import type { DesktopSessionInput } from "@shared/session-types"
 import { messageTextContent } from "../message/message-content"
 import { AssistantMessage } from "../message/assistant-message"
 import { buildConversationEntries } from "../message/conversation-turn-model"
+import { ContextCompactionDivider } from "../message/context-compaction-divider"
 import { visibleTranscriptParts } from "./transcript-visibility"
+import { planTurnBlocks } from "./turn-block-plan"
 import { Marker, MarkerContent, MarkerIcon } from "@renderer/components/ui/marker"
 import { MessageScrollerItem } from "@renderer/components/ui/message-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
@@ -80,15 +82,24 @@ export function ConversationTranscript({
         if (entry.type === "system") {
           return (
             <MessageScrollerItem key={entry.system.id} messageId={entry.system.id}>
-              <MessageBlock
-                message={entry.system.message}
-                parts={entry.system.parts}
-                streaming={false}
-                onOpenFile={onOpenFile}
-                canOpenReview={canOpenReview}
-                onOpenReview={onOpenReview}
-                onOpenTerminal={onOpenTerminal}
-              />
+              {entry.system.compactionPhase ? (
+                <ContextCompactionDivider
+                  presentation={{
+                    kind: "context_compaction",
+                    phase: entry.system.compactionPhase,
+                  }}
+                />
+              ) : (
+                <MessageBlock
+                  message={entry.system.message}
+                  parts={entry.system.parts}
+                  streaming={false}
+                  onOpenFile={onOpenFile}
+                  canOpenReview={canOpenReview}
+                  onOpenReview={onOpenReview}
+                  onOpenTerminal={onOpenTerminal}
+                />
+              )}
             </MessageScrollerItem>
           )
         }
@@ -118,30 +129,39 @@ export function ConversationTranscript({
                 />
               </MessageScrollerItem>
             ) : null}
-            {entry.turn.assistantMessages.length > 0 ? (
-              <MessageScrollerItem
-                messageId={entry.turn.assistantMessages.at(-1)?.id ?? `${entry.turn.id}-assistant`}
-                className="group/msg min-w-0"
-              >
-                <AssistantMessage
-                  parts={entry.turn.assistantParts}
-                  streaming={running && entry === lastTurn}
-                  onOpenFile={onOpenFile}
-                  canOpenReview={canOpenReview}
-                  onOpenReview={onOpenReview}
-                  onOpenTerminal={onOpenTerminal}
-                />
-                {running && entry === lastTurn ? null : (
-                  <AssistantMessageActions
-                    message={entry.turn.assistantMessages.at(-1)}
-                    content={messageTextContent(entry.turn.assistantParts)}
-                    disabled={false}
-                    onCopy={onCopyAssistantMessage}
-                    onFork={onForkAssistantMessage}
+            {planTurnBlocks(entry.turn, { streaming: running && entry === lastTurn }).map((item) =>
+              item.kind === "divider" && item.phase ? (
+                <MessageScrollerItem key={item.key} messageId={item.messageId}>
+                  <ContextCompactionDivider
+                    presentation={{ kind: "context_compaction", phase: item.phase }}
                   />
-                )}
-              </MessageScrollerItem>
-            ) : null}
+                </MessageScrollerItem>
+              ) : (
+                <MessageScrollerItem
+                  key={item.key}
+                  messageId={item.messageId}
+                  className="group/msg min-w-0"
+                >
+                  <AssistantMessage
+                    parts={item.parts}
+                    streaming={item.streaming}
+                    onOpenFile={onOpenFile}
+                    canOpenReview={canOpenReview}
+                    onOpenReview={onOpenReview}
+                    onOpenTerminal={onOpenTerminal}
+                  />
+                  {item.showActions ? (
+                    <AssistantMessageActions
+                      message={entry.turn.assistantMessages.at(-1)}
+                      content={messageTextContent(entry.turn.assistantParts)}
+                      disabled={false}
+                      onCopy={onCopyAssistantMessage}
+                      onFork={onForkAssistantMessage}
+                    />
+                  ) : null}
+                </MessageScrollerItem>
+              )
+            )}
             {turnFailures.map((run) => (
               <MessageScrollerItem key={run.id} messageId={`run-error-${run.id}`}>
                 <RunErrorNotice error={run.error} />
