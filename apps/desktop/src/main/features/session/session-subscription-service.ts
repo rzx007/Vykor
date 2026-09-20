@@ -20,6 +20,7 @@ import type {
   OpenDesktopAuxSessionInput,
 } from "../../../shared/session-types"
 import { isOutsideProjectWorkspacePath } from "./outside-project-workspace"
+import { pumpSubscription } from "./session-subscription-pump"
 import { reserveSubscriptionSnapshot, SessionSubscriptionRegistry } from "./session-subscriptions"
 import { app } from "electron"
 
@@ -77,7 +78,7 @@ export class SessionSubscriptionService {
     )
 
     setTimeout(() => {
-      void this.pumpSession(webContents, primarySubscriptionSlot, sessionId, controller, iterator)
+      void this.pumpSession(client, webContents, primarySubscriptionSlot, sessionId, controller, iterator)
     }, 0)
 
     return toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
@@ -107,12 +108,13 @@ export class SessionSubscriptionService {
       "无法加载辅助会话状态。"
     )
     setTimeout(() => {
-      void this.pumpSession(webContents, slot, sessionId, controller, iterator, subscriptionId)
+      void this.pumpSession(client, webContents, slot, sessionId, controller, iterator, subscriptionId)
     }, 0)
     return toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
   }
 
   private async pumpSession(
+    client: SessionSubscriptionClient,
     webContents: WebContents,
     slot: string,
     sessionId: string,
@@ -120,28 +122,33 @@ export class SessionSubscriptionService {
     iterator: AsyncIterator<SyncEventUpdate>,
     auxiliarySubscriptionId?: string
   ): Promise<void> {
-    try {
-      while (!controller.signal.aborted && !webContents.isDestroyed()) {
-        const update = await iterator.next()
-        if (update.done) return
-        const current = this.subscriptions.get(webContents.id, slot)
-        if (!current || current.controller !== controller || current.sessionId !== sessionId) return
-        const view = toDesktopSessionView(update.value.state, sessionId, update.value.source)
-        if (auxiliarySubscriptionId) {
-          const payload: DesktopAuxSessionUpdate = {
-            subscriptionId: auxiliarySubscriptionId,
-            view,
-          }
-          webContents.send(IpcEvents.sessionAuxUpdated, payload)
-        } else {
-          webContents.send(IpcEvents.sessionUpdated, view)
-        }
+    const subscription = this.subscriptions.get(webContents.id, slot)
+    const send = (view: DesktopSessionView): void => {
+      if (auxiliarySubscriptionId) {
+        const payload: DesktopAuxSessionUpdate = { subscriptionId: auxiliarySubscriptionId, view }
+        webContents.send(IpcEvents.sessionAuxUpdated, payload)
+        return
       }
-    } catch (error) {
-      if (!controller.signal.aborted && !webContents.isDestroyed()) {
-        console.error(`[session] sync failed for ${sessionId}`, error)
-      }
+      webContents.send(IpcEvents.sessionUpdated, view)
     }
+
+    await pumpSubscription<SyncEventUpdate>({
+      initialIterator: iterator,
+      createIterator: () =>
+        syncEvents(client, { sessionId, signal: controller.signal })[Symbol.asyncIterator](),
+      isActive: () =>
+        !controller.signal.aborted &&
+        !webContents.isDestroyed() &&
+        Boolean(subscription) &&
+        this.subscriptions.isCurrent(webContents.id, slot, subscription!),
+      onUpdate: (update) => send(toDesktopSessionView(update.state, sessionId, update.source)),
+      onReconnecting: (last) => send(toDesktopSessionView(last.state, sessionId, "reconnecting")),
+      onError: (error) => {
+        if (!controller.signal.aborted && !webContents.isDestroyed()) {
+          console.error(`[session] sync failed for ${sessionId}`, error)
+        }
+      },
+    })
   }
 }
 
