@@ -13,6 +13,7 @@ import {
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";
+import { channelConnectorLabel } from "./channel-connector-labels.js";
 import type { ChannelAttachmentDownload } from "../../daemon/channel-runtime-service.js";
 import type { SessionCommandService } from "../session/session-command-service.js";
 import type { SessionInteractionService } from "../session/session-interaction-service.js";
@@ -340,7 +341,7 @@ export class ChannelApplicationService {
     const created = this.context.sessionCommands.createSession({
       cwd: input.cwd,
       model: input.model,
-      title: `${input.connector} · ${input.chatId}`,
+      title: channelSessionTitle(input),
       metadata: {
         source: "channel",
         externalConversation: {
@@ -350,6 +351,7 @@ export class ChannelApplicationService {
           chatId: input.chatId,
           ...(input.threadId ? { threadId: input.threadId } : {}),
         },
+        desktop: { workspaceMode: "outside_project" },
       },
     });
     return this.context.channels.upsertConversation({
@@ -362,4 +364,18 @@ export class ChannelApplicationService {
       sessionId: created.id,
     });
   }
+}
+
+/**
+ * 渠道会话标题：用第一条消息（折叠空白、取第一句、按码点截断到 20）。
+ * 首条是图片/文件等无正文时回退 `平台显示名 · chatId`。
+ */
+function channelSessionTitle(input: DurableChannelMessageInput): string {
+  const normalized = input.content.replace(/\s+/g, " ").trim();
+  const firstSentence = normalized.match(/^.*?[。！？.!?]/)?.[0] ?? normalized;
+  const title = [...firstSentence].slice(0, 20).join("");
+  // 纯标点/纯空白不算标题，回退到平台显示名 + 会话地址。
+  return /[\p{L}\p{N}]/u.test(title)
+    ? title
+    : `${channelConnectorLabel(input.connector)} · ${input.chatId}`;
 }

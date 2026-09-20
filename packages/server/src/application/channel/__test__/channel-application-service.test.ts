@@ -326,6 +326,108 @@ describe("ChannelApplicationService contracts", () => {
       expect.objectContaining({ id: fixture.conversation.id, sessionId: "s2" }),
     );
   });
+
+  function newConversationFixture() {
+    const fixture = createFixture();
+    fixture.channels.findConversation.mockReturnValue(undefined);
+    fixture.sessions.createSession.mockReturnValue({ id: "s1" });
+    return fixture;
+  }
+
+  it("titles a new channel session from the first message and marks it outside-project", async () => {
+    const fixture = newConversationFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "oc_1",
+      externalMessageId: "msg-title",
+      content: "帮我看下这个报错",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    expect(fixture.sessions.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "帮我看下这个报错",
+        metadata: expect.objectContaining({
+          source: "channel",
+          desktop: { workspaceMode: "outside_project" },
+        }),
+      }),
+    );
+  });
+
+  it("falls back to the localized connector and chat id when the first message has no text", async () => {
+    const fixture = newConversationFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "oc_1",
+      externalMessageId: "msg-empty",
+      content: "",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    expect(fixture.sessions.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "飞书 · oc_1" }),
+    );
+  });
+
+  it("falls back when the first message is punctuation only", async () => {
+    const fixture = newConversationFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "lark",
+      accountId: "app-1",
+      chatId: "oc_2",
+      externalMessageId: "msg-punct",
+      content: "  。！  ",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    expect(fixture.sessions.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "飞书（国际） · oc_2" }),
+    );
+  });
+
+  it("caps a long first message at 20 code points and takes the first sentence", async () => {
+    const fixture = newConversationFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "oc_3",
+      externalMessageId: "msg-long",
+      content: "这是一段非常非常长的第一条消息它没有任何标点符号需要被截断到二十个字符以内",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    const title = (fixture.sessions.createSession.mock.calls[0]![0] as { title: string }).title;
+    expect([...title]).toHaveLength(20);
+
+    fixture.sessions.createSession.mockClear();
+    await service.handleMessage({
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "oc_4",
+      externalMessageId: "msg-sentence",
+      content: "第一句。第二句不应该出现",
+      cwd: "/repo",
+      model: "m",
+    });
+    expect(fixture.sessions.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "第一句。" }),
+    );
+  });
 });
 
 describe("ChannelApplicationService inbound attachments", () => {
