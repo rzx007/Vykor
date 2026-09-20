@@ -9,9 +9,8 @@ import { ContextCompactionDivider } from "../message/context-compaction-divider"
 import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
 import { selectRunNotices } from "./run-notices"
-import { Marker, MarkerContent, MarkerIcon } from "@renderer/components/ui/marker"
+import { LoadingState } from "@renderer/components/ui/loading-state"
 import { MessageScrollerItem } from "@renderer/components/ui/message-scroller"
-import { Spinner } from "@renderer/components/ui/spinner"
 import type {
   DesktopSessionMessage,
   DesktopSessionPart,
@@ -172,13 +171,8 @@ export function ConversationTranscript({
         )
       })}
       {running ? (
-        <MessageScrollerItem messageId="conversation-running-status text-foreground/30">
-          <Marker>
-            <MarkerIcon>
-              <Spinner />
-            </MarkerIcon>
-            <MarkerContent className="shimmer">正在处理</MarkerContent>
-          </Marker>
+        <MessageScrollerItem messageId="conversation-running-status">
+          <LoadingState label="正在处理" variant="Dots" />
         </MessageScrollerItem>
       ) : null}
     </>

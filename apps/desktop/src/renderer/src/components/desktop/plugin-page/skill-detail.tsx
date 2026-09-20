@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { cjk } from "@streamdown/cjk"
 import { Copy, Download, MoreHorizontal, Trash2 } from "lucide-react"
 import { Streamdown } from "streamdown"
 import type { DesktopSkillInfo } from "@shared/skill-types"
@@ -104,7 +105,12 @@ export function SkillDetail({
           aria-label={`${skill.name} 技能说明`}
           className="desktop-markdown-preview min-h-0 flex-1 overflow-auto rounded-xl bg-muted/40 px-5 py-4 text-sm leading-7 focus-visible:outline-2 focus-visible:outline-ring"
         >
-          <Streamdown mode="static" controls={false} className="desktop-streamdown">
+          <Streamdown
+            mode="static"
+            controls={false}
+            plugins={{ cjk }}
+            className="desktop-streamdown"
+          >
             {skillBody(skill.content)}
           </Streamdown>
         </article>

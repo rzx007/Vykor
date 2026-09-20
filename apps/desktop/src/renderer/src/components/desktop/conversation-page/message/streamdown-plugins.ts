@@ -1,3 +1,4 @@
+import { cjk } from "@streamdown/cjk"
 import type { CustomRenderer, PluginConfig } from "streamdown"
 
 import { MermaidDiagram } from "./mermaid-diagram"
@@ -19,6 +20,7 @@ const cspSafeCodeHighlighter: NonNullable<PluginConfig["code"]> = {
 }
 
 export const streamdownPlugins: PluginConfig = {
+  cjk,
   code: cspSafeCodeHighlighter,
   renderers: customRenderers,
 }

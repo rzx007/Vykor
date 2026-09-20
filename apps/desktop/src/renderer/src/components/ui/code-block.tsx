@@ -2,11 +2,10 @@
 
 import { DEFAULT_THEMES, type FileContents } from "@pierre/diffs"
 import { File as PierreFile, type FileOptions } from "@pierre/diffs/react"
-import { Check, Copy, FileCode2 } from "lucide-react"
+import { Check, CodeXml, Copy } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { cn } from "@renderer/lib/utils"
-import { Button } from "@renderer/components/ui/button"
 
 // -- Styles --
 // Injected once at runtime — ships as a single self-contained file with no
@@ -47,13 +46,28 @@ function CopyBtn({ code }: { code: string }): React.JSX.Element {
     if (typeof window === "undefined" || !navigator?.clipboard) return
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setTimeout(() => setCopied(false), 1600)
     })
   }
   return (
-    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={copy}>
-      {copied ? <Check className="h-3.5 w-3.5 text-teal-400" /> : <Copy className="h-3.5 w-3.5" />}
-    </Button>
+    <button
+      type="button"
+      aria-label="Copy code"
+      onClick={copy}
+      className={cn(
+        "-mr-1 ml-auto flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] font-medium transition-colors",
+        copied
+          ? "text-emerald-600 dark:text-emerald-400"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      )}
+    >
+      {copied ? (
+        <Check className="h-3 w-3" strokeWidth={3} />
+      ) : (
+        <Copy className="h-3 w-3" strokeWidth={2} />
+      )}
+      {copied ? "Copied" : "Copy"}
+    </button>
   )
 }
 
@@ -102,6 +116,10 @@ function CodeRenderer({
         :host {
           display: block;
           min-width: max-content;
+          --diffs-font-size: var(--code-font-size);
+          --diffs-line-height: var(--code-line-height);
+          --diffs-fg-number-override: var(--muted-foreground);
+          --diffs-gap-style: 1px solid var(--border);
           background: transparent;
           color: var(--content-foreground);
           font-family: var(--font-mono);
@@ -130,14 +148,10 @@ function CodeRenderer({
 
   return (
     <div
-      className={cn(
-        "overflow-x-auto",
-        scrollable && "overflow-y-auto",
-        bodyClassName ?? "bg-background"
-      )}
+      className={cn("overflow-x-auto", scrollable && "overflow-y-auto", bodyClassName)}
       style={scrollable ? { maxHeight: `${maxHeight}px` } : undefined}
     >
-      <div className={cn("px-4 py-3", highlightLines?.length && "cbhl")}>
+      <div className={cn(highlightLines?.length && "cbhl")}>
         <PierreFile file={file} options={options} />
       </div>
     </div>
@@ -208,12 +222,19 @@ export function CodeBlock({
   className,
 }: CodeBlockProps): React.JSX.Element {
   return (
-    <div className={cn("overflow-hidden rounded-lg border", className)}>
-      <div className="flex h-10 items-center justify-between gap-2 border-b bg-muted/50 px-4">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <FileCode2 className="h-4 w-4 shrink-0" />
-          <span className="truncate font-mono text-xs lowercase">{filename ?? language}</span>
-        </div>
+    <div
+      className={cn(
+        "w-full overflow-hidden rounded-xl border border-border bg-muted/40 shadow-sm",
+        className
+      )}
+    >
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4 text-[12.5px]">
+        <span className="inline-flex min-w-0 items-center gap-[7px]">
+          <CodeXml className="size-[15px] shrink-0 text-muted-foreground" strokeWidth={1.8} />
+          <span className="truncate font-mono leading-none text-foreground">
+            {filename ?? language}
+          </span>
+        </span>
         <CopyBtn code={code} />
       </div>
       <CodeRenderer
