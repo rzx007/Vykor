@@ -69,6 +69,26 @@ describe("pumpSubscription", () => {
     expect(events).toEqual(["a", "reconnecting:a", "b"])
   })
 
+  it("drops an update that arrives after the subscription went inactive", async () => {
+    const updates: number[] = []
+    let active = true
+    const iterator: AsyncIterator<number> = {
+      next: async () => {
+        active = false
+        return { done: false, value: 1 }
+      },
+    }
+
+    await pumpSubscription<number>({
+      createIterator: () => iterator,
+      isActive: () => active,
+      onUpdate: (value) => updates.push(value),
+      backoffMs: () => 0,
+    })
+
+    expect(updates).toEqual([])
+  })
+
   it("stops immediately when inactive", async () => {
     const createIterator = vi.fn()
     await pumpSubscription<number>({

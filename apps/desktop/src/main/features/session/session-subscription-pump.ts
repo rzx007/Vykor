@@ -30,6 +30,7 @@ export async function pumpSubscription<T>(options: SubscriptionPumpOptions<T>): 
       while (options.isActive()) {
         const update = await iterator.next()
         if (update.done) break
+        if (!options.isActive()) break
         last = update.value
         options.onUpdate(update.value)
       }
