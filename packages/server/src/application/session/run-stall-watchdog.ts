@@ -37,21 +37,28 @@ export class RunStallWatchdog {
 
   check(): void {
     if (this.disposed) return
-    const now = this.now()
-    const activity = this.options.readActivity()
-    const latest = Math.max(activity.runUpdatedAt, activity.taskUpdatedAt)
-    if (latest > this.lastActivityAt) {
-      this.lastActivityAt = latest
-      return
+    try {
+      const now = this.now()
+      const activity = this.options.readActivity()
+      const latest = Math.max(activity.runUpdatedAt, activity.taskUpdatedAt)
+      if (latest > this.lastActivityAt) {
+        this.lastActivityAt = latest
+        return
+      }
+      if (now - this.lastActivityAt < this.options.staleMs) return
+      if (this.options.hasPendingPermission() || this.options.hasRunningChildTask()) {
+        this.lastActivityAt = now
+        return
+      }
+      this.options.log?.(`run ${this.options.runId} made no progress for ${now - this.lastActivityAt}ms`)
+      this.dispose()
+      this.options.onStall()
+    } catch (error) {
+      // 定时器回调里抛异常会带走进程；看门狗只负责记录，然后等下一次检查。
+      this.options.log?.(
+        `run ${this.options.runId} stall check failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
-    if (now - this.lastActivityAt < this.options.staleMs) return
-    if (this.options.hasPendingPermission() || this.options.hasRunningChildTask()) {
-      this.lastActivityAt = now
-      return
-    }
-    this.options.log?.(`run ${this.options.runId} made no progress for ${now - this.lastActivityAt}ms`)
-    this.dispose()
-    this.options.onStall()
   }
 
   dispose(): void {

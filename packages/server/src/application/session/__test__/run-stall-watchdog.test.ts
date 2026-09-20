@@ -59,6 +59,20 @@ describe("RunStallWatchdog", () => {
     expect(stalls).toEqual(["stall"])
   })
 
+  it("logs and stays alive when reading activity throws", () => {
+    const log = vi.fn()
+    const { watchdog: instance, advance } = watchdog({
+      readActivity: () => {
+        throw new Error("activity boom")
+      },
+      log,
+    })
+
+    advance(1_000)
+    expect(() => instance.check()).not.toThrow()
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("activity boom"))
+  })
+
   it("does not fire while a permission request is pending", () => {
     const { watchdog: instance, stalls, advance } = watchdog({
       hasPendingPermission: () => true,

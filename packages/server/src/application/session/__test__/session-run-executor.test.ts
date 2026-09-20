@@ -423,6 +423,45 @@ describe("SessionRunExecutor", () => {
     );
 
     expect(interrupt).toHaveBeenCalledWith(expect.stringContaining("无进展"));
+    expect(store.spies.updateRun).toHaveBeenCalledWith(
+      "run-1",
+      expect.objectContaining({ metadata: expect.objectContaining({ stalled: true }) }),
+    );
+  });
+
+  it("keeps a run alive while transcript messages keep updating", async () => {
+    const store = createStore();
+    store.data.conversations.listMessages = vi.fn(() => [{ updatedAt: Date.now() } as never]);
+    const handle = deferredHandle();
+    const interrupt = handle.interrupt as ReturnType<typeof vi.fn>;
+    const executor = new SessionRunExecutor({
+      data: store.data,
+      attachments: store.attachments,
+      goals: store.goals,
+      agentPool: {
+        configured: true,
+        acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }),
+        close: async () => {},
+        closeIfStale: async () => {},
+      } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1",
+      log: () => {},
+      stallTimeoutMs: 30,
+      stallCheckIntervalMs: 5,
+    });
+
+    const execution = executor.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    expect(interrupt).not.toHaveBeenCalled();
+
+    handle.complete();
+    await execution;
   });
 });
 
@@ -530,6 +569,30 @@ function hangingHandle(): AgentRunHandle {
       rejectResult(new Error(reason ?? "Run interrupted"));
     }),
   } as unknown as AgentRunHandle;
+}
+
+function deferredHandle(): AgentRunHandle & { complete: () => void } {
+  let resolveResult!: (value: unknown) => void;
+  const result = new Promise<never>((resolve) => {
+    resolveResult = resolve as (value: unknown) => void;
+  });
+  return {
+    id: "run-1",
+    inputId: "input-1",
+    sessionId: "s1",
+    traceId: "trace-1",
+    started: Promise.resolve({ sessionId: "s1", inputId: "input-1", runId: "run-1" }),
+    result,
+    steer: vi.fn(),
+    interrupt: vi.fn(async () => {}),
+    complete: () =>
+      resolveResult({
+        status: "completed",
+        output: "ok",
+        history: [],
+        usage: { inputTokens: 0, outputTokens: 0 },
+      }),
+  } as unknown as AgentRunHandle & { complete: () => void };
 }
 
 function completedHandle(): AgentRunHandle {

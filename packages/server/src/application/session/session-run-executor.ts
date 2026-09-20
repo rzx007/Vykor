@@ -257,9 +257,14 @@ export class SessionRunExecutor {
         intervalMs: this.context.stallCheckIntervalMs ?? DEFAULT_RUN_STALL_CHECK_INTERVAL_MS,
         readActivity: () => ({
           runUpdatedAt: this.context.data.runs.getRun(runId)?.updatedAt ?? 0,
-          taskUpdatedAt: this.context.data.runs
-            .listSessionTasks(sessionId)
-            .reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
+          taskUpdatedAt: Math.max(
+            this.context.data.runs
+              .listSessionTasks(sessionId)
+              .reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
+            this.context.data.conversations
+              .listMessages(sessionId)
+              .reduce((latest, message) => Math.max(latest, message.updatedAt), 0),
+          ),
         }),
         hasPendingPermission: () =>
           this.context.data.permissions
@@ -270,9 +275,20 @@ export class SessionRunExecutor {
             .listSessionTasks(sessionId)
             .some((task) => Boolean(task.childSessionId) && task.status === "running"),
         onStall: () => {
-          void run.interrupt(
-            `运行超过 ${Math.round(stallTimeoutMs / 60_000)} 分钟无进展，已自动终止`,
-          );
+          this.context.data.runs.updateRun(runId, { metadata: { stalled: true } });
+          void run
+            .interrupt(
+              `运行超过 ${Math.round(stallTimeoutMs / 60_000)} 分钟无进展，已自动终止`,
+            )
+            .catch((error) =>
+              this.context.log({
+                level: "warn",
+                event: "session.run.stall_interrupt_failed",
+                sessionId,
+                runId,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            );
         },
         log: (message) =>
           this.context.log({
