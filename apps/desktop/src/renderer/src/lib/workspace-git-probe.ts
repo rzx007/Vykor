@@ -25,17 +25,21 @@ export async function probeWorkspaceGit(path: string): Promise<boolean> {
     return current.result
   }
 
-  const request = window.desktop.git.isRepository({ path }).then(
-    (response) => {
-      const result = response.isRepository
-      entries.set(key, { result, completedAt: Date.now() })
-      return result
-    },
-    () => {
+  const request = window.desktop.git
+    .isRepository({ path })
+    .then((response) => {
+      const isRepository = response?.isRepository
+      if (isRepository !== true && isRepository !== false) {
+        entries.delete(key)
+        return false
+      }
+      entries.set(key, { result: isRepository, completedAt: Date.now() })
+      return isRepository
+    })
+    .catch(() => {
       entries.delete(key)
       return false
-    }
-  )
+    })
 
   entries.set(key, { ...current, inFlight: request })
   return request

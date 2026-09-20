@@ -96,6 +96,19 @@ describe("probeWorkspaceGit", () => {
     expect(probe).toHaveBeenCalledTimes(2)
   })
 
+  it("returns false when the IPC probe resolves with a malformed response", async () => {
+    const probe = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: { git: { isRepository: probe } },
+    })
+
+    await expect(probeWorkspaceGit("D:/repo")).resolves.toBe(false)
+    await expect(probeWorkspaceGit("D:/repo")).resolves.toBe(false)
+
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
   it("returns false without probing for an empty path", async () => {
     const probe = installProbe(true)
 
