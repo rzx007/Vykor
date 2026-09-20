@@ -37,6 +37,7 @@ export class EventResource {
         signal: options.signal,
         decode: decodeSessionEventRecord,
         reconnect: options.transportReconnect ?? false,
+        idleTimeoutMs: options.idleTimeoutMs,
       },
     );
   }

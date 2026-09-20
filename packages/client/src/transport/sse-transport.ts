@@ -20,6 +20,8 @@ export interface SseStreamOptions<T = unknown> {
   reconnect?: boolean;
   reconnectDelayMs?: number;
   noBodyMessage?: string;
+  /** 超过该毫秒数没有收到任何原始 SSE 帧（含注释帧）就中止当前连接；0/未设置表示关闭。 */
+  idleTimeoutMs?: number;
 }
 
 export interface SseRawFrame {
@@ -133,24 +135,46 @@ export class SseTransport {
     let connected = false;
 
     while (!options.signal?.aborted) {
-      const headers = new Headers(options.headers);
-      if (lastEventId) headers.set("Last-Event-ID", lastEventId);
-      const requestUrl = connected && lastEventId ? withoutCursor(url) : url;
-      const response = await this.transport.requestResponse(
-        requestUrl.slice(this.transport.baseUrl.length),
-        { headers, signal: options.signal },
-      );
-      connected = true;
-      if (!response.body) {
-        throw new Error(options.noBodyMessage ?? "Event stream response has no body");
-      }
-
-      for await (const frame of readRawSseFrames(response.body)) {
-        if (frame.id !== undefined) lastEventId = frame.id;
-        if (frame.retry !== undefined) reconnectDelayMs = frame.retry;
-        if (frame.data !== undefined) {
-          yield (options.decode ?? ((value) => value as T))(JSON.parse(frame.data));
+      const connection = new AbortController();
+      const onOuterAbort = () => connection.abort(options.signal?.reason);
+      options.signal?.addEventListener("abort", onOuterAbort, { once: true });
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      let idleExpired = false;
+      const resetIdleTimer = () => {
+        if (!options.idleTimeoutMs || options.idleTimeoutMs <= 0) return;
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          idleExpired = true;
+          connection.abort("sse_idle_timeout");
+        }, options.idleTimeoutMs);
+      };
+      try {
+        const headers = new Headers(options.headers);
+        if (lastEventId) headers.set("Last-Event-ID", lastEventId);
+        const requestUrl = connected && lastEventId ? withoutCursor(url) : url;
+        const response = await this.transport.requestResponse(
+          requestUrl.slice(this.transport.baseUrl.length),
+          { headers, signal: connection.signal },
+        );
+        connected = true;
+        if (!response.body) {
+          throw new Error(options.noBodyMessage ?? "Event stream response has no body");
         }
+        resetIdleTimer();
+        try {
+          for await (const frame of readRawSseFrames(response.body, resetIdleTimer)) {
+            if (frame.id !== undefined) lastEventId = frame.id;
+            if (frame.retry !== undefined) reconnectDelayMs = frame.retry;
+            if (frame.data !== undefined) {
+              yield (options.decode ?? ((value) => value as T))(JSON.parse(frame.data));
+            }
+          }
+        } catch (error) {
+          if (!idleExpired) throw error;
+        }
+      } finally {
+        if (idleTimer) clearTimeout(idleTimer);
+        options.signal?.removeEventListener("abort", onOuterAbort);
       }
 
       if (!options.reconnect || options.signal?.aborted) return;
@@ -161,6 +185,7 @@ export class SseTransport {
 
 async function* readRawSseFrames(
   stream: ReadableStream<Uint8Array>,
+  onFrame?: () => void,
 ): AsyncIterable<SseRawFrame> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -173,11 +198,14 @@ async function* readRawSseFrames(
       const frames = buffer.split(/\r?\n\r?\n/);
       buffer = frames.pop() ?? "";
       for (const value of frames) {
+        // 注释/keepalive 帧解析后会被丢弃，但同样算一次活动。
+        onFrame?.();
         const frame = parseRawSseFrame(value);
         if (frame) yield frame;
       }
     }
     buffer += decoder.decode();
+    onFrame?.();
     const frame = parseRawSseFrame(buffer);
     if (frame) yield frame;
   } finally {

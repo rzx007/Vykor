@@ -660,6 +660,8 @@ export interface EventSyncOptions {
    * Defaults to exponential backoff capped at 30s. Tests may pass `() => 0`.
    */
   reconnectDelayMs?: (attempt: number) => number;
+  /** 会话事件流空闲超时（毫秒）；默认由 sync 层填 60s。 */
+  idleTimeoutMs?: number;
 }
 
 /** `syncEvents` 产出的单次状态更新。 */
