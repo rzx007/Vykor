@@ -99,14 +99,23 @@ function reconcile(
 ): void {
   const previousForeignKeys = database.pragma("foreign_keys", { simple: true }) as number;
   database.pragma("foreign_keys = OFF");
-  database.exec("BEGIN");
+  let inTransaction = false;
   try {
+    database.exec("BEGIN");
+    inTransaction = true;
     for (const table of Object.values(snapshot.tables)) reconcileTable(database, table);
     dropExtraTables(database, snapshot);
     seedBaseline(database, baseline);
     database.exec("COMMIT");
+    inTransaction = false;
   } catch (error) {
-    database.exec("ROLLBACK");
+    if (inTransaction) {
+      try {
+        database.exec("ROLLBACK");
+      } catch {
+        // keep the original error
+      }
+    }
     throw error;
   } finally {
     database.pragma(`foreign_keys = ${previousForeignKeys ? "ON" : "OFF"}`);
@@ -177,10 +186,9 @@ function reconcileIndexes(database: Database.Database, table: AdoptionTable): vo
       database.exec(createIndexSql(table.name, index, true));
       continue;
     }
-    const expectedPartial = index.where !== undefined;
     if (
       current.isUnique !== index.isUnique ||
-      current.partial !== expectedPartial ||
+      normalizePredicate(current.where) !== normalizePredicate(index.where) ||
       current.columns.join(",") !== index.columns.join(",")
     ) {
       throw new LegacyAdoptionError(`legacy adoption: index definition differs: ${index.name}`);
@@ -191,25 +199,41 @@ function reconcileIndexes(database: Database.Database, table: AdoptionTable): vo
 function existingIndexes(
   database: Database.Database,
   tableName: string,
-): Map<string, { isUnique: boolean; partial: boolean; columns: string[] }> {
-  const result = new Map<string, { isUnique: boolean; partial: boolean; columns: string[] }>();
+): Map<string, { isUnique: boolean; columns: string[]; where: string | undefined }> {
+  const result = new Map<
+    string,
+    { isUnique: boolean; columns: string[]; where: string | undefined }
+  >();
   const list = database.pragma(`index_list(${quote(tableName)})`) as Array<{
     name: string;
     unique: number;
-    partial: number;
   }>;
   for (const row of list) {
     if (row.name.startsWith("sqlite_autoindex")) continue;
     const columns = (
       database.pragma(`index_info(${quote(row.name)})`) as Array<{ name: string }>
     ).map((info) => info.name);
+    const definition = database
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
+      .get(row.name) as { sql: string } | undefined;
     result.set(row.name, {
       isUnique: Boolean(row.unique),
-      partial: Boolean(row.partial),
       columns,
+      where: extractWhere(definition?.sql),
     });
   }
   return result;
+}
+
+function extractWhere(sql: string | undefined): string | undefined {
+  if (!sql) return undefined;
+  const match = sql.match(/\bWHERE\b([\s\S]*)$/i);
+  return match?.[1]?.trim();
+}
+
+function normalizePredicate(value: string | undefined): string {
+  if (value === undefined) return "";
+  return value.replace(/[`"]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function createIndexSql(

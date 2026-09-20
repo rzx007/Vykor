@@ -56,11 +56,14 @@ describe("adoptLegacyDatabase", () => {
       (c) => c.name,
     );
     expect(columns).toContain("platform_meta_json");
-    const index = (db.pragma("index_list(project_location)") as Array<{
-      name: string;
-      partial: number;
-    }>).find((row) => row.name === "project_location_active_path");
-    expect(index?.partial).toBe(1);
+    const indexSql = (
+      db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type='index' AND name='project_location_active_path'",
+        )
+        .get() as { sql: string }
+    ).sql;
+    expect(indexSql.replace(/[`"]/g, "")).toContain("WHERE project_location.status = 'active'");
     expect(db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'cron_job'").get()).toBeUndefined();
     expect(db.prepare("SELECT hash, created_at FROM __drizzle_migrations").all()).toEqual([
       { hash: baseline.hash, created_at: baseline.folderMillis },
@@ -70,6 +73,17 @@ describe("adoptLegacyDatabase", () => {
     expect(
       adoptLegacyDatabase(db, { baseline, snapshot: loadBaselineSnapshot(migrationsFolder) }),
     ).toBe(false);
+  });
+
+  it("rejects a partial index whose predicate differs", () => {
+    const db = baselineDatabase();
+    db.exec("DROP INDEX project_location_active_path");
+    db.exec(
+      "CREATE UNIQUE INDEX project_location_active_path ON project_location (normalized_path) WHERE \"project_location\".\"status\" = 'inactive'",
+    );
+    expect(() =>
+      adoptLegacyDatabase(db, { baseline, snapshot: loadBaselineSnapshot(migrationsFolder) }),
+    ).toThrow(LegacyAdoptionError);
   });
 
   it("returns false for a fresh database", () => {
