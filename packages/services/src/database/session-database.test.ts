@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
@@ -90,5 +91,41 @@ describe("SessionDatabase", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it("adopts a pre-baseline database on open and then applies incremental migrations", () => {
+    withTempPath((path) => {
+      const migrationsFolder = fileURLToPath(
+        new URL("../session-runtime/migrations/", import.meta.url),
+      );
+      const baselineSql = readFileSync(join(migrationsFolder, "0000_current_schema.sql"), "utf8");
+      const legacy = new Database(path);
+      for (const statement of baselineSql.split("--> statement-breakpoint")) {
+        const trimmed = statement.trim();
+        if (trimmed) legacy.exec(trimmed);
+      }
+      legacy.exec("ALTER TABLE channel_delivery DROP COLUMN platform_meta_json");
+      legacy.exec("CREATE TABLE cron_job (id text PRIMARY KEY NOT NULL)");
+      legacy.exec(
+        "CREATE TABLE __drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at numeric)",
+      );
+      legacy.exec("INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('stale', 1)");
+      legacy.close();
+
+      const database = SessionDatabase.open({ path });
+      try {
+        const columns = (
+          database.connection.pragma("table_info(channel_delivery)") as Array<{ name: string }>
+        ).map((column) => column.name);
+        expect(columns).toContain("platform_meta_json");
+        expect(
+          database.connection
+            .prepare("SELECT 1 FROM sqlite_master WHERE name = 'cron_job'")
+            .get(),
+        ).toBeUndefined();
+      } finally {
+        database.close();
+      }
+    });
   });
 });
