@@ -57,13 +57,16 @@ im.messageResource.get({ params: { type: "image" | "file" }, path: { message_id,
 
 问题：`ChannelApplicationService`（`packages/server/src/application/daemon-application.ts:758`）比持有飞书客户端的 adapter（同文件 `:771` 之后的 `ChannelRuntimeService`，且运行时才创建、会重启换凭据）先存在。因此下载器**不能**是启动前塞进去的固定对象，必须是一个**由运行时服务持有、随连接变化更新**的回调。
 
-做法：
+做法（关键：经 `ConnectorRuntimeHandle` 传递，而不是在 `defaultCreateRuntime` 里直接写服务字段）：
 
-1. `ChannelRuntimeService` 新增私有字段 `attachmentDownloader: ((messageId, attachment) => Promise<...>) | null`。
-2. `defaultCreateRuntime`（`packages/server/src/daemon/channel-runtime-service.ts:451`）创建 adapter 后，把 `adapter.downloadAttachment.bind(adapter)` 写入该字段。
-3. `handle.stop()` 时把该字段清 `null`，避免用已断开客户端下载。
-4. 新增公开方法 `downloadAttachment(messageId, attachment)`：读该字段；未连上返回 `undefined`（上层按失败处理）。
-5. `daemon-application.ts:758` 给 `ChannelApplicationService` 注入 `downloadChannelAttachment: (messageId, att) => this.channelRuntime?.downloadAttachment(messageId, att)`（闭包延迟取值，与 `:786` 既有 `this.channelRuntime?.applyFeishuConfig` 同法，无循环依赖）。
+1. `ConnectorRuntimeHandle`（`packages/server/src/daemon/channel-runtime-service.ts:35-40`）增加可选方法 `downloadAttachment?(input): Promise<...>`。
+2. `defaultCreateRuntime` 创建 adapter 后，在返回的 handle 上把 `downloadAttachment` 实现为 `(input) => adapter.downloadAttachment(input)`（闭包捕获 adapter 实例）。
+3. `startInternal` 在 `entry.handle = handle`（`:403`）之后，把 `handle.downloadAttachment` 记入服务的 `attachmentDownloader` 字段。
+4. `stopInternal`（`:412-425`）把 `attachmentDownloader` 清 `null`，避免用已断开客户端下载。
+5. 新增公开方法 `downloadAttachment(messageId, attachment)`：读该字段；未连上（字段为空 / handle 未提供该方法）返回 `undefined`（上层按失败处理）。
+6. `daemon-application.ts:758` 给 `ChannelApplicationService` 注入 `downloadChannelAttachment: (messageId, att) => this.channelRuntime?.downloadAttachment(messageId, att)`（闭包延迟取值，与 `:786` 既有 `this.channelRuntime?.applyFeishuConfig` 同法，无循环依赖）。
+
+为什么不能"在 `defaultCreateRuntime` 里直接写服务字段"：该路径只在**未注入 `createRuntime`** 时执行（`:437`），而现有测试**总是注入 fake 工厂**（`channel-runtime-service.test.ts:85`）。经 handle 传递，真实与 fake 两条路径都能生效，也满足"stop 后清空"的要求。
 
 ## 6. 数据流
 
@@ -86,7 +89,13 @@ im.messageResource.get({ params: { type: "image" | "file" }, path: { message_id,
 
 `durableChannelInputId` 只用 `connector + accountId + externalMessageId`（`packages/protocol/src/channel.ts:70-78`）。若同一消息被重复投递而每次都重新 `import`，会产生新的 `assetId`，导致 `promptAttachmentFingerprint` 变化，`admitPrompt` 抛 `prompt_id_conflict` → 409。
 
-**必须**：导入前先 `sessionQueries.getInput(inputId)`；若已存在且已带附件引用，**复用**，不重新下载/导入。去重键取 `message_id + file_key`。
+**必须**：导入前先 `sessionQueries.getInput(inputId)`；若已存在且已带附件引用，**复用**，不重新下载/导入。
+
+**实际不变式（比"message_id + file_key 去重"更准确）**：飞书一条消息的资源是稳定的，且对图片/文件消息 adapter 只产出**一个** attachment；因此 `externalMessageId` 一旦确立，其附件集合就固定。复用策略依赖这个不变式：同一 `externalMessageId` 再次到达时，视为同一份附件，直接复用已有 `assetId`。
+
+**已知边界**：若同一 `externalMessageId` 的附件描述被改动（现实中不会发生），复用策略会沿用旧 asset，**不会**报 409。这是有意的取舍——宁可用旧资源，也不要 409 把消息卡死。
+
+复用的 `displayName` 必须与首次准入时写库的值一致（`conversation-transactions` 同时写 `displayName` 与 `metadata.requestedDisplayName`，`run-admission-service` 以 `requestedDisplayName` 重建指纹）；否则指纹不一致会 409。实现从 `SessionInputAttachmentRecord` 的 `assetId`/`intent`/`displayName` 三个字段原样重建。
 
 ## 8. 失败口径
 
@@ -95,9 +104,11 @@ im.messageResource.get({ params: { type: "image" | "file" }, path: { message_id,
 | 下载器为空（渠道未连上 / 已停） | 整条消息失败 |
 | 飞书下载报错 | 整条消息失败 |
 | 超过 `AttachmentService.limits.maxBytesPerFile`（默认 100 MiB） | 整条消息失败（blob store 流式抛 `attachment_too_large`） |
-| `admitPrompt` 失败 | 整条消息失败；已导入的 asset 交 retention/`recover()` 清理 |
+| `admitPrompt` 失败 | 整条消息失败；已导入的 `ready` 但未被引用的 asset 由 retention 的 `gcAttachments()` 回收（注意：`AttachmentService.recover()` 只处理卡在 `importing` 的记录，不删 `ready` 孤儿） |
 
 不"只发文字"，不跳过附件，不把 image 降级成 file/text。
+
+**关于"不静默丢附件"**：若附件描述缺少可信 `type`/`externalId`（无法定位资源），该条消息最终会因"无正文且无附件"以 `prompt_content_required` 失败——属于失败而非降级。合法但未知的 `type`（如 `audio`）当前不在支持范围，会被跳过；由于此类消息正文为空，仍会失败，不会静默当文本处理。
 
 ## 9. 边界与非目标
 

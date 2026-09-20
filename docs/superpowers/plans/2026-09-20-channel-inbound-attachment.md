@@ -75,8 +75,11 @@
 - [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
 - [ ] **步骤 3：实现**
   - `handleMessageInLane`（`:90-169`）：取 `input.metadata?.attachments`（可信字段）→ 幂等查询 → 下载 → `import` → 组装 `AdmitPromptAttachmentInput[]` → 传入 `admitPrompt` 的 `attachments`；
+  - `displayName` 优先级：`descriptor.name ?? download.name ?? descriptor.externalId`（飞书文件的实际文件名在 `descriptor.name`，adapter 不返回 `name`）；
   - 失败抛明确错误，不吞。
 - [ ] **步骤 4：运行确认通过 + Commit**（消息：`feat(server): import feishu inbound attachments into the session`）
+
+> **注意（红线）**：本任务把 `attachments` 与 `downloadChannelAttachment` 加为 `ChannelApplicationServiceContext` 的**必需**字段，注入发生在任务 4。因此**任务 2 与任务 4 必须一起改完再提交**，否则 `pnpm check-types` 会红（daemon 装配缺字段）。执行时把任务 2/4 视为一次提交，或先加可选字段再在任务 4 收紧。
 
 ---
 
@@ -87,12 +90,15 @@
 - Produces：`ChannelRuntimeService.downloadAttachment(messageId, attachment)`
 
 - [ ] **步骤 1：编写失败的测试**
-  - 运行时启动（fake `createRuntime` 返回带 `downloadAttachment` 的 adapter）后，`service.downloadAttachment(...)` 转发到该 adapter；
-  - 未启动时返回 `undefined`；
-  - `stop()` 后返回 `undefined`（不残留已断开客户端）。
+  - fake `createRuntime` 返回的 handle 带 `downloadAttachment`；`service.start*` 之后 `service.downloadAttachment(...)` 转发到该 handle 的实现；
+  - handle 未提供 `downloadAttachment` 时返回 `undefined`；
+  - `stop()` 之后返回 `undefined`（不残留已断开客户端）。
 - [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/daemon/channel-runtime-service.test.ts`
 - [ ] **步骤 3：实现**
-  - 私有字段 + `defaultCreateRuntime` 赋值 + `handle.stop()` 清空 + 公开方法；`ConnectorRuntimeHandle` 若要传回下载器，用闭包捕获 adapter 实例。
+  - `ConnectorRuntimeHandle`（`:35-40`）增加可选 `downloadAttachment?(input): Promise<...>`；
+  - `defaultCreateRuntime` 返回的 handle 里把 `downloadAttachment` 实现为闭包捕获的 `adapter.downloadAttachment`；
+  - `startInternal` 在 `entry.handle = handle`（`:403`）之后把该实现记入服务字段；`stopInternal`（`:412-425`）清 `null`；
+  - 公开 `downloadAttachment` 读该字段，空则返回 `undefined`。
 - [ ] **步骤 4：运行确认通过 + Commit**（消息：`feat(server): expose channel attachment downloader on the runtime service`）
 
 ---
