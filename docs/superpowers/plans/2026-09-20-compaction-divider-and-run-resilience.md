@@ -321,8 +321,8 @@ Expected: 现有相关用例全部 PASS
       [],
       [run("run-1", "input-1")]
     )
-    expect(entries.map((entry) => entry.type)).toEqual(["system", "turn"])
-    const system = entries[0]
+    expect(entries.map((entry) => entry.type)).toEqual(["turn", "system"])
+    const system = entries[1]
     if (system?.type !== "system") throw new Error("Expected a system entry")
     expect(system.system.compactionPhase).toBeUndefined()
   })
