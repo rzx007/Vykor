@@ -5,8 +5,14 @@ import type {
   DesktopSessionRecord,
   DesktopWorkspaceMode,
 } from "@shared/session-types"
+import { isChannelSessionMetadata } from "@shared/channel-types"
 
 import type { DesktopSessionState } from "./types"
+
+/** 会话是否属于 IM 渠道（含旧会话；fork 出的普通会话不算）。 */
+export function isChannelSession(session: DesktopSessionRecord): boolean {
+  return isChannelSessionMetadata(session.metadata ?? {})
+}
 
 export function upsertProject(
   projects: DesktopProject[],
@@ -69,7 +75,11 @@ export function resolveSessionWorkspace(
   | "branch"
   | "branches"
 > {
-  if (session.workspaceMode === "outside_project" || !session.projectId) {
+  if (
+    isChannelSession(session) ||
+    session.workspaceMode === "outside_project" ||
+    !session.projectId
+  ) {
     return {
       workspaceMode: "outside_project",
       selectedProject: null,
@@ -122,9 +132,16 @@ export function sessionProvider(
 
 export function projectFromSession(session: DesktopSessionRecord): DesktopProject {
   const normalized = session.cwd.replace(/[\\/]+$/, "")
+  const directoryName = normalized.split(/[\\/]/).pop() || session.cwd
+  const title = session.title?.trim()
+  // 项目外/渠道会话的工作区名用会话标题，避免右侧工具显示 `oc_...-hash` 目录名。
+  const name =
+    title && (isChannelSession(session) || session.workspaceMode === "outside_project")
+      ? title
+      : directoryName
   return {
     id: session.projectId ?? session.cwd,
-    name: normalized.split(/[\\/]/).pop() || session.cwd,
+    name,
     path: session.cwd,
     lastOpenedAt: session.updatedAt,
     ...(typeof session.metadata["defaultShell"] === "string"
