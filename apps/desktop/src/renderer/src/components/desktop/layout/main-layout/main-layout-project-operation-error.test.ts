@@ -66,6 +66,9 @@ vi.mock("@renderer/components/desktop/layout/use-desktop-window-chrome", () => (
     close: vi.fn(),
   }),
 }))
+vi.mock("@renderer/hooks/use-active-workspace-is-git", () => ({
+  useActiveWorkspaceIsGit: () => false,
+}))
 vi.mock("@renderer/components/desktop/layout/main-layout/utility-panel", () => ({
   UtilityPanel: () => null,
   useUtilityPanelController: () => ({

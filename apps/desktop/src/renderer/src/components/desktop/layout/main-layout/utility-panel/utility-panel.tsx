@@ -19,6 +19,7 @@ import type {
   TerminalPanelCommand,
   TerminalSessionTabInfo,
 } from "@renderer/components/desktop/tools/terminal/terminal-tool"
+import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
 import { cn } from "@renderer/lib/utils"
 import {
   selectActiveWorkspaceProject,
@@ -105,11 +106,12 @@ export function UtilityPanel({
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const selectedProjectPath = workspaceProject?.path
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
-  const selectedProjectGit = useDesktopSessionStore((state) => state.selectedProjectGit)
+  const activeWorkspaceIsGit = useActiveWorkspaceIsGit()
   const selectedProjectAvailable = workspaceProject?.available ?? false
-  const availableTools = selectedProjectGit
-    ? utilityToolOrder
-    : utilityToolOrder.filter((tool) => tool !== "review")
+  const availableTools =
+    activeWorkspaceIsGit === true
+      ? utilityToolOrder
+      : utilityToolOrder.filter((tool) => tool !== "review")
   const persistedFileState = selectedProjectPath ? persistedFileTabs[scopeId] : undefined
   const fileStateVisible = fileProjectPath === (selectedProjectPath ?? null)
   const visibleFileTabs = fileTabs.filter(
@@ -118,7 +120,7 @@ export function UtilityPanel({
   const visibleTabs = tabs.filter(
     (tab) =>
       (!tab.projectPath || tab.projectPath === selectedProjectPath) &&
-      (selectedProjectGit || tab.tool !== "review")
+      (activeWorkspaceIsGit === true || tab.tool !== "review")
   )
   const visibleActiveFilePath =
     fileStateVisible || visibleTabs.some((tab) => tab.filePath === activeFilePath)
@@ -167,7 +169,7 @@ export function UtilityPanel({
   }, [setTerminalMounted, terminalOpenRequest])
 
   useEffect(() => {
-    if (!selectedProjectGit) return
+    if (activeWorkspaceIsGit !== true) return
     if (!reviewOpenRequest || handledReviewRequestRef.current === reviewOpenRequest.id) return
     handledReviewRequestRef.current = reviewOpenRequest.id
     const timer = window.setTimeout(() => {
@@ -183,10 +185,10 @@ export function UtilityPanel({
       })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [reviewOpenRequest, selectedProjectGit, setActiveTabId, setTabs])
+  }, [reviewOpenRequest, activeWorkspaceIsGit, setActiveTabId, setTabs])
 
   useEffect(() => {
-    if (selectedProjectGit) return
+    if (activeWorkspaceIsGit === true) return
     const timer = window.setTimeout(() => {
       setTabs((current) => {
         if (!current.some((tab) => tab.tool === "review")) return current
@@ -196,7 +198,7 @@ export function UtilityPanel({
       })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [activeTabId, selectedProjectGit, setActiveTabId, setTabs])
+  }, [activeTabId, activeWorkspaceIsGit, setActiveTabId, setTabs])
 
   const openBrowserTab = useCallback(
     (url: string | null = null, title = "新标签页"): void => {
@@ -636,7 +638,7 @@ export function UtilityPanel({
               key={activeSessionId ?? "no-session"}
               active={activeTab?.tool === "agents"}
               onOpenFile={onOpenFile}
-              canOpenReview={selectedProjectGit}
+              canOpenReview={activeWorkspaceIsGit === true}
               onOpenReview={onOpenReview}
               onOpenTerminal={onOpenTerminal}
             />
