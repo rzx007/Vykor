@@ -138,4 +138,42 @@ describe("adoptLegacyDatabase", () => {
     });
     expect(() => adoptLegacyDatabase(db, { baseline, snapshot })).toThrow(/primary key column/);
   });
+
+  it("accepts a notNull-only difference on an existing column", () => {
+    const db = new Database(":memory:");
+    db.exec("CREATE TABLE t (id text NOT NULL, keep text)");
+    db.exec(
+      "CREATE TABLE __drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at numeric)",
+    );
+    const snapshot = snapshotOf({
+      t: {
+        name: "t",
+        columns: {
+          id: { name: "id", type: "text", primaryKey: true, notNull: true },
+          keep: { name: "keep", type: "text", primaryKey: false, notNull: true },
+        },
+        indexes: {},
+      },
+    });
+    expect(adoptLegacyDatabase(db, { baseline, snapshot })).toBe(true);
+  });
+
+  it("rejects a type difference on an existing column", () => {
+    const db = new Database(":memory:");
+    db.exec("CREATE TABLE t (id text NOT NULL, keep text)");
+    db.exec(
+      "CREATE TABLE __drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at numeric)",
+    );
+    const snapshot = snapshotOf({
+      t: {
+        name: "t",
+        columns: {
+          id: { name: "id", type: "text", primaryKey: true, notNull: true },
+          keep: { name: "keep", type: "integer", primaryKey: false, notNull: true },
+        },
+        indexes: {},
+      },
+    });
+    expect(() => adoptLegacyDatabase(db, { baseline, snapshot })).toThrow(LegacyAdoptionError);
+  });
 });

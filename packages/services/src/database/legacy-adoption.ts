@@ -141,10 +141,7 @@ function reconcileTable(database: Database.Database, table: AdoptionTable): void
       addColumn(database, table, column);
       continue;
     }
-    if (
-      live.type.trim().toLowerCase() !== column.type.trim().toLowerCase() ||
-      Boolean(live.notnull) !== column.notNull
-    ) {
+    if (live.type.trim().toLowerCase() !== column.type.trim().toLowerCase()) {
       throw new LegacyAdoptionError(
         `legacy adoption: column definition differs: ${table.name}.${column.name}`,
       );

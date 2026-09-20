@@ -132,8 +132,8 @@ SessionDatabase.open
 - 缺索引 → `CREATE [UNIQUE] INDEX IF NOT EXISTS "name" ON "table" ("c1",...)`，
   **`where` 存在时追加 `WHERE <where>`**（保留部分唯一索引谓词，否则会误建为全表唯一）。
 - 索引同名但定义（columns / isUnique / where）与快照不一致 → `LegacyAdoptionError`。
-- 列已存在但归一化后的 `type` / `notNull` 不一致 → `LegacyAdoptionError`
-  （比较前把 type 转小写、notNull 转布尔）。
+- 列已存在但归一化后的 `type` 不一致 → `LegacyAdoptionError`
+  （比较前把 type 转小写）；`notNull` 差异忽略（SQLite 无法原地改，运行时由应用层保证）。
 - 缺整表 → `LegacyAdoptionError` 点名（基线前旧库不应缺整表；显式失败优于猜测）。
 
 **多余表**（库里有、快照无，排除 `__drizzle_migrations` 与 `sqlite_%`）→ `DROP TABLE`。
@@ -267,3 +267,4 @@ SessionDatabase.open
 | 文档引用行未覆盖最强策略陈述 | §7 补 `operations-and-recovery.md:124-133`、`durable-execution-data-model.md:104`、`architecture-migration-status.md:60`、`architecture-overview.md:148` |
 | `writePackagedMigrationInventory` 未透传 `expectedPaths` | §7 补充 |
 | §2.1「补齐到当前基线」范围过大 | §2.1 收窄为「基线世代旧库」，缺整表走 §5 报错 |
+| 真实旧库 E2E：`session_input.items_json` 在旧库可空、基线 `NOT NULL` | §5：已存在列只严格比较 `type`，忽略 `notNull` 差异（SQLite 不能原地改 NOT NULL，运行时由应用层保证）；新增两条单测 |
