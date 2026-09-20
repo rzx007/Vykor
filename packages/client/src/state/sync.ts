@@ -3,7 +3,8 @@
  * 无 sessionId 的全局视图使用 HTTP replay + SSE live。
  *
  * UI（如 `useServerSync`）通常消费 `syncEvents`，而不是分别调 listEvents / streamEvents。
- * live SSE 非 abort 断流后按 `state.lastSeq` 指数退避重连；session 路径遇 seq 空洞会 re-snapshot。
+ * live SSE 非 abort 断流后指数退避重连；session 路径重连时重新取快照（`source: "snapshot"`），
+ * 全局路径按 `state.lastSeq` 续传并补 replay 空洞。
  */
 
 import {
@@ -35,6 +36,9 @@ export interface SyncEventsClient {
 const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
   Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
 
+/** 会话事件流空闲超时：服务端 keepalive 每 15s 一次，取 4 倍余量。 */
+const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 60_000;
+
 /** 用已有事件列表一次性 hydrate 出客户端状态（离线/测试常用）。 */
 export function hydrateState(events: Iterable<SessionEventRecord>): OpenHarnessClientState {
   return applyEvents(createInitialClientState(), events);
@@ -51,11 +55,16 @@ export async function* syncEvents(
 ): AsyncIterable<SyncEventUpdate> {
   let state = createInitialClientState();
   if (options.sessionId) {
-    const snapshot = await client.sessions.getState(options.sessionId, { signal: options.signal });
+    const sessionId = options.sessionId;
+    const snapshot = await client.sessions.getState(sessionId, { signal: options.signal });
     state = applySessionSnapshot(state, snapshot);
     yield { state, source: "snapshot" };
 
-    yield* liveWithReconnect(client, state, options, snapshot.cursor);
+    yield* liveWithReconnect(client, state, options, snapshot.cursor, async (current) => {
+      const refreshed = await client.sessions.getState(sessionId, { signal: options.signal });
+      const next = applySessionSnapshot(current, refreshed);
+      return { state: next, cursor: refreshed.cursor };
+    });
     return;
   }
   const replay = await client.events.list({
@@ -77,6 +86,9 @@ async function* liveWithReconnect(
   initialState: OpenHarnessClientState,
   options: EventSyncOptions,
   initialCursor: number,
+  resync?: (
+    current: OpenHarnessClientState,
+  ) => Promise<{ state: OpenHarnessClientState; cursor: number }>,
 ): AsyncIterable<SyncEventUpdate> {
   let state = initialState;
   let cursor = initialCursor;
@@ -90,6 +102,7 @@ async function* liveWithReconnect(
         sessionId: options.sessionId,
         signal: options.signal,
         transportReconnect: false,
+        idleTimeoutMs: options.idleTimeoutMs ?? DEFAULT_SESSION_IDLE_TIMEOUT_MS,
       })) {
         attempt = 0;
         if (event.seq > state.lastSeq + 1 && !options.sessionId) {
@@ -116,14 +129,28 @@ async function* liveWithReconnect(
       yield { state, source: "reconnecting" };
       if (!(await waitForReconnect(delayMs(attempt), options.signal))) return;
       attempt += 1;
-      cursor = state.lastSeq;
+      if (resync) {
+        const refreshed = await resync(state);
+        state = refreshed.state;
+        cursor = refreshed.cursor;
+        yield { state, source: "snapshot" };
+      } else {
+        cursor = state.lastSeq;
+      }
     } catch (error) {
       if (error instanceof UnsupportedSessionEventSchemaVersionError) throw error;
       if (isAbortError(error) || options.signal?.aborted) return;
       yield { state, source: "reconnecting" };
       if (!(await waitForReconnect(delayMs(attempt), options.signal))) return;
       attempt += 1;
-      cursor = state.lastSeq;
+      if (resync) {
+        const refreshed = await resync(state);
+        state = refreshed.state;
+        cursor = refreshed.cursor;
+        yield { state, source: "snapshot" };
+      } else {
+        cursor = state.lastSeq;
+      }
     }
   }
 }

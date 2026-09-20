@@ -1115,7 +1115,7 @@ describe("OpenHarnessClient", () => {
     expect(liveSeqs).toEqual([2]);
   });
 
-  it("accepts global seq gaps in a session-filtered stream without re-snapshotting", async () => {
+  it("re-snapshots a session stream on reconnect and continues from the snapshot cursor", async () => {
     const controller = new AbortController();
     const session: SessionRecord = {
       id: "s1",
@@ -1156,7 +1156,7 @@ describe("OpenHarnessClient", () => {
               throw new Error("stream reset");
             })();
           }
-          expect(options.cursor).toBe(2);
+          expect(options.cursor).toBe(4);
           return (async function* () {
             yield event(5, "session.run.updated");
             controller.abort();
@@ -1177,9 +1177,9 @@ describe("OpenHarnessClient", () => {
       lastSeq = update.state.lastSeq;
     }
 
-    expect(snapshotCalls).toBe(1);
+    expect(snapshotCalls).toBe(2);
     expect(sources).toContain("reconnecting");
-    expect(sources.filter((source) => source === "snapshot")).toHaveLength(1);
+    expect(sources.filter((source) => source === "snapshot")).toHaveLength(2);
     expect(lastSeq).toBe(5);
   });
 
