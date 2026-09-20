@@ -1,11 +1,11 @@
 # 交接：Desktop 渠道接入板块
 
 > 状态：历史。已完成；实现与决策以 `docs/superpowers/specs/2026-09-19-desktop-channel-onboarding-design.md` 与 `docs/superpowers/plans/2026-09-19-desktop-channel-onboarding.md` 为准。
-> 注意：本交接文档中“Desktop 主进程直接读写 `channel-credentials.json`”的决策已被取代——渠道配置与接入由 daemon 全权负责（唯一写入者），Desktop/CLI 只走 API。
+> 注意：渠道配置与接入由 daemon 全权负责（唯一写入者），Desktop/CLI 只走 API。本交接文档旧版“Desktop 主进程直接读写 `channel-credentials.json`”的说法已删除。
 
 ## 背景一句话
 
-飞书 CLI 扫码接入（`ohs channels add feishu`）已完成；下一步是在 Desktop 复用它做一个「渠道接入」板块。
+飞书 CLI 扫码接入（`ohs channels add feishu`）已完成；Desktop 的「渠道接入」（连接）板块也已落地，详见下方状态。
 
 ## 已完成（全部合并、已推送）
 
@@ -26,16 +26,11 @@
 - `packages/channels/src/bus/acl.ts` + `core/manager.ts` 的 `onDenied`
 - CLI 编排参考：`apps/cli/src/commands/channels-onboarding.ts`
 
-Desktop 新增设置板块参考 MCP 设置：`apps/desktop/src/renderer/src/components/desktop/settings-page/mcp-settings.tsx` 及 `shared/ipc-channels.ts`、`shared/desktop-api-contract.ts`、`preload/desktop-api.ts`、`main/features/mcp/{ipc.ts,mcp-service.ts}`、`main/features/index.ts`。渠道配置不在 server 的 settings API 里（`system-resource.ts` 只覆盖 settings）；Desktop 主进程直接读写 `channel-credentials.json`（同一台机器）。连接状态用 `channel-resource.ts` 的 `getStatus`。
+Desktop 新增设置板块参考 MCP 设置：`apps/desktop/src/renderer/src/components/desktop/settings-page/mcp-settings.tsx` 及 `shared/ipc-channels.ts`、`shared/desktop-api-contract.ts`、`preload/desktop-api.ts`、`main/features/mcp/{ipc.ts,mcp-service.ts}`、`main/features/index.ts`。渠道配置不由 Desktop 直接写盘：daemon 是唯一写入者，Desktop/CLI 都走 client 的 `channel-resource.ts`（`/channels/feishu/*`、`/channels/runtime/*`）。面板实现在 `apps/desktop/src/main/features/channels/channel-service.ts` 与 `apps/desktop/src/renderer/src/components/desktop/settings-page/connections-settings.tsx`。
 
-## 必须先定清楚的决策
+## 已定决策（曾被列为待定）
 
-渠道“连接进程”归谁？现状是飞书长连接跑在 `ohs channels serve`（CLI 进程），daemon 不管渠道生命周期，Desktop 无法启停。二选一：
-
-- A（小）：Desktop 只做“接入 + 状态展示”，运行仍靠 `ohs channels serve`。
-- B（大）：把渠道生命周期搬进 daemon，Desktop 可启停。
-
-选一条写进 spec 并说明理由。
+渠道长连接归 daemon：**已选 B** —— 长连接、渠道配置与接入全部搬进 daemon（`ChannelRuntimeService` + `ChannelOnboardingService`，daemon 是唯一写入者），Desktop 与 CLI 只走 API。理由与完整契约见 `docs/superpowers/specs/2026-09-19-desktop-channel-onboarding-design.md`。
 
 ## 硬约束
 
@@ -48,7 +43,7 @@ Desktop 新增设置板块参考 MCP 设置：`apps/desktop/src/renderer/src/com
 
 ## 已知遗留 / 非目标
 
-- 真人端到端验收（`add feishu` 扫码 → `serve` 收发一条 → `allow`）是否已通过，接手先确认。
+- 真人端到端验收已通过（扫码接入、收发、被拒提示 + 加白名单、主开关停用、`ohs channels serve` 有界停止）。
 - `apps/mcp-feishu`（独立目录、不构建）仍读磁盘 `appSecret`；非目标。
 - 暂不做其他平台与 Feishu media upload / Agent 出站附件。
 
@@ -80,6 +75,8 @@ git diff --check
 ## 参考文档
 
 - `docs/channels-flow.md`（渠道权威流程 + 会话分类图）
+- `docs/superpowers/specs/2026-09-19-desktop-channel-onboarding-design.md`
+- `docs/superpowers/plans/2026-09-19-desktop-channel-onboarding.md`
 - `docs/superpowers/specs/2026-09-19-channel-config-unification-design.md`
 - `docs/superpowers/plans/2026-09-19-channel-config-unification.md`
 - `docs/superpowers/specs/2026-09-18-feishu-cli-onboarding-design.md`
