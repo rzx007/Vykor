@@ -86,7 +86,7 @@ Input 校验不把 `traceId` 当业务内容，因为一次网络重试可能得
 
 `SessionStore.transaction()` 同时提交 SQLite 和内存 read model。失败时两边都回滚。文本 delta 是例外：它先通过 live SSE 显示，再按时间或大小 checkpoint；Tool 边界、Run 终态和 store close 会强制落盘。
 
-## 版本规则：只认当前格式
+## 版本规则：当前格式与基线接管
 
 本项目对基线前旧库做快照驱动的接管补齐，并自动应用增量迁移；不做字段猜测或跨世代数据转换。
 

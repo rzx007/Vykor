@@ -119,6 +119,9 @@ export interface AdoptionBaseline {
 
 const MIGRATIONS_TABLE = "__drizzle_migrations";
 
+/** 只清理已知废弃表；未识别的表一律保留，避免误删用户数据。 */
+const OBSOLETE_TABLES = new Set(["cron_job", "cron_run"]);
+
 export function baselineHash(sqlPath: string): string {
   return createHash("sha256").update(readFileSync(sqlPath, "utf8")).digest("hex");
 }
@@ -338,7 +341,9 @@ function dropExtraTables(database: Database.Database, snapshot: AdoptionSnapshot
     )
     .all(MIGRATIONS_TABLE) as Array<{ name: string }>;
   for (const row of rows) {
-    if (!wanted.has(row.name)) database.exec(`DROP TABLE ${quote(row.name)}`);
+    if (OBSOLETE_TABLES.has(row.name) && !wanted.has(row.name)) {
+      database.exec(`DROP TABLE ${quote(row.name)}`);
+    }
   }
 }
 
@@ -505,7 +510,11 @@ describe("adoptLegacyDatabase", () => {
 - [ ] **Step 4: 运行测试**
 
 Run: `pnpm --filter @openharness/services exec vitest run src/database/legacy-adoption.test.ts`
-Expected: PASS（6 个用例）。
+Expected: PASS（10 个用例）。
+
+> 后续 E2E / 复核修复在原 6 个用例之外补了 4 个：`accepts a partial index whose predicate differs only by the table qualifier`、
+> `accepts a notNull-only difference on an existing column`、`rejects a type difference on an existing column`、
+> `only drops allowlisted obsolete tables and leaves unrecognized tables untouched`（后者为 allowlist 收口所加）。
 
 - [ ] **Step 5: 提交**
 

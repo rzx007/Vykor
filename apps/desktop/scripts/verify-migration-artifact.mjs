@@ -110,13 +110,14 @@ async function main() {
     desktopRoot,
     "../../packages/services/src/session-runtime/migrations"
   )
-  const expected = expectedMigrationPaths(sourceMigrations)
   if (command === "--write-inventory" && args.length === 1) {
+    const expected = expectedMigrationPaths(sourceMigrations)
     const output = await writePackagedMigrationInventory(args[0], expected)
     process.stdout.write(`Wrote packaged migration inventory: ${output}\n`)
     return
   }
   if (command === "--verify-inventories" && args.length === 2) {
+    const expected = expectedMigrationPaths(sourceMigrations)
     const inventories = await Promise.all(
       args.map(async (path) => JSON.parse(await readFile(resolve(path), "utf8")))
     )

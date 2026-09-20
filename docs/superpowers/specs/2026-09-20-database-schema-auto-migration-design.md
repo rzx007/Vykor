@@ -41,7 +41,7 @@
   （更老的 clean-slate 之前世代若缺整表，不在接管范围，见 §5 / §8。）
 - 建立可长期使用的增量迁移链（`drizzle-kit generate` 产出 `0001+`）。
 - 移除已失去意义的 `application_storage_format` 标记，迁移状态完全交给 drizzle 的 `__drizzle_migrations`。
-- 接管时清理基线中已不存在的废弃表（如 `cron_job` / `cron_run`）。
+- 接管时按 allowlist 清理已知废弃表（`cron_job` / `cron_run`），未识别的表保留不动。
 
 ### 2.2 非目标
 
@@ -136,7 +136,9 @@ SessionDatabase.open
   （比较前把 type 转小写）；`notNull` 差异忽略（SQLite 无法原地改，运行时由应用层保证）。
 - 缺整表 → `LegacyAdoptionError` 点名（基线前旧库不应缺整表；显式失败优于猜测）。
 
-**多余表**（库里有、快照无，排除 `__drizzle_migrations` 与 `sqlite_%`）→ `DROP TABLE`。
+**多余表**（库里有、快照无，排除 `__drizzle_migrations` 与 `sqlite_%`）：**只删除显式 allowlist 中的已知废弃表**
+`const OBSOLETE_TABLES = new Set(["cron_job", "cron_run"])`。仅当表名在 `OBSOLETE_TABLES` 且不在快照中时才 `DROP TABLE`；
+任何其他未识别的表一律保留不动，避免误删用户数据或未来新增的表。
 
 - 事务外先 `PRAGMA foreign_keys = OFF`，事务结束后恢复原值
   （`defer_foreign_keys` 无法覆盖「先删父表」场景，故用 OFF）。
@@ -213,7 +215,7 @@ SessionDatabase.open
 - 接管只处理**可加性**变更；改名 / 改类型 / 数据变换必须写显式迁移文件。
 - 缺整表、缺 PK 列、列 / 索引定义冲突 → 显式 `LegacyAdoptionError`（不静默）。
 - FK / CHECK 不接管（见 §2.2）；变更它们须显式迁移。
-- 多余索引不删（无害）；多余表删除。
+- 多余索引不删（无害）；仅按 `OBSOLETE_TABLES` allowlist 删除已知废弃表，未识别的表保留。
 - 反转 clean-slate 策略：需同步 **7 处门禁 / 测试 + 8 份文档**；遗漏任一会导致 CI 失败。
 - drizzle 水位线只增不减：接管补写 baseline 行后，`0001+` 才会执行；顺序错误会重跑基线撞表。
 
@@ -268,3 +270,4 @@ SessionDatabase.open
 | `writePackagedMigrationInventory` 未透传 `expectedPaths` | §7 补充 |
 | §2.1「补齐到当前基线」范围过大 | §2.1 收窄为「基线世代旧库」，缺整表走 §5 报错 |
 | 真实旧库 E2E：`session_input.items_json` 在旧库可空、基线 `NOT NULL` | §5：已存在列只严格比较 `type`，忽略 `notNull` 差异（SQLite 不能原地改 NOT NULL，运行时由应用层保证）；新增两条单测 |
+| 「多余表全部 DROP」会误删未知表 | §5 / §2.1 / §8：改为只删 `OBSOLETE_TABLES` allowlist（`cron_job` / `cron_run`）中的表，未识别的表保留；新增 allowlist 单测 |

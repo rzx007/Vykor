@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { SessionDatabase } from "./session-database.js";
 
-// Regenerated from the current single baseline migration (0000_current_schema).
+// Regenerated from the current migration chain (0000_current_schema + 0001_drop_application_storage_format).
 const expected = JSON.parse(readFileSync(new URL("./__fixtures__/current-schema-inventory.json", import.meta.url), "utf8"));
 
 function inventory(database: Database.Database) {
@@ -58,7 +58,7 @@ describe("SessionDatabase", () => {
     });
   });
 
-  it("preserves the current inventory and data on a second open with one baseline", () => {
+  it("preserves the current inventory and data on a second open with the migration chain", () => {
     withTempPath((path) => {
       const first = SessionDatabase.open({ path });
       expect(normalize(inventory(first.connection))).toEqual(normalize(expected));
@@ -128,8 +128,29 @@ describe("SessionDatabase", () => {
             .prepare("SELECT 1 FROM sqlite_master WHERE name = 'cron_job'")
             .get(),
         ).toBeUndefined();
+        expect(
+          database.connection
+            .prepare("SELECT 1 FROM sqlite_master WHERE name = 'application_storage_format'")
+            .get(),
+        ).toBeUndefined();
+        expect(
+          database.connection
+            .prepare("SELECT count(*) AS n FROM __drizzle_migrations")
+            .get(),
+        ).toEqual({ n: 2 });
       } finally {
         database.close();
+      }
+
+      const reopened = SessionDatabase.open({ path });
+      try {
+        expect(
+          reopened.connection
+            .prepare("SELECT count(*) AS n FROM __drizzle_migrations")
+            .get(),
+        ).toEqual({ n: 2 });
+      } finally {
+        reopened.close();
       }
     });
   });

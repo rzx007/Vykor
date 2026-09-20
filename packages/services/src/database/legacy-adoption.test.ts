@@ -158,6 +158,21 @@ describe("adoptLegacyDatabase", () => {
     expect(adoptLegacyDatabase(db, { baseline, snapshot })).toBe(true);
   });
 
+  it("only drops allowlisted obsolete tables and leaves unrecognized tables untouched", () => {
+    const db = baselineDatabase();
+    db.exec("CREATE TABLE cron_job (id text PRIMARY KEY NOT NULL)");
+    db.exec("CREATE TABLE user_extra (id text PRIMARY KEY NOT NULL)");
+
+    expect(
+      adoptLegacyDatabase(db, { baseline, snapshot: loadBaselineSnapshot(migrationsFolder) }),
+    ).toBe(true);
+
+    expect(db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'cron_job'").get()).toBeUndefined();
+    expect(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'user_extra'").get(),
+    ).toBeTruthy();
+  });
+
   it("rejects a type difference on an existing column", () => {
     const db = new Database(":memory:");
     db.exec("CREATE TABLE t (id text NOT NULL, keep text)");

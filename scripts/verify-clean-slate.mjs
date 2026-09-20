@@ -261,8 +261,8 @@ function inventoryDirectory(root, directory, category, requireBuildArtifacts) {
 function checkBundleInventory(root, requireBuildArtifacts) {
   const results = [];
   const skipped = [];
-  requirePattern(results, "bundle-inventory", root, "apps/cli/build.ts", /cpSync\([\s\S]*session-runtime\/migrations[\s\S]*dist\/migrations/, "CLI build must copy the current migration baseline");
-  requirePattern(results, "bundle-inventory", root, "apps/desktop/electron.vite.config.ts", /copy-session-migrations[\s\S]*session-runtime\/migrations/, "Desktop build must copy the current migration baseline");
+  requirePattern(results, "bundle-inventory", root, "apps/cli/build.ts", /cpSync\([\s\S]*session-runtime\/migrations[\s\S]*dist\/migrations/, "CLI build must copy the current migration chain");
+  requirePattern(results, "bundle-inventory", root, "apps/desktop/electron.vite.config.ts", /copy-session-migrations[\s\S]*session-runtime\/migrations/, "Desktop build must copy the current migration chain");
   for (const directory of ["apps/cli/dist/migrations", "apps/desktop/out/session-runtime/migrations"]) {
     const inventory = inventoryDirectory(root, directory, "bundle-inventory", requireBuildArtifacts);
     results.push(...inventory.problems);

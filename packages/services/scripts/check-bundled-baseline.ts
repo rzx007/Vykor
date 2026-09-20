@@ -48,7 +48,7 @@ try {
     `;
     const run = spawnSync("node", ["-e", code], { cwd: servicesRoot, encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr || String(run.error));
-    console.log(`${layout}: bundled empty database and reopen passed; one identical baseline`);
+    console.log(`${layout}: bundled empty database and reopen passed; migration chain applied`);
   }
 } finally {
   rmSync(directory, { recursive: true, force: true });

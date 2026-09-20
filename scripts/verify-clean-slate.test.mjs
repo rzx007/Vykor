@@ -72,7 +72,7 @@ test("reports missing bundle outputs as skipped normally and failures in strict 
   }
 });
 
-test("reports forbidden schema names inside the single current SQL baseline", async () => {
+test("reports forbidden schema names inside the current migration chain", async () => {
   const root = mkdtempSync(join(tmpdir(), "verify-clean-slate-sql-"));
   try {
     write(root, "scripts/forbidden-compatibility-surfaces.json", JSON.stringify({

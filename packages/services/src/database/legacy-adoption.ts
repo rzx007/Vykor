@@ -43,14 +43,16 @@ export interface AdoptionBaseline {
 
 const MIGRATIONS_TABLE = "__drizzle_migrations";
 
+/** 只清理已知废弃表；未识别的表一律保留，避免误删用户数据。 */
+const OBSOLETE_TABLES = new Set(["cron_job", "cron_run"]);
+
 export function baselineHash(sqlPath: string): string {
   return createHash("sha256").update(readFileSync(sqlPath, "utf8")).digest("hex");
 }
 
 export function loadBaselineSnapshot(migrationsFolder: string): AdoptionSnapshot {
-  const journal = JSON.parse(
-    readFileSync(join(migrationsFolder, "meta", "_journal.json"), "utf8"),
-  ) as { entries: Array<{ idx: number }> };
+  const journalPath = join(migrationsFolder, "meta", "_journal.json");
+  const journal = readJson<{ entries: Array<{ idx: number }> }>(journalPath);
   const entry = journal.entries[0];
   if (!entry) throw new LegacyAdoptionError("migration journal is empty");
   const file = join(
@@ -58,7 +60,18 @@ export function loadBaselineSnapshot(migrationsFolder: string): AdoptionSnapshot
     "meta",
     `${String(entry.idx).padStart(4, "0")}_snapshot.json`,
   );
-  return JSON.parse(readFileSync(file, "utf8")) as AdoptionSnapshot;
+  return readJson<AdoptionSnapshot>(file);
+}
+
+function readJson<T>(file: string): T {
+  try {
+    return JSON.parse(readFileSync(file, "utf8")) as T;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new LegacyAdoptionError(
+      `legacy adoption: cannot read migration metadata ${file}: ${detail}`,
+    );
+  }
 }
 
 /** 返回是否执行了接管；空库与已打标库返回 false。 */
@@ -262,7 +275,9 @@ function dropExtraTables(database: Database.Database, snapshot: AdoptionSnapshot
     )
     .all(MIGRATIONS_TABLE) as Array<{ name: string }>;
   for (const row of rows) {
-    if (!wanted.has(row.name)) database.exec(`DROP TABLE ${quote(row.name)}`);
+    if (OBSOLETE_TABLES.has(row.name) && !wanted.has(row.name)) {
+      database.exec(`DROP TABLE ${quote(row.name)}`);
+    }
   }
 }
 

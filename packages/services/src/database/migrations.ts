@@ -22,10 +22,20 @@ export function applySessionMigrations(database: Database.Database): void {
   const migrations = readMigrationFiles({ migrationsFolder });
   const baseline = migrations[0];
   if (baseline) {
-    adoptLegacyDatabase(database, {
-      baseline: { hash: baseline.hash, folderMillis: baseline.folderMillis },
-      snapshot: loadBaselineSnapshot(migrationsFolder),
-    });
+    try {
+      adoptLegacyDatabase(database, {
+        baseline: { hash: baseline.hash, folderMillis: baseline.folderMillis },
+        snapshot: loadBaselineSnapshot(migrationsFolder),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Legacy database adoption failed for ${database.name}: ${detail}. ` +
+          "This database predates the current baseline and could not be reconciled automatically; " +
+          "back it up and either run the older version to export, or delete it to start fresh.",
+        { cause: error },
+      );
+    }
   }
   migrate(drizzle(database), { migrationsFolder });
 }
