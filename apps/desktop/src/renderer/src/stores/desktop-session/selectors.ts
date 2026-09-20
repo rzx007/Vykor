@@ -1,5 +1,11 @@
 import { createEmptySessionRuntime } from "./operation-state"
-import { projectFromSession, outsideProjectDraftWorkspace } from "./helpers"
+import {
+  isChannelSession,
+  isSessionPinned,
+  projectFromSession,
+  outsideProjectDraftWorkspace,
+} from "./helpers"
+import { channelConnectorLabel } from "@shared/channel-types"
 import type { DesktopProject, DesktopSessionRecord } from "@shared/session-types"
 import type {
   DesktopOperation,
@@ -61,6 +67,63 @@ export function selectActiveSessionId(
   state: DesktopSessionState
 ): DesktopSessionState["activeSessionId"] {
   return state.activeSessionId
+}
+
+export interface DesktopImSessionGroup {
+  connector: string
+  label: string
+  sessions: DesktopSessionRecord[]
+}
+
+/**
+ * 「IM 会话」分区的数据：仅未归档的渠道会话，按平台分组。
+ * 组内置顶优先、再按更新时间倒序；组间按各组最新更新时间倒序。
+ */
+export function selectImSessionGroups(state: DesktopSessionState): DesktopImSessionGroup[] {
+  const byConnector = new Map<string, DesktopSessionRecord[]>()
+  for (const session of state.sessions) {
+    if (!isChannelSession(session)) continue
+    const connector = readChannelConnector(session)
+    const list = byConnector.get(connector)
+    if (list) list.push(session)
+    else byConnector.set(connector, [session])
+  }
+  const groups = [...byConnector.entries()].map(([connector, sessions]) => ({
+    connector,
+    label: channelConnectorLabel(connector === "other" ? undefined : connector),
+    sessions: [...sessions].sort(compareImSessions),
+  }))
+  groups.sort(
+    (left, right) =>
+      latestUpdatedAt(right.sessions) - latestUpdatedAt(left.sessions) ||
+      left.connector.localeCompare(right.connector)
+  )
+  return groups
+}
+
+function readChannelConnector(session: DesktopSessionRecord): string {
+  const external = session.metadata["externalConversation"]
+  if (isRecord(external)) {
+    const connector = external["connector"]
+    if (typeof connector === "string" && connector.trim()) return connector.trim().toLowerCase()
+  }
+  return "other"
+}
+
+function compareImSessions(left: DesktopSessionRecord, right: DesktopSessionRecord): number {
+  return (
+    Number(isSessionPinned(right)) - Number(isSessionPinned(left)) ||
+    right.updatedAt - left.updatedAt ||
+    left.id.localeCompare(right.id)
+  )
+}
+
+function latestUpdatedAt(sessions: DesktopSessionRecord[]): number {
+  return sessions.reduce((max, session) => Math.max(max, session.updatedAt), 0)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 export function selectActiveSessionRecord(

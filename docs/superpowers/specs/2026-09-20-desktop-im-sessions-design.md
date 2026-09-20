@@ -152,7 +152,7 @@ export function selectImSessionGroups(state: DesktopSessionState): DesktopImSess
 ### 6.3 打开语义（含旧会话）
 
 - `resolveSessionWorkspace`：`isChannelSession(session)` 时直接返回 `outside_project` + `selectedProject: null`（即使旧会话没有 `desktop.workspaceMode`），保证 IM 分区里所有会话打开行为一致。
-- `projectFromSession`（合成工作区）：展示名优先用 `session.title`（非空时），回退 `basename(cwd)`，避免右侧工具/文件面板显示 `oc_...-hash`。
+- `projectFromSession`（合成工作区）：**仅对渠道会话**优先用 `session.title`（非空时），否则回退 `basename(cwd)`；避免右侧工具/文件面板显示 `oc_...-hash`，同时不改变定时 standalone 等既有行为。
 - 置顶：对渠道会话仍可用，且在 IM 组内排序生效（§6.1）。
 - 归档：归档后离开 IM 分区进入「已归档」；该外部会话的下一条消息会按 `resolveConversation` 新建会话（既有行为）。
 - 删除：删除会话后外部会话映射仍在，下一条消息重建会话（既有行为）。

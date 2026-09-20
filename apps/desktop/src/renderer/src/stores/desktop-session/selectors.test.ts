@@ -6,6 +6,7 @@ import {
   selectActiveSessionPermissionReplies,
   selectActiveWorkspaceProject,
   selectCommandCatalogCwd,
+  selectImSessionGroups,
   selectPermissionReplyError,
   selectPermissionReplyPending,
   selectActiveSessionPromptSubmissions,
@@ -17,6 +18,7 @@ import {
   selectSessionComposerError,
   selectSessionSending,
 } from "./selectors"
+import type { DesktopSessionRecord } from "@shared/session-types"
 import type { DesktopOperationKind, DesktopSessionState } from "./types"
 
 function stateWithPendingOperation(
@@ -56,6 +58,71 @@ function stateWith(overrides: Partial<DesktopSessionState>): DesktopSessionState
     ...overrides,
   } as DesktopSessionState
 }
+
+function channelSession(overrides: Partial<DesktopSessionRecord> = {}): DesktopSessionRecord {
+  return {
+    id: "s1",
+    projectId: "p1",
+    cwd: "/data/channels/feishu/oc_1-abc",
+    title: "会话",
+    model: "m",
+    status: "idle",
+    metadata: { externalConversation: { connector: "feishu" } },
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  }
+}
+
+describe("selectImSessionGroups", () => {
+  it("groups only channel sessions by platform with labels", () => {
+    const groups = selectImSessionGroups(
+      stateWith({
+        sessions: [
+          channelSession({ id: "a", metadata: { externalConversation: { connector: "feishu" } } }),
+          channelSession({
+            id: "b",
+            updatedAt: 5,
+            metadata: { externalConversation: { connector: "slack" } },
+          }),
+          channelSession({ id: "c", metadata: { source: "channel" } }),
+          channelSession({ id: "ordinary", metadata: {}, cwd: "/work/alpha" }),
+        ],
+      }) as DesktopSessionState
+    )
+    // ordinary 会话（无渠道 metadata）不入选。
+    const ids = groups.flatMap((group) => group.sessions.map((session) => session.id))
+    expect(ids).not.toContain("ordinary")
+    expect(groups.find((group) => group.connector === "feishu")?.label).toBe("飞书")
+    expect(groups.find((group) => group.connector === "slack")?.label).toBe("其他平台")
+    expect(groups.find((group) => group.connector === "other")?.label).toBe("其他平台")
+  })
+
+  it("sorts pinned first, then updatedAt, and orders groups by their latest session", () => {
+    const groups = selectImSessionGroups(
+      stateWith({
+        sessions: [
+          channelSession({ id: "old", updatedAt: 1 }),
+          channelSession({ id: "new", updatedAt: 9 }),
+          channelSession({
+            id: "pinned",
+            updatedAt: 2,
+            metadata: { externalConversation: { connector: "feishu" }, desktop: { pinnedAt: 5 } },
+          }),
+          channelSession({
+            id: "slack-new",
+            updatedAt: 20,
+            metadata: { externalConversation: { connector: "slack" } },
+          }),
+        ],
+      }) as DesktopSessionState
+    )
+    const feishu = groups.find((group) => group.connector === "feishu")!
+    expect(feishu.sessions.map((session) => session.id)).toEqual(["pinned", "new", "old"])
+    // slack 组最新 20 > feishu 组最新 9。
+    expect(groups[0]?.connector).toBe("slack")
+  })
+})
 
 describe("desktop session selectors", () => {
   it("provides the active outside-project workspace to right-panel tools", () => {
