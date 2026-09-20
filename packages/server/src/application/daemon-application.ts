@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { resolveChannelWorkspaceRoot } from "@openharness/core";
 import type { AgentBackgroundShellHost, Settings } from "@openharness/core";
 import type { ChannelConfigStore } from "@openharness/auth";
 import { createModelCatalogService } from "@openharness/api";
@@ -781,6 +783,11 @@ export class DaemonApplication implements DurableAgentApplication {
           },
           config: { getFeishu: () => channelConfig.getFeishu() },
           getSettings: () => options.getSettings?.() ?? options.settings,
+          workspaceRoot: resolveChannelWorkspaceRoot({
+            envDir: process.env.OPENHARNESS_CHANNELS_DIR,
+            outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
+            homedir: homedir(),
+          }),
           logger: options.log,
         });
         this.channelOnboarding = new ChannelOnboardingService({
