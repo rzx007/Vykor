@@ -197,6 +197,7 @@ export {
   getMcpOAuthFilePath,
   getChannelCredentialsFilePath,
   getChannelWorkspaceRoot,
+  resolveChannelWorkspaceRoot,
 } from "./config/paths";
 export { resolveGitRepository, type GitRepositoryInfo } from "./config/git";
 

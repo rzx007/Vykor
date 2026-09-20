@@ -134,7 +134,24 @@ export function getChannelCredentialsFilePath(): string {
   return resolvePaths().channelCredentialsFilePath;
 }
 
-/** 渠道会话专用工作区根目录；可用 OPENHARNESS_CHANNELS_DIR 覆盖。 */
+/**
+ * 渠道会话工作区根目录。默认落在"项目外工作区"根（`<文档>/OpenHarness`）下的 `channels`，
+ * 以便 Desktop 把它当作项目外工作区隐藏；可用 OPENHARNESS_CHANNELS_DIR 显式覆盖。
+ */
+export function resolveChannelWorkspaceRoot(input: {
+  envDir?: string | undefined;
+  outsideProjectWorkspaceRoot?: string | undefined;
+  homedir?: string | undefined;
+} = {}): string {
+  if (input.envDir) return input.envDir;
+  const base =
+    input.outsideProjectWorkspaceRoot ??
+    join(input.homedir ?? homedir(), "Documents", "OpenHarness");
+  return join(base, "channels");
+}
+
 export function getChannelWorkspaceRoot(): string {
-  return process.env.OPENHARNESS_CHANNELS_DIR ?? join(getConfigDir(), "channels");
+  return resolveChannelWorkspaceRoot({
+    envDir: process.env.OPENHARNESS_CHANNELS_DIR,
+  });
 }

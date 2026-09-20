@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import {
   PROJECT_CONFIG_DIR_NAME,
   getChannelWorkspaceRoot,
+  resolveChannelWorkspaceRoot,
   getInstalledPluginStorePath,
   getMcpOAuthFilePath,
   getMemoryDir,
@@ -65,21 +67,39 @@ describe("MCP OAuth path", () => {
   });
 });
 
+describe("resolveChannelWorkspaceRoot", () => {
+  it("prefers the env override, then the outside-project root, then homedir/Documents", () => {
+    const home = resolve("/tmp/openharness-home");
+    expect(
+      resolveChannelWorkspaceRoot({
+        envDir: resolve("/tmp/openharness-channels-env"),
+        outsideProjectWorkspaceRoot: resolve("/tmp/openharness-out"),
+        homedir: home,
+      }),
+    ).toBe(resolve("/tmp/openharness-channels-env"));
+    expect(
+      resolveChannelWorkspaceRoot({
+        outsideProjectWorkspaceRoot: resolve("/tmp/openharness-out"),
+        homedir: home,
+      }),
+    ).toBe(join(resolve("/tmp/openharness-out"), "channels"));
+    expect(resolveChannelWorkspaceRoot({ homedir: home })).toBe(
+      join(home, "Documents", "OpenHarness", "channels"),
+    );
+  });
+});
+
 describe("getChannelWorkspaceRoot", () => {
-  it("defaults under the config dir and honors OPENHARNESS_CHANNELS_DIR", () => {
-    const previousConfig = process.env.OPENHARNESS_CONFIG_DIR;
+  it("defaults under Documents/OpenHarness and honors OPENHARNESS_CHANNELS_DIR", () => {
     const previousChannels = process.env.OPENHARNESS_CHANNELS_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = resolve("/tmp/openharness-channels-test");
     delete process.env.OPENHARNESS_CHANNELS_DIR;
     try {
       expect(getChannelWorkspaceRoot()).toBe(
-        join(resolve("/tmp/openharness-channels-test"), "channels"),
+        join(homedir(), "Documents", "OpenHarness", "channels"),
       );
       process.env.OPENHARNESS_CHANNELS_DIR = resolve("/tmp/openharness-channels-workspace");
       expect(getChannelWorkspaceRoot()).toBe(resolve("/tmp/openharness-channels-workspace"));
     } finally {
-      if (previousConfig === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previousConfig;
       if (previousChannels === undefined) delete process.env.OPENHARNESS_CHANNELS_DIR;
       else process.env.OPENHARNESS_CHANNELS_DIR = previousChannels;
     }
