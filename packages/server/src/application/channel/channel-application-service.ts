@@ -1,5 +1,6 @@
 import {
   durableChannelInputId,
+  type AdmitPromptAttachmentInput,
   type ChannelDeliveryRecord,
   type ChannelStatusSnapshot,
   type DurableChannelMessageInput,
@@ -62,6 +63,53 @@ export interface ChannelApplicationServiceContext {
   sessionInteractions: Pick<SessionInteractionService, "admitPrompt">;
   runControl: Pick<RunControlService, "awaitRun">;
   log(event: ObservabilityEvent): void;
+  attachments: Pick<AttachmentImportPort, "import">;
+  downloadChannelAttachment(
+    messageId: string,
+    attachment: { type: "image" | "file"; externalId: string; name?: string },
+  ): Promise<ChannelAttachmentDownload | undefined> | ChannelAttachmentDownload | undefined;
+}
+
+/** 入站附件导入端口；只需 import。 */
+export interface AttachmentImportPort {
+  import(input: {
+    displayName: string;
+    declaredMediaType?: string;
+    content: ReadableStream<Uint8Array>;
+  }): Promise<{ id: string }>;
+}
+
+/** 平台附件下载结果：字节流 + 可选文件名/类型。 */
+export interface ChannelAttachmentDownload {
+  stream: ReadableStream<Uint8Array>;
+  name?: string;
+  mimeType?: string;
+}
+
+const INBOUND_ATTACHMENT_TYPES = new Set(["image", "file"]);
+
+/** 从 metadata.attachments 里只取可信字段；忽略 data/url，绝不自行 fetch。 */
+function readInboundAttachments(
+  metadata: Record<string, unknown> | undefined,
+): Array<{ type: "image" | "file"; externalId: string; name?: string }> {
+  const raw = metadata?.["attachments"];
+  if (!Array.isArray(raw)) return [];
+  const result: Array<{ type: "image" | "file"; externalId: string; name?: string }> = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const candidate = entry as Record<string, unknown>;
+    const type = candidate["type"];
+    const externalId = candidate["externalId"];
+    if (typeof type !== "string" || !INBOUND_ATTACHMENT_TYPES.has(type)) continue;
+    if (typeof externalId !== "string" || !externalId.trim()) continue;
+    const name = candidate["name"];
+    result.push({
+      type: type as "image" | "file",
+      externalId: externalId.trim(),
+      ...(typeof name === "string" && name.trim() ? { name: name.trim() } : {}),
+    });
+  }
+  return result;
 }
 
 /** 外部聊天消息进入 durable Session/Run 的唯一应用入口。 */
@@ -93,6 +141,7 @@ export class ChannelApplicationService {
     const inputId = durableChannelInputId(input);
     const existedBefore = Boolean(this.sessionQueries.getInput(inputId));
     const conversation = this.resolveConversation(input);
+    const attachments = await this.resolveInboundAttachments(input, inputId);
     let admission;
     try {
       admission = await this.context.sessionInteractions.admitPrompt(
@@ -101,6 +150,7 @@ export class ChannelApplicationService {
           id: inputId,
           items: [{ type: "text", text: input.content }],
           delivery: "queue",
+          ...(attachments.length > 0 ? { attachments } : {}),
           metadata: {
             source: "channel",
             channel: {
@@ -166,6 +216,68 @@ export class ChannelApplicationService {
       content,
     });
     return { conversation, delivery, duplicate: existedBefore };
+  }
+
+  /**
+   * 下载入站附件并导入为 assetId 引用。
+   * - 幂等：该 durable input 已存在且已带附件引用时直接复用，避免重复 import 造成指纹变化 → 409。
+   * - 失败即整条消息失败：下载器不可用 / 下载失败 / 超限都抛错，不降级、不静默丢附件。
+   */
+  private async resolveInboundAttachments(
+    input: DurableChannelMessageInput,
+    inputId: string,
+  ): Promise<AdmitPromptAttachmentInput[]> {
+    const descriptors = readInboundAttachments(input.metadata);
+    if (descriptors.length === 0) return [];
+
+    const existing = this.sessionQueries.getInput(inputId);
+    const existingAttachments = (existing as { attachments?: unknown } | undefined)?.attachments;
+    if (Array.isArray(existingAttachments) && existingAttachments.length > 0) {
+      return existingAttachments.map((record) => {
+        const candidate = record as Record<string, unknown>;
+        return {
+          assetId: String(candidate["assetId"]),
+          ...(typeof candidate["intent"] === "string"
+            ? { intent: candidate["intent"] as AdmitPromptAttachmentInput["intent"] }
+            : {}),
+          ...(typeof candidate["displayName"] === "string"
+            ? { displayName: candidate["displayName"] }
+            : {}),
+        };
+      });
+    }
+
+    const resolved: AdmitPromptAttachmentInput[] = [];
+    for (const descriptor of descriptors) {
+      const download = await this.context.downloadChannelAttachment(
+        input.externalMessageId,
+        descriptor,
+      );      if (!download) {
+        throw new ApplicationError(
+          502,
+          `Channel attachment download unavailable for ${input.externalMessageId}/${descriptor.externalId}`,
+        );
+      }
+      // 飞书文件的实际文件名在 descriptor.name（file_name）；adapter 不返回 name。
+      const displayName = descriptor.name ?? download.name ?? descriptor.externalId;
+      let asset: { id: string };
+      try {
+        asset = await this.context.attachments.import({
+          displayName,
+          ...(download.mimeType ? { declaredMediaType: download.mimeType } : {}),
+          content: download.stream,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new ApplicationError(422, `Channel attachment import failed: ${message}`);
+      }
+      resolved.push({
+        assetId: asset.id,
+        intent: descriptor.type === "image" ? "vision" : "tool_resource",
+        displayName,
+      });
+    }
+    return resolved;
   }
 
   private async withConversationLane<T>(

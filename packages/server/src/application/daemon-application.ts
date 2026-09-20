@@ -765,6 +765,9 @@ export class DaemonApplication implements DurableAgentApplication {
         sessionInteractions: this.interactions,
         runControl: this.runControl,
         log: options.log,
+        attachments: this.attachments,
+        downloadChannelAttachment: (messageId, attachment) =>
+          this.channelRuntime?.downloadAttachment(messageId, attachment),
       });
       if (options.channelConfigStore) {
         const channelConfig = options.channelConfigStore;

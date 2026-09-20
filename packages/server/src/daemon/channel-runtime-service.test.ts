@@ -304,4 +304,54 @@ describe("ChannelRuntimeService", () => {
     await expect(service.start("feishu")).rejects.toMatchObject({ code: "closed" });
     await expect(service.stop("feishu")).rejects.toBeInstanceOf(ChannelRuntimeError);
   });
+
+  it("forwards attachment downloads to the running handle's downloader", async () => {
+    const downloadAttachment = vi.fn(async () => ({
+      stream: new ReadableStream<Uint8Array>(),
+      mimeType: "image/png",
+    }));
+    const { service } = makeService({
+      createRuntime: async () => fakeHandle({ downloadAttachment }).handle,
+    });
+    await service.start("feishu");
+
+    const result = await service.downloadAttachment("msg-1", {
+      type: "image",
+      externalId: "img_v2_1",
+    });
+
+    expect(downloadAttachment).toHaveBeenCalledWith({
+      messageId: "msg-1",
+      type: "image",
+      externalId: "img_v2_1",
+    });
+    expect(result?.mimeType).toBe("image/png");
+  });
+
+  it("returns undefined before start and after stop", async () => {
+    const downloadAttachment = vi.fn(async () => ({ stream: new ReadableStream<Uint8Array>() }));
+    const { service } = makeService({
+      createRuntime: async () => fakeHandle({ downloadAttachment }).handle,
+    });
+
+    await expect(
+      service.downloadAttachment("m", { type: "file", externalId: "f" }),
+    ).resolves.toBeUndefined();
+
+    await service.start("feishu");
+    await service.stop("feishu");
+
+    await expect(
+      service.downloadAttachment("m", { type: "file", externalId: "f" }),
+    ).resolves.toBeUndefined();
+    expect(downloadAttachment).not.toHaveBeenCalled();
+  });
+
+  it("returns undefined when the handle exposes no downloader", async () => {
+    const { service } = makeService();
+    await service.start("feishu");
+    await expect(
+      service.downloadAttachment("m", { type: "image", externalId: "k" }),
+    ).resolves.toBeUndefined();
+  });
 });

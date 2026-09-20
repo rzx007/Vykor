@@ -323,3 +323,260 @@ describe("ChannelApplicationService contracts", () => {
     );
   });
 });
+
+describe("ChannelApplicationService inbound attachments", () => {
+  function createFixture() {
+    const existingInputs = new Map<string, any>();
+    const existingSessions = new Map<string, any>([
+      ["s1", { id: "s1", status: "idle", cwd: "/repo" }],
+    ]);
+    const conversation: ExternalConversationRecord = {
+      id: "conv-1",
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "chat-1",
+      sessionId: "s1",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const delivery: ChannelDeliveryRecord = {
+      id: "del-1",
+      conversationId: "conv-1",
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "chat-1",
+      sessionId: "s1",
+      inputId: "inp-1",
+      status: "pending",
+      content: "reply",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const channels = {
+      findConversation: vi.fn(() => conversation),
+      upsertConversation: vi.fn(() => conversation),
+      createDelivery: vi.fn(() => delivery),
+      getDelivery: vi.fn(() => delivery),
+      updateDelivery: vi.fn((_id: string, patch: any) => ({ ...delivery, ...patch })),
+      listConversations: vi.fn(() => [conversation]),
+      listDeliveries: vi.fn(() => [delivery]),
+    };
+    const sessions = {
+      admitPrompt: vi.fn(async () => ({
+        input: { id: "inp-1", sessionId: "s1" },
+        run: { id: "run-1", sessionId: "s1", status: "pending" },
+      })),
+      awaitRun: vi.fn(async () => ({ status: "completed" as const, output: "ok" })),
+      createSession: vi.fn(() => ({ id: "s1" })),
+    };
+    const sessionQueries = {
+      getInput: vi.fn((id: string) => existingInputs.get(id)),
+      getSession: vi.fn((id: string) => existingSessions.get(id)),
+    };
+    const attachments = {
+      import: vi.fn(async () => ({ id: "att-1", status: "ready" })),
+    };
+    const downloadChannelAttachment = vi.fn(async () => ({
+      stream: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+          controller.close();
+        },
+      }),
+    }));
+    const log = vi.fn();
+    return {
+      sessionQueries,
+      channels,
+      sessions,
+      attachments,
+      downloadChannelAttachment,
+      log,
+      existingInputs,
+      existingSessions,
+      conversation,
+      delivery,
+    };
+  }
+
+  function createService(fixture: ReturnType<typeof createFixture>) {
+    return new ChannelApplicationService({
+      sessionQueries: fixture.sessionQueries,
+      channels: fixture.channels as any,
+      sessionCommands: fixture.sessions as any,
+      sessionInteractions: fixture.sessions as any,
+      runControl: fixture.sessions as any,
+      log: fixture.log,
+      attachments: fixture.attachments as any,
+      downloadChannelAttachment: fixture.downloadChannelAttachment as any,
+    });
+  }
+
+  function imageInput(overrides: Partial<DurableChannelMessageInput> = {}): DurableChannelMessageInput {
+    return {
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "chat-1",
+      externalMessageId: "msg-image",
+      senderId: "ou_sender",
+      content: "",
+      cwd: "/repo",
+      model: "m",
+      metadata: {
+        attachments: [{ type: "image", externalId: "img_v2_1" }],
+      },
+      ...overrides,
+    };
+  }
+
+  it("downloads and imports an inbound image, passing intent=vision to admitPrompt", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage(imageInput());
+
+    expect(fixture.downloadChannelAttachment).toHaveBeenCalledWith("msg-image", {
+      type: "image",
+      externalId: "img_v2_1",
+    });
+    expect(fixture.attachments.import).toHaveBeenCalledOnce();
+    expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({ assetId: "att-1", intent: "vision", displayName: "img_v2_1" }),
+        ],
+      }),
+    );
+  });
+
+  it("imports an inbound file with displayName from the platform file name and intent=tool_resource", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage(
+      imageInput({
+        externalMessageId: "msg-file",
+        metadata: {
+          attachments: [{ type: "file", externalId: "file_v2_1", name: "report.pdf" }],
+        },
+      }),
+    );
+
+    expect(fixture.downloadChannelAttachment).toHaveBeenCalledWith("msg-file", {
+      type: "file",
+      externalId: "file_v2_1",
+      name: "report.pdf",
+    });
+    expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({ intent: "tool_resource", displayName: "report.pdf" }),
+        ],
+      }),
+    );
+  });
+
+  it("fails the whole message when the downloader is unavailable", async () => {
+    const fixture = createFixture();
+    fixture.downloadChannelAttachment.mockResolvedValue(undefined as any);
+    const service = createService(fixture);
+
+    await expect(service.handleMessage(imageInput())).rejects.toBeInstanceOf(ApplicationError);
+    expect(fixture.attachments.import).not.toHaveBeenCalled();
+    expect(fixture.sessions.admitPrompt).not.toHaveBeenCalled();
+  });
+
+  it("fails the whole message when the downloader throws", async () => {
+    const fixture = createFixture();
+    fixture.downloadChannelAttachment.mockRejectedValue(new Error("feishu 403"));
+    const service = createService(fixture);
+
+    await expect(service.handleMessage(imageInput())).rejects.toThrow("feishu 403");
+    expect(fixture.attachments.import).not.toHaveBeenCalled();
+    expect(fixture.sessions.admitPrompt).not.toHaveBeenCalled();
+  });
+
+  it("fails the whole message when import rejects (e.g. attachment_too_large)", async () => {
+    const fixture = createFixture();
+    fixture.attachments.import.mockRejectedValue(new Error("attachment_too_large"));
+    const service = createService(fixture);
+
+    await expect(service.handleMessage(imageInput())).rejects.toThrow("attachment_too_large");
+    expect(fixture.sessions.admitPrompt).not.toHaveBeenCalled();
+  });
+
+  it("reuses the existing input attachments on redelivery without re-importing", async () => {
+    const fixture = createFixture();
+    fixture.existingInputs.set(
+      "channel:feishu:app-1:msg-image",
+      {
+        id: "inp-1",
+        sessionId: "s1",
+        attachments: [{ assetId: "att-existing", intent: "vision" }],
+      },
+    );
+    const service = createService(fixture);
+
+    await service.handleMessage(imageInput());
+
+    expect(fixture.downloadChannelAttachment).not.toHaveBeenCalled();
+    expect(fixture.attachments.import).not.toHaveBeenCalled();
+    expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({
+        attachments: [expect.objectContaining({ assetId: "att-existing", intent: "vision" })],
+      }),
+    );
+  });
+
+  it("ignores untrusted data/url fields on inbound attachment descriptors", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage(
+      imageInput({
+        metadata: {
+          attachments: [
+            { type: "image", externalId: "img_v2_1", url: "http://evil", data: "AAAA" },
+          ],
+        },
+      }),
+    );
+
+    expect(fixture.downloadChannelAttachment).toHaveBeenCalledWith("msg-image", {
+      type: "image",
+      externalId: "img_v2_1",
+    });
+    expect(fixture.attachments.import).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.any(Object) }),
+    );
+    const importArg = fixture.attachments.import.mock.calls[0]![0] as Record<string, unknown>;
+    expect(importArg).not.toHaveProperty("url");
+    expect(importArg).not.toHaveProperty("data");
+  });
+
+  it("does not attempt downloads when there are no inbound attachments", async () => {
+    const fixture = createFixture();
+    const service = createService(fixture);
+
+    await service.handleMessage({
+      connector: "feishu",
+      accountId: "app-1",
+      chatId: "chat-1",
+      externalMessageId: "msg-text",
+      senderId: "ou_sender",
+      content: "hello",
+      cwd: "/repo",
+      model: "m",
+    });
+
+    expect(fixture.downloadChannelAttachment).not.toHaveBeenCalled();
+    expect(fixture.attachments.import).not.toHaveBeenCalled();
+    expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
+      "s1",
+      expect.not.objectContaining({ attachments: expect.anything() }),
+    );
+  });
+});

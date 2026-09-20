@@ -31,12 +31,28 @@ export interface ChannelRuntimeApplicationPort {
   ): Promise<ChannelDeliveryRecord>;
 }
 
+/** 平台附件下载结果：字节流 + 可选文件名/类型。 */
+export interface ChannelAttachmentDownload {
+  stream: ReadableStream<Uint8Array>;
+  name?: string;
+  mimeType?: string;
+}
+
+export interface ChannelAttachmentDownloadInput {
+  messageId: string;
+  type: "image" | "file";
+  externalId: string;
+  name?: string;
+}
+
 /** 一个 connector 的运行时句柄；由 createRuntime 返回。 */
 export interface ConnectorRuntimeHandle {
   start(): Promise<void>;
   stopInbound(): Promise<void>;
   stopBridge(options?: { drainTimeoutMs?: number }): Promise<void>;
   stop(): Promise<void>;
+  /** 可选：下载该 connector 入站消息的资源；未提供表示不支持。 */
+  downloadAttachment?(input: ChannelAttachmentDownloadInput): Promise<ChannelAttachmentDownload | undefined>;
 }
 
 export interface CreateConnectorRuntimeInput {
@@ -120,6 +136,10 @@ export class ChannelRuntimeService {
   private readonly now: () => number;
   private denialSeq = 0;
   private closed = false;
+  /** 当前运行中 connector 的附件下载实现；随连接建立/停止变更。 */
+  private attachmentDownloader:
+    | ((input: ChannelAttachmentDownloadInput) => Promise<ChannelAttachmentDownload | undefined>)
+    | null = null;
 
   constructor(private readonly options: ChannelRuntimeServiceOptions) {
     this.workspaceRoot = options.workspaceRoot ?? getChannelWorkspaceRoot();
@@ -132,6 +152,19 @@ export class ChannelRuntimeService {
 
   hasConnector(name: string): boolean {
     return this.entries.has(name);
+  }
+
+  /**
+   * 下载入站附件。仅当 connector 的连接已建立且提供了下载实现时可用；
+   * 未连接/已停止返回 undefined（上层按失败处理）。
+   */
+  async downloadAttachment(
+    messageId: string,
+    attachment: Omit<ChannelAttachmentDownloadInput, "messageId">,
+  ): Promise<ChannelAttachmentDownload | undefined> {
+    const downloader = this.attachmentDownloader;
+    if (!downloader) return undefined;
+    return downloader({ ...attachment, messageId });
   }
 
   status(): ChannelRuntimeStatus {
@@ -401,6 +434,9 @@ export class ChannelRuntimeService {
       return;
     }
     entry.handle = handle;
+    this.attachmentDownloader = handle.downloadAttachment
+      ? (input) => handle.downloadAttachment!(input)
+      : null;
     this.patchStatus(entry, {
       state: "running",
       startedAt: this.now(),
@@ -413,6 +449,7 @@ export class ChannelRuntimeService {
     const entry = this.mustEntry(name);
     const handle = entry.handle;
     entry.handle = null;
+    this.attachmentDownloader = null;
     if (!handle) {
       this.patchStatus(entry, { state: "stopped", startedAt: undefined });
       return;
@@ -504,6 +541,12 @@ export class ChannelRuntimeService {
       },
       stopInbound: () => manager.stopInbound(),
       stopBridge: (options) => bridge.stop(options),
+      downloadAttachment: (download) =>
+        adapter.downloadAttachment({
+          messageId: download.messageId,
+          fileKey: download.externalId,
+          type: download.type,
+        }),
       stop: async () => {
         await bridge.stop();
         await manager.stopAll();
