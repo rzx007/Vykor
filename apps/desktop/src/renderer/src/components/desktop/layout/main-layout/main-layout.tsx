@@ -14,6 +14,7 @@ import { ScopedOperationError } from "@renderer/components/desktop/conversation-
 import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
+import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   selectActiveSessionId,
@@ -53,7 +54,7 @@ export function MainLayout(): React.JSX.Element {
   const selectedProjectOperationError = useDesktopSessionStore((state) =>
     selectProjectOperationError(state, state.selectedProject?.id ?? null)
   )
-  const selectedProjectGit = useDesktopSessionStore((state) => state.selectedProjectGit)
+  const activeWorkspaceIsGit = useActiveWorkspaceIsGit()
   const refreshSelectedProjectGit = useDesktopSessionStore(
     (state) => state.refreshSelectedProjectGit
   )
@@ -151,9 +152,8 @@ export function MainLayout(): React.JSX.Element {
 
   const requestOpenReview = useCallback(
     (path?: string): void => {
-      void refreshSelectedProjectGit({ force: true }).then((git) => {
-        if (git) openReview(path)
-      })
+      void refreshSelectedProjectGit({ force: true })
+      openReview(path)
     },
     [openReview, refreshSelectedProjectGit]
   )
@@ -278,7 +278,7 @@ export function MainLayout(): React.JSX.Element {
           panelOpen={panelOpen}
           onTogglePanel={togglePanel}
           onOpenFile={openWorkspaceFile}
-          canOpenReview={selectedProjectGit}
+          canOpenReview={activeWorkspaceIsGit === true}
           onOpenReview={requestOpenReview}
           onOpenTerminal={openTerminal}
           onOpenAgents={() => openUtilityTool("agents")}

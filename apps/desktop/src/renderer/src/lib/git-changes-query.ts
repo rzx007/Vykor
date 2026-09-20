@@ -23,7 +23,7 @@ function normalizedScope(scope: DesktopGitDiffScope | undefined): DesktopGitDiff
   return scope ?? "uncommitted"
 }
 
-function normalizedRootPath(rootPath: string): string {
+export function normalizedRootPath(rootPath: string): string {
   const isWindowsPath = /^[a-z]:[\\/]/i.test(rootPath) || rootPath.startsWith("\\\\")
   const normalized = (isWindowsPath ? rootPath.replace(/\\/g, "/") : rootPath).replace(/\/+$/, "")
   return isWindowsPath ? normalized.toLowerCase() : normalized

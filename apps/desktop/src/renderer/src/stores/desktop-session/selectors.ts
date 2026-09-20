@@ -140,7 +140,13 @@ export function selectActiveSessionRecord(
     : (state.sessions.find((session) => session.id === state.activeSessionId) ?? null)
 }
 
-/** 右侧工具使用的实际工作目录；项目外会话使用它自己的托管 xN 目录。 */
+/**
+ * 右侧工具使用的实际工作目录；项目外会话使用它自己的托管 xN 目录。
+ *
+ * 注意：`state.selectedProjectGit` 只用于分支选择器（项目会话语义）；
+ * 「这目录是不是 git 仓库」请用 `useActiveWorkspaceIsGit`，它对本函数返回的
+ * 项目外 workspace 也会做只读探测。
+ */
 export function selectActiveWorkspaceProject(state: DesktopSessionState): DesktopProject | null {
   const activeSession = state.activeSessionId
     ? state.sessionView?.session.id === state.activeSessionId

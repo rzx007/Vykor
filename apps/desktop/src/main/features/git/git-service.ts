@@ -11,6 +11,8 @@ import type {
   DesktopGitFileDiffInput,
   DesktopGitFileDiffResult,
   DesktopGitFileStatus,
+  DesktopGitIsRepositoryInput,
+  DesktopGitIsRepositoryResult,
 } from "../../../shared/git-types"
 
 const execAsync = promisify(execFile)
@@ -19,6 +21,17 @@ const maxUntrackedStatBytes = 1_250_000
 const textDecoder = new TextDecoder("utf-8", { fatal: false })
 
 class GitService {
+  async isRepository(input: DesktopGitIsRepositoryInput): Promise<DesktopGitIsRepositoryResult> {
+    try {
+      const path = await resolveDirectory(input.path)
+      const stdout = await runGit(path, ["rev-parse", "--show-toplevel"])
+      const rootPath = stdout.trim()
+      return rootPath ? { isRepository: true, rootPath } : { isRepository: false, rootPath: null }
+    } catch {
+      return { isRepository: false, rootPath: null }
+    }
+  }
+
   async changes(input: DesktopGitChangesInput): Promise<DesktopGitChangesResult> {
     const rootPath = await resolveDirectory(input.rootPath)
     const scope = normalizeDiffScope(input.scope)

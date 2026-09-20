@@ -13,7 +13,10 @@ import { Button } from "@renderer/components/ui/button"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
 import { queryGitChanges } from "@renderer/lib/git-changes-query"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import {
+  selectActiveWorkspaceProject,
+  useDesktopSessionStore,
+} from "@renderer/stores/desktop-session"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { routeChangedFileClick, toProjectRelativePath } from "@shared/workspace-open-path"
 
@@ -397,7 +400,8 @@ export function ChangedFilesSummary({
   onOpenFile: (path: string, line?: number) => void
   onOpenReview: (path?: string) => void
 }): React.JSX.Element {
-  const selectedProjectPath = useDesktopSessionStore((state) => state.selectedProject?.path)
+  const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
+  const selectedProjectPath = workspaceProject?.path
   const [expanded, setExpanded] = useState(false)
   const [gitStatsByPath, setGitStatsByPath] = useState<Record<string, ChangedFileStats>>({})
   const fileKey = useMemo(

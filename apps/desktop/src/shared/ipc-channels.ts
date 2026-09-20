@@ -81,6 +81,8 @@ import type {
   DesktopGitChangesResult,
   DesktopGitFileDiffInput,
   DesktopGitFileDiffResult,
+  DesktopGitIsRepositoryInput,
+  DesktopGitIsRepositoryResult,
 } from "./git-types"
 import type {
   DesktopPluginActionInput,
@@ -233,6 +235,7 @@ export const IpcChannels = {
 
   gitChanges: "git:changes",
   gitFileDiff: "git:file-diff",
+  gitIsRepository: "git:is-repository",
 
   clipboardReadText: "clipboard:read-text",
   clipboardWriteText: "clipboard:write-text",
@@ -652,6 +655,10 @@ export interface IpcInvokeMap {
   [IpcChannels.gitFileDiff]: {
     args: [input: DesktopGitFileDiffInput]
     result: DesktopGitFileDiffResult
+  }
+  [IpcChannels.gitIsRepository]: {
+    args: [input: DesktopGitIsRepositoryInput]
+    result: DesktopGitIsRepositoryResult
   }
 
   [IpcChannels.clipboardReadText]: {

@@ -27,7 +27,10 @@ import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { queryGitChanges } from "@renderer/lib/git-changes-query"
 import { cn } from "@renderer/lib/utils"
-import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import {
+  selectActiveWorkspaceProject,
+  useDesktopSessionStore,
+} from "@renderer/stores/desktop-session"
 import type {
   DesktopGitChangedFile,
   DesktopGitChangesResult,
@@ -85,7 +88,7 @@ export function ReviewTool({
 }: {
   openRequest?: { id: number; path?: string } | null
 }): React.JSX.Element {
-  const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
+  const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
   const selectedProjectPath = selectedProject?.path
   const [loadState, setLoadState] = useState<LoadState>("idle")
@@ -198,13 +201,13 @@ export function ReviewTool({
     }
   }, [activeFile?.status, activePath, reviewRange, selectedProjectPath])
 
-  if (!selectedProject) {
+  if (!selectedProjectPath) {
     return (
       <DesktopEmptyState
         icon={GitPullRequestDraft}
         size="sm"
         title="审阅改动"
-        description="选择一个项目后可以查看文件 diff。"
+        description="当前工作目录不可用。"
       />
     )
   }
