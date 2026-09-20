@@ -314,12 +314,6 @@
     },
     {
       "type": "table",
-      "name": "application_storage_format",
-      "tbl_name": "application_storage_format",
-      "sql": "CREATE TABLE `application_storage_format` ( `id` integer PRIMARY KEY NOT NULL, `version` integer NOT NULL, CONSTRAINT \"application_storage_format_singleton\" CHECK(\"application_storage_format\".\"id\" = 1) )"
-    },
-    {
-      "type": "table",
       "name": "attachment_asset",
       "tbl_name": "attachment_asset",
       "sql": "CREATE TABLE `attachment_asset` ( `id` text PRIMARY KEY NOT NULL, `display_name` text NOT NULL, `declared_media_type` text, `media_type` text, `size_bytes` integer, `sha256` text, `status` text NOT NULL, `staging_name` text, `failure_code` text, `created_at` integer NOT NULL, `updated_at` integer NOT NULL, `deleted_at` integer )"
@@ -546,28 +540,6 @@
         {
           "cid": 5,
           "name": "heartbeat_at",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 0
-        }
-      ],
-      "foreignKeys": []
-    },
-    {
-      "name": "application_storage_format",
-      "columns": [
-        {
-          "cid": 0,
-          "name": "id",
-          "type": "INTEGER",
-          "notnull": 1,
-          "dflt_value": null,
-          "pk": 1
-        },
-        {
-          "cid": 1,
-          "name": "version",
           "type": "INTEGER",
           "notnull": 1,
           "dflt_value": null,
@@ -3622,12 +3594,6 @@
           "match": "NONE"
         }
       ]
-    }
-  ],
-  "format": [
-    {
-      "id": 1,
-      "version": 3
     }
   ]
 }

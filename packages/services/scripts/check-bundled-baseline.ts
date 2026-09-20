@@ -25,12 +25,13 @@ try {
     });
     assert.equal(result.success, true, result.logs.map(String).join("\n"));
     cpSync(source, assets, { recursive: true });
-    assert.deepEqual(readdirSync(assets).filter((file) => file.endsWith(".sql")), ["0000_current_schema.sql"]);
-    assert.equal(
-      readFileSync(join(assets, "0000_current_schema.sql"), "utf8"),
-      readFileSync(join(source, "0000_current_schema.sql"), "utf8"),
-    );
-    assert.equal(JSON.parse(readFileSync(join(assets, "meta/_journal.json"), "utf8")).entries.length, 1);
+    const sqlFiles = readdirSync(source).filter((file) => file.endsWith(".sql")).sort();
+    assert.deepEqual(readdirSync(assets).filter((file) => file.endsWith(".sql")).sort(), sqlFiles);
+    for (const file of sqlFiles) {
+      assert.equal(readFileSync(join(assets, file), "utf8"), readFileSync(join(source, file), "utf8"));
+    }
+    const journalEntries = JSON.parse(readFileSync(join(assets, "meta/_journal.json"), "utf8")).entries;
+    assert.equal(journalEntries.length, sqlFiles.length);
     const moduleUrl = pathToFileURL(join(output, "index.js")).href;
     const path = join(directory, layout, "empty.db");
     const code = `
@@ -39,9 +40,8 @@ try {
         const { SessionDatabase } = await import(${JSON.stringify(moduleUrl)});
         for (let i = 0; i < 2; i++) {
           const db = SessionDatabase.open({ path: ${JSON.stringify(path)} });
-          assert.equal(db.connection.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations'").get().n, 32);
-          assert.equal(db.connection.prepare("SELECT version FROM application_storage_format WHERE id = 1").get().version, 3);
-          assert.equal(db.connection.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get().n, 1);
+          assert.equal(db.connection.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations'").get().n, 31);
+          assert.equal(db.connection.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get().n, 2);
           db.close();
         }
       })().catch(error => { console.error(error); process.exitCode = 1; });

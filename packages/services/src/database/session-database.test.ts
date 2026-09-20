@@ -22,7 +22,6 @@ function inventory(database: Database.Database) {
       columns: database.pragma(`table_info(${JSON.stringify(row.name)})`),
       foreignKeys: database.pragma(`foreign_key_list(${JSON.stringify(row.name)})`),
     })),
-    format: database.prepare("SELECT * FROM application_storage_format").all(),
   };
 }
 
@@ -49,9 +48,9 @@ describe("SessionDatabase", () => {
       expect(database.connection.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(
         database.connection
-          .prepare("SELECT version FROM application_storage_format WHERE id = 1")
+          .prepare("SELECT 1 FROM sqlite_master WHERE name = 'application_storage_format'")
           .get(),
-      ).toEqual({ version: 3 });
+      ).toBeUndefined();
 
       database.close();
 
@@ -65,7 +64,7 @@ describe("SessionDatabase", () => {
       expect(normalize(inventory(first.connection))).toEqual(normalize(expected));
       first.connection.prepare("UPDATE session_event_sequence SET reserved_through = 42 WHERE id = 1").run();
       const journal = first.connection.prepare("SELECT * FROM __drizzle_migrations").all();
-      expect(journal).toHaveLength(1);
+      expect(journal).toHaveLength(2);
       first.close();
       const second = SessionDatabase.open({ path });
       try {
@@ -75,10 +74,16 @@ describe("SessionDatabase", () => {
       } finally { second.close(); }
     });
     const directory = new URL("../session-runtime/migrations/", import.meta.url);
-    expect(readdirSync(directory).filter((name) => name.endsWith(".sql"))).toEqual(["0000_current_schema.sql"]);
+    const sqlFiles = readdirSync(directory).filter((name) => name.endsWith(".sql")).sort();
+    expect(sqlFiles).toEqual([
+      "0000_current_schema.sql",
+      "0001_drop_application_storage_format.sql",
+    ]);
     const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", directory), "utf8"));
-    expect(journal.entries).toHaveLength(1);
-    expect(journal.entries[0]).toMatchObject({ idx: 0, tag: "0000_current_schema" });
+    expect(journal.entries.map((entry: { tag: string }) => entry.tag).sort()).toEqual([
+      "0000_current_schema",
+      "0001_drop_application_storage_format",
+    ]);
   });
 
   it("creates parent directories before opening the SQLite file", () => {

@@ -594,11 +594,6 @@ export const sessionEventSequence = sqliteTable("session_event_sequence", {
   check("session_event_sequence_singleton", sql`${table.id} = 1`),
 ]);
 
-export const applicationStorageFormat = sqliteTable("application_storage_format", {
-  id: integer("id").primaryKey(),
-  version: integer("version").notNull(),
-}, (table) => [check("application_storage_format_singleton", sql`${table.id} = 1`)]);
-
 export const projectionSettlements = sqliteTable(
   "projection_settlement",
   {

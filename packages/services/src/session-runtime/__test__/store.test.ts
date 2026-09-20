@@ -138,15 +138,15 @@ describe("SessionStore", () => {
   });
 
 
-  it("creates a format 3 database with input attachment and typed part columns", () => {
+  it("creates a current-format database with input attachment and typed part columns", () => {
     withStore((_store, path) => {
       const database = new Database(path, { readonly: true });
       try {
         expect(
           database
-            .prepare("SELECT version FROM application_storage_format WHERE id = 1")
+            .prepare("SELECT 1 FROM sqlite_master WHERE name = 'application_storage_format'")
             .get(),
-        ).toEqual({ version: 3 });
+        ).toBeUndefined();
 
         const refIndexes = database
           .prepare(
