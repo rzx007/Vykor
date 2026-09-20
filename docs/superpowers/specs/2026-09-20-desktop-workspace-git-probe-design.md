@@ -47,7 +47,7 @@
 
 ### 关键事实
 
-- **审阅链路本来就不依赖「项目记录」**：`ReviewTool` 用的是 `selectedProjectPath`（`review-tool.tsx:88-90`），而右侧面板的路径来自 `selectActiveWorkspaceProject`（`utility-panel.tsx:105`）——它对项目外会话会用**会话 cwd 合成一个 workspace**（`selectors.ts:82-88`）。底层 `git.changes` / `fileDiff` 只需要一个目录（`git-service.ts:22-23` 直接 `resolveDirectory(rootPath)`）。
+- **审阅链路本来就不依赖「项目记录」**：`ReviewTool` 用的是 `selectedProjectPath`（`review-tool.tsx:88-90`），而右侧面板的路径来自 `selectActiveWorkspaceProject`（`utility-panel.tsx:105`）——它对项目外会话会用**会话 cwd 合成一个 workspace**（`selectors.ts:144`）。底层 `git.changes` / `fileDiff` 只需要一个目录（`git-service.ts:22-23` 直接 `resolveDirectory(rootPath)`）。
 - **`inspectProject` 有写副作用**：它调用 `client.projects.inspect(path)` → `ProjectRepository.inspect`（`project-repository.ts:36-89`），在路径不存在项目时会 **INSERT 一条 project 记录**。因此项目外会话不能直接复用 `inspectProject`，否则会把托管目录注册成项目。
 - **仓库里存在两套 git 探测**：
   | 探测 | 位置 | 命令 | 副作用 |
@@ -62,7 +62,7 @@
 - **统一探测**：`git:isRepository` 通道，只读回答「该目录是不是 git 仓库」，返回仓库根路径。
 - **项目会话**：`session.workspaceMode !== "outside_project"` 且 `session.projectId` 存在的会话。
 - **项目外会话**：`workspaceMode === "outside_project"` 的会话，其 cwd 由桌面端在 `Documents\OpenHarness\<date>\xN` 下分配。
-- **工作区项目（workspace project）**：右侧面板与对话实际使用的目录，由 `selectActiveWorkspaceProject`（`selectors.ts:76`）给出。项目会话返回 store 里的 `selectedProject`；项目外会话返回由**会话 cwd 合成**的 workspace（`projectFromSession(session)`，其 `path === session.cwd`）。
+- **工作区项目（workspace project）**：右侧面板与对话实际使用的目录，由 `selectActiveWorkspaceProject`（`apps/desktop/src/renderer/src/stores/desktop-session/selectors.ts:144`）给出。项目会话返回 store 里的 `selectedProject`；项目外会话返回由**会话 cwd 合成**的 workspace（`projectFromSession`，`apps/desktop/src/renderer/src/stores/desktop-session/helpers.ts:133`，其 `path === session.cwd`）。
 - **`selectActiveWorkspaceProject` 与 `state.selectedProject` 的区别**：前者对项目外会话非空，后者对项目外会话恒为 `null`。本次多处改动就是把消费点从后者换到前者。
 - **`useActiveWorkspaceIsGit`**：新增 hook，返回值类型 `boolean | null`（`null` = 尚未判定）。它内部产出本节所说的 `activeWorkspaceIsGit` 语义。
 
@@ -78,7 +78,7 @@
 
 4. **项目外会话的审阅默认停在「上一轮」。** 审阅面板的四个范围选项与默认值（`review-tool.tsx:45-50`）保持不变，用户可自行切到未提交/未暂存/已暂存，**不为项目外会话增加「禁用其他选项」的逻辑**。这不等于 `review-tool.tsx` 完全不动：它必须把「拿工作区路径」的来源从 `state.selectedProject` 改为 `selectActiveWorkspaceProject`（详见证 7）。
 
-5. **缓存复用现有模式。** TTL 与去重策略参照 `renderer/src/lib/git-changes-query.ts`（`Map` + `inFlight` 去重 + `maxAgeMs`），TTL 取 `1000ms`。缓存键**完全复用** `git-changes-query.ts` 的 `normalizedRootPath` 规则（Windows 盘符/UNC 路径转正斜杠、去尾部斜杠并小写；POSIX 路径保留大小写、仅去尾部斜杠），不引入第二套路径规范化；**缓存键取探测输入路径（会话 cwd），不取返回的 `rootPath`**。`git:isRepository` 返回的 `rootPath` 只用于展示与调试，**绝不被当作 `git.changes` 的 `rootPath`**（否则 cwd 为子目录时会与 `selectedProjectPath` 大小写不一致，破坏 `toProjectRelativePath` 的匹配）。
+5. **缓存复用现有模式。** TTL 与去重策略参照 `renderer/src/lib/git-changes-query.ts`（`Map` + `inFlight` 去重 + `maxAgeMs`），TTL 取 `1000ms`。缓存键**完全复用** `git-changes-query.ts` 的 `normalizedRootPath` 规则，做法是从 `git-changes-query.ts` **导出该函数**（现为文件内私有函数，`git-changes-query.ts:26`）供 `workspace-git-probe.ts` 直接引用，**不复制实现、不引入第二套规范化**。规则为：Windows 盘符/UNC 路径转正斜杠、去尾部斜杠并小写；POSIX 路径保留大小写、仅去尾部斜杠。**缓存键取探测输入路径（会话 cwd），不取返回的 `rootPath`**。`git:isRepository` 返回的 `rootPath` 当前**没有任何消费方**（hook 只返回布尔），保留在返回类型中仅用于调试与未来展示。**它绝不作为 `git.changes` 的 `rootPath`**（否则 cwd 为子目录时会与 `selectedProjectPath` 大小写不一致，破坏 `toProjectRelativePath` 的匹配）。
 
 6. **不写 store。** 探测结果只存在于渲染进程的模块级缓存与 React 状态里，绝不写回 `useDesktopSessionStore`，也不触碰 `projects` 表。
 
@@ -155,8 +155,8 @@ git: {
 | git IPC 注册 | 把探测通道接到 `gitService` | `apps/desktop/src/main/features/git/ipc.ts` |
 | 探测缓存 | TTL + inFlight 去重 + 复用 `normalizedRootPath` | `apps/desktop/src/renderer/src/lib/workspace-git-probe.ts` |
 | `useActiveWorkspaceIsGit` | 把「项目会话取 store / 项目外会话探测」合成一个布尔 | `apps/desktop/src/renderer/src/hooks/use-active-workspace-is-git.ts` |
-| `utility-panel` | 审阅工具出现/保留、review 标签页 gate | 现有文件，改 5 处消费点 |
-| `main-layout` | 传给 `ConversationPane` 的 `canOpenReview` | 现有文件，改 2 处 |
+| `utility-panel` | 审阅工具出现/保留、review 标签页 gate | 现有文件：订阅行 `:108` 改用 hook，另改 `:110`、`:121`、`:170`、`:189`、`:639` |
+| `main-layout` | 传给 `ConversationPane` 的 `canOpenReview` | 现有文件：订阅行 `:56` 改用 hook，另改 `:281` |
 | `review-tool` | 工作区路径来源 + 空态判断 | 现有文件，改 3 处（`:88`、`:90`、`:201`） |
 | `assistant-message` | diff 统计的路径来源 | 现有文件，改 1 处（`:400`） |
 
@@ -202,4 +202,4 @@ git: {
 
 ## 待确认
 
-无。设计选项（做法 X、选择 A）与三个实现细节（hook 放 `hooks/`、探测 TTL 与 `git-changes-query.ts` 对齐为 1000ms、不替换旧探测）均已由用户确认。
+无。设计要求（做法 X：新增只读 `git:isRepository` 统一探测出口；选择 A：审阅默认停在「上一轮」但允许切换）与实施细节（hook 放 `hooks/`、探测 TTL 采用 `git-changes-query.ts` 的 `1000ms`、不替换 `session-operations.ts:80` 的旧探测）均已由用户确认。
