@@ -33,15 +33,17 @@ export function planTurnBlocks(
         phase: block.phase,
       }
     }
-    const isStreaming = options.streaming && index === lastAssistantIndex
+    const isLastAssistant = index === lastAssistantIndex
+    const isStreaming = options.streaming && isLastAssistant
+    const firstMessageId = block.messages[0]?.id
     const lastMessageId = block.messages.at(-1)?.id
     return {
-      key: lastMessageId ?? `${turn.id}-assistant-${index}`,
-      messageId: lastMessageId ?? `${turn.id}-assistant-${index}`,
+      key: firstMessageId ?? `${turn.id}-assistant-${index}`,
+      messageId: lastMessageId ?? firstMessageId ?? `${turn.id}-assistant-${index}`,
       kind: "assistant" as const,
       parts: block.parts,
       streaming: isStreaming,
-      showActions: !isStreaming,
+      showActions: isLastAssistant && !options.streaming,
     }
   })
 }

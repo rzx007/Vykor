@@ -20,8 +20,34 @@ describe("turn block plan", () => {
       "assistant",
     ])
     expect(plan[0]).toMatchObject({ kind: "divider", streaming: false, showActions: false })
-    expect(plan[1]).toMatchObject({ kind: "assistant", streaming: false, showActions: true })
+    expect(plan[1]).toMatchObject({ kind: "assistant", streaming: false, showActions: false })
     expect(plan[3]).toMatchObject({ kind: "assistant", streaming: true, showActions: false })
+  })
+
+  it("shows actions only on the last assistant block when the turn is finished", () => {
+    const turn = turnWithBlocks([
+      { kind: "assistant", messages: [message("a-1", 2)], parts: [] },
+      { kind: "divider", message: message("d-1", 3), parts: [], phase: "completed" },
+      { kind: "assistant", messages: [message("a-2", 4)], parts: [] },
+    ])
+    const plan = planTurnBlocks(turn, { streaming: false })
+
+    expect(plan[0]).toMatchObject({ kind: "assistant", showActions: false })
+    expect(plan[2]).toMatchObject({ kind: "assistant", showActions: true })
+  })
+
+  it("keeps the assistant block key stable while its messages grow", () => {
+    const first = turnWithBlocks([
+      { kind: "assistant", messages: [message("a-1", 2)], parts: [] },
+    ])
+    const grown = turnWithBlocks([
+      { kind: "assistant", messages: [message("a-1", 2), message("a-2", 4)], parts: [] },
+    ])
+
+    expect(planTurnBlocks(first, { streaming: true })[0]?.key).toBe(
+      planTurnBlocks(grown, { streaming: true })[0]?.key
+    )
+    expect(planTurnBlocks(grown, { streaming: true })[0]?.messageId).toBe("a-2")
   })
 
   it("never streams when the turn is not the running turn", () => {
