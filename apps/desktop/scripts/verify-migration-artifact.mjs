@@ -1,17 +1,24 @@
 import { createHash } from "node:crypto"
+import { readdirSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const expectedMigrationPaths = Object.freeze([
-  "0000_current_schema.sql",
-  "meta/0000_snapshot.json",
-  "meta/_journal.json",
-])
 const sha256Pattern = /^[0-9a-f]{64}$/
 
-export function validateMigrationInventory(value) {
+export function expectedMigrationPaths(migrationsDirectory) {
+  const paths = []
+  for (const name of readdirSync(migrationsDirectory)) {
+    if (name.endsWith(".sql")) paths.push(name)
+  }
+  for (const name of readdirSync(join(migrationsDirectory, "meta"))) {
+    if (name.endsWith(".json")) paths.push(`meta/${name}`)
+  }
+  return paths.sort()
+}
+
+export function validateMigrationInventory(value, expectedPaths) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("migration inventory must be an object")
   }
@@ -26,9 +33,9 @@ export function validateMigrationInventory(value) {
   if (!Array.isArray(value.migrations)) throw new Error("migration inventory requires migrations")
 
   const actualPaths = value.migrations.map((entry) => entry?.path).sort()
-  if (JSON.stringify(actualPaths) !== JSON.stringify(expectedMigrationPaths)) {
+  if (JSON.stringify(actualPaths) !== JSON.stringify([...expectedPaths].sort())) {
     throw new Error(
-      `migration inventory must contain exactly [${expectedMigrationPaths.join(", ")}]; found [${actualPaths.join(", ")}]`
+      `migration inventory must contain exactly [${[...expectedPaths].sort().join(", ")}]; found [${actualPaths.join(", ")}]`
     )
   }
   for (const entry of value.migrations) {
@@ -39,8 +46,8 @@ export function validateMigrationInventory(value) {
   return value
 }
 
-export function verifyPlatformInventories(values) {
-  const entries = values.map(validateMigrationInventory)
+export function verifyPlatformInventories(values, expectedPaths) {
+  const entries = values.map((value) => validateMigrationInventory(value, expectedPaths))
   const byPlatform = Object.fromEntries(entries.map((entry) => [entry.platform, entry]))
   if (entries.length !== 2 || !byPlatform.win || !byPlatform.linux) {
     throw new Error("exactly one Windows and one Linux migration inventory are required")
@@ -57,7 +64,7 @@ export function verifyPlatformInventories(values) {
   return { win: byPlatform.win, linux: byPlatform.linux }
 }
 
-export async function writePackagedMigrationInventory(platform) {
+export async function writePackagedMigrationInventory(platform, expectedPaths) {
   if (platform !== "win" && platform !== "linux") {
     throw new Error(`expected platform win or linux, received ${String(platform)}`)
   }
@@ -83,12 +90,15 @@ export async function writePackagedMigrationInventory(platform) {
     path,
     sha256: sha256(extractFile(archive, archiveKey)),
   }))
-  const inventory = validateMigrationInventory({
-    version: 1,
-    platform,
-    archiveSha256: sha256(await readFile(archive)),
-    migrations,
-  })
+  const inventory = validateMigrationInventory(
+    {
+      version: 1,
+      platform,
+      archiveSha256: sha256(await readFile(archive)),
+      migrations,
+    },
+    expectedPaths
+  )
   const output = join(desktopRoot, "dist", `clean-slate-migrations-${platform}.json`)
   await writeFile(output, `${JSON.stringify(inventory, null, 2)}\n`, "utf8")
   return output
@@ -96,8 +106,13 @@ export async function writePackagedMigrationInventory(platform) {
 
 async function main() {
   const [command, ...args] = process.argv.slice(2)
+  const sourceMigrations = resolve(
+    desktopRoot,
+    "../../packages/services/src/session-runtime/migrations"
+  )
+  const expected = expectedMigrationPaths(sourceMigrations)
   if (command === "--write-inventory" && args.length === 1) {
-    const output = await writePackagedMigrationInventory(args[0])
+    const output = await writePackagedMigrationInventory(args[0], expected)
     process.stdout.write(`Wrote packaged migration inventory: ${output}\n`)
     return
   }
@@ -105,7 +120,7 @@ async function main() {
     const inventories = await Promise.all(
       args.map(async (path) => JSON.parse(await readFile(resolve(path), "utf8")))
     )
-    verifyPlatformInventories(inventories)
+    verifyPlatformInventories(inventories, expected)
     process.stdout.write("Windows and Linux packaged migration inventories verified.\n")
     return
   }
