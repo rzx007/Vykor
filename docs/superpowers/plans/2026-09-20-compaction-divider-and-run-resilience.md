@@ -36,6 +36,7 @@
 | `packages/client/src/types/index.ts` | 修改 | `EventSyncOptions.idleTimeoutMs`（B1） |
 | `packages/client/src/resources/event-resource.ts` | 修改 | 透传 `idleTimeoutMs`（B1） |
 | `packages/client/src/state/sync.ts` | 修改 | 重连时重新取快照 + 透传 idle 超时（B2） |
+| `packages/client/src/transport/__test__/http-client.test.ts` | 修改 | 同步既有「session 流不重取快照」断言（B2 行为变更） |
 | `apps/desktop/src/main/features/session/session-subscription-pump.ts` | 新建 | 带退避的订阅重建循环（纯函数，B3） |
 | `apps/desktop/src/main/features/session/session-subscription-service.ts` | 修改 | 用 pump 循环替换一次性 pump（B3） |
 | `packages/server/src/application/session/run-stall-watchdog.ts` | 新建 | run 无进展看门狗（C1） |
@@ -719,8 +720,34 @@ describe("turn block plan", () => {
       "assistant",
     ])
     expect(plan[0]).toMatchObject({ kind: "divider", streaming: false, showActions: false })
-    expect(plan[1]).toMatchObject({ kind: "assistant", streaming: false, showActions: true })
+    expect(plan[1]).toMatchObject({ kind: "assistant", streaming: false, showActions: false })
     expect(plan[3]).toMatchObject({ kind: "assistant", streaming: true, showActions: false })
+  })
+
+  it("shows actions only on the last assistant block when the turn is finished", () => {
+    const turn = turnWithBlocks([
+      { kind: "assistant", messages: [message("a-1", 2)], parts: [] },
+      { kind: "divider", message: message("d-1", 3), parts: [], phase: "completed" },
+      { kind: "assistant", messages: [message("a-2", 4)], parts: [] },
+    ])
+    const plan = planTurnBlocks(turn, { streaming: false })
+
+    expect(plan[0]).toMatchObject({ kind: "assistant", showActions: false })
+    expect(plan[2]).toMatchObject({ kind: "assistant", showActions: true })
+  })
+
+  it("keeps the assistant block key stable while its messages grow", () => {
+    const first = turnWithBlocks([
+      { kind: "assistant", messages: [message("a-1", 2)], parts: [] },
+    ])
+    const grown = turnWithBlocks([
+      { kind: "assistant", messages: [message("a-1", 2), message("a-2", 4)], parts: [] },
+    ])
+
+    expect(planTurnBlocks(first, { streaming: true })[0]?.key).toBe(
+      planTurnBlocks(grown, { streaming: true })[0]?.key
+    )
+    expect(planTurnBlocks(grown, { streaming: true })[0]?.messageId).toBe("a-2")
   })
 
   it("never streams when the turn is not the running turn", () => {
@@ -819,19 +846,23 @@ export function planTurnBlocks(
         phase: block.phase,
       }
     }
-    const isStreaming = options.streaming && index === lastAssistantIndex
+    const isLastAssistant = index === lastAssistantIndex
+    const isStreaming = options.streaming && isLastAssistant
+    const firstMessageId = block.messages[0]?.id
     const lastMessageId = block.messages.at(-1)?.id
     return {
-      key: lastMessageId ?? `${turn.id}-assistant-${index}`,
-      messageId: lastMessageId ?? `${turn.id}-assistant-${index}`,
+      key: firstMessageId ?? `${turn.id}-assistant-${index}`,
+      messageId: lastMessageId ?? firstMessageId ?? `${turn.id}-assistant-${index}`,
       kind: "assistant" as const,
       parts: block.parts,
       streaming: isStreaming,
-      showActions: !isStreaming,
+      showActions: isLastAssistant && !options.streaming,
     }
   })
 }
 ```
+
+> 说明（计划修订，2026-09-20）：`key` 取**段内首条消息 id**（段在流式增长时保持稳定，避免 React 重挂载丢失展开状态）；`messageId` 取末条 id 保持滚动锚点。`showActions` 只在**最后一个助手段**且该轮**不在流式中**时为真——与设计文档「streaming 与 AssistantMessageActions 只挂在最后一段」一致，避免中途压缩后每个助手段都出现一行重复的复制/分叉按钮。
 
 - [ ] **Step 4: 改 transcript 渲染**
 
@@ -1080,8 +1111,7 @@ Expected: 第 1 个用例挂起/超时失败（没有空闲超时）
         }
         resetIdleTimer()
         try {
-          for await (const frame of readRawSseFrames(response.body)) {
-            resetIdleTimer()
+          for await (const frame of readRawSseFrames(response.body, resetIdleTimer)) {
             if (frame.id !== undefined) lastEventId = frame.id
             if (frame.retry !== undefined) reconnectDelayMs = frame.retry
             if (frame.data !== undefined) {
@@ -1100,6 +1130,40 @@ Expected: 第 1 个用例挂起/超时失败（没有空闲超时）
       await waitForReconnect(reconnectDelayMs, options.signal)
     }
   }
+```
+
+3. `readRawSseFrames` 增加活动回调（关键：注释/keepalive 帧会被 `parseRawSseFrame` 丢弃，必须在解析前回调，否则 keepalive 不会刷新计时器）：
+
+```ts
+async function* readRawSseFrames(
+  stream: ReadableStream<Uint8Array>,
+  onFrame?: () => void,
+): AsyncIterable<SseRawFrame> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() ?? "";
+      for (const value of frames) {
+        // 注释/keepalive 帧解析后会被丢弃，但同样算一次活动。
+        onFrame?.();
+        const frame = parseRawSseFrame(value);
+        if (frame) yield frame;
+      }
+    }
+    buffer += decoder.decode();
+    onFrame?.();
+    const frame = parseRawSseFrame(buffer);
+    if (frame) yield frame;
+  } finally {
+    reader.releaseLock();
+  }
+}
 ```
 
 - [ ] **Step 4: 透传选项**
@@ -1131,11 +1195,13 @@ Expected: 全部 PASS
 
 **Files:**
 - Modify: `packages/client/src/state/sync.ts`
+- Modify: `packages/client/src/transport/__test__/http-client.test.ts`（既有用例「accepts global seq gaps in a session-filtered stream without re-snapshotting」断言的正是 B2 要改掉的旧行为，必须同步更新断言与用例名，属行为变更的必要测试同步）
 - Test: `packages/client/src/state/__test__/sync.test.ts`（新建）
 
 **Interfaces:**
 - Consumes: B1 的 `EventSyncOptions.idleTimeoutMs`。
 - 行为：会话路径每次重连（流干净结束或抛错）后重新 `client.sessions.getState`，并以 `source: "snapshot"` yield 一次；`liveWithReconnect` 的既有签名与调用方不变。
+- 说明：`liveWithReconnect` 是会话与全局事件流共用函数，因此**两条事件流路径都会带上默认 60s 空闲超时**（两者同由 `HttpEventHub` 提供、15s keepalive），这是有意为之；terminal/attachment 等非事件流不受影响。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1218,6 +1284,30 @@ describe("syncEvents reconnect", () => {
     expect(sources).toEqual(["snapshot", "reconnecting", "snapshot"])
     expect(getState).toHaveBeenCalledTimes(2)
   })
+
+  it("keeps reconnecting when the resync snapshot fails", async () => {
+    const getState = vi
+      .fn<() => Promise<SessionStateSnapshot>>()
+      .mockResolvedValueOnce(snapshot(1))
+      .mockRejectedValueOnce(new Error("snapshot boom"))
+      .mockResolvedValue(snapshot(1))
+    const client = {
+      sessions: { getState },
+      events: { list: vi.fn(async () => []), stream: vi.fn(() => emptyStream()) },
+    }
+
+    const sources: string[] = []
+    for await (const update of syncEvents(client as never, {
+      sessionId: "s1",
+      reconnectDelayMs: () => 0,
+    })) {
+      sources.push(update.source)
+      if (sources.length >= 4) break
+    }
+
+    expect(sources).toEqual(["snapshot", "reconnecting", "reconnecting", "snapshot"])
+    expect(getState).toHaveBeenCalledTimes(3)
+  })
 })
 ```
 
@@ -1248,7 +1338,7 @@ Expected: FAIL（第二次 yield 是 `live` 而不是 `snapshot`；`getState` �
   }
 ```
 
-2. `liveWithReconnect` 签名与循环改为（注意：重连分支的「等待退避 → 重新快照 → yield」在流结束与 catch 两处各写一遍，不要嵌套 generator）：
+2. `liveWithReconnect` 签名与循环改为（重连体的「等待退避 → 重新快照/失败降级 → 视结果 yield」统一收敛到 `applyResync`，避免两处粘贴分叉；**resync 自身失败不能冒泡终止生成器**，否则 daemon 重启期间订阅会永久死亡）：
 
 ```ts
 async function* liveWithReconnect(
@@ -1264,6 +1354,23 @@ async function* liveWithReconnect(
   let cursor = initialCursor
   let attempt = 0
   const delayMs = options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS
+
+  const applyResync = async (): Promise<"resynced" | "resumed" | "aborted"> => {
+    if (!resync) {
+      cursor = state.lastSeq
+      return "resumed"
+    }
+    try {
+      const refreshed = await resync(state)
+      state = refreshed.state
+      cursor = Math.max(refreshed.cursor, state.lastSeq)
+      return "resynced"
+    } catch (error) {
+      if (isAbortError(error) || options.signal?.aborted) return "aborted"
+      cursor = state.lastSeq
+      return "resumed"
+    }
+  }
 
   while (!options.signal?.aborted) {
     try {
@@ -1299,28 +1406,18 @@ async function* liveWithReconnect(
       yield { state, source: "reconnecting" }
       if (!(await waitForReconnect(delayMs(attempt), options.signal))) return
       attempt += 1
-      if (resync) {
-        const refreshed = await resync(state)
-        state = refreshed.state
-        cursor = refreshed.cursor
-        yield { state, source: "snapshot" }
-      } else {
-        cursor = state.lastSeq
-      }
+      const outcome = await applyResync()
+      if (outcome === "aborted") return
+      if (outcome === "resynced") yield { state, source: "snapshot" }
     } catch (error) {
       if (error instanceof UnsupportedSessionEventSchemaVersionError) throw error
       if (isAbortError(error) || options.signal?.aborted) return
       yield { state, source: "reconnecting" }
       if (!(await waitForReconnect(delayMs(attempt), options.signal))) return
       attempt += 1
-      if (resync) {
-        const refreshed = await resync(state)
-        state = refreshed.state
-        cursor = refreshed.cursor
-        yield { state, source: "snapshot" }
-      } else {
-        cursor = state.lastSeq
-      }
+      const outcome = await applyResync()
+      if (outcome === "aborted") return
+      if (outcome === "resynced") yield { state, source: "snapshot" }
     }
   }
 }
@@ -1485,6 +1582,7 @@ export async function pumpSubscription<T>(options: SubscriptionPumpOptions<T>): 
       while (options.isActive()) {
         const update = await iterator.next()
         if (update.done) break
+        if (!options.isActive()) break
         last = update.value
         options.onUpdate(update.value)
       }
@@ -1969,9 +2067,20 @@ Expected: 无错误
 
 ---
 
-## 最终验证（Task V）
+## 最终审查修复（Task V 前）
 
-- [ ] **Step 1: 三个包各自全量测试**
+全分支 review 发现三处必须在合并前处理的问题，作为一次修复提交完成：
+
+1. **Critical：看门狗活动判据不完整**。`run.updatedAt` 只在每次模型回合的 `usage`/`complete` 时更新（`transcript-projection.ts:248,258`），流式文本 delta 与工具起止只 bump message/part 的 `updatedAt`（`incremental-output.ts:26-28`、`conversation-repository.ts:206`），task 心跳也只覆盖后台命令/子智能体。单个长回合流式或单个长工具会误触发中断。
+   修复：`session-run-executor.ts` 的 `readActivity` 把 `conversations.listMessages(sessionId)` 的最大 `updatedAt` 并入活动信号（`taskUpdatedAt` 取 task 与 message 的较大值）。新增 executor 级测试：message 持续更新时不中断。
+2. **Important：看门狗回调与 interrupt 无防护**。定时器回调抛异常或 `run.interrupt` reject 会带走进程（仓库无 uncaughtException 处理器）。
+   修复：`run-stall-watchdog.ts` 的 `check()` 整体 try/catch 后只 log；executor 的 `run.interrupt(...)` 挂 `.catch` 并记 warn 日志。新增「readActivity 抛错时 check 不抛出且记日志」测试。
+3. **Important：自动中断的原因在桌面端不可见**。桌面只对 `failed` run 渲染 `RunErrorNotice`，watchdog 产生的是 `interrupted`。
+   修复：executor 触发中断前给 run 打 `metadata.stalled = true`；桌面新增 `transcript/run-notices.ts` 的 `selectRunNotices(runs)`（failed，或 interrupted 且 `metadata.stalled === true`），`transcript.tsx` 用它渲染通知（`RunErrorNotice` 展示 run.error 即可读原因）；新增该选择器的单测。
+
+涉及文件（在既有清单基础上新增）：`packages/server/src/application/session/session-run-executor.ts`、`packages/server/src/application/session/run-stall-watchdog.ts`、`apps/desktop/src/renderer/src/components/desktop/conversation-page/transcript/transcript.tsx`、新增 `.../transcript/run-notices.ts` 与其测试，以及相应测试文件。
+
+## 最终验证（Task V）- [ ] **Step 1: 三个包各自全量测试**
 
 Run: `pnpm --filter @openharness/desktop test`
 Run: `pnpm --filter @openharness/client test`
