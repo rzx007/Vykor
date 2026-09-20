@@ -50,7 +50,7 @@ pnpm --filter @openharness/desktop verify:update-packaging
 1. 固定触发时的完整 commit，校验版本格式，以及已有同名 tag 是否指向该 commit。
 2. 在临时工作树同步候选版本，运行类型检查、全量测试、架构边界检查、文档检查和脚本测试，并生成固定的 release notes。
 3. 在 Windows / Ubuntu runner 构建 Desktop；每个平台都会直接读取已打包的 `app.asar`，记录其中 migration 文件及 SHA-256，再上传安装包、更新清单和 inventory。
-4. 汇总任务确认 Windows / Linux 安装包都只包含当前单一数据库基线，并且文件内容一致。只有前述检查全部成功，才创建并推送 `vX.Y.Z` tag。已有 tag 指向同一 commit 时复用；指向其他 commit 时直接失败。
+4. 汇总任务确认 Windows / Linux 安装包都包含基线与全部增量迁移（journal 与文件一一对应），并且文件内容一致。只有前述检查全部成功，才创建并推送 `vX.Y.Z` tag。已有 tag 指向同一 commit 时复用；指向其他 commit 时直接失败。
 5. 构建并发布 `@rzx/ohs`。已存在的精确版本会跳过上传，但仍通过 `npm view @rzx/ohs@X.Y.Z` 在线确认。
 6. 只有 npm 发布及在线确认成功，才创建或更新 GitHub Release。重跑会同时覆盖资产和 notes，避免页面说明与证据不一致。
 7. 再次读取 npm、GitHub Release notes 和资产列表，核对无误后把版本、tag 与完整 commit 写进 job summary。

@@ -214,6 +214,6 @@ Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增�
 | Desktop 服务 | `apps/desktop/src/main/features/channels/channel-service.ts` | 经 daemon HTTP 调渠道接口、生成二维码、拒绝高水位 |
 | Desktop 页面 | `apps/desktop/src/renderer/src/components/desktop/settings-page/connections-settings.tsx` | 「连接」板块：接入、状态、白名单、启停、被拒提示 |
 | 工作目录根 | `packages/core/src/config/paths.ts` | `getChannelWorkspaceRoot()` |
-| 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 当前数据库基线，包含聊天映射和回复状态 |
+| 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 迁移链基线（起点），包含聊天映射和回复状态 |
 
 `FeishuPush` 工具仍是另一条主动推送捷径：它由当前 Agent 主动选择目标并发消息，不代表收到一条外部消息后的 durable 回复流程；它也在 daemon 进程内读取同一份渠道配置。

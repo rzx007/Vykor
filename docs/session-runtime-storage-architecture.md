@@ -28,7 +28,7 @@ new SessionStore(options)
 
 | 状态 | 当前负责人 | 说明 |
 | --- | --- | --- |
-| SQLite 连接与 schema | `SessionDatabase` | 打开连接、配置 SQLite、应用唯一当前 migration、关闭数据库 |
+| SQLite 连接与 schema | `SessionDatabase` | 打开连接、配置 SQLite、应用迁移链（基线 + 增量）、关闭数据库 |
 | Session 列表和关系 | `SessionRepository` | 创建、更新、归档、查询和 child 关系 |
 | Input、Message、Part、Event | `ConversationRepository` | transcript 与 durable event 的单域读写 |
 | Run、Attempt、Session Task | `RunRepository` | Run 生命周期、实际模型尝试和持久任务 |
@@ -108,15 +108,17 @@ text delta 有两条路径：
 
 ## Schema 与启动边界
 
-当前数据库只有：
+迁移目录以 0000_current_schema.sql 为基线，其后是 0001+ 增量迁移：
 
 ```text
 packages/services/src/session-runtime/migrations/0000_current_schema.sql
+packages/services/src/session-runtime/migrations/0001_drop_application_storage_format.sql
 packages/services/src/session-runtime/migrations/meta/0000_snapshot.json
+packages/services/src/session-runtime/migrations/meta/0001_snapshot.json
 packages/services/src/session-runtime/migrations/meta/_journal.json
 ```
 
-journal 只有一条当前基线。启动支持空目录建库和当前 schema 的幂等再次打开；不会扫描旧 migration 链，也不会读取、猜测或转换旧数据库。
+迁移目录以 `0000_current_schema.sql` 为基线，其后为增量迁移；journal 与 `.sql` 文件一一对应。启动先按基线快照接管基线前旧库，再无条件应用增量迁移；不做字段猜测或读取时降级。
 
 Daemon 对外 ready 前由 Server 的 recovery service 收束上次进程留下的 active Run、Attempt、Task、Permission、closing Session、Workflow claim 和 Projection Settlement。Services 提供原子存储能力，但不决定 HTTP 错误、Run 排队或是否重新调用模型。
 
@@ -159,7 +161,7 @@ Repository/Transaction 返回已经写入当前 read model 的记录。Server Ap
 - `packages/services/src/session-runtime/__test__/store.test.ts`：数据库生命周期、owner、recovery、retention 和系统级能力；
 - `packages/services/src/session-runtime/__test__/session-task-waiting.test.ts`：task waiter 不丢唤醒；
 - `node scripts/architecture-boundaries.mjs`：依赖方向和旧平铺调用基线；
-- `node scripts/verify-clean-slate.mjs`：单 migration、协议和禁止兼容面。
+- `node scripts/verify-clean-slate.mjs`：迁移链完整性（基线 + journal 与文件一致）、协议和禁止兼容面。
 
 ## 历史说明
 

@@ -7,13 +7,13 @@
 - 同一个数据目录同一时刻只允许一个 Durable Application 写入。
 - 重启只恢复记录，不复活已经消失的模型请求、Tool 进程或 live Handle。
 - 看见 `running` 不代表一定还在跑；必须同时检查 Application owner 和 live runtime。
-- 旧格式数据不会自动升级。格式不匹配时先停下，不要手改版本号。
+- 基线前旧库由快照驱动的接管自动补齐结构，再应用增量迁移；不要手改 __drizzle_migrations。
 
 ## 启动到 ready 的顺序
 
 ```text
 打开 SQLite
-  -> 检查 storage format = 3
+  -> 接管基线前旧库并应用增量迁移
   -> 取得 Application Owner 租约
   -> 恢复 Projection Settlement
   -> 收束失去进程的 Run / Attempt / Permission / Child
@@ -117,20 +117,17 @@ Application backup 可以包含：
 - 不会恢复旧 PID、模型连接、Tool 进程或 live child；
 - 第一次启动会取得新的 owner；
 - 仍为活动态的记录会走普通启动恢复；
-- storage format 必须就是当前版本 3。
+- 迁移链必须完整：基线 `0000_current_schema.sql` 与其后增量迁移的 journal 与文件一一对应。
 
-不要把旧格式数据库的 marker 手工改成 3。marker 只证明数据确实由当前格式创建，不是转换开关。
+旧库由快照驱动的接管处理，不要手工改 `__drizzle_migrations`；接管只补齐基线快照的结构，不做字段猜测。
 
-## 破坏性格式切换
+## schema 演进与旧库接管
 
-当前策略是 hard cut，也就是只支持当前接口和当前数据：
-
-- 旧 SQLite、旧 JSON Memory、旧 Session snapshot、旧 Swarm 文件和无版本 settings 都直接拒绝。
-- 不提供自动 migration、字段别名、读取时升级或“尽量猜”。
-- 需要继续使用旧数据时，用对应旧版本运行并导出；新版本不会负责转换。
-- 可以删除旧数据后创建全新数据目录，但删除前应自行确认是否还需要保留历史。
-
-这样做的代价是升级不能无感；好处是每次读取都只有一种含义，恢复流程不会把猜出来的状态当成事实。
+- 迁移链以 `0000_current_schema.sql` 为基线，其后为增量迁移；启动时按 `__drizzle_migrations` 水位线应用。
+- 基线前旧库（表结构属于当前基线世代、但缺列/索引或含废弃表）由快照对账一次性接管补齐，再应用增量迁移。
+- 接管只做可加性变更：缺列补列、缺索引建索引、删除基线中不存在的表；改名/改类型/数据变换必须写显式迁移文件。
+- 缺整表、缺主键列、列或索引定义冲突会明确失败，不做猜测。
+- 需要继续使用更早世代的旧数据时，改用对应旧版本运行并按需导出；新版本不负责跨世代转换。
 
 ## Native Plugin 恢复
 

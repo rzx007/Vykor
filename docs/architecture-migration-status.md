@@ -56,8 +56,8 @@
 
 - HTTP 协议版本是 `4`，请求头是 `x-openharness-protocol-version`。
 - `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 4 的版本。
-- SQLite 只有 `packages/services/src/session-runtime/migrations/0000_current_schema.sql` 一份当前 schema，journal 只有一条记录。
-- 启动只支持空目录建库和当前 schema 的幂等二次打开，不读取、猜测或转换旧数据库。
+- SQLite 以 `packages/services/src/session-runtime/migrations/0000_current_schema.sql` 为基线，其后为 `drizzle-kit generate` 产出的增量迁移链。
+- 启动先接管基线前旧库（按基线快照补齐列/索引、清理废弃表），再无条件下应用增量迁移；不做字段猜测或读取时降级。
 - Native Plugin 只接受严格 v1 manifest，安装 scope 只有 `user` 与 `managed`；外部格式先通过 `@openharness/plugin-converters` 显式转换。
 - 项目 Skill 目录只有 `.agents/skills` 与 `.openharness-ts/skills`；用户 Skill 默认位于 `~/.openharness-ts/skills`。
 
@@ -69,7 +69,7 @@
 - 对外暴露的底层 Client transport；
 - `SessionStore` 和 Application 层只做一跳转发的平铺业务方法；
 - 旧 Client 字段名、旧插件 scope/manifest、旧 Skill 目录和旧 shell fallback；
-- 旧数据库 migration 链、旧 schema 自动读取与运行时升级；
+- 旧 schema 的读取时升级与字段猜测；仅保留快照驱动的基线接管（见数据库 schema 自动迁移设计）。
 - 为“至少保留一轮发行”准备的多次发布、deprecated 周期和删除授权流程。
 
 OpenAI-compatible Provider、外部插件导入、平台 shell 选择、可靠重试、取消、事务回滚和崩溃恢复仍是当前产品能力。它们解决真实运行问题，不属于兼容层。
@@ -79,7 +79,7 @@ OpenAI-compatible Provider、外部插件导入、平台 shell 选择、可靠�
 | 命令 | 守护内容 |
 | --- | --- |
 | `pnpm check:architecture` | Client contract、禁止兼容面、包/模块依赖和 clean-slate 聚合检查 |
-| `pnpm check:clean-slate` | Client 公开导出、协议版本/header、单 migration/journal、发布顺序和 bundle inventory |
+| `pnpm check:clean-slate` | Client 公开导出、协议版本/header、迁移链完整性、发布顺序和 bundle inventory |
 | `pnpm test:clean-slate` | 空环境 smoke、安全清理、失败清理和 verifier 失败 fixture |
 | `pnpm check-docs` | 文档状态、必备入口、本地链接、源码路径和契约测试映射 |
 

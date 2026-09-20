@@ -211,7 +211,7 @@
 - SQLite、event、settings、Session snapshot、Memory 和 Swarm 文件都有明确版本标记；
 - 需要版本标记的数据缺失标记或版本不同时直接失败；声明为必填的字段缺失或字段名过时时直接失败；
 - 不做自动 migration、读取时升级或旧数据猜测；
-- 格式切换和恢复步骤见 [Operations and Recovery](./operations-and-recovery.md#破坏性格式切换)。
+- 格式切换和恢复步骤见 [Operations and Recovery](./operations-and-recovery.md#schema-演进与旧库接管)。
 
 ## 写文档时的约定
 
