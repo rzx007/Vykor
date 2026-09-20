@@ -3,10 +3,14 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
-vi.mock("@renderer/stores/desktop-session", () => ({
-  useDesktopSessionStore: (selector: (state: unknown) => unknown) =>
-    selector({ selectedProject: { path: "D:/repo" } }),
-}))
+vi.mock("@renderer/stores/desktop-session", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@renderer/stores/desktop-session")>()
+  return {
+    ...actual,
+    useDesktopSessionStore: (selector: (state: unknown) => unknown) =>
+      selector({ selectedProject: { path: "D:/repo" } }),
+  }
+})
 
 import { resetGitChangesQueryCacheForTests } from "@renderer/lib/git-changes-query"
 import { ChangedFilesSummary } from "./assistant-message"
