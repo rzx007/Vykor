@@ -38,11 +38,11 @@ function renderIsGit(): { read: () => boolean | null; unmount: () => void } {
   return { read: () => snapshot.current, unmount }
 }
 
-function outsideProjectSessionView(): DesktopSessionView {
-  const view = emptySessionView("s1")
+function outsideProjectSessionView(id = "s1", cwd = "D:/xm"): DesktopSessionView {
+  const view = emptySessionView(id)
   return {
     ...view,
-    session: { ...view.session, cwd: "D:/xm", workspaceMode: "outside_project" },
+    session: { ...view.session, cwd, workspaceMode: "outside_project" },
   }
 }
 
@@ -136,6 +136,41 @@ describe("useActiveWorkspaceIsGit", () => {
 
     const view = renderIsGit()
 
+    expect(view.read()).toBeNull()
+  })
+
+  it("returns null immediately after switching to another outside-project path with a pending probe", async () => {
+    const pending = new Promise<{ isRepository: boolean; rootPath: null }>(() => {})
+    const isRepository = vi.fn(async ({ path }: { path: string }) => {
+      if (path === "D:/one") return { isRepository: true, rootPath: null }
+      return pending
+    })
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: { git: { isRepository } },
+    })
+    useDesktopSessionStore.setState({
+      selectedProject: null,
+      selectedProjectGit: false,
+      activeSessionId: "s1",
+      sessionView: outsideProjectSessionView("s1", "D:/one"),
+    })
+
+    const view = renderIsGit()
+    await act(async () => {})
+    expect(view.read()).toBe(true)
+
+    act(() => {
+      useDesktopSessionStore.setState({
+        activeSessionId: "s2",
+        sessionView: outsideProjectSessionView("s2", "D:/two"),
+      })
+    })
+
+    expect(isRepository).toHaveBeenCalledWith({ path: "D:/two" })
+    expect(view.read()).toBeNull()
+
+    await act(async () => {})
     expect(view.read()).toBeNull()
   })
 
