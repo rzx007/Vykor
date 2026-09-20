@@ -1042,7 +1042,7 @@ git commit -m "fix(desktop): derive packaged migration inventory from source dir
 
 ### Task 6: 文档同步
 
-**Files:** 见每步。
+**Files:** 见每步；另需更新 `docs/README.md` 的 `## 当前格式策略` 块（SQLite 自动迁移 + 旧库接管口径与入链锚点）。
 
 - [ ] **Step 1: `packages/services/README.md`**
 

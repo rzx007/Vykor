@@ -20,7 +20,7 @@
 | 5 Client / Transport | 把通用网络能力与 endpoint 映射分开 | HTTP/SSE transport、协议协商、领域 Resources、state reducer 和 commands 分目录维护 | `packages/client/src/transport`、`protocol`、`resources`、`state`、`commands` |
 | 6 Desktop / Frontend | 明确服务端权威状态与本地界面状态 | Frontend 通过共享 Client snapshot/SSE 收敛；Desktop Main 只保留 Electron、窗口、文件系统、daemon 连接和 IPC 等平台职责 | `apps/frontend/src`、`apps/desktop/src/main` |
 | 7 公共 API 收口 | 只保留长期公共契约 | Client 公开面由 contract 文件锁定；CLI、Desktop 和 Frontend 使用领域 Resource，不依赖内部 transport 或临时 facade | `scripts/client-public-api-contract.json`、`packages/client/src/__test__/public-api.test.ts` |
-| 8 Clean-slate 删除 | 删除兼容入口和旧数据路径 | 顶层 Client 业务转发、Store/Application 纯转发、旧字段/目录/scope/shell 回退已经删除；协议提升为 4，migration 压为单一当前基线 | `scripts/verify-clean-slate.mjs`、[Compatibility surface 实施审计](./compatibility-surface-audit.md) |
+| 8 Clean-slate 删除 | 删除兼容入口和旧数据路径 | 顶层 Client 业务转发、Store/Application 纯转发、旧字段/目录/scope/shell 回退已经删除；协议提升为 4，migration 以基线 + 增量链管理 | `scripts/verify-clean-slate.mjs`、[Compatibility surface 实施审计](./compatibility-surface-audit.md) |
 
 原始长期设计见 [按业务域重组长期设计](./superpowers/specs/2026-09-14-business-domain-codebase-reorganization-design.md)。Stage 8 最终采用不保留兼容层的 [clean-slate 设计](./superpowers/specs/2026-09-16-clean-slate-compatibility-removal-design.md) 和 [实施计划](./superpowers/plans/2026-09-16-clean-slate-compatibility-removal.md)。
 
