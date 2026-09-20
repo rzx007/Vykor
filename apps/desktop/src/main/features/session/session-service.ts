@@ -55,7 +55,12 @@ import type {
 import { resolveDesktopAttachmentSupport } from "../../../shared/attachment-types"
 import { requireDesktopPluginCapabilities } from "../../../shared/plugin-capabilities"
 import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
-import { buildOutsideProjectRoot, isOutsideProjectWorkspacePath } from "./outside-project-workspace"
+import {
+  buildOutsideProjectRoot,
+  isChannelProjectHidden,
+  normalizeWorkspacePath,
+} from "./outside-project-workspace"
+import { isChannelSessionMetadata } from "../../../shared/channel-types"
 import { workspaceService } from "../workspace/workspace-service"
 import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
@@ -125,9 +130,18 @@ export class DesktopSessionService {
         ...(defaultProvider ? { provider: defaultProvider } : {}),
       })
     }
+    const documentsPath = app.getPath("documents")
+    const channelSessionCwds = new Set(
+      allSessions
+        .filter((session) => isChannelSessionMetadata(session.metadata ?? {}))
+        .map((session) => normalizeWorkspacePath(session.cwd))
+    )
     const projects = await Promise.all(
       projectRecords
-        .filter((project) => !isOutsideProjectWorkspacePath(project.path, app.getPath("documents")))
+        .filter(
+          (project) =>
+            !isChannelProjectHidden(project.path, channelSessionCwds, documentsPath)
+        )
         .map(toDesktopProject)
     )
 

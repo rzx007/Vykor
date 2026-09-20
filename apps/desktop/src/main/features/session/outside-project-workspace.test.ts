@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   allocateOutsideProjectWorkspace,
   buildOutsideProjectDayRoot,
+  isChannelProjectHidden,
   isOutsideProjectWorkspacePath,
+  normalizeWorkspacePath,
 } from "./outside-project-workspace"
 
 const temporaryRoots: string[] = []
@@ -71,6 +73,28 @@ describe("outside-project workspace paths", () => {
 
     expect(new Set(allocated).size).toBe(3)
     expect(allocated.map((path) => path.split(/[\\/]/).at(-1)).sort()).toEqual(["x1", "x2", "x3"])
+  })
+
+  it("normalizes workspace paths for comparison", () => {
+    expect(normalizeWorkspacePath("C:\\Data\\Channels\\")).toBe("c:/data/channels")
+    expect(normalizeWorkspacePath("/data/channels")).toBe("/data/channels")
+  })
+
+  it("hides a project that is a channel session cwd, regardless of the documents root", () => {
+    const channelCwd = "/data/channels/feishu/oc_1-abc"
+    const channelCwds = new Set([normalizeWorkspacePath(channelCwd)])
+    expect(isChannelProjectHidden(channelCwd, channelCwds, "/Users/tester/Documents")).toBe(true)
+    expect(isChannelProjectHidden("/work/alpha", channelCwds, "/Users/tester/Documents")).toBe(false)
+  })
+
+  it("still hides documents/OpenHarness projects by path", () => {
+    expect(
+      isChannelProjectHidden(
+        "/Users/tester/Documents/OpenHarness/x1",
+        new Set(),
+        "/Users/tester/Documents"
+      )
+    ).toBe(true)
   })
 
   it("allocates a real cwd without requiring a project record", async () => {

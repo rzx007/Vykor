@@ -56,6 +56,26 @@ export function isOutsideProjectWorkspacePath(
   )
 }
 
+/** 归一化工作区路径用于比较：统一分隔符、去尾斜杠、大小写不敏感。 */
+export function normalizeWorkspacePath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
+}
+
+/**
+ * 项目是否应从「项目」列表隐藏：位于项目外工作区根下，或它就是某个渠道会话的 cwd。
+ * 后者不依赖路径/env，覆盖 `OPENHARNESS_CHANNELS_DIR` 指到文档目录外的情况。
+ */
+export function isChannelProjectHidden(
+  projectPath: string,
+  channelSessionCwds: ReadonlySet<string>,
+  documentsPath: string
+): boolean {
+  return (
+    isOutsideProjectWorkspacePath(projectPath, documentsPath) ||
+    channelSessionCwds.has(normalizeWorkspacePath(projectPath))
+  )
+}
+
 /**
  * mkdir 本身负责抢占 xN，因此多个窗口同时创建会话也不会拿到同一目录。
  */
