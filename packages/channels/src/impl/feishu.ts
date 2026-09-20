@@ -1,3 +1,5 @@
+import { Readable } from "node:stream";
+
 import type { ChannelAdapter, ChannelAdapterCapabilities, ChannelAttachment, ChannelMessage } from "../index.js";
 
 export interface FeishuConfig {
@@ -29,6 +31,15 @@ interface LarkClient {
           reply_in_thread?: boolean;
         };
       }): Promise<void>;
+    };
+    messageResource: {
+      get(payload: {
+        params: { type: string };
+        path: { message_id: string; file_key: string };
+      }): Promise<{
+        getReadableStream(): NodeJS.ReadableStream;
+        headers: Record<string, string>;
+      }>;
     };
   };
 }
@@ -356,6 +367,37 @@ export class FeishuAdapter implements ChannelAdapter {
         msg_type: messageType,
       },
     });
+  }
+
+  /**
+   * 下载用户发来的消息资源。
+   * 必须用 im.messageResource.get（im.image.get/im.file.get 只能下载机器人自己上传的资源）。
+   * messageId 用资源所属消息的 message_id（即入站的 externalMessageId），不是根消息。
+   */
+  async downloadAttachment(input: {
+    messageId: string;
+    fileKey: string;
+    type: "image" | "file";
+  }): Promise<{ stream: ReadableStream<Uint8Array>; mimeType?: string; sizeBytes?: number }> {
+    if (!this.client) {
+      throw new Error("Feishu client not connected");
+    }
+    const response = await this.client.im.messageResource.get({
+      params: { type: input.type },
+      path: { message_id: input.messageId, file_key: input.fileKey },
+    });
+    const stream = Readable.toWeb(
+      response.getReadableStream() as Readable,
+    ) as ReadableStream<Uint8Array>;
+    const headers = response.headers ?? {};
+    const mimeType = headers["content-type"] ?? headers["Content-Type"];
+    const contentLength = headers["content-length"] ?? headers["Content-Length"];
+    const sizeBytes = contentLength ? Number(contentLength) : undefined;
+    return {
+      stream,
+      ...(mimeType ? { mimeType } : {}),
+      ...(sizeBytes !== undefined && Number.isFinite(sizeBytes) ? { sizeBytes } : {}),
+    };
   }
 
   onMessage(handler: (message: ChannelMessage) => void): void {

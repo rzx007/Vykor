@@ -1,3 +1,5 @@
+import { Readable } from "node:stream";
+
 import { describe, it, expect, vi } from "vitest";
 import { FeishuAdapter } from "../feishu.js";
 import type { ChannelMessage } from "../../index.js";
@@ -413,6 +415,95 @@ describe("FeishuAdapter inbound attachments (image and file)", () => {
     });
 
     expect(received).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inbound attachment download (im.messageResource.get)
+// ---------------------------------------------------------------------------
+
+interface MessageResourceCall {
+  params: { type: string };
+  path: { message_id: string; file_key: string };
+}
+
+/** Build a FeishuAdapter with a mocked client exposing messageResource.get. */
+function makeDownloadAdapter(result?: {
+  headers?: Record<string, string>;
+  chunks?: Uint8Array[];
+  reject?: Error;
+}) {
+  const adapter = new FeishuAdapter({ appId: "app", appSecret: "secret" });
+  const get = vi.fn(async (_call: MessageResourceCall) => {
+    if (result?.reject) throw result.reject;
+    return {
+      writeFile: vi.fn(async () => undefined),
+      getReadableStream: () =>
+        Readable.from(result?.chunks ?? [new Uint8Array([1, 2, 3])]) as unknown as NodeJS.ReadableStream,
+      headers: result?.headers ?? {},
+    };
+  });
+  (adapter as unknown as { client: unknown }).client = {
+    im: { message: { create: vi.fn(), reply: vi.fn() }, messageResource: { get } },
+  };
+  return { adapter, get };
+}
+
+describe("FeishuAdapter.downloadAttachment (inbound attachment download)", () => {
+  it("downloads an image via im.messageResource.get with type=image", async () => {
+    const { adapter, get } = makeDownloadAdapter({
+      headers: { "content-type": "image/png", "content-length": "3" },
+      chunks: [new Uint8Array([9, 9])],
+    });
+
+    const result = await adapter.downloadAttachment({
+      messageId: "msg_image",
+      fileKey: "img_v2_001",
+      type: "image",
+    });
+
+    expect(get).toHaveBeenCalledOnce();
+    expect(get.mock.calls[0]![0]).toEqual({
+      params: { type: "image" },
+      path: { message_id: "msg_image", file_key: "img_v2_001" },
+    });
+    expect(result.mimeType).toBe("image/png");
+    expect(result.sizeBytes).toBe(3);
+    const reader = result.stream.getReader();
+    const first = await reader.read();
+    expect(first.value).toEqual(new Uint8Array([9, 9]));
+  });
+
+  it("downloads a file via im.messageResource.get with type=file", async () => {
+    const { adapter, get } = makeDownloadAdapter();
+    await adapter.downloadAttachment({ messageId: "msg_file", fileKey: "file_v2_1", type: "file" });
+    expect(get.mock.calls[0]![0].params.type).toBe("file");
+    expect(get).not.toHaveBeenCalledWith(expect.objectContaining({ params: { type: "image" } }));
+  });
+
+  it("does not use the bot-only im.image.get/im.file.get endpoints", async () => {
+    const { adapter } = makeDownloadAdapter();
+    const imageGet = vi.fn();
+    const fileGet = vi.fn();
+    (adapter as unknown as { client: { im: Record<string, unknown> } }).client.im["image"] = { get: imageGet };
+    (adapter as unknown as { client: { im: Record<string, unknown> } }).client.im["file"] = { get: fileGet };
+    await adapter.downloadAttachment({ messageId: "m", fileKey: "k", type: "image" });
+    expect(imageGet).not.toHaveBeenCalled();
+    expect(fileGet).not.toHaveBeenCalled();
+  });
+
+  it("throws when the client is not connected", async () => {
+    const adapter = new FeishuAdapter({ appId: "app", appSecret: "secret" });
+    await expect(
+      adapter.downloadAttachment({ messageId: "m", fileKey: "k", type: "image" }),
+    ).rejects.toThrow("Feishu client not connected");
+  });
+
+  it("propagates download failures", async () => {
+    const { adapter } = makeDownloadAdapter({ reject: new Error("feishu 403") });
+    await expect(
+      adapter.downloadAttachment({ messageId: "m", fileKey: "k", type: "file" }),
+    ).rejects.toThrow("feishu 403");
   });
 });
 
