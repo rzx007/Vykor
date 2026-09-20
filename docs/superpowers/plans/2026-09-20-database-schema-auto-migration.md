@@ -264,7 +264,7 @@ function reconcileIndexes(database: Database.Database, table: AdoptionTable): vo
     }
     if (
       current.isUnique !== index.isUnique ||
-      normalizePredicate(current.where) !== normalizePredicate(index.where) ||
+      normalizePredicate(current.where, table.name) !== normalizePredicate(index.where, table.name) ||
       current.columns.join(",") !== index.columns.join(",")
     ) {
       throw new LegacyAdoptionError(`legacy adoption: index definition differs: ${index.name}`);
@@ -307,9 +307,18 @@ function extractWhere(sql: string | undefined): string | undefined {
   return match?.[1]?.trim();
 }
 
-function normalizePredicate(value: string | undefined): string {
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizePredicate(value: string | undefined, tableName: string): string {
   if (value === undefined) return "";
-  return value.replace(/[`"]/g, "").replace(/\s+/g, " ").trim();
+  const qualifier = new RegExp(`\\b${escapeRegExp(tableName)}\\.`, "g");
+  return value
+    .replace(/[`"]/g, "")
+    .replace(qualifier, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function createIndexSql(

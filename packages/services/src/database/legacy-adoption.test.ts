@@ -75,6 +75,17 @@ describe("adoptLegacyDatabase", () => {
     ).toBe(false);
   });
 
+  it("accepts a partial index whose predicate differs only by the table qualifier", () => {
+    const db = baselineDatabase();
+    db.exec("DROP INDEX project_location_active_path");
+    db.exec(
+      "CREATE UNIQUE INDEX \"project_location_active_path\" ON \"project_location\" (\"normalized_path\") WHERE \"status\" = 'active'",
+    );
+    expect(
+      adoptLegacyDatabase(db, { baseline, snapshot: loadBaselineSnapshot(migrationsFolder) }),
+    ).toBe(true);
+  });
+
   it("rejects a partial index whose predicate differs", () => {
     const db = baselineDatabase();
     db.exec("DROP INDEX project_location_active_path");
