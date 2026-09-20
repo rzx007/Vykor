@@ -184,6 +184,94 @@ describe("Sidebar collapsible sections and empty states", () => {
     })
   })
 
+  function channelSession() {
+    return {
+      id: "channel-1",
+      projectId: "project-1",
+      workspaceMode: "outside_project" as const,
+      cwd: "/data/channels/feishu/oc_1-abc",
+      title: "帮我看下这个报错",
+      model: "m",
+      status: "idle" as const,
+      metadata: { externalConversation: { connector: "feishu" } },
+      createdAt: 1,
+      updatedAt: 1,
+    }
+  }
+
+  it("does not render the IM section when there are no channel sessions", () => {
+    act(() => {
+      root.render(
+        <Sidebar
+          open={true}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    })
+
+    expect(container.textContent).not.toContain("IM 会话")
+    expect(container.querySelector('[aria-label="刷新 IM 会话"]')).toBeNull()
+  })
+
+  it("renders channel sessions under the IM section, not in recent", () => {
+    useDesktopSessionStore.setState({ sessions: [channelSession()] })
+
+    act(() => {
+      root.render(
+        <Sidebar
+          open={true}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain("IM 会话")
+    expect(container.textContent).toContain("飞书")
+    // 标题只出现一次（IM 分区里），没有重复出现在「最近」。
+    expect(container.textContent?.split("帮我看下这个报错")).toHaveLength(2)
+    expect(container.textContent).toContain("暂无最近会话")
+  })
+
+  it("refreshes via the header button and when expanding the IM section", async () => {
+    const refreshBootstrap = vi.fn(async () => {})
+    useDesktopSessionStore.setState({ sessions: [channelSession()], refreshBootstrap })
+
+    act(() => {
+      root.render(
+        <Sidebar
+          open={true}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="刷新 IM 会话"]')?.click()
+    })
+    expect(refreshBootstrap).toHaveBeenCalledTimes(1)
+
+    // 折叠后重新展开 IM 分区也应触发刷新。
+    const imSectionBtn = [...container.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("IM 会话")
+    )
+    await act(async () => {
+      imSectionBtn?.click()
+    })
+    await act(async () => {
+      imSectionBtn?.click()
+    })
+    expect(refreshBootstrap).toHaveBeenCalledTimes(2)
+  })
+
   it("restores collapsed state from localStorage on initial render", () => {
     localStorage.setItem(
       SIDEBAR_SECTIONS_STORAGE_KEY,

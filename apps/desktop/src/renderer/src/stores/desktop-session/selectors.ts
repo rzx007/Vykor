@@ -80,8 +80,13 @@ export interface DesktopImSessionGroup {
  * 组内置顶优先、再按更新时间倒序；组间按各组最新更新时间倒序。
  */
 export function selectImSessionGroups(state: DesktopSessionState): DesktopImSessionGroup[] {
+  return groupImSessions(state.sessions)
+}
+
+/** 与 selectImSessionGroups 相同，但直接接收会话数组，便于组件 useMemo 使用。 */
+export function groupImSessions(sessions: DesktopSessionRecord[]): DesktopImSessionGroup[] {
   const byConnector = new Map<string, DesktopSessionRecord[]>()
-  for (const session of state.sessions) {
+  for (const session of sessions) {
     if (!isChannelSession(session)) continue
     const connector = readChannelConnector(session)
     const list = byConnector.get(connector)

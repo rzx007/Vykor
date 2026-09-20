@@ -27,28 +27,36 @@ describe("sidebar-section-expansion", () => {
   it("handles partial or corrupt fields by falling back to defaults", () => {
     expect(parseSidebarSectionExpansion(JSON.stringify({ projects: false }))).toEqual({
       projects: false,
+      im: true,
       recent: true,
     })
+    // 旧数据没有 im 字段 → 默认展开。
     expect(parseSidebarSectionExpansion(JSON.stringify({ recent: false }))).toEqual({
       projects: true,
+      im: true,
       recent: false,
     })
-    expect(parseSidebarSectionExpansion(JSON.stringify({ projects: "invalid", recent: false }))).toEqual({
+    expect(
+      parseSidebarSectionExpansion(
+        JSON.stringify({ projects: "invalid", im: false, recent: false })
+      )
+    ).toEqual({
       projects: true,
+      im: false,
       recent: false,
     })
   })
 
   it("saves and loads expansion state from localStorage", () => {
-    expect(loadSidebarSectionExpansion()).toEqual({ projects: true, recent: true })
+    expect(loadSidebarSectionExpansion()).toEqual({ projects: true, im: true, recent: true })
 
-    saveSidebarSectionExpansion({ projects: false, recent: true })
+    saveSidebarSectionExpansion({ projects: false, im: true, recent: true })
     expect(localStorage.getItem(SIDEBAR_SECTIONS_STORAGE_KEY)).toBe(
-      JSON.stringify({ projects: false, recent: true })
+      JSON.stringify({ projects: false, im: true, recent: true })
     )
-    expect(loadSidebarSectionExpansion()).toEqual({ projects: false, recent: true })
+    expect(loadSidebarSectionExpansion()).toEqual({ projects: false, im: true, recent: true })
 
-    saveSidebarSectionExpansion({ projects: false, recent: false })
-    expect(loadSidebarSectionExpansion()).toEqual({ projects: false, recent: false })
+    saveSidebarSectionExpansion({ projects: false, im: false, recent: false })
+    expect(loadSidebarSectionExpansion()).toEqual({ projects: false, im: false, recent: false })
   })
 })

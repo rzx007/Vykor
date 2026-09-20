@@ -14,6 +14,7 @@ import {
   Pin,
   PinOff,
   PlugZap,
+  RefreshCw,
   Search,
   Settings,
   Smartphone,
@@ -50,14 +51,20 @@ import { Label } from "@renderer/components/ui/label"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
-import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
+  isChannelSession,
+  isSessionPinned,
+  useDesktopSessionStore,
+} from "@renderer/stores/desktop-session"
+import {
+  groupImSessions,
   selectActiveSessionId,
   selectArchivedSessions,
   selectLoadStatus,
   selectProjects,
   selectSessions,
 } from "@renderer/stores/desktop-session/selectors"
+import type { DesktopImSessionGroup } from "@renderer/stores/desktop-session/selectors"
 import type { DesktopProject, DesktopSessionRecord } from "@shared/session-types"
 import { useSessionActionDialogs } from "../../conversation-page/session/session-action-dialogs"
 import { SessionMoreMenu } from "../../conversation-page/session/session-more-menu"
@@ -98,6 +105,8 @@ export function Sidebar({
   const projects = useDesktopSessionStore(selectProjects)
   const sessions = useDesktopSessionStore(selectSessions)
   const archivedSessions = useDesktopSessionStore(selectArchivedSessions)
+  const imGroups = useMemo(() => groupImSessions(sessions), [sessions])
+  const refreshBootstrap = useDesktopSessionStore((state) => state.refreshBootstrap)
   const activeSessionId = useDesktopSessionStore(selectActiveSessionId)
   const loadStatus = useDesktopSessionStore(selectLoadStatus)
   const startNewConversation = useDesktopSessionStore((state) => state.startNewConversation)
@@ -121,11 +130,19 @@ export function Sidebar({
     setSectionExpansion((current) => {
       const next = { ...current, [section]: !current[section] }
       saveSidebarSectionExpansion(next)
+      // 展开 IM 分区时刷新一次，让 daemon 侧新建的渠道会话尽快出现。
+      if (section === "im" && next.im && !current.im) {
+        void refreshBootstrap().catch(() => undefined)
+      }
       return next
     })
   }
   const recentSessions = useMemo(
-    () => sessions.filter((session) => session.workspaceMode === "outside_project"),
+    () =>
+      sessions.filter(
+        (session) =>
+          session.workspaceMode === "outside_project" && !isChannelSession(session)
+      ),
     [sessions]
   )
   const activeProjectPath = useMemo(() => {
@@ -318,7 +335,11 @@ export function Sidebar({
                             <ProjectGroup
                               key={project.path}
                               project={project}
-                              sessions={sessions.filter((session) => samePath(session.cwd, project.path))}
+                              sessions={sessions.filter(
+                                (session) =>
+                                  samePath(session.cwd, project.path) &&
+                                  !isChannelSession(session)
+                              )}
                               activeSessionId={activeSessionId}
                               expanded={expanded}
                               onToggle={() =>
@@ -334,6 +355,54 @@ export function Sidebar({
                   </motion.div>
                 ) : null}
               </AnimatePresence>
+
+              {imGroups.length > 0 ? (
+                <>
+                  <div className="mt-4 flex items-center gap-1">
+                    <SidebarSectionHeader
+                      title="IM 会话"
+                      expanded={sectionExpansion.im}
+                      onToggle={() => toggleSection("im")}
+                      className="flex-1"
+                    />
+                    <button
+                      type="button"
+                      aria-label="刷新 IM 会话"
+                      title="刷新 IM 会话"
+                      onClick={() => void refreshBootstrap().catch(() => undefined)}
+                      className="grid size-6 shrink-0 place-items-center rounded text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_svg]:size-3.5"
+                    >
+                      <RefreshCw />
+                    </button>
+                  </div>
+                  <AnimatePresence initial={false}>
+                    {sectionExpansion.im ? (
+                      <motion.div
+                        key="im-section"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{
+                          height: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
+                          opacity: { duration: 0.14, ease: "easeOut" },
+                        }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-0.5">
+                          {imGroups.map((group) => (
+                            <ImSessionGroup
+                              key={group.connector}
+                              group={group}
+                              activeSessionId={activeSessionId}
+                              actions={sessionActions}
+                            />
+                          ))}
+                        </div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </>
+              ) : null}
 
               <SidebarSectionHeader
                 title="最近"
@@ -715,6 +784,50 @@ function ProjectGroup({
           </motion.div>
         ) : null}
       </AnimatePresence>
+    </section>
+  )
+}
+
+function ImSessionGroup({
+  group,
+  activeSessionId,
+  actions,
+}: {
+  group: DesktopImSessionGroup
+  activeSessionId: string | null
+  actions: SessionActions
+}): React.JSX.Element {
+  const [showAll, setShowAll] = useState(false)
+  const visibleSessions = showAll ? group.sessions : group.sessions.slice(0, 5)
+
+  return (
+    <section>
+      <div className="text-ui-small flex h-7.5 min-w-0 items-center gap-2 px-2.5 font-[450] text-sidebar-foreground/90">
+        <Smartphone className="size-3.75 shrink-0 text-sidebar-muted" strokeWidth={1.7} />
+        <span className="truncate">{group.label}</span>
+        <span className="text-ui-caption ml-auto shrink-0 font-normal text-sidebar-muted/70">
+          {group.sessions.length}
+        </span>
+      </div>
+      <div className="pb-1">
+        {visibleSessions.map((session) => (
+          <SessionRow
+            key={session.id}
+            session={session}
+            active={activeSessionId === session.id}
+            actions={actions}
+          />
+        ))}
+        {group.sessions.length > 5 ? (
+          <button
+            type="button"
+            onClick={() => setShowAll((current) => !current)}
+            className="flex h-7 w-full items-center rounded-md pr-2 pl-8 text-left text-xs font-normal text-sidebar-muted/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            {showAll ? "收起" : "展开显示"}
+          </button>
+        ) : null}
+      </div>
     </section>
   )
 }

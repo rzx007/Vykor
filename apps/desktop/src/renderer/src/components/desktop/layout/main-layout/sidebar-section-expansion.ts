@@ -1,5 +1,6 @@
 export interface SidebarSectionExpansion {
   projects: boolean
+  im: boolean
   recent: boolean
 }
 
@@ -7,6 +8,7 @@ export const SIDEBAR_SECTIONS_STORAGE_KEY = "openharness.desktop.sidebar-section
 
 export const DEFAULT_SIDEBAR_SECTION_EXPANSION: SidebarSectionExpansion = {
   projects: true,
+  im: true,
   recent: true,
 }
 
@@ -28,6 +30,8 @@ export function parseSidebarSectionExpansion(raw: string | null | undefined): Si
         typeof record.projects === "boolean"
           ? record.projects
           : DEFAULT_SIDEBAR_SECTION_EXPANSION.projects,
+      im:
+        typeof record.im === "boolean" ? record.im : DEFAULT_SIDEBAR_SECTION_EXPANSION.im,
       recent:
         typeof record.recent === "boolean"
           ? record.recent
