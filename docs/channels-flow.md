@@ -62,10 +62,14 @@ daemon close()
 渠道消息没有“当前项目”，所以每个外部会话使用专用工作目录：
 
 ```text
-<OPENHARNESS_CHANNELS_DIR 或 ~/.openharness-ts/channels>/<connector>/<sanitize(chatId)>-<hash(会话键)>/
+<OPENHARNESS_CHANNELS_DIR 或 <文档>/OpenHarness/channels>/<connector>/<sanitize(chatId)>-<hash(会话键)>/
 ```
 
-会话键与 Session 分类键一致（`connector + accountId + chatId + threadId`），hash 后缀避免不同会话落到同一目录；目录按需创建。
+会话键与 Session 分类键一致（`connector + accountId + chatId + threadId`），hash 后缀避免不同会话落到同一目录；目录按需创建。默认放在 Desktop 的"项目外工作区"根（`<文档>/OpenHarness`）下，因此渠道会话被当作项目外会话：不进「项目」，对应自动创建的项目行也会被隐藏。旧的 `~/.openharness-ts/channels` 目录不迁移。
+
+## Desktop 的「IM 会话」分区
+
+Desktop 侧边栏把渠道会话单独放在「IM 会话」分区（按平台分组，如「飞书」），不混进「项目」和「最近」；没有渠道会话时整栏不显示。会话标题取**第一条消息**（图片/文件等无正文时回退 `飞书 · <chatId>`）。新建的渠道会话由 daemon 异步创建，点分区标题旁的「刷新」按钮或展开该分区即可刷新出来（事件驱动的自动刷新后续再做）。
 
 ## 配置（含密钥）文件
 
@@ -184,7 +188,7 @@ ohs channels status
 - 机器人名称（取到时）；
 - daemon 最近的外部聊天映射数量与回复状态。
 
-Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增删白名单、查看被拒提示。
+Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增删白名单、查看被拒提示；侧边栏的「IM 会话」分区列出各平台的渠道会话。
 
 ## 相关命令
 
@@ -213,7 +217,8 @@ Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增�
 | 应用服务 | `packages/server/src/application/channel/channel-application-service.ts` | 映射 Session、幂等准入、等待 Run、保存回复 |
 | Desktop 服务 | `apps/desktop/src/main/features/channels/channel-service.ts` | 经 daemon HTTP 调渠道接口、生成二维码、拒绝高水位 |
 | Desktop 页面 | `apps/desktop/src/renderer/src/components/desktop/settings-page/connections-settings.tsx` | 「连接」板块：接入、状态、白名单、启停、被拒提示 |
-| 工作目录根 | `packages/core/src/config/paths.ts` | `getChannelWorkspaceRoot()` |
+| 工作目录根 | `packages/core/src/config/paths.ts` | `resolveChannelWorkspaceRoot()`（默认项目外根下的 `channels`） |
+| Desktop IM 分区 | `apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar.tsx` | 「IM 会话」分区：按平台分组、刷新入口 |
 | 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 迁移链基线（起点），包含聊天映射和回复状态 |
 
 `FeishuPush` 工具仍是另一条主动推送捷径：它由当前 Agent 主动选择目标并发消息，不代表收到一条外部消息后的 durable 回复流程；它也在 daemon 进程内读取同一份渠道配置。
