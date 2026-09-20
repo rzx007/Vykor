@@ -24,7 +24,7 @@ export function applySessionMigrations(database: Database.Database): void {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Failed to apply database migrations for ${database.name}: ${detail}. ` +
+      `Failed to apply database migrations for ${database.name}: ${detail}\n` +
         "If this database was created before the current migration baseline, delete it to start fresh.",
       { cause: error },
     );
