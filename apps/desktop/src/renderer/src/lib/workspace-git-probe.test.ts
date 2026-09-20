@@ -115,4 +115,17 @@ describe("probeWorkspaceGit", () => {
     await expect(probeWorkspaceGit("   ")).resolves.toBe(false)
     expect(probe).not.toHaveBeenCalled()
   })
+
+  it("evicts the oldest entries instead of growing the cache without bound", async () => {
+    const probe = installProbe(true)
+
+    for (let index = 0; index < 70; index += 1) {
+      await probeWorkspaceGit(`D:/workspace-${index}`)
+    }
+    expect(probe).toHaveBeenCalledTimes(70)
+
+    // 最早插入的路径已被挤出：再问它一次会重新发探测。
+    await probeWorkspaceGit("D:/workspace-0")
+    expect(probe).toHaveBeenCalledTimes(71)
+  })
 })

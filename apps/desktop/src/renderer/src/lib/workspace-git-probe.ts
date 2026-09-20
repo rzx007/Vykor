@@ -1,6 +1,7 @@
 import { normalizedRootPath } from "./git-changes-query"
 
 const defaultMaxAgeMs = 1_000
+const maxEntries = 64
 
 type ProbeEntry = {
   inFlight?: Promise<boolean>
@@ -9,6 +10,17 @@ type ProbeEntry = {
 }
 
 const entries = new Map<string, ProbeEntry>()
+
+/** 写入时把最早插入的键挤出去，避免长期运行下路径只增不减。 */
+function setEntry(key: string, entry: ProbeEntry): void {
+  entries.delete(key)
+  entries.set(key, entry)
+  while (entries.size > maxEntries) {
+    const oldest = entries.keys().next().value
+    if (oldest === undefined) break
+    entries.delete(oldest)
+  }
+}
 
 export async function probeWorkspaceGit(path: string): Promise<boolean> {
   if (!path.trim()) return false
@@ -33,7 +45,7 @@ export async function probeWorkspaceGit(path: string): Promise<boolean> {
         entries.delete(key)
         return false
       }
-      entries.set(key, { result: isRepository, completedAt: Date.now() })
+      setEntry(key, { result: isRepository, completedAt: Date.now() })
       return isRepository
     })
     .catch(() => {
@@ -41,7 +53,7 @@ export async function probeWorkspaceGit(path: string): Promise<boolean> {
       return false
     })
 
-  entries.set(key, { ...current, inFlight: request })
+  setEntry(key, { ...current, inFlight: request })
   return request
 }
 

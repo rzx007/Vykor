@@ -12,6 +12,7 @@ import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { useActiveWorkspaceIsGit } from "./use-active-workspace-is-git"
 
 const initialStoreState = useDesktopSessionStore.getState()
+const initialDesktop = Reflect.get(window, "desktop")
 const unmounts: Array<() => void> = []
 
 function renderIsGit(): { read: () => boolean | null; unmount: () => void } {
@@ -48,7 +49,7 @@ function outsideProjectSessionView(id = "s1", cwd = "D:/xm"): DesktopSessionView
 
 function installProbe(
   isRepository: (options: { path: string }) => Promise<{ isRepository: boolean; rootPath: null }>
-): ReturnType<typeof vi.fn> {
+): ReturnType<typeof vi.fn<typeof isRepository>> {
   const probe = vi.fn(isRepository)
   Object.defineProperty(window, "desktop", {
     configurable: true,
@@ -69,6 +70,12 @@ describe("useActiveWorkspaceIsGit", () => {
     useDesktopSessionStore.setState(initialStoreState, true)
     resetWorkspaceGitProbeCacheForTests()
     vi.restoreAllMocks()
+    if (initialDesktop === undefined) Reflect.deleteProperty(window, "desktop")
+    else
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: initialDesktop,
+      })
     Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
   })
 

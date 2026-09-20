@@ -63,6 +63,13 @@ describe("gitService.isRepository", () => {
     })
   })
 
+  it("reports false without throwing when the path points at a file", async () => {
+    await expect(gitService.isRepository({ path: join(plainDir, "readme.txt") })).resolves.toEqual({
+      isRepository: false,
+      rootPath: null,
+    })
+  })
+
   it("reports false without throwing for an empty path", async () => {
     await expect(gitService.isRepository({ path: "   " })).resolves.toEqual({
       isRepository: false,
