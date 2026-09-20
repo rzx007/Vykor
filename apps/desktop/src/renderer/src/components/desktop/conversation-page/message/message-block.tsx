@@ -33,10 +33,8 @@ import {
   type ComposerDocument,
 } from "@renderer/stores/desktop-session/composer-document"
 import { ModelSwitchDivider, readModelSwitchPresentation } from "./model-switch-divider"
-import {
-  ContextCompactionDivider,
-  readContextCompactionPresentation,
-} from "./context-compaction-divider"
+import { ContextCompactionDivider } from "./context-compaction-divider"
+import { readContextCompactionPresentation } from "./compaction-presentation"
 
 const collapsibleUserMessageChars = 900
 const collapsibleUserMessageLines = 14
