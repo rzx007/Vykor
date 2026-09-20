@@ -36,3 +36,12 @@ export interface DesktopGitFileDiffResult {
   patch: string
   binary: boolean
 }
+
+export interface DesktopGitIsRepositoryInput {
+  path: string
+}
+
+export interface DesktopGitIsRepositoryResult {
+  isRepository: boolean
+  rootPath: string | null
+}

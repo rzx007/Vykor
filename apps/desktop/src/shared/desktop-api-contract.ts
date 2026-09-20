@@ -89,6 +89,8 @@ import type {
   DesktopGitChangesResult,
   DesktopGitFileDiffInput,
   DesktopGitFileDiffResult,
+  DesktopGitIsRepositoryInput,
+  DesktopGitIsRepositoryResult,
 } from "./git-types"
 import type {
   DesktopPluginActionInput,
@@ -194,6 +196,7 @@ export type DesktopAPI = {
   git: {
     changes: (input: DesktopGitChangesInput) => Promise<DesktopGitChangesResult>
     fileDiff: (input: DesktopGitFileDiffInput) => Promise<DesktopGitFileDiffResult>
+    isRepository: (input: DesktopGitIsRepositoryInput) => Promise<DesktopGitIsRepositoryResult>
   }
   clipboard: {
     readText: () => Promise<string>

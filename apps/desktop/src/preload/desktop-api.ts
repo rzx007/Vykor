@@ -86,6 +86,8 @@ export const desktopAPI = {
       invoke(IpcChannels.gitChanges, input),
     fileDiff: (input: IpcInvokeMap[typeof IpcChannels.gitFileDiff]["args"][0]) =>
       invoke(IpcChannels.gitFileDiff, input),
+    isRepository: (input: IpcInvokeMap[typeof IpcChannels.gitIsRepository]["args"][0]) =>
+      invoke(IpcChannels.gitIsRepository, input),
   },
   clipboard: {
     readText: () => invoke(IpcChannels.clipboardReadText),
