@@ -155,16 +155,22 @@ function checkMigrations(root) {
   if (!existsSync(directory)) return [missing("migration", rel)];
   const sql = readdirSync(directory).filter((name) => name.endsWith(".sql")).sort();
   const results = [];
-  if (sql.length !== 1 || sql[0] !== "0000_current_schema.sql") {
-    results.push(problem("migration", rel, 1, `expected only 0000_current_schema.sql; found [${sql.join(", ")}]`));
+  const baseline = "0000_current_schema.sql";
+  if (!sql.includes(baseline)) {
+    results.push(problem("migration", rel, 1, `missing baseline ${baseline}; found [${sql.join(", ")}]`));
   }
   const journalFile = `${rel}/meta/_journal.json`;
   const journalSource = read(root, journalFile);
   if (journalSource === undefined) return [...results, missing("migration", journalFile)];
   try {
     const journal = JSON.parse(journalSource);
-    if (journal.entries?.length !== 1 || journal.entries[0]?.idx !== 0 || journal.entries[0]?.tag !== "0000_current_schema") {
-      results.push(problem("migration", journalFile, 1, "journal must contain the single 0000_current_schema baseline"));
+    const entries = Array.isArray(journal.entries) ? journal.entries : [];
+    const tags = entries.map((entry) => `${entry.tag}.sql`).sort();
+    if (entries.length === 0 || tags.join("|") !== sql.join("|")) {
+      results.push(problem("migration", journalFile, 1, `journal tags must match migration files; journal=[${tags.join(", ")}] files=[${sql.join(", ")}]`));
+    }
+    if (entries[0]?.tag !== "0000_current_schema") {
+      results.push(problem("migration", journalFile, 1, "first journal entry must be 0000_current_schema"));
     }
   } catch (error) {
     results.push(problem("migration", journalFile, 1, `invalid journal JSON: ${error.message}`));
@@ -232,12 +238,22 @@ function inventoryDirectory(root, directory, category, requireBuildArtifacts) {
   }
   const sql = readdirSync(join(root, directory)).filter((name) => name.endsWith(".sql")).sort();
   const results = [];
-  if (sql.length !== 1 || sql[0] !== "0000_current_schema.sql") {
-    results.push(problem(category, directory, 1, `bundled migration inventory must contain one baseline; found [${sql.join(", ")}]`));
+  if (!sql.includes("0000_current_schema.sql")) {
+    results.push(problem(category, directory, 1, `bundled migration inventory must contain the baseline; found [${sql.join(", ")}]`));
   }
   const journal = read(root, `${directory}/meta/_journal.json`);
-  if (!journal || JSON.parse(journal).entries?.length !== 1) {
-    results.push(problem(category, `${directory}/meta/_journal.json`, 1, "bundled journal must contain one entry"));
+  let journalOk = false;
+  if (journal) {
+    try {
+      const entries = JSON.parse(journal).entries ?? [];
+      const tags = entries.map((entry) => `${entry.tag}.sql`).sort();
+      journalOk = entries.length > 0 && tags.join("|") === sql.join("|");
+    } catch {
+      journalOk = false;
+    }
+  }
+  if (!journalOk) {
+    results.push(problem(category, `${directory}/meta/_journal.json`, 1, "bundled journal must match bundled migration files"));
   }
   return { problems: results, skipped: [] };
 }
