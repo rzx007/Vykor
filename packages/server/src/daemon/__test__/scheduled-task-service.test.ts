@@ -354,12 +354,13 @@ describe("ScheduledTaskService", () => {
         destination: "chat",
         sessionId: "chat-1",
         model: "",
+        effort: "",
         permissionProfile: { mode: "workspace_write" },
       }),
     ).not.toThrow();
   });
 
-  it("accepts non-enum effort values and rejects an empty effort", () => {
+  it("accepts non-enum effort values and clears an empty effort", () => {
     const { service } = createHarness();
     const task = service.createTask({
       name: "effort-briefing",
@@ -373,9 +374,8 @@ describe("ScheduledTaskService", () => {
     });
     expect(task.effort).toBe("xhigh");
 
-    expect(() => service.updateTask(task.id, { effort: "" })).toThrow(
-      "Unknown scheduled task effort",
-    );
+    const cleared = service.updateTask(task.id, { effort: "" });
+    expect(cleared.effort).toBeUndefined();
   });
 
   it("runs one missed occurrence after daemon recovery when requested", async () => {

@@ -438,9 +438,6 @@ export class ScheduledTaskService {
     ) {
       throw new Error("Unknown scheduled task permission profile");
     }
-    if (typeof input.effort === "string" && input.effort.trim().length === 0) {
-      throw new Error("Unknown scheduled task effort");
-    }
     if (
       input.overlapPolicy &&
       !["skip", "queue"].includes(input.overlapPolicy)
