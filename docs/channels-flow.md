@@ -94,6 +94,19 @@ daemon close()
 
 `allowFrom` 为空时默认全部拒绝。白名单检查仍在 `ChannelManager`：**发送者或会话（群）任一命中即放行**，所以 `ou_...` 放行某个人、`oc_...` 放行某个群。未通过的消息不会进入 daemon，daemon 会记录最近拒绝并在 Desktop「连接」页提示，可用「加入白名单」直接放行。
 
+## 入站图片 / 文件（附件）
+
+飞书发来的图片或文件会被**下载到本机**并存入 OpenHarness 附件库，再作为附件进入 Agent 会话：
+
+- 下载走飞书的 `im.messageResource.get`（`message_id` + `file_key` + `type`），因为用户发来的资源只能用这个接口；`im.image.get`/`im.file.get` 只能下载机器人自己上传的资源。
+- 图片以 `intent: "vision"` 交给 Agent（走视觉模型看图）；文件以 `intent: "tool_resource"` 交给 Agent（交给工具读取）。
+- 只信任附件的 `type`/`externalId`/`name`；`data`/`url` 一律忽略，绝不会自行去 fetch。
+- **失败即整条消息失败**（下载器不可用、下载报错、超过单文件上限），不降级成纯文本、不静默丢弃。
+- **幂等**：同一条飞书消息被重复推送时，复用首次导入的附件，不会重复导入，也不会触发 409。
+- 出站（Agent 回复带附件、上传到飞书）**当前不做**。
+
+设计与契约见 `docs/superpowers/specs/2026-09-20-channel-inbound-attachment-design.md`。
+
 ## 外部聊天怎么绑定 Session
 
 数据库保存一条 external conversation record，唯一键是：
