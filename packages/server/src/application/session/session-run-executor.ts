@@ -7,6 +7,7 @@ import type { GoalOperations, SessionStore } from "@openharness/services";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import { RunInterruptedError, type SessionRunWorkContext } from "../../runtime/run-coordinator.js";
 import type { AgentPool } from "../agent/agent-pool.js";
+import { RunStallWatchdog } from "./run-stall-watchdog.js";
 import type { SessionPostRunMaintenance } from "./session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import type { SessionTranscriptProjection } from "./transcript-projection.js";
@@ -28,10 +29,12 @@ import type { SessionContextUsageAgent } from "../assemble-session-context-usage
 
 const ATTACHMENT_LEASE_TTL_MS = 2 * 60 * 1_000;
 const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
+const DEFAULT_RUN_STALL_TIMEOUT_MS = 10 * 60 * 1_000;
+const DEFAULT_RUN_STALL_CHECK_INTERVAL_MS = 30 * 1_000;
 
 export interface SessionRunExecutorContext {
   data: Pick<SessionStore,
-    "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction"
+    "conversations" | "conversationTransactions" | "permissions" | "runs" | "sessions" | "transaction"
   >;
   attachments: Pick<SessionStore["attachments"],
     "acquireAttachmentLeases" | "renewAttachmentLeases" | "releaseAttachmentLeases"
@@ -66,6 +69,10 @@ export interface SessionRunExecutorContext {
   ) => Promise<void>;
   /** Re-read the cwd catalog before executing renderer-supplied Skill paths. */
   resolveSkillCatalog?(session: SessionRecord): Promise<SessionInputSkillCatalog>;
+  /** 无进展看门狗：超过该时长没有任何 run/task 更新就中断 run（默认 10 分钟）。 */
+  stallTimeoutMs?: number;
+  /** 无进展看门狗检查周期（默认 30 秒）。 */
+  stallCheckIntervalMs?: number;
 }
 
 export interface ExecuteSessionRunInput {
@@ -92,6 +99,7 @@ export class SessionRunExecutor {
     if (!this.context.agentPool.configured) return;
     const { sessionId, inputId, runId } = input;
     let agentTouched = false;
+    let watchdog: RunStallWatchdog | undefined;
     let cleanupAttachmentResources: (() => Promise<void>) | undefined;
     let cleanupAttachmentLease: (() => void) | undefined;
     try {
@@ -241,6 +249,42 @@ export class SessionRunExecutor {
       // 若在 register 前已经被 abort，coordinator 会立刻 interrupt 这个 handle。
       await workContext.registerHandle(run);
 
+      const stallTimeoutMs = this.context.stallTimeoutMs ?? DEFAULT_RUN_STALL_TIMEOUT_MS;
+      watchdog = new RunStallWatchdog({
+        runId,
+        sessionId,
+        staleMs: stallTimeoutMs,
+        intervalMs: this.context.stallCheckIntervalMs ?? DEFAULT_RUN_STALL_CHECK_INTERVAL_MS,
+        readActivity: () => ({
+          runUpdatedAt: this.context.data.runs.getRun(runId)?.updatedAt ?? 0,
+          taskUpdatedAt: this.context.data.runs
+            .listSessionTasks(sessionId)
+            .reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
+        }),
+        hasPendingPermission: () =>
+          this.context.data.permissions
+            .list({ sessionId })
+            .some((request) => request.runId === runId && request.status === "pending"),
+        hasRunningChildTask: () =>
+          this.context.data.runs
+            .listSessionTasks(sessionId)
+            .some((task) => Boolean(task.childSessionId) && task.status === "running"),
+        onStall: () => {
+          void run.interrupt(
+            `运行超过 ${Math.round(stallTimeoutMs / 60_000)} 分钟无进展，已自动终止`,
+          );
+        },
+        log: (message) =>
+          this.context.log({
+            level: "warn",
+            event: "session.run.stalled",
+            sessionId,
+            runId,
+            error: message,
+          }),
+      });
+      watchdog.start();
+
       // 模型回合、工具、JobWait 都在这次 result 里。成功时 projector 已经把 run 标成 completed。
       await run.result;
 
@@ -368,6 +412,7 @@ export class SessionRunExecutor {
       // Failed / interrupted terminal: drop stale usage; next usage() may reassemble.
       this.context.contextUsageCache?.invalidate(sessionId);
     } finally {
+      watchdog?.dispose();
       if (cleanupAttachmentResources) {
         try {
           await cleanupAttachmentResources();

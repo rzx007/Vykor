@@ -16,7 +16,7 @@ export interface SessionRunExecutorAssemblyOptions extends Omit<SessionRunExecut
 > {
   store: Pick<SessionStore,
     "attachments" | "conversations" | "conversationTransactions" |
-    "runs" | "sessions" | "transaction"
+    "permissions" | "runs" | "sessions" | "transaction"
   >;
   attachmentService: Pick<AttachmentService, "resolveReadyContentPath" | "readReadyText">;
   resolveSessionSettings(cwd: string): Promise<Settings | undefined>;

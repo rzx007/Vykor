@@ -394,6 +394,36 @@ describe("SessionRunExecutor", () => {
       expect.objectContaining({ status: "failed", errorCode: "attachment_model_unsupported" }),
     );
   });
+
+  it("interrupts a run that makes no progress", async () => {
+    const store = createStore()
+    const handle = hangingHandle()
+    const interrupt = handle.interrupt as ReturnType<typeof vi.fn>
+    const executor = new SessionRunExecutor({
+      data: store.data,
+      attachments: store.attachments,
+      goals: store.goals,
+      agentPool: {
+        configured: true,
+        acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }),
+        close: async () => {},
+        closeIfStale: async () => {},
+      } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1",
+      log: () => {},
+      stallTimeoutMs: 20,
+      stallCheckIntervalMs: 5,
+    });
+
+    await executor.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} },
+    );
+
+    expect(interrupt).toHaveBeenCalledWith(expect.stringContaining("无进展"));
+  });
 });
 
 function capabilitySnapshot(
@@ -451,7 +481,8 @@ function createStore(options: {
     conversationTransactions: {
       settleActiveRunAttempts: vi.fn(),
     },
-    runs: { getRun, updateRun },
+    runs: { getRun, updateRun, listSessionTasks: vi.fn(() => []) },
+    permissions: { list: vi.fn(() => []) },
   } satisfies SessionRunExecutorContext["data"];
   const attachments = {
       acquireAttachmentLeases: vi.fn(() => []),
@@ -480,6 +511,25 @@ function attachment(assetId: string, seq: number) {
     metadata: {},
     createdAt: 1,
   };
+}
+
+function hangingHandle(): AgentRunHandle {
+  let rejectResult!: (error: unknown) => void;
+  const result = new Promise<never>((_, reject) => {
+    rejectResult = reject;
+  });
+  return {
+    id: "run-1",
+    inputId: "input-1",
+    sessionId: "s1",
+    traceId: "trace-1",
+    started: Promise.resolve({ sessionId: "s1", inputId: "input-1", runId: "run-1" }),
+    result,
+    steer: vi.fn(),
+    interrupt: vi.fn(async (reason?: string) => {
+      rejectResult(new Error(reason ?? "Run interrupted"));
+    }),
+  } as unknown as AgentRunHandle;
 }
 
 function completedHandle(): AgentRunHandle {
