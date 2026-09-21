@@ -588,4 +588,86 @@ describe("SessionTranscriptProjection", () => {
       metadata: { inputAttachmentId: "ref-steer" },
     }));
   });
+
+  it("projects reasoning deltas into a reasoning part", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "先看文件。",
+      source: "reasoning_content",
+    });
+
+    expect(store.upsertMessagePart).toHaveBeenCalledWith(expect.objectContaining({
+      type: "reasoning",
+      status: "running",
+      metadata: { source: "reasoning_content" },
+    }));
+    expect(store.appendMessagePartDelta).toHaveBeenCalledWith(expect.objectContaining({
+      field: "reasoning",
+      delta: "先看文件。",
+    }));
+  });
+
+  it("closes the reasoning part when text starts and opens a new one later", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "first",
+      source: "think",
+    });
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "正文" });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "second",
+      source: "think",
+    });
+
+    const reasoningParts = store.upsertMessagePart.mock.calls
+      .map(([input]) => input)
+      .filter((input) => input.type === "reasoning");
+    expect(reasoningParts).toHaveLength(3);
+    expect(reasoningParts[0]).toMatchObject({ status: "running" });
+    expect(reasoningParts[1]).toMatchObject({ status: "completed" });
+    expect(reasoningParts[2]).toMatchObject({ status: "running" });
+  });
+
+  it("closes the reasoning part before a steered input continues the run", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "before steer",
+      source: "think",
+    });
+    projection.projectSteeredInputs(state, [createInput({
+      id: "steer-1",
+      seq: 2,
+      delivery: "steer",
+      content: "continue",
+    })]);
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "after steer",
+      source: "think",
+    });
+
+    const reasoningParts = store.upsertMessagePart.mock.calls
+      .map(([input]) => input)
+      .filter((input) => input.type === "reasoning");
+    expect(reasoningParts).toHaveLength(3);
+    expect(reasoningParts[1]).toMatchObject({ status: "completed" });
+    expect(store.appendMessagePartDelta).toHaveBeenLastCalledWith(expect.objectContaining({
+      field: "reasoning",
+      delta: "after steer",
+      partId: "p4",
+    }));
+  });
 });

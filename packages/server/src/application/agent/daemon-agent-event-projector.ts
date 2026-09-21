@@ -125,6 +125,13 @@ export class DaemonAgentEventProjector {
           ...(event.data.phase ? { phase: event.data.phase } : {}),
         });
         return;
+      case "output.reasoning.delta":
+        this.projectStream(event, {
+          type: "reasoning_delta",
+          delta: event.data.delta,
+          source: event.data.source,
+        });
+        return;
       case "output.turn.completed":
         this.projectStream(event, { type: "complete", stopReason: event.data.stopReason });
         return;
