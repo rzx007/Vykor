@@ -109,6 +109,7 @@ import type {
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
 } from "./settings-types"
 import type {
@@ -302,6 +303,7 @@ export const IpcChannels = {
   settingsUpdateWorkStyle: "settings:update-work-style",
   settingsUpdateNotificationMode: "settings:update-notification-mode",
   settingsUpdateAgentEnvironment: "settings:update-agent-environment",
+  settingsUpdateReasoningVisibility: "settings:update-reasoning-visibility",
   settingsUpdateDefaultOpener: "settings:update-default-opener",
   settingsUpdateDefaultTerminalShell: "settings:update-default-terminal-shell",
   daemonAutoStartSnapshot: "daemon-autostart:snapshot",
@@ -398,6 +400,10 @@ export interface IpcInvokeMap {
   }
   [IpcChannels.settingsUpdateAgentEnvironment]: {
     args: [input: UpdateDesktopAgentEnvironmentInput]
+    result: DesktopSettingsSnapshot
+  }
+  [IpcChannels.settingsUpdateReasoningVisibility]: {
+    args: [input: UpdateDesktopReasoningVisibilityInput]
     result: DesktopSettingsSnapshot
   }
   [IpcChannels.settingsUpdateDefaultOpener]: {

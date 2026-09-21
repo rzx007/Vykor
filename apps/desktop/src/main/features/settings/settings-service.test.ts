@@ -7,6 +7,7 @@ const defaultSnapshot = {
   workStyle: "practical",
   notificationMode: "when_unfocused",
   agentEnvironment: "native",
+  showReasoning: true,
   wslSupported: false,
   restartRequired: false,
   defaultOpenerId: null,
@@ -140,5 +141,28 @@ describe("DesktopSettingsService.updateAgentEnvironment", () => {
     )
     expect(patchSettings).toHaveBeenCalledOnce()
     expect(capabilities).not.toHaveBeenCalled()
+  })
+})
+
+describe("DesktopSettingsService.updateReasoningVisibility", () => {
+  it("patches showReasoning through the daemon client", async () => {
+    const patchSettings = vi.fn(async (patch) => patch)
+    const service = new DesktopSettingsService({
+      daemonClient: async () => ({
+        protocol: { capabilities: vi.fn() },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
+      refreshDaemonClient: async () => ({
+        protocol: { capabilities: vi.fn() },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
+      getPreferences: preferences,
+      patchPreferences: vi.fn(),
+    })
+
+    const result = await service.updateReasoningVisibility({ showReasoning: false })
+
+    expect(patchSettings).toHaveBeenCalledWith({ showReasoning: false })
+    expect(result).toMatchObject({ showReasoning: false })
   })
 })

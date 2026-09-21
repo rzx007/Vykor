@@ -236,6 +236,9 @@ export const desktopAPI = {
     updateAgentEnvironment: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateAgentEnvironment]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateAgentEnvironment, input),
+    updateReasoningVisibility: (
+      input: IpcInvokeMap[typeof IpcChannels.settingsUpdateReasoningVisibility]["args"][0]
+    ) => invoke(IpcChannels.settingsUpdateReasoningVisibility, input),
     updateDefaultOpener: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateDefaultOpener]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateDefaultOpener, input),

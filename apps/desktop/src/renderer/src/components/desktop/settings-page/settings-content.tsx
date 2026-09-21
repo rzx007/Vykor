@@ -137,6 +137,12 @@ function GeneralSettings(): React.JSX.Element {
         />
         <Separator />
         <SettingRow
+          title="思考过程"
+          description="在对话中展示模型的思考过程（默认收起，点击展开）。"
+          control={<ReasoningVisibilityControl />}
+        />
+        <Separator />
+        <SettingRow
           title="通知"
           description="选择任务完成、失败或需要你处理时是否发送系统通知。"
           control={<NotificationModeControl />}
@@ -293,6 +299,63 @@ function WorkStyleControl(): React.JSX.Element {
           </SelectGroup>
         </SelectContent>
       </Select>
+      {error ? (
+        <p role="alert" className="text-ui-caption max-w-56 text-right text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function ReasoningVisibilityControl(): React.JSX.Element {
+  const [enabled, setEnabled] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.desktop.settings
+      .snapshot()
+      .then((snapshot) => {
+        if (!cancelled) setEnabled(snapshot.showReasoning)
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) setError(errorMessage(loadError))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const update = (next: boolean): void => {
+    if (saving || next === enabled) return
+    const previous = enabled
+    setEnabled(next)
+    setSaving(true)
+    setError(null)
+    void window.desktop.settings
+      .updateReasoningVisibility({ showReasoning: next })
+      .then((snapshot) => setEnabled(snapshot.showReasoning))
+      .catch((saveError: unknown) => {
+        setEnabled(previous)
+        setError(errorMessage(saveError))
+      })
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Switch
+        aria-label="思考过程"
+        checked={enabled}
+        disabled={loading || saving}
+        onCheckedChange={update}
+      />
       {error ? (
         <p role="alert" className="text-ui-caption max-w-56 text-right text-destructive">
           {error}

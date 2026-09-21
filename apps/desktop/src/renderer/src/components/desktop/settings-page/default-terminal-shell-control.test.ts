@@ -136,6 +136,7 @@ function settingsSnapshot(defaultTerminalShellId: string | null): DesktopSetting
     workStyle: "practical",
     notificationMode: "when_unfocused",
     agentEnvironment: "native",
+    showReasoning: true,
     restartRequired: false,
     defaultOpenerId: null,
     defaultTerminalShellId,
