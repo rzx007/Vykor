@@ -17,6 +17,10 @@ export interface AssistantMessage {
   content: string;
   phase?: AssistantMessagePhase;
   toolUses?: ToolUseBlock[];
+  /** 展示与落盘用的思考内容，两类来源合并。 */
+  reasoning?: string;
+  /** 仅当上游用 reasoning_content 提供思考内容时存在，用于回传。 */
+  reasoningReplay?: string;
   /** 压缩摘要消息；不改变发给模型的 content。 */
   compactRole?: CompactRole;
 }

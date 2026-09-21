@@ -17,6 +17,8 @@ export type {
 export type {
   StreamEvent,
   TextDeltaEvent,
+  ReasoningDeltaEvent,
+  ReasoningSource,
   ToolUseStartEvent,
   ToolUseEndEvent,
   ErrorEvent,

@@ -245,6 +245,13 @@ export type AgentEventInput =
         phase?: import("./messages").AssistantMessagePhase;
       };
     }
+  | {
+      type: "output.reasoning.delta";
+      data: {
+        delta: string;
+        source: import("./events").ReasoningSource;
+      };
+    }
   | { type: "output.turn.completed"; data: { stopReason: string } }
   | {
       type: "tool.started";
