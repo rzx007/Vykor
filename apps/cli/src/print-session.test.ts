@@ -25,10 +25,14 @@ it("marks an inherited CLI effort so later settings edits can affect the session
     model: "model-a", effort: "low", permission: { mode: "default" }, maxTurns: 50,
   } as never;
   expect(buildPrintSessionMetadata(settings, {} as never)).toMatchObject({
-    runtimeDefaultFields: ["effort"],
+    runtimeDefaultFields: ["effort", "maxTurns", "systemPrompt"],
   });
   expect(buildPrintSessionMetadata(settings, { effort: "high" } as never))
-    .not.toHaveProperty("runtimeDefaultFields");
+    .toMatchObject({ runtimeDefaultFields: ["maxTurns", "systemPrompt"] });
+  expect(buildPrintSessionMetadata(settings, { maxTurns: 5 } as never))
+    .toMatchObject({ runtimeDefaultFields: ["effort", "systemPrompt"] });
+  expect(buildPrintSessionMetadata(settings, { systemPrompt: "custom" } as never))
+    .toMatchObject({ runtimeDefaultFields: ["effort", "maxTurns"] });
 });
 
 function printClient(resources: {

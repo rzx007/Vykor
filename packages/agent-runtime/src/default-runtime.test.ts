@@ -15,6 +15,109 @@ import type { ExecutionEnvironmentHandle } from "@openharness/environment";
 import { createAgentWorkspaceBinding } from "./agent-composition.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 
+it("rebuilds the next request prompt from changed file-backed settings", async () => {
+  const prompts: string[] = [];
+  let configuration = {
+    revision: 0,
+    configuration: {
+      model: "model-a", workStyle: "practical" as const,
+      fastMode: false, settingsPrompt: "old instructions",
+    },
+  };
+  const runtime = await createOpenHarnessRuntime({
+    settings: {
+      ...BASE_SETTINGS,
+      systemPrompt: "old instructions",
+      workStyle: "practical",
+      fastMode: false,
+      sandbox: { enabled: false },
+    },
+    configuration: {
+      client: {
+        async *streamMessage(input) {
+          prompts.push(String(input.system));
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        },
+      },
+    },
+    requestConfigurationStore: { read: async () => configuration },
+  });
+  try {
+    for await (const _ of runtime.queryEngine.submitMessage("first")) { /* consume */ }
+    configuration = {
+      revision: 1,
+      configuration: {
+        model: "model-a", workStyle: "efficient" as const,
+        fastMode: true, settingsPrompt: "new instructions",
+      },
+    };
+    for await (const _ of runtime.queryEngine.submitMessage("second")) { /* consume */ }
+    expect(prompts[0]).toContain("# Work Style: Practical");
+    expect(prompts[0]).toContain("old instructions");
+    expect(prompts[1]).toContain("# Work Style: Efficient");
+    expect(prompts[1]).toContain("Fast mode is enabled");
+    expect(prompts[1]).toContain("new instructions");
+    expect(prompts[1]).not.toContain("old instructions");
+  } finally {
+    await runtime.close();
+  }
+});
+
+it("rebuilds the prompt when a warm session explicitly clears its override", async () => {
+  const prompts: string[] = [];
+  let sessionPrompt = "old session instructions";
+  let settingsPrompt = "old settings instructions";
+  const runtime = await createOpenHarnessRuntime({
+    settings: { ...BASE_SETTINGS, systemPrompt: settingsPrompt, sandbox: { enabled: false } },
+    configuration: {
+      systemPrompt: sessionPrompt,
+      client: {
+        async *streamMessage(input) {
+          prompts.push(String(input.system));
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        },
+      },
+    },
+    requestConfigurationStore: { read: async () => ({
+      revision: 0,
+      configuration: { model: "model-a", systemPrompt: sessionPrompt, settingsPrompt },
+    }) },
+  });
+  try {
+    for await (const _ of runtime.queryEngine.submitMessage("first")) { /* consume */ }
+    sessionPrompt = "";
+    settingsPrompt = "new settings instructions";
+    for await (const _ of runtime.queryEngine.submitMessage("second")) { /* consume */ }
+    expect(prompts[0]).toContain("old session instructions");
+    expect(prompts[1]).toContain("new settings instructions");
+    expect(prompts[1]).not.toContain("old session instructions");
+  } finally {
+    await runtime.close();
+  }
+});
+
+it("keeps an explicit Agent fastMode over its initial settings default", async () => {
+  let prompt = "";
+  const runtime = await createOpenHarnessRuntime({
+    settings: { ...BASE_SETTINGS, fastMode: false, sandbox: { enabled: false } },
+    configuration: {
+      fastMode: true,
+      client: {
+        async *streamMessage(input) {
+          prompt = String(input.system);
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        },
+      },
+    },
+  });
+  try {
+    for await (const _ of runtime.queryEngine.submitMessage("hello")) { /* consume */ }
+    expect(prompt).toContain("Fast mode is enabled");
+  } finally {
+    await runtime.close();
+  }
+});
+
 it.each([undefined, "Custom root instructions"])("lists only the current View Agent names and descriptions with custom prompt=%s", async (systemPrompt) => {
   const prompts: string[] = [];
   const runtime = await createOpenHarnessRuntime({

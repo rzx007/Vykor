@@ -104,6 +104,11 @@ const LIVE_REQUEST_CONFIGURATION_KEYS = new Set([
   "baseUrl",
   "apiFormat",
   "effort",
+  "maxTurns",
+  "systemPrompt",
+]);
+const MODEL_REQUEST_CONFIGURATION_KEYS = new Set([
+  "model", "provider", "baseUrl", "apiFormat", "effort",
 ]);
 
 function isLiveRequestConfigurationChange(
@@ -119,7 +124,14 @@ function isLiveRequestConfigurationChange(
 
 function readRuntimeMetadata(
   metadata: Record<string, unknown>,
-): { model?: unknown; provider?: unknown; baseUrl?: unknown; effort?: unknown } {
+): {
+  model?: unknown;
+  provider?: unknown;
+  baseUrl?: unknown;
+  effort?: unknown;
+  maxTurns?: unknown;
+  systemPrompt?: unknown;
+} {
   const runtime = metadata.runtime;
   return typeof runtime === "object" && runtime !== null ? runtime : {};
 }
@@ -287,6 +299,29 @@ export class SessionCommandService {
           };
         }
       }
+      if (Object.prototype.hasOwnProperty.call(incomingRuntime, "maxTurns")) {
+        if (typeof incomingRuntime.maxTurns !== "number"
+          || !Number.isSafeInteger(incomingRuntime.maxTurns)
+          || incomingRuntime.maxTurns <= 0) {
+          throw new SessionApplicationError(400, "maxTurns must be a positive safe integer");
+        }
+        const defaults = existing.metadata.runtimeDefaultFields;
+        if (Array.isArray(defaults)) {
+          mergedMetadata = {
+            ...mergedMetadata,
+            runtimeDefaultFields: defaults.filter((field) => field !== "maxTurns"),
+          };
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(incomingRuntime, "systemPrompt")) {
+        const defaults = existing.metadata.runtimeDefaultFields;
+        if (Array.isArray(defaults)) {
+          mergedMetadata = {
+            ...mergedMetadata,
+            runtimeDefaultFields: defaults.filter((field) => field !== "systemPrompt"),
+          };
+        }
+      }
       const provider = incomingRuntime.provider;
       const previousProvider = readSessionRuntimeConfig(existing).provider;
       if (typeof provider === "string" && provider !== previousProvider
@@ -302,7 +337,7 @@ export class SessionCommandService {
         readSessionRuntimeConfig(existing),
         readSessionRuntimeConfig({ ...existing, metadata: mergedMetadata }),
       );
-      if (changed.some((key) => LIVE_REQUEST_CONFIGURATION_KEYS.has(key))) {
+      if (changed.some((key) => MODEL_REQUEST_CONFIGURATION_KEYS.has(key))) {
         const normalized = await this.options.validateRequestSelection({
           session: existing,
           next: readSessionRuntimeConfig({ ...existing, metadata: mergedMetadata }),

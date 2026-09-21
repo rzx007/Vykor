@@ -17,6 +17,11 @@ export type AgentRequestConfiguration = {
   apiFormat?: "anthropic" | "openai";
   effort?: string;
   maxTurns?: number;
+  /** A session override takes precedence over settingsPrompt. */
+  systemPrompt?: string;
+  settingsPrompt?: string;
+  workStyle?: Settings["workStyle"];
+  fastMode?: boolean;
 };
 
 export type AgentRequestConfigurationPatch = Partial<AgentRequestConfiguration>;

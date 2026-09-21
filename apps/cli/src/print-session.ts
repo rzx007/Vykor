@@ -69,8 +69,13 @@ export function buildPrintSessionMetadata(
     sessionMode: options.coordinator === true || isCoordinatorMode() ? "coordinator" : "direct",
     pluginsEnabled: options.pluginsEnabled ?? settings.plugins?.enabled,
   });
-  return options.effort === undefined
-    ? { ...metadata, runtimeDefaultFields: ["effort"] }
+  const runtimeDefaultFields = [
+    ...(options.effort === undefined ? ["effort"] : []),
+    ...(options.maxTurns === undefined ? ["maxTurns"] : []),
+    ...(options.systemPrompt === undefined ? ["systemPrompt"] : []),
+  ];
+  return runtimeDefaultFields.length > 0
+    ? { ...metadata, runtimeDefaultFields }
     : metadata;
 }
 

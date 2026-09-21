@@ -47,6 +47,7 @@ export function createMemoryRequestConfigurationStore(
         { ...current, ...normalizedPatch },
         normalizedPatch,
       ));
+      assertValidRequestConfiguration(next);
       if (!sameConfiguration(current, next)) {
         current = next;
         revision++;
@@ -59,6 +60,7 @@ export function createMemoryRequestConfigurationStore(
         copyConfiguration(previous),
         copyConfiguration(previous),
       ));
+      assertValidRequestConfiguration(restored);
       if (!sameConfiguration(current, restored)) {
         current = restored;
         revision++;
@@ -67,6 +69,7 @@ export function createMemoryRequestConfigurationStore(
     }),
     replaceSynchronously: (patch) => {
       const next = { ...current, ...omitUndefined(patch) };
+      assertValidRequestConfiguration(next);
       if (!sameConfiguration(current, next)) {
         current = next;
         revision++;
@@ -74,6 +77,28 @@ export function createMemoryRequestConfigurationStore(
       return snapshot();
     },
   };
+}
+
+function assertValidRequestConfiguration(configuration: AgentRequestConfiguration): void {
+  if (typeof configuration.model !== "string" || !configuration.model.trim()) {
+    throw new Error("model is required");
+  }
+  if (configuration.maxTurns !== undefined
+    && (!Number.isSafeInteger(configuration.maxTurns) || configuration.maxTurns <= 0)) {
+    throw new Error("maxTurns must be a positive safe integer");
+  }
+  if (configuration.fastMode !== undefined && typeof configuration.fastMode !== "boolean") {
+    throw new Error("fastMode must be a boolean");
+  }
+  if (configuration.workStyle !== undefined
+    && configuration.workStyle !== "practical" && configuration.workStyle !== "efficient") {
+    throw new Error("workStyle must be practical or efficient");
+  }
+  for (const field of ["systemPrompt", "settingsPrompt"] as const) {
+    if (configuration[field] !== undefined && typeof configuration[field] !== "string") {
+      throw new Error(`${field} must be a string`);
+    }
+  }
 }
 
 function copyConfiguration(

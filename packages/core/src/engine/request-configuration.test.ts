@@ -6,7 +6,92 @@ import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 
 describe("QueryEngine request configuration", () => {
-  it("uses an increased turn limit before deciding whether to continue after tools", async () => {
+  it("reads configuration at the next automatic request after checking for follow-ups", async () => {
+    const models: string[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        models.push(params.model);
+        if (models.length === 1) {
+          yield {
+            type: "tool_use_start" as const,
+            toolUse: { type: "tool_use", id: "echo", name: "Echo", input: {} },
+          };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+        } else {
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        }
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echoes", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    let model = "model-a";
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 2, resolveRequestConfiguration: async () => ({
+        revision: 0, model, client, maxTurns: 2,
+      }) },
+    );
+    for await (const _ of engine.submitMessage("start", {
+      execution: {
+        emit: async () => {}, closeSteering: () => {},
+        takeSteeredInputs: async () => { model = "model-b"; return []; },
+      } as never,
+    })) { /* consume */ }
+    expect(models).toEqual(["model-a", "model-b"]);
+  });
+
+  it("accepts a steered follow-up when the turn limit rises during a tool-free response", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    let requestCount = 0;
+    const models: string[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requestCount++;
+        models.push(params.model);
+        if (requestCount === 1) { started(); await held; }
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    let maxTurns = 1;
+    let model = "model-a";
+    let pending = true;
+    const engine = new QueryEngine(client, new ToolRegistry(),
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1, resolveRequestConfiguration: async () => ({
+        revision: 0, model, client, maxTurns,
+      }) },
+    );
+    const running = (async () => {
+      for await (const _ of engine.submitMessage("first", {
+        execution: {
+          emit: async () => {}, closeSteering: () => {},
+          takeSteeredInputs: async () => {
+            if (!pending) return [];
+            pending = false;
+            model = "model-b";
+            maxTurns = 1;
+            return [{ id: "follow-up", content: "continue" }];
+          },
+        } as never,
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    maxTurns = 2;
+    release();
+    await running;
+    expect(requestCount).toBe(2);
+    expect(models).toEqual(["model-a", "model-b"]);
+  });
+
+  it("uses an increased turn limit after tools and finishes an accepted follow-up", async () => {
     const requests: string[] = [];
     let release!: () => void;
     let started!: () => void;
@@ -42,7 +127,18 @@ describe("QueryEngine request configuration", () => {
       }) },
     );
     const running = (async () => {
-      for await (const _ of engine.submitMessage("run")) { /* consume */ }
+      let pending = true;
+      for await (const _ of engine.submitMessage("run", {
+        execution: {
+          emit: async () => {}, closeSteering: () => {},
+          takeSteeredInputs: async () => {
+            if (!pending) return [];
+            pending = false;
+            maxTurns = 1;
+            return [{ id: "follow-up", content: "continue" }];
+          },
+        } as never,
+      })) { /* consume */ }
     })();
     await firstStarted;
     maxTurns = 2;

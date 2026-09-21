@@ -138,6 +138,43 @@ describe("SessionCommandService", () => {
       expect(updated.metadata.runtime).toMatchObject({ effort: "high" });
     });
 
+    it("accepts an explicit turn limit during a run and stops following the default", async () => {
+      const { service, runtimeControl } = createService({
+        hasWork: true,
+        sessionRecord: {
+          ...session,
+          metadata: {
+            runtime: { model: "gpt-test", maxTurns: 3 },
+            runtimeDefaultFields: ["maxTurns"],
+          },
+        } as any,
+      });
+      const updated = await service.updateSession("s1", {
+        metadata: { runtime: { maxTurns: 5 } },
+      });
+      expect(updated.metadata.runtimeDefaultFields).toEqual([]);
+      expect(updated.metadata.runtime).toMatchObject({ maxTurns: 5 });
+      expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
+    });
+
+    it("accepts a session prompt during a run and stops following the file prompt", async () => {
+      const { service, runtimeControl } = createService({
+        hasWork: true,
+        sessionRecord: {
+          ...session,
+          metadata: {
+            runtime: { model: "gpt-test" },
+            runtimeDefaultFields: ["systemPrompt"],
+          },
+        } as any,
+      });
+      const updated = await service.updateSession("s1", {
+        metadata: { runtime: { systemPrompt: "session instructions" } },
+      });
+      expect(updated.metadata.runtimeDefaultFields).toEqual([]);
+      expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
+    });
+
     it("merges overlapping live updates in arrival order", async () => {
       let releaseFirst!: () => void;
       let signalFirst!: () => void;

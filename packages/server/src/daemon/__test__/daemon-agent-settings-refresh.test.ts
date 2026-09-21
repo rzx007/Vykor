@@ -8,6 +8,64 @@ import { createDefaultNodeAgent } from "@openharness/agent-runtime";
 import { createDaemonAgentLoader } from "../daemon-agent.js";
 
 describe("daemon request settings refresh", () => {
+  it("keeps an explicitly cleared session prompt cleared on a warm agent", async () => {
+    const session = {
+      id: "cleared-prompt", cwd: "/repo", model: "model-a",
+      metadata: { runtime: { model: "model-a", systemPrompt: "old session instructions" } },
+    } as any;
+    const createAgent = vi.fn(async () => ({
+      loadHistory: () => undefined, close: async () => undefined,
+    }) as any);
+    const loader = createDaemonAgentLoader({
+      settings: { model: "model-a", systemPrompt: "old settings instructions" } as any,
+      getSettingsForCwd: async () => ({ model: "model-a", systemPrompt: "new settings instructions" } as any),
+      getSession: () => session,
+      createAgent,
+    })!;
+    await loader({ session, history: [], parts: [] });
+    const reader = createAgent.mock.calls[0]![0].options.requestConfigurationStore;
+    expect((await reader.read()).configuration.systemPrompt).toBe("old session instructions");
+    session.metadata.runtime.systemPrompt = "";
+    const configuration = (await reader.read()).configuration;
+    expect(configuration.systemPrompt).toBe("");
+    expect(configuration.settingsPrompt).toBe("new settings instructions");
+  });
+
+  it("reads changed prompt settings without replacing a session model", async () => {
+    let settings = {
+      model: "settings-model", systemPrompt: "old instructions",
+      workStyle: "practical", fastMode: false,
+    };
+    const createAgent = vi.fn(async () => ({
+      loadHistory: () => undefined, close: async () => undefined,
+    }) as any);
+    const loader = createDaemonAgentLoader({
+      settings: settings as any,
+      getSettingsForCwd: async () => settings as any,
+      createAgent,
+    })!;
+    await loader({
+      session: {
+        id: "prompt-settings", cwd: "/repo", model: "session-model",
+        metadata: {
+          runtime: { model: "session-model", systemPrompt: "old instructions" },
+          runtimeDefaultFields: ["systemPrompt"],
+        },
+      } as any,
+      history: [], parts: [],
+    });
+    const reader = createAgent.mock.calls[0]![0].options.requestConfigurationStore;
+    settings = {
+      model: "different-default", systemPrompt: "new instructions",
+      workStyle: "efficient", fastMode: true,
+    };
+    expect((await reader.read()).configuration).toMatchObject({
+      model: "session-model", settingsPrompt: "new instructions",
+      workStyle: "efficient", fastMode: true,
+    });
+    expect((await reader.read()).configuration.systemPrompt).toBeUndefined();
+  });
+
   it("reads a changed default maxTurns for a warm session", async () => {
     let maxTurns = 1;
     const createAgent = vi.fn(async () => ({
@@ -34,7 +92,7 @@ describe("daemon request settings refresh", () => {
     expect((await reader.read()).configuration.maxTurns).toBe(2);
   });
 
-  it("uses a project effort edit for the next model request in the same run", async () => {
+  it("uses a project settings edit for the next model request in the same run", async () => {
     const project = mkdtempSync(join(tmpdir(), "openharness-effort-run-"));
     let release!: () => void;
     let started!: () => void;
@@ -60,7 +118,10 @@ describe("daemon request settings refresh", () => {
     };
     let agent: Awaited<ReturnType<typeof createDefaultNodeAgent>> | undefined;
     try {
-      await saveProjectSettings({ effort: "low" }, project);
+      await saveProjectSettings({
+        effort: "low", workStyle: "practical", fastMode: false,
+        systemPrompt: "old project instructions",
+      }, project);
       const loader = createDaemonAgentLoader({
         getSettingsForCwd: (cwd) => loadSettings(undefined, { includeProject: true, projectRoot: cwd }),
         createAgent: async ({ options }) => {
@@ -77,19 +138,26 @@ describe("daemon request settings refresh", () => {
           id: "session-live-effort", cwd: project, model: "model-a",
           metadata: {
             runtime: { model: "model-a", permissionMode: "full_auto" },
-            runtimeDefaultFields: ["effort"],
+            runtimeDefaultFields: ["effort", "systemPrompt"],
           },
         } as any,
         history: [], parts: [],
       });
       const running = agent.runMessage("use Echo");
       await firstStarted;
-      await saveProjectSettings({ effort: "high" }, project);
+      await saveProjectSettings({
+        effort: "high", workStyle: "efficient", fastMode: true,
+        systemPrompt: "new project instructions",
+      }, project);
       release();
       await running;
       expect(requests.map((item) => item.effort)).toEqual(["low", "high"]);
       expect(requests[0]!.system).toContain("Effort: low");
       expect(requests[1]!.system).toContain("Effort: high");
+      expect(requests[0]!.system).toContain("old project instructions");
+      expect(requests[1]!.system).toContain("new project instructions");
+      expect(requests[1]!.system).toContain("# Work Style: Efficient");
+      expect(requests[1]!.system).toContain("Fast mode is enabled");
     } finally {
       release?.();
       await agent?.close();

@@ -26,7 +26,11 @@ it("marks a new session as following the default effort only when effort is not 
     model: "model-a", provider: "provider-a",
   }
   await operations.createSession(client as never, base)
-  expect(create.mock.calls[0]![0].metadata.runtimeDefaultFields).toEqual(["effort"])
+  expect(create.mock.calls[0]![0].metadata.runtimeDefaultFields).toEqual([
+    "effort", "maxTurns", "systemPrompt",
+  ])
   await operations.createSession(client as never, { ...base, effort: "high" })
-  expect(create.mock.calls[1]![0].metadata.runtimeDefaultFields).toBeUndefined()
+  expect(create.mock.calls[1]![0].metadata.runtimeDefaultFields).toEqual([
+    "maxTurns", "systemPrompt",
+  ])
 })

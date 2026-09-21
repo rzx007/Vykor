@@ -209,7 +209,9 @@ export class SessionOperations {
         title: "",
         metadata: {
           ...(!projectId ? { desktop: { workspaceMode: "outside_project" } } : {}),
-          ...(!input.effort?.trim() ? { runtimeDefaultFields: ["effort"] } : {}),
+          runtimeDefaultFields: input.effort?.trim()
+            ? ["maxTurns", "systemPrompt"]
+            : ["effort", "maxTurns", "systemPrompt"],
           runtime: {
             model,
             ...(provider ? { provider } : {}),

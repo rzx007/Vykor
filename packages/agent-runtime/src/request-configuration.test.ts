@@ -5,6 +5,20 @@ import {
 } from "./request-configuration.js";
 
 describe("memory request configuration store", () => {
+  it("rejects invalid live request options before accepting a revision", async () => {
+    const store = createMemoryRequestConfigurationStore(
+      { model: "model-a", maxTurns: 3 },
+      async (next) => next,
+    );
+    await expect(store.update({ maxTurns: 0 })).rejects.toThrow(/maxTurns/);
+    await expect(store.update({ fastMode: "yes" } as never)).rejects.toThrow(/fastMode/);
+    await expect(store.update({ workStyle: "turbo" } as never)).rejects.toThrow(/workStyle/);
+    await expect(store.update({ systemPrompt: 42 } as never)).rejects.toThrow(/systemPrompt/);
+    expect(await store.read()).toEqual({
+      revision: 0, configuration: { model: "model-a", maxTurns: 3 },
+    });
+  });
+
   it("serializes concurrent patches and does not restore over a newer selection", async () => {
     const store = createMemoryRequestConfigurationStore(
       { model: "model-a", effort: "low" },

@@ -303,11 +303,28 @@ function createDaemonRequestConfigurationStore(input: {
   let lastReportedError: string | undefined;
   const read = async () => {
     const session = input.getSession?.(input.session.id) ?? input.session;
-    const followsDefaultEffort = Array.isArray(session.metadata.runtimeDefaultFields)
-      && session.metadata.runtimeDefaultFields.includes("effort");
-    if (followsDefaultEffort && input.getSettingsForCwd) {
+    const defaults = Array.isArray(session.metadata.runtimeDefaultFields)
+      ? session.metadata.runtimeDefaultFields : [];
+    const followsDefaultEffort = defaults.includes("effort");
+    const followsDefaultMaxTurns = defaults.includes("maxTurns");
+    const followsDefaultSystemPrompt = defaults.includes("systemPrompt");
+    if (input.getSettingsForCwd) {
       try {
-        lastValidSettings = await input.getSettingsForCwd(session.cwd);
+        const loaded = await input.getSettingsForCwd(session.cwd);
+        if (followsDefaultMaxTurns && (!Number.isSafeInteger(loaded.maxTurns) || loaded.maxTurns <= 0)) {
+          throw new RangeError("settings.maxTurns must be a positive safe integer");
+        }
+        if (loaded.workStyle !== undefined
+          && loaded.workStyle !== "practical" && loaded.workStyle !== "efficient") {
+          throw new Error("settings.workStyle must be practical or efficient");
+        }
+        if (loaded.fastMode !== undefined && typeof loaded.fastMode !== "boolean") {
+          throw new Error("settings.fastMode must be a boolean");
+        }
+        if (loaded.systemPrompt !== undefined && typeof loaded.systemPrompt !== "string") {
+          throw new Error("settings.systemPrompt must be a string");
+        }
+        lastValidSettings = loaded;
         lastReportedError = undefined;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -322,6 +339,7 @@ function createDaemonRequestConfigurationStore(input: {
       baseUrl: defaultBaseUrlForSession(session, input.settings),
       apiFormat: input.settings?.apiFormat,
       effort: followsDefaultEffort ? lastValidSettings?.effort : input.settings?.effort,
+      maxTurns: followsDefaultMaxTurns ? lastValidSettings?.maxTurns : input.settings?.maxTurns,
     });
     const rawRuntime = session.metadata.runtime;
     const effortCleared = rawRuntime !== null && typeof rawRuntime === "object"
@@ -330,6 +348,9 @@ function createDaemonRequestConfigurationStore(input: {
     const baseUrlCleared = rawRuntime !== null && typeof rawRuntime === "object"
       && !Array.isArray(rawRuntime)
       && (rawRuntime as Record<string, unknown>).baseUrl === "";
+    const systemPromptCleared = rawRuntime !== null && typeof rawRuntime === "object"
+      && !Array.isArray(rawRuntime)
+      && (rawRuntime as Record<string, unknown>).systemPrompt === "";
     return {
       revision: readSessionRuntimeRevision(session.metadata),
       configuration: {
@@ -342,6 +363,17 @@ function createDaemonRequestConfigurationStore(input: {
           ? { effort: lastValidSettings.effort }
           : effortCleared ? { effort: "" }
           : runtime.effort !== undefined ? { effort: runtime.effort } : {}),
+        ...(followsDefaultMaxTurns && lastValidSettings?.maxTurns !== undefined
+          ? { maxTurns: lastValidSettings.maxTurns }
+          : runtime.maxTurns !== undefined ? { maxTurns: runtime.maxTurns } : {}),
+        ...(followsDefaultSystemPrompt
+          ? { systemPrompt: undefined }
+          : systemPromptCleared ? { systemPrompt: "" }
+          : runtime.systemPrompt !== undefined ? { systemPrompt: runtime.systemPrompt } : {}),
+        settingsPrompt: lastValidSettings?.systemPrompt,
+        ...(lastValidSettings?.workStyle ? { workStyle: lastValidSettings.workStyle } : {}),
+        ...(lastValidSettings?.fastMode !== undefined
+          ? { fastMode: lastValidSettings.fastMode } : {}),
       },
     };
   };

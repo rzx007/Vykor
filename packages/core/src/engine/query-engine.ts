@@ -542,20 +542,29 @@ export class QueryEngine implements IQueryEngine {
           options.execution?.closeSteering();
           throw new MaxTurnsExceeded(this.maxTurns);
         }
-        preparedNextRequestConfiguration = (await this.consumeFollowUps(options)).requestConfiguration
-          ?? preparedNextRequestConfiguration;
+        preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(
+          (await this.consumeFollowUps(options)).requestConfiguration,
+          turnCount,
+        );
         continue;
       }
 
       // 无工具调用：若 turn 边界有 follow-up，则继续同一 submitMessage
+      if (this.options.resolveRequestConfiguration) {
+        preparedNextRequestConfiguration = await this.resolveRequestConfiguration(options);
+        this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
+      }
       if (turnCount + 1 >= this.maxTurns) {
         options.execution?.closeSteering();
         return;
       }
       const followUp = await this.consumeFollowUps(options, true);
       if (followUp.accepted) {
-        preparedNextRequestConfiguration = followUp.requestConfiguration;
         turnCount++;
+        preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(
+          followUp.requestConfiguration,
+          turnCount,
+        );
         continue;
       }
       return;
@@ -618,6 +627,18 @@ export class QueryEngine implements IQueryEngine {
       throw new RangeError("maxTurns must be a positive safe integer");
     }
     this.maxTurns = maxTurns;
+  }
+
+  private preserveAcceptedFollowUp(
+    configuration: QueryRequestConfiguration | undefined,
+    nextTurnCount: number,
+  ): QueryRequestConfiguration | undefined {
+    if (!configuration) return undefined;
+    const maxTurns = configuration.maxTurns ?? this.maxTurns;
+    // Steering has already accepted this input; let its request finish if the limit just fell.
+    return maxTurns <= nextTurnCount
+      ? { ...configuration, maxTurns: nextTurnCount + 1 }
+      : configuration;
   }
 
   getHistory(): Message[] {

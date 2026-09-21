@@ -214,14 +214,23 @@ export async function createOpenHarnessRuntime(
   const buildSystemPrompt = (
     skillsList: Array<{ name: string; description: string }> | undefined,
     effort = configuration.effort ?? settings.effort,
+    promptSettings: {
+      systemPrompt?: string;
+      workStyle?: Settings["workStyle"];
+      fastMode?: boolean;
+    } = {
+      systemPrompt: settings.systemPrompt,
+      workStyle: settings.workStyle,
+      fastMode: configuration.fastMode ?? settings.fastMode,
+    },
   ) =>
     buildRuntimeSystemPrompt({
-      customPrompt: settings.systemPrompt,
+      customPrompt: promptSettings.systemPrompt,
       cwd: hostCwd,
       environmentInfo: options.executionEnvironment?.info,
       permissionMode: mode,
-      workStyle: settings.workStyle,
-      fastMode: configuration.fastMode ?? settings.fastMode,
+      workStyle: promptSettings.workStyle,
+      fastMode: promptSettings.fastMode,
       effort,
       passes: settings.passes,
       includeBackgroundShell,
@@ -249,13 +258,24 @@ export async function createOpenHarnessRuntime(
         baseUrl: snapshot.configuration.baseUrl,
       };
       const effort = snapshot.configuration.effort;
-      const prompt = configuration.systemPrompt ?? await buildSystemPrompt(
+      const sessionPrompt = Object.prototype.hasOwnProperty.call(
+        snapshot.configuration, "systemPrompt",
+      ) ? snapshot.configuration.systemPrompt : configuration.systemPrompt;
+      const settingsPrompt = Object.prototype.hasOwnProperty.call(
+        snapshot.configuration, "settingsPrompt",
+      ) ? snapshot.configuration.settingsPrompt : settings.systemPrompt;
+      const prompt = sessionPrompt?.trim() ? sessionPrompt : await buildSystemPrompt(
         input.capabilityView
           ? [...input.capabilityView.skills.values()].map((binding) => binding.definition)
               .filter((skill) => !skill.disableModelInvocation)
           : options.skillRegistry?.getNonPluginSkills()
               .filter((skill) => !skill.disableModelInvocation),
         effort,
+        {
+          systemPrompt: settingsPrompt,
+          workStyle: snapshot.configuration.workStyle ?? settings.workStyle,
+          fastMode: snapshot.configuration.fastMode ?? configuration.fastMode ?? settings.fastMode,
+        },
       );
       const agents = input.capabilityView
         ? [...input.capabilityView.agents].map(([name, { definition }]) =>
