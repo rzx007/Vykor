@@ -1,4 +1,4 @@
-import type { StreamEvent } from "@openharness/core";
+import type { ReasoningSource, StreamEvent } from "@openharness/core";
 import type { AssistantMessagePhase } from "@openharness/core";
 import type { SessionStore } from "@openharness/services";
 import type {
@@ -27,6 +27,7 @@ export type ActiveTranscriptProjectionState = {
   activeTextPartId?: string;
   activeTextPhase?: AssistantMessagePhase;
   activeReasoningPartId?: string;
+  activeReasoningSource?: ReasoningSource;
   reasoningChars?: number;
   reasoningTruncated?: boolean;
   toolParts: Map<string, ActiveToolPart>;
@@ -146,6 +147,9 @@ export class SessionTranscriptProjection {
     switch (event.type) {
       case "reasoning_delta": {
         this.completeOpenTextPart(state, "completed", "commentary");
+        if (state.activeReasoningPartId && state.activeReasoningSource !== event.source) {
+          this.completeOpenReasoningPart(state, "completed");
+        }
         const messageId = this.ensureAssistantMessage(state, true);
         if (!state.activeReasoningPartId) {
           const part = this.store.conversations.upsertMessagePart({
@@ -157,6 +161,7 @@ export class SessionTranscriptProjection {
             metadata: { source: event.source },
           });
           state.activeReasoningPartId = part.id;
+          state.activeReasoningSource = event.source;
         }
         const delta = this.takeReasoningDelta(state, event.delta);
         if (!delta) return {};
@@ -341,6 +346,7 @@ export class SessionTranscriptProjection {
       status,
     });
     delete state.activeReasoningPartId;
+    delete state.activeReasoningSource;
     delete state.reasoningChars;
     delete state.reasoningTruncated;
   }

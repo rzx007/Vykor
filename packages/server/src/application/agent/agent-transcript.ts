@@ -6,6 +6,7 @@ import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
 } from "@openharness/protocol";
+import { publicTextFromParts } from "../../session/transcript-text.js";
 
 type UserMessageContent = Extract<Message, { type: "user" }>["content"];
 
@@ -65,6 +66,12 @@ export function buildAgentTranscript(
     const text = textFromParts(messageParts);
     const reasoning = reasoningFromParts(messageParts);
     const reasoningReplay = reasoningReplayFromParts(messageParts);
+    const reasoningSegments = messageParts
+      .filter((part) => part.type === "reasoning" && part.text)
+      .map((part) => ({
+        source: part.metadata.source === "reasoning_content" ? "reasoning_content" as const : "think" as const,
+        text: part.text!,
+      }));
     const phase = assistantPhaseFromParts(messageParts);
     if (text || toolUses.length > 0 || reasoning) {
       output.push({
@@ -74,6 +81,7 @@ export function buildAgentTranscript(
         ...(toolUses.length > 0 ? { toolUses } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(reasoningReplay ? { reasoningReplay } : {}),
+        ...(reasoningSegments.length > 0 ? { reasoningSegments } : {}),
       });
     }
     for (const part of messageParts.filter(
@@ -126,7 +134,16 @@ export function agentMessagesToTranscript(messages: Message[]): ReplaceTranscrip
     }
     if (message.type === "assistant") {
       const transcriptParts: ReplaceTranscriptPartInput[] = [];
-      if (message.reasoning) {
+      if (message.reasoningSegments?.length) {
+        for (const segment of message.reasoningSegments) {
+          transcriptParts.push({
+            type: "reasoning",
+            status: "completed",
+            text: segment.text,
+            metadata: { source: segment.source },
+          });
+        }
+      } else if (message.reasoning) {
         const replay = message.reasoningReplay ?? "";
         // 只有 reasoning_content 来源能回传；think 部分按前缀切出来。
         // 实际场景一轮只会出现一种来源，混用时按 replay 在前处理。
@@ -217,10 +234,7 @@ function assistantPhaseFromParts(
 }
 
 function textFromParts(parts: SessionMessagePartRecord[]): string {
-  return parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text ?? "")
-    .join("");
+  return publicTextFromParts(parts);
 }
 
 function reasoningFromParts(parts: SessionMessagePartRecord[]): string {

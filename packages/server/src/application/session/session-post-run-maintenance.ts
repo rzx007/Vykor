@@ -4,6 +4,7 @@ import { updateRulesFromSession, type SessionMessageLike } from "@openharness/pe
 import type { SessionStore } from "@openharness/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
+import { isPublicTextPart } from "../../session/transcript-text.js";
 
 export interface SessionPostRunMaintenanceContext {
   data: Pick<SessionStore, "conversations" | "runs" | "sessions">;
@@ -120,6 +121,7 @@ function transcriptMessages(
     .map((message) => {
       const content = store.conversations.listMessageParts(sessionId, { messageId: message.id })
         .sort((a, b) => a.seq - b.seq)
+        .filter(isPublicTextPart)
         .map((part) => part.text ?? (typeof part.output === "string" ? part.output : ""))
         .filter(Boolean)
         .join("\n");

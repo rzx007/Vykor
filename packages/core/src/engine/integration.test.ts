@@ -1711,6 +1711,10 @@ describe("Integration: Steer follow-ups", () => {
     const assistant = history.find((message) => message.type === "assistant") as any;
     expect(assistant.reasoning).toBe("内部推演补充想法");
     expect(assistant.reasoningReplay).toBe("内部推演");
+    expect(assistant.reasoningSegments).toEqual([
+      { source: "reasoning_content", text: "内部推演" },
+      { source: "think", text: "补充想法" },
+    ]);
     expect(assistant.content).toBe("答案");
   });
 

@@ -378,6 +378,7 @@ export class QueryEngine implements IQueryEngine {
       let assistantText = "";
       let assistantReasoning = "";
       let assistantReasoningReplay = "";
+      const assistantReasoningSegments: Array<{ source: "reasoning_content" | "think"; text: string }> = [];
       let assistantPhase: import("../types/messages").AssistantMessagePhase | undefined;
       const toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
@@ -391,6 +392,9 @@ export class QueryEngine implements IQueryEngine {
           assistantPhase = event.phase ?? assistantPhase;
         } else if (event.type === "reasoning_delta") {
           assistantReasoning += event.delta;
+          const lastSegment = assistantReasoningSegments.at(-1);
+          if (lastSegment?.source === event.source) lastSegment.text += event.delta;
+          else assistantReasoningSegments.push({ source: event.source, text: event.delta });
           if (event.source === "reasoning_content") {
             assistantReasoningReplay += event.delta;
           }
@@ -420,6 +424,7 @@ export class QueryEngine implements IQueryEngine {
           toolUses: toolUses.length > 0 ? toolUses : undefined,
           ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
           ...(assistantReasoningReplay ? { reasoningReplay: assistantReasoningReplay } : {}),
+          ...(assistantReasoningSegments.length > 0 ? { reasoningSegments: assistantReasoningSegments } : {}),
         });
       }
 

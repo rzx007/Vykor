@@ -443,6 +443,17 @@ describe("OpenAICompatibleClient DSML tool-call recovery", () => {
     expect(events.find((event) => event.type === "complete")!.stopReason).toBe("tool_use");
   });
 
+  it("keeps DSML-like markup inside think blocks out of tool-call recovery", async () => {
+    const hidden = '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path" string="true">secret.json</｜DSML｜parameter></｜DSML｜invoke>';
+    const client = contentClient([`<think>${hidden}</think>答案`]);
+    const events = await collectEvents(client, [READ_TOOL]);
+
+    expect(events.filter((item) => item.type === "reasoning_delta"))
+      .toEqual([expect.objectContaining({ delta: hidden, source: "think" })]);
+    expect(textOf(events)).toBe("答案");
+    expect(events.some((item) => item.type === "tool_use_start")).toBe(false);
+  });
+
   it("recovers an orphan invoke block with no tool_calls wrapper", async () => {
     const client = contentClient([
       '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path" string="true">a.json</｜DSML｜parameter></｜DSML｜invoke>',

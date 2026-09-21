@@ -8,6 +8,7 @@ import type {
   SessionMessageRecord,
   SessionRecord,
 } from "@openharness/protocol";
+import { isPublicTextPart, publicTextFromParts } from "./transcript-text.js";
 
 export type SessionExportFormat = "md" | "json";
 
@@ -36,16 +37,13 @@ function partsForMessage(
 }
 
 function textFromParts(parts: SessionMessagePartRecord[]): string {
-  return parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text ?? "")
-    .join("");
+  return publicTextFromParts(parts);
 }
 
 function markdownFromParts(parts: SessionMessagePartRecord[]): string {
   return parts
     .flatMap((part) => {
-      if (part.type === "text") {
+      if (isPublicTextPart(part)) {
         return part.text ? [part.text] : [];
       }
       if (part.type === "attachment") {

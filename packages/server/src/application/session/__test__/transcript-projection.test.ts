@@ -611,6 +611,25 @@ describe("SessionTranscriptProjection", () => {
     }));
   });
 
+  it("starts a new reasoning part when the source changes", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+    projection.projectStreamEvent(state, { type: "reasoning_delta", delta: "think", source: "think" });
+    projection.projectStreamEvent(state, { type: "reasoning_delta", delta: "replay", source: "reasoning_content" });
+    projection.projectStreamEvent(state, { type: "reasoning_delta", delta: "more", source: "think" });
+
+    expect(store.upsertMessagePart.mock.calls
+      .map(([part]) => part)
+      .filter((part) => part.type === "reasoning")
+      .map((part) => [part.status, part.metadata?.source]))
+      .toEqual([
+        ["running", "think"], ["completed", undefined],
+        ["running", "reasoning_content"], ["completed", undefined],
+        ["running", "think"],
+      ]);
+  });
+
   it("closes the reasoning part when text starts and opens a new one later", () => {
     const store = createStore();
     const projection = new SessionTranscriptProjection(store);

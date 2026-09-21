@@ -10,6 +10,15 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-21-reasoning-visibility-design.md`
 
+## 合并后修订：统一文本出口与来源边界
+
+现有任务已合并。本次追加工作按下面顺序执行，沿用现有测试工具，不重复跑全量套件：
+
+1. 在 server 会话层新增唯一的正文 part 读取函数（只取 `type === "text"`）。让运行结果、运行后个人化与会话记忆、导出、agent transcript 重建和会话维护复用它；各出口保留原有的连接符与角色选择。先给运行结果和运行后维护加含 reasoning 的失败用例，再实现共用规则。
+2. 给投影状态记录当前 reasoning part 来源。来源变化时关闭旧 part、打开带新 `metadata.source` 的 part，并让该事件经过事务。定向测试连续的 `think → reasoning_content → think`，验证 part 顺序、来源及重建后的 `reasoningReplay`。
+3. core 消息保留带来源的 `reasoningSegments`；压缩重写优先按分段还原，兼容缺少分段的旧消息。定向测试混合来源的重写与重建往返。
+4. 运行受影响的 server 定向测试及根类型检查；核对 diff 中没有改动无关的桌面 sidebar 文件。
+
 ## Global Constraints
 
 - 思考内容**不硬截断**回传与落盘；只有展示层 20000 字符上限与落盘 1000000 字符安全阀。

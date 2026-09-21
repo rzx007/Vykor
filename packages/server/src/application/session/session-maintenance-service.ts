@@ -19,6 +19,7 @@ import { estimateCostUsd } from "../../shared/usage.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import type { ContextUsageCache } from "../context-usage-cache.js";
 import type { SessionContextUsageAgent } from "../assemble-session-context-usage.js";
+import { isPublicTextPart } from "../../session/transcript-text.js";
 
 export class SessionMaintenanceError extends ApplicationError {
   constructor(status: 400 | 404 | 409 | 501, message: string) {
@@ -334,7 +335,7 @@ function transcriptToPersonalizationMessages(
     .map((message) => {
       const content = (partsByMessage.get(message.id) ?? [])
         .sort((a, b) => a.seq - b.seq)
-        .filter((part) => part.type !== "reasoning")
+        .filter(isPublicTextPart)
         .map((part) => part.text)
         .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
         .join("\n");

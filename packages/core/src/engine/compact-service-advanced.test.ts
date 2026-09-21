@@ -7,6 +7,20 @@ import {
 } from "./compact-service.js";
 import type { Message, StreamEvent, IHookExecutor, HookResult } from "../index.js";
 
+it("counts replayable reasoning but not display-only think text", () => {
+  const service = new CompactService();
+  const base: Message = { type: "assistant", content: "answer" };
+  const baseline = service.estimateTokens([base]);
+  const thinkOnly = service.estimateTokens([{ ...base, reasoning: "x".repeat(4000) }]);
+  const replay = service.estimateTokens([{
+    ...base,
+    reasoning: "x".repeat(8000),
+    reasoningReplay: "x".repeat(4000),
+  }]);
+  expect(thinkOnly).toBe(baseline);
+  expect(replay).toBeGreaterThan(baseline + 500);
+});
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------

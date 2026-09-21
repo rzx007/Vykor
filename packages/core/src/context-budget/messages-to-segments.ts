@@ -42,7 +42,7 @@ function resolveBucket(msg: Message, messages: Message[], index: number): Contex
 }
 
 function assistantText(msg: Extract<Message, { type: "assistant" }>): string {
-  let text = msg.content;
+  let text = msg.content + (msg.reasoningReplay ?? "");
   if (msg.toolUses?.length) {
     for (const toolUse of msg.toolUses) {
       text += toolUse.name + JSON.stringify(toolUse.input);

@@ -165,3 +165,16 @@ test("drops reasoning items when showReasoning is false", () => {
 
   expect(bucketToTranscript(value, { showReasoning: false })).toEqual([]);
 });
+
+test("hides only reasoning when assistant text and reasoning are interleaved", () => {
+  const value = bucket(
+    [input("i1", 1, "问题")],
+    [message("m1", 2, "assistant")],
+    [reasoningPart("m1", 1, "先想"), part("m1", 2, "答案")],
+  );
+
+  expect(bucketToTranscript(value, { showReasoning: false }))
+    .toEqual([expect.objectContaining({ role: "assistant", text: "答案" })]);
+  expect(bucketToTranscript(value, { showReasoning: true }).map((item) => item.role))
+    .toEqual(["reasoning", "assistant"]);
+});

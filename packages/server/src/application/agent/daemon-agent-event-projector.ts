@@ -436,7 +436,9 @@ export class DaemonAgentEventProjector {
       (stream.type === "text_delta" &&
         this.context.transcriptProjection.hasOpenTextPart(state) &&
         state.activeReasoningPartId === undefined) ||
-      (stream.type === "reasoning_delta" && state.activeReasoningPartId !== undefined);
+      (stream.type === "reasoning_delta" &&
+        state.activeReasoningPartId !== undefined &&
+        state.activeReasoningSource === stream.source);
     const before = direct ? undefined : this.context.events.checkpoint();
     let applied: ReturnType<SessionTranscriptProjection["projectStreamEvent"]>;
     try {

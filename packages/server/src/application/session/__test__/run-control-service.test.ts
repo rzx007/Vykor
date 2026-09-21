@@ -393,6 +393,7 @@ describe("RunControlService", () => {
     ]);
     messageParts.set("s1", [
       { id: "p1", sessionId: "s1", messageId: "m1", type: "text", text: "Hello world", status: "completed", createdAt: 1, updatedAt: 1 },
+      { id: "p2", sessionId: "s1", messageId: "m1", type: "reasoning", text: "private reasoning", status: "completed", createdAt: 1, updatedAt: 1 },
     ]);
 
     const service = new RunControlService(options);

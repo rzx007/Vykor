@@ -3,6 +3,15 @@ import { describe, expect, it } from "vitest";
 import { messagesToLedgerSegments } from "./messages-to-segments.js";
 
 describe("messagesToLedgerSegments", () => {
+  it("includes replayable reasoning without counting display-only think text", () => {
+    const segments = messagesToLedgerSegments([{
+      type: "assistant",
+      content: "answer",
+      reasoning: "think and replay",
+      reasoningReplay: "replay",
+    }]);
+    expect(segments[0]?.text).toBe("answerreplay");
+  });
   it("routes compactRole summary to summary bucket and boundary to conversation", () => {
     const segments = messagesToLedgerSegments([
       { type: "assistant", content: "Summary: did stuff", compactRole: "summary" },

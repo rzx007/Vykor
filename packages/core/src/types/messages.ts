@@ -21,6 +21,8 @@ export interface AssistantMessage {
   reasoning?: string;
   /** 仅当上游用 reasoning_content 提供思考内容时存在，用于回传。 */
   reasoningReplay?: string;
+  /** 来源及顺序，供压缩重写 transcript 时无损还原。 */
+  reasoningSegments?: Array<{ source: "reasoning_content" | "think"; text: string }>;
   /** 压缩摘要消息；不改变发给模型的 content。 */
   compactRole?: CompactRole;
 }

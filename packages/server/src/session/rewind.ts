@@ -8,6 +8,7 @@ import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
 } from "@openharness/protocol";
+import { publicTextFromParts } from "./transcript-text.js";
 
 export interface RewindTranscriptResult {
   kept: ReplaceTranscriptMessageInput[];
@@ -16,11 +17,7 @@ export interface RewindTranscriptResult {
 }
 
 function userText(parts: SessionMessagePartRecord[]): string {
-  return parts
-    .filter((part) => part.type === "text" || part.type === "reasoning")
-    .map((part) => part.text ?? "")
-    .join("")
-    .trim();
+  return publicTextFromParts(parts).trim();
 }
 
 function toReplaceInput(

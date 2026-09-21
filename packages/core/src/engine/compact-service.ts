@@ -1102,7 +1102,7 @@ export class CompactService {
 
   /**
    * 保守估算消息列表占用的 token 数。
-   * - assistant：正文 + 每个 tool_use 的 name / input
+   * - assistant：正文 + 可回传的 reasoning + 每个 tool_use 的 name / input
    * - 其它：字符串 content，或遍历 text / image block
    * 最后乘 TOKEN_ESTIMATION_PADDING 并向上取整。
    */
@@ -1111,6 +1111,7 @@ export class CompactService {
     for (const msg of messages) {
       if (msg.type === "assistant") {
         total += estimateTokens(msg.content);
+        if (msg.reasoningReplay) total += estimateTokens(msg.reasoningReplay);
         if (msg.toolUses) {
           for (const tu of msg.toolUses) {
             total += estimateTokens(tu.name);

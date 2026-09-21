@@ -45,6 +45,32 @@ function projectorStore(flat: Record<string, any>) {
 }
 
 describe("DaemonAgentEventProjector", () => {
+  it("projects reasoning events and transacts when their source changes", async () => {
+    const transaction = vi.fn((work: () => unknown) => work());
+    const projectStreamEvent = vi.fn(() => ({}));
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({ transaction }),
+      transcriptProjection: { projectStreamEvent } as any,
+      executionProjector: {} as any,
+      liveChildren: {} as any,
+      events: { checkpoint: vi.fn(() => 1), publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+    const state = {
+      sessionId: "s1", runId: "r1", inputId: "i1", assistantTurnCompleted: false,
+      activeReasoningPartId: "part-1", activeReasoningSource: "think", toolParts: new Map(),
+    };
+    (projector as any).transcripts.set("r1", state);
+
+    await projector.apply(event("output.reasoning.delta", { delta: "replay", source: "reasoning_content" }, {
+      sessionId: "s1", runId: "r1",
+    }));
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(projectStreamEvent).toHaveBeenCalledWith(state, {
+      type: "reasoning_delta", delta: "replay", source: "reasoning_content",
+    });
+  });
   it("records a failed child startup run without ending the root run", async () => {
     const sessions = new Map<string, any>([["parent", { id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } } }]]);
     const inputs = new Map<string, any>();

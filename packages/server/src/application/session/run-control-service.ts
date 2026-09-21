@@ -11,6 +11,7 @@ import { sessionUserInputText } from "@openharness/protocol";
 import { AttachmentError } from "@openharness/services";
 import { normalizeTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
+import { isPublicTextPart } from "../../session/transcript-text.js";
 
 export interface RunControlDurableSessions {
   getSession(sessionId: string): { id: string; cwd?: string; status?: string } | undefined;
@@ -385,6 +386,7 @@ export class RunControlService {
           messageId: message.id,
         }),
       )
+      .filter(isPublicTextPart)
       .map((part) => {
         if (part.text) return part.text;
         if (part.output == null) return "";

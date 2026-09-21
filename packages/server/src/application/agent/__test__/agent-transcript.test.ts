@@ -431,4 +431,39 @@ describe("agent transcript codec", () => {
       ]),
     );
   });
+
+  it("preserves interleaved reasoning sources when replacing the transcript", () => {
+    const output = agentMessagesToTranscript([{
+      type: "assistant",
+      content: "answer",
+      reasoning: "thinkreplaymore",
+      reasoningReplay: "replay",
+      reasoningSegments: [
+        { source: "think", text: "think" },
+        { source: "reasoning_content", text: "replay" },
+        { source: "think", text: "more" },
+      ],
+    }]);
+    expect(output[0]!.parts.filter((part) => part.type === "reasoning")
+      .map((part) => [part.text, part.metadata?.source]))
+      .toEqual([["think", "think"], ["replay", "reasoning_content"], ["more", "think"]]);
+
+    const rebuilt = buildAgentTranscript(
+      [{ id: "m1", sessionId: "s1", seq: 1, role: "assistant", metadata: {} }] as any,
+      output[0]!.parts.map((part, index) => ({
+        ...part,
+        id: `p${index}`,
+        sessionId: "s1",
+        messageId: "m1",
+        seq: index,
+        metadata: part.metadata ?? {},
+      })) as any,
+    );
+    expect(rebuilt.messages[0]).toMatchObject({
+      type: "assistant",
+      content: "answer",
+      reasoning: "thinkreplaymore",
+      reasoningReplay: "replay",
+    });
+  });
 });
