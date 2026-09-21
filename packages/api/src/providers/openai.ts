@@ -180,7 +180,6 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       new Map();
     let finishReason: string | null = null;
     let usageData = { inputTokens: 0, outputTokens: 0 };
-    let collectedReasoning = "";
     // Buffer to strip inline <think>…</think> blocks across streaming chunks.
     let thinkBuf = "";
     let recoveredToolCalls: RecoveredToolCall[] = [];
@@ -193,7 +192,6 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       // Reset per-attempt accumulated state so a retry starts from a clean slate.
       collectedToolCalls.clear();
       finishReason = null;
-      collectedReasoning = "";
       thinkBuf = "";
       recoveredToolCalls = [];
       emittedAnyText = false;
@@ -249,7 +247,6 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
 
           const reasoningPiece = (delta as any).reasoning_content;
           if (reasoningPiece) {
-            collectedReasoning += reasoningPiece;
             yield {
               type: "reasoning_delta",
               delta: reasoningPiece,
