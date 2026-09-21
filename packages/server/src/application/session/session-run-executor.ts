@@ -69,7 +69,7 @@ export interface SessionRunExecutorContext {
   ) => Promise<void>;
   /** Re-read the cwd catalog before executing renderer-supplied Skill paths. */
   resolveSkillCatalog?(session: SessionRecord): Promise<SessionInputSkillCatalog>;
-  /** 无进展看门狗：超过该时长没有任何 run/task 更新就中断 run（默认 10 分钟）。 */
+  /** 无进展看门狗：超过该时长没有记录更新且没有运行中的任务或工具时中断 run（默认 10 分钟）。 */
   stallTimeoutMs?: number;
   /** 无进展看门狗检查周期（默认 30 秒）。 */
   stallCheckIntervalMs?: number;
@@ -273,6 +273,15 @@ export class SessionRunExecutor {
           this.context.data.runs
             .listSessionTasks(sessionId)
             .some((task) => Boolean(task.childSessionId) && task.status === "running"),
+        hasRunningTool: () => {
+          const messageIds = new Set(this.context.data.conversations
+            .listMessages(sessionId)
+            .filter((message) => message.runId === runId)
+            .map((message) => message.id));
+          return this.context.data.conversations
+            .listMessageParts(sessionId)
+            .some((part) => messageIds.has(part.messageId) && part.type === "tool" && part.status === "running");
+        },
         onStall: () => {
           this.context.data.runs.updateRun(runId, { metadata: { stalled: true } });
           void run

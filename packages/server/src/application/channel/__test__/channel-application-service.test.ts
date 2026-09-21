@@ -544,7 +544,7 @@ describe("ChannelApplicationService inbound attachments", () => {
     expect(fixture.downloadChannelAttachment).toHaveBeenCalledWith("msg-image", {
       type: "image",
       externalId: "img_v2_1",
-    });
+    }, expect.any(AbortSignal));
     expect(fixture.attachments.import).toHaveBeenCalledOnce();
     expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
       "s1",
@@ -573,7 +573,7 @@ describe("ChannelApplicationService inbound attachments", () => {
       type: "file",
       externalId: "file_v2_1",
       name: "report.pdf",
-    });
+    }, expect.any(AbortSignal));
     expect(fixture.sessions.admitPrompt).toHaveBeenCalledWith(
       "s1",
       expect.objectContaining({
@@ -602,6 +602,46 @@ describe("ChannelApplicationService inbound attachments", () => {
     await expect(service.handleMessage(imageInput())).rejects.toThrow("feishu 403");
     expect(fixture.attachments.import).not.toHaveBeenCalled();
     expect(fixture.sessions.admitPrompt).not.toHaveBeenCalled();
+  });
+
+  it("times out a stalled download and releases the conversation lane", async () => {
+    const fixture = createFixture();
+    fixture.downloadChannelAttachment.mockImplementation(() => new Promise(() => {}));
+    const service = new ChannelApplicationService({
+      sessionQueries: fixture.sessionQueries,
+      channels: fixture.channels as any,
+      sessionCommands: fixture.sessions as any,
+      sessionInteractions: fixture.sessions as any,
+      runControl: fixture.sessions as any,
+      log: fixture.log,
+      attachments: fixture.attachments as any,
+      downloadChannelAttachment: fixture.downloadChannelAttachment as any,
+      inboundAttachmentTimeoutMs: 20,
+    });
+    const first = service.handleMessage(imageInput());
+    const second = service.handleMessage(imageInput({ externalMessageId: "msg-next", content: "next", metadata: {} }));
+    await expect(first).rejects.toThrow("timed out");
+    await expect(second).resolves.toBeDefined();
+    expect(fixture.log).toHaveBeenCalledWith(expect.objectContaining({ event: "channel.attachment.timeout" }));
+  });
+
+  it("aborts a stalled attachment import and releases the conversation lane", async () => {
+    const fixture = createFixture();
+    fixture.attachments.import.mockImplementation(({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    const service = new ChannelApplicationService({
+      sessionQueries: fixture.sessionQueries, channels: fixture.channels as any,
+      sessionCommands: fixture.sessions as any, sessionInteractions: fixture.sessions as any,
+      runControl: fixture.sessions as any, log: fixture.log,
+      attachments: fixture.attachments as any,
+      downloadChannelAttachment: fixture.downloadChannelAttachment as any,
+      inboundAttachmentTimeoutMs: 20,
+    });
+    const first = service.handleMessage(imageInput());
+    const second = service.handleMessage(imageInput({ externalMessageId: "msg-next", content: "next", metadata: {} }));
+    await expect(first).rejects.toThrow("timed out");
+    await expect(second).resolves.toBeDefined();
   });
 
   it("fails the whole message when import rejects (e.g. attachment_too_large)", async () => {
@@ -654,7 +694,7 @@ describe("ChannelApplicationService inbound attachments", () => {
     expect(fixture.downloadChannelAttachment).toHaveBeenCalledWith("msg-image", {
       type: "image",
       externalId: "img_v2_1",
-    });
+    }, expect.any(AbortSignal));
     expect(fixture.attachments.import).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.any(Object) }),
     );

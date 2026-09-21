@@ -450,6 +450,19 @@ function makeDownloadAdapter(result?: {
 }
 
 describe("FeishuAdapter.downloadAttachment (inbound attachment download)", () => {
+  it("destroys a download stream that arrives after cancellation", async () => {
+    const { adapter, get } = makeDownloadAdapter();
+    const source = new Readable({ read() {} });
+    let respond!: (value: unknown) => void;
+    get.mockImplementation(() => new Promise((resolve) => { respond = resolve; }) as never);
+    const controller = new AbortController();
+    const download = adapter.downloadAttachment({ messageId: "m", fileKey: "k", type: "file", signal: controller.signal });
+    controller.abort(new Error("cancelled"));
+    respond({ getReadableStream: () => source, headers: {} });
+    await expect(download).rejects.toThrow("cancelled");
+    expect(source.destroyed).toBe(true);
+  });
+
   it("downloads an image via im.messageResource.get with type=image", async () => {
     const { adapter, get } = makeDownloadAdapter({
       headers: { "content-type": "image/png", "content-length": "3" },

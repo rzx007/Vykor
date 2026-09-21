@@ -11,13 +11,14 @@ export interface RunStallWatchdogOptions {
   readActivity(): { runUpdatedAt: number; taskUpdatedAt: number }
   hasPendingPermission(): boolean
   hasRunningChildTask(): boolean
+  hasRunningTool(): boolean
   onStall(): void
   log?(message: string): void
 }
 
 /**
  * run 无进展看门狗：只在「run 与关联 task 都没有更新」且没有等待用户授权、
- * 没有运行中的子任务时判停。触发一次后自我 dispose，避免重复中断。
+ * 没有运行中的子任务或工具时判停。触发一次后自我 dispose，避免重复中断。
  */
 export class RunStallWatchdog {
   private handle?: ReturnType<typeof setInterval>
@@ -46,7 +47,7 @@ export class RunStallWatchdog {
         return
       }
       if (now - this.lastActivityAt < this.options.staleMs) return
-      if (this.options.hasPendingPermission() || this.options.hasRunningChildTask()) {
+      if (this.options.hasPendingPermission() || this.options.hasRunningChildTask() || this.options.hasRunningTool()) {
         this.lastActivityAt = now
         return
       }

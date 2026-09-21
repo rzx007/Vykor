@@ -464,6 +464,30 @@ describe("SessionRunExecutor", () => {
     handle.complete();
     await execution;
   });
+
+  it("keeps a run alive while its tool is running without new writes", async () => {
+    const store = createStore();
+    const updatedAt = Date.now();
+    store.data.conversations.listMessages = vi.fn(() => [{ id: "message-1", runId: "run-1", updatedAt } as never]);
+    store.data.conversations.listMessageParts = vi.fn(() => [{ messageId: "message-1", type: "tool", status: "running" } as never]);
+    const handle = deferredHandle();
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => handle }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+      stallTimeoutMs: 20, stallCheckIntervalMs: 5,
+    });
+    const execution = executor.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(handle.interrupt).not.toHaveBeenCalled();
+    handle.complete();
+    await execution;
+  });
 });
 
 function capabilitySnapshot(

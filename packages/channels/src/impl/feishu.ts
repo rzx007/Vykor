@@ -378,6 +378,7 @@ export class FeishuAdapter implements ChannelAdapter {
     messageId: string;
     fileKey: string;
     type: "image" | "file";
+    signal?: AbortSignal;
   }): Promise<{ stream: ReadableStream<Uint8Array>; mimeType?: string; sizeBytes?: number }> {
     if (!this.client) {
       throw new Error("Feishu client not connected");
@@ -386,8 +387,18 @@ export class FeishuAdapter implements ChannelAdapter {
       params: { type: input.type },
       path: { message_id: input.messageId, file_key: input.fileKey },
     });
+    if (input.signal?.aborted) {
+      (response.getReadableStream() as Readable).destroy();
+      throw input.signal.reason;
+    }
+    const source = response.getReadableStream() as Readable;
+    if (input.signal) {
+      const abort = () => source.destroy();
+      input.signal.addEventListener("abort", abort, { once: true });
+      source.once("close", () => input.signal?.removeEventListener("abort", abort));
+    }
     const stream = Readable.toWeb(
-      response.getReadableStream() as Readable,
+      source,
     ) as ReadableStream<Uint8Array>;
     const headers = response.headers ?? {};
     const mimeType = headers["content-type"] ?? headers["Content-Type"];

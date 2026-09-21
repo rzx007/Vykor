@@ -66,9 +66,11 @@ export interface ChannelApplicationServiceContext {
   runControl: Pick<RunControlService, "awaitRun">;
   log(event: ObservabilityEvent): void;
   attachments: Pick<AttachmentImportPort, "import">;
+  inboundAttachmentTimeoutMs?: number;
   downloadChannelAttachment(
     messageId: string,
     attachment: { type: "image" | "file"; externalId: string; name?: string },
+    signal?: AbortSignal,
   ): Promise<ChannelAttachmentDownload | undefined> | ChannelAttachmentDownload | undefined;
 }
 
@@ -78,6 +80,7 @@ export interface AttachmentImportPort {
     displayName: string;
     declaredMediaType?: string;
     content: ReadableStream<Uint8Array>;
+    signal?: AbortSignal;
   }): Promise<{ id: string }>;
 }
 
@@ -248,34 +251,50 @@ export class ChannelApplicationService {
 
     const resolved: AdmitPromptAttachmentInput[] = [];
     for (const descriptor of descriptors) {
-      const download = await this.context.downloadChannelAttachment(
-        input.externalMessageId,
-        descriptor,
-      );
-      if (!download) {
-        throw new ApplicationError(
-          502,
-          `Channel attachment download unavailable for ${input.externalMessageId}/${descriptor.externalId}`,
-        );
-      }
-      // 飞书文件的实际文件名在 descriptor.name（file_name）；adapter 不返回 name。
-      const displayName = descriptor.name ?? download.name ?? descriptor.externalId;
-      let asset: { id: string };
+      const controller = new AbortController();
+      const timeoutError = new ApplicationError(504, `Channel attachment timed out for ${input.externalMessageId}/${descriptor.externalId}`);
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
-        asset = await this.context.attachments.import({
-          displayName,
-          ...(download.mimeType ? { declaredMediaType: download.mimeType } : {}),
-          content: download.stream,
+        const deadline = new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            controller.abort();
+            reject(timeoutError);
+          }, this.context.inboundAttachmentTimeoutMs ?? 2 * 60_000);
+          timeout.unref?.();
         });
+        const transfer = async () => {
+          const download = await this.context.downloadChannelAttachment(input.externalMessageId, descriptor, controller.signal);
+          if (!download) throw new ApplicationError(502, `Channel attachment download unavailable for ${input.externalMessageId}/${descriptor.externalId}`);
+          if (controller.signal.aborted) {
+            void download.stream.cancel().catch(() => undefined);
+            throw timeoutError;
+          }
+          const displayName = descriptor.name ?? download.name ?? descriptor.externalId;
+          let asset: { id: string };
+          try {
+            asset = await this.context.attachments.import({
+              displayName,
+              ...(download.mimeType ? { declaredMediaType: download.mimeType } : {}),
+              content: download.stream,
+              signal: controller.signal,
+            });
+          } catch (error) {
+            if (controller.signal.aborted) throw timeoutError;
+            const message = error instanceof Error ? error.message : String(error);
+            throw new ApplicationError(422, `Channel attachment import failed: ${message}`);
+          }
+          return { assetId: asset.id, intent: descriptor.type === "image" ? "vision" as const : "tool_resource" as const, displayName };
+        };
+        resolved.push(await Promise.race([transfer(), deadline]));
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new ApplicationError(422, `Channel attachment import failed: ${message}`);
+        if (controller.signal.aborted) {
+          this.context.log({ level: "warn", event: "channel.attachment.timeout", requestId: inputId, error: timeoutError.message });
+          throw timeoutError;
+        }
+        throw error;
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
-      resolved.push({
-        assetId: asset.id,
-        intent: descriptor.type === "image" ? "vision" : "tool_resource",
-        displayName,
-      });
     }
     return resolved;
   }

@@ -43,6 +43,7 @@ export interface ChannelAttachmentDownloadInput {
   type: "image" | "file";
   externalId: string;
   name?: string;
+  signal?: AbortSignal;
 }
 
 /** 一个 connector 的运行时句柄；由 createRuntime 返回。 */
@@ -161,10 +162,11 @@ export class ChannelRuntimeService {
   async downloadAttachment(
     messageId: string,
     attachment: Omit<ChannelAttachmentDownloadInput, "messageId">,
+    signal?: AbortSignal,
   ): Promise<ChannelAttachmentDownload | undefined> {
     const downloader = this.attachmentDownloader;
     if (!downloader) return undefined;
-    return downloader({ ...attachment, messageId });
+    return downloader({ ...attachment, messageId, signal });
   }
 
   status(): ChannelRuntimeStatus {
@@ -554,6 +556,7 @@ export class ChannelRuntimeService {
           messageId: download.messageId,
           fileKey: download.externalId,
           type: download.type,
+          signal: download.signal,
         }),
       stop: async () => {
         await bridge.stop();

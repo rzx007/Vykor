@@ -412,6 +412,12 @@ export class DaemonApplication implements DurableAgentApplication {
         settings: options.settings,
         getSettings: options.getSettings,
         getSettingsForCwd: options.getSettingsForCwd,
+        onSettingsReloadError: (sessionId, error) => options.log({
+          level: "warn",
+          event: "settings.reload.failed",
+          sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
         getSession: (id) => store.sessions.get(id),
         resolveReasoningEfforts: async ({ provider, model }) => {
           if (!provider || !model) return undefined;
@@ -801,8 +807,8 @@ export class DaemonApplication implements DurableAgentApplication {
         runControl: this.runControl,
         log: options.log,
         attachments: this.attachments,
-        downloadChannelAttachment: (messageId, attachment) =>
-          this.channelRuntime?.downloadAttachment(messageId, attachment),
+        downloadChannelAttachment: (messageId, attachment, signal) =>
+          this.channelRuntime?.downloadAttachment(messageId, attachment, signal),
       });
       if (options.channelConfigStore) {
         const channelConfig = options.channelConfigStore;
