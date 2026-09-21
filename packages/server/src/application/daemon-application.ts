@@ -37,6 +37,7 @@ import {
 import { AttachmentService } from "./attachments/attachment-service.js";
 import { catalogModelReasoningEfforts } from "./default-services/catalog-provider-mapping.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
+import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
 import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
 import { DaemonJobService } from "../jobs/daemon-job-service.js";
@@ -161,6 +162,8 @@ export interface DurableAgentApplication {
   readonly channelOnboarding?: ChannelOnboardingService;
   readonly workflows: SessionWorkflowRunRepository;
   readonly retention: ApplicationRetentionService;
+  /** Process-wide coordinator for OAuth-driven MCP Runtime reconnects. */
+  readonly mcpRuntimes: McpRuntimeConnectionCoordinator;
   ready(): Promise<void>;
   close(): Promise<void>;
 }
@@ -198,6 +201,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly channelOnboarding?: ChannelOnboardingService;
   readonly workflows: SessionWorkflowRunRepository;
   readonly retention: ApplicationRetentionService;
+  readonly mcpRuntimes: McpRuntimeConnectionCoordinator;
   private readonly attachmentResources: SessionAttachmentResources;
   private readonly modelCatalog: ReturnType<typeof createModelCatalogService>;
 
@@ -222,6 +226,7 @@ export class DaemonApplication implements DurableAgentApplication {
   constructor(private readonly options: DaemonApplicationOptions) {
     const { store } = options;
     this.store = store;
+    this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
     this.modelCatalog = createModelCatalogService();
     // 同一份会话库同时只允许一个 daemon 当主人。心跳断了，别人才能接管。
     this.ownerLease = store.acquireApplicationOwner({
@@ -409,6 +414,7 @@ export class DaemonApplication implements DurableAgentApplication {
           return catalogModelReasoningEfforts(catalog, provider, model);
         },
         createAgent: options.createAgent,
+        mcpRuntimeRegistry: this.mcpRuntimes,
         acquireEnvironment: acquireSessionEnvironment,
         createTerminal:
           options.createTerminal ??

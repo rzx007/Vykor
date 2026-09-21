@@ -1,5 +1,20 @@
-import type { McpServerConfig, RuntimeBundle, Settings } from "@openharness/core";
-import { McpClientManager, McpOAuthRuntime } from "@openharness/mcp";
+import { randomUUID } from "node:crypto";
+import type {
+  ActiveMcpRuntimeHandle,
+  McpRuntimeRegistry,
+  McpServerConfig,
+  McpServerIdentity,
+  RuntimeBundle,
+  Settings,
+  ToolDefinition,
+} from "@openharness/core";
+import {
+  createMcpServerIdentity,
+  McpClientManager,
+  McpOAuthRuntime,
+  resolveMcpAuthMode,
+  resolveMcpOAuthStatus,
+} from "@openharness/mcp";
 import { McpOAuthCredentialStore } from "@openharness/auth";
 import { getAllAgentDefinitions } from "@openharness/coordinator";
 import { appendUserProfileUpdate } from "@openharness/prompts";
@@ -27,6 +42,8 @@ export interface InstallRuntimeIntegrationsOptions {
   mcpServers?: Record<string, McpServerConfig>;
   memory?: AgentMemoryRuntime;
   executionEnvironment?: ExecutionEnvironmentHandle;
+  /** Host-owned registry used to coordinate OAuth-driven Runtime reconnects. */
+  mcpRuntimeRegistry?: McpRuntimeRegistry;
 }
 
 /** Install integrations that need a fully constructed RuntimeBundle. */
@@ -51,8 +68,9 @@ export async function installRuntimeIntegrations(
   });
   await installProgrammaticExtensions(options);
 
+  const credentialStore = new McpOAuthCredentialStore();
   const mcpOAuthRuntime = new McpOAuthRuntime({
-    store: new McpOAuthCredentialStore(),
+    store: credentialStore,
   });
   const mcpManager = new McpClientManager({
     cwd: options.executionEnvironment?.workspace.executionRoot ?? options.cwd,
@@ -66,44 +84,96 @@ export async function installRuntimeIntegrations(
     options.mcpServers ?? options.discovery.mcpServers,
     options.executionEnvironment?.info,
   );
-  if (Object.keys(mcpServers).length > 0) {
-    await mcpManager.connectAll(mcpServers);
+
+  const runtimeRegistry = options.mcpRuntimeRegistry;
+  const identityFor = (name: string): McpServerIdentity | undefined => {
+    const config = mcpServers[name];
+    return config ? createMcpServerIdentity(name, config) : undefined;
+  };
+  const executionFor = (name: string): ToolDefinition["execution"] => {
+    const server = mcpServers[name];
+    return server?.type === "http" || server?.type === "sse"
+      ? { domain: "control_plane", supportedEnvironments: ["local", "wsl"], network: true }
+      : { domain: "environment", supportedEnvironments: ["local", "wsl"] };
+  };
+  const commitMcpTools = (name: string, tools: ToolDefinition[]): void => {
+    runtime.toolRegistry.replaceBySource(
+      { kind: "mcp", id: name },
+      tools.map((tool) => ({ ...tool, execution: executionFor(name) })),
+    );
+  };
+  const connectionErrors = new Map<string, string>();
+
+  // Publish a prepared connection only when its generation is still current.
+  // The generation is checked again after staging, right before the atomic
+  // activation, so a concurrent logout can never publish a stale connection.
+  const stageAndActivate = async (
+    name: string,
+    config: McpServerConfig,
+    identity: McpServerIdentity | undefined,
+    generation: number,
+  ): Promise<void> => {
+    let prepared;
+    try {
+      prepared = await mcpManager.prepareConnection(name, config);
+    } catch (error) {
+      // Connection setup failures are isolated per server and never fatal.
+      throw new McpConnectionStageError(error);
+    }
+    if (runtimeRegistry && identity && runtimeRegistry.currentGeneration(identity) !== generation) {
+      await prepared.client.close().catch(() => undefined);
+      return;
+    }
+    const activation = mcpManager.activatePreparedConnection(prepared, (tools) =>
+      commitMcpTools(name, tools),
+    );
+    if (!activation.committed) {
+      await activation.discardPrepared().catch(() => undefined);
+      // A tool-commit conflict is a configuration error and stays fatal.
+      throw activation.error;
+    }
+    await activation.closePrevious();
+  };
+
+  const disconnectServer = async (name: string): Promise<void> => {
+    runtime.toolRegistry.replaceBySource({ kind: "mcp", id: name }, []);
+    await mcpManager.disconnect(name);
+  };
+
+  if (runtimeRegistry) {
+    const unregister = runtimeRegistry.register(createMcpRuntimeHandle({
+      sessionId: options.sessionId,
+      identityFor,
+      mcpServers,
+      mcpManager,
+      credentialStore,
+      stageAndActivate,
+      disconnectServer,
+      registry: runtimeRegistry,
+    }));
+    runtime.addCleanup(() => unregister());
   }
-  const registeredMcpToolNames: string[] = [];
-  const mcpToolOwners = new Map(
-    mcpManager.getConnectedTools().map((tool) => [
-      `mcp__${tool.serverName}__${tool.name}`,
-      tool.serverName,
-    ]),
+
+  await Promise.all(
+    Object.entries(mcpServers).map(async ([name, config]) => {
+      const identity = identityFor(name);
+      const generation = runtimeRegistry && identity
+        ? runtimeRegistry.currentGeneration(identity)
+        : 0;
+      try {
+        await stageAndActivate(name, config, identity, generation);
+      } catch (error) {
+        if (error instanceof McpConnectionStageError) {
+          connectionErrors.set(name, error.message);
+          // Keep the failed attempt observable for plugin readiness diagnostics.
+          mcpManager.recordFailedConnection(name, config, error.cause);
+          return;
+        }
+        throw error;
+      }
+    }),
   );
-  try {
-    for (const tool of mcpManager.getAsToolDefinitions()) {
-      const serverName = mcpToolOwners.get(tool.name);
-      const server = serverName ? mcpServers[serverName] : undefined;
-      runtime.toolRegistry.register({
-        ...tool,
-        execution: server?.type === "http" || server?.type === "sse"
-          ? {
-              domain: "control_plane",
-              supportedEnvironments: ["local", "wsl"],
-              network: true,
-            }
-          : {
-              domain: "environment",
-              supportedEnvironments: ["local", "wsl"],
-            },
-      }, {
-        kind: "mcp",
-        ...(serverName ? { id: serverName } : {}),
-      });
-      registeredMcpToolNames.push(tool.name);
-    }
-  } catch (error) {
-    for (const name of registeredMcpToolNames) {
-      runtime.toolRegistry.unregister?.(name);
-    }
-    throw error;
-  }
+
   runtime.queryEngine.setMcpManager(mcpManager);
   runtime.queryEngine.setMcpAuth(
     createMcpAuthHost({
@@ -165,7 +235,7 @@ export async function installRuntimeIntegrations(
         if (owner !== pluginId) continue;
         const connection = mcpManager.getConnection(serverName);
         if (connection?.status !== "connected") {
-          errors.push(`MCP ${serverName}: ${connection?.error?.message ?? "server is not connected in this environment"}`);
+          errors.push(`MCP ${serverName}: ${connection?.error?.message ?? connectionErrors.get(serverName) ?? "server is not connected in this environment"}`);
         } else {
           for (const error of [connection.toolError, connection.resourceError]) {
             if (error) errors.push(`MCP ${serverName}: ${error.message}`);
@@ -211,6 +281,71 @@ async function installProgrammaticExtensions(options: InstallRuntimeIntegrations
       throw error;
     }
   }
+}
+
+/** Marks a per-server connection setup failure so it can be isolated. */
+class McpConnectionStageError extends Error {
+  constructor(readonly cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "McpConnectionStageError";
+  }
+}
+
+/** @internal Exposed for focused tests of the Runtime handle contract. */
+export interface CreateMcpRuntimeHandleInput {
+  sessionId: string;
+  identityFor(name: string): McpServerIdentity | undefined;
+  mcpServers: Record<string, McpServerConfig>;
+  mcpManager: McpClientManager;
+  credentialStore: McpOAuthCredentialStore;
+  registry: McpRuntimeRegistry;
+  stageAndActivate(
+    name: string,
+    config: McpServerConfig,
+    identity: McpServerIdentity | undefined,
+    generation: number,
+  ): Promise<void>;
+  disconnectServer(name: string): Promise<void>;
+}
+
+/**
+ * Build the narrow Runtime handle the coordinator drives.
+ *
+ * `synchronize` never trusts a login/logout intent: it re-reads the shared
+ * credential store's final state after acquiring the identity lock and then
+ * reconnects or disconnects accordingly.
+ */
+export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): ActiveMcpRuntimeHandle {
+  return {
+    runtimeId: `${input.sessionId}:${randomUUID()}`,
+    identity: (name) => input.identityFor(name),
+    getStatus: (identity) => {
+      const connection = input.mcpManager.getConnection(identity.name);
+      if (!connection) return "disconnected";
+      if (connection.status === "connected") return "connected";
+      if (connection.status === "error") return "error";
+      return "disconnected";
+    },
+    async synchronize(identity, generation) {
+      const config = input.mcpServers[identity.name];
+      const current = input.identityFor(identity.name);
+      if (!config || !current || current.endpointFingerprint !== identity.endpointFingerprint) return;
+      if (input.registry.currentGeneration(identity) !== generation) return;
+
+      const credential = await input.credentialStore.get(identity.name);
+      if (resolveMcpAuthMode(config, credential) !== "oauth") return;
+
+      const status = resolveMcpOAuthStatus(config, credential);
+      const usable =
+        (status === "valid" || status === "expired-refreshable") &&
+        credential?.serverUrl === config.url;
+      if (usable) {
+        await input.stageAndActivate(identity.name, config, identity, generation);
+      } else {
+        await input.disconnectServer(identity.name);
+      }
+    },
+  };
 }
 
 export function selectMcpServersForEnvironment(

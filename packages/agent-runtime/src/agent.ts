@@ -13,6 +13,7 @@ import type {
   ContentBlock,
   HookDefinition,
   Message,
+  McpRuntimeRegistry,
   RuntimeBundle,
   RunCapabilityView,
   Settings,
@@ -65,6 +66,8 @@ export interface OpenHarnessAgentOptions extends OpenHarnessAgentConfiguration {
   mcpServers?: Settings["mcpServers"];
   extensions?: OpenHarnessAgentExtension[];
   childIdleTtlMs?: number;
+  /** Host-owned registry that coordinates OAuth-driven MCP Runtime reconnects. */
+  mcpRuntimeRegistry?: McpRuntimeRegistry;
   /** Reliable ordered host sink. A rejection fails the active framework operation. */
   onEvent?: AgentEventListener;
   /** 逐项替换或关闭默认能力；未传的项目继续使用各自默认值。 */

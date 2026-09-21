@@ -1,0 +1,188 @@
+import { describe, expect, it, vi } from "vitest";
+import type {
+  ActiveMcpRuntimeHandle,
+  McpRuntimeStatus,
+  McpServerIdentity,
+} from "@openharness/core";
+import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
+
+function identity(name: string, fingerprint: string): McpServerIdentity {
+  return {
+    name,
+    transport: "http",
+    endpoint: `https://${fingerprint}.test/mcp`,
+    endpointFingerprint: fingerprint,
+  };
+}
+
+function fakeHandle(options: {
+  runtimeId: string;
+  servers: Record<string, McpServerIdentity>;
+  statuses?: Record<string, McpRuntimeStatus>;
+  onSynchronize?: (identity: McpServerIdentity, generation: number) => Promise<void> | void;
+  delayMs?: number;
+}) {
+  const generations: number[] = [];
+  let concurrent = 0;
+  let maxConcurrent = 0;
+  const synchronize = vi.fn(async (target: McpServerIdentity, generation: number) => {
+    concurrent += 1;
+    maxConcurrent = Math.max(maxConcurrent, concurrent);
+    generations.push(generation);
+    try {
+      if (options.delayMs) await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+      await options.onSynchronize?.(target, generation);
+    } finally {
+      concurrent -= 1;
+    }
+  });
+  const handle: ActiveMcpRuntimeHandle = {
+    runtimeId: options.runtimeId,
+    identity: (name) => options.servers[name],
+    getStatus: (target) => options.statuses?.[target.name] ?? "connected",
+    synchronize,
+  };
+  return { handle, generations, synchronize, maxConcurrent: () => maxConcurrent };
+}
+
+describe("McpRuntimeConnectionCoordinator", () => {
+  it("returns unavailable when no Runtime participates", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const other = fakeHandle({ runtimeId: "r1", servers: { linear: identity("linear", "aaa") } });
+    coordinator.register(other.handle);
+
+    await expect(coordinator.getStatus(identity("linear", "bbb"))).resolves.toEqual({
+      status: "unavailable",
+      affectedRuntimes: 0,
+      failures: [],
+    });
+    await expect(coordinator.synchronize(identity("linear", "bbb"))).resolves.toEqual({
+      status: "unavailable",
+      affectedRuntimes: 0,
+      failures: [],
+    });
+    expect(other.synchronize).not.toHaveBeenCalled();
+  });
+
+  it("matches only the same name and endpoint fingerprint", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "same");
+    const match = fakeHandle({ runtimeId: "match", servers: { linear: target } });
+    const otherEndpoint = fakeHandle({ runtimeId: "endpoint", servers: { linear: identity("linear", "other") } });
+    const otherName = fakeHandle({ runtimeId: "name", servers: { github: target } });
+    coordinator.register(match.handle);
+    coordinator.register(otherEndpoint.handle);
+    coordinator.register(otherName.handle);
+
+    const result = await coordinator.synchronize(target);
+
+    expect(result.affectedRuntimes).toBe(1);
+    expect(match.synchronize).toHaveBeenCalledTimes(1);
+    expect(otherEndpoint.synchronize).not.toHaveBeenCalled();
+    expect(otherName.synchronize).not.toHaveBeenCalled();
+  });
+
+  it("keeps same-name different-endpoint runtimes isolated across projects", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const projectA = identity("linear", "project-a");
+    const projectB = identity("linear", "project-b");
+    const a = fakeHandle({ runtimeId: "a", servers: { linear: projectA } });
+    const b = fakeHandle({ runtimeId: "b", servers: { linear: projectB } });
+    coordinator.register(a.handle);
+    coordinator.register(b.handle);
+
+    await coordinator.synchronize(projectA);
+
+    expect(a.synchronize).toHaveBeenCalledTimes(1);
+    expect(b.synchronize).not.toHaveBeenCalled();
+  });
+
+  it("aggregates error over disconnected over connected", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "agg");
+    coordinator.register(fakeHandle({ runtimeId: "c", servers: { linear: target }, statuses: { linear: "connected" } }).handle);
+    coordinator.register(fakeHandle({ runtimeId: "d", servers: { linear: target }, statuses: { linear: "disconnected" } }).handle);
+
+    await expect(coordinator.getStatus(target)).resolves.toMatchObject({ status: "disconnected", affectedRuntimes: 2 });
+    await expect(coordinator.synchronize(target)).resolves.toMatchObject({ status: "disconnected" });
+
+    const errorCoordinator = new McpRuntimeConnectionCoordinator();
+    errorCoordinator.register(fakeHandle({ runtimeId: "c", servers: { linear: target }, statuses: { linear: "connected" } }).handle);
+    errorCoordinator.register(fakeHandle({ runtimeId: "e", servers: { linear: target }, statuses: { linear: "error" } }).handle);
+    await expect(errorCoordinator.synchronize(target)).resolves.toMatchObject({ status: "error" });
+  });
+
+  it("serializes synchronize per identity and increments generation", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "serial");
+    const handle = fakeHandle({ runtimeId: "r1", servers: { linear: target }, delayMs: 10 });
+    coordinator.register(handle.handle);
+
+    const first = coordinator.synchronize(target);
+    const second = coordinator.synchronize(target);
+    await Promise.all([first, second]);
+
+    expect(handle.generations).toEqual([1, 2]);
+    expect(handle.maxConcurrent()).toBe(1);
+  });
+
+  it("reports failures with runtime ids but keeps other runtimes", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "fail");
+    const failing = fakeHandle({
+      runtimeId: "failing",
+      servers: { linear: target },
+      statuses: { linear: "error" },
+      onSynchronize: () => { throw new Error("reconnect failed"); },
+    });
+    const healthy = fakeHandle({ runtimeId: "healthy", servers: { linear: target } });
+    coordinator.register(failing.handle);
+    coordinator.register(healthy.handle);
+
+    const result = await coordinator.synchronize(target);
+
+    expect(result.affectedRuntimes).toBe(2);
+    expect(result.failures).toEqual([{ runtimeId: "failing", message: "reconnect failed" }]);
+    expect(healthy.synchronize).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("error");
+  });
+
+  it("never lets an older generation synchronize overwrite a newer one", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "generation");
+    const seen: number[] = [];
+    const handle = fakeHandle({
+      runtimeId: "r1",
+      servers: { linear: target },
+      onSynchronize: async (_target, generation) => { seen.push(generation); },
+    });
+    coordinator.register(handle.handle);
+
+    await coordinator.synchronize(target);
+    await coordinator.synchronize(target);
+
+    expect(seen).toEqual([1, 2]);
+    expect(coordinator.currentGeneration(target)).toBe(2);
+  });
+
+  it("does not run synchronize during getStatus", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "readonly");
+    const handle = fakeHandle({ runtimeId: "r1", servers: { linear: target } });
+    coordinator.register(handle.handle);
+
+    await coordinator.getStatus(target);
+
+    expect(handle.synchronize).not.toHaveBeenCalled();
+  });
+
+  it("unregisters a handle when its cleanup runs", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "cleanup");
+    const handle = fakeHandle({ runtimeId: "r1", servers: { linear: target } });
+    const unregister = coordinator.register(handle.handle);
+
+    unregister();
+    await expect(coordinator.synchronize(target)).resolves.toMatchObject({ affectedRuntimes: 0, status: "unavailable" });
+  });
+});

@@ -259,6 +259,34 @@ export class McpClientManager {
   }
 
   /**
+   * Record a failed connection attempt so status and diagnostics stay
+   * observable without exposing any staged client or transport.
+   */
+  recordFailedConnection(
+    name: string,
+    config: McpServerConfig,
+    error: unknown,
+  ): McpConnection {
+    const kind = resolveTransportKind(config);
+    const transportKind: McpTransportKind = typeof kind === "string" ? kind : "stdio";
+    const connection: McpConnection = {
+      name,
+      config,
+      status: "error",
+      transport: transportKind,
+      authConfigured:
+        transportKind === "stdio"
+          ? !!config.env
+          : !!config.headers || (transportKind === "http" && !!this.options.oauthRuntime),
+      tools: [],
+      resources: [],
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+    this.connections.set(name, connection);
+    return connection;
+  }
+
+  /**
    * Atomically publish a prepared connection and commit its tools.
    *
    * The manager maps are switched, then `commitTools` runs synchronously, all

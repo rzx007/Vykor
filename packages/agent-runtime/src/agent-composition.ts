@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type {
   AgentSession,
+  McpRuntimeRegistry,
   McpServerConfig,
   RuntimeBundle,
   Settings,
@@ -50,6 +51,7 @@ interface AgentCompositionOptions extends OpenHarnessAgentConfiguration {
   mcpServers?: Record<string, McpServerConfig>;
   extensions?: OpenHarnessAgentExtension[];
   childIdleTtlMs?: number;
+  mcpRuntimeRegistry?: McpRuntimeRegistry;
   capabilityOverrides?: AgentCapabilityOverrides;
   effects?: AgentEffectOverrides;
 }
@@ -179,6 +181,7 @@ async function composeOpenHarnessAgentInternal(
     mcpServers: options.mcpServers,
     memory: environment.memory,
     executionEnvironment,
+    mcpRuntimeRegistry: options.mcpRuntimeRegistry,
   });
   const session = createAgentSession({
     queryEngine: runtime.queryEngine,

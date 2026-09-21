@@ -93,7 +93,11 @@ export type {
   McpRuntimeSyncResult,
   McpAuthServerSnapshot,
   McpRuntimeConnectionCoordinator,
+  ActiveMcpRuntimeHandle,
+  McpRuntimeRegistry,
 } from "./types/mcp-oauth";
+
+export { createUnavailableMcpRuntimeCoordinator } from "./mcp-runtime-coordinator";
 
 export type { UsageSnapshot, CostTracker as ICostTracker } from "./types/usage";
 

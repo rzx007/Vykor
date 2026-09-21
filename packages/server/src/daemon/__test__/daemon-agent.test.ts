@@ -78,6 +78,24 @@ describe("createDaemonAgentLoader", () => {
     });
   });
 
+  it("forwards the MCP runtime registry into Agent options", async () => {
+    const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
+    const createAgent = vi.fn(async () => agent);
+    const mcpRuntimeRegistry = {
+      register: vi.fn(() => () => undefined),
+      currentGeneration: vi.fn(() => 0),
+    };
+    const loader = createDaemonAgentLoader({
+      settings: { model: "default-model" } as any,
+      createAgent,
+      mcpRuntimeRegistry,
+    })!;
+
+    await loader({ session, history: [], parts: [] });
+
+    expect(createAgent.mock.calls[0]![0].options.mcpRuntimeRegistry).toBe(mcpRuntimeRegistry);
+  });
+
   it("acquires one daemon-owned environment lease before creating an Agent", async () => {
     const lease = { environmentId: "env-1", release: vi.fn(async () => {}) } as any;
     const acquireEnvironment = vi.fn(async () => lease);

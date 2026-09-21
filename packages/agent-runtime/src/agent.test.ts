@@ -163,33 +163,15 @@ describe("createDefaultNodeAgent", () => {
     expect(runtimeClose).toHaveBeenCalledOnce();
   });
 
-  it("disconnects manager-owned MCP resources when connection setup rejects", async () => {
+  it("isolates a failed MCP connection and records it without leaking resources", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
     tempDirs.push(cwd);
     const connectionError = new Error("MCP connection setup failed");
-    const resourceClose = vi.fn(async () => {});
     const runtimeClose = vi.spyOn(RuntimeBundle.prototype, "close");
-    vi.spyOn(McpClientManager.prototype, "connectAll").mockImplementationOnce(
-      async function (servers) {
-        const manager = this as unknown as {
-          connections: Map<string, unknown>;
-          clients: Map<string, { close(): Promise<void> }>;
-        };
-        manager.connections.set("partial", {
-          name: "partial",
-          config: servers.partial,
-          status: "connecting",
-          transport: "stdio",
-          authConfigured: false,
-          tools: [],
-          resources: [],
-        });
-        manager.clients.set("partial", { close: resourceClose });
-        throw connectionError;
-      },
-    );
+    const recordFailed = vi.spyOn(McpClientManager.prototype, "recordFailedConnection");
+    vi.spyOn(McpClientManager.prototype, "prepareConnection").mockRejectedValueOnce(connectionError);
 
-    const creation = createDefaultNodeAgent({
+    const agent = await createDefaultNodeAgent({
       cwd,
       settings: {
         apiKey: "test-key",
@@ -204,8 +186,12 @@ describe("createDefaultNodeAgent", () => {
       },
     });
 
-    await expect(creation).rejects.toBe(connectionError);
-    expect(resourceClose).toHaveBeenCalledOnce();
+    expect(recordFailed).toHaveBeenCalledWith("partial", expect.anything(), connectionError);
+    expect(agent.inspect().mcpServers).toEqual([
+      expect.objectContaining({ name: "partial", status: "error" }),
+    ]);
+    expect(runtimeClose).not.toHaveBeenCalled();
+    await agent.close();
     expect(runtimeClose).toHaveBeenCalledOnce();
   });
 
@@ -241,7 +227,18 @@ describe("createDefaultNodeAgent", () => {
     tempDirs.push(cwd);
     const connectionError = new Error("MCP initialization failed");
     const cleanup = vi.fn(async () => {});
-    vi.spyOn(McpClientManager.prototype, "connectAll").mockRejectedValueOnce(connectionError);
+    vi.spyOn(McpClientManager.prototype, "prepareConnection").mockResolvedValueOnce({
+      name: "failing",
+      connection: { status: "connected" },
+      client: { close: vi.fn(async () => {}) },
+      transport: {},
+      tools: [],
+    } as never);
+    vi.spyOn(McpClientManager.prototype, "activatePreparedConnection").mockReturnValueOnce({
+      committed: false,
+      error: connectionError,
+      discardPrepared: async () => {},
+    });
     vi.spyOn(defaultNodeTerminal, "createDefaultNodeTerminal").mockResolvedValueOnce({
       value: {
         value: {

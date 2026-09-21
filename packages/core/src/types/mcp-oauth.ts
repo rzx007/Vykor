@@ -98,3 +98,24 @@ export interface McpRuntimeConnectionCoordinator {
   getStatus(identity: McpServerIdentity): Promise<McpRuntimeSyncResult>;
   synchronize(identity: McpServerIdentity): Promise<McpRuntimeSyncResult>;
 }
+
+/**
+ * Narrow capability one active Session Runtime exposes to the coordinator.
+ *
+ * `synchronize` must check the generation before staging a connection and again
+ * before publishing it. `getStatus` maps the Runtime's internal state onto
+ * `McpRuntimeStatus` (initializing maps to `disconnected`).
+ */
+export interface ActiveMcpRuntimeHandle {
+  runtimeId: string;
+  identity(name: string): McpServerIdentity | undefined;
+  synchronize(identity: McpServerIdentity, generation: number): Promise<void>;
+  getStatus(identity: McpServerIdentity): McpRuntimeStatus;
+}
+
+/** Process-wide registry of active MCP Runtime handles. */
+export interface McpRuntimeRegistry {
+  register(handle: ActiveMcpRuntimeHandle): () => void;
+  /** Monotonic per-identity generation shared with the coordinator. */
+  currentGeneration(identity: McpServerIdentity): number;
+}

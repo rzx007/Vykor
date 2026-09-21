@@ -17,6 +17,7 @@ import type {
   AgentBackgroundShellHost,
   AgentEffects,
   AgentEventListener,
+  McpRuntimeRegistry,
   Settings,
   ToolDefinition,
 } from "@openharness/core";
@@ -95,6 +96,8 @@ export interface DaemonAgentLoaderOptions {
   tools?: DaemonToolsProvider;
   toolOverrides?: ToolDefinition[];
   trustedToolOverrides?: string[];
+  /** Process-wide registry so OAuth login/logout can reconnect this Agent's MCP Runtimes. */
+  mcpRuntimeRegistry?: McpRuntimeRegistry;
   /**
    * 生产里就是给这个 Agent 建一个投影：把模型吐出的事件写成会话记录，再推给 UI。
    * 要等 Agent 造好才能建（投影要用 agent.id），但 onEvent 在造 Agent 时就得先挂上。
@@ -171,6 +174,7 @@ export function createDaemonAgentLoader(
       ...(settings ? { settings } : {}),
       cwd: session.cwd,
       sessionId: session.id,
+      ...(options.mcpRuntimeRegistry ? { mcpRuntimeRegistry: options.mcpRuntimeRegistry } : {}),
       ...(options.executionSurface ? { executionSurface: options.executionSurface } : {}),
       ...(executionEnvironment ? { executionEnvironment } : {}),
       ...configuration,
