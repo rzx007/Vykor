@@ -158,6 +158,30 @@ export async function saveSettings(settings: Settings): Promise<void> {
   await writeJsonFileAtomically(configPath, settings);
 }
 
+/**
+ * Return a copy of settings with only the named HTTP MCP server's non-secret
+ * `oauth.scopes` replaced. Other servers and unrelated fields keep their
+ * identity. Unknown or stdio/SSE servers return the original settings.
+ */
+export function withMcpServerOAuthScopes(
+  settings: Settings,
+  serverName: string,
+  scopes: readonly string[],
+): Settings {
+  const existing = settings.mcpServers?.[serverName];
+  if (!existing || existing.type !== "http") return settings;
+  return {
+    ...settings,
+    mcpServers: {
+      ...(settings.mcpServers ?? {}),
+      [serverName]: {
+        ...existing,
+        oauth: { ...(existing.oauth ?? {}), scopes: [...scopes] },
+      },
+    },
+  };
+}
+
 export async function loadProjectSettings(projectRoot?: string): Promise<Partial<Settings> | null> {
   return loadSettingsFile(getProjectSettingsFilePath(projectRoot));
 }

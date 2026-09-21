@@ -29,7 +29,17 @@ export interface McpOAuthLoginDeps {
   callbackFactory?: typeof createOAuthCallback;
   openBrowser?(url: string): Promise<void>;
   readCallbackUrl?(prompt: string): Promise<string>;
-  verifyConnection?(input: { serverName: string; config: McpRemoteServerConfig }): Promise<void>;
+  /**
+   * Verify the candidate credential against the real MCP server. The provided
+   * store is an operation-local, writable copy: any refresh or token rotation
+   * during verification stays in memory and is never written to the shared
+   * credential store.
+   */
+  verifyConnection?(input: {
+    serverName: string;
+    config: McpRemoteServerConfig;
+    store: McpOAuthCredentialStore;
+  }): Promise<void>;
   stdout?(line: string): void;
 }
 
@@ -43,10 +53,18 @@ export interface McpOAuthLoginInput {
   signal?: AbortSignal;
 }
 
+export interface McpOAuthLoginResult {
+  status: "valid";
+  scopes: string[];
+  verified: boolean;
+  /** Final candidate credential; the caller decides whether to persist it. */
+  credential: McpOAuthCredentialRecord;
+}
+
 export async function loginMcpOAuth(
   input: McpOAuthLoginInput,
   deps: McpOAuthLoginDeps = {},
-): Promise<{ status: "valid"; scopes: string[]; verified: boolean }> {
+): Promise<McpOAuthLoginResult> {
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(new McpOAuthError("oauth-login-timeout", "OAuth login timed out")), 300_000);
   timer.unref?.();
@@ -61,7 +79,7 @@ export async function loginMcpOAuth(
 async function performLogin(
   input: McpOAuthLoginInput,
   deps: McpOAuthLoginDeps,
-): Promise<{ status: "valid"; scopes: string[]; verified: boolean }> {
+): Promise<McpOAuthLoginResult> {
   if (input.config.type !== "http") throw new McpOAuthError("oauth-transport-unsupported", "OAuth is supported only for Streamable HTTP MCP servers");
   if (hasAuthorizationHeader(input.config.headers)) {
     throw new McpOAuthError("oauth-static-auth-conflict", "Remove the configured Authorization header before OAuth login");
@@ -152,23 +170,94 @@ async function performLogin(
           expiresAt: tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : undefined,
         },
       };
-      await input.store.set(input.serverName, credential);
+
+      // The candidate lives only in this operation's memory. Active Runtimes
+      // keep reading the shared store's previous credential until the caller
+      // commits the verified candidate.
+      const candidateStore = createMemoryCredentialStore(credential);
       let verified = false;
       if (deps.verifyConnection) {
         try {
-          await deps.verifyConnection({ serverName: input.serverName, config: input.config });
+          await deps.verifyConnection({
+            serverName: input.serverName,
+            config: input.config,
+            store: candidateStore,
+          });
           verified = true;
-        } catch (error) {
-          if (isAuthenticationFailure(error)) {
-            await input.store.update(input.serverName, current => current ? { ...current, diagnostic: { code: "reauthentication-required", updatedAt: Date.now() } } : current);
-            throw error;
-          }
+        } catch {
+          await revokeCandidateTokens({
+            store: candidateStore,
+            serverName: input.serverName,
+            authorization: discovered.authorization,
+            fetch: fetchImpl,
+            signal: input.signal,
+          });
+          throw new McpOAuthError(
+            "oauth-login-verification-failed",
+            "OAuth authorization succeeded, but the MCP server rejected the credential",
+          );
         }
       }
-      return { status: "valid", scopes, verified };
+      const finalCredential = (await candidateStore.get(input.serverName)) ?? credential;
+      return {
+        status: "valid",
+        scopes: [...finalCredential.tokens.scope],
+        verified,
+        credential: finalCredential,
+      };
     } finally {
       await liveCallback.close();
     }
+  }
+
+/**
+ * Operation-local credential store used to verify a candidate credential.
+ *
+ * It supports the same surface as the shared store so a one-shot
+ * `McpOAuthRuntime` can perform a single 401 refresh and refresh-token
+ * rotation, but every write stays in this operation's memory.
+ */
+function createMemoryCredentialStore(
+  initial: McpOAuthCredentialRecord,
+): McpOAuthCredentialStore {
+  let value: McpOAuthCredentialRecord | undefined = initial;
+  let queue: Promise<unknown> = Promise.resolve();
+  const withLock = async <T>(operation: () => Promise<T>): Promise<T> => {
+    const run = queue.then(operation, operation);
+    queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  };
+  return {
+    get: async () => value,
+    set: async (_name, next) => { value = next; },
+    delete: async () => { const had = value !== undefined; value = undefined; return had; },
+    update: async (_name, mutate) => { value = mutate(value); return value; },
+    runExclusive: async (_name, operation) =>
+      withLock(async () => {
+        const { next, result } = await operation(value);
+        value = next;
+        return result;
+      }),
+  };
+}
+
+async function revokeCandidateTokens(input: {
+  store: McpOAuthCredentialStore;
+  serverName: string;
+  authorization: OAuthAuthorizationServerMetadata;
+  fetch: typeof fetch;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const credential = await input.store.get(input.serverName);
+  const endpoint = credential?.binding.revocationEndpoint ?? input.authorization.revocation_endpoint;
+  if (!credential || !endpoint) return;
+  if (credential.tokens.refreshToken) {
+    await revokeToken({ endpoint, token: credential.tokens.refreshToken, hint: "refresh_token", registration: credential.registration, fetch: input.fetch, signal: input.signal }).catch(() => undefined);
+  }
+  await revokeToken({ endpoint, token: credential.tokens.accessToken, hint: "access_token", registration: credential.registration, fetch: input.fetch, signal: input.signal }).catch(() => undefined);
 }
 
 export async function revokeMcpOAuthCredential(input: {
@@ -225,8 +314,4 @@ function sdkFetch(fetchImpl: typeof fetch, signal?: AbortSignal): typeof fetch {
 
 function hasAuthorizationHeader(headers?: Record<string, string>): boolean {
   return Object.keys(headers ?? {}).some(key => key.toLowerCase() === "authorization");
-}
-
-function isAuthenticationFailure(error: unknown): boolean {
-  return error instanceof McpOAuthError && /unauthorized|invalid-grant|reauthentication/.test(error.code);
 }

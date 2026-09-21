@@ -572,6 +572,8 @@ export {
   revokeMcpOAuthCredential,
   type McpOAuthCredentialStore,
   type McpOAuthLoginDeps,
+  type McpOAuthLoginInput,
+  type McpOAuthLoginResult,
 } from "./oauth/login.js";
 export { McpOAuthRuntime } from "./oauth/runtime-auth.js";
 export { verifyMcpOAuthConnection } from "./oauth/verify-connection.js";

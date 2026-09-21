@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { loadSettings, saveProjectSettings, saveSettings } from "./settings.js";
+import { loadSettings, saveProjectSettings, saveSettings, withMcpServerOAuthScopes } from "./settings.js";
 
 describe("daemon settings", () => {
   const forbidden = JSON.parse(readFileSync(new URL("../../../../scripts/forbidden-compatibility-surfaces.json", import.meta.url), "utf8"));
@@ -252,5 +252,42 @@ describe("daemon settings", () => {
     await expect(loadSettings()).rejects.toMatchObject({
       field: "settings.mcpServers.linear.oauth.accessToken",
     });
+  });
+
+  it("patches only the target server's non-secret oauth scopes", () => {
+    const settings = {
+      model: "m",
+      apiFormat: "openai" as const,
+      maxTurns: 1,
+      permission: { mode: "default" as const },
+      mcpServers: {
+        linear: { type: "http" as const, url: "https://mcp.linear.app/mcp", oauth: { clientId: "c" } },
+        github: { type: "http" as const, url: "https://mcp.github.com/mcp", oauth: { scopes: ["repo"] } },
+        local: { type: "stdio" as const, command: "node" },
+      },
+    };
+
+    const next = withMcpServerOAuthScopes(settings, "linear", ["read", "write"]);
+
+    expect(next.mcpServers?.linear).toEqual({
+      type: "http",
+      url: "https://mcp.linear.app/mcp",
+      oauth: { clientId: "c", scopes: ["read", "write"] },
+    });
+    expect(next.mcpServers?.github).toBe(settings.mcpServers.github);
+    expect(next.mcpServers?.local).toBe(settings.mcpServers.local);
+    expect(settings.mcpServers?.linear.oauth).toEqual({ clientId: "c" });
+  });
+
+  it("leaves settings untouched for an unknown or stdio server", () => {
+    const settings = {
+      model: "m",
+      apiFormat: "openai" as const,
+      maxTurns: 1,
+      permission: { mode: "default" as const },
+      mcpServers: { local: { type: "stdio" as const, command: "node" } },
+    };
+    expect(withMcpServerOAuthScopes(settings, "missing", ["read"])).toBe(settings);
+    expect(withMcpServerOAuthScopes(settings, "local", ["read"])).toBe(settings);
   });
 });

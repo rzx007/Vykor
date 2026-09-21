@@ -182,6 +182,7 @@ export {
   saveSettings,
   loadProjectSettings,
   saveProjectSettings,
+  withMcpServerOAuthScopes,
 } from "./config/settings";
 export {
   PROJECT_CONFIG_DIR_NAME,
