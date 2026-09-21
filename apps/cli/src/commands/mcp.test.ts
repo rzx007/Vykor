@@ -1,76 +1,172 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpOAuthCredentialRecord, Settings } from "@openharness/core";
-import { McpOAuthRuntime, type McpOAuthCredentialStore } from "@openharness/mcp";
+import type { McpOAuthCredentialRecord, McpRuntimeStatus, Settings } from "@openharness/core";
+import { buildMcpAuthServerSnapshot } from "@openharness/mcp";
+import { McpOAuthApplicationError } from "@openharness/server";
 import { createMcpCommand, type McpCommandDeps } from "./mcp.js";
 
-function fixture() {
+function credential(): McpOAuthCredentialRecord {
+  return {
+    serverUrl: "https://mcp.linear.app/mcp",
+    revision: 1,
+    binding: {
+      issuer: "https://auth.linear.app",
+      redirectUri: "http://127.0.0.1/callback",
+      authorizationEndpoint: "https://auth.linear.app/authorize",
+      tokenEndpoint: "https://auth.linear.app/token",
+    },
+    registration: { client_id: "client" },
+    tokens: { accessToken: "secret", tokenType: "Bearer", scope: ["read"] },
+  };
+}
+
+function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
   let settings = {
     model: "test",
     apiFormat: "openai",
     maxTurns: 1,
     permission: { mode: "default" },
-    mcpServers: {},
+    mcpServers: {
+      linear: { type: "http", url: "https://mcp.linear.app/mcp", oauth: { scopes: ["read"] } },
+      local: { type: "stdio", command: "node", args: ["server.js"] },
+    },
   } as Settings;
   const credentials = new Map<string, McpOAuthCredentialRecord>();
-  const store: McpOAuthCredentialStore = {
-    get: async name => credentials.get(name),
-    set: async (name, value) => { credentials.set(name, value); },
-    delete: async name => credentials.delete(name),
-    update: async (name, mutate) => {
-      const next = mutate(credentials.get(name));
-      if (next) credentials.set(name, next); else credentials.delete(name);
-      return next;
-    },
-    runExclusive: async (name, operation) => {
-      const result = await operation(credentials.get(name));
-      if (result.next) credentials.set(name, result.next); else credentials.delete(name);
-      return result.result;
-    },
-  };
+
+  const snapshot = vi.fn(async () => ({
+    servers: Object.entries(settings.mcpServers ?? {}).map(([name, config]) =>
+      buildMcpAuthServerSnapshot({
+        name,
+        config,
+        credential: credentials.get(name),
+        runtimeStatus: options.runtimeStatus ?? "connected",
+      }),
+    ),
+  }));
+  const login = vi.fn(async (request: { name: string }) => {
+    credentials.set(request.name, credential());
+    return await snapshot();
+  });
+  const logout = vi.fn(async (name: string) => {
+    credentials.delete(name);
+    return await snapshot();
+  });
   const output: string[] = [];
-  const login = vi.fn(async () => ({ status: "valid" as const, scopes: ["read"], verified: true }));
   const deps: McpCommandDeps = {
     loadSettings: async () => settings,
     saveSettings: async next => { settings = next; },
-    store: store as any,
-    runtime: new McpOAuthRuntime({ store }),
-    login: login as any,
-    revoke: vi.fn(async ({ serverName }) => { await store.delete(serverName); }) as any,
+    application: { snapshot, login, logout },
     openBrowser: vi.fn(async () => undefined),
     readLine: vi.fn(async () => ""),
     stdout: line => output.push(line),
   };
   const run = (...args: string[]) => createMcpCommand(deps).parseAsync(["node", "ohs", ...args]);
-  return { deps, run, login, output, getSettings: () => settings };
+  return { deps, run, login, logout, output, credentials, snapshot, getSettings: () => settings };
 }
 
 describe("mcp command", () => {
   it("adds HTTP and stdio servers using Codex-compatible shapes", async () => {
     const test = fixture();
-    await test.run("add", "linear", "--url", "https://mcp.linear.app/mcp");
-    await test.run("add", "local", "--", "node", "server.js");
+    await test.run("add", "linear2", "--url", "https://mcp.linear.app/mcp");
+    await test.run("add", "local2", "--", "node", "server.js");
     expect(test.getSettings().mcpServers).toMatchObject({
-      linear: { type: "http", url: "https://mcp.linear.app/mcp" },
-      local: { type: "stdio", command: "node", args: ["server.js"] },
+      linear2: { type: "http", url: "https://mcp.linear.app/mcp" },
+      local2: { type: "stdio", command: "node", args: ["server.js"] },
+    });
+  });
+
+  it("produces identical JSON for get and status with stable auth and runtime fields", async () => {
+    const test = fixture({ runtimeStatus: "connected" });
+    await test.run("get", "linear", "--json");
+    const fromGet = test.output.at(-1)!;
+    await test.run("status", "linear", "--json");
+    const fromStatus = test.output.at(-1)!;
+
+    expect(fromStatus).toEqual(fromGet);
+    expect(JSON.parse(fromStatus)).toEqual({
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      url: "https://mcp.linear.app/mcp",
+      authMode: "oauth",
+      authStatus: "not-logged-in",
+      scopes: ["read"],
+      runtimeStatus: "connected",
+    });
+    expect(fromStatus).not.toContain("secret");
+  });
+
+  it("shows auth mode, auth status and runtime state in human output", async () => {
+    const test = fixture({ runtimeStatus: "disconnected" });
+    await test.run("status", "linear");
+    const text = test.output.join("\n");
+    expect(text).toContain("auth-mode: oauth");
+    expect(text).toContain("auth-status: not-logged-in");
+    expect(text).toContain("runtime: disconnected");
+    expect(text).toContain("endpoint: https://mcp.linear.app/mcp");
+  });
+
+  it("describes stdio servers without an endpoint URL", async () => {
+    const test = fixture();
+    await test.run("status", "local", "--json");
+    expect(JSON.parse(test.output.at(-1)!)).toMatchObject({
+      name: "local",
+      transport: "stdio",
+      command: "node",
+      args: ["server.js"],
+      authMode: "none",
+      authStatus: "unsupported",
+      runtimeStatus: "connected",
     });
   });
 
   it("passes explicit scopes and no-browser to login", async () => {
     const test = fixture();
-    await test.run("add", "linear", "--url", "https://mcp.linear.app/mcp");
     await test.run("login", "linear", "--scopes", "read,issues:read", "--no-browser");
     expect(test.login).toHaveBeenCalledWith(expect.objectContaining({
+      name: "linear",
       scopes: ["read", "issues:read"],
       noBrowser: true,
-    }), expect.any(Object));
+    }));
   });
 
-  it("returns stable JSON without credential material", async () => {
+  it("keeps login successful when no runtime is available", async () => {
+    const test = fixture({ runtimeStatus: "unavailable" });
+    await test.run("login", "linear");
+    expect(test.output.join("\n")).toContain("Logged in to linear");
+    expect(test.credentials.get("linear")).toBeDefined();
+  });
+
+  it("reports a saved-but-not-reconnected failure and keeps the credential", async () => {
     const test = fixture();
-    await test.run("add", "linear", "--url", "https://mcp.linear.app/mcp");
-    await test.run("get", "linear", "--json");
-    const value = test.output.at(-1)!;
-    expect(value).not.toContain("accessToken");
-    expect(JSON.parse(value)).toMatchObject({ name: "linear", transport: "http", authStatus: "not-logged-in" });
+    test.login.mockImplementationOnce(async (request: { name: string }) => {
+      test.credentials.set(request.name, credential());
+      throw new McpOAuthApplicationError(
+        "oauth-saved-runtime-sync-failed",
+        "OAuth authorization was saved, but the active runtime failed to reconnect.",
+        [{ runtimeId: "runtime-1", message: "reconnect failed" }],
+      );
+    });
+
+    await expect(test.run("login", "linear")).rejects.toMatchObject({ code: "oauth-saved-runtime-sync-failed" });
+    expect(test.output.join("\n")).toContain("authorization was saved for linear");
+    expect(test.output.join("\n")).toContain("ohs mcp status linear");
+    expect(test.credentials.get("linear")).toBeDefined();
+  });
+
+  it("reports a removed-but-not-disconnected failure without restoring the credential", async () => {
+    const test = fixture();
+    test.credentials.set("linear", credential());
+    test.logout.mockImplementationOnce(async () => {
+      test.credentials.delete("linear");
+      throw new McpOAuthApplicationError(
+        "oauth-removed-runtime-sync-failed",
+        "OAuth credentials were removed, but the active runtime failed to disconnect.",
+        [{ runtimeId: "runtime-1", message: "disconnect failed" }],
+      );
+    });
+
+    await expect(test.run("logout", "linear")).rejects.toMatchObject({ code: "oauth-removed-runtime-sync-failed" });
+    expect(test.output.join("\n")).toContain("credentials were removed for linear");
+    expect(test.credentials.get("linear")).toBeUndefined();
   });
 });

@@ -33,6 +33,9 @@ export interface McpOAuthLoginRequest {
   name: string;
   scopes: string[];
   openBrowser(url: string): Promise<void>;
+  /** Print the authorization URL and accept a pasted callback URL instead. */
+  noBrowser?: boolean;
+  readCallbackUrl?(prompt: string): Promise<string>;
 }
 
 export type McpOAuthApplicationErrorCode =
@@ -172,6 +175,7 @@ export class McpOAuthApplicationService {
           scopes: request.scopes.length ? request.scopes : undefined,
           store: this.deps.store,
           signal: browser.signal,
+          ...(request.noBrowser ? { noBrowser: true } : {}),
         },
         {
           openBrowser: async (url) => {
@@ -182,6 +186,7 @@ export class McpOAuthApplicationService {
               throw error;
             }
           },
+          ...(request.readCallbackUrl ? { readCallbackUrl: request.readCallbackUrl } : {}),
           verifyConnection: (input) => this.deps.verify(input),
         },
       );
