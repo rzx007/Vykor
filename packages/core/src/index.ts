@@ -87,6 +87,12 @@ export type {
   McpOAuthAuthStatus,
   McpOAuthCredentialRecord,
   McpOAuthStoreFile,
+  McpAuthMode,
+  McpRuntimeStatus,
+  McpServerIdentity,
+  McpRuntimeSyncResult,
+  McpAuthServerSnapshot,
+  McpRuntimeConnectionCoordinator,
 } from "./types/mcp-oauth";
 
 export type { UsageSnapshot, CostTracker as ICostTracker } from "./types/usage";

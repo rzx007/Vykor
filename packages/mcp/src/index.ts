@@ -392,7 +392,14 @@ export class McpClientManager {
 export { McpOAuthError } from "./oauth/errors.js";
 export { assertIssuer, assertOAuthEndpoint, assertScopeSubset, parseScopes } from "./oauth/security.js";
 export { createOAuthCallback, type OAuthCallbackController } from "./oauth/callback.js";
-export { resolveMcpOAuthStatus } from "./oauth/status.js";
+export { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./oauth/status.js";
+export {
+  buildMcpAuthServerSnapshot,
+  createMcpServerIdentity,
+  fingerprintMcpEndpoint,
+  normalizeMcpEndpoint,
+  type BuildMcpAuthServerSnapshotInput,
+} from "./oauth/snapshot.js";
 export {
   loginMcpOAuth,
   revokeMcpOAuthCredential,

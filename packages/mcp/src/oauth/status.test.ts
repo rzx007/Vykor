@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { McpOAuthCredentialRecord } from "@openharness/core";
-import { resolveMcpOAuthStatus } from "./status.js";
+import { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
 
 const now = 10_000;
 const credential: McpOAuthCredentialRecord = {
@@ -23,5 +23,28 @@ describe("resolveMcpOAuthStatus", () => {
       { ...credential, diagnostic: { code: "reauthentication-required", updatedAt: now } },
       now,
     )).toBe("reauthentication-required");
+  });
+});
+
+describe("resolveMcpAuthMode", () => {
+  it("recognizes bearer case-insensitively and custom schemes", () => {
+    expect(resolveMcpAuthMode({ type: "http", url: credential.serverUrl, headers: { authorization: "bearer x" } }, undefined)).toBe("bearer");
+    expect(resolveMcpAuthMode({ type: "http", url: credential.serverUrl, headers: { Authorization: "Basic abc" } }, undefined)).toBe("custom");
+  });
+
+  it("prefers explicit headers over matching OAuth credentials", () => {
+    expect(resolveMcpAuthMode({ type: "http", url: credential.serverUrl, headers: { Authorization: "Bearer x" } }, credential)).toBe("bearer");
+  });
+
+  it("detects oauth from declared settings or a matching credential", () => {
+    expect(resolveMcpAuthMode({ type: "http", url: credential.serverUrl, oauth: {} }, undefined)).toBe("oauth");
+    expect(resolveMcpAuthMode({ type: "http", url: credential.serverUrl }, credential)).toBe("oauth");
+  });
+
+  it("returns none without auth config or a non-http transport", () => {
+    expect(resolveMcpAuthMode({ type: "http", url: credential.serverUrl }, undefined)).toBe("none");
+    expect(resolveMcpAuthMode({ type: "http", url: "https://other.test/mcp" }, credential)).toBe("none");
+    expect(resolveMcpAuthMode({ type: "stdio", command: "node" }, credential)).toBe("none");
+    expect(resolveMcpAuthMode({ type: "sse", url: "https://x.test/sse", headers: { Authorization: "Bearer x" } }, undefined)).toBe("none");
   });
 });

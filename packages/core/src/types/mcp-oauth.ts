@@ -49,3 +49,52 @@ export interface McpOAuthStoreFile {
   version: 1;
   servers: Record<string, McpOAuthCredentialRecord>;
 }
+
+/** How a configured HTTP MCP server authenticates requests. */
+export type McpAuthMode = "none" | "oauth" | "bearer" | "custom";
+
+/** Aggregate state of the active Runtime connections for one MCP server. */
+export type McpRuntimeStatus =
+  | "connected"
+  | "disconnected"
+  | "error"
+  | "unavailable";
+
+/**
+ * Cross-process identity of a configured MCP server.
+ *
+ * `endpoint` is the normalized URL (host lowercased, default port dropped,
+ * fragment removed, path and query preserved). `endpointFingerprint` is the
+ * SHA-256 base64url digest of `endpoint`; only the fingerprint crosses the
+ * daemon control-plane wire so the full endpoint never appears in logs.
+ */
+export interface McpServerIdentity {
+  name: string;
+  transport: "http";
+  endpoint: string;
+  endpointFingerprint: string;
+}
+
+export interface McpRuntimeSyncResult {
+  status: McpRuntimeStatus;
+  affectedRuntimes: number;
+  failures: Array<{ runtimeId: string; message: string }>;
+}
+
+/** Secret-free public view of one configured MCP server. */
+export interface McpAuthServerSnapshot {
+  name: string;
+  enabled: true;
+  transport: "stdio" | "http" | "sse";
+  endpoint?: string;
+  authMode: McpAuthMode;
+  authStatus: McpOAuthAuthStatus;
+  scopes: string[];
+  runtimeStatus: McpRuntimeStatus;
+}
+
+/** Reconnects or disconnects the active Runtimes matching one server identity. */
+export interface McpRuntimeConnectionCoordinator {
+  getStatus(identity: McpServerIdentity): Promise<McpRuntimeSyncResult>;
+  synchronize(identity: McpServerIdentity): Promise<McpRuntimeSyncResult>;
+}

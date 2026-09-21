@@ -1,8 +1,38 @@
 import type {
+  McpAuthMode,
   McpOAuthAuthStatus,
   McpOAuthCredentialRecord,
   McpServerConfig,
 } from "@openharness/core";
+
+/**
+ * Resolve how an MCP server authenticates.
+ *
+ * Priority follows the transport behavior: an explicit static `Authorization`
+ * header always wins, then OAuth (declared in settings or backed by a matching
+ * credential). stdio and SSE servers report `none` in this phase.
+ */
+export function resolveMcpAuthMode(
+  config: McpServerConfig,
+  credential: McpOAuthCredentialRecord | undefined,
+): McpAuthMode {
+  if (config.type !== "http") return "none";
+  const authorization = findAuthorizationHeader(config.headers);
+  if (authorization !== undefined) {
+    return /^bearer\s+\S/i.test(authorization.trim()) ? "bearer" : "custom";
+  }
+  if (config.oauth !== undefined) return "oauth";
+  if (credential !== undefined && credential.serverUrl === config.url) return "oauth";
+  return "none";
+}
+
+function findAuthorizationHeader(headers?: Record<string, string>): string | undefined {
+  if (!headers) return undefined;
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === "authorization") return value;
+  }
+  return undefined;
+}
 
 export function resolveMcpOAuthStatus(
   config: McpServerConfig,
