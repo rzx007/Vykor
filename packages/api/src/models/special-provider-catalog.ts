@@ -4,12 +4,7 @@ export const CODEX_DEFAULT_MODEL = "gpt-5.6-sol";
 
 const CODEX_MULTIMODAL_INPUT = {
   input: ["text", "image", "pdf"],
-  output: ["text"],
-};
-
-const CODEX_TEXT_INPUT = {
-  input: ["text"],
-  output: ["text"],
+  output: ["text", "image"],
 };
 
 export const SPECIAL_PROVIDER_CATALOG: ModelsDevCatalog = {
@@ -17,6 +12,14 @@ export const SPECIAL_PROVIDER_CATALOG: ModelsDevCatalog = {
     id: "codex",
     name: "Codex Subscription",
     models: {
+      "gpt-6-astra": {
+        id: "gpt-6-astra",
+        name: "GPT-6 Astra",
+        reasoning: true,
+        tool_call: true,
+        modalities: CODEX_MULTIMODAL_INPUT,
+        limit: { context: 1_050_000, output: 128_000 },
+      },
       "gpt-5.6-sol": {
         id: "gpt-5.6-sol",
         name: "GPT-5.6 Sol",
@@ -48,31 +51,7 @@ export const SPECIAL_PROVIDER_CATALOG: ModelsDevCatalog = {
         tool_call: true,
         modalities: CODEX_MULTIMODAL_INPUT,
         limit: { context: 1_050_000, output: 128_000 },
-      },
-      "gpt-5.4": {
-        id: "gpt-5.4",
-        name: "GPT-5.4",
-        reasoning: true,
-        tool_call: true,
-        modalities: CODEX_MULTIMODAL_INPUT,
-        limit: { context: 1_050_000, output: 128_000 },
-      },
-      "gpt-5.4-mini": {
-        id: "gpt-5.4-mini",
-        name: "GPT-5.4 Mini",
-        reasoning: true,
-        tool_call: true,
-        modalities: CODEX_MULTIMODAL_INPUT,
-        limit: { context: 400_000, output: 128_000 },
-      },
-      "gpt-5.3-codex-spark": {
-        id: "gpt-5.3-codex-spark",
-        name: "GPT-5.3 Codex Spark",
-        reasoning: false,
-        tool_call: true,
-        modalities: CODEX_TEXT_INPUT,
-        limit: { context: 128_000, output: 128_000 },
-      },
+      }
     },
   },
 };
