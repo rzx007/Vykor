@@ -38,6 +38,19 @@ function event(seq: number, type: string, payload: Record<string, unknown>, sess
 }
 
 describe("session event reducer", () => {
+  it("removes a deleted session tree from the global state", () => {
+    const created = applyEvents(createInitialClientState(), [
+      event(1, "session.created", { session: session("root", 1) }, "root"),
+      event(2, "session.created", { session: session("child", 2) }, "child"),
+    ]);
+    const deleted = applyEvent(created, {
+      ...event(3, "session.deleted", { sessionIds: ["root", "child"] }),
+      sessionId: undefined,
+    });
+    expect(deleted.sessionOrder).toEqual([]);
+    expect(deleted.sessions).toEqual({});
+    expect(deleted.buckets).toEqual({});
+  });
   it("ignores a session snapshot older than the accepted snapshot cursor", () => {
     const newer = applySessionSnapshot(createInitialClientState(), {
       cursor: 7,

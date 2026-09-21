@@ -830,6 +830,8 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.schedules = new ScheduledTaskService({
         schedules: store.schedules,
+        latestEventSeq: () => store.conversations.latestEventSeq(),
+        onDurableEvent: (previousEventSeq) => this.eventPublisher.publishSince(previousEventSeq),
         execute: (task, run, onSessionReady) => scheduledExecutor.execute(task, run, onSessionReady),
       });
       /**

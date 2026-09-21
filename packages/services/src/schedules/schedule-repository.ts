@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  AppendEventInput,
   CreateScheduledRunInput,
   CreateScheduledTaskInput,
   ScheduledRunRecord,
@@ -16,7 +17,10 @@ import {
 } from "./schedule-records.js";
 
 export class ScheduleRepository {
-  constructor(private readonly storage: StorageContext) {}
+  constructor(
+    private readonly storage: StorageContext,
+    private readonly appendEvent?: (input: AppendEventInput) => void,
+  ) {}
   private get database() {
     return this.storage.database.connection;
   }
@@ -128,19 +132,21 @@ export class ScheduleRepository {
     })();
   }
   deleteTask(id: string): boolean {
-    return this.database.transaction(() => {
+    return this.storage.atomic(() => {
       this.storage.assertWritable();
       this.database
         .prepare("DELETE FROM scheduled_run WHERE task_id = ?")
         .run(id);
-      return (
+      const deleted = (
         this.database.prepare("DELETE FROM scheduled_task WHERE id = ?").run(id)
           .changes > 0
       );
-    })();
+      if (deleted) this.appendEvent?.({ type: "scheduled.task.deleted", payload: { taskId: id } });
+      return deleted;
+    });
   }
   createRun(input: CreateScheduledRunInput): ScheduledRunRecord {
-    return this.database.transaction(() => {
+    return this.storage.atomic(() => {
       this.storage.assertWritable();
       if (!this.getTask(input.taskId))
         throw new Error(`Scheduled task not found: ${input.taskId}`);
@@ -158,8 +164,10 @@ export class ScheduleRepository {
           timestamp,
           timestamp,
         );
-      return this.getRun(id)!;
-    })();
+      const run = this.getRun(id)!;
+      this.appendEvent?.({ type: "scheduled.run.created", payload: { run } });
+      return run;
+    });
   }
   getRun(id: string): ScheduledRunRecord | undefined {
     const row = this.database
@@ -192,7 +200,7 @@ export class ScheduleRepository {
     ).map(scheduledRunFromRow);
   }
   updateRun(id: string, patch: UpdateScheduledRunInput): ScheduledRunRecord {
-    return this.database.transaction(() => {
+    return this.storage.atomic(() => {
       this.storage.assertWritable();
       const current = this.getRun(id);
       if (!current) throw new Error(`Scheduled run not found: ${id}`);
@@ -218,27 +226,40 @@ export class ScheduleRepository {
           updated.updatedAt,
           id,
         );
-      return this.getRun(id)!;
-    })();
+      const run = this.getRun(id)!;
+      this.appendEvent?.({ type: "scheduled.run.updated", payload: { run, previousStatus: current.status } });
+      return run;
+    });
   }
   linkRunSession(id: string, sessionId: string): ScheduledRunRecord {
-    return this.database.transaction(() => {
+    return this.storage.atomic(() => {
       this.storage.assertWritable();
       if (!this.getRun(id)) throw new Error(`Scheduled run not found: ${id}`);
       this.database.prepare(
         "UPDATE scheduled_run SET session_id = ?, updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM session WHERE id = ?)",
       ).run(sessionId, Date.now(), id, sessionId);
-      return this.getRun(id)!;
-    })();
+      const run = this.getRun(id)!;
+      this.appendEvent?.({ type: "scheduled.run.updated", payload: { run, previousStatus: run.status } });
+      return run;
+    });
   }
   interruptActiveRuns(reason: string): number {
-    return this.database.transaction(() => {
+    return this.storage.atomic(() => {
       this.storage.assertWritable();
-      return this.database
-        .prepare(
-          "UPDATE scheduled_run SET status = 'interrupted', error = ?, unread = 1, finished_at = ?, updated_at = ? WHERE status IN ('queued', 'running')",
-        )
-        .run(reason, Date.now(), Date.now()).changes;
-    })();
+      const active = this.database.prepare("SELECT id FROM scheduled_run WHERE status IN ('queued', 'running')")
+        .all() as Array<{ id: string }>;
+      for (const { id } of active) {
+        const previousStatus = this.getRun(id)!.status;
+        const timestamp = Date.now();
+        this.database.prepare(
+          "UPDATE scheduled_run SET status = 'interrupted', error = ?, unread = 1, finished_at = ?, updated_at = ? WHERE id = ?",
+        ).run(reason, timestamp, timestamp, id);
+        this.appendEvent?.({
+          type: "scheduled.run.updated",
+          payload: { run: this.getRun(id)!, previousStatus },
+        });
+      }
+      return active.length;
+    });
   }
 }

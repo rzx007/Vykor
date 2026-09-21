@@ -33,6 +33,11 @@ export interface SyncEventsClient {
   };
 }
 
+type GlobalEventReducer = (
+  state: OpenHarnessClientState,
+  event: SessionEventRecord,
+) => OpenHarnessClientState;
+
 const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
   Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
 
@@ -51,7 +56,7 @@ export function hydrateState(events: Iterable<SessionEventRecord>): OpenHarnessC
  */
 export async function* syncEvents(
   client: SyncEventsClient,
-  options: EventSyncOptions = {},
+  options: EventSyncOptions & { globalReducer?: GlobalEventReducer } = {},
 ): AsyncIterable<SyncEventUpdate> {
   let state = createInitialClientState();
   if (options.sessionId) {
@@ -72,13 +77,17 @@ export async function* syncEvents(
     sessionId: options.sessionId,
     signal: options.signal,
   });
+  const reduce = options.globalReducer ?? applyEvent;
 
   for (const event of replay) {
-    state = applyEvent(state, event);
+    state = reduce(state, event);
     yield { event, state, source: "replay" };
   }
 
-  yield* liveWithReconnect(client, state, options, state.lastSeq);
+  // Global consumers need an explicit boundary between initial history and live updates.
+  yield { state, source: "snapshot" };
+
+  yield* liveWithReconnect(client, state, options, state.lastSeq, undefined, reduce);
 }
 
 async function* liveWithReconnect(
@@ -89,6 +98,7 @@ async function* liveWithReconnect(
   resync?: (
     current: OpenHarnessClientState,
   ) => Promise<{ state: OpenHarnessClientState; cursor: number }>,
+  reduce: GlobalEventReducer = applyEvent,
 ): AsyncIterable<SyncEventUpdate> {
   let state = initialState;
   let cursor = initialCursor;
@@ -129,14 +139,14 @@ async function* liveWithReconnect(
           });
           for (const missed of gap) {
             const beforeGap = state;
-            state = applyEvent(state, missed);
+            state = reduce(state, missed);
             if (state !== beforeGap) yield { event: missed, state, source: "replay" };
           }
           cursor = state.lastSeq;
         }
 
         const before = state;
-        state = applyEvent(state, event);
+        state = reduce(state, event);
         cursor = state.lastSeq;
         if (state !== before) yield { event, state, source: "live" };
       }

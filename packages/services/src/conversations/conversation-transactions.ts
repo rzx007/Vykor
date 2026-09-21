@@ -810,6 +810,7 @@ export class ConversationTransactions {
         (event) => !event.sessionId || !sessionIdSet.has(event.sessionId),
       );
       for (const id of removedEventIds) this.storage.mutations.events.delete(id);
+      this.conversations.appendEvent({ type: "session.deleted", payload: { sessionIds } });
       this.testHooks?.afterDeleteMemory?.();
       return sessionIds;
     });

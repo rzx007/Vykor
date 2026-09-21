@@ -56,6 +56,39 @@ function createHarness(
 }
 
 describe("ScheduledTaskService", () => {
+  it("publishes committed run transitions without a Scheduled page subscriber", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ohs-schedule-publish-"));
+    const scheduleStore = new SessionStore({ path: join(dir, "store.db") });
+    const published: number[] = [];
+    const deleted: string[] = [];
+    const service = new ScheduledTaskService({
+      schedules: scheduleStore.schedules,
+      execute: async () => ({ runId: "agent", summary: "done" }),
+      latestEventSeq: () => scheduleStore.conversations.latestEventSeq(),
+      onDurableEvent: (cursor) => {
+        for (const event of scheduleStore.conversations.listEvents({ afterSeq: cursor })) {
+          if (event.type.startsWith("scheduled.run.")) published.push(event.seq);
+          if (event.type === "scheduled.task.deleted") deleted.push(String(event.payload.taskId));
+        }
+      },
+    });
+    cleanups.push(async () => {
+      await service.shutdown();
+      scheduleStore.close();
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const task = service.createTask({
+      name: "background", prompt: "work", recurrence: "2099-01-01T00:00:00Z",
+      recurrenceFormat: "once", timezone: "UTC", destination: "standalone",
+      projectPaths: [process.cwd()],
+    });
+    const result = await service.trigger(task.id);
+    expect(published).toHaveLength(3);
+    expect(new Set(published).size).toBe(3);
+    expect(result.status).toBe("succeeded");
+    service.removeTask(task.id);
+    expect(deleted).toEqual([task.id]);
+  });
   it("persists a run session as soon as execution reports it", async () => {
     let releaseExecution!: () => void;
     let executionStarted!: (

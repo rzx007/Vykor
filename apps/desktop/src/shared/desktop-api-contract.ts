@@ -46,6 +46,7 @@ import type {
   GetDesktopContextUsageInput,
 } from "./session-types"
 import type { DesktopContextUsageSnapshot } from "./context-usage-types"
+import type { DesktopActivityUpdate } from "./activity-types"
 import type {
   WorkspaceListFilesInput,
   WorkspaceListFilesResult,
@@ -149,6 +150,10 @@ import type {
 } from "./channel-types"
 
 export type DesktopAPI = {
+  activity: {
+    open: () => Promise<DesktopActivityUpdate>
+    onUpdated: (listener: (update: DesktopActivityUpdate) => void) => () => void
+  }
   app: {
     getInfo: () => Promise<DesktopAppInfo>
     getPlatform: () => Promise<PlatformInfo>
@@ -317,12 +322,8 @@ export type DesktopAPI = {
       input: DesktopPluginArchiveConfirmInput
     ) => Promise<DesktopPluginArchiveConfirmResult>
     cancelArchive: (input: DesktopPluginArchiveCancelInput) => Promise<void>
-    importGit: (
-      input: DesktopPluginGitImportInput
-    ) => Promise<DesktopPluginGitImportResult>
-    confirmGit: (
-      input: DesktopPluginArchiveConfirmInput
-    ) => Promise<DesktopPluginGitConfirmResult>
+    importGit: (input: DesktopPluginGitImportInput) => Promise<DesktopPluginGitImportResult>
+    confirmGit: (input: DesktopPluginArchiveConfirmInput) => Promise<DesktopPluginGitConfirmResult>
     cancelGit: (input: DesktopPluginArchiveCancelInput) => Promise<void>
   }
   skills: {

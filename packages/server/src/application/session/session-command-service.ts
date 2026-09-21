@@ -335,7 +335,10 @@ export class SessionCommandService {
         await this.options.runtimeControl.waitForRuns(interruptedRuns.get(id) ?? []);
         await this.options.runtimeControl.closeAgent(id);
       }
-      return this.options.sessions.deleteSessionTree(sessionId);
+      const checkpoint = this.options.events.checkpoint();
+      const deleted = this.options.sessions.deleteSessionTree(sessionId);
+      this.options.events.publishSince(checkpoint);
+      return deleted;
     } finally {
       for (const lease of leases.reverse()) lease.release();
     }

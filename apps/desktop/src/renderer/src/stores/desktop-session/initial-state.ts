@@ -3,6 +3,8 @@ import { disabledDesktopAttachmentSupport } from "@shared/attachment-types"
 
 import { createEmptySessionRuntime } from "./operation-state"
 import { emptyComposerDraftState } from "./composer-draft-state"
+import { createActivityState } from "./activity-state"
+import { readActivityPersistence } from "./activity-persistence"
 import type {
   BootstrapActions,
   AttachmentActions,
@@ -44,6 +46,8 @@ export function createInitialState(): Omit<
   | keyof PromptActions
   | keyof QueuedPromptActions
   | "applySessionUpdate"
+  | "applyActivityUpdate"
+  | "markActivitySessionRead"
 > {
   return {
     loadStatus: "idle" as const,
@@ -71,6 +75,8 @@ export function createInitialState(): Omit<
     branches: [],
     activeSessionId: null,
     sessionView: null,
+    activity: createActivityState(readActivityPersistence()),
+    selectedScheduledTaskId: null,
     contextUsageSnapshot: null,
     ...emptyComposerDraftState(),
     ...createInitialRuntimeState(),

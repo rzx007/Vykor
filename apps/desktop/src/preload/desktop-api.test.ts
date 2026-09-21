@@ -21,6 +21,26 @@ vi.mock("electron", () => ({
 import { IpcChannels, IpcEvents } from "../shared/ipc-channels"
 import { desktopAPI } from "./desktop-api"
 
+describe("desktop activity preload bridge", () => {
+  it("opens the global activity stream", async () => {
+    await desktopAPI.activity.open()
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.activityOpen)
+  })
+
+  it("delivers updates and removes the same wrapped listener", () => {
+    const listener = vi.fn()
+    const unsubscribe = desktopAPI.activity.onUpdated(listener)
+    const [, wrapped] = electron.on.mock.lastCall!
+    expect(electron.on).toHaveBeenCalledWith(IpcEvents.activityUpdated, wrapped)
+
+    const update = { cursor: 4, delivery: "live", sessions: [], scheduled: [] }
+    wrapped({}, update)
+    expect(listener).toHaveBeenCalledWith(update)
+    unsubscribe()
+    expect(electron.removeListener).toHaveBeenCalledWith(IpcEvents.activityUpdated, wrapped)
+  })
+})
+
 describe("desktop attachment preload bridge", () => {
   it("turns dropped File objects into paths inside preload and does not expose those paths back", async () => {
     const files = [{ name: "report.pdf" }, { name: "missing.png" }] as unknown as File[]

@@ -50,6 +50,13 @@ describe("DurableEventRegistry", () => {
     )).toThrow("requires a sessionId");
   });
 
+  it("requires a non-empty list of session IDs in a global deletion event", () => {
+    expect(() => defaultDurableEventRegistry.prepareWrite("session.deleted", { sessionIds: [] }))
+      .toThrow("sessionIds must be a non-empty string array");
+    expect(() => defaultDurableEventRegistry.prepareWrite("session.deleted", { sessionIds: ["s1", 4] }))
+      .toThrow("sessionIds must be a non-empty string array");
+  });
+
   it("accepts only the current event version", () => {
     const registry = createDurableEventRegistry([versionedFixture]);
     expect(registry.prepareRead(

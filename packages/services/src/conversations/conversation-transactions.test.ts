@@ -1264,6 +1264,23 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     describe("deleteSessionTree", () => {
+      it("writes one durable global deletion event for the removed session tree", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-event-"));
+        const sessionStore = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          sessionStore.sessions.create({ id: "root", cwd: dir, model: "m" });
+          sessionStore.sessions.create({ id: "child", parentId: "root", cwd: dir, model: "m" });
+          const cursor = sessionStore.conversations.latestEventSeq();
+
+          expect(createTransactions(sessionStore).deleteSessionTree("root")).toEqual(["root", "child"]);
+          expect(sessionStore.conversations.listEvents({ afterSeq: cursor })).toMatchObject([
+            { type: "session.deleted", payload: { sessionIds: ["root", "child"] } },
+          ]);
+        } finally {
+          sessionStore.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
       function seedDeleteFixture(store: SessionStore, dir: string) {
         createReadyAttachment(store, "tree-asset", 10);
         const ids = ["root", "child", "grandchild", "outside"];

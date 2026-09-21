@@ -259,6 +259,10 @@ export interface DesktopSessionState
   branches: string[]
   activeSessionId: string | null
   sessionView: DesktopSessionView | null
+  activity: import("./activity-state").ActivityState
+  selectedScheduledTaskId: string | null
+  applyActivityUpdate: (update: import("@shared/activity-types").DesktopActivityUpdate) => void
+  markActivitySessionRead: (sessionId: string) => void
   contextUsageSnapshot: DesktopContextUsageSnapshot | null
   applySessionUpdate: (view: DesktopSessionView) => void
 }

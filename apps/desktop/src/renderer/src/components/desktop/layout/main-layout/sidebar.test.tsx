@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import { createActivityState } from "@renderer/stores/desktop-session/activity-state"
 import { SIDEBAR_SECTIONS_STORAGE_KEY } from "./sidebar-section-expansion"
 import { Sidebar } from "./sidebar"
 
@@ -62,6 +63,7 @@ describe("Sidebar collapsible sections and empty states", () => {
       archivedSessions: [],
       activeSessionId: null,
       loadStatus: "idle",
+      activity: createActivityState(),
     })
   })
 
@@ -238,7 +240,101 @@ describe("Sidebar collapsible sections and empty states", () => {
     expect(container.textContent).toContain("暂无最近会话")
   })
 
-  it("refreshes via the header button and when expanding the IM section", async () => {
+  it("shows one running spinner in the existing right-side action position", () => {
+    const session = channelSession()
+    useDesktopSessionStore.setState({
+      sessions: [session],
+      activity: {
+        ...createActivityState(),
+        sessions: {
+          [session.id]: {
+            session,
+            executionState: "running",
+            attentionState: "read",
+            activitySeq: 1,
+            updatedAt: 1,
+          },
+        },
+      },
+    })
+
+    act(() =>
+      root.render(
+        <Sidebar
+          open={true}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    )
+
+    const rightAction = container.querySelector<HTMLButtonElement>(
+      '[aria-label="帮我看下这个报错 正在运行，打开更多操作"]'
+    )
+    expect(rightAction).not.toBeNull()
+    expect(rightAction?.querySelectorAll('[data-slot="spinner"]')).toHaveLength(1)
+    expect(rightAction?.parentElement?.querySelectorAll('[data-slot="spinner"]')).toHaveLength(1)
+    expect(
+      rightAction?.querySelector('[data-slot="spinner"]')?.classList.contains("animate-spin")
+    ).toBe(true)
+  })
+
+  it("shows an accessible unread result and a Scheduled badge when the page is not mounted", () => {
+    const current = channelSession()
+    useDesktopSessionStore.setState({
+      sessions: [current],
+      activity: {
+        ...createActivityState(),
+        initialized: true,
+        cursor: 3,
+        sessions: {
+          [current.id]: {
+            session: current,
+            executionState: "failed",
+            attentionState: "unread",
+            activitySeq: 2,
+            updatedAt: 2,
+          },
+        },
+        scheduledRuns: {
+          run: {
+            taskId: "task",
+            activitySeq: 3,
+            updatedAt: 3,
+            executionState: "completed",
+            attentionState: "unread",
+            run: {
+              id: "run",
+              taskId: "task",
+              status: "succeeded",
+              cause: "scheduled",
+              scheduledFor: 1,
+              unread: true,
+              createdAt: 1,
+              updatedAt: 3,
+            },
+          },
+        },
+      },
+    })
+    act(() =>
+      root.render(
+        <Sidebar
+          open={true}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    )
+    expect(container.querySelector('[aria-label*="运行失败"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="定时任务，1 个结果待查看"]')).not.toBeNull()
+  })
+
+  it("refreshes via the header button but not when expanding the IM section", async () => {
     const refreshBootstrap = vi.fn(async () => {})
     useDesktopSessionStore.setState({ sessions: [channelSession()], refreshBootstrap })
 
@@ -259,7 +355,7 @@ describe("Sidebar collapsible sections and empty states", () => {
     })
     expect(refreshBootstrap).toHaveBeenCalledTimes(1)
 
-    // 折叠后重新展开 IM 分区也应触发刷新。
+    // Activity 全局事件负责新会话，展开分区不再触发网络刷新。
     const imSectionBtn = [...container.querySelectorAll("button")].find((b) =>
       b.textContent?.includes("IM 会话")
     )
@@ -269,7 +365,7 @@ describe("Sidebar collapsible sections and empty states", () => {
     await act(async () => {
       imSectionBtn?.click()
     })
-    expect(refreshBootstrap).toHaveBeenCalledTimes(2)
+    expect(refreshBootstrap).toHaveBeenCalledTimes(1)
   })
 
   it("restores collapsed state from localStorage on initial render", () => {

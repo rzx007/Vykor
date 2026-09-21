@@ -277,7 +277,7 @@ export class SessionStore {
         hooks: options.transactionHooks,
       });
       this.projects = new ProjectRepository(this.storage);
-      this.schedules = new ScheduleRepository(this.storage);
+      this.schedules = new ScheduleRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.workflows = new WorkflowRepository(this.storage);
       this.channels = new ChannelRepository(this.storage);
       this.conversations = new ConversationRepository({

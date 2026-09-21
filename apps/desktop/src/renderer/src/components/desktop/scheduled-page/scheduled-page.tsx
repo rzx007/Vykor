@@ -6,6 +6,7 @@ import { useAppearance } from "@renderer/components/appearance/appearance-provid
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type {
   CreateDesktopScheduledTaskInput,
   DesktopScheduledRun,
@@ -29,7 +30,6 @@ const splitColumns = "minmax(0, 0fr) minmax(0, 44rem) minmax(0, 1fr)"
 export function ScheduledPage({
   onStartConversation,
   onOpenConversation,
-  onSessionListChanged,
 }: ScheduledPageProps): React.JSX.Element {
   const { resolvedReducedMotion } = useAppearance()
   const [tasks, setTasks] = useState<DesktopScheduledTask[]>([])
@@ -41,124 +41,179 @@ export function ScheduledPage({
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [runningTaskIds, setRunningTaskIds] = useState<Set<string>>(() => new Set())
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorTask, setEditorTask] = useState<DesktopScheduledTask | null>(null)
+  const scheduledActivity = useDesktopSessionStore((state) => state.activity.scheduledRuns)
+  const activityInitialized = useDesktopSessionStore((state) => state.activity.initialized)
+  const lastDeletedTaskId = useDesktopSessionStore((state) => state.activity.lastDeletedTaskId)
+  const runningTaskIds = useMemo(
+    () =>
+      new Set(
+        Object.values(scheduledActivity)
+          .filter((item) => item.executionState === "running")
+          .map((item) => item.taskId)
+      ),
+    [scheduledActivity]
+  )
+  const displayStatus =
+    status && activityInitialized
+      ? {
+          ...status,
+          unread: Object.values(scheduledActivity).filter(
+            (item) => item.attentionState === "unread"
+          ).length,
+          executing: runningTaskIds.size,
+        }
+      : status
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase())
-  const refreshInitializedRef = useRef(false)
-  const unreadCountRef = useRef(0)
-  const notifiedRunIdsRef = useRef<Set<string>>(new Set())
-  const knownRunSessionIdsRef = useRef<Set<string> | null>(null)
-  const refreshRequestRef = useRef(0)
+  const detailRequestRef = useRef(0)
+  const requestedListSeqRef = useRef(0)
+  const appliedListSeqRef = useRef(0)
+  const taskListSignal = useMemo(
+    () =>
+      JSON.stringify({
+        lastDeletedTaskId,
+        runs: Object.values(scheduledActivity)
+          .map(({ run }) => [run.id, run.status])
+          .sort((a, b) => a[0]!.localeCompare(b[0]!)),
+      }),
+    [scheduledActivity, lastDeletedTaskId]
+  )
+  const seenTaskListSignalRef = useRef(taskListSignal)
   const selectedIdRef = useRef(selectedId)
   const selectTask = useCallback((nextSelectedId: string | null): void => {
     selectedIdRef.current = nextSelectedId
     setSelectedId(nextSelectedId)
   }, [])
 
-  const refresh = useCallback(async (): Promise<void> => {
-    const requestId = ++refreshRequestRef.current
-    const selectedTaskId = selectedId
-    try {
-      const previousUnread = unreadCountRef.current
-      const initialized = refreshInitializedRef.current
-      const [nextStatus, nextTasks, latestRuns, selectedRuns] = await Promise.all([
-        window.desktop.schedules.status(),
-        window.desktop.schedules.list(),
-        window.desktop.schedules.listRuns({ limit: 50 }),
-        selectedTaskId
-          ? window.desktop.schedules.listRuns({ taskId: selectedTaskId, limit: 30 })
-          : Promise.resolve(null),
-      ])
-      if (requestId !== refreshRequestRef.current || selectedTaskId !== selectedIdRef.current) return
-      if (initialized && nextStatus.unread > previousUnread) {
-        const unreadRuns = await window.desktop.schedules.listRuns({ unread: true, limit: 10 })
-        await notifyUnreadScheduledRuns(
-          unreadRuns,
-          nextTasks,
-          selectedTaskId,
-          notifiedRunIdsRef.current
-        )
-      }
-      const nextSessionIds = new Set(
-        latestRuns.flatMap((run) => (run.sessionId ? [run.sessionId] : []))
-      )
-      const previousSessionIds = knownRunSessionIdsRef.current
-      const sessionIdsChanged =
-        (previousSessionIds === null && nextSessionIds.size > 0) ||
-        (previousSessionIds !== null && !sameStringSet(previousSessionIds, nextSessionIds))
-      let sessionListSynchronized = !sessionIdsChanged
-      if (sessionIdsChanged) {
-        try {
-          await onSessionListChanged()
-          sessionListSynchronized = true
-        } catch {
-          // Keep the previous snapshot so the next poll retries the narrow session-list refresh.
-        }
-      }
-      if (requestId !== refreshRequestRef.current || selectedTaskId !== selectedIdRef.current) return
-      if (sessionListSynchronized) knownRunSessionIdsRef.current = nextSessionIds
-      unreadCountRef.current = nextStatus.unread
-      refreshInitializedRef.current = true
-      setStatus(nextStatus)
+  const applyTaskList = useCallback(
+    (
+      requestSeq: number,
+      nextTasks: DesktopScheduledTask[],
+      nextStatus?: DesktopScheduledStatus
+    ): boolean => {
+      if (requestSeq !== requestedListSeqRef.current || requestSeq < appliedListSeqRef.current)
+        return false
+      appliedListSeqRef.current = requestSeq
       setTasks(nextTasks)
-      if (selectedRuns) {
-        setRuns(selectedRuns.map((run) => (run.unread ? { ...run, unread: false } : run)))
-      }
-      setRunningTaskIds(
-        new Set(
-          latestRuns
-            .filter((run) => run.status === "running" || run.status === "queued")
-            .map((run) => run.taskId)
-        )
-      )
-      if (
-        selectedIdRef.current &&
-        !nextTasks.some((task) => task.id === selectedIdRef.current)
-      ) {
+      if (nextStatus) setStatus(nextStatus)
+      if (selectedIdRef.current && !nextTasks.some((task) => task.id === selectedIdRef.current)) {
         selectTask(null)
       }
       setError(null)
+      return true
+    },
+    [selectTask]
+  )
+
+  const refresh = useCallback(async (): Promise<void> => {
+    const requestSeq = ++requestedListSeqRef.current
+    try {
+      const [nextStatus, nextTasks] = await Promise.all([
+        window.desktop.schedules.status(),
+        window.desktop.schedules.list(),
+      ])
+      applyTaskList(requestSeq, nextTasks, nextStatus)
     } catch (cause) {
-      if (requestId === refreshRequestRef.current && selectedTaskId === selectedIdRef.current) {
+      if (requestSeq === requestedListSeqRef.current && requestSeq >= appliedListSeqRef.current) {
         setError(cause instanceof Error ? cause.message : String(cause))
       }
     } finally {
       setLoading(false)
     }
-  }, [onSessionListChanged, selectTask, selectedId])
+  }, [applyTaskList])
 
-  useEffect(() => {
-    const initialTimer = window.setTimeout(() => void refresh(), 0)
-    const timer = window.setInterval(() => void refresh(), 20_000)
-    return () => {
-      window.clearTimeout(initialTimer)
-      window.clearInterval(timer)
-    }
-  }, [refresh])
-
-  useEffect(() => {
-    if (!selectedId) return
-    let disposed = false
-    void window.desktop.schedules
-      .listRuns({ taskId: selectedId, limit: 30 })
-      .then(async (nextRuns) => {
-        if (disposed) return
-        setRuns(nextRuns.map((run) => (run.unread ? { ...run, unread: false } : run)))
-        const unreadRuns = nextRuns.filter((run) => run.unread)
-        if (unreadRuns.length === 0) return
+  const refreshSelectedRuns = useCallback(async (taskId: string): Promise<void> => {
+    const requestId = ++detailRequestRef.current
+    try {
+      const nextRuns = await window.desktop.schedules.listRuns({ taskId, limit: 30 })
+      if (requestId !== detailRequestRef.current || taskId !== selectedIdRef.current) return
+      setRuns(nextRuns.map((run) => (run.unread ? { ...run, unread: false } : run)))
+      while (taskId === selectedIdRef.current) {
+        const unreadRuns = await window.desktop.schedules.listRuns({
+          taskId,
+          unread: true,
+          limit: 500,
+        })
+        if (unreadRuns.length === 0) break
         await Promise.all(
           unreadRuns.map((run) => window.desktop.schedules.setRunUnread(run.id, false))
         )
-        const nextStatus = await window.desktop.schedules.status()
-        if (!disposed) setStatus(nextStatus)
-      })
-      .catch(
-        (cause) => !disposed && setError(cause instanceof Error ? cause.message : String(cause))
-      )
+      }
+      if (taskId === selectedIdRef.current) setError(null)
+    } catch (cause) {
+      if (requestId === detailRequestRef.current && taskId === selectedIdRef.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    }
+  }, [])
+
+  const refreshAll = useCallback(async (): Promise<void> => {
+    await refresh()
+    if (selectedIdRef.current) await refreshSelectedRuns(selectedIdRef.current)
+  }, [refresh, refreshSelectedRuns])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refresh(), 0)
+    return () => window.clearTimeout(timer)
+  }, [refresh])
+
+  const selectedTaskActivityKey = useMemo(
+    () =>
+      JSON.stringify(
+        Object.values(scheduledActivity)
+          .filter((item) => item.taskId === selectedId)
+          .map(({ run }) => [run.id, run.status, run.sessionId, run.runId, run.summary, run.error])
+          .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+      ),
+    [scheduledActivity, selectedId]
+  )
+
+  useEffect(() => {
+    if (!selectedId) return
+    const timer = window.setTimeout(() => void refreshSelectedRuns(selectedId), 0)
+    return () => window.clearTimeout(timer)
+  }, [selectedId, selectedTaskActivityKey, refreshSelectedRuns])
+
+  useEffect(() => {
+    if (loading) return
+    if (taskListSignal === seenTaskListSignalRef.current) return
+    seenTaskListSignalRef.current = taskListSignal
+    let disposed = false
+    let timer: number
+    const load = async (attempt: number): Promise<void> => {
+      if (disposed) return
+      const requestSeq = ++requestedListSeqRef.current
+      try {
+        const nextTasks = await window.desktop.schedules.list()
+        if (disposed) return
+        if (!applyTaskList(requestSeq, nextTasks) && requestSeq >= appliedListSeqRef.current) {
+          timer = window.setTimeout(
+            () => void load(attempt + 1),
+            Math.min(30_000, 250 * 2 ** attempt)
+          )
+        }
+      } catch (cause) {
+        if (disposed || requestSeq < appliedListSeqRef.current) return
+        if (requestSeq === requestedListSeqRef.current) {
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
+        timer = window.setTimeout(
+          () => void load(attempt + 1),
+          Math.min(30_000, 250 * 2 ** attempt)
+        )
+      }
+    }
+    timer = window.setTimeout(() => void load(0), 0)
     return () => {
       disposed = true
+      window.clearTimeout(timer)
     }
+  }, [loading, taskListSignal, applyTaskList])
+
+  useEffect(() => {
+    useDesktopSessionStore.setState({ selectedScheduledTaskId: selectedId })
+    return () => useDesktopSessionStore.setState({ selectedScheduledTaskId: null })
   }, [selectedId])
 
   const selected = useMemo(
@@ -279,10 +334,10 @@ export function ScheduledPage({
                 filter={filter}
                 filterCounts={filterCounts}
                 search={search}
-                status={status}
+                status={displayStatus}
                 onFilterChange={setFilter}
                 onSearchChange={setSearch}
-                onRefresh={refresh}
+                onRefresh={refreshAll}
                 onCreateManual={openCreateEditor}
                 onStartConversation={onStartConversation}
                 loading={loading}
@@ -396,7 +451,7 @@ export function ScheduledPage({
                       setError(null)
                       void onOpenConversation(sessionId).catch((cause) => {
                         setError(cause instanceof Error ? cause.message : String(cause))
-                        void refresh()
+                        void refreshAll()
                       })
                     }}
                   />
@@ -420,45 +475,4 @@ export function ScheduledPage({
       ) : null}
     </section>
   )
-}
-
-function sameStringSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  return left.size === right.size && [...left].every((value) => right.has(value))
-}
-
-async function notifyUnreadScheduledRuns(
-  runs: readonly DesktopScheduledRun[],
-  tasks: readonly DesktopScheduledTask[],
-  selectedTaskId: string | null,
-  notifiedRunIds: Set<string>
-): Promise<void> {
-  const mode = await readNotificationMode()
-  if (mode === "never") return
-
-  const taskNames = new Map(tasks.map((task) => [task.id, task.name]))
-  for (const run of runs) {
-    if (run.taskId === selectedTaskId || notifiedRunIds.has(run.id)) continue
-    notifiedRunIds.add(run.id)
-    const taskName = taskNames.get(run.taskId)?.trim() || "已安排任务"
-    await window.desktop.tray.notify({
-      title: scheduledRunNotificationTitle(run),
-      body: `${taskName} 有新的运行结果。`,
-      ...(mode === "always" ? { showWhenFocused: true } : {}),
-    })
-  }
-}
-
-async function readNotificationMode(): Promise<"never" | "when_unfocused" | "always"> {
-  try {
-    return (await window.desktop.settings.snapshot()).notificationMode
-  } catch {
-    return "when_unfocused"
-  }
-}
-
-function scheduledRunNotificationTitle(run: DesktopScheduledRun): string {
-  if (run.status === "succeeded") return "已安排任务完成"
-  if (run.status === "needs_attention") return "已安排任务需要处理"
-  if (run.status === "failed" || run.status === "interrupted") return "已安排任务失败"
-  return "已安排任务有新结果"
 }

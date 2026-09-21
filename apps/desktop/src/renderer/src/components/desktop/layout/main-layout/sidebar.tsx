@@ -1,5 +1,7 @@
 import {
   Archive,
+  CircleAlert,
+  CircleHelp,
   Bell,
   ChevronDown,
   Clock3,
@@ -104,6 +106,13 @@ export function Sidebar({
   const darkTheme = resolvedTheme === "dark"
   const projects = useDesktopSessionStore(selectProjects)
   const sessions = useDesktopSessionStore(selectSessions)
+  const activity = useDesktopSessionStore((state) => state.activity)
+  const scheduledUnread = Object.values(activity.scheduledRuns).filter(
+    (item) => item.attentionState === "unread"
+  ).length
+  const scheduledRunning = Object.values(activity.scheduledRuns).some(
+    (item) => item.executionState === "running"
+  )
   const archivedSessions = useDesktopSessionStore(selectArchivedSessions)
   const imGroups = useMemo(() => groupImSessions(sessions), [sessions])
   const refreshBootstrap = useDesktopSessionStore((state) => state.refreshBootstrap)
@@ -122,26 +131,21 @@ export function Sidebar({
   const [projectName, setProjectName] = useState("")
   const [busy, setBusy] = useState(false)
   const [projectExpansion, setProjectExpansion] = useState<Record<string, boolean>>({})
-  const [sectionExpansion, setSectionExpansion] = useState<SidebarSectionExpansion>(
-    () => loadSidebarSectionExpansion()
+  const [sectionExpansion, setSectionExpansion] = useState<SidebarSectionExpansion>(() =>
+    loadSidebarSectionExpansion()
   )
 
   const toggleSection = (section: keyof SidebarSectionExpansion): void => {
     setSectionExpansion((current) => {
       const next = { ...current, [section]: !current[section] }
       saveSidebarSectionExpansion(next)
-      // 展开 IM 分区时刷新一次，让 daemon 侧新建的渠道会话尽快出现。
-      if (section === "im" && next.im && !current.im) {
-        void refreshBootstrap().catch(() => undefined)
-      }
       return next
     })
   }
   const recentSessions = useMemo(
     () =>
       sessions.filter(
-        (session) =>
-          session.workspaceMode === "outside_project" && !isChannelSession(session)
+        (session) => session.workspaceMode === "outside_project" && !isChannelSession(session)
       ),
     [sessions]
   )
@@ -260,17 +264,19 @@ export function Sidebar({
                 icon={icon}
                 label={label}
                 selected={(isScheduled && scheduledSelected) || (isPlugins && pluginsSelected)}
+                badge={isScheduled ? scheduledUnread : 0}
+                running={isScheduled && scheduledRunning}
                 onClick={
                   isScheduled
                     ? () => {
-                      setArchiveMode(false)
-                      onOpenScheduled()
-                    }
+                        setArchiveMode(false)
+                        onOpenScheduled()
+                      }
                     : isPlugins
                       ? () => {
-                        setArchiveMode(false)
-                        onOpenPlugins()
-                      }
+                          setArchiveMode(false)
+                          onOpenPlugins()
+                        }
                       : undefined
                 }
               />
@@ -337,13 +343,15 @@ export function Sidebar({
                               project={project}
                               sessions={sessions.filter(
                                 (session) =>
-                                  samePath(session.cwd, project.path) &&
-                                  !isChannelSession(session)
+                                  samePath(session.cwd, project.path) && !isChannelSession(session)
                               )}
                               activeSessionId={activeSessionId}
                               expanded={expanded}
                               onToggle={() =>
-                                setProjectExpansion((current) => ({ ...current, [path]: !expanded }))
+                                setProjectExpansion((current) => ({
+                                  ...current,
+                                  [path]: !expanded,
+                                }))
                               }
                               projectActions={projectActions}
                               actions={sessionActions}
@@ -611,7 +619,10 @@ function SessionRow({
 }): React.JSX.Element {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const pinned = isSessionPinned(session)
-  const running = !archived && session.status === "running"
+  const activity = useDesktopSessionStore((state) => state.activity.sessions[session.id])
+  const running =
+    !archived &&
+    (activity?.executionState === "running" || (!activity && session.status === "running"))
   const title = sessionTitle(session)
 
   return (
@@ -635,6 +646,7 @@ function SessionRow({
       >
         {pinned ? <Pin className="mr-1 inline size-3 -translate-y-px text-sidebar-muted" /> : null}
         {title}
+        {!archived && activity ? <SessionActivityIndicator activity={activity} /> : null}
       </button>
       <SessionMoreMenu
         session={session}
@@ -866,17 +878,24 @@ function SidebarNavigationButton({
   icon: Icon,
   label,
   selected = false,
+  badge = 0,
+  running = false,
   onClick,
 }: {
   icon: typeof MessageSquarePlus
   label: string
   selected?: boolean
+  badge?: number
+  running?: boolean
   onClick?: () => void
 }): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={
+        badge ? `${label}，${badge} 个结果待查看` : running ? `${label}，正在运行` : label
+      }
       className={cn(
         "text-ui-small flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left font-[450] text-sidebar-foreground transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         selected && "bg-sidebar-selected"
@@ -884,8 +903,49 @@ function SidebarNavigationButton({
     >
       <Icon className="size-4 text-sidebar-muted" strokeWidth={1.8} />
       <span>{label}</span>
+      {running ? (
+        <Spinner aria-hidden="true" className="ml-auto size-3 motion-reduce:animate-none" />
+      ) : null}
+      {badge ? (
+        <span
+          aria-hidden="true"
+          className="ml-auto rounded-full bg-sidebar-accent px-1.5 text-xs tabular-nums"
+        >
+          {badge}
+        </span>
+      ) : null}
     </button>
   )
+}
+
+function SessionActivityIndicator({
+  activity,
+}: {
+  activity: import("@shared/activity-types").DesktopSessionActivity
+}): React.JSX.Element | null {
+  const status = activity.executionState
+  if (status === "needs_input")
+    return (
+      <span aria-label="等待处理" className="ml-2 inline-flex align-middle text-amber-600">
+        <CircleHelp aria-hidden="true" className="size-3.5" />
+      </span>
+    )
+  if (status === "failed" || status === "interrupted")
+    return (
+      <span
+        aria-label={status === "failed" ? "运行失败" : "运行中断"}
+        className="ml-2 inline-flex align-middle text-destructive"
+      >
+        <CircleAlert aria-hidden="true" className="size-3.5" />
+      </span>
+    )
+  if (status === "completed" && activity.attentionState === "unread")
+    return (
+      <span aria-label="有新结果" className="ml-2 inline-flex align-middle">
+        <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+      </span>
+    )
+  return null
 }
 
 function SidebarSectionHeader({
@@ -905,7 +965,7 @@ function SidebarSectionHeader({
       onClick={onToggle}
       aria-expanded={expanded}
       className={cn(
-        "group/section flex h-7 w-full cursor-pointer items-center gap-1.5 px-2.5 text-left text-ui-small font-normal text-sidebar-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none select-none",
+        "group/section text-ui-small flex h-7 w-full cursor-pointer items-center gap-1.5 px-2.5 text-left font-normal text-sidebar-muted/70 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         className
       )}
     >

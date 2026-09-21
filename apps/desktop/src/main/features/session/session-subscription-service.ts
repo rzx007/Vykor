@@ -39,6 +39,10 @@ export class SessionSubscriptionService {
     return sub?.sessionId === sessionId
   }
 
+  closeDeletedSessions(webContentsId: number, sessionIds: readonly string[]): void {
+    this.subscriptions.deleteMatchingSessions(webContentsId, new Set(sessionIds))
+  }
+
   closeSession(webContentsId: number): void {
     this.subscriptions.clearOwner(webContentsId)
   }
@@ -78,7 +82,14 @@ export class SessionSubscriptionService {
     )
 
     setTimeout(() => {
-      void this.pumpSession(client, webContents, primarySubscriptionSlot, sessionId, controller, iterator)
+      void this.pumpSession(
+        client,
+        webContents,
+        primarySubscriptionSlot,
+        sessionId,
+        controller,
+        iterator
+      )
     }, 0)
 
     return toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
@@ -108,7 +119,15 @@ export class SessionSubscriptionService {
       "无法加载辅助会话状态。"
     )
     setTimeout(() => {
-      void this.pumpSession(client, webContents, slot, sessionId, controller, iterator, subscriptionId)
+      void this.pumpSession(
+        client,
+        webContents,
+        slot,
+        sessionId,
+        controller,
+        iterator,
+        subscriptionId
+      )
     }, 0)
     return toDesktopSessionView(snapshot.state, sessionId, snapshot.source)
   }
@@ -141,7 +160,13 @@ export class SessionSubscriptionService {
         !webContents.isDestroyed() &&
         Boolean(subscription) &&
         this.subscriptions.isCurrent(webContents.id, slot, subscription!),
-      onUpdate: (update) => send(toDesktopSessionView(update.state, sessionId, update.source)),
+      onUpdate: (update) => {
+        if (!update.state.buckets[sessionId]?.session) {
+          this.subscriptions.delete(webContents.id, slot)
+          return
+        }
+        send(toDesktopSessionView(update.state, sessionId, update.source))
+      },
       onReconnecting: (last) => send(toDesktopSessionView(last.state, sessionId, "reconnecting")),
       onError: (error) => {
         if (!controller.signal.aborted && !webContents.isDestroyed()) {

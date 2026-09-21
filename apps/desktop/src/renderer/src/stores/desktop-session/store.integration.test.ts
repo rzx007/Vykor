@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { emptySessionView, resetDesktopSessionStore } from "./store-test-fixtures"
 import { attachDesktopSessionEvents, useDesktopSessionStore } from "./store"
+import { createActivityState } from "./activity-state"
 
 beforeEach(() => {
   resetDesktopSessionStore()
@@ -22,6 +23,46 @@ describe("desktop session store composition", () => {
 })
 
 describe("desktop session store event lifecycle", () => {
+  it("shares one Activity listener under two mounted bridges and removes it on final detach", async () => {
+    const listeners = new Set<
+      (value: import("@shared/activity-types").DesktopActivityUpdate) => void
+    >()
+    const open = vi.fn(async () => ({
+      cursor: 0,
+      delivery: "baseline" as const,
+      sessions: [],
+      scheduled: [],
+    }))
+    vi.stubGlobal("window", {
+      desktop: {
+        sessions: {
+          onUpdated: () => () => undefined,
+          onDaemonStatusChanged: () => () => undefined,
+        },
+        activity: {
+          open,
+          onUpdated: (
+            listener: (value: import("@shared/activity-types").DesktopActivityUpdate) => void
+          ) => {
+            listeners.add(listener)
+            return () => {
+              listeners.delete(listener)
+            }
+          },
+        },
+      },
+    })
+    useDesktopSessionStore.setState({ activity: createActivityState() })
+    const first = attachDesktopSessionEvents()
+    const second = attachDesktopSessionEvents()
+    expect(listeners.size).toBe(1)
+    expect(open).toHaveBeenCalledOnce()
+    first()
+    expect(listeners.size).toBe(1)
+    second()
+    expect(listeners.size).toBe(0)
+  })
+
   it("shares subscriptions until the last cleanup and can attach again", () => {
     const sessionSubscribers = new Set<(view: ReturnType<typeof emptySessionView>) => void>()
     const daemonSubscribers = new Set<

@@ -286,7 +286,7 @@ describe("SessionCommandService", () => {
     });
 
     it("deletes child sessions recursively, cleans up runtime, and releases operation lease", async () => {
-      const { service, sessions, runtimeControl, isBarrierReleased } = createService();
+      const { service, sessions, runtimeControl, events, isBarrierReleased } = createService();
       const child = { ...session, id: "child-1", parentId: "s1" };
       sessions.listChildSessions.mockImplementation((id: string) => (id === "s1" ? [child as any] : []));
       sessions.deleteSessionTree.mockImplementation(() => {
@@ -302,6 +302,7 @@ describe("SessionCommandService", () => {
       expect(runtimeControl.closeAgent).toHaveBeenCalledWith("s1");
       expect(sessions.deleteSessionTree).toHaveBeenCalledWith("s1");
       expect(sessions.deleteSessionTree).toHaveBeenCalledTimes(1);
+      expect(events.publishSince).toHaveBeenCalledWith(42);
       expect(sessions.beginArchive).not.toHaveBeenCalled();
       expect(isBarrierReleased()).toBe(true);
     });

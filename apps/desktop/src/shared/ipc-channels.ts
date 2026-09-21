@@ -39,6 +39,7 @@ import type {
   SessionGoal,
 } from "./session-types"
 import type { DesktopContextUsageSnapshot } from "./context-usage-types"
+import type { DesktopActivityUpdate } from "./activity-types"
 import type {
   WorkspaceListFilesInput,
   WorkspaceListFilesResult,
@@ -169,6 +170,7 @@ export const IpcChannels = {
   petSetIgnoreMouseEvents: "pet:set-ignore-mouse-events",
 
   sessionBootstrap: "session:bootstrap",
+  activityOpen: "activity:open",
   sessionList: "session:list",
   sessionDaemonStatus: "session:daemon-status",
   sessionChooseProject: "session:choose-project",
@@ -315,6 +317,7 @@ export const IpcEvents = {
   windowMaximizedChanged: "window:maximized-changed",
   petClicked: "pet:clicked",
   sessionUpdated: "session:updated",
+  activityUpdated: "activity:updated",
   sessionAuxUpdated: "session:aux-updated",
   sessionDaemonStatusChanged: "session:daemon-status-changed",
   attachmentUploadEvent: "attachment:upload-event",
@@ -469,15 +472,30 @@ export interface IpcInvokeMap {
     args: [cwd: string]
     result: DesktopCommandCatalogEntry[]
   }
-  [IpcChannels.sessionListContextPlugins]: { args: [cwd: string]; result: DesktopPluginCatalogEntry[] }
+  [IpcChannels.sessionListContextPlugins]: {
+    args: [cwd: string]
+    result: DesktopPluginCatalogEntry[]
+  }
   [IpcChannels.sessionCompact]: {
     args: [input: CompactDesktopSessionInput]
     result: DesktopCompactSessionResult
   }
-  [IpcChannels.sessionGoalGet]: { args: [input: GetDesktopSessionGoalInput]; result: SessionGoal | null }
-  [IpcChannels.sessionGoalCreate]: { args: [input: CreateDesktopSessionGoalInput]; result: SessionGoal }
-  [IpcChannels.sessionGoalUpdate]: { args: [input: UpdateDesktopSessionGoalInput]; result: SessionGoal }
-  [IpcChannels.sessionGoalAction]: { args: [input: DesktopSessionGoalActionInput]; result: SessionGoal }
+  [IpcChannels.sessionGoalGet]: {
+    args: [input: GetDesktopSessionGoalInput]
+    result: SessionGoal | null
+  }
+  [IpcChannels.sessionGoalCreate]: {
+    args: [input: CreateDesktopSessionGoalInput]
+    result: SessionGoal
+  }
+  [IpcChannels.sessionGoalUpdate]: {
+    args: [input: UpdateDesktopSessionGoalInput]
+    result: SessionGoal
+  }
+  [IpcChannels.sessionGoalAction]: {
+    args: [input: DesktopSessionGoalActionInput]
+    result: SessionGoal
+  }
   [IpcChannels.projectRename]: {
     args: [input: RenameDesktopProjectInput]
     result: DesktopProjectDetails["project"]
@@ -508,6 +526,7 @@ export interface IpcInvokeMap {
     result: DesktopSessionRecord
   }
   [IpcChannels.sessionOpen]: { args: [sessionId: string]; result: DesktopSessionView }
+  [IpcChannels.activityOpen]: { args: []; result: DesktopActivityUpdate }
   [IpcChannels.sessionAuxOpen]: {
     args: [input: OpenDesktopAuxSessionInput]
     result: DesktopSessionView

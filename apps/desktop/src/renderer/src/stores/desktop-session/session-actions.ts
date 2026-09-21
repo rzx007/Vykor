@@ -2,6 +2,8 @@ import type { CreateDesktopSessionInput, DesktopSessionView } from "@shared/sess
 import type { DesktopAttachmentDraft } from "@shared/attachment-types"
 
 import { applyBootstrapData } from "./bootstrap-actions"
+import { forgetSessionActivity } from "./activity-state"
+import { saveActivityPersistence } from "./activity-persistence"
 import { errorMessage } from "./error-state"
 import {
   formatSessionTitle,
@@ -154,6 +156,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       })
       if (!snapshotApplied) return "cancelled"
 
+      get().markActivitySessionRead(sessionId)
       writePersistedActiveSessionId(sessionId)
       const workspace = resolveSessionWorkspace(get().projects, view.session)
       if (
@@ -520,6 +523,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       set((state) => ({
         ...(isActive ? resolveSessionWorkspace(state.projects, existing) : {}),
         sessions: state.sessions.filter((session) => !deleted.has(session.id)),
+        activity: forgetSessionActivity(state.activity, deleted),
         archivedSessions: state.archivedSessions.filter((session) => !deleted.has(session.id)),
         activeSessionId: isActive ? null : state.activeSessionId,
         sessionView:
@@ -534,6 +538,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           : state.selectedPermissionMode,
         selectedEffort: isActive ? sessionEffort(existing) : state.selectedEffort,
       }))
+      saveActivityPersistence(get().activity)
       if (isActive) {
         clearPersistedActiveSessionId()
         const project = get().selectedProject

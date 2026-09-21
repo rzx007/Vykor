@@ -35,6 +35,8 @@ export interface ScheduleOperations {
 
 export interface ScheduledTaskServiceOptions {
   schedules: ScheduleOperations;
+  latestEventSeq?: () => number;
+  onDurableEvent?: (previousEventSeq: number) => void;
   execute(
     task: ScheduledTaskRecord,
     run: ScheduledRunRecord,
@@ -48,7 +50,7 @@ export class ScheduledTaskService {
   private shuttingDown = false;
 
   constructor(private readonly options: ScheduledTaskServiceOptions) {
-    options.schedules.interruptActiveRuns(DAEMON_RESTART_REASON);
+    this.commitScheduleChange(() => options.schedules.interruptActiveRuns(DAEMON_RESTART_REASON));
     for (const task of options.schedules.listTasks()) {
       const missedRun =
         task.status === "active" &&
@@ -166,7 +168,7 @@ export class ScheduledTaskService {
     if (this.active.has(id))
       throw new Error(`Scheduled task is running: ${id}`);
     this.clearTimer(id);
-    if (!this.options.schedules.deleteTask(id)) {
+    if (!this.commitScheduleChange(() => this.options.schedules.deleteTask(id))) {
       throw new Error(`Scheduled task not found: ${id}`);
     }
   }
@@ -178,7 +180,16 @@ export class ScheduledTaskService {
   }
 
   markRunRead(id: string, unread = false): ScheduledRunRecord {
-    return this.options.schedules.updateRun(id, { unread });
+    return this.commitScheduleChange(() => this.options.schedules.updateRun(id, { unread }));
+  }
+
+  private commitScheduleChange<T>(change: () => T): T {
+    const previousSeq = this.options.latestEventSeq?.();
+    const value = change();
+    if (previousSeq !== undefined && this.options.latestEventSeq?.() !== previousSeq) {
+      this.options.onDurableEvent?.(previousSeq);
+    }
+    return value;
   }
 
   async shutdown(): Promise<void> {
@@ -249,11 +260,11 @@ export class ScheduledTaskService {
         "Skipped because the previous scheduled run is still active",
       );
     }
-    const run = this.options.schedules.createRun({
+    const run = this.commitScheduleChange(() => this.options.schedules.createRun({
       taskId: task.id,
       cause,
       scheduledFor,
-    });
+    }));
     const promise = this.executeRun(task, run);
     this.active.set(task.id, promise);
     try {
@@ -269,21 +280,21 @@ export class ScheduledTaskService {
     task: ScheduledTaskRecord,
     run: ScheduledRunRecord,
   ): Promise<ScheduledRunRecord> {
-    this.options.schedules.updateRun(run.id, {
+    this.commitScheduleChange(() => this.options.schedules.updateRun(run.id, {
       status: "running",
       startedAt: Date.now(),
-    });
+    }));
     try {
       const result = await this.options.execute(task, run, (sessionId) => {
-        this.options.schedules.linkRunSession(run.id, sessionId);
+        this.commitScheduleChange(() => this.options.schedules.linkRunSession(run.id, sessionId));
       });
-      const finished = this.options.schedules.updateRun(run.id, {
+      const finished = this.commitScheduleChange(() => this.options.schedules.updateRun(run.id, {
         status: "succeeded",
         runId: result.runId,
         summary: result.summary,
         unread: true,
         finishedAt: Date.now(),
-      });
+      }));
       this.finishTask(task.id, finished.finishedAt!, true);
       return finished;
     } catch (error) {
@@ -291,13 +302,13 @@ export class ScheduledTaskService {
       const status = message.includes("requires user attention")
         ? "needs_attention"
         : "failed";
-      const finished = this.options.schedules.updateRun(run.id, {
+      const finished = this.commitScheduleChange(() => this.options.schedules.updateRun(run.id, {
         status,
         error: message,
         ...(status === "needs_attention" ? { attentionReason: message } : {}),
         unread: true,
         finishedAt: Date.now(),
-      });
+      }));
       this.finishTask(task.id, finished.finishedAt!, false);
       return finished;
     }
@@ -377,17 +388,17 @@ export class ScheduledTaskService {
     scheduledFor: number,
     summary: string,
   ): ScheduledRunRecord {
-    const skipped = this.options.schedules.createRun({
+    const skipped = this.commitScheduleChange(() => this.options.schedules.createRun({
       taskId,
       cause,
       scheduledFor,
-    });
-    return this.options.schedules.updateRun(skipped.id, {
+    }));
+    return this.commitScheduleChange(() => this.options.schedules.updateRun(skipped.id, {
       status: "skipped",
       summary,
       unread: true,
       finishedAt: Date.now(),
-    });
+    }));
   }
 
   private validateInput(

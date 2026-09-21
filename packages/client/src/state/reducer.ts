@@ -141,6 +141,9 @@ export function applyEvent(
     case "session.archived":
       next = archiveSession(next, event);
       break;
+    case "session.deleted":
+      next = deleteSessions(next, event);
+      break;
     case "session.input.admitted":
       next = upsertInput(next, readPayloadRecord<SessionInputRecord>(event, "input"));
       break;
@@ -207,6 +210,20 @@ function archiveSession(state: OpenHarnessClientState, event: SessionEventRecord
     updatedAt: Math.max(current.updatedAt, event.createdAt),
   };
   return upsertSession(state, archived);
+}
+
+function deleteSessions(state: OpenHarnessClientState, event: SessionEventRecord): OpenHarnessClientState {
+  const ids = new Set(Array.isArray(event.payload.sessionIds)
+    ? event.payload.sessionIds.filter((id): id is string => typeof id === "string") : []);
+  if (ids.size === 0) return state;
+  return {
+    ...state,
+    sessions: Object.fromEntries(Object.entries(state.sessions).filter(([id]) => !ids.has(id))),
+    sessionOrder: state.sessionOrder.filter((id) => !ids.has(id)),
+    buckets: Object.fromEntries(Object.entries(state.buckets).filter(([id]) => !ids.has(id))),
+    snapshotCursorBySession: Object.fromEntries(Object.entries(state.snapshotCursorBySession).filter(([id]) => !ids.has(id))),
+    eventsBySeq: Object.fromEntries(Object.entries(state.eventsBySeq).filter(([, item]) => !item.sessionId || !ids.has(item.sessionId))),
+  };
 }
 
 function upsertInput(state: OpenHarnessClientState, input: SessionInputRecord | undefined): OpenHarnessClientState {

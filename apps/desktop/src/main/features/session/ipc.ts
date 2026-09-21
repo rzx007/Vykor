@@ -32,6 +32,10 @@ export const sessionIpcContribution: IpcContribution = {
   register() {
     return [
       {
+        channel: IpcChannels.activityOpen,
+        handler: (event) => desktopSessionService.openActivity(event.sender),
+      },
+      {
         channel: IpcChannels.sessionBootstrap,
         handler: () => desktopSessionService.bootstrap(),
       },

@@ -36,6 +36,14 @@ export class SessionSubscriptionRegistry {
     return true
   }
 
+  deleteMatchingSessions(ownerId: number, sessionIds: ReadonlySet<string>): void {
+    const subscriptions = this.owners.get(ownerId)
+    if (!subscriptions) return
+    for (const [slot, subscription] of subscriptions) {
+      if (sessionIds.has(subscription.sessionId)) this.delete(ownerId, slot)
+    }
+  }
+
   clearOwner(ownerId: number): void {
     const subscriptions = this.owners.get(ownerId)
     if (!subscriptions) return

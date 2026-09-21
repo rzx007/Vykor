@@ -167,6 +167,15 @@ const workflowEventTypes = [
 ] as const;
 
 export const DEFAULT_DURABLE_EVENT_DEFINITIONS: readonly DurableEventDefinition[] = [
+  { type: "session.deleted", currentVersion: 1, scope: "global", validate: (payload) => {
+    const ids = payload.sessionIds;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.some((id) => typeof id !== "string" || !id.trim())) {
+      throw new Error("sessionIds must be a non-empty string array");
+    }
+  } },
+  { type: "scheduled.task.deleted", currentVersion: 1, scope: "global", validate: stringsPayload("taskId") },
+  { type: "scheduled.run.created", currentVersion: 1, scope: "global", validate: objectPayload("run") },
+  { type: "scheduled.run.updated", currentVersion: 1, scope: "global", validate: objectPayload("run") },
   sessionDefinition("session.created", objectPayload("session")),
   sessionDefinition("session.updated", objectPayload("session")),
   sessionDefinition("session.archived", stringsPayload("sessionId")),

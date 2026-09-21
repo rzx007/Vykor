@@ -65,6 +65,8 @@ import { workspaceService } from "../workspace/workspace-service"
 import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
 import { SessionSubscriptionService, toDesktopSessionRecord } from "./session-subscription-service"
+import { GlobalActivitySubscriptionService } from "../activity/global-activity-subscription-service"
+import type { DesktopActivityUpdate } from "../../../shared/activity-types"
 import {
   requirePermissionMode,
   requireString,
@@ -76,6 +78,10 @@ import {
 export class DesktopSessionService {
   readonly connection = new DaemonConnectionService()
   readonly subscriptions = new SessionSubscriptionService()
+  readonly activitySubscriptions = new GlobalActivitySubscriptionService(
+    undefined,
+    (ownerId, sessionIds) => this.subscriptions.closeDeletedSessions(ownerId, sessionIds)
+  )
   readonly operations = new SessionOperations()
 
   async listSessions(): Promise<DesktopSessionLists> {
@@ -139,8 +145,7 @@ export class DesktopSessionService {
     const projects = await Promise.all(
       projectRecords
         .filter(
-          (project) =>
-            !isChannelProjectHidden(project.path, channelSessionCwds, documentsPath)
+          (project) => !isChannelProjectHidden(project.path, channelSessionCwds, documentsPath)
         )
         .map(toDesktopProject)
     )
@@ -290,6 +295,11 @@ export class DesktopSessionService {
     return await this.subscriptions.openSession(client, webContents, sessionIdInput)
   }
 
+  async openActivity(webContents: WebContents): Promise<DesktopActivityUpdate> {
+    const client = await this.getClient()
+    return this.activitySubscriptions.open(client, webContents)
+  }
+
   closeSession(webContentsId: number): void {
     this.subscriptions.closeSession(webContentsId)
   }
@@ -425,6 +435,7 @@ export class DesktopSessionService {
 
   async dispose(): Promise<void> {
     this.subscriptions.clearAll()
+    this.activitySubscriptions.clearAll()
     await this.connection.dispose()
   }
 
@@ -432,9 +443,11 @@ export class DesktopSessionService {
     return this.connection.getClient()
   }
 
-  refreshDaemonClient(): Promise<OpenHarnessClient> {
+  async refreshDaemonClient(): Promise<OpenHarnessClient> {
     this.subscriptions.clearAll()
-    return this.connection.refreshClient()
+    const client = await this.connection.refreshClient()
+    await this.activitySubscriptions.replaceClient(client)
+    return client
   }
 
   get clientPromise(): Promise<OpenHarnessClient> | null {
@@ -443,7 +456,7 @@ export class DesktopSessionService {
   }
 
   set clientPromise(promise: Promise<OpenHarnessClient> | null) {
-    ; (
+    ;(
       this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null }
     ).clientPromise = promise
   }

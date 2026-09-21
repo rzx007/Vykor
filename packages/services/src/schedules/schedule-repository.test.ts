@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import type { ScheduledRunRecord } from "@openharness/protocol";
 
 import { ApplicationOwnerConflictError, SessionStore } from "../session-runtime/store.js";
 import type { StorageContext } from "../database/storage-context.js";
@@ -28,6 +29,43 @@ describe("ScheduleRepository", () => {
     recurrenceFormat: "once" as const, timezone: "UTC", destination: "standalone" as const,
   };
   const runInput = { taskId: "task", cause: "manual" as const, scheduledFor: 100 };
+
+  it("replays every committed run transition including session link and read state", () => {
+    withRepository((_repository, store) => {
+      store.schedules.createTask({ ...taskInput, id: "task" });
+      store.schedules.createRun({ ...runInput, id: "run" });
+      store.schedules.updateRun("run", { status: "running" });
+      store.sessions.create({ id: "session", cwd: process.cwd(), model: "test" });
+      store.schedules.linkRunSession("run", "session");
+      store.schedules.updateRun("run", { status: "succeeded", unread: true });
+      store.schedules.updateRun("run", { unread: false });
+
+      expect(store.conversations.listEvents().filter((event) => event.type.startsWith("scheduled.run."))
+        .map((event) => [event.type, (event.payload.run as ScheduledRunRecord).status,
+          (event.payload.run as ScheduledRunRecord).sessionId,
+          (event.payload.run as ScheduledRunRecord).unread])).toEqual([
+          ["scheduled.run.created", "queued", undefined, false],
+          ["scheduled.run.updated", "running", undefined, false],
+          ["scheduled.run.updated", "running", "session", false],
+          ["scheduled.run.updated", "succeeded", "session", true],
+          ["scheduled.run.updated", "succeeded", "session", false],
+        ]);
+    });
+  });
+  it("records a task deletion so replay can discard its old unread runs", () => {
+    withRepository((_repository, store) => {
+      store.schedules.createTask({ ...taskInput, id: "task" });
+      store.schedules.createRun({ ...runInput, id: "run" });
+      store.schedules.updateRun("run", { status: "succeeded", unread: true });
+      const before = store.conversations.latestEventSeq();
+
+      expect(store.schedules.deleteTask("task")).toBe(true);
+      expect(store.schedules.getRun("run")).toBeUndefined();
+      expect(store.conversations.listEvents({ afterSeq: before })).toMatchObject([
+        { type: "scheduled.task.deleted", payload: { taskId: "task" } },
+      ]);
+    });
+  });
   const writes: Array<[string, (store: SessionStore) => unknown]> = [
     ["createTask", (store) => store.schedules.createTask({ ...taskInput, id: "new-task" })],
     ["updateTask", (store) => store.schedules.updateTask("task", { name: "changed" })],

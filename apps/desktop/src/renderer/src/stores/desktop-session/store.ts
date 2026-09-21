@@ -1,5 +1,10 @@
 import { create } from "zustand"
+import type { DesktopActivityUpdate } from "@shared/activity-types"
 
+import { applyActivityUpdate as reduceActivity, markSessionRead } from "./activity-state"
+import { saveActivityPersistence } from "./activity-persistence"
+import { clearPersistedActiveSessionId } from "./persistence"
+import { upsertSession } from "./helpers"
 import { createAttachmentActions } from "./attachment-actions"
 import { attachDesktopDaemonStatusEvents, createBootstrapActions } from "./bootstrap-actions"
 import { createInitialState } from "./initial-state"
@@ -21,6 +26,8 @@ let desktopSessionEventSubscriptionCount = 0
 let detachDesktopSessionUpdates: (() => void) | null = null
 let detachDesktopDaemonStatus: (() => void) | null = null
 let detachDesktopAttachmentUploads: (() => void) | null = null
+let detachDesktopActivity: (() => void) | null = null
+let activityAttachGeneration = 0
 const projectDetailsCoordinator = createProjectDetailsCoordinator()
 
 export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => {
@@ -41,6 +48,62 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
     ...createAttachmentActions(context),
     ...createQueuedPromptActions(context),
     applySessionUpdate: createApplySessionUpdate(context),
+    applyActivityUpdate: (update: DesktopActivityUpdate) => {
+      const previous = get().activity
+      const removedSessions = new Set(update.removedSessionIds ?? [])
+      const activeDeleted =
+        get().activeSessionId !== null && removedSessions.has(get().activeSessionId!)
+      const viewedSessionId =
+        get().sessionView?.session.id === get().activeSessionId ? get().activeSessionId : null
+      const { state: activity, notifications } = reduceActivity(previous, update, viewedSessionId)
+      if (activity === previous) return
+      const acceptedSessions = update.sessions.flatMap((item) => {
+        const session = activity.sessions[item.session.id]?.session
+        return session ? [session] : []
+      })
+      set((current) => ({
+        activity,
+        sessions: acceptedSessions
+          .reduce(
+            (sessions, session) =>
+              session.status === "archived"
+                ? sessions.filter((row) => row.id !== session.id)
+                : upsertSession(sessions, session),
+            current.sessions
+          )
+          .filter((item) => !removedSessions.has(item.id)),
+        archivedSessions: acceptedSessions
+          .reduce(
+            (sessions, session) =>
+              session.status === "archived" ? upsertSession(sessions, session) : sessions,
+            current.archivedSessions
+          )
+          .filter((item) => !removedSessions.has(item.id)),
+        activeSessionId: activeDeleted ? null : current.activeSessionId,
+        sessionView: activeDeleted ? null : current.sessionView,
+      }))
+      if (activeDeleted) clearPersistedActiveSessionId()
+      saveActivityPersistence(activity)
+      for (const notification of notifications) {
+        if (notification.taskId && notification.taskId === get().selectedScheduledTaskId) continue
+        void window.desktop.settings
+          .snapshot()
+          .then((settings) => {
+            if (settings.notificationMode === "never") return
+            return window.desktop.tray.notify({
+              title: notification.title,
+              body: notification.body,
+              ...(settings.notificationMode === "always" ? { showWhenFocused: true } : {}),
+            })
+          })
+          .catch(() => undefined)
+      }
+    },
+    markActivitySessionRead: (sessionId) => {
+      const activity = markSessionRead(get().activity, sessionId)
+      set({ activity })
+      saveActivityPersistence(activity)
+    },
   }
 })
 
@@ -55,6 +118,20 @@ export function attachDesktopSessionEvents(): () => void {
       useDesktopSessionStore.getState().applySessionUpdate(view)
       void useDesktopSessionStore.getState().refreshGoal(view.session.id)
     })
+    if (typeof window.desktop.activity?.onUpdated === "function") {
+      const generation = ++activityAttachGeneration
+      detachDesktopActivity = window.desktop.activity.onUpdated((update) => {
+        useDesktopSessionStore.getState().applyActivityUpdate(update)
+      })
+      void window.desktop.activity
+        .open()
+        .then((baseline) => {
+          if (generation === activityAttachGeneration) {
+            useDesktopSessionStore.getState().applyActivityUpdate(baseline)
+          }
+        })
+        .catch(() => undefined)
+    }
     if (typeof window.desktop.attachments?.onUploadEvent === "function") {
       detachDesktopAttachmentUploads = window.desktop.attachments.onUploadEvent((event) => {
         useDesktopSessionStore.getState().applyAttachmentUploadEvent(event)
@@ -77,9 +154,12 @@ export function attachDesktopSessionEvents(): () => void {
     detachDesktopSessionUpdates?.()
     detachDesktopDaemonStatus?.()
     detachDesktopAttachmentUploads?.()
+    detachDesktopActivity?.()
+    activityAttachGeneration += 1
     detachDesktopSessionUpdates = null
     detachDesktopDaemonStatus = null
     detachDesktopAttachmentUploads = null
+    detachDesktopActivity = null
     selectedProjectGitRefreshScheduler.reset()
   }
 }

@@ -12,6 +12,7 @@ import type { DesktopAuxSessionUpdate, DesktopDaemonStatus } from "../shared/ses
 import type { DesktopAPI } from "../shared/desktop-api-contract"
 import type { DesktopAttachmentUploadEvent } from "../shared/attachment-types"
 import type { DesktopUpdateState } from "../shared/update-types"
+import type { DesktopActivityUpdate } from "../shared/activity-types"
 
 const invoke = <C extends IpcChannel>(
   channel: C,
@@ -19,6 +20,15 @@ const invoke = <C extends IpcChannel>(
 ): Promise<IpcInvokeMap[C]["result"]> => ipcRenderer.invoke(channel, ...args)
 
 export const desktopAPI = {
+  activity: {
+    open: () => invoke(IpcChannels.activityOpen),
+    onUpdated: (listener: (update: DesktopActivityUpdate) => void): (() => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, update: DesktopActivityUpdate): void =>
+        listener(update)
+      ipcRenderer.on(IpcEvents.activityUpdated, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.activityUpdated, wrapped)
+    },
+  },
   app: {
     getInfo: () => invoke(IpcChannels.appGetInfo),
     getPlatform: () => invoke(IpcChannels.appGetPlatform),
@@ -289,10 +299,14 @@ export const desktopAPI = {
     listContextPlugins: (cwd: string) => invoke(IpcChannels.sessionListContextPlugins, cwd),
     compact: (input: IpcInvokeMap[typeof IpcChannels.sessionCompact]["args"][0]) =>
       invoke(IpcChannels.sessionCompact, input),
-    getGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalGet]["args"][0]) => invoke(IpcChannels.sessionGoalGet, input),
-    createGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalCreate]["args"][0]) => invoke(IpcChannels.sessionGoalCreate, input),
-    updateGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalUpdate]["args"][0]) => invoke(IpcChannels.sessionGoalUpdate, input),
-    goalAction: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalAction]["args"][0]) => invoke(IpcChannels.sessionGoalAction, input),
+    getGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalGet]["args"][0]) =>
+      invoke(IpcChannels.sessionGoalGet, input),
+    createGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalCreate]["args"][0]) =>
+      invoke(IpcChannels.sessionGoalCreate, input),
+    updateGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalUpdate]["args"][0]) =>
+      invoke(IpcChannels.sessionGoalUpdate, input),
+    goalAction: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalAction]["args"][0]) =>
+      invoke(IpcChannels.sessionGoalAction, input),
     renameProject: (input: IpcInvokeMap[typeof IpcChannels.projectRename]["args"][0]) =>
       invoke(IpcChannels.projectRename, input),
     setProjectPinned: (input: IpcInvokeMap[typeof IpcChannels.projectSetPinned]["args"][0]) =>
