@@ -107,6 +107,28 @@ describe("createDefaultNodeAgent", () => {
     await agent.close();
   });
 
+  it("releases MCP connection leases after a Run settles", async () => {
+    const release = vi.fn();
+    const retain = vi.spyOn(McpClientManager.prototype, "retainCurrentConnections").mockReturnValue(release);
+    const agent = await createDefaultNodeAgent({
+      client: { async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" as const }; } },
+      settings: {
+        model: "test",
+        apiFormat: "anthropic",
+        maxTurns: 2,
+        permission: { mode: "default" },
+        sandbox: { enabled: false },
+      },
+    });
+    try {
+      await agent.runMessage("finish");
+      expect(retain).toHaveBeenCalledOnce();
+      expect(release).toHaveBeenCalledOnce();
+    } finally {
+      await agent.close();
+    }
+  });
+
   it("exposes caller tool override provenance through the public API", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-tool-"));
     tempDirs.push(cwd);

@@ -100,7 +100,8 @@ export interface PreparedMcpConnection {
  * Result of an atomic activation.
  *
  * `committed: true` means the staged connection is current and its tools were
- * committed; `closePrevious()` releases the replaced connection. `committed:
+ * committed; `closePrevious()` releases the replaced connection once active
+ * Runs using it have settled. `committed:
  * false` means the tool commit failed and the previous connection was restored;
  * `discardPrepared()` releases the never-published staged connection.
  */
@@ -112,6 +113,9 @@ export class McpClientManager {
   private connections = new Map<string, McpConnection>();
   private clients = new Map<string, Client>();
   private transports = new Map<string, Transport>();
+  private readonly runLeases = new Map<Client, number>();
+  private readonly retiredClients = new Map<Client, string>();
+  private readonly retiredClosures = new Map<Client, { name: string; work: Promise<void> }>();
 
   constructor(private readonly options: {
     cwd?: string;
@@ -325,7 +329,39 @@ export class McpClientManager {
 
     return {
       committed: true,
-      closePrevious: () => this.closeClient(previousClient),
+      closePrevious: async () => {
+        if (!previousClient) return;
+        if ((this.runLeases.get(previousClient) ?? 0) > 0) {
+          this.retiredClients.set(previousClient, name);
+          return;
+        }
+        await this.closeClient(previousClient);
+      },
+    };
+  }
+
+  /** Keep the clients captured by one active Run until it settles. */
+  retainCurrentConnections(): () => void {
+    const captured = [...this.clients.values()];
+    for (const client of captured) {
+      this.runLeases.set(client, (this.runLeases.get(client) ?? 0) + 1);
+    }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      for (const client of captured) {
+        const remaining = (this.runLeases.get(client) ?? 1) - 1;
+        if (remaining > 0) this.runLeases.set(client, remaining);
+        else {
+          this.runLeases.delete(client);
+          if (this.retiredClients.has(client)) {
+            void this.closeRetiredClient(client).catch(() => {
+              process.stderr.write("[mcp] Deferred connection close failed\n");
+            });
+          }
+        }
+      }
     };
   }
 
@@ -381,11 +417,16 @@ export class McpClientManager {
    */
   async disconnect(name: string): Promise<void> {
     const client = this.clients.get(name);
-    let failure: unknown;
+    const retired = [...this.retiredClients].filter(([, owner]) => owner === name).map(([item]) => item);
+    const closing = [...this.retiredClosures.values()].filter((item) => item.name === name).map((item) => item.work);
+    const failures: unknown[] = [];
     try {
-      if (client) await client.close();
-    } catch (error) {
-      failure = error;
+      const results = await Promise.allSettled([
+        ...(client ? [Promise.resolve().then(() => client.close())] : []),
+        ...retired.map((item) => this.closeRetiredClient(item)),
+        ...closing,
+      ]);
+      for (const result of results) if (result.status === "rejected") failures.push(result.reason);
     } finally {
       this.clients.delete(name);
       this.transports.delete(name);
@@ -398,7 +439,7 @@ export class McpClientManager {
         this.connections.delete(name);
       }
     }
-    if (failure !== undefined) throw failure;
+    if (failures.length) throw failures[0];
   }
 
   async disconnectAll(): Promise<void> {
@@ -469,7 +510,7 @@ export class McpClientManager {
       description: `[${serverName}] ${tool.description}`,
       inputSchema: tool.inputSchema,
       execute: async (input, context) => {
-        if (!client || this.clients.get(serverName) !== client) {
+        if (!client || (this.clients.get(serverName) !== client && this.retiredClients.get(client) !== serverName)) {
           return {
             content: [{ type: "text", text: `MCP connection changed or closed: ${serverName}. Start a new Run to use the current connection.` }],
             isError: true,
@@ -487,6 +528,18 @@ export class McpClientManager {
   private async closeClient(client: Client | undefined): Promise<void> {
     if (!client) return;
     await client.close();
+  }
+
+  private closeRetiredClient(client: Client): Promise<void> {
+    const existing = this.retiredClosures.get(client);
+    if (existing) return existing.work;
+    const name = this.retiredClients.get(client);
+    if (!name) return Promise.resolve();
+    this.retiredClients.delete(client);
+    const work = Promise.resolve().then(() => client.close());
+    this.retiredClosures.set(client, { name, work });
+    void work.finally(() => this.retiredClosures.delete(client)).catch(() => undefined);
+    return work;
   }
 
   async callTool(

@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type McpServerConfig, type ToolDefinition } from "@openharness/core";
 import { McpClientManager } from "@openharness/mcp";
 import { mcpToolCallTool, listMcpResourcesTool, readMcpResourceTool, mcpAuthTool } from "../../tools/src/mcp/mcp-tools.js";
@@ -69,6 +69,40 @@ it("keeps a captured MCP Tool Definition while a new view sees the replacement",
     const fresh = createRunCapabilityView(sources, "private-plugin").tools.get("mcp__private__version")!;
     expect((await fresh.invoke({}, { cwd: process.cwd() })).content).toEqual([{ type: "text", text: "replacement" }]);
   } finally { await manager.disconnectAll(); }
+});
+
+it("keeps an active Run on its old MCP client across an atomic reconnect", async () => {
+  const manager = new McpClientManager();
+  let releaseRun: (() => void) | undefined;
+  try {
+    expect((await manager.connect("private", config("old-client"))).status).toBe("connected");
+    const registry = new ToolRegistry();
+    registry.register(manager.getAsToolDefinitions()[0]!, { kind: "mcp", id: "private" });
+    const sources = { toolRegistry: registry, pluginIds: new Set(["private-plugin"]), mcpServers: [{
+      ownerPluginId: "private-plugin", serverId: "plugin:private-plugin:mcp:private", serverName: "private", definition: config("old-client"),
+    }] };
+    const oldBinding = createRunCapabilityView(sources, "private-plugin").tools.get("mcp__private__version")!;
+    releaseRun = manager.retainCurrentConnections();
+    const prepared = await manager.prepareConnection("private", config("new-client"));
+    const activation = manager.activatePreparedConnection(prepared, (tools) => {
+      registry.replaceBySource({ kind: "mcp", id: "private" }, tools);
+    });
+    if (!activation.committed) throw activation.error;
+    await activation.closePrevious();
+
+    expect((await oldBinding.invoke({}, { cwd: process.cwd() })).content).toEqual([{ type: "text", text: "old-client" }]);
+    const fresh = createRunCapabilityView(sources, "private-plugin").tools.get("mcp__private__version")!;
+    expect((await fresh.invoke({}, { cwd: process.cwd() })).content).toEqual([{ type: "text", text: "new-client" }]);
+
+    releaseRun();
+    releaseRun = undefined;
+    await vi.waitFor(async () => {
+      expect((await oldBinding.invoke({}, { cwd: process.cwd() })).isError).toBe(true);
+    });
+  } finally {
+    releaseRun?.();
+    await manager.disconnectAll();
+  }
 });
 
 it.each([undefined, "another-plugin"])("blocks global MCP meta capabilities for a Run owned by %s", async (pluginId) => {

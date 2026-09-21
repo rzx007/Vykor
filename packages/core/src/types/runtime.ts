@@ -474,6 +474,7 @@ export interface QueryEngine {
   setAllowedTools(tools: string[] | null): void;
   setSessionId(sessionId: string | undefined): void;
   setMcpManager(mgr: unknown): void;
+  retainMcpConnectionsForRun?(): () => void;
   setMcpAuth(auth: McpAuthHost | undefined): void;
   setTerminal(terminal: AgentTerminalHost | undefined): void;
   setJobs(jobs: AgentJobHost | undefined): void;

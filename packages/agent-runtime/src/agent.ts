@@ -209,6 +209,8 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
       runId: `run_${randomUUID()}`,
       traceId: randomUUID(),
     };
+    const capabilityView = options.capabilityView ?? this.createRunCapabilityView();
+    const releaseMcpConnections = this.runtime.queryEngine.retainMcpConnectionsForRun?.();
     const run = new FrameworkAgentRun({
       agentId: this.id,
       session: this.session,
@@ -224,8 +226,9 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
       delivery: options.delivery ?? "queue",
       metadata: options.metadata,
       goal: options.goal,
-      capabilityView: options.capabilityView ?? this.createRunCapabilityView(),
+      capabilityView,
       onSettled: (result, toolActivity) => {
+        releaseMcpConnections?.();
         if (this.activeRun !== run) return;
         if (result && toolActivity)
           this.completedRunToolActivity = toolActivity;

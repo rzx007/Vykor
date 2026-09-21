@@ -58,13 +58,14 @@ function createHandle(options: {
   config?: Record<string, unknown>;
   credential?: McpOAuthCredentialRecord;
   connection?: { status: string } | undefined;
-  generation?: number;
+  generation?: number | (() => number);
+  onCredentialGet?: () => void;
 } = {}) {
   const stageAndActivate = vi.fn(async () => undefined);
   const disconnectServer = vi.fn(async () => undefined);
   const registry = {
     register: vi.fn(() => () => undefined),
-    currentGeneration: vi.fn(() => options.generation ?? 3),
+    currentGeneration: vi.fn(() => typeof options.generation === "function" ? options.generation() : (options.generation ?? 3)),
   } as unknown as McpRuntimeRegistry;
   const mcpManager = {
     getConnection: vi.fn(() => options.connection),
@@ -81,7 +82,7 @@ function createHandle(options: {
     },
     mcpManager,
     credentialStore: {
-      get: vi.fn(async () => options.credential),
+      get: vi.fn(async () => { options.onCredentialGet?.(); return options.credential; }),
     } as never,
     registry,
     stageAndActivate,
@@ -144,6 +145,19 @@ describe("createMcpRuntimeHandle", () => {
 
     expect(stageAndActivate).not.toHaveBeenCalled();
     expect(disconnectServer).not.toHaveBeenCalled();
+  });
+
+  it("does not stage after credential loading supersedes its generation", async () => {
+    let generation = 3;
+    const { handle, stageAndActivate } = createHandle({
+      credential: usableCredential,
+      generation: () => generation,
+      onCredentialGet: () => { generation = 4; },
+    });
+
+    await handle.synchronize(linearIdentity, 3);
+
+    expect(stageAndActivate).not.toHaveBeenCalled();
   });
 
   it("ignores a synchronize for a mismatched endpoint", async () => {

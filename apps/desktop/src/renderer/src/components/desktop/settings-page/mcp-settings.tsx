@@ -153,7 +153,7 @@ export function McpSettings(): React.JSX.Element {
                   </p>
                 ) : null}
               </div>
-              {server.transport === "http" && server.authMode === "oauth" ? (
+              {server.transport === "http" && (server.authMode === "oauth" || server.authMode === "none") ? (
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64">
                   {canLogin(server.authStatus) ? (
                     <div className="flex flex-col gap-1">

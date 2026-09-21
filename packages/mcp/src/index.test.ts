@@ -483,6 +483,60 @@ describe("McpClientManager", () => {
       expect(JSON.stringify(result)).toContain("connection changed or closed");
       await activation.closePrevious();
     });
+
+    it("keeps a replaced client callable until its owning Run releases it", async () => {
+      await manager.connect("linear", { type: "stdio", command: "node" });
+      const oldClient = manager["clients"].get("linear") as { close: ReturnType<typeof vi.fn> };
+      const captured = manager.getAsToolDefinitions()[0]!;
+      const releaseRun = manager.retainCurrentConnections();
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+      const activation = manager.activatePreparedConnection(prepared, () => undefined);
+      if (!activation.committed) throw new Error("expected commit");
+
+      await activation.closePrevious();
+      expect(oldClient.close).not.toHaveBeenCalled();
+      expect((await captured.execute({}, { cwd: process.cwd() })).isError).toBeFalsy();
+
+      releaseRun();
+      await vi.waitFor(() => expect(oldClient.close).toHaveBeenCalledOnce());
+      expect((await captured.execute({}, { cwd: process.cwd() })).isError).toBe(true);
+    });
+
+    it("force-closes a leased old client on logout", async () => {
+      await manager.connect("linear", { type: "stdio", command: "node" });
+      const oldClient = manager["clients"].get("linear") as { close: ReturnType<typeof vi.fn> };
+      const captured = manager.getAsToolDefinitions()[0]!;
+      const releaseRun = manager.retainCurrentConnections();
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+      const activation = manager.activatePreparedConnection(prepared, () => undefined);
+      if (!activation.committed) throw new Error("expected commit");
+      await activation.closePrevious();
+
+      await manager.disconnect("linear");
+
+      expect(oldClient.close).toHaveBeenCalledOnce();
+      expect((await captured.execute({}, { cwd: process.cwd() })).isError).toBe(true);
+      releaseRun();
+      expect(oldClient.close).toHaveBeenCalledOnce();
+    });
+
+    it("closes retired clients even if the current client close throws synchronously", async () => {
+      await manager.connect("linear", { type: "stdio", command: "node" });
+      const oldClient = manager["clients"].get("linear") as { close: ReturnType<typeof vi.fn> };
+      const releaseRun = manager.retainCurrentConnections();
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+      const activation = manager.activatePreparedConnection(prepared, () => undefined);
+      if (!activation.committed) throw new Error("expected commit");
+      await activation.closePrevious();
+      const currentClient = manager["clients"].get("linear") as { close: ReturnType<typeof vi.fn> };
+      currentClient.close.mockImplementationOnce(() => { throw new Error("synchronous close failed"); });
+
+      await expect(manager.disconnect("linear")).rejects.toThrow("synchronous close failed");
+
+      expect(oldClient.close).toHaveBeenCalledOnce();
+      expect(manager.getConnection("linear")).toBeUndefined();
+      releaseRun();
+    });
   });
 });
 

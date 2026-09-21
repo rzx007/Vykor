@@ -237,6 +237,26 @@ describe("McpOAuthApplicationService", () => {
     expect(world.revoke).toHaveBeenCalledTimes(1);
   });
 
+  it("does not put an untrusted settings error into a logout warning", async () => {
+    const world = createWorld();
+    const warn = vi.fn();
+    const service = world.createService({
+      loadSettings: async () => ({
+        ...world.getSettings(),
+        mcpServers: { linear: { type: "http", url: "https://mcp.example/mcp" } },
+      }),
+      saveSettings: async () => { throw new Error("Bearer access-secret https://mcp.example/mcp?token=query-secret"); },
+      warn,
+    });
+
+    await service.logout("linear");
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]![0]).not.toContain("access-secret");
+    expect(warn.mock.calls[0]![0]).not.toContain("query-secret");
+    expect(world.getValue()).toBeUndefined();
+  });
+
   it("classifies daemon rejection after logout as removed-but-not-synchronized", async () => {
     const world = createWorld();
     const service = world.createService();

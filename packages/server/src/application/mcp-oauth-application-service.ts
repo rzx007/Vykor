@@ -146,10 +146,8 @@ export class McpOAuthApplicationService {
       ?.abort(new Error("MCP OAuth login cancelled by logout"));
     return await this.runServerOperation(name, async () => {
       const config = await this.requireServer(name);
-      await this.backfillOAuthScopes(name, config).catch((error) => {
-        this.deps.warn?.(
-          `Could not backfill OAuth scopes for ${name}: ${error instanceof Error ? error.message : String(error)}`,
-        );
+      await this.backfillOAuthScopes(name, config).catch(() => {
+        this.deps.warn?.(`Could not backfill OAuth scopes for ${name}.`);
       });
       await this.deps.revoke({ serverName: name, store: this.deps.store });
       await this.synchronize(

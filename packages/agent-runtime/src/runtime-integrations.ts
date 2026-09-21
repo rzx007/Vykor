@@ -113,6 +113,7 @@ export async function installRuntimeIntegrations(
     identity: McpServerIdentity | undefined,
     generation: number,
   ): Promise<void> => {
+    if (runtimeRegistry && identity && runtimeRegistry.currentGeneration(identity) !== generation) return;
     let prepared;
     try {
       prepared = await mcpManager.prepareConnection(name, config);
@@ -333,6 +334,7 @@ export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): Acti
       if (input.registry.currentGeneration(identity) !== generation) return;
 
       const credential = await input.credentialStore.get(identity.name);
+      if (input.registry.currentGeneration(identity) !== generation) return;
       // A legacy logged-in Runtime may still hold a config without an OAuth
       // marker after logout backfills settings in another process. Only an
       // explicit static Authorization must opt out of OAuth synchronization.
