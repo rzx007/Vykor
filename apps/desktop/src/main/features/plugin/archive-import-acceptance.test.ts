@@ -28,9 +28,22 @@ const exampleSource = fileURLToPath(
 )
 
 let root: string
+let scopedTmpdir: string
 let previousConfigDir: string | undefined
+let previousTempEnv: { TEMP?: string; TMP?: string; TMPDIR?: string }
 
 beforeEach(async () => {
+  // 解析器把临时目录建在 os.tmpdir() 下，而它是全局共享的；这里把本用例的
+  // 临时目录收窄到独立作用域，避免与其它并行运行的包互相看到对方的残留目录。
+  scopedTmpdir = await mkdtemp(join(tmpdir(), "ohs-desktop-plugin-tmp-"))
+  previousTempEnv = {
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
+  }
+  process.env.TEMP = scopedTmpdir
+  process.env.TMP = scopedTmpdir
+  process.env.TMPDIR = scopedTmpdir
   root = await mkdtemp(join(tmpdir(), "ohs-desktop-plugin-archive-"))
   previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR
   process.env.OPENHARNESS_CONFIG_DIR = join(root, "config")
@@ -39,7 +52,14 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR
   else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir
+  if (previousTempEnv.TEMP === undefined) delete process.env.TEMP
+  else process.env.TEMP = previousTempEnv.TEMP
+  if (previousTempEnv.TMP === undefined) delete process.env.TMP
+  else process.env.TMP = previousTempEnv.TMP
+  if (previousTempEnv.TMPDIR === undefined) delete process.env.TMPDIR
+  else process.env.TMPDIR = previousTempEnv.TMPDIR
   await rm(root, { recursive: true, force: true })
+  await rm(scopedTmpdir, { recursive: true, force: true })
 })
 
 async function copyDirectory(source: string, destination: string): Promise<void> {

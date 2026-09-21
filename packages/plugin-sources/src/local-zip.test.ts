@@ -2,14 +2,38 @@ import { access, copyFile, mkdtemp, readFile, readdir, rm, truncate, writeFile }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { resolveLocalPluginArchive, resolveLocalPluginZip } from "./index.js";
 
 const temporaryRoots: string[] = [];
 const manifest = ".openharness-plugin/plugin.json";
 
+let scopedTmpdir: string;
+let previousTempEnv: { TEMP?: string; TMP?: string; TMPDIR?: string };
+
+beforeEach(async () => {
+  // 解析器在全局共享的 os.tmpdir() 下建私有目录；收窄到独立作用域，避免与
+  // 并行运行的其它包互相看到对方的 oh-plugin-zip-* 残留目录。
+  scopedTmpdir = await mkdtemp(join(tmpdir(), "oh-plugin-source-tmp-"));
+  previousTempEnv = {
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
+  };
+  process.env.TEMP = scopedTmpdir;
+  process.env.TMP = scopedTmpdir;
+  process.env.TMPDIR = scopedTmpdir;
+});
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  if (previousTempEnv.TEMP === undefined) delete process.env.TEMP;
+  else process.env.TEMP = previousTempEnv.TEMP;
+  if (previousTempEnv.TMP === undefined) delete process.env.TMP;
+  else process.env.TMP = previousTempEnv.TMP;
+  if (previousTempEnv.TMPDIR === undefined) delete process.env.TMPDIR;
+  else process.env.TMPDIR = previousTempEnv.TMPDIR;
+  await rm(scopedTmpdir, { recursive: true, force: true });
 });
 
 function crc32(bytes: Buffer): number {
