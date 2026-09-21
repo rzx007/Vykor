@@ -960,6 +960,15 @@ const REASONING_TRUNCATION_NOTICE = "\n\n…（思考内容过长，已截断）
         return;
 ```
 
+同一个 Step 还要放开协议类型（**计划修订**：这一步原本写在 Task 9，但 server 投影在类型检查里必须有它才能编译，故提前到本任务；Task 9 只保留 reducer 改动）：
+
+`packages/protocol/src/session.ts` 的 `AppendMessagePartDeltaInput`：
+
+```ts
+  /** 增量写入的字段；reasoning 用于模型的思考内容。 */
+  field: "text" | "reasoning";
+```
+
 - [ ] **Step 4: 跑测试与类型检查**
 
 Run: `pnpm --filter @openharness/server exec vitest run src/application/session/__test__/transcript-projection.test.ts && pnpm --filter @openharness/server check-types`
@@ -1226,12 +1235,7 @@ Expected: FAIL —— part 不存在（`field: "reasoning"` 被直接丢弃）�
 
 - [ ] **Step 3: 实现**
 
-`packages/protocol/src/session.ts` 的 `AppendMessagePartDeltaInput`：
-
-```ts
-  /** 增量写入的字段；reasoning 用于模型的思考内容。 */
-  field: "text" | "reasoning";
-```
+`packages/protocol/src/session.ts` 的 `AppendMessagePartDeltaInput.field` 已在 Task 7 放开为 `"text" | "reasoning"`（计划修订），本任务不重复修改。
 
 `packages/client/src/state/reducer.ts` 的 `appendPartDelta`（`:275-317`）改两处。第一处是入口校验（`:281`）：
 
