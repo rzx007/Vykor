@@ -6,7 +6,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Message } from "@openharness/core";
 import {
   OpenAICompatibleClient,
-  stripThinkBlocks,
   tokenLimitParamForModel,
   convertUserContentToOpenAI,
 } from "./openai.js";
@@ -22,53 +21,6 @@ describe("OpenAICompatibleClient configuration", () => {
     expect((client.client as any)._options.defaultHeaders).toEqual({
       "X-Tenant": "desktop",
     });
-  });
-});
-
-describe("stripThinkBlocks", () => {
-  it("removes a complete <think> block", () => {
-    const [visible, leftover] = stripThinkBlocks("before<think>secret</think>after");
-    expect(visible).toBe("beforeafter");
-    expect(leftover).toBe("");
-  });
-
-  it("removes a multiline <think> block", () => {
-    const [visible, leftover] = stripThinkBlocks("a<think>line1\nline2</think>b");
-    expect(visible).toBe("ab");
-    expect(leftover).toBe("");
-  });
-
-  it("holds back an unclosed <think> block", () => {
-    const [visible, leftover] = stripThinkBlocks("visible<think>not yet closed");
-    expect(visible).toBe("visible");
-    expect(leftover).toBe("<think>not yet closed");
-  });
-
-  it("holds back a partial opening tag split across chunks", () => {
-    const [visible, leftover] = stripThinkBlocks("hello<thi");
-    expect(visible).toBe("hello");
-    expect(leftover).toBe("<thi");
-  });
-
-  it("simulates the full cross-chunk lifecycle", () => {
-    // Provider splits "<think>secret</think>" across many chunks.
-    const chunks = ["Vis", "ib", "le <thi", "nk>secret", " thoughts</thi", "nk> tail"];
-    let buf = "";
-    let out = "";
-    for (const chunk of chunks) {
-      buf += chunk;
-      const [visible, leftover] = stripThinkBlocks(buf);
-      out += visible;
-      buf = leftover;
-    }
-    out += buf;
-    expect(out).toBe("Visible  tail");
-  });
-
-  it("passes through plain text untouched", () => {
-    const [visible, leftover] = stripThinkBlocks("just normal text");
-    expect(visible).toBe("just normal text");
-    expect(leftover).toBe("");
   });
 });
 

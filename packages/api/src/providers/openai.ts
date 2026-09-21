@@ -19,6 +19,7 @@ import {
   preparedImageDataUrl,
   prepareUserContentWithVisionImages,
 } from "./native-image-payload.js";
+import { extractThinkBlocks } from "./think-blocks.js";
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
@@ -37,10 +38,6 @@ const EMPTY_REASONING_ENV = "OPENHARNESS_REQUIRE_EMPTY_REASONING_CONTENT";
 // leaks tool calls into the content channel at long context. Set this to a
 // truthy value to fall back to forwarding the raw markup as text.
 const DSML_RECOVERY_DISABLE_ENV = "OPENHARNESS_DISABLE_DSML_RECOVERY";
-
-// Matches complete <think>…</think> blocks (`s` flag so newlines are included).
-const THINK_RE = /<think>.*?<\/think>/gs;
-const THINK_OPEN_TAG = "<think>";
 
 interface ReasoningMessage {
   content?: string | null;
@@ -71,36 +68,6 @@ export function tokenLimitParamForModel(
     return { max_completion_tokens: maxTokens };
   }
   return { max_tokens: maxTokens };
-}
-
-/**
- * Strip complete `<think>…</think>` blocks, returning `[visibleText, leftover]`.
- *
- * Complete pairs are removed via regex. An unclosed `<think>` is held back in
- * `leftover` so it can be re-evaluated once the closing tag arrives in the next
- * streaming chunk. Providers may also split the opening tag across chunk
- * boundaries (e.g. `"<thi"` then `"nk>"`), so the longest suffix that could
- * still become `<think>` is held back as well.
- */
-export function stripThinkBlocks(buf: string): [string, string] {
-  // Remove fully-closed blocks.
-  const cleaned = buf.replace(THINK_RE, "");
-
-  // Hold back any unclosed <think> for the next chunk.
-  const openIdx = cleaned.indexOf(THINK_OPEN_TAG);
-  if (openIdx !== -1) {
-    return [cleaned.slice(0, openIdx), cleaned.slice(openIdx)];
-  }
-
-  // Hold back the longest suffix that could still become `<think>`.
-  const maxPrefix = Math.min(cleaned.length, THINK_OPEN_TAG.length - 1);
-  for (let prefixLen = maxPrefix; prefixLen > 0; prefixLen--) {
-    if (THINK_OPEN_TAG.startsWith(cleaned.slice(cleaned.length - prefixLen))) {
-      return [cleaned.slice(0, cleaned.length - prefixLen), cleaned.slice(cleaned.length - prefixLen)];
-    }
-  }
-
-  return [cleaned, ""];
 }
 
 function emptyReasoningRequired(): boolean {
@@ -260,12 +227,19 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
 
           if (delta.content) {
             thinkBuf += delta.content;
-            const [visible, leftover] = stripThinkBlocks(thinkBuf);
-            thinkBuf = leftover;
-            if (visible) {
+            const extracted = extractThinkBlocks(thinkBuf);
+            thinkBuf = extracted.leftover;
+            if (extracted.reasoning) {
+              yield {
+                type: "reasoning_delta",
+                delta: extracted.reasoning,
+                source: "think",
+              };
+            }
+            if (extracted.visible) {
               const scanned = recovery
-                ? recovery.push(visible)
-                : { visible, toolCalls: [] as RecoveredToolCall[] };
+                ? recovery.push(extracted.visible)
+                : { visible: extracted.visible, toolCalls: [] as RecoveredToolCall[] };
               if (scanned.visible) {
                 emittedAnyText = true;
                 yield { type: "text_delta", delta: scanned.visible };
@@ -307,14 +281,20 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
 
         // Flush any remaining buffered content (e.g. a partial <think> prefix at EOF).
         if (thinkBuf) {
-          const scanned = recovery
-            ? recovery.push(thinkBuf)
-            : { visible: thinkBuf, toolCalls: [] as RecoveredToolCall[] };
-          if (scanned.visible) {
-            emittedAnyText = true;
-            yield { type: "text_delta", delta: scanned.visible };
+          const extracted = extractThinkBlocks(thinkBuf, { final: true });
+          if (extracted.reasoning) {
+            yield { type: "reasoning_delta", delta: extracted.reasoning, source: "think" };
           }
-          recoveredToolCalls.push(...scanned.toolCalls);
+          if (extracted.visible) {
+            const scanned = recovery
+              ? recovery.push(extracted.visible)
+              : { visible: extracted.visible, toolCalls: [] as RecoveredToolCall[] };
+            if (scanned.visible) {
+              emittedAnyText = true;
+              yield { type: "text_delta", delta: scanned.visible };
+            }
+            recoveredToolCalls.push(...scanned.toolCalls);
+          }
           thinkBuf = "";
         }
         if (recovery) {
