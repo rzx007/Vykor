@@ -283,6 +283,7 @@ describe("Sidebar collapsible sections and empty states", () => {
 
   it("shows an accessible unread result and a Scheduled badge when the page is not mounted", () => {
     const current = channelSession()
+    const onOpenConversation = vi.fn()
     useDesktopSessionStore.setState({
       sessions: [current],
       activity: {
@@ -326,12 +327,72 @@ describe("Sidebar collapsible sections and empty states", () => {
           onOpenSettings={vi.fn()}
           onOpenScheduled={vi.fn()}
           onOpenPlugins={vi.fn()}
+          onOpenConversation={onOpenConversation}
+        />
+      )
+    )
+    const failureIndicator = container.querySelector<HTMLElement>('[aria-label="运行失败"]')
+    expect(failureIndicator).not.toBeNull()
+    expect(failureIndicator?.classList.contains("right-8")).toBe(true)
+    expect(failureIndicator?.querySelector("svg")).toBeNull()
+    expect(failureIndicator?.classList.contains("bg-destructive")).toBe(true)
+    const sessionButton = failureIndicator?.closest("button")
+    expect(sessionButton).not.toBeNull()
+    act(() => sessionButton?.click())
+    expect(onOpenConversation).toHaveBeenCalledWith(current.id)
+
+    act(() => useDesktopSessionStore.getState().markActivitySessionRead(current.id))
+    expect(container.querySelector('[aria-label="运行失败"]')).toBeNull()
+    expect(container.querySelector('[aria-label="定时任务，1 个结果待查看"]')).not.toBeNull()
+  })
+
+  it("clears a seen interruption but keeps a pending-input indicator", () => {
+    const session = channelSession()
+    const interrupted = {
+      session,
+      executionState: "interrupted" as const,
+      attentionState: "unread" as const,
+      activitySeq: 2,
+      updatedAt: 2,
+    }
+    useDesktopSessionStore.setState({
+      sessions: [session],
+      activity: {
+        ...createActivityState(),
+        sessions: { [session.id]: interrupted },
+      },
+    })
+    act(() =>
+      root.render(
+        <Sidebar
+          open={true}
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
           onOpenConversation={vi.fn()}
         />
       )
     )
-    expect(container.querySelector('[aria-label*="运行失败"]')).not.toBeNull()
-    expect(container.querySelector('[aria-label="定时任务，1 个结果待查看"]')).not.toBeNull()
+
+    expect(container.querySelector('[aria-label="运行中断"]')).not.toBeNull()
+    act(() => useDesktopSessionStore.getState().markActivitySessionRead(session.id))
+    expect(container.querySelector('[aria-label="运行中断"]')).toBeNull()
+
+    act(() =>
+      useDesktopSessionStore.setState((state) => ({
+        activity: {
+          ...state.activity,
+          sessions: {
+            ...state.activity.sessions,
+            [session.id]: {
+              ...state.activity.sessions[session.id],
+              executionState: "needs_input",
+            },
+          },
+        },
+      }))
+    )
+    expect(container.querySelector('[aria-label="等待处理"]')).not.toBeNull()
   })
 
   it("refreshes via the header button but not when expanding the IM section", async () => {

@@ -1,7 +1,5 @@
 import {
   Archive,
-  CircleAlert,
-  CircleHelp,
   Bell,
   ChevronDown,
   Clock3,
@@ -637,7 +635,7 @@ function SessionRow({
         type="button"
         onClick={() => actions.onOpen(session)}
         className={cn(
-          "text-ui-small h-7.5 min-w-0 flex-1 truncate rounded-md pr-8 text-left leading-7.5 font-normal transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          "text-ui-small relative h-7.5 min-w-0 flex-1 truncate rounded-md pr-12 text-left leading-7.5 font-normal transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
           nested ? "pl-8" : "pl-2.5",
           active
             ? "bg-sidebar-selected text-sidebar-foreground"
@@ -924,28 +922,25 @@ function SessionActivityIndicator({
   activity: import("@shared/activity-types").DesktopSessionActivity
 }): React.JSX.Element | null {
   const status = activity.executionState
-  if (status === "needs_input")
-    return (
-      <span aria-label="等待处理" className="ml-2 inline-flex align-middle text-amber-600">
-        <CircleHelp aria-hidden="true" className="size-3.5" />
-      </span>
-    )
-  if (status === "failed" || status === "interrupted")
-    return (
-      <span
-        aria-label={status === "failed" ? "运行失败" : "运行中断"}
-        className="ml-2 inline-flex align-middle text-destructive"
-      >
-        <CircleAlert aria-hidden="true" className="size-3.5" />
-      </span>
-    )
-  if (status === "completed" && activity.attentionState === "unread")
-    return (
-      <span aria-label="有新结果" className="ml-2 inline-flex align-middle">
-        <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-      </span>
-    )
-  return null
+  const indicator =
+    status === "needs_input"
+      ? { label: "等待处理", color: "bg-amber-600" }
+      : (status === "failed" || status === "interrupted") && activity.attentionState === "unread"
+        ? { label: status === "failed" ? "运行失败" : "运行中断", color: "bg-destructive" }
+        : status === "completed" && activity.attentionState === "unread"
+          ? { label: "有新结果", color: "bg-primary" }
+          : null
+  if (!indicator) return null
+  return (
+    <span
+      role="img"
+      aria-label={indicator.label}
+      className={cn(
+        "pointer-events-none absolute top-1/2 right-8 size-2 -translate-y-1/2 rounded-full",
+        indicator.color
+      )}
+    />
+  )
 }
 
 function SidebarSectionHeader({
