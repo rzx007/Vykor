@@ -330,6 +330,7 @@ const TOP_LEVEL_SETTINGS_FIELDS = new Set([
   "effort",
   "passes",
   "childBudget",
+  "showReasoning",
   "verbose",
 ]);
 

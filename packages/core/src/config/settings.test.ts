@@ -44,6 +44,17 @@ describe("daemon settings", () => {
     expect((await loadSettings()).workStyle).toBe("efficient");
   });
 
+  it("accepts and preserves the showReasoning setting", async () => {
+    writeFileSync(
+      join(configDir, "settings.json"),
+      JSON.stringify({ showReasoning: false }),
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.showReasoning).toBe(false);
+  });
+
   it("merges the plugin master switch with project and CLI precedence", async () => {
     const projectRoot = join(configDir, "plugin-project");
     const projectConfigDir = join(projectRoot, ".openharness-ts");

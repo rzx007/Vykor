@@ -286,6 +286,7 @@ function coerceConfigValue(key: string, value: string): unknown {
     [
       "verbose",
       "fastMode",
+      "showReasoning",
       "plugins.enabled",
       "memory.enabled",
       "memory.sessionMemoryEnabled",
