@@ -209,6 +209,7 @@ export class SessionOperations {
         title: "",
         metadata: {
           ...(!projectId ? { desktop: { workspaceMode: "outside_project" } } : {}),
+          ...(!input.effort?.trim() ? { runtimeDefaultFields: ["effort"] } : {}),
           runtime: {
             model,
             ...(provider ? { provider } : {}),

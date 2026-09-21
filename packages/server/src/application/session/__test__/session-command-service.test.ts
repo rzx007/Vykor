@@ -121,6 +121,23 @@ describe("SessionCommandService", () => {
   });
 
   describe("updateSession", () => {
+    it("stops following the default effort after an explicit session choice", async () => {
+      const { service } = createService({
+        sessionRecord: {
+          ...session,
+          metadata: {
+            runtime: { model: "gpt-test" },
+            runtimeDefaultFields: ["effort"],
+          },
+        } as any,
+      });
+      const updated = await service.updateSession("s1", {
+        metadata: { runtime: { effort: "high" } },
+      });
+      expect(updated.metadata.runtimeDefaultFields).toEqual([]);
+      expect(updated.metadata.runtime).toMatchObject({ effort: "high" });
+    });
+
     it("merges overlapping live updates in arrival order", async () => {
       let releaseFirst!: () => void;
       let signalFirst!: () => void;

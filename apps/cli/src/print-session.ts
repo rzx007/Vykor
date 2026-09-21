@@ -55,7 +55,7 @@ export function buildPrintSessionMetadata(
     ? options.disallowedTools.split(",").map((tool) => tool.trim()).filter(Boolean)
     : undefined;
 
-  return patchSessionRuntimeMetadata({}, {
+  const metadata = patchSessionRuntimeMetadata({}, {
     model: options.model ?? settings.model,
     provider: settings.provider,
     baseUrl: settings.baseUrl,
@@ -69,6 +69,9 @@ export function buildPrintSessionMetadata(
     sessionMode: options.coordinator === true || isCoordinatorMode() ? "coordinator" : "direct",
     pluginsEnabled: options.pluginsEnabled ?? settings.plugins?.enabled,
   });
+  return options.effort === undefined
+    ? { ...metadata, runtimeDefaultFields: ["effort"] }
+    : metadata;
 }
 
 function runTerminalStatus(

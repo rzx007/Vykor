@@ -18,7 +18,18 @@ vi.mock("@openharness/client", async () => {
 
 import { OpenHarnessClient } from "@openharness/client";
 import { ensureLocalDaemon } from "./ensure-daemon.js";
-import { runPrintSession } from "./print-session.js";
+import { buildPrintSessionMetadata, runPrintSession } from "./print-session.js";
+
+it("marks an inherited CLI effort so later settings edits can affect the session", () => {
+  const settings = {
+    model: "model-a", effort: "low", permission: { mode: "default" }, maxTurns: 50,
+  } as never;
+  expect(buildPrintSessionMetadata(settings, {} as never)).toMatchObject({
+    runtimeDefaultFields: ["effort"],
+  });
+  expect(buildPrintSessionMetadata(settings, { effort: "high" } as never))
+    .not.toHaveProperty("runtimeDefaultFields");
+});
 
 function printClient(resources: {
   create: ReturnType<typeof vi.fn>;

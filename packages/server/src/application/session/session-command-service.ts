@@ -142,7 +142,12 @@ function mergeSessionMetadata(
   existing: Record<string, unknown> | undefined,
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
-  const { runtimeRevision: _revision, appliedRequestModel: _appliedModel, ...safePatch } = patch;
+  const {
+    runtimeRevision: _revision,
+    appliedRequestModel: _appliedModel,
+    runtimeDefaultFields: _defaultFields,
+    ...safePatch
+  } = patch;
   const next = { ...(existing ?? {}), ...safePatch };
   if (patch.runtime !== undefined) {
     next.runtime = {
@@ -273,6 +278,15 @@ export class SessionCommandService {
       : undefined;
     if (mergedMetadata) {
       const incomingRuntime = readRuntimeMetadata(input.metadata ?? {});
+      if (Object.prototype.hasOwnProperty.call(incomingRuntime, "effort")) {
+        const defaults = existing.metadata.runtimeDefaultFields;
+        if (Array.isArray(defaults)) {
+          mergedMetadata = {
+            ...mergedMetadata,
+            runtimeDefaultFields: defaults.filter((field) => field !== "effort"),
+          };
+        }
+      }
       const provider = incomingRuntime.provider;
       const previousProvider = readSessionRuntimeConfig(existing).provider;
       if (typeof provider === "string" && provider !== previousProvider

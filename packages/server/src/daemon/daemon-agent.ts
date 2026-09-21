@@ -91,6 +91,7 @@ export interface DaemonAgentLoaderOptions {
   settings?: Settings;
   getSettings?: () => Settings;
   getSettingsForCwd?: (cwd: string) => Promise<Settings> | Settings;
+  onSettingsReloadError?: (sessionId: string, error: unknown) => void;
   /** Returns the durable record so a warm Agent can read a later selection. */
   getSession?: (sessionId: string) => SessionRecord | undefined;
   createAgent?: CreateDaemonAgent;
@@ -170,6 +171,8 @@ export function createDaemonAgentLoader(
       session,
       settings,
       getSession: options.getSession,
+      getSettingsForCwd: options.getSettingsForCwd,
+      onSettingsReloadError: options.onSettingsReloadError,
     });
     let declaredEfforts: string[] | undefined;
     try {
@@ -201,6 +204,8 @@ export function createDaemonAgentLoader(
             session: childSession,
             settings,
             getSession: options.getSession,
+            getSettingsForCwd: options.getSettingsForCwd,
+            onSettingsReloadError: options.onSettingsReloadError,
           }) : undefined;
         },
       } : {}),
@@ -291,14 +296,32 @@ function createDaemonRequestConfigurationStore(input: {
   session: SessionRecord;
   settings: Settings | undefined;
   getSession?: (sessionId: string) => SessionRecord | undefined;
+  getSettingsForCwd?: (cwd: string) => Promise<Settings> | Settings;
+  onSettingsReloadError?: (sessionId: string, error: unknown) => void;
 }): AgentRequestConfigurationReader {
+  let lastValidSettings = input.settings;
+  let lastReportedError: string | undefined;
   const read = async () => {
     const session = input.getSession?.(input.session.id) ?? input.session;
+    const followsDefaultEffort = Array.isArray(session.metadata.runtimeDefaultFields)
+      && session.metadata.runtimeDefaultFields.includes("effort");
+    if (followsDefaultEffort && input.getSettingsForCwd) {
+      try {
+        lastValidSettings = await input.getSettingsForCwd(session.cwd);
+        lastReportedError = undefined;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message !== lastReportedError) {
+          input.onSettingsReloadError?.(session.id, error);
+          lastReportedError = message;
+        }
+      }
+    }
     const runtime = readSessionRuntimeConfig(session, {
       provider: input.settings?.provider,
       baseUrl: defaultBaseUrlForSession(session, input.settings),
       apiFormat: input.settings?.apiFormat,
-      effort: input.settings?.effort,
+      effort: followsDefaultEffort ? lastValidSettings?.effort : input.settings?.effort,
     });
     const rawRuntime = session.metadata.runtime;
     const effortCleared = rawRuntime !== null && typeof rawRuntime === "object"
@@ -315,7 +338,9 @@ function createDaemonRequestConfigurationStore(input: {
         ...(baseUrlCleared ? { baseUrl: "" }
           : runtime.baseUrl ? { baseUrl: runtime.baseUrl } : {}),
         ...(runtime.apiFormat ? { apiFormat: runtime.apiFormat } : {}),
-        ...(effortCleared ? { effort: "" }
+        ...(followsDefaultEffort && lastValidSettings?.effort !== undefined
+          ? { effort: lastValidSettings.effort }
+          : effortCleared ? { effort: "" }
           : runtime.effort !== undefined ? { effort: runtime.effort } : {}),
       },
     };
