@@ -255,7 +255,7 @@ Scheduled 的 `run.unread` 是唯一真相：
 - failed / interrupted：红色图标，并用文字或 aria-label 表达状态；
 - 不能只靠颜色。
 
-同一组件用于项目、最近和 IM 会话。收到 `session.created` / `session.updated` baseline 或 delta 时，全局 store upsert `DesktopSessionRecord`，沿用现有 `upsertSession` 排序，因此新 IM 会话无需展开分区或刷新。保留 IM 手动刷新按钮作为用户恢复手段，但取消“展开时自动 refreshBootstrap”。
+同一组件用于项目、最近和 IM 会话。收到 `session.created` / `session.updated` baseline 或 delta 时，全局 store upsert `DesktopSessionRecord`，沿用现有 `upsertSession` 排序，因此新 IM 会话无需展开分区或刷新；IM 分区不提供手动刷新按钮，展开分区也不触发 `refreshBootstrap`。
 
 Scheduled 导航项显示总 unread badge；存在 queued / running run 时显示轻量运行标识。Scheduled 页面从 Activity slice 获取 status 和 runningTaskIds，task / run 详情仍通过现有 schedule API 加载。
 
