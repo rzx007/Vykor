@@ -376,6 +376,8 @@ export class QueryEngine implements IQueryEngine {
       forceFinalResponse = false;
 
       let assistantText = "";
+      let assistantReasoning = "";
+      let assistantReasoningReplay = "";
       let assistantPhase: import("../types/messages").AssistantMessagePhase | undefined;
       const toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
@@ -387,6 +389,11 @@ export class QueryEngine implements IQueryEngine {
         if (event.type === "text_delta") {
           assistantText += event.delta;
           assistantPhase = event.phase ?? assistantPhase;
+        } else if (event.type === "reasoning_delta") {
+          assistantReasoning += event.delta;
+          if (event.source === "reasoning_content") {
+            assistantReasoningReplay += event.delta;
+          }
         } else if (event.type === "tool_use_start") {
           toolUses.push(event.toolUse);
         } else if (event.type === "usage") {
@@ -404,13 +411,15 @@ export class QueryEngine implements IQueryEngine {
         yield { type: "text_delta", delta: notice };
       }
 
-      // 如果助手有文本回复或工具调用，则将其添加到消息历史中
-      if (assistantText || toolUses.length > 0) {
+      // 如果助手有文本、思考内容或工具调用，则将其添加到消息历史中
+      if (assistantText || toolUses.length > 0 || assistantReasoning) {
         this.messages.push({
           type: "assistant",
           content: assistantText,
           phase: assistantPhase ?? (toolUses.length > 0 ? "commentary" : "final_answer"),
           toolUses: toolUses.length > 0 ? toolUses : undefined,
+          ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
+          ...(assistantReasoningReplay ? { reasoningReplay: assistantReasoningReplay } : {}),
         });
       }
 

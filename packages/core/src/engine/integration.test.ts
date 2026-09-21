@@ -1693,6 +1693,43 @@ describe("Integration: Steer follow-ups", () => {
     expect(prepareUserContent).toHaveBeenCalledWith(followUp, expect.any(Object));
     expect(engine.getHistory()).toContainEqual({ type: "user", content: preparedFollowUp });
   });
+
+  it("persists reasoning and replayable reasoning on the assistant message", async () => {
+    const { client } = createMockStreamClient([
+      [
+        { type: "reasoning_delta", delta: "内部推演", source: "reasoning_content" },
+        { type: "reasoning_delta", delta: "补充想法", source: "think" },
+        { type: "text_delta", delta: "答案" },
+        { type: "complete", stopReason: "end_turn" },
+      ],
+    ]);
+
+    const engine = new QueryEngine(client, new ToolRegistry(), allowAll(), noopHooks());
+    for await (const _ of engine.submitMessage("hi")) {}
+
+    const history = engine.getHistory();
+    const assistant = history.find((message) => message.type === "assistant") as any;
+    expect(assistant.reasoning).toBe("内部推演补充想法");
+    expect(assistant.reasoningReplay).toBe("内部推演");
+    expect(assistant.content).toBe("答案");
+  });
+
+  it("keeps a reasoning-only assistant turn in history", async () => {
+    const { client } = createMockStreamClient([
+      [
+        { type: "reasoning_delta", delta: "只有想法", source: "reasoning_content" },
+        { type: "complete", stopReason: "end_turn" },
+      ],
+    ]);
+
+    const engine = new QueryEngine(client, new ToolRegistry(), allowAll(), noopHooks());
+    for await (const _ of engine.submitMessage("hi")) {}
+
+    const history = engine.getHistory();
+    const assistant = history.find((message) => message.type === "assistant") as any;
+    expect(assistant.reasoning).toBe("只有想法");
+    expect(assistant.content).toBe("");
+  });
 });
 
 
