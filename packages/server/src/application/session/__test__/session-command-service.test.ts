@@ -21,12 +21,18 @@ function createService(overrides: {
   sessionRecord?: typeof session | null;
   hasWork?: boolean;
   barrierBlocked?: boolean;
+  validateRequestSelection?: SessionCommandServiceOptions["validateRequestSelection"];
+  persistSession?: boolean;
 } = {}) {
-  const currentSession = overrides.sessionRecord === null ? undefined : (overrides.sessionRecord ?? session);
+  let currentSession = overrides.sessionRecord === null ? undefined : (overrides.sessionRecord ?? session);
   const sessions = {
     createSession: vi.fn((input) => ({ ...session, ...input })),
     getSession: vi.fn(() => currentSession),
-    updateSession: vi.fn((_id, input) => ({ ...session, ...input })),
+    updateSession: vi.fn((_id, input) => {
+      const updated = { ...(currentSession ?? session), ...input };
+      if (overrides.persistSession) currentSession = updated;
+      return updated;
+    }),
     archiveSession: vi.fn(() => ({ ...session, status: "archived" as const })),
     beginArchive: vi.fn(() => ({ ...session, status: "closing" as const })),
     listChildSessions: vi.fn(() => []),
@@ -72,6 +78,7 @@ function createService(overrides: {
     operationGate,
     events,
     contextUsageCache,
+    validateRequestSelection: overrides.validateRequestSelection,
   };
 
   const service = new SessionCommandService(options);
@@ -114,6 +121,52 @@ describe("SessionCommandService", () => {
   });
 
   describe("updateSession", () => {
+    it("merges overlapping live updates in arrival order", async () => {
+      let releaseFirst!: () => void;
+      let signalFirst!: () => void;
+      const held = new Promise<void>((resolve) => { releaseFirst = resolve; });
+      const firstStarted = new Promise<void>((resolve) => { signalFirst = resolve; });
+      const { service, sessions } = createService({
+        persistSession: true,
+        validateRequestSelection: async ({ next }) => {
+          if (next.model === "model-b") {
+            signalFirst();
+            await held;
+          }
+          return {};
+        },
+      });
+      const first = service.updateSession("s1", { metadata: { runtime: { model: "model-b" } } });
+      await firstStarted;
+      const second = service.updateSession("s1", { metadata: { runtime: { effort: "high" } } });
+      releaseFirst();
+      await Promise.all([first, second]);
+      expect(sessions.getSession("s1")?.metadata).toMatchObject({
+        runtime: { model: "model-b", effort: "high" }, runtimeRevision: 2,
+      });
+    });
+
+    it("rejects an invalid request selection before persisting it", async () => {
+      const { service, sessions } = createService({
+        validateRequestSelection: async () => { throw new Error("unsupported effort"); },
+      });
+      await expect(service.updateSession("s1", {
+        metadata: { runtime: { effort: "invalid" } },
+      })).rejects.toThrow("unsupported effort");
+      expect(sessions.updateSession).not.toHaveBeenCalled();
+    });
+
+    it("normalizes an inherited effort in the durable selection", async () => {
+      const { service } = createService({
+        validateRequestSelection: async () => ({ effort: "" }),
+      });
+      await expect(service.updateSession("s1", {
+        metadata: { runtime: { model: "other-model" } },
+      })).resolves.toMatchObject({
+        metadata: { runtime: { model: "other-model", effort: "" } },
+      });
+    });
+
     it("fails when session does not exist", async () => {
       const { service } = createService({ sessionRecord: null });
 
@@ -123,42 +176,55 @@ describe("SessionCommandService", () => {
       });
     });
 
-    it("rejects runtime config update when session has active work", async () => {
-      const { service } = createService({ hasWork: true });
+    it("persists request configuration while session work is active without closing its agent", async () => {
+      const { service, runtimeControl, operationGate } = createService({ hasWork: true });
 
       await expect(
-        service.updateSession("s1", { metadata: { runtime: { model: "another-model" } } }),
-      ).rejects.toMatchObject({
-        status: 409,
-        message: "Cannot update runtime session settings while the session is active",
+        service.updateSession("s1", {
+          metadata: { runtime: { model: "another-model", effort: "high" } },
+        }),
+      ).resolves.toMatchObject({
+        metadata: {
+          runtime: { model: "another-model", effort: "high" },
+          runtimeRevision: 1,
+        },
+      });
+
+      expect(operationGate.tryEnterBarrier).not.toHaveBeenCalled();
+      expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
+    });
+
+    it("still blocks a mixed agent change while the session is active", async () => {
+      const { service, sessions } = createService({ hasWork: true });
+      await expect(service.updateSession("s1", {
+        agent: "reviewer",
+        metadata: { runtime: { model: "another-model" } },
+      })).rejects.toMatchObject({ status: 409 });
+      expect(sessions.updateSession).not.toHaveBeenCalled();
+    });
+
+    it("clears an inherited provider URL when changing provider", async () => {
+      const { service } = createService({
+        sessionRecord: {
+          ...session,
+          metadata: { runtime: { model: "gpt-test", provider: "openai", baseUrl: "https://old.example/v1" } },
+        },
+      });
+      await expect(service.updateSession("s1", {
+        metadata: { runtime: { model: "deepseek-chat", provider: "deepseek" } },
+      })).resolves.toMatchObject({
+        metadata: { runtime: { model: "deepseek-chat", provider: "deepseek", baseUrl: "" } },
       });
     });
 
-    it("switches model, creates presentation message, closes agent pool, and invalidates context usage cache", async () => {
+    it("persists a model selection without claiming it was already used", async () => {
       const { service, sessions, transactions, runtimeControl, contextUsageCache, events } = createService();
 
       await service.updateSession("s1", { metadata: { runtime: { model: "gpt-4o" } } });
 
-      expect(transactions.createMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionId: "s1",
-          role: "system",
-          metadata: {
-            presentation: {
-              kind: "model_switch",
-              fromModel: "gpt-test",
-              toModel: "gpt-4o",
-            },
-          },
-        }),
-      );
-      expect(transactions.upsertMessagePart).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionId: "s1",
-          text: "模型已切换 gpt-test → gpt-4o",
-        }),
-      );
-      expect(runtimeControl.closeAgent).toHaveBeenCalledWith("s1");
+      expect(transactions.createMessage).not.toHaveBeenCalled();
+      expect(transactions.upsertMessagePart).not.toHaveBeenCalled();
+      expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
       expect(contextUsageCache.invalidate).toHaveBeenCalledWith("s1");
       expect(events.publishSince).toHaveBeenCalledWith(42);
     });
@@ -174,6 +240,15 @@ describe("SessionCommandService", () => {
         title: "Renamed Title",
       }));
       expect(events.publishSince).toHaveBeenCalledWith(42);
+    });
+
+    it("does not accept a client-supplied runtime revision", async () => {
+      const { service } = createService();
+      const updated = await service.updateSession("s1", {
+        title: "renamed",
+        metadata: { runtimeRevision: "corrupted" },
+      });
+      expect(updated.metadata.runtimeRevision).toBeUndefined();
     });
   });
 

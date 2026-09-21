@@ -149,6 +149,9 @@ export class DaemonAgentEventProjector {
         this.projectUsage(event);
         return;
       case "domain.event":
+        if (event.data.name === "request.configuration") {
+          this.projectRequestConfiguration(event);
+        }
         if (event.data.name === "goal.assessment" && event.context.runId) {
           const run = this.context.store.runs.getRun(event.context.runId);
           const payload = event.data.payload;
@@ -195,7 +198,7 @@ export class DaemonAgentEventProjector {
   }
 
   private async projectChildCreated(event: Extract<AgentEvent, { type: "child.created" }>): Promise<void> {
-    const { childId, sessionId, spawn, cwd, worktree } = event.data;
+    const { childId, sessionId, spawn, cwd, worktree, parentRequestConfiguration } = event.data;
     const parent = this.context.store.sessions.get(event.context.sessionId);
     if (!parent) throw new Error(`Parent session not found for child ${childId}: ${event.context.sessionId}`);
     if (parent.status === "closing" || parent.status === "archived") {
@@ -212,9 +215,10 @@ export class DaemonAgentEventProjector {
     if (!existing) {
       const before = this.context.events.checkpoint();
       const parentRuntime = readSessionRuntimeConfig(parent);
-      const model = spawn.model ?? parentRuntime.model;
+      const model = spawn.model ?? parentRequestConfiguration?.model ?? parentRuntime.model;
       const runtimePatch = {
         ...parentRuntime,
+        ...parentRequestConfiguration,
         model,
         ...(spawn.systemPrompt !== undefined ? { systemPrompt: spawn.systemPrompt } : {}),
         ...(spawn.permissionMode !== undefined ? { permissionMode: spawn.permissionMode } : {}),
@@ -566,6 +570,54 @@ export class DaemonAgentEventProjector {
       type,
       sessionId: event.context.sessionId,
       payload: { frameworkEventId: event.id, ...payload },
+    });
+    this.context.events.publishSince(before);
+  }
+
+  private projectRequestConfiguration(event: Extract<AgentEvent, { type: "domain.event" }>): void {
+    const model = event.data.payload?.model;
+    if (typeof model !== "string" || !model.trim()) return;
+    const transcript = event.context.runId
+      ? this.transcripts.get(event.context.runId) : undefined;
+    if (transcript) {
+      const payload = event.data.payload ?? {};
+      transcript.requestConfiguration = {
+        revision: typeof payload.revision === "number" ? payload.revision : 0,
+        model,
+        ...(typeof payload.provider === "string" ? { provider: payload.provider } : {}),
+        ...(typeof payload.effort === "string" ? { effort: payload.effort } : {}),
+      };
+    }
+    const session = this.context.store.sessions.get(event.context.sessionId);
+    if (!session) return;
+    const previous = typeof session.metadata.appliedRequestModel === "string"
+      ? session.metadata.appliedRequestModel : undefined;
+    if (previous === model) return;
+    const before = this.context.events.checkpoint();
+    this.context.store.transaction(() => {
+      if (previous) {
+        const message = this.context.store.conversations.createMessage({
+          sessionId: session.id,
+          role: "system",
+          metadata: {
+            presentation: {
+              kind: "model_switch",
+              fromModel: previous,
+              toModel: model,
+            },
+          },
+        });
+        this.context.store.conversations.upsertMessagePart({
+          sessionId: session.id,
+          messageId: message.id,
+          type: "text",
+          status: "completed",
+          text: `模型已切换 ${previous} → ${model}`,
+        });
+      }
+      this.context.store.sessions.update(session.id, {
+        metadata: { ...session.metadata, appliedRequestModel: model },
+      });
     });
     this.context.events.publishSince(before);
   }

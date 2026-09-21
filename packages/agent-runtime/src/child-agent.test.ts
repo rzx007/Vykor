@@ -8,6 +8,42 @@ import { createRunCapabilityView } from "./run-capability-view.js";
 import { ToolRegistry } from "@openharness/core";
 
 describe("AgentChildManager", () => {
+  it("uses the parent's applied selection for a newly created child", async () => {
+    let appliedModel = "old-model";
+    const models: string[] = [];
+    const events: any[] = [];
+    const bus = new AgentEventBus();
+    bus.subscribe((event) => { events.push(event); });
+    const manager = createManager(
+      bus,
+      async (options) => {
+        models.push(options.model);
+        return fakeAgent(() => completedRun("done"));
+      },
+      undefined,
+      undefined,
+      false,
+      { model: "old-model" },
+      undefined,
+      () => ({ model: appliedModel, baseUrl: "" }),
+    );
+    const controller = manager.createController(parentScope());
+    try {
+      await controller.spawnChildAgent({
+        description: "first", prompt: "first", agent: "worker", cwd: "/repo",
+      });
+      appliedModel = "new-model";
+      await controller.spawnChildAgent({
+        description: "second", prompt: "second", agent: "worker", cwd: "/repo",
+      });
+      expect(models).toEqual(["old-model", "new-model"]);
+      expect(events.filter((item) => item.type === "child.created")
+        .map((item) => item.data.parentRequestConfiguration.baseUrl)).toEqual(["", ""]);
+    } finally {
+      await manager.closeAll();
+    }
+  });
+
   it("rejects plugin Child follow-ups from another Run before idempotency or metadata can bypass authorization", async () => {
     const submitted: string[] = [];
     const manager = createManager(new AgentEventBus(), async () => fakeAgent((content: string) => {
@@ -867,10 +903,12 @@ function createManager(
   preserveRunIdentity = false,
   configuration: Record<string, unknown> = {},
   acquire: (input: any, childId: string) => Promise<any> = async (input) => ({ cwd: input.cwd, release: async () => {} }),
+  configurationForChild?: () => Record<string, unknown>,
 ) {
   return new AgentChildManager({
     settings: {} as any,
     configuration,
+    ...(configurationForChild ? { configurationForChild } : {}),
     cwd: "/repo",
     eventBus: bus,
     idleTtlMs,

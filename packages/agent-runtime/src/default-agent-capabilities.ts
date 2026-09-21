@@ -36,6 +36,7 @@ import {
 export interface ResolveDefaultAgentCapabilitiesOptions {
   settings: Settings;
   configuration: OpenHarnessAgentConfiguration;
+  configurationForChild?: () => OpenHarnessAgentConfiguration;
   capabilityOverrides?: AgentCapabilityOverrides;
   effects?: AgentEffectOverrides;
   cwd: string;
@@ -72,6 +73,7 @@ export async function resolveDefaultAgentCapabilities(
   const childManager = new AgentChildManager({
     settings: options.settings,
     configuration: options.configuration,
+    configurationForChild: options.configurationForChild,
     capabilityOverrides: options.capabilityOverrides,
     effects: options.effects,
     cwd: options.cwd,

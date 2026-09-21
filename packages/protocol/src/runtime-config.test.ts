@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs";
 
 import {
   patchSessionRuntimeMetadata,
+  readSessionRuntimeRevision,
   readRuntimeMetadata,
   readSessionRuntimeConfig,
   runtimeMetadataChanged,
+  changedSessionRuntimeKeys,
   type SessionRecord,
 } from "./index.js";
 
@@ -57,6 +59,32 @@ describe("session runtime metadata", () => {
 
   it("accepts a cleared effort through the metadata validator", () => {
     expect(() => readRuntimeMetadata({ runtime: { effort: "" } })).not.toThrow();
+  });
+
+  it("defaults a missing runtime revision to zero and validates stored revisions", () => {
+    expect(readSessionRuntimeRevision({ runtime: { model: "m" } })).toBe(0);
+    expect(readSessionRuntimeRevision({ runtimeRevision: 3 })).toBe(3);
+    expect(() => readSessionRuntimeRevision({ runtimeRevision: -1 })).toThrow(
+      /runtimeRevision/,
+    );
+    expect(() => readSessionRuntimeRevision({ runtimeRevision: 1.5 })).toThrow(
+      /runtimeRevision/,
+    );
+  });
+
+  it("reports only effective request configuration changes", () => {
+    const before = readSessionRuntimeConfig(session({
+      runtime: { model: "m", provider: "openai", effort: "low" },
+    }));
+    const unchanged = readSessionRuntimeConfig(session({
+      runtime: { model: "m", provider: "openai", effort: "low" },
+    }));
+    const changed = readSessionRuntimeConfig(session({
+      runtime: { model: "m", provider: "openai", effort: "" },
+    }));
+
+    expect(changedSessionRuntimeKeys(before, unchanged)).toEqual([]);
+    expect(changedSessionRuntimeKeys(before, changed)).toEqual(["effort"]);
   });
 
   it("rejects a non-object runtime and invalid patches", () => {

@@ -96,6 +96,64 @@ describe("createDaemonAgentLoader", () => {
     expect(createAgent.mock.calls[0]![0].options.mcpRuntimeRegistry).toBe(mcpRuntimeRegistry);
   });
 
+  it("does not restore the old default URL when loading a switched provider", async () => {
+    const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn(async () => {}) }) as any);
+    const switched = {
+      ...session,
+      model: "deepseek-chat",
+      metadata: { runtime: { model: "deepseek-chat", provider: "deepseek", baseUrl: "" } },
+    };
+    const loader = createDaemonAgentLoader({
+      settings: { model: "old", provider: "openai", baseUrl: "https://old.example/v1" } as any,
+      createAgent,
+    })!;
+    await loader({ session: switched, history: [], parts: [] });
+    expect(createAgent.mock.calls[0]![0].options.baseUrl).toBeUndefined();
+    expect((await createAgent.mock.calls[0]![0].options.requestConfigurationStore.read()).configuration.baseUrl)
+      .toBe("");
+  });
+
+  it("gives a warm Agent a store that reads the latest durable request selection", async () => {
+    let current = structuredClone(session);
+    const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
+    const createAgent = vi.fn(async () => agent);
+    const loader = createDaemonAgentLoader({
+      settings: { model: "default-model", effort: "medium" } as any,
+      getSession: () => current,
+      createAgent,
+    })!;
+
+    await loader({ session, history: [], parts: [] });
+    const store = createAgent.mock.calls[0]![0].options.requestConfigurationStore;
+    expect(await store.read()).toMatchObject({
+      revision: 0,
+      configuration: { model: "model-from-session", effort: "high" },
+    });
+
+    current = {
+      ...current,
+      metadata: {
+        runtime: { model: "model-after-update", effort: "low" },
+        runtimeRevision: 4,
+      },
+    };
+    expect(await store.read()).toMatchObject({
+      revision: 4,
+      configuration: { model: "model-after-update", effort: "low" },
+    });
+    current = {
+      ...current,
+      metadata: {
+        runtime: { model: "model-after-update", effort: "" },
+        runtimeRevision: 5,
+      },
+    };
+    expect(await store.read()).toMatchObject({
+      revision: 5,
+      configuration: { model: "model-after-update", effort: "" },
+    });
+  });
+
   it("acquires one daemon-owned environment lease before creating an Agent", async () => {
     const lease = { environmentId: "env-1", release: vi.fn(async () => {}) } as any;
     const acquireEnvironment = vi.fn(async () => lease);
@@ -522,11 +580,8 @@ describe("createDaemonAgentLoader", () => {
 
     await service.updateSession(record.id, { metadata: { runtime: { effort: "high" } } });
 
-    expect(agents[0]!.close).toHaveBeenCalledOnce();
-    expect(await pool.get(record.id)).toBeUndefined();
-
-    await pool.acquireSession(record.id);
-    expect(createAgent).toHaveBeenCalledTimes(2);
-    expect(createAgent.mock.calls[1]![0].options.reasoningEffort).toBe("high");
+    expect(agents[0]!.close).not.toHaveBeenCalled();
+    expect(await pool.get(record.id)).toBe(agents[0]);
+    expect(createAgent).toHaveBeenCalledOnce();
   });
 });

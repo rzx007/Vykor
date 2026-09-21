@@ -35,7 +35,11 @@ import {
 } from "@openharness/services";
 
 import { AttachmentService } from "./attachments/attachment-service.js";
-import { catalogModelReasoningEfforts } from "./default-services/catalog-provider-mapping.js";
+import {
+  catalogModelReasoningEfforts,
+  readCatalogProvider,
+} from "./default-services/catalog-provider-mapping.js";
+import { validateRequestSelection } from "./session/request-selection-validation.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
@@ -408,10 +412,20 @@ export class DaemonApplication implements DurableAgentApplication {
         settings: options.settings,
         getSettings: options.getSettings,
         getSettingsForCwd: options.getSettingsForCwd,
+        getSession: (id) => store.sessions.get(id),
         resolveReasoningEfforts: async ({ provider, model }) => {
           if (!provider || !model) return undefined;
           const catalog = await this.modelCatalog.load();
           return catalogModelReasoningEfforts(catalog, provider, model);
+        },
+        resolveModelContextWindow: async ({ provider, model }) => {
+          if (!provider) return undefined;
+          const catalogProvider = readCatalogProvider(await this.modelCatalog.load(), provider);
+          const entry = Object.entries(catalogProvider?.models ?? {}).find(([id, value]) =>
+            (value.id ?? id) === model)?.[1];
+          const capacity = entry?.limit?.context;
+          return typeof capacity === "number" && Number.isSafeInteger(capacity) && capacity > 0
+            ? capacity : undefined;
         },
         createAgent: options.createAgent,
         mcpRuntimeRegistry: this.mcpRuntimes,
@@ -678,6 +692,19 @@ export class DaemonApplication implements DurableAgentApplication {
         resolveSessionListTitle: (id) => store["resolveSessionListTitle"](id),
       });
       this.commands = new SessionCommandService({
+        validateRequestSelection: async ({ session, next, explicitEffort }) => {
+          const settings = options.getSettingsForCwd
+            ? await options.getSettingsForCwd(session.cwd)
+            : (options.getSettings?.() ?? options.settings);
+          return validateRequestSelection({
+            catalog: await this.modelCatalog.load(),
+            provider: next.provider ?? settings?.provider,
+            model: next.model,
+            effort: next.effort,
+            explicitEffort,
+            customProviders: settings?.customProviders,
+          });
+        },
         sessions: {
           createSession: (input) => store.sessions.create(input),
           getSession: (id) => store.sessions.get(id),

@@ -12,6 +12,7 @@ import type {
   AgentBackgroundShellHost,
   AgentScheduleEffects,
   McpAuthHost,
+  QueryRequestConfiguration,
 } from "../index";
 import type {
   ToolContext,
@@ -175,6 +176,7 @@ export class QueryEngine implements IQueryEngine {
   private cwd: string;
   private sessionId: string | undefined;
   private reasoningEffort: string | undefined;
+  private appliedRequestConfiguration: QueryRequestConfiguration | undefined;
 
   constructor(
     private apiClient: StreamingMessageClient,
@@ -280,7 +282,12 @@ export class QueryEngine implements IQueryEngine {
     content: string | ContentBlock[],
     options: SubmitMessageOptions = {},
   ): AsyncIterable<StreamEvent> {
-    const preparedContent = await this.prepareUserContent(content, options.signal);
+    const initialRequestConfiguration = await this.resolveRequestConfiguration(options);
+    const preparedContent = await this.prepareUserContent(
+      content,
+      options.signal,
+      initialRequestConfiguration.client,
+    );
     this.messages = sanitizeMessageHistory(this.messages);
     this.messages.push({ type: "user", content: preparedContent });
 
@@ -296,15 +303,7 @@ export class QueryEngine implements IQueryEngine {
         // retriever failure is non-fatal; continue without memory context
       }
     }
-    const runSystemPrompt = options.execution?.capabilityView && this.options.systemPromptForRun
-      ? await this.options.systemPromptForRun(options.execution.capabilityView)
-      : this.systemPrompt;
-    this.lastRunPrompt = { systemPrompt: runSystemPrompt };
-    const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, runSystemPrompt);
     const contribution = options.execution?.contribution;
-    const turnSystemPrompt = contribution?.systemGuidance
-      ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
-      : baseSystemPrompt;
     const runToolRegistry = this.runToolRegistry(contribution, options.execution?.capabilityView);
     const internalTools = new Set(
       contribution?.tools
@@ -323,11 +322,32 @@ export class QueryEngine implements IQueryEngine {
     const blockedTools = new Set<string>();
     let recoveryToolTurnsRemaining: number | null = null;
     let forceFinalResponse = false;
+    let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
 
     // 执行会话开始时的钩子函数
     await this.hookExecutor.execute("session_start", {});
 
     while (turnCount < this.maxTurns || forceFinalResponse) {
+      // The first request must use the same client that prepared its attachments.
+      const requestConfiguration = turnCount === 0
+        ? initialRequestConfiguration
+        : preparedNextRequestConfiguration ?? await this.resolveRequestConfiguration(options);
+      preparedNextRequestConfiguration = undefined;
+      const runSystemPrompt = requestConfiguration.systemPrompt
+        ?? (options.execution?.capabilityView && this.options.systemPromptForRun
+          ? await this.options.systemPromptForRun(options.execution.capabilityView)
+          : this.systemPrompt);
+      this.lastRunPrompt = { systemPrompt: runSystemPrompt };
+      const baseSystemPrompt = this.composeTurnSystemPrompt(memoryContext, runSystemPrompt);
+      const turnSystemPrompt = contribution?.systemGuidance
+        ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
+        : baseSystemPrompt;
+      this.compactService.setClient(
+        toCompactClient(requestConfiguration.client, requestConfiguration.model),
+      );
+      if (requestConfiguration.contextWindow !== undefined) {
+        this.compactService.setContextWindow(requestConfiguration.contextWindow);
+      }
       // 自动压缩消息历史以控制上下文长度
       try {
         this.compactService.setProgressCallback((event) =>
@@ -365,12 +385,29 @@ export class QueryEngine implements IQueryEngine {
       const system = trajectoryControl.guidance
         ? appendSystemGuidance(recoverySystem, trajectoryControl.guidance)
         : recoverySystem;
-      const stream = this.apiClient.streamMessage({
-        model: this.model,
+      this.appliedRequestConfiguration = requestConfiguration;
+      if (this.options.resolveRequestConfiguration) {
+        await options.execution?.emit({
+          type: "domain.event",
+          data: {
+            name: "request.configuration",
+            payload: {
+              revision: requestConfiguration.revision,
+              model: requestConfiguration.model,
+              ...(requestConfiguration.provider ? { provider: requestConfiguration.provider } : {}),
+              ...(requestConfiguration.effort !== undefined ? { effort: requestConfiguration.effort } : {}),
+            },
+          },
+        });
+      }
+      const stream = requestConfiguration.client.streamMessage({
+        model: requestConfiguration.model,
         messages: this.messages,
         system,
         tools: tools.length > 0 ? tools : undefined,
-        ...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {}),
+        ...(requestConfiguration.reasoningEffort
+          ? { reasoningEffort: requestConfiguration.reasoningEffort }
+          : {}),
         abortSignal: options.signal,
       });
       forceFinalResponse = false;
@@ -497,7 +534,7 @@ export class QueryEngine implements IQueryEngine {
           options.execution?.closeSteering();
           throw new MaxTurnsExceeded(this.maxTurns);
         }
-        await this.consumeFollowUps(options);
+        preparedNextRequestConfiguration = (await this.consumeFollowUps(options)).requestConfiguration;
         continue;
       }
 
@@ -506,7 +543,9 @@ export class QueryEngine implements IQueryEngine {
         options.execution?.closeSteering();
         return;
       }
-      if (await this.consumeFollowUps(options, true)) {
+      const followUp = await this.consumeFollowUps(options, true);
+      if (followUp.accepted) {
+        preparedNextRequestConfiguration = followUp.requestConfiguration;
         turnCount++;
         continue;
       }
@@ -519,13 +558,16 @@ export class QueryEngine implements IQueryEngine {
   private async consumeFollowUps(
     options: SubmitMessageOptions,
     closeIfEmpty = false,
-  ): Promise<boolean> {
+  ): Promise<{ accepted: boolean; requestConfiguration?: QueryRequestConfiguration }> {
     const followUps = await (options.execution?.takeSteeredInputs({
       closeIfEmpty,
     }) ?? []);
-    if (followUps.length === 0) return false;
+    if (followUps.length === 0) return { accepted: false };
+    const requestConfiguration = await this.resolveRequestConfiguration(options);
     const preparedFollowUps = await Promise.all(
-      followUps.map((input) => this.prepareUserContent(input.content, options.signal)),
+      followUps.map((input) => this.prepareUserContent(
+        input.content, options.signal, requestConfiguration.client,
+      )),
     );
     this.messages.push(
       ...preparedFollowUps.map((preparedContent) => ({
@@ -533,18 +575,40 @@ export class QueryEngine implements IQueryEngine {
         content: preparedContent,
       })),
     );
-    return true;
+    return { accepted: true, requestConfiguration };
   }
 
   private prepareUserContent(
     content: string | ContentBlock[],
     signal?: AbortSignal,
+    client = this.apiClient,
   ): Promise<string | ContentBlock[]> {
-    return this.apiClient.prepareUserContent?.(content, { signal }) ?? Promise.resolve(content);
+    return client.prepareUserContent?.(content, { signal }) ?? Promise.resolve(content);
+  }
+
+  private async resolveRequestConfiguration(
+    options: SubmitMessageOptions,
+  ): Promise<QueryRequestConfiguration> {
+    if (this.options.resolveRequestConfiguration) {
+      return await this.options.resolveRequestConfiguration({
+        signal: options.signal,
+        capabilityView: options.execution?.capabilityView,
+      });
+    }
+    return {
+      revision: 0,
+      model: this.model,
+      client: this.apiClient,
+      ...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {}),
+    };
   }
 
   getHistory(): Message[] {
     return [...this.messages];
+  }
+
+  getAppliedRequestConfiguration(): QueryRequestConfiguration | undefined {
+    return this.appliedRequestConfiguration;
   }
 
   /**

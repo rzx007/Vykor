@@ -17,6 +17,10 @@ import type {
   RuntimeBundle,
   RunCapabilityView,
   Settings,
+  AgentRequestConfigurationPatch,
+  AgentRequestConfigurationSnapshot,
+  AgentRequestConfigurationReader,
+  AgentRequestConfigurationStore,
   ToolDescriptor,
   ToolRegistrationSource,
   UsageSnapshot,
@@ -44,6 +48,7 @@ import {
   type AgentChildManager,
 } from "./child-agent.js";
 import { AgentEventBus } from "./event-source.js";
+import { createMemoryRequestConfigurationStore } from "./request-configuration.js";
 import type { OpenHarnessAgentExtension } from "./extensions.js";
 import {
   FrameworkAgentRun,
@@ -146,6 +151,9 @@ export interface OpenHarnessAgent {
   loadHistory(messages: Message[]): void;
   clear(): void;
   setModel(model: string): void;
+  updateConfiguration(
+    patch: AgentRequestConfigurationPatch,
+  ): Promise<AgentRequestConfigurationSnapshot>;
   setCompactContextProvider(
     provider: CompactContextProvider | undefined,
   ): void;
@@ -185,6 +193,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
     readonly children: AgentChildDirectory,
     private readonly capabilities: ResolvedAgentCapabilities,
     private model: string,
+    private readonly requestConfigurationStore: AgentRequestConfigurationReader,
   ) {}
 
   get id(): string {
@@ -272,8 +281,33 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
 
   setModel(model: string): void {
     this.assertIdle("set the model");
+    const store = this.requestConfigurationStore as AgentRequestConfigurationReader & {
+      replaceSynchronously?: (patch: AgentRequestConfigurationPatch) => AgentRequestConfigurationSnapshot;
+    };
+    if (!store.replaceSynchronously) {
+      throw new Error("Host-owned configuration requires a session update");
+    }
+    store.replaceSynchronously({ model });
     this.model = model;
     this.runtime.queryEngine.setModel(model);
+  }
+
+  async updateConfiguration(
+    patch: AgentRequestConfigurationPatch,
+  ): Promise<AgentRequestConfigurationSnapshot> {
+    if (this.lifecycleState === "closing" || this.lifecycleState === "closed") {
+      throw new AgentOperationConflictError(
+        this.id,
+        this.lifecycleState,
+        "update configuration",
+      );
+    }
+    if (!("update" in this.requestConfigurationStore)) {
+      throw new Error("Host-owned configuration requires a session update");
+    }
+    const snapshot = await (this.requestConfigurationStore as AgentRequestConfigurationStore).update(patch);
+    this.model = snapshot.configuration.model;
+    return snapshot;
   }
 
   setCompactContextProvider(
@@ -440,6 +474,7 @@ export interface AssembledAgentOptions {
   childDirectory: AgentChildRegistry;
   capabilities: ResolvedAgentCapabilities;
   model: string;
+  requestConfigurationStore?: AgentRequestConfigurationReader;
 }
 
 /** Kernel 与默认 Node 组装共用的最后一步；这里只接收已经准备好的对象。 */
@@ -460,6 +495,11 @@ export function createAssembledAgent(
     options.childDirectory,
     options.capabilities,
     options.model,
+    options.requestConfigurationStore
+      ?? createMemoryRequestConfigurationStore(
+        { model: options.model },
+        async (next) => next,
+      ),
   );
 }
 

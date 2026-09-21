@@ -10,6 +10,7 @@ function projectorStore(flat: Record<string, any>) {
   return {
     sessions: {
       get: flat.getSession ?? vi.fn(),
+      update: flat.updateSession ?? vi.fn(),
       create: flat.createSession ?? vi.fn(),
       archive: flat.archiveSession ?? vi.fn(),
     },
@@ -45,6 +46,76 @@ function projectorStore(flat: Record<string, any>) {
 }
 
 describe("DaemonAgentEventProjector", () => {
+  it("persists the applied parent model for a new child while the target has changed", async () => {
+    const sessions = new Map<string, any>([["parent", {
+      id: "parent", cwd: "/repo", model: "model-b",
+      metadata: { runtime: { model: "model-b", effort: "high", baseUrl: "https://new.example/v1" }, appliedRequestModel: "model-a" },
+    }]]);
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+      }),
+      transcriptProjection: {} as any,
+      executionProjector: { createBridge: () => ({ registerChildExecution: (input: any) => input, bindChildExecutionRun: async () => {} }) } as any,
+      liveChildren: { register: () => {}, unregister: () => {} },
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+    await projector.apply(event("child.created", {
+      childId: "child", sessionId: "child-session", cwd: "/repo",
+      spawn: { description: "work", prompt: "work", agent: "worker", cwd: "/repo" },
+      parentRequestConfiguration: { model: "model-a", effort: "low", baseUrl: "" },
+    }, { sessionId: "parent", runId: "root-run", childId: "child" }));
+    expect(sessions.get("child-session")?.metadata.runtime).toMatchObject({
+      model: "model-a", effort: "low", baseUrl: "",
+    });
+  });
+
+  it("writes a model divider only when the selected model starts a request", async () => {
+    let session = {
+      id: "s1", cwd: "/repo", model: "model-b",
+      metadata: { runtime: { model: "model-b" }, appliedRequestModel: "model-a" },
+    };
+    const messages: Array<Record<string, unknown>> = [];
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getSession: () => session,
+        updateSession: (_id: string, patch: any) => {
+          session = { ...session, ...patch };
+          return session;
+        },
+        createMessage: (input: Record<string, unknown>) => {
+          messages.push(input);
+          return { id: `message-${messages.length}`, ...input };
+        },
+        upsertMessagePart: vi.fn(),
+      }),
+      transcriptProjection: {} as any,
+      executionProjector: {} as any,
+      liveChildren: {} as any,
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+
+    await projector.apply(event("domain.event", {
+      name: "request.configuration", payload: { revision: 0, model: "model-a" },
+    }, { sessionId: "s1", runId: "r1" }));
+    expect(messages).toEqual([]);
+    await projector.apply(event("domain.event", {
+      name: "request.configuration", payload: { revision: 1, model: "model-b" },
+    }, { sessionId: "s1", runId: "r1" }));
+    expect(messages).toEqual([
+      expect.objectContaining({
+        role: "system",
+        metadata: { presentation: { kind: "model_switch", fromModel: "model-a", toModel: "model-b" } },
+      }),
+    ]);
+    expect(session.metadata.appliedRequestModel).toBe("model-b");
+  });
+
   it("projects reasoning events and transacts when their source changes", async () => {
     const transaction = vi.fn((work: () => unknown) => work());
     const projectStreamEvent = vi.fn(() => ({}));

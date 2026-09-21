@@ -333,6 +333,13 @@ export class CompactService {
     this.client = client;
   }
 
+  setContextWindow(tokens: number): void {
+    if (!Number.isSafeInteger(tokens) || tokens <= 0) {
+      throw new RangeError("Context window must be a positive safe integer");
+    }
+    this.maxTokens = tokens;
+  }
+
   /** 注册 / 替换上下文提供者（由 QueryEngine 或 Host 接线后注入运行时上下文）。 */
   setCompactContextProvider(fn: CompactContextProvider | undefined): void {
     this.contextProvider = fn;

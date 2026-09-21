@@ -25,6 +25,125 @@ afterEach(() => {
 });
 
 describe("createDefaultNodeAgent", () => {
+  it("clears an explicit effort without restoring the startup default", async () => {
+    const requests: Array<{ effort?: string; system?: string }> = [];
+    const agent = await createDefaultNodeAgent({
+      client: {
+        async *streamMessage(params) {
+          requests.push({ effort: params.reasoningEffort, system: params.system });
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        },
+      },
+      settings: {
+        model: "model-a", effort: "low", apiFormat: "openai", maxTurns: 2,
+        permission: { mode: "default" }, plugins: { enabled: false },
+        memory: { enabled: false }, sandbox: { enabled: false },
+      },
+    });
+    try {
+      await agent.updateConfiguration({ effort: "" });
+      await agent.runMessage("hello");
+      expect(requests[0]!.effort).toBeUndefined();
+      expect(requests[0]!.system).not.toContain("Effort: low");
+    } finally {
+      await agent.close();
+    }
+  });
+
+  it("rejects synchronous model changes when a host owns the request selection", async () => {
+    const agent = await createDefaultNodeAgent({
+      client: { async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" }; } },
+      requestConfigurationStore: {
+        read: async () => ({ revision: 0, configuration: { model: "host-model" } }),
+        update: async () => { throw new Error("use host session update"); },
+        restoreIfCurrent: async () => undefined,
+      },
+      settings: {
+        model: "host-model",
+        apiFormat: "openai",
+        maxTurns: 2,
+        permission: { mode: "default" },
+        plugins: { enabled: false },
+        memory: { enabled: false },
+        sandbox: { enabled: false },
+      },
+    });
+    try {
+      expect(() => agent.setModel("unpersisted-model")).toThrow(/host.*configuration|session update/i);
+      await expect(agent.updateConfiguration({ model: "unpersisted-model" }))
+        .rejects.toThrow(/host.*configuration|session update/i);
+      expect(agent.inspect().model).toBe("host-model");
+    } finally {
+      await agent.close();
+    }
+  });
+
+  it("accepts a model and effort update while a run waits for its first response", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-request-config-"));
+    tempDirs.push(cwd);
+    const requests: Array<{ model: string; reasoningEffort?: string; system?: string }> = [];
+    let releaseFirstRequest!: () => void;
+    let signalFirstRequest!: () => void;
+    const firstRequestHeld = new Promise<void>((resolve) => { releaseFirstRequest = resolve; });
+    const firstRequestStarted = new Promise<void>((resolve) => { signalFirstRequest = resolve; });
+    const executeEcho = vi.fn(async () => ({ content: [{ type: "text" as const, text: "ok" }] }));
+    const agent = await createDefaultNodeAgent({
+      cwd,
+      client: {
+        async *streamMessage(params) {
+          requests.push({ model: params.model, reasoningEffort: params.reasoningEffort, system: params.system });
+          if (requests.length === 1) {
+            signalFirstRequest();
+            await firstRequestHeld;
+            yield {
+              type: "tool_use_start" as const,
+              toolUse: { type: "tool_use", id: "echo-1", name: "Echo", input: {} },
+            };
+            yield { type: "complete" as const, stopReason: "tool_use" };
+            return;
+          }
+          yield { type: "text_delta" as const, delta: "done" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        },
+      },
+      tools: [{ name: "Echo", description: "Echoes input.", inputSchema: {}, execute: executeEcho }],
+      settings: {
+        model: "model-a",
+        effort: "low",
+        apiFormat: "openai",
+        maxTurns: 3,
+        permission: { mode: "full_auto" },
+        plugins: { enabled: false },
+        memory: { enabled: false },
+        sandbox: { enabled: false },
+      },
+    });
+
+    let running: Promise<unknown> | undefined;
+    try {
+      running = agent.runMessage("use Echo");
+      await firstRequestStarted;
+      await expect(agent.updateConfiguration({ model: "model-b", effort: "high" })).resolves.toMatchObject({
+        revision: 1,
+        configuration: { model: "model-b", effort: "high" },
+      });
+      releaseFirstRequest();
+      await expect(running).resolves.toMatchObject({ output: "done" });
+
+      expect(requests.map(({ model, reasoningEffort }) => ({ model, reasoningEffort }))).toEqual([
+        { model: "model-a", reasoningEffort: "low" },
+        { model: "model-b", reasoningEffort: "high" },
+      ]);
+      expect(requests[0]!.system).toContain("Effort: low");
+      expect(requests[1]!.system).toContain("Effort: high");
+      expect(executeEcho).toHaveBeenCalledTimes(1);
+    } finally {
+      releaseFirstRequest();
+      await running?.catch(() => undefined);
+      await agent.close();
+    }
+  });
+
   it("denies an ask decision when no permission effect is configured", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-permission-"));
     tempDirs.push(cwd);

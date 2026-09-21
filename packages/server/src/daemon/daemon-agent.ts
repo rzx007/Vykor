@@ -17,13 +17,17 @@ import type {
   AgentBackgroundShellHost,
   AgentEffects,
   AgentEventListener,
+  AgentRequestConfigurationReader,
   McpRuntimeRegistry,
   Settings,
   ToolDefinition,
 } from "@openharness/core";
 import type { AgentTerminalHost } from "@openharness/terminal";
 import type { ExecutionEnvironmentHandle } from "@openharness/environment";
-import { readSessionRuntimeConfig } from "@openharness/protocol";
+import {
+  readSessionRuntimeConfig,
+  readSessionRuntimeRevision,
+} from "@openharness/protocol";
 import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
@@ -80,9 +84,15 @@ export interface DaemonAgentLoaderOptions {
     provider?: string;
     model?: string;
   }): Promise<string[] | undefined> | string[] | undefined;
+  resolveModelContextWindow?(input: {
+    provider?: string;
+    model: string;
+  }): Promise<number | undefined> | number | undefined;
   settings?: Settings;
   getSettings?: () => Settings;
   getSettingsForCwd?: (cwd: string) => Promise<Settings> | Settings;
+  /** Returns the durable record so a warm Agent can read a later selection. */
+  getSession?: (sessionId: string) => SessionRecord | undefined;
   createAgent?: CreateDaemonAgent;
   requestPermission?: AgentEffects["requestPermission"];
   schedules?: AgentScheduleEffects;
@@ -156,6 +166,11 @@ export function createDaemonAgentLoader(
       ? await options.acquireEnvironment(session, settings)
       : undefined;
     const configuration = agentConfigurationFromSession(session, settings);
+    const requestConfigurationStore = createDaemonRequestConfigurationStore({
+      session,
+      settings,
+      getSession: options.getSession,
+    });
     let declaredEfforts: string[] | undefined;
     try {
       declaredEfforts = await options.resolveReasoningEfforts?.({
@@ -178,6 +193,25 @@ export function createDaemonAgentLoader(
       ...(options.executionSurface ? { executionSurface: options.executionSurface } : {}),
       ...(executionEnvironment ? { executionEnvironment } : {}),
       ...configuration,
+      requestConfigurationStore,
+      ...(options.getSession ? {
+        requestConfigurationStoreForSession: (sessionId: string) => {
+          const childSession = options.getSession!(sessionId);
+          return childSession ? createDaemonRequestConfigurationStore({
+            session: childSession,
+            settings,
+            getSession: options.getSession,
+          }) : undefined;
+        },
+      } : {}),
+      ...(options.resolveReasoningEfforts
+        ? { resolveReasoningEfforts: async (input) =>
+            await options.resolveReasoningEfforts!(input) }
+        : {}),
+      ...(options.resolveModelContextWindow
+        ? { resolveModelContextWindow: async (input) =>
+            await options.resolveModelContextWindow!(input) }
+        : {}),
       reasoningEffort,
       capabilityOverrides: {
         ...(options.schedules ? { schedules: options.schedules } : {}),
@@ -253,6 +287,51 @@ export function createDaemonAgentLoader(
   };
 }
 
+function createDaemonRequestConfigurationStore(input: {
+  session: SessionRecord;
+  settings: Settings | undefined;
+  getSession?: (sessionId: string) => SessionRecord | undefined;
+}): AgentRequestConfigurationReader {
+  const read = async () => {
+    const session = input.getSession?.(input.session.id) ?? input.session;
+    const runtime = readSessionRuntimeConfig(session, {
+      provider: input.settings?.provider,
+      baseUrl: defaultBaseUrlForSession(session, input.settings),
+      apiFormat: input.settings?.apiFormat,
+      effort: input.settings?.effort,
+    });
+    const rawRuntime = session.metadata.runtime;
+    const effortCleared = rawRuntime !== null && typeof rawRuntime === "object"
+      && !Array.isArray(rawRuntime)
+      && (rawRuntime as Record<string, unknown>).effort === "";
+    const baseUrlCleared = rawRuntime !== null && typeof rawRuntime === "object"
+      && !Array.isArray(rawRuntime)
+      && (rawRuntime as Record<string, unknown>).baseUrl === "";
+    return {
+      revision: readSessionRuntimeRevision(session.metadata),
+      configuration: {
+        model: runtime.model,
+        ...(runtime.provider ? { provider: runtime.provider } : {}),
+        ...(baseUrlCleared ? { baseUrl: "" }
+          : runtime.baseUrl ? { baseUrl: runtime.baseUrl } : {}),
+        ...(runtime.apiFormat ? { apiFormat: runtime.apiFormat } : {}),
+        ...(effortCleared ? { effort: "" }
+          : runtime.effort !== undefined ? { effort: runtime.effort } : {}),
+      },
+    };
+  };
+  return { read };
+}
+
+function defaultBaseUrlForSession(
+  session: SessionRecord,
+  settings: Settings | undefined,
+): string | undefined {
+  const selectedProvider = readSessionRuntimeConfig(session).provider;
+  return selectedProvider && selectedProvider !== settings?.provider
+    ? undefined : settings?.baseUrl;
+}
+
 /** 项目级设置优先于进程级，再退回构造时传入的静态 settings。 */
 async function resolveSettingsForSession(
   options: DaemonAgentLoaderOptions,
@@ -275,7 +354,7 @@ function agentConfigurationFromSession(
 ): Partial<OpenHarnessAgentOptions> {
   const runtime = readSessionRuntimeConfig(session, {
     provider: settings?.provider,
-    baseUrl: settings?.baseUrl,
+    baseUrl: defaultBaseUrlForSession(session, settings),
     apiFormat: settings?.apiFormat,
     permissionMode: settings?.permission?.mode,
     maxTurns: settings?.maxTurns,

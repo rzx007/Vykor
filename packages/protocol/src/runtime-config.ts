@@ -20,6 +20,21 @@ export type SessionRuntimeConfig = {
 
 export type SessionRuntimeConfigPatch = Partial<SessionRuntimeConfig>;
 
+const RUNTIME_CONFIG_KEYS: Array<keyof SessionRuntimeConfig> = [
+  "model",
+  "provider",
+  "baseUrl",
+  "apiFormat",
+  "permissionMode",
+  "maxTurns",
+  "effort",
+  "sessionMode",
+  "systemPrompt",
+  "allowedTools",
+  "disallowedTools",
+  "pluginsEnabled",
+];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -83,6 +98,24 @@ export function readRuntimeMetadata(metadata: Record<string, unknown> | undefine
     }
   }
   return runtime;
+}
+
+export function readSessionRuntimeRevision(
+  metadata: Record<string, unknown> | undefined,
+): number {
+  const revision = metadata?.runtimeRevision;
+  if (revision === undefined) return 0;
+  if (
+    typeof revision !== "number"
+    || !Number.isSafeInteger(revision)
+    || revision < 0
+  ) {
+    throw new ProtocolDataError(
+      "metadata.runtimeRevision must be a non-negative safe integer",
+      "metadata.runtimeRevision",
+    );
+  }
+  return revision;
 }
 
 export function readSessionRuntimeConfig(
@@ -152,6 +185,15 @@ export function runtimeMetadataChanged(
   after: Record<string, unknown>,
 ): boolean {
   return JSON.stringify(readRuntimeMetadata(before)) !== JSON.stringify(readRuntimeMetadata(after));
+}
+
+export function changedSessionRuntimeKeys(
+  before: SessionRuntimeConfig,
+  after: SessionRuntimeConfig,
+): Array<keyof SessionRuntimeConfig> {
+  return RUNTIME_CONFIG_KEYS.filter(
+    (key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+  );
 }
 
 function stripUndefined<T extends Record<string, unknown>>(input: T): Partial<T> {

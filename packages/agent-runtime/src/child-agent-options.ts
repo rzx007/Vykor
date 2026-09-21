@@ -30,8 +30,10 @@ export function deriveChildAgentOptions(
     : configuration.effort;
   const inheritsModel = childModel === configuration.model;
   const effortUnchanged = childEffort === configuration.effort;
+  const { requestConfigurationStore: _parentReader, ...inherited } = configuration;
   return {
-    ...configuration,
+    ...inherited,
+    requestConfigurationStore: configuration.requestConfigurationStoreForSession?.(input.sessionId),
     settings: input.settings,
     cwd: input.cwd,
     sessionId: input.sessionId,

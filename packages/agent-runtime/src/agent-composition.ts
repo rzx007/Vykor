@@ -9,6 +9,7 @@ import type {
 } from "@openharness/core";
 import { createAgentSession, getSkillsDir, loadSettings } from "@openharness/core";
 import type { McpClientManager } from "@openharness/mcp";
+import type { AgentRequestConfigurationReader } from "@openharness/core";
 import { createWorkspaceBinding } from "@openharness/environment";
 import type { ExecutionEnvironmentHandle } from "@openharness/environment";
 import {
@@ -43,6 +44,7 @@ import {
 } from "./extensions.js";
 import type { AgentMemoryRuntime } from "./memory-runtime.js";
 import { installRuntimeIntegrations } from "./runtime-integrations.js";
+import { createMemoryRequestConfigurationStore } from "./request-configuration.js";
 
 interface AgentCompositionOptions extends OpenHarnessAgentConfiguration {
   settings?: Settings;
@@ -83,6 +85,7 @@ export interface AgentComposition {
   childManager: AgentChildManager;
   capabilities: ResolvedAgentCapabilities;
   model: string;
+  requestConfigurationStore: AgentRequestConfigurationReader;
   cleanup: CleanupStack;
 }
 
@@ -121,6 +124,7 @@ async function composeOpenHarnessAgentInternal(
   }
 
   const sessionId = options.sessionId ?? `agent_session_${randomUUID()}`;
+  let activeRuntime: RuntimeBundle | undefined;
   let executionEnvironment: ExecutionEnvironmentHandle | undefined =
     options.executionEnvironment;
   if (!executionEnvironment && options.executionSurface === "desktop_managed") {
@@ -148,6 +152,17 @@ async function composeOpenHarnessAgentInternal(
   const environment = await resolveDefaultAgentCapabilities({
     settings,
     configuration: options,
+    configurationForChild: () => {
+      const applied = activeRuntime?.queryEngine.getAppliedRequestConfiguration?.();
+      return applied ? {
+        ...options,
+        model: applied.model,
+        provider: applied.provider,
+        baseUrl: applied.baseUrl,
+        effort: applied.effort,
+        reasoningEffort: applied.reasoningEffort,
+      } : options;
+    },
     capabilityOverrides: options.capabilityOverrides,
     effects: options.effects,
     cwd,
@@ -159,6 +174,17 @@ async function composeOpenHarnessAgentInternal(
     resolveDefaultTerminal: internal.resolveDefaultTerminal,
     cleanup,
   });
+  const requestConfigurationStore = options.requestConfigurationStore
+    ?? createMemoryRequestConfigurationStore(
+      {
+        model: options.model ?? settings.model,
+        ...(options.provider ?? settings.provider ? { provider: options.provider ?? settings.provider } : {}),
+        ...(options.baseUrl ?? settings.baseUrl ? { baseUrl: options.baseUrl ?? settings.baseUrl } : {}),
+        ...(options.apiFormat ?? settings.apiFormat ? { apiFormat: options.apiFormat ?? settings.apiFormat } : {}),
+        ...(options.effort ?? settings.effort ? { effort: options.effort ?? settings.effort } : {}),
+      },
+      async (next) => next,
+    );
 
   const runtime = await createOpenHarnessRuntime({
     settings,
@@ -169,7 +195,9 @@ async function composeOpenHarnessAgentInternal(
     executionEnvironment,
     skillRegistry: discovery.skillRegistry,
     agentDefinitions: discovery.agentDefinitions,
+    requestConfigurationStore,
   });
+  activeRuntime = runtime;
   rollback.add(() => runtime.close(), runtime);
 
   const mcpIntegration = await installRuntimeIntegrations({
@@ -198,6 +226,7 @@ async function composeOpenHarnessAgentInternal(
     childManager: environment.childManager,
     capabilities: environment.capabilities,
     model: options.model ?? settings.model,
+    requestConfigurationStore,
     cleanup,
   };
 }
