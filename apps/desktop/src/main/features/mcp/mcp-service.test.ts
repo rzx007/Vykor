@@ -7,13 +7,38 @@ const snapshot = {
       name: "linear",
       transport: "http" as const,
       endpoint: "https://mcp.linear.app/mcp",
+      authMode: "oauth" as const,
       authStatus: "not-logged-in",
       scopes: [],
+      runtimeStatus: "connected" as const,
     },
   ],
 }
 
 describe("DesktopMcpService", () => {
+  it("passes the unified auth mode, credential status and runtime status through", async () => {
+    const application = {
+      snapshot: vi.fn(async () => snapshot),
+      login: vi.fn(),
+      logout: vi.fn(),
+    }
+    const service = new DesktopMcpService(application as never, vi.fn())
+
+    await expect(service.snapshot()).resolves.toEqual({
+      servers: [
+        {
+          name: "linear",
+          transport: "http",
+          endpoint: "https://mcp.linear.app/mcp",
+          authMode: "oauth",
+          authStatus: "not-logged-in",
+          scopes: [],
+          runtimeStatus: "connected",
+        },
+      ],
+    })
+  })
+
   it("normalizes scopes and opens the authorization URL through Electron", async () => {
     const openExternal = vi.fn(async () => undefined)
     const application = {

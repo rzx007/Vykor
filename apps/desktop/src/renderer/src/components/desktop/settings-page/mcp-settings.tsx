@@ -4,10 +4,22 @@ import { Button } from "@renderer/components/ui/button"
 import { Card, CardContent } from "@renderer/components/ui/card"
 import { Input } from "@renderer/components/ui/input"
 import { Spinner } from "@renderer/components/ui/spinner"
-import type { DesktopMcpAuthStatus, DesktopMcpServer } from "@shared/mcp-types"
+import type {
+  DesktopMcpAuthMode,
+  DesktopMcpAuthStatus,
+  DesktopMcpRuntimeStatus,
+  DesktopMcpServer,
+} from "@shared/mcp-types"
 import { errorMessage } from "./settings-error-message"
 
-const statusLabels: Record<DesktopMcpAuthStatus, string> = {
+const authModeLabels: Record<DesktopMcpAuthMode, string> = {
+  none: "未配置认证",
+  oauth: "OAuth",
+  bearer: "Bearer",
+  custom: "自定义认证",
+}
+
+const authStatusLabels: Record<DesktopMcpAuthStatus, string> = {
   "not-configured": "未配置",
   "not-logged-in": "未登录",
   valid: "已连接",
@@ -15,6 +27,13 @@ const statusLabels: Record<DesktopMcpAuthStatus, string> = {
   "reauthentication-required": "需要重新登录",
   static: "静态凭据",
   unsupported: "不支持 OAuth",
+}
+
+const runtimeStatusLabels: Record<DesktopMcpRuntimeStatus, string> = {
+  connected: "Runtime 已连接",
+  disconnected: "Runtime 未运行",
+  error: "Runtime 连接失败",
+  unavailable: "Runtime 状态不可用",
 }
 
 export function McpSettings(): React.JSX.Element {
@@ -58,7 +77,15 @@ export function McpSettings(): React.JSX.Element {
     void window.desktop.mcp
       .login({ name: server.name, scopes })
       .then((snapshot) => setServers(snapshot.servers))
-      .catch((cause: unknown) => setError(errorMessage(cause)))
+      .catch((cause: unknown) => {
+        // The credential may already be saved even when the runtime failed to
+        // reconnect; refresh so the page still shows the saved auth state.
+        setError(errorMessage(cause))
+        void window.desktop.mcp
+          .snapshot()
+          .then((snapshot) => setServers(snapshot.servers))
+          .catch(() => undefined)
+      })
       .finally(() => setBusy(null))
   }
 
@@ -68,7 +95,13 @@ export function McpSettings(): React.JSX.Element {
     void window.desktop.mcp
       .logout({ name: server.name })
       .then((snapshot) => setServers(snapshot.servers))
-      .catch((cause: unknown) => setError(errorMessage(cause)))
+      .catch((cause: unknown) => {
+        setError(errorMessage(cause))
+        void window.desktop.mcp
+          .snapshot()
+          .then((snapshot) => setServers(snapshot.servers))
+          .catch(() => undefined)
+      })
       .finally(() => setBusy(null))
   }
 
@@ -102,8 +135,12 @@ export function McpSettings(): React.JSX.Element {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-heading text-base font-semibold">{server.name}</h2>
+                  <Badge variant="outline">{authModeLabels[server.authMode]}</Badge>
                   <Badge variant={badgeVariant(server.authStatus)}>
-                    {statusLabels[server.authStatus]}
+                    {authStatusLabels[server.authStatus]}
+                  </Badge>
+                  <Badge variant={runtimeBadgeVariant(server.runtimeStatus)}>
+                    {runtimeStatusLabels[server.runtimeStatus]}
                   </Badge>
                   <Badge variant="outline">{server.transport}</Badge>
                 </div>
@@ -116,7 +153,7 @@ export function McpSettings(): React.JSX.Element {
                   </p>
                 ) : null}
               </div>
-              {server.transport === "http" ? (
+              {server.transport === "http" && server.authMode === "oauth" ? (
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64">
                   {canLogin(server.authStatus) ? (
                     <div className="flex flex-col gap-1">
@@ -138,14 +175,11 @@ export function McpSettings(): React.JSX.Element {
                   <Button
                     size="sm"
                     variant={canLogout(server.authStatus) ? "outline" : "default"}
-                    disabled={
-                      busy !== null ||
-                      (!canLogin(server.authStatus) && !canLogout(server.authStatus))
-                    }
+                    disabled={busy !== null}
                     onClick={() => (canLogout(server.authStatus) ? logout(server) : login(server))}
                   >
                     {busy === server.name ? <Spinner /> : null}
-                    {canLogout(server.authStatus) ? "退出登录" : "浏览器授权"}
+                    {actionLabel(server.authStatus)}
                   </Button>
                 </div>
               ) : null}
@@ -159,6 +193,11 @@ export function McpSettings(): React.JSX.Element {
 
 function canLogin(status: DesktopMcpAuthStatus): boolean {
   return status === "not-logged-in" || status === "reauthentication-required"
+}
+
+function actionLabel(status: DesktopMcpAuthStatus): string {
+  if (canLogout(status)) return "退出登录"
+  return status === "reauthentication-required" ? "重新授权" : "浏览器授权"
 }
 
 function endpointLabel(server: DesktopMcpServer): string {
@@ -176,5 +215,13 @@ function badgeVariant(
   if (status === "valid") return "default"
   if (status === "reauthentication-required") return "destructive"
   if (status === "expired-refreshable") return "secondary"
+  return "outline"
+}
+
+function runtimeBadgeVariant(
+  status: DesktopMcpRuntimeStatus
+): "default" | "secondary" | "destructive" | "outline" {
+  if (status === "error") return "destructive"
+  if (status === "connected") return "secondary"
   return "outline"
 }

@@ -56,8 +56,10 @@ function toDesktopSnapshot(snapshot: McpOAuthSnapshot): DesktopMcpSnapshot {
       name: server.name,
       transport: server.transport,
       ...(server.endpoint ? { endpoint: server.endpoint } : {}),
+      authMode: server.authMode,
       authStatus: server.authStatus,
       scopes: [...server.scopes],
+      runtimeStatus: server.runtimeStatus,
     })),
   }
 }
