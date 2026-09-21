@@ -399,3 +399,119 @@ describe("OpenAICompatibleClient reasoning effort", () => {
     expect("reasoning_effort" in params).toBe(false);
   });
 });
+
+describe("OpenAICompatibleClient DSML tool-call recovery", () => {
+  const ENV = "OPENHARNESS_DISABLE_DSML_RECOVERY";
+  const READ_TOOL = {
+    name: "Read",
+    description: "read a file",
+    inputSchema: { type: "object" },
+  } as any;
+
+  beforeEach(() => {
+    delete process.env[ENV];
+  });
+
+  afterEach(() => {
+    delete process.env[ENV];
+  });
+
+  function contentClient(chunks: string[]) {
+    const create = vi.fn(async () => ({
+      async *[Symbol.asyncIterator]() {
+        for (const chunk of chunks) {
+          yield { choices: [{ delta: { content: chunk }, finish_reason: null }] };
+        }
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      },
+    }));
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: undefined } as any);
+    client.client = { chat: { completions: { create } } } as any;
+    return client;
+  }
+
+  async function collectEvents(client: OpenAICompatibleClient, tools: any[]) {
+    const events: any[] = [];
+    for await (const event of client.streamMessage({
+      model: "deepseek-v4.1-flash",
+      messages: [{ type: "user", content: "hi" }],
+      tools,
+    })) {
+      events.push(event);
+    }
+    return events;
+  }
+
+  const textOf = (events: any[]) =>
+    events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+
+  it("recovers a leaked DSML tool call and keeps the markup out of the text", async () => {
+    const client = contentClient([
+      "我看一下页面配置。\n",
+      '<｜DSML｜tool_calls> <｜DSML｜invoke name="Read"> <｜DSML｜parameter ',
+      'name="file_path" string="true">C:\\tmp\\pages.json</｜DSML｜parameter> </｜DSML｜invoke> </｜DSML｜tool_calls>',
+    ]);
+    const events = await collectEvents(client, [READ_TOOL]);
+
+    expect(textOf(events)).toBe("我看一下页面配置。\n");
+    const toolUses = events.filter((event) => event.type === "tool_use_start");
+    expect(toolUses).toHaveLength(1);
+    expect(toolUses[0]!.toolUse.name).toBe("Read");
+    expect(toolUses[0]!.toolUse.input).toEqual({ file_path: "C:\\tmp\\pages.json" });
+    expect(events.find((event) => event.type === "complete")!.stopReason).toBe("tool_use");
+  });
+
+  it("recovers an orphan invoke block with no tool_calls wrapper", async () => {
+    const client = contentClient([
+      '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path" string="true">a.json</｜DSML｜parameter></｜DSML｜invoke>',
+    ]);
+    const events = await collectEvents(client, [READ_TOOL]);
+
+    expect(textOf(events)).toBe("");
+    expect(events.filter((event) => event.type === "tool_use_start")).toHaveLength(1);
+    expect(events.find((event) => event.type === "complete")!.stopReason).toBe("tool_use");
+  });
+
+  it("keeps the raw markup as text when the tool is not declared", async () => {
+    const leaked =
+      '<｜DSML｜invoke name="Unknown"><｜DSML｜parameter name="x" string="true">1</｜DSML｜parameter></｜DSML｜invoke>';
+    const client = contentClient([leaked]);
+    const events = await collectEvents(client, [READ_TOOL]);
+
+    expect(textOf(events)).toBe(leaked);
+    expect(events.some((event) => event.type === "tool_use_start")).toBe(false);
+    expect(events.find((event) => event.type === "complete")!.stopReason).toBe("stop");
+  });
+
+  it("does not recover when the request declares no tools", async () => {
+    const leaked =
+      '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path" string="true">a.json</｜DSML｜parameter></｜DSML｜invoke>';
+    const client = contentClient([leaked]);
+    const events = await collectEvents(client, []);
+
+    expect(textOf(events)).toBe(leaked);
+    expect(events.some((event) => event.type === "tool_use_start")).toBe(false);
+  });
+
+  it("can be disabled with OPENHARNESS_DISABLE_DSML_RECOVERY", async () => {
+    process.env[ENV] = "1";
+    const leaked =
+      '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path" string="true">a.json</｜DSML｜parameter></｜DSML｜invoke>';
+    const client = contentClient([leaked]);
+    const events = await collectEvents(client, [READ_TOOL]);
+
+    expect(textOf(events)).toBe(leaked);
+    expect(events.some((event) => event.type === "tool_use_start")).toBe(false);
+  });
+
+  it("passes ordinary text containing angle brackets through untouched", async () => {
+    const client = contentClient(["比较一下：a < b，还有 <div> 标签"]);
+    const events = await collectEvents(client, [READ_TOOL]);
+
+    expect(textOf(events)).toBe("比较一下：a < b，还有 <div> 标签");
+    expect(events.some((event) => event.type === "tool_use_start")).toBe(false);
+  });
+});

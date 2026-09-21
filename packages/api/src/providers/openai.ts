@@ -10,6 +10,11 @@ import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import { AuthenticationFailure, RateLimitFailure, requestFailure } from "../errors/index";
 import { abortableDelay } from "./retry";
 import {
+  createDsmlRecoveryScanner,
+  type DsmlRecoveryScanner,
+  type RecoveredToolCall,
+} from "./dsml-tool-call-recovery.js";
+import {
   prepareNativeImagePayload,
   preparedImageDataUrl,
   prepareUserContentWithVisionImages,
@@ -27,6 +32,11 @@ const MAX_COMPLETION_TOKEN_MODEL_PREFIXES = ["gpt-5", "o1", "o3", "o4"];
 // assistant turns (Kimi-on-Anthropic style). Strict-OpenAI providers reject
 // the field outright, so the default is off.
 const EMPTY_REASONING_ENV = "OPENHARNESS_REQUIRE_EMPTY_REASONING_CONTENT";
+
+// DSML tool-call recovery is on by default because DeepSeek V4 intermittently
+// leaks tool calls into the content channel at long context. Set this to a
+// truthy value to fall back to forwarding the raw markup as text.
+const DSML_RECOVERY_DISABLE_ENV = "OPENHARNESS_DISABLE_DSML_RECOVERY";
 
 // Matches complete <think>…</think> blocks (`s` flag so newlines are included).
 const THINK_RE = /<think>.*?<\/think>/gs;
@@ -94,7 +104,11 @@ export function stripThinkBlocks(buf: string): [string, string] {
 }
 
 function emptyReasoningRequired(): boolean {
-  const raw = (process.env[EMPTY_REASONING_ENV] ?? "").trim().toLowerCase();
+  return envFlagEnabled(EMPTY_REASONING_ENV);
+}
+
+function envFlagEnabled(name: string): boolean {
+  const raw = (process.env[name] ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
@@ -203,6 +217,9 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
     let collectedReasoning = "";
     // Buffer to strip inline <think>…</think> blocks across streaming chunks.
     let thinkBuf = "";
+    let recoveredToolCalls: RecoveredToolCall[] = [];
+    let recovery: DsmlRecoveryScanner | undefined;
+    let emittedAnyText = false;
 
     let lastError: Error | undefined;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -212,6 +229,15 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       finishReason = null;
       collectedReasoning = "";
       thinkBuf = "";
+      recoveredToolCalls = [];
+      emittedAnyText = false;
+      const declaredTools = params.tools;
+      recovery =
+        declaredTools?.length && !envFlagEnabled(DSML_RECOVERY_DISABLE_ENV)
+          ? createDsmlRecoveryScanner({
+              declaredToolNames: new Set(declaredTools.map((tool) => tool.name)),
+            })
+          : undefined;
       try {
         const stream = await this._client.chat.completions.create(createParams, {
           signal: params.abortSignal,
@@ -237,7 +263,14 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
             const [visible, leftover] = stripThinkBlocks(thinkBuf);
             thinkBuf = leftover;
             if (visible) {
-              yield { type: "text_delta", delta: visible };
+              const scanned = recovery
+                ? recovery.push(visible)
+                : { visible, toolCalls: [] as RecoveredToolCall[] };
+              if (scanned.visible) {
+                emittedAnyText = true;
+                yield { type: "text_delta", delta: scanned.visible };
+              }
+              recoveredToolCalls.push(...scanned.toolCalls);
             }
           }
 
@@ -269,8 +302,23 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
 
         // Flush any remaining buffered content (e.g. a partial <think> prefix at EOF).
         if (thinkBuf) {
-          yield { type: "text_delta", delta: thinkBuf };
+          const scanned = recovery
+            ? recovery.push(thinkBuf)
+            : { visible: thinkBuf, toolCalls: [] as RecoveredToolCall[] };
+          if (scanned.visible) {
+            emittedAnyText = true;
+            yield { type: "text_delta", delta: scanned.visible };
+          }
+          recoveredToolCalls.push(...scanned.toolCalls);
           thinkBuf = "";
+        }
+        if (recovery) {
+          const tail = recovery.flush();
+          if (tail.visible) {
+            emittedAnyText = true;
+            yield { type: "text_delta", delta: tail.visible };
+          }
+          recoveredToolCalls.push(...tail.toolCalls);
         }
         break;
       } catch (error) {
@@ -295,8 +343,10 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       this.reasoningHistory.set(turnKey, collectedReasoning);
     }
 
+    let nativeToolUseCount = 0;
     for (const [, tc] of collectedToolCalls) {
       if (!tc.name) continue;
+      nativeToolUseCount++;
       let input: Record<string, unknown>;
       try {
         input = JSON.parse(tc.arguments || "{}");
@@ -309,6 +359,13 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       };
     }
 
+    for (const call of recoveredToolCalls) {
+      yield {
+        type: "tool_use_start",
+        toolUse: { type: "tool_use", id: call.id, name: call.name, input: call.input },
+      };
+    }
+
     yield {
       type: "usage",
       usage: {
@@ -317,9 +374,18 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       },
     };
 
+    const toolUseCount = nativeToolUseCount + recoveredToolCalls.length;
+    if (finishReason === "tool_calls" && toolUseCount === 0 && !emittedAnyText) {
+      yield {
+        type: "text_delta",
+        delta:
+          "⚠️ 上游声明了工具调用（finish_reason=tool_calls），但没有返回可执行的调用内容，本轮未执行任何工具。",
+      };
+    }
+
     yield {
       type: "complete",
-      stopReason: finishReason === "tool_calls" ? "tool_use" : finishReason ?? "end_turn",
+      stopReason: toolUseCount > 0 ? "tool_use" : finishReason ?? "end_turn",
     };
   }
 
