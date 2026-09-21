@@ -66,6 +66,7 @@ import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
 import { ConversationTranscriptSkeleton } from "./transcript/conversation-transcript-skeleton"
 import { ConversationTranscript } from "./transcript/transcript"
+import { useShowReasoning } from "./use-show-reasoning"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./types"
 import {
   resolveScrollerAgentStatus,
@@ -191,6 +192,7 @@ function ConversationPane({
     [composerScope, setComposerDraftDocument]
   )
   const sending = goalBusy || (hasSession ? activeSessionSending : newConversationSending)
+  const showReasoning = useShowReasoning()
   const archived = sessionView?.session.status === "archived"
   const sessionActions = useSessionActionDialogs()
 
@@ -541,6 +543,7 @@ function ConversationPane({
                       canOpenReview={canOpenReview}
                       onOpenReview={onOpenReview}
                       onOpenTerminal={onOpenTerminal}
+                      showReasoning={showReasoning}
                     />
                   )}
                 </MessageScrollerContent>

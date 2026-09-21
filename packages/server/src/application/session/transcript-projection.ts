@@ -8,6 +8,9 @@ import type {
 } from "@openharness/protocol";
 import type { AttachmentRoutingDecision } from "../attachments/routing/attachment-routing-types.js";
 
+const REASONING_PART_CHAR_LIMIT = 1_000_000;
+const REASONING_TRUNCATION_NOTICE = "\n\n…（思考内容过长，已截断）";
+
 type ActiveToolPart = {
   partId: string;
   messageId: string;
@@ -23,6 +26,9 @@ export type ActiveTranscriptProjectionState = {
   assistantTurnCompleted: boolean;
   activeTextPartId?: string;
   activeTextPhase?: AssistantMessagePhase;
+  activeReasoningPartId?: string;
+  reasoningChars?: number;
+  reasoningTruncated?: boolean;
   toolParts: Map<string, ActiveToolPart>;
 };
 
@@ -113,6 +119,7 @@ export class SessionTranscriptProjection {
   }
 
   projectSteeredInputs(state: ActiveTranscriptProjectionState, pending: SessionInputRecord[]): void {
+    this.completeOpenReasoningPart(state, "completed");
     this.completeOpenTextPart(state, "completed");
     delete state.assistantMessageId;
     state.assistantTurnCompleted = true;
@@ -137,7 +144,34 @@ export class SessionTranscriptProjection {
     event: StreamEvent,
   ): AppliedTranscriptStreamEvent {
     switch (event.type) {
+      case "reasoning_delta": {
+        this.completeOpenTextPart(state, "completed", "commentary");
+        const messageId = this.ensureAssistantMessage(state, true);
+        if (!state.activeReasoningPartId) {
+          const part = this.store.conversations.upsertMessagePart({
+            sessionId: state.sessionId,
+            messageId,
+            type: "reasoning",
+            status: "running",
+            text: "",
+            metadata: { source: event.source },
+          });
+          state.activeReasoningPartId = part.id;
+        }
+        const delta = this.takeReasoningDelta(state, event.delta);
+        if (!delta) return {};
+        return {
+          liveEvent: this.store.incrementalOutput.appendMessagePartDelta({
+            sessionId: state.sessionId,
+            messageId,
+            partId: state.activeReasoningPartId,
+            field: "reasoning",
+            delta,
+          }),
+        };
+      }
       case "text_delta": {
+        this.completeOpenReasoningPart(state, "completed");
         const messageId = this.ensureAssistantMessage(state, true);
         if (!state.activeTextPartId) {
           const part = this.store.conversations.upsertMessagePart({
@@ -162,6 +196,7 @@ export class SessionTranscriptProjection {
         };
       }
       case "tool_use_start": {
+        this.completeOpenReasoningPart(state, "completed");
         this.completeOpenTextPart(state, "completed", "commentary");
         const messageId = this.ensureAssistantMessage(state, true);
         const part = this.store.conversations.upsertMessagePart({
@@ -249,6 +284,7 @@ export class SessionTranscriptProjection {
         return {};
       }
       case "complete": {
+        this.completeOpenReasoningPart(state, "completed");
         this.completeOpenTextPart(
           state,
           "completed",
@@ -260,6 +296,7 @@ export class SessionTranscriptProjection {
       }
       case "error": {
         const messageId = this.ensureAssistantMessage(state, true);
+        this.completeOpenReasoningPart(state, "completed");
         this.completeOpenTextPart(state, "failed");
         this.store.conversations.upsertMessagePart({
           sessionId: state.sessionId,
@@ -289,6 +326,42 @@ export class SessionTranscriptProjection {
     });
     delete state.activeTextPartId;
     delete state.activeTextPhase;
+  }
+
+  completeOpenReasoningPart(
+    state: ActiveTranscriptProjectionState,
+    status: Extract<SessionMessagePartStatus, "completed" | "failed" | "interrupted">,
+  ): void {
+    if (!state.assistantMessageId || !state.activeReasoningPartId) return;
+    this.store.conversations.upsertMessagePart({
+      id: state.activeReasoningPartId,
+      sessionId: state.sessionId,
+      messageId: state.assistantMessageId,
+      type: "reasoning",
+      status,
+    });
+    delete state.activeReasoningPartId;
+    delete state.reasoningChars;
+    delete state.reasoningTruncated;
+  }
+
+  private takeReasoningDelta(
+    state: ActiveTranscriptProjectionState,
+    delta: string,
+  ): string {
+    const used = state.reasoningChars ?? 0;
+    if (used >= REASONING_PART_CHAR_LIMIT) {
+      if (state.reasoningTruncated) return "";
+      state.reasoningTruncated = true;
+      return REASONING_TRUNCATION_NOTICE;
+    }
+    if (used + delta.length <= REASONING_PART_CHAR_LIMIT) {
+      state.reasoningChars = used + delta.length;
+      return delta;
+    }
+    state.reasoningChars = REASONING_PART_CHAR_LIMIT;
+    state.reasoningTruncated = true;
+    return delta.slice(0, REASONING_PART_CHAR_LIMIT - used) + REASONING_TRUNCATION_NOTICE;
   }
 
   /** Closes parts left running when event delivery fails before terminal events are projected. */

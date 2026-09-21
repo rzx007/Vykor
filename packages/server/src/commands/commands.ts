@@ -198,6 +198,13 @@ export const BUILTIN_SESSION_COMMANDS: readonly CommandCatalogEntry[] = [
     argumentHint: "[low|medium|high]",
   },
   {
+    name: "/reasoning",
+    description: "Show or hide model reasoning in the transcript",
+    kind: "session",
+    source: "builtin",
+    argumentHint: "[on|off]",
+  },
+  {
     name: "/fast",
     description: "Toggle fast mode (on | off | toggle)",
     kind: "session",

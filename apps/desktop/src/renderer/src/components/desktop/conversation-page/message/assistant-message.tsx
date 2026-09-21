@@ -32,6 +32,7 @@ import {
 } from "./message-render-model"
 import { createStreamdownComponents } from "./streamdown-components"
 import { streamdownPlugins } from "./streamdown-plugins"
+import { truncateReasoning } from "./reasoning-text"
 import { MessageAttachment } from "./message-attachment"
 import { GeneratedImageGallery, ImageGenerationMessage } from "./image-generation-message"
 
@@ -89,12 +90,18 @@ export function AssistantMessage({
           )
         }
         if (unit.type === "reasoning") {
+          const truncated = truncateReasoning(unit.text)
           return (
             <details key={unit.id} className="text-ui-small text-ui-muted">
               <summary className="w-fit cursor-pointer font-medium select-none hover:text-foreground">
                 思考过程
               </summary>
-              <p className="mt-2 border-l pl-3.5 leading-6 whitespace-pre-wrap">{unit.text}</p>
+              <p className="mt-2 border-l pl-3.5 leading-6 whitespace-pre-wrap">{truncated.text}</p>
+              {truncated.omitted > 0 ? (
+                <p className="mt-1 text-ui-caption text-ui-muted">
+                  已省略前 {truncated.omitted} 个字符
+                </p>
+              ) : null}
             </details>
           )
         }

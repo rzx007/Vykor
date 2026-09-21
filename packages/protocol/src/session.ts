@@ -514,7 +514,8 @@ export interface AppendMessagePartDeltaInput {
   sessionId: string;
   messageId: string;
   partId: string;
-  field: "text";
+  /** 增量写入的字段；reasoning 用于模型的思考内容。 */
+  field: "text" | "reasoning";
   delta: string;
 }
 

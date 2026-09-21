@@ -4,6 +4,7 @@ import type { SyntaxStyle } from "@opentui/core";
 import { useTheme } from "../../theme/ThemeContext";
 import type { TranscriptItem } from "../../types";
 import { ToolDiff } from "../../components/messages/ToolDiff";
+import { truncateReasoning } from "./reasoning-text";
 
 /**
  * Pick the first "summary" value from a tool_input record.
@@ -105,6 +106,21 @@ function TranscriptPartView({
       return (
         <text fg={c.accent}>{icons.user + item.text}</text>
       );
+
+    case "reasoning": {
+      const truncated = truncateReasoning(item.text);
+      return (
+        <CollapsibleTranscriptBlock
+          tone={c.muted}
+          summary={`思考过程${item.streaming ? " …" : ""}`}
+        >
+          {truncated.omitted > 0
+            ? <text fg={c.muted}>{`已省略前 ${truncated.omitted} 个字符`}</text>
+            : null}
+          <text fg={c.muted}>{truncated.text}</text>
+        </CollapsibleTranscriptBlock>
+      );
+    }
 
     case "assistant":
       return <markdown content={item.text} syntaxStyle={syntax} streaming={item.streaming === true} />;

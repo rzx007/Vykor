@@ -55,6 +55,17 @@ describe("writeSessionExport", () => {
         metadata: { inputAttachmentId: "ref_1" },
         createdAt: 1,
         updatedAt: 1,
+      }, {
+        id: "p3",
+        sessionId: "s1",
+        messageId: "m1",
+        seq: 3,
+        type: "reasoning" as const,
+        status: "completed" as const,
+        text: "internal chain of thought",
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
       }];
       const inputs = [{
         id: "i1",
@@ -90,6 +101,7 @@ describe("writeSessionExport", () => {
       const markdown = readFileSync(md.filepath, "utf8");
       expect(markdown).toContain("hello export");
       expect(markdown).toContain("[附件: screen.png | image/png | 42 bytes | assetId=att_1]");
+      expect(markdown).not.toContain("internal chain of thought");
       expect(markdown).not.toMatch(/storage|blob|sha256/i);
 
       const json = await writeSessionExport({

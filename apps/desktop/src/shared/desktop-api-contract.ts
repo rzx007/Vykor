@@ -118,6 +118,7 @@ import type {
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
 } from "./settings-types"
 import type {
@@ -295,6 +296,9 @@ export type DesktopAPI = {
     ) => Promise<DesktopSettingsSnapshot>
     updateAgentEnvironment: (
       input: UpdateDesktopAgentEnvironmentInput
+    ) => Promise<DesktopSettingsSnapshot>
+    updateReasoningVisibility: (
+      input: UpdateDesktopReasoningVisibilityInput
     ) => Promise<DesktopSettingsSnapshot>
     updateDefaultOpener: (
       input: UpdateDesktopDefaultOpenerInput

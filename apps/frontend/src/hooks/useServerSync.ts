@@ -74,6 +74,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     runId: string;
   } | null>(null);
   const [ready, setReady] = useState(false);
+  const [showReasoning, setShowReasoning] = useState(true);
   const [globalSystemItems, setGlobalSystemItems] = useState<TranscriptItem[]>([]);
   const [systemItemsBySession, setSystemItemsBySession] = useState<Record<string, TranscriptItem[]>>({});
   const [commandCatalog, setCommandCatalog] = useState<CommandCatalogEntry[]>([]);
@@ -341,6 +342,13 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     return await client.providers.listModels();
   }, []);
 
+  const refreshSettings = useCallback(async (): Promise<void> => {
+    const client = clientRef.current;
+    if (!client) return;
+    const settings = await client.system.getSettings();
+    setShowReasoning(settings.showReasoning !== false);
+  }, []);
+
   const cacheFirstRead = useCallback(
     (request: PresentationReadRequest): void => {
       const cached = presentationCacheRef.current[request.key];
@@ -477,6 +485,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
           client.system.listCommands({ cwd }).catch(() => [] as CommandCatalogEntry[]),
         ]);
         const model = daemon.model ?? stringSetting(settings.model) ?? "default";
+        setShowReasoning(settings.showReasoning !== false);
         const provider = stringSetting(settings.provider);
         const baseUrl = stringSetting(settings.baseUrl);
         const apiFormat = settings.apiFormat === "anthropic" || settings.apiFormat === "openai" ? settings.apiFormat : undefined;
@@ -712,6 +721,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         activateSession,
         returnToHome,
         refreshJobs,
+        refreshSettings,
         loadJobDetail,
         createAndSwitchSession,
         cacheFirstRead,
@@ -725,7 +735,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         reportError(error instanceof Error ? error.message : String(error));
       });
     },
-    [activateSession, cacheFirstRead, clearDisplayRequest, clientState, createAndSwitchSession, daemon, loadJobDetail, localBusy, pushSystem, refreshJobs, reportAuxiliaryError, reportError, returnToHome, setStatusAndDefault, showDisplayRequest],
+    [activateSession, cacheFirstRead, clearDisplayRequest, clientState, createAndSwitchSession, daemon, loadJobDetail, localBusy, pushSystem, refreshJobs, refreshSettings, reportAuxiliaryError, reportError, returnToHome, setStatusAndDefault, showDisplayRequest],
   );
 
   const bucket = activeSessionId ? clientState.buckets[activeSessionId] : undefined;
@@ -739,12 +749,12 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     [bucket],
   );
   const transcriptView = useMemo(() => {
-    const base = splitStreamingAssistant(bucketToTranscript(bucket));
+    const base = splitStreamingAssistant(bucketToTranscript(bucket, { showReasoning }));
     return {
       transcript: [...base.items, ...recoveryItems, ...(activeSessionId ? (systemItemsBySession[activeSessionId] ?? []) : globalSystemItems)],
       assistantBuffer: base.assistantBuffer,
     };
-  }, [activeSessionId, bucket, globalSystemItems, recoveryItems, systemItemsBySession]);
+  }, [activeSessionId, bucket, globalSystemItems, recoveryItems, showReasoning, systemItemsBySession]);
   const submittedRunRecord = submittedRun ? clientState.buckets[submittedRun.sessionId]?.runs[submittedRun.runId] : undefined;
   const waitingForSubmittedRun = !!submittedRun && (!submittedRunRecord || submittedRunRecord.status === "pending" || submittedRunRecord.status === "running");
   const commandDetails = useMemo(() => mergeCommandDetails(commandCatalog), [commandCatalog]);

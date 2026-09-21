@@ -16,7 +16,7 @@ export type FrontendConfig = {
 
 export type TranscriptItem = {
   id?: string;
-  role: "system" | "user" | "assistant" | "tool" | "tool_result" | "log";
+  role: "system" | "user" | "assistant" | "reasoning" | "tool" | "tool_result" | "log";
   text: string;
   streaming?: boolean;
   tool_name?: string;

@@ -8,6 +8,14 @@ export interface TextDeltaEvent {
   phase?: AssistantMessagePhase;
 }
 
+export type ReasoningSource = "reasoning_content" | "think";
+
+export interface ReasoningDeltaEvent {
+  type: "reasoning_delta";
+  delta: string;
+  source: ReasoningSource;
+}
+
 export interface ToolUseStartEvent {
   type: "tool_use_start";
   toolUse: {
@@ -47,6 +55,7 @@ export interface CompleteEvent {
 
 export type StreamEvent =
   | TextDeltaEvent
+  | ReasoningDeltaEvent
   | ToolUseStartEvent
   | ToolUseEndEvent
   | ErrorEvent

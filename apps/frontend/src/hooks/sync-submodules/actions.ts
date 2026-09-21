@@ -75,6 +75,7 @@ export interface ActionDispatcherContext {
   activateSession: (session: SessionRecord) => void;
   returnToHome: (title?: string) => void;
   refreshJobs: () => Promise<void>;
+  refreshSettings?: () => void | Promise<void>;
   loadJobDetail: (client: Pick<OpenHarnessClient, "jobs">, sessionId: string, jobId: string) => Promise<void>;
   createAndSwitchSession: (title?: string) => Promise<SessionRecord | undefined>;
   cacheFirstRead: (request: import("@openharness/client").PresentationReadRequest) => void;
@@ -209,6 +210,7 @@ export async function executeTuiAction(
           cacheFirstRead: ctx.cacheFirstRead,
           daemon: ctx.daemon,
           setStatus: ctx.setStatusAndDefault,
+          onSettingsChanged: ctx.refreshSettings,
         });
       } catch (error) {
         if (slash && JOBS_AUXILIARY_SLASH_COMMANDS.has(slash.name)) {

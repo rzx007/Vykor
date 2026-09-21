@@ -588,4 +588,146 @@ describe("SessionTranscriptProjection", () => {
       metadata: { inputAttachmentId: "ref-steer" },
     }));
   });
+
+  it("projects reasoning deltas into a reasoning part", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "先看文件。",
+      source: "reasoning_content",
+    });
+
+    expect(store.upsertMessagePart).toHaveBeenCalledWith(expect.objectContaining({
+      type: "reasoning",
+      status: "running",
+      metadata: { source: "reasoning_content" },
+    }));
+    expect(store.appendMessagePartDelta).toHaveBeenCalledWith(expect.objectContaining({
+      field: "reasoning",
+      delta: "先看文件。",
+    }));
+  });
+
+  it("closes the reasoning part when text starts and opens a new one later", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "first",
+      source: "think",
+    });
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "正文" });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "second",
+      source: "think",
+    });
+
+    const reasoningParts = store.upsertMessagePart.mock.calls
+      .map(([input]) => input)
+      .filter((input) => input.type === "reasoning");
+    expect(reasoningParts).toHaveLength(3);
+    expect(reasoningParts[0]).toMatchObject({ status: "running" });
+    expect(reasoningParts[1]).toMatchObject({ status: "completed" });
+    expect(reasoningParts[2]).toMatchObject({ status: "running" });
+  });
+
+  it("keeps text before and after reasoning in separate ordered parts", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput({ content: "" }));
+
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "先给结论。" });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "再展开推理。",
+      source: "think",
+    });
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "结论如上。" });
+
+    expect(store.upsertMessagePart.mock.calls.map(([part]) => `${part.type}:${part.status}`)).toEqual([
+      "text:running",
+      "text:completed",
+      "reasoning:running",
+      "reasoning:completed",
+      "text:running",
+    ]);
+    expect(store.upsertMessagePart).toHaveBeenCalledWith({
+      id: "p1",
+      sessionId: "s1",
+      messageId: "m2",
+      type: "text",
+      status: "completed",
+      metadata: { phase: "commentary" },
+    });
+    const deltas = store.appendMessagePartDelta.mock.calls.map(([input]) => input);
+    expect(deltas.map((delta) => delta.field)).toEqual(["text", "reasoning", "text"]);
+    expect(deltas.map((delta) => delta.partId)).toEqual(["p1", "p2", "p3"]);
+  });
+
+  it("closes the reasoning part before a steered input continues the run", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "before steer",
+      source: "think",
+    });
+    projection.projectSteeredInputs(state, [createInput({
+      id: "steer-1",
+      seq: 2,
+      delivery: "steer",
+      content: "continue",
+    })]);
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "after steer",
+      source: "think",
+    });
+
+    const reasoningParts = store.upsertMessagePart.mock.calls
+      .map(([input]) => input)
+      .filter((input) => input.type === "reasoning");
+    expect(reasoningParts).toHaveLength(3);
+    expect(reasoningParts[1]).toMatchObject({ status: "completed" });
+    expect(store.appendMessagePartDelta).toHaveBeenLastCalledWith(expect.objectContaining({
+      field: "reasoning",
+      delta: "after steer",
+      partId: "p4",
+    }));
+  });
+
+  it("appends the truncation notice once after the reasoning part reaches the char limit", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "x".repeat(1_000_000),
+      source: "think",
+    });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "overflow",
+      source: "think",
+    });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "more",
+      source: "think",
+    });
+
+    const deltas = store.appendMessagePartDelta.mock.calls.map(([input]) => input);
+    expect(deltas).toHaveLength(2);
+    expect(deltas[0].delta).toHaveLength(1_000_000);
+    expect(deltas[1].delta).toBe("\n\n…（思考内容过长，已截断）");
+  });
 });

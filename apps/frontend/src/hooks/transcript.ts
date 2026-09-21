@@ -50,10 +50,19 @@ function messageToTranscriptItems(
 
   const items: TranscriptItem[] = [];
   for (const part of parts) {
-    if (part.type === "text" || part.type === "reasoning") {
+    if (part.type === "text") {
       if (part.text) items.push({
         id: `${message.id}:${part.id}`,
         role: "assistant",
+        text: part.text,
+        streaming: part.status === "pending" || part.status === "running",
+      });
+      continue;
+    }
+    if (part.type === "reasoning") {
+      if (part.text) items.push({
+        id: `${message.id}:${part.id}`,
+        role: "reasoning",
         text: part.text,
         streaming: part.status === "pending" || part.status === "running",
       });
@@ -101,7 +110,7 @@ function messageToTranscriptItems(
   return items;
 }
 
-export function bucketToTranscript(bucket: SessionBucket | undefined): TranscriptItem[] {
+function projectBucketToItems(bucket: SessionBucket | undefined): TranscriptItem[] {
   if (!bucket) return [];
   const inputById = new Map(bucket.inputs.map((input) => [input.id, input]));
   const projectedInputIds = new Set<string>();
@@ -134,6 +143,17 @@ export function bucketToTranscript(bucket: SessionBucket | undefined): Transcrip
     const admittedAfterTranscript = input.createdAt >= transcriptUpdatedAt;
     if (!belongsToActiveRun && !admittedAfterTranscript) continue;
     items.push({ id: `input:${input.id}`, role: "user", text: input.content });
+  }
+  return items;
+}
+
+export function bucketToTranscript(
+  bucket: SessionBucket | undefined,
+  options: { showReasoning?: boolean } = {},
+): TranscriptItem[] {
+  const items = projectBucketToItems(bucket);
+  if (options.showReasoning === false) {
+    return items.filter((item) => item.role !== "reasoning");
   }
   return items;
 }

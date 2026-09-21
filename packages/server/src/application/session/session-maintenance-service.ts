@@ -334,6 +334,7 @@ function transcriptToPersonalizationMessages(
     .map((message) => {
       const content = (partsByMessage.get(message.id) ?? [])
         .sort((a, b) => a.seq - b.seq)
+        .filter((part) => part.type !== "reasoning")
         .map((part) => part.text)
         .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
         .join("\n");

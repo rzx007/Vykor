@@ -4,6 +4,7 @@ import type {
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
   UpdateDesktopAgentEnvironmentInput,
+  UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
 } from "../../../shared/settings-types"
 import type { IpcContribution } from "../../core/ipc/types"
@@ -34,6 +35,13 @@ export const settingsIpcContribution: IpcContribution = {
         handler: (_event, input) =>
           desktopSettingsService.updateAgentEnvironment(
             input as UpdateDesktopAgentEnvironmentInput
+          ),
+      },
+      {
+        channel: IpcChannels.settingsUpdateReasoningVisibility,
+        handler: (_event, input) =>
+          desktopSettingsService.updateReasoningVisibility(
+            input as UpdateDesktopReasoningVisibilityInput
           ),
       },
       {

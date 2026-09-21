@@ -125,6 +125,13 @@ export class DaemonAgentEventProjector {
           ...(event.data.phase ? { phase: event.data.phase } : {}),
         });
         return;
+      case "output.reasoning.delta":
+        this.projectStream(event, {
+          type: "reasoning_delta",
+          delta: event.data.delta,
+          source: event.data.source,
+        });
+        return;
       case "output.turn.completed":
         this.projectStream(event, { type: "complete", stopReason: event.data.stopReason });
         return;
@@ -425,7 +432,11 @@ export class DaemonAgentEventProjector {
     const state = this.transcripts.get(runId);
     if (!state) throw new Error(`Transcript projection not started for run: ${runId}`);
     const stateSnapshot = snapshotTranscript(state);
-    const direct = stream.type === "text_delta" && this.context.transcriptProjection.hasOpenTextPart(state);
+    const direct =
+      (stream.type === "text_delta" &&
+        this.context.transcriptProjection.hasOpenTextPart(state) &&
+        state.activeReasoningPartId === undefined) ||
+      (stream.type === "reasoning_delta" && state.activeReasoningPartId !== undefined);
     const before = direct ? undefined : this.context.events.checkpoint();
     let applied: ReturnType<SessionTranscriptProjection["projectStreamEvent"]>;
     try {
@@ -478,6 +489,12 @@ export class DaemonAgentEventProjector {
             state,
             interrupted ? "interrupted" : failed ? "failed" : "completed",
           );
+          if (state.activeReasoningPartId) {
+            this.context.transcriptProjection.completeOpenReasoningPart(
+              state,
+              interrupted ? "interrupted" : failed ? "failed" : "completed",
+            );
+          }
         }
         if (error) {
           this.context.store.conversations.appendEvent({

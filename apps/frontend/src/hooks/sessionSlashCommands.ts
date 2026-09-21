@@ -43,6 +43,7 @@ export type SessionSlashCtx = {
   cacheFirstRead?: (request: PresentationReadRequest) => void;
   daemon?: FrontendConfig["daemon"];
   setStatus: Dispatch<SetStateAction<Record<string, unknown>>>;
+  onSettingsChanged?: () => void | Promise<void>;
 };
 
 export async function dispatchSessionSlashCommand(
@@ -61,6 +62,7 @@ export async function dispatchSessionSlashCommand(
     cacheFirstRead,
     daemon,
     setStatus,
+    onSettingsChanged,
   } = ctx;
 
   const outcome = await dispatchSessionCommand(slash, {
@@ -94,5 +96,8 @@ export async function dispatchSessionSlashCommand(
   });
 
   if (outcome === "local_ui") return "local_ui_ignored";
+  if (outcome === "handled") {
+    void Promise.resolve().then(() => onSettingsChanged?.()).catch(() => {});
+  }
   return outcome;
 }

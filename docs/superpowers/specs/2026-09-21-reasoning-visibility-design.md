@@ -62,7 +62,7 @@
    - `reasoningReplay?: string`：仅当本轮确实收到过 `reasoning_content` 时存在，回传专用。
    分开的原因：`<think>` 来源的网关（Qwen/GLM 这类）经常不接受请求里带 `reasoning_content`（有网关直接 400）；现状对这类流量从不回传，不能因为本次改动引入新行为。
 3. **服务端落成 `reasoning` part**，复用 `session.message.part.delta` 的增量通道（`field: "reasoning"`）。part 顺序按事件到达顺序，天然支持 interleaved thinking 的多段交替。
-4. **默认折叠可见 + 全局设置开关** `showReasoning`（默认 `true`），并提供 `/reasoning on|off` 命令，与 `/effort` 的做法对齐。子智能体只读回放继续强制隐藏。
+4. **默认折叠可见 + 全局设置开关** `showReasoning`（默认 `true`），并提供 `/reasoning on|off` 命令；命令形态对齐现有的 `/fast`：不带参数就切换，`on`/`off` 显式设置，因此不需要进 `shouldPresentSlashOutput`。子智能体只读回放继续强制隐藏。
 5. **不硬截断**：回传与落盘保留完整内容；只加展示层与落盘的防御上限。
    - 展示层：单个 reasoning 块超过 20000 字符时只渲染尾部，并显示"已省略前 N 字符"。
    - 落盘：单条 reasoning part 超过 1000000 字符时截断并加标记（防御性，正常不会触发）。
@@ -157,10 +157,9 @@ reasoning part 的来源记录在 `metadata.source`（`"reasoning_content" | "th
 
 - `GET/PATCH /settings` 支持 `showReasoning`；TUI 读取同一设置；未设置时视为显示。
 - 桌面这条链路要按现有 `workStyle` 的样板补齐：`buildDesktopSettingsSnapshot`（`apps/desktop/src/shared/settings-types.ts:58-78`）带上字段，再补主进程写方法（参照 `updateWorkStyle`）、IPC 通道、preload 契约和设置页开关。只加快照字段会导致设置页的开关没有写值通路。
-- 新增 `/reasoning on|off` 命令（`packages/client/src/commands/session-commands.ts`）。它写的是用户级 `settings.json`：展示与否是用户偏好，不按会话区分。要跟 `/effort` 一样在三处登记，否则命令能敲但不进补全/帮助：
+- 新增 `/reasoning on|off` 命令（`packages/client/src/commands/session-commands.ts`）。它写的是用户级 `settings.json`：展示与否是用户偏好，不按会话区分。命令形态对齐 `/fast`（无参数切换），因此只登记两处；`shouldPresentSlashOutput` 只对"无参数时打印状态"的命令有意义，本命令不需要登记：
   1. `packages/server/src/commands/commands.ts` 的命令目录（`GET /commands`，桌面与 TUI 的补全来源）。
-  2. `session-commands.ts` 的 `shouldPresentSlashOutput`：支持无参数时打印当前状态。
-  3. `packages/server/src/application/default-services/settings-service.ts:266-300` 的 `coerceConfigValue` 布尔键白名单加 `showReasoning`，否则 `/config set showReasoning off` 存进去的是字符串 `"off"`（真值）。
+  2. `packages/server/src/application/default-services/settings-service.ts:266-300` 的 `coerceConfigValue` 布尔键白名单加 `showReasoning`，否则 `/config set showReasoning off` 存进去的是字符串 `"off"`（真值）。
 
 ## 错误边界与状态
 

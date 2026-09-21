@@ -346,4 +346,89 @@ describe("agent transcript codec", () => {
 
     expect(transcript.messages).toEqual([{ type: "user", content: "继续" }]);
   });
+
+  it("rebuilds reasoning fields without merging them into content", () => {
+    const messages = [
+      {
+        id: "m1",
+        sessionId: "s1",
+        seq: 2,
+        role: "assistant",
+        metadata: {},
+        createdAt: 2,
+        updatedAt: 2,
+      },
+    ] as any;
+    const parts = [
+      {
+        id: "p1",
+        sessionId: "s1",
+        messageId: "m1",
+        seq: 1,
+        type: "reasoning",
+        status: "completed",
+        text: "想法A",
+        metadata: { source: "reasoning_content" },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: "p2",
+        sessionId: "s1",
+        messageId: "m1",
+        seq: 2,
+        type: "reasoning",
+        status: "completed",
+        text: "想法B",
+        metadata: { source: "think" },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: "p3",
+        sessionId: "s1",
+        messageId: "m1",
+        seq: 3,
+        type: "text",
+        status: "completed",
+        text: "答案",
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ] as any;
+
+    const transcript = buildAgentTranscript(messages, parts);
+    const assistant = transcript.messages.find((message) => message.type === "assistant") as any;
+    expect(assistant.content).toBe("答案");
+    expect(assistant.reasoning).toBe("想法A想法B");
+    expect(assistant.reasoningReplay).toBe("想法A");
+  });
+
+  it("writes reasoning back when the transcript is replaced", () => {
+    const output = agentMessagesToTranscript([
+      {
+        type: "assistant",
+        content: "答案",
+        reasoning: "想法A想法B",
+        reasoningReplay: "想法A",
+      } as any,
+    ]);
+
+    const parts = output[0]!.parts;
+    expect(parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "reasoning",
+          text: "想法A",
+          metadata: { source: "reasoning_content" },
+        }),
+        expect.objectContaining({
+          type: "reasoning",
+          text: "想法B",
+          metadata: { source: "think" },
+        }),
+      ]),
+    );
+  });
 });

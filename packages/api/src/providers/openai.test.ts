@@ -6,7 +6,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Message } from "@openharness/core";
 import {
   OpenAICompatibleClient,
-  stripThinkBlocks,
   tokenLimitParamForModel,
   convertUserContentToOpenAI,
 } from "./openai.js";
@@ -22,53 +21,6 @@ describe("OpenAICompatibleClient configuration", () => {
     expect((client.client as any)._options.defaultHeaders).toEqual({
       "X-Tenant": "desktop",
     });
-  });
-});
-
-describe("stripThinkBlocks", () => {
-  it("removes a complete <think> block", () => {
-    const [visible, leftover] = stripThinkBlocks("before<think>secret</think>after");
-    expect(visible).toBe("beforeafter");
-    expect(leftover).toBe("");
-  });
-
-  it("removes a multiline <think> block", () => {
-    const [visible, leftover] = stripThinkBlocks("a<think>line1\nline2</think>b");
-    expect(visible).toBe("ab");
-    expect(leftover).toBe("");
-  });
-
-  it("holds back an unclosed <think> block", () => {
-    const [visible, leftover] = stripThinkBlocks("visible<think>not yet closed");
-    expect(visible).toBe("visible");
-    expect(leftover).toBe("<think>not yet closed");
-  });
-
-  it("holds back a partial opening tag split across chunks", () => {
-    const [visible, leftover] = stripThinkBlocks("hello<thi");
-    expect(visible).toBe("hello");
-    expect(leftover).toBe("<thi");
-  });
-
-  it("simulates the full cross-chunk lifecycle", () => {
-    // Provider splits "<think>secret</think>" across many chunks.
-    const chunks = ["Vis", "ib", "le <thi", "nk>secret", " thoughts</thi", "nk> tail"];
-    let buf = "";
-    let out = "";
-    for (const chunk of chunks) {
-      buf += chunk;
-      const [visible, leftover] = stripThinkBlocks(buf);
-      out += visible;
-      buf = leftover;
-    }
-    out += buf;
-    expect(out).toBe("Visible  tail");
-  });
-
-  it("passes through plain text untouched", () => {
-    const [visible, leftover] = stripThinkBlocks("just normal text");
-    expect(visible).toBe("just normal text");
-    expect(leftover).toBe("");
   });
 });
 
@@ -199,6 +151,33 @@ describe("convertMessages reasoning_content gating", () => {
     const out = await client.build(toolUseMsg);
     const assistant = out.find((m: any) => m.role === "assistant");
     expect(assistant.reasoning_content).toBe("");
+  });
+
+  it("replays reasoning from the assistant message field", async () => {
+    const out = await client.build([
+      {
+        type: "assistant",
+        content: "",
+        reasoning: "想法",
+        reasoningReplay: "想法",
+        toolUses: [{ type: "tool_use", id: "t1", name: "foo", input: {} }],
+      },
+    ]);
+    const assistant = out.find((message: any) => message.role === "assistant");
+    expect(assistant.reasoning_content).toBe("想法");
+  });
+
+  it("does not replay think-only reasoning", async () => {
+    const out = await client.build([
+      {
+        type: "assistant",
+        content: "",
+        reasoning: "来自 think 的想法",
+        toolUses: [{ type: "tool_use", id: "t1", name: "foo", input: {} }],
+      },
+    ]);
+    const assistant = out.find((message: any) => message.role === "assistant");
+    expect(assistant.reasoning_content).toBeUndefined();
   });
 });
 
@@ -513,5 +492,50 @@ describe("OpenAICompatibleClient DSML tool-call recovery", () => {
 
     expect(textOf(events)).toBe("比较一下：a < b，还有 <div> 标签");
     expect(events.some((event) => event.type === "tool_use_start")).toBe(false);
+  });
+});
+
+describe("OpenAICompatibleClient reasoning deltas", () => {
+  function deltaClient(deltas: Array<Record<string, unknown>>) {
+    const create = vi.fn(async () => ({
+      async *[Symbol.asyncIterator]() {
+        for (const delta of deltas) {
+          yield { choices: [{ delta, finish_reason: null }] };
+        }
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      },
+    }));
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: undefined } as any);
+    client.client = { chat: { completions: { create } } } as any;
+    return client;
+  }
+
+  it("emits reasoning_content as reasoning deltas", async () => {
+    const client = deltaClient([
+      { reasoning_content: "先看目录。" },
+      { reasoning_content: "再读文件。" },
+      { content: "完成。" },
+    ]);
+    const events: any[] = [];
+    for await (const event of client.streamMessage({
+      model: "deepseek-v4.1-flash",
+      messages: [{ type: "user", content: "hi" }],
+    })) {
+      events.push(event);
+    }
+
+    const reasoning = events
+      .filter((event) => event.type === "reasoning_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(reasoning).toBe("先看目录。再读文件。");
+    expect(events.filter((event) => event.type === "reasoning_delta")[0]!.source).toBe(
+      "reasoning_content",
+    );
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toBe("完成。");
   });
 });

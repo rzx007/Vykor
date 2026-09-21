@@ -16,6 +16,7 @@ export interface DesktopSettingsSnapshot {
   workStyle: DesktopWorkStyle
   notificationMode: DesktopNotificationMode
   agentEnvironment: DesktopAgentEnvironment
+  showReasoning: boolean
   restartRequired: boolean
   defaultOpenerId: string | null
   defaultTerminalShellId: string | null
@@ -32,6 +33,10 @@ export interface UpdateDesktopNotificationModeInput {
 
 export interface UpdateDesktopAgentEnvironmentInput {
   environment: "native" | "wsl"
+}
+
+export interface UpdateDesktopReasoningVisibilityInput {
+  showReasoning: boolean
 }
 
 export interface UpdateDesktopDefaultOpenerInput {
@@ -70,6 +75,7 @@ export function buildDesktopSettingsSnapshot(
       ? preferences.notificationMode
       : "when_unfocused",
     agentEnvironment: resolveDesktopAgentEnvironment(settings.agentEnvironment),
+    showReasoning: settings.showReasoning !== false,
     restartRequired: options.restartRequired ?? false,
     defaultOpenerId: normalizeDefaultOpenerId(preferences.defaultOpenerId),
     defaultTerminalShellId: normalizeDefaultTerminalShellId(preferences.defaultTerminalShellId),

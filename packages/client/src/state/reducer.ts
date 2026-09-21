@@ -295,7 +295,8 @@ function appendPartDelta(state: OpenHarnessClientState, event: SessionEventRecor
   const partId = typeof event.payload.partId === "string" ? event.payload.partId : undefined;
   const field = event.payload.field;
   const delta = typeof event.payload.delta === "string" ? event.payload.delta : undefined;
-  if (!sessionId || !messageId || !partId || field !== "text" || delta === undefined) return state;
+  if (field !== "text" && field !== "reasoning") return state;
+  if (!sessionId || !messageId || !partId || delta === undefined) return state;
 
   const bucket = cloneBucketForPartWrite(state.buckets[sessionId]);
   const currentParts = bucket.partsByMessageId[messageId] ?? [];
@@ -315,7 +316,7 @@ function appendPartDelta(state: OpenHarnessClientState, event: SessionEventRecor
       sessionId,
       messageId,
       seq,
-      type: "text",
+      type: field === "reasoning" ? "reasoning" : "text",
       status: "running",
       text: delta,
       metadata: {},

@@ -13,6 +13,7 @@ import type {
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
 } from "../../../shared/settings-types"
 import { desktopSessionService } from "../session/session-service"
@@ -56,6 +57,18 @@ export class DesktopSettingsService {
     }
     return this.withDaemonRetry(async (client) => {
       const settings = await client.system.patchSettings({ workStyle: input.workStyle })
+      return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
+    })
+  }
+
+  async updateReasoningVisibility(
+    input: UpdateDesktopReasoningVisibilityInput
+  ): Promise<DesktopSettingsSnapshot> {
+    if (typeof input.showReasoning !== "boolean") {
+      throw new Error("思考过程展示开关必须是布尔值。")
+    }
+    return this.withDaemonRetry(async (client) => {
+      const settings = await client.system.patchSettings({ showReasoning: input.showReasoning })
       return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
     })
   }

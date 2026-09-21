@@ -63,13 +63,17 @@ export function buildAgentTranscript(
         input: part.input ?? {},
       }));
     const text = textFromParts(messageParts);
+    const reasoning = reasoningFromParts(messageParts);
+    const reasoningReplay = reasoningReplayFromParts(messageParts);
     const phase = assistantPhaseFromParts(messageParts);
-    if (text || toolUses.length > 0) {
+    if (text || toolUses.length > 0 || reasoning) {
       output.push({
         type: "assistant",
         content: text,
         ...(phase ? { phase } : {}),
         ...(toolUses.length > 0 ? { toolUses } : {}),
+        ...(reasoning ? { reasoning } : {}),
+        ...(reasoningReplay ? { reasoningReplay } : {}),
       });
     }
     for (const part of messageParts.filter(
@@ -122,6 +126,32 @@ export function agentMessagesToTranscript(messages: Message[]): ReplaceTranscrip
     }
     if (message.type === "assistant") {
       const transcriptParts: ReplaceTranscriptPartInput[] = [];
+      if (message.reasoning) {
+        const replay = message.reasoningReplay ?? "";
+        // 只有 reasoning_content 来源能回传；think 部分按前缀切出来。
+        // 实际场景一轮只会出现一种来源，混用时按 replay 在前处理。
+        const thinkOnly = replay
+          ? message.reasoning.startsWith(replay)
+            ? message.reasoning.slice(replay.length)
+            : ""
+          : message.reasoning;
+        if (replay) {
+          transcriptParts.push({
+            type: "reasoning",
+            status: "completed",
+            text: replay,
+            metadata: { source: "reasoning_content" },
+          });
+        }
+        if (thinkOnly) {
+          transcriptParts.push({
+            type: "reasoning",
+            status: "completed",
+            text: thinkOnly,
+            metadata: { source: "think" },
+          });
+        }
+      }
       if (message.content) {
         transcriptParts.push({
           type: "text",
@@ -188,7 +218,25 @@ function assistantPhaseFromParts(
 
 function textFromParts(parts: SessionMessagePartRecord[]): string {
   return parts
-    .filter((part) => part.type === "text" || part.type === "reasoning")
+    .filter((part) => part.type === "text")
+    .map((part) => part.text ?? "")
+    .join("");
+}
+
+function reasoningFromParts(parts: SessionMessagePartRecord[]): string {
+  return parts
+    .filter((part) => part.type === "reasoning")
+    .map((part) => part.text ?? "")
+    .join("");
+}
+
+function reasoningReplayFromParts(parts: SessionMessagePartRecord[]): string {
+  return parts
+    .filter(
+      (part) =>
+        part.type === "reasoning" &&
+        (part.metadata as Record<string, unknown>).source === "reasoning_content",
+    )
     .map((part) => part.text ?? "")
     .join("");
 }
