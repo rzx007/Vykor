@@ -132,7 +132,6 @@ async function imageBlockToDataUrl(
 
 export class OpenAICompatibleClient implements StreamingMessageClient {
   private _client: OpenAI;
-  private reasoningHistory: Map<number, string> = new Map();
 
   constructor(private config: ProviderConfig) {
     this._client = new OpenAI({
@@ -323,11 +322,6 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       }
     }
 
-    const turnKey = this.reasoningHistory.size;
-    if (collectedReasoning) {
-      this.reasoningHistory.set(turnKey, collectedReasoning);
-    }
-
     let nativeToolUseCount = 0;
     for (const [, tc] of collectedToolCalls) {
       if (!tc.name) continue;
@@ -406,7 +400,6 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       messages.push({ role: "system", content: params.system });
     }
 
-    let turnIdx = 0;
     for (const msg of params.messages) {
       switch (msg.type) {
         case "user": {
@@ -431,9 +424,8 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
             role: "assistant",
             content: nonEmptyText(rawContent),
           };
-          const reasoning = this.reasoningHistory.get(turnIdx);
-          if (reasoning) {
-            assistantMsg.reasoning_content = reasoning;
+          if (msg.reasoningReplay) {
+            assistantMsg.reasoning_content = msg.reasoningReplay;
           } else if (msg.toolUses?.length && emptyReasoningRequired()) {
             assistantMsg.reasoning_content = "";
           }
@@ -448,7 +440,6 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
             }));
           }
           messages.push(assistantMsg as unknown as OpenAI.ChatCompletionMessageParam);
-          turnIdx++;
           break;
         }
         case "tool_result": {

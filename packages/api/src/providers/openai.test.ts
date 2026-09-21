@@ -152,6 +152,33 @@ describe("convertMessages reasoning_content gating", () => {
     const assistant = out.find((m: any) => m.role === "assistant");
     expect(assistant.reasoning_content).toBe("");
   });
+
+  it("replays reasoning from the assistant message field", async () => {
+    const out = await client.build([
+      {
+        type: "assistant",
+        content: "",
+        reasoning: "想法",
+        reasoningReplay: "想法",
+        toolUses: [{ type: "tool_use", id: "t1", name: "foo", input: {} }],
+      },
+    ]);
+    const assistant = out.find((message: any) => message.role === "assistant");
+    expect(assistant.reasoning_content).toBe("想法");
+  });
+
+  it("does not replay think-only reasoning", async () => {
+    const out = await client.build([
+      {
+        type: "assistant",
+        content: "",
+        reasoning: "来自 think 的想法",
+        toolUses: [{ type: "tool_use", id: "t1", name: "foo", input: {} }],
+      },
+    ]);
+    const assistant = out.find((message: any) => message.role === "assistant");
+    expect(assistant.reasoning_content).toBeUndefined();
+  });
 });
 
 describe("convertMessages empty content sanitization", () => {
