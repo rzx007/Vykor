@@ -41,6 +41,26 @@ interface PendingSteer {
   receipt: ReturnType<typeof deferred<AgentInputReceipt>>;
 }
 
+/** 把 StreamEvent 里与文本/思考相关的事件映射成 AgentEvent；其余事件交给调用方。 */
+export function streamEventToAgentEvent(event: StreamEvent): AgentEventInput | undefined {
+  if (event.type === "text_delta") {
+    return {
+      type: "output.text.delta",
+      data: {
+        delta: event.delta,
+        ...(event.phase ? { phase: event.phase } : {}),
+      },
+    };
+  }
+  if (event.type === "reasoning_delta") {
+    return {
+      type: "output.reasoning.delta",
+      data: { delta: event.delta, source: event.source },
+    };
+  }
+  return undefined;
+}
+
 export class FrameworkAgentRun implements AgentRunHandle {
   readonly id: string;
   readonly inputId: string;
@@ -238,15 +258,12 @@ export class FrameworkAgentRun implements AgentRunHandle {
   }
 
   private async projectStreamEvent(event: StreamEvent): Promise<void> {
-    if (event.type === "text_delta") {
-      await this.emit({
-        type: "output.text.delta",
-        data: {
-          delta: event.delta,
-          ...(event.phase ? { phase: event.phase } : {}),
-        },
-      });
-    } else if (event.type === "complete") {
+    const mapped = streamEventToAgentEvent(event);
+    if (mapped) {
+      await this.emit(mapped);
+      return;
+    }
+    if (event.type === "complete") {
       await this.emit({
         type: "output.turn.completed",
         data: { stopReason: event.stopReason },
