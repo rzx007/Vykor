@@ -164,13 +164,23 @@ describe("buildMcpAuthServerSnapshot", () => {
         config: {
           type: "http",
           url: activeCredential.serverUrl,
-          oauth: { scopes: ["read"] },
+          oauth: { scopes: ["write", "read"] },
         },
         credential: activeCredential,
         runtimeStatus: "connected",
         now,
       }),
     ).toMatchObject({ authMode: "oauth", authStatus: "valid", scopes: ["read", "write"] });
+  });
+
+  it("shows desired scopes for a changed-scope reauthorization", () => {
+    expect(buildMcpAuthServerSnapshot({
+      name: "linear",
+      config: { type: "http", url: activeCredential.serverUrl, oauth: { scopes: ["read"] } },
+      credential: activeCredential,
+      runtimeStatus: "connected",
+      now,
+    })).toMatchObject({ authMode: "oauth", authStatus: "reauthentication-required", scopes: ["read"] });
   });
 
   it("keeps oauth mode with not-logged-in after logout when scopes remain in settings", () => {
