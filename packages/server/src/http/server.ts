@@ -52,6 +52,7 @@ import { createScheduleRoutes } from "./routes/schedules.js";
 import { HttpEventHub } from "./routes/events.js";
 import { createGitRoutes } from "./routes/git.js";
 import { createJobRoutes } from "./routes/job.js";
+import { createMcpRoutes } from "./routes/mcp.js";
 import { createMemoryRoutes } from "./routes/memory.js";
 import { createPermissionRoutes } from "./routes/permission.js";
 import { createProjectRoutes } from "./routes/project.js";
@@ -372,6 +373,10 @@ export class OpenHarnessHttpServer {
         hooksService: this.services.hooks,
         control: this.application.control,
       }),
+    );
+    this.app.route(
+      "/mcp",
+      createMcpRoutes({ runtimes: this.application.mcpRuntimes }),
     );
     this.app.route("/git", createGitRoutes({ gitService: this.services.git }));
     this.app.route("/channels", createChannelRoutes(this.application.channels));

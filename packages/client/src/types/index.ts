@@ -396,6 +396,15 @@ export interface McpServerStatus {
   error?: string;
 }
 
+/** Wire-compatible copy of the daemon's aggregate MCP Runtime state. */
+export type McpRuntimeStatus = "connected" | "disconnected" | "error" | "unavailable";
+
+export interface McpRuntimeSyncResult {
+  status: McpRuntimeStatus;
+  affectedRuntimes: number;
+  failures: Array<{ runtimeId: string; message: string }>;
+}
+
 export interface MemoryEntryRecord {
   id: string;
   content: string;

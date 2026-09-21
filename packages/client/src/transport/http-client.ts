@@ -33,6 +33,7 @@ import {
   TerminalResource,
   ChannelResource,
   EventResource,
+  McpResource,
   createPromptRequestId,
 } from "../resources/index.js";
 
@@ -58,6 +59,7 @@ export {
   TerminalResource,
   ChannelResource,
   EventResource,
+  McpResource,
   createPromptRequestId,
 };
 
@@ -78,6 +80,7 @@ export class OpenHarnessClient {
   readonly terminals: TerminalResource;
   readonly channels: ChannelResource;
   readonly events: EventResource;
+  readonly mcp: McpResource;
 
   constructor(options: OpenHarnessClientOptions) {
     const transport = new HttpTransport(options);
@@ -97,5 +100,6 @@ export class OpenHarnessClient {
     this.terminals = new TerminalResource(transport, sse);
     this.channels = new ChannelResource(transport);
     this.events = new EventResource(transport, sse);
+    this.mcp = new McpResource(transport);
   }
 }

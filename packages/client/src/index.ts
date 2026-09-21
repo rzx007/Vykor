@@ -33,6 +33,7 @@ export {
   TerminalResource,
   ChannelResource,
   EventResource,
+  McpResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
 export type {
@@ -131,6 +132,8 @@ export type {
   ListProjectsOptions,
   ProjectRecord,
   McpServerStatus,
+  McpRuntimeStatus,
+  McpRuntimeSyncResult,
   MemoryEntryRecord,
   MemoryListResponse,
   ModelInfo,

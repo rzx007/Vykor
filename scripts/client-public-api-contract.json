@@ -3,6 +3,82 @@
   "version": 1,
   "entries": [
     {
+      "name": "attachments",
+      "kind": "client-resource"
+    },
+    {
+      "name": "auth",
+      "kind": "client-resource"
+    },
+    {
+      "name": "channels",
+      "kind": "client-resource"
+    },
+    {
+      "name": "development",
+      "kind": "client-resource"
+    },
+    {
+      "name": "events",
+      "kind": "client-resource"
+    },
+    {
+      "name": "jobs",
+      "kind": "client-resource"
+    },
+    {
+      "name": "mcp",
+      "kind": "client-resource"
+    },
+    {
+      "name": "permissions",
+      "kind": "client-resource"
+    },
+    {
+      "name": "plugins",
+      "kind": "client-resource"
+    },
+    {
+      "name": "projects",
+      "kind": "client-resource"
+    },
+    {
+      "name": "protocol",
+      "kind": "client-resource"
+    },
+    {
+      "name": "providers",
+      "kind": "client-resource"
+    },
+    {
+      "name": "schedules",
+      "kind": "client-resource"
+    },
+    {
+      "name": "sessions",
+      "kind": "client-resource"
+    },
+    {
+      "name": "system",
+      "kind": "client-resource"
+    },
+    {
+      "name": "terminals",
+      "kind": "client-resource"
+    },
+    {
+      "name": "applyEvent",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "applyEvents",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "applySessionSnapshot",
+      "kind": "runtime-export"
+    },
+    {
       "name": "AttachmentResource",
       "kind": "runtime-export"
     },
@@ -11,11 +87,23 @@
       "kind": "runtime-export"
     },
     {
-      "name": "CURRENT_PROTOCOL_VERSION",
+      "name": "ChannelResource",
       "kind": "runtime-export"
     },
     {
-      "name": "ChannelResource",
+      "name": "checkProtocolCompatibility",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "createInitialClientState",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "createPromptRequestId",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "CURRENT_PROTOCOL_VERSION",
       "kind": "runtime-export"
     },
     {
@@ -23,11 +111,23 @@
       "kind": "runtime-export"
     },
     {
+      "name": "dispatchSessionCommand",
+      "kind": "runtime-export"
+    },
+    {
       "name": "EventResource",
       "kind": "runtime-export"
     },
     {
+      "name": "hasActiveRun",
+      "kind": "runtime-export"
+    },
+    {
       "name": "HttpTransport",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "hydrateState",
       "kind": "runtime-export"
     },
     {
@@ -47,95 +147,7 @@
       "kind": "runtime-export"
     },
     {
-      "name": "OpenHarnessApiError",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "OpenHarnessClient",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PermissionResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PluginResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ProjectResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ProtocolClient",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ProviderResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ScheduleResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SessionResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SessionSyncController",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SseTransport",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SystemResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "TerminalResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "UnsupportedSessionEventSchemaVersionError",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "applyEvent",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "applyEvents",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "applySessionSnapshot",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "checkProtocolCompatibility",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "createInitialClientState",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "createPromptRequestId",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "dispatchSessionCommand",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "hasActiveRun",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "hydrateState",
+      "name": "McpResource",
       "kind": "runtime-export"
     },
     {
@@ -144,6 +156,14 @@
     },
     {
       "name": "normalizeDaemonBaseUrl",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "OpenHarnessApiError",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "OpenHarnessClient",
       "kind": "runtime-export"
     },
     {
@@ -167,6 +187,26 @@
       "kind": "runtime-export"
     },
     {
+      "name": "PermissionResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "PluginResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "ProjectResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "ProtocolClient",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "ProviderResource",
+      "kind": "runtime-export"
+    },
+    {
       "name": "readRuntimeMetadata",
       "kind": "runtime-export"
     },
@@ -176,6 +216,10 @@
     },
     {
       "name": "resolveSessionCwd",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "ScheduleResource",
       "kind": "runtime-export"
     },
     {
@@ -211,6 +255,18 @@
       "kind": "runtime-export"
     },
     {
+      "name": "SessionResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "SessionSyncController",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "SseTransport",
+      "kind": "runtime-export"
+    },
+    {
       "name": "streamServerSentEvents",
       "kind": "runtime-export"
     },
@@ -220,6 +276,18 @@
     },
     {
       "name": "syncEvents",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "SystemResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "TerminalResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "UnsupportedSessionEventSchemaVersionError",
       "kind": "runtime-export"
     },
     {
@@ -271,19 +339,15 @@
       "kind": "type-export"
     },
     {
+      "name": "ChannelConnectorRuntimeStatus",
+      "kind": "type-export"
+    },
+    {
       "name": "ChannelDeliveryRecord",
       "kind": "type-export"
     },
     {
       "name": "ChannelDeliveryStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelStatusSnapshot",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelConnectorRuntimeStatus",
       "kind": "type-export"
     },
     {
@@ -307,31 +371,7 @@
       "kind": "type-export"
     },
     {
-      "name": "FeishuAllowInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuChannelSnapshot",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuConnectInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuPatchInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuRegistrationSnapshot",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuRegistrationStartInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuRegistrationState",
+      "name": "ChannelStatusSnapshot",
       "kind": "type-export"
     },
     {
@@ -411,6 +451,34 @@
       "kind": "type-export"
     },
     {
+      "name": "FeishuAllowInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuChannelSnapshot",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuConnectInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuPatchInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuRegistrationSnapshot",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuRegistrationStartInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "FeishuRegistrationState",
+      "kind": "type-export"
+    },
+    {
       "name": "ForkClientSessionInput",
       "kind": "type-export"
     },
@@ -480,6 +548,14 @@
     },
     {
       "name": "ListSessionsOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "McpRuntimeStatus",
+      "kind": "type-export"
+    },
+    {
+      "name": "McpRuntimeSyncResult",
       "kind": "type-export"
     },
     {
@@ -789,66 +865,6 @@
     {
       "name": "UploadAttachmentInput",
       "kind": "type-export"
-    },
-    {
-      "name": "protocol",
-      "kind": "client-resource"
-    },
-    {
-      "name": "system",
-      "kind": "client-resource"
-    },
-    {
-      "name": "providers",
-      "kind": "client-resource"
-    },
-    {
-      "name": "auth",
-      "kind": "client-resource"
-    },
-    {
-      "name": "projects",
-      "kind": "client-resource"
-    },
-    {
-      "name": "plugins",
-      "kind": "client-resource"
-    },
-    {
-      "name": "development",
-      "kind": "client-resource"
-    },
-    {
-      "name": "sessions",
-      "kind": "client-resource"
-    },
-    {
-      "name": "attachments",
-      "kind": "client-resource"
-    },
-    {
-      "name": "permissions",
-      "kind": "client-resource"
-    },
-    {
-      "name": "schedules",
-      "kind": "client-resource"
-    },
-    {
-      "name": "jobs",
-      "kind": "client-resource"
-    },
-    {
-      "name": "terminals",
-      "kind": "client-resource"
-    },
-    {
-      "name": "channels",
-      "kind": "client-resource"
-    },
-    {
-      "name": "events",
-      "kind": "client-resource"
     }
   ]
 }

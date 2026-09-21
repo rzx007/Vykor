@@ -630,6 +630,28 @@ describe("OpenHarnessHttpServer", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it("guards MCP runtime control routes with bearer auth and returns unavailable without runtimes", async () => {
+    await withServer(async ({ baseUrl, token }) => {
+      const fingerprint = "A".repeat(43);
+      const unauthorized = await fetch(`${baseUrl}/mcp/linear/runtime-status?fingerprint=${fingerprint}`);
+      expect(unauthorized.status).toBe(401);
+
+      const status = await fetch(`${baseUrl}/mcp/linear/runtime-status?fingerprint=${fingerprint}`, {
+        headers: auth(token),
+      });
+      expect(status.status).toBe(200);
+      await expect(status.json()).resolves.toEqual({ status: "unavailable", affectedRuntimes: 0, failures: [] });
+
+      const sync = await fetch(`${baseUrl}/mcp/linear/synchronize`, {
+        method: "POST",
+        headers: { ...auth(token), "content-type": "application/json" },
+        body: JSON.stringify({ fingerprint }),
+      });
+      expect(sync.status).toBe(200);
+      await expect(sync.json()).resolves.toEqual({ status: "unavailable", affectedRuntimes: 0, failures: [] });
+    });
+  });
+
   it("serves durable authenticated attachments and recovers interrupted imports", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ohs-attachments-e2e-"));
     const storePath = join(dir, "sessions.db");

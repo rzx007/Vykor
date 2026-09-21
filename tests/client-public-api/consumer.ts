@@ -39,6 +39,8 @@ import {
   type ProjectRecord,
   type PluginInfo,
   type SkillSnapshot,
+  type McpRuntimeSyncResult,
+  type McpRuntimeStatus,
 } from "@openharness/client";
 
 export async function consumePublicApi(client: OpenHarnessClient): Promise<void> {
@@ -148,6 +150,12 @@ export async function consumePublicApi(client: OpenHarnessClient): Promise<void>
   const projects: ProjectRecord[] = await client.projects.list();
   const pluginResult: { plugins: PluginInfo[]; warnings: string[] } = await client.plugins.list({ cwd: "/workspace" });
   const skills: SkillSnapshot = await client.development.listSkills();
+
+  // MCP Runtime control Resource
+  const mcpStatus: McpRuntimeSyncResult = await client.mcp.runtimeStatus("linear", "A".repeat(43));
+  const mcpRuntime: McpRuntimeStatus = mcpStatus.status;
+  const mcpSync: McpRuntimeSyncResult = await client.mcp.synchronize("linear", "A".repeat(43));
+  void [mcpRuntime, mcpSync];
 
   // State / Sync API
   const initialState = createInitialClientState();

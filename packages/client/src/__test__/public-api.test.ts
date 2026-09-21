@@ -11,7 +11,7 @@ const contractPath = resolve(repoRoot, "scripts/client-public-api-contract.json"
 const contract = JSON.parse(readFileSync(contractPath, "utf8"));
 const entries = contract.entries;
 const resourceNames = [
-  "attachments", "auth", "channels", "development", "events", "jobs",
+  "attachments", "auth", "channels", "development", "events", "jobs", "mcp",
   "permissions", "plugins", "projects", "protocol", "providers", "schedules",
   "sessions", "system", "terminals",
 ].sort();
