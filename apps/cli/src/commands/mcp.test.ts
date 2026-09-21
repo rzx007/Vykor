@@ -169,4 +169,34 @@ describe("mcp command", () => {
     expect(test.output.join("\n")).toContain("credentials were removed for linear");
     expect(test.credentials.get("linear")).toBeUndefined();
   });
+
+  it("clears OAuth credentials before removing a configured server", async () => {
+    const test = fixture();
+    test.credentials.set("linear", credential());
+
+    await test.run("remove", "linear");
+
+    expect(test.logout).toHaveBeenCalledWith("linear");
+    expect(test.credentials.get("linear")).toBeUndefined();
+    expect(test.getSettings().mcpServers?.linear).toBeUndefined();
+  });
+
+  it("removes local config but reports runtime disconnection failure", async () => {
+    const test = fixture();
+    test.credentials.set("linear", credential());
+    test.logout.mockImplementationOnce(async () => {
+      test.credentials.delete("linear");
+      throw new McpOAuthApplicationError(
+        "oauth-removed-runtime-sync-failed",
+        "OAuth credentials were removed, but a runtime failed to disconnect.",
+        [{ runtimeId: "runtime-1", message: "MCP runtime synchronization failed" }],
+      );
+    });
+
+    await expect(test.run("remove", "linear"))
+      .rejects.toMatchObject({ code: "oauth-removed-runtime-sync-failed" });
+    expect(test.credentials.get("linear")).toBeUndefined();
+    expect(test.getSettings().mcpServers?.linear).toBeUndefined();
+    expect(test.output.join("\n")).toContain("credentials were removed for linear");
+  });
 });

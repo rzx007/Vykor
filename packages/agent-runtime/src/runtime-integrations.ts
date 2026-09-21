@@ -333,7 +333,11 @@ export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): Acti
       if (input.registry.currentGeneration(identity) !== generation) return;
 
       const credential = await input.credentialStore.get(identity.name);
-      if (resolveMcpAuthMode(config, credential) !== "oauth") return;
+      // A legacy logged-in Runtime may still hold a config without an OAuth
+      // marker after logout backfills settings in another process. Only an
+      // explicit static Authorization must opt out of OAuth synchronization.
+      const authMode = resolveMcpAuthMode(config, credential);
+      if (authMode === "bearer" || authMode === "custom") return;
 
       const status = resolveMcpOAuthStatus(config, credential);
       const usable =

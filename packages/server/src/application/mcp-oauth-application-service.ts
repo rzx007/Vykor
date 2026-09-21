@@ -253,7 +253,16 @@ export class McpOAuthApplicationService {
     if (config.type !== "http") return;
     const identity = createMcpServerIdentity(name, config);
     if (!identity) return;
-    const result: McpRuntimeSyncResult = await this.deps.coordinator.synchronize(identity);
+    let result: McpRuntimeSyncResult;
+    try {
+      result = await this.deps.coordinator.synchronize(identity);
+    } catch {
+      throw new McpOAuthApplicationError(
+        code,
+        `${message} The daemon control request failed.`,
+        [{ runtimeId: "daemon", message: "MCP runtime control request failed" }],
+      );
+    }
     if (result.failures.length > 0) {
       throw new McpOAuthApplicationError(
         code,

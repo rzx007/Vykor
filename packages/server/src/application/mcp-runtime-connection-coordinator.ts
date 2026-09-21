@@ -36,7 +36,7 @@ export class McpRuntimeConnectionCoordinator
   }
 
   currentGeneration(identity: McpServerIdentity): number {
-    return this.generations.get(identity.endpointFingerprint) ?? 0;
+    return this.generations.get(identityKey(identity)) ?? 0;
   }
 
   async getStatus(identity: McpServerIdentity): Promise<McpRuntimeSyncResult> {
@@ -49,7 +49,7 @@ export class McpRuntimeConnectionCoordinator
   }
 
   async synchronize(identity: McpServerIdentity): Promise<McpRuntimeSyncResult> {
-    const key = identity.endpointFingerprint;
+    const key = identityKey(identity);
     return this.enqueue(key, async () => {
       const generation = (this.generations.get(key) ?? 0) + 1;
       this.generations.set(key, generation);
@@ -106,5 +106,14 @@ function aggregateStatus(statuses: McpRuntimeStatus[]): McpRuntimeStatus {
 }
 
 function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  // Exception messages are untrusted: SDK/network errors can contain tokens
+  // or the complete endpoint query. The control plane exposes a stable,
+  // secret-free summary instead of attempting incomplete pattern redaction.
+  return error instanceof Error && error.name === "McpConnectionStageError"
+    ? "MCP connection setup failed"
+    : "MCP runtime synchronization failed";
+}
+
+function identityKey(identity: McpServerIdentity): string {
+  return JSON.stringify([identity.transport, identity.name, identity.endpointFingerprint]);
 }

@@ -137,8 +137,18 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
     .action(async (name: string) => {
       const settings = await deps.loadSettings();
       if (!settings.mcpServers?.[name]) throw new Error(`MCP server not found: ${name}`);
+      let syncFailure: McpOAuthApplicationError | undefined;
+      try {
+        await deps.application.logout(name);
+      } catch (error) {
+        // A failed Runtime cleanup does not undo the credential deletion.
+        if (!(error instanceof McpOAuthApplicationError) || error.code !== "oauth-removed-runtime-sync-failed") throw error;
+        reportRuntimeSyncFailure(deps, error, name, "removed");
+        syncFailure = error;
+      }
       delete settings.mcpServers[name];
       await deps.saveSettings(settings);
+      if (syncFailure) throw syncFailure;
       deps.stdout(`Removed MCP server: ${name}`);
     });
 

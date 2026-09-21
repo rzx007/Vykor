@@ -209,6 +209,16 @@ describe("McpOAuthApplicationService", () => {
     expect(world.getValue()?.tokens.scope).toEqual(["read"]);
   });
 
+  it("classifies daemon rejection after login as saved-but-not-synchronized", async () => {
+    const world = createWorld({ stored: null });
+    const service = world.createService();
+    world.coordinator.synchronize.mockRejectedValueOnce(new Error("daemon returned 401"));
+
+    await expect(service.login({ name: "linear", scopes: ["read"], openBrowser: async () => undefined }))
+      .rejects.toMatchObject({ code: "oauth-saved-runtime-sync-failed" });
+    expect(world.getValue()?.tokens.scope).toEqual(["read"]);
+  });
+
   it("backfills scopes, revokes, and disconnects runtimes on logout", async () => {
     const world = createWorld({ stored: credential(["read", "write"]) });
     const service = world.createService({ loadSettings: async () => {
@@ -225,6 +235,16 @@ describe("McpOAuthApplicationService", () => {
 
     expect(world.getValue()).toBeUndefined();
     expect(world.revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies daemon rejection after logout as removed-but-not-synchronized", async () => {
+    const world = createWorld();
+    const service = world.createService();
+    world.coordinator.synchronize.mockRejectedValueOnce(new Error("protocol incompatible"));
+
+    await expect(service.logout("linear"))
+      .rejects.toMatchObject({ code: "oauth-removed-runtime-sync-failed" });
+    expect(world.getValue()).toBeUndefined();
   });
 
   it("cancels and settles an active login before logout removes credentials", async () => {

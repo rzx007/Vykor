@@ -97,6 +97,24 @@ describe("McpRuntimeConnectionCoordinator", () => {
     expect(b.synchronize).not.toHaveBeenCalled();
   });
 
+  it("keeps generations isolated for different names sharing one endpoint", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const linear = identity("linear", "shared-endpoint");
+    const github = identity("github", "shared-endpoint");
+    const linearHandle = fakeHandle({ runtimeId: "linear-runtime", servers: { linear } });
+    const githubHandle = fakeHandle({ runtimeId: "github-runtime", servers: { github } });
+    coordinator.register(linearHandle.handle);
+    coordinator.register(githubHandle.handle);
+
+    await coordinator.synchronize(linear);
+    await coordinator.synchronize(github);
+
+    expect(linearHandle.generations).toEqual([1]);
+    expect(githubHandle.generations).toEqual([1]);
+    expect(coordinator.currentGeneration(linear)).toBe(1);
+    expect(coordinator.currentGeneration(github)).toBe(1);
+  });
+
   it("aggregates error over disconnected over connected", async () => {
     const coordinator = new McpRuntimeConnectionCoordinator();
     const target = identity("linear", "agg");
@@ -142,9 +160,28 @@ describe("McpRuntimeConnectionCoordinator", () => {
     const result = await coordinator.synchronize(target);
 
     expect(result.affectedRuntimes).toBe(2);
-    expect(result.failures).toEqual([{ runtimeId: "failing", message: "reconnect failed" }]);
+    expect(result.failures).toEqual([{ runtimeId: "failing", message: "MCP runtime synchronization failed" }]);
     expect(healthy.synchronize).toHaveBeenCalledTimes(1);
     expect(result.status).toBe("error");
+  });
+
+  it("redacts credentials and endpoint queries from runtime failure messages", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const target = identity("linear", "redaction");
+    coordinator.register(fakeHandle({
+      runtimeId: "failing",
+      servers: { linear: target },
+      onSynchronize: () => {
+        throw new Error("POST https://mcp.example.test/mcp?token=query-secret Authorization: Bearer access-secret failed");
+      },
+    }).handle);
+
+    const result = await coordinator.synchronize(target);
+    const serialized = JSON.stringify(result.failures);
+
+    expect(serialized).not.toContain("query-secret");
+    expect(serialized).not.toContain("access-secret");
+    expect(serialized).not.toContain("?token=");
   });
 
   it("never lets an older generation synchronize overwrite a newer one", async () => {

@@ -122,6 +122,21 @@ describe("createMcpRuntimeHandle", () => {
     expect(disconnectServer).toHaveBeenCalledWith("linear");
   });
 
+  it("disconnects a legacy OAuth runtime after logout even without an oauth settings marker", async () => {
+    const { handle, stageAndActivate, disconnectServer } = createHandle({
+      config: {
+        type: "http",
+        url: "https://mcp.linear.app/mcp",
+      },
+      credential: undefined,
+    });
+
+    await handle.synchronize(linearIdentity, 3);
+
+    expect(stageAndActivate).not.toHaveBeenCalled();
+    expect(disconnectServer).toHaveBeenCalledWith("linear");
+  });
+
   it("ignores a superseded generation", async () => {
     const { handle, stageAndActivate, disconnectServer } = createHandle({ credential: usableCredential, generation: 4 });
 
