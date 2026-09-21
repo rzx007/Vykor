@@ -792,6 +792,19 @@ export async function dispatchSessionCommand(
     return "handled";
   }
 
+  if (slash?.name === "/reasoning") {
+    const arg = slash.args.trim().split(/\s+/).filter(Boolean)[0];
+    const settings = await client.system.getSettings();
+    const current = settings.showReasoning !== false;
+    let next: boolean;
+    if (arg === "on") next = true;
+    else if (arg === "off") next = false;
+    else next = !current;
+    await client.system.patchSettings({ showReasoning: next });
+    emit(`Reasoning: ${next ? "ON" : "OFF"}`);
+    return "handled";
+  }
+
   if (slash?.name === "/turns") {
     const value = slash.args.trim().split(/\s+/).filter(Boolean)[0];
     if (!value) {

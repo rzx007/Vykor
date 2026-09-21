@@ -575,4 +575,33 @@ describe("dispatchSessionCommand", () => {
     expect(patches).toEqual([{ permission_mode: "plan" }]);
     expect(emitted[0]).toBe("Permission mode: plan");
   });
+
+  it("toggles showReasoning with no argument", async () => {
+    const patchSettings = vi.fn(async () => ({}));
+    const { host: h, emitted } = host({
+      client: fakeClient({
+        getSettings: async () => ({ showReasoning: false }),
+        patchSettings,
+      }),
+    });
+
+    await dispatchSessionCommand({ name: "/reasoning", args: "" }, h);
+
+    expect(patchSettings).toHaveBeenCalledWith({ showReasoning: true });
+    expect(emitted.join("\n")).toContain("Reasoning: ON");
+  });
+
+  it("accepts an explicit off argument", async () => {
+    const patchSettings = vi.fn(async () => ({}));
+    const { host: h } = host({
+      client: fakeClient({
+        getSettings: async () => ({ showReasoning: true }),
+        patchSettings,
+      }),
+    });
+
+    await dispatchSessionCommand({ name: "/reasoning", args: "off" }, h);
+
+    expect(patchSettings).toHaveBeenCalledWith({ showReasoning: false });
+  });
 });
