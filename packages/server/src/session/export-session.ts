@@ -37,7 +37,7 @@ function partsForMessage(
 
 function textFromParts(parts: SessionMessagePartRecord[]): string {
   return parts
-    .filter((part) => part.type === "text" || part.type === "reasoning")
+    .filter((part) => part.type === "text")
     .map((part) => part.text ?? "")
     .join("");
 }
@@ -45,7 +45,7 @@ function textFromParts(parts: SessionMessagePartRecord[]): string {
 function markdownFromParts(parts: SessionMessagePartRecord[]): string {
   return parts
     .flatMap((part) => {
-      if (part.type === "text" || part.type === "reasoning") {
+      if (part.type === "text") {
         return part.text ? [part.text] : [];
       }
       if (part.type === "attachment") {

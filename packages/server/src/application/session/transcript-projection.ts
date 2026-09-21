@@ -145,6 +145,7 @@ export class SessionTranscriptProjection {
   ): AppliedTranscriptStreamEvent {
     switch (event.type) {
       case "reasoning_delta": {
+        this.completeOpenTextPart(state, "completed", "commentary");
         const messageId = this.ensureAssistantMessage(state, true);
         if (!state.activeReasoningPartId) {
           const part = this.store.conversations.upsertMessagePart({

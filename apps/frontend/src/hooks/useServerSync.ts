@@ -342,6 +342,13 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     return await client.providers.listModels();
   }, []);
 
+  const refreshSettings = useCallback(async (): Promise<void> => {
+    const client = clientRef.current;
+    if (!client) return;
+    const settings = await client.system.getSettings();
+    setShowReasoning(settings.showReasoning !== false);
+  }, []);
+
   const cacheFirstRead = useCallback(
     (request: PresentationReadRequest): void => {
       const cached = presentationCacheRef.current[request.key];
@@ -714,6 +721,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         activateSession,
         returnToHome,
         refreshJobs,
+        refreshSettings,
         loadJobDetail,
         createAndSwitchSession,
         cacheFirstRead,
@@ -727,7 +735,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         reportError(error instanceof Error ? error.message : String(error));
       });
     },
-    [activateSession, cacheFirstRead, clearDisplayRequest, clientState, createAndSwitchSession, daemon, loadJobDetail, localBusy, pushSystem, refreshJobs, reportAuxiliaryError, reportError, returnToHome, setStatusAndDefault, showDisplayRequest],
+    [activateSession, cacheFirstRead, clearDisplayRequest, clientState, createAndSwitchSession, daemon, loadJobDetail, localBusy, pushSystem, refreshJobs, refreshSettings, reportAuxiliaryError, reportError, returnToHome, setStatusAndDefault, showDisplayRequest],
   );
 
   const bucket = activeSessionId ? clientState.buckets[activeSessionId] : undefined;

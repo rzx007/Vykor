@@ -637,6 +637,39 @@ describe("SessionTranscriptProjection", () => {
     expect(reasoningParts[2]).toMatchObject({ status: "running" });
   });
 
+  it("keeps text before and after reasoning in separate ordered parts", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput({ content: "" }));
+
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "先给结论。" });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "再展开推理。",
+      source: "think",
+    });
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "结论如上。" });
+
+    expect(store.upsertMessagePart.mock.calls.map(([part]) => `${part.type}:${part.status}`)).toEqual([
+      "text:running",
+      "text:completed",
+      "reasoning:running",
+      "reasoning:completed",
+      "text:running",
+    ]);
+    expect(store.upsertMessagePart).toHaveBeenCalledWith({
+      id: "p1",
+      sessionId: "s1",
+      messageId: "m2",
+      type: "text",
+      status: "completed",
+      metadata: { phase: "commentary" },
+    });
+    const deltas = store.appendMessagePartDelta.mock.calls.map(([input]) => input);
+    expect(deltas.map((delta) => delta.field)).toEqual(["text", "reasoning", "text"]);
+    expect(deltas.map((delta) => delta.partId)).toEqual(["p1", "p2", "p3"]);
+  });
+
   it("closes the reasoning part before a steered input continues the run", () => {
     const store = createStore();
     const projection = new SessionTranscriptProjection(store);

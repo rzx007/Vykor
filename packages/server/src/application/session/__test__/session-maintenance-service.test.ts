@@ -193,6 +193,17 @@ describe("SessionMaintenanceService", () => {
       metadata: {},
       createdAt: 1,
       updatedAt: 1,
+    }, {
+      id: "p2",
+      seq: 2,
+      sessionId: "s1",
+      messageId: "m1",
+      type: "reasoning",
+      status: "completed",
+      text: "internal chain of thought",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
     }] as any);
 
     await expect(maintenance.remember("s1")).resolves.toBe(remembered);
