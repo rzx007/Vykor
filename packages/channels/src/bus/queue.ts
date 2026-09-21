@@ -49,30 +49,44 @@ export interface OutboundMessage {
 class AsyncQueue<T> {
   private buffer: T[] = [];
   private waiters: Array<{ resolve: (v: T) => void; reject: (e: Error) => void }> = [];
-  private droppedCount = 0;
+  private producers: Array<{
+    item: T;
+    resolve: () => void;
+    reject: (error: Error) => void;
+    signal?: AbortSignal;
+    onAbort?: () => void;
+  }> = [];
 
   constructor(private readonly maxSize: number = 0) {}
 
-  /**
-   * Push an item into the queue. Returns true if accepted, false if dropped
-   * because the buffer is at capacity (maxSize > 0 and no waiting consumer).
-   */
-  push(item: T): boolean {
+  /** Push an item, waiting for buffer capacity instead of dropping it. */
+  push(item: T, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return Promise.reject(new Error("publish aborted"));
     const waiter = this.waiters.shift();
     if (waiter) {
       waiter.resolve(item);
-      return true;
+      return Promise.resolve();
     }
     if (this.maxSize > 0 && this.buffer.length >= this.maxSize) {
-      this.droppedCount++;
-      return false;
+      return new Promise<void>((resolve, reject) => {
+        const producer = { item, resolve, reject, signal, onAbort: undefined as (() => void) | undefined };
+        producer.onAbort = () => {
+          const index = this.producers.indexOf(producer);
+          if (index >= 0) {
+            this.producers.splice(index, 1);
+            reject(new Error("publish aborted"));
+          }
+        };
+        this.producers.push(producer);
+        signal?.addEventListener("abort", producer.onAbort, { once: true });
+      });
     }
     this.buffer.push(item);
-    return true;
+    return Promise.resolve();
   }
 
   get dropped(): number {
-    return this.droppedCount;
+    return 0;
   }
 
   pull(signal?: AbortSignal): Promise<T> {
@@ -81,6 +95,14 @@ class AsyncQueue<T> {
     }
     const head = this.buffer.shift();
     if (head !== undefined) {
+      const producer = this.producers.shift();
+      if (producer) {
+        if (producer.onAbort) {
+          producer.signal?.removeEventListener("abort", producer.onAbort);
+        }
+        this.buffer.push(producer.item);
+        producer.resolve();
+      }
       return Promise.resolve(head);
     }
     return new Promise<T>((resolve, reject) => {
@@ -117,23 +139,16 @@ export class MessageBus {
   private readonly inbound = new AsyncQueue<InboundMessage>(DEFAULT_MAX_QUEUE_SIZE);
   private readonly outbound = new AsyncQueue<OutboundMessage>(DEFAULT_MAX_QUEUE_SIZE);
 
-  publishInbound(msg: InboundMessage): void {
-    const accepted = this.inbound.push(msg);
-    if (!accepted) {
-      // Inbound queue is full — log and drop. Callers can check inboundDropped.
-      console.warn(`[MessageBus] inbound queue full (${DEFAULT_MAX_QUEUE_SIZE}), message dropped`);
-    }
+  publishInbound(msg: InboundMessage, signal?: AbortSignal): Promise<void> {
+    return this.inbound.push(msg, signal);
   }
 
   consumeInbound(signal?: AbortSignal): Promise<InboundMessage> {
     return this.inbound.pull(signal);
   }
 
-  publishOutbound(msg: OutboundMessage): void {
-    const accepted = this.outbound.push(msg);
-    if (!accepted) {
-      console.warn(`[MessageBus] outbound queue full (${DEFAULT_MAX_QUEUE_SIZE}), message dropped`);
-    }
+  publishOutbound(msg: OutboundMessage, signal?: AbortSignal): Promise<void> {
+    return this.outbound.push(msg, signal);
   }
 
   consumeOutbound(signal?: AbortSignal): Promise<OutboundMessage> {

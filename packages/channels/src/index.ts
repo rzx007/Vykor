@@ -65,7 +65,7 @@ export interface ChannelAdapter {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   send(message: ChannelMessage): Promise<void>;
-  onMessage(handler: (message: ChannelMessage) => void): void;
+  onMessage(handler: (message: ChannelMessage) => void | Promise<void>): void;
 }
 
 export { EventBus } from "./bus";

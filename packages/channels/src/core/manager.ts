@@ -130,7 +130,7 @@ export class ChannelManager {
     return [...this.adapters.keys()];
   }
 
-  private handleInbound(channelName: string, msg: ChannelMessage): void {
+  private async handleInbound(channelName: string, msg: ChannelMessage): Promise<void> {
     if (!this.acceptingInbound) return;
     const allowList = this.opts.allowFrom[channelName];
     if (!isAllowed({ sender: msg.sender, ...(msg.chatId ? { chatId: msg.chatId } : {}) }, allowList)) {
@@ -175,7 +175,7 @@ export class ChannelManager {
         : {}),
       ...(msg.platformMeta ? { platformMeta: msg.platformMeta } : {}),
     };
-    this.bus.publishInbound(inbound);
+    await this.bus.publishInbound(inbound);
   }
 
   private async dispatchOutbound(signal: AbortSignal): Promise<void> {

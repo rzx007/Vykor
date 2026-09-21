@@ -119,6 +119,54 @@ describe("DurableChannelBridge", () => {
     await bridge.stop();
   });
 
+  it("启动时恢复全部积压回复而不是只恢复前 200 条", async () => {
+    const bus = new MessageBus();
+    const saved = Array.from({ length: 201 }, (_, index) =>
+      delivery({ id: `delivery-${index}`, content: `reply-${index}` }),
+    );
+    const application = port({
+      listPendingChannelDeliveries: vi.fn(async (options) =>
+        options?.limit === undefined ? saved : saved.slice(0, options.limit),
+      ),
+    });
+    const bridge = new DurableChannelBridge({
+      application,
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+      connectors: ["feishu"],
+    });
+    bridge.start();
+
+    await vi.waitFor(() => {
+      expect(bus.outboundSize).toBe(201);
+    });
+    await bridge.stop();
+  });
+
+  it("停止时取消等待队列空位的积压恢复", async () => {
+    const bus = new MessageBus();
+    const saved = Array.from({ length: 1_001 }, (_, index) =>
+      delivery({ id: `delivery-${index}` }),
+    );
+    const bridge = new DurableChannelBridge({
+      application: port({
+        listPendingChannelDeliveries: vi.fn(async () => saved),
+      }),
+      bus,
+      cwd: "D:/project",
+      model: "model-1",
+    });
+    bridge.start();
+    await vi.waitFor(() => {
+      expect(bus.outboundSize).toBe(1_000);
+    });
+
+    await bridge.stop();
+    await bus.consumeOutbound();
+    expect(bus.outboundSize).toBe(999);
+  });
+
   it("结果为 unknown 时不自动重发，避免平台已经收到却发出第二条", async () => {
     const bus = new MessageBus();
     const application = port({

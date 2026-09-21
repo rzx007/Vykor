@@ -170,6 +170,50 @@ describe("ChannelRuntimeService", () => {
     expect(created[0]!.calls.stop).toBe(1);
   });
 
+  it("records and cleans up a synchronous runtime start failure", async () => {
+    const { service, created } = makeService({
+      createRuntime: async (input) => {
+        const { handle, calls } = fakeHandle({
+          start: (() => {
+            throw new Error("synchronous start failure");
+          }) as ConnectorRuntimeHandle["start"],
+        });
+        created.push({ handle, calls, input });
+        return handle;
+      },
+    });
+
+    await expect(service.start("feishu")).resolves.toBeUndefined();
+    expect(service.status().connectors[0]).toMatchObject({
+      state: "error",
+      lastError: "synchronous start failure",
+    });
+    expect(created[0]!.calls.stop).toBe(1);
+  });
+
+  it("stops a timed-out runtime again when its start resolves late", async () => {
+    let release!: () => void;
+    const { service, created } = makeService({
+      connectTimeoutMs: 10,
+      createRuntime: async (input) => {
+        const { handle, calls } = fakeHandle({
+          start: () => new Promise<void>((resolve) => (release = resolve)),
+        });
+        created.push({ handle, calls, input });
+        return handle;
+      },
+    });
+
+    await service.start("feishu");
+    expect(created[0]!.calls.stop).toBe(1);
+
+    release();
+    await vi.waitFor(() => {
+      expect(created[0]!.calls.stop).toBe(2);
+    });
+    expect(service.status().connectors[0]?.state).toBe("error");
+  });
+
   it("does not connect when shutdown races an in-flight start", async () => {
     let release!: () => void;
     const { service, created } = makeService({
@@ -275,6 +319,20 @@ describe("ChannelRuntimeService", () => {
     const seqs = status.recentDenials.map((denial) => denial.seq);
     expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
     expect(new Set(seqs).size).toBe(50);
+  });
+
+  it("propagates delivery persistence failures to the outbound dispatcher", async () => {
+    const app = application();
+    vi.mocked(app.recordDelivery).mockRejectedValue(new Error("database unavailable"));
+    const { service, created } = makeService({ application: app });
+    await service.start("feishu");
+
+    await expect(
+      created[0]!.input.onDeliveryResult({
+        deliveryId: "delivery-1",
+        status: "unknown",
+      }),
+    ).rejects.toThrow("database unavailable");
   });
 
   it("resolves distinct workspace directories per session key", async () => {

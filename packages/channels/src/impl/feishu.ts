@@ -78,7 +78,7 @@ export class FeishuAdapter implements ChannelAdapter {
 
   private client: LarkClient | null = null;
   private wsClient: LarkWSClient | null = null;
-  private handler: ((message: ChannelMessage) => void) | undefined;
+  private handler: ((message: ChannelMessage) => void | Promise<void>) | undefined;
   private readonly replyAtBotNames: string[];
   constructor(private readonly config: FeishuConfig) {
     // 统一转小写，使 @mention 匹配大小写不敏感。
@@ -260,7 +260,7 @@ export class FeishuAdapter implements ChannelAdapter {
       },
     };
 
-    if (this.handler) this.handler(inbound);
+    if (this.handler) await this.handler(inbound);
   }
 
   async disconnect(): Promise<void> {
@@ -400,7 +400,7 @@ export class FeishuAdapter implements ChannelAdapter {
     };
   }
 
-  onMessage(handler: (message: ChannelMessage) => void): void {
+  onMessage(handler: (message: ChannelMessage) => void | Promise<void>): void {
     this.handler = handler;
   }
 }

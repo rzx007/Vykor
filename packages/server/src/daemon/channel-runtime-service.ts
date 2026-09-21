@@ -417,15 +417,23 @@ export class ChannelRuntimeService {
       this.patchStatus(entry, { state: "stopped", startedAt: undefined });
       return;
     }
+    let starting: Promise<void> | undefined;
     try {
+      starting = handle.start();
       await withTimeout(
-        handle.start(),
+        starting,
         this.connectTimeoutMs,
         `连接超时（${this.connectTimeoutMs}ms）`,
       );
     } catch (error) {
       this.patchStatus(entry, { state: "error", lastError: messageOf(error) });
       await handle.stop().catch(() => undefined);
+      if (starting) {
+        void starting.then(
+          () => handle.stop().catch(() => undefined),
+          () => undefined,
+        );
+      }
       return;
     }
     if (this.closed) {
@@ -619,6 +627,7 @@ export class ChannelRuntimeService {
         event: "channel.runtime.delivery_record_failed",
         error: messageOf(error),
       });
+      throw error;
     }
   }
 

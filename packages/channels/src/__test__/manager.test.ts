@@ -190,6 +190,28 @@ describe("ChannelManager", () => {
     await mgr.stopAll();
   });
 
+  it("unknown 状态保存失败时不向平台发送回复", async () => {
+    const bus = new MessageBus();
+    const fake = makeAdapter("t");
+    const mgr = new ChannelManager([fake.adapter], bus, {
+      allowFrom: { t: ["*"] },
+      onDeliveryResult: async () => {
+        throw new Error("database unavailable");
+      },
+    });
+    await mgr.startAll();
+    bus.publishOutbound({
+      channel: "t",
+      chatId: "c2",
+      content: "must not send",
+      metadata: { _delivery_id: "delivery-1" },
+    });
+
+    await tick();
+    expect(fake.sent).toHaveLength(0);
+    await mgr.stopAll();
+  });
+
   it("平台明确发送失败时记 failed，回复内容仍留在 durable delivery", async () => {
     const bus = new MessageBus();
     const fake = makeAdapter("t", { failSend: true });

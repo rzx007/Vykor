@@ -2,7 +2,7 @@ import type { ChannelAdapter, ChannelMessage } from "../index";
 
 export class StdioAdapter implements ChannelAdapter {
   name = "stdio";
-  private handler?: (message: ChannelMessage) => void;
+  private handler?: (message: ChannelMessage) => void | Promise<void>;
 
   async connect(): Promise<void> { }
 
@@ -12,13 +12,13 @@ export class StdioAdapter implements ChannelAdapter {
     process.stdout.write(`${message.content}\n`);
   }
 
-  onMessage(handler: (message: ChannelMessage) => void): void {
+  onMessage(handler: (message: ChannelMessage) => void | Promise<void>): void {
     this.handler = handler;
     const readline = require("node:readline") as typeof import("node:readline");
     const rl = readline.createInterface({ input: process.stdin });
     rl.on("line", (line: string) => {
       if (this.handler) {
-        this.handler({
+        void this.handler({
           id: `stdio_${Date.now()}`,
           channel: "stdio",
           sender: "user",

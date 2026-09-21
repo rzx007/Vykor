@@ -87,7 +87,7 @@ export class DurableChannelBridge {
         break;
       }
       try {
-        await this.handle(message);
+        await this.handle(message, signal);
       } catch (error) {
         this.deps.onWarning?.(
           `durable bridge 处理消息失败(${message.channel}/${message.chatId}):${
@@ -98,7 +98,7 @@ export class DurableChannelBridge {
     }
   }
 
-  private async handle(message: InboundMessage): Promise<void> {
+  private async handle(message: InboundMessage, signal: AbortSignal): Promise<void> {
     const cwd =
       typeof this.deps.cwd === "function" ? await this.deps.cwd(message) : this.deps.cwd;
     const metadata = {
@@ -125,7 +125,7 @@ export class DurableChannelBridge {
     ) {
       return;
     }
-    this.publish(result.delivery);
+    await this.publish(result.delivery, signal);
   }
 
   private async recoverPending(signal: AbortSignal): Promise<void> {
@@ -138,10 +138,9 @@ export class DurableChannelBridge {
         const deliveries =
           await this.deps.application.listPendingChannelDeliveries({
             connector,
-            limit: 200,
             signal,
           });
-        for (const delivery of deliveries) this.publish(delivery);
+        for (const delivery of deliveries) await this.publish(delivery, signal);
       } catch (error) {
         if (signal.aborted) return;
         this.deps.onWarning?.(
@@ -153,20 +152,23 @@ export class DurableChannelBridge {
     }
   }
 
-  private publish(delivery: ChannelDeliveryRecord): void {
-    this.deps.bus.publishOutbound({
-      channel: delivery.connector,
-      chatId: delivery.chatId,
-      content: delivery.content,
-      // 平台路由上下文必须透传：缺失时不得静默降级成普通 chat。
-      ...(delivery.platformMeta ? { platformMeta: delivery.platformMeta } : {}),
-      // 线程标识单独透传；rootMessageId 在 platformMeta 内。
-      ...(delivery.threadId ? { threadId: delivery.threadId } : {}),
-      metadata: {
-        _delivery_id: delivery.id,
-        _session_id: delivery.sessionId,
-        _run_id: delivery.runId,
+  private publish(delivery: ChannelDeliveryRecord, signal: AbortSignal): Promise<void> {
+    return this.deps.bus.publishOutbound(
+      {
+        channel: delivery.connector,
+        chatId: delivery.chatId,
+        content: delivery.content,
+        // 平台路由上下文必须透传：缺失时不得静默降级成普通 chat。
+        ...(delivery.platformMeta ? { platformMeta: delivery.platformMeta } : {}),
+        // 线程标识单独透传；rootMessageId 在 platformMeta 内。
+        ...(delivery.threadId ? { threadId: delivery.threadId } : {}),
+        metadata: {
+          _delivery_id: delivery.id,
+          _session_id: delivery.sessionId,
+          _run_id: delivery.runId,
+        },
       },
-    });
+      signal,
+    );
   }
 }

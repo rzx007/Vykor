@@ -43,6 +43,42 @@ describe("MessageBus", () => {
     expect((await p2).content).toBe("y");
   });
 
+  it("入站队列满时等待空位而不是丢弃消息", async () => {
+    const bus = new MessageBus();
+    for (let index = 0; index < 1_000; index += 1) {
+      bus.publishInbound(inbound(String(index)));
+    }
+
+    let published = false;
+    const pending = Promise.resolve(bus.publishInbound(inbound("overflow"))).then(() => {
+      published = true;
+    });
+    await Promise.resolve();
+    expect(published).toBe(false);
+
+    await bus.consumeInbound();
+    await pending;
+    expect(bus.inboundSize).toBe(1_000);
+    expect(bus.inboundDropped).toBe(0);
+  });
+
+  it("取消等待中的出站发布后不会在稍后重新入队", async () => {
+    const bus = new MessageBus();
+    for (let index = 0; index < 1_000; index += 1) {
+      bus.publishOutbound({ channel: "test", chatId: "c1", content: String(index) });
+    }
+    const controller = new AbortController();
+    const pending = bus.publishOutbound(
+      { channel: "test", chatId: "c1", content: "cancelled" },
+      controller.signal,
+    );
+
+    controller.abort();
+    await expect(pending).rejects.toThrow(/abort/i);
+    await bus.consumeOutbound();
+    expect(bus.outboundSize).toBe(999);
+  });
+
   it("AbortSignal 取消挂起的消费", async () => {
     const bus = new MessageBus();
     const ac = new AbortController();

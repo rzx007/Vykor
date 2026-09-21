@@ -3,7 +3,7 @@ import type { ChannelAdapter, ChannelMessage } from "../index";
 export class HttpAdapter implements ChannelAdapter {
   name = "http";
   private url?: string;
-  private handler?: (message: ChannelMessage) => void;
+  private handler?: (message: ChannelMessage) => void | Promise<void>;
 
   constructor(url?: string) {
     this.url = url;
@@ -22,7 +22,7 @@ export class HttpAdapter implements ChannelAdapter {
     });
   }
 
-  onMessage(handler: (message: ChannelMessage) => void): void {
+  onMessage(handler: (message: ChannelMessage) => void | Promise<void>): void {
     this.handler = handler;
   }
 }
