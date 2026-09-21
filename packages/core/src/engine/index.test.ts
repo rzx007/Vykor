@@ -110,6 +110,68 @@ describe("ToolRegistry", () => {
       id: "remote",
     });
   });
+
+  describe("replaceBySource", () => {
+    it("replaces only the matching source and keeps other sources", () => {
+      const registry = new ToolRegistry();
+      const source = { kind: "mcp" as const, id: "linear" };
+      const builtin = registryTool("Builtin", "builtin");
+      const oldDefinition = registryTool("mcp__linear__old", "old");
+      registry.register(builtin, { kind: "builtin" });
+      registry.register(oldDefinition, source);
+      const newDefinition = registryTool("mcp__linear__new", "new");
+
+      registry.replaceBySource(source, [newDefinition]);
+
+      expect(registry.get("mcp__linear__old")).toBeUndefined();
+      expect(registry.get("mcp__linear__new")).toBe(newDefinition);
+      expect(registry.get("Builtin")).toBe(builtin);
+      expect(registry.inspect("mcp__linear__new")?.source).toEqual({
+        kind: "mcp",
+        id: "linear",
+      });
+    });
+
+    it("leaves the map unchanged when a new name conflicts with another source", () => {
+      const registry = new ToolRegistry();
+      const source = { kind: "mcp" as const, id: "linear" };
+      const oldDefinition = registryTool("mcp__linear__old", "old");
+      const builtin = registryTool("Builtin", "builtin");
+      const conflicting = registryTool("Builtin", "conflict");
+      registry.register(oldDefinition, source);
+      registry.register(builtin, { kind: "builtin" });
+
+      expect(() => registry.replaceBySource(source, [conflicting])).toThrow("already registered");
+      expect(registry.get("mcp__linear__old")).toBe(oldDefinition);
+      expect(registry.get("Builtin")).toBe(builtin);
+    });
+
+    it("rejects duplicate names within the replacement set without mutating", () => {
+      const registry = new ToolRegistry();
+      const source = { kind: "mcp" as const, id: "linear" };
+      const oldDefinition = registryTool("mcp__linear__old", "old");
+      registry.register(oldDefinition, source);
+
+      expect(() =>
+        registry.replaceBySource(source, [
+          registryTool("dup", "a"),
+          registryTool("dup", "b"),
+        ]),
+      ).toThrow("already registered");
+      expect(registry.get("mcp__linear__old")).toBe(oldDefinition);
+    });
+
+    it("removes the whole source with an empty replacement set", () => {
+      const registry = new ToolRegistry();
+      const source = { kind: "mcp" as const, id: "linear" };
+      registry.register(registryTool("mcp__linear__a", "a"), source);
+      registry.register(registryTool("mcp__linear__b", "b"), source);
+
+      registry.replaceBySource(source, []);
+
+      expect(registry.getAll()).toHaveLength(0);
+    });
+  });
 });
 function registryTool(name: string, description: string): ToolDefinition {
   return {

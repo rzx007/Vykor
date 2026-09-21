@@ -17,6 +17,7 @@ import type {
   ToolContext,
   ToolDefinition,
   ToolExecutionResult,
+  ToolRegistrationSource,
   ToolRegistry as IToolRegistry,
   ToolRegistryView,
   ToolDescriptor,
@@ -963,6 +964,9 @@ export class QueryEngine implements IQueryEngine {
       override(tool: ToolDefinition, source): void {
         inner.override(tool, source);
       },
+      replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void {
+        inner.replaceBySource(source, tools);
+      },
       unregister(name: string): boolean {
         return inner.unregister?.(name) ?? false;
       },
@@ -991,6 +995,7 @@ export class QueryEngine implements IQueryEngine {
     const base: IToolRegistry = captured ? {
       register: () => { throw new Error("Run capability view is immutable"); },
       override: () => { throw new Error("Run capability view is immutable"); },
+      replaceBySource: () => { throw new Error("Run capability view is immutable"); },
       get: (name) => captured.get(name),
       getAll: () => [...captured.values()],
       has: (name) => captured.has(name),
@@ -1012,6 +1017,9 @@ export class QueryEngine implements IQueryEngine {
         throw new Error("Run-scoped tool registry is immutable");
       },
       override: () => {
+        throw new Error("Run-scoped tool registry is immutable");
+      },
+      replaceBySource: () => {
         throw new Error("Run-scoped tool registry is immutable");
       },
       unregister: () => false,

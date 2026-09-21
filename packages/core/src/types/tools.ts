@@ -141,5 +141,13 @@ export interface ToolRegistry extends ToolRegistryView {
   getAll(): ToolDefinition[];
   register(tool: ToolDefinition, source?: ToolRegistrationSource): void;
   override(tool: ToolDefinition, source: ToolRegistrationSource): void;
+  /**
+   * Atomically replace every tool registered by one exact source.
+   *
+   * Implementations must validate the whole replacement set before publishing
+   * it, keep the method synchronous, and never call back into waiting code in
+   * the middle of the swap. A failed validation leaves the registry untouched.
+   */
+  replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void;
   unregister?(name: string): boolean;
 }

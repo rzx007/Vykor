@@ -67,6 +67,34 @@ export class ToolRegistry implements IToolRegistry {
     });
   }
 
+  replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void {
+    const next = new Map(this.tools);
+    for (const [name, entry] of next) {
+      if (sameSource(entry.source, source)) next.delete(name);
+    }
+    const claimed = new Set<string>();
+    for (const tool of tools) {
+      if (claimed.has(tool.name)) {
+        throw new ToolRegistrationError(
+          "tool_already_registered",
+          `Tool "${tool.name}" is already registered by ${formatSource(source)}; use an explicit override`,
+        );
+      }
+      const existing = next.get(tool.name);
+      if (existing) {
+        throw new ToolRegistrationError(
+          "tool_already_registered",
+          `Tool "${tool.name}" is already registered by ${formatSource(existing.source)}; use an explicit override`,
+        );
+      }
+      claimed.add(tool.name);
+    }
+    for (const tool of tools) {
+      next.set(tool.name, { definition: tool, source: copySource(source) });
+    }
+    this.tools = next;
+  }
+
   unregister(name: string): boolean {
     return this.tools.delete(name);
   }
@@ -103,4 +131,8 @@ function copySource(source: ToolRegistrationSource): ToolRegistrationSource {
 
 function formatSource(source: ToolRegistrationSource): string {
   return source.id ? `${source.kind}:${source.id}` : source.kind;
+}
+
+function sameSource(a: ToolRegistrationSource, b: ToolRegistrationSource): boolean {
+  return a.kind === b.kind && a.id === b.id;
 }

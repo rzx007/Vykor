@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type McpServerConfig } from "@openharness/core";
+import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type McpServerConfig, type ToolDefinition } from "@openharness/core";
 import { McpClientManager } from "@openharness/mcp";
 import { mcpToolCallTool, listMcpResourcesTool, readMcpResourceTool, mcpAuthTool } from "../../tools/src/mcp/mcp-tools.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
@@ -44,6 +44,30 @@ it("never redirects a captured MCP Tool to a reconnected client", async () => {
     expect(stale.content).not.toEqual([{ type: "text", text: "new-client" }]);
     const fresh = createRunCapabilityView(sources, "private-plugin").tools.get("mcp__private__version")!;
     expect((await fresh.invoke({}, { cwd: process.cwd() })).content).toEqual([{ type: "text", text: "new-client" }]);
+  } finally { await manager.disconnectAll(); }
+});
+
+it("keeps a captured MCP Tool Definition while a new view sees the replacement", async () => {
+  const manager = new McpClientManager();
+  try {
+    expect((await manager.connect("private", config("old-client"))).status).toBe("connected");
+    const registry = new ToolRegistry();
+    registry.register(manager.getAsToolDefinitions()[0]!, { kind: "mcp", id: "private" });
+    const sources = { toolRegistry: registry, pluginIds: new Set(["private-plugin"]), mcpServers: [{
+      ownerPluginId: "private-plugin", serverId: "plugin:private-plugin:mcp:private", serverName: "private", definition: config("old-client"),
+    }] };
+    const captured = createRunCapabilityView(sources, "private-plugin").tools.get("mcp__private__version")!;
+    const replacement: ToolDefinition = {
+      name: "mcp__private__version",
+      description: "replacement",
+      inputSchema: {},
+      execute: async () => ({ content: [{ type: "text", text: "replacement" }] }),
+    };
+    registry.replaceBySource({ kind: "mcp", id: "private" }, [replacement]);
+
+    expect((await captured.invoke({}, { cwd: process.cwd() })).content).toEqual([{ type: "text", text: "old-client" }]);
+    const fresh = createRunCapabilityView(sources, "private-plugin").tools.get("mcp__private__version")!;
+    expect((await fresh.invoke({}, { cwd: process.cwd() })).content).toEqual([{ type: "text", text: "replacement" }]);
   } finally { await manager.disconnectAll(); }
 });
 

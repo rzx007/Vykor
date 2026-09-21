@@ -103,6 +103,13 @@ class RuntimeToolRegistry implements IToolRegistry {
     this.inner.override(tool, source);
   }
 
+  replaceBySource(
+    source: Parameters<IToolRegistry["replaceBySource"]>[0],
+    tools: Parameters<IToolRegistry["replaceBySource"]>[1],
+  ): void {
+    this.inner.replaceBySource(source, tools);
+  }
+
   unregister(name: string): boolean {
     return this.inner.unregister?.(name) ?? false;
   }
