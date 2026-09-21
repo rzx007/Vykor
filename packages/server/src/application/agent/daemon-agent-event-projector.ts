@@ -433,7 +433,9 @@ export class DaemonAgentEventProjector {
     if (!state) throw new Error(`Transcript projection not started for run: ${runId}`);
     const stateSnapshot = snapshotTranscript(state);
     const direct =
-      (stream.type === "text_delta" && this.context.transcriptProjection.hasOpenTextPart(state)) ||
+      (stream.type === "text_delta" &&
+        this.context.transcriptProjection.hasOpenTextPart(state) &&
+        state.activeReasoningPartId === undefined) ||
       (stream.type === "reasoning_delta" && state.activeReasoningPartId !== undefined);
     const before = direct ? undefined : this.context.events.checkpoint();
     let applied: ReturnType<SessionTranscriptProjection["projectStreamEvent"]>;
