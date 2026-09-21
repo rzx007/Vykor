@@ -236,6 +236,8 @@ export function buildMarkdownPresentationSection(): string {
 - Use only a few major sections for complex answers; do not turn every point into a heading.
 - Use tables only when repeated fields benefit from comparison. Put long explanations in prose or lists.
 - Use descriptive link text instead of placing long raw URLs on separate lines.
+- When citing a file you have located, use a Markdown link such as [label](/absolute/path/to/file.ts:42). Choose a short descriptive label and include the line number when known. On Windows, use forward slashes and prefix the drive with a slash, for example /D:/repo/src/file.ts:42.
+- Do not invent a file path or line number. Leave unverified paths as plain text or inline code.
 - Use blockquotes only for a genuinely distinct note or warning, not as decoration for every item.
 - Follow an explicit format requested by the user or required for a skill's deliverable.`;
 }

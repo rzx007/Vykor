@@ -8,6 +8,32 @@ import { createDefaultNodeAgent } from "@openharness/agent-runtime";
 import { createDaemonAgentLoader } from "../daemon-agent.js";
 
 describe("daemon request settings refresh", () => {
+  it("reads a changed default maxTurns for a warm session", async () => {
+    let maxTurns = 1;
+    const createAgent = vi.fn(async () => ({
+      loadHistory: () => undefined, close: async () => undefined,
+    }) as any);
+    const loader = createDaemonAgentLoader({
+      settings: { model: "model-a", maxTurns: 1 } as any,
+      getSettingsForCwd: async () => ({ model: "model-a", maxTurns } as any),
+      createAgent,
+    })!;
+    await loader({
+      session: {
+        id: "max-turns", cwd: "/repo", model: "model-a",
+        metadata: {
+          runtime: { model: "model-a", maxTurns: 1 },
+          runtimeDefaultFields: ["maxTurns"],
+        },
+      } as any,
+      history: [], parts: [],
+    });
+    const reader = createAgent.mock.calls[0]![0].options.requestConfigurationStore;
+    expect((await reader.read()).configuration.maxTurns).toBe(1);
+    maxTurns = 2;
+    expect((await reader.read()).configuration.maxTurns).toBe(2);
+  });
+
   it("uses a project effort edit for the next model request in the same run", async () => {
     const project = mkdtempSync(join(tmpdir(), "openharness-effort-run-"));
     let release!: () => void;

@@ -6,7 +6,6 @@ import {
   buildAssistantContent,
   collectChangedFiles,
   parseFileReference,
-  parseInlineFileReference,
   summarizeToolCall,
   toolDisplayName,
 } from "../message-render-model"
@@ -139,55 +138,11 @@ describe("message render model", () => {
       path: "apps/desktop/src/App.tsx",
       line: 42,
     })
-    expect(parseFileReference("https://example.com/App.tsx")).toBeNull()
-  })
-
-  it("keeps inline file references conservative", () => {
-    expect(parseInlineFileReference("assistant-message.tsx")).toBeNull()
-    expect(parseInlineFileReference("shiki/engine/javascript")).toBeNull()
-    expect(parseInlineFileReference("apps/desktop/src/App.tsx:42")).toEqual({
-      path: "apps/desktop/src/App.tsx",
+    expect(parseFileReference("/D:/repo/src/App.tsx:42")).toEqual({
+      path: "D:/repo/src/App.tsx",
       line: 42,
     })
-    expect(parseInlineFileReference("./Dockerfile")).toEqual({ path: "./Dockerfile" })
-  })
-
-  it("rejects inline dependency and generated paths across common project types", () => {
-    expect(parseInlineFileReference("node_modules/react/index.js")).toBeNull()
-    expect(parseInlineFileReference("packages/foo/node_modules/bar/index.js")).toBeNull()
-    expect(parseInlineFileReference(".pnpm/react@19/node_modules/react/index.js")).toBeNull()
-    expect(parseInlineFileReference("dist/index.js")).toBeNull()
-    expect(parseInlineFileReference("build/classes/java/main/App.class")).toBeNull()
-    expect(
-      parseInlineFileReference(".venv/lib/python3.12/site-packages/django/__init__.py")
-    ).toBeNull()
-    expect(parseInlineFileReference("__pycache__/foo.cpython-312.pyc")).toBeNull()
-    expect(parseInlineFileReference("target/debug/build/foo/out/bindings.rs")).toBeNull()
-    expect(
-      parseInlineFileReference(".cargo/registry/src/index.crates.io/foo/src/lib.rs")
-    ).toBeNull()
-    expect(
-      parseInlineFileReference("pkg/mod/github.com/gin-gonic/gin@v1.10.0/context.go")
-    ).toBeNull()
-    expect(parseInlineFileReference("vendor/bundle/ruby/3.3.0/gems/rails/lib/rails.rb")).toBeNull()
-    expect(parseInlineFileReference("vendor/autoload.php")).toBeNull()
-    expect(parseInlineFileReference(".gradle/caches/modules-2/files-2.1/App.java")).toBeNull()
-    expect(parseInlineFileReference("obj/Debug/net8.0/Foo.AssemblyInfo.cs")).toBeNull()
-  })
-
-  it("keeps inline source files clickable across common project types", () => {
-    expect(parseInlineFileReference("src/index.ts")).toEqual({ path: "src/index.ts" })
-    expect(parseInlineFileReference("cmd/server/main.go")).toEqual({ path: "cmd/server/main.go" })
-    expect(parseInlineFileReference("crates/core/src/lib.rs")).toEqual({
-      path: "crates/core/src/lib.rs",
-    })
-    expect(parseInlineFileReference("app/models/user.py")).toEqual({ path: "app/models/user.py" })
-    expect(parseInlineFileReference("src/main/java/com/example/App.java")).toEqual({
-      path: "src/main/java/com/example/App.java",
-    })
-    expect(parseInlineFileReference(".vscode/settings.json")).toEqual({
-      path: ".vscode/settings.json",
-    })
+    expect(parseFileReference("https://example.com/App.tsx")).toBeNull()
   })
 
   it("collects files and line stats from an apply patch call", () => {

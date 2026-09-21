@@ -333,6 +333,10 @@ export class QueryEngine implements IQueryEngine {
         ? initialRequestConfiguration
         : preparedNextRequestConfiguration ?? await this.resolveRequestConfiguration(options);
       preparedNextRequestConfiguration = undefined;
+      this.applyRequestMaxTurns(requestConfiguration.maxTurns);
+      if (turnCount >= this.maxTurns && !forceFinalResponse) {
+        throw new MaxTurnsExceeded(this.maxTurns);
+      }
       const runSystemPrompt = requestConfiguration.systemPrompt
         ?? (options.execution?.capabilityView && this.options.systemPromptForRun
           ? await this.options.systemPromptForRun(options.execution.capabilityView)
@@ -525,6 +529,10 @@ export class QueryEngine implements IQueryEngine {
           }
         }
         turnCount++;
+        if (this.options.resolveRequestConfiguration) {
+          preparedNextRequestConfiguration = await this.resolveRequestConfiguration(options);
+          this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
+        }
         if (turnCount >= this.maxTurns) {
           if (!forcedFinalTurn && (recoveryToolTurnsRemaining !== null || blockedTools.size > 0)) {
             options.execution?.closeSteering();
@@ -534,7 +542,8 @@ export class QueryEngine implements IQueryEngine {
           options.execution?.closeSteering();
           throw new MaxTurnsExceeded(this.maxTurns);
         }
-        preparedNextRequestConfiguration = (await this.consumeFollowUps(options)).requestConfiguration;
+        preparedNextRequestConfiguration = (await this.consumeFollowUps(options)).requestConfiguration
+          ?? preparedNextRequestConfiguration;
         continue;
       }
 
@@ -601,6 +610,14 @@ export class QueryEngine implements IQueryEngine {
       client: this.apiClient,
       ...(this.reasoningEffort ? { reasoningEffort: this.reasoningEffort } : {}),
     };
+  }
+
+  private applyRequestMaxTurns(maxTurns: number | undefined): void {
+    if (maxTurns === undefined) return;
+    if (!Number.isSafeInteger(maxTurns) || maxTurns <= 0) {
+      throw new RangeError("maxTurns must be a positive safe integer");
+    }
+    this.maxTurns = maxTurns;
   }
 
   getHistory(): Message[] {

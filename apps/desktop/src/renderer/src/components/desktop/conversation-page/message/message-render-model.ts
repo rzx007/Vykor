@@ -157,23 +157,12 @@ export function parseFileReference(value: string): FileReference | null {
   const text = value.trim().replace(/^file:\/\//i, "")
   if (!text || /^(?:https?:|mailto:|#)/i.test(text) || text.startsWith("-")) return null
   const match = text.match(/^(.*?)(?::(\d+)(?::\d+)?)?$/)
-  const path = match?.[1]?.replace(/^[`'"]|[`'"]$/g, "") ?? text
+  const path = (match?.[1]?.replace(/^[`'"]|[`'"]$/g, "") ?? text).replace(/^\/(?=[a-z]:[\\/])/i, "")
   const hasSeparator = /[\\/]/.test(path)
   const hasExtension = /(?:^|[\\/])[^\\/]+\.[a-z0-9]{1,12}$/i.test(path)
   if (!hasSeparator && !hasExtension) return null
   if (/\s/.test(path) && !/^[a-z]:[\\/]/i.test(path)) return null
   return { path, line: match?.[2] ? Number(match[2]) : undefined }
-}
-
-export function parseInlineFileReference(value: string): FileReference | null {
-  const reference = parseFileReference(value)
-  if (!reference) return null
-  if (!/[\\/]/.test(reference.path)) return null
-
-  const name = reference.path.split(/[\\/]/).filter(Boolean).pop() ?? ""
-  if (!isFileLikeName(name)) return null
-  if (isLikelyDependencyOrGeneratedPath(reference.path)) return null
-  return reference
 }
 
 export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] {
@@ -316,59 +305,6 @@ function humanizeToolName(value: string): string {
 function truncateSummary(value: string): string {
   const oneLine = value.replace(/\s+/g, " ")
   return oneLine.length > 88 ? `${oneLine.slice(0, 85)}...` : oneLine
-}
-
-function isFileLikeName(name: string): boolean {
-  if (/^[^.\\/]+\.[a-z0-9]{1,12}$/i.test(name)) return true
-  return /^(?:dockerfile|makefile|license|readme|changelog)$/i.test(name)
-}
-
-function isLikelyDependencyOrGeneratedPath(path: string): boolean {
-  const segments = path
-    .replace(/\\/g, "/")
-    .split("/")
-    .filter((segment) => segment && segment !== ".")
-    .map((segment) => segment.toLocaleLowerCase())
-  const excludedSegments = new Set([
-    ".build",
-    ".cache",
-    ".git",
-    ".gradle",
-    ".m2",
-    ".mypy_cache",
-    ".next",
-    ".nuxt",
-    ".parcel-cache",
-    ".pnpm",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".svelte-kit",
-    ".turbo",
-    ".venv",
-    ".vite",
-    ".yarn",
-    "__pycache__",
-    "build",
-    "cmakefiles",
-    "coverage",
-    "deriveddata",
-    "dist",
-    "env",
-    "node_modules",
-    "obj",
-    "out",
-    "site-packages",
-    "target",
-    "vendor",
-    "venv",
-  ])
-
-  if (segments.some((segment) => excludedSegments.has(segment))) return true
-  return hasSegmentPair(segments, "pkg", "mod") || hasSegmentPair(segments, ".cargo", "registry")
-}
-
-function hasSegmentPair(segments: string[], first: string, second: string): boolean {
-  return segments.some((segment, index) => segment === first && segments[index + 1] === second)
 }
 
 function findPatch(value: unknown): string | null {

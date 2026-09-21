@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react"
 import { Streamdown } from "streamdown"
 
-import { parseFileReference, parseInlineFileReference } from "./message-render-model"
+import { parseFileReference } from "./message-render-model"
 import { FileButton, StreamdownCodeBlock } from "./streamdown-renderers"
 
 type StreamdownComponents = NonNullable<ComponentProps<typeof Streamdown>["components"]>
@@ -28,19 +28,10 @@ export function createStreamdownComponents({
       )
     },
     inlineCode: ({ children, ...props }) => {
-      const value = String(children).replace(/\n$/, "")
-      const file = parseInlineFileReference(value)
-      if (!file || !onOpenFile) {
-        return (
-          <code className="text-ui-small rounded-md bg-input/80 px-1.5 py-0.5" {...props}>
-            {children}
-          </code>
-        )
-      }
       return (
-        <FileButton path={file.path} line={file.line} onOpenFile={onOpenFile}>
+        <code className="text-ui-small rounded-md bg-input/80 px-1.5 py-0.5" {...props}>
           {children}
-        </FileButton>
+        </code>
       )
     },
     code: StreamdownCodeBlock,

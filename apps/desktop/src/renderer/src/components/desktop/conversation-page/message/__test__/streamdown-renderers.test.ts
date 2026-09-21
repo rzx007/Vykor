@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import type { ReactElement } from "react"
 
 vi.mock("streamdown", () => ({
   useIsCodeFenceIncomplete: () => false,
@@ -6,7 +7,21 @@ vi.mock("streamdown", () => ({
 
 import { CodeBlock } from "@renderer/components/ui/code-block"
 
+import { createStreamdownComponents } from "../streamdown-components"
 import { FileButton, StreamdownCodeBlock } from "../streamdown-renderers"
+
+describe("streamdown file references", () => {
+  it("renders explicit file links as buttons but keeps inline code as code", () => {
+    const components = createStreamdownComponents({ onOpenFile: vi.fn() })
+    const anchor = components.a as (props: { href: string; children: string }) => ReactElement
+    const inlineCode = components.inlineCode as (props: { children: string }) => ReactElement
+    const link = anchor({ href: "src/index.ts:42", children: "entry" })
+    const inline = inlineCode({ children: "src/index.ts:42" })
+
+    expect(link).toMatchObject({ type: FileButton, props: { path: "src/index.ts", line: 42 } })
+    expect(inline).toMatchObject({ type: "code" })
+  })
+})
 
 describe("StreamdownCodeBlock", () => {
   it("routes a non-Mermaid fence to CodeBlock with its source and language", () => {

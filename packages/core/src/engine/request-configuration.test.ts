@@ -6,6 +6,51 @@ import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 
 describe("QueryEngine request configuration", () => {
+  it("uses an increased turn limit before deciding whether to continue after tools", async () => {
+    const requests: string[] = [];
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests.push(params.model);
+        if (requests.length === 1) {
+          started();
+          await held;
+          yield {
+            type: "tool_use_start" as const,
+            toolUse: { type: "tool_use", id: "echo", name: "Echo", input: {} },
+          };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+          return;
+        }
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    let maxTurns = 1;
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echo", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1, resolveRequestConfiguration: async () => ({
+        revision: 0, model: "model-a", client, maxTurns,
+      }) },
+    );
+    const running = (async () => {
+      for await (const _ of engine.submitMessage("run")) { /* consume */ }
+    })();
+    await firstStarted;
+    maxTurns = 2;
+    release();
+    await running;
+    expect(requests).toEqual(["model-a", "model-a"]);
+  });
+
   it("prepares a steered follow-up with the client selected for its request", async () => {
     const prepared: string[] = [];
     let release!: () => void;

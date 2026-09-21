@@ -16,6 +16,7 @@ export type AgentRequestConfiguration = {
   baseUrl?: string;
   apiFormat?: "anthropic" | "openai";
   effort?: string;
+  maxTurns?: number;
 };
 
 export type AgentRequestConfigurationPatch = Partial<AgentRequestConfiguration>;
@@ -47,6 +48,7 @@ export type QueryRequestConfiguration = {
   baseUrl?: string;
   apiFormat?: "anthropic" | "openai";
   effort?: string;
+  maxTurns?: number;
   reasoningEffort?: string;
   client: StreamingMessageClient;
   systemPrompt?: string;
