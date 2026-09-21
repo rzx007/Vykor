@@ -515,3 +515,48 @@ describe("OpenAICompatibleClient DSML tool-call recovery", () => {
     expect(events.some((event) => event.type === "tool_use_start")).toBe(false);
   });
 });
+
+describe("OpenAICompatibleClient reasoning deltas", () => {
+  function deltaClient(deltas: Array<Record<string, unknown>>) {
+    const create = vi.fn(async () => ({
+      async *[Symbol.asyncIterator]() {
+        for (const delta of deltas) {
+          yield { choices: [{ delta, finish_reason: null }] };
+        }
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      },
+    }));
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: undefined } as any);
+    client.client = { chat: { completions: { create } } } as any;
+    return client;
+  }
+
+  it("emits reasoning_content as reasoning deltas", async () => {
+    const client = deltaClient([
+      { reasoning_content: "先看目录。" },
+      { reasoning_content: "再读文件。" },
+      { content: "完成。" },
+    ]);
+    const events: any[] = [];
+    for await (const event of client.streamMessage({
+      model: "deepseek-v4.1-flash",
+      messages: [{ type: "user", content: "hi" }],
+    })) {
+      events.push(event);
+    }
+
+    const reasoning = events
+      .filter((event) => event.type === "reasoning_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(reasoning).toBe("先看目录。再读文件。");
+    expect(events.filter((event) => event.type === "reasoning_delta")[0]!.source).toBe(
+      "reasoning_content",
+    );
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toBe("完成。");
+  });
+});

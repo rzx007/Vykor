@@ -277,6 +277,11 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
           const reasoningPiece = (delta as any).reasoning_content;
           if (reasoningPiece) {
             collectedReasoning += reasoningPiece;
+            yield {
+              type: "reasoning_delta",
+              delta: reasoningPiece,
+              source: "reasoning_content",
+            };
           }
 
           if (delta.tool_calls) {
