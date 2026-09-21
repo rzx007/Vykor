@@ -88,6 +88,17 @@ function bigConversation(turns: number): Message[] {
 
 const SMALL_MAX = 20_000 + 13_000 + 100; // threshold ~= 100 tokens
 
+it("uses the newly selected model's context window on the next compaction", async () => {
+  const svc = new CompactService(100_000, 1);
+  const messages = bigConversation(15);
+  expect(await svc.autoCompact(messages)).toEqual(messages);
+
+  svc.setContextWindow(SMALL_MAX);
+  const compacted = await svc.autoCompact(messages);
+  expect(compacted).not.toEqual(messages);
+  expect(compacted.length).toBeLessThan(messages.length);
+});
+
 // ---------------------------------------------------------------------------
 // 0. microCompact tool-result clearing policy
 // ---------------------------------------------------------------------------

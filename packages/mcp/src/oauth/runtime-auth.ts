@@ -8,7 +8,7 @@ import { McpOAuthError } from "./errors.js";
 import type { McpOAuthCredentialStore } from "./login.js";
 import { timedFetch, tokenScopes } from "./protocol.js";
 import { assertScopeSubset } from "./security.js";
-import { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
+import { oauthScopesChanged, resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
 
 export type McpConnectionAction = "connect" | "disconnect" | "ignore";
 
@@ -22,6 +22,7 @@ export class McpOAuthRuntime {
     fetch?: typeof fetch;
     allowLoopbackHttp?: boolean;
     clock?: () => number;
+    getConfiguredScopes?: (name: string, config: McpRemoteServerConfig) => Promise<readonly string[] | undefined>;
   }) {
     this.fetchImpl = options.fetch ?? fetch;
     this.clock = options.clock ?? (() => Date.now());
@@ -37,7 +38,9 @@ export class McpOAuthRuntime {
     const staticMode = resolveMcpAuthMode(config, undefined);
     if (staticMode === "bearer" || staticMode === "custom") return "ignore";
     const credential = await this.options.store.get(name);
-    const status = resolveMcpOAuthStatus(config, credential, this.clock());
+    if (!credential) return "disconnect";
+    const scopes = await this.configuredScopes(name, config);
+    const status = resolveMcpOAuthStatus({ ...config, oauth: { ...config.oauth, scopes: scopes && [...scopes] } }, credential, this.clock());
     return (status === "valid" || status === "expired-refreshable") && credential?.serverUrl === config.url
       ? "connect"
       : "disconnect";
@@ -64,10 +67,19 @@ export class McpOAuthRuntime {
       await this.markReauthentication(name);
       throw new McpOAuthError("oauth-binding-changed", "OAuth credential is bound to another MCP endpoint");
     }
+    if (oauthScopesChanged(await this.configuredScopes(name, config), credential.tokens.scope)) {
+      throw new McpOAuthError("oauth-reauthentication-required", `MCP OAuth scopes changed; run ohs mcp login ${name} --scopes with the configured scopes`);
+    }
     if (!credential.tokens.expiresAt || credential.tokens.expiresAt - this.clock() > 30_000) {
       return credential.tokens.accessToken || undefined;
     }
     return this.refreshOnce(name, config, credential, signal);
+  }
+
+  private async configuredScopes(name: string, config: McpRemoteServerConfig): Promise<readonly string[] | undefined> {
+    return this.options.getConfiguredScopes
+      ? await this.options.getConfiguredScopes(name, config)
+      : config.oauth?.scopes;
   }
 
   createFetch(name: string, config: McpRemoteServerConfig): typeof fetch {

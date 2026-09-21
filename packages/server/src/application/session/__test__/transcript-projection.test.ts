@@ -71,6 +71,24 @@ function createInput(
 }
 
 describe("SessionTranscriptProjection", () => {
+  it("records the actual request configuration on the assistant message", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store as any);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+    state.requestConfiguration = {
+      revision: 2, model: "model-b", provider: "provider-b", effort: "high",
+    };
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "answer" });
+    expect(store.createMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: "assistant",
+      metadata: {
+        requestConfiguration: {
+          revision: 2, model: "model-b", provider: "provider-b", effort: "high",
+        },
+      },
+    }));
+  });
+
   it("does not project an internal input as a user message", () => {
     const store = createStore();
     const projection = new SessionTranscriptProjection(store as any);

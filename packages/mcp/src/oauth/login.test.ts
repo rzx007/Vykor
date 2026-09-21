@@ -102,6 +102,25 @@ describe("loginMcpOAuth", () => {
     expect(store.value).toBeUndefined();
   });
 
+  it("verifies a changed explicit scope using the requested scopes rather than old settings", async () => {
+    const store = memoryStore();
+    let verifiedScopes: string[] | undefined;
+
+    await loginMcpOAuth({
+      serverName: "linear",
+      config: { type: "http", url: "https://mcp.test/mcp", oauth: { scopes: ["write"] } },
+      scopes: ["read"],
+      store,
+    }, {
+      fetch: loginFetch(),
+      callbackFactory: callbackFactory([]) as any,
+      openBrowser: async () => undefined,
+      verifyConnection: async ({ config }) => { verifiedScopes = config.oauth?.scopes; },
+    });
+
+    expect(verifiedScopes).toEqual(["read"]);
+  });
+
   it("revokes the in-memory candidate and leaves the shared store untouched when verification fails", async () => {
     const existing = memoryStore(undefined);
     const revoked: string[] = [];

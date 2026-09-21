@@ -180,7 +180,7 @@ async function performLogin(
         try {
           await deps.verifyConnection({
             serverName: input.serverName,
-            config: input.config,
+            config: { ...input.config, oauth: { ...input.config.oauth, scopes: configured } },
             store: candidateStore,
           });
           verified = true;

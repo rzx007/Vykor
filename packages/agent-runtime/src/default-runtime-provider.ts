@@ -58,7 +58,10 @@ export async function resolveApiClient(
   const apiKey = await resolveApiKey(settings, configuration, resolvedStorage);
   const providerName = configuration?.provider ?? settings.provider;
   const customProvider = resolveCustomProviderRuntime(settings, providerName);
-  const rawBaseURL = configuration?.baseUrl ?? customProvider?.baseURL ?? settings.baseUrl;
+  const rawBaseURL = configuration?.baseUrl === ""
+    ? customProvider?.baseURL
+    : configuration?.baseUrl ?? customProvider?.baseURL
+      ?? (providerName === settings.provider ? settings.baseUrl : undefined);
   const baseURL = providerName && !customProvider
     ? resolveProviderScopedBaseUrl(rawBaseURL, providerName)
     : rawBaseURL;

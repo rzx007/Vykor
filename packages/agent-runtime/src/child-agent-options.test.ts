@@ -169,6 +169,25 @@ describe("deriveChildAgentOptions", () => {
     ).toBeUndefined();
   });
 
+  it("does not hand the parent session's configuration reader to a child", () => {
+    const parentReader = { read: async () => ({ revision: 0, configuration: { model: "parent" } }) };
+    const childReader = { read: async () => ({ revision: 0, configuration: { model: "child" } }) };
+    const options = deriveChildAgentOptions({
+      configuration: {
+        model: "parent",
+        requestConfigurationStore: parentReader,
+        requestConfigurationStoreForSession: (sessionId) =>
+          sessionId === "child-session" ? childReader : undefined,
+      },
+      settings: {} as any,
+      child: { description: "work", prompt: "work", agent: "worker", cwd: "/repo" },
+      cwd: "/repo",
+      sessionId: "child-session",
+    });
+    expect(options.requestConfigurationStore).toBe(childReader);
+    expect(options.requestConfigurationStore).not.toBe(parentReader);
+  });
+
   it("drops the parent reasoning effort when the child switches models", () => {
     const options = deriveChildAgentOptions({
       configuration: {

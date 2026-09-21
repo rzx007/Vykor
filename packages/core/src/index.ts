@@ -145,6 +145,12 @@ export type {
   AgentRunScope,
   AgentSerializedError,
   AgentSteerInput,
+  AgentRequestConfiguration,
+  AgentRequestConfigurationPatch,
+  AgentRequestConfigurationSnapshot,
+  AgentRequestConfigurationReader,
+  AgentRequestConfigurationStore,
+  QueryRequestConfiguration,
 } from "./types/runtime";
 
 export { AgentChildBudgetExceededError } from "./types/runtime";

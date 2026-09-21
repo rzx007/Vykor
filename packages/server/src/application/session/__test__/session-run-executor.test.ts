@@ -133,6 +133,7 @@ describe("SessionRunExecutor", () => {
       metadata: { requestedBy: "test", traceId: "trace-1" },
       ids: { inputId: "input-1", runId: "run-1", traceId: "trace-1" },
     });
+    expect(agent.setModel).not.toHaveBeenCalled();
     expect(registerHandle).toHaveBeenCalledWith(handle);
     expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", agent);
     expect(closeIfStale).toHaveBeenCalledWith("s1");

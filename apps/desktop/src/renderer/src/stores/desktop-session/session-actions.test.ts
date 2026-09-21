@@ -1012,6 +1012,30 @@ describe("desktop session actions", () => {
     })
   })
 
+  it("keeps the newer session model when update responses arrive out of order", async () => {
+    const view = emptySessionView("session-model-race")
+    const resolvers: Array<(value: typeof view.session) => void> = []
+    vi.stubGlobal("window", { desktop: { sessions: {
+      updateModel: () => new Promise<typeof view.session>((resolve) => resolvers.push(resolve)),
+      getContextUsage: vi.fn(async () => null),
+    } } })
+    useDesktopSessionStore.setState({
+      activeSessionId: view.session.id,
+      sessionView: view,
+      sessions: [view.session],
+    })
+    const select = (id: string) => useDesktopSessionStore.getState().updateSessionModel(view.session.id, {
+      id, label: id, provider: "Provider", providerName: "provider",
+    })
+    const older = select("model-b")
+    const newer = select("model-c")
+    resolvers[1]!({ ...view.session, model: "model-c", metadata: { runtime: { model: "model-c", provider: "provider" } } })
+    await newer
+    resolvers[0]!({ ...view.session, model: "model-b", metadata: { runtime: { model: "model-b", provider: "provider" } } })
+    await older
+    expect(useDesktopSessionStore.getState().selectedModel).toBe("model-c")
+  })
+
   it("does not let an older same-session usage refresh overwrite a newer response", async () => {
     const view = emptySessionView("session-usage-race")
     const resolvers: Array<(value: unknown) => void> = []

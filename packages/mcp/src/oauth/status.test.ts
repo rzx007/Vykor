@@ -24,6 +24,14 @@ describe("resolveMcpOAuthStatus", () => {
       now,
     )).toBe("reauthentication-required");
   });
+
+  it("requires reauthorization for any configured scope-set change", () => {
+    const granted = { ...credential, tokens: { ...credential.tokens, scope: ["read", "write"] } };
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["write", "read"] } }, granted, now)).toBe("expired-refreshable");
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["read"] } }, granted, now)).toBe("reauthentication-required");
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["read", "write", "admin"] } }, granted, now)).toBe("reauthentication-required");
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl }, granted, now)).toBe("expired-refreshable");
+  });
 });
 
 describe("resolveMcpAuthMode", () => {

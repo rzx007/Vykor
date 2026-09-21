@@ -8,6 +8,7 @@ import type {
   Settings,
   ToolDefinition,
 } from "@openharness/core";
+import { loadSettings } from "@openharness/core";
 import {
   createMcpServerIdentity,
   McpClientManager,
@@ -72,6 +73,13 @@ export async function installRuntimeIntegrations(
   const credentialStore = new McpOAuthCredentialStore();
   const mcpOAuthRuntime = new McpOAuthRuntime({
     store: credentialStore,
+    getConfiguredScopes: async (name, config) => {
+      const latest = await loadSettings(undefined, { includeProject: true, projectRoot: options.cwd });
+      const current = latest.mcpServers?.[name];
+      return current?.type === "http" && current.url === config.url
+        ? current.oauth?.scopes
+        : config.oauth?.scopes;
+    },
   });
   const mcpManager = new McpClientManager({
     cwd: options.executionEnvironment?.workspace.executionRoot ?? options.cwd,

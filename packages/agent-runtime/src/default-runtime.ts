@@ -1,4 +1,4 @@
-import type { RunCapabilityView, Settings } from "@openharness/core";
+import type { AgentRequestConfigurationReader, RunCapabilityView, Settings, StreamingMessageClient } from "@openharness/core";
 import {
   QueryEngine,
   RuntimeBuilder,
@@ -57,6 +57,7 @@ interface OpenHarnessRuntimeOptions {
   sessionId?: string;
   capabilities?: ResolvedAgentCapabilities;
   executionEnvironment?: ExecutionEnvironmentHandle;
+  requestConfigurationStore?: AgentRequestConfigurationReader;
 }
 
 /**
@@ -210,7 +211,10 @@ export async function createOpenHarnessRuntime(
   const runtimeModel = resolveRuntimeModel(settings, configuration);
 
   // 自定义 prompt 优先。默认提示仅列普通 Skill；有 Run View 时按该次范围重建摘要。
-  const buildSystemPrompt = (skillsList: Array<{ name: string; description: string }> | undefined) =>
+  const buildSystemPrompt = (
+    skillsList: Array<{ name: string; description: string }> | undefined,
+    effort = configuration.effort ?? settings.effort,
+  ) =>
     buildRuntimeSystemPrompt({
       customPrompt: settings.systemPrompt,
       cwd: hostCwd,
@@ -218,7 +222,7 @@ export async function createOpenHarnessRuntime(
       permissionMode: mode,
       workStyle: settings.workStyle,
       fastMode: configuration.fastMode ?? settings.fastMode,
-      effort: configuration.effort ?? settings.effort,
+      effort,
       passes: settings.passes,
       includeBackgroundShell,
       includeDelegation,
@@ -227,6 +231,75 @@ export async function createOpenHarnessRuntime(
   const systemPrompt = configuration.systemPrompt ?? await buildSystemPrompt(
     options.skillRegistry?.getNonPluginSkills().filter((skill) => !skill.disableModelInvocation),
   );
+  let resolvedClient: StreamingMessageClient | undefined = apiClient;
+  let resolvedClientKey: string | undefined = configuration.client
+    ? undefined
+    : JSON.stringify([
+      configuration.provider ?? settings.provider,
+      configuration.baseUrl ?? settings.baseUrl,
+      configuration.apiFormat ?? settings.apiFormat,
+      runtimeModel,
+    ]);
+  const resolveRequestConfiguration = options.requestConfigurationStore
+    ? async (input: { capabilityView?: RunCapabilityView }) => {
+      const snapshot = await options.requestConfigurationStore!.read();
+      const requestConfiguration = {
+        ...configuration,
+        ...snapshot.configuration,
+        baseUrl: snapshot.configuration.baseUrl,
+      };
+      const effort = snapshot.configuration.effort;
+      const prompt = configuration.systemPrompt ?? await buildSystemPrompt(
+        input.capabilityView
+          ? [...input.capabilityView.skills.values()].map((binding) => binding.definition)
+              .filter((skill) => !skill.disableModelInvocation)
+          : options.skillRegistry?.getNonPluginSkills()
+              .filter((skill) => !skill.disableModelInvocation),
+        effort,
+      );
+      const agents = input.capabilityView
+        ? [...input.capabilityView.agents].map(([name, { definition }]) =>
+            JSON.stringify({ name, description: definition.description }))
+        : [];
+      const systemPromptForRequest = agents.length
+        ? `${prompt}\n\n# Available agents\nUse Agent with subagentType set to one of these names:\n${agents.join("\n")}`
+        : prompt;
+      const clientKey = JSON.stringify([
+        requestConfiguration.provider,
+        requestConfiguration.baseUrl,
+        requestConfiguration.apiFormat,
+        requestConfiguration.model,
+      ]);
+      if (!configuration.client && clientKey !== resolvedClientKey) {
+        resolvedClient = await resolveApiClient(
+          settings,
+          requestConfiguration,
+          storage,
+          options.sessionId,
+        );
+        resolvedClientKey = clientKey;
+      }
+      const declaredEfforts = await configuration.resolveReasoningEfforts?.({
+        provider: requestConfiguration.provider,
+        model: requestConfiguration.model,
+      });
+      const reasoningEffort = effort && (
+        configuration.client || declaredEfforts?.includes(effort)
+      ) ? effort : undefined;
+      const contextWindow = await configuration.resolveModelContextWindow?.({
+        provider: requestConfiguration.provider,
+        model: requestConfiguration.model,
+      });
+      return {
+        revision: snapshot.revision,
+        ...snapshot.configuration,
+        client: resolvedClient!,
+        systemPrompt: systemPromptForRequest,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(contextWindow ? { contextWindow } : {}),
+      };
+    }
+    : undefined;
 
   const engineOptions = {
     maxTurns: configuration.maxTurns ?? settings.maxTurns,
@@ -238,6 +311,7 @@ export async function createOpenHarnessRuntime(
     settings,
     executionEnvironment: options.executionEnvironment,
     skillRegistry: options.skillRegistry,
+    ...(resolveRequestConfiguration ? { resolveRequestConfiguration } : {}),
     systemPromptForRun: async (view: RunCapabilityView) => {
       const prompt = configuration.systemPrompt ?? await buildSystemPrompt(
         [...view.skills.values()].map((binding) => binding.definition).filter((skill) => !skill.disableModelInvocation),

@@ -9,6 +9,50 @@ import type { CompactContextProvider } from "../engine/compact-service";
 import type { AgentTerminalHost } from "@openharness/terminal";
 import type { AgentJobHost } from "@openharness/jobs";
 
+/** The user-selected values that are safe to change between model requests. */
+export type AgentRequestConfiguration = {
+  model: string;
+  provider?: string;
+  baseUrl?: string;
+  apiFormat?: "anthropic" | "openai";
+  effort?: string;
+};
+
+export type AgentRequestConfigurationPatch = Partial<AgentRequestConfiguration>;
+
+export type AgentRequestConfigurationSnapshot = {
+  revision: number;
+  configuration: Readonly<AgentRequestConfiguration>;
+};
+
+export interface AgentRequestConfigurationReader {
+  read(): Promise<AgentRequestConfigurationSnapshot>;
+}
+
+export interface AgentRequestConfigurationStore extends AgentRequestConfigurationReader {
+  update(
+    patch: AgentRequestConfigurationPatch,
+  ): Promise<AgentRequestConfigurationSnapshot>;
+  restoreIfCurrent(
+    failedRevision: number,
+    previous: Readonly<AgentRequestConfiguration>,
+  ): Promise<AgentRequestConfigurationSnapshot | undefined>;
+}
+
+/** A fully prepared model request captured at one request boundary. */
+export type QueryRequestConfiguration = {
+  revision: number;
+  model: string;
+  provider?: string;
+  baseUrl?: string;
+  apiFormat?: "anthropic" | "openai";
+  effort?: string;
+  reasoningEffort?: string;
+  client: StreamingMessageClient;
+  systemPrompt?: string;
+  contextWindow?: number;
+};
+
 export interface AgentPermissionRequest {
   toolName: string;
   reason?: string;
@@ -295,6 +339,7 @@ export type AgentEventInput =
         childId: string;
         sessionId: string;
         spawn: AgentChildSpawnInput;
+        parentRequestConfiguration?: AgentRequestConfiguration;
         cwd: string;
         worktree?: { path: string; branch: string };
       };
@@ -464,6 +509,7 @@ export interface QueryEngine {
     },
   ): AsyncIterable<StreamEvent>;
   getHistory(): Message[];
+  getAppliedRequestConfiguration?(): QueryRequestConfiguration | undefined;
   getContextUsagePromptSource(): {
     systemPrompt?: string;
     memoryReminderText?: string;
@@ -504,6 +550,11 @@ export interface QueryEngineOptions {
   model?: string;
   maxTokens?: number;
   reasoningEffort?: string;
+  /** Resolves a stable model/client pair before each model request. */
+  resolveRequestConfiguration?: (input: {
+    signal?: AbortSignal;
+    capabilityView?: RunCapabilityView;
+  }) => Promise<QueryRequestConfiguration>;
   /** Default 300000 ms; can also be set with OPENHARNESS_TOOL_TIMEOUT_MS. */
   toolTimeoutMs?: number;
   settings?: Settings;

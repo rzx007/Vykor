@@ -4,6 +4,14 @@ import type {
   McpOAuthCredentialRecord,
   McpServerConfig,
 } from "@openharness/core";
+import { uniqueScopes } from "./security.js";
+
+export function oauthScopesChanged(configured: readonly string[] | undefined, granted: readonly string[]): boolean {
+  if (configured === undefined) return false;
+  const expected = new Set(uniqueScopes(configured));
+  const actual = new Set(uniqueScopes(granted));
+  return expected.size !== actual.size || [...expected].some(scope => !actual.has(scope));
+}
 
 /**
  * Resolve how an MCP server authenticates.
@@ -41,6 +49,7 @@ export function resolveMcpOAuthStatus(
 ): McpOAuthAuthStatus {
   if (config.type === "stdio" || config.type === "sse") return "unsupported";
   if (config.headers && Object.keys(config.headers).some(key => key.toLowerCase() === "authorization")) return "static";
+  if (credential && oauthScopesChanged(config.oauth?.scopes, credential.tokens.scope)) return "reauthentication-required";
   return credential ? credentialStatus(config.url, credential, now) : "not-logged-in";
 }
 

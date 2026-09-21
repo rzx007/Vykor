@@ -1,4 +1,4 @@
-import { readSessionRuntimeConfig, type SessionRecord } from "@openharness/protocol";
+import type { SessionRecord } from "@openharness/protocol";
 import type { ProviderInputCapabilities } from "@openharness/api";
 import { PluginPreparationError } from "@openharness/agent-runtime";
 import type { ContentBlock, ModelInputCapabilities } from "@openharness/core";
@@ -150,7 +150,6 @@ export class SessionRunExecutor {
       // 先拿到实际 Agent，路由才能看见 allow/deny 过滤后的工具和真实宿主能力。
       agentTouched = true;
       const agent = await this.context.agentPool.acquireSession(sessionId);
-      agent.setModel(readSessionRuntimeConfig(session).model);
       const pluginId = typeof storedRun?.metadata?.pluginId === "string" ? storedRun.metadata.pluginId : undefined;
       const capabilityView = agent.createRunCapabilityView?.(pluginId);
       if (pluginId && !capabilityView) throw new Error("Plugin capability view is unavailable");

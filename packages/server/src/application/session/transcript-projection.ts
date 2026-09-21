@@ -22,6 +22,12 @@ export type ActiveTranscriptProjectionState = {
   sessionId: string;
   runId: string;
   inputId: string;
+  requestConfiguration?: {
+    revision: number;
+    model: string;
+    provider?: string;
+    effort?: string;
+  };
   assistantMessageId?: string;
   assistantTurnCompleted: boolean;
   activeTextPartId?: string;
@@ -412,6 +418,9 @@ export class SessionTranscriptProjection {
       sessionId: state.sessionId,
       role: "assistant",
       runId: state.runId,
+      ...(state.requestConfiguration
+        ? { metadata: { requestConfiguration: state.requestConfiguration } }
+        : {}),
     });
     state.assistantMessageId = message.id;
     return message.id;

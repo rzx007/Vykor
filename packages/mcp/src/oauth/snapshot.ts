@@ -7,7 +7,7 @@ import type {
   McpServerConfig,
   McpServerIdentity,
 } from "@openharness/core";
-import { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
+import { oauthScopesChanged, resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
 
 /**
  * Normalize an MCP endpoint URL.
@@ -77,10 +77,11 @@ export function buildMcpAuthServerSnapshot(
   const authMode: McpAuthMode = resolveMcpAuthMode(config, credential);
   const matchedPresence =
     config.type === "http" && credential !== undefined && credential.serverUrl === config.url;
+  const scopeChanged = matchedPresence && oauthScopesChanged(config.oauth?.scopes, credential!.tokens.scope);
   const scopes =
     config.type === "stdio"
       ? []
-      : matchedPresence
+      : matchedPresence && !scopeChanged
         ? [...credential!.tokens.scope]
         : [...(config.oauth?.scopes ?? [])];
 

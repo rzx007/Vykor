@@ -65,6 +65,12 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
   let primaryNavigationGeneration = 0
   let defaultSettingsGeneration = 0
   let contextUsageGeneration = 0
+  const runtimeConfigGeneration = new Map<string, number>()
+  const nextRuntimeConfigGeneration = (sessionId: string): number => {
+    const generation = (runtimeConfigGeneration.get(sessionId) ?? 0) + 1
+    runtimeConfigGeneration.set(sessionId, generation)
+    return generation
+  }
   let defaultSettingsWrite: Promise<void> = Promise.resolve()
   const advancePrimaryNavigation = (): number => {
     primaryNavigationGeneration += 1
@@ -318,6 +324,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
     },
 
     async updateSessionModel(sessionId, model) {
+      const generation = nextRuntimeConfigGeneration(sessionId)
       const previousContextWindow =
         get().activeSessionId === sessionId ? get().contextUsageSnapshot?.contextWindow : undefined
       const session = await window.desktop.sessions.updateModel({
@@ -325,6 +332,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         model: model.id,
         provider: model.providerName,
       })
+      if (runtimeConfigGeneration.get(sessionId) !== generation) return
       set((state) => ({
         sessions: upsertSession(state.sessions, session),
         selectedModel: state.activeSessionId === sessionId ? session.model : state.selectedModel,
@@ -364,7 +372,9 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
     },
 
     async updateSessionEffort(sessionId, effort) {
+      const generation = nextRuntimeConfigGeneration(sessionId)
       const session = await window.desktop.sessions.updateEffort({ sessionId, effort })
+      if (runtimeConfigGeneration.get(sessionId) !== generation) return
       set((state) => ({
         sessions: upsertSession(state.sessions, session),
         selectedEffort:

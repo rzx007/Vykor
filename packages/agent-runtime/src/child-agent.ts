@@ -79,6 +79,7 @@ interface AgentChildBudgetReservation {
 export interface AgentChildManagerOptions {
   settings: Settings;
   configuration: OpenHarnessAgentConfiguration;
+  configurationForChild?: () => OpenHarnessAgentConfiguration;
   capabilityOverrides?: AgentCapabilityOverrides;
   effects?: AgentEffectOverrides;
   cwd: string;
@@ -288,6 +289,8 @@ export class AgentChildManager implements AgentChildDirectory {
       lease = { cwd: input.cwd, release: async () => {} };
     }
     const record = {} as ChildRecord;
+    const parentRequestConfiguration = this.options.configurationForChild?.()
+      ?? this.options.configuration;
     const handle = new ChildHandle(this, () => record);
     Object.assign(record, {
       id: childId,
@@ -297,7 +300,7 @@ export class AgentChildManager implements AgentChildDirectory {
       parentScope,
       lease,
       createAgent: () => this.options.createAgent(deriveChildAgentOptions({
-        configuration: this.options.configuration,
+        configuration: parentRequestConfiguration,
         settings: this.options.settings,
         capabilityOverrides: this.options.capabilityOverrides,
         effects: this.options.effects,
@@ -327,6 +330,16 @@ export class AgentChildManager implements AgentChildDirectory {
           childId,
           sessionId,
           spawn: input,
+          ...(parentRequestConfiguration.model ? {
+            parentRequestConfiguration: {
+              model: parentRequestConfiguration.model,
+              ...(parentRequestConfiguration.provider ? { provider: parentRequestConfiguration.provider } : {}),
+              ...(parentRequestConfiguration.baseUrl !== undefined
+                ? { baseUrl: parentRequestConfiguration.baseUrl } : {}),
+              ...(parentRequestConfiguration.apiFormat ? { apiFormat: parentRequestConfiguration.apiFormat } : {}),
+              ...(parentRequestConfiguration.effort !== undefined ? { effort: parentRequestConfiguration.effort } : {}),
+            },
+          } : {}),
           cwd: lease.cwd,
           ...(lease.worktree ? { worktree: lease.worktree } : {}),
         },

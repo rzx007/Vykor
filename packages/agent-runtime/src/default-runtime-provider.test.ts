@@ -47,6 +47,20 @@ function customProviderSettings(
 }
 
 describe("resolveApiClient request header templates", () => {
+  it("does not carry the old provider URL into a new provider", async () => {
+    const client = await resolveApiClient(
+      {
+        ...BASE_SETTINGS,
+        apiKey: "test-key",
+        provider: "openai",
+        baseUrl: "https://old-gateway.example/v1",
+      },
+      { provider: "deepseek", model: "deepseek-chat" },
+    );
+    const baseURL = (client as OpenAICompatibleClient).client._options.baseURL;
+    expect(baseURL).not.toBe("https://old-gateway.example/v1");
+  });
+
   it.each([
     [undefined, "office-gateway"],
     ["models.dev", "catalog-gateway"],

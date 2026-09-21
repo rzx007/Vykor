@@ -55,6 +55,45 @@ describe("McpOAuthRuntime", () => {
     expect(store.get).not.toHaveBeenCalled();
   });
 
+  it("disconnects after logout even when current settings cannot be read", async () => {
+    const runtime = new McpOAuthRuntime({
+      store: memoryStore(),
+      getConfiguredScopes: async () => { throw new Error("settings unavailable"); },
+    });
+
+    await expect(runtime.getConnectionAction("linear", {
+      type: "http", url: "https://mcp.test/mcp", oauth: { scopes: ["read"] },
+    })).resolves.toBe("disconnect");
+  });
+
+  it("blocks an active connection before sending an old token after configured scopes change", async () => {
+    const store = memoryStore({ ...makeCredential(), tokens: { ...makeCredential().tokens, expiresAt: 200_000 } });
+    let configuredScopes = ["read"];
+    const fetch = vi.fn(async () => new Response("ok", { status: 200 }));
+    const runtime = new McpOAuthRuntime({
+      store,
+      fetch: fetch as typeof globalThis.fetch,
+      clock: () => 100_000,
+      getConfiguredScopes: async () => configuredScopes,
+    });
+    const config = { type: "http" as const, url: "https://mcp.test/mcp", oauth: { scopes: ["read"] } };
+    const request = runtime.createFetch("linear", config);
+
+    expect((await request(config.url)).status).toBe(200);
+    configuredScopes = ["write"];
+    await expect(request(config.url)).rejects.toMatchObject({
+      code: "oauth-reauthentication-required",
+      message: expect.stringContaining("ohs mcp login linear"),
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await expect(runtime.getConnectionAction("linear", config)).resolves.toBe("disconnect");
+
+    await store.set("linear", { ...makeCredential(), tokens: { ...makeCredential().tokens, accessToken: "new", scope: ["write"], expiresAt: 200_000 } });
+    expect((await request(config.url)).status).toBe(200);
+    await expect(runtime.getConnectionAction("linear", config)).resolves.toBe("connect");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it("coalesces refresh and rejects expanded refresh scopes", async () => {
     const store = memoryStore(makeCredential());
     const fetch = vi.fn(async () => new Response(JSON.stringify({ access_token: "new", refresh_token: "new-refresh", token_type: "Bearer", scope: "read write" }), { status: 200, headers: { "content-type": "application/json" } })) as unknown as typeof globalThis.fetch;

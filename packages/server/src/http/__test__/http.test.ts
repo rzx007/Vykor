@@ -2616,6 +2616,7 @@ describe("OpenHarnessHttpServer", () => {
           session: { metadata: Record<string, unknown> };
         };
         expect(body.session.metadata).toEqual({
+          runtimeRevision: 1,
           runtime: {
             model: "m",
             maxTurns: 9,
