@@ -28,6 +28,7 @@ export type ActiveTranscriptProjectionState = {
   activeTextPhase?: AssistantMessagePhase;
   activeReasoningPartId?: string;
   reasoningChars?: number;
+  reasoningTruncated?: boolean;
   toolParts: Map<string, ActiveToolPart>;
 };
 
@@ -340,6 +341,7 @@ export class SessionTranscriptProjection {
     });
     delete state.activeReasoningPartId;
     delete state.reasoningChars;
+    delete state.reasoningTruncated;
   }
 
   private takeReasoningDelta(
@@ -347,12 +349,17 @@ export class SessionTranscriptProjection {
     delta: string,
   ): string {
     const used = state.reasoningChars ?? 0;
-    if (used >= REASONING_PART_CHAR_LIMIT) return "";
+    if (used >= REASONING_PART_CHAR_LIMIT) {
+      if (state.reasoningTruncated) return "";
+      state.reasoningTruncated = true;
+      return REASONING_TRUNCATION_NOTICE;
+    }
     if (used + delta.length <= REASONING_PART_CHAR_LIMIT) {
       state.reasoningChars = used + delta.length;
       return delta;
     }
     state.reasoningChars = REASONING_PART_CHAR_LIMIT;
+    state.reasoningTruncated = true;
     return delta.slice(0, REASONING_PART_CHAR_LIMIT - used) + REASONING_TRUNCATION_NOTICE;
   }
 

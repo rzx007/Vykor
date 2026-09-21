@@ -670,4 +670,31 @@ describe("SessionTranscriptProjection", () => {
       partId: "p4",
     }));
   });
+
+  it("appends the truncation notice once after the reasoning part reaches the char limit", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "x".repeat(1_000_000),
+      source: "think",
+    });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "overflow",
+      source: "think",
+    });
+    projection.projectStreamEvent(state, {
+      type: "reasoning_delta",
+      delta: "more",
+      source: "think",
+    });
+
+    const deltas = store.appendMessagePartDelta.mock.calls.map(([input]) => input);
+    expect(deltas).toHaveLength(2);
+    expect(deltas[0].delta).toHaveLength(1_000_000);
+    expect(deltas[1].delta).toBe("\n\n…（思考内容过长，已截断）");
+  });
 });
