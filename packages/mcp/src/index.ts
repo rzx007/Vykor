@@ -83,6 +83,31 @@ export interface McpToolCallResult {
   isError?: boolean;
 }
 
+/**
+ * A connection that has finished discovery but is not yet visible through the
+ * manager's current-connection maps. Tool Definitions are bound to the staged
+ * client, so they cannot reach the new connection until activation.
+ */
+export interface PreparedMcpConnection {
+  readonly name: string;
+  readonly connection: McpConnection;
+  readonly client: Client;
+  readonly transport: Transport;
+  readonly tools: ToolDefinition[];
+}
+
+/**
+ * Result of an atomic activation.
+ *
+ * `committed: true` means the staged connection is current and its tools were
+ * committed; `closePrevious()` releases the replaced connection. `committed:
+ * false` means the tool commit failed and the previous connection was restored;
+ * `discardPrepared()` releases the never-published staged connection.
+ */
+export type McpConnectionActivation =
+  | { committed: true; closePrevious(): Promise<void> }
+  | { committed: false; error: unknown; discardPrepared(): Promise<void> };
+
 export class McpClientManager {
   private connections = new Map<string, McpConnection>();
   private clients = new Map<string, Client>();
@@ -102,7 +127,7 @@ export class McpClientManager {
     const transportKind: McpTransportKind =
       typeof kind === "string" ? kind : "stdio";
 
-    const connection: McpConnection = {
+    const placeholder: McpConnection = {
       name,
       config,
       status: "connecting",
@@ -114,34 +139,75 @@ export class McpClientManager {
       tools: [],
       resources: [],
     };
-    this.connections.set(name, connection);
+    this.connections.set(name, placeholder);
 
     if (typeof kind !== "string") {
       // Invalid config: fail this connection in isolation, do not throw.
-      connection.status = "error";
-      connection.error = new Error(kind.error);
-      return connection;
+      placeholder.status = "error";
+      placeholder.error = new Error(kind.error);
+      return placeholder;
     }
 
     try {
-      const transport = this.createTransport(name, kind, config);
-      this.transports.set(name, transport);
+      const prepared = await this.prepareConnection(name, config);
+      this.connections.set(name, prepared.connection);
+      this.clients.set(name, prepared.client);
+      this.transports.set(name, prepared.transport);
+      return prepared.connection;
+    } catch (err) {
+      placeholder.status = "error";
+      placeholder.error = err instanceof Error ? err : new Error(String(err));
+      this.clients.delete(name);
+      this.transports.delete(name);
+      return placeholder;
+    }
+  }
 
-      const client = new Client(
-        { name: "openharness", version: "0.1.0" },
-        { capabilities: {} }
-      );
-      client.onclose = () => {
-        if (this.clients.get(name) !== client) return;
-        connection.status = "disconnected";
-        connection.error = new Error(`MCP connection closed: ${name}`);
-        connection.tools = [];
-        connection.resources = [];
-        this.clients.delete(name);
-        this.transports.delete(name);
-      };
+  /**
+   * Connect and discover a server without publishing it to the current maps.
+   *
+   * On failure the staged client is closed and the original error is thrown.
+   * Callers must either activate the result or call `discardPrepared()`.
+   */
+  async prepareConnection(
+    name: string,
+    config: McpServerConfig,
+  ): Promise<PreparedMcpConnection> {
+    const kind = resolveTransportKind(config);
+    if (typeof kind !== "string") throw new Error(kind.error);
+
+    const connection: McpConnection = {
+      name,
+      config,
+      status: "connecting",
+      transport: kind,
+      authConfigured:
+        kind === "stdio"
+          ? !!config.env
+          : !!config.headers || (kind === "http" && !!this.options.oauthRuntime),
+      tools: [],
+      resources: [],
+    };
+
+    const transport = this.createTransport(name, kind, config);
+    const client = new Client(
+      { name: "openharness", version: "0.1.0" },
+      { capabilities: {} }
+    );
+    let closed = false;
+    client.onclose = () => {
+      closed = true;
+      if (this.clients.get(name) !== client) return;
+      connection.status = "disconnected";
+      connection.error = new Error(`MCP connection closed: ${name}`);
+      connection.tools = [];
+      connection.resources = [];
+      this.clients.delete(name);
+      this.transports.delete(name);
+    };
+
+    try {
       await client.connect(transport);
-      this.clients.set(name, client);
 
       const toolsResult = await client.listTools().catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -160,7 +226,7 @@ export class McpClientManager {
         return { resources: [] };
       });
 
-      const tools: McpToolInfo[] = (toolsResult.tools as any[]).map((t) => ({
+      connection.tools = (toolsResult.tools as any[]).map((t) => ({
         serverName: name,
         name: t.name,
         description: t.description ?? "",
@@ -170,27 +236,69 @@ export class McpClientManager {
         },
       }));
 
-      const resources: McpResourceInfo[] = (resourcesResult.resources as any[]).map(
-        (r) => ({
-          serverName: name,
-          name: r.name ?? String(r.uri),
-          uri: String(r.uri),
-          description: r.description ?? "",
-        })
-      );
+      connection.resources = (resourcesResult.resources as any[]).map((r) => ({
+        serverName: name,
+        name: r.name ?? String(r.uri),
+        uri: String(r.uri),
+        description: r.description ?? "",
+      }));
 
-      if (this.clients.get(name) !== client) throw connection.error ?? new Error(`MCP connection closed: ${name}`);
-      connection.tools = tools;
-      connection.resources = resources;
+      if (closed) throw connection.error ?? new Error(`MCP connection closed: ${name}`);
       connection.status = "connected";
+      return {
+        name,
+        connection,
+        client,
+        transport,
+        tools: connection.tools.map((tool) => this.buildToolDefinition(tool, client)),
+      };
     } catch (err) {
-      connection.status = "error";
-      connection.error = err instanceof Error ? err : new Error(String(err));
-      this.clients.delete(name);
-      this.transports.delete(name);
+      await client.close().catch(() => undefined);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  /**
+   * Atomically publish a prepared connection and commit its tools.
+   *
+   * The manager maps are switched, then `commitTools` runs synchronously, all
+   * without awaiting. If the commit throws, the previous maps are restored in
+   * the same critical section and the staged resources are returned for
+   * out-of-band cleanup. No asynchronous cleanup happens inside this method.
+   */
+  activatePreparedConnection(
+    prepared: PreparedMcpConnection,
+    commitTools: (tools: ToolDefinition[]) => void,
+  ): McpConnectionActivation {
+    const { name } = prepared;
+    const previousConnection = this.connections.get(name);
+    const previousClient = this.clients.get(name);
+    const previousTransport = this.transports.get(name);
+
+    this.connections.set(name, prepared.connection);
+    this.clients.set(name, prepared.client);
+    this.transports.set(name, prepared.transport);
+
+    try {
+      commitTools(prepared.tools);
+    } catch (error) {
+      if (previousConnection) this.connections.set(name, previousConnection);
+      else this.connections.delete(name);
+      if (previousClient) this.clients.set(name, previousClient);
+      else this.clients.delete(name);
+      if (previousTransport) this.transports.set(name, previousTransport);
+      else this.transports.delete(name);
+      return {
+        committed: false,
+        error,
+        discardPrepared: () => this.closeClient(prepared.client),
+      };
     }
 
-    return connection;
+    return {
+      committed: true,
+      closePrevious: () => this.closeClient(previousClient),
+    };
   }
 
   /** Build the SDK transport for a resolved kind. */
@@ -237,29 +345,44 @@ export class McpClientManager {
     );
   }
 
+  /**
+   * Close one connection and clear its local maps.
+   *
+   * Local state is always cleared, and any sanitized `client.close()` error is
+   * rethrown so the caller (Runtime coordinator) can report it.
+   */
   async disconnect(name: string): Promise<void> {
     const client = this.clients.get(name);
-    if (client) {
-      try {
-        await client.close();
-      } catch { }
-    }
-    this.clients.delete(name);
-    this.transports.delete(name);
+    let failure: unknown;
+    try {
+      if (client) await client.close();
+    } catch (error) {
+      failure = error;
+    } finally {
+      this.clients.delete(name);
+      this.transports.delete(name);
 
-    const connection = this.connections.get(name);
-    if (connection) {
-      connection.status = "disconnected";
-      connection.tools = [];
-      connection.resources = [];
-      this.connections.delete(name);
+      const connection = this.connections.get(name);
+      if (connection) {
+        connection.status = "disconnected";
+        connection.tools = [];
+        connection.resources = [];
+        this.connections.delete(name);
+      }
     }
+    if (failure !== undefined) throw failure;
   }
 
   async disconnectAll(): Promise<void> {
+    const failures: unknown[] = [];
     for (const name of [...this.connections.keys()]) {
-      await this.disconnect(name);
+      try {
+        await this.disconnect(name);
+      } catch (error) {
+        failures.push(error);
+      }
     }
+    if (failures.length) throw failures[0];
   }
 
   async reconnect(name: string, config?: McpServerConfig): Promise<McpConnection | undefined> {
@@ -296,30 +419,46 @@ export class McpClientManager {
   }
 
   getAsToolDefinitions(): ToolDefinition[] {
-    return this.getConnectedTools().map(
-      (t): ToolDefinition => {
-        const { serverName, name } = t;
-        const client = this.clients.get(serverName);
-        return {
-          name: `mcp__${serverName}__${name}`,
-          description: `[${serverName}] ${t.description}`,
-          inputSchema: t.inputSchema,
-          execute: async (input, context) => {
-            if (!client || this.clients.get(serverName) !== client) {
-              return {
-                content: [{ type: "text", text: `MCP connection changed or closed: ${serverName}. Start a new Run to use the current connection.` }],
-                isError: true,
-              };
-            }
-            const result = await this.callClientTool(client, name, input, context.abortSignal);
-            return {
-              content: [{ type: "text" as const, text: result.content }],
-              isError: result.isError,
-            };
-          },
-        };
-      }
+    return this.getConnectedTools().map((tool) =>
+      this.buildToolDefinition(tool, this.clients.get(tool.serverName)),
     );
+  }
+
+  /**
+   * Build a Tool Definition bound to one concrete client.
+   *
+   * The closure refuses to call a client that is no longer the manager's
+   * current client, so a captured Run can never be redirected to a newer
+   * connection.
+   */
+  private buildToolDefinition(
+    tool: McpToolInfo,
+    client: Client | undefined,
+  ): ToolDefinition {
+    const { serverName, name } = tool;
+    return {
+      name: `mcp__${serverName}__${name}`,
+      description: `[${serverName}] ${tool.description}`,
+      inputSchema: tool.inputSchema,
+      execute: async (input, context) => {
+        if (!client || this.clients.get(serverName) !== client) {
+          return {
+            content: [{ type: "text", text: `MCP connection changed or closed: ${serverName}. Start a new Run to use the current connection.` }],
+            isError: true,
+          };
+        }
+        const result = await this.callClientTool(client, name, input, context.abortSignal);
+        return {
+          content: [{ type: "text" as const, text: result.content }],
+          isError: result.isError,
+        };
+      },
+    };
+  }
+
+  private async closeClient(client: Client | undefined): Promise<void> {
+    if (!client) return;
+    await client.close();
   }
 
   async callTool(

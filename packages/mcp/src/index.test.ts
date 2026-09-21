@@ -380,6 +380,110 @@ describe("McpClientManager", () => {
     expect(conn.resourceError).toBeDefined();
     expect(conn.resourceError!.message).toContain("connection reset");
   });
+
+  describe("staged connections", () => {
+    it("prepareConnection discovers tools without publishing the connection", async () => {
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+
+      expect(prepared.connection.status).toBe("connected");
+      expect(prepared.tools.map((tool) => tool.name)).toEqual([
+        "mcp__linear__read_file",
+        "mcp__linear__write_file",
+      ]);
+      expect(manager.getConnection("linear")).toBeUndefined();
+      expect(manager.getConnections()).toHaveLength(0);
+    });
+
+    it("closes staged resources and throws when preparation fails", async () => {
+      const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+      vi.mocked(Client).mockImplementationOnce(() => ({
+        connect: vi.fn().mockRejectedValue(new Error("spawn failed")),
+        close: vi.fn().mockResolvedValue(undefined),
+        listTools: vi.fn(),
+        listResources: vi.fn(),
+        callTool: vi.fn(),
+        readResource: vi.fn(),
+      } as any));
+
+      await expect(
+        manager.prepareConnection("bad", { type: "stdio", command: "node" }),
+      ).rejects.toThrow("spawn failed");
+      expect(manager.getConnection("bad")).toBeUndefined();
+      expect(manager.getConnections()).toHaveLength(0);
+    });
+
+    it("activates a prepared connection and closes the previous one", async () => {
+      const previous = await manager.connect("linear", { type: "stdio", command: "node" });
+      const previousClient = manager["clients"].get("linear") as { close: ReturnType<typeof vi.fn> };
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+
+      const activation = manager.activatePreparedConnection(prepared, () => undefined);
+
+      expect(activation.committed).toBe(true);
+      expect(manager.getConnection("linear")).toBe(prepared.connection);
+      expect(manager.getConnection("linear")).not.toBe(previous);
+      if (!activation.committed) throw new Error("expected commit");
+      await activation.closePrevious();
+      expect(previousClient.close).toHaveBeenCalledTimes(1);
+      expect(manager.getConnection("linear")).toBe(prepared.connection);
+    });
+
+    it("restores the previous connection when the tool commit throws", async () => {
+      const previous = await manager.connect("linear", { type: "stdio", command: "node" });
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+      const stagedClient = prepared.client as unknown as { close: ReturnType<typeof vi.fn> };
+
+      const activation = manager.activatePreparedConnection(prepared, () => {
+        throw new Error("registry rejected");
+      });
+
+      expect(activation.committed).toBe(false);
+      if (activation.committed) throw new Error("expected failure");
+      expect(activation.error).toBeInstanceOf(Error);
+      expect(manager.getConnection("linear")).toBe(previous);
+      expect(manager["clients"].get("linear")).not.toBe(prepared.client);
+      await activation.discardPrepared();
+      expect(stagedClient.close).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the new connection when closing the previous one fails", async () => {
+      await manager.connect("linear", { type: "stdio", command: "node" });
+      const previousClient = manager["clients"].get("linear") as { close: ReturnType<typeof vi.fn> };
+      previousClient.close.mockRejectedValueOnce(new Error("close failed"));
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+
+      const activation = manager.activatePreparedConnection(prepared, () => undefined);
+      if (!activation.committed) throw new Error("expected commit");
+
+      await expect(activation.closePrevious()).rejects.toThrow("close failed");
+      expect(manager.getConnection("linear")).toBe(prepared.connection);
+      expect(manager["clients"].get("linear")).toBe(prepared.client);
+    });
+
+    it("clears local maps even when disconnect close fails", async () => {
+      await manager.connect("linear", { type: "stdio", command: "node" });
+      const client = manager["clients"].get("linear") as { close: ReturnType<typeof vi.fn> };
+      client.close.mockRejectedValueOnce(new Error("close failed"));
+
+      await expect(manager.disconnect("linear")).rejects.toThrow("close failed");
+      expect(manager.getConnection("linear")).toBeUndefined();
+      expect(manager["clients"].has("linear")).toBe(false);
+      expect(manager["transports"].has("linear")).toBe(false);
+    });
+
+    it("keeps captured tool definitions on their original client after activation", async () => {
+      await manager.connect("linear", { type: "stdio", command: "node" });
+      const captured = manager.getAsToolDefinitions()[0]!;
+      const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
+      const activation = manager.activatePreparedConnection(prepared, () => undefined);
+      if (!activation.committed) throw new Error("expected commit");
+
+      const result = await captured.execute({}, { cwd: process.cwd() });
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result)).toContain("connection changed or closed");
+      await activation.closePrevious();
+    });
+  });
 });
 
 function makeChildProcess(): EventEmitter & {

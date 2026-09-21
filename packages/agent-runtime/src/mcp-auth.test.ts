@@ -1,8 +1,51 @@
 import { describe, expect, it, vi } from "vitest";
-import { ToolRegistry, type Settings } from "@openharness/core";
-import type { McpClientManager, McpConnection } from "@openharness/mcp";
+import { ToolRegistry, type McpServerConfig, type Settings, type ToolDefinition } from "@openharness/core";
+import type { McpClientManager, PreparedMcpConnection } from "@openharness/mcp";
 
 import { applyMcpAuthConfig, createMcpAuthHost, defaultMcpEnvKey } from "./mcp-auth.js";
+
+function fakeStagedManager(options: {
+  tools?: ToolDefinition[];
+  prepareError?: Error;
+} = {}) {
+  const closePrevious = vi.fn(async () => undefined);
+  const discardPrepared = vi.fn(async () => undefined);
+  const manager = {
+    prepareConnection: vi.fn(async (name: string, config: McpServerConfig): Promise<PreparedMcpConnection> => {
+      if (options.prepareError) throw options.prepareError;
+      return {
+        name,
+        connection: {
+          name,
+          config,
+          status: "connected",
+          transport: config.type,
+          authConfigured: true,
+          tools: [],
+          resources: [],
+        },
+        client: {} as PreparedMcpConnection["client"],
+        transport: {} as PreparedMcpConnection["transport"],
+        tools: options.tools ?? [],
+      };
+    }),
+    activatePreparedConnection: vi.fn(
+      (prepared: PreparedMcpConnection, commitTools: (tools: ToolDefinition[]) => void) => {
+        try {
+          commitTools(prepared.tools);
+        } catch (error) {
+          return { committed: false as const, error, discardPrepared };
+        }
+        return { committed: true as const, closePrevious };
+      },
+    ),
+  } as unknown as McpClientManager;
+  return { manager, closePrevious, discardPrepared };
+}
+
+function tool(name: string, description = name): ToolDefinition {
+  return { name, description, inputSchema: {}, execute: vi.fn() };
+}
 
 const baseSettings: Settings = {
   model: "test-model",
@@ -69,42 +112,17 @@ describe("applyMcpAuthConfig", () => {
 });
 
 describe("createMcpAuthHost", () => {
-  it("persists config, reconnects with the new config, and registers live MCP tools", async () => {
+  it("persists config, prepares the new connection, and atomically registers its tools", async () => {
     const settings: Settings = {
       ...baseSettings,
       mcpServers: { remote: { type: "http", url: "https://mcp.example" } },
     };
     let persisted: Settings | undefined;
-    const connection: Partial<McpConnection> = { status: "connected" };
-    const manager = {
-      getConnection: vi.fn(),
-      reconnect: vi.fn(async () => connection),
-      getConnectedTools: vi.fn(() => [
-        { serverName: "remote", name: "query" },
-        { serverName: "other", name: "query" },
-      ]),
-      getAsToolDefinitions: vi.fn(() => [
-        {
-          name: "mcp__remote__query",
-          description: "query",
-          inputSchema: { type: "object", properties: {} },
-          execute: vi.fn(),
-        },
-        {
-          name: "mcp__other__query",
-          description: "other",
-          inputSchema: { type: "object", properties: {} },
-          execute: vi.fn(),
-        },
-      ]),
-    } as unknown as McpClientManager;
+    const { manager, closePrevious } = fakeStagedManager({
+      tools: [tool("mcp__remote__query", "query")],
+    });
     const registry = new ToolRegistry();
-    registry.register({
-      name: "mcp__remote__old",
-      description: "old",
-      inputSchema: {},
-      execute: vi.fn(),
-    }, { kind: "mcp", id: "remote" });
+    registry.register(tool("mcp__remote__old", "old"), { kind: "mcp", id: "remote" });
     const host = createMcpAuthHost({
       settings,
       mcpManager: manager,
@@ -121,7 +139,7 @@ describe("createMcpAuthHost", () => {
     expect(result.message).toContain("Saved MCP auth for remote");
     expect(persisted?.mcpServers?.remote?.headers).toEqual({ Authorization: "Bearer tok" });
     expect(settings.mcpServers?.remote?.headers).toEqual({ Authorization: "Bearer tok" });
-    expect(manager.reconnect).toHaveBeenCalledWith("remote", {
+    expect(manager.prepareConnection).toHaveBeenCalledWith("remote", {
       type: "http",
       url: "https://mcp.example",
       headers: { Authorization: "Bearer tok" },
@@ -132,30 +150,17 @@ describe("createMcpAuthHost", () => {
       source: { kind: "mcp", id: "remote" },
     });
     expect(registry.has("mcp__remote__old")).toBe(false);
-    expect(registry.has("mcp__other__query")).toBe(false);
+    expect(closePrevious).toHaveBeenCalledTimes(1);
   });
 
-  it("reports reconnect failure instead of claiming success", async () => {
+  it("reports reconnect failure instead of claiming success and keeps old tools", async () => {
     const settings: Settings = {
       ...baseSettings,
       mcpServers: { remote: { type: "http", url: "https://mcp.example" } },
     };
-    const manager = {
-      getConnection: vi.fn(),
-      reconnect: vi.fn(async () => ({
-        status: "error",
-        error: new Error("401 Unauthorized"),
-      })),
-      getConnectedTools: vi.fn(() => []),
-      getAsToolDefinitions: vi.fn(() => []),
-    } as unknown as McpClientManager;
+    const { manager } = fakeStagedManager({ prepareError: new Error("401 Unauthorized") });
     const registry = new ToolRegistry();
-    registry.register({
-      name: "mcp__remote__old",
-      description: "old",
-      inputSchema: {},
-      execute: vi.fn(),
-    }, { kind: "mcp", id: "remote" });
+    registry.register(tool("mcp__remote__old", "old"), { kind: "mcp", id: "remote" });
     const host = createMcpAuthHost({
       settings,
       mcpManager: manager,
@@ -176,20 +181,10 @@ describe("createMcpAuthHost", () => {
       ...baseSettings,
       mcpServers: { remote: { type: "http", url: "https://mcp.example" } },
     };
-    const callerTool = {
-      name: "mcp__remote__query",
-      description: "caller-owned",
-      inputSchema: {},
-      execute: vi.fn(),
-    };
-    const manager = {
-      getConnection: vi.fn(),
-      reconnect: vi.fn(async () => ({ status: "connected" })),
-      getConnectedTools: vi.fn(() => [
-        { serverName: "remote", name: "query" },
-      ]),
-      getAsToolDefinitions: vi.fn(() => [{ ...callerTool, description: "mcp" }]),
-    } as unknown as McpClientManager;
+    const callerTool = tool("mcp__remote__query", "caller-owned");
+    const { manager, discardPrepared } = fakeStagedManager({
+      tools: [tool("mcp__remote__query", "mcp")],
+    });
     const registry = new ToolRegistry();
     registry.register(callerTool, { kind: "agent" });
     const host = createMcpAuthHost({
@@ -206,32 +201,18 @@ describe("createMcpAuthHost", () => {
     })).rejects.toMatchObject({ code: "tool_already_registered" });
     expect(registry.get("mcp__remote__query")).toBe(callerTool);
     expect(registry.inspect("mcp__remote__query")?.source).toEqual({ kind: "agent" });
+    expect(discardPrepared).toHaveBeenCalledTimes(1);
   });
 
-  it("rolls back newly registered MCP tools when a later tool conflicts", async () => {
+  it("leaves the registry unchanged when a later tool in the set conflicts", async () => {
     const settings: Settings = {
       ...baseSettings,
       mcpServers: { remote: { type: "http", url: "https://mcp.example" } },
     };
-    const conflict = {
-      name: "mcp__remote__conflict",
-      description: "caller-owned",
-      inputSchema: {},
-      execute: vi.fn(),
-    };
-    const definitions = [
-      { ...conflict, name: "mcp__remote__first", description: "first" },
-      { ...conflict, description: "mcp conflict" },
-    ];
-    const manager = {
-      getConnection: vi.fn(),
-      reconnect: vi.fn(async () => ({ status: "connected" })),
-      getConnectedTools: vi.fn(() => [
-        { serverName: "remote", name: "first" },
-        { serverName: "remote", name: "conflict" },
-      ]),
-      getAsToolDefinitions: vi.fn(() => definitions),
-    } as unknown as McpClientManager;
+    const conflict = tool("mcp__remote__conflict", "caller-owned");
+    const { manager } = fakeStagedManager({
+      tools: [tool("mcp__remote__first", "first"), tool("mcp__remote__conflict", "mcp conflict")],
+    });
     const registry = new ToolRegistry();
     registry.register(conflict, { kind: "agent" });
     const host = createMcpAuthHost({

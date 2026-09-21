@@ -34,85 +34,41 @@ export function createMcpAuthHost(options: CreateMcpAuthHostOptions): McpAuthHos
         },
       };
 
-      assertMcpToolUnregisterAvailable(options.toolRegistry, input.serverName);
       await persistSettings(nextSettings);
       Object.assign(options.settings, nextSettings);
 
-      const previousTools = listMcpServerTools(
-        options.toolRegistry,
-        input.serverName,
-      );
-      unregisterMcpServerTools(options.toolRegistry, input.serverName);
-      const registeredNames: string[] = [];
-      let connection;
+      let prepared;
       try {
-        connection = await options.mcpManager.reconnect(input.serverName, nextConfig);
-        const ownedNames = new Set(
-          options.mcpManager.getConnectedTools()
-            .filter((tool) => tool.serverName === input.serverName)
-            .map((tool) => `mcp__${tool.serverName}__${tool.name}`),
-        );
-        for (const tool of options.mcpManager.getAsToolDefinitions()) {
-          if (ownedNames.has(tool.name)) {
-            options.toolRegistry.register(tool, {
-              kind: "mcp",
-              id: input.serverName,
-            });
-            registeredNames.push(tool.name);
-          }
-        }
-
-        if (!connection) {
-          throw new Error(`Saved MCP auth for ${input.serverName}, but reconnect did not run.`);
-        }
-        if (connection.status !== "connected") {
-          const detail = connection.error ? `: ${connection.error.message}` : "";
-          throw new Error(`Saved MCP auth for ${input.serverName}, but reconnect failed${detail}`);
-        }
+        prepared = await options.mcpManager.prepareConnection(input.serverName, nextConfig);
       } catch (error) {
-        for (const name of registeredNames) options.toolRegistry.unregister?.(name);
-        for (const previous of previousTools) {
-          options.toolRegistry.register(previous.definition, previous.source);
-        }
-        throw error;
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Saved MCP auth for ${input.serverName}, but reconnect failed: ${detail}`);
       }
 
+      const activation = options.mcpManager.activatePreparedConnection(prepared, (tools) => {
+        options.toolRegistry.replaceBySource(
+          { kind: "mcp", id: input.serverName },
+          tools,
+        );
+      });
+
+      if (!activation.committed) {
+        await activation.discardPrepared().catch(() => undefined);
+        throw activation.error;
+      }
+
+      let cleanupWarning = "";
+      try {
+        await activation.closePrevious();
+      } catch {
+        cleanupWarning = " The previous connection could not be closed.";
+      }
 
       return {
-        message: `Saved MCP auth for ${input.serverName} and reconnected it (mode=${input.mode}).`,
+        message: `Saved MCP auth for ${input.serverName} and reconnected it (mode=${input.mode}).${cleanupWarning}`,
       };
     },
   };
-}
-
-function listMcpServerTools(toolRegistry: IToolRegistry, serverName: string) {
-  return toolRegistry.getAll().flatMap((definition) => {
-    const source = toolRegistry.inspect(definition.name)?.source;
-    return source?.kind === "mcp" && source.id === serverName
-      ? [{ definition, source }]
-      : [];
-  });
-}
-
-function assertMcpToolUnregisterAvailable(toolRegistry: IToolRegistry, serverName: string): void {
-  if (typeof toolRegistry.unregister === "function") return;
-  throw new Error(
-    `Cannot reconnect MCP server ${serverName}: the active tool registry cannot remove old MCP tools.`,
-  );
-}
-
-function unregisterMcpServerTools(toolRegistry: IToolRegistry, serverName: string): void {
-  const prefix = `mcp__${serverName}__`;
-  for (const tool of toolRegistry.getAll()) {
-    const source = toolRegistry.inspect(tool.name)?.source;
-    if (
-      tool.name.startsWith(prefix) &&
-      source?.kind === "mcp" &&
-      source.id === serverName
-    ) {
-      toolRegistry.unregister?.(tool.name);
-    }
-  }
 }
 
 export function applyMcpAuthConfig(
