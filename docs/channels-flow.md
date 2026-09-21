@@ -10,6 +10,19 @@ Channels 把飞书等聊天平台接到正在运行的 daemon。**渠道长连�
 
 daemon 内部由两个服务承担：`ChannelRuntimeService`（长连接生命周期、ACL 拒绝上报、每会话工作目录）与 `ChannelOnboardingService`（唯一写 `channel-credentials.json` 的入口）。消息进入 Agent 的唯一正式桥接仍是 `DurableChannelBridge`，只是现在直接在 daemon 内调用 `ChannelApplicationService`，不再走 HTTP。
 
+## 生产使用范围
+
+当前 Channels 可用于正常运行的单 daemon 生产场景。这里的 **durable** 具体表示：外部聊天稳定映射到数据库里的 Session，平台消息按稳定 ID 幂等准入，Agent Run 与待发送回复会持久保存，daemon 正常重启后可以恢复未发送回复；队列拥塞时会等待空位，不会静默丢弃消息。
+
+这不是“任何故障下绝不丢消息”的承诺。当前默认 daemon、数据库和平台服务总体正常，暂不保证下面这些极端场景：
+
+- daemon 在平台事件已确认、但消息尚未写入数据库的短暂窗口内异常崩溃；
+- 平台持续不可用时自动重试、指数退避、死信队列和告警升级；
+- `unknown` 回复与平台侧消息的自动对账、人工重试或作废；
+- 超大规模历史积压的分页恢复与专用运维工具。
+
+因此，本项目所说的“生产级 durable channel”是面向正常单 daemon 运行的产品级保证，不等同于金融级零丢失消息系统。需要上述严格保证时，应先补齐入站先落盘再确认、运行期投递重试与对账能力。
+
 ## 接入（扫码优先，手填兜底）
 
 ```bash
@@ -36,7 +49,7 @@ ohs channels add feishu
   → daemon 保存 sent / failed / unknown
 ```
 
-这里把“Agent 已经跑完”和“回复已经发到平台”分成了两件事。平台发送失败时，系统重发数据库里已经保存的回复，不会重新运行 Agent。
+这里把“Agent 已经跑完”和“回复已经发到平台”分成了两件事。平台发送失败时，回复仍保存在数据库里，并在渠道下次启动时恢复发送，不会重新运行 Agent。
 
 ## 运行时生命周期
 

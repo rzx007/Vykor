@@ -4,7 +4,7 @@ import type {
   DesktopMcpLoginInput,
   DesktopMcpSnapshot,
   DesktopMcpLogoutInput,
-} from "../../../shared/mcp-types"
+} from "@shared/mcp-types"
 import { createDesktopMcpRuntimeCoordinator } from "./mcp-runtime-coordinator"
 
 type McpApplication = Pick<McpOAuthApplicationService, "snapshot" | "login" | "logout">
@@ -15,7 +15,7 @@ export class DesktopMcpService {
       coordinator: createDesktopMcpRuntimeCoordinator(),
     }),
     private readonly openExternal = (url: string): Promise<void> => shell.openExternal(url)
-  ) {}
+  ) { }
 
   async snapshot(): Promise<DesktopMcpSnapshot> {
     return toDesktopSnapshot(await this.application.snapshot())

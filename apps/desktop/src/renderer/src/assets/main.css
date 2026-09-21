@@ -524,6 +524,7 @@
 
   .assistant-markdown [data-streamdown="paragraph"] {
     margin-block: 0;
+    line-height: 1.7;
   }
 
   .assistant-markdown [data-streamdown="link"] {

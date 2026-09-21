@@ -32,7 +32,7 @@ export function createStreamdownComponents({
       const file = parseInlineFileReference(value)
       if (!file || !onOpenFile) {
         return (
-          <code data-streamdown="inline-code" {...props}>
+          <code className="text-ui-small rounded-md bg-input/80 px-1.5 py-0.5" {...props}>
             {children}
           </code>
         )
