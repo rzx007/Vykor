@@ -6,6 +6,7 @@ import {
   resolveDesktopRuntimeSnapshot,
 } from "./runtime-selection"
 import { DesktopSessionService } from "./session-service"
+import { resolveProviderForModel } from "./session-operations"
 
 const models: DesktopModel[] = [
   {
@@ -27,6 +28,18 @@ const models: DesktopModel[] = [
     providerName: "openai",
   },
 ]
+
+it("does not use settings provider to disambiguate a session model", async () => {
+  const client = {
+    providers: { listModels: async () => [
+      { name: "one", models: [{ id: "shared", providerName: "one" }] },
+      { name: "two", models: [{ id: "shared", providerName: "two" }] },
+    ] },
+    system: { getSettings: async () => ({ provider: "two" }) },
+  }
+  await expect(resolveProviderForModel(client as never, "shared", undefined))
+    .rejects.toThrow(/明确指定 provider/)
+})
 
 describe("resolveBootstrapRuntimeSelection", () => {
   it("prefers the configured provider and switches to one of its models when the saved model belongs elsewhere", () => {
@@ -59,7 +72,7 @@ describe("resolveBootstrapRuntimeSelection", () => {
 })
 
 describe("resolveDesktopRuntimeSnapshot", () => {
-  it("returns normalized models and patch flags from the same runtime resolution", () => {
+  it("returns a fallback model and provider without changing settings", () => {
     expect(
       resolveDesktopRuntimeSnapshot(models, {
         model: "gpt-5.3-codex-spark",
@@ -70,8 +83,6 @@ describe("resolveDesktopRuntimeSnapshot", () => {
       defaultProvider: "gemini",
       configuredModel: "gpt-5.3-codex-spark",
       configuredProvider: "gemini",
-      needsModelPatch: true,
-      needsProviderPatch: false,
     })
   })
 

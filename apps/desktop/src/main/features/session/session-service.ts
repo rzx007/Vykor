@@ -130,12 +130,6 @@ export class DesktopSessionService {
       throw new Error("没有找到可用模型，请先在 OpenHarness 设置中配置模型。")
     }
 
-    if (runtimeSnapshot.needsModelPatch || runtimeSnapshot.needsProviderPatch) {
-      await client.system.patchSettings({
-        model: defaultModel,
-        ...(defaultProvider ? { provider: defaultProvider } : {}),
-      })
-    }
     const documentsPath = app.getPath("documents")
     const channelSessionCwds = new Set(
       allSessions

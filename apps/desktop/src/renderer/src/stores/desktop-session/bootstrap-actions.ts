@@ -12,7 +12,7 @@ import {
   failScopedOperation,
   removeScopedOperation,
 } from "./error-state"
-import { resolveInitialProject, sortSessions } from "./helpers"
+import { resolveInitialProject, sessionProvider, sortSessions } from "./helpers"
 import { clearPersistedActiveSessionId, readPersistedActiveSessionId } from "./persistence"
 import type { BootstrapActions, DesktopSessionState, DesktopStoreContext } from "./types"
 
@@ -57,6 +57,7 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
         const sessions = sortSessions(data.sessions)
         const archivedSessions = sortSessions(data.archivedSessions)
         const persistedSessionId = readPersistedActiveSessionId()
+        const recentSelection = mostRecentSessionSelection(data)
         set({
           loadStatus: "ready",
           daemonStatus: latestDaemonStatus,
@@ -68,8 +69,8 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
           defaultModel: data.defaultModel,
           defaultProvider: data.defaultProvider ?? null,
           defaultPermissionMode: data.defaultPermissionMode,
-          selectedModel: data.defaultModel,
-          selectedProvider: data.defaultProvider ?? null,
+          selectedModel: recentSelection.model ?? data.defaultModel,
+          selectedProvider: recentSelection.provider ?? data.defaultProvider ?? null,
           selectedPermissionMode: data.defaultPermissionMode,
           workspaceMode,
           outsideProjectWorkspaceRoot: data.outsideProjectWorkspaceRoot,
@@ -165,8 +166,11 @@ export function applyBootstrapData(
     data.models.some(
       (item) => item.id === preferredModel && item.providerName === preferredProvider
     )
-  const model = preferredExists ? preferredModel : data.defaultModel
-  const provider = preferredExists ? preferredProvider : (data.defaultProvider ?? null)
+  const recentSelection = mostRecentSessionSelection(data)
+  const model = preferredExists ? preferredModel : (recentSelection.model ?? data.defaultModel)
+  const provider = preferredExists
+    ? preferredProvider
+    : (recentSelection.provider ?? data.defaultProvider ?? null)
   return {
     loadStatus: "ready",
     projects: data.projects,
@@ -184,4 +188,21 @@ export function applyBootstrapData(
     outsideProjectWorkspaceRoot: data.outsideProjectWorkspaceRoot,
     selectedProject,
   }
+}
+
+function mostRecentSessionSelection(data: DesktopBootstrapData): {
+  model: string | null
+  provider: string | null
+} {
+  const latest = data.sessions.reduce<DesktopBootstrapData["sessions"][number] | null>(
+    (current, candidate) =>
+      !current || candidate.updatedAt > current.updatedAt ? candidate : current,
+    null
+  )
+  if (!latest) return { model: null, provider: null }
+  const provider = sessionProvider(latest, null)
+  if (!data.models.some((item) => item.id === latest.model && item.providerName === provider)) {
+    return { model: null, provider: null }
+  }
+  return { model: latest.model, provider }
 }

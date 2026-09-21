@@ -76,8 +76,8 @@ describe("ProviderConnectionDialog", () => {
     expect(onSubmit).toHaveBeenCalledWith({
       apiKey: "sk-test",
       headers: { "X-Session": "{{sessionId}}" },
-      setActive: true,
     })
+    expect(document.body.textContent).not.toContain("设为当前供应商")
   })
 
   it("uses headersDirty three-state semantics for catalog reconnect", async () => {
@@ -103,7 +103,6 @@ describe("ProviderConnectionDialog", () => {
     })
     expect(onSubmit).toHaveBeenCalledWith({
       apiKey: "sk-reconnect",
-      setActive: true,
     })
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("headers")
 
@@ -127,7 +126,6 @@ describe("ProviderConnectionDialog", () => {
     expect(onSubmit).toHaveBeenCalledWith({
       apiKey: "sk-reconnect",
       headers: { "X-Tenant": "desktop" },
-      setActive: true,
     })
 
     onSubmit.mockClear()
@@ -142,7 +140,6 @@ describe("ProviderConnectionDialog", () => {
     expect(onSubmit).toHaveBeenCalledWith({
       apiKey: "sk-reconnect",
       headers: {},
-      setActive: true,
     })
   })
 
@@ -162,7 +159,6 @@ describe("ProviderConnectionDialog", () => {
     })
     expect(onSubmit).toHaveBeenCalledWith({
       apiKey: "sk-builtin",
-      setActive: true,
     })
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("headers")
   })

@@ -52,8 +52,7 @@ describe("CustomProviderDialog credentials", () => {
       findButton("保存修改")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     })
     expect(onSubmit).toHaveBeenCalledWith(
-      expect.not.objectContaining({ apiKey: expect.anything() }),
-      false
+      expect.not.objectContaining({ apiKey: expect.anything() })
     )
 
     await act(async () => {

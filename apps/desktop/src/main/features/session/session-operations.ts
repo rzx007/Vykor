@@ -532,10 +532,6 @@ export async function resolveProviderForModel(
 
   const providers = uniqueModelProviders(models, model)
   if (providers.length <= 1) return providers[0]
-
-  const settings = await client.system.getSettings()
-  const configuredProvider = optionalProvider(settings["provider"])
-  if (configuredProvider && providers.includes(configuredProvider)) return configuredProvider
   throw new Error(`模型 ${model} 在多个 provider 中同名，请明确指定 provider。`)
 }
 

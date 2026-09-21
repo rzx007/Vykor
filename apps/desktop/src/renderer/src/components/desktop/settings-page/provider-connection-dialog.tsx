@@ -2,7 +2,6 @@ import { ChevronDown, LoaderCircle } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
-import { Checkbox } from "@renderer/components/ui/checkbox"
 import {
   Collapsible,
   CollapsibleContent,
@@ -26,7 +25,6 @@ import { headersFromRows, rowsFromHeaders, type RequestHeaderRow } from "./reque
 export interface ProviderConnectionSubmitValue {
   apiKey: string
   headers?: Record<string, string>
-  setActive: boolean
 }
 
 interface ProviderConnectionDialogProps {
@@ -47,7 +45,6 @@ export function ProviderConnectionDialog({
   const nextRowId = useRef(1)
   const isCatalog = provider?.source === "catalog"
   const [apiKey, setApiKey] = useState("")
-  const [setActive, setSetActive] = useState(true)
   const [headerRows, setHeaderRows] = useState<RequestHeaderRow[]>([])
   const [headersDirty, setHeadersDirty] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -57,7 +54,6 @@ export function ProviderConnectionDialog({
   useEffect(() => {
     if (!open || !provider) return
     setApiKey("")
-    setSetActive(true)
     setAdvancedOpen(false)
     setHeaderError(null)
     if (provider.source === "catalog") {
@@ -83,7 +79,6 @@ export function ProviderConnectionDialog({
 
     const value: ProviderConnectionSubmitValue = {
       apiKey: apiKey.trim(),
-      setActive,
     }
 
     if (isCatalog) {
@@ -159,14 +154,6 @@ export function ProviderConnectionDialog({
                 </CollapsibleContent>
               </Collapsible>
             ) : null}
-            <Field orientation="horizontal">
-              <Checkbox
-                id="provider-set-active"
-                checked={setActive}
-                onCheckedChange={(checked) => setSetActive(checked === true)}
-              />
-              <FieldLabel htmlFor="provider-set-active">连接后设为当前供应商</FieldLabel>
-            </Field>
           </FieldGroup>
           <DialogFooter>
             <DialogClose

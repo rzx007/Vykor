@@ -242,53 +242,29 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       await window.desktop.sessions.close()
       clearPersistedActiveSessionId()
       const newConversationRuntime = createEmptySessionRuntime()
-      set((state) => ({
-        activeSessionId: null,
-        sessionView: null,
-        contextUsageSnapshot: null,
-        selectedModel: state.defaultModel,
-        selectedProvider: state.defaultProvider,
-        selectedPermissionMode: state.defaultPermissionMode,
-        selectedEffort: null,
-        newConversationRuntime,
-        sessionRuntimes: releaseActiveSessionAcknowledgements(state),
-      }))
+      set((state) => {
+        const previous = state.sessions.find((session) => session.id === state.activeSessionId)
+        return {
+          activeSessionId: null,
+          sessionView: null,
+          contextUsageSnapshot: null,
+          selectedModel: previous?.model ?? state.selectedModel ?? state.defaultModel,
+          selectedProvider: previous
+            ? sessionProvider(previous, state.selectedProvider)
+            : state.selectedProvider ?? state.defaultProvider,
+          selectedPermissionMode: state.defaultPermissionMode,
+          selectedEffort: previous ? sessionEffort(previous) : state.selectedEffort,
+          newConversationRuntime,
+          sessionRuntimes: releaseActiveSessionAcknowledgements(state),
+        }
+      })
     },
 
     async selectModel(model) {
-      const generation = ++defaultSettingsGeneration
       set({
         selectedModel: model.id,
         selectedProvider: model.providerName,
-        defaultModel: model.id,
-        defaultProvider: model.providerName,
       })
-      try {
-        const request = defaultSettingsWrite.then(() =>
-          window.desktop.sessions.setDefaultModel({
-            model: model.id,
-            provider: model.providerName,
-          })
-        )
-        defaultSettingsWrite = request.then(
-          () => undefined,
-          () => undefined
-        )
-        const data = await request
-        if (generation !== defaultSettingsGeneration) return
-        set((state) =>
-          applyBootstrapData(
-            data,
-            state.selectedProject,
-            state.workspaceMode,
-            model.id,
-            model.providerName
-          )
-        )
-        void get().refreshContextUsage({ refresh: true })
-      } catch {
-        if (generation !== defaultSettingsGeneration) return
-      }
     },
 
     async selectPermissionMode(permissionMode) {

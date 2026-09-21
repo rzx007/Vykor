@@ -79,7 +79,7 @@ export class DesktopProviderService {
     await withDaemonRetry(async (client) => {
       const settings = await client.system.getSettings()
       if (settings.provider === provider) {
-        throw new Error("该供应商正在使用中。请先切换到其他供应商，再断开连接。")
+        await client.system.patchSettings({ provider: "auto" })
       }
       const catalogProvider = (await client.providers.listProviders()).find(
         (item) => item.name === provider && item.source === "catalog"
@@ -118,7 +118,13 @@ export class DesktopProviderService {
   }
 
   async removeCustom(input: RemoveDesktopCustomProviderInput): Promise<DesktopProviderSnapshot> {
-    await withDaemonRetry((client) => client.providers.removeCustomProvider(input.provider))
+    await withDaemonRetry(async (client) => {
+      const settings = await client.system.getSettings()
+      if (settings.provider === input.provider) {
+        await client.system.patchSettings({ provider: "auto" })
+      }
+      await client.providers.removeCustomProvider(input.provider)
+    })
     return await this.snapshot()
   }
 }

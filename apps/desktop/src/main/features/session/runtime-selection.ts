@@ -6,8 +6,6 @@ export interface DesktopRuntimeSnapshot {
   defaultProvider?: string
   configuredModel?: string
   configuredProvider?: string
-  needsModelPatch: boolean
-  needsProviderPatch: boolean
 }
 
 export function resolveDesktopRuntimeSnapshot(
@@ -26,8 +24,6 @@ export function resolveDesktopRuntimeSnapshot(
     ...(configuredProvider ? { configuredProvider } : {}),
     ...(defaultModel ? { defaultModel } : {}),
     ...(defaultProvider ? { defaultProvider } : {}),
-    needsModelPatch: !!defaultModel && defaultModel !== configuredModel,
-    needsProviderPatch: !!defaultProvider && defaultProvider !== configuredProvider,
   }
 }
 

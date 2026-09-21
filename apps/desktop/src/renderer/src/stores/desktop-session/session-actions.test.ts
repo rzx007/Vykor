@@ -16,6 +16,7 @@ import {
 } from "./store-test-fixtures"
 import { sessionEffort } from "./helpers"
 import { useDesktopSessionStore } from "./store"
+import { applyBootstrapData } from "./bootstrap-actions"
 import type { DesktopSessionRuntime } from "./types"
 import { composerDocument, emptyComposerDocument } from "./composer-document"
 
@@ -82,6 +83,55 @@ function readyAttachment(draftId: string, assetId: string): DesktopAttachmentDra
 }
 
 describe("desktop session actions", () => {
+  it("restores the latest session model after restart even when an older session is pinned", () => {
+    const older = emptySessionView("older").session
+    older.model = "old-model"
+    older.updatedAt = 10
+    older.metadata = { runtime: { model: "old-model", provider: "old-provider" }, desktop: { pinnedAt: 100 } }
+    const latest = emptySessionView("latest").session
+    latest.model = "recent-model"
+    latest.updatedAt = 20
+    latest.metadata = { runtime: { model: "recent-model", provider: "recent-provider" } }
+    const result = applyBootstrapData({
+      ...refreshedBootstrap,
+      sessions: [older, latest],
+      models: [
+        ...refreshedBootstrap.models,
+        { id: "old-model", label: "Old", provider: "Old", providerName: "old-provider" },
+        { id: "recent-model", label: "Recent", provider: "Recent", providerName: "recent-provider" },
+      ],
+    }, null, "outside_project", null, null)
+    expect(result).toMatchObject({ selectedModel: "recent-model", selectedProvider: "recent-provider" })
+  })
+
+  it("starts a new conversation with the most recently used session model", async () => {
+    const previous = emptySessionView("last-session")
+    previous.session.model = "model-from-session"
+    previous.session.metadata = { runtime: { model: "model-from-session", provider: "session-provider" } }
+    const create = vi.fn(async () => emptySessionView("new-session").session)
+    vi.stubGlobal("window", { desktop: { sessions: {
+      close: vi.fn(async () => undefined),
+      create,
+      open: vi.fn(async (sessionId: string) => emptySessionView(sessionId)),
+      sendPrompt: vi.fn(async () => undefined),
+    } } })
+    resetNewConversationState()
+    useDesktopSessionStore.setState({
+      activeSessionId: previous.session.id,
+      sessionView: previous,
+      sessions: [previous.session],
+      selectedModel: "model-from-session",
+      selectedProvider: "session-provider",
+      defaultModel: "settings-model",
+      defaultProvider: "settings-provider",
+    })
+    await useDesktopSessionStore.getState().startNewConversation()
+    await useDesktopSessionStore.getState().startSession("hello")
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      model: "model-from-session", provider: "session-provider",
+    }))
+  })
+
   beforeEach(() => {
     resetDesktopSessionStore()
   })
@@ -923,46 +973,6 @@ describe("desktop session actions", () => {
     )
   })
 
-  it("keeps the latest selected model when an older default-model request fails late", async () => {
-    let rejectFirst!: (error: Error) => void
-    let resolveSecond!: (value: typeof refreshedBootstrap) => void
-    const setDefaultModel = vi.fn(
-      () =>
-        new Promise<typeof refreshedBootstrap>((resolve, reject) => {
-          if (setDefaultModel.mock.calls.length === 1) rejectFirst = reject
-          else resolveSecond = resolve
-        })
-    )
-    vi.stubGlobal("window", { desktop: { sessions: { setDefaultModel } } })
-    resetNewConversationState()
-    const first = useDesktopSessionStore.getState().selectModel({
-      id: "model-a",
-      label: "Model A",
-      provider: "Provider A",
-      providerName: "provider-a",
-    })
-    const second = useDesktopSessionStore.getState().selectModel({
-      id: "model-b",
-      label: "Model B",
-      provider: "Provider B",
-      providerName: "provider-b",
-    })
-
-    await vi.waitFor(() => expect(setDefaultModel).toHaveBeenCalledTimes(1))
-    rejectFirst(new Error("first model failed"))
-    await first
-    await vi.waitFor(() => expect(setDefaultModel).toHaveBeenCalledTimes(2))
-    resolveSecond({ ...refreshedBootstrap, defaultModel: "model-b", defaultProvider: "provider-b" })
-    await second
-
-    expect(useDesktopSessionStore.getState()).toMatchObject({
-      selectedModel: "model-b",
-      selectedProvider: "provider-b",
-      defaultModel: "model-b",
-      defaultProvider: "provider-b",
-    })
-  })
-
   it("passes the previous context window when refreshing after a session model switch", async () => {
     const view = emptySessionView("session-model-switch")
     const previousSnapshot = {
@@ -1010,6 +1020,22 @@ describe("desktop session actions", () => {
       refresh: true,
       previousContextWindow: 200_000,
     })
+  })
+
+  it("chooses a new conversation model without changing global provider settings", async () => {
+    const setDefaultModel = vi.fn()
+    vi.stubGlobal("window", { desktop: { sessions: { setDefaultModel } } })
+    resetNewConversationState()
+    await useDesktopSessionStore.getState().selectModel({
+      id: "chosen-model", label: "Chosen", provider: "Chosen", providerName: "chosen-provider",
+    })
+    expect(useDesktopSessionStore.getState()).toMatchObject({
+      selectedModel: "chosen-model",
+      selectedProvider: "chosen-provider",
+      defaultModel: "test-model",
+      defaultProvider: null,
+    })
+    expect(setDefaultModel).not.toHaveBeenCalled()
   })
 
   it("keeps the newer session model when update responses arrive out of order", async () => {
@@ -1096,97 +1122,6 @@ describe("desktop session actions", () => {
     expect(useDesktopSessionStore.getState()).toMatchObject({
       selectedPermissionMode: "full_auto",
       defaultPermissionMode: "full_auto",
-    })
-  })
-
-  it("serializes a model selection before a later permission selection and keeps both fields", async () => {
-    let resolveModel!: (value: typeof refreshedBootstrap) => void
-    let resolvePermission!: (value: typeof refreshedBootstrap) => void
-    const setDefaultModel = vi.fn(
-      () => new Promise<typeof refreshedBootstrap>((resolve) => (resolveModel = resolve))
-    )
-    const setDefaultPermissionMode = vi.fn(
-      () => new Promise<typeof refreshedBootstrap>((resolve) => (resolvePermission = resolve))
-    )
-    vi.stubGlobal("window", {
-      desktop: { sessions: { setDefaultModel, setDefaultPermissionMode } },
-    })
-    resetNewConversationState()
-
-    const model = useDesktopSessionStore.getState().selectModel({
-      id: "model-a",
-      label: "Model A",
-      provider: "Provider A",
-      providerName: "provider-a",
-    })
-    const permission = useDesktopSessionStore.getState().selectPermissionMode("full_auto")
-    await vi.waitFor(() => expect(setDefaultModel).toHaveBeenCalledOnce())
-    expect(setDefaultPermissionMode).not.toHaveBeenCalled()
-    resolveModel({
-      ...refreshedBootstrap,
-      defaultModel: "model-a",
-      defaultProvider: "provider-a",
-      defaultPermissionMode: "default",
-    })
-    await vi.waitFor(() => expect(setDefaultPermissionMode).toHaveBeenCalledOnce())
-    resolvePermission({
-      ...refreshedBootstrap,
-      defaultModel: "model-a",
-      defaultProvider: "provider-a",
-      defaultPermissionMode: "full_auto",
-    })
-    await Promise.all([model, permission])
-
-    expect(useDesktopSessionStore.getState()).toMatchObject({
-      selectedModel: "model-a",
-      selectedProvider: "provider-a",
-      defaultModel: "model-a",
-      defaultProvider: "provider-a",
-      selectedPermissionMode: "full_auto",
-      defaultPermissionMode: "full_auto",
-    })
-  })
-
-  it("serializes a permission selection before a later model selection and keeps both fields", async () => {
-    let resolvePermission!: (value: typeof refreshedBootstrap) => void
-    let resolveModel!: (value: typeof refreshedBootstrap) => void
-    const setDefaultPermissionMode = vi.fn(
-      () => new Promise<typeof refreshedBootstrap>((resolve) => (resolvePermission = resolve))
-    )
-    const setDefaultModel = vi.fn(
-      () => new Promise<typeof refreshedBootstrap>((resolve) => (resolveModel = resolve))
-    )
-    vi.stubGlobal("window", {
-      desktop: { sessions: { setDefaultModel, setDefaultPermissionMode } },
-    })
-    resetNewConversationState()
-
-    const permission = useDesktopSessionStore.getState().selectPermissionMode("plan")
-    const model = useDesktopSessionStore.getState().selectModel({
-      id: "model-b",
-      label: "Model B",
-      provider: "Provider B",
-      providerName: "provider-b",
-    })
-    await vi.waitFor(() => expect(setDefaultPermissionMode).toHaveBeenCalledOnce())
-    expect(setDefaultModel).not.toHaveBeenCalled()
-    resolvePermission({ ...refreshedBootstrap, defaultPermissionMode: "plan" })
-    await vi.waitFor(() => expect(setDefaultModel).toHaveBeenCalledOnce())
-    resolveModel({
-      ...refreshedBootstrap,
-      defaultModel: "model-b",
-      defaultProvider: "provider-b",
-      defaultPermissionMode: "plan",
-    })
-    await Promise.all([permission, model])
-
-    expect(useDesktopSessionStore.getState()).toMatchObject({
-      selectedModel: "model-b",
-      selectedProvider: "provider-b",
-      defaultModel: "model-b",
-      defaultProvider: "provider-b",
-      selectedPermissionMode: "plan",
-      defaultPermissionMode: "plan",
     })
   })
 

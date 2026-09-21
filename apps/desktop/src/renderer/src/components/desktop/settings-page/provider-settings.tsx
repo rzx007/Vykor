@@ -1,5 +1,4 @@
 import {
-  CheckCircle2,
   CircleAlert,
   CircleCheck,
   Link2,
@@ -30,7 +29,6 @@ import { Button } from "@renderer/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@renderer/components/ui/card"
@@ -200,7 +198,6 @@ export function ProviderSettings(): React.JSX.Element {
         .includes(query)
     )
   }, [additionalAvailableProviders, providerQuery])
-  const activeProvider = snapshot?.providers.find((provider) => provider.active)
 
   const runMutation = async (
     providerName: string,
@@ -233,14 +230,6 @@ export function ProviderSettings(): React.JSX.Element {
     }
   }
 
-  const activate = (provider: DesktopProviderInfo): void => {
-    void runMutation(
-      provider.name,
-      () => window.desktop.providers.activate({ provider: provider.name }),
-      `已将 ${providerDisplayName(provider)} 设为当前供应商。`
-    )
-  }
-
   const connect = (value: ProviderConnectionSubmitValue): void => {
     if (!connectTarget || !value.apiKey.trim() || busyProvider) return
     const target = connectTarget
@@ -251,7 +240,7 @@ export function ProviderSettings(): React.JSX.Element {
           provider: target.name,
           apiKey: value.apiKey,
           ...(value.headers !== undefined ? { headers: value.headers } : {}),
-          setActive: value.setActive,
+          setActive: false,
         }),
       `已连接 ${providerDisplayName(target)}。`
     ).then((succeeded) => {
@@ -276,14 +265,14 @@ export function ProviderSettings(): React.JSX.Element {
     ).then((succeeded) => succeeded && setDisconnectTarget(null))
   }
 
-  const saveCustomProvider = (value: DesktopCustomProviderInput, setActive: boolean): void => {
+  const saveCustomProvider = (value: DesktopCustomProviderInput): void => {
     const target = customEditTarget
     void runMutation(
       target?.name ?? value.id,
       () =>
         target
           ? window.desktop.providers.updateCustom({ provider: target.name, value })
-          : window.desktop.providers.createCustom({ ...value, setActive }),
+          : window.desktop.providers.createCustom({ ...value, setActive: false }),
       target ? `已更新 ${value.displayName}。` : `已添加 ${value.displayName}。`
     ).then((succeeded) => {
       if (!succeeded) return
@@ -341,8 +330,6 @@ export function ProviderSettings(): React.JSX.Element {
         </Alert>
       ) : null}
 
-      <CurrentProviderCard provider={activeProvider} activeModel={snapshot?.activeModel} />
-
       <section className="flex flex-col gap-4" aria-labelledby="provider-heading">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
@@ -377,7 +364,6 @@ export function ProviderSettings(): React.JSX.Element {
           additionalProviderCount={additionalAvailableProviders.length}
           busyProvider={busyProvider}
           onShowMore={() => setMoreProvidersOpen(true)}
-          onActivate={activate}
           onConnect={openConnectDialog}
           onDisconnect={setDisconnectTarget}
           onAddCustom={() => {
@@ -479,55 +465,12 @@ export function ProviderSettings(): React.JSX.Element {
   )
 }
 
-function CurrentProviderCard({
-  provider,
-  activeModel,
-}: {
-  provider?: DesktopProviderInfo
-  activeModel?: string
-}): React.JSX.Element {
-  return (
-    <Card className="shadow-xs">
-      <CardHeader className="border-b bg-muted/30">
-        <CardTitle>当前供应商</CardTitle>
-        <CardDescription>新会话默认使用的模型服务与认证来源。</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-center justify-between gap-5">
-        <div className="flex min-w-0 items-center gap-4">
-          <ProviderIcon provider={provider} emphasized />
-          <div className="min-w-0">
-            <p className="truncate font-heading text-base font-semibold">
-              {provider?.displayName ?? "尚未选择供应商"}
-            </p>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
-              {activeModel ?? "未选择默认模型"}
-            </p>
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              {provider
-                ? sourceLabel(provider.credentialSource, provider.credentialLabel)
-                : "连接供应商后即可开始使用"}
-            </p>
-          </div>
-        </div>
-        {provider?.connected ? (
-          <Badge variant="secondary">正在使用</Badge>
-        ) : provider ? (
-          <Badge variant="destructive">认证不可用</Badge>
-        ) : (
-          <Badge variant="outline">未配置</Badge>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
 function ProviderListCard({
   connectedProviders,
   availableProviders,
   additionalProviderCount,
   busyProvider,
   onShowMore,
-  onActivate,
   onConnect,
   onDisconnect,
   onAddCustom,
@@ -539,7 +482,6 @@ function ProviderListCard({
   additionalProviderCount: number
   busyProvider: string | null
   onShowMore: () => void
-  onActivate: (provider: DesktopProviderInfo) => void
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
   onAddCustom: () => void
@@ -558,7 +500,6 @@ function ProviderListCard({
           providers={connectedProviders}
           emptyText="还没有检测到已连接的供应商。"
           busyProvider={busyProvider}
-          onActivate={onActivate}
           onConnect={onConnect}
           onDisconnect={onDisconnect}
           onEditCustom={onEditCustom}
@@ -571,7 +512,6 @@ function ProviderListCard({
           providers={availableProviders}
           emptyText="所有内置供应商都已连接。"
           busyProvider={busyProvider}
-          onActivate={onActivate}
           onConnect={onConnect}
           onDisconnect={onDisconnect}
           onEditCustom={onEditCustom}
@@ -702,7 +642,6 @@ function ProviderGroup({
   providers,
   emptyText,
   busyProvider,
-  onActivate,
   onConnect,
   onDisconnect,
   onEditCustom,
@@ -713,7 +652,6 @@ function ProviderGroup({
   providers: DesktopProviderInfo[]
   emptyText: string
   busyProvider: string | null
-  onActivate: (provider: DesktopProviderInfo) => void
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
   onEditCustom: (provider: DesktopProviderInfo) => void
@@ -739,7 +677,6 @@ function ProviderGroup({
                 provider={provider}
                 busy={busyProvider === provider.name}
                 locked={busyProvider !== null}
-                onActivate={() => onActivate(provider)}
                 onConnect={() => onConnect(provider)}
                 onDisconnect={() => onDisconnect(provider)}
                 onEditCustom={() => onEditCustom(provider)}
@@ -757,7 +694,6 @@ function ProviderRow({
   provider,
   busy,
   locked,
-  onActivate,
   onConnect,
   onDisconnect,
   onEditCustom,
@@ -766,7 +702,6 @@ function ProviderRow({
   provider: DesktopProviderInfo
   busy: boolean
   locked: boolean
-  onActivate: () => void
   onConnect: () => void
   onDisconnect: () => void
   onEditCustom: () => void
@@ -784,15 +719,10 @@ function ProviderRow({
                 {sourceLabel(provider.credentialSource, provider.credentialLabel)}
               </Badge>
             ) : null}
-            {provider.active ? (
-              <Badge variant={provider.connected ? "secondary" : "destructive"}>
-                {provider.connected ? "正在使用" : "认证不可用"}
-              </Badge>
-            ) : null}
+            {provider.active ? <Badge variant="outline">旧默认连接</Badge> : null}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {provider.currentModel ??
-              providerDescriptions[provider.name] ??
+            {providerDescriptions[provider.name] ??
               (provider.custom
                 ? provider.baseUrl
                 : provider.source === "catalog"
@@ -802,23 +732,18 @@ function ProviderRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-1.5">
-        {provider.active && provider.connected ? (
-          <Button type="button" size="sm" variant="ghost" disabled>
-            <CheckCircle2 data-icon="inline-start" />
-            当前
-          </Button>
-        ) : provider.connected ? (
-          <Button type="button" size="sm" variant="outline" disabled={locked} onClick={onActivate}>
+        {provider.credentialSource === "credentials" ? (
+          <Button type="button" size="sm" variant="outline" disabled={locked} onClick={onConnect}>
             {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
-            {busy ? "切换中..." : "设为当前"}
+            {busy ? "保存中..." : "更新密钥"}
           </Button>
-        ) : (
+        ) : !provider.connected ? (
           <Button type="button" size="sm" variant="outline" disabled={locked} onClick={onConnect}>
             <Link2 data-icon="inline-start" />
-            {provider.active ? "重新连接" : "连接"}
+            连接
           </Button>
-        )}
-        {provider.credentialSource === "credentials" && !provider.active && !provider.custom ? (
+        ) : null}
+        {provider.credentialSource === "credentials" && !provider.custom ? (
           <Button type="button" size="sm" variant="ghost" disabled={locked} onClick={onDisconnect}>
             断开
           </Button>
@@ -840,7 +765,7 @@ function ProviderRow({
               size="icon-sm"
               variant="ghost"
               aria-label={`删除 ${provider.displayName}`}
-              disabled={locked || provider.active}
+              disabled={locked}
               onClick={onRemoveCustom}
             >
               <Trash2 data-icon="inline-start" />
@@ -854,11 +779,9 @@ function ProviderRow({
 
 function ProviderIcon({
   provider,
-  emphasized = false,
   compact = false,
 }: {
   provider?: DesktopProviderInfo
-  emphasized?: boolean
   compact?: boolean
 }): React.JSX.Element {
   const BrandIcon = provider ? resolveProviderBrandIcon(provider.name) : undefined
@@ -869,9 +792,7 @@ function ProviderIcon({
         "grid shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground ring-1 ring-foreground/10",
         compact
           ? "size-5 rounded-sm bg-transparent ring-0 [&_svg]:size-3.5"
-          : emphasized
-            ? "size-12 shadow-xs [&_svg]:size-5"
-            : "size-9 rounded-lg [&_svg]:size-4"
+          : "size-9 rounded-lg [&_svg]:size-4"
       )}
     >
       {BrandIcon ? <ProviderBrandMark icon={BrandIcon} /> : <Sparkles aria-hidden="true" />}
@@ -886,7 +807,6 @@ function ProviderBrandMark({ icon: Icon }: { icon: ProviderBrandIcon }): React.J
 function ProviderSettingsSkeleton(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-8" aria-label="正在加载供应商">
-      <Skeleton className="h-36 w-full rounded-xl" />
       <div className="flex flex-col gap-3">
         <Skeleton className="h-5 w-24" />
         <Skeleton className="h-4 w-80" />

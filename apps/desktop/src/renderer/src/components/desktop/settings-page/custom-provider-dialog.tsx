@@ -2,7 +2,6 @@ import { LoaderCircle, Plus, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
-import { Checkbox } from "@renderer/components/ui/checkbox"
 import {
   Dialog,
   DialogClose,
@@ -34,7 +33,7 @@ interface CustomProviderDialogProps {
   provider?: DesktopProviderInfo
   busy: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (value: DesktopCustomProviderInput, setActive: boolean) => void
+  onSubmit: (value: DesktopCustomProviderInput) => void
 }
 
 export function CustomProviderDialog({
@@ -46,7 +45,6 @@ export function CustomProviderDialog({
 }: CustomProviderDialogProps): React.JSX.Element {
   const nextRowId = useRef(1)
   const [form, setForm] = useState<CustomProviderFormState>(() => initialForm(provider))
-  const [setActive, setSetActive] = useState(true)
   const [replacingApiKey, setReplacingApiKey] = useState(false)
   const [invalid, setInvalid] = useState<{ field: string; message: string } | null>(null)
   const hasSavedApiKey = provider?.credentialSource === "credentials"
@@ -56,7 +54,6 @@ export function CustomProviderDialog({
   useEffect(() => {
     if (!open) return
     setForm(initialForm(provider))
-    setSetActive(provider ? false : true)
     setReplacingApiKey(false)
     setInvalid(null)
   }, [open, provider])
@@ -71,7 +68,7 @@ export function CustomProviderDialog({
       return
     }
     setInvalid(null)
-    onSubmit(result.value, setActive)
+    onSubmit(result.value)
   }
 
   return (
@@ -290,16 +287,6 @@ export function CustomProviderDialog({
               }
             />
 
-            {!provider ? (
-              <Field orientation="horizontal">
-                <Checkbox
-                  id="custom-provider-active"
-                  checked={setActive}
-                  onCheckedChange={(checked) => setSetActive(checked === true)}
-                />
-                <FieldLabel htmlFor="custom-provider-active">保存后设为当前供应商</FieldLabel>
-              </Field>
-            ) : null}
           </FieldGroup>
 
           <DialogFooter>

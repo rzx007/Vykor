@@ -6,10 +6,13 @@ const daemon = vi.hoisted(() => ({
     listModels: vi.fn(),
     connectCatalogProvider: vi.fn(),
     updateCatalogProviderHeaders: vi.fn(),
+    disconnectCatalogProvider: vi.fn(),
+    removeCustomProvider: vi.fn(),
   },
   auth: {
     getStatus: vi.fn(),
     login: vi.fn(),
+    logout: vi.fn(),
   },
   system: {
     getSettings: vi.fn(),
@@ -383,6 +386,24 @@ describe("DesktopProviderService catalog headers", () => {
       active: false,
     })
   })
+
+  it("detaches an old default provider before disconnecting its credential", async () => {
+    daemon.system.getSettings.mockResolvedValue({ provider: "openai" })
+    daemon.system.patchSettings.mockResolvedValue({})
+    await service.disconnect({ provider: "openai" })
+    expect(daemon.system.patchSettings).toHaveBeenCalledWith({ provider: "auto" })
+    expect(daemon.auth.logout).toHaveBeenCalledWith({ provider: "openai" })
+  })
+
+  it("detaches an old default custom provider before removing its connection", async () => {
+    daemon.system.getSettings.mockResolvedValue({ provider: "office-gateway" })
+    daemon.system.patchSettings.mockResolvedValue({})
+    daemon.providers.removeCustomProvider.mockResolvedValue({})
+    await service.removeCustom({ provider: "office-gateway" })
+    expect(daemon.system.patchSettings).toHaveBeenCalledWith({ provider: "auto" })
+    expect(daemon.providers.removeCustomProvider).toHaveBeenCalledWith("office-gateway")
+  })
+
 
   it("forwards catalog connect header templates to the client", async () => {
     daemon.providers.listProviders.mockResolvedValue([
