@@ -483,4 +483,4 @@ ohs mcp status linear --json
 
 ## 后续阶段边界
 
-完成本设计后，第二阶段仅剩“配置 scope 变化主动进入重新授权状态”的补全工作。第三阶段继续独立设计 OS Keyring、文件降级策略、可配置 `oauth_resource`、完整自定义 callback，以及 App Server 登录接口和完成事件。
+配置 scope 变化的按需拦截已实现。2026-09-21 用户决定将“刷新错误分类”和“resource URL 绑定校验”移入第三阶段，与 OS Keyring、文件降级、可配置 resource/callback、App Server 登录接口和完成事件一起设计。该调整是范围迁移，不代表这两项已经完成。第三阶段详见 [设计文档](2026-09-21-mcp-oauth-phase-3-design.md)。
