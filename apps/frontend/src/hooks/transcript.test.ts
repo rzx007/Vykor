@@ -51,6 +51,10 @@ function part(messageId: string, seq: number, text: string): SessionMessagePartR
   };
 }
 
+function reasoningPart(messageId: string, seq: number, text: string): SessionMessagePartRecord {
+  return { ...part(messageId, seq, text), id: `p:${messageId}:reasoning`, type: "reasoning" };
+}
+
 function bucket(
   inputs: SessionInputRecord[],
   messages: SessionMessageRecord[],
@@ -138,4 +142,26 @@ test("does not resurrect historical inputs after compact or rewind replaces mess
   ]);
 
   expect(bucketToTranscript(bucket(inputs, [], [], 10))).toEqual([]);
+});
+
+test("projects reasoning parts as their own items", () => {
+  const value = bucket(
+    [input("i1", 1, "问题")],
+    [message("m1", 2, "assistant")],
+    [reasoningPart("m1", 1, "先想"), part("m1", 2, "答案")],
+  );
+
+  const items = bucketToTranscript(value);
+  expect(items.map((item) => item.role)).toEqual(["reasoning", "assistant"]);
+  expect(items[0]!.text).toBe("先想");
+});
+
+test("drops reasoning items when showReasoning is false", () => {
+  const value = bucket(
+    [input("i1", 1, "问题")],
+    [message("m1", 2, "assistant")],
+    [reasoningPart("m1", 1, "先想")],
+  );
+
+  expect(bucketToTranscript(value, { showReasoning: false })).toEqual([]);
 });

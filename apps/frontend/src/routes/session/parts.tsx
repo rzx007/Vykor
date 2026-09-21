@@ -106,6 +106,16 @@ function TranscriptPartView({
         <text fg={c.accent}>{icons.user + item.text}</text>
       );
 
+    case "reasoning":
+      return (
+        <CollapsibleTranscriptBlock
+          tone={c.muted}
+          summary={`思考过程${item.streaming ? " …" : ""}`}
+        >
+          <text fg={c.muted}>{item.text}</text>
+        </CollapsibleTranscriptBlock>
+      );
+
     case "assistant":
       return <markdown content={item.text} syntaxStyle={syntax} streaming={item.streaming === true} />;
 
