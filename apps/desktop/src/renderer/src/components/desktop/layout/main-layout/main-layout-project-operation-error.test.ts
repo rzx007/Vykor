@@ -105,6 +105,9 @@ let mountedContainer: HTMLDivElement | null = null
 
 beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+  Reflect.set(window, "desktop", {
+    settings: { snapshot: vi.fn(async () => ({ showReasoning: false })) },
+  })
   useDesktopSessionStore.setState(stateWith({}), true)
 })
 
@@ -117,6 +120,7 @@ afterEach(() => {
   }
   useDesktopSessionStore.setState(initialStoreState, true)
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
+  Reflect.deleteProperty(window, "desktop")
 })
 
 function stateWith(overrides: Partial<DesktopSessionState>): DesktopSessionState {
