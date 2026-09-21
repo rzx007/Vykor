@@ -8,7 +8,9 @@ import { McpOAuthError } from "./errors.js";
 import type { McpOAuthCredentialStore } from "./login.js";
 import { timedFetch, tokenScopes } from "./protocol.js";
 import { assertScopeSubset } from "./security.js";
-import { resolveMcpOAuthStatus } from "./status.js";
+import { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
+
+export type McpConnectionAction = "connect" | "disconnect" | "ignore";
 
 export class McpOAuthRuntime {
   private readonly inFlight = new Map<string, Promise<string | undefined>>();
@@ -27,6 +29,18 @@ export class McpOAuthRuntime {
 
   async getStatus(name: string, config: McpServerConfig) {
     return resolveMcpOAuthStatus(config, await this.options.store.get(name), this.clock());
+  }
+
+  /** Read the final credential state before a Runtime sync; static auth is unaffected. */
+  async getConnectionAction(name: string, config: McpServerConfig): Promise<McpConnectionAction> {
+    if (config.type !== "http") return "ignore";
+    const staticMode = resolveMcpAuthMode(config, undefined);
+    if (staticMode === "bearer" || staticMode === "custom") return "ignore";
+    const credential = await this.options.store.get(name);
+    const status = resolveMcpOAuthStatus(config, credential, this.clock());
+    return (status === "valid" || status === "expired-refreshable") && credential?.serverUrl === config.url
+      ? "connect"
+      : "disconnect";
   }
 
   async getAccessToken(

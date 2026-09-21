@@ -228,11 +228,6 @@ export class QueryEngine implements IQueryEngine {
     this.mcpManager = mgr;
   }
 
-  retainMcpConnectionsForRun(): () => void {
-    const manager = this.mcpManager as { retainCurrentConnections?: () => () => void } | undefined;
-    return manager?.retainCurrentConnections?.() ?? (() => undefined);
-  }
-
   setMcpAuth(auth: McpAuthHost | undefined): void {
     this.mcpAuth = auth;
   }

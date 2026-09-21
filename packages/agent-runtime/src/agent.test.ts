@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  QueryEngine,
   type AgentEvent,
   AgentRunNotAcceptingInputError,
   RuntimeBundle,
@@ -110,6 +111,7 @@ describe("createDefaultNodeAgent", () => {
   it("releases MCP connection leases after a Run settles", async () => {
     const release = vi.fn();
     const retain = vi.spyOn(McpClientManager.prototype, "retainCurrentConnections").mockReturnValue(release);
+    expect("retainMcpConnectionsForRun" in QueryEngine.prototype).toBe(false);
     const agent = await createDefaultNodeAgent({
       client: { async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" as const }; } },
       settings: {

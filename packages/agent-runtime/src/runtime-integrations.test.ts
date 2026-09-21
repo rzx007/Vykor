@@ -5,7 +5,7 @@ import type {
   McpRuntimeRegistry,
   McpServerIdentity,
 } from "@openharness/core";
-import type { McpClientManager } from "@openharness/mcp";
+import { McpOAuthRuntime, type McpClientManager } from "@openharness/mcp";
 
 import { createMcpRuntimeHandle, selectMcpServersForEnvironment } from "./runtime-integrations.js";
 
@@ -81,9 +81,9 @@ function createHandle(options: {
       }) as never,
     },
     mcpManager,
-    credentialStore: {
+    oauthRuntime: new McpOAuthRuntime({ store: {
       get: vi.fn(async () => { options.onCredentialGet?.(); return options.credential; }),
-    } as never,
+    } as never }),
     registry,
     stageAndActivate,
     disconnectServer,

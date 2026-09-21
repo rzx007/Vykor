@@ -13,11 +13,11 @@ function makeCredential(): McpOAuthCredentialRecord {
   };
 }
 
-function memoryStore(initial: McpOAuthCredentialRecord): McpOAuthCredentialStore {
+function memoryStore(initial?: McpOAuthCredentialRecord): McpOAuthCredentialStore {
   let value: McpOAuthCredentialRecord | undefined = initial;
   return {
     get: async () => value,
-    list: async () => ({ linear: value! }),
+    list: async () => value ? { linear: value } : {},
     set: async (_name, next) => { value = next; },
     delete: async () => { const found = !!value; value = undefined; return found; },
     update: async (_name, mutate) => (value = mutate(value)),
@@ -30,6 +30,31 @@ function memoryStore(initial: McpOAuthCredentialRecord): McpOAuthCredentialStore
 }
 
 describe("McpOAuthRuntime", () => {
+  it.each([
+    { label: "valid matching credential", credential: { ...makeCredential(), tokens: { ...makeCredential().tokens, expiresAt: 200_000 } }, config: { type: "http" as const, url: "https://mcp.test/mcp" }, want: "connect" },
+    { label: "expired refreshable credential", credential: makeCredential(), config: { type: "http" as const, url: "https://mcp.test/mcp" }, want: "connect" },
+    { label: "missing OAuth credential", credential: undefined, config: { type: "http" as const, url: "https://mcp.test/mcp", oauth: { scopes: ["read"] } }, want: "disconnect" },
+    { label: "legacy logout without OAuth marker", credential: undefined, config: { type: "http" as const, url: "https://mcp.test/mcp" }, want: "disconnect" },
+    { label: "credential bound to another endpoint", credential: makeCredential(), config: { type: "http" as const, url: "https://mcp.test/other" }, want: "disconnect" },
+    { label: "reauthorization required", credential: { ...makeCredential(), diagnostic: { code: "reauthentication-required" as const, updatedAt: 1 } }, config: { type: "http" as const, url: "https://mcp.test/mcp" }, want: "disconnect" },
+    { label: "explicit static bearer", credential: makeCredential(), config: { type: "http" as const, url: "https://mcp.test/mcp", headers: { Authorization: "Bearer static" } }, want: "ignore" },
+    { label: "explicit custom authorization", credential: makeCredential(), config: { type: "http" as const, url: "https://mcp.test/mcp", headers: { Authorization: "Basic static" } }, want: "ignore" },
+  ])("chooses $want for $label", async ({ credential, config, want }) => {
+    const runtime = new McpOAuthRuntime({ store: memoryStore(credential), clock: () => 100_000 });
+
+    await expect(runtime.getConnectionAction("linear", config)).resolves.toBe(want);
+  });
+
+  it("does not read the OAuth store for explicit static Authorization", async () => {
+    const store = { get: vi.fn(async () => { throw new Error("credential store unavailable"); }) } as unknown as McpOAuthCredentialStore;
+    const runtime = new McpOAuthRuntime({ store });
+
+    await expect(runtime.getConnectionAction("linear", {
+      type: "http", url: "https://mcp.test/mcp", headers: { Authorization: "Bearer static" },
+    })).resolves.toBe("ignore");
+    expect(store.get).not.toHaveBeenCalled();
+  });
+
   it("coalesces refresh and rejects expanded refresh scopes", async () => {
     const store = memoryStore(makeCredential());
     const fetch = vi.fn(async () => new Response(JSON.stringify({ access_token: "new", refresh_token: "new-refresh", token_type: "Bearer", scope: "read write" }), { status: 200, headers: { "content-type": "application/json" } })) as unknown as typeof globalThis.fetch;

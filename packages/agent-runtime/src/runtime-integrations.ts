@@ -12,8 +12,6 @@ import {
   createMcpServerIdentity,
   McpClientManager,
   McpOAuthRuntime,
-  resolveMcpAuthMode,
-  resolveMcpOAuthStatus,
 } from "@openharness/mcp";
 import { McpOAuthCredentialStore } from "@openharness/auth";
 import { getAllAgentDefinitions } from "@openharness/coordinator";
@@ -49,7 +47,10 @@ export interface InstallRuntimeIntegrationsOptions {
 /** Install integrations that need a fully constructed RuntimeBundle. */
 export async function installRuntimeIntegrations(
   options: InstallRuntimeIntegrationsOptions,
-): Promise<() => ReturnType<McpClientManager["getConnections"]>> {
+): Promise<{
+  getConnections: () => ReturnType<McpClientManager["getConnections"]>;
+  retainConnectionsForRun: () => () => void;
+}> {
   const { runtime } = options;
   const memory = options.memory;
   const inventory = options.discovery.pluginCapabilityInventory;
@@ -147,7 +148,7 @@ export async function installRuntimeIntegrations(
       identityFor,
       mcpServers,
       mcpManager,
-      credentialStore,
+      oauthRuntime: mcpOAuthRuntime,
       stageAndActivate,
       disconnectServer,
       registry: runtimeRegistry,
@@ -252,7 +253,10 @@ export async function installRuntimeIntegrations(
     }, pluginId);
   };
 
-  return () => mcpManager.getConnections();
+  return {
+    getConnections: () => mcpManager.getConnections(),
+    retainConnectionsForRun: () => mcpManager.retainCurrentConnections(),
+  };
 }
 
 function assertPluginMcpServerNamesAvailable(options: InstallRuntimeIntegrationsOptions): void {
@@ -298,7 +302,7 @@ export interface CreateMcpRuntimeHandleInput {
   identityFor(name: string): McpServerIdentity | undefined;
   mcpServers: Record<string, McpServerConfig>;
   mcpManager: McpClientManager;
-  credentialStore: McpOAuthCredentialStore;
+  oauthRuntime: McpOAuthRuntime;
   registry: McpRuntimeRegistry;
   stageAndActivate(
     name: string,
@@ -333,19 +337,10 @@ export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): Acti
       if (!config || !current || current.endpointFingerprint !== identity.endpointFingerprint) return;
       if (input.registry.currentGeneration(identity) !== generation) return;
 
-      const credential = await input.credentialStore.get(identity.name);
+      const action = await input.oauthRuntime.getConnectionAction(identity.name, config);
       if (input.registry.currentGeneration(identity) !== generation) return;
-      // A legacy logged-in Runtime may still hold a config without an OAuth
-      // marker after logout backfills settings in another process. Only an
-      // explicit static Authorization must opt out of OAuth synchronization.
-      const authMode = resolveMcpAuthMode(config, credential);
-      if (authMode === "bearer" || authMode === "custom") return;
-
-      const status = resolveMcpOAuthStatus(config, credential);
-      const usable =
-        (status === "valid" || status === "expired-refreshable") &&
-        credential?.serverUrl === config.url;
-      if (usable) {
+      if (action === "ignore") return;
+      if (action === "connect") {
         await input.stageAndActivate(identity.name, config, identity, generation);
       } else {
         await input.disconnectServer(identity.name);

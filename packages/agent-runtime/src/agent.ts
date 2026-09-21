@@ -175,6 +175,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
     private readonly runtime: RuntimeBundle,
     private readonly session: AgentSession,
     private readonly mcpConnections: () => readonly McpConnection[],
+    private readonly retainMcpConnectionsForRun: () => () => void,
     private readonly memory: AgentMemoryRuntime | undefined,
     private readonly eventBus: AgentEventBus,
     private readonly effects: AgentEffects,
@@ -210,7 +211,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
       traceId: randomUUID(),
     };
     const capabilityView = options.capabilityView ?? this.createRunCapabilityView();
-    const releaseMcpConnections = this.runtime.queryEngine.retainMcpConnectionsForRun?.();
+    const releaseMcpConnections = this.retainMcpConnectionsForRun();
     const run = new FrameworkAgentRun({
       agentId: this.id,
       session: this.session,
@@ -228,7 +229,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
       goal: options.goal,
       capabilityView,
       onSettled: (result, toolActivity) => {
-        releaseMcpConnections?.();
+        releaseMcpConnections();
         if (this.activeRun !== run) return;
         if (result && toolActivity)
           this.completedRunToolActivity = toolActivity;
@@ -429,6 +430,7 @@ export interface AssembledAgentOptions {
   runtime: RuntimeBundle;
   session: AgentSession;
   mcpConnections: () => readonly McpConnection[];
+  retainMcpConnectionsForRun?: () => () => void;
   memory: AgentMemoryRuntime | undefined;
   eventBus: AgentEventBus;
   effects: AgentEffects;
@@ -448,6 +450,7 @@ export function createAssembledAgent(
     options.runtime,
     options.session,
     options.mcpConnections,
+    options.retainMcpConnectionsForRun ?? (() => () => undefined),
     options.memory,
     options.eventBus,
     options.effects,

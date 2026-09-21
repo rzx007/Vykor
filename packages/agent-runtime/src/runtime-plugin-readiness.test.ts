@@ -40,7 +40,7 @@ async function install(plugins: LoadedNativePlugin[], hostServers: Record<string
     configuration: { client: { async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" }; } } },
   });
   runtimes.push(runtime);
-  const getConnections = await installRuntimeIntegrations({ cwd: roots[0]!, sessionId: "readiness", settings: runtime.settings, runtime,
+  const { getConnections } = await installRuntimeIntegrations({ cwd: roots[0]!, sessionId: "readiness", settings: runtime.settings, runtime,
     discovery: { skillRegistry, plugins, agentDefinitions: [], warnings: [],
       mcpServers: Object.assign({}, ...plugins.map(item => item.components.mcpServers?.value ?? {}), hostServers),
       pluginCapabilityInventory: createPluginCapabilityInventory(plugins.map(item => ({ plugin: item, record: {

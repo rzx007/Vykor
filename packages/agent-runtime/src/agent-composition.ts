@@ -78,6 +78,7 @@ export interface AgentComposition {
   runtime: RuntimeBundle;
   session: AgentSession;
   mcpConnections: () => ReturnType<McpClientManager["getConnections"]>;
+  retainMcpConnectionsForRun: () => () => void;
   memory: AgentMemoryRuntime | undefined;
   childManager: AgentChildManager;
   capabilities: ResolvedAgentCapabilities;
@@ -171,7 +172,7 @@ async function composeOpenHarnessAgentInternal(
   });
   rollback.add(() => runtime.close(), runtime);
 
-  const mcpConnections = await installRuntimeIntegrations({
+  const mcpIntegration = await installRuntimeIntegrations({
     cwd,
     sessionId,
     settings,
@@ -191,7 +192,8 @@ async function composeOpenHarnessAgentInternal(
   return {
     runtime,
     session,
-    mcpConnections,
+    mcpConnections: mcpIntegration.getConnections,
+    retainMcpConnectionsForRun: mcpIntegration.retainConnectionsForRun,
     memory: environment.memory,
     childManager: environment.childManager,
     capabilities: environment.capabilities,
