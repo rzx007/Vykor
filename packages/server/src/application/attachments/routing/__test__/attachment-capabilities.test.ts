@@ -31,13 +31,11 @@ describe("attachment input capabilities", () => {
         modelInputCapabilities(model).image,
       ]),
     )).toEqual({
+      "gpt-6-astra": "native",
       "gpt-5.6-sol": "native",
       "gpt-5.6-terra": "native",
       "gpt-5.6-luna": "native",
       "gpt-5.5": "native",
-      "gpt-5.4": "native",
-      "gpt-5.4-mini": "native",
-      "gpt-5.3-codex-spark": "unsupported",
     });
   });
 

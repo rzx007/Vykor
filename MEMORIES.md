@@ -8,6 +8,9 @@
 - 2026-09-02 — `packages/agent-runtime/src/default-node-terminal.ts:28-40` / `packages/terminal-node/src/agent-terminal-host.ts:114-145` / `packages/terminal-node/src/local-terminal-provider.ts:64-88`：默认 Agent Terminal 不读取 sandbox 设置并把所有会话硬编码为 `runtime: "local"`，使启用沙箱的 Agent 仍通过宿主机 PTY 执行 `JobSend` 输入；同时命令 deny 规则只检查 `input.command` 而 `JobSend` 使用 `input.data`，可绕过沙箱及命令黑名单修改工作区外文件；引入提交 `cbecbbe2528c1f4c98735d4d5cf44287700cbe97`；状态 `pending-review`。
 - 2026-09-08 — `packages/permissions/src/index.ts:81-86` / `packages/agent-runtime/src/default-runtime.ts:189-200` / `apps/desktop/src/main/features/settings/settings-service.ts:92-111`：切换到 WSL 时没有迁移或预检现有 Windows 绝对路径 permission.pathRules，但运行时把它们视为致命配置错误；已有 Windows 路径规则的用户保存 WSL 设置后，所有新会话在构造 PermissionChecker 时稳定失败，无法执行任何任务；引入提交 `b1deeecffc80ca97a890fd47cb7b3d18f0fe267a`；状态 `pending-review`。
 - 2026-09-14 — `apps/desktop/src/main/features/workspace/workspace-service.ts:98-130` / `apps/desktop/src/shared/safe-image-preview.ts:17-41` / `apps/desktop/src/renderer/src/components/desktop/tools/file-image-preview.tsx:20-48`：工作区图片预览只按压缩文件大小与魔数放行，未限制像素尺寸或解码内存；合法的高压缩比 PNG/JPEG/GIF/WebP 可在 50 MiB 限制内声明数 GB 像素，打开文件标签时交给 Chromium 解码，稳定耗尽 Desktop 渲染进程内存并崩溃；引入提交 `39fa8a8f1d05a0c618f30bbad886e36da4df61f6` / `186b454916ba1e652c7cc76edb1726ed20bee7ec`；状态 `pending-review`。
+- 2026-09-21 — [中等] `packages/server/src/application/session/run-stall-watchdog.ts:48-49` / `packages/server/src/application/session/session-run-executor.ts:252-276`：无进展看门狗把「活动」只定义为 run 记录 / 会话任务 / 消息三者的 updatedAt 前进（`readActivity`），且只豁免「等待权限」与「运行中的子任务」，没有豁免正在执行的长工具调用；真空期默认 10 分钟（`DEFAULT_RUN_STALL_TIMEOUT_MS`，生产代码无任何覆盖点），而工具只在 tool.started / tool.completed 两个时刻写库、执行期间没有增量输出落库，因此一次超过 10 分钟的阻塞工具（长构建、长测试、pnpm install、对后台 shell 的 JobWait）会被判为卡死并以「运行超过 10 分钟无进展，已自动终止」中断，正常的长任务被误杀并可能留下半途副作用；引入提交 `6aeb2a3048741cf1cf57a9b5fedc14c4e66b1054` / `1d5440876277b3ac5dd198e074c265268a03110c`；状态 `pending-review`。
+- 2026-09-21 — [中等] `packages/server/src/application/channel/channel-application-service.ts:251,265` / `packages/channels/src/impl/feishu.ts:377`：入站附件下载与导入全程没有超时、没有 AbortSignal，且整段处理串行在会话车道内（`withConversationLane`，键为 connector+accountId+chatId+threadId）；飞书侧下载流一旦中途停滞（对端 hang、慢网），`attachments.import` 只按 maxBytes 拦超大、不拦停滞，Promise 永不 settle，该会话后续入站消息将永久排队且无任何错误上报，直至重启守护进程；引入提交 `89a5e40bbecc088e06542437efa9387869e48493` / `0888d1382f252ba3005d3c6c89f907cdddccb419`；状态 `pending-review`。
+
 ## 已审核基线
 
 > 每晚 21:00 的自动审查只读此节最后一条来判断待审区间：审「最后基线日期的次日 00:00:00」到「昨天 23:59:59」。这条基线本身就是审核邮戳——即使某天零发现也要写一行，否则那天会被反复重审。
@@ -15,4 +18,5 @@
 > **每天最多审 1 天**：一次运行只审最早的未审日期，绝不在一次运行里连审多天；剩余积压留给后续运行逐日消化。
 
 - 2026-09-14 — 起点基线。此前只有零散人工审查记录（见上），无逐日覆盖；2026-09-15 起为待审积压。
-- 2026-09-20 — 范围 2026-09-15..2026-09-20（360 个提交）；用户决定不回溯审查，**跳过**（非审查通过，这 6 天不做补审）。基线推进到此日，下一待审日为 2026-09-21。
+- 2026-09-19 — 范围 4e5a4df0..c5433b5c（2026-09-15..2026-09-19，304 个提交）；用户决定不回溯审查，**跳过**（非审查通过，这 5 天不做补审）。基线推进到此日，下一待审日为 2026-09-20。
+- 2026-09-20 — 范围 e0a2d8cb..0e8e945f（62 个提交）；发现 严重 0 / 中等 2
