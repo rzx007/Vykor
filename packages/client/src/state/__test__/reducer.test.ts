@@ -445,6 +445,29 @@ describe("session event reducer", () => {
     expect(state.buckets.s1?.partsByMessageId.m1?.[0]?.text).toBe("hello");
   });
 
+  it("appends reasoning deltas and creates a reasoning placeholder part", () => {
+    let state = createInitialClientState();
+    state = applyEvent(state, event(1, "session.message.part.delta", {
+      sessionId: "s1",
+      messageId: "m1",
+      partId: "p1",
+      field: "reasoning",
+      delta: "先想一下",
+    }));
+
+    const part = state.buckets.s1?.partsByMessageId.m1?.[0];
+    expect(part).toMatchObject({ id: "p1", type: "reasoning", text: "先想一下", status: "running" });
+
+    state = applyEvent(state, event(2, "session.message.part.delta", {
+      sessionId: "s1",
+      messageId: "m1",
+      partId: "p1",
+      field: "reasoning",
+      delta: "再动手",
+    }));
+    expect(state.buckets.s1?.partsByMessageId.m1?.[0]?.text).toBe("先想一下再动手");
+  });
+
   it("updates permission state after reply and can hydrate from replayed history", () => {
     const pending: PermissionRequestRecord = {
       id: "p1",
