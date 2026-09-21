@@ -93,11 +93,13 @@ reasoning?: string;
 reasoningReplay?: string;
 ```
 
-`packages/core/src/types/runtime.ts` 的 AgentEvent 新增与 `output.text.delta` 并列的 `output.reasoning.delta`（`data: { delta: string; source: "reasoning_content" | "think" }`）。
+`packages/core/src/types/runtime.ts` 的 `AgentEventInput` 联合新增与 `output.text.delta` 并列的 `output.reasoning.delta`（`data: { delta: string; source: "reasoning_content" | "think" }`）。注意 `AgentEvent = AgentEventInput & { context }`（同文件 `:302`），要改的是 `AgentEventInput`，直接往 `AgentEvent` 加成员无法编译。
 
 ### 协议
 
 `packages/protocol/src/session.ts:513-519` 的 `AppendMessagePartDeltaInput.field` 从 `"text"` 放开为 `"text" | "reasoning"`。`SessionMessagePartType` 已含 `"reasoning"`，无需改动；无需数据库 schema 迁移。
+
+reasoning part 的来源记录在 `metadata.source`（`"reasoning_content" | "think"`）：part 记录没有专有字段，`metadata` 是协议留给扩展的位置。重建历史时要靠它区分哪些能回传。
 
 ### 设置
 
@@ -111,6 +113,17 @@ reasoningReplay?: string;
 - 把 `stripThinkBlocks` 改造成 `extractThinkBlocks`：返回 `{ visible, reasoning, leftover }` 三段，保留现有跨 chunk 尾部扣留逻辑；`<think>` 内容产出 `reasoning_delta`（`source: "think"`）。删除 `stripThinkBlocks` 并迁移其测试。
 - 处理顺序：`<think>` 抽取 → DSML 工具调用扫描器 → 输出。思考内容不参与工具调用恢复。
 - 一次响应内两类来源可以同时出现，按各自的累积器分别记录。
+- 流结束（EOF）时残留的三段语义要明确：
+  - 完整但未闭合的 `<think>` 块（含内容）：内容按 `reasoning_delta` 发出，标签本身丢弃。它本来就属于思考内容，继续当正文发会更糟。
+  - 只是"可能是 `<think>` 前缀"的尾巴（如流末尾的 `<thi`）：按正文发出，绝不吞字。
+  - 既非标签也非前缀的残留：按正文发出。
+
+### 1.1 事件跨层接线（漏一处功能就整体失效）
+
+运行时有两跳是按类型显式枚举、未识别类型会被静默忽略的，必须同时补：
+
+- `packages/agent-runtime/src/framework-agent-run.ts:240-277` 的 `projectStreamEvent`：新增 `reasoning_delta` → `output.reasoning.delta` 分支。这里不补，事件在 agent 运行时就被丢掉。
+- `packages/server/src/application/agent/daemon-agent-event-projector.ts:121-127` 的 `project()`：新增 `output.reasoning.delta` → `reasoning_delta` 的映射，再交给 `projectStream` 落到 transcript。
 
 ### 2. 引擎与回传（packages/core/src/engine/query-engine.ts）
 
@@ -118,6 +131,15 @@ reasoningReplay?: string;
 - `packages/api/src/providers/openai.ts` 的 `convertMessages` 改为读 `msg.reasoningReplay`，删除 `reasoningHistory` 及其两处读写。
 - `OPENHARNESS_REQUIRE_EMPTY_REASONING_CONTENT` 语义不变：assistant 消息带 `toolUses` 但无 `reasoningReplay` 时，按开关补空串。
 - 压缩把消息丢弃时，思考内容随消息一起消失（不发这条消息就不需要回传，符合上游规则）；压缩采用 `...msg` 展开的路径会自然保留字段。
+
+### 2.1 历史重建与压缩重写（不改会污染正文、回传也会丢）
+
+会话热加载 / daemon 重启时，core 的消息不是从内存来的，而是 `buildAgentTranscript`（`packages/server/src/application/agent/agent-transcript.ts:25-87`，调用点 `packages/server/src/daemon/daemon-agent.ts:228-229`）从落盘 transcript 重建。这条路径今天就在，必须先改好，否则 reasoning part 一落地就会被当成正文：
+
+- `textFromParts`（`agent-transcript.ts:189-194`）现在把 `type === "reasoning"` 的文本并进 assistant `content` —— 必须改成只取 `text` part，否则思考内容会被当正文回传给上游。
+- 同处要从 reasoning part 还原两个字段：所有 reasoning part 文本拼成 `reasoning`；`metadata.source === "reasoning_content"` 的那些同时拼成 `reasoningReplay`。这是"DeepSeek + tools 不 400"能在重启后依然成立的关键。
+- 只有 reasoning、没有正文和工具调用的 assistant 消息也要保留（`content` 为空串），否则这轮消息会从重建结果里消失。
+- 压缩重写 transcript 时走 `agentMessagesToTranscript`（`agent-transcript.ts:106-177`，调用点 `packages/server/src/application/session/session-maintenance-service.ts:132-134`）：assistant 消息要把 `reasoning` / `reasoningReplay` 写成 reasoning part（含 `metadata.source`），保证压缩后的最新几轮在重建时仍能正确回传。
 
 ### 3. 服务端投影（packages/server/src/application/session/transcript-projection.ts）
 
@@ -133,9 +155,12 @@ reasoningReplay?: string;
 
 ### 5. 设置与命令
 
-- `GET/PATCH /settings` 支持 `showReasoning`；桌面设置页新增开关；TUI 读取同一设置。
-- 新增 `/reasoning on|off` 命令（`packages/client/src/commands/session-commands.ts`，参照 `/effort` 的读写方式）。它写的是用户级 `settings.json`：展示与否是用户偏好，不按会话区分。
-- 未设置时视为显示。
+- `GET/PATCH /settings` 支持 `showReasoning`；TUI 读取同一设置；未设置时视为显示。
+- 桌面这条链路要按现有 `workStyle` 的样板补齐：`buildDesktopSettingsSnapshot`（`apps/desktop/src/shared/settings-types.ts:58-78`）带上字段，再补主进程写方法（参照 `updateWorkStyle`）、IPC 通道、preload 契约和设置页开关。只加快照字段会导致设置页的开关没有写值通路。
+- 新增 `/reasoning on|off` 命令（`packages/client/src/commands/session-commands.ts`）。它写的是用户级 `settings.json`：展示与否是用户偏好，不按会话区分。要跟 `/effort` 一样在三处登记，否则命令能敲但不进补全/帮助：
+  1. `packages/server/src/commands/commands.ts` 的命令目录（`GET /commands`，桌面与 TUI 的补全来源）。
+  2. `session-commands.ts` 的 `shouldPresentSlashOutput`：支持无参数时打印当前状态。
+  3. `packages/server/src/application/default-services/settings-service.ts:266-300` 的 `coerceConfigValue` 布尔键白名单加 `showReasoning`，否则 `/config set showReasoning off` 存进去的是字符串 `"off"`（真值）。
 
 ## 错误边界与状态
 
@@ -149,11 +174,12 @@ reasoningReplay?: string;
 
 ### 分层测试
 
-- api：`<think>` 抽取（完整块、未闭合扣留、跨 chunk 拆分）、`reasoning_content` 转事件、两类来源混合、消息字段回传、`reasoningHistory` 删除后的回归（多轮工具调用场景）。
+- api：`<think>` 抽取（完整块、未闭合扣留、跨 chunk 拆分）、EOF 残留的三段语义、`reasoning_content` 转事件、两类来源混合、消息字段回传、`reasoningHistory` 删除后的回归（多轮工具调用场景）。
+- agent-runtime：`projectStreamEvent` 能把 `reasoning_delta` 转成 `output.reasoning.delta`（防止事件被静默忽略的回归）。
 - core：引擎累积并写入消息、事件顺序、压缩后字段消失的行为。
-- server：reasoning part 的建立/增量/关闭、与 text/tool part 的交替、落盘安全阀、`showReasoning` 设置读写。
+- server：事件投影映射、reasoning part 的建立/增量/关闭、与 text/tool part 的交替、落盘安全阀、`buildAgentTranscript` 重建出 `reasoning` / `reasoningReplay` 且正文不含思考文本、`agentMessagesToTranscript` 写回 reasoning part、`showReasoning` 设置读写。
 - client：reducer 处理 `field: "reasoning"`（含缺 part 时创建占位、重连去重）。
-- 桌面 / TUI：开关生效、折叠渲染、超长省略。
+- 桌面 / TUI：开关生效（含桌面设置快照/IPC 写值通路）、折叠渲染、超长省略。
 
 ### 手工验收
 
@@ -161,6 +187,7 @@ reasoningReplay?: string;
 2. 设置里关闭 `showReasoning` 后，历史与新消息里的思考块都消失，重新打开后恢复。
 3. DeepSeek 带 `tools` 的多轮工具调用会话不再出现 400（对照改动前用下标 Map 的行为）。
 4. 长会话（触发一次压缩）里，思考内容不会贴到错误的 assistant 消息上。
+5. 重启 daemon 后在同一会话里继续带工具的多轮对话：历史里思考块仍在，且不出现 400（验证 `buildAgentTranscript` 的重建路径）。
 
 ## 不在范围内
 
