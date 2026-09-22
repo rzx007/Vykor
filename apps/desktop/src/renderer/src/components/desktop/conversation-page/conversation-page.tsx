@@ -11,6 +11,7 @@ import {
   MessageScrollerViewport,
 } from "@renderer/components/ui/message-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { cn } from "@renderer/lib/utils"
 import {
   areDesktopAttachmentsSendable,
   disabledDesktopAttachmentSupport,
@@ -29,6 +30,7 @@ import {
 } from "@renderer/stores/desktop-session/composer-document"
 import {
   selectActiveSessionOpening,
+  selectActiveSessionRecord,
   selectActiveSessionComposerError,
   selectActiveSessionPermissionReplies,
   selectActiveSessionPromptSubmissions,
@@ -64,7 +66,7 @@ import { ProjectInfoButton } from "./session/project-info-popover"
 import { SessionMoreMenu } from "./session/session-more-menu"
 import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
-import { ConversationTranscriptSkeleton } from "./transcript/conversation-transcript-skeleton"
+import { ConversationTranscriptSkeletonOverlay } from "./transcript/conversation-transcript-skeleton"
 import { ConversationTranscript } from "./transcript/transcript"
 import { useShowReasoning } from "./use-show-reasoning"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./types"
@@ -97,6 +99,7 @@ function ConversationPane({
   const navigate = useNavigate()
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
+  const activeSession = useDesktopSessionStore(selectActiveSessionRecord)
   const openingSession = useDesktopSessionStore(selectActiveSessionOpening)
   const activeSessionError = useDesktopSessionStore(selectActiveSessionComposerError)
   const newConversationError = useDesktopSessionStore(selectNewConversationError)
@@ -226,7 +229,7 @@ function ConversationPane({
     return () => window.clearInterval(timer)
   }, [activeSessionId, refreshGoal])
 
-  const title = sessionView?.session.title.trim() || "新对话"
+  const title = activeSession?.title.trim() || "新对话"
   const currentModel = sessionView?.session.model ?? selectedModel
   const modelLabel = resolveModelLabel(models, currentModel, selectedProvider)
   const running = Boolean(
@@ -286,8 +289,12 @@ function ConversationPane({
     commandCwd && skillCommandSnapshot?.cwd === commandCwd ? skillCommandSnapshot.commands : []
   const skillCommands: ComposerSkill[] = toComposerSkills(commandCatalog)
   const applicationCommands = toComposerCommands(commandCatalog)
-  const pluginCatalog = pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd ? pluginSnapshot.plugins : []
-  const pluginCatalogError = pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd ? pluginSnapshot.error ?? null : null
+  const pluginCatalog =
+    pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd ? pluginSnapshot.plugins : []
+  const pluginCatalogError =
+    pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd
+      ? (pluginSnapshot.error ?? null)
+      : null
   const canSubmit =
     areDesktopAttachmentsSendable(attachments) &&
     Boolean(draftText.trim() || attachments.length > 0)
@@ -361,10 +368,21 @@ function ConversationPane({
     if (!pluginMentionsEnabled || !commandCwd || loadStatus !== "ready") return
     let cancelled = false
     void window.desktop.sessions.listContextPlugins(commandCwd).then(
-      (plugins) => { if (!cancelled) setPluginSnapshot({ cwd: commandCwd, plugins }) },
-      () => { if (!cancelled) setPluginSnapshot({ cwd: commandCwd, plugins: [], error: "插件列表暂时无法加载，请稍后重试。" }) },
+      (plugins) => {
+        if (!cancelled) setPluginSnapshot({ cwd: commandCwd, plugins })
+      },
+      () => {
+        if (!cancelled)
+          setPluginSnapshot({
+            cwd: commandCwd,
+            plugins: [],
+            error: "插件列表暂时无法加载，请稍后重试。",
+          })
+      }
     )
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [commandCwd, loadStatus])
 
   const executeComposerCommand = useCallback(
@@ -408,7 +426,7 @@ function ConversationPane({
             <ProjectInfoButton
               selectedProject={selectedProject}
               projects={projects}
-              cwd={sessionView?.session.cwd ?? null}
+              cwd={activeSession?.cwd ?? null}
               sessions={sessions}
             />
             <h1 className="text-ui-small truncate font-semibold">{title}</h1>
@@ -513,51 +531,60 @@ function ConversationPane({
         />
       ) : (
         <>
-          <MessageScrollerProvider
-            key={`${activeSessionId ?? "new-session"}:${sessionView?.session.id === activeSessionId ? "ready" : "loading"}`}
-            autoScroll
-            defaultScrollPosition="end"
-            scrollPreviousItemPeek={72}
-          >
-            <MessageScroller className="min-h-0 min-w-0 flex-1">
-              <MessageScrollerViewport className="overflow-x-hidden">
-                <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
-                  {openingSession && !sessionView ? (
-                    <ConversationTranscriptSkeleton />
-                  ) : (
-                    <ConversationTranscript
-                      inputs={sessionView?.inputs ?? []}
-                      messages={transcript.messages}
-                      parts={transcript.parts}
-                      runs={sessionView?.runs ?? []}
-                      running={running}
-                      canEditLastUserMessage={!archived && !running && !sending}
-                      onEditLastUserMessage={(sourceMessageId, content) =>
-                        void editLatestUserMessage(sourceMessageId, content)
-                      }
-                      onCopyAssistantMessage={(content) => void copyAssistantMessage(content)}
-                      onForkAssistantMessage={(messageId) =>
-                        void forkFromAssistantMessage(messageId)
-                      }
-                      onOpenFile={onOpenFile}
-                      canOpenReview={canOpenReview}
-                      onOpenReview={onOpenReview}
-                      onOpenTerminal={onOpenTerminal}
-                      showReasoning={showReasoning}
-                    />
-                  )}
-                </MessageScrollerContent>
-              </MessageScrollerViewport>
-              <MessageScrollerButton className="bottom-5" title={scrollerAgentStatus?.title}>
-                {scrollerAgentStatus ? (
-                  <>
-                    <ScrollerAgentStatusIcon kind={scrollerAgentStatus.kind} />
-                    <span className="sr-only">滚动到最新</span>
-                  </>
-                ) : undefined}
-              </MessageScrollerButton>
-            </MessageScroller>
-          </MessageScrollerProvider>
+          <div className="relative min-h-0 min-w-0 flex-1">
+            <MessageScrollerProvider
+              key={`${activeSessionId ?? "new-session"}:${sessionView?.session.id === activeSessionId ? "ready" : "loading"}`}
+              autoScroll
+              defaultScrollPosition="end"
+              scrollPreviousItemPeek={72}
+            >
+              <MessageScroller
+                className={cn(
+                  "min-h-0 min-w-0 flex-1",
+                  sessionView && "animate-in duration-200 fade-in-0 motion-reduce:animate-none"
+                )}
+              >
+                <MessageScrollerViewport className="overflow-x-hidden">
+                  <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
+                    {openingSession && !sessionView ? null : (
+                      <ConversationTranscript
+                        inputs={sessionView?.inputs ?? []}
+                        messages={transcript.messages}
+                        parts={transcript.parts}
+                        runs={sessionView?.runs ?? []}
+                        running={running}
+                        canEditLastUserMessage={!archived && !running && !sending}
+                        onEditLastUserMessage={(sourceMessageId, content) =>
+                          void editLatestUserMessage(sourceMessageId, content)
+                        }
+                        onCopyAssistantMessage={(content) => void copyAssistantMessage(content)}
+                        onForkAssistantMessage={(messageId) =>
+                          void forkFromAssistantMessage(messageId)
+                        }
+                        onOpenFile={onOpenFile}
+                        canOpenReview={canOpenReview}
+                        onOpenReview={onOpenReview}
+                        onOpenTerminal={onOpenTerminal}
+                        showReasoning={showReasoning}
+                      />
+                    )}
+                  </MessageScrollerContent>
+                </MessageScrollerViewport>
+                <MessageScrollerButton className="bottom-5" title={scrollerAgentStatus?.title}>
+                  {scrollerAgentStatus ? (
+                    <>
+                      <ScrollerAgentStatusIcon kind={scrollerAgentStatus.kind} />
+                      <span className="sr-only">滚动到最新</span>
+                    </>
+                  ) : undefined}
+                </MessageScrollerButton>
+              </MessageScroller>
+            </MessageScrollerProvider>
+            <ConversationTranscriptSkeletonOverlay
+              key={activeSessionId}
+              loading={openingSession && !sessionView}
+            />
+          </div>
 
           {!archived && pendingPermissions.length > 0 ? (
             <div
@@ -605,7 +632,10 @@ function ConversationPane({
                 error={goalComposer.error}
                 onDismiss={() => dismissGoalError(composerScope)}
               />
-              <ScopedOperationError key={`error:${composerScope}`} error={composerValidationError ?? activeSessionError ?? pluginCatalogError} />
+              <ScopedOperationError
+                key={`error:${composerScope}`}
+                error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
+              />
               <PluginPreparationStatus activeSessionId={activeSessionId} view={sessionView} />
               <PendingPromptQueue
                 prompts={pendingPrompts}

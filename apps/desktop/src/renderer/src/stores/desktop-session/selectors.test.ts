@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { createEmptySessionRuntime } from "./operation-state"
 import {
   selectActiveSessionOpening,
+  selectActiveSessionRecord,
   selectActiveSessionPermissionReplies,
   selectActiveWorkspaceProject,
   selectCommandCatalogCwd,
@@ -73,6 +74,24 @@ function channelSession(overrides: Partial<DesktopSessionRecord> = {}): DesktopS
     ...overrides,
   }
 }
+
+describe("selectActiveSessionRecord", () => {
+  it("keeps the target session's title and cwd available while its view loads", () => {
+    const session = channelSession({ id: "target", title: "历史对话", cwd: "D:\\project" })
+    const state = stateWith({
+      activeSessionId: session.id,
+      sessionView: null,
+      sessions: [session],
+      archivedSessions: [],
+    })
+
+    expect(selectActiveSessionRecord(state)).toBe(session)
+    const archived = { ...session, status: "archived" as const }
+    expect(selectActiveSessionRecord({ ...state, sessions: [], archivedSessions: [archived] })).toBe(
+      archived
+    )
+  })
+})
 
 describe("selectImSessionGroups", () => {
   it("groups only channel sessions by platform with labels", () => {

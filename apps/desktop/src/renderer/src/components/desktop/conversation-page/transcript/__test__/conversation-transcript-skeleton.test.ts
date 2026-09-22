@@ -3,17 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import { ConversationTranscriptSkeleton } from "../conversation-transcript-skeleton"
-import { MessageScrollerProvider } from "@renderer/components/ui/message-scroller"
 
 describe("ConversationTranscriptSkeleton", () => {
   it("renders a conversation-shaped skeleton without visible loading copy", () => {
-    const html = renderToStaticMarkup(
-      createElement(
-        MessageScrollerProvider,
-        null,
-        createElement(ConversationTranscriptSkeleton)
-      )
-    )
+    const html = renderToStaticMarkup(createElement(ConversationTranscriptSkeleton))
 
     expect(html).toContain('aria-label="正在加载会话"')
     expect(html).toContain("aria-busy")

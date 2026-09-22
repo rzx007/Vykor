@@ -23,10 +23,7 @@ const permissionReplyStatesByOperations = new WeakMap<
   Record<string, PermissionReplyState>
 >()
 
-const composerOperationKinds = new Set<DesktopOperationKind>([
-  "send-prompt",
-  "edit-prompt",
-])
+const composerOperationKinds = new Set<DesktopOperationKind>(["send-prompt", "edit-prompt"])
 
 const sessionErrorOperationKinds = new Set<DesktopOperationKind>([
   "open-session",
@@ -131,13 +128,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-export function selectActiveSessionRecord(
-  state: DesktopSessionState
-): DesktopSessionRecord | null {
+export function selectActiveSessionRecord(state: DesktopSessionState): DesktopSessionRecord | null {
   if (!state.activeSessionId) return null
   return state.sessionView?.session.id === state.activeSessionId
     ? state.sessionView.session
-    : (state.sessions.find((session) => session.id === state.activeSessionId) ?? null)
+    : (state.sessions.find((session) => session.id === state.activeSessionId) ??
+        state.archivedSessions.find((session) => session.id === state.activeSessionId) ??
+        null)
 }
 
 /**
