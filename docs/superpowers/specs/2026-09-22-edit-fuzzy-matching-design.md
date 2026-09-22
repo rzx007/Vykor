@@ -1,0 +1,207 @@
+# Edit 模糊匹配兜底设计
+
+> 状态：待实现。
+
+## 目标
+
+让 `Edit` 工具在 `old_string` 与文件实际内容存在**缩进、空白、行尾、转义**差异时仍能正确替换。当前 `Edit` 是精确子串匹配，差一个空格或换行就直接失败；失败后模型往往改用 `Write` 整文件重写，而整文件重写在大文件上会触发"单次输出截断 → 分多次写入 → 向用户解释分段原因"的连锁反应。修复匹配健壮性即切断这条因果链。
+
+本阶段只改匹配策略。工具的入参、返回结构、既有错误文案与成功文案全部不变。
+
+## 背景与现状
+
+`packages/tools/src/file/edit.ts` 的匹配核心只有一行：
+
+```ts
+if (!content.includes(oldString)) {
+  return { content: [{ type: "text", text: "old_string not found in file." }], isError: true };
+}
+```
+
+它的三个脆弱点：
+
+1. **精确匹配，零容错**。缩进、空白、行尾任一不同即失败。
+2. **不处理行尾**。文件是 CRLF、模型给 LF 的 `old_string` 时必然失败。`HostFileOperations.readText`（`packages/tools/src/file/operations.ts:51`）用 `readFile(path, "utf-8")`，不做任何行尾归一。
+3. **不处理 BOM**。`readFile(path, "utf-8")` 不剥离 BOM，`\uFEFF` 留在内容开头，编辑首行容易失败。
+
+现有行为细节（必须保留）：
+
+- 空 `old_string` → `"old_string must not be empty."`
+- 未命中 → `"old_string not found in file."`
+- 命中多处且未开 `replace_all` → `"Found N matches at lines .... Make old_string more specific or use replace_all to replace all."`（`findMatchLines` 计算行号；`packages/tools/src/file/__test__/edit.test.ts:30` 精确断言了这条文案）
+- 成功 → `"Successfully edited ${filePath}"`
+
+## 术语
+
+- **replacer**：一个 `(content, find) => Generator<string>` 函数，产出所有候选匹配片段。产出 0 个表示该策略不适用。
+- **唯一匹配**：候选片段在内容中只出现一次（`index === lastIndex`）。非 `replaceAll` 时只有唯一匹配才可应用，避免改错位置。
+- **兜底链**：按固定优先级依次尝试的 replacer 列表。第一个产出唯一匹配的策略胜出。
+- **吞大段（disproportionate match）**：模糊匹配到的片段远大于 `old_string`，说明匹配跑偏，必须拒绝。
+
+## 设计决策
+
+1. **匹配逻辑抽成独立纯函数模块** `packages/tools/src/file/edit-replacers.ts`，`edit.ts` 变薄。理由：9 级策略各自需要独立单测，混在工具执行流程里无法单独验证。
+
+2. **移植 opencode 的 9 级兜底链**，顺序即优先级：精确 → 逐行 trim → 首尾锚点(Levenshtein ≥0.65) → 空白归一 → 缩进无关 → 转义还原 → 边界 trim → 上下文行(≥50%) → 多 occurrence。该链路源自 cline / gemini-cli 的实践，opencode 已在多供应商环境验证。全部为纯函数，移植与测试成本低。
+
+3. **不新增依赖**。Levenshtein 距离内联实现（opencode 亦如此）；不需要 `diff` 包（该包只用于产出 patch 供 UI/授权展示，本阶段不做）。
+
+4. **保留现有精确匹配的歧义语义**。精确命中多处且未开 `replaceAll` 时，仍返回带行号的原文案。模糊策略只在其后兜底，不改变精确路径的既有行为。
+
+5. **吞大段护栏必须存在**。模糊匹配（尤其锚点与上下文策略）可能匹配到"另一段相似代码"。命中前先过 `isDisproportionateMatch`，超限直接拒绝替换并报错，不做静默选择。
+
+6. **行尾在文本层归一**。读取原内容后探测其行尾，把 `oldString`/`newString` 先归一成 LF、再转成文件自身行尾，然后匹配/替换；写回保持文件原行尾。不修改 `operations.readText`/`writeText`，避免波及 Read 工具等全局读取路径。
+
+7. **BOM 在文本层处理**。读取后检测前导 `\uFEFF`，剥离后参与匹配；`old_string`/`new_string` 也剥一次前导 BOM，保证两侧一致；写回时按原样补回。同样不修改全局读取路径。
+
+8. **不做严格模式开关**。靠吞大段护栏 + 多命中报错兜底即可，不引入额外配置（YAGNI）。
+
+## 接口
+
+### 新模块 `packages/tools/src/file/edit-replacers.ts`
+
+```ts
+export type Replacer = (content: string, find: string) => Generator<string, void, unknown>;
+
+export function replace(
+  content: string,
+  oldString: string,
+  newString: string,
+  replaceAll?: boolean,
+): string;
+
+export function isDisproportionateMatch(search: string, oldString: string): boolean;
+export function normalizeLineEndings(text: string): string;
+export function detectLineEnding(text: string): "\n" | "\r\n";
+export function convertToLineEnding(text: string, ending: "\n" | "\r\n"): string;
+
+export const SimpleReplacer: Replacer;
+export const LineTrimmedReplacer: Replacer;
+export const BlockAnchorReplacer: Replacer;
+export const WhitespaceNormalizedReplacer: Replacer;
+export const IndentationFlexibleReplacer: Replacer;
+export const EscapeNormalizedReplacer: Replacer;
+export const TrimmedBoundaryReplacer: Replacer;
+export const ContextAwareReplacer: Replacer;
+export const MultiOccurrenceReplacer: Replacer;
+```
+
+`replace` 会抛出两类可区分的错误，由 `edit.ts` 映射成工具文案：
+
+- **未找到**：全链都没有产出任何候选 → `edit.ts` 映射为既有文案 `"old_string not found in file."`。
+- **歧义**：某级产出了候选，但都不是唯一匹配（且未开 `replaceAll`）→ `edit.ts` 映射为 `"Found multiple matches for oldString. Provide more surrounding context to make the match unique."`。**注意**：这是模糊路径专用的新文案；精确路径的多命中仍由 `edit.ts` 在第 5 步用既有带行号文案处理，两者互不影响。
+
+`replace` 的前置校验：`oldString === newString` 时抛 `"No changes to apply: oldString and newString are identical."`。这是相对现状的**新增校验**——当前代码在此情况下会走完流程并返回成功文案（实际什么都没改），属既有缺陷，本阶段一并修正。
+
+### `edit.ts` 保持不变的对外契约
+
+- 入参：`file_path`、`old_string`、`new_string`、`replace_all`。
+- **既有**错误/成功文案逐字不变（空 `old_string`、精确多命中带行号、未找到、成功、sandbox、系统目录、managed persistence）。
+- 本阶段新增两条错误文案：模糊路径歧义、`oldString === newString`（见「接口」与「错误处理」）。
+- 沙箱校验、系统目录校验、managed persistence 校验顺序不变。
+- `findMatchLines` 仍留在 `edit.ts`，用于精确匹配的歧义报错。
+
+## 运行流程
+
+### `replace()` 算法
+
+1. 若 `oldString === newString` → 抛错。
+2. 按顺序遍历兜底链；对每个 replacer：
+   1. 收集它产出的候选片段。
+   2. `replaceAll === true`：取第一个候选，做 `content.replaceAll(search, newString)` 并返回。
+   3. `replaceAll !== true`：跳过在内容中不唯一的候选（`index !== lastIndex`）。对唯一候选：
+      - 先过 `isDisproportionateMatch(search, oldString)`，超限则抛错；
+      - 返回 `content.slice(0, index) + newString + content.slice(index + search.length)`。
+3. 全链无可用候选 → 抛错。
+
+`edit.ts` 的调用顺序：
+
+1. 空 `old_string` 校验 → 既有文案。
+2. 路径解析、managed persistence、系统目录、sandbox 读/写校验 → 全部不变。
+3. `content = operations.readText(filePath)`。
+4. 探测并剥离 BOM，得到 `body`；记录 `hasBom`。
+5. **精确路径优先，以保留歧义语义**：若 `body.includes(oldString)`：
+   - 统计出现次数；
+   - 次数 > 1 且未开 `replaceAll` → 返回既有带行号文案（`findMatchLines`）；
+   - 否则替换（`replaceAll` 全替换，否则替换首个）→ 进入第 7 步。
+6. 精确未命中 → 归一化行尾后调用 `replace(body, oldString, newString, replaceAll)`，按抛出的错误类型映射：
+   - 「未找到」→ 返回既有文案 `"old_string not found in file."`；
+   - 「歧义」→ 返回模糊路径专用文案（见「接口」节）；
+   - 「吞大段」→ 返回该错误文案；
+   - 成功 → 进入第 7 步。
+7. 写回：`(hasBom ? "\uFEFF" : "") + updated`，`operations.writeText`。
+8. 返回既有成功文案。
+
+> 说明：第 5 步刻意在 `edit.ts` 内先做一次精确判定，是为了让"多命中报行号"这条既有行为与文案完全不受兜底链影响。第 6 步的 `replace()` 内部同样以精确匹配开头，因此非歧义场景不会多走一次模糊策略。
+
+## 组件与职责
+
+| 单元 | 职责 | 位置 |
+|---|---|---|
+| `edit-replacers.ts` | 9 级匹配策略、吞大段护栏、行尾三函数 | 新建 |
+| `edit.ts` | 路径/沙箱校验、BOM 处理、精确歧义判定、调用 `replace`、写回 | 改薄 |
+| `edit-replacers.test.ts` | 每个 replacer 单测 + 护栏 + 行尾函数单测 | 新建 |
+| `edit.test.ts` | 端到端行为（含 CRLF / BOM / 吞大段 / 歧义回归） | 追加 |
+
+## 不在范围内
+
+- `apply_patch` 工具（V4A 格式）的引入。
+- 按模型/供应商切换编辑工具集。
+- 编辑后的 LSP 诊断回传、格式化器调用。
+- "必须先 Read 才能 Edit" 的强制约束。
+- `write.ts` 的任何改动。
+- 严格模式开关。
+- `operations.readText` / `writeText` 的全局行为改动。
+
+## 错误处理
+
+| 场景 | 表现 |
+|---|---|
+| 空 `old_string` | 既有文案 `"old_string must not be empty."` |
+| 精确命中多处且未开 `replace_all` | 既有带行号文案（不变） |
+| 全链未命中 | 既有文案 `"old_string not found in file."` |
+| 模糊策略仅产出非唯一候选 | 模糊路径专用歧义文案（新增） |
+| 模糊匹配片段远大于 `old_string` | 拒绝替换并报错，提示重新读取文件后给出完整精确的 `old_string` |
+| `oldString === newString` | 报错，不做任何写入（相对现状为新增校验） |
+| 文件是 CRLF、`old_string` 是 LF | 归一后正常匹配，写回仍是 CRLF |
+| 文件有 BOM、编辑首行 | 剥离后正常匹配，写回保留 BOM |
+| 沙箱拒绝读/写 | 既有 sandbox 错误文案（不变） |
+
+## 测试
+
+### `packages/tools/src/file/__test__/edit-replacers.test.ts`（纯函数）
+
+- 9 个 replacer 各至少一条：命中与不命中。
+- `isDisproportionateMatch`：正向（远超阈值）与反向（正常长度）。
+- `normalizeLineEndings` / `detectLineEnding` / `convertToLineEnding`：LF 与 CRLF 两态、混合内容取 CRLF。
+- `replace()`：唯一匹配才应用；非唯一候选被跳过；`replaceAll` 全量替换。
+
+### `packages/tools/src/file/__test__/edit.test.ts`（端到端，追加）
+
+保留现有 2 条（歧义报行号、sandbox 拒绝），追加：
+
+1. 缩进不符可恢复（`old_string` 少一层缩进仍成功）。
+2. 空白数量不符可恢复。
+3. **CRLF 文件 + LF `old_string`** 可恢复，且写回后文件仍是 CRLF。
+4. **BOM 文件编辑首行**可恢复，且写回后 BOM 仍存在。
+5. 转义还原（`old_string` 里是字面 `\n`）可恢复。
+6. 吞大段被拒绝，返回拒绝文案，且文件未被修改。
+7. 多命中仍报带行号文案（回归，文案逐字一致）。
+8. `replace_all` 全量替换。
+9. 无命中报错文案不变。
+10. 模糊路径仅产出非唯一候选时报歧义文案，且文件未被修改。
+11. `old_string === new_string` 时报错且不做任何写入。
+
+## 风险与缓解
+
+| 风险 | 缓解 |
+|---|---|
+| 模糊匹配改错位置 | 非 `replaceAll` 只接受唯一匹配；命中前过吞大段护栏；精确路径优先级最高 |
+| 锚点策略（Levenshtein）误配到相似代码块 | 相似度阈值 0.65 + 吞大段护栏；且它排在逐行 trim 之后 |
+| 行尾归一后写回改变了文件行尾 | 归一只作用于 `oldString`/`newString`；写回内容始终保留文件原行尾 |
+| BOM 处理破坏二进制或非 UTF-8 文件 | 仅在文本层检测前导 `\uFEFF`；非文本路径不走此逻辑（`edit.ts` 本就是文本工具） |
+| 既有测试文案被改动 | 精确路径与错误文案逐字保留；`edit.test.ts` 现有断言作为回归护栏 |
+
+## 待确认
+
+无。四项取舍已由用户确认：全量 9 级兜底链、包含行尾归一、包含 BOM 处理、不做严格模式开关。
