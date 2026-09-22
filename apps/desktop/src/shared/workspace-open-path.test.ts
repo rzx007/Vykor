@@ -49,4 +49,9 @@ describe("routeChangedFileClick", () => {
       )
     ).toBe("preview")
   })
+
+  it("opens preview for a POSIX absolute path outside a POSIX project", () => {
+    expect(routeChangedFileClick("/Users/ruanz/other/file.ts", "/work/repo", true)).toBe("preview")
+    expect(routeChangedFileClick("/work/repo/src/file.ts", "/work/repo", true)).toBe("review")
+  })
 })

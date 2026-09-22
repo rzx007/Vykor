@@ -21,8 +21,23 @@ export function routeChangedFileClick(
   projectPath: string | undefined,
   canOpenReview: boolean
 ): "review" | "preview" {
-  if (canOpenReview && toProjectRelativePath(path, projectPath)) return "review"
+  if (canOpenReview && isReviewablePath(path, projectPath)) return "review"
   return "preview"
+}
+
+function isReviewablePath(path: string, projectPath: string | undefined): boolean {
+  const normalizedPath = stripExtendedPrefix(
+    path.trim().replace(/:(\d+)(?::\d+)?$/, "").replace(/\\/g, "/")
+  )
+  const normalizedProject = projectPath?.replace(/\\/g, "/").replace(/\/$/, "")
+  if (isWindowsAbsolutePath(normalizedPath)) {
+    if (!normalizedProject) return false
+    return normalizedPath.toLocaleLowerCase().startsWith(`${normalizedProject.toLocaleLowerCase()}/`)
+  }
+  if (normalizedPath.startsWith("/") && normalizedProject?.startsWith("/")) {
+    return normalizedPath === normalizedProject || normalizedPath.startsWith(`${normalizedProject}/`)
+  }
+  return !normalizedPath.startsWith("/") || Boolean(normalizedProject && !normalizedProject.startsWith("/"))
 }
 
 function stripExtendedPrefix(path: string): string {

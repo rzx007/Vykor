@@ -116,6 +116,28 @@ describe("useActiveWorkspaceIsGit", () => {
     expect(isRepository).toHaveBeenCalledWith({ path: "D:/xm" })
   })
 
+  it("probes an outside-project session even while the previous project remains selected", async () => {
+    const isRepository = installProbe(async () => ({ isRepository: true, rootPath: null }))
+    useDesktopSessionStore.setState({
+      selectedProject: {
+        id: "old-project",
+        name: "old",
+        path: "D:/old",
+        lastOpenedAt: 1,
+        available: true,
+      },
+      selectedProjectGit: false,
+      activeSessionId: "s1",
+      sessionView: outsideProjectSessionView("s1", "D:/xm"),
+    })
+
+    const view = renderIsGit()
+    await act(async () => {})
+
+    expect(view.read()).toBe(true)
+    expect(isRepository).toHaveBeenCalledWith({ path: "D:/xm" })
+  })
+
   it("returns false when the probe reports a non-repository", async () => {
     const isRepository = installProbe(async () => ({ isRepository: false, rootPath: null }))
     useDesktopSessionStore.setState({

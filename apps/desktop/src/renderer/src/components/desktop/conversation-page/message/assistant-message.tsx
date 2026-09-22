@@ -414,9 +414,12 @@ export function ChangedFilesSummary({
   const fileKey = useMemo(
     () =>
       files
-        .map((file) =>
-          normalizeReviewPath(toProjectRelativePath(file.path, selectedProjectPath) ?? file.path)
-        )
+        .map((file) => {
+          const path = normalizeReviewPath(
+            toProjectRelativePath(file.path, selectedProjectPath) ?? file.path
+          )
+          return `${path}:${file.additions}:${file.deletions}:${file.hasStats ? "stats" : "patch"}`
+        })
         .join("\n"),
     [files, selectedProjectPath]
   )
@@ -469,9 +472,10 @@ export function ChangedFilesSummary({
     [files, gitStatsByPath, selectedProjectPath]
   )
   const visible = expanded ? filesWithStats : filesWithStats.slice(0, 3)
-  const additions = filesWithStats.reduce((total, file) => total + file.additions, 0)
-  const deletions = filesWithStats.reduce((total, file) => total + file.deletions, 0)
   const hasStats = filesWithStats.some((file) => file.hasStats)
+  const statsFiles = hasStats ? filesWithStats.filter((file) => file.hasStats) : filesWithStats
+  const additions = statsFiles.reduce((total, file) => total + file.additions, 0)
+  const deletions = statsFiles.reduce((total, file) => total + file.deletions, 0)
 
   return (
     <section className="text-ui-small overflow-hidden rounded-lg border bg-transparent">

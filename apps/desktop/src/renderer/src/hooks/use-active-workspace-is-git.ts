@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { probeWorkspaceGit } from "@renderer/lib/workspace-git-probe"
 import {
   selectActiveWorkspaceProject,
+  selectActiveSessionRecord,
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
 
@@ -21,7 +22,11 @@ import {
 export function useActiveWorkspaceIsGit(): boolean | null {
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const selectedProjectGit = useDesktopSessionStore((state) => state.selectedProjectGit)
-  const isProjectSession = useDesktopSessionStore((state) => state.selectedProject !== null)
+  const activeSession = useDesktopSessionStore(selectActiveSessionRecord)
+  const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
+  const isProjectSession = activeSession
+    ? activeSession.workspaceMode !== "outside_project" && activeSession.projectId != null
+    : selectedProject !== null
   const workspacePath = workspaceProject?.path ?? null
   const [probed, setProbed] = useState<{ path: string; value: boolean } | null>(null)
 
