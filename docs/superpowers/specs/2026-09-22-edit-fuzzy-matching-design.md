@@ -50,6 +50,8 @@ if (!content.includes(oldString)) {
 
 5. **吞大段护栏必须存在**。模糊匹配（尤其锚点与上下文策略）可能匹配到"另一段相似代码"。命中前先过 `isDisproportionateMatch`，超限直接拒绝替换并报错，不做静默选择。
 
+   **关于可测性**：当前 9 个 replacer 在正常输入下都不会产出"远超 `oldString`"的候选——只有病态输入（例如单行内数百个连续空格）才可能触发。因此 `replace` 的 `replacers` 参数默认取模块内的 `REPLACERS`，允许测试注入一个"故意产出超长候选"的合成 replacer 来精确验证护栏接线。这是依赖注入式测试缝，不改变默认行为。
+
 6. **行尾在文本层归一**。读取原内容后探测其行尾，把 `oldString`/`newString` 先归一成 LF、再转成文件自身行尾，然后匹配/替换；写回保持文件原行尾。不修改 `operations.readText`/`writeText`，避免波及 Read 工具等全局读取路径。
 
 7. **BOM 在文本层处理，且只对 Host 环境承诺往返保留**。读取后检测前导 `\uFEFF`，剥离后参与匹配；`old_string`/`new_string` 也剥一次前导 BOM，保证两侧一致；写回时按原样补回。
@@ -74,7 +76,10 @@ export function replace(
   oldString: string,
   newString: string,
   replaceAll?: boolean,
+  replacers?: Replacer[],
 ): string;
+
+export const REPLACERS: Replacer[];
 
 export function isDisproportionateMatch(search: string, oldString: string): boolean;
 export function normalizeLineEndings(text: string): string;
@@ -210,7 +215,7 @@ export class EditMatchError extends Error {
 - `normalizeLineEndings` / `detectLineEnding` / `convertToLineEnding`：LF 与 CRLF 两态、混合内容取 CRLF。
 - `replace()`：唯一匹配才应用；非唯一候选被跳过；`replaceAll` 全量替换。
 - `replace()` 错误类型：`not_found` / `ambiguous` / `identical` 各一条，断言 `EditMatchError.kind`。
-- **`replaceAll === true` 且候选远超 `oldString` 时抛 `disproportionate`**（护栏在 `replaceAll` 分支同样生效）。
+- **`replace()` 的吞大段护栏**：注入一个合成 replacer（产出远超 `oldString` 的候选），分别断言 `replaceAll` 为 `false` 与 `true` 时都抛 `disproportionate`（护栏在两个分支都生效）。
 
 ### `packages/tools/src/file/__test__/edit.test.ts`（端到端，追加）
 
@@ -221,14 +226,14 @@ export class EditMatchError extends Error {
 3. **CRLF 文件 + LF `old_string`** 可恢复，且写回后文件仍是 CRLF。
 4. **BOM 文件编辑首行**（Host 环境）可恢复，且写回后 BOM 仍存在。
 5. 转义还原（`old_string` 里是字面 `\n`）可恢复。
-6. 吞大段被拒绝，返回拒绝文案，且文件未被修改。
-7. `replace_all: true` + 巨幅候选时同样被拒绝（护栏回归）。
-8. 多命中仍报带行号文案（回归，文案逐字一致）。
-9. `replace_all` 全量替换。
-10. 无命中报错文案不变。
-11. 模糊路径仅产出非唯一候选时报歧义文案，且文件未被修改。
-12. `old_string === new_string` 时报错且不做任何写入。**用例须使用文件中确实存在的串**（否则测不到第 5 步之前的那道校验）。
-13. CRLF 文件 + LF `old_string`，且归一后多处命中时报 `ambiguous` 文案（锁定上面声明的有意行为）。
+6. 多命中仍报带行号文案（回归，文案逐字一致）。
+7. `replace_all` 全量替换。
+8. 无命中报错文案不变。
+9. 模糊路径仅产出非唯一候选时报歧义文案，且文件未被修改。
+10. `old_string === new_string` 时报错且不做任何写入。**用例须使用文件中确实存在的串**（否则测不到第 5 步之前的那道校验）。
+11. CRLF 文件 + LF `old_string`，且归一后多处命中时报 `ambiguous` 文案（锁定上面声明的有意行为）。
+
+> 吞大段护栏不单列端到端用例：正常输入下真实 replacer 链无法触发它（见设计决策 5），其接线由 `replace()` 的注入式单测覆盖。
 
 ## 风险与缓解
 
