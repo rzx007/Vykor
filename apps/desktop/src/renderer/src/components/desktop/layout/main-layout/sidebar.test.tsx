@@ -395,7 +395,7 @@ describe("Sidebar collapsible sections and empty states", () => {
     expect(container.querySelector('[aria-label="等待处理"]')).not.toBeNull()
   })
 
-  it("refreshes via the header button but not when expanding the IM section", async () => {
+  it("does not render an IM refresh button and never refreshes on expand", async () => {
     const refreshBootstrap = vi.fn(async () => {})
     useDesktopSessionStore.setState({ sessions: [channelSession()], refreshBootstrap })
 
@@ -411,10 +411,7 @@ describe("Sidebar collapsible sections and empty states", () => {
       )
     })
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="刷新 IM 会话"]')?.click()
-    })
-    expect(refreshBootstrap).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('[aria-label="刷新 IM 会话"]')).toBeNull()
 
     // Activity 全局事件负责新会话，展开分区不再触发网络刷新。
     const imSectionBtn = [...container.querySelectorAll("button")].find((b) =>
@@ -426,7 +423,7 @@ describe("Sidebar collapsible sections and empty states", () => {
     await act(async () => {
       imSectionBtn?.click()
     })
-    expect(refreshBootstrap).toHaveBeenCalledTimes(1)
+    expect(refreshBootstrap).not.toHaveBeenCalled()
   })
 
   it("restores collapsed state from localStorage on initial render", () => {

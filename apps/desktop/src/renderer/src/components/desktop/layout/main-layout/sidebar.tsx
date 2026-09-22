@@ -14,7 +14,6 @@ import {
   Pin,
   PinOff,
   PlugZap,
-  RefreshCw,
   Search,
   Settings,
   Smartphone,
@@ -113,7 +112,6 @@ export function Sidebar({
   )
   const archivedSessions = useDesktopSessionStore(selectArchivedSessions)
   const imGroups = useMemo(() => groupImSessions(sessions), [sessions])
-  const refreshBootstrap = useDesktopSessionStore((state) => state.refreshBootstrap)
   const activeSessionId = useDesktopSessionStore(selectActiveSessionId)
   const loadStatus = useDesktopSessionStore(selectLoadStatus)
   const startNewConversation = useDesktopSessionStore((state) => state.startNewConversation)
@@ -364,23 +362,12 @@ export function Sidebar({
 
               {imGroups.length > 0 ? (
                 <>
-                  <div className="mt-4 flex items-center gap-1">
-                    <SidebarSectionHeader
-                      title="IM 会话"
-                      expanded={sectionExpansion.im}
-                      onToggle={() => toggleSection("im")}
-                      className="flex-1"
-                    />
-                    <button
-                      type="button"
-                      aria-label="刷新 IM 会话"
-                      title="刷新 IM 会话"
-                      onClick={() => void refreshBootstrap().catch(() => undefined)}
-                      className="grid size-6 shrink-0 place-items-center rounded text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_svg]:size-3.5"
-                    >
-                      <RefreshCw />
-                    </button>
-                  </div>
+                  <SidebarSectionHeader
+                    title="IM 会话"
+                    expanded={sectionExpansion.im}
+                    onToggle={() => toggleSection("im")}
+                    className="mt-4"
+                  />
                   <AnimatePresence initial={false}>
                     {sectionExpansion.im ? (
                       <motion.div

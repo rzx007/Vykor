@@ -21,9 +21,22 @@ vi.mock("@openharness/agent-runtime", () => ({
 }));
 
 let root: string;
+let scopedTmpdir: string;
 let previousConfigDir: string | undefined;
+let previousTempEnv: { TEMP?: string; TMP?: string; TMPDIR?: string };
 
 beforeEach(async () => {
+  // 解析器把临时目录建在全局共享的 os.tmpdir() 下；把本用例收窄到独立作用域，
+  // 避免并行运行的其它包留下的 oh-plugin-zip-* 目录污染 residue 断言。
+  scopedTmpdir = await mkdtemp(join(tmpdir(), "ohs-plugin-service-tmp-"));
+  previousTempEnv = {
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
+  };
+  process.env.TEMP = scopedTmpdir;
+  process.env.TMP = scopedTmpdir;
+  process.env.TMPDIR = scopedTmpdir;
   root = await mkdtemp(join(tmpdir(), "ohs-plugin-service-"));
   previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
   process.env.OPENHARNESS_CONFIG_DIR = join(root, "config");
@@ -38,7 +51,14 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
   else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+  if (previousTempEnv.TEMP === undefined) delete process.env.TEMP;
+  else process.env.TEMP = previousTempEnv.TEMP;
+  if (previousTempEnv.TMP === undefined) delete process.env.TMP;
+  else process.env.TMP = previousTempEnv.TMP;
+  if (previousTempEnv.TMPDIR === undefined) delete process.env.TMPDIR;
+  else process.env.TMPDIR = previousTempEnv.TMPDIR;
   await rm(root, { recursive: true, force: true });
+  await rm(scopedTmpdir, { recursive: true, force: true });
 });
 
 function service() {

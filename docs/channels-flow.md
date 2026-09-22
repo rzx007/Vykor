@@ -82,7 +82,7 @@ daemon close()
 
 ## Desktop 的「IM 会话」分区
 
-Desktop 侧边栏把渠道会话单独放在「IM 会话」分区（按平台分组，如「飞书」），不混进「项目」和「最近」；没有渠道会话时整栏不显示。会话标题取**第一条消息**（图片/文件等无正文时回退 `飞书 · <chatId>`）。新建的渠道会话由 daemon 异步创建，点分区标题旁的「刷新」按钮或展开该分区即可刷新出来（事件驱动的自动刷新后续再做）。
+Desktop 侧边栏把渠道会话单独放在「IM 会话」分区（按平台分组，如「飞书」），不混进「项目」和「最近」；没有渠道会话时整栏不显示。会话标题取**第一条消息**（图片/文件等无正文时回退 `飞书 · <chatId>`）。新建的渠道会话由 daemon 异步创建，其 `session.created` 事件经全局 Activity 订阅自动 upsert 到侧边栏，无需手动刷新。
 
 ## 配置（含密钥）文件
 
@@ -231,7 +231,7 @@ Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增�
 | Desktop 服务 | `apps/desktop/src/main/features/channels/channel-service.ts` | 经 daemon HTTP 调渠道接口、生成二维码、拒绝高水位 |
 | Desktop 页面 | `apps/desktop/src/renderer/src/components/desktop/settings-page/connections-settings.tsx` | 「连接」板块：接入、状态、白名单、启停、被拒提示 |
 | 工作目录根 | `packages/core/src/config/paths.ts` | `resolveChannelWorkspaceRoot()`（默认项目外根下的 `channels`） |
-| Desktop IM 分区 | `apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar.tsx` | 「IM 会话」分区：按平台分组、刷新入口 |
+| Desktop IM 分区 | `apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar.tsx` | 「IM 会话」分区：按平台分组 |
 | 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 迁移链基线（起点），包含聊天映射和回复状态 |
 
 `FeishuPush` 工具仍是另一条主动推送捷径：它由当前 Agent 主动选择目标并发消息，不代表收到一条外部消息后的 durable 回复流程；它也在 daemon 进程内读取同一份渠道配置。

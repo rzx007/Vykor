@@ -37,11 +37,12 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["src/**/*.test.ts"],
-    // 不少测试会 spawn 真实子进程（bash/grep/glob、task、swarm teammate 等）。
-    // turbo 并行跑全量时 CPU 争抢可能让子进程变慢；默认 5s/用例偏紧，给足余量
-    // 避免环境抖动导致的偶发超时（非断言失败）。
-    testTimeout: 20000,
-    hookTimeout: 20000,
+    // 不少测试会 spawn 真实子进程（bash/grep/glob、task、swarm teammate 等），
+    // 也有 zlib/CRC 压力归档、TypeScript 全量建程序这类重活。turbo 并行跑全量时
+    // CPU 争抢会让这些用例慢数倍；5s 默认值、20s 都仍会在高负载下偶发超时
+    // （非断言失败），这里再放宽到 60s 留足余量。
+    testTimeout: 60000,
+    hookTimeout: 60000,
   },
   resolve: {
     alias: Object.fromEntries(

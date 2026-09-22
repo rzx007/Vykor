@@ -16,6 +16,7 @@ function watchdog(
     readActivity: () => ({ runUpdatedAt: 0, taskUpdatedAt: 0 }),
     hasPendingPermission: () => false,
     hasRunningChildTask: () => false,
+    hasRunningTool: () => false,
     onStall: () => stalls.push("stall"),
     ...overrides,
   })
@@ -91,6 +92,22 @@ describe("RunStallWatchdog", () => {
     advance(1_000)
     instance.check()
     expect(stalls).toEqual([])
+  })
+
+  it("does not fire while a tool is running, then fires once it stops", () => {
+    let runningTool = true
+    const { watchdog: instance, stalls, advance } = watchdog({
+      hasRunningTool: () => runningTool,
+    })
+
+    advance(1_000)
+    instance.check()
+    expect(stalls).toEqual([])
+
+    runningTool = false
+    advance(1_000)
+    instance.check()
+    expect(stalls).toEqual(["stall"])
   })
 
   it("schedules and clears the interval", () => {
