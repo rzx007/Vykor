@@ -7,7 +7,6 @@ import {
   FolderOpen,
   FolderSync,
   GitPullRequest,
-  MessageSquarePlus,
   Moon,
   MoreHorizontal,
   Pencil,
@@ -115,6 +114,7 @@ export function Sidebar({
   const activeSessionId = useDesktopSessionStore(selectActiveSessionId)
   const loadStatus = useDesktopSessionStore(selectLoadStatus)
   const startNewConversation = useDesktopSessionStore((state) => state.startNewConversation)
+  const selectOutsideProject = useDesktopSessionStore((state) => state.selectOutsideProject)
   const selectProject = useDesktopSessionStore((state) => state.selectProject)
   const renameProject = useDesktopSessionStore((state) => state.renameProject)
   const togglePinProject = useDesktopSessionStore((state) => state.togglePinProject)
@@ -167,6 +167,11 @@ export function Sidebar({
     })()
   }
 
+  const beginRecentNewConversation = (): void => {
+    selectOutsideProject()
+    beginNewConversation()
+  }
+
   const beginProjectRename = (project: DesktopProject): void => {
     setProjectName(project.name)
     setRenameProjectTarget(project)
@@ -198,6 +203,7 @@ export function Sidebar({
     onDelete: sessionActionsDialogs.beginDelete,
   }
   const projectActions: ProjectActions = {
+    onNewConversation: (project) => beginNewConversation(project),
     onRename: beginProjectRename,
     onTogglePin: (project) => void togglePinProject(project.path),
     onRemove: setRemoveProjectTarget,
@@ -401,6 +407,8 @@ export function Sidebar({
                 title="最近"
                 expanded={sectionExpansion.recent}
                 onToggle={() => toggleSection("recent")}
+                actionLabel="新建最近会话"
+                onAction={beginRecentNewConversation}
                 className="mt-4"
               />
               <AnimatePresence initial={false}>
@@ -547,6 +555,7 @@ type SessionActions = {
 }
 
 type ProjectActions = {
+  onNewConversation: (project: DesktopProject) => void
   onRename: (project: DesktopProject) => void
   onTogglePin: (project: DesktopProject) => void
   onRemove: (project: DesktopProject) => void
@@ -726,10 +735,19 @@ function ProjectGroup({
             ref={triggerRef}
             aria-label={`管理项目 ${project.name}`}
             title="更多操作"
-            className="absolute right-1 grid size-6 place-items-center rounded text-sidebar-muted opacity-0 transition-opacity outline-none group-hover/project:opacity-100 hover:bg-sidebar-accent focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-sidebar-accent data-popup-open:opacity-100 [&_svg]:size-3.5"
+            className="absolute right-7 grid size-6 place-items-center rounded text-sidebar-muted opacity-0 transition-opacity outline-none group-hover/project:opacity-100 hover:bg-sidebar-accent focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-sidebar-accent data-popup-open:opacity-100 [&_svg]:size-3.5"
           >
             <MoreHorizontal />
           </DropdownMenuTrigger>
+          <button
+            type="button"
+            aria-label={`在项目 ${project.name} 中新建会话`}
+            title="新建会话"
+            onClick={() => projectActions.onNewConversation(project)}
+            className="absolute right-1 grid size-6 place-items-center rounded text-sidebar-muted opacity-0 transition-opacity outline-none group-hover/project:opacity-100 hover:bg-sidebar-accent focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <SquarePen className="size-3.5" />
+          </button>
         </div>
         <DropdownMenuContent align="start" className="min-w-56">
           {projectMenuItems(Boolean(project.pinnedAt)).map((item) => (
@@ -867,7 +885,7 @@ function SidebarNavigationButton({
   running = false,
   onClick,
 }: {
-  icon: typeof MessageSquarePlus
+  icon: typeof SquarePen
   label: string
   selected?: boolean
   badge?: number
@@ -934,31 +952,45 @@ function SidebarSectionHeader({
   title,
   expanded,
   onToggle,
+  actionLabel,
+  onAction,
   className,
 }: {
   title: string
   expanded: boolean
   onToggle: () => void
+  actionLabel?: string
+  onAction?: () => void
   className?: string
 }): React.JSX.Element {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={expanded}
-      className={cn(
-        "group/section text-ui-small flex h-7 w-full cursor-pointer items-center gap-1.5 px-2.5 text-left font-normal text-sidebar-muted/70 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        className
-      )}
-    >
-      <span>{title}</span>
-      <ChevronDown
-        className={cn(
-          "size-3.5 shrink-0 text-sidebar-muted/50 opacity-0 transition-all duration-200 group-hover/section:opacity-100 group-focus-visible/section:opacity-100",
-          !expanded && "-rotate-90"
-        )}
-      />
-    </button>
+    <div className={cn("group/section flex h-7 w-full items-center px-2.5", className)}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="text-ui-small flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left font-normal text-sidebar-muted/70 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <span>{title}</span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 shrink-0 text-sidebar-muted/50 opacity-0 transition-all duration-200 group-hover/section:opacity-100 group-focus-visible/section:opacity-100",
+            !expanded && "-rotate-90"
+          )}
+        />
+      </button>
+      {onAction ? (
+        <button
+          type="button"
+          aria-label={actionLabel}
+          title={actionLabel}
+          onClick={onAction}
+          className="grid size-6 place-items-center rounded text-sidebar-muted opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/section:opacity-100"
+        >
+          <SquarePen className="size-3.5" />
+        </button>
+      ) : null}
+    </div>
   )
 }
 
