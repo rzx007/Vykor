@@ -34,26 +34,6 @@ function projectorStore(flat: Record<string, any>) {
               ? session.metadata.appliedRequestModel
               : undefined;
           if (previous === input.model) return false;
-          if (previous) {
-            const message = (flat.createMessage ?? vi.fn())({
-              sessionId: session.id,
-              role: "system",
-              metadata: {
-                presentation: {
-                  kind: "model_switch",
-                  fromModel: previous,
-                  toModel: input.model,
-                },
-              },
-            });
-            (flat.upsertMessagePart ?? vi.fn())({
-              sessionId: session.id,
-              messageId: message.id,
-              type: "text",
-              status: "completed",
-              text: `模型已切换 ${previous} → ${input.model}`,
-            });
-          }
           (flat.updateSession ?? vi.fn())(session.id, {
             metadata: { ...session.metadata, appliedRequestModel: input.model },
           });
@@ -108,7 +88,7 @@ describe("DaemonAgentEventProjector", () => {
     });
   });
 
-  it("writes a model divider only when the selected model starts a request", async () => {
+  it("updates the applied model without writing a divider when a request starts", async () => {
     let session = {
       id: "s1", cwd: "/repo", model: "model-b",
       metadata: { runtime: { model: "model-b" }, appliedRequestModel: "model-a" },
@@ -142,12 +122,7 @@ describe("DaemonAgentEventProjector", () => {
     await projector.apply(event("domain.event", {
       name: "request.configuration", payload: { revision: 1, model: "model-b" },
     }, { sessionId: "s1", runId: "r1" }));
-    expect(messages).toEqual([
-      expect.objectContaining({
-        role: "system",
-        metadata: { presentation: { kind: "model_switch", fromModel: "model-a", toModel: "model-b" } },
-      }),
-    ]);
+    expect(messages).toEqual([]);
     expect(session.metadata.appliedRequestModel).toBe("model-b");
   });
 

@@ -271,16 +271,34 @@ describe("SessionCommandService", () => {
       });
     });
 
-    it("persists a model selection without claiming it was already used", async () => {
+    it("records a model divider immediately when an idle session changes models", async () => {
       const { service, sessions, transactions, runtimeControl, contextUsageCache, events } = createService();
+
+      await service.updateSession("s1", { metadata: { runtime: { model: "gpt-4o" } } });
+
+      expect(transactions.createMessage).toHaveBeenCalledWith({
+        sessionId: "s1",
+        role: "system",
+        metadata: { presentation: {
+          kind: "model_switch", fromModel: "gpt-test", toModel: "gpt-4o",
+        } },
+      });
+      expect(transactions.upsertMessagePart).toHaveBeenCalledWith(expect.objectContaining({
+        sessionId: "s1", messageId: "msg-switch", type: "text",
+        status: "completed", text: "模型已切换 gpt-test → gpt-4o",
+      }));
+      expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
+      expect(contextUsageCache.invalidate).toHaveBeenCalledWith("s1");
+      expect(events.publishSince).toHaveBeenCalledWith(42);
+    });
+
+    it("does not record a divider when the model changes during a run", async () => {
+      const { service, transactions } = createService({ hasWork: true });
 
       await service.updateSession("s1", { metadata: { runtime: { model: "gpt-4o" } } });
 
       expect(transactions.createMessage).not.toHaveBeenCalled();
       expect(transactions.upsertMessagePart).not.toHaveBeenCalled();
-      expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
-      expect(contextUsageCache.invalidate).toHaveBeenCalledWith("s1");
-      expect(events.publishSince).toHaveBeenCalledWith(42);
     });
 
     it("updates title only without barrier or model switch message", async () => {

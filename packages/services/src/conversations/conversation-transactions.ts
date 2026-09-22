@@ -867,11 +867,7 @@ export class ConversationTransactions {
     });
   }
 
-  /**
-   * Persist the model a session will use for its next request. When it differs
-   * from the last applied model, record a system divider message and update the
-   * session metadata inside one transaction. Returns whether anything changed.
-   */
+  /** Persist the model actually used by a request without adding a UI divider. */
   recordAppliedRequestConfiguration(input: { sessionId: string; model: string }): boolean {
     const sessions = this.requireSessions();
     const session = sessions.get(input.sessionId);
@@ -880,26 +876,6 @@ export class ConversationTransactions {
       ? session.metadata.appliedRequestModel : undefined;
     if (previous === input.model) return false;
     this.storage.atomic(() => {
-      if (previous) {
-        const message = this.conversations.createMessage({
-          sessionId: session.id,
-          role: "system",
-          metadata: {
-            presentation: {
-              kind: "model_switch",
-              fromModel: previous,
-              toModel: input.model,
-            },
-          },
-        });
-        this.conversations.upsertMessagePart({
-          sessionId: session.id,
-          messageId: message.id,
-          type: "text",
-          status: "completed",
-          text: `模型已切换 ${previous} → ${input.model}`,
-        });
-      }
       sessions.update(session.id, {
         metadata: { ...session.metadata, appliedRequestModel: input.model },
       });

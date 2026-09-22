@@ -398,16 +398,35 @@ export class SessionCommandService {
         ? readSessionRuntimeConfig({ ...existing, metadata }).model
         : undefined;
       const modelChanged = nextModel !== undefined && nextModel !== existing.model;
-      const savedMetadata = modelChanged && metadata && typeof existing.metadata.appliedRequestModel !== "string"
-        ? { ...metadata, appliedRequestModel: existing.model }
-        : metadata;
+      const showModelSwitch = modelChanged
+        && !this.options.runtimeControl.hasRunWork(sessionId)
+        && !this.options.runtimeControl.hasActiveWorkForSession(sessionId)
+        && !this.options.runtimeControl.hasLiveChild(sessionId);
       const session = this.options.transactions.transaction(() => {
         const updated = this.options.sessions.updateSession(sessionId, {
           title: input.title,
           model: nextModel,
           agent: input.agent,
-          metadata: savedMetadata,
+          metadata,
         });
+        if (showModelSwitch && nextModel) {
+          const message = this.options.transactions.createMessage({
+            sessionId,
+            role: "system",
+            metadata: { presentation: {
+              kind: "model_switch",
+              fromModel: existing.model,
+              toModel: nextModel,
+            } },
+          });
+          this.options.transactions.upsertMessagePart({
+            sessionId,
+            messageId: message.id,
+            type: "text",
+            status: "completed",
+            text: `模型已切换 ${existing.model} → ${nextModel}`,
+          });
+        }
         return updated;
       });
       if (runtimeConfigurationChanged && !liveRequestConfigurationChange) {

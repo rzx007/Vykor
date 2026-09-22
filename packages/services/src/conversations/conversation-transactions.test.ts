@@ -1761,25 +1761,13 @@ describe("ConversationTransactions.recordAppliedRequestConfiguration", () => {
     return { dir, store, tx };
   }
 
-  it("records a divider and updates the applied model when it changes", () => {
+  it("updates the applied model without adding a divider when a request starts", () => {
     const { dir, store, tx } = createFixture();
     try {
       expect(tx.recordAppliedRequestConfiguration({ sessionId: "s1", model: "model-b" })).toBe(true);
       expect(store.sessions.get("s1")!.metadata.appliedRequestModel).toBe("model-b");
 
-      const divider = store.conversations
-        .listMessages("s1")
-        .find((message) => (message.metadata.presentation as any)?.kind === "model_switch");
-      expect(divider?.role).toBe("system");
-      expect(divider?.metadata.presentation).toEqual({
-        kind: "model_switch",
-        fromModel: "model-a",
-        toModel: "model-b",
-      });
-      const part = store.conversations
-        .listMessageParts("s1")
-        .find((candidate) => candidate.messageId === divider!.id);
-      expect(part?.text).toBe("模型已切换 model-a → model-b");
+      expect(store.conversations.listMessages("s1")).toEqual([]);
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
