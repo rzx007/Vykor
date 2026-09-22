@@ -145,6 +145,15 @@ describe("message render model", () => {
     expect(parseFileReference("https://example.com/App.tsx")).toBeNull()
   })
 
+  it("strips the Markdown slash only from Windows drive paths", () => {
+    expect(parseFileReference("/E:/code/openharness-ts/My File.ts:7")).toEqual({
+      path: "E:/code/openharness-ts/My File.ts",
+      line: 7,
+    })
+    expect(parseFileReference("src/a.ts:1")).toEqual({ path: "src/a.ts", line: 1 })
+    expect(parseFileReference("src/My File.ts:7")).toBeNull()
+  })
+
   it("collects files and line stats from an apply patch call", () => {
     const part = toolPart("apply_patch", {
       patch: [
