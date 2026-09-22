@@ -13,6 +13,10 @@ import type { DesktopAPI } from "../shared/desktop-api-contract"
 import type { DesktopAttachmentUploadEvent } from "../shared/attachment-types"
 import type { DesktopUpdateState } from "../shared/update-types"
 import type { DesktopActivityUpdate } from "../shared/activity-types"
+import {
+  parseWindowMaterialArguments,
+  type DesktopWindowMaterialPreference,
+} from "../shared/window-material-types"
 
 const invoke = <C extends IpcChannel>(
   channel: C,
@@ -54,6 +58,12 @@ export const desktopAPI = {
     getZoomLevel: () => invoke(IpcChannels.windowGetZoomLevel),
     setZoomLevel: (level: number) => invoke(IpcChannels.windowSetZoomLevel, level),
     openExternal: (url: string) => invoke(IpcChannels.windowOpenExternal, url),
+    // 建窗时主进程把材质结论塞进 additionalArguments，这里同步读出来。
+    // 走 argv 而不是 IPC：renderer 首帧就要知道玻璃是否生效，异步 IPC 会先出一帧错误底色。
+    // 没有参数（宠物窗口等）就是 null——不要在这里伪造 fallback 状态（D5）。
+    material: parseWindowMaterialArguments(process.argv),
+    setMaterial: (preference: DesktopWindowMaterialPreference) =>
+      invoke(IpcChannels.windowSetMaterial, preference),
     onMaximizedChanged: (listener: (value: boolean) => void): (() => void) => {
       const wrapped = (_event: Electron.IpcRendererEvent, value: boolean): void => listener(value)
       ipcRenderer.on(IpcEvents.windowMaximizedChanged, wrapped)

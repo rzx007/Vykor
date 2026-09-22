@@ -149,6 +149,10 @@ import type {
   DesktopFeishuRegistrationStartInput,
   DesktopRuntimeDelta,
 } from "./channel-types"
+import type {
+  DesktopWindowMaterialPreference,
+  DesktopWindowMaterialState,
+} from "./window-material-types"
 
 export type DesktopAPI = {
   activity: {
@@ -167,6 +171,8 @@ export type DesktopAPI = {
     onStateChanged: (listener: (state: DesktopUpdateState) => void) => () => void
   }
   window: {
+    /** 主窗口建窗时由主进程通过 additionalArguments 注入的同步快照；宠物窗口等无参数入口为 null。 */
+    material: DesktopWindowMaterialState | null
     showMain: () => Promise<void>
     minimize: () => Promise<void>
     close: () => Promise<void>
@@ -175,6 +181,10 @@ export type DesktopAPI = {
     getZoomLevel: () => Promise<number>
     setZoomLevel: (level: number) => Promise<number>
     openExternal: (url: string) => Promise<void>
+    /** 切换窗口材质；返回主进程算出的权威状态（偏好 / 生效 / 降级原因 / 外壳模式）。 */
+    setMaterial: (
+      preference: DesktopWindowMaterialPreference
+    ) => Promise<DesktopWindowMaterialState>
     onMaximizedChanged: (listener: (value: boolean) => void) => () => void
   }
   tray: {

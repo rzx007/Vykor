@@ -140,6 +140,10 @@ import type {
   DesktopFeishuRegistrationStartInput,
   DesktopRuntimeDelta,
 } from "./channel-types"
+import type {
+  DesktopWindowMaterialPreference,
+  DesktopWindowMaterialState,
+} from "./window-material-types"
 
 export const IpcChannels = {
   appGetInfo: "app:get-info",
@@ -158,6 +162,7 @@ export const IpcChannels = {
   windowGetZoomLevel: "window:get-zoom-level",
   windowSetZoomLevel: "window:set-zoom-level",
   windowOpenExternal: "window:open-external",
+  windowSetMaterial: "window:set-material",
 
   trayFlash: "tray:flash",
   trayStopFlash: "tray:stop-flash",
@@ -380,6 +385,10 @@ export interface IpcInvokeMap {
   [IpcChannels.windowGetZoomLevel]: { args: []; result: number }
   [IpcChannels.windowSetZoomLevel]: { args: [level: number]; result: number }
   [IpcChannels.windowOpenExternal]: { args: [url: string]; result: void }
+  [IpcChannels.windowSetMaterial]: {
+    args: [preference: DesktopWindowMaterialPreference]
+    result: DesktopWindowMaterialState
+  }
 
   [IpcChannels.trayFlash]: { args: []; result: void }
   [IpcChannels.trayStopFlash]: { args: []; result: void }

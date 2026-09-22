@@ -3,8 +3,9 @@ import { app, BrowserWindow, shell } from "electron"
 import { IpcChannels, type DesktopAppInfo, type PlatformInfo } from "../../../shared/ipc-channels"
 import type { IpcContribution } from "../../core/ipc/types"
 import { quitApp, setForceQuit } from "../../core/services/lifecycle"
-import { showMainWindow } from "../main-window/window"
+import { setMainWindowMaterial, showMainWindow } from "../main-window/window"
 import { normalizeZoomLevel } from "../../../shared/zoom"
+import { isDesktopWindowMaterialPreference } from "../../../shared/window-material-types"
 import { openUrlInDefaultBrowser } from "./open-external-url"
 
 export const windowControlsIpcContribution: IpcContribution = {
@@ -76,6 +77,17 @@ export const windowControlsIpcContribution: IpcContribution = {
             openExternal: (target) => shell.openExternal(target),
             openPath: (path) => shell.openPath(path),
           }),
+      },
+      {
+        channel: IpcChannels.windowSetMaterial,
+        handler: (event, preference) => {
+          if (!isDesktopWindowMaterialPreference(preference)) {
+            throw new Error("未知的窗口材质设置。")
+          }
+          const win = getEventWindow(event.sender)
+          if (!win) throw new Error("窗口不存在，无法切换窗口材质。")
+          return setMainWindowMaterial(win, preference)
+        },
       },
     ]
   },
