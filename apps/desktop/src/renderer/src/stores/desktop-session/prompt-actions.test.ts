@@ -745,6 +745,36 @@ describe("desktop session store prompt intent boundaries", () => {
     })
 
     expect(Object.keys(sessionRuntime("session-1").pendingPromptSubmissions)).toEqual([
+      firstCall[0].id,
+      secondCall[0].id,
+    ])
+    useDesktopSessionStore.getState().applySessionUpdate({
+      ...emptySessionView("session-1", 3),
+      messages: [{
+        id: "message-first",
+        sessionId: "session-1",
+        seq: 1,
+        role: "user",
+        inputId: firstCall[0].id,
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      parts: [{
+        id: "part-first",
+        sessionId: "session-1",
+        messageId: "message-first",
+        seq: 1,
+        type: "text",
+        status: "completed",
+        text: "first request",
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+    })
+
+    expect(Object.keys(sessionRuntime("session-1").pendingPromptSubmissions)).toEqual([
       secondCall[0].id,
     ])
   })

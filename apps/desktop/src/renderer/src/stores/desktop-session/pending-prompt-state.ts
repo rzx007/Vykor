@@ -1,9 +1,5 @@
 import type { DesktopSessionView } from "@shared/session-types"
-import type {
-  DesktopSessionRuntime,
-  PendingPromptSubmission,
-  QueuedPromptAction,
-} from "./types"
+import type { DesktopSessionRuntime, PendingPromptSubmission, QueuedPromptAction } from "./types"
 
 export function classifyPromptPlacement(
   view: DesktopSessionView | null,
@@ -39,19 +35,28 @@ export function reconcilePendingPromptSubmissions(
   view: DesktopSessionView
 ): Record<string, PendingPromptSubmission> {
   const confirmedInputIds = new Set(view.inputs.map((input) => input.id))
+  const visibleMessageIds = new Set(
+    view.parts
+      .filter((part) => part.type === "text" || part.type === "attachment")
+      .map((part) => part.messageId)
+  )
   const projectedInputIds = new Set(
     view.messages.flatMap((message) =>
-      message.role === "user" && message.inputId ? [message.inputId] : []
+      message.role === "user" && message.inputId && visibleMessageIds.has(message.id)
+        ? [message.inputId]
+        : []
     )
   )
-  return Object.fromEntries(Object.entries(submissions).flatMap(([id, submission]) => {
-    if (submission.sessionId !== view.session.id) return [[id, submission]]
-    if (projectedInputIds.has(id)) return []
-    if (confirmedInputIds.has(id)) {
-      return [[id, { ...submission, phase: "accepted" as const, error: undefined }]]
-    }
-    return [[id, submission]]
-  }))
+  return Object.fromEntries(
+    Object.entries(submissions).flatMap(([id, submission]) => {
+      if (submission.sessionId !== view.session.id) return [[id, submission]]
+      if (projectedInputIds.has(id)) return []
+      if (confirmedInputIds.has(id)) {
+        return [[id, { ...submission, phase: "accepted" as const, error: undefined }]]
+      }
+      return [[id, submission]]
+    })
+  )
 }
 
 export function reconcileQueuedPromptActions(

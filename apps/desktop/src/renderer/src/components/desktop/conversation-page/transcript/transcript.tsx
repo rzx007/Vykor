@@ -112,7 +112,7 @@ export function ConversationTranscript({
         return (
           <Fragment key={entry.turn.id}>
             {userMessage ? (
-              <MessageScrollerItem messageId={userMessage.id} scrollAnchor className="pt-2">
+              <MessageScrollerItem messageId={userMessage.inputId ?? userMessage.id} scrollAnchor className="pt-2">
                 <MessageBlock
                   message={userMessage}
                   inputItems={inputs.find((input) => input.id === userMessage.inputId)?.items}

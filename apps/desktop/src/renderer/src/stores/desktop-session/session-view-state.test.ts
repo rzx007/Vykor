@@ -138,6 +138,19 @@ describe("desktop session view state", () => {
       createdAt: 1,
       updatedAt: 1,
     })
+    expect(reconcileRuntimeWithView(runtime, view).pendingPromptSubmissions).toHaveProperty("input-1")
+    view.parts.push({
+      id: "part-1",
+      sessionId: "s1",
+      messageId: "message-1",
+      seq: 1,
+      type: "text",
+      status: "completed",
+      text: "first",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
 
     expect(reconcileRuntimeWithView(runtime, view).pendingPromptSubmissions).toEqual({
       "input-2": runtime.pendingPromptSubmissions["input-2"],

@@ -6,6 +6,7 @@ import type {
   DesktopSessionMessage,
   DesktopSessionRun,
 } from "@shared/session-types"
+import { buildConversationEntries } from "../../message/conversation-turn-model"
 import { derivePendingHandoffSubmission, mergeOptimisticTranscript } from "../optimistic-transcript"
 
 const submission: PendingPromptSubmission = {
@@ -51,7 +52,7 @@ describe("mergeOptimisticTranscript", () => {
     ])
   })
 
-  it("lets an authoritative user message with the same input id take over without duplication", () => {
+  it("keeps the local bubble until the authoritative user message has renderable content", () => {
     const authoritative: DesktopSessionMessage = {
       id: "message-server",
       sessionId: "session-1",
@@ -63,10 +64,32 @@ describe("mergeOptimisticTranscript", () => {
       updatedAt: 11,
     }
 
-    const result = mergeOptimisticTranscript([authoritative], [], [submission])
+    const beforePart = mergeOptimisticTranscript([authoritative], [], [submission])
+    expect(beforePart.messages.map((message) => message.id)).toEqual([
+      "message-server",
+      "optimistic-message:input-local",
+    ])
+    const beforePartTurns = buildConversationEntries(beforePart.messages, beforePart.parts, [])
+    expect(beforePartTurns).toHaveLength(1)
+    expect(beforePartTurns[0]).toMatchObject({
+      type: "turn",
+      turn: { userMessage: { id: "optimistic-message:input-local" } },
+    })
 
+    const result = mergeOptimisticTranscript([authoritative], [{
+      id: "part-server",
+      sessionId: "session-1",
+      messageId: "message-server",
+      seq: 1,
+      type: "text",
+      status: "completed",
+      text: "new request",
+      metadata: {},
+      createdAt: 11,
+      updatedAt: 11,
+    }], [submission])
     expect(result.messages).toEqual([authoritative])
-    expect(result.parts).toEqual([])
+    expect(result.parts.map((part) => part.id)).toEqual(["part-server"])
   })
 
   it("keeps ordered items for optimistic skills, including an empty text task", () => {

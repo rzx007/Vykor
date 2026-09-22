@@ -514,9 +514,9 @@ function ConversationPane({
       ) : (
         <>
           <MessageScrollerProvider
-            key={activeSessionId ?? "new-session"}
+            key={`${activeSessionId ?? "new-session"}:${sessionView?.session.id === activeSessionId ? "ready" : "loading"}`}
             autoScroll
-            defaultScrollPosition="last-anchor"
+            defaultScrollPosition="end"
             scrollPreviousItemPeek={72}
           >
             <MessageScroller className="min-h-0 min-w-0 flex-1">

@@ -49,9 +49,16 @@ export function mergeOptimisticTranscript(
   parts: DesktopSessionPart[],
   submissions: PendingPromptSubmission[]
 ): { messages: DesktopSessionMessage[]; parts: DesktopSessionPart[] } {
+  const visibleMessageIds = new Set(
+    parts
+      .filter((part) => part.type === "text" || part.type === "attachment")
+      .map((part) => part.messageId)
+  )
   const authoritativeInputIds = new Set(
     messages.flatMap((message) =>
-      message.role === "user" && message.inputId ? [message.inputId] : []
+      message.role === "user" && message.inputId && visibleMessageIds.has(message.id)
+        ? [message.inputId]
+        : []
     )
   )
   const optimistic = submissions.filter(

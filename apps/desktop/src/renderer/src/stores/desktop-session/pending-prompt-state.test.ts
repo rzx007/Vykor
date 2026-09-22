@@ -141,6 +141,23 @@ describe("desktop pending prompt state", () => {
       updatedAt: 1,
     })
     expect(reconcilePendingPromptSubmissions(updated, view)).toEqual({
+      "input-1": updated["input-1"],
+      "input-2": submissions["input-2"],
+    })
+
+    view.parts.push({
+      id: "part-1",
+      sessionId: "s1",
+      messageId: "message-1",
+      seq: 1,
+      type: "text",
+      status: "completed",
+      text: "first",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    expect(reconcilePendingPromptSubmissions(updated, view)).toEqual({
       "input-2": submissions["input-2"],
     })
   })

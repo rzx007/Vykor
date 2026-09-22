@@ -410,7 +410,7 @@ describe("desktop session actions", () => {
     expect(open).toHaveBeenCalledWith("session-b")
   })
 
-  it("keeps the first optimistic prompt until the transcript projects its user message", async () => {
+  it("keeps the first optimistic prompt until the transcript projects its user content", async () => {
     const session = emptySessionView("session-created").session
     let resolvePrompt!: () => void
     const sendPrompt = vi.fn<
@@ -467,6 +467,24 @@ describe("desktop session actions", () => {
       seq: 1,
       role: "user",
       inputId,
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }]
+    useDesktopSessionStore.getState().applySessionUpdate(confirmed)
+
+    expect(
+      useDesktopSessionStore.getState().sessionRuntimes[session.id]?.pendingPromptSubmissions
+    ).toHaveProperty(inputId)
+    confirmed.cursor = 4
+    confirmed.parts = [{
+      id: "part-confirmed",
+      sessionId: session.id,
+      messageId: "message-confirmed",
+      seq: 1,
+      type: "text",
+      status: "completed",
+      text: "first prompt",
       metadata: {},
       createdAt: 1,
       updatedAt: 1,
@@ -1516,6 +1534,18 @@ describe("desktop session store outside-project mode", () => {
       seq: 1,
       role: "user",
       inputId: "input-confirmed",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }]
+    view.parts = [{
+      id: "part-confirmed",
+      sessionId: "session-reopen",
+      messageId: "message-confirmed",
+      seq: 1,
+      type: "text",
+      status: "completed",
+      text: "confirmed",
       metadata: {},
       createdAt: 1,
       updatedAt: 1,
