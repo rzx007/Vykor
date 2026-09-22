@@ -102,6 +102,7 @@ export type EditMatchErrorKind =
   | "disproportionate"; // 候选片段远大于 oldString
 
 export class EditMatchError extends Error {
+  constructor(kind: EditMatchErrorKind);
   readonly kind: EditMatchErrorKind;
 }
 ```
@@ -142,7 +143,7 @@ export class EditMatchError extends Error {
 
 `edit.ts` 的调用顺序：
 
-1. 空 `old_string` 校验 → 既有文案。
+1. 空 `old_string` 校验 → 既有文案。紧接着做 **`oldString === newString` 校验 → `identical` 文案**，并且**必须在路径/沙箱校验与第 5 步内联精确替换之前**（原因见下方说明）。
 2. 路径解析、managed persistence、系统目录、sandbox 读/写校验 → 全部不变。
 3. `content = operations.readText(filePath)`。
 4. 探测并剥离 BOM，得到 `body`；记录 `hasBom`。
@@ -160,6 +161,10 @@ export class EditMatchError extends Error {
 8. 返回既有成功文案。
 
 > 说明：第 5 步刻意在 `edit.ts` 内先做一次精确判定，是为了让"多命中报行号"这条既有行为与文案完全不受兜底链影响。第 6 步的 `replace()` 内部同样以精确匹配开头，因此非歧义场景不会多走一次模糊策略。
+>
+> `identical` 校验**必须在第 5 步之前**：第 5 步是内联精确替换，若 `old_string === new_string` 且该串在文件中存在，第 5 步会直接替换并返回成功文案，永远不会进入 `replace()`。`replace()` 内部的同名检查保留作纵深防御（供直接调用 `replace()` 的单测使用）。
+>
+> **有意行为**：若文件是 CRLF、`old_string` 是 LF，且**归一后**该串在文件中出现多处，则第 5 步的精确判定（用原始 `old_string`）不命中，进入第 6 步；`replace()` 的 SimpleReplacer 产出多个候选、判为非唯一，最终返回 `ambiguous` 文案而非既有带行号文案。这是有意取舍：该场景下"有歧义"的结论正确，且归一后无法稳定复现原始行号。
 
 ## 组件与职责
 
@@ -190,7 +195,7 @@ export class EditMatchError extends Error {
 | 全链未命中 | 既有文案 `"old_string not found in file."` |
 | 模糊策略仅产出非唯一候选 | 模糊路径专用歧义文案（新增） |
 | 模糊匹配片段远大于 `old_string` | 拒绝替换并报错，提示重新读取文件后给出完整精确的 `old_string` |
-| `oldString === newString` | 报错，不做任何写入（相对现状为新增校验） |
+| `oldString === newString` | 报错，不做任何写入（相对现状为新增校验）；校验发生在第 5 步内联替换之前，因此无论该串是否存在于文件都会报错 |
 | 文件是 CRLF、`old_string` 是 LF | 归一后正常匹配，写回仍是 CRLF |
 | 文件有 BOM、编辑首行（Host） | 剥离后正常匹配，写回保留 BOM |
 | 文件有 BOM（WSL） | 读入时 BOM 已被 `TextDecoder` 剥离，编辑正常匹配；写回不补回（既有行为，本阶段不修） |
@@ -222,7 +227,8 @@ export class EditMatchError extends Error {
 9. `replace_all` 全量替换。
 10. 无命中报错文案不变。
 11. 模糊路径仅产出非唯一候选时报歧义文案，且文件未被修改。
-12. `old_string === new_string` 时报错且不做任何写入。
+12. `old_string === new_string` 时报错且不做任何写入。**用例须使用文件中确实存在的串**（否则测不到第 5 步之前的那道校验）。
+13. CRLF 文件 + LF `old_string`，且归一后多处命中时报 `ambiguous` 文案（锁定上面声明的有意行为）。
 
 ## 风险与缓解
 
