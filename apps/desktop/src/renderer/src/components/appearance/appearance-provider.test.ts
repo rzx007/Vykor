@@ -4,6 +4,9 @@ import { act, createElement, useEffect, type ReactElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { DesktopAPI } from "@shared/desktop-api-contract"
+import type { DesktopWindowMaterialState } from "@shared/window-material-types"
+
 import {
   APPEARANCE_STORAGE_KEY,
   DEFAULT_APPEARANCE_PREFERENCES,
@@ -249,5 +252,90 @@ describe("AppearanceProvider", () => {
 
   it("does not expose the removed useTheme compatibility hook", () => {
     expect("useTheme" in appearanceProviderModule).toBe(false)
+  })
+
+  describe("window material", () => {
+    const GLASS_TRANSPARENT: DesktopWindowMaterialState = {
+      preference: "glass",
+      active: "glass",
+      unavailableReason: null,
+      shell: "transparent",
+    }
+
+    function stubDesktop(
+      material: DesktopWindowMaterialState | null,
+      setMaterial: DesktopAPI["window"]["setMaterial"]
+    ): void {
+      ;(window as unknown as { desktop?: unknown }).desktop = {
+        window: { material, setMaterial },
+      } as unknown as DesktopAPI
+    }
+
+    afterEach(() => {
+      delete (window as unknown as { desktop?: unknown }).desktop
+      document.documentElement.removeAttribute("data-window-material")
+      document.documentElement.removeAttribute("data-window-shell")
+    })
+
+    it("writes the startup material snapshot to the root", async () => {
+      stubDesktop(GLASS_TRANSPARENT, vi.fn())
+
+      await renderProvider()
+
+      expect(latest?.windowMaterial).toEqual(GLASS_TRANSPARENT)
+      expect(document.documentElement.dataset.windowMaterial).toBe("glass")
+      expect(document.documentElement.dataset.windowShell).toBe("transparent")
+    })
+
+    it("optimistically writes a material switch, then follows the main process result", async () => {
+      let resolveMaterial: (state: DesktopWindowMaterialState) => void = () => undefined
+      const setMaterial = vi.fn(
+        () =>
+          new Promise<DesktopWindowMaterialState>((resolve) => {
+            resolveMaterial = resolve
+          })
+      )
+      stubDesktop(GLASS_TRANSPARENT, setMaterial)
+      await renderProvider()
+
+      act(() => latest?.setWindowMaterial("opaque"))
+
+      expect(setMaterial).toHaveBeenCalledWith("opaque")
+      expect(latest?.windowMaterial).toEqual({ ...GLASS_TRANSPARENT, preference: "opaque" })
+      expect(document.documentElement.dataset.windowMaterial).toBe("glass")
+      expect(document.documentElement.dataset.windowShell).toBe("transparent")
+
+      const authoritative: DesktopWindowMaterialState = {
+        preference: "opaque",
+        active: "opaque",
+        unavailableReason: null,
+        shell: "solid",
+      }
+      await act(async () => {
+        resolveMaterial(authoritative)
+      })
+
+      expect(latest?.windowMaterial).toEqual(authoritative)
+      expect(document.documentElement.dataset.windowMaterial).toBe("opaque")
+      expect(document.documentElement.dataset.windowShell).toBe("solid")
+    })
+
+    it("rolls a failed material switch back and reports the error", async () => {
+      const setMaterial = vi.fn(() => Promise.reject(new Error("material unavailable")))
+      stubDesktop(GLASS_TRANSPARENT, setMaterial)
+      await renderProvider()
+
+      await act(async () => {
+        latest?.setWindowMaterial("opaque")
+      })
+
+      expect(latest?.windowMaterial).toEqual(GLASS_TRANSPARENT)
+      expect(document.documentElement.dataset.windowMaterial).toBe("glass")
+      expect(document.documentElement.dataset.windowShell).toBe("transparent")
+      expect(latest?.saveState).toEqual({
+        status: "error",
+        message: "无法切换窗口材质",
+      })
+    })
   })
 })

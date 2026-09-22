@@ -229,6 +229,22 @@
   --sidebar-ring: var(--ring);
 }
 
+/* 玻璃档的外壳模式由主进程决定（D7）：
+   - transparent：Windows/Linux，把外壳完全让出来，Acrylic / 合成器模糊才透得出来；
+   - translucent：macOS，vibrancy 之上再叠一层半透明染色。
+   不透明档不匹配任何规则，保持上面 :root / .dark 的实色 token。 */
+html[data-window-shell="transparent"] {
+  --shell: transparent;
+}
+
+html[data-window-shell="translucent"] {
+  --shell: color-mix(in oklab, oklch(0.969 0.008 236) 60%, transparent);
+}
+
+html.dark[data-window-shell="translucent"] {
+  --shell: color-mix(in oklab, oklch(0.22 0.012 250) 64%, transparent);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
