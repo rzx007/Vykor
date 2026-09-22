@@ -52,7 +52,13 @@ if (!content.includes(oldString)) {
 
 6. **行尾在文本层归一**。读取原内容后探测其行尾，把 `oldString`/`newString` 先归一成 LF、再转成文件自身行尾，然后匹配/替换；写回保持文件原行尾。不修改 `operations.readText`/`writeText`，避免波及 Read 工具等全局读取路径。
 
-7. **BOM 在文本层处理**。读取后检测前导 `\uFEFF`，剥离后参与匹配；`old_string`/`new_string` 也剥一次前导 BOM，保证两侧一致；写回时按原样补回。同样不修改全局读取路径。
+7. **BOM 在文本层处理，且只对 Host 环境承诺往返保留**。读取后检测前导 `\uFEFF`，剥离后参与匹配；`old_string`/`new_string` 也剥一次前导 BOM，保证两侧一致；写回时按原样补回。
+
+   **环境差异（必须明确，否则实现与测试会踩空）**：
+   - Host（`HostFileOperations`）用 `readFile(path, "utf-8")`，`\uFEFF` 会留在内容里 → 可检测、可补回 → **BOM 往返保留成立**。
+   - WSL（`WslFileOperations`）用 `new TextDecoder().decode(...)`，默认 `ignoreBOM: false` 即**已把 BOM 剥离**；`writeText` 用 `TextEncoder` 不写 BOM。因此 `hasBom` 恒为 `false`，写回不会补回 → **WSL 下编辑带 BOM 文件会丢 BOM**。
+   - 该 WSL 行为是**既有缺陷**：当前 `edit.ts` 同样经 `readText`/`writeText` 读写，WSL 今天就已丢 BOM。本阶段不使其变差，也不修复它（修复需改 `WslFileOperations` 的全局读写，超出范围）。
+   - 因此：本阶段的 BOM 往返保证**仅对 Host 生效**；WSL 沿用现状，并在测试中明确区分。
 
 8. **不做严格模式开关**。靠吞大段护栏 + 多命中报错兜底即可，不引入额外配置（YAGNI）。
 
@@ -86,18 +92,36 @@ export const ContextAwareReplacer: Replacer;
 export const MultiOccurrenceReplacer: Replacer;
 ```
 
-`replace` 会抛出两类可区分的错误，由 `edit.ts` 映射成工具文案：
+`replace` 用**单一可判别错误类型**表达失败，避免靠 message 字符串判断：
 
-- **未找到**：全链都没有产出任何候选 → `edit.ts` 映射为既有文案 `"old_string not found in file."`。
-- **歧义**：某级产出了候选，但都不是唯一匹配（且未开 `replaceAll`）→ `edit.ts` 映射为 `"Found multiple matches for oldString. Provide more surrounding context to make the match unique."`。**注意**：这是模糊路径专用的新文案；精确路径的多命中仍由 `edit.ts` 在第 5 步用既有带行号文案处理，两者互不影响。
+```ts
+export type EditMatchErrorKind =
+  | "identical"        // oldString === newString
+  | "not_found"        // 全链都没有产出任何候选
+  | "ambiguous"        // 产出了候选，但都不唯一（且未开 replaceAll）
+  | "disproportionate"; // 候选片段远大于 oldString
 
-`replace` 的前置校验：`oldString === newString` 时抛 `"No changes to apply: oldString and newString are identical."`。这是相对现状的**新增校验**——当前代码在此情况下会走完流程并返回成功文案（实际什么都没改），属既有缺陷，本阶段一并修正。
+export class EditMatchError extends Error {
+  readonly kind: EditMatchErrorKind;
+}
+```
+
+四类的映射（`edit.ts` 按 `error.kind` 分派）：
+
+| kind | `edit.ts` 返回的文案 | 新旧 |
+|---|---|---|
+| `identical` | `"No changes to apply: oldString and newString are identical."` | 新增 |
+| `not_found` | `"old_string not found in file."` | **沿用既有** |
+| `ambiguous` | `"Found multiple matches for oldString. Provide more surrounding context to make the match unique."` | 新增 |
+| `disproportionate` | `"Refusing replacement because the matched span is much larger than oldString. Re-read the file and provide the full exact oldString for the intended replacement."` | 新增 |
+
+**精确路径的多命中不走这里**：`edit.ts` 第 5 步在调用 `replace` 之前就用既有带行号文案处理了精确多命中，因此 `ambiguous` 只可能来自模糊策略，两者互不影响。
 
 ### `edit.ts` 保持不变的对外契约
 
 - 入参：`file_path`、`old_string`、`new_string`、`replace_all`。
 - **既有**错误/成功文案逐字不变（空 `old_string`、精确多命中带行号、未找到、成功、sandbox、系统目录、managed persistence）。
-- 本阶段新增两条错误文案：模糊路径歧义、`oldString === newString`（见「接口」与「错误处理」）。
+- 本阶段新增三条错误文案：`identical`、`ambiguous`、`disproportionate`（见上表）。
 - 沙箱校验、系统目录校验、managed persistence 校验顺序不变。
 - `findMatchLines` 仍留在 `edit.ts`，用于精确匹配的歧义报错。
 
@@ -105,14 +129,16 @@ export const MultiOccurrenceReplacer: Replacer;
 
 ### `replace()` 算法
 
-1. 若 `oldString === newString` → 抛错。
+1. 若 `oldString === newString` → 抛 `EditMatchError("identical")`。
 2. 按顺序遍历兜底链；对每个 replacer：
    1. 收集它产出的候选片段。
-   2. `replaceAll === true`：取第一个候选，做 `content.replaceAll(search, newString)` 并返回。
+   2. `replaceAll === true`：取第一个候选，先过 `isDisproportionateMatch(search, oldString)`；超限则抛 `EditMatchError("disproportionate")`；否则做 `content.replaceAll(search, newString)` 并返回。
    3. `replaceAll !== true`：跳过在内容中不唯一的候选（`index !== lastIndex`）。对唯一候选：
-      - 先过 `isDisproportionateMatch(search, oldString)`，超限则抛错；
+      - 先过 `isDisproportionateMatch(search, oldString)`，超限则抛 `EditMatchError("disproportionate")`；
       - 返回 `content.slice(0, index) + newString + content.slice(index + search.length)`。
-3. 全链无可用候选 → 抛错。
+3. 全链结束：若曾有候选但都被唯一性检查跳过 → 抛 `EditMatchError("ambiguous")`；若从未产出候选 → 抛 `EditMatchError("not_found")`。
+
+> **吞大段护栏在 `replaceAll` 与否两种分支下都生效**（步骤 2.2 与 2.3 各检查一次），与设计决策 5 一致。
 
 `edit.ts` 的调用顺序：
 
@@ -124,10 +150,11 @@ export const MultiOccurrenceReplacer: Replacer;
    - 统计出现次数；
    - 次数 > 1 且未开 `replaceAll` → 返回既有带行号文案（`findMatchLines`）；
    - 否则替换（`replaceAll` 全替换，否则替换首个）→ 进入第 7 步。
-6. 精确未命中 → 归一化行尾后调用 `replace(body, oldString, newString, replaceAll)`，按抛出的错误类型映射：
-   - 「未找到」→ 返回既有文案 `"old_string not found in file."`；
-   - 「歧义」→ 返回模糊路径专用文案（见「接口」节）；
-   - 「吞大段」→ 返回该错误文案；
+6. 精确未命中 → **保持 `body` 原行尾不动**，仅把 `oldString`/`newString` 归一后传入 `replace(body, ...)`，按 `EditMatchError.kind` 分派：
+   - `not_found` → 既有文案 `"old_string not found in file."`；
+   - `ambiguous` → 上表 `ambiguous` 文案；
+   - `disproportionate` → 上表 `disproportionate` 文案；
+   - `identical` → 上表 `identical` 文案；
    - 成功 → 进入第 7 步。
 7. 写回：`(hasBom ? "\uFEFF" : "") + updated`，`operations.writeText`。
 8. 返回既有成功文案。
@@ -138,9 +165,9 @@ export const MultiOccurrenceReplacer: Replacer;
 
 | 单元 | 职责 | 位置 |
 |---|---|---|
-| `edit-replacers.ts` | 9 级匹配策略、吞大段护栏、行尾三函数 | 新建 |
-| `edit.ts` | 路径/沙箱校验、BOM 处理、精确歧义判定、调用 `replace`、写回 | 改薄 |
-| `edit-replacers.test.ts` | 每个 replacer 单测 + 护栏 + 行尾函数单测 | 新建 |
+| `edit-replacers.ts` | 9 级匹配策略、`EditMatchError`（含 `kind`）、吞大段护栏、行尾三函数 | 新建 |
+| `edit.ts` | 路径/沙箱校验、BOM 处理、精确歧义判定、按 `kind` 映射错误、写回 | 改薄 |
+| `edit-replacers.test.ts` | 每个 replacer 单测 + 护栏 + 行尾函数 + `EditMatchError.kind` | 新建 |
 | `edit.test.ts` | 端到端行为（含 CRLF / BOM / 吞大段 / 歧义回归） | 追加 |
 
 ## 不在范围内
@@ -152,6 +179,7 @@ export const MultiOccurrenceReplacer: Replacer;
 - `write.ts` 的任何改动。
 - 严格模式开关。
 - `operations.readText` / `writeText` 的全局行为改动。
+- **WSL 的 BOM 往返保留**（需改 `WslFileOperations` 的全局读写，既有缺陷，本阶段不修）。
 
 ## 错误处理
 
@@ -164,7 +192,8 @@ export const MultiOccurrenceReplacer: Replacer;
 | 模糊匹配片段远大于 `old_string` | 拒绝替换并报错，提示重新读取文件后给出完整精确的 `old_string` |
 | `oldString === newString` | 报错，不做任何写入（相对现状为新增校验） |
 | 文件是 CRLF、`old_string` 是 LF | 归一后正常匹配，写回仍是 CRLF |
-| 文件有 BOM、编辑首行 | 剥离后正常匹配，写回保留 BOM |
+| 文件有 BOM、编辑首行（Host） | 剥离后正常匹配，写回保留 BOM |
+| 文件有 BOM（WSL） | 读入时 BOM 已被 `TextDecoder` 剥离，编辑正常匹配；写回不补回（既有行为，本阶段不修） |
 | 沙箱拒绝读/写 | 既有 sandbox 错误文案（不变） |
 
 ## 测试
@@ -175,6 +204,8 @@ export const MultiOccurrenceReplacer: Replacer;
 - `isDisproportionateMatch`：正向（远超阈值）与反向（正常长度）。
 - `normalizeLineEndings` / `detectLineEnding` / `convertToLineEnding`：LF 与 CRLF 两态、混合内容取 CRLF。
 - `replace()`：唯一匹配才应用；非唯一候选被跳过；`replaceAll` 全量替换。
+- `replace()` 错误类型：`not_found` / `ambiguous` / `identical` 各一条，断言 `EditMatchError.kind`。
+- **`replaceAll === true` 且候选远超 `oldString` 时抛 `disproportionate`**（护栏在 `replaceAll` 分支同样生效）。
 
 ### `packages/tools/src/file/__test__/edit.test.ts`（端到端，追加）
 
@@ -183,25 +214,27 @@ export const MultiOccurrenceReplacer: Replacer;
 1. 缩进不符可恢复（`old_string` 少一层缩进仍成功）。
 2. 空白数量不符可恢复。
 3. **CRLF 文件 + LF `old_string`** 可恢复，且写回后文件仍是 CRLF。
-4. **BOM 文件编辑首行**可恢复，且写回后 BOM 仍存在。
+4. **BOM 文件编辑首行**（Host 环境）可恢复，且写回后 BOM 仍存在。
 5. 转义还原（`old_string` 里是字面 `\n`）可恢复。
 6. 吞大段被拒绝，返回拒绝文案，且文件未被修改。
-7. 多命中仍报带行号文案（回归，文案逐字一致）。
-8. `replace_all` 全量替换。
-9. 无命中报错文案不变。
-10. 模糊路径仅产出非唯一候选时报歧义文案，且文件未被修改。
-11. `old_string === new_string` 时报错且不做任何写入。
+7. `replace_all: true` + 巨幅候选时同样被拒绝（护栏回归）。
+8. 多命中仍报带行号文案（回归，文案逐字一致）。
+9. `replace_all` 全量替换。
+10. 无命中报错文案不变。
+11. 模糊路径仅产出非唯一候选时报歧义文案，且文件未被修改。
+12. `old_string === new_string` 时报错且不做任何写入。
 
 ## 风险与缓解
 
 | 风险 | 缓解 |
 |---|---|
-| 模糊匹配改错位置 | 非 `replaceAll` 只接受唯一匹配；命中前过吞大段护栏；精确路径优先级最高 |
+| 模糊匹配改错位置 | 非 `replaceAll` 只接受唯一匹配；两种分支都过吞大段护栏；精确路径优先级最高 |
 | 锚点策略（Levenshtein）误配到相似代码块 | 相似度阈值 0.65 + 吞大段护栏；且它排在逐行 trim 之后 |
 | 行尾归一后写回改变了文件行尾 | 归一只作用于 `oldString`/`newString`；写回内容始终保留文件原行尾 |
 | BOM 处理破坏二进制或非 UTF-8 文件 | 仅在文本层检测前导 `\uFEFF`；非文本路径不走此逻辑（`edit.ts` 本就是文本工具） |
+| WSL 下 BOM 被 `TextDecoder` 剥离导致往返丢失 | 已在设计决策 7 与「不在范围内」显式声明：本阶段只对 Host 承诺，WSL 沿用既有行为，测试按环境区分 |
 | 既有测试文案被改动 | 精确路径与错误文案逐字保留；`edit.test.ts` 现有断言作为回归护栏 |
 
 ## 待确认
 
-无。四项取舍已由用户确认：全量 9 级兜底链、包含行尾归一、包含 BOM 处理、不做严格模式开关。
+无。四项取舍已由用户确认：全量 9 级兜底链、包含行尾归一、包含 BOM 处理、不做严格模式开关。BOM 的环境差异（Host 承诺往返、WSL 沿用现状）为审查后补充的明确化说明。
