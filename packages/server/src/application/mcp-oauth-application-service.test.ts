@@ -71,7 +71,7 @@ function createWorld(options: { stored?: McpOAuthCredentialRecord | null } = {})
     return new McpOAuthApplicationService({
       loadSettings: async () => settings,
       saveSettings: async (next) => { if (saveGate) await saveGate; settings = next; },
-      store,
+      credentialStore: store,
       coordinator,
       login,
       revoke,

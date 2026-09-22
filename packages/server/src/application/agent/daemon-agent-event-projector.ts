@@ -588,38 +588,13 @@ export class DaemonAgentEventProjector {
         ...(typeof payload.effort === "string" ? { effort: payload.effort } : {}),
       };
     }
-    const session = this.context.store.sessions.get(event.context.sessionId);
-    if (!session) return;
-    const previous = typeof session.metadata.appliedRequestModel === "string"
-      ? session.metadata.appliedRequestModel : undefined;
-    if (previous === model) return;
     const before = this.context.events.checkpoint();
-    this.context.store.transaction(() => {
-      if (previous) {
-        const message = this.context.store.conversations.createMessage({
-          sessionId: session.id,
-          role: "system",
-          metadata: {
-            presentation: {
-              kind: "model_switch",
-              fromModel: previous,
-              toModel: model,
-            },
-          },
-        });
-        this.context.store.conversations.upsertMessagePart({
-          sessionId: session.id,
-          messageId: message.id,
-          type: "text",
-          status: "completed",
-          text: `模型已切换 ${previous} → ${model}`,
-        });
-      }
-      this.context.store.sessions.update(session.id, {
-        metadata: { ...session.metadata, appliedRequestModel: model },
+    const changed = this.context.store.conversationTransactions
+      .recordAppliedRequestConfiguration({
+        sessionId: event.context.sessionId,
+        model,
       });
-    });
-    this.context.events.publishSince(before);
+    if (changed) this.context.events.publishSince(before);
   }
 
   private async compensateChildProjectionFailure(event: AgentEvent, error: unknown): Promise<void> {

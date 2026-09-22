@@ -24,6 +24,41 @@ function projectorStore(flat: Record<string, any>) {
     conversationTransactions: {
       admitPrompt: flat.admitPrompt ?? vi.fn(),
       settleActiveRunAttempts: flat.settleActiveRunAttempts ?? vi.fn(),
+      recordAppliedRequestConfiguration:
+        flat.recordAppliedRequestConfiguration ??
+        ((input: { sessionId: string; model: string }) => {
+          const session = flat.getSession?.(input.sessionId);
+          if (!session) return false;
+          const previous =
+            typeof session.metadata?.appliedRequestModel === "string"
+              ? session.metadata.appliedRequestModel
+              : undefined;
+          if (previous === input.model) return false;
+          if (previous) {
+            const message = (flat.createMessage ?? vi.fn())({
+              sessionId: session.id,
+              role: "system",
+              metadata: {
+                presentation: {
+                  kind: "model_switch",
+                  fromModel: previous,
+                  toModel: input.model,
+                },
+              },
+            });
+            (flat.upsertMessagePart ?? vi.fn())({
+              sessionId: session.id,
+              messageId: message.id,
+              type: "text",
+              status: "completed",
+              text: `模型已切换 ${previous} → ${input.model}`,
+            });
+          }
+          (flat.updateSession ?? vi.fn())(session.id, {
+            metadata: { ...session.metadata, appliedRequestModel: input.model },
+          });
+          return true;
+        }),
     },
     runs: {
       getRun: flat.getRun ?? vi.fn(),

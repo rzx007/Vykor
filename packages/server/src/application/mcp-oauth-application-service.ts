@@ -62,7 +62,7 @@ export class McpOAuthApplicationError extends Error {
 export interface McpOAuthApplicationServiceDeps {
   loadSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<void>;
-  store: McpOAuthCredentialStore;
+  credentialStore: McpOAuthCredentialStore;
   coordinator: McpRuntimeConnectionCoordinator;
   login: typeof loginMcpOAuth;
   revoke: typeof revokeMcpOAuthCredential;
@@ -80,11 +80,11 @@ export class McpOAuthApplicationService {
   private readonly operations = new Map<string, Promise<void>>();
 
   constructor(overrides: Partial<McpOAuthApplicationServiceDeps> = {}) {
-    const store = overrides.store ?? new FileMcpOAuthCredentialStore();
+    const credentialStore = overrides.credentialStore ?? new FileMcpOAuthCredentialStore();
     this.deps = {
       loadSettings,
       saveSettings,
-      store,
+      credentialStore,
       coordinator: createUnavailableMcpRuntimeCoordinator(),
       login: loginMcpOAuth,
       revoke: revokeMcpOAuthCredential,
@@ -102,7 +102,7 @@ export class McpOAuthApplicationService {
     const settings = await this.deps.loadSettings();
     const servers = await Promise.all(
       Object.entries(settings.mcpServers ?? {}).map(async ([name, config]) => {
-        const credential = await this.deps.store.get(name);
+        const credential = await this.deps.credentialStore.get(name);
         const identity = createMcpServerIdentity(name, config);
         const runtimeStatus = identity
           ? (await this.deps.coordinator.getStatus(identity)).status
@@ -149,7 +149,7 @@ export class McpOAuthApplicationService {
       await this.backfillOAuthScopes(name, config).catch(() => {
         this.deps.warn?.(`Could not backfill OAuth scopes for ${name}.`);
       });
-      await this.deps.revoke({ serverName: name, store: this.deps.store });
+      await this.deps.revoke({ serverName: name, store: this.deps.credentialStore });
       await this.synchronize(
         name,
         config,
@@ -171,7 +171,7 @@ export class McpOAuthApplicationService {
           serverName: request.name,
           config,
           scopes: request.scopes.length ? request.scopes : undefined,
-          store: this.deps.store,
+          store: this.deps.credentialStore,
           signal: browser.signal,
           ...(request.noBrowser ? { noBrowser: true } : {}),
         },
@@ -214,7 +214,7 @@ export class McpOAuthApplicationService {
     result: McpOAuthLoginResult,
   ): Promise<void> {
     try {
-      await this.deps.store.runExclusive(name, async () => {
+      await this.deps.credentialStore.runExclusive(name, async () => {
         const latest = await this.deps.loadSettings();
         const nextSettings = withMcpServerOAuthScopes(latest, name, result.credential.tokens.scope);
         await this.deps.saveSettings(nextSettings);
@@ -233,7 +233,7 @@ export class McpOAuthApplicationService {
     config: McpServerConfig,
   ): Promise<void> {
     if (config.type !== "http" || config.oauth?.scopes?.length) return;
-    await this.deps.store.runExclusive(name, async (current) => {
+    await this.deps.credentialStore.runExclusive(name, async (current) => {
       if (!current) return { next: current, result: undefined };
       const latest = await this.deps.loadSettings();
       const nextSettings = withMcpServerOAuthScopes(latest, name, current.tokens.scope);

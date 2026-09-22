@@ -1741,3 +1741,70 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
   });
 });
+
+describe("ConversationTransactions.recordAppliedRequestConfiguration", () => {
+  function createFixture() {
+    const dir = mkdtempSync(join(tmpdir(), "ohs-model-switch-"));
+    const store = new SessionStore({ path: join(dir, "store.db") });
+    const tx = new ConversationTransactions({
+      storage: (store as any).storage,
+      conversations: store.conversations,
+      sessions: store.sessions,
+      save: () => (store as any).save(),
+    });
+    store.sessions.create({
+      id: "s1",
+      cwd: dir,
+      model: "model-b",
+      metadata: { appliedRequestModel: "model-a" },
+    });
+    return { dir, store, tx };
+  }
+
+  it("records a divider and updates the applied model when it changes", () => {
+    const { dir, store, tx } = createFixture();
+    try {
+      expect(tx.recordAppliedRequestConfiguration({ sessionId: "s1", model: "model-b" })).toBe(true);
+      expect(store.sessions.get("s1")!.metadata.appliedRequestModel).toBe("model-b");
+
+      const divider = store.conversations
+        .listMessages("s1")
+        .find((message) => (message.metadata.presentation as any)?.kind === "model_switch");
+      expect(divider?.role).toBe("system");
+      expect(divider?.metadata.presentation).toEqual({
+        kind: "model_switch",
+        fromModel: "model-a",
+        toModel: "model-b",
+      });
+      const part = store.conversations
+        .listMessageParts("s1")
+        .find((candidate) => candidate.messageId === divider!.id);
+      expect(part?.text).toBe("模型已切换 model-a → model-b");
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does nothing when the model is unchanged", () => {
+    const { dir, store, tx } = createFixture();
+    try {
+      store.sessions.update("s1", { metadata: { appliedRequestModel: "model-b" } });
+      expect(tx.recordAppliedRequestConfiguration({ sessionId: "s1", model: "model-b" })).toBe(false);
+      expect(store.conversations.listMessages("s1")).toEqual([]);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns false when the session does not exist", () => {
+    const { dir, store, tx } = createFixture();
+    try {
+      expect(tx.recordAppliedRequestConfiguration({ sessionId: "missing", model: "model-b" })).toBe(false);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
