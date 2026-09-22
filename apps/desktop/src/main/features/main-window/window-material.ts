@@ -105,16 +105,21 @@ export function mainWindowMaterialOptions(input: {
       : { backgroundColor: opaqueBackground }
   }
 
-  // Linux 没有可移植的原生材质，只能靠透明窗口 + 桌面合成器自带模糊（KWin 等，需用户开启）。
-  // 这里两档位都无条件透明：transparent 是构造期选项、运行期改不了，
-  // 若在不透明档位用不透明窗口，用户之后切回玻璃就必须重启；而 renderer 在不透明档位会自己铺满底色，
-  // 所以「始终透明」两档位都正确。hasShadow: false 是因为部分窗口管理器会给 frameless 窗口画外侧阴影/描边，
-  // 看起来像窗口外缘多了一条黑线。renderer 圆角本仓库没有做，因此不涉及「透明底把圆角填成直角黑底」。
-  return {
-    backgroundColor: TRANSPARENT_WINDOW_BACKGROUND,
-    transparent: true,
-    hasShadow: false,
+  if (input.platform === "linux") {
+    // Linux 没有可移植的原生材质，只能靠透明窗口 + 桌面合成器自带模糊（KWin 等，需用户开启）。
+    // 这里两档位都无条件透明：transparent 是构造期选项、运行期改不了，
+    // 若在不透明档位用不透明窗口，用户之后切回玻璃就必须重启；而 renderer 在不透明档位会自己铺满底色，
+    // 所以「始终透明」两档位都正确。hasShadow: false 是因为部分窗口管理器会给 frameless 窗口画外侧阴影/描边，
+    // 看起来像窗口外缘多了一条黑线。renderer 圆角本仓库没有做，因此不涉及「透明底把圆角填成直角黑底」。
+    return {
+      backgroundColor: TRANSPARENT_WINDOW_BACKGROUND,
+      transparent: true,
+      hasShadow: false,
+    }
   }
+
+  // 不可达，防御性返回。
+  return { backgroundColor: opaqueBackground }
 }
 
 /**
@@ -135,6 +140,7 @@ export function applyMainWindowMaterial(
   const glass = isGlassWindowMaterial(input.state)
 
   if (input.platform === "darwin") {
+    // 已知限制：visualEffectState 是构造期选项，Electron 39 没有 setVisualEffectState，运行期切到玻璃时无法重置它。
     win.setBackgroundColor(
       glass ? TRANSPARENT_WINDOW_BACKGROUND : mainWindowBackgroundColor(input.useDarkColors)
     )

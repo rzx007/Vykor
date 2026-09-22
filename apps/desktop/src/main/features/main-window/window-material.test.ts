@@ -1,7 +1,9 @@
 // apps/desktop/src/main/features/main-window/window-material.test.ts
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+import type { BrowserWindow } from "electron"
 
 import {
+  applyMainWindowMaterial,
   mainWindowMaterialOptions,
   resolveWindowMaterialState,
   supportsNativeWindowMaterial,
@@ -114,12 +116,18 @@ describe("mainWindowMaterialOptions", () => {
     preference: "glass",
     active: "glass",
     unavailableReason: null,
-    shell: "transparent",
+    shell: "translucent",
   } as const
   const opaque = {
     preference: "opaque",
     active: "opaque",
     unavailableReason: null,
+    shell: "solid",
+  } as const
+  const degradedGlass = {
+    preference: "glass",
+    active: "opaque",
+    unavailableReason: "reduced-transparency",
     shell: "solid",
   } as const
 
@@ -167,5 +175,128 @@ describe("mainWindowMaterialOptions", () => {
     expect(
       mainWindowMaterialOptions({ platform: "linux", state: opaque, useDarkColors: true })
     ).toEqual(expected)
+  })
+
+  it("玻璃被系统降级时只用主题底色，不带任何材质属性", () => {
+    expect(
+      mainWindowMaterialOptions({
+        platform: "darwin",
+        state: degradedGlass,
+        useDarkColors: false,
+      })
+    ).toEqual({ backgroundColor: "#f4f7f9" })
+    expect(
+      mainWindowMaterialOptions({ platform: "win32", state: degradedGlass, useDarkColors: true })
+    ).toEqual({ backgroundColor: "#20242a" })
+  })
+
+  it("不支持的平台不走 Linux 分支，兜底返回主题底色", () => {
+    expect(
+      mainWindowMaterialOptions({ platform: "freebsd", state: opaque, useDarkColors: false })
+    ).toEqual({ backgroundColor: "#f4f7f9" })
+  })
+})
+
+describe("applyMainWindowMaterial", () => {
+  const glass = {
+    preference: "glass",
+    active: "glass",
+    unavailableReason: null,
+    shell: "translucent",
+  } as const
+  const degradedGlass = {
+    preference: "glass",
+    active: "opaque",
+    unavailableReason: "reduced-transparency",
+    shell: "solid",
+  } as const
+
+  function createFakeWindow(isDestroyed = false) {
+    return {
+      isDestroyed: vi.fn(() => isDestroyed),
+      setBackgroundColor: vi.fn(),
+      setVibrancy: vi.fn(),
+      setBackgroundMaterial: vi.fn(),
+    }
+  }
+
+  it("macOS 玻璃：透明底 + under-window vibrancy", () => {
+    const win = createFakeWindow()
+
+    applyMainWindowMaterial(win as unknown as BrowserWindow, {
+      platform: "darwin",
+      state: glass,
+      useDarkColors: false,
+    })
+
+    expect(win.setBackgroundColor).toHaveBeenCalledWith(TRANSPARENT_WINDOW_BACKGROUND)
+    expect(win.setVibrancy).toHaveBeenCalledWith("under-window")
+    expect(win.setBackgroundMaterial).not.toHaveBeenCalled()
+  })
+
+  it("macOS 降级：主题底色 + 清空 vibrancy", () => {
+    const win = createFakeWindow()
+
+    applyMainWindowMaterial(win as unknown as BrowserWindow, {
+      platform: "darwin",
+      state: degradedGlass,
+      useDarkColors: true,
+    })
+
+    expect(win.setBackgroundColor).toHaveBeenCalledWith("#20242a")
+    expect(win.setVibrancy).toHaveBeenCalledWith(null)
+  })
+
+  it("Windows 玻璃：透明底 + acrylic；降级：主题底色 + none", () => {
+    const glassWin = createFakeWindow()
+
+    applyMainWindowMaterial(glassWin as unknown as BrowserWindow, {
+      platform: "win32",
+      state: glass,
+      useDarkColors: false,
+    })
+
+    expect(glassWin.setBackgroundColor).toHaveBeenCalledWith(TRANSPARENT_WINDOW_BACKGROUND)
+    expect(glassWin.setBackgroundMaterial).toHaveBeenCalledWith("acrylic")
+    expect(glassWin.setVibrancy).not.toHaveBeenCalled()
+
+    const degradedWin = createFakeWindow()
+
+    applyMainWindowMaterial(degradedWin as unknown as BrowserWindow, {
+      platform: "win32",
+      state: degradedGlass,
+      useDarkColors: false,
+    })
+
+    expect(degradedWin.setBackgroundColor).toHaveBeenCalledWith("#f4f7f9")
+    expect(degradedWin.setBackgroundMaterial).toHaveBeenCalledWith("none")
+  })
+
+  it("Linux：不碰底色、vibrancy 与材质，观感交给 renderer", () => {
+    const win = createFakeWindow()
+
+    applyMainWindowMaterial(win as unknown as BrowserWindow, {
+      platform: "linux",
+      state: glass,
+      useDarkColors: false,
+    })
+
+    expect(win.setBackgroundColor).not.toHaveBeenCalled()
+    expect(win.setVibrancy).not.toHaveBeenCalled()
+    expect(win.setBackgroundMaterial).not.toHaveBeenCalled()
+  })
+
+  it("窗口已销毁时任何 setter 都不调用", () => {
+    const win = createFakeWindow(true)
+
+    applyMainWindowMaterial(win as unknown as BrowserWindow, {
+      platform: "darwin",
+      state: glass,
+      useDarkColors: false,
+    })
+
+    expect(win.setBackgroundColor).not.toHaveBeenCalled()
+    expect(win.setVibrancy).not.toHaveBeenCalled()
+    expect(win.setBackgroundMaterial).not.toHaveBeenCalled()
   })
 })
