@@ -37,8 +37,16 @@ export async function probeWorkspaceGit(path: string): Promise<boolean> {
     return current.result
   }
 
-  const request = window.desktop.git
-    .isRepository({ path })
+  let pending: Promise<{ isRepository?: boolean } | undefined>
+  try {
+    const bridge = window.desktop?.git
+    pending = bridge ? bridge.isRepository({ path }) : Promise.resolve(undefined)
+  } catch {
+    entries.delete(key)
+    return false
+  }
+
+  const request = pending
     .then((response) => {
       const isRepository = response?.isRepository
       if (isRepository !== true && isRepository !== false) {

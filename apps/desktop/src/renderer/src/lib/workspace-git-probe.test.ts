@@ -109,6 +109,31 @@ describe("probeWorkspaceGit", () => {
     expect(probe).toHaveBeenCalledTimes(2)
   })
 
+  it("returns false without caching when the desktop git bridge is unavailable", async () => {
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: { settings: { snapshot: vi.fn() } },
+    })
+
+    await expect(probeWorkspaceGit("D:/repo")).resolves.toBe(false)
+    await expect(probeWorkspaceGit("D:/repo")).resolves.toBe(false)
+  })
+
+  it("returns false when the git bridge throws synchronously", async () => {
+    const probe = vi.fn(() => {
+      throw new Error("bridge down")
+    })
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: { git: { isRepository: probe } },
+    })
+
+    await expect(probeWorkspaceGit("D:/repo")).resolves.toBe(false)
+    await expect(probeWorkspaceGit("D:/repo")).resolves.toBe(false)
+
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
   it("returns false without probing for an empty path", async () => {
     const probe = installProbe(true)
 
