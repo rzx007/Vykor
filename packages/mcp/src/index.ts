@@ -618,6 +618,7 @@ export {
   createMcpServerIdentity,
   fingerprintMcpEndpoint,
   normalizeMcpEndpoint,
+  summarizeMcpEndpoint,
   type BuildMcpAuthServerSnapshotInput,
 } from "./oauth/snapshot.js";
 export {

@@ -200,6 +200,10 @@ export {
   type SettingsLockOptions,
 } from "./config/settings-mutation";
 export {
+  assertValidMcpServerConfig,
+  McpServerConfigError,
+} from "./config/mcp-config-validation";
+export {
   PROJECT_CONFIG_DIR_NAME,
   resolvePaths,
   getConfigDir,

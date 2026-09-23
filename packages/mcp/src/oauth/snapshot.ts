@@ -34,6 +34,25 @@ export function fingerprintMcpEndpoint(endpoint: string): string {
 }
 
 /**
+ * Secret-free list summary for a remote endpoint: scheme, host (and port) and
+ * path only. Userinfo, query string and fragment are dropped because they can
+ * carry tokens. Returns `undefined` for malformed URLs.
+ */
+export function summarizeMcpEndpoint(value: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  url.username = "";
+  url.password = "";
+  url.search = "";
+  url.hash = "";
+  return url.href;
+}
+
+/**
  * Build the cross-process identity for an HTTP MCP server.
  *
  * Returns `undefined` for stdio/SSE configs, malformed URLs and URLs with
