@@ -33,7 +33,7 @@
 - `ToolContext` 在 `packages/core/src/engine/query-engine.ts:932` 组装。
 - **引擎是会话级生命周期**：daemon 的 `AgentPool` 每个 session 只调一次 loader（`packages/server/src/daemon/daemon-agent.ts:124-132`），因此运行期与 `QueryEngine` 实例随会话存活，跨轮次复用。**所以把读记录放在 `QueryEngine` 实例上即可覆盖整个会话，无需改 daemon。**
 - `read.ts` 与 `write.ts` 都用 `resolveToolPathInContext`（`packages/tools/src/file/environment-path.ts:6`）解析出同一个绝对路径，天然可比。
-- 已存在「覆盖前看 diff」的基础设施：`packages/tools/src/file/preview.ts` 的 `computeFileChange` 与 `diff.ts` 的 `computeToolDiff`（含 `MAX_DIFF_PAYLOAD_LINES` 截断），但从 `packages/tools/src/index.ts:20` 导出后**在 packages/apps 的非 node_modules 源码里没有任何生产消费方**（只有测试）。即：**diff 预览已建好但未接线**，接线属于另一件事。
+- 已存在「覆盖前看 diff」的基础设施：`packages/tools/src/file/preview.ts` 的 `computeFileChange` 与 `diff.ts` 的 `computeToolDiff`（含 `MAX_DIFF_PAYLOAD_LINES` 截断），但从 `packages/tools/src/index.ts:20` 导出后**在仓库根 `apps/` 与其余 packages 的非 node_modules 源码里没有任何生产消费方**（只有测试）。即：**diff 预览已建好但未接线**，接线属于另一件事。
 - `read.ts` 当前实现用 `readBytes` + `new TextDecoder("utf-8", { fatal: true, ignoreBOM: true })`，因此 BOM 会**保留**在解码结果里（`ignoreBOM: true` 表示不剥离）。
 
 ## 术语
@@ -56,11 +56,16 @@
    }
    ```
 
-3. **路径归一化由 registry 内部完成**，工具只传 `resolveToolPathInContext` 给出的绝对路径。规则：
-   - Windows：反斜杠转正斜杠 + 全部小写 + 去尾部斜杠；
-   - 非 Windows：反斜杠转正斜杠 + 去尾部斜杠（保留大小写）。
-   
-   与仓库既有约定一致（参考 `git-changes-query.ts` 的 `normalizedRootPath` 思路）。归一化集中在 registry，避免 Read/Write 各写一份。
+3. **路径归一化由 registry 内部完成**，工具只传 `resolveToolPathInContext` 给出的路径。规则**按路径形状判定**，不按 `process.platform`：
+
+   ```
+   forward = path.replace(/\\/g, "/")
+   windowsStyle = /^[a-zA-Z]:\//.test(forward) || forward.startsWith("//")   // 盘符或 UNC
+   stripped = forward.replace(/\/+$/, "")
+   return windowsStyle ? stripped.toLowerCase() : stripped
+   ```
+
+   理由：Windows 主机 + WSL 环境下，`resolveToolPathInContext` 返回的是 POSIX 形态（`/mnt/d/...`）。若按 `process.platform` 判定就会把 POSIX 路径整体小写，在大小写敏感的 Linux 语义下把 `/mnt/d/A.txt` 与 `/mnt/d/a.txt` 当成同一路径，造成**误放行**（守卫里比误拒绝更危险）。按路径形状判定与仓库既有约定一致（`git-changes-query.ts:26` 的 `normalizedRootPath`）。
 
 4. **记录是有界的**：默认最多 `4096` 条，超出按插入顺序淘汰最早的一条（FIFO），防止长会话无界增长。
 
@@ -72,7 +77,15 @@
 
 8. **`Write` 成功后不记录**（不把"刚写的文件"标成已读）。理由：与 opencode 的规则一致（"覆盖已存在文件前必须先用 Read 工具"），语义简单可预测——要覆盖就得先读。
 
-9. **BOM 处理**：读取目标文件现有内容时检测前导 `\uFEFF`；写入时若原有 BOM 则补回；同时把 `content` 自带的**一个**前导 BOM 剥掉，避免双 BOM。新建文件不添加 BOM。
+9. **BOM 处理**（算法与语义都要照此实现）：
+
+   - `content` 的前导 BOM **一律丢弃**（`body = content.startsWith("\uFEFF") ? content.slice(1) : content`）；
+   - **仅当目标文件原本有 BOM 时**补回一个（`hasBom = exists && before.startsWith("\uFEFF")`；`final = (hasBom ? "\uFEFF" : "") + body`）。
+
+   推论（测试必须按此断言）：
+   - 新建文件 → **0 个 BOM**（即使 `content` 自带 BOM，也被丢弃）；
+   - 覆盖无 BOM 的已存在文件 → **0 个 BOM**（即使 `content` 自带 BOM）；
+   - 覆盖有 BOM 的已存在文件 → **恰好 1 个 BOM**（不论 `content` 是否自带）。
 
    **环境差异**（与 Edit 规格同源）：Host 的 `readText` 保留 BOM，可检测可补回；WSL 的 `readText` 经 `TextDecoder` 默认剥离 BOM，`hasBom` 恒为 false，因此 **WSL 下不保证保留 BOM**（既有行为，本阶段不修）。
 
@@ -108,7 +121,7 @@
 
 ```ts
 export function createReadFileRegistry(options?: { maxEntries?: number }): ReadFileRegistry;
-export function normalizeReadPath(path: string, platformName?: NodeJS.Platform): string;
+export function normalizeReadPath(path: string): string;
 ```
 
 ### `packages/core/src/engine/query-engine.ts`
@@ -123,9 +136,11 @@ export function normalizeReadPath(path: string, platformName?: NodeJS.Platform):
 ### `packages/tools/src/file/write.ts`
 
 - 读入 `const registry = context.readFiles;`
-- 用 `operations.readText(filePath)` 探测是否存在并取 `before`（失败视为不存在）。
-- 已存在且 `registry && !registry.hasRead(filePath)` → 返回拒绝文案（决策 11）。
+- **用 `operations.stat` 判断目标是否存在**（不读内容）；存在时才 `readText` 取 `before` 用于 BOM 检测。
+- 已存在且 `registry && !registry.hasRead(filePath)` → 返回拒绝文案（决策 11），不写盘。
 - BOM 与反馈按决策 9/10 处理。
+
+> 存在性判定与读取顺序的完整步骤见「运行流程 · `Write` 执行」。**不要**用 `readText` 探测存在性：那会把「存在但读不了」误判为不存在，从而绕过读后写检查。
 
 ## 运行流程
 
@@ -183,8 +198,8 @@ export function normalizeReadPath(path: string, platformName?: NodeJS.Platform):
 | 覆盖已存在文件且已读过 | 正常写入，`Overwrote ...` |
 | 新建文件（不存在） | 正常写入，`Created ...`，无需先读 |
 | `context.readFiles` 缺失 | 跳过检查，正常写入（向后兼容） |
-| 覆盖带 BOM 的文件（Host） | BOM 保留 |
-| `content` 自带前导 BOM | 剥掉一个，最终只有一个 BOM |
+| 覆盖带 BOM 的文件（Host） | BOM 保留（恰好 1 个） |
+| 覆盖无 BOM 的文件、或新建文件 | 结果 **0 个** BOM（`content` 自带的 BOM 也丢弃） |
 | 覆盖带 BOM 的文件（WSL） | BOM 不保留（既有行为，不在本阶段修） |
 | managed-persistence / 系统目录 / sandbox 拒绝 | 既有文案与顺序不变 |
 
@@ -193,11 +208,12 @@ export function normalizeReadPath(path: string, platformName?: NodeJS.Platform):
 ### `packages/core/src/engine/read-file-registry.test.ts`（新建）
 
 1. `markRead` 后 `hasRead` 为真。
-2. Windows 语义：`C:\A\B.txt` 与 `c:/a/b.txt` 视为同一路径（用 `normalizeReadPath(path, "win32")` 断言）。
-3. 非 Windows 语义：`/A/B.txt` 与 `/a/b.txt` **不**视为同一路径。
-4. 尾部斜杠与反斜杠等价。
-5. 未记录过的路径 `hasRead` 为假。
-6. 超过 `maxEntries` 时最早记录被淘汰（用 `maxEntries: 2` 验证 FIFO）。
+2. Windows 形态路径：`C:\A\B.txt` 与 `c:/a/b.txt` 视为同一路径（形状判定，无需传平台）。
+3. POSIX 形态路径：`/A/B.txt` 与 `/a/b.txt` **不**视为同一路径（大小写保留）。
+4. **WSL 语义**：`/mnt/d/A.txt` 与 `/mnt/d/a.txt` **不**视为同一路径（防止在 Windows 主机上误把 POSIX 路径小写化而误放行）。
+5. 尾部斜杠与反斜杠等价（`C:\A\` ≡ `c:/a`）。
+6. 未记录过的路径 `hasRead` 为假。
+7. 超过 `maxEntries` 时最早记录被淘汰（用 `maxEntries: 2` 验证 FIFO）。
 
 ### `packages/tools/src/file/__test__/write.test.ts`（新建）
 
@@ -214,16 +230,28 @@ function fakeRegistry(initial: string[] = []) {
 2. 覆盖**已读**文件 → 返回 `Overwrote ...`，内容被替换。
 3. 覆盖**未读**文件（registry 存在、未 mark）→ `isError` 为真、文案等于决策 11、**磁盘内容未变**。
 4. `readFiles` 缺失（只传 `{ cwd }`）→ 覆盖未读文件仍然成功（向后兼容）。
-5. 覆盖带 BOM 的文件（Host）→ 写回后仍以 `\uFEFF` 开头且只有一个 BOM。
-6. `content` 自带前导 BOM → 最终只有一个 BOM。
-7. 空内容写入 → `(0 lines, 0 bytes)`，文件为空。
-8. managed-persistence / 系统目录 / sandbox 三条既有拒绝行为不回归。
+5. 覆盖带 BOM 的文件（Host）→ 写回后以 `\uFEFF` 开头且**恰好一个** BOM。
+6. 覆盖带 BOM 的文件、且 `content` 也自带 BOM → 仍是**恰好一个** BOM。
+7. 覆盖**无 BOM** 的已存在文件、且 `content` 自带 BOM → 结果 **0 个** BOM。
+8. 空内容写入 → `(0 lines, 0 bytes)`，文件为空。
+9. **`Write` 成功后不标记已读**（决策 8）：先用 registry 已读的记录覆盖文件 A，写入成功；再对 A 发起第二次 `Write`（此时 A 已存在、且 registry 里没有 A 的"新"记录）→ 若先前 mark 过则放行，断言其行为与决策 8 一致（即**不因刚写过而自动放行**：把 registry 清空后再写应被拒绝）。
+10. `description` 含「overwrite」「Read」等关键词（决策 12）。
+11. managed-persistence / 系统目录 / sandbox 三条既有拒绝行为不回归。
 
 ### `packages/tools/src/file/__test__/read.test.ts`（追加）
 
 1. 成功读取文件后 registry 中有该路径（传入 fake registry，断言 `hasRead` 为真）。
 2. 目录列举后 registry 中**没有**该路径。
 3. 二进制拒绝后 registry 中**没有**该路径。
+4. 图片读取成功后 registry 中有该路径（决策 5）。
+
+### `packages/core/src/engine/query-engine-read-files.test.ts`（新建，覆盖决策 1）
+
+沿用 `packages/core/src/engine/goal-context.test.ts` 的 `new QueryEngine(...)` 构造方式，注册一个**捕获 `ToolContext` 的假工具**，跑一轮后断言：
+
+1. 传给工具的 `context.readFiles` 已定义（非 undefined）；
+2. 它是 `ReadFileRegistry` 形状（`markRead`/`hasRead` 均为函数）；
+3. 同一 QueryEngine 实例的两次调用拿到的是**同一个** registry 对象（跨轮次共享）。
 
 ### 集成验证
 
@@ -240,6 +268,7 @@ function fakeRegistry(initial: string[] = []) {
 | WSL 下 BOM 仍丢失 | 已在决策 9 显式声明为既有行为、不在本阶段修 |
 | diff 预览被误以为已接线 | 规格显式列为不在范围内，并说明 `computeToolDiff` 现状 |
 | 引擎复用导致记录跨会话泄漏 | 引擎是会话级（AgentPool 每 session 一个）；会话结束随 runtime 释放 |
+| **记录会因 warm agent 重建而清空** | `invalidateWarmAgents`（软设置变更）、daemon 重启/热加载、以及子代理各自的引擎都会重建，registry 随之丢失，已读文件需要重读。这是**偏向安全**的失效方向（最多多要求一次 Read），本阶段接受；如需严格持久，需把 registry 挂到更长寿的对象（另议） |
 
 ## 待确认
 
