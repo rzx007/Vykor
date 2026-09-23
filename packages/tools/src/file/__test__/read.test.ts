@@ -41,6 +41,55 @@ describe("fileReadTool", () => {
     }
   });
 
+  it("returns a PNG as an image block", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-read-image-"));
+    try {
+      const file = join(dir, "screenshot.png");
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
+      await writeFile(file, png);
+
+      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+
+      expect(result.isError).toBeFalsy();
+      expect(result.content).toEqual([{
+        type: "image",
+        source: { type: "file", mediaType: "image/png", path: file, sizeBytes: png.byteLength },
+      }]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a mislabeled image instead of returning its bytes as text", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-read-image-"));
+    try {
+      const file = join(dir, "broken.png");
+      await writeFile(file, "not a PNG");
+
+      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+
+      expect(result.isError).toBe(true);
+      expect((result.content[0] as { text: string }).text).toContain("Invalid image file");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects unrecognized binary data rather than showing replacement characters", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-read-binary-"));
+    try {
+      const file = join(dir, "data.bin");
+      await writeFile(file, Buffer.from([0, 255, 1, 2]));
+
+      const result = await fileReadTool.execute!({ file_path: file }, { cwd: dir });
+
+      expect(result.isError).toBe(true);
+      expect((result.content[0] as { text: string }).text).toContain("Unsupported binary file");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("lists directory entries", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-read-dir-"));
     try {

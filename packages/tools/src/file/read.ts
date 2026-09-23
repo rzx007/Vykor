@@ -1,3 +1,4 @@
+import { extname } from "node:path";
 import type { ToolDefinition } from "@openharness/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
@@ -5,7 +6,7 @@ import { fileOperationsFor } from "./operations.js";
 
 export const fileReadTool: ToolDefinition = {
   name: "Read",
-  description: "Read a local file or directory.",
+  description: "Read a local text file, image, or directory.",
   inputSchema: {
     type: "object",
     properties: {
@@ -53,7 +54,32 @@ export const fileReadTool: ToolDefinition = {
         };
       }
 
-      const content = await operations.readText(filePath);
+      const bytes = await operations.readBytes(filePath);
+      const mediaType = imageMediaType(bytes);
+      const expectedMediaType = IMAGE_EXTENSIONS[extname(filePath).toLowerCase()];
+      if (expectedMediaType && mediaType !== expectedMediaType) {
+        throw new Error(`Invalid image file: expected ${expectedMediaType} content`);
+      }
+      if (mediaType) {
+        const hostPath = context.environment
+          ? context.environment.paths.toHostPath(filePath)
+          : filePath;
+        if (!hostPath) throw new Error("Image file is not accessible to the model provider");
+        return {
+          content: [{
+            type: "image",
+            source: { type: "file", mediaType, path: hostPath, sizeBytes: bytes.byteLength },
+          }],
+        };
+      }
+
+      let content: string;
+      try {
+        content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+      } catch {
+        throw new Error("Unsupported binary file");
+      }
+      if (content.includes("\0")) throw new Error("Unsupported binary file");
       const lines = content.split("\n");
       const start = Math.max(0, offset - 1);
       const end = start + limit;
@@ -70,3 +96,24 @@ export const fileReadTool: ToolDefinition = {
     }
   },
 };
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
+
+function imageMediaType(bytes: Uint8Array): string | undefined {
+  if (bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, i) => bytes[i] === value)) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) {
+    return "image/jpeg";
+  }
+  const header = new TextDecoder("utf-8").decode(bytes.subarray(0, 12));
+  if (header.startsWith("GIF87a") || header.startsWith("GIF89a")) return "image/gif";
+  if (header.startsWith("RIFF") && header.slice(8, 12) === "WEBP") return "image/webp";
+  return undefined;
+}
