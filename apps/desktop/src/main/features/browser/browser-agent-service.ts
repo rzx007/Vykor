@@ -13,6 +13,20 @@ type ElementTarget = {
 }
 
 type BrowserAnnotation = { target: string; comment: string }
+type InspectedPage = {
+  url: string
+  title: string
+  pageText: string
+  elements: Array<{
+    index: number
+    selector: string
+    role: string
+    name: string
+    href: string
+    value: string
+    requiresConfirmation: boolean
+  }>
+}
 
 const MAX_PAGE_TEXT = 12_000
 const MAX_ELEMENTS = 80
@@ -59,6 +73,7 @@ export class BrowserAgentService implements BrowserHost {
   private readonly targets = new Map<string, ElementTarget>()
   private readonly annotations = new Map<number, BrowserAnnotation[]>()
   private readonly approvedOrigins = new Map<string, Set<string>>()
+  private readonly pageFingerprints = new Map<number, string>()
   private activeTabId: string | null = null
   private targetSequence = 0
   // ponytail: serialize browser operations globally; use per-tab queues only if throughput becomes a measured bottleneck.
@@ -77,6 +92,7 @@ export class BrowserAgentService implements BrowserHost {
         }
       }
       this.annotations.delete(guest.id)
+      this.pageFingerprints.delete(guest.id)
     })
   }
 
@@ -196,22 +212,10 @@ export class BrowserAgentService implements BrowserHost {
       )
     }
 
-    const page = (await contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT)) as {
-      url: string
-      title: string
-      pageText: string
-      elements: Array<{
-        index: number
-        selector: string
-        role: string
-        name: string
-        href: string
-        value: string
-        requiresConfirmation: boolean
-      }>
-    }
+    const page = (await contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT)) as InspectedPage
     this.assertActiveTab(tabId, contents)
     const elements = this.rememberTargets(contents.id, page.elements)
+    this.pageFingerprints.set(contents.id, fingerprintPage(page))
     const screenshotBytes =
       input.action.action === "inspect" ? await this.capture(contents) : undefined
     this.assertActiveTab(tabId, contents)
@@ -233,6 +237,7 @@ export class BrowserAgentService implements BrowserHost {
     this.targets.clear()
     this.annotations.clear()
     this.approvedOrigins.clear()
+    this.pageFingerprints.clear()
   }
 
   private async requireOrigin(
@@ -387,13 +392,16 @@ export class BrowserAgentService implements BrowserHost {
     const text = action.action === "type" ? JSON.stringify(action.text.slice(0, 4_000)) : ""
     const operation =
       action.action === "click"
-        ? "el.click(); return 'clicked';"
+        ? "const target = el; setTimeout(() => { if (!target.isConnected) return; try { target.click(); } catch { /* Navigation may destroy this execution context. */ } }, 0); return 'click queued';"
         : "if (!('value' in el) && !el.isContentEditable) throw new Error('Target is not editable'); if (el.isContentEditable) el.textContent = text; else { const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (setter) setter.call(el, text); else el.value = text; } el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })); el.dispatchEvent(new Event('change', { bubbles: true })); return 'typed';"
     const result = await contents.executeJavaScript(
       `(() => { const el = document.querySelector(${selector}); if (!el) throw new Error('Target is no longer present'); const actualRole = el.getAttribute('role') || ({ BUTTON: 'button', A: 'link', INPUT: el.type === 'checkbox' ? 'checkbox' : 'textbox', TEXTAREA: 'textbox', SELECT: 'combobox' }[el.tagName] || 'control'); const actualName = (el.getAttribute('aria-label') || el.getAttribute('title') || [...(el.labels || [])].map((label) => label.innerText).join(' ') || el.innerText || el.getAttribute('placeholder') || '').trim().replace(/\\s+/g, ' ').slice(0, 180); if (actualRole !== ${role} || actualName !== ${name}) throw new Error('Page changed; inspect it again before acting'); const text = ${text}; ${operation} })()`,
       true
     )
     if (typeof result !== "string") throw new Error("The browser action did not complete.")
+    if (action.action === "click") {
+      await waitForPageUpdate(contents, this.pageFingerprints.get(contents.id) ?? "")
+    }
   }
 
   private async capture(contents: WebContents): Promise<Uint8Array> {
@@ -409,6 +417,43 @@ export class BrowserAgentService implements BrowserHost {
       throw new Error("The active browser tab changed while the tool was waiting. Inspect the page again.")
     }
   }
+}
+
+async function waitForPageUpdate(contents: WebContents, before: string): Promise<void> {
+  const startedAt = Date.now()
+  let lastFingerprint = before
+  let changedAt: number | null = null
+  while (Date.now() - startedAt < 2_500) {
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    if (contents.isDestroyed()) return
+    if (contents.isLoading()) continue
+
+    let page: InspectedPage
+    try {
+      page = await contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT) as InspectedPage
+    } catch {
+      // Navigation can replace the execution context between load events.
+      continue
+    }
+
+    const currentFingerprint = fingerprintPage(page)
+    const now = Date.now()
+    if (currentFingerprint !== lastFingerprint) {
+      lastFingerprint = currentFingerprint
+      changedAt = now
+    }
+    if (changedAt !== null && now - changedAt >= 180) return
+    if (changedAt === null && now - startedAt >= 900) return
+  }
+}
+
+function fingerprintPage(page: InspectedPage): string {
+  return JSON.stringify({
+    url: page.url,
+    title: page.title,
+    pageText: page.pageText,
+    elements: page.elements.map(({ role, name, href, value }) => ({ role, name, href, value })),
+  })
 }
 
 export const browserAgentService = new BrowserAgentService()
