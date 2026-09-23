@@ -92,7 +92,8 @@ export function buildMcpAuthServerSnapshot(
 ): McpAuthServerSnapshot {
   const { name, config, credential, runtimeStatus } = input;
   const now = input.now ?? Date.now();
-  const endpoint = config.type === "stdio" ? undefined : normalizeMcpEndpoint(config.url);
+  const normalized = config.type === "stdio" ? undefined : normalizeMcpEndpoint(config.url);
+  const endpoint = normalized === undefined ? undefined : summarizeMcpEndpoint(normalized);
   const authMode: McpAuthMode = resolveMcpAuthMode(config, credential);
   const matchedPresence =
     config.type === "http" && credential !== undefined && credential.serverUrl === config.url;

@@ -14,6 +14,7 @@ import {
   selectMcpServersForEnvironment,
   type McpConnectionSource,
 } from "./runtime-integrations.js";
+import { createDefaultNodeAgent } from "./default-agent.js";
 
 const SERVERS = {
   local: { type: "stdio" as const, command: "node" },
@@ -21,6 +22,29 @@ const SERVERS = {
 };
 
 describe("MCP execution domains", () => {
+  it("does not classify an explicitly supplied host server as global", async () => {
+    let handle: ActiveMcpRuntimeHandle | undefined;
+    const registry = {
+      register: (value: ActiveMcpRuntimeHandle) => { handle = value; return () => undefined; },
+      currentGeneration: () => 0,
+      currentNamedGeneration: () => 0,
+    } as McpRuntimeRegistry;
+    const agent = await createDefaultNodeAgent({
+      cwd: process.cwd(),
+      pluginsEnabled: false,
+      client: { streamMessage: async function* () { yield { type: "complete" as const, stopReason: "end_turn" }; } },
+      settings: { model: "test", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" } },
+      mcpServers: { explicit: { type: "http", url: "https://explicit.example/mcp", enabled: false } },
+      mcpRuntimeRegistry: registry,
+      capabilityOverrides: { terminal: false, memory: false },
+    });
+    try {
+      expect(handle?.identity("explicit")).toBeUndefined();
+    } finally {
+      await agent.close();
+    }
+  });
+
   it("keeps all configured transports for local execution", () => {
     expect(selectMcpServersForEnvironment(SERVERS)).toEqual(SERVERS);
   });
@@ -351,6 +375,18 @@ describe("createMcpRuntimeHandle.reconcileGlobal", () => {
 
     expect(disconnectServer).not.toHaveBeenCalled();
     expect(rememberServerConfig).not.toHaveBeenCalled();
+    expect(stageAndActivate).not.toHaveBeenCalled();
+  });
+
+  it("leaves an explicit host server alone when a global server of the same name appears", async () => {
+    const { handle, disconnectServer, stageAndActivate } = createHandle({
+      source: "host",
+      globalConfig: current,
+    });
+
+    await handle.reconcileGlobal("linear", 3);
+
+    expect(disconnectServer).not.toHaveBeenCalled();
     expect(stageAndActivate).not.toHaveBeenCalled();
   });
 });

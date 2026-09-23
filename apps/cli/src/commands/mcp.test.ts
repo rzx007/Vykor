@@ -30,6 +30,7 @@ function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
       local: { type: "stdio", command: "node", args: ["server.js"] },
       disabled: { type: "stdio", command: "node", args: ["off.js"], enabled: false },
       tracked: { type: "http", url: "https://mcp.example/mcp?token=query-secret" },
+      malformed: { type: "http", url: "https://?token=malformed-secret" },
     },
   } as Settings;
   const credentials = new Map<string, McpOAuthCredentialRecord>();
@@ -159,6 +160,14 @@ describe("mcp command", () => {
     const entry = JSON.parse(test.output.at(-1)!) as { url: string };
     expect(entry.url).toBe("https://mcp.example/mcp");
     expect(test.output.join("\n")).not.toContain("query-secret");
+  });
+
+  it("does not print a malformed endpoint that may contain a token", async () => {
+    const test = fixture();
+
+    await test.run("status", "malformed", "--json");
+
+    expect(test.output.at(-1)).not.toContain("malformed-secret");
   });
 
   it("passes explicit scopes and no-browser to login", async () => {

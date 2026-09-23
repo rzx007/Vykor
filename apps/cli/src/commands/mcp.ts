@@ -268,7 +268,7 @@ function toCliEntry(
   const remote = config as McpRemoteServerConfig | undefined;
   const url = snapshot.endpoint ?? remote?.url ?? "";
   // Strip userinfo/query/fragment so a token in the URL never reaches CLI output.
-  return { ...base, url: summarizeMcpEndpoint(url) ?? url };
+  return { ...base, url: summarizeMcpEndpoint(url) ?? "(invalid endpoint)" };
 }
 
 function cliEndpoint(entry: CliMcpEntry): string {

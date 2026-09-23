@@ -241,6 +241,25 @@ describe("McpConfigApplicationService", () => {
     expect(world.events.indexOf("clear:linear")).toBeLessThan(world.events.indexOf("write"));
   });
 
+  it("keeps a concurrently replaced same-name server during removal", async () => {
+    const world = createWorld();
+    const replacement = { type: "http" as const, url: "https://replacement.example/mcp" };
+    const credentialStore = {
+      ...world.credentialStore,
+      delete: async () => {
+        world.setSettings({
+          ...world.getSettings(),
+          mcpServers: { ...world.getSettings().mcpServers, linear: replacement },
+        });
+        return true;
+      },
+    } as McpOAuthCredentialStore;
+    const service = world.createService({ credentialStore });
+
+    await expect(service.remove("linear")).rejects.toMatchObject({ code: "mcp-config-conflict" });
+    expect(world.getSettings().mcpServers?.linear).toEqual(replacement);
+  });
+
   it("reports a partial success when the credential is cleared but the config write fails", async () => {
     const world = createWorld();
     const service = world.createService();

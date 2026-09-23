@@ -72,6 +72,17 @@ describe("createMcpServerIdentity", () => {
 });
 
 describe("buildMcpAuthServerSnapshot", () => {
+  it("does not expose endpoint query credentials in a public snapshot", () => {
+    const snapshot = buildMcpAuthServerSnapshot({
+      name: "private",
+      config: { type: "http", url: "https://mcp.example/mcp?token=query-secret" },
+      credential: undefined,
+      runtimeStatus: "unavailable",
+    });
+    expect(snapshot.endpoint).toBe("https://mcp.example/mcp");
+    expect(JSON.stringify(snapshot)).not.toContain("query-secret");
+  });
+
   it("reflects the enabled flag and defaults omitted servers to enabled", () => {
     const disabled = buildMcpAuthServerSnapshot({
       name: "off",
@@ -140,7 +151,7 @@ describe("buildMcpAuthServerSnapshot", () => {
       name: "linear",
       enabled: true,
       transport: "http",
-      endpoint: "https://mcp.linear.app/mcp?tenant=a",
+      endpoint: "https://mcp.linear.app/mcp",
       authMode: "oauth",
       authStatus: "not-logged-in",
       scopes: ["read"],

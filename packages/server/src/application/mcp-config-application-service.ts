@@ -192,7 +192,8 @@ export class McpConfigApplicationService {
   async remove(name: string): Promise<McpConfigOperationResult> {
     const trimmed = assertName(name);
     const settings = await this.deps.loadSettings();
-    if (!settings.mcpServers?.[trimmed]) throw notFound(trimmed);
+    const expectedConfig = settings.mcpServers?.[trimmed];
+    if (!expectedConfig) throw notFound(trimmed);
 
     // Clear credentials first: a failure here keeps the config so the user can
     // retry, and a cleared credential that cannot be followed by a config write
@@ -200,11 +201,19 @@ export class McpConfigApplicationService {
     const credentialRemoved = await this.clearCredential(trimmed);
     try {
       await this.persist((current) => {
+        if (!sameConfig(current.mcpServers?.[trimmed], expectedConfig)) {
+          throw new McpConfigApplicationError(
+            "mcp-config-conflict",
+            `MCP 服务 ${trimmed} 在移除期间已变化；新配置未删除${credentialRemoved ? "，旧凭据已清理" : ""}。`,
+          );
+        }
         const mcpServers = { ...(current.mcpServers ?? {}) };
         delete mcpServers[trimmed];
         return { ...current, mcpServers };
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof McpConfigApplicationError && error.code === "mcp-config-conflict")
+        throw error;
       return { persisted: false, credentialRemoved, runtimeFailures: [] };
     }
     return this.result(true, credentialRemoved, trimmed);

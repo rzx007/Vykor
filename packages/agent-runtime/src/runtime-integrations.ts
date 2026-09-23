@@ -106,10 +106,9 @@ export async function installRuntimeIntegrations(
   const connectionSources = new Map<string, McpConnectionSource>();
   const sessionProjectOverrides = await projectDeclaresMcpServers();
   for (const serverName of Object.keys(mcpServers)) {
-    const fromHost =
-      options.mcpServers?.[serverName] !== undefined ||
-      options.settings.mcpServers?.[serverName] !== undefined;
-    if (fromHost) connectionSources.set(serverName, sessionProjectOverrides ? "project" : "global");
+    if (options.mcpServers?.[serverName] !== undefined) connectionSources.set(serverName, "host");
+    else if (options.settings.mcpServers?.[serverName] !== undefined)
+      connectionSources.set(serverName, sessionProjectOverrides ? "project" : "global");
     else if (serverOwners.has(serverName)) connectionSources.set(serverName, "plugin");
     else connectionSources.set(serverName, "unknown");
   }
@@ -368,7 +367,7 @@ class McpConnectionStageError extends Error {
 }
 
 /** Where a session's configured MCP server came from. */
-export type McpConnectionSource = "global" | "project" | "plugin" | "unknown";
+export type McpConnectionSource = "global" | "project" | "plugin" | "host" | "unknown";
 
 /** @internal Exposed for focused tests of the Runtime handle contract. */
 export interface CreateMcpRuntimeHandleInput {
@@ -466,7 +465,7 @@ export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): Acti
       if (await input.projectOverridesMcpServers()) return;
       // A plugin owns this name in this session. A later global entry with the
       // same name must not replace the plugin's connection or tools.
-      if (input.connectionSource(name) === "plugin") return;
+      if (input.connectionSource(name) === "plugin" || input.connectionSource(name) === "host") return;
 
       const desired = await input.resolveGlobalServer(name);
       if (!guard()) return;
