@@ -60,7 +60,10 @@ describe("resolveToolPathInContext", () => {
     );
 
     expect(readBytes).toHaveBeenCalledWith("/workspace/src/app.ts");
-    expect(result.content[0]).toMatchObject({ text: "1: hello" });
+    expect(result.isError).toBeFalsy();
+    expect((result.content[0] as { text: string }).text).toBe(
+      "1: hello\n\n(End of file - total 1 lines)",
+    );
   });
 
   it("returns a host path for images on a WSL mounted drive", async () => {

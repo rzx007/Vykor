@@ -14,7 +14,11 @@ describe("file operations", () => {
     const cwd = await mkdtemp(join(tmpdir(), "ohs-files-")); roots.push(cwd);
     const file = join(cwd, "note.txt");
     await fileWriteTool.execute!({ file_path: file, content: "hello" }, { cwd });
-    expect((await fileReadTool.execute!({ file_path: file }, { cwd })).content[0]).toMatchObject({ text: "1: hello" });
+    const readResult = await fileReadTool.execute!({ file_path: file }, { cwd });
+    expect(readResult.isError).toBeFalsy();
+    expect((readResult.content[0] as { text: string }).text).toBe(
+      "1: hello\n\n(End of file - total 1 lines)",
+    );
     expect(await readFile(file, "utf8")).toBe("hello");
   });
 
