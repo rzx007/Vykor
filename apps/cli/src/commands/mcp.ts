@@ -4,7 +4,7 @@ import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import {
   loadSettings,
-  saveSettings,
+  updateSettings,
   type McpAuthServerSnapshot,
   type McpRemoteServerConfig,
   type McpServerConfig,
@@ -19,7 +19,7 @@ import { createCliMcpRuntimeCoordinator } from "../mcp-runtime-coordinator.js";
 
 export interface McpCommandDeps {
   loadSettings(): Promise<Settings>;
-  saveSettings(settings: Settings): Promise<void>;
+  updateSettings(change: (current: Settings) => Settings): Promise<Settings>;
   application: Pick<McpOAuthApplicationService, "snapshot" | "login" | "logout">;
   openBrowser(url: string): Promise<void>;
   readLine(prompt: string): Promise<string>;
@@ -80,22 +80,23 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
       if (!!opts.url === !!stdioCommand.length) {
         throw new Error("Provide exactly one of --url or a stdio command after --");
       }
-      const settings = await deps.loadSettings();
-      settings.mcpServers ??= {};
-      if (opts.url) {
-        const url = new URL(opts.url);
-        const scopes = [...new Set((opts.scope ?? []).map(value => value.trim()).filter(Boolean))];
-        settings.mcpServers[name] = {
-          type: "http",
-          url: url.toString(),
-          ...(scopes.length ? { oauth: { scopes } } : {}),
-        };
-      } else {
-        const [command, ...args] = stdioCommand;
-        const env = parseEnvironment(opts.env);
-        settings.mcpServers[name] = { type: "stdio", command: command!, args, env };
-      }
-      await deps.saveSettings(settings);
+      await deps.updateSettings((settings) => {
+        const mcpServers = { ...(settings.mcpServers ?? {}) };
+        if (opts.url) {
+          const url = new URL(opts.url);
+          const scopes = [...new Set((opts.scope ?? []).map(value => value.trim()).filter(Boolean))];
+          mcpServers[name] = {
+            type: "http",
+            url: url.toString(),
+            ...(scopes.length ? { oauth: { scopes } } : {}),
+          };
+        } else {
+          const [command, ...args] = stdioCommand;
+          const env = parseEnvironment(opts.env);
+          mcpServers[name] = { type: "stdio", command: command!, args, env };
+        }
+        return { ...settings, mcpServers };
+      });
       deps.stdout(`Added MCP server: ${name}`);
     });
 
@@ -152,8 +153,11 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
         reportRuntimeSyncFailure(deps, error, name, "removed");
         syncFailure = error;
       }
-      delete settings.mcpServers[name];
-      await deps.saveSettings(settings);
+      await deps.updateSettings((current) => {
+        const mcpServers = { ...(current.mcpServers ?? {}) };
+        delete mcpServers[name];
+        return { ...current, mcpServers };
+      });
       if (syncFailure) throw syncFailure;
       deps.stdout(`Removed MCP server: ${name}`);
     });
@@ -167,7 +171,7 @@ export function createDefaultMcpCommandDeps(): McpCommandDeps {
   });
   return {
     loadSettings,
-    saveSettings,
+    updateSettings,
     application,
     openBrowser: openSystemBrowser,
     readLine: async prompt => {

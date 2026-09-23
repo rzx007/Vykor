@@ -2,7 +2,7 @@ import { McpOAuthCredentialStore as FileMcpOAuthCredentialStore } from "@openhar
 import {
   createUnavailableMcpRuntimeCoordinator,
   loadSettings,
-  saveSettings,
+  updateSettings,
   withMcpServerOAuthScopes,
   type McpAuthServerSnapshot,
   type McpRuntimeConnectionCoordinator,
@@ -62,7 +62,9 @@ export class McpOAuthApplicationError extends Error {
 
 export interface McpOAuthApplicationServiceDeps {
   loadSettings(): Promise<Settings>;
-  saveSettings(settings: Settings): Promise<void>;
+  updateSettings(
+    change: (current: Settings) => Settings | Promise<Settings>,
+  ): Promise<Settings>;
   credentialStore: McpOAuthCredentialStore;
   coordinator: McpRuntimeConnectionCoordinator;
   login: typeof loginMcpOAuth;
@@ -84,7 +86,7 @@ export class McpOAuthApplicationService {
     const credentialStore = overrides.credentialStore ?? new FileMcpOAuthCredentialStore();
     this.deps = {
       loadSettings,
-      saveSettings,
+      updateSettings,
       credentialStore,
       coordinator: createUnavailableMcpRuntimeCoordinator(),
       login: loginMcpOAuth,
@@ -222,9 +224,9 @@ export class McpOAuthApplicationService {
   ): Promise<void> {
     try {
       await this.deps.credentialStore.runExclusive(name, async () => {
-        const latest = await this.deps.loadSettings();
-        const nextSettings = withMcpServerOAuthScopes(latest, name, result.credential.tokens.scope);
-        await this.deps.saveSettings(nextSettings);
+        await this.deps.updateSettings((latest) =>
+          withMcpServerOAuthScopes(latest, name, result.credential.tokens.scope),
+        );
         return { next: result.credential, result: undefined };
       });
     } catch {
@@ -242,9 +244,9 @@ export class McpOAuthApplicationService {
     if (config.type !== "http" || config.oauth?.scopes?.length) return;
     await this.deps.credentialStore.runExclusive(name, async (current) => {
       if (!current) return { next: current, result: undefined };
-      const latest = await this.deps.loadSettings();
-      const nextSettings = withMcpServerOAuthScopes(latest, name, current.tokens.scope);
-      await this.deps.saveSettings(nextSettings);
+      await this.deps.updateSettings((latest) =>
+        withMcpServerOAuthScopes(latest, name, current.tokens.scope),
+      );
       return { next: current, result: undefined };
     });
   }

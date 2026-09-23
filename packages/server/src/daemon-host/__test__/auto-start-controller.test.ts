@@ -30,8 +30,9 @@ function fixture(initial = false) {
   const controller = createDaemonAutoStartController({
     invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
     loadSettings: async () => current,
-    saveSettings: async (next) => {
-      current = next;
+    updateSettings: async (change) => {
+      current = change(current);
+      return current;
     },
     createService: () => ({
       status: () => ({ platform: "win32", state }),
@@ -68,8 +69,9 @@ describe("daemon auto-start controller", () => {
     const controller = createDaemonAutoStartController({
       invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => current,
-      saveSettings: async (next) => {
-        current = next;
+      updateSettings: async (change) => {
+        current = change(current);
+        return current;
       },
       createService: () => ({
         status: () => ({ platform: "linux", state: "unknown" }),
@@ -102,8 +104,9 @@ describe("daemon auto-start controller", () => {
     const controller = createDaemonAutoStartController({
       invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => current,
-      saveSettings: async (next) => {
-        current = next;
+      updateSettings: async (change) => {
+        current = change(current);
+        return current;
       },
       createService: () => ({
         status: () => {
@@ -127,8 +130,9 @@ describe("daemon auto-start controller", () => {
     const controller = createDaemonAutoStartController({
       invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => current,
-      saveSettings: async (next) => {
-        current = next;
+      updateSettings: async (change) => {
+        current = change(current);
+        return current;
       },
       createService: () => ({
         status: () => ({ platform: "win32", state: "running" }),
@@ -152,7 +156,7 @@ describe("daemon auto-start controller", () => {
     const controller = createDaemonAutoStartController({
       invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => settings(false),
-      saveSettings: vi.fn(),
+      updateSettings: vi.fn(async (change) => change(settings(false))),
       createService: () => ({
         status: synchronousStatus,
         statusAsync: async () => ({ platform: "win32", state: "not-installed" }),

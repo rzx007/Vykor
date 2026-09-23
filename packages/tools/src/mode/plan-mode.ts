@@ -5,10 +5,11 @@ export const enterPlanModeTool: ToolDefinition = {
   description: "Switch permission mode to plan.",
   inputSchema: { type: "object", properties: {} },
   async execute() {
-    const { loadSettings, saveSettings } = await import("@openharness/core");
-    const settings = await loadSettings();
-    settings.permission = { ...settings.permission, mode: "plan" };
-    await saveSettings(settings);
+    const { updateSettings } = await import("@openharness/core");
+    await updateSettings((settings) => ({
+      ...settings,
+      permission: { ...settings.permission, mode: "plan" },
+    }));
     return { content: [{ type: "text", text: "Permission mode set to plan" }] };
   },
 };
@@ -18,10 +19,11 @@ export const exitPlanModeTool: ToolDefinition = {
   description: "Switch permission mode back to default.",
   inputSchema: { type: "object", properties: {} },
   async execute() {
-    const { loadSettings, saveSettings } = await import("@openharness/core");
-    const settings = await loadSettings();
-    settings.permission = { ...settings.permission, mode: "default" };
-    await saveSettings(settings);
+    const { updateSettings } = await import("@openharness/core");
+    await updateSettings((settings) => ({
+      ...settings,
+      permission: { ...settings.permission, mode: "default" },
+    }));
     return { content: [{ type: "text", text: "Permission mode set to default" }] };
   },
 };

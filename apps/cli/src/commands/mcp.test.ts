@@ -53,7 +53,7 @@ function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
   const output: string[] = [];
   const deps: McpCommandDeps = {
     loadSettings: async () => settings,
-    saveSettings: async next => { settings = next; },
+    updateSettings: async change => { settings = change(settings); return settings; },
     application: { snapshot, login, logout },
     openBrowser: vi.fn(async () => undefined),
     readLine: vi.fn(async () => ""),

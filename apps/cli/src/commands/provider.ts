@@ -33,7 +33,7 @@ export interface ApplyProviderConfigInput {
 
 /**
  * 把 provider 配置应用到 settings，返回一份新的 settings（不改原对象，不落盘）。
- * 调用方负责 saveSettings。供 use/add 以及后续 setup 复用。
+ * 调用方负责持久化。供 use/add 以及后续 setup 复用。
  */
 export function applyProviderConfig(settings: Settings, input: ApplyProviderConfigInput): Settings {
   const next: Settings = { ...settings };
@@ -126,19 +126,19 @@ export function createProviderCommand(): Command {
     .action(async (name: string, opts: { model?: string }) => {
       const chalk = (await import("chalk")).default;
       const { findByName } = await import("@openharness/api");
-      const { loadSettings, saveSettings } = await import("@openharness/core");
+      const { updateSettings } = await import("@openharness/core");
 
       if (!findByName(name)) {
         await warnUnknownProvider(chalk, name);
       }
 
-      const settings = await loadSettings();
-      const next = applyProviderConfig(settings, {
-        name,
-        model: opts.model,
-        setActive: true,
-      });
-      await saveSettings(next);
+      const next = await updateSettings((settings) =>
+        applyProviderConfig(settings, {
+          name,
+          model: opts.model,
+          setActive: true,
+        }),
+      );
 
       console.log(chalk.green(`Active provider set to ${name}`));
       if (next.model) console.log(chalk.gray(`  model: ${next.model}`));
@@ -160,7 +160,7 @@ export function createProviderCommand(): Command {
         const chalk = (await import("chalk")).default;
         const { findByName } = await import("@openharness/api");
         const { CredentialStorage } = await import("@openharness/auth");
-        const { loadSettings, saveSettings } = await import("@openharness/core");
+        const { updateSettings } = await import("@openharness/core");
 
         if (!findByName(name)) {
           await warnUnknownProvider(chalk, name);
@@ -172,14 +172,14 @@ export function createProviderCommand(): Command {
         const hasSettingsChange =
           opts.model !== undefined || opts.baseUrl !== undefined || opts.use === true;
         if (hasSettingsChange) {
-          const settings = await loadSettings();
-          const next = applyProviderConfig(settings, {
-            name,
-            model: opts.model,
-            baseUrl: opts.baseUrl,
-            setActive: opts.use,
-          });
-          await saveSettings(next);
+          await updateSettings((settings) =>
+            applyProviderConfig(settings, {
+              name,
+              model: opts.model,
+              baseUrl: opts.baseUrl,
+              setActive: opts.use,
+            }),
+          );
         }
 
         console.log(chalk.green(`Stored API key for ${name} (${maskKey(opts.apiKey)})`));
@@ -200,7 +200,7 @@ export function createProviderCommand(): Command {
       async (name: string, opts: { apiKey?: string; model?: string; baseUrl?: string }) => {
         const chalk = (await import("chalk")).default;
         const { CredentialStorage } = await import("@openharness/auth");
-        const { loadSettings, saveSettings } = await import("@openharness/core");
+        const { updateSettings } = await import("@openharness/core");
 
         if (
           opts.apiKey === undefined &&
@@ -221,13 +221,13 @@ export function createProviderCommand(): Command {
 
         const hasSettingsChange = opts.model !== undefined || opts.baseUrl !== undefined;
         if (hasSettingsChange) {
-          const settings = await loadSettings();
-          const next = applyProviderConfig(settings, {
-            name,
-            model: opts.model,
-            baseUrl: opts.baseUrl,
-          });
-          await saveSettings(next);
+          await updateSettings((settings) =>
+            applyProviderConfig(settings, {
+              name,
+              model: opts.model,
+              baseUrl: opts.baseUrl,
+            }),
+          );
         }
 
         console.log(chalk.green(`Updated ${name}`));

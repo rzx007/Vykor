@@ -1,5 +1,5 @@
 import {
-  saveSettings,
+  updateSettings,
   type Settings,
 } from "@openharness/core";
 
@@ -55,6 +55,31 @@ export async function saveSettingsAndRefreshRef(
   ref: DaemonSettingsRef,
   next: Settings
 ): Promise<void> {
-  await saveSettings(next);
-  ref.current = next;
+  const base = ref.current;
+  const merged = await updateSettings((latest) =>
+    applyTopLevelChanges(latest, base, next)
+  );
+  ref.current = merged;
+}
+
+/**
+ * Persist the top-level fields that the daemon intentionally changed, leaving
+ * fields a concurrent writer (CLI, Desktop, another settings window) touched in
+ * between alone. Without this, a full-file write of a snapshot read before the
+ * lock would silently discard those unrelated edits.
+ */
+function applyTopLevelChanges(
+  latest: Settings,
+  base: Settings,
+  next: Settings
+): Settings {
+  const result = { ...latest } as unknown as Record<string, unknown>;
+  const before = base as unknown as Record<string, unknown>;
+  const after = next as unknown as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (JSON.stringify(before[key]) === JSON.stringify(after[key])) continue;
+    if (after[key] === undefined) delete result[key];
+    else result[key] = after[key];
+  }
+  return result as unknown as Settings;
 }

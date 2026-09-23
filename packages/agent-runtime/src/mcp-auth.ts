@@ -5,7 +5,7 @@ import type {
   Settings,
   IToolRegistry,
 } from "@openharness/core";
-import { saveSettings } from "@openharness/core";
+import { updateSettings } from "@openharness/core";
 import { McpClientManager, resolveTransportKind } from "@openharness/mcp";
 
 export interface CreateMcpAuthHostOptions {
@@ -16,7 +16,7 @@ export interface CreateMcpAuthHostOptions {
 }
 
 export function createMcpAuthHost(options: CreateMcpAuthHostOptions): McpAuthHost {
-  const persistSettings = options.persistSettings ?? saveSettings;
+  const persistSettings = options.persistSettings;
   return {
     async configure(input) {
       const existing = options.settings.mcpServers?.[input.serverName]
@@ -34,8 +34,19 @@ export function createMcpAuthHost(options: CreateMcpAuthHostOptions): McpAuthHos
         },
       };
 
-      await persistSettings(nextSettings);
-      Object.assign(options.settings, nextSettings);
+      if (persistSettings) {
+        await persistSettings(nextSettings);
+        Object.assign(options.settings, nextSettings);
+      } else {
+        const persisted = await updateSettings((latest) => ({
+          ...latest,
+          mcpServers: {
+            ...(latest.mcpServers ?? {}),
+            [input.serverName]: nextConfig,
+          },
+        }));
+        Object.assign(options.settings, persisted);
+      }
 
       let prepared;
       try {

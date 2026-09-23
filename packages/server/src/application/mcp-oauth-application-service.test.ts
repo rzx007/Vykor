@@ -70,7 +70,7 @@ function createWorld(options: { stored?: McpOAuthCredentialRecord | null } = {})
   function createService(overrides: Partial<McpOAuthApplicationServiceDeps> = {}) {
     return new McpOAuthApplicationService({
       loadSettings: async () => settings,
-      saveSettings: async (next) => { if (saveGate) await saveGate; settings = next; },
+      updateSettings: async (change) => { if (saveGate) await saveGate; settings = await change(settings); return settings; },
       credentialStore: store,
       coordinator,
       login,
@@ -176,7 +176,7 @@ describe("McpOAuthApplicationService", () => {
   it("does not write a candidate credential when settings cannot be saved", async () => {
     const old = credential(["read"]);
     const world = createWorld({ stored: old });
-    const service = world.createService({ saveSettings: async () => { throw new Error("disk full"); } });
+    const service = world.createService({ updateSettings: async () => { throw new Error("disk full"); } });
     world.loginResults.push({ status: "valid", scopes: ["write"], verified: true, credential: credential(["write"]) });
 
     await expect(service.login({ name: "linear", scopes: ["write"], openBrowser: async () => undefined }))
@@ -259,7 +259,7 @@ describe("McpOAuthApplicationService", () => {
         ...world.getSettings(),
         mcpServers: { linear: { type: "http", url: "https://mcp.example/mcp" } },
       }),
-      saveSettings: async () => { throw new Error("Bearer access-secret https://mcp.example/mcp?token=query-secret"); },
+      updateSettings: async () => { throw new Error("Bearer access-secret https://mcp.example/mcp?token=query-secret"); },
       warn,
     });
 

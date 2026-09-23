@@ -91,7 +91,7 @@ program
   .argument("[key]", "Config key")
   .argument("[value]", "Config value")
   .action(async (action: string, key?: string, value?: string) => {
-    const { loadSettings, saveSettings } = await import("@openharness/core");
+    const { loadSettings, updateSettings } = await import("@openharness/core");
     const settings = await loadSettings();
     if (action === "show" || !key) {
       console.log(JSON.stringify(settings, null, 2));
@@ -108,12 +108,14 @@ program
         process.exit(1);
         return;
       }
-      const patch = buildSettingsPatch(
-        settings as unknown as Record<string, unknown>,
-        key,
-        coerced,
-      );
-      await saveSettings({ ...settings, ...patch } as typeof settings);
+      await updateSettings((current) => {
+        const patch = buildSettingsPatch(
+          current as unknown as Record<string, unknown>,
+          key,
+          coerced,
+        );
+        return { ...current, ...patch } as typeof current;
+      });
       if (key === "daemon.autoStart") {
         const entry = process.argv[1];
         if (!entry) throw new Error("Cannot locate CLI entrypoint.");

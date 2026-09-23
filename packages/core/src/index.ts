@@ -193,6 +193,13 @@ export {
   withMcpServerOAuthScopes,
 } from "./config/settings";
 export {
+  updateSettings,
+  withSettingsFileLock,
+  SettingsConflictError,
+  SettingsLockTimeoutError,
+  type SettingsLockOptions,
+} from "./config/settings-mutation";
+export {
   PROJECT_CONFIG_DIR_NAME,
   resolvePaths,
   getConfigDir,

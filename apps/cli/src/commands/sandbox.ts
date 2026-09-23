@@ -21,19 +21,27 @@ export function formatSandboxStatus(settings: Settings): string {
 export function createSandboxCommand(): Command {
   const command = new Command("sandbox").description("Manage the local SRT sandbox");
   command.command("enable").option("--global").option("--fail-open").action(async (options) => {
-    const { loadSettings, loadProjectSettings, saveProjectSettings, saveSettings } = await import("@openharness/core");
-    const current = options.global ? await loadSettings() : { ...(await loadSettings()), ...(await loadProjectSettings(process.cwd())) };
+    const { loadSettings, loadProjectSettings, saveProjectSettings, updateSettings } = await import("@openharness/core");
+    if (options.global) {
+      const next = await updateSettings((settings) => enableSandbox(settings, options));
+      console.log(formatSandboxStatus(next));
+      return;
+    }
+    const current = { ...(await loadSettings()), ...(await loadProjectSettings(process.cwd())) };
     const next = enableSandbox(current, options);
-    if (options.global) await saveSettings(next);
-    else await saveProjectSettings({ sandbox: next.sandbox }, process.cwd());
+    await saveProjectSettings({ sandbox: next.sandbox }, process.cwd());
     console.log(formatSandboxStatus(next));
   });
   command.command("disable").option("--global").action(async (options) => {
-    const { loadSettings, loadProjectSettings, saveProjectSettings, saveSettings } = await import("@openharness/core");
-    const current = options.global ? await loadSettings() : { ...(await loadSettings()), ...(await loadProjectSettings(process.cwd())) };
+    const { loadSettings, loadProjectSettings, saveProjectSettings, updateSettings } = await import("@openharness/core");
+    if (options.global) {
+      const next = await updateSettings((settings) => disableSandbox(settings));
+      console.log(formatSandboxStatus(next));
+      return;
+    }
+    const current = { ...(await loadSettings()), ...(await loadProjectSettings(process.cwd())) };
     const next = disableSandbox(current);
-    if (options.global) await saveSettings(next);
-    else await saveProjectSettings({ sandbox: next.sandbox }, process.cwd());
+    await saveProjectSettings({ sandbox: next.sandbox }, process.cwd());
     console.log(formatSandboxStatus(next));
   });
   command.command("status").action(async () => {

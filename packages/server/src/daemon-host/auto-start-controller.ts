@@ -1,4 +1,4 @@
-import { loadSettings, saveSettings, type Settings } from "@openharness/core";
+import { loadSettings, updateSettings, type Settings } from "@openharness/core";
 
 import {
   DaemonSystemService,
@@ -24,7 +24,7 @@ export interface DaemonAutoStartController {
 export interface DaemonAutoStartControllerOptions {
   invocation: DaemonServiceInvocation;
   loadSettings?: typeof loadSettings;
-  saveSettings?: typeof saveSettings;
+  updateSettings?: typeof updateSettings;
   createService?: () => Pick<
     DaemonSystemService,
     "status" | "statusAsync" | "install" | "start" | "uninstall"
@@ -35,7 +35,7 @@ export function createDaemonAutoStartController(
   options: DaemonAutoStartControllerOptions,
 ): DaemonAutoStartController {
   const read = options.loadSettings ?? loadSettings;
-  const write = options.saveSettings ?? saveSettings;
+  const write = options.updateSettings ?? updateSettings;
   const createService =
     options.createService ??
     (() => new DaemonSystemService({ invocation: options.invocation }));
@@ -54,7 +54,7 @@ export function createDaemonAutoStartController(
     snapshot,
     async enable() {
       const previous = await read();
-      await write(withAutoStart(previous, true));
+      await write((settings) => withAutoStart(settings, true));
       const service = createService();
       try {
         service.install();
@@ -70,7 +70,11 @@ export function createDaemonAutoStartController(
           cause: error,
           restoreConfigured: previous.daemon?.autoStart ?? false,
           service,
-          restoreSettings: () => write(previous),
+          restoreSettings: async () => {
+            await write((settings) =>
+              withAutoStart(settings, previous.daemon?.autoStart ?? false),
+            );
+          },
         });
       }
     },
@@ -79,7 +83,7 @@ export function createDaemonAutoStartController(
       const service = createService();
       try {
         service.uninstall();
-        await write(withAutoStart(previous, false));
+        await write((settings) => withAutoStart(settings, false));
         const result = await snapshot();
         if (result.configured || result.serviceState !== "not-installed") {
           throw new Error(
@@ -92,7 +96,11 @@ export function createDaemonAutoStartController(
           cause: error,
           restoreConfigured: previous.daemon?.autoStart ?? false,
           service,
-          restoreSettings: () => write(previous),
+          restoreSettings: async () => {
+            await write((settings) =>
+              withAutoStart(settings, previous.daemon?.autoStart ?? false),
+            );
+          },
         });
       }
     },
@@ -106,8 +114,7 @@ export async function shouldStartManagedDaemon(): Promise<boolean> {
 export async function saveDaemonAutoStartPreference(
   autoStart: boolean,
 ): Promise<void> {
-  const settings = await loadSettings();
-  await saveSettings(withAutoStart(settings, autoStart));
+  await updateSettings((settings) => withAutoStart(settings, autoStart));
 }
 
 export function reconcileDaemonSystemService(

@@ -14,7 +14,7 @@ export const configTool: ToolDefinition = {
   },
   async execute(input) {
     const action = (input.action as string) ?? "show";
-    const { loadSettings, saveSettings } = await import("@openharness/core");
+    const { loadSettings, updateSettings } = await import("@openharness/core");
     const settings = await loadSettings();
     if (action === "show") {
       return { content: [{ type: "text", text: JSON.stringify(settings, null, 2) }] };
@@ -31,8 +31,7 @@ export const configTool: ToolDefinition = {
       if (!(key in settings)) {
         return { content: [{ type: "text", text: `Unknown config key: ${key}` }], isError: true };
       }
-      (settings as any)[key] = value;
-      await saveSettings(settings);
+      await updateSettings((current) => ({ ...current, [key]: value }));
       return { content: [{ type: "text", text: `Updated ${key}` }] };
     }
     return { content: [{ type: "text", text: "Usage: action=show or action=set" }], isError: true };

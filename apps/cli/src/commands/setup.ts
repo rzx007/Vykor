@@ -71,7 +71,7 @@ export function createSetupCommand(): Command {
       const chalk = (await import("chalk")).default;
       const { PROVIDERS } = await import("@openharness/api");
       const { CredentialStorage, describeCodexAuthState } = await import("@openharness/auth");
-      const { loadSettings, saveSettings } = await import("@openharness/core");
+      const { loadSettings, updateSettings } = await import("@openharness/core");
 
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const ask = (q: string): Promise<string> =>
@@ -160,14 +160,15 @@ export function createSetupCommand(): Command {
           );
         }
 
-        const settings = await loadSettings();
-        const next = applyProviderConfig(settings, {
-          name: config.settingsPatch.provider,
-          model: config.settingsPatch.model,
-          setActive: true,
+        await updateSettings((settings) => {
+          const next = applyProviderConfig(settings, {
+            name: config.settingsPatch.provider,
+            model: config.settingsPatch.model,
+            setActive: true,
+          });
+          next.apiFormat = config.settingsPatch.apiFormat;
+          return next;
         });
-        next.apiFormat = config.settingsPatch.apiFormat;
-        await saveSettings(next);
 
         console.log(chalk.green(`\nDone. Active provider set to ${spec.displayName} (${spec.name}).`));
         console.log(chalk.gray("Verify with:"));
