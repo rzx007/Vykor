@@ -14,6 +14,16 @@ export function isChannelSession(session: DesktopSessionRecord): boolean {
   return isChannelSessionMetadata(session.metadata ?? {})
 }
 
+/**
+ * 历史列表只展示顶层会话。
+ *
+ * 子代理会话（daemon 投影出的 child session）带 `parentId`，服务端 `sessions.list`
+ * 默认已过滤掉；这里同步拦掉 Activity 推送带来的同类会话，避免它们混进侧边栏。
+ */
+export function isTopLevelSession(session: DesktopSessionRecord): boolean {
+  return !session.parentId
+}
+
 export function upsertProject(
   projects: DesktopProject[],
   project: DesktopProject

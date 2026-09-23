@@ -44,6 +44,37 @@ describe("Desktop Activity store", () => {
     expect(refreshBootstrap).not.toHaveBeenCalled()
   })
 
+  it("does not add a sub-agent child session to the history list", () => {
+    useDesktopSessionStore.getState().applyActivityUpdate({
+      cursor: 1,
+      delivery: "live",
+      scheduled: [],
+      sessions: [
+        {
+          session: {
+            id: "child-1",
+            parentId: "parent-1",
+            cwd: "/repo",
+            title: "worker@default",
+            model: "test",
+            status: "running",
+            metadata: { childId: "child-1" },
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          activitySeq: 1,
+          updatedAt: 1,
+          executionState: "running",
+          attentionState: "read",
+        },
+      ],
+      eventType: "session.created",
+    })
+    expect(useDesktopSessionStore.getState().sessions.map((session) => session.id)).not.toContain(
+      "child-1"
+    )
+  })
+
   it("does not reorder a live session backwards when an older baseline fills other sessions", () => {
     const row = (id: string, updatedAt: number) => ({
       id,

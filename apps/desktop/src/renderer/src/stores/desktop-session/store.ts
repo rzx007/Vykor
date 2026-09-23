@@ -4,7 +4,7 @@ import type { DesktopActivityUpdate } from "@shared/activity-types"
 import { applyActivityUpdate as reduceActivity, markSessionRead } from "./activity-state"
 import { saveActivityPersistence } from "./activity-persistence"
 import { clearPersistedActiveSessionId } from "./persistence"
-import { upsertSession } from "./helpers"
+import { isTopLevelSession, upsertSession } from "./helpers"
 import { createAttachmentActions } from "./attachment-actions"
 import { attachDesktopDaemonStatusEvents, createBootstrapActions } from "./bootstrap-actions"
 import { createInitialState } from "./initial-state"
@@ -59,7 +59,7 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
       if (activity === previous) return
       const acceptedSessions = update.sessions.flatMap((item) => {
         const session = activity.sessions[item.session.id]?.session
-        return session ? [session] : []
+        return session && isTopLevelSession(session) ? [session] : []
       })
       set((current) => ({
         activity,
