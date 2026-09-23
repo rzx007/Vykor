@@ -12,9 +12,12 @@ const execFileAsync = promisify(execFile)
 
 let repoRoot: string
 let plainDir: string
+let previousGitCeiling: string | undefined
 
 beforeAll(async () => {
   const base = await mkdtemp(join(tmpdir(), "oh-git-probe-"))
+  previousGitCeiling = process.env.GIT_CEILING_DIRECTORIES
+  process.env.GIT_CEILING_DIRECTORIES = base
   repoRoot = join(base, "repo")
   plainDir = join(base, "plain")
   const { mkdir } = await import("node:fs/promises")
@@ -25,6 +28,8 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  if (previousGitCeiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES
+  else process.env.GIT_CEILING_DIRECTORIES = previousGitCeiling
   if (repoRoot) await rm(join(repoRoot, ".."), { recursive: true, force: true })
 })
 
