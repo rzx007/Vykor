@@ -27,11 +27,9 @@ function questionPayload(permission: DesktopPermissionRequest): ApprovalQuestion
         ? record.options.filter((option): option is string => typeof option === "string")
         : []
 
-      const type = record.type === "check" ? "check" as const : "radio" as const
+      const type = record.type === "check" ? ("check" as const) : ("radio" as const)
 
-      return [
-        { q: text, type: options.length > 0 ? type : ("check" as const), options },
-      ]
+      return [{ q: text, type: options.length > 0 ? type : ("check" as const), options }]
     })
 
     if (parsed.length > 0) return parsed
