@@ -32,6 +32,7 @@ describe("startup loading document", () => {
     const styles = document.querySelector("style")?.textContent ?? ""
 
     expect(styles).toContain("#startup-loading")
+    expect(styles).toContain('"Segoe UI Variable Text"')
     expect(styles).not.toMatch(/#startup-loading\s*\{[^}]*background\s*:\s*#/)
     expect(styles).toContain("linear-gradient(180deg, #000000 0%, #151718 100%)")
     expect(styles).toContain("animation: startup-badge-in")

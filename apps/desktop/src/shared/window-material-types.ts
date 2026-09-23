@@ -9,8 +9,9 @@ export type DesktopWindowMaterialUnavailableReason = "unsupported-platform" | "r
  * renderer 外壳（`--shell`）该用什么底：
  * - "solid"：不透明档，token 保持原值；
  * - "translucent"：玻璃 + macOS，vibrancy 之上再叠一层半透明染色；
- * - "transparent"：玻璃 + Windows/Linux，外壳全透明，
- *   让原生材质（Acrylic / 合成器模糊）直接可见——材质只在 web 内容透明处才透得出来。
+ * - "transparent"：玻璃 + Windows/Linux，默认全透明，让原生材质（Acrylic / 合成器模糊）
+ *   直接可见——材质只在 web 内容透明处才透得出来；应用主题与系统主题不一致时由 CSS 叠一层主题色，
+ *   因为背板跟随的是系统主题。
  */
 export type DesktopWindowMaterialShell = "solid" | "translucent" | "transparent"
 

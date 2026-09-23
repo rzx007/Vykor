@@ -237,6 +237,20 @@ html[data-window-shell="transparent"] {
   --shell: transparent;
 }
 
+/* Windows Acrylic 背板跟随「系统主题」而不是应用主题。应用与系统主题一致时保持全透明
+   （材质最明显）；不一致时才叠一层主题色，避免玻璃区比内容区亮/暗一大截。 */
+@media (prefers-color-scheme: dark) {
+  html.light[data-window-shell="transparent"] {
+    --shell: color-mix(in oklab, oklch(0.969 0.008 236) 62%, transparent);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  html.dark[data-window-shell="transparent"] {
+    --shell: color-mix(in oklab, oklch(0.22 0.012 250) 80%, transparent);
+  }
+}
+
 html[data-window-shell="translucent"] {
   --shell: color-mix(in oklab, oklch(0.969 0.008 236) 60%, transparent);
 }
