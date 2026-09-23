@@ -169,4 +169,56 @@ describe("AnthropicClient native image input", () => {
     }).rejects.toThrow();
     expect(stream).not.toHaveBeenCalled();
   });
+
+  it("converts tool-result images to Anthropic base64 blocks", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-anthropic-tool-image-"));
+    try {
+      const imagePath = join(dir, "screenshot.png");
+      const image = await sharp({
+        create: { width: 10, height: 10, channels: 3, background: "green" },
+      }).png().toBuffer();
+      await writeFile(imagePath, image);
+      const stream = vi.fn(() => ({
+        async *[Symbol.asyncIterator]() {},
+        finalMessage: async () => ({
+          usage: { input_tokens: 0, output_tokens: 0 },
+          stop_reason: "end_turn",
+        }),
+      }));
+      const client = new AnthropicClient({ apiKey: "test" } as any);
+      (client as any).client = { messages: { stream } };
+
+      for await (const _ of client.streamMessage({
+        model: "claude-test",
+        messages: [{
+          type: "tool_result",
+          toolUseId: "t1",
+          content: [
+            { type: "text", text: "page inspected" },
+            { type: "image", source: { type: "file", mediaType: "image/png", path: imagePath } },
+          ],
+        }],
+      })) {}
+
+      const request = stream.mock.calls[0]![0] as any;
+      expect(request.messages[0].content[0]).toEqual({
+        type: "tool_result",
+        tool_use_id: "t1",
+        content: [
+          { type: "text", text: "page inspected" },
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/png",
+              data: image.toString("base64"),
+            },
+          },
+        ],
+        is_error: undefined,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

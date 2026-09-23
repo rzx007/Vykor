@@ -953,6 +953,12 @@ export class QueryEngine implements IQueryEngine {
             ...(execution?.effects?.askUserPrompt
               ? { askUserPrompt: (question: string) => execution.effects.askUserPrompt!(question, execution.scope) }
               : {}),
+            ...(execution?.effects?.requestPermission
+              ? {
+                  requestPermission: (request) =>
+                    execution.effects.requestPermission!(request, execution.scope),
+                }
+              : {}),
             agent: execution,
           };
           const result = await this.executeToolWithTimeout(

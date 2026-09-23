@@ -211,7 +211,7 @@ export class AnthropicClient implements StreamingMessageClient {
               {
                 type: "tool_result" as const,
                 tool_use_id: msg.toolUseId,
-                content: msg.content,
+                content: await convertUserContentToAnthropic(msg.content, signal),
                 is_error: msg.isError,
               } as Anthropic.ToolResultBlockParam,
             ],

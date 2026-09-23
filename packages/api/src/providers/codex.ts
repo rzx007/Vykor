@@ -239,7 +239,9 @@ async function convertMessagesToCodex(
       result.push({
         type: "function_call_output",
         call_id: msg.toolUseId,
-        output: contentBlocksToText(msg.content),
+        output: msg.content.some((block) => block.type === "image")
+          ? await convertUserContent(msg.content, signal)
+          : contentBlocksToText(msg.content),
       });
     }
   }
@@ -277,10 +279,10 @@ async function imageBlockToDataUrl(
 }
 
 function contentBlocksToText(blocks: ContentBlock[]): string {
-  return blocks.map((block) => {
-    if (block.type === "text") return block.text;
-    return "[image]";
-  }).join("\n");
+  return blocks
+    .filter((block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text")
+    .map((block) => block.text)
+    .join("\n");
 }
 
 function convertToolToCodex(tool: ToolDefinition): Record<string, unknown> {

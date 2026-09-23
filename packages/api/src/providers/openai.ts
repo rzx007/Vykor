@@ -392,12 +392,21 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
 
   private async convertMessages(params: StreamMessageParams): Promise<OpenAI.ChatCompletionMessageParam[]> {
     const messages: OpenAI.ChatCompletionMessageParam[] = [];
+    let pendingToolImages: Array<Extract<ContentBlock, { type: "image" }>> = [];
+
+    const flushToolImages = async () => {
+      if (!pendingToolImages.length) return;
+      const content = await convertUserContentToOpenAI(pendingToolImages, params.abortSignal);
+      if (Array.isArray(content) && content.length) messages.push({ role: "user", content });
+      pendingToolImages = [];
+    };
 
     if (params.system) {
       messages.push({ role: "system", content: params.system });
     }
 
     for (const msg of params.messages) {
+      if (msg.type !== "tool_result") await flushToolImages();
       switch (msg.type) {
         case "user": {
           if (typeof msg.content === "string") {
@@ -440,33 +449,24 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
           break;
         }
         case "tool_result": {
-          // OpenAI tool messages support text content only; extract text blocks and
-          // represent image blocks as a placeholder so the model knows they existed.
-          let toolContent: string;
-          if (typeof msg.content === "string") {
-            toolContent = msg.content;
-          } else if (Array.isArray(msg.content)) {
-            const parts: string[] = [];
-            for (const block of msg.content as ContentBlock[]) {
-              if (block.type === "text") {
-                parts.push(block.text);
-              } else if (block.type === "image") {
-                parts.push("[image]");
-              }
-            }
-            toolContent = parts.join("\n");
-          } else {
-            toolContent = JSON.stringify(msg.content);
-          }
+          const text = msg.content
+            .filter((block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text")
+            .map((block) => block.text)
+            .join("\n");
+          pendingToolImages.push(...msg.content.filter(
+            (block): block is Extract<ContentBlock, { type: "image" }> => block.type === "image",
+          ));
           messages.push({
             role: "tool",
             tool_call_id: msg.toolUseId,
-            content: nonEmptyText(toolContent),
+            content: nonEmptyText(text),
           });
           break;
         }
       }
     }
+
+    await flushToolImages();
 
     return messages;
   }

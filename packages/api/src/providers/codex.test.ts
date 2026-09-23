@@ -153,4 +153,52 @@ describe("CodexSubscriptionClient native image input", () => {
       await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });
+
+  it("sends tool-result images as function call output content", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-codex-tool-image-"));
+    try {
+      const imagePath = join(dir, "screenshot.png");
+      const image = await sharp({
+        create: { width: 10, height: 10, channels: 3, background: "green" },
+      }).png().toBuffer();
+      await writeFile(imagePath, image);
+      let requestBody: any;
+      vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+        requestBody = JSON.parse(String(init?.body));
+        return new Response(
+          `data: ${JSON.stringify({ type: "response.completed", response: { usage: { input_tokens: 0, output_tokens: 0 } } })}\n\n`,
+          { status: 200, headers: { "content-type": "text/event-stream" } },
+        );
+      }));
+      const client = new CodexSubscriptionClient({
+        apiKey: jwt({ "https://api.openai.com/auth": { chatgpt_account_id: "acct_123" } }),
+      });
+
+      for await (const _ of client.streamMessage({
+        model: "gpt-test",
+        messages: [{
+          type: "tool_result",
+          toolUseId: "t1",
+          content: [
+            { type: "text", text: "page inspected" },
+            { type: "image", source: { type: "file", mediaType: "image/png", path: imagePath } },
+          ],
+        }],
+      })) {}
+
+      expect(requestBody.input[0]).toEqual({
+        type: "function_call_output",
+        call_id: "t1",
+        output: [
+          { type: "input_text", text: "page inspected" },
+          {
+            type: "input_image",
+            image_url: `data:image/png;base64,${image.toString("base64")}`,
+          },
+        ],
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,6 +1,11 @@
 import type { ContentBlock } from "./messages";
 import type { Settings } from "./settings";
-import type { AgentExecutionContext, AgentScheduleEffects } from "./runtime";
+import type {
+  AgentExecutionContext,
+  AgentPermissionDecision,
+  AgentPermissionRequest,
+  AgentScheduleEffects,
+} from "./runtime";
 import type { AgentTerminalHost } from "@openharness/terminal";
 import type { AgentJobHost } from "@openharness/jobs";
 import type { ExecutionEnvironmentHandle, ShellDescriptor } from "@openharness/environment";
@@ -70,6 +75,10 @@ export interface ToolContext {
   schedules?: AgentScheduleEffects;
   /** Host-owned interactive user question. */
   askUserPrompt?: (question: string) => Promise<string>;
+  /** Request a normal persisted Permission decision from the host. */
+  requestPermission?: (
+    request: AgentPermissionRequest,
+  ) => Promise<AgentPermissionDecision>;
   agent?: AgentExecutionContext;
 }
 

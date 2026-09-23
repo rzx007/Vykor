@@ -35,15 +35,25 @@ export function createBrowserTool(
       if (!context.sessionId) return failed("Browser use requires a desktop session.");
       const action = parseAction(input);
       if (!action) return failed("Invalid browser action or missing action parameters.");
-      if (!context.askUserPrompt) return failed("This host cannot request browser permissions.");
+      if (!context.requestPermission && !context.askUserPrompt) {
+        return failed("This host cannot request browser permissions.");
+      }
       try {
         const observation = await host.execute({
           action,
           sessionId: context.sessionId,
           cwd: context.cwd,
           approve: async (question) => {
+            if (context.requestPermission) {
+              const decision = await context.requestPermission({
+                toolName: "Browser",
+                reason: question,
+                input: { action: action.action },
+              });
+              return decision.status === "approved";
+            }
             const answer = await context.askUserPrompt!(question);
-            return /^(yes|y|允许|同意)$/i.test(answer.trim());
+            return isBrowserPermissionApproved(answer);
           },
         });
         const content: ContentBlock[] = [{
@@ -73,6 +83,25 @@ export function createBrowserTool(
       }
     },
   };
+}
+
+export function isBrowserPermissionApproved(answer: string): boolean {
+  const isYes = (value: unknown): value is string =>
+    typeof value === "string" && /^(yes|y|允许|同意)$/i.test(value.trim());
+  if (isYes(answer)) return true;
+  try {
+    const parsed = JSON.parse(answer) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    const custom = (parsed as Record<string, unknown>).custom;
+    return Boolean(
+      custom &&
+        typeof custom === "object" &&
+        !Array.isArray(custom) &&
+        Object.values(custom).some(isYes),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function parseAction(input: Record<string, unknown>): BrowserAction | null {

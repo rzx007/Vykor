@@ -277,6 +277,53 @@ describe("convertMessages image passing", () => {
       await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });
+
+  it("sends tool-result images in a following user message after every tool response", async () => {
+    const client = new TestableClient({ apiKey: "test", baseURL: undefined } as any);
+    const dir = await mkdtemp(join(tmpdir(), "oh-openai-tool-image-"));
+    try {
+      const imagePath = join(dir, "screenshot.png");
+      const image = await sharp({
+        create: { width: 10, height: 10, channels: 3, background: "green" },
+      }).png().toBuffer();
+      await writeFile(imagePath, image);
+
+      const out = await client.build([
+        {
+          type: "assistant",
+          content: "",
+          toolUses: [
+            { type: "tool_use", id: "t1", name: "Browser", input: {} },
+            { type: "tool_use", id: "t2", name: "Read", input: {} },
+          ],
+        },
+        {
+          type: "tool_result",
+          toolUseId: "t1",
+          content: [
+            { type: "text", text: "page inspected" },
+            { type: "image", source: { type: "file", mediaType: "image/png", path: imagePath } },
+          ],
+        },
+        {
+          type: "tool_result",
+          toolUseId: "t2",
+          content: [{ type: "text", text: "file read" }],
+        },
+      ]);
+
+      expect(out.map((message: any) => message.role)).toEqual([
+        "assistant", "tool", "tool", "user",
+      ]);
+      expect(out[1].content).toBe("page inspected");
+      expect(out[3].content).toContainEqual({
+        type: "image_url",
+        image_url: { url: `data:image/png;base64,${image.toString("base64")}` },
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("OpenAICompatibleClient cancellation", () => {
