@@ -8,7 +8,6 @@ import type {
   DesktopMcpSnapshot,
 } from "@shared/mcp-types"
 import { McpManager, type McpManagerProps } from "./mcp-manager"
-import { mcpStorageKey } from "./mcp-config"
 
 function server(overrides: Partial<DesktopMcpServer> = {}): DesktopMcpServer {
   return {
@@ -127,7 +126,7 @@ describe("MCP manager against the desktop API", () => {
 
   it("shows globally configured servers and never reads the old localStorage demo data", async () => {
     localStorage.setItem(
-      mcpStorageKey("D:/project"),
+      'openharness:mcp:local:v1:"D:/project"',
       JSON.stringify({
         version: 1,
         document: {

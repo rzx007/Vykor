@@ -96,14 +96,21 @@ async function reclaimIfStale(
   staleMs: number,
   now: () => number,
 ): Promise<boolean> {
+  let mtimeMs: number;
   try {
-    const info = await stat(lockPath);
-    if (now() - info.mtimeMs <= staleMs) return false;
+    mtimeMs = (await stat(lockPath)).mtimeMs;
+  } catch {
+    // The lock disappeared; retry immediately.
+    return true;
+  }
+  if (now() - mtimeMs <= staleMs) return false;
+  try {
     await rm(lockPath, { force: true });
     return true;
   } catch {
-    // The lock disappeared or is unreadable; retry immediately.
-    return true;
+    // Reclaim failed (for example the file is still undeletable on Windows).
+    // Fall through to the bounded wait instead of spinning without a deadline.
+    return false;
   }
 }
 

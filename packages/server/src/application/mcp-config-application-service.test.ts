@@ -212,6 +212,23 @@ describe("McpConfigApplicationService", () => {
     });
   });
 
+  it("still reconciles and reports the saved config when clearing the old credential fails", async () => {
+    const world = createWorld();
+    const service = world.createService();
+    world.setClearError(new Error("locks busy"));
+
+    await expect(
+      service.update({
+        name: "linear",
+        config: { type: "http", url: "https://mcp.example/v2" },
+        expectedConfig: linearConfig(),
+      }),
+    ).rejects.toMatchObject({ code: "mcp-credential-removal-failed" });
+
+    expect(world.coordinator.reconcileGlobal).toHaveBeenCalledWith("linear");
+    expect(world.getSettings().mcpServers?.linear).toMatchObject({ url: "https://mcp.example/v2" });
+  });
+
   it("clears credentials before removing the config", async () => {
     const world = createWorld();
     const service = world.createService();

@@ -206,14 +206,27 @@ export async function installRuntimeIntegrations(
     runtime.addCleanup(() => unregister());
   }
 
+  // Capture each server's name generation before the initial connects start. A
+  // reconcile that runs while an initial connect is in flight advances it, which
+  // aborts the stale connect instead of letting it publish tools for old config.
+  const installNamedGenerations = new Map<string, number>();
+  if (runtimeRegistry) {
+    for (const name of Object.keys(enabledMcpServers)) {
+      installNamedGenerations.set(name, runtimeRegistry.currentNamedGeneration(name));
+    }
+  }
+
   await Promise.all(
     Object.entries(enabledMcpServers).map(async ([name, config]) => {
       const identity = identityFor(name);
       const generation = runtimeRegistry && identity
         ? runtimeRegistry.currentGeneration(identity)
         : 0;
-      const guard = runtimeRegistry && identity
-        ? () => runtimeRegistry.currentGeneration(identity) === generation
+      const namedGeneration = installNamedGenerations.get(name) ?? 0;
+      const guard = runtimeRegistry
+        ? () =>
+            runtimeRegistry.currentNamedGeneration(name) === namedGeneration &&
+            (!identity || runtimeRegistry.currentGeneration(identity) === generation)
         : () => true;
       try {
         await stageAndActivate(name, config, guard);
@@ -397,8 +410,16 @@ export interface CreateMcpRuntimeHandleInput {
  * project or plugin connection that merely shares the name.
  */
 export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): ActiveMcpRuntimeHandle {
-  const identityGuard = (identity: McpServerIdentity, generation: number) =>
-    () => input.registry.currentGeneration(identity) === generation;
+  // An identity-guarded connect must also abort if a name-keyed reconcile has
+  // superseded it, otherwise a slow install-time or OAuth connect could publish
+  // tools for a config that a later disable/delete/address change withdrew.
+  const identityGuard = (
+    identity: McpServerIdentity,
+    generation: number,
+    namedGeneration: number,
+  ) => () =>
+    input.registry.currentGeneration(identity) === generation &&
+    input.registry.currentNamedGeneration(identity.name) === namedGeneration;
   const namedGuard = (name: string, generation: number) =>
     () => input.registry.currentNamedGeneration(name) === generation;
 
@@ -420,7 +441,8 @@ export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): Acti
       const config = input.mcpServers[identity.name];
       const current = input.identityFor(identity.name);
       if (!config || !current || current.endpointFingerprint !== identity.endpointFingerprint) return;
-      const guard = identityGuard(identity, generation);
+      const namedGeneration = input.registry.currentNamedGeneration(identity.name);
+      const guard = identityGuard(identity, generation, namedGeneration);
       if (!guard()) return;
       if (config.enabled === false) {
         await input.disconnectServer(identity.name);
@@ -442,6 +464,9 @@ export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): Acti
       // Project settings replace the whole global list; global operations must
       // not touch any connection owned by such a session.
       if (await input.projectOverridesMcpServers()) return;
+      // A plugin owns this name in this session. A later global entry with the
+      // same name must not replace the plugin's connection or tools.
+      if (input.connectionSource(name) === "plugin") return;
 
       const desired = await input.resolveGlobalServer(name);
       if (!guard()) return;

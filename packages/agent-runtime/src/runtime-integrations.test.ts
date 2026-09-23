@@ -340,4 +340,33 @@ describe("createMcpRuntimeHandle.reconcileGlobal", () => {
     expect(disconnectServer).not.toHaveBeenCalled();
     expect(stageAndActivate).not.toHaveBeenCalled();
   });
+
+  it("leaves a plugin server alone when a global server of the same name appears", async () => {
+    const { handle, disconnectServer, stageAndActivate, rememberServerConfig } = createHandle({
+      source: "plugin",
+      globalConfig: current,
+    });
+
+    await handle.reconcileGlobal("linear", 3);
+
+    expect(disconnectServer).not.toHaveBeenCalled();
+    expect(rememberServerConfig).not.toHaveBeenCalled();
+    expect(stageAndActivate).not.toHaveBeenCalled();
+  });
+});
+
+describe("createMcpRuntimeHandle.synchronize generation guard", () => {
+  it("does not stage after a name-keyed reconcile supersedes the OAuth synchronize", async () => {
+    let namedGeneration = 3;
+    const { handle, stageAndActivate } = createHandle({
+      credential: usableCredential,
+      generation: 3,
+      namedGeneration: () => namedGeneration,
+      onCredentialGet: () => { namedGeneration = 4; },
+    });
+
+    await handle.synchronize(linearIdentity, 3);
+
+    expect(stageAndActivate).not.toHaveBeenCalled();
+  });
 });

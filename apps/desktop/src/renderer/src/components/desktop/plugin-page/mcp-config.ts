@@ -14,7 +14,6 @@ type ParseOptions = {
   /** When editing an existing server, its stable name (renames are rejected). */
   editingName?: string
 }
-type StorageAccess = Pick<Storage, "getItem" | "setItem">
 export type McpPairs = [string, string][]
 
 const REAL_FIELDS = new Set(["type", "command", "args", "env", "cwd", "url", "headers", "oauth", "enabled"])
@@ -300,44 +299,4 @@ function pairsToObject(pairs: McpPairs, label: string): McpConfig | undefined {
     hasValue = true
   }
   return hasValue ? result : undefined
-}
-
-export const mcpStorageKey = (projectPath: string): string =>
-  `openharness:mcp:local:v1:${JSON.stringify(projectPath)}`
-export const emptyMcpDocument = (): McpDocument => ({ servers: [], extras: {}, wrapped: true })
-
-export function loadMcpStorage(
-  storage: StorageAccess,
-  projectPath: string
-): { document: McpDocument; raw: string | null } {
-  const raw = storage.getItem(mcpStorageKey(projectPath))
-  if (raw === null) return { document: emptyMcpDocument(), raw }
-  const value: unknown = JSON.parse(raw)
-  if (!object(value) || value.version !== 1 || !object(value.document))
-    throw new Error("本机 MCP 配置格式无效，原始数据已保留")
-  const document = value.document
-  if (!Array.isArray(document.servers) || !object(document.extras))
-    throw new Error("本机 MCP 配置格式无效，原始数据已保留")
-  const servers = document.servers.map((s: unknown): McpEntry => {
-    if (!object(s) || typeof s.name !== "string" || !object(s.config))
-      throw new Error("本机 MCP 配置格式无效")
-    return { name: s.name, config: s.config }
-  })
-  if (servers.length)
-    parseMcpJson(serializeMcpDocument({ servers, extras: document.extras, wrapped: true }))
-  return { document: { servers, extras: document.extras, wrapped: true }, raw }
-}
-
-export function saveMcpStorage(
-  storage: StorageAccess,
-  projectPath: string,
-  document: McpDocument,
-  expectedRaw: string | null
-): string {
-  if (storage.getItem(mcpStorageKey(projectPath)) !== expectedRaw)
-    throw new Error("本机配置已被其他窗口修改，请刷新后重试；当前编辑内容已保留")
-  if (document.servers.length) parseMcpJson(serializeMcpDocument({ ...document, wrapped: true }))
-  const raw = JSON.stringify({ version: 1, document: { ...document, wrapped: true } })
-  storage.setItem(mcpStorageKey(projectPath), raw)
-  return raw
 }

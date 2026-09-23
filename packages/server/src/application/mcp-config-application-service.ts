@@ -167,13 +167,26 @@ export class McpConfigApplicationService {
       };
     });
     // A changed URL / auth identity makes any stored OAuth credential invalid.
-    const credentialRemoved = authIdentityChanged(
-      input.expectedConfig as McpServerConfig,
-      config,
-    )
-      ? await this.clearCredential(name)
-      : false;
-    return this.result(true, credentialRemoved, name);
+    // Clear it after the config is persisted, but still reconcile so active
+    // sessions never keep a connection that no longer matches the saved config.
+    const identityChanged = authIdentityChanged(input.expectedConfig as McpServerConfig, config);
+    let credentialRemoved = false;
+    let clearFailed = false;
+    if (identityChanged) {
+      try {
+        credentialRemoved = await this.deps.credentialStore.delete(name);
+      } catch {
+        clearFailed = true;
+      }
+    }
+    const runtimeFailures = await this.reconcile(name);
+    if (clearFailed) {
+      throw new McpConfigApplicationError(
+        "mcp-credential-removal-failed",
+        `已保存 ${name} 的新配置，但旧凭据清理失败；请重新授权。`,
+      );
+    }
+    return { persisted: true, credentialRemoved, runtimeFailures };
   }
 
   async remove(name: string): Promise<McpConfigOperationResult> {
@@ -305,7 +318,9 @@ function authIdentity(config: McpServerConfig | undefined): string | undefined {
   const remote = config as McpRemoteServerConfig;
   return JSON.stringify({
     type: remote.type,
-    url: summarizeMcpEndpoint(remote.url) ?? remote.url,
+    // Use the raw URL: the stored credential's `serverUrl` is raw, so a query
+    // change must invalidate it even though the list summary hides the query.
+    url: remote.url,
     headers: remote.headers ?? {},
     oauth: remote.oauth ?? {},
   });

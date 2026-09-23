@@ -29,6 +29,7 @@ function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
       linear: { type: "http", url: "https://mcp.linear.app/mcp", oauth: { scopes: ["read"] } },
       local: { type: "stdio", command: "node", args: ["server.js"] },
       disabled: { type: "stdio", command: "node", args: ["off.js"], enabled: false },
+      tracked: { type: "http", url: "https://mcp.example/mcp?token=query-secret" },
     },
   } as Settings;
   const credentials = new Map<string, McpOAuthCredentialRecord>();
@@ -148,6 +149,16 @@ describe("mcp command", () => {
       name: "local",
       enabled: true,
     });
+  });
+
+  it("strips userinfo and query tokens from the CLI endpoint output", async () => {
+    const test = fixture();
+
+    await test.run("status", "tracked", "--json");
+
+    const entry = JSON.parse(test.output.at(-1)!) as { url: string };
+    expect(entry.url).toBe("https://mcp.example/mcp");
+    expect(test.output.join("\n")).not.toContain("query-secret");
   });
 
   it("passes explicit scopes and no-browser to login", async () => {
