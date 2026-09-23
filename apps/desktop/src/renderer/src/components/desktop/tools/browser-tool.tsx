@@ -119,8 +119,8 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
       const webview = element as BrowserWebviewElement | null
       if (!webview) {
         const previous = webviewRef.current
-        const webContentsId = previous?.getWebContentsId?.()
-        if (webContentsId !== undefined) {
+        // React calls the ref with null after detaching the <webview>; Electron methods can throw at that point.
+        if (previous) {
           void window.desktop.browser
             .updateTab({ action: "unbind", tabId: tab.id })
             .catch(() => undefined)
