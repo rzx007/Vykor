@@ -1,14 +1,75 @@
 // @vitest-environment jsdom
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type {
+  DesktopMcpOperationResult,
+  DesktopMcpServer,
+  DesktopMcpSnapshot,
+} from "@shared/mcp-types"
 import { McpManager, type McpManagerProps } from "./mcp-manager"
-import { loadMcpStorage, parseMcpJson, saveMcpStorage } from "./mcp-config"
+import { mcpStorageKey } from "./mcp-config"
 
-describe("MCP manager local workflow", () => {
+function server(overrides: Partial<DesktopMcpServer> = {}): DesktopMcpServer {
+  return {
+    name: "linear",
+    enabled: true,
+    transport: "http",
+    summary: "https://mcp.linear.app/mcp",
+    authMode: "oauth",
+    authStatus: "not-logged-in",
+    scopes: [],
+    runtimeStatus: "connected",
+    ...overrides,
+  }
+}
+
+function snapshot(...servers: DesktopMcpServer[]): DesktopMcpSnapshot {
+  return { servers }
+}
+
+function operation(
+  next: DesktopMcpSnapshot,
+  overrides: Partial<DesktopMcpOperationResult> = {}
+): DesktopMcpOperationResult {
+  return { persisted: true, credentialRemoved: false, runtimeFailures: [], snapshot: next, ...overrides }
+}
+
+function installDesktop(overrides: {
+  snapshot?: ReturnType<typeof vi.fn>
+  getConfig?: ReturnType<typeof vi.fn>
+  exportConfig?: ReturnType<typeof vi.fn>
+  add?: ReturnType<typeof vi.fn>
+  update?: ReturnType<typeof vi.fn>
+  remove?: ReturnType<typeof vi.fn>
+  setEnabled?: ReturnType<typeof vi.fn>
+  login?: ReturnType<typeof vi.fn>
+  logout?: ReturnType<typeof vi.fn>
+} = {}) {
+  const desktop = {
+    mcp: {
+      snapshot: overrides.snapshot ?? vi.fn(async () => snapshot(server())),
+      getConfig:
+        overrides.getConfig ??
+        vi.fn(async () => ({ type: "http", url: "https://mcp.linear.app/mcp" })),
+      exportConfig: overrides.exportConfig ?? vi.fn(async () => ({ mcpServers: {} })),
+      add: overrides.add ?? vi.fn(async () => operation(snapshot(server()))),
+      update: overrides.update ?? vi.fn(async () => operation(snapshot(server()))),
+      remove: overrides.remove ?? vi.fn(async () => operation(snapshot())),
+      setEnabled: overrides.setEnabled ?? vi.fn(async () => operation(snapshot(server()))),
+      login: overrides.login ?? vi.fn(async () => snapshot(server({ authStatus: "valid" }))),
+      logout: overrides.logout ?? vi.fn(async () => snapshot(server())),
+    },
+  }
+  Object.defineProperty(window, "desktop", { configurable: true, value: desktop })
+  return desktop
+}
+
+describe("MCP manager against the desktop API", () => {
   let root: Root
   let container: HTMLDivElement
-  let props: McpManagerProps
+  let notify: ReturnType<typeof vi.fn>
+
   beforeEach(() => {
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -17,30 +78,38 @@ describe("MCP manager local workflow", () => {
     container = document.createElement("div")
     document.body.append(container)
     root = createRoot(container)
-    props = {
-      query: "",
-      addRequest: 0,
-      refreshRequest: 0,
-      projectPath: "D:/project",
-      notify: () => {},
-    }
+    notify = vi.fn()
   })
   afterEach(async () => {
     await act(async () => root.unmount())
     container.remove()
+    vi.restoreAllMocks()
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
       .IS_REACT_ACT_ENVIRONMENT
   })
+
   async function render(next: Partial<McpManagerProps> = {}): Promise<void> {
-    props = { ...props, ...next }
+    const props: McpManagerProps = {
+      query: "",
+      addRequest: 0,
+      refreshRequest: 0,
+      notify,
+      ...next,
+    }
     await act(async () => root.render(<McpManager {...props} />))
+    await act(async () => {
+      await Promise.resolve()
+    })
   }
   async function click(label: string): Promise<void> {
     const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (b) => b.textContent?.trim() === label || b.getAttribute("aria-label") === label
+      (item) => item.textContent?.trim() === label || item.getAttribute("aria-label") === label
     )
     expect(button, `button: ${label}`).toBeTruthy()
-    await act(async () => button!.click())
+    await act(async () => {
+      button!.click()
+      await Promise.resolve()
+    })
   }
   async function input(selector: string, value: string): Promise<void> {
     const element = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!
@@ -52,129 +121,166 @@ describe("MCP manager local workflow", () => {
       element.dispatchEvent(new Event("input", { bubbles: true }))
     })
   }
+  function rows(): Element[] {
+    return [...container.querySelectorAll("[data-extension-row]")]
+  }
 
-  it("saves an HTTP server from the form without writing it before confirm", async () => {
-    await render()
-    await render({ addRequest: 1 })
-    expect(loadMcpStorage(localStorage, props.projectPath).document.servers).toHaveLength(0)
-    await click("流式 HTTP")
-    await input('input[id$="-name"]', "remote")
-    await input('input[id$="-url"]', "https://example.com/mcp")
-    await input('input[aria-label="标头 1 键"]', "Accept")
-    await input('input[aria-label="标头 1 值"]', "application/json")
-    await click("保存")
-    expect(loadMcpStorage(localStorage, props.projectPath).document.servers[0]).toMatchObject({
-      name: "remote",
-      config: {
-        type: "http",
-        url: "https://example.com/mcp",
-        headers: { Accept: "application/json" },
-      },
-    })
-  })
-
-  it("opens only on new add requests and confirms abandoning a dirty editor", async () => {
-    await render()
-    expect(document.querySelector('[role="dialog"]')).toBeNull()
-    await render({ addRequest: 1 })
-    expect(document.querySelector('input[id$="-name"]')).toBeTruthy()
-    await input('input[id$="-name"]', "draft")
-    await click("取消")
-    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("放弃未保存")
-    await click("继续编辑")
-    expect(document.querySelector<HTMLInputElement>('input[id$="-name"]')?.value).toBe("draft")
-    await click("取消")
-    await click("放弃更改")
-    await render({ query: "anything" })
-    expect(document.querySelector('[role="dialog"]')).toBeNull()
-    expect(loadMcpStorage(localStorage, props.projectPath).document.servers).toEqual([])
-    await render({ projectPath: "D:/another-project" })
-    expect(document.querySelector('[role="dialog"]')).toBeNull()
-  })
-
-  it("preserves real fields through JSON → form → JSON and persists an edited command", async () => {
-    await render()
-    await render({ addRequest: 1 })
-    await click("JSON")
-    await input(
-      "textarea",
-      '{"name":"local","type":"stdio","command":"node","env":{"EMPTY":""}}'
+  it("shows globally configured servers and never reads the old localStorage demo data", async () => {
+    localStorage.setItem(
+      mcpStorageKey("D:/project"),
+      JSON.stringify({
+        version: 1,
+        document: {
+          servers: [{ name: "demo-only", config: { type: "stdio", command: "node" } }],
+          extras: {},
+          wrapped: true,
+        },
+      })
     )
-    await click("表单")
-    await input('input[id$="-command"]', "bun")
-    await click("JSON")
-    expect(JSON.parse(document.querySelector("textarea")!.value)).toMatchObject({
-      type: "stdio",
-      command: "bun",
-      env: { EMPTY: "" },
-    })
-    await click("保存")
-    expect(loadMcpStorage(localStorage, props.projectPath).document.servers).toEqual([
-      { name: "local", config: { type: "stdio", command: "bun", env: { EMPTY: "" } } },
-    ])
-    expect(container.querySelectorAll("[data-extension-row]")).toHaveLength(1)
-    expect(container.textContent).toContain("未连接")
-  })
-
-  it("rejects a partially invalid batch without saving any server", async () => {
-    await render()
-    await render({ addRequest: 1 })
-    await click("JSON")
-    await input(
-      "textarea",
-      '{"mcpServers":{"good":{"type":"stdio","command":"node"},"bad":{"type":"http","url":"ftp://example.com"}}}'
-    )
-    await click("保存")
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain("http")
-    expect(loadMcpStorage(localStorage, props.projectPath).document.servers).toHaveLength(0)
-  })
-
-  it("filters persisted servers, refreshes local changes and requires confirmation to remove", async () => {
-    saveMcpStorage(
-      localStorage,
-      props.projectPath,
-      parseMcpJson(
-        '{"mcpServers":{"alpha":{"type":"stdio","command":"node"},"beta":{"type":"http","url":"https://example.com/mcp","enabled":false}}}'
+    const desktop = installDesktop({
+      snapshot: vi.fn(async () =>
+        snapshot(
+          server({ name: "linear" }),
+          server({ name: "beui", transport: "stdio", summary: "npx beui", authMode: "none" })
+        )
       ),
-      null
-    )
+    })
+
     await render()
+
+    expect(desktop.mcp.snapshot).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain("linear")
+    expect(container.textContent).toContain("beui")
+    expect(container.textContent).not.toContain("demo-only")
+  })
+
+  it("filters and searches the global list", async () => {
+    installDesktop({
+      snapshot: vi.fn(async () =>
+        snapshot(
+          server({ name: "alpha" }),
+          server({ name: "beta", enabled: false, summary: "https://beta.test/mcp" })
+        )
+      ),
+    })
+    await render()
+
     await click("已停用")
-    expect(container.querySelectorAll("[data-extension-row]")).toHaveLength(1)
-    expect(container.querySelector("[data-extension-row]")?.textContent).toContain("beta")
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]?.textContent).toContain("beta")
+
     await click("全部")
     await render({ query: "alpha" })
-    expect(container.querySelectorAll("[data-extension-row]")).toHaveLength(1)
-    await click("查看 alpha 的 MCP 配置")
-    await click("移除")
-    expect(loadMcpStorage(localStorage, props.projectPath).document.servers).toHaveLength(2)
-    await click("移除配置")
-    expect(
-      loadMcpStorage(localStorage, props.projectPath).document.servers.map((s) => s.name)
-    ).toEqual(["beta"])
-    const current = loadMcpStorage(localStorage, props.projectPath)
-    saveMcpStorage(
-      localStorage,
-      props.projectPath,
-      parseMcpJson('{"name":"external","type":"stdio","command":"bun"}'),
-      current.raw
-    )
-    await render({ refreshRequest: 1, query: "" })
-    expect(container.textContent).toContain("external")
-    expect(container.querySelectorAll("[data-extension-row]")).toHaveLength(1)
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]?.textContent).toContain("alpha")
   })
 
-  it("keeps a title-only empty state without starter templates", async () => {
+  it("toggles a server through the API and applies the returned snapshot", async () => {
+    const desktop = installDesktop({
+      snapshot: vi.fn(async () => snapshot(server({ name: "alpha" }))),
+      setEnabled: vi.fn(async () => operation(snapshot(server({ name: "alpha", enabled: false })))),
+    })
     await render()
 
-    expect(container.textContent).toContain("还没有 MCP")
-    expect(container.textContent).not.toContain("尚未添加 MCP 服务器")
-    expect(container.textContent).not.toContain("添加本地命令")
-    expect(container.textContent).not.toContain("STDIO")
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!
+    await act(async () => {
+      toggle.click()
+      await Promise.resolve()
+    })
+
+    expect(desktop.mcp.setEnabled).toHaveBeenCalledWith({ name: "alpha", enabled: false })
+    expect(container.textContent).toContain("已停用")
+  })
+
+  it("reports a saved-but-not-synced operation as a partial success", async () => {
+    installDesktop({
+      snapshot: vi.fn(async () => snapshot(server({ name: "alpha" }))),
+      setEnabled: vi.fn(async () =>
+        operation(snapshot(server({ name: "alpha", enabled: false })), {
+          runtimeFailures: [{ runtimeId: "runtime-1", message: "reconnect failed" }],
+        })
+      ),
+    })
+    await render()
+
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!
+    await act(async () => {
+      toggle.click()
+      await Promise.resolve()
+    })
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("同步到活动会话失败"))
+  })
+
+  it("shows OAuth actions only for OAuth HTTP servers", async () => {
+    installDesktop({
+      snapshot: vi.fn(async () =>
+        snapshot(
+          server({ name: "linear", transport: "http", authMode: "oauth", authStatus: "not-logged-in" }),
+          server({ name: "beui", transport: "stdio", authMode: "none", summary: "npx beui" })
+        )
+      ),
+    })
+    await render()
+
+    await click("查看 beui 的 MCP 配置")
+    expect(document.body.textContent).toContain("无需认证")
     expect(
-      [...document.querySelectorAll("button")].filter(
-        (item) => item.textContent?.trim() === "添加 MCP"
+      [...document.querySelectorAll("button")].some((item) =>
+        ["浏览器授权", "重新授权", "退出登录"].includes(item.textContent?.trim() ?? "")
       )
-    ).toHaveLength(0)
+    ).toBe(false)
+
+    await click("查看 linear 的 MCP 配置")
+    expect(document.body.textContent).toContain("浏览器授权")
+  })
+
+  it("refreshes the snapshot after an OAuth login", async () => {
+    const desktop = installDesktop({
+      snapshot: vi.fn(async () =>
+        snapshot(server({ name: "linear", authMode: "oauth", authStatus: "not-logged-in" }))
+      ),
+      login: vi.fn(async () => snapshot(server({ name: "linear", authMode: "oauth", authStatus: "valid" }))),
+    })
+    await render()
+
+    await click("查看 linear 的 MCP 配置")
+    await click("浏览器授权")
+
+    expect(desktop.mcp.login).toHaveBeenCalledWith({ name: "linear", scopes: [] })
+    expect(document.body.textContent).toContain("已授权")
+  })
+
+  it("adds a server through the editor using a real config", async () => {
+    const desktop = installDesktop({
+      snapshot: vi.fn(async () => snapshot()),
+    })
+    await render()
+    await render({ addRequest: 1 })
+
+    await input('input[id$="-name"]', "beui")
+    await input('input[id$="-command"]', "npx")
+    await click("保存")
+
+    expect(desktop.mcp.add).toHaveBeenCalledWith({
+      name: "beui",
+      config: { type: "stdio", command: "npx" },
+    })
+  })
+
+  it("exports the real global config from the desktop API", async () => {
+    const desktop = installDesktop({
+      exportConfig: vi.fn(async () => ({
+        mcpServers: { linear: { type: "http", url: "https://mcp.linear.app/mcp" } },
+      })),
+    })
+    await render()
+
+    await click("导出 JSON")
+
+    expect(desktop.mcp.exportConfig).toHaveBeenCalledTimes(1)
+    expect(document.querySelector<HTMLTextAreaElement>("#mcp-export-json")?.value).toContain(
+      "mcp.linear.app"
+    )
   })
 })

@@ -28,7 +28,6 @@ import { DefaultTerminalShellControl } from "./default-terminal-shell-control"
 import { errorMessage } from "./settings-error-message"
 import { DaemonAutoStartControl } from "./daemon-autostart-control"
 import { AppearanceSettings } from "@renderer/components/appearance/appearance-settings"
-import { McpSettings } from "./mcp-settings"
 import { ConnectionsSettings } from "./connections-settings"
 import { isDesktopNotificationMode, isDesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopNotificationMode, DesktopWorkStyle } from "@shared/settings-types"
@@ -51,8 +50,6 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
                 ? "连接模型服务和开发工具订阅，选择 OpenHarness 默认使用的供应商。"
                 : selectedSection === "外观"
                   ? "调整 OpenHarness 在当前设备上的显示方式。更改会立即预览并自动保存。"
-                  : selectedSection === "MCP 服务"
-                    ? "查看已配置的 MCP 服务，并通过浏览器完成 OAuth 登录或撤销本地授权。"
                   : selectedSection === "连接"
                     ? "把飞书接入 OpenHarness：扫码或手填创建机器人，管理白名单，并查看真实连接状态。"
                   : selectedSection === "存储"
@@ -69,8 +66,6 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
           <AppearanceSettings />
         ) : selectedSection === "存储" ? (
           <AttachmentStorageSettings />
-        ) : selectedSection === "MCP 服务" ? (
-          <McpSettings />
         ) : selectedSection === "连接" ? (
           <ConnectionsSettings />
         ) : (

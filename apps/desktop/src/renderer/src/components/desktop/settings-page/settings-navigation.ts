@@ -3,7 +3,6 @@ import {
   CircleUserRound,
   Code2,
   CreditCard,
-  Database,
   GitBranch,
   HardDrive,
   Keyboard,
@@ -33,7 +32,6 @@ export const personalSettingsNavigation: SettingsNavigationItem[] = [
 ]
 
 export const integrationSettingsNavigation: SettingsNavigationItem[] = [
-  { label: "MCP 服务", slug: "mcp", icon: Database },
   { label: "连接", slug: "connections", icon: Link2 },
 ]
 

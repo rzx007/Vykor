@@ -171,8 +171,6 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
             </TabsContent>
             <TabsContent value="mcp" keepMounted>
               <McpManager
-                key={projectPath}
-                projectPath={projectPath}
                 query={queries.mcp}
                 addRequest={addRequests.mcp}
                 refreshRequest={refreshRequests.mcp}
