@@ -43,6 +43,16 @@ describe("McpResource", () => {
     });
   });
 
+  it("posts reconcile-global with only the server name", async () => {
+    const { resource, calls } = makeResource();
+    await resource.reconcileGlobal("linear");
+
+    expect(calls[0]).toMatchObject({
+      path: "/mcp/linear/reconcile-global",
+      options: { method: "POST", body: {} },
+    });
+  });
+
   it("encodes server names and forwards the abort signal", async () => {
     const { resource, calls } = makeResource();
     const controller = new AbortController();

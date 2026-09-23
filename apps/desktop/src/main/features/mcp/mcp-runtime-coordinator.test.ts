@@ -28,13 +28,17 @@ function fixture(options: {
     if (options.syncError) throw options.syncError
     return connected
   })
-  const createClient = vi.fn(() => ({ mcp: { runtimeStatus, synchronize } }))
+  const reconcileGlobal = vi.fn(async () => {
+    if (options.syncError) throw options.syncError
+    return connected
+  })
+  const createClient = vi.fn(() => ({ mcp: { runtimeStatus, synchronize, reconcileGlobal } }))
   const coordinator = createDesktopMcpRuntimeCoordinator({
     readRegistry: () =>
       "registry" in options ? options.registry : { url: "http://127.0.0.1:1234", token: "tok" },
     createClient: createClient as never,
   })
-  return { coordinator, createClient, runtimeStatus, synchronize }
+  return { coordinator, createClient, runtimeStatus, synchronize, reconcileGlobal }
 }
 
 describe("createDesktopMcpRuntimeCoordinator", () => {
@@ -68,5 +72,11 @@ describe("createDesktopMcpRuntimeCoordinator", () => {
     await expect(coordinator.synchronize(identity)).rejects.toBeInstanceOf(
       IncompatibleProtocolError
     )
+  })
+
+  it("reconciles by server name through the daemon control plane", async () => {
+    const { coordinator, reconcileGlobal } = fixture()
+    await expect(coordinator.reconcileGlobal("local")).resolves.toEqual(connected)
+    expect(reconcileGlobal).toHaveBeenCalledWith("local")
   })
 })

@@ -14,5 +14,6 @@ export function createUnavailableMcpRuntimeCoordinator(): McpRuntimeConnectionCo
   return {
     getStatus: unavailable,
     synchronize: unavailable,
+    reconcileGlobal: unavailable,
   };
 }

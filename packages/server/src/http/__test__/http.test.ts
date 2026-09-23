@@ -649,6 +649,16 @@ describe("OpenHarnessHttpServer", () => {
       });
       expect(sync.status).toBe(200);
       await expect(sync.json()).resolves.toEqual({ status: "unavailable", affectedRuntimes: 0, failures: [] });
+
+      const unauthorizedReconcile = await fetch(`${baseUrl}/mcp/linear/reconcile-global`, { method: "POST" });
+      expect(unauthorizedReconcile.status).toBe(401);
+
+      const reconcile = await fetch(`${baseUrl}/mcp/linear/reconcile-global`, {
+        method: "POST",
+        headers: auth(token),
+      });
+      expect(reconcile.status).toBe(200);
+      await expect(reconcile.json()).resolves.toEqual({ status: "unavailable", affectedRuntimes: 0, failures: [] });
     });
   });
 

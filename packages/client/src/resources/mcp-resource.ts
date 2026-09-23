@@ -34,4 +34,18 @@ export class McpResource {
       { method: "POST", body: { fingerprint }, signal: options.signal },
     );
   }
+
+  /**
+   * Ask every active Runtime to re-check the latest global config for `name`.
+   * Only the server name crosses the wire.
+   */
+  async reconcileGlobal(
+    name: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<McpRuntimeSyncResult> {
+    return await this.transport.request<McpRuntimeSyncResult>(
+      `/mcp/${encodeURIComponent(name)}/reconcile-global`,
+      { method: "POST", body: {}, signal: options.signal },
+    );
+  }
 }

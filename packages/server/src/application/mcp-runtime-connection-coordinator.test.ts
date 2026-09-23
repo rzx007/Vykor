@@ -20,7 +20,9 @@ function fakeHandle(options: {
   servers: Record<string, McpServerIdentity>;
   statuses?: Record<string, McpRuntimeStatus>;
   onSynchronize?: (identity: McpServerIdentity, generation: number) => Promise<void> | void;
+  onReconcile?: (name: string, generation: number) => Promise<void> | void;
   delayMs?: number;
+  reconcileDelayMs?: number;
 }) {
   const generations: number[] = [];
   let concurrent = 0;
@@ -36,13 +38,36 @@ function fakeHandle(options: {
       concurrent -= 1;
     }
   });
+  const reconcileGenerations: number[] = [];
+  let reconcileConcurrent = 0;
+  let maxReconcileConcurrent = 0;
+  const reconcileGlobal = vi.fn(async (name: string, generation: number) => {
+    reconcileConcurrent += 1;
+    maxReconcileConcurrent = Math.max(maxReconcileConcurrent, reconcileConcurrent);
+    reconcileGenerations.push(generation);
+    try {
+      if (options.reconcileDelayMs) await new Promise((resolve) => setTimeout(resolve, options.reconcileDelayMs));
+      await options.onReconcile?.(name, generation);
+    } finally {
+      reconcileConcurrent -= 1;
+    }
+  });
   const handle: ActiveMcpRuntimeHandle = {
     runtimeId: options.runtimeId,
     identity: (name) => options.servers[name],
     getStatus: (target) => options.statuses?.[target.name] ?? "connected",
     synchronize,
+    reconcileGlobal,
   };
-  return { handle, generations, synchronize, maxConcurrent: () => maxConcurrent };
+  return {
+    handle,
+    generations,
+    synchronize,
+    reconcileGenerations,
+    reconcileGlobal,
+    maxConcurrent: () => maxConcurrent,
+    maxReconcileConcurrent: () => maxReconcileConcurrent,
+  };
 }
 
 describe("McpRuntimeConnectionCoordinator", () => {
@@ -221,5 +246,66 @@ describe("McpRuntimeConnectionCoordinator", () => {
 
     unregister();
     await expect(coordinator.synchronize(target)).resolves.toMatchObject({ affectedRuntimes: 0, status: "unavailable" });
+  });
+
+  it("reconciles every active handle by name, including stdio without an identity", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const http = fakeHandle({ runtimeId: "http", servers: { linear: identity("linear", "aaa") } });
+    const stdio = fakeHandle({ runtimeId: "stdio", servers: {} });
+    coordinator.register(http.handle);
+    coordinator.register(stdio.handle);
+
+    const result = await coordinator.reconcileGlobal("local");
+
+    expect(result.affectedRuntimes).toBe(2);
+    expect(http.reconcileGlobal).toHaveBeenCalledWith("local", 1);
+    expect(stdio.reconcileGlobal).toHaveBeenCalledWith("local", 1);
+    expect(coordinator.currentNamedGeneration("local")).toBe(1);
+  });
+
+  it("serializes reconciles per name and advances the named generation", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    const order: number[] = [];
+    const handle = fakeHandle({
+      runtimeId: "r1",
+      servers: {},
+      reconcileDelayMs: 20,
+      onReconcile: (_name, generation) => { order.push(generation); },
+    });
+    coordinator.register(handle.handle);
+
+    const first = coordinator.reconcileGlobal("linear");
+    const second = coordinator.reconcileGlobal("linear");
+    await Promise.all([first, second]);
+
+    expect(order).toEqual([1, 2]);
+    expect(handle.maxReconcileConcurrent()).toBe(1);
+    expect(coordinator.currentNamedGeneration("linear")).toBe(2);
+  });
+
+  it("reports reconcile failures without leaking details", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    coordinator.register(fakeHandle({
+      runtimeId: "failing",
+      servers: {},
+      onReconcile: () => {
+        throw new Error("POST https://mcp.example.test/mcp?token=query-secret failed");
+      },
+    }).handle);
+
+    const result = await coordinator.reconcileGlobal("linear");
+
+    expect(result.status).toBe("error");
+    expect(result.failures).toEqual([{ runtimeId: "failing", message: "MCP runtime synchronization failed" }]);
+    expect(JSON.stringify(result)).not.toContain("query-secret");
+  });
+
+  it("reports unavailable when no runtime can reconcile a name", async () => {
+    const coordinator = new McpRuntimeConnectionCoordinator();
+    await expect(coordinator.reconcileGlobal("linear")).resolves.toEqual({
+      status: "unavailable",
+      affectedRuntimes: 0,
+      failures: [],
+    });
   });
 });

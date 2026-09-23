@@ -21,6 +21,7 @@ export class McpRuntimeConnectionCoordinator
 {
   private readonly handles = new Map<string, ActiveMcpRuntimeHandle>();
   private readonly generations = new Map<string, number>();
+  private readonly namedGenerations = new Map<string, number>();
   private readonly queues = new Map<string, Promise<unknown>>();
 
   register(handle: ActiveMcpRuntimeHandle): () => void {
@@ -37,6 +38,10 @@ export class McpRuntimeConnectionCoordinator
 
   currentGeneration(identity: McpServerIdentity): number {
     return this.generations.get(identityKey(identity)) ?? 0;
+  }
+
+  currentNamedGeneration(name: string): number {
+    return this.namedGenerations.get(name) ?? 0;
   }
 
   async getStatus(identity: McpServerIdentity): Promise<McpRuntimeSyncResult> {
@@ -83,6 +88,37 @@ export class McpRuntimeConnectionCoordinator
     });
   }
 
+  /**
+   * Reconcile the latest global config for `name` across every active Runtime.
+   *
+   * Unlike `synchronize`, this is keyed by server name and fans out to all
+   * handles (a server may be stdio, SSE, newly added or previously disabled).
+   * Runs are serialized per name and advance a name generation so a slow
+   * connect can never override a later disable, delete or address change.
+   */
+  async reconcileGlobal(name: string): Promise<McpRuntimeSyncResult> {
+    return this.enqueue(`global:${name}`, async () => {
+      const generation = (this.namedGenerations.get(name) ?? 0) + 1;
+      this.namedGenerations.set(name, generation);
+
+      const participants = [...this.handles.values()];
+      const settled = await Promise.allSettled(
+        participants.map((handle) => handle.reconcileGlobal(name, generation)),
+      );
+      const failures = settled.flatMap((result, index) =>
+        result.status === "rejected"
+          ? [{ runtimeId: participants[index]!.runtimeId, message: describeError(result.reason) }]
+          : [],
+      );
+
+      return {
+        status: summarizeReconcile(participants.length, failures.length > 0),
+        affectedRuntimes: participants.length,
+        failures,
+      };
+    });
+  }
+
   private enqueue<T>(key: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.queues.get(key) ?? Promise.resolve();
     const current = previous.then(operation, operation);
@@ -103,6 +139,19 @@ function aggregateStatus(statuses: McpRuntimeStatus[]): McpRuntimeStatus {
   if (statuses.some((status) => status === "error")) return "error";
   if (statuses.every((status) => status === "connected")) return "connected";
   return "disconnected";
+}
+
+/**
+ * Coarse result for a name-keyed reconcile. Callers care about `failures`; the
+ * status only distinguishes "no active session" from "some session failed".
+ */
+function summarizeReconcile(
+  participantCount: number,
+  hasFailures: boolean,
+): McpRuntimeStatus {
+  if (participantCount === 0) return "unavailable";
+  if (hasFailures) return "error";
+  return "connected";
 }
 
 function describeError(error: unknown): string {

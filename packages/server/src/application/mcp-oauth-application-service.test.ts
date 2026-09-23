@@ -61,6 +61,7 @@ function createWorld(options: { stored?: McpOAuthCredentialRecord | null } = {})
   const coordinator = {
     getStatus: vi.fn(async (): Promise<McpRuntimeSyncResult> => unavailable),
     synchronize: vi.fn(async (): Promise<McpRuntimeSyncResult> => unavailable),
+    reconcileGlobal: vi.fn(async (): Promise<McpRuntimeSyncResult> => unavailable),
   };
   const loginResults: McpOAuthLoginResult[] = [];
   const login = vi.fn(async () => loginResults.shift() ?? { status: "valid" as const, scopes: ["read"], verified: true, credential: credential() });

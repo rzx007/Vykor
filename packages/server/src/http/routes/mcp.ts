@@ -38,6 +38,9 @@ export function createMcpRoutes(context: McpRoutesContext): Hono {
       }
       const identity = identityFor(c.req.param("name"), fingerprint);
       return jsonResponse(await context.runtimes.synchronize(identity));
+    })
+    .post("/:name/reconcile-global", async (c) => {
+      return jsonResponse(await context.runtimes.reconcileGlobal(c.req.param("name")));
     });
 }
 

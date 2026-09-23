@@ -14,6 +14,7 @@ export interface CliMcpRuntimeClient {
   mcp: {
     runtimeStatus(name: string, fingerprint: string): Promise<McpRuntimeSyncResult>;
     synchronize(name: string, fingerprint: string): Promise<McpRuntimeSyncResult>;
+    reconcileGlobal(name: string): Promise<McpRuntimeSyncResult>;
   };
 }
 
@@ -69,6 +70,22 @@ export function createCliMcpRuntimeCoordinator(
   return {
     getStatus: (identity) => invoke(identity, "status"),
     synchronize: (identity) => invoke(identity, "synchronize"),
+    reconcileGlobal: async (name) => {
+      let registry: { url: string; token: string } | undefined;
+      try {
+        registry = readRegistry();
+      } catch {
+        registry = undefined;
+      }
+      if (!registry) return unavailable();
+      const client = createClient({ baseUrl: registry.url, token: registry.token });
+      try {
+        return await client.mcp.reconcileGlobal(name);
+      } catch (error) {
+        if (isDaemonUnreachable(error)) return unavailable();
+        throw error;
+      }
+    },
   };
 }
 

@@ -17,6 +17,7 @@ interface DesktopMcpRuntimeClient {
   mcp: {
     runtimeStatus(name: string, fingerprint: string): Promise<McpRuntimeSyncResult>
     synchronize(name: string, fingerprint: string): Promise<McpRuntimeSyncResult>
+    reconcileGlobal(name: string): Promise<McpRuntimeSyncResult>
   }
 }
 
@@ -44,6 +45,7 @@ export function createDesktopMcpRuntimeCoordinator(
 ): {
   getStatus(identity: McpRuntimeIdentity): Promise<McpRuntimeSyncResult>
   synchronize(identity: McpRuntimeIdentity): Promise<McpRuntimeSyncResult>
+  reconcileGlobal(name: string): Promise<McpRuntimeSyncResult>
 } {
   const readRegistry = options.readRegistry ?? (() => readDaemonRegistry())
   const createClient =
@@ -75,6 +77,22 @@ export function createDesktopMcpRuntimeCoordinator(
   return {
     getStatus: (identity) => invoke(identity, "status"),
     synchronize: (identity) => invoke(identity, "synchronize"),
+    reconcileGlobal: async (name: string) => {
+      let registry: { url: string; token: string } | undefined
+      try {
+        registry = readRegistry()
+      } catch {
+        registry = undefined
+      }
+      if (!registry) return unavailable()
+      const client = createClient({ baseUrl: registry.url, token: registry.token })
+      try {
+        return await client.mcp.reconcileGlobal(name)
+      } catch (error) {
+        if (isDaemonUnreachable(error)) return unavailable()
+        throw error
+      }
+    },
   }
 }
 
