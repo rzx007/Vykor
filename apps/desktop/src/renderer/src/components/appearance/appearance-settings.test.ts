@@ -210,6 +210,24 @@ describe("AppearanceSettings", () => {
     act(() => opaque?.click())
     expect(setWindowMaterial).toHaveBeenCalledWith("opaque")
   })
+
+  it("hides the whole window section when the entry has no material snapshot", async () => {
+    mocks.useAppearance.mockReturnValue({
+      preferences: DEFAULT_APPEARANCE_PREFERENCES,
+      resolvedTheme: "light",
+      resolvedReducedMotion: false,
+      windowMaterial: null,
+      fontAvailability: {},
+      saveState: { status: "idle" },
+      setPreference,
+      setWindowMaterial,
+      resetAppearance,
+    })
+    await renderSettings()
+
+    expect(container.querySelector('[aria-label="透明磨玻璃窗口背景"]')).toBeNull()
+    expect(container.textContent).not.toContain("窗口背景")
+  })
 })
 
 function setInputValue(input: HTMLInputElement | null, value: string): void {

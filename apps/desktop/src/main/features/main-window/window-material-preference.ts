@@ -35,7 +35,11 @@ export function createWindowMaterialPreferenceStore(
     try {
       const raw = JSON.parse(readFileSync(resolvePath(), "utf8")) as unknown
       return isDesktopWindowMaterialPreference(raw) ? raw : DEFAULT_WINDOW_MATERIAL_PREFERENCE
-    } catch {
+    } catch (error) {
+      // 文件不存在是首次启动的正常情况，不告警；其它读取失败（权限、损坏）才需要留痕。
+      if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+        console.warn("[window-material] failed to read window material preference", error)
+      }
       return DEFAULT_WINDOW_MATERIAL_PREFERENCE
     }
   }
@@ -44,7 +48,8 @@ export function createWindowMaterialPreferenceStore(
     try {
       writeFileSync(resolvePath(), JSON.stringify(preference), "utf8")
     } catch (error) {
-      // 写盘失败不影响本次会话：材质已经应用，只是重启后会退回上一次的值。
+      // 写盘失败只影响「重启后」的取值：本次会话的材质由调用方决定——
+      // window.ts 会读回旧偏好，并把旧材质重新应用到窗口。
       console.warn("[window-material] failed to persist window material preference", error)
     }
   }
