@@ -68,7 +68,7 @@ describe("MCP manager local workflow", () => {
       config: {
         type: "http",
         url: "https://example.com/mcp",
-        http_headers: { Accept: "application/json" },
+        headers: { Accept: "application/json" },
       },
     })
   })
@@ -92,53 +92,28 @@ describe("MCP manager local workflow", () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull()
   })
 
-  it("preserves extras through JSON → form → JSON and persists an edited command", async () => {
+  it("preserves real fields through JSON → form → JSON and persists an edited command", async () => {
     await render()
     await render({ addRequest: 1 })
     await click("JSON")
     await input(
       "textarea",
-      '{"name":"local","command":"node","custom":{"retry":3},"env":{"EMPTY":""}}'
+      '{"name":"local","type":"stdio","command":"node","env":{"EMPTY":""}}'
     )
     await click("表单")
     await input('input[id$="-command"]', "bun")
     await click("JSON")
     expect(JSON.parse(document.querySelector("textarea")!.value)).toMatchObject({
+      type: "stdio",
       command: "bun",
-      custom: { retry: 3 },
       env: { EMPTY: "" },
     })
     await click("保存")
     expect(loadMcpStorage(localStorage, props.projectPath).document.servers).toEqual([
-      { name: "local", config: { command: "bun", custom: { retry: 3 }, env: { EMPTY: "" } } },
+      { name: "local", config: { type: "stdio", command: "bun", env: { EMPTY: "" } } },
     ])
     expect(container.querySelectorAll("[data-extension-row]")).toHaveLength(1)
     expect(container.textContent).toContain("未连接")
-  })
-
-  it.each([
-    { mcpServers: {} },
-    { name: "metadata", mcpServers: { nested: { command: "ignored" } } },
-  ])("preserves reserved extension fields when editing a saved server: %j", async (extensions) => {
-    saveMcpStorage(
-      localStorage,
-      props.projectPath,
-      parseMcpJson(JSON.stringify({ mcpServers: { a: { command: "node", ...extensions } } })),
-      null
-    )
-    await render()
-    await click("查看 a 的 MCP 配置")
-    await click("编辑配置")
-    await click("表单")
-    await input('input[id$="-command"]', "bun")
-    await click("JSON")
-    expect(JSON.parse(document.querySelector("textarea")!.value)).toEqual({
-      mcpServers: { a: { command: "bun", ...extensions } },
-    })
-    await click("保存")
-    expect(loadMcpStorage(localStorage, props.projectPath).document.servers).toEqual([
-      { name: "a", config: { command: "bun", ...extensions } },
-    ])
   })
 
   it("rejects a partially invalid batch without saving any server", async () => {
@@ -147,7 +122,7 @@ describe("MCP manager local workflow", () => {
     await click("JSON")
     await input(
       "textarea",
-      '{"mcpServers":{"good":{"command":"node"},"bad":{"url":"ftp://example.com"}}}'
+      '{"mcpServers":{"good":{"type":"stdio","command":"node"},"bad":{"type":"http","url":"ftp://example.com"}}}'
     )
     await click("保存")
     expect(document.querySelector('[role="alert"]')?.textContent).toContain("http")
@@ -159,7 +134,7 @@ describe("MCP manager local workflow", () => {
       localStorage,
       props.projectPath,
       parseMcpJson(
-        '{"mcpServers":{"alpha":{"command":"node"},"beta":{"url":"https://example.com/mcp","enabled":false}}}'
+        '{"mcpServers":{"alpha":{"type":"stdio","command":"node"},"beta":{"type":"http","url":"https://example.com/mcp","enabled":false}}}'
       ),
       null
     )
@@ -181,7 +156,7 @@ describe("MCP manager local workflow", () => {
     saveMcpStorage(
       localStorage,
       props.projectPath,
-      parseMcpJson('{"name":"external","command":"bun"}'),
+      parseMcpJson('{"name":"external","type":"stdio","command":"bun"}'),
       current.raw
     )
     await render({ refreshRequest: 1, query: "" })

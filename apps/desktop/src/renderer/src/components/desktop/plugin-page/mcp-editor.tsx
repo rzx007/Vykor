@@ -24,6 +24,7 @@ import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-gro
 import { Separator } from "@renderer/components/ui/separator"
 import {
   fromMcpForm,
+  mcpTransport,
   parseMcpJson,
   serializeMcpDocument,
   toMcpForm,
@@ -34,19 +35,23 @@ import { McpFormFields } from "./mcp-form"
 
 export function McpEditor({
   initial,
-  editing,
+  editingName,
   existingNames,
   onSave,
   onClose,
 }: {
   initial: McpDocument
-  editing: boolean
+  /** Stable name of the server being edited; renames are rejected. */
+  editingName?: string
   existingNames: string[]
-  onSave: (document: McpDocument) => string | null
+  onSave: (document: McpDocument) => Promise<void>
   onClose: () => void
 }): React.JSX.Element {
   const id = useId()
-  const [mode, setMode] = useState("form")
+  const editing = editingName !== undefined
+  const [mode, setMode] = useState(() =>
+    initial.servers.some((server) => mcpTransport(server.config) === "sse") ? "json" : "form"
+  )
   const [json, setJson] = useState(() => serializeMcpDocument(initial))
   const [document, setDocument] = useState(initial)
   const [forms, setForms] = useState<McpForm[]>(() => initial.servers.map(toMcpForm))
@@ -54,6 +59,7 @@ export function McpEditor({
   const [dirty, setDirty] = useState(false)
   const [discard, setDiscard] = useState(false)
   const [error, setError] = useState("")
+  const [saving, setSaving] = useState(false)
   const errorRef = useRef<HTMLDivElement>(null)
 
   function report(message: string): void {
@@ -82,19 +88,26 @@ export function McpEditor({
       report(e instanceof Error ? e.message : "配置无法转换，请检查输入")
     }
   }
-  function save(): void {
+  async function save(): Promise<void> {
+    if (saving) return
+    setSaving(true)
     try {
-      const value = parseMcpJson(serializeMcpDocument(currentDocument()), { existingNames })
+      const value = parseMcpJson(serializeMcpDocument(currentDocument()), {
+        existingNames,
+        ...(editingName !== undefined ? { editingName } : {}),
+      })
       if (editing && value.servers.length !== 1)
         throw new Error("编辑时只能保存一个服务器；批量导入请使用添加 MCP")
-      const saveError = onSave(value)
-      if (saveError) report(saveError)
-      else onClose()
+      await onSave(value)
+      onClose()
     } catch (e) {
       report(e instanceof Error ? e.message : "保存失败，请检查配置")
+    } finally {
+      setSaving(false)
     }
   }
   function close(): void {
+    if (saving) return
     if (dirty) setDiscard(true)
     else onClose()
   }
@@ -109,7 +122,9 @@ export function McpEditor({
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="shrink-0 px-6 pt-6 pr-12 pb-4">
           <DialogTitle>{editing ? "编辑 MCP 服务器" : "添加 MCP 服务器"}</DialogTitle>
-          <DialogDescription>配置保存在本机，尚未连接。</DialogDescription>
+          <DialogDescription>
+            保存到全局 settings.mcpServers，与 CLI 共用；停用或删除会同步到已有会话。
+          </DialogDescription>
         </DialogHeader>
         <div className="shrink-0 px-6 pb-4">
           <ToggleGroup
@@ -179,6 +194,7 @@ export function McpEditor({
                   value={forms[activeIndex]}
                   error={error}
                   errorId={`${id}-error`}
+                  nameLocked={editing}
                   onChange={(value) => {
                     setForms(forms.map((form, index) => (index === activeIndex ? value : form)))
                     setDirty(true)
@@ -202,13 +218,21 @@ export function McpEditor({
             </FieldError>
           )}
           <DialogFooter className="flex-row items-center justify-between sm:justify-between">
-            <span className="text-xs text-muted-foreground">仅本机保存 · 未连接</span>
+            <span className="text-xs text-muted-foreground">
+              保存到全局配置，与 CLI 共用
+            </span>
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={close}>
+              <Button variant="ghost" onClick={close} disabled={saving}>
                 取消
               </Button>
-              <Button variant="secondary" size="sm" className="rounded-full px-3" onClick={save}>
-                保存
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-full px-3"
+                onClick={() => void save()}
+                disabled={saving}
+              >
+                {saving ? "保存中…" : "保存"}
               </Button>
             </div>
           </DialogFooter>

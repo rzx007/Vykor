@@ -8,9 +8,23 @@ export interface McpDocument {
   extras: McpConfig
   wrapped: boolean
 }
-type ParseOptions = { allowIncomplete?: boolean; existingNames?: string[] }
+type ParseOptions = {
+  allowIncomplete?: boolean
+  existingNames?: string[]
+  /** When editing an existing server, its stable name (renames are rejected). */
+  editingName?: string
+}
 type StorageAccess = Pick<Storage, "getItem" | "setItem">
 export type McpPairs = [string, string][]
+
+const REAL_FIELDS = new Set(["type", "command", "args", "env", "cwd", "url", "headers", "oauth", "enabled"])
+const REMOVED_FIELDS = new Set([
+  "env_vars",
+  "bearer_token_env_var",
+  "http_headers",
+  "env_http_headers",
+])
+const OAUTH_FIELDS = new Set(["scopes", "clientId", "callbackPort"])
 
 function object(value: unknown): value is McpConfig {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -45,71 +59,106 @@ function checkDuplicateKeys(text: string): void {
   visit()
 }
 
-export function mcpTransport(config: McpConfig): "stdio" | "http" {
-  return config.type === "http" || (config.type === undefined && config.url !== undefined)
-    ? "http"
-    : "stdio"
+export function mcpTransport(config: McpConfig): "stdio" | "http" | "sse" {
+  if (config.type === "sse") return "sse"
+  if (config.type === "http") return "http"
+  if (config.type === undefined && config.url !== undefined) return "http"
+  return "stdio"
 }
 
+/**
+ * Validate one entry against the real `McpServerConfig` shape. Demo-only fields
+ * (`env_vars`, `bearer_token_env_var`, `http_headers`, `env_http_headers`) and
+ * unknown fields are rejected so the editor can never persist a config the
+ * Runtime would not honor.
+ */
 export function validateMcpEntry(entry: McpEntry, allowIncomplete = false): void {
   const { name, config } = entry
   const fail = (message: string): never => {
     throw new Error(`${name || "未命名服务器"}：${message}`)
   }
   if (!allowIncomplete && !name.trim()) fail("名称不能为空")
-  if (config.type !== undefined && config.type !== "stdio" && config.type !== "http")
-    fail("type 只能是 stdio 或 http")
+  for (const key of Object.keys(config)) {
+    if (REMOVED_FIELDS.has(key)) fail(`字段 ${key} 已不再支持；请改用真实的 headers / env 配置`)
+    if (!REAL_FIELDS.has(key)) fail(`不支持的字段：${key}`)
+  }
+  if (config.type !== undefined && !["stdio", "http", "sse"].includes(config.type as string))
+    fail("type 只能是 stdio、http 或 sse")
   if (config.type === undefined && config.command !== undefined && config.url !== undefined)
     fail("同时包含 command 和 url 时，请明确指定 type")
   const transport = mcpTransport(config)
-  for (const key of ["command", "url", "cwd", "bearer_token_env_var"] as const) {
+
+  for (const key of ["command", "url", "cwd"] as const) {
     if (config[key] !== undefined && typeof config[key] !== "string") fail(`${key} 必须是字符串`)
   }
-  for (const key of ["args", "env_vars"] as const) {
-    const value = config[key]
-    if (value !== undefined && (!Array.isArray(value) || value.some((v) => typeof v !== "string")))
-      fail(`${key} 必须是字符串数组`)
-    if (
-      !allowIncomplete &&
-      transport === "stdio" &&
-      key === "env_vars" &&
-      Array.isArray(value) &&
-      value.some((v: string) => !v.trim())
-    )
-      fail("env_vars 中的变量名不能为空")
-  }
-  for (const key of ["env", "http_headers", "env_http_headers"] as const) {
+  if (
+    config.args !== undefined &&
+    (!Array.isArray(config.args) || config.args.some((value) => typeof value !== "string"))
+  )
+    fail("args 必须是字符串数组")
+  for (const key of ["env", "headers"] as const) {
     const value = config[key]
     if (value === undefined) continue
     if (!object(value)) fail(`${key} 必须是键值对象`)
-    const active = key === "env" ? transport === "stdio" : transport === "http"
     for (const [k, v] of Object.entries(value as McpConfig)) {
       if (typeof v !== "string") fail(`${key}.${k} 必须是字符串`)
-      if (!allowIncomplete && active && !k.trim()) fail(`${key} 的键不能为空`)
-      if (!allowIncomplete && active && key === "env_http_headers" && !(v as string).trim())
-        fail(`${key}.${k} 的环境变量名不能为空`)
+      if (!allowIncomplete && !k.trim()) fail(`${key} 的键不能为空`)
     }
   }
+  validateOAuth(config.oauth, fail, allowIncomplete)
   if (config.enabled !== undefined && typeof config.enabled !== "boolean")
     fail("enabled 必须是布尔值")
   if (allowIncomplete) return
-  const required = transport === "stdio" ? "command" : "url"
-  if (typeof config[required] !== "string" || !(config[required] as string).trim())
-    fail(`${required} 不能为空`)
-  if (
-    transport === "http" &&
-    config.bearer_token_env_var !== undefined &&
-    !(config.bearer_token_env_var as string).trim()
-  )
-    fail("bearer_token_env_var 不能为空；不需要时请删除此字段")
-  if (transport === "http" && config.url !== undefined) {
-    try {
-      const url = new URL(config.url as string)
-      if (!["http:", "https:"].includes(url.protocol) || !url.hostname) throw new Error()
-    } catch {
-      fail("url 必须是有效的 http:// 或 https:// URL")
-    }
+
+  if (transport === "stdio") {
+    if (typeof config.command !== "string" || !config.command.trim()) fail("command 不能为空")
+    if (config.url !== undefined || config.headers !== undefined || config.oauth !== undefined)
+      fail("stdio 配置不能包含 url、headers 或 oauth")
+    return
   }
+  const rawUrl = config.url
+  if (typeof rawUrl !== "string" || !rawUrl.trim()) fail("url 不能为空")
+  try {
+    const url = new URL(String(rawUrl))
+    if (!["http:", "https:"].includes(url.protocol) || !url.hostname) throw new Error()
+  } catch {
+    fail("url 必须是有效的 http:// 或 https:// URL")
+  }
+  if (
+    config.command !== undefined ||
+    config.args !== undefined ||
+    config.env !== undefined ||
+    config.cwd !== undefined
+  )
+    fail("远程配置不能包含 command、args、env 或 cwd")
+}
+
+function validateOAuth(
+  oauth: unknown,
+  fail: (message: string) => never,
+  allowIncomplete: boolean
+): void {
+  if (oauth === undefined) return
+  if (!object(oauth)) fail("oauth 必须是对象")
+  for (const key of Object.keys(oauth as McpConfig)) {
+    if (!OAUTH_FIELDS.has(key)) fail(`oauth 不支持的字段：${key}`)
+  }
+  const value = oauth as McpConfig
+  if (
+    value.scopes !== undefined &&
+    (!Array.isArray(value.scopes) || value.scopes.some((scope) => typeof scope !== "string"))
+  )
+    fail("oauth.scopes 必须是字符串数组")
+  if (value.clientId !== undefined && typeof value.clientId !== "string")
+    fail("oauth.clientId 必须是字符串")
+  if (value.callbackPort !== undefined && typeof value.callbackPort !== "number")
+    fail("oauth.callbackPort 必须是数字")
+  if (
+    !allowIncomplete &&
+    Array.isArray(value.scopes) &&
+    value.scopes.some((scope) => !(scope as string).trim())
+  )
+    fail("oauth.scopes 不能包含空值")
 }
 
 export function parseMcpJson(text: string, options: ParseOptions = {}): McpDocument {
@@ -140,14 +189,21 @@ export function parseMcpJson(text: string, options: ParseOptions = {}): McpDocum
     servers = [{ name, config }]
   }
   if (!servers.length) throw new Error("请添加至少一个 MCP 服务器")
-  const names = new Set<string>()
+
+  const editingName = options.editingName?.trim()
   const existing = new Set((options.existingNames ?? []).map((name) => name.trim()))
+  if (editingName) existing.delete(editingName)
+  const names = new Set<string>()
   for (const entry of servers) {
     validateMcpEntry(entry, options.allowIncomplete)
     const key = entry.name.trim()
     if (names.has(key)) throw new Error(`名称重复：${key || "空名称"}`)
     if (existing.has(key)) throw new Error(`名称已存在：${key}。请使用其他名称，或编辑已有配置。`)
     names.add(key)
+  }
+  if (editingName !== undefined) {
+    if (servers.length !== 1) throw new Error("编辑已有服务时只能包含一个服务器")
+    if (servers[0].name.trim() !== editingName) throw new Error("编辑已有服务时不能修改名称")
   }
   return { servers, extras, wrapped }
 }
@@ -172,20 +228,19 @@ export function serializeMcpDocument(doc: McpDocument): string {
 export interface McpForm {
   original: McpEntry
   name: string
-  type: "stdio" | "http"
+  type: "stdio" | "http" | "sse"
   command: string
   args: string[]
   env: McpPairs
-  env_vars: string[]
   cwd: string
   url: string
-  bearer_token_env_var: string
-  http_headers: McpPairs
-  env_http_headers: McpPairs
+  headers: McpPairs
+  scopes: string[]
 }
 
 export function toMcpForm(entry: McpEntry): McpForm {
   const c = entry.config
+  const oauth = object(c.oauth) ? c.oauth : undefined
   return {
     original: entry,
     name: entry.name,
@@ -193,47 +248,58 @@ export function toMcpForm(entry: McpEntry): McpForm {
     command: (c.command as string) ?? "",
     args: (c.args as string[]) ?? [],
     env: Object.entries((c.env as Record<string, string>) ?? {}),
-    env_vars: (c.env_vars as string[]) ?? [],
     cwd: (c.cwd as string) ?? "",
     url: (c.url as string) ?? "",
-    bearer_token_env_var: (c.bearer_token_env_var as string) ?? "",
-    http_headers: Object.entries((c.http_headers as Record<string, string>) ?? {}),
-    env_http_headers: Object.entries((c.env_http_headers as Record<string, string>) ?? {}),
+    headers: Object.entries((c.headers as Record<string, string>) ?? {}),
+    scopes: [...((oauth?.scopes as string[]) ?? [])],
   }
 }
 
 export function fromMcpForm(form: McpForm): McpEntry {
-  const config = { ...form.original.config }
-  const initial = toMcpForm(form.original)
-  for (const key of [
-    "type",
-    "command",
-    "args",
-    "env_vars",
-    "cwd",
-    "url",
-    "bearer_token_env_var",
-    "env",
-    "http_headers",
-    "env_http_headers",
-  ] as const) {
-    if (JSON.stringify(form[key]) === JSON.stringify(initial[key])) continue
-    if (key === "env" || key === "http_headers" || key === "env_http_headers") {
-      const names = new Set<string>()
-      for (const [name] of form[key]) {
-        if (!name.trim()) throw new Error(`${key} 的键不能为空；请填写或移除此行`)
-        const normalized = key === "env" ? name : name.toLowerCase()
-        if (names.has(normalized)) throw new Error(`${key} 中存在重复键：${name}`)
-        names.add(normalized)
-      }
-      config[key] = Object.fromEntries(form[key])
-    } else if ((key === "cwd" || key === "bearer_token_env_var") && form[key] === "") {
-      delete config[key]
-    } else {
-      config[key] = form[key]
-    }
+  const original = form.original.config
+  const config: McpConfig = {}
+  if (original.enabled !== undefined) config.enabled = original.enabled
+
+  if (form.type === "stdio") {
+    config.type = "stdio"
+    config.command = form.command
+    if (form.args.length) config.args = [...form.args]
+    const env = pairsToObject(form.env, "env")
+    if (env) config.env = env
+    if (form.cwd.trim()) config.cwd = form.cwd
+    return { name: form.name, config }
+  }
+
+  config.type = form.type
+  config.url = form.url
+  const headers = pairsToObject(form.headers, "headers")
+  if (headers) config.headers = headers
+
+  const originalOauth = object(original.oauth) ? original.oauth : undefined
+  const scopes = form.scopes.map((scope) => scope.trim()).filter(Boolean)
+  if (scopes.length) {
+    config.oauth = { ...(originalOauth ?? {}), scopes }
+  } else if (originalOauth?.clientId !== undefined || originalOauth?.callbackPort !== undefined) {
+    const { scopes: _scopes, ...rest } = originalOauth
+    config.oauth = rest
   }
   return { name: form.name, config }
+}
+
+function pairsToObject(pairs: McpPairs, label: string): McpConfig | undefined {
+  const result: McpConfig = {}
+  const names = new Set<string>()
+  let hasValue = false
+  for (const [key, value] of pairs) {
+    if (!key.trim() && !value.trim()) continue
+    if (!key.trim()) throw new Error(`${label} 的键不能为空；请填写或移除此行`)
+    const normalized = label === "env" ? key : key.toLowerCase()
+    if (names.has(normalized)) throw new Error(`${label} 中存在重复键：${key}`)
+    names.add(normalized)
+    result[key] = value
+    hasValue = true
+  }
+  return hasValue ? result : undefined
 }
 
 export const mcpStorageKey = (projectPath: string): string =>

@@ -2,7 +2,7 @@ import { useId } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
-import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@renderer/components/ui/field"
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@renderer/components/ui/field"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
 import type { McpForm, McpPairs } from "./mcp-config"
 
@@ -182,11 +182,13 @@ export function McpFormFields({
   onChange,
   error,
   errorId,
+  nameLocked = false,
 }: {
   value: McpForm
   onChange: (value: McpForm) => void
   error: string
   errorId: string
+  nameLocked?: boolean
 }): React.JSX.Element {
   const id = useId()
   const invalid = (key: string): boolean => Boolean(error && error.includes(key))
@@ -194,13 +196,14 @@ export function McpFormFields({
     onChange({ ...value, [key]: next })
   }
   function text(
-    key: "name" | "command" | "cwd" | "url" | "bearer_token_env_var",
+    key: "name" | "command" | "cwd" | "url",
     label: string,
     placeholder: string
   ): React.JSX.Element {
     const bad = invalid(key === "name" ? "名称" : key)
+    const locked = key === "name" && nameLocked
     return (
-      <Field data-invalid={bad}>
+      <Field data-invalid={bad} data-disabled={locked}>
         <FieldLabel htmlFor={`${id}-${key}`}>{label}</FieldLabel>
         <Input
           id={`${id}-${key}`}
@@ -209,9 +212,11 @@ export function McpFormFields({
           aria-invalid={bad}
           aria-describedby={bad ? errorId : undefined}
           onChange={(event) => update(key, event.target.value)}
+          disabled={locked}
           autoComplete="off"
           spellCheck={false}
         />
+        {locked && <FieldDescription>已有服务的名称不可修改。</FieldDescription>}
       </Field>
     )
   }
@@ -241,6 +246,11 @@ export function McpFormFields({
             <ToggleGroupItem value="http" className="rounded-md px-3">
               流式 HTTP
             </ToggleGroupItem>
+            {value.type === "sse" && (
+              <ToggleGroupItem value="sse" disabled className="rounded-md px-3">
+                SSE（仅 JSON）
+              </ToggleGroupItem>
+            )}
           </ToggleGroup>
         </div>
       </section>
@@ -267,34 +277,25 @@ export function McpFormFields({
               invalid={invalid("env")}
               errorId={errorId}
             />
-            <StringRows
-              label="环境变量传递"
-              addLabel="添加变量"
-              values={value.env_vars}
-              onChange={(next) => update("env_vars", next)}
-              invalid={invalid("env_vars")}
-              errorId={errorId}
-            />
             {text("cwd", "工作目录", "~/code")}
           </>
         ) : (
           <>
             {text("url", "URL", "https://mcp.example.com/mcp")}
-            {text("bearer_token_env_var", "Bearer 令牌环境变量", "MCP_BEARER_TOKEN")}
             <PairRows
               label="标头"
               addLabel="添加标头"
-              values={value.http_headers}
-              onChange={(next) => update("http_headers", next)}
-              invalid={invalid("http_headers")}
+              values={value.headers}
+              onChange={(next) => update("headers", next)}
+              invalid={invalid("headers")}
               errorId={errorId}
             />
-            <PairRows
-              label="来自环境变量的标头"
-              addLabel="添加变量"
-              values={value.env_http_headers}
-              onChange={(next) => update("env_http_headers", next)}
-              invalid={invalid("env_http_headers")}
+            <StringRows
+              label="OAuth scopes"
+              addLabel="添加 scope"
+              values={value.scopes}
+              onChange={(next) => update("scopes", next)}
+              invalid={invalid("oauth")}
               errorId={errorId}
             />
           </>

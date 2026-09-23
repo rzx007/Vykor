@@ -354,11 +354,14 @@ function McpProjectManager({
       {editor && (
         <McpEditor
           initial={editor.initial}
-          editing={editor.originalName !== undefined}
+          editingName={editor.originalName}
           existingNames={document.servers
             .filter((s) => s.name !== editor.originalName)
             .map((s) => s.name)}
-          onSave={saveEditor}
+          onSave={async (incoming) => {
+            const saveError = saveEditor(incoming)
+            if (saveError) throw new Error(saveError)
+          }}
           onClose={() => {
             setEditor(null)
           }}
