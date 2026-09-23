@@ -72,6 +72,24 @@ describe("createMcpServerIdentity", () => {
 });
 
 describe("buildMcpAuthServerSnapshot", () => {
+  it("reflects the enabled flag and defaults omitted servers to enabled", () => {
+    const disabled = buildMcpAuthServerSnapshot({
+      name: "off",
+      config: { type: "stdio", command: "node", enabled: false },
+      credential: undefined,
+      runtimeStatus: "disconnected",
+    });
+    expect(disabled.enabled).toBe(false);
+
+    const defaulted = buildMcpAuthServerSnapshot({
+      name: "on",
+      config: { type: "stdio", command: "node" },
+      credential: undefined,
+      runtimeStatus: "disconnected",
+    });
+    expect(defaulted.enabled).toBe(true);
+  });
+
   it("prefers an explicit Bearer header over residual OAuth credentials", () => {
     const snapshot = buildMcpAuthServerSnapshot({
       name: "linear",

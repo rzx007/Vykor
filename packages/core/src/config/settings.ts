@@ -398,10 +398,13 @@ function validateSettingsFields(
       if (!server) continue;
       assertKnownFields(
         server,
-        new Set(["type", "command", "args", "env", "cwd", "url", "headers", "oauth"]),
+        new Set(["type", "command", "args", "env", "cwd", "url", "headers", "oauth", "enabled"]),
         `settings.mcpServers.${name}`,
         configPath,
       );
+      if (server.enabled !== undefined && typeof server.enabled !== "boolean") {
+        throw new SettingsFileError(`settings.mcpServers.${name}.enabled`, configPath);
+      }
       assertNestedFields(
         server,
         "oauth",

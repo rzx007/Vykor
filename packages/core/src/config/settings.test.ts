@@ -301,4 +301,31 @@ describe("daemon settings", () => {
     expect(withMcpServerOAuthScopes(settings, "missing", ["read"])).toBe(settings);
     expect(withMcpServerOAuthScopes(settings, "local", ["read"])).toBe(settings);
   });
+
+  it("accepts an enabled flag on every MCP transport", async () => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
+      mcpServers: {
+        off: { type: "stdio", command: "node", enabled: false },
+        on: { type: "http", url: "https://mcp.example/mcp", enabled: true },
+        legacy: { type: "sse", url: "https://mcp.example/sse", enabled: false },
+      },
+    }));
+
+    const settings = await loadSettings();
+
+    expect(settings.mcpServers?.off).toMatchObject({ type: "stdio", enabled: false });
+    expect(settings.mcpServers?.on).toMatchObject({ type: "http", enabled: true });
+    expect(settings.mcpServers?.legacy).toMatchObject({ type: "sse", enabled: false });
+  });
+
+  it("rejects a non-boolean MCP enabled flag", async () => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
+      mcpServers: { bad: { type: "stdio", command: "node", enabled: "no" } },
+    }));
+
+    await expect(loadSettings()).rejects.toMatchObject({
+      name: "SettingsFileError",
+      field: "settings.mcpServers.bad.enabled",
+    });
+  });
 });

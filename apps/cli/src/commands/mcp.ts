@@ -208,7 +208,7 @@ async function describeServer(deps: McpCommandDeps, name: string): Promise<CliMc
 
 interface CliMcpEntry {
   name: string;
-  enabled: true;
+  enabled: boolean;
   transport: "stdio" | "http" | "sse";
   authMode: string;
   authStatus: string;
@@ -225,7 +225,7 @@ function toCliEntry(
 ): CliMcpEntry {
   const base = {
     name: snapshot.name,
-    enabled: true as const,
+    enabled: snapshot.enabled,
     transport: snapshot.transport,
     authMode: snapshot.authMode,
     authStatus: snapshot.authStatus,

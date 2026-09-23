@@ -28,6 +28,7 @@ function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
     mcpServers: {
       linear: { type: "http", url: "https://mcp.linear.app/mcp", oauth: { scopes: ["read"] } },
       local: { type: "stdio", command: "node", args: ["server.js"] },
+      disabled: { type: "stdio", command: "node", args: ["off.js"], enabled: false },
     },
   } as Settings;
   const credentials = new Map<string, McpOAuthCredentialRecord>();
@@ -128,6 +129,22 @@ describe("mcp command", () => {
       authMode: "none",
       authStatus: "unsupported",
       runtimeStatus: "connected",
+    });
+  });
+
+  it("reports the real enabled state instead of a fixed true", async () => {
+    const test = fixture();
+
+    await test.run("status", "disabled", "--json");
+    expect(JSON.parse(test.output.at(-1)!)).toMatchObject({
+      name: "disabled",
+      enabled: false,
+    });
+
+    await test.run("status", "local", "--json");
+    expect(JSON.parse(test.output.at(-1)!)).toMatchObject({
+      name: "local",
+      enabled: true,
     });
   });
 

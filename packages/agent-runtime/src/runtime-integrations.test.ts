@@ -7,7 +7,7 @@ import type {
 } from "@openharness/core";
 import { McpOAuthRuntime, type McpClientManager } from "@openharness/mcp";
 
-import { createMcpRuntimeHandle, selectMcpServersForEnvironment } from "./runtime-integrations.js";
+import { createMcpRuntimeHandle, filterEnabledMcpServers, selectMcpServersForEnvironment } from "./runtime-integrations.js";
 
 const SERVERS = {
   local: { type: "stdio" as const, command: "node" },
@@ -31,6 +31,18 @@ describe("MCP execution domains", () => {
       kind: "wsl",
       networkMode: "none",
     })).toEqual({ local: SERVERS.local });
+  });
+
+  it("keeps only enabled MCP servers for a new session", () => {
+    expect(filterEnabledMcpServers(SERVERS)).toEqual(SERVERS);
+    expect(filterEnabledMcpServers({
+      ...SERVERS,
+      disabled: { type: "stdio", command: "node", enabled: false },
+      explicit: { type: "http", url: "https://mcp.example.test", enabled: true },
+    })).toEqual({
+      ...SERVERS,
+      explicit: { type: "http", url: "https://mcp.example.test", enabled: true },
+    });
   });
 });
 
@@ -183,5 +195,22 @@ describe("createMcpRuntimeHandle", () => {
 
     expect(stageAndActivate).not.toHaveBeenCalled();
     expect(disconnectServer).not.toHaveBeenCalled();
+  });
+
+  it("disconnects instead of reconnecting a disabled server", async () => {
+    const { handle, stageAndActivate, disconnectServer } = createHandle({
+      config: {
+        type: "http",
+        url: "https://mcp.linear.app/mcp",
+        enabled: false,
+        oauth: { scopes: ["read"] },
+      },
+      credential: usableCredential,
+    });
+
+    await handle.synchronize(linearIdentity, 3);
+
+    expect(stageAndActivate).not.toHaveBeenCalled();
+    expect(disconnectServer).toHaveBeenCalledWith("linear");
   });
 });

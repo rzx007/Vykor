@@ -8,6 +8,8 @@ export interface McpStdioServerConfig {
   args?: string[];
   env?: Record<string, string>;
   cwd?: string;
+  /** Missing means enabled. `false` keeps the server configured but unconnected. */
+  enabled?: boolean;
   url?: never;
   headers?: never;
   oauth?: never;
@@ -18,6 +20,8 @@ export interface McpRemoteServerConfig {
   url: string;
   headers?: Record<string, string>;
   oauth?: McpOAuthSettings;
+  /** Missing means enabled. `false` keeps the server configured but unconnected. */
+  enabled?: boolean;
   command?: never;
   args?: never;
   env?: never;

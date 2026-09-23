@@ -84,7 +84,7 @@ export interface McpRuntimeSyncResult {
 /** Secret-free public view of one configured MCP server. */
 export interface McpAuthServerSnapshot {
   name: string;
-  enabled: true;
+  enabled: boolean;
   transport: "stdio" | "http" | "sse";
   endpoint?: string;
   authMode: McpAuthMode;

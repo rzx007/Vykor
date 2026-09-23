@@ -87,7 +87,7 @@ export function buildMcpAuthServerSnapshot(
 
   return {
     name,
-    enabled: true,
+    enabled: config.enabled !== false,
     transport: config.type,
     ...(endpoint === undefined ? {} : { endpoint }),
     authMode,

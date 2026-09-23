@@ -93,6 +93,7 @@ export async function installRuntimeIntegrations(
     options.mcpServers ?? options.discovery.mcpServers,
     options.executionEnvironment?.info,
   );
+  const enabledMcpServers = filterEnabledMcpServers(mcpServers);
 
   const runtimeRegistry = options.mcpRuntimeRegistry;
   const identityFor = (name: string): McpServerIdentity | undefined => {
@@ -165,7 +166,7 @@ export async function installRuntimeIntegrations(
   }
 
   await Promise.all(
-    Object.entries(mcpServers).map(async ([name, config]) => {
+    Object.entries(enabledMcpServers).map(async ([name, config]) => {
       const identity = identityFor(name);
       const generation = runtimeRegistry && identity
         ? runtimeRegistry.currentGeneration(identity)
@@ -221,7 +222,7 @@ export async function installRuntimeIntegrations(
     })),
   ];
   const serverOwners = new Map([...inventory.mcpServers].map(([id, owner]) => [owner.serverName, { id, ...owner }]));
-  const servers = Object.entries(mcpServers).map(([serverName, definition]) => {
+  const servers = Object.entries(enabledMcpServers).map(([serverName, definition]) => {
     const pluginServer = serverOwners.get(serverName);
     // Name conflicts were rejected before any plugin activation or connection.
     const hostOwned = options.mcpServers !== undefined || options.settings.mcpServers?.[serverName] !== undefined;
@@ -344,6 +345,10 @@ export function createMcpRuntimeHandle(input: CreateMcpRuntimeHandleInput): Acti
       const current = input.identityFor(identity.name);
       if (!config || !current || current.endpointFingerprint !== identity.endpointFingerprint) return;
       if (input.registry.currentGeneration(identity) !== generation) return;
+      if (config.enabled === false) {
+        await input.disconnectServer(identity.name);
+        return;
+      }
 
       const action = await input.oauthRuntime.getConnectionAction(identity.name, config);
       if (input.registry.currentGeneration(identity) !== generation) return;
@@ -366,5 +371,18 @@ export function selectMcpServersForEnvironment(
     Object.entries(servers).filter(([, server]) =>
       server.type === "stdio" || environment.networkMode !== "none"
     ),
+  );
+}
+
+/**
+ * Keep the servers a new session should actually connect. `enabled: false`
+ * servers stay configured (management snapshots still list them) but are
+ * neither connected nor bound into the run capability view.
+ */
+export function filterEnabledMcpServers(
+  servers: Record<string, McpServerConfig>,
+): Record<string, McpServerConfig> {
+  return Object.fromEntries(
+    Object.entries(servers).filter(([, config]) => config.enabled !== false),
   );
 }
