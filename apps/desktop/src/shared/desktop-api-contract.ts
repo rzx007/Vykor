@@ -181,6 +181,8 @@ export type DesktopAPI = {
     getZoomLevel: () => Promise<number>
     setZoomLevel: (level: number) => Promise<number>
     openExternal: (url: string) => Promise<void>
+    /** 读取主进程当前的权威材质状态；renderer 重载后用它和主进程对账（argv 快照会过期）。 */
+    getMaterial: () => Promise<DesktopWindowMaterialState>
     /** 切换窗口材质；返回主进程算出的权威状态（偏好 / 生效 / 降级原因 / 外壳模式）。 */
     setMaterial: (
       preference: DesktopWindowMaterialPreference

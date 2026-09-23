@@ -20,6 +20,7 @@ vi.mock("electron", () => ({
 }))
 
 const windowModule = vi.hoisted(() => ({
+  currentMainWindowMaterialState: vi.fn(),
   setMainWindowMaterial: vi.fn(),
   showMainWindow: vi.fn(),
 }))
@@ -34,6 +35,13 @@ function windowSetMaterialHandler() {
   const registration = windowControlsIpcContribution
     .register({} as never)
     .find((entry) => entry.channel === IpcChannels.windowSetMaterial)!
+  return registration.handler
+}
+
+function windowGetMaterialHandler() {
+  const registration = windowControlsIpcContribution
+    .register({} as never)
+    .find((entry) => entry.channel === IpcChannels.windowGetMaterial)!
   return registration.handler
 }
 
@@ -76,6 +84,21 @@ describe("window material IPC handler", () => {
 
     expect(electron.fromWebContents).toHaveBeenCalledWith(event.sender)
     expect(windowModule.setMainWindowMaterial).toHaveBeenCalledWith(win, "opaque")
+    expect(result).toBe(state)
+  })
+
+  it("returns the current material state for renderer reconciliation", () => {
+    const state: DesktopWindowMaterialState = {
+      preference: "glass",
+      active: "glass",
+      unavailableReason: null,
+      shell: "transparent",
+    }
+    windowModule.currentMainWindowMaterialState.mockReturnValue(state)
+
+    const result = windowGetMaterialHandler()(event)
+
+    expect(windowModule.currentMainWindowMaterialState).toHaveBeenCalledTimes(1)
     expect(result).toBe(state)
   })
 })

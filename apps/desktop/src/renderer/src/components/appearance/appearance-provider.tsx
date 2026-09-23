@@ -185,6 +185,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
       .then((state) => {
         windowMaterialRef.current = state
         setWindowMaterialState(state)
+        setSaveState({ status: "saved" })
       })
       .catch(() => {
         windowMaterialRef.current = previous
@@ -208,6 +209,28 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
     )
     if (windowMaterial) writeWindowMaterialAttributes(document.documentElement, windowMaterial)
   }, [preferences, resolvedReducedMotion, resolvedTheme, windowMaterial])
+
+  // renderer 重载（崩溃恢复 / dev 刷新）后 argv 快照会停留在建窗时刻，
+  // 这里和主进程对账一次：落盘偏好、实际材质、开关显示才能对得上。
+  useEffect(() => {
+    if (!windowMaterialRef.current) return
+
+    let disposed = false
+    void window.desktop.window
+      .getMaterial()
+      .then((state) => {
+        if (disposed) return
+        windowMaterialRef.current = state
+        setWindowMaterialState(state)
+      })
+      .catch(() => {
+        // 对账失败不提示：本次渲染继续用 argv 快照，用户切换时仍会拿到权威状态。
+      })
+
+    return () => {
+      disposed = true
+    }
+  }, [])
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent): void => {

@@ -62,6 +62,7 @@ export const desktopAPI = {
     // 走 argv 而不是 IPC：renderer 首帧就要知道玻璃是否生效，异步 IPC 会先出一帧错误底色。
     // 没有参数（宠物窗口等）就是 null——不要在这里伪造 fallback 状态（D5）。
     material: parseWindowMaterialArguments(process.argv),
+    getMaterial: () => invoke(IpcChannels.windowGetMaterial),
     setMaterial: (preference: DesktopWindowMaterialPreference) =>
       invoke(IpcChannels.windowSetMaterial, preference),
     onMaximizedChanged: (listener: (value: boolean) => void): (() => void) => {

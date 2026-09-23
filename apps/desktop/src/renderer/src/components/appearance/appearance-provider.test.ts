@@ -264,10 +264,12 @@ describe("AppearanceProvider", () => {
 
     function stubDesktop(
       material: DesktopWindowMaterialState | null,
-      setMaterial: DesktopAPI["window"]["setMaterial"]
+      setMaterial: DesktopAPI["window"]["setMaterial"],
+      getMaterial: DesktopAPI["window"]["getMaterial"] = () =>
+        new Promise<DesktopWindowMaterialState>(() => undefined)
     ): void {
       ;(window as unknown as { desktop?: unknown }).desktop = {
-        window: { material, setMaterial },
+        window: { material, getMaterial, setMaterial },
       } as unknown as DesktopAPI
     }
 
@@ -285,6 +287,29 @@ describe("AppearanceProvider", () => {
       expect(latest?.windowMaterial).toEqual(GLASS_TRANSPARENT)
       expect(document.documentElement.dataset.windowMaterial).toBe("glass")
       expect(document.documentElement.dataset.windowShell).toBe("transparent")
+    })
+
+    it("reconciles the material state with the main process once after mount", async () => {
+      const authoritative: DesktopWindowMaterialState = {
+        preference: "opaque",
+        active: "opaque",
+        unavailableReason: null,
+        shell: "solid",
+      }
+      const getMaterial = vi.fn(() => Promise.resolve(authoritative))
+      stubDesktop(GLASS_TRANSPARENT, vi.fn(), getMaterial)
+
+      await renderProvider()
+      await act(async () => undefined)
+
+      expect(getMaterial).toHaveBeenCalledTimes(1)
+      expect(latest?.windowMaterial).toEqual(authoritative)
+      expect(document.documentElement.dataset.windowMaterial).toBe("opaque")
+      expect(document.documentElement.dataset.windowShell).toBe("solid")
+
+      await renderProvider()
+
+      expect(getMaterial).toHaveBeenCalledTimes(1)
     })
 
     it("optimistically writes a material switch, then follows the main process result", async () => {

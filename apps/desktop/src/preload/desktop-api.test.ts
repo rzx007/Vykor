@@ -75,12 +75,14 @@ describe("desktop window preload bridge", () => {
     )
   })
 
-  it("exposes the argv material snapshot and routes the material command", async () => {
+  it("exposes the argv material snapshot and routes the material commands", async () => {
     // vitest 进程的 argv 不含主进程注入的四个前缀参数，因此快照必须是 null（宠物窗口走同一条路径）。
     expect(desktopAPI.window.material).toBeNull()
 
+    await desktopAPI.window.getMaterial()
     await desktopAPI.window.setMaterial("opaque")
 
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.windowGetMaterial)
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.windowSetMaterial, "opaque")
   })
 })

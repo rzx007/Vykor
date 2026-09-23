@@ -162,6 +162,7 @@ export const IpcChannels = {
   windowGetZoomLevel: "window:get-zoom-level",
   windowSetZoomLevel: "window:set-zoom-level",
   windowOpenExternal: "window:open-external",
+  windowGetMaterial: "window:get-material",
   windowSetMaterial: "window:set-material",
 
   trayFlash: "tray:flash",
@@ -385,6 +386,7 @@ export interface IpcInvokeMap {
   [IpcChannels.windowGetZoomLevel]: { args: []; result: number }
   [IpcChannels.windowSetZoomLevel]: { args: [level: number]; result: number }
   [IpcChannels.windowOpenExternal]: { args: [url: string]; result: void }
+  [IpcChannels.windowGetMaterial]: { args: []; result: DesktopWindowMaterialState }
   [IpcChannels.windowSetMaterial]: {
     args: [preference: DesktopWindowMaterialPreference]
     result: DesktopWindowMaterialState
