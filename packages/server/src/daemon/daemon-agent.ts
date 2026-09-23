@@ -2,6 +2,7 @@ import {
   createDefaultNodeAgent,
   type OpenHarnessAgent,
   type OpenHarnessAgentOptions,
+  type AgentEffectOverrides,
   type ObservableJobProducer,
 } from "@openharness/agent-runtime";
 import { join } from "node:path";
@@ -96,6 +97,7 @@ export interface DaemonAgentLoaderOptions {
   getSession?: (sessionId: string) => SessionRecord | undefined;
   createAgent?: CreateDaemonAgent;
   requestPermission?: AgentEffects["requestPermission"];
+  askUserPrompt?: AgentEffects["askUserPrompt"];
   schedules?: AgentScheduleEffects;
   createTerminal?(
     session: SessionRecord,
@@ -160,6 +162,11 @@ export function createDaemonAgentLoader(
         status: "denied" as const,
         reason: "Daemon permission host is not configured",
       }));
+    const askUserPrompt =
+      options.askUserPrompt ??
+      (async () => {
+        throw new Error("Daemon question host is not configured");
+      });
     const terminal = options.createTerminal?.(session);
     const backgroundShell = options.createBackgroundShell?.(session);
     const tools = (await options.tools?.({ session, settings })) ?? [];
@@ -226,7 +233,7 @@ export function createDaemonAgentLoader(
           ? { workflowRepository: options.workflowRepository }
           : {}),
       },
-      effects: { requestPermission },
+      effects: { requestPermission, askUserPrompt } as AgentEffectOverrides,
       ...(tools.length > 0 ? { tools } : {}),
       ...(options.toolOverrides ? { toolOverrides: options.toolOverrides } : {}),
       ...(options.trustedToolOverrides

@@ -317,7 +317,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       }
     },
 
-    async replyPermission(permissionId, status, decision = "once") {
+    async replyPermission(permissionId, status, decision = "once", answer) {
       const sessionId = get().activeSessionId
       if (!sessionId || !permissionId) return
       const operationId = `${sessionId}:${permissionId}`
@@ -332,7 +332,12 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         })
       )
       try {
-        await window.desktop.sessions.replyPermission({ permissionId, status, decision })
+        await window.desktop.sessions.replyPermission({
+          permissionId,
+          status,
+          decision,
+          ...(answer !== undefined ? { answer } : {}),
+        })
         replaceRuntime(sessionId, (runtime) => removeOperation(runtime, operationId))
       } catch (error) {
         const message = errorMessage(error)

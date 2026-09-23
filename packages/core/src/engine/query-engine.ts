@@ -950,6 +950,9 @@ export class QueryEngine implements IQueryEngine {
             jobs: this.jobs,
             backgroundShell: this.backgroundShell,
             schedules: this.schedules,
+            ...(execution?.effects.askUserPrompt
+              ? { askUserPrompt: (question: string) => execution.effects.askUserPrompt!(question, execution.scope) }
+              : {}),
             agent: execution,
           };
           const result = await this.executeToolWithTimeout(

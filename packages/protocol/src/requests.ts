@@ -380,10 +380,12 @@ export function parseReplyPermissionRequest(value: unknown): ReplyPermissionRequ
   );
   const decision = optionalEnum(body, "decision", ["once", "session"] as const);
   const clientId = optionalString(body, "clientId");
+  const answer = optionalString(body, "answer");
   return {
     status,
     ...(decision !== undefined ? { decision } : {}),
     ...(clientId !== undefined ? { clientId } : {}),
+    ...(answer !== undefined ? { answer } : {}),
   };
 }
 

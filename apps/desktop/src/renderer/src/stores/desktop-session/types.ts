@@ -192,7 +192,8 @@ export interface PromptActions {
   replyPermission: (
     permissionId: string,
     status: "approved" | "denied",
-    decision?: "once" | "session"
+    decision?: "once" | "session",
+    answer?: string
   ) => Promise<void>
 }
 

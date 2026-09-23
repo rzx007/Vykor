@@ -86,6 +86,44 @@ describe("StorePermissionBroker", () => {
     });
   });
 
+  it("returns an AskUser answer from the persisted reply", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const answer = broker.ask({
+        sessionId: "s1",
+        runId: "r1",
+        toolName: "AskUser",
+        reason: "Choose a mode",
+        input: { kind: "question", question: "Choose a mode" },
+      });
+      const request = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({
+        requestId: request.id,
+        status: "approved",
+        decision: "once",
+        answer: JSON.stringify({ selected: { "0": [1] }, custom: {} }),
+      });
+
+      await expect(answer).resolves.toMatchObject({
+        status: "approved",
+        answer: JSON.stringify({ selected: { "0": [1] }, custom: {} }),
+      });
+    });
+  });
+
+  it("never reuses a session approval for AskUser questions", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const first = broker.ask({ sessionId: "s1", runId: "r1", toolName: "AskUser", reason: "first" });
+      const firstRequest = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({ requestId: firstRequest.id, status: "approved", decision: "session", answer: "first" });
+      await expect(first).resolves.toMatchObject({ status: "approved", answer: "first" });
+
+      const second = broker.ask({ sessionId: "s1", runId: "r1", toolName: "AskUser", reason: "second" });
+      expect(store.permissions.list({ status: "pending", toolName: "AskUser" })).toHaveLength(1);
+      broker.reply({ requestId: store.permissions.list({ status: "pending" })[0]!.id, status: "approved", decision: "once", answer: "second" });
+      await expect(second).resolves.toMatchObject({ status: "approved", answer: "second" });
+    });
+  });
+
   it("persists session-scoped approvals and reuses them for later matching asks", async () => {
     await withBroker(async ({ broker, store }) => {
       const first = broker.ask({ sessionId: "s1", runId: "r1", toolName: "Bash", input: { command: "pnpm test" } });

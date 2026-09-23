@@ -23,6 +23,7 @@ export interface PermissionReplyInput {
   status: PermissionReplyStatus;
   decision?: PermissionDecisionScope;
   clientId?: string;
+  answer?: string;
 }
 
 export interface ListPermissionRequestsInput {
@@ -134,6 +135,7 @@ export class StorePermissionBroker implements PermissionBroker {
       status: input.status,
       decision: input.decision,
       clientId: input.clientId,
+      ...(input.answer !== undefined ? { answer: input.answer } : {}),
     });
     this.notify(previousEventSeq);
     this.controller.resolve(replied.id, this.decisionFromRequest(replied));
@@ -158,6 +160,7 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   private findSessionApproval(sessionId: string, toolName: string): PermissionRequestRecord | undefined {
+    if (toolName === "AskUser") return undefined;
     for (const candidateId of this.sessionLineage(sessionId)) {
       const approval = this.permissions
         .list({ sessionId: candidateId, toolName, status: "approved" })
@@ -212,6 +215,7 @@ export class StorePermissionBroker implements PermissionBroker {
       return {
         status: request.status,
         ...(request.decision === "once" || request.decision === "session" ? { decision: request.decision } : {}),
+        ...(typeof request.payload.answer === "string" ? { answer: request.payload.answer } : {}),
       };
     }
     return {

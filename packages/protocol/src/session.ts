@@ -591,6 +591,7 @@ export interface ReplyPermissionInput {
   status: Extract<PermissionStatus, "approved" | "denied" | "expired">;
   decision?: string;
   clientId?: string;
+  answer?: string;
 }
 
 export interface ListPermissionRequestsOptions {

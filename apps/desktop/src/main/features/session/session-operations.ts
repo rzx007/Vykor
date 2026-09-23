@@ -378,6 +378,7 @@ export class SessionOperations {
       status: input.status,
       decision: input.decision ?? "once",
       clientId: "desktop",
+      ...(input.answer !== undefined ? { answer: input.answer } : {}),
     })
   }
 

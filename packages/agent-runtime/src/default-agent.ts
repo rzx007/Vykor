@@ -61,6 +61,7 @@ async function createDefaultNodeAgentInternal(
       status: "denied",
       reason: "No permission effect configured",
     })),
+    ...(options.effects?.askUserPrompt ? { askUserPrompt: options.effects.askUserPrompt } : {}),
   };
   const composition = await composeOpenHarnessAgent(options, {
     ...internal,

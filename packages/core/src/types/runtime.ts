@@ -70,6 +70,7 @@ export interface AgentPermissionDecision {
   status: "approved" | "denied" | "expired";
   decision?: "once" | "session";
   reason?: string;
+  answer?: string;
 }
 
 export interface AgentScheduledTaskInput {
@@ -147,6 +148,7 @@ export interface AgentEffectContext {
 
 export interface AgentEffects {
   requestPermission(input: AgentPermissionRequest, context: AgentEffectContext): Promise<AgentPermissionDecision>;
+  askUserPrompt?(question: string, context: AgentEffectContext): Promise<string>;
 }
 
 export interface AgentChildSpawnInput {

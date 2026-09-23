@@ -96,6 +96,7 @@ export class PermissionRepository {
     request.status = input.status;
     if (input.decision !== undefined) request.decision = input.decision;
     if (input.clientId !== undefined) request.decidedByClientId = input.clientId;
+    if (input.answer !== undefined) request.payload.answer = input.answer;
     request.updatedAt = Date.now();
     this.options.storage.mutations.permissions.add(request.id);
     this.emit("permission.replied", request);

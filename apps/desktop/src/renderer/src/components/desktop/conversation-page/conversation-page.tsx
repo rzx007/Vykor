@@ -62,6 +62,8 @@ import type { ComposerSkill } from "./composer/rich-prompt-input"
 import { HeaderIconButton } from "./composer/controls"
 import { NewConversationStart } from "./session/new-conversation-start"
 import { PermissionCard } from "./message/message-block"
+import { AskUserCard } from "./message/ask-user-card"
+import { isAskUserPermission } from "./message/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
 import { SessionMoreMenu } from "./session/session-more-menu"
 import { useSessionActionDialogs } from "./session/session-action-dialogs"
@@ -593,18 +595,30 @@ function ConversationPane({
               className="mx-auto mb-2 max-h-[min(18rem,35vh)] w-[min(760px,calc(100%-32px))] shrink-0 scrollbar-thin overflow-y-auto px-px"
             >
               <div className="space-y-2">
-                {pendingPermissions.map((permission) => (
-                  <PermissionCard
-                    key={permission.id}
-                    permission={permission}
-                    className="mt-0"
-                    replyPending={permissionReplies[permission.id]?.pending}
-                    replyError={permissionReplies[permission.id]?.error}
-                    onReply={(status, decision) =>
-                      void replyPermission(permission.id, status, decision)
-                    }
-                  />
-                ))}
+                {pendingPermissions.map((permission) =>
+                  isAskUserPermission(permission) ? (
+                    <AskUserCard
+                      key={`${permission.id}:${permissionReplies[permission.id]?.error ?? "active"}`}
+                      permission={permission}
+                      replyPending={permissionReplies[permission.id]?.pending}
+                      replyError={permissionReplies[permission.id]?.error}
+                      onReply={(answer) =>
+                        void replyPermission(permission.id, "approved", "once", answer)
+                      }
+                    />
+                  ) : (
+                    <PermissionCard
+                      key={permission.id}
+                      permission={permission}
+                      className="mt-0"
+                      replyPending={permissionReplies[permission.id]?.pending}
+                      replyError={permissionReplies[permission.id]?.error}
+                      onReply={(status, decision) =>
+                        void replyPermission(permission.id, status, decision)
+                      }
+                    />
+                  )
+                )}
               </div>
             </div>
           ) : null}

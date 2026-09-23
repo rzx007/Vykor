@@ -492,6 +492,33 @@ export class DaemonApplication implements DurableAgentApplication {
             signal: context.signal,
           });
         },
+        askUserPrompt: async (question, context) => {
+          let input: Record<string, unknown> = { kind: "question", question };
+          try {
+            const parsed = JSON.parse(question) as unknown;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              const record = parsed as Record<string, unknown>;
+              if (record.kind === "question" && Array.isArray(record.questions)) {
+                input = record;
+              }
+            }
+          } catch {
+            // Plain text question; keep the fallback payload.
+          }
+          const decision = await this.permissions.ask({
+            sessionId: context.sessionId,
+            runId: context.runId,
+            traceId: context.traceId,
+            toolName: "AskUser",
+            reason: typeof input.question === "string" ? input.question : "请回答问题",
+            input,
+            signal: context.signal,
+          });
+          if (decision.status !== "approved") {
+            throw new Error(decision.reason ?? "用户未回答问题");
+          }
+          return decision.answer ?? "";
+        },
         schedules: {
           create: async (input) => this.schedules.createTask({ ...input, createdBy: "agent" }),
           update: async (id, patch) => this.schedules.updateTask(id, patch),

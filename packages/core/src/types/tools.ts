@@ -68,6 +68,8 @@ export interface ToolContext {
   backgroundShell?: AgentBackgroundShellHost;
   /** Host-owned persistent scheduler. Omitted when durable schedules are unavailable. */
   schedules?: AgentScheduleEffects;
+  /** Host-owned interactive user question. */
+  askUserPrompt?: (question: string) => Promise<string>;
   agent?: AgentExecutionContext;
 }
 

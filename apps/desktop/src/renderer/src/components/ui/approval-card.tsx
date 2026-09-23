@@ -2,7 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
 import { Button } from "@renderer/components/ui/button"
-import GlideMenu from "@/components/primitives/GlideMenu"
+import GlideMenu from "@renderer/components/ui/GlideMenu"
+import { cn } from "@renderer/lib/utils"
 
 /* ─────────────────────────────────────────────────────────
  * APPROVAL CARD (human-in-the-loop)
@@ -43,6 +44,11 @@ export type ApprovalLabels = {
   send: string
   customPlaceholder: string
   sentMessage: string
+}
+
+export type ApprovalAnswers = {
+  selected: Record<number, number[]>
+  custom: Record<number, string>
 }
 
 const DEFAULT_LABELS: ApprovalLabels = {
@@ -162,18 +168,24 @@ export default function ApprovalCard({
   onSubmitted,
   onAnswerChange,
   resettable = true,
+  className,
+  dismissible = true,
 }: {
   questions?: ApprovalQuestion[]
   labels?: Partial<ApprovalLabels>
-  onSubmitted?: (answers: Record<number, number[]>) => void
+  onSubmitted?: (answers: ApprovalAnswers) => void
   onAnswerChange?: (questionIndex: number, answer: number[]) => void
   resettable?: boolean
+  className?: string
+  dismissible?: boolean
   variant?: string
 } = {}) {
   const t = { ...DEFAULT_LABELS, ...labels }
   const [qi, setQi] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number[]>>({})
   const [custom, setCustom] = useState<Record<number, string>>({})
+  const answersRef = useRef(answers)
+  const customRef = useRef(custom)
   const [sent, setSent] = useState(false)
   const [open, setOpen] = useState(true)
 
@@ -196,7 +208,9 @@ export default function ApprovalCard({
     const item = questionRefs.current[qi]
     if (!item) return
     const reduce =
-      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
     setViewportH(item.offsetHeight)
     setTrackY(item.offsetTop)
     setAnimate(withAnim && !reduce)
@@ -232,7 +246,7 @@ export default function ApprovalCard({
   const send = () => {
     if (advanceTimer.current) clearTimeout(advanceTimer.current)
     setSent(true)
-    onSubmitted?.(answers)
+    onSubmitted?.({ selected: answersRef.current, custom: customRef.current })
   }
 
   const advance = () => {
@@ -251,15 +265,22 @@ export default function ApprovalCard({
             ? picked.filter((item) => item !== index)
             : [...picked, index]
       onAnswerChange?.(qi, next)
-      return { ...current, [qi]: next }
+      const updated = { ...current, [qi]: next }
+      answersRef.current = updated
+      return updated
     })
     if (type === "radio") {
-      setCustom((current) => ({ ...current, [qi]: "" }))
-      if (advanceTimer.current) clearTimeout(advanceTimer.current)
-      advanceTimer.current = setTimeout(() => {
-        if (last) send()
-        else setQi((current) => Math.min(questions.length - 1, current + 1))
-      }, 480)
+      setCustom((current) => {
+        const updated = { ...current, [qi]: "" }
+        customRef.current = updated
+        return updated
+      })
+      if (!last) {
+        if (advanceTimer.current) clearTimeout(advanceTimer.current)
+        advanceTimer.current = setTimeout(() => {
+          setQi((current) => Math.min(questions.length - 1, current + 1))
+        }, 480)
+      }
     }
   }
 
@@ -267,6 +288,8 @@ export default function ApprovalCard({
     setQi(0)
     setAnswers({})
     setCustom({})
+    answersRef.current = {}
+    customRef.current = {}
     setSent(false)
     setOpen(true)
     measured.current = false
@@ -321,20 +344,22 @@ export default function ApprovalCard({
   }
 
   return (
-    <div className="w-full max-w-80">
+    <div className={cn("w-full", className)}>
       <div
-        className="rounded-card bg-surface relative overflow-hidden shadow-card"
+        className="relative flex max-h-[min(34rem,55vh)] min-h-0 flex-col overflow-hidden rounded-xl border bg-background shadow-sm"
         style={{ animation: "fade-up 380ms cubic-bezier(0.23,1,0.32,1) both" }}
       >
-        <button
-          type="button"
-          aria-label="Dismiss"
-          onClick={() => setOpen(false)}
-          className="primitive-icon-button text-ink-3 hover:bg-hover hover:text-ink absolute top-2.5 right-2.5 z-10 transition-colors duration-100"
-        >
-          <Ico size={14} sw={2.2} path={<path d="M18 6L6 18M6 6l12 12" />} />
-        </button>
-        <div className="primitive-card-pad">
+        {dismissible ? (
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setOpen(false)}
+            className="absolute top-3 right-3 z-10 grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Ico size={14} sw={2.2} path={<path d="M18 6L6 18M6 6l12 12" />} />
+          </button>
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-3 scrollbar-thin">
           {/* the question itself is the heading */}
           <div
             className="overflow-hidden"
@@ -371,10 +396,10 @@ export default function ApprovalCard({
                     aria-hidden={active ? undefined : true}
                     style={questionStyle}
                   >
-                    <div className="text-ink pr-7 text-[14px] font-medium">{question.q}</div>
+                    <div className="pr-8 text-sm leading-6 font-semibold text-foreground">{question.q}</div>
                     <GlideMenu
-                      className="mt-2.5 flex flex-col gap-1"
-                      highlightClassName="inset-x-0 rounded-control bg-hover"
+                      className="mt-3 flex flex-col gap-1.5"
+                      highlightClassName="inset-x-0 rounded-lg bg-muted"
                     >
                       {question.options.map((option, i) => {
                         const on = picked.includes(i)
@@ -388,14 +413,25 @@ export default function ApprovalCard({
                             onClick={() => {
                               if (active) toggle(i)
                             }}
-                            className="rounded-control relative z-10 flex items-center gap-1.5 py-1 pr-2 pl-1 text-left transition-colors duration-100"
+                            className={cn(
+                              "relative z-10 flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors duration-100",
+                              on
+                                ? "border-border bg-muted text-foreground"
+                                : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            )}
                           >
                             <span
-                              className={`flex size-4 shrink-0 items-center justify-center transition-colors duration-200 ${question.type === "radio" ? "rounded-full" : "rounded-[5px]"} ${on ? "bg-ink text-canvas" : "text-transparent shadow-[inset_0_0_0_1.5px_var(--line-strong)]"}`}
+                              className={cn(
+                                "flex size-4 shrink-0 items-center justify-center border transition-colors duration-150",
+                                question.type === "radio" ? "rounded-full" : "rounded",
+                                on
+                                  ? "border-foreground bg-foreground text-background"
+                                  : "border-border bg-background text-transparent"
+                              )}
                             >
                               {question.type === "radio" ? (
                                 <span
-                                  className="bg-canvas size-1.5 rounded-full transition-transform duration-200"
+                                  className="size-1.5 rounded-full bg-background transition-transform duration-150"
                                   style={{ transform: on ? "scale(1)" : "scale(0)" }}
                                 />
                               ) : (
@@ -414,7 +450,7 @@ export default function ApprovalCard({
                               )}
                             </span>
                             <span
-                              className={`text-[13px] leading-none transition-colors duration-200 ${on ? "text-ink" : "text-ink-2"}`}
+                              className="text-sm leading-5"
                             >
                               {option}
                             </span>
@@ -423,26 +459,37 @@ export default function ApprovalCard({
                       })}
                       <label
                         data-menu-row
-                        className="rounded-control relative z-10 flex items-center gap-1.5 py-1 pr-2 pl-1 transition-colors duration-100"
+                        className={cn(
+                          "relative z-10 flex min-h-10 items-center rounded-lg border border-input bg-input/30 px-3 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30",
+                          question.options.length > 0 && "mt-1"
+                        )}
                       >
                         <input
                           value={custom[qIdx] ?? ""}
                           tabIndex={active ? 0 : -1}
                           onChange={(event) => {
                             if (!active) return
-                            setCustom((current) => ({ ...current, [qIdx]: event.target.value }))
+                            setCustom((current) => {
+                              const updated = { ...current, [qIdx]: event.target.value }
+                              customRef.current = updated
+                              return updated
+                            })
                             if (question.type === "radio")
-                              setAnswers((current) => ({ ...current, [qIdx]: [] }))
+                              setAnswers((current) => {
+                                const updated = { ...current, [qIdx]: [] }
+                                answersRef.current = updated
+                                return updated
+                              })
                           }}
                           onKeyDown={(event) => {
-                            if (event.key === "Enter" && hasAnswer) {
+                            if (event.key === "Enter") {
                               event.preventDefault()
-                              advance()
+                              if (hasAnswer && !last) goTo(qi + 1)
                             }
                           }}
                           placeholder={t.customPlaceholder}
                           aria-label="Custom answer"
-                          className="text-ink placeholder:text-ink-3 min-w-0 flex-1 bg-transparent pl-1.5 text-[13px] outline-none"
+                          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                         />
                       </label>
                     </GlideMenu>
@@ -454,19 +501,19 @@ export default function ApprovalCard({
         </div>
 
         {/* footer — step nav (rolling counter) + pill actions */}
-        <div className="primitive-card-footer flex items-center justify-between gap-3">
-          <div className="text-ink-3 flex items-center gap-1">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t bg-background px-4 py-3">
+          <div className="flex items-center gap-1 text-muted-foreground">
             <button
               type="button"
               aria-label="Previous question"
               disabled={qi <= 0}
               onClick={() => goTo(qi - 1)}
-              className="enabled:hover:text-ink flex size-[18px] items-center justify-center rounded-[5px] transition-colors duration-100 disabled:opacity-30"
+              className="flex size-6 items-center justify-center rounded-md transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-30"
             >
               <Ico size={14} path={<path d="M18 15l-6-6-6 6" />} />
             </button>
             <span
-              className="text-ink-3 inline-flex items-center text-[12px] font-medium tabular-nums"
+              className="inline-flex items-center text-xs font-medium tabular-nums"
               style={{ letterSpacing: "-0.1px", lineHeight: 1 }}
             >
               <RollingDigits value={`${qi + 1} / ${questions.length}`} />
@@ -476,7 +523,7 @@ export default function ApprovalCard({
               aria-label="Next question"
               disabled={last}
               onClick={() => goTo(qi + 1)}
-              className="enabled:hover:text-ink flex size-[18px] items-center justify-center rounded-[5px] transition-colors duration-100 disabled:opacity-30"
+              className="flex size-6 items-center justify-center rounded-md transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-30"
             >
               <Ico size={14} path={<path d="M6 9l6 6 6-6" />} />
             </button>

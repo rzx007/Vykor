@@ -379,6 +379,7 @@ export interface ReplyDesktopPermissionInput {
   permissionId: string
   status: "approved" | "denied"
   decision?: "once" | "session"
+  answer?: string
 }
 
 export interface SetDefaultDesktopModelInput {

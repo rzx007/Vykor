@@ -36,6 +36,7 @@ export interface AgentCapabilityOverrides {
 
 export interface AgentEffectOverrides {
   requestPermission?: AgentEffects["requestPermission"];
+  askUserPrompt?: AgentEffects["askUserPrompt"];
 }
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */

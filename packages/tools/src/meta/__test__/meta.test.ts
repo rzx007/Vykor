@@ -423,4 +423,19 @@ describe("askUserTool", () => {
     );
     expect((result.content[0] as any).text).toBe("Alice");
   });
+
+  it("serializes multiple questions for the host interaction", async () => {
+    let prompt = "";
+    const result = await askUserTool.execute!(
+      {
+        questions: [
+          { question: "Mode?", options: ["Fast", "Careful"] },
+          { question: "Details?" },
+        ],
+      },
+      { cwd: process.cwd(), askUserPrompt: async (value: string) => { prompt = value; return "answers"; } } as any
+    );
+    expect(JSON.parse(prompt)).toMatchObject({ kind: "question", questions: expect.any(Array) });
+    expect((result.content[0] as any).text).toBe("answers");
+  });
 });
