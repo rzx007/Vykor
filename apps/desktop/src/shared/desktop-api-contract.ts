@@ -4,6 +4,7 @@ import type {
   PlatformInfo,
   TrayNotificationOptions,
 } from "./ipc-channels"
+import { IpcChannels, type IpcInvokeMap } from "./ipc-channels"
 import type {
   CheckoutDesktopProjectBranchInput,
   CreateDesktopSessionInput,
@@ -199,6 +200,17 @@ export type DesktopAPI = {
       preference: DesktopWindowMaterialPreference
     ) => Promise<DesktopWindowMaterialState>
     onMaximizedChanged: (listener: (value: boolean) => void) => () => void
+  }
+  browser: {
+    updateTab: (
+      input: IpcInvokeMap[typeof IpcChannels.browserTabUpdate]["args"][0]
+    ) => Promise<void>
+    inspectAt: (
+      input: IpcInvokeMap[typeof IpcChannels.browserInspectAt]["args"][0]
+    ) => Promise<string>
+    addAnnotation: (
+      input: IpcInvokeMap[typeof IpcChannels.browserAddAnnotation]["args"][0]
+    ) => Promise<void>
   }
   tray: {
     flash: () => Promise<void>

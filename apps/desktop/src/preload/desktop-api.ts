@@ -71,6 +71,14 @@ export const desktopAPI = {
       return () => ipcRenderer.removeListener(IpcEvents.windowMaximizedChanged, wrapped)
     },
   },
+  browser: {
+    updateTab: (input: IpcInvokeMap[typeof IpcChannels.browserTabUpdate]["args"][0]) =>
+      invoke(IpcChannels.browserTabUpdate, input),
+    inspectAt: (input: IpcInvokeMap[typeof IpcChannels.browserInspectAt]["args"][0]) =>
+      invoke(IpcChannels.browserInspectAt, input),
+    addAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserAddAnnotation]["args"][0]) =>
+      invoke(IpcChannels.browserAddAnnotation, input),
+  },
   tray: {
     flash: () => invoke(IpcChannels.trayFlash),
     stopFlash: () => invoke(IpcChannels.trayStopFlash),

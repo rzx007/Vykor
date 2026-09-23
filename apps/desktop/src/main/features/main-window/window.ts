@@ -6,6 +6,7 @@ import { isForceQuit } from "../../core/services/lifecycle"
 import { showPetWindow, syncPetWithMainWindow } from "../pet/window"
 import { clearAttention } from "../tray/attention-badge"
 import { isAllowedWebviewUrl } from "./webview-policy"
+import { browserAgentService } from "../browser/browser-agent-service"
 import { mainWindowChromeOptions } from "./window-chrome"
 import {
   applyMainWindowMaterial,
@@ -167,6 +168,9 @@ function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
 }
 
 function attachWebviewPolicy(win: BrowserWindow): void {
+  win.webContents.on("did-attach-webview", (_event, guest) => {
+    browserAgentService.trackGuest(win.webContents.id, guest)
+  })
   win.webContents.on("will-attach-webview", (event, webPreferences, params) => {
     if (!isAllowedWebviewUrl(params.src)) {
       event.preventDefault()

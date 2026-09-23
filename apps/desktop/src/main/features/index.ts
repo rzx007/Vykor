@@ -1,5 +1,6 @@
 import type { IpcContribution } from "../core/ipc/types"
 import { attachmentIpcContribution } from "./attachment/ipc"
+import { browserIpcContribution } from "./browser/ipc"
 import { channelIpcContribution } from "./channels/ipc"
 import { clipboardIpcContribution } from "./clipboard/ipc"
 import { daemonAutoStartIpcContribution } from "./daemon-autostart/ipc"
@@ -20,6 +21,7 @@ import { workspaceIpcContribution } from "./workspace/ipc"
 export const allIpcContributions: IpcContribution[] = [
   daemonAutoStartIpcContribution,
   attachmentIpcContribution,
+  browserIpcContribution,
   windowControlsIpcContribution,
   trayIpcContribution,
   petIpcContribution,

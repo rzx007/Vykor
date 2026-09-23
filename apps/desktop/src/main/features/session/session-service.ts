@@ -64,6 +64,7 @@ import { isChannelSessionMetadata } from "../../../shared/channel-types"
 import { workspaceService } from "../workspace/workspace-service"
 import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
+import { browserAgentService } from "../browser/browser-agent-service"
 import { SessionSubscriptionService, toDesktopSessionRecord } from "./session-subscription-service"
 import { GlobalActivitySubscriptionService } from "../activity/global-activity-subscription-service"
 import type { DesktopActivityUpdate } from "../../../shared/activity-types"
@@ -76,7 +77,9 @@ import {
 } from "./session-operations"
 
 export class DesktopSessionService {
-  readonly connection = new DaemonConnectionService()
+  readonly connection = new DaemonConnectionService({
+    browserHost: browserAgentService,
+  })
   readonly subscriptions = new SessionSubscriptionService()
   readonly activitySubscriptions = new GlobalActivitySubscriptionService(
     undefined,
@@ -431,6 +434,7 @@ export class DesktopSessionService {
     this.subscriptions.clearAll()
     this.activitySubscriptions.clearAll()
     await this.connection.dispose()
+    await browserAgentService.dispose()
   }
 
   daemonClient(): Promise<OpenHarnessClient> {

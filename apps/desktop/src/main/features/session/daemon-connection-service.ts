@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron"
 import { OpenHarnessClient } from "@openharness/client"
-import { type OpenHarnessHttpServer } from "@openharness/server"
+import { type BrowserHost, type OpenHarnessHttpServer } from "@openharness/server"
 import {
   clearDaemonRegistry,
   createBearerToken,
@@ -41,6 +41,7 @@ export interface DaemonConnectionServiceOptions {
   stopNonDesktopDaemon?: (registry: DaemonRegistry) => Promise<void>
   /** Reconcile the OS service so it starts a desktop-managed daemon. */
   reconcileDesktopService?: (registry: DaemonRegistry) => Promise<void>
+  browserHost?: BrowserHost
 }
 
 export class DaemonConnectionService {
@@ -53,6 +54,7 @@ export class DaemonConnectionService {
   private readonly shouldAutoStart: () => Promise<boolean>
   private readonly stopNonDesktopDaemon: (registry: DaemonRegistry) => Promise<void>
   private readonly reconcileDesktopService: (registry: DaemonRegistry) => Promise<void>
+  private readonly browserHost?: BrowserHost
 
   constructor(options: DaemonConnectionServiceOptions = {}) {
     this.pidAlive = options.pidAlive ?? isPidAlive
@@ -60,6 +62,7 @@ export class DaemonConnectionService {
     this.shouldAutoStart = options.shouldAutoStart ?? (async () => await shouldStartManagedDaemon())
     this.stopNonDesktopDaemon = options.stopNonDesktopDaemon ?? stopNonDesktopDaemon
     this.reconcileDesktopService = options.reconcileDesktopService ?? reconcileDesktopManagedService
+    this.browserHost = options.browserHost
   }
 
   getDaemonStatus(): DesktopDaemonStatus {
@@ -184,6 +187,7 @@ export class DaemonConnectionService {
         version: app.getVersion(),
         executionSurface: "desktop_managed",
         outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
+        ...(this.browserHost ? { browserHost: this.browserHost } : {}),
       })
       this.embeddedServer = server
       this.embeddedUrl = listen.url

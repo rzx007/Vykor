@@ -176,6 +176,10 @@ export const IpcChannels = {
   windowGetMaterial: "window:get-material",
   windowSetMaterial: "window:set-material",
 
+  browserTabUpdate: "browser:tab:update",
+  browserInspectAt: "browser:inspect-at",
+  browserAddAnnotation: "browser:annotation:add",
+
   trayFlash: "tray:flash",
   trayStopFlash: "tray:stop-flash",
   trayNotify: "tray:notify",
@@ -407,6 +411,18 @@ export interface IpcInvokeMap {
   [IpcChannels.windowSetMaterial]: {
     args: [preference: DesktopWindowMaterialPreference]
     result: DesktopWindowMaterialState
+  }
+  [IpcChannels.browserTabUpdate]: {
+    args: [input: { action: "bind"; tabId: string; webContentsId: number } | { action: "active"; tabId: string | null } | { action: "unbind"; tabId: string }]
+    result: void
+  }
+  [IpcChannels.browserInspectAt]: {
+    args: [input: { tabId: string; x: number; y: number }]
+    result: string
+  }
+  [IpcChannels.browserAddAnnotation]: {
+    args: [input: { tabId: string; target: string; comment: string }]
+    result: void
   }
 
   [IpcChannels.trayFlash]: { args: []; result: void }

@@ -9,6 +9,7 @@ import type { AttachmentLimits } from "@openharness/protocol";
 import type { CommandCatalogProvider } from "../commands/commands.js";
 import type { DurableAgentApplication } from "../application/daemon-application.js";
 import type { AttachmentService } from "../application/attachments/attachment-service.js";
+import type { BrowserHost } from "../application/browser-tools/browser-host.js";
 import { createDefaultNodeApplication } from "../application/default-node-application.js";
 import type { CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import type {
@@ -114,6 +115,8 @@ export interface OpenHarnessServerOptions {
   channelConfigStore?: ChannelConfigStore;
   /** Test/embedding seam. Production daemon creation uses createDefaultNodeAgent directly. */
   createAgent?: CreateDaemonAgent;
+  /** Optional browser capability supplied by an embedding desktop application. */
+  browserHost?: BrowserHost;
   services?: OpenHarnessServerServices;
   version?: string;
   logger?: StructuredLogger;
@@ -173,6 +176,7 @@ export class OpenHarnessHttpServer {
         executionSurface: options.executionSurface,
         outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
         createAgent: options.createAgent,
+        browserHost: options.browserHost,
         ...(options.channelConfigStore
           ? { channelConfigStore: options.channelConfigStore }
           : {}),

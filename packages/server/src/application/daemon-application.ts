@@ -115,6 +115,7 @@ import {
   createDaemonImageGenerationTool,
   createDaemonImageToTextTool,
 } from "./visual-tools/index.js";
+import { createBrowserTool, type BrowserHost } from "./browser-tools/index.js";
 
 export interface DaemonApplicationOptions {
   store: SessionStore;
@@ -130,6 +131,8 @@ export interface DaemonApplicationOptions {
   /** Root used for scheduled conversations that intentionally run outside a project. */
   outsideProjectWorkspaceRoot?: string;
   createAgent?: CreateDaemonAgent;
+  /** Browser control is supplied by an embedding desktop host; the server builds the agent tool. */
+  browserHost?: BrowserHost;
   /** 提供后 daemon 才构造渠道运行时与接入服务；未提供时渠道路由返回 503。 */
   channelConfigStore?: ChannelConfigStore;
   createTerminal?(session: SessionRecord): ObservableJobProducer<AgentTerminalHost>;
@@ -471,7 +474,23 @@ export class DaemonApplication implements DurableAgentApplication {
             jobs: this.jobs.createDetachedProcessAgentHost(session),
           })),
         workflowRepository: this.workflows,
-        tools: async () => [imageToTextTool, imageGenerationTool],
+        tools: async () => [
+          imageToTextTool,
+          imageGenerationTool,
+          createBrowserTool(options.browserHost, async ({ bytes }) => {
+            const asset = await this.attachments.import({
+              displayName: `browser-${randomUUID()}.png`,
+              declaredMediaType: "image/png",
+              content: new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(bytes)
+                  controller.close()
+                },
+              }),
+            })
+            return (await this.attachments.resolveReadyContentPath(asset.id)).path
+          }),
+        ],
         toolOverrides: [
           createAttachmentReadTool({
             defaultTool: fileReadTool,

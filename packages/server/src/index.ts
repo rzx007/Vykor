@@ -7,6 +7,7 @@ export {
   type OpenHarnessServerServices,
   type OpenHarnessRuntimeSnapshot,
 } from "./http/index.js";
+export type { BrowserAction, BrowserHost, BrowserObservation } from "./application/browser-tools/browser-host.js";
 export {
   startOpenHarnessDaemon,
   type OpenHarnessDaemonOptions,
