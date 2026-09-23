@@ -9,8 +9,9 @@ import { McpSettings } from "./mcp-settings"
 function makeServer(overrides: Partial<DesktopMcpServer> = {}): DesktopMcpServer {
   return {
     name: "linear",
+    enabled: true,
     transport: "http",
-    endpoint: "https://mcp.linear.app/mcp",
+    summary: "https://mcp.linear.app/mcp",
     authMode: "oauth",
     authStatus: "not-logged-in",
     scopes: [],

@@ -138,7 +138,18 @@ import type {
   AttachmentStorageReport,
 } from "@openharness/client"
 import type { DesktopUpdateState } from "./update-types"
-import type { DesktopMcpLoginInput, DesktopMcpLogoutInput, DesktopMcpSnapshot } from "./mcp-types"
+import type {
+  DesktopMcpAddInput,
+  DesktopMcpExportResult,
+  DesktopMcpGetConfigInput,
+  DesktopMcpLoginInput,
+  DesktopMcpLogoutInput,
+  DesktopMcpOperationResult,
+  DesktopMcpRemoveInput,
+  DesktopMcpSetEnabledInput,
+  DesktopMcpSnapshot,
+  DesktopMcpUpdateInput,
+} from "./mcp-types"
 import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@openharness/client"
 import type {
   DesktopConnectionsSnapshot,
@@ -274,6 +285,12 @@ export type DesktopAPI = {
   }
   mcp: {
     snapshot: () => Promise<DesktopMcpSnapshot>
+    getConfig: (input: DesktopMcpGetConfigInput) => Promise<Record<string, unknown>>
+    exportConfig: () => Promise<DesktopMcpExportResult>
+    add: (input: DesktopMcpAddInput) => Promise<DesktopMcpOperationResult>
+    update: (input: DesktopMcpUpdateInput) => Promise<DesktopMcpOperationResult>
+    remove: (input: DesktopMcpRemoveInput) => Promise<DesktopMcpOperationResult>
+    setEnabled: (input: DesktopMcpSetEnabledInput) => Promise<DesktopMcpOperationResult>
     login: (input: DesktopMcpLoginInput) => Promise<DesktopMcpSnapshot>
     logout: (input: DesktopMcpLogoutInput) => Promise<DesktopMcpSnapshot>
   }

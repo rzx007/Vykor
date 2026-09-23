@@ -223,6 +223,17 @@ export const desktopAPI = {
   },
   mcp: {
     snapshot: () => invoke(IpcChannels.mcpSnapshot),
+    getConfig: (input: IpcInvokeMap[typeof IpcChannels.mcpGetConfig]["args"][0]) =>
+      invoke(IpcChannels.mcpGetConfig, input),
+    exportConfig: () => invoke(IpcChannels.mcpExportConfig),
+    add: (input: IpcInvokeMap[typeof IpcChannels.mcpAdd]["args"][0]) =>
+      invoke(IpcChannels.mcpAdd, input),
+    update: (input: IpcInvokeMap[typeof IpcChannels.mcpUpdate]["args"][0]) =>
+      invoke(IpcChannels.mcpUpdate, input),
+    remove: (input: IpcInvokeMap[typeof IpcChannels.mcpRemove]["args"][0]) =>
+      invoke(IpcChannels.mcpRemove, input),
+    setEnabled: (input: IpcInvokeMap[typeof IpcChannels.mcpSetEnabled]["args"][0]) =>
+      invoke(IpcChannels.mcpSetEnabled, input),
     login: (input: IpcInvokeMap[typeof IpcChannels.mcpLogin]["args"][0]) =>
       invoke(IpcChannels.mcpLogin, input),
     logout: (input: IpcInvokeMap[typeof IpcChannels.mcpLogout]["args"][0]) =>

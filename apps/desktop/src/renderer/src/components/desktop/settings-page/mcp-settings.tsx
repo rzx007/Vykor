@@ -203,7 +203,7 @@ function actionLabel(status: DesktopMcpAuthStatus): string {
 }
 
 function endpointLabel(server: DesktopMcpServer): string {
-  if (server.endpoint) return server.endpoint
+  if (server.summary) return server.summary
   return server.transport === "stdio" ? "本地进程服务" : "地址无效或已隐藏"
 }
 

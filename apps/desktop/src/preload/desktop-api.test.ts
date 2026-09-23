@@ -124,3 +124,44 @@ describe("desktop daemon autostart preload bridge", () => {
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.daemonAutoStartDismissOnboarding)
   })
 })
+
+describe("desktop MCP preload bridge", () => {
+  it("exposes snapshot, config and management operations on their channels", async () => {
+    await desktopAPI.mcp.snapshot()
+    await desktopAPI.mcp.getConfig({ name: "linear" })
+    await desktopAPI.mcp.exportConfig()
+    await desktopAPI.mcp.add({ name: "beui", config: { type: "stdio", command: "npx" } })
+    await desktopAPI.mcp.update({
+      name: "linear",
+      config: { type: "http", url: "https://x.test/v2" },
+      expectedConfig: { type: "http", url: "https://x.test/mcp" },
+    })
+    await desktopAPI.mcp.remove({ name: "linear" })
+    await desktopAPI.mcp.setEnabled({ name: "linear", enabled: false })
+    await desktopAPI.mcp.login({ name: "linear", scopes: ["read"] })
+    await desktopAPI.mcp.logout({ name: "linear" })
+
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpSnapshot)
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpGetConfig, { name: "linear" })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpExportConfig)
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpAdd, {
+      name: "beui",
+      config: { type: "stdio", command: "npx" },
+    })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpUpdate, {
+      name: "linear",
+      config: { type: "http", url: "https://x.test/v2" },
+      expectedConfig: { type: "http", url: "https://x.test/mcp" },
+    })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpRemove, { name: "linear" })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpSetEnabled, {
+      name: "linear",
+      enabled: false,
+    })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpLogin, {
+      name: "linear",
+      scopes: ["read"],
+    })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpLogout, { name: "linear" })
+  })
+})

@@ -129,7 +129,18 @@ import type {
   AttachmentStorageReport,
 } from "@openharness/client"
 import type { DesktopUpdateState } from "./update-types"
-import type { DesktopMcpLoginInput, DesktopMcpLogoutInput, DesktopMcpSnapshot } from "./mcp-types"
+import type {
+  DesktopMcpAddInput,
+  DesktopMcpExportResult,
+  DesktopMcpGetConfigInput,
+  DesktopMcpLoginInput,
+  DesktopMcpLogoutInput,
+  DesktopMcpOperationResult,
+  DesktopMcpRemoveInput,
+  DesktopMcpSetEnabledInput,
+  DesktopMcpSnapshot,
+  DesktopMcpUpdateInput,
+} from "./mcp-types"
 import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@openharness/client"
 import type {
   DesktopConnectionsSnapshot,
@@ -276,6 +287,12 @@ export const IpcChannels = {
   providerCustomRemove: "provider:custom-remove",
 
   mcpSnapshot: "mcp:snapshot",
+  mcpGetConfig: "mcp:get-config",
+  mcpExportConfig: "mcp:export-config",
+  mcpAdd: "mcp:add",
+  mcpUpdate: "mcp:update",
+  mcpRemove: "mcp:remove",
+  mcpSetEnabled: "mcp:set-enabled",
   mcpLogin: "mcp:login",
   mcpLogout: "mcp:logout",
 
@@ -437,6 +454,24 @@ export interface IpcInvokeMap {
   }
 
   [IpcChannels.mcpSnapshot]: { args: []; result: DesktopMcpSnapshot }
+  [IpcChannels.mcpGetConfig]: {
+    args: [input: DesktopMcpGetConfigInput]
+    result: Record<string, unknown>
+  }
+  [IpcChannels.mcpExportConfig]: { args: []; result: DesktopMcpExportResult }
+  [IpcChannels.mcpAdd]: { args: [input: DesktopMcpAddInput]; result: DesktopMcpOperationResult }
+  [IpcChannels.mcpUpdate]: {
+    args: [input: DesktopMcpUpdateInput]
+    result: DesktopMcpOperationResult
+  }
+  [IpcChannels.mcpRemove]: {
+    args: [input: DesktopMcpRemoveInput]
+    result: DesktopMcpOperationResult
+  }
+  [IpcChannels.mcpSetEnabled]: {
+    args: [input: DesktopMcpSetEnabledInput]
+    result: DesktopMcpOperationResult
+  }
   [IpcChannels.mcpLogin]: { args: [input: DesktopMcpLoginInput]; result: DesktopMcpSnapshot }
   [IpcChannels.mcpLogout]: { args: [input: DesktopMcpLogoutInput]; result: DesktopMcpSnapshot }
 
