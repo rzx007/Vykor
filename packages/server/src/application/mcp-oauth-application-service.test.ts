@@ -124,7 +124,7 @@ describe("McpOAuthApplicationService", () => {
           enabled: true,
           transport: "http",
           authMode: "none",
-          authStatus: "not-logged-in",
+          authStatus: "not-configured",
           scopes: [],
           runtimeStatus: "unavailable",
         },
@@ -156,6 +156,20 @@ describe("McpOAuthApplicationService", () => {
       .rejects.toMatchObject({ code: "oauth-login-verification-failed" });
 
     expect(world.getValue()).toEqual(old);
+    expect(world.coordinator.synchronize).not.toHaveBeenCalled();
+  });
+
+  it("preserves the public-server diagnosis instead of returning a generic login failure", async () => {
+    const world = createWorld({ stored: null });
+    const service = world.createService();
+    world.login.mockRejectedValueOnce(new McpOAuthError("oauth-not-required", "OAuth is not required"));
+
+    await expect(service.login({ name: "linear", scopes: [], openBrowser: async () => undefined }))
+      .rejects.toMatchObject({
+        code: "oauth-not-required",
+        message: expect.stringContaining("does not require OAuth"),
+      });
+    expect(world.getValue()).toBeUndefined();
     expect(world.coordinator.synchronize).not.toHaveBeenCalled();
   });
 

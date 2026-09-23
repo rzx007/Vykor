@@ -154,7 +154,7 @@ export type McpOAuthAuthStatus =
 | `oauth` | `expired-refreshable` | access token 已过期，可以使用 refresh token 恢复 |
 | `oauth` | `reauthentication-required` | 必须重新浏览器授权 |
 | `bearer` / `custom` | `static` | 使用 settings 中的静态 Authorization |
-| `none` | `not-logged-in` | HTTP 服务没有可用认证配置 |
+| `none` | `not-configured` | HTTP 服务未声明认证，可作为公开 MCP 直接连接 |
 | `none` | `unsupported` | stdio 或 SSE 不支持本阶段 OAuth |
 
 ### Runtime 状态
@@ -356,6 +356,8 @@ Run `ohs mcp status linear` for the current state.
 ```
 
 Desktop 保留最新快照并显示错误，不把成功保存的授权错误地回退为“未登录”。
+
+公开 HTTP MCP 使用 `authMode: "none"` 和 `authStatus: "not-configured"`，设置页显示“无需认证”且不提供 OAuth 按钮。需要首次 OAuth 授权的服务应在配置中显式声明 `oauth`；CLI 可在添加时使用可重复的 `--scope` 参数，例如 `ohs mcp add linear --url https://mcp.linear.app/mcp --scope read`。若对已经可匿名 initialize 的服务手工执行 login，返回 `oauth-not-required`，不能统一包装成 discovery 失败。
 
 ## 兼容性
 

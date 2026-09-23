@@ -39,6 +39,7 @@ export interface McpOAuthLoginRequest {
 }
 
 export type McpOAuthApplicationErrorCode =
+  | "oauth-not-required"
   | "oauth-login-failed"
   | "oauth-login-verification-failed"
   | "oauth-saved-runtime-sync-failed"
@@ -194,6 +195,12 @@ export class McpOAuthApplicationService {
         throw new McpOAuthApplicationError(
           "oauth-login-verification-failed",
           `OAuth authorization for ${request.name} was not accepted by the MCP server.`,
+        );
+      }
+      if (error instanceof McpOAuthError && error.code === "oauth-not-required") {
+        throw new McpOAuthApplicationError(
+          "oauth-not-required",
+          `MCP server ${request.name} does not require OAuth. Use it without browser authorization.`,
         );
       }
       throw new McpOAuthApplicationError(

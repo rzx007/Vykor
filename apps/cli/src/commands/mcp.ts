@@ -74,8 +74,9 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
     .argument("<name>", "Server name")
     .argument("[stdioCommand...]", "Command after -- for a stdio server")
     .option("--url <url>", "Streamable HTTP server URL")
+    .option("--scope <scope>", "OAuth scope (repeatable)", collectScope, [])
     .option("-e, --env <pairs...>", "Environment variables (KEY=VALUE)")
-    .action(async (name: string, stdioCommand: string[], opts: { url?: string; env?: string[] }) => {
+    .action(async (name: string, stdioCommand: string[], opts: { url?: string; scope?: string[]; env?: string[] }) => {
       if (!!opts.url === !!stdioCommand.length) {
         throw new Error("Provide exactly one of --url or a stdio command after --");
       }
@@ -83,7 +84,12 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
       settings.mcpServers ??= {};
       if (opts.url) {
         const url = new URL(opts.url);
-        settings.mcpServers[name] = { type: "http", url: url.toString() };
+        const scopes = [...new Set((opts.scope ?? []).map(value => value.trim()).filter(Boolean))];
+        settings.mcpServers[name] = {
+          type: "http",
+          url: url.toString(),
+          ...(scopes.length ? { oauth: { scopes } } : {}),
+        };
       } else {
         const [command, ...args] = stdioCommand;
         const env = parseEnvironment(opts.env);
@@ -255,6 +261,10 @@ function reportRuntimeSyncFailure(
     : `OAuth credentials were removed for ${name}, but ${count} active runtime failed to disconnect.`;
   deps.stdout(message);
   deps.stdout(`Run \`ohs mcp status ${name}\` for the current state.`);
+}
+
+function collectScope(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }
 
 function parseEnvironment(pairs?: string[]): Record<string, string> | undefined {

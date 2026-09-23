@@ -50,7 +50,8 @@ export function resolveMcpOAuthStatus(
   if (config.type === "stdio" || config.type === "sse") return "unsupported";
   if (config.headers && Object.keys(config.headers).some(key => key.toLowerCase() === "authorization")) return "static";
   if (credential && oauthScopesChanged(config.oauth?.scopes, credential.tokens.scope)) return "reauthentication-required";
-  return credential ? credentialStatus(config.url, credential, now) : "not-logged-in";
+  if (credential) return credentialStatus(config.url, credential, now);
+  return config.oauth === undefined ? "not-configured" : "not-logged-in";
 }
 
 function credentialStatus(serverUrl: string, credential: McpOAuthCredentialRecord, now: number): McpOAuthAuthStatus {

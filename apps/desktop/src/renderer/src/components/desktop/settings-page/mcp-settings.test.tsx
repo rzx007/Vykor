@@ -104,19 +104,16 @@ describe("McpSettings", () => {
     ).toBe(true)
   })
 
-  it("offers first-time OAuth authorization for an unauthenticated HTTP server", async () => {
+  it("treats a public HTTP server as unauthenticated without offering OAuth", async () => {
     const login = vi.fn(async () => ({ servers: [makeServer()] }))
-    installDesktop(makeServer({ authMode: "none", authStatus: "not-logged-in" }), { login })
+    installDesktop(makeServer({ authMode: "none", authStatus: "not-configured" }), { login })
 
     await render()
 
-    const authorize = Array.from(container.querySelectorAll("button"))
-      .find((button) => button.textContent?.includes("浏览器授权"))
-    expect(authorize).toBeDefined()
-    await act(async () => {
-      authorize?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
-    })
-    expect(login).toHaveBeenCalledWith({ name: "linear", scopes: [] })
+    expect(container.textContent).toContain("无需认证")
+    expect(container.textContent).not.toContain("未登录")
+    expect(container.textContent).not.toContain("浏览器授权")
+    expect(login).not.toHaveBeenCalled()
   })
 
   it("does not offer an OAuth login button for static credentials", async () => {

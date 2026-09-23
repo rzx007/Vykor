@@ -13,7 +13,7 @@ import type {
 import { errorMessage } from "./settings-error-message"
 
 const authModeLabels: Record<DesktopMcpAuthMode, string> = {
-  none: "未配置认证",
+  none: "无需认证",
   oauth: "OAuth",
   bearer: "Bearer",
   custom: "自定义认证",
@@ -136,9 +136,11 @@ export function McpSettings(): React.JSX.Element {
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-heading text-base font-semibold">{server.name}</h2>
                   <Badge variant="outline">{authModeLabels[server.authMode]}</Badge>
-                  <Badge variant={badgeVariant(server.authStatus)}>
-                    {authStatusLabels[server.authStatus]}
-                  </Badge>
+                  {server.authMode === "none" ? null : (
+                    <Badge variant={badgeVariant(server.authStatus)}>
+                      {authStatusLabels[server.authStatus]}
+                    </Badge>
+                  )}
                   <Badge variant={runtimeBadgeVariant(server.runtimeStatus)}>
                     {runtimeStatusLabels[server.runtimeStatus]}
                   </Badge>
@@ -153,7 +155,7 @@ export function McpSettings(): React.JSX.Element {
                   </p>
                 ) : null}
               </div>
-              {server.transport === "http" && (server.authMode === "oauth" || server.authMode === "none") ? (
+              {server.transport === "http" && server.authMode === "oauth" ? (
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64">
                   {canLogin(server.authStatus) ? (
                     <div className="flex flex-col gap-1">

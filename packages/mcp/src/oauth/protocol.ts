@@ -47,6 +47,9 @@ export async function discoverOAuth(
   const challengedMetadata = challenge
     ? extractWWWAuthenticateParams(challenge).resourceMetadataUrl
     : undefined;
+  if (challenge?.ok && !challengedMetadata) {
+    throw new McpOAuthError("oauth-not-required", "MCP server accepts unauthenticated connections");
+  }
   if (challengedMetadata) assertOAuthEndpoint(challengedMetadata, options);
   const fetchWithTimeout = ((request: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
     timedFetch(fetchImpl, request as any, { ...(init as RequestInit), signal: options.signal ?? init?.signal })) as typeof fetch;

@@ -74,6 +74,18 @@ describe("mcp command", () => {
     });
   });
 
+  it("marks OAuth explicitly when add receives repeatable Codex-compatible scopes", async () => {
+    const test = fixture();
+
+    await test.run("add", "linear-oauth", "--url", "https://mcp.linear.app/mcp", "--scope", "read", "--scope", "issues:read");
+
+    expect(test.getSettings().mcpServers?.["linear-oauth"]).toEqual({
+      type: "http",
+      url: "https://mcp.linear.app/mcp",
+      oauth: { scopes: ["read", "issues:read"] },
+    });
+  });
+
   it("produces identical JSON for get and status with stable auth and runtime fields", async () => {
     const test = fixture({ runtimeStatus: "connected" });
     await test.run("get", "linear", "--json");

@@ -87,6 +87,11 @@ ohs auth login <provider> <api-key>
 ohs auth status
 ohs provider list|use|add|edit|remove
 ohs mcp list|add|remove
+# 公开 HTTP MCP：只提供 URL
+ohs mcp add beui --url https://mcp.beui.dev/mcp
+# OAuth HTTP MCP：显式声明 scope，再授权
+ohs mcp add linear --url https://mcp.linear.app/mcp --scope read
+ohs mcp login linear --scopes read
 ohs plugin list|install|uninstall|enable|disable
 ohs sandbox enable|disable|status|check
 ohs daemon start|status|stop|install|uninstall

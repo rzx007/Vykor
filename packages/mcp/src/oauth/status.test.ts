@@ -16,6 +16,10 @@ describe("resolveMcpOAuthStatus", () => {
     expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["read"] } }, credential, now)).toBe("expired-refreshable");
   });
 
+  it("reports not-configured for a public HTTP server without OAuth settings", () => {
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl }, undefined, now)).toBe("not-configured");
+  });
+
   it("gives static authorization and diagnostics priority", () => {
     expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, headers: { Authorization: "Bearer x" } }, credential, now)).toBe("static");
     expect(resolveMcpOAuthStatus(
