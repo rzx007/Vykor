@@ -18,21 +18,34 @@
         margin: 0;
       }
 
+      /* 遮罩层本身不设背景色：窗口从第一帧就是原生材质，只有中心徽标自己带底色，
+         这样玻璃在第一帧就可见，且徽标在任意壁纸上都读得清。 */
       #startup-loading {
         position: fixed;
         inset: 0;
         z-index: 9999;
         display: grid;
         place-items: center;
-        background: #f4f7f9;
-        color: #68747d;
         font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+        -webkit-app-region: drag;
+        transition: opacity 0.16s ease;
+      }
+
+      #startup-loading[data-startup-dismissed="true"] {
+        opacity: 0;
       }
 
       .startup-loading-content {
         display: grid;
         justify-items: center;
         gap: 0.75rem;
+        padding: 1.5rem 1.75rem;
+        border-radius: 1.5rem;
+        background: linear-gradient(180deg, #000000 0%, #151718 100%);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+        -webkit-app-region: no-drag;
+        animation: startup-badge-in 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
 
       .startup-loading-wordmark {
@@ -40,12 +53,10 @@
         font-weight: 500;
         letter-spacing: 0.03em;
       }
-
       .startup-loading-dots {
         display: flex;
         gap: 0.3125rem;
       }
-
       .startup-loading-dot {
         width: 0.25rem;
         height: 0.25rem;
@@ -53,15 +64,33 @@
         background: currentColor;
         animation: startup-dot 1.5s ease-in-out infinite;
       }
-
       .startup-loading-dot:nth-child(2) {
         animation-delay: 160ms;
       }
-
       .startup-loading-dot:nth-child(3) {
         animation-delay: 320ms;
       }
 
+      @keyframes startup-badge-in {
+        0% {
+          transform: scale(0.72);
+          opacity: 0.2;
+        }
+        60% {
+          transform: scale(1.045);
+          opacity: 1;
+        }
+        80% {
+          transform: scale(0.985);
+        }
+        90% {
+          transform: scale(1.008);
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
       @keyframes startup-dot {
         0%,
         100% {
@@ -72,24 +101,10 @@
         }
       }
 
-      @media (prefers-color-scheme: dark) {
-        #startup-loading {
-          background: #20242a;
-          color: #8d969e;
-        }
-      }
-
-      html.light #startup-loading {
-        background: #f4f7f9;
-        color: #68747d;
-      }
-
-      html.dark #startup-loading {
-        background: #20242a;
-        color: #8d969e;
-      }
-
       @media (prefers-reduced-motion: reduce) {
+        .startup-loading-content {
+          animation: none;
+        }
         .startup-loading-dot {
           animation: none;
           opacity: 0.55;
@@ -102,7 +117,7 @@
   <body>
     <div id="root"></div>
     <div id="startup-loading" role="status" aria-label="正在启动 OpenHarness">
-      <div class="startup-loading-content" aria-hidden="true">
+      <div class="startup-loading-content" data-startup-badge="true" aria-hidden="true">
         <span class="startup-loading-wordmark">OpenHarness-ts</span>
         <span class="startup-loading-dots">
           <span class="startup-loading-dot" data-startup-dot="true"></span>

@@ -26,17 +26,29 @@ import {
   parseAppearancePreferences,
   type AppearancePreferences,
 } from "./appearance-preferences"
+import {
+  DEFAULT_WINDOW_MATERIAL_PREFERENCE,
+  type DesktopWindowMaterialPreference,
+  type DesktopWindowMaterialState,
+} from "@shared/window-material-types"
+import {
+  readWindowMaterialSnapshot,
+  writeWindowMaterialAttributes,
+} from "@renderer/apply-startup-theme"
 
 export type AppearanceContextValue = {
   preferences: AppearancePreferences
   resolvedTheme: "light" | "dark"
   resolvedReducedMotion: boolean
+  /** 主窗口才有值；宠物窗口等其它入口为 null。 */
+  windowMaterial: DesktopWindowMaterialState | null
   fontAvailability: Readonly<Record<string, boolean>>
   saveState: { status: "idle" | "saved" | "error"; message?: string }
   setPreference: <K extends keyof Omit<AppearancePreferences, "version">>(
     key: K,
     value: AppearancePreferences[K]
   ) => boolean
+  setWindowMaterial: (preference: DesktopWindowMaterialPreference) => void
   resetAppearance: () => boolean
 }
 
@@ -117,6 +129,10 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
   const [saveState, setSaveState] = useState<AppearanceContextValue["saveState"]>({
     status: "idle",
   })
+  const [windowMaterial, setWindowMaterialState] = useState<DesktopWindowMaterialState | null>(
+    readWindowMaterialSnapshot
+  )
+  const windowMaterialRef = useRef(windowMaterial)
   const systemDark = useMediaQuery("(prefers-color-scheme: dark)", false)
   const systemReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)", true)
   const resolvedTheme =
@@ -156,10 +172,33 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
     [persistPreferences]
   )
 
-  const resetAppearance = useCallback(
-    () => persistPreferences(parseAppearancePreferences(null)),
-    [persistPreferences]
-  )
+  const setWindowMaterial = useCallback((preference: DesktopWindowMaterialPreference): void => {
+    const previous = windowMaterialRef.current
+    // 乐观更新：开关立刻反映选择，原生材质等主进程返回权威状态后再变。
+    // 不伪造 active / shell——沿用上一份状态，只改 preference。
+    const optimistic = previous ? { ...previous, preference } : null
+    windowMaterialRef.current = optimistic
+    setWindowMaterialState(optimistic)
+
+    window.desktop.window
+      .setMaterial(preference)
+      .then((state) => {
+        windowMaterialRef.current = state
+        setWindowMaterialState(state)
+        setSaveState({ status: "saved" })
+      })
+      .catch(() => {
+        windowMaterialRef.current = previous
+        setWindowMaterialState(previous)
+        setSaveState({ status: "error", message: "无法切换窗口材质" })
+      })
+  }, [])
+
+  const resetAppearance = useCallback(() => {
+    const saved = persistPreferences(parseAppearancePreferences(null))
+    if (saved) setWindowMaterial(DEFAULT_WINDOW_MATERIAL_PREFERENCE)
+    return saved
+  }, [persistPreferences, setWindowMaterial])
 
   useLayoutEffect(() => {
     applyAppearanceToRoot(
@@ -168,7 +207,30 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
       resolvedTheme,
       resolvedReducedMotion
     )
-  }, [preferences, resolvedReducedMotion, resolvedTheme])
+    if (windowMaterial) writeWindowMaterialAttributes(document.documentElement, windowMaterial)
+  }, [preferences, resolvedReducedMotion, resolvedTheme, windowMaterial])
+
+  // renderer 重载（崩溃恢复 / dev 刷新）后 argv 快照会停留在建窗时刻，
+  // 这里和主进程对账一次：落盘偏好、实际材质、开关显示才能对得上。
+  useEffect(() => {
+    if (!windowMaterialRef.current) return
+
+    let disposed = false
+    void window.desktop.window
+      .getMaterial()
+      .then((state) => {
+        if (disposed) return
+        windowMaterialRef.current = state
+        setWindowMaterialState(state)
+      })
+      .catch(() => {
+        // 对账失败不提示：本次渲染继续用 argv 快照，用户切换时仍会拿到权威状态。
+      })
+
+    return () => {
+      disposed = true
+    }
+  }, [])
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent): void => {
@@ -213,9 +275,11 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
       preferences,
       resolvedTheme,
       resolvedReducedMotion,
+      windowMaterial,
       fontAvailability,
       saveState,
       setPreference,
+      setWindowMaterial,
       resetAppearance,
     }),
     [
@@ -226,6 +290,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
       resolvedTheme,
       saveState,
       setPreference,
+      setWindowMaterial,
+      windowMaterial,
     ]
   )
 

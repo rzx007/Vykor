@@ -14,11 +14,19 @@ vi.mock("./appearance-provider", () => ({
 
 import { AppearanceSettings } from "./appearance-settings"
 
+const WINDOW_MATERIAL_STATE = {
+  preference: "glass",
+  active: "glass",
+  unavailableReason: null,
+  shell: "transparent",
+} as const
+
 describe("AppearanceSettings", () => {
   let container: HTMLDivElement
   let root: Root
   let setPreference: ReturnType<typeof vi.fn>
   let resetAppearance: ReturnType<typeof vi.fn>
+  let setWindowMaterial: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     ;(
@@ -29,10 +37,12 @@ describe("AppearanceSettings", () => {
     root = createRoot(container)
     setPreference = vi.fn(() => true)
     resetAppearance = vi.fn(() => true)
+    setWindowMaterial = vi.fn()
     mocks.useAppearance.mockReturnValue({
       preferences: DEFAULT_APPEARANCE_PREFERENCES,
       resolvedTheme: "light",
       resolvedReducedMotion: false,
+      windowMaterial: WINDOW_MATERIAL_STATE,
       fontAvailability: {
         "segoe-ui": false,
         "cascadia-code": false,
@@ -41,6 +51,7 @@ describe("AppearanceSettings", () => {
       },
       saveState: { status: "idle" },
       setPreference,
+      setWindowMaterial,
       resetAppearance,
     })
   })
@@ -123,9 +134,11 @@ describe("AppearanceSettings", () => {
       preferences: DEFAULT_APPEARANCE_PREFERENCES,
       resolvedTheme: "light",
       resolvedReducedMotion: false,
+      windowMaterial: WINDOW_MATERIAL_STATE,
       fontAvailability: {},
       saveState: { status: "saved" },
       setPreference,
+      setWindowMaterial,
       resetAppearance,
     })
     await renderSettings()
@@ -138,7 +151,7 @@ describe("AppearanceSettings", () => {
     )
     await act(async () => reset?.click())
     expect(document.body.textContent).toContain("恢复默认外观？")
-    expect(document.body.textContent).toContain("主题、颜色、字体、字号和动效")
+    expect(document.body.textContent).toContain("主题、颜色、字体、字号、动效和窗口材质")
 
     const confirm = Array.from(document.body.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "确认恢复"
@@ -153,9 +166,11 @@ describe("AppearanceSettings", () => {
       preferences: DEFAULT_APPEARANCE_PREFERENCES,
       resolvedTheme: "light",
       resolvedReducedMotion: false,
+      windowMaterial: WINDOW_MATERIAL_STATE,
       fontAvailability: {},
       saveState: { status: "error", message: "无法保存外观设置" },
       setPreference,
+      setWindowMaterial,
       resetAppearance,
     })
     await renderSettings()
@@ -182,6 +197,36 @@ describe("AppearanceSettings", () => {
     )
     act(() => motionOn?.click())
     expect(setPreference).toHaveBeenCalledWith("reducedMotion", "on")
+  })
+
+  it("commits the window material choice immediately", async () => {
+    await renderSettings()
+
+    const glass = container.querySelector<HTMLButtonElement>('[aria-label="透明磨玻璃窗口背景"]')
+    const opaque = container.querySelector<HTMLButtonElement>('[aria-label="不透明窗口背景"]')
+    expect(glass).not.toBeNull()
+    expect(opaque).not.toBeNull()
+
+    act(() => opaque?.click())
+    expect(setWindowMaterial).toHaveBeenCalledWith("opaque")
+  })
+
+  it("hides the whole window section when the entry has no material snapshot", async () => {
+    mocks.useAppearance.mockReturnValue({
+      preferences: DEFAULT_APPEARANCE_PREFERENCES,
+      resolvedTheme: "light",
+      resolvedReducedMotion: false,
+      windowMaterial: null,
+      fontAvailability: {},
+      saveState: { status: "idle" },
+      setPreference,
+      setWindowMaterial,
+      resetAppearance,
+    })
+    await renderSettings()
+
+    expect(container.querySelector('[aria-label="透明磨玻璃窗口背景"]')).toBeNull()
+    expect(container.textContent).not.toContain("窗口背景")
   })
 })
 

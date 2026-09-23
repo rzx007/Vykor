@@ -27,23 +27,24 @@ describe("startup loading document", () => {
     expect(styles).toContain("z-index: 9999")
   })
 
-  it("paints stored and system themes without waiting for React", () => {
+  it("遮罩层没有不透明底色，只有中心徽标自带底色", () => {
     const document = new JSDOM(html).window.document
     const styles = document.querySelector("style")?.textContent ?? ""
+
+    expect(styles).toContain("#startup-loading")
+    expect(styles).toContain('"Segoe UI Variable Text"')
+    expect(styles).not.toMatch(/#startup-loading\s*\{[^}]*background\s*:\s*#/)
+    expect(styles).toContain("linear-gradient(180deg, #000000 0%, #151718 100%)")
+    expect(styles).toContain("animation: startup-badge-in")
+    expect(styles).toContain("prefers-reduced-motion: reduce")
+  })
+
+  it("在 React 之前加载已存主题脚本", () => {
+    const document = new JSDOM(html).window.document
     const scripts = [...document.querySelectorAll("script")].map((script) =>
       script.getAttribute("src")
     )
 
     expect(scripts).toContain("./src/startup-theme.ts")
-    expect(styles).toContain("prefers-color-scheme: dark")
-    expect(styles).toContain("html.dark")
-    expect(styles).toContain("html.light")
-    expect(styles).toContain("#20242a")
-    expect(styles).toContain("#f4f7f9")
-    expect(styles).toContain("prefers-reduced-motion: reduce")
-    expect(styles).toContain("animation: none")
-    expect(styles).not.toContain("html.dark body")
-    expect(styles).not.toContain("html.light body")
-    expect(styles).not.toMatch(/body\s*,\s*#startup-loading/)
   })
 })

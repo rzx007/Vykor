@@ -37,6 +37,7 @@ import {
 import { Separator } from "@renderer/components/ui/separator"
 import { Slider } from "@renderer/components/ui/slider"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
+import type { DesktopWindowMaterialPreference } from "@shared/window-material-types"
 
 import { ACCENT_PRESET_COLORS } from "./appearance-colors"
 import { CODE_FONT_OPTIONS, UI_FONT_OPTIONS, type AppearanceFontOption } from "./appearance-fonts"
@@ -52,6 +53,7 @@ import {
 } from "./appearance-preferences"
 import { useAppearance } from "./appearance-provider"
 import { ThemePreviewCard } from "./theme-preview-card"
+import { windowMaterialDescription } from "./window-material-copy"
 
 const THEME_OPTIONS: readonly AppearanceTheme[] = ["system", "light", "dark"]
 const ACCENT_OPTIONS: readonly { id: AccentPresetId; label: string }[] = [
@@ -66,10 +68,24 @@ const MOTION_OPTIONS: readonly { value: ReducedMotionPreference; label: string }
   { value: "on", label: "开启" },
   { value: "off", label: "关闭" },
 ]
+const WINDOW_MATERIAL_OPTIONS: readonly {
+  value: DesktopWindowMaterialPreference
+  label: string
+}[] = [
+  { value: "glass", label: "透明磨玻璃" },
+  { value: "opaque", label: "不透明" },
+]
 
 export function AppearanceSettings(): React.JSX.Element {
-  const { preferences, fontAvailability, saveState, setPreference, resetAppearance } =
-    useAppearance()
+  const {
+    preferences,
+    windowMaterial,
+    fontAvailability,
+    saveState,
+    setPreference,
+    setWindowMaterial,
+    resetAppearance,
+  } = useAppearance()
   const selectedAccent =
     preferences.accent.kind === "custom"
       ? preferences.accent.value
@@ -126,6 +142,35 @@ export function AppearanceSettings(): React.JSX.Element {
           </Field>
         </FieldGroup>
       </AppearanceSection>
+
+      {windowMaterial ? (
+        <AppearanceSection title="窗口">
+          <FieldGroup>
+            <Field orientation="responsive">
+              <FieldContent>
+                <FieldTitle id="window-material-label">窗口背景</FieldTitle>
+                <FieldDescription>{windowMaterialDescription(windowMaterial)}</FieldDescription>
+              </FieldContent>
+              <ToggleGroup
+                aria-labelledby="window-material-label"
+                variant="outline"
+                value={[windowMaterial.preference]}
+                onValueChange={(values) =>
+                  commitSingle(values as DesktopWindowMaterialPreference[], (value) =>
+                    setWindowMaterial(value)
+                  )
+                }
+              >
+                {WINDOW_MATERIAL_OPTIONS.map(({ value, label }) => (
+                  <ToggleGroupItem key={value} value={value} aria-label={`${label}窗口背景`}>
+                    {label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </Field>
+          </FieldGroup>
+        </AppearanceSection>
+      ) : null}
 
       <AppearanceSection title="颜色">
         <FieldGroup>
@@ -439,7 +484,7 @@ function ResetAppearanceDialog({ onReset }: { onReset: () => boolean }): React.J
         <AlertDialogHeader>
           <AlertDialogTitle>恢复默认外观？</AlertDialogTitle>
           <AlertDialogDescription>
-            主题、颜色、字体、字号和动效都会恢复为默认值，并立即应用到当前设备。
+            主题、颜色、字体、字号、动效和窗口材质都会恢复为默认值，并立即应用到当前设备。
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
