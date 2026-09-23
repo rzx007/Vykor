@@ -249,6 +249,8 @@ function ConversationPane({
     })
   const pendingPermissions =
     sessionView?.permissions.filter((permission) => permission.status === "pending") ?? []
+  const singleAskUserPrompt =
+    pendingPermissions.length === 1 && isAskUserPermission(pendingPermissions[0]!)
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
     .filter((submission) => submission.sessionId === activeSessionId)
     .sort((left, right) => left.createdAt - right.createdAt)
@@ -592,7 +594,12 @@ function ConversationPane({
             <div
               role="region"
               aria-label="待处理的授权请求"
-              className="mx-auto mb-2 max-h-[min(18rem,35vh)] w-[min(760px,calc(100%-32px))] shrink-0 scrollbar-thin overflow-y-auto px-px"
+              className={cn(
+                "mx-auto mb-2 w-[min(760px,calc(100%-32px))] shrink-0 px-px",
+                singleAskUserPrompt
+                  ? "overflow-visible"
+                  : "max-h-[min(18rem,35vh)] overflow-y-auto scrollbar-thin"
+              )}
             >
               <div className="space-y-2">
                 {pendingPermissions.map((permission) =>

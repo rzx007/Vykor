@@ -13,7 +13,7 @@ const permission = {
     input: {
       kind: "question",
       questions: [
-        { question: "Choose a mode", options: ["Fast", "Careful"] },
+        { question: "Choose a mode", type: "check", options: ["Fast", "Careful"] },
         { question: "Anything else?" },
       ],
     },
@@ -34,6 +34,7 @@ describe("AskUserCard", () => {
     )
     expect(html).toContain("Choose a mode")
     expect(html).toContain("Fast")
+    expect(html).toContain('data-question-type="check"')
     expect(html).toContain("继续")
   })
 

@@ -429,13 +429,19 @@ describe("askUserTool", () => {
     const result = await askUserTool.execute!(
       {
         questions: [
-          { question: "Mode?", options: ["Fast", "Careful"] },
+          { question: "Mode?", type: "check", options: ["Fast", "Careful"] },
           { question: "Details?" },
         ],
       },
       { cwd: process.cwd(), askUserPrompt: async (value: string) => { prompt = value; return "answers"; } } as any
     );
-    expect(JSON.parse(prompt)).toMatchObject({ kind: "question", questions: expect.any(Array) });
+    expect(JSON.parse(prompt)).toMatchObject({
+      kind: "question",
+      questions: [
+        { question: "Mode?", type: "check", options: ["Fast", "Careful"] },
+        { question: "Details?" },
+      ],
+    });
     expect((result.content[0] as any).text).toBe("answers");
   });
 });

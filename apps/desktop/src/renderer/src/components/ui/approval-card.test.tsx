@@ -53,3 +53,31 @@ it("keeps the footer fixed and requires an explicit submit on the last radio que
   await act(async () => submit?.click())
   expect(onSubmitted).toHaveBeenCalledTimes(1)
 })
+
+it("collects multiple checked options and submits them together", async () => {
+  const onSubmitted = vi.fn()
+  await act(async () => {
+    root.render(
+      <ApprovalCard
+        questions={[{ q: "Select features", type: "check", options: ["A", "B", "C"] }]}
+        labels={{ send: "提交" }}
+        dismissible={false}
+        onSubmitted={onSubmitted}
+      />
+    )
+  })
+
+  const buttons = [...container.querySelectorAll<HTMLButtonElement>("button")]
+  await act(async () => {
+    buttons.find((button) => button.textContent === "A")?.click()
+    buttons.find((button) => button.textContent === "C")?.click()
+  })
+  expect(onSubmitted).not.toHaveBeenCalled()
+
+  await act(async () => {
+    ;[...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "提交")
+      ?.click()
+  })
+  expect(onSubmitted).toHaveBeenCalledWith({ selected: { 0: [0, 2] }, custom: {} })
+})

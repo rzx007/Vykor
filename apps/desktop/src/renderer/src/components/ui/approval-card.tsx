@@ -390,6 +390,7 @@ export default function ApprovalCard({
                 return (
                   <div
                     key={qIdx}
+                    data-question-type={question.type}
                     ref={(el) => {
                       questionRefs.current[qIdx] = el
                     }}

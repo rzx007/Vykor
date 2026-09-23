@@ -14,6 +14,7 @@ export const askUserTool: ToolDefinition = {
           type: "object",
           properties: {
             question: { type: "string" },
+            type: { type: "string", enum: ["radio", "check"] },
             options: { type: "array", items: { type: "string" } },
           },
           required: ["question"],
@@ -41,6 +42,7 @@ export const askUserTool: ToolDefinition = {
       if (!item || typeof item !== "object" || Array.isArray(item)) return true;
       const record = item as Record<string, unknown>;
       return typeof record.question !== "string" || !record.question.trim() ||
+        (record.type !== undefined && record.type !== "radio" && record.type !== "check") ||
         (record.options !== undefined &&
           (!Array.isArray(record.options) || record.options.some((option) => typeof option !== "string")));
     })) {
