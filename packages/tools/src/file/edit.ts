@@ -3,6 +3,14 @@ import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { fileOperationsFor } from "./operations.js";
 import { managedPersistencePathKind } from "./managed-persistence-path.js";
+import {
+  EditMatchError,
+  convertToLineEnding,
+  detectLineEnding,
+  editMatchMessage,
+  normalizeLineEndings,
+  replace as replaceFuzzy,
+} from "./edit-replacers.js";
 
 // System directories that must never be edited, regardless of permission mode.
 const SYSTEM_DIR_PREFIXES = [
@@ -76,35 +84,64 @@ export const fileEditTool: ToolDefinition = {
         };
       }
 
+      if (oldString === newString) {
+        return {
+          content: [{ type: "text", text: editMatchMessage("identical") }],
+          isError: true,
+        };
+      }
+
       const operations = fileOperationsFor(context);
       const content = await operations.readText(filePath);
 
-      if (!content.includes(oldString)) {
+      const hasBom = content.startsWith("\uFEFF");
+      const body = hasBom ? content.slice(1) : content;
+      const desiredOld = oldString.startsWith("\uFEFF") ? oldString.slice(1) : oldString;
+      const desiredNew = newString.startsWith("\uFEFF") ? newString.slice(1) : newString;
+
+      if (desiredOld.length === 0) {
         return {
-          content: [{ type: "text", text: "old_string not found in file." }],
+          content: [{ type: "text", text: "old_string must not be empty." }],
           isError: true,
         };
       }
 
-      const occurrences = content.split(oldString).length - 1;
-      if (occurrences > 1 && !replaceAll) {
-        const lines = findMatchLines(content, oldString);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Found ${occurrences} matches at lines ${lines.join(", ")}. Make old_string more specific or use replace_all to replace all.`,
-            },
-          ],
-          isError: true,
-        };
+      let updated: string;
+      if (body.includes(desiredOld)) {
+        const occurrences = body.split(desiredOld).length - 1;
+        if (occurrences > 1 && !replaceAll) {
+          const lines = findMatchLines(body, desiredOld);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Found ${occurrences} matches at lines ${lines.join(", ")}. Make old_string more specific or use replace_all to replace all.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        updated = replaceAll
+          ? body.replaceAll(desiredOld, desiredNew)
+          : body.replace(desiredOld, desiredNew);
+      } else {
+        const ending = detectLineEnding(body);
+        const normalizedOld = convertToLineEnding(normalizeLineEndings(desiredOld), ending);
+        const normalizedNew = convertToLineEnding(normalizeLineEndings(desiredNew), ending);
+        try {
+          updated = replaceFuzzy(body, normalizedOld, normalizedNew, replaceAll);
+        } catch (error) {
+          if (error instanceof EditMatchError) {
+            return {
+              content: [{ type: "text", text: editMatchMessage(error.kind) }],
+              isError: true,
+            };
+          }
+          throw error;
+        }
       }
 
-      const updated = replaceAll
-        ? content.replaceAll(oldString, newString)
-        : content.replace(oldString, newString);
-
-      await operations.writeText(filePath, updated);
+      await operations.writeText(filePath, (hasBom ? "\uFEFF" : "") + updated);
 
       return {
         content: [{ type: "text", text: `Successfully edited ${filePath}` }],

@@ -4,7 +4,7 @@
 
 **目标：** 让 `Edit` 在 `old_string` 与文件内容存在缩进、空白、行尾、转义差异时仍能正确替换，切断"精确匹配失败 → 模型改用整文件 `Write` → 大文件输出截断 → 分块写入"这条因果链。
 
-**架构：** 把匹配策略抽成独立纯函数模块 `edit-replacers.ts`（9 级 replacer 兜底链 + 吞大段护栏 + 行尾函数 + 可判别的 `EditMatchError`），`edit.ts` 变薄：读 → BOM 处理 → 精确优先 → 兜底 → 写回。工具入参、返回结构、既有文案全部不变。
+**架构：** 把匹配策略抽成独立纯函数模块 `edit-replacers.ts`（9 级 replacer 兜底链 + 候选位置展开与歧义判断 + 吞大段护栏 + 行尾函数 + 可判别的 `EditMatchError`），`edit.ts` 变薄：安全校验 → 读 → BOM 处理 → 精确优先 → 兜底 → 写回。工具入参、返回结构、既有文案全部不变。
 
 **技术栈：** TypeScript、Vitest、pnpm workspace。
 
@@ -22,12 +22,16 @@
   - `disproportionate`：`Refusing replacement because the matched span is much larger than oldString. Re-read the file and provide the full exact oldString for the intended replacement.`
 - **既有文案逐字不变**：空 `old_string` → `old_string must not be empty.`；精确多命中 → `` `Found ${n} matches at lines ${lines}. Make old_string more specific or use replace_all to replace all.` ``；成功 → `` `Successfully edited ${filePath}` ``。
 - 吞大段护栏在 `replaceAll` 为真/假两种分支下**都**生效。
-- `identical` 校验必须发生在 `edit.ts` 的**内联精确替换之前**。
+- 空候选不得进入 `indexOf` / `replaceAll`；BOM 剥离后为空的 `desiredOld` 返回既有空字符串文案。
+- 每个 replacer 必须产出全部合格候选；非 `replaceAll` 时，只要当前策略解析出多个位置就返回 `ambiguous`，不得静默选最高分或第一个。
+- 同一候选自身重叠的位置也必须全部展开；`replaceAll` 遇到重叠位置返回 `ambiguous`。
+- 锚点策略只扫描可能满足块长度的结尾，不得对每个首锚点遍历文件剩余部分。
+- `identical` 校验必须发生在 `edit.ts` 的**内联精确替换之前**，但在路径、managed persistence、系统目录和 sandbox 校验之后。
 - 不新增依赖；Levenshtein 内联实现。
 - 不修改 `packages/tools/src/file/operations.ts`、`write.ts`、`read.ts`。
 - 不修改 `packages/tools/src/file/__test__/edit.test.ts` 中现有 2 条用例的断言。
 - 测试命令：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`（端到端为 `... src/file/__test__/edit.test.ts`）。
-- 类型检查：`pnpm --filter @openharness/tools run typecheck`（若该脚本不存在，改用 `pnpm --filter @openharness/tools exec tsc --noEmit`，以 `packages/tools/package.json` 实际脚本为准）。
+- 类型检查：`pnpm --filter @openharness/tools run check-types`。
 
 ---
 
@@ -88,8 +92,8 @@ describe("isDisproportionateMatch", () => {
     expect(isDisproportionateMatch(`a${spaces}b\nc${spaces}d`, "a b\nc d")).toBe(true);
   });
 
-  it("never rejects a single-line oldString", () => {
-    expect(isDisproportionateMatch("x".repeat(2000), "x")).toBe(false);
+  it("rejects a single-line candidate that is far longer than oldString", () => {
+    expect(isDisproportionateMatch("x".repeat(2000), "x")).toBe(true);
   });
 });
 
@@ -169,7 +173,6 @@ export function isDisproportionateMatch(search: string, oldString: string): bool
   const oldLines = oldString.split("\n").length;
   const searchLines = search.split("\n").length;
   if (searchLines >= Math.max(oldLines + 3, oldLines * 2)) return true;
-  if (oldLines === 1) return false;
   return (
     search.trim().length > Math.max(oldString.trim().length + 500, oldString.trim().length * 4)
   );
@@ -209,6 +212,10 @@ describe("SimpleReplacer", () => {
   it("yields the exact find string", () => {
     expect(collect(SimpleReplacer, "hello world", "world")).toEqual(["world"]);
   });
+
+  it("yields nothing when content does not contain the find string", () => {
+    expect(collect(SimpleReplacer, "hello", "missing")).toEqual([]);
+  });
 });
 
 describe("LineTrimmedReplacer", () => {
@@ -222,12 +229,39 @@ describe("LineTrimmedReplacer", () => {
   it("yields nothing when content differs", () => {
     expect(collect(LineTrimmedReplacer, "a\nb", "x\ny")).toEqual([]);
   });
+
+  it("does not yield an empty line for a whitespace-only find", () => {
+    expect(collect(LineTrimmedReplacer, "a\n\nb", "   ")).toEqual([]);
+  });
 });
 
 describe("WhitespaceNormalizedReplacer", () => {
   it("matches when inner whitespace run length differs", () => {
     const matches = collect(WhitespaceNormalizedReplacer, "const a   =   1;", "const a = 1;");
     expect(matches.length).toBeGreaterThan(0);
+  });
+
+  it("yields nothing when normalized text differs", () => {
+    expect(collect(WhitespaceNormalizedReplacer, "const a = 1;", "const b = 2;")).toEqual([]);
+  });
+
+  it("never turns a whitespace-only find into an empty candidate", () => {
+    expect(collect(WhitespaceNormalizedReplacer, "a\n\nb", "   ")).toEqual([]);
+  });
+
+  it("yields every differently-spaced match on the same line", () => {
+    const content = "const a   = 1; / const a\t= 1;";
+    expect(collect(WhitespaceNormalizedReplacer, content, "const a = 1;")).toEqual([
+      "const a   = 1;",
+      "const a\t= 1;",
+    ]);
+  });
+
+  it("yields overlapping differently-spaced matches on the same line", () => {
+    expect(collect(WhitespaceNormalizedReplacer, "a  a\t a", "a a")).toEqual([
+      "a  a",
+      "a\t a",
+    ]);
   });
 });
 
@@ -236,6 +270,10 @@ describe("IndentationFlexibleReplacer", () => {
     const content = "    if (x) {\n      go();\n    }";
     const find = "if (x) {\n  go();\n}";
     expect(collect(IndentationFlexibleReplacer, content, find).length).toBeGreaterThan(0);
+  });
+
+  it("yields nothing when block content differs", () => {
+    expect(collect(IndentationFlexibleReplacer, "  a\n  b", "a\nc")).toEqual([]);
   });
 });
 
@@ -247,6 +285,10 @@ describe("EscapeNormalizedReplacer", () => {
       "const a = 1;\nconst b = 2;",
     );
   });
+
+  it("yields nothing when the unescaped text is absent", () => {
+    expect(collect(EscapeNormalizedReplacer, "alpha", "beta\\ngamma")).toEqual([]);
+  });
 });
 
 describe("TrimmedBoundaryReplacer", () => {
@@ -254,11 +296,20 @@ describe("TrimmedBoundaryReplacer", () => {
     const matches = collect(TrimmedBoundaryReplacer, "target", "\n\ntarget\n\n");
     expect(matches).toContain("target");
   });
+
+  it("yields nothing when trimming would produce an empty candidate", () => {
+    expect(collect(TrimmedBoundaryReplacer, "a\n\nb", "  \n  ")).toEqual([]);
+  });
 });
 
 describe("MultiOccurrenceReplacer", () => {
   it("yields one entry per occurrence", () => {
     expect(collect(MultiOccurrenceReplacer, "a-a-a", "a")).toEqual(["a", "a", "a"]);
+  });
+
+  it("yields nothing when the text is absent or find is empty", () => {
+    expect(collect(MultiOccurrenceReplacer, "abc", "z")).toEqual([]);
+    expect(collect(MultiOccurrenceReplacer, "abc", "")).toEqual([]);
   });
 });
 ```
@@ -277,8 +328,8 @@ describe("MultiOccurrenceReplacer", () => {
 ```ts
 export type Replacer = (content: string, find: string) => Generator<string, void, unknown>;
 
-export const SimpleReplacer: Replacer = function* (_content, find) {
-  yield find;
+export const SimpleReplacer: Replacer = function* (content, find) {
+  if (find.length > 0 && content.includes(find)) yield find;
 };
 
 export const LineTrimmedReplacer: Replacer = function* (content, find) {
@@ -292,7 +343,9 @@ export const LineTrimmedReplacer: Replacer = function* (content, find) {
   for (let i = 0; i <= originalLines.length - searchLines.length; i++) {
     let matches = true;
     for (let j = 0; j < searchLines.length; j++) {
-      if (originalLines[i + j].trim() !== searchLines[j].trim()) {
+      const originalLine = originalLines[i + j];
+      const searchLine = searchLines[j];
+      if (originalLine === undefined || searchLine === undefined || originalLine.trim() !== searchLine.trim()) {
         matches = false;
         break;
       }
@@ -301,24 +354,26 @@ export const LineTrimmedReplacer: Replacer = function* (content, find) {
 
     let matchStartIndex = 0;
     for (let k = 0; k < i; k++) {
-      matchStartIndex += originalLines[k].length + 1;
+      matchStartIndex += originalLines[k]!.length + 1;
     }
 
     let matchEndIndex = matchStartIndex;
     for (let k = 0; k < searchLines.length; k++) {
-      matchEndIndex += originalLines[i + k].length;
+      matchEndIndex += originalLines[i + k]!.length;
       if (k < searchLines.length - 1) {
         matchEndIndex += 1;
       }
     }
 
-    yield content.substring(matchStartIndex, matchEndIndex);
+    const candidate = content.substring(matchStartIndex, matchEndIndex);
+    if (candidate.length > 0) yield candidate;
   }
 };
 
 export const WhitespaceNormalizedReplacer: Replacer = function* (content, find) {
   const normalizeWhitespace = (text: string) => text.replace(/\s+/g, " ").trim();
   const normalizedFind = normalizeWhitespace(find);
+  if (normalizedFind.length === 0) return;
 
   const lines = content.split("\n");
   for (const line of lines) {
@@ -328,16 +383,14 @@ export const WhitespaceNormalizedReplacer: Replacer = function* (content, find) 
     }
     if (!normalizeWhitespace(line).includes(normalizedFind)) continue;
 
-    const words = find.trim().split(/\s+/);
+    const words = find.trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) continue;
     const pattern = words
       .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
       .join("\\s+");
-    try {
-      const match = line.match(new RegExp(pattern));
-      if (match) yield match[0];
-    } catch {
-      // 无效正则，跳过
+    for (const match of line.matchAll(new RegExp(`(?=(${pattern}))`, "g"))) {
+      const candidate = match[1];
+      if (candidate) yield candidate;
     }
   }
 
@@ -360,7 +413,7 @@ export const IndentationFlexibleReplacer: Replacer = function* (content, find) {
     const minIndent = Math.min(
       ...nonEmptyLines.map((line) => {
         const match = line.match(/^(\s*)/);
-        return match ? match[1].length : 0;
+        return match?.[1]?.length ?? 0;
       }),
     );
     return lines
@@ -369,6 +422,7 @@ export const IndentationFlexibleReplacer: Replacer = function* (content, find) {
   };
 
   const normalizedFind = removeIndentation(find);
+  if (normalizedFind.length === 0) return;
   const contentLines = content.split("\n");
   const findLines = find.split("\n");
 
@@ -408,6 +462,7 @@ export const EscapeNormalizedReplacer: Replacer = function* (content, find) {
     });
 
   const unescapedFind = unescapeString(find);
+  if (unescapedFind.length === 0) return;
   if (content.includes(unescapedFind)) {
     yield unescapedFind;
   }
@@ -424,7 +479,7 @@ export const EscapeNormalizedReplacer: Replacer = function* (content, find) {
 
 export const TrimmedBoundaryReplacer: Replacer = function* (content, find) {
   const trimmedFind = find.trim();
-  if (trimmedFind === find) return;
+  if (trimmedFind.length === 0 || trimmedFind === find) return;
 
   if (content.includes(trimmedFind)) {
     yield trimmedFind;
@@ -441,6 +496,7 @@ export const TrimmedBoundaryReplacer: Replacer = function* (content, find) {
 };
 
 export const MultiOccurrenceReplacer: Replacer = function* (content, find) {
+  if (find.length === 0) return;
   let startIndex = 0;
   while (true) {
     const index = content.indexOf(find, startIndex);
@@ -497,6 +553,23 @@ describe("BlockAnchorReplacer", () => {
     const find = ["start", "another unrelated middle", "end"].join("\n");
     expect(collect(BlockAnchorReplacer, content, find)).toEqual([]);
   });
+
+  it("yields every block that passes the similarity threshold", () => {
+    const content = [
+      "head", "return alpha;", "tail", "gap",
+      "head", "return alphi;", "tail",
+    ].join("\n");
+    const find = ["head", "return alphx;", "tail"].join("\n");
+    expect(collect(BlockAnchorReplacer, content, find)).toHaveLength(2);
+  });
+
+  it("limits end-anchor scanning to the allowed block-size window", () => {
+    const content = Array.from({ length: 30_000 }, () => "}").join("\n");
+    const startedAt = performance.now();
+    expect(collect(BlockAnchorReplacer, content, ["}", "missing", "}"].join("\n")))
+      .toEqual([]);
+    expect(performance.now() - startedAt).toBeLessThan(500);
+  });
 });
 
 describe("ContextAwareReplacer", () => {
@@ -508,6 +581,29 @@ describe("ContextAwareReplacer", () => {
 
   it("yields nothing for fewer than three lines", () => {
     expect(collect(ContextAwareReplacer, "a", "a")).toEqual([]);
+  });
+
+  it("yields nothing when fewer than half of the middle lines match", () => {
+    const content = ["head", "one", "two", "three", "tail"].join("\n");
+    const find = ["head", "x", "y", "three", "tail"].join("\n");
+    expect(collect(ContextAwareReplacer, content, find)).toEqual([]);
+  });
+
+  it("yields every block that satisfies the context threshold", () => {
+    const content = [
+      "head", "shared", "one", "tail", "gap",
+      "head", "shared", "two", "tail",
+    ].join("\n");
+    const find = ["head", "shared", "expected", "tail"].join("\n");
+    expect(collect(ContextAwareReplacer, content, find)).toHaveLength(2);
+  });
+
+  it("does not scan every possible end anchor for a fixed-size block", () => {
+    const content = Array.from({ length: 3_000 }, () => "}").join("\n");
+    const startedAt = performance.now();
+    expect(collect(ContextAwareReplacer, content, ["}", "missing", "}"].join("\n")))
+      .toEqual([]);
+    expect(performance.now() - startedAt).toBeLessThan(500);
   });
 });
 ```
@@ -522,27 +618,26 @@ describe("ContextAwareReplacer", () => {
 在 `packages/tools/src/file/edit-replacers.ts` 末尾追加：
 
 ```ts
-const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.65;
-const MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD = 0.65;
+const BLOCK_SIMILARITY_THRESHOLD = 0.65;
 
 function levenshtein(a: string, b: string): number {
   if (a === "" || b === "") return Math.max(a.length, b.length);
 
-  const matrix = Array.from({ length: a.length + 1 }, (_, i) =>
-    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
-  );
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
 
   for (let i = 1; i <= a.length; i++) {
+    const current = [i];
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost,
+      current[j] = Math.min(
+        previous[j]! + 1,
+        current[j - 1]! + 1,
+        previous[j - 1]! + cost,
       );
     }
+    previous = current;
   }
-  return matrix[a.length][b.length];
+  return previous[b.length]!;
 }
 
 function blockRangeToSubstring(
@@ -550,41 +645,30 @@ function blockRangeToSubstring(
   startLine: number,
   endLine: number,
 ): string {
-  let matchStartIndex = 0;
-  for (let k = 0; k < startLine; k++) {
-    matchStartIndex += lines[k].length + 1;
-  }
-  let matchEndIndex = matchStartIndex;
-  for (let k = startLine; k <= endLine; k++) {
-    matchEndIndex += lines[k].length;
-    if (k < endLine) matchEndIndex += 1;
-  }
-  return lines.join("\n").substring(matchStartIndex, matchEndIndex);
+  return lines.slice(startLine, endLine + 1).join("\n");
 }
 
 export const BlockAnchorReplacer: Replacer = function* (content, find) {
   const originalLines = content.split("\n");
   const searchLines = find.split("\n");
 
-  if (searchLines.length < 3) return;
   if (searchLines[searchLines.length - 1] === "") searchLines.pop();
+  if (searchLines.length < 3) return;
 
-  const firstLineSearch = searchLines[0].trim();
-  const lastLineSearch = searchLines[searchLines.length - 1].trim();
+  const firstLineSearch = searchLines[0]!.trim();
+  const lastLineSearch = searchLines[searchLines.length - 1]!.trim();
   const searchBlockSize = searchLines.length;
   const maxLineDelta = Math.max(1, Math.floor(searchBlockSize * 0.25));
 
   const candidates: Array<{ startLine: number; endLine: number }> = [];
   for (let i = 0; i < originalLines.length; i++) {
-    if (originalLines[i].trim() !== firstLineSearch) continue;
-    for (let j = i + 2; j < originalLines.length; j++) {
-      if (originalLines[j].trim() === lastLineSearch) {
-        const actualBlockSize = j - i + 1;
-        if (Math.abs(actualBlockSize - searchBlockSize) <= maxLineDelta) {
-          candidates.push({ startLine: i, endLine: j });
-        }
-        break;
-      }
+    if (originalLines[i]!.trim() !== firstLineSearch) continue;
+    const expectedEndLine = i + searchBlockSize - 1;
+    const minEndLine = Math.max(i + 2, expectedEndLine - maxLineDelta);
+    const maxEndLine = Math.min(originalLines.length - 1, expectedEndLine + maxLineDelta);
+    for (let j = minEndLine; j <= maxEndLine; j++) {
+      if (originalLines[j]!.trim() !== lastLineSearch) continue;
+      candidates.push({ startLine: i, endLine: j });
     }
   }
 
@@ -596,8 +680,8 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
     if (linesToCheck <= 0) return 1;
     let similarity = 0;
     for (let j = 1; j < searchBlockSize - 1 && j < actualBlockSize - 1; j++) {
-      const originalLine = originalLines[startLine + j].trim();
-      const searchLine = searchLines[j].trim();
+      const originalLine = originalLines[startLine + j]!.trim();
+      const searchLine = searchLines[j]!.trim();
       const maxLen = Math.max(originalLine.length, searchLine.length);
       if (maxLen === 0) continue;
       similarity += 1 - levenshtein(originalLine, searchLine) / maxLen;
@@ -605,74 +689,41 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
     return similarity / linesToCheck;
   };
 
-  if (candidates.length === 1) {
-    const { startLine, endLine } = candidates[0];
-    const actualBlockSize = endLine - startLine + 1;
-    const linesToCheck = Math.min(searchBlockSize - 2, actualBlockSize - 2);
-    let similarity = 1;
-    if (linesToCheck > 0) {
-      similarity = 0;
-      for (let j = 1; j < searchBlockSize - 1 && j < actualBlockSize - 1; j++) {
-        const originalLine = originalLines[startLine + j].trim();
-        const searchLine = searchLines[j].trim();
-        const maxLen = Math.max(originalLine.length, searchLine.length);
-        if (maxLen === 0) continue;
-        similarity += (1 - levenshtein(originalLine, searchLine) / maxLen) / linesToCheck;
-        if (similarity >= SINGLE_CANDIDATE_SIMILARITY_THRESHOLD) break;
-      }
-    }
-    if (similarity >= SINGLE_CANDIDATE_SIMILARITY_THRESHOLD) {
-      yield blockRangeToSubstring(originalLines, startLine, endLine);
-    }
-    return;
-  }
-
-  let bestMatch: { startLine: number; endLine: number } | null = null;
-  let maxSimilarity = -1;
   for (const candidate of candidates) {
     const similarity = similarityFor(candidate.startLine, candidate.endLine);
-    if (similarity > maxSimilarity) {
-      maxSimilarity = similarity;
-      bestMatch = candidate;
+    if (similarity >= BLOCK_SIMILARITY_THRESHOLD) {
+      yield blockRangeToSubstring(originalLines, candidate.startLine, candidate.endLine);
     }
-  }
-  if (bestMatch && maxSimilarity >= MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD) {
-    yield blockRangeToSubstring(originalLines, bestMatch.startLine, bestMatch.endLine);
   }
 };
 
 export const ContextAwareReplacer: Replacer = function* (content, find) {
   const findLines = find.split("\n");
-  if (findLines.length < 3) return;
   if (findLines[findLines.length - 1] === "") findLines.pop();
+  if (findLines.length < 3) return;
 
   const contentLines = content.split("\n");
-  const firstLine = findLines[0].trim();
-  const lastLine = findLines[findLines.length - 1].trim();
+  const firstLine = findLines[0]!.trim();
+  const lastLine = findLines[findLines.length - 1]!.trim();
 
   for (let i = 0; i < contentLines.length; i++) {
-    if (contentLines[i].trim() !== firstLine) continue;
-    for (let j = i + 2; j < contentLines.length; j++) {
-      if (contentLines[j].trim() !== lastLine) continue;
+    if (contentLines[i]!.trim() !== firstLine) continue;
+    const endLine = i + findLines.length - 1;
+    if (endLine >= contentLines.length || contentLines[endLine]!.trim() !== lastLine) continue;
 
-      const blockLines = contentLines.slice(i, j + 1);
-      if (blockLines.length === findLines.length) {
-        let matchingLines = 0;
-        let totalNonEmptyLines = 0;
-        for (let k = 1; k < blockLines.length - 1; k++) {
-          const blockLine = blockLines[k].trim();
-          const findLine = findLines[k].trim();
-          if (blockLine.length > 0 || findLine.length > 0) {
-            totalNonEmptyLines++;
-            if (blockLine === findLine) matchingLines++;
-          }
-        }
-        if (totalNonEmptyLines === 0 || matchingLines / totalNonEmptyLines >= 0.5) {
-          yield blockLines.join("\n");
-          return;
-        }
+    const blockLines = contentLines.slice(i, endLine + 1);
+    let matchingLines = 0;
+    let totalNonEmptyLines = 0;
+    for (let k = 1; k < blockLines.length - 1; k++) {
+      const blockLine = blockLines[k]!.trim();
+      const findLine = findLines[k]!.trim();
+      if (blockLine.length > 0 || findLine.length > 0) {
+        totalNonEmptyLines++;
+        if (blockLine === findLine) matchingLines++;
       }
-      break;
+    }
+    if (totalNonEmptyLines === 0 || matchingLines / totalNonEmptyLines >= 0.5) {
+      yield blockLines.join("\n");
     }
   }
 };
@@ -745,6 +796,79 @@ describe("replace", () => {
     expect(replace("a-a-a", "a", "b", true)).toBe("b-b-b");
   });
 
+  it("rejects multiple different fuzzy locations instead of selecting the first", () => {
+    const synthetic: Replacer = function* () {
+      yield "alpha";
+      yield "beta";
+    };
+    expect(() => replace("alpha / beta", "target", "X", false, [synthetic]))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
+
+  it("replaces all non-overlapping fuzzy locations when replaceAll is true", () => {
+    const synthetic: Replacer = function* () {
+      yield "alpha";
+      yield "beta";
+    };
+    expect(replace("alpha / beta", "target", "X", true, [synthetic])).toBe("X / X");
+  });
+
+  it("rejects differently-spaced matches on the same line as ambiguous", () => {
+    const content = "const a   = 1; / const a\t= 1;";
+    expect(() => replace(content, "const a = 1;", "X"))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
+
+  it("replaces every differently-spaced match on the same line", () => {
+    const content = "const a   = 1; / const a\t= 1;";
+    expect(replace(content, "const a = 1;", "X", true)).toBe("X / X");
+  });
+
+  it("rejects overlapping differently-spaced matches", () => {
+    expect(() => replace("a  a\t a", "a a", "X"))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
+
+  it("rejects overlapping differently-spaced replaceAll matches", () => {
+    expect(() => replace("a  a\t a", "a a", "X", true))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
+
+  it("rejects overlapping replaceAll locations", () => {
+    const synthetic: Replacer = function* () {
+      yield "ab";
+      yield "bc";
+    };
+    expect(() => replace("abc", "target", "X", true, [synthetic]))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
+
+  it("rejects overlapping locations produced by one candidate", () => {
+    const synthetic: Replacer = function* () {
+      yield "aa";
+    };
+    expect(() => replace("aaa", "target", "X", false, [synthetic]))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
+
+  it("rejects overlapping replaceAll locations produced by one candidate", () => {
+    const synthetic: Replacer = function* () {
+      yield "aa";
+    };
+    expect(() => replace("aaa", "target", "X", true, [synthetic]))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
+
+  it("ignores empty candidates in both branches", () => {
+    const synthetic: Replacer = function* () {
+      yield "";
+    };
+    for (const replaceAll of [false, true]) {
+      expect(() => replace("abc", "   ", "X", replaceAll, [synthetic]))
+        .toThrowError(expect.objectContaining({ kind: "not_found" }));
+    }
+  });
+
   it("throws disproportionate when a candidate spans far more than oldString", () => {
     const search = Array.from({ length: 10 }, (_, index) => `line${index}`).join("\n");
     const synthetic: Replacer = function* () {
@@ -770,6 +894,16 @@ describe("replace", () => {
       expect((error as EditMatchError).kind).toBe("disproportionate");
     }
   });
+
+  it("reports ambiguity before checking a non-unique disproportionate candidate", () => {
+    const search = Array.from({ length: 10 }, (_, index) => `line${index}`).join("\n");
+    const synthetic: Replacer = function* () {
+      yield search;
+    };
+    const content = `${search}\nseparator\n${search}`;
+    expect(() => replace(content, "a\nb", "X", false, [synthetic]))
+      .toThrowError(expect.objectContaining({ kind: "ambiguous" }));
+  });
 });
 ```
 
@@ -783,7 +917,7 @@ describe("replace", () => {
 在 `packages/tools/src/file/edit-replacers.ts` 末尾追加：
 
 ```ts
-const REPLACERS: Replacer[] = [
+export const REPLACERS: Replacer[] = [
   SimpleReplacer,
   LineTrimmedReplacer,
   BlockAnchorReplacer,
@@ -795,6 +929,25 @@ const REPLACERS: Replacer[] = [
   MultiOccurrenceReplacer,
 ];
 
+interface MatchSpan {
+  start: number;
+  end: number;
+  search: string;
+}
+
+function collectMatchSpans(content: string, searches: string[]): MatchSpan[] {
+  const spans = new Map<string, MatchSpan>();
+  for (const search of searches) {
+    let start = content.indexOf(search);
+    while (start !== -1) {
+      const span = { start, end: start + search.length, search };
+      spans.set(`${span.start}:${span.end}`, span);
+      start = content.indexOf(search, start + 1);
+    }
+  }
+  return [...spans.values()].sort((left, right) => left.start - right.start || left.end - right.end);
+}
+
 export function replace(
   content: string,
   oldString: string,
@@ -804,34 +957,43 @@ export function replace(
 ): string {
   if (oldString === newString) throw new EditMatchError("identical");
 
-  let sawCandidate = false;
-
   for (const replacer of replacers) {
-    for (const search of replacer(content, oldString)) {
-      const index = content.indexOf(search);
-      if (index === -1) continue;
+    const searches = [...new Set(replacer(content, oldString))].filter(
+      (search) => search.length > 0,
+    );
+    const spans = collectMatchSpans(content, searches);
+    if (spans.length === 0) continue;
 
-      sawCandidate = true;
-      if (isDisproportionateMatch(search, oldString)) {
+    if (!replaceAll) {
+      if (spans.length > 1) throw new EditMatchError("ambiguous");
+      const span = spans[0]!;
+      if (isDisproportionateMatch(span.search, oldString)) {
         throw new EditMatchError("disproportionate");
       }
-
-      if (replaceAll) {
-        return content.replaceAll(search, newString);
-      }
-
-      const lastIndex = content.lastIndexOf(search);
-      if (index !== lastIndex) continue;
-
-      return content.slice(0, index) + newString + content.slice(index + search.length);
+      return content.slice(0, span.start) + newString + content.slice(span.end);
     }
+
+    if (spans.some((span) => isDisproportionateMatch(span.search, oldString))) {
+      throw new EditMatchError("disproportionate");
+    }
+    for (let index = 1; index < spans.length; index++) {
+      if (spans[index]!.start < spans[index - 1]!.end) {
+        throw new EditMatchError("ambiguous");
+      }
+    }
+
+    let updated = content;
+    for (const span of [...spans].reverse()) {
+      updated = updated.slice(0, span.start) + newString + updated.slice(span.end);
+    }
+    return updated;
   }
 
-  throw new EditMatchError(sawCandidate ? "ambiguous" : "not_found");
+  throw new EditMatchError("not_found");
 }
 ```
 
-> `replacers` 参数默认取模块内的 `REPLACERS`，只为测试注入合成 replacer 提供缝（当前 9 个 replacer 在正常输入下不会产出超长候选，护栏无法被真实链路触发）。默认行为不变。
+> `REPLACERS` 按规格导出。`replacers` 参数默认取该列表，同时为候选歧义、空候选、重叠位置和吞大段护栏提供合成策略测试缝。组合层只在原内容上计算位置，再从后向前写回，避免新文本被后续匹配再次消费。
 
 - [ ] **步骤 4：运行测试验证通过**
 
@@ -855,10 +1017,10 @@ git commit -m "feat(tools): add the edit replacer fallback chain"
 
 - [ ] **步骤 1：编写失败的测试**
 
-在 `packages/tools/src/file/__test__/edit.test.ts` 顶部补充 import：
+把 `packages/tools/src/file/__test__/edit.test.ts` 顶部的 `node:fs/promises` import 改为：
 
 ```ts
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 ```
 
 并在 `describe("fileEditTool", ...)` 内追加（沿用文件里现有的 `settings` 构造方式）：
@@ -972,12 +1134,172 @@ it("reports ambiguous when a CRLF file has multiple normalized matches", async (
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("recovers an edit when whitespace run lengths differ", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-whitespace-"));
+  try {
+    const file = join(dir, "spacing.ts");
+    await writeFile(file, "const value   =   1;\n", "utf-8");
+    const result = await fileEditTool.execute!(
+      { file_path: file, old_string: "const value = 1;", new_string: "const value = 2;" },
+      { cwd: dir, settings },
+    );
+    expect(result.isError).toBeFalsy();
+    expect(await readFile(file, "utf-8")).toBe("const value = 2;\n");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("recovers an edit when old_string contains literal escapes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-escape-"));
+  try {
+    const file = join(dir, "escaped.txt");
+    await writeFile(file, "alpha\nbeta\n", "utf-8");
+    const result = await fileEditTool.execute!(
+      { file_path: file, old_string: "alpha\\nbeta", new_string: "ALPHA\nBETA" },
+      { cwd: dir, settings },
+    );
+    expect(result.isError).toBeFalsy();
+    expect(await readFile(file, "utf-8")).toBe("ALPHA\nBETA\n");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("replaces every exact occurrence when replace_all is true", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-all-"));
+  try {
+    const file = join(dir, "all.txt");
+    await writeFile(file, "old / old / old", "utf-8");
+    const result = await fileEditTool.execute!(
+      { file_path: file, old_string: "old", new_string: "new", replace_all: true },
+      { cwd: dir, settings },
+    );
+    expect(result.isError).toBeFalsy();
+    expect(await readFile(file, "utf-8")).toBe("new / new / new");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("keeps the existing not-found message and does not modify the file", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-missing-"));
+  try {
+    const file = join(dir, "missing.txt");
+    await writeFile(file, "original\n", "utf-8");
+    const result = await fileEditTool.execute!(
+      { file_path: file, old_string: "absent", new_string: "new" },
+      { cwd: dir, settings },
+    );
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { type: string; text: string }).text).toBe(
+      "old_string not found in file.",
+    );
+    expect(await readFile(file, "utf-8")).toBe("original\n");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("rejects multiple different fuzzy locations and leaves the file unchanged", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-fuzzy-ambiguous-"));
+  try {
+    const file = join(dir, "ambiguous.ts");
+    const before = [
+      "if (ready) {", "    run();", "}",
+      "if (ready) {", "      run();", "}",
+    ].join("\n");
+    await writeFile(file, before, "utf-8");
+    const result = await fileEditTool.execute!(
+      {
+        file_path: file,
+        old_string: "if (ready) {\n  run();\n}",
+        new_string: "if (ready) {\n  stop();\n}",
+      },
+      { cwd: dir, settings },
+    );
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { type: string; text: string }).text).toBe(
+      "Found multiple matches for oldString. Provide more surrounding context to make the match unique.",
+    );
+    expect(await readFile(file, "utf-8")).toBe(before);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("does not expand a whitespace-only fuzzy search when replace_all is true", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-empty-candidate-"));
+  try {
+    const file = join(dir, "blank.txt");
+    const before = "alpha\n\nbeta\n";
+    await writeFile(file, before, "utf-8");
+    const result = await fileEditTool.execute!(
+      { file_path: file, old_string: "   ", new_string: "X", replace_all: true },
+      { cwd: dir, settings },
+    );
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { type: string; text: string }).text).toBe(
+      "old_string not found in file.",
+    );
+    expect(await readFile(file, "utf-8")).toBe(before);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("treats an old_string containing only BOM as empty after BOM normalization", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-bom-only-"));
+  try {
+    const file = join(dir, "bom-only.txt");
+    const before = "\uFEFFtitle\n";
+    await writeFile(file, before, "utf-8");
+    const result = await fileEditTool.execute!(
+      { file_path: file, old_string: "\uFEFF", new_string: "X", replace_all: true },
+      { cwd: dir, settings },
+    );
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { type: string; text: string }).text).toBe(
+      "old_string must not be empty.",
+    );
+    expect(await readFile(file, "utf-8")).toBe(before);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("keeps sandbox denial ahead of the identical-string check", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oh-edit-identical-sandbox-"));
+  try {
+    const file = join(dir, "secret.txt");
+    await writeFile(file, "same", "utf-8");
+    const result = await fileEditTool.execute!(
+      { file_path: file, old_string: "same", new_string: "same" },
+      {
+        cwd: dir,
+        settings: {
+          ...settings,
+          sandbox: {
+            enabled: true,
+            filesystem: { allowRead: ["."], denyRead: ["secret.txt"], allowWrite: ["."] },
+          },
+        },
+      },
+    );
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { type: string; text: string }).text)
+      .toContain("denied by sandbox rule");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 ```
 
 - [ ] **步骤 2：运行测试验证失败**
 
 运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit.test.ts`
-预期：FAIL。缩进、CRLF、BOM、`identical`、CRLF 歧义五条新用例均失败（现有 2 条仍通过）。
+预期：FAIL。至少缩进、空白、CRLF、BOM、转义、`identical` 与模糊歧义用例失败；既有精确路径、未命中、纯空白保护和 sandbox 优先级用例可继续通过。
 
 - [ ] **步骤 3：改写 `edit.ts` 的匹配与写回部分**
 
@@ -994,16 +1316,9 @@ import {
 } from "./edit-replacers.js";
 ```
 
-在空 `old_string` 校验之后**立即**加入 `identical` 校验（必须在路径/沙箱校验与内联精确替换之前）：
+保留现有空 `old_string` 校验。完成路径解析、managed persistence、系统目录以及 sandbox 读写校验后，在 `const operations = fileOperationsFor(context);` 之前加入 `identical` 校验：
 
 ```ts
-    if (!oldString) {
-      return {
-        content: [{ type: "text", text: "old_string must not be empty." }],
-        isError: true,
-      };
-    }
-
     if (oldString === newString) {
       return {
         content: [{ type: "text", text: editMatchMessage("identical") }],
@@ -1022,6 +1337,13 @@ import {
       const body = hasBom ? content.slice(1) : content;
       const desiredOld = oldString.startsWith("\uFEFF") ? oldString.slice(1) : oldString;
       const desiredNew = newString.startsWith("\uFEFF") ? newString.slice(1) : newString;
+
+      if (desiredOld.length === 0) {
+        return {
+          content: [{ type: "text", text: "old_string must not be empty." }],
+          isError: true,
+        };
+      }
 
       let updated: string;
       if (body.includes(desiredOld)) {
@@ -1049,7 +1371,10 @@ import {
           updated = replaceFuzzy(body, normalizedOld, normalizedNew, replaceAll);
         } catch (error) {
           if (error instanceof EditMatchError) {
-            return { content: [{ type: "text", text: error.message }], isError: true };
+            return {
+              content: [{ type: "text", text: editMatchMessage(error.kind) }],
+              isError: true,
+            };
           }
           throw error;
         }
@@ -1067,15 +1392,15 @@ import {
 - [ ] **步骤 4：运行测试验证通过**
 
 运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit.test.ts`
-预期：PASS，现有 2 条 + 新增 5 条全部通过。
+预期：PASS，现有 2 条 + 新增 13 条全部通过。
 
 - [ ] **步骤 5：跑整个 tools 包测试与类型检查**
 
 运行：`pnpm --filter @openharness/tools exec vitest run`
 预期：全绿。
 
-运行：`pnpm --filter @openharness/tools run typecheck`
-预期：通过。（若该脚本不存在，改跑 `pnpm --filter @openharness/tools exec tsc --noEmit`。）
+运行：`pnpm --filter @openharness/tools run check-types`
+预期：通过。
 
 - [ ] **步骤 6：Commit**
 
@@ -1088,11 +1413,18 @@ git commit -m "feat(tools): use fuzzy matching fallback in the edit tool"
 
 ## 自检记录
 
-- **规格覆盖度**：规格「接口」的 `EditMatchError`/`editMatchMessage`/行尾三函数/护栏/9 个 replacer/`replace`/`REPLACERS` → 任务 1（错误类型+行尾+护栏）、任务 2（7 个基础 replacer）、任务 3（2 个相似度 replacer）、任务 4（`replace` 组合 + 注入缝）；规格「运行流程·`replace()` 算法」→ 任务 4 步骤 3；规格「运行流程·`edit.ts` 调用顺序」8 步 → 任务 5 步骤 3；规格「错误处理」表 → 任务 4（`not_found`/`ambiguous`/`disproportionate`/`identical`）+ 任务 5（CRLF、BOM Host、`identical` 前置、CRLF 归一歧义）；规格「测试」→ 任务 1-4 的纯函数测试 + 任务 5 的端到端 7 条（现有 2 条 + 新增 5 条：缩进/CRLF/BOM/identical/归一歧义）。
+- **规格覆盖度**：规格「接口」的 `EditMatchError`/`editMatchMessage`/行尾三函数/护栏/9 个 replacer/`replace`/`REPLACERS` → 任务 1（错误类型+行尾+护栏）、任务 2（7 个基础 replacer）、任务 3（2 个相似度 replacer）、任务 4（位置展开、空候选过滤、歧义、重叠检测、从后向前替换）；规格「运行流程·`edit.ts` 调用顺序」→ 任务 5 步骤 3；规格「错误处理」与安全校验优先级 → 任务 4-5；规格「测试」→ 任务 1-4 的纯函数测试 + 任务 5 的现有 2 条与新增 13 条端到端测试。
 - **占位符扫描**：无 TODO / "待定" / "类似任务 N"；每个代码步骤都带完整可粘贴代码；测试均为真实断言。
 - **类型一致性**：`EditMatchErrorKind` 四值、`Replacer`、`replace`、`REPLACERS`、`editMatchMessage`、`isDisproportionateMatch`、`normalizeLineEndings`/`detectLineEnding`/`convertToLineEnding`、9 个 replacer 常量名在任务 1-5 中一致；`edit.ts` 导入名与模块导出一致。
-- **与规格的显式差异**：规格「接口」写「`edit.ts` 按 `error.kind` 分派」，本计划实现为 `EditMatchError.message` 已由同一张表生成、`edit.ts` 直接返回 `error.message`，并提供 `editMatchMessage(kind)` 供 `identical` 前置校验复用。语义等价，且避免了两处文案表。
-- **自查中修正的三处计划缺陷**（初稿写错、已改）：
+- **规格一致性**：`edit.ts` 使用 `error.kind` 调用 `editMatchMessage`；`REPLACERS` 按接口导出；`identical` 位于安全校验之后、读取和替换之前；类型检查命令与 `packages/tools/package.json` 的 `check-types` 脚本一致。
+- **自查中修正的十处计划缺陷**（初稿写错、已改）：
   1. 吞大段护栏在正常输入下无法被真实 replacer 链触发，故为其加了 `replacers` 注入参数与合成 replacer 测试（规格同步更新）；原先基于"40 行文件 + 4 行 old_string + replace_all"的用例实际会走精确路径并成功，已删除。
-  2. `isDisproportionateMatch` 对**单行** `oldString` 恒返回 `false`，原"单行长串应被拒"的断言写反了，已改为多行超长文本用例。
+  2. 初稿让 `isDisproportionateMatch` 对单行 `oldString` 恒返回 `false`，会放过单行内数百个连续空格；现统一应用字符长度阈值，并补单行回归测试。
   3. CRLF 歧义用例若 `old_string` 不含换行，会命中精确路径并返回带行号文案而非 `ambiguous`，已改为"含 LF 的两行片段在 CRLF 文件中重复出现"。
+  4. 空候选可能触发 `replaceAll("", newString)`，现由 BOM 后二次校验、各策略防御和组合层统一过滤三层阻断。
+  5. 锚点/上下文策略原先会静默挑选第一个或最高分候选，现改为产出全部合格候选，由组合层按位置数量判歧义。
+  6. 初稿未适配仓库的 `noUncheckedIndexedAccess`，现有数组索引均通过边界分支、局部变量或非空断言明确证明。
+  7. 初稿遗漏多项规格测试并写错类型检查脚本名，现补齐端到端矩阵并改用 `check-types`。
+  8. 同一候选原先按候选长度跳步，遗漏自身重叠的位置；现按一个字符推进并覆盖 `replaceAll` 两个分支。
+  9. 空白归一策略原先只产出同一行的第一个非重叠正则命中；现用零宽前瞻的全局 `matchAll` 产出全部空白变体，包括互相重叠的位置。
+  10. 两个锚点策略原先会扫描每个首锚点后的全部行；现按允许的块长度限定结尾，并加入重复锚点性能回归。

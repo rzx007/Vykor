@@ -34,15 +34,16 @@ if (!content.includes(oldString)) {
 ## 术语
 
 - **replacer**：一个 `(content, find) => Generator<string>` 函数，产出所有候选匹配片段。产出 0 个表示该策略不适用。
-- **唯一匹配**：候选片段在内容中只出现一次（`index === lastIndex`）。非 `replaceAll` 时只有唯一匹配才可应用，避免改错位置。
-- **兜底链**：按固定优先级依次尝试的 replacer 列表。第一个产出唯一匹配的策略胜出。
+- **匹配位置（span）**：候选片段在原内容中的一个 `[start, end)` 区间。同一个候选片段出现多次时会展开成多个位置。
+- **唯一匹配**：当前策略最终只解析出一个去重后的位置。不能仅凭某个候选片段自身只出现一次就认定唯一，因为同一策略可能同时产出多个不同片段。
+- **兜底链**：按固定优先级依次尝试的 replacer 列表。第一个解析出有效位置的策略决定结果：非 `replaceAll` 时一个位置才替换，多个位置立即报歧义；`replaceAll` 时替换该策略解析出的全部不重叠位置。
 - **吞大段（disproportionate match）**：模糊匹配到的片段远大于 `old_string`，说明匹配跑偏，必须拒绝。
 
 ## 设计决策
 
 1. **匹配逻辑抽成独立纯函数模块** `packages/tools/src/file/edit-replacers.ts`，`edit.ts` 变薄。理由：9 级策略各自需要独立单测，混在工具执行流程里无法单独验证。
 
-2. **移植 opencode 的 9 级兜底链**，顺序即优先级：精确 → 逐行 trim → 首尾锚点(Levenshtein ≥0.65) → 空白归一 → 缩进无关 → 转义还原 → 边界 trim → 上下文行(≥50%) → 多 occurrence。该链路源自 cline / gemini-cli 的实践，opencode 已在多供应商环境验证。全部为纯函数，移植与测试成本低。
+2. **移植 opencode 的 9 级兜底链**，顺序即优先级：精确 → 逐行 trim → 首尾锚点(Levenshtein ≥0.65) → 空白归一 → 缩进无关 → 转义还原 → 边界 trim → 上下文行(≥50%) → 多 occurrence。该链路源自 cline / gemini-cli 的实践，opencode 已在多供应商环境验证。全部为纯函数。锚点策略只扫描可能满足块长度约束的结尾：`BlockAnchorReplacer` 限定为目标行数 ±25%，`ContextAwareReplacer` 直接检查固定结尾，不能对每个首锚点遍历文件剩余部分。
 
 3. **不新增依赖**。Levenshtein 距离内联实现（opencode 亦如此）；不需要 `diff` 包（该包只用于产出 patch 供 UI/授权展示，本阶段不做）。
 
@@ -52,9 +53,11 @@ if (!content.includes(oldString)) {
 
    **关于可测性**：当前 9 个 replacer 在正常输入下都不会产出"远超 `oldString`"的候选——只有病态输入（例如单行内数百个连续空格）才可能触发。因此 `replace` 的 `replacers` 参数默认取模块内的 `REPLACERS`，允许测试注入一个"故意产出超长候选"的合成 replacer 来精确验证护栏接线。这是依赖注入式测试缝，不改变默认行为。
 
-6. **行尾在文本层归一**。读取原内容后探测其行尾，把 `oldString`/`newString` 先归一成 LF、再转成文件自身行尾，然后匹配/替换；写回保持文件原行尾。不修改 `operations.readText`/`writeText`，避免波及 Read 工具等全局读取路径。
+6. **空候选永远无效**。replacer 产出的 `""` 不得进入 `indexOf` / `replaceAll`，否则 JavaScript 会把新文本插入每个字符边界。组合层统一丢弃空候选；BOM 剥离后若 `desiredOld` 变为空串，`edit.ts` 返回既有的 `"old_string must not be empty."`，不读写文件。纯空白 `old_string` 仍可走精确匹配，但模糊策略不得通过 trim 把它退化为空候选。
 
-7. **BOM 在文本层处理，且只对 Host 环境承诺往返保留**。读取后检测前导 `\uFEFF`，剥离后参与匹配；`old_string`/`new_string` 也剥一次前导 BOM，保证两侧一致；写回时按原样补回。
+7. **行尾在文本层归一**。读取原内容后探测其行尾，把 `oldString`/`newString` 先归一成 LF、再转成文件自身行尾，然后匹配/替换；写回保持文件原行尾。不修改 `operations.readText`/`writeText`，避免波及 Read 工具等全局读取路径。
+
+8. **BOM 在文本层处理，且只对 Host 环境承诺往返保留**。读取后检测前导 `\uFEFF`，剥离后参与匹配；`old_string`/`new_string` 也剥一次前导 BOM，保证两侧一致；写回时按原样补回。
 
    **环境差异（必须明确，否则实现与测试会踩空）**：
    - Host（`HostFileOperations`）用 `readFile(path, "utf-8")`，`\uFEFF` 会留在内容里 → 可检测、可补回 → **BOM 往返保留成立**。
@@ -62,7 +65,9 @@ if (!content.includes(oldString)) {
    - 该 WSL 行为是**既有缺陷**：当前 `edit.ts` 同样经 `readText`/`writeText` 读写，WSL 今天就已丢 BOM。本阶段不使其变差，也不修复它（修复需改 `WslFileOperations` 的全局读写，超出范围）。
    - 因此：本阶段的 BOM 往返保证**仅对 Host 生效**；WSL 沿用现状，并在测试中明确区分。
 
-8. **不做严格模式开关**。靠吞大段护栏 + 多命中报错兜底即可，不引入额外配置（YAGNI）。
+9. **安全校验优先于无改动校验**。`oldString === newString` 仍须发生在任何替换之前，但放在路径解析、managed persistence、系统目录和 sandbox 校验之后，避免改变受保护路径的既有错误优先级。该检查不需要读取文件。
+
+10. **不做严格模式开关**。靠吞大段护栏 + 多命中报错兜底即可，不引入额外配置（YAGNI）。
 
 ## 接口
 
@@ -103,7 +108,7 @@ export const MultiOccurrenceReplacer: Replacer;
 export type EditMatchErrorKind =
   | "identical"        // oldString === newString
   | "not_found"        // 全链都没有产出任何候选
-  | "ambiguous"        // 产出了候选，但都不唯一（且未开 replaceAll）
+  | "ambiguous"        // 当前策略解析出多个位置或 replaceAll 位置互相重叠
   | "disproportionate"; // 候选片段远大于 oldString
 
 export class EditMatchError extends Error {
@@ -137,22 +142,26 @@ export class EditMatchError extends Error {
 
 1. 若 `oldString === newString` → 抛 `EditMatchError("identical")`。
 2. 按顺序遍历兜底链；对每个 replacer：
-   1. 收集它产出的候选片段。
-   2. `replaceAll === true`：取第一个候选，先过 `isDisproportionateMatch(search, oldString)`；超限则抛 `EditMatchError("disproportionate")`；否则做 `content.replaceAll(search, newString)` 并返回。
-   3. `replaceAll !== true`：跳过在内容中不唯一的候选（`index !== lastIndex`）。对唯一候选：
-      - 先过 `isDisproportionateMatch(search, oldString)`，超限则抛 `EditMatchError("disproportionate")`；
-      - 返回 `content.slice(0, index) + newString + content.slice(index + search.length)`。
-3. 全链结束：若曾有候选但都被唯一性检查跳过 → 抛 `EditMatchError("ambiguous")`；若从未产出候选 → 抛 `EditMatchError("not_found")`。
+   1. 收集并去重它产出的**非空**候选片段；空候选直接丢弃。
+   2. 在原内容中展开每个候选的全部匹配位置（包括同一候选自身重叠的位置），按 `[start, end)` 去重；没有位置则继续下一策略。
+   3. `replaceAll !== true`：
+      - 多于一个位置 → 立即抛 `EditMatchError("ambiguous")`，不得继续让更宽松的策略静默挑选位置；
+      - 恰好一个位置 → 对其候选做 `isDisproportionateMatch`，超限则抛 `disproportionate`，否则按该区间替换。
+   4. `replaceAll === true`：
+      - 所有候选先过 `isDisproportionateMatch`；任一超限即抛 `disproportionate`；
+      - 若不同位置发生部分重叠，抛 `ambiguous`，避免重复消费原文；
+      - 按位置从后向前替换全部区间，保证位置基于原内容且 `newString` 不会被后续步骤再次匹配。
+3. 全链结束仍无位置 → 抛 `EditMatchError("not_found")`。
 
-> **吞大段护栏在 `replaceAll` 与否两种分支下都生效**（步骤 2.2 与 2.3 各检查一次），与设计决策 5 一致。
+> **吞大段护栏在 `replaceAll` 与否两种分支下都生效**。非 `replaceAll` 先确认位置唯一，再检查唯一候选；`replaceAll` 检查该策略的全部候选。
 
 `edit.ts` 的调用顺序：
 
-1. 空 `old_string` 校验 → 既有文案。紧接着做 **`oldString === newString` 校验 → `identical` 文案**，并且**必须在路径/沙箱校验与第 5 步内联精确替换之前**（原因见下方说明）。
+1. 空 `old_string` 校验 → 既有文案。
 2. 路径解析、managed persistence、系统目录、sandbox 读/写校验 → 全部不变。
-3. `content = operations.readText(filePath)`。
-4. 探测并剥离 BOM，得到 `body`；记录 `hasBom`。
-5. **精确路径优先，以保留歧义语义**：若 `body.includes(oldString)`：
+3. **`oldString === newString` 校验 → `identical` 文案**。它位于安全校验之后、任何读取或替换之前。
+4. `content = operations.readText(filePath)`；探测并剥离 BOM，得到 `body`，记录 `hasBom`；`oldString`/`newString` 各剥一次前导 BOM。若剥离后的 `desiredOld` 为空，返回既有空 `old_string` 文案。
+5. **精确路径优先，以保留歧义语义**：若 `body.includes(desiredOld)`：
    - 统计出现次数；
    - 次数 > 1 且未开 `replaceAll` → 返回既有带行号文案（`findMatchLines`）；
    - 否则替换（`replaceAll` 全替换，否则替换首个）→ 进入第 7 步。
@@ -167,9 +176,9 @@ export class EditMatchError extends Error {
 
 > 说明：第 5 步刻意在 `edit.ts` 内先做一次精确判定，是为了让"多命中报行号"这条既有行为与文案完全不受兜底链影响。第 6 步的 `replace()` 内部同样以精确匹配开头，因此非歧义场景不会多走一次模糊策略。
 >
-> `identical` 校验**必须在第 5 步之前**：第 5 步是内联精确替换，若 `old_string === new_string` 且该串在文件中存在，第 5 步会直接替换并返回成功文案，永远不会进入 `replace()`。`replace()` 内部的同名检查保留作纵深防御（供直接调用 `replace()` 的单测使用）。
+> `identical` 校验**必须在第 5 步之前**，但不应抢在路径与 sandbox 校验之前：第 5 步是内联精确替换，若 `old_string === new_string` 且该串在文件中存在，第 5 步会直接替换并返回成功文案。`replace()` 内部的同名检查保留作纵深防御（供直接调用 `replace()` 的单测使用）。
 >
-> **有意行为**：若文件是 CRLF、`old_string` 是 LF，且**归一后**该串在文件中出现多处，则第 5 步的精确判定（用原始 `old_string`）不命中，进入第 6 步；`replace()` 的 SimpleReplacer 产出多个候选、判为非唯一，最终返回 `ambiguous` 文案而非既有带行号文案。这是有意取舍：该场景下"有歧义"的结论正确，且归一后无法稳定复现原始行号。
+> **有意行为**：若文件是 CRLF、`old_string` 是 LF，且**归一后**该串在文件中出现多处，则第 5 步的精确判定（用原始 `old_string`）不命中，进入第 6 步；`replace()` 的 SimpleReplacer 将该候选展开为多个位置，最终返回 `ambiguous` 文案而非既有带行号文案。这是有意取舍：该场景下"有歧义"的结论正确，且归一后无法稳定复现原始行号。
 
 ## 组件与职责
 
@@ -178,7 +187,7 @@ export class EditMatchError extends Error {
 | `edit-replacers.ts` | 9 级匹配策略、`EditMatchError`（含 `kind`）、吞大段护栏、行尾三函数 | 新建 |
 | `edit.ts` | 路径/沙箱校验、BOM 处理、精确歧义判定、按 `kind` 映射错误、写回 | 改薄 |
 | `edit-replacers.test.ts` | 每个 replacer 单测 + 护栏 + 行尾函数 + `EditMatchError.kind` | 新建 |
-| `edit.test.ts` | 端到端行为（含 CRLF / BOM / 吞大段 / 歧义回归） | 追加 |
+| `edit.test.ts` | 端到端行为（含 CRLF / BOM / 空候选 / 校验顺序 / 歧义回归） | 追加 |
 
 ## 不在范围内
 
@@ -211,15 +220,20 @@ export class EditMatchError extends Error {
 ### `packages/tools/src/file/__test__/edit-replacers.test.ts`（纯函数）
 
 - 9 个 replacer 各至少一条：命中与不命中。
+- 空候选：纯空白查找不得让任何模糊策略产出可替换的空串；`replaceAll` 不得向字符边界插入内容。
 - `isDisproportionateMatch`：正向（远超阈值）与反向（正常长度）。
 - `normalizeLineEndings` / `detectLineEnding` / `convertToLineEnding`：LF 与 CRLF 两态、混合内容取 CRLF。
-- `replace()`：唯一匹配才应用；非唯一候选被跳过；`replaceAll` 全量替换。
+- `replace()`：唯一位置才应用；非 `replaceAll` 遇到多个位置立即报歧义；`replaceAll` 全量替换不重叠位置。
 - `replace()` 错误类型：`not_found` / `ambiguous` / `identical` 各一条，断言 `EditMatchError.kind`。
 - **`replace()` 的吞大段护栏**：注入一个合成 replacer（产出远超 `oldString` 的候选），分别断言 `replaceAll` 为 `false` 与 `true` 时都抛 `disproportionate`（护栏在两个分支都生效）。
+- 多个不同的模糊候选：非 `replaceAll` 抛 `ambiguous`；`replaceAll` 替换全部不重叠位置；重叠位置抛 `ambiguous`。
+- 同一候选自身重叠：例如 `"aaa"` 中的 `"aa"` 必须展开成两个位置，非 `replaceAll` 与 `replaceAll` 都抛 `ambiguous`。
+- 同一行多个空白变体：包括互相重叠的变体都要产出；非 `replaceAll` 多位置报歧义，`replaceAll` 只替换全部不重叠位置，存在重叠则报歧义。
+- 重复锚点：验证候选结果正确，并用宽松上限防止固定大小的上下文策略退化为全文件成对扫描。
 
 ### `packages/tools/src/file/__test__/edit.test.ts`（端到端，追加）
 
-保留现有 2 条（歧义报行号、sandbox 拒绝），追加：
+保留现有 2 条（歧义报行号、sandbox 拒绝），并让端到端测试覆盖以下行为；其中第 6 项已由现有歧义行号用例覆盖，其余为新增用例：
 
 1. 缩进不符可恢复（`old_string` 少一层缩进仍成功）。
 2. 空白数量不符可恢复。
@@ -230,8 +244,11 @@ export class EditMatchError extends Error {
 7. `replace_all` 全量替换。
 8. 无命中报错文案不变。
 9. 模糊路径仅产出非唯一候选时报歧义文案，且文件未被修改。
-10. `old_string === new_string` 时报错且不做任何写入。**用例须使用文件中确实存在的串**（否则测不到第 5 步之前的那道校验）。
+10. `old_string === new_string` 时报错且不做任何读取或写入；用例使用文件中确实存在的串，并断言内容不变。
 11. CRLF 文件 + LF `old_string`，且归一后多处命中时报 `ambiguous` 文案（锁定上面声明的有意行为）。
+12. 纯空白 `old_string` 未精确命中时，即使开启 `replace_all` 也不修改文件。
+13. `old_string` 只有 BOM、剥离后为空时返回既有空字符串文案，且文件不变。
+14. 受 sandbox 拒绝的路径即使 `old_string === new_string`，仍优先返回 sandbox 错误。
 
 > 吞大段护栏不单列端到端用例：正常输入下真实 replacer 链无法触发它（见设计决策 5），其接线由 `replace()` 的注入式单测覆盖。
 
@@ -239,11 +256,13 @@ export class EditMatchError extends Error {
 
 | 风险 | 缓解 |
 |---|---|
-| 模糊匹配改错位置 | 非 `replaceAll` 只接受唯一匹配；两种分支都过吞大段护栏；精确路径优先级最高 |
-| 锚点策略（Levenshtein）误配到相似代码块 | 相似度阈值 0.65 + 吞大段护栏；且它排在逐行 trim 之后 |
-| 行尾归一后写回改变了文件行尾 | 归一只作用于 `oldString`/`newString`；写回内容始终保留文件原行尾 |
+| 模糊匹配改错位置 | 每个策略必须产出全部候选位置；非 `replaceAll` 遇到多个位置立即报歧义；两种分支都过吞大段护栏；精确路径优先级最高 |
+| 锚点策略（Levenshtein）误配到相似代码块 | 相似度阈值 0.65；多个合格块不会静默选最高分，而是交由组合层报歧义或按显式 `replaceAll` 全部替换 |
+| 常见 `{` / `}` / 空行锚点导致大文件卡顿 | `BlockAnchorReplacer` 只扫描目标大小 ±25% 的结尾；`ContextAwareReplacer` 只检查固定结尾，不创建无效区间副本 |
+| 空候选导致 `replaceAll("", ...)` 扩张文件 | BOM 剥离后重新校验查找串；组合层丢弃所有空候选；纯空白与仅 BOM 输入有回归测试 |
+| 行尾归一后写回改变了文件行尾 | 归一只作用于 `oldString`/`newString`；未触及的原内容字节不变，新插入文本使用 `detectLineEnding` 选出的文件行尾（混合文件按既定规则选 CRLF） |
 | BOM 处理破坏二进制或非 UTF-8 文件 | 仅在文本层检测前导 `\uFEFF`；非文本路径不走此逻辑（`edit.ts` 本就是文本工具） |
-| WSL 下 BOM 被 `TextDecoder` 剥离导致往返丢失 | 已在设计决策 7 与「不在范围内」显式声明：本阶段只对 Host 承诺，WSL 沿用既有行为，测试按环境区分 |
+| WSL 下 BOM 被 `TextDecoder` 剥离导致往返丢失 | 已在设计决策 8 与「不在范围内」显式声明：本阶段只对 Host 承诺，WSL 沿用既有行为，测试按环境区分 |
 | 既有测试文案被改动 | 精确路径与错误文案逐字保留；`edit.test.ts` 现有断言作为回归护栏 |
 
 ## 待确认
