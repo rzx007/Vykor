@@ -67,6 +67,8 @@
 
    理由：Windows 主机 + WSL 环境下，`resolveToolPathInContext` 返回的是 POSIX 形态（`/mnt/d/...`）。若按 `process.platform` 判定就会把 POSIX 路径整体小写，在大小写敏感的 Linux 语义下把 `/mnt/d/A.txt` 与 `/mnt/d/a.txt` 当成同一路径，造成**误放行**（守卫里比误拒绝更危险）。按路径形状判定与仓库既有约定一致（`git-changes-query.ts:26` 的 `normalizedRootPath`）。
 
+   **已知边界**：POSIX 下以 `//` 开头的路径会被当成 UNC 处理（转小写）。`resolveToolPathInContext` 返回的是规范化绝对路径，这种路径极罕见，可接受，不在本阶段处理。
+
 4. **记录是有界的**：默认最多 `4096` 条，超出按插入顺序淘汰最早的一条（FIFO），防止长会话无界增长。
 
 5. **`Read` 在成功读取文件后记录**，包括文本与图片；**目录列举不记录**，读取失败（二进制、越界、sandbox 拒绝）不记录。
@@ -177,7 +179,7 @@ export function normalizeReadPath(path: string): string;
 | `QueryEngine` | 构造 registry 并注入 `ToolContext` | `packages/core/src/engine/query-engine.ts`（修改） |
 | `read.ts` | 成功读取后 `markRead` | `packages/tools/src/file/read.ts`（修改） |
 | `write.ts` | 读后写检查、BOM、写入反馈、description | `packages/tools/src/file/write.ts`（修改） |
-| 测试 | registry 单测、Read 记录、Write 拒绝/放行/BOM/反馈 | 三个测试文件 |
+| 测试 | registry 单测、Read 记录、Write 拒绝/放行/BOM/反馈、QueryEngine 注入 | 四个测试文件（registry 新建、write 新建、query-engine 新建、read 追加） |
 
 ## 不在范围内
 
@@ -234,7 +236,7 @@ function fakeRegistry(initial: string[] = []) {
 6. 覆盖带 BOM 的文件、且 `content` 也自带 BOM → 仍是**恰好一个** BOM。
 7. 覆盖**无 BOM** 的已存在文件、且 `content` 自带 BOM → 结果 **0 个** BOM。
 8. 空内容写入 → `(0 lines, 0 bytes)`，文件为空。
-9. **`Write` 成功后不标记已读**（决策 8）：先用 registry 已读的记录覆盖文件 A，写入成功；再对 A 发起第二次 `Write`（此时 A 已存在、且 registry 里没有 A 的"新"记录）→ 若先前 mark 过则放行，断言其行为与决策 8 一致（即**不因刚写过而自动放行**：把 registry 清空后再写应被拒绝）。
+9. **`Write` 成功后不标记已读**（决策 8，判别式要精确）：对一个**不存在**的文件 A 首次 `Write`（新建 → 放行）；紧接着对 A 再 `Write` 一次——此时 A 已存在，而 registry 从始至终没有 A（初始为空，且首次 `Write` **也不 mark**）→ 断言**被拒绝**（决策 11 文案）。若首次 `Write` 曾把 A 标记为已读，第二次就会被放行，因此这条能真正判别决策 8。**不要**用"先读后写、再写一次"来测——那样 A 本来就在 registry 里，测不到任何东西。
 10. `description` 含「overwrite」「Read」等关键词（决策 12）。
 11. managed-persistence / 系统目录 / sandbox 三条既有拒绝行为不回归。
 
@@ -249,9 +251,9 @@ function fakeRegistry(initial: string[] = []) {
 
 沿用 `packages/core/src/engine/goal-context.test.ts` 的 `new QueryEngine(...)` 构造方式，注册一个**捕获 `ToolContext` 的假工具**，跑一轮后断言：
 
-1. 传给工具的 `context.readFiles` 已定义（非 undefined）；
-2. 它是 `ReadFileRegistry` 形状（`markRead`/`hasRead` 均为函数）；
-3. 同一 QueryEngine 实例的两次调用拿到的是**同一个** registry 对象（跨轮次共享）。
+1. 传给工具的 `context.readFiles` 已定义（非 undefined），且是 `ReadFileRegistry` 形状（`markRead`/`hasRead` 均为函数）。
+2. **跨轮次共享（行为断言）**：第一次调用中 `markRead(X)`，第二次调用中 `hasRead(X)` 为真。断言**行为**而非对象同一性，避免与"registry 挂在引擎实例上"这一实现方式耦合。
+3. （可选附加）两次调用拿到的是同一个 registry 对象。
 
 ### 集成验证
 
