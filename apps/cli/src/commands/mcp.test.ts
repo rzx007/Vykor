@@ -52,16 +52,18 @@ function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
     return await snapshot();
   });
   const output: string[] = [];
+  const reconcile = vi.fn(async () => [] as Array<{ runtimeId: string; message: string }>);
   const deps: McpCommandDeps = {
     loadSettings: async () => settings,
     updateSettings: async change => { settings = change(settings); return settings; },
     application: { snapshot, login, logout },
+    reconcile,
     openBrowser: vi.fn(async () => undefined),
     readLine: vi.fn(async () => ""),
     stdout: line => output.push(line),
   };
   const run = (...args: string[]) => createMcpCommand(deps).parseAsync(["node", "ohs", ...args]);
-  return { deps, run, login, logout, output, credentials, snapshot, getSettings: () => settings };
+  return { deps, run, login, logout, output, credentials, snapshot, reconcile, getSettings: () => settings };
 }
 
 describe("mcp command", () => {
@@ -197,6 +199,16 @@ describe("mcp command", () => {
     await expect(test.run("logout", "linear")).rejects.toMatchObject({ code: "oauth-removed-runtime-sync-failed" });
     expect(test.output.join("\n")).toContain("credentials were removed for linear");
     expect(test.credentials.get("linear")).toBeUndefined();
+  });
+
+  it("reconciles active sessions after add and reports sync failures", async () => {
+    const test = fixture();
+    test.reconcile.mockResolvedValueOnce([{ runtimeId: "runtime-1", message: "sync failed" }]);
+
+    await test.run("add", "beui", "--", "npx", "beui");
+
+    expect(test.reconcile).toHaveBeenCalledWith("beui");
+    expect(test.output.join("\n")).toContain("failed to sync");
   });
 
   it("clears OAuth credentials before removing a configured server", async () => {

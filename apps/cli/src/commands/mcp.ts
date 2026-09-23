@@ -21,6 +21,8 @@ export interface McpCommandDeps {
   loadSettings(): Promise<Settings>;
   updateSettings(change: (current: Settings) => Settings): Promise<Settings>;
   application: Pick<McpOAuthApplicationService, "snapshot" | "login" | "logout">;
+  /** Ask active sessions to re-check the latest global config for one server. */
+  reconcile?(name: string): Promise<Array<{ runtimeId: string; message: string }>>;
   openBrowser(url: string): Promise<void>;
   readLine(prompt: string): Promise<string>;
   stdout(line: string): void;
@@ -97,6 +99,7 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
         }
         return { ...settings, mcpServers };
       });
+      await reportReconcileFailures(deps, name, "Added");
       deps.stdout(`Added MCP server: ${name}`);
     });
 
@@ -158,6 +161,7 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
         delete mcpServers[name];
         return { ...current, mcpServers };
       });
+      await reportReconcileFailures(deps, name, "Removed");
       if (syncFailure) throw syncFailure;
       deps.stdout(`Removed MCP server: ${name}`);
     });
@@ -166,13 +170,19 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
 }
 
 export function createDefaultMcpCommandDeps(): McpCommandDeps {
-  const application = new McpOAuthApplicationService({
-    coordinator: createCliMcpRuntimeCoordinator(),
-  });
+  const coordinator = createCliMcpRuntimeCoordinator();
+  const application = new McpOAuthApplicationService({ coordinator });
   return {
     loadSettings,
     updateSettings,
     application,
+    reconcile: async (name) => {
+      try {
+        return (await coordinator.reconcileGlobal(name)).failures;
+      } catch {
+        return [{ runtimeId: "daemon", message: "MCP runtime control request failed" }];
+      }
+    },
     openBrowser: openSystemBrowser,
     readLine: async prompt => {
       const reader = createInterface({ input: stdin, output: stdout });
@@ -180,6 +190,20 @@ export function createDefaultMcpCommandDeps(): McpCommandDeps {
     },
     stdout: line => console.log(line),
   };
+}
+
+async function reportReconcileFailures(
+  deps: McpCommandDeps,
+  name: string,
+  action: "Added" | "Removed",
+): Promise<void> {
+  if (!deps.reconcile) return;
+  const failures = await deps.reconcile(name);
+  if (failures.length) {
+    deps.stdout(
+      `${action} ${name}, but ${failures.length} active runtime(s) failed to sync; it will apply in new sessions.`,
+    );
+  }
 }
 
 async function requireServer(deps: McpCommandDeps, name: string): Promise<McpServerConfig> {
