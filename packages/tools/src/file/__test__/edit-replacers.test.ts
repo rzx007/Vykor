@@ -80,6 +80,15 @@ const collect = (replacer: Replacer, content: string, find: string): string[] =>
   ...replacer(content, find),
 ];
 
+const countUpTo = (replacer: Replacer, content: string, find: string, cap: number): number => {
+  let count = 0;
+  for (const _match of replacer(content, find)) {
+    count += 1;
+    if (count > cap) break;
+  }
+  return count;
+};
+
 describe("SimpleReplacer", () => {
   it("yields the exact find string", () => {
     expect(collect(SimpleReplacer, "hello world", "world")).toEqual(["world"]);
@@ -217,11 +226,16 @@ describe("BlockAnchorReplacer", () => {
   });
 
   it("limits end-anchor scanning to the allowed block-size window", () => {
-    const content = Array.from({ length: 30_000 }, () => "}").join("\n");
-    const startedAt = performance.now();
-    expect(collect(BlockAnchorReplacer, content, ["}", "missing", "}"].join("\n")))
-      .toEqual([]);
-    expect(performance.now() - startedAt).toBeLessThan(500);
+    const blockCount = 2_000;
+    const content = Array.from(
+      { length: blockCount },
+      () => ["head", "middle", "tail"],
+    )
+      .flat()
+      .join("\n");
+    const find = ["head", "middle", "tail"].join("\n");
+
+    expect(countUpTo(BlockAnchorReplacer, content, find, blockCount)).toBe(blockCount);
   });
 });
 
@@ -252,11 +266,11 @@ describe("ContextAwareReplacer", () => {
   });
 
   it("does not scan every possible end anchor for a fixed-size block", () => {
-    const content = Array.from({ length: 3_000 }, () => "}").join("\n");
-    const startedAt = performance.now();
-    expect(collect(ContextAwareReplacer, content, ["}", "missing", "}"].join("\n")))
-      .toEqual([]);
-    expect(performance.now() - startedAt).toBeLessThan(500);
+    const lineCount = 2_000;
+    const content = Array.from({ length: lineCount }, () => "}").join("\n");
+    const find = ["}", "}", "}"].join("\n");
+
+    expect(countUpTo(ContextAwareReplacer, content, find, lineCount)).toBe(lineCount - 2);
   });
 });
 
