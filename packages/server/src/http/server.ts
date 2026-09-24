@@ -55,6 +55,7 @@ import { createGitRoutes } from "./routes/git.js";
 import { createJobRoutes } from "./routes/job.js";
 import { createMcpRoutes } from "./routes/mcp.js";
 import { createMemoryRoutes } from "./routes/memory.js";
+import { createFactsRoutes } from "./routes/facts.js";
 import { createPermissionRoutes } from "./routes/permission.js";
 import { createProjectRoutes } from "./routes/project.js";
 import { createRunExecutionRoutes } from "./routes/run-execution.js";
@@ -353,6 +354,10 @@ export class VykorHttpServer {
         memoryService: this.services.memory,
         control: this.application.control,
       }),
+    );
+    this.app.route(
+      "/facts",
+      createFactsRoutes({ control: this.application.control }),
     );
     this.app.route(
       "/auth",
