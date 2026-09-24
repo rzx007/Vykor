@@ -58,6 +58,12 @@ export interface ToolContext {
   /** Lifetime of this tool invocation, including its execution timeout. */
   abortSignal?: AbortSignal;
   settings?: Settings;
+  /** Selected model identity for the request that invoked this tool. */
+  requestConfiguration?: {
+    model: string;
+    provider?: string;
+    apiFormat?: Settings["apiFormat"];
+  };
   /** Actual tools available to the current QueryEngine after host injection and allow/deny filtering. */
   toolRegistry?: ToolRegistryView;
   skillRegistry?: unknown;

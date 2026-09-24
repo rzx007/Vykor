@@ -474,23 +474,26 @@ export class DaemonApplication implements DurableAgentApplication {
             jobs: this.jobs.createDetachedProcessAgentHost(session),
           })),
         workflowRepository: this.workflows,
-        tools: async () => [
-          imageToTextTool,
-          imageGenerationTool,
-          createBrowserTool(options.browserHost, async ({ bytes }) => {
-            const asset = await this.attachments.import({
-              displayName: `browser-${randomUUID()}.png`,
-              declaredMediaType: "image/png",
-              content: new ReadableStream<Uint8Array>({
-                start(controller) {
-                  controller.enqueue(bytes)
-                  controller.close()
-                },
-              }),
-            })
-            return (await this.attachments.resolveReadyContentPath(asset.id)).path
-          }),
-        ],
+        tools: async () => {
+          const catalog = await this.modelCatalog.load()
+          return [
+            imageToTextTool,
+            imageGenerationTool,
+            createBrowserTool(options.browserHost, async ({ bytes }) => {
+              const asset = await this.attachments.import({
+                displayName: `browser-${randomUUID()}.png`,
+                declaredMediaType: "image/png",
+                content: new ReadableStream<Uint8Array>({
+                  start(controller) {
+                    controller.enqueue(bytes)
+                    controller.close()
+                  },
+                }),
+              })
+              return (await this.attachments.resolveReadyContentPath(asset.id)).path
+            }, catalog),
+          ]
+        },
         toolOverrides: [
           createAttachmentReadTool({
             defaultTool: fileReadTool,

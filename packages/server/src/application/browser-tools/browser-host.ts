@@ -26,6 +26,7 @@ export interface BrowserHost {
     action: BrowserAction;
     sessionId: string;
     cwd: string;
+    includeScreenshot: boolean;
     approve: (question: string) => Promise<boolean>;
   }): Promise<BrowserObservation>;
 }

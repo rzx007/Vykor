@@ -6,6 +6,57 @@ import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
 
 describe("QueryEngine request configuration", () => {
+  it("passes the current model identity to dynamically injected tools", async () => {
+    const requests: StreamMessageParams[] = [];
+    const toolRequests: Array<{ model: string; provider?: string; apiFormat?: "openai" | "anthropic" } | undefined> = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests.push(params);
+        if (requests.length === 1) {
+          yield {
+            type: "tool_use_start" as const,
+            toolUse: { type: "tool_use", id: "browser-1", name: "Browser", input: { action: "inspect" } },
+          };
+          yield { type: "complete" as const, stopReason: "tool_use" };
+        } else {
+          yield { type: "complete" as const, stopReason: "end_turn" };
+        }
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Browser",
+      description: "Inspect the page",
+      inputSchema: { type: "object" },
+      execute: async (_input, context) => {
+        toolRequests.push(context.requestConfiguration);
+        return {
+          content: [{ type: "text" as const, text: "Page text: Settings" }],
+        };
+      },
+    });
+    const engine = new QueryEngine(
+      client,
+      tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) },
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      {
+        maxTurns: 2,
+        resolveRequestConfiguration: async () => ({
+          revision: 0,
+          model: "text-only-model",
+          client,
+          maxTurns: 2,
+        }),
+      },
+    );
+
+    for await (const _ of engine.submitMessage("inspect the page")) { /* consume */ }
+
+    expect(toolRequests).toEqual([{ model: "text-only-model" }]);
+    expect(requests).toHaveLength(2);
+  });
+
   it("reads configuration at the next automatic request after checking for follow-ups", async () => {
     const models: string[] = [];
     const client: StreamingMessageClient = {

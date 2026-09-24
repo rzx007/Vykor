@@ -150,6 +150,7 @@ export class BrowserAgentService implements BrowserHost {
     action: BrowserAction
     sessionId: string
     cwd: string
+    includeScreenshot: boolean
     approve: (question: string) => Promise<boolean>
   }): Promise<BrowserObservation> {
     const requestedTabId = this.activeTabId
@@ -163,6 +164,7 @@ export class BrowserAgentService implements BrowserHost {
       action: BrowserAction
       sessionId: string
       cwd: string
+      includeScreenshot: boolean
       approve: (question: string) => Promise<boolean>
     },
     requestedTabId: string | null
@@ -217,7 +219,9 @@ export class BrowserAgentService implements BrowserHost {
     const elements = this.rememberTargets(contents.id, page.elements)
     this.pageFingerprints.set(contents.id, fingerprintPage(page))
     const screenshotBytes =
-      input.action.action === "inspect" ? await this.capture(contents) : undefined
+      input.action.action === "inspect" && input.includeScreenshot
+        ? await this.capture(contents)
+        : undefined
     this.assertActiveTab(tabId, contents)
     return {
       url: page.url,

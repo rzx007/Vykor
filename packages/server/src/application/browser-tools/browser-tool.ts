@@ -1,5 +1,12 @@
-import type { ContentBlock, ToolDefinition, ToolResult } from "@vykor/core";
+import { findByName, providerInputCapabilities, type ModelsDevCatalog } from "@vykor/api";
+import type { ContentBlock, InputSupport, ToolDefinition, ToolResult } from "@vykor/core";
 import type { BrowserAction, BrowserHost } from "./browser-host.js";
+import {
+  modelInputCapabilities,
+  normalizeInputSupport,
+  resolveEffectiveImageSupport,
+} from "../attachments/routing/attachment-capabilities.js";
+import { readCatalogProvider } from "../default-services/catalog-provider-mapping.js";
 
 export type BrowserScreenshotStore = (input: {
   bytes: Uint8Array;
@@ -9,6 +16,7 @@ export type BrowserScreenshotStore = (input: {
 export function createBrowserTool(
   host: BrowserHost | undefined,
   storeScreenshot: BrowserScreenshotStore,
+  catalog: ModelsDevCatalog,
 ): ToolDefinition {
   return {
     name: "Browser",
@@ -43,6 +51,7 @@ export function createBrowserTool(
           action,
           sessionId: context.sessionId,
           cwd: context.cwd,
+          includeScreenshot: supportsNativeImageInput(context, catalog),
           approve: async (question) => {
             if (context.requestPermission) {
               const decision = await context.requestPermission({
@@ -83,6 +92,40 @@ export function createBrowserTool(
       }
     },
   };
+}
+
+function supportsNativeImageInput(
+  context: Parameters<ToolDefinition["execute"]>[1],
+  catalog: ModelsDevCatalog,
+): boolean {
+  const request = context.requestConfiguration;
+  if (!request) return false;
+
+  const providerName = request.provider ?? context.settings?.provider;
+  const customProvider = context.settings?.customProviders?.find((item) => item.id === providerName);
+  const backend = customProvider
+    ? "openai_compat"
+    : providerName
+      ? findByName(providerName)?.backendType
+      : request.apiFormat === "openai"
+        ? "openai_compat"
+        : request.apiFormat === "anthropic"
+          ? "anthropic"
+          : undefined;
+  if (!backend) return false;
+
+  const provider = providerName ? readCatalogProvider(catalog, providerName) : undefined;
+  const model = Object.entries(provider?.models ?? {}).find(([id, value]) =>
+    (value.id ?? id) === request.model,
+  )?.[1];
+  const customModel = customProvider?.models.find((item) => item.id === request.model);
+  const modelSupport: InputSupport = model
+    ? modelInputCapabilities(model).image
+    : normalizeInputSupport(customModel?.imageInputSupport);
+  return resolveEffectiveImageSupport(
+    { image: modelSupport },
+    providerInputCapabilities(backend),
+  ) === "native";
 }
 
 export function isBrowserPermissionApproved(answer: string): boolean {
