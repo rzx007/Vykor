@@ -1,6 +1,9 @@
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, readdir, unlink } from "node:fs/promises";
+import { detectCredentialValue } from "./sensitive-content.js";
+
+export { detectCredentialValue, type CredentialRisk } from "./sensitive-content.js";
 
 export {
   MAX_MEMORY_EXTRACTION_RECORDS,
@@ -361,6 +364,9 @@ export class MemoryManager {
     if (!content.trim()) {
       throw new Error("Memory content must not be empty");
     }
+    if (containsCredentialLikeValue([content, ...(tags ?? []), options?.name, options?.description], metadata)) {
+      throw new Error("Memory contains credential-like content");
+    }
 
     const type = options?.type ?? DEFAULT_MEMORY_TYPE;
     const signature = computeMemorySignature(content, type, "knowledge");
@@ -428,6 +434,11 @@ export class MemoryManager {
     await this.ensureLoaded();
     const entry = this.entries.get(id);
     if (!entry) return undefined;
+    if (containsCredentialLikeValue([
+      updates.content, ...(updates.tags ?? []), updates.name, updates.description,
+    ], updates.metadata)) {
+      throw new Error("Memory contains credential-like content");
+    }
     if (updates.content !== undefined) entry.content = updates.content;
     if (updates.tags !== undefined) entry.tags = updates.tags;
     if (updates.metadata !== undefined) entry.metadata = updates.metadata;
@@ -879,6 +890,15 @@ export class MemoryManager {
       // best-effort
     }
   }
+}
+
+function containsCredentialLikeValue(
+  values: Array<string | undefined>,
+  metadata?: Record<string, unknown>,
+): boolean {
+  if (values.some((value) => value && detectCredentialValue(value))) return true;
+  return Object.entries(metadata ?? {}).some(([key, value]) =>
+    typeof value === "string" && Boolean(detectCredentialValue(`${key}=${value}`)));
 }
 
 // ──────────────────────────────────────────────────────────────────────────

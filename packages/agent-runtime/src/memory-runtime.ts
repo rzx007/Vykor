@@ -4,6 +4,7 @@ import type { Message, StreamingMessageClient } from "@vykor/core";
 import { getProjectMemoryDir } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
+  detectCredentialValue,
   isMemoryWriteToolCall,
   MemoryManager,
   parseMemoryExtractionRecords,
@@ -132,6 +133,9 @@ export async function extractMemories(options: {
     const quote = record.evidence?.trim();
     const sourceText = quote && userTexts.find((text) => text.includes(quote));
     if (options.automatic && (record.scope !== "project" || !sourceText)) continue;
+    if ([record.title, record.description, record.body, ...record.tags].some(
+      (value) => detectCredentialValue(value),
+    )) continue;
     const entry = await options.manager.add(record.body, record.tags, {
       source_type: options.automatic ? "user_message" : "manual_remember",
       source_session_id: options.sessionId,

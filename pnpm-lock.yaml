@@ -816,6 +816,10 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/personalization:
+    dependencies:
+      '@vykor/memory':
+        specifier: workspace:*
+        version: link:../memory
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

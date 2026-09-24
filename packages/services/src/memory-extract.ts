@@ -1,6 +1,7 @@
 import type { StreamingMessageClient } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
+  detectCredentialValue,
   isMemoryWriteToolCall,
   MemoryManager,
   parseMemoryExtractionRecords,
@@ -81,6 +82,9 @@ export async function applyExtractionRecords(
 ): Promise<ExtractionResult> {
   const writtenIds: string[] = [];
   for (const record of selectWritableMemoryExtractionRecords(records)) {
+    if ([record.title, record.description, record.body, ...record.tags].some(
+      (value) => detectCredentialValue(value),
+    )) continue;
     const entry = await manager.add(record.body, record.tags, undefined, {
       name: record.title,
       description: record.description,

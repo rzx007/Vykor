@@ -431,6 +431,17 @@ describe("MemoryManager Markdown store", () => {
     expect(results.length).toBe(1);
   });
 
+  it("rejects credential-like additions and updates without changing the stored record", async () => {
+    const manager = new MemoryManager();
+    const entry = await manager.add("Store credentials in environment variables");
+
+    await expect(manager.add("api_key=example-secret-value")).rejects.toThrow("Memory contains credential-like content");
+    await expect(manager.add("Safe body", [], { token: "example-secret-value" })).rejects.toThrow("Memory contains credential-like content");
+    await expect(manager.update(entry.id, { content: "Bearer exampletoken123456" })).rejects.toThrow("Memory contains credential-like content");
+    expect((await manager.get(entry.id))?.content).toBe("Store credentials in environment variables");
+    expect((await manager.getAll())).toHaveLength(1);
+  });
+
   it("keeps disabled memories inspectable but out of search, prompts, and the index", async () => {
     dir = await mkdtemp(join(tmpdir(), "vk-memory-disabled-"));
     const manager = new MemoryManager(1000, dir);

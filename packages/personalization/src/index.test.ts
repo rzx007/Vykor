@@ -120,6 +120,13 @@ describe("rules persistence", () => {
 });
 
 describe("updateRulesFromSession", () => {
+  it("does not persist credential-like environment fact values", () => {
+    expect(updateRulesFromSession([
+      { id: "u-secret", createdAt: 1, role: "user", content: "ssh ops@sk-examplelongtoken123" },
+    ], projectDir, "s-secret")).toBe(0);
+    expect(loadFacts(projectDir).facts).toEqual([]);
+  });
+
   it("records user fact provenance without promoting assistant guesses or refreshing old observations", () => {
     const messages = [
       { id: "u1", createdAt: Date.parse("2026-09-24T00:00:00.000Z"), role: "user", content: "ssh ops@10.1.2.3" },

@@ -50,6 +50,29 @@ function fakeClient(responseText: string, onStream?: () => void): StreamingMessa
 }
 
 describe("extractMemories", () => {
+  it("skips a credential candidate while keeping a safe memory from the same response", async () => {
+    const manager = new MemoryManager();
+    const result = await extractMemories({
+      apiClient: fakeClient(JSON.stringify({ memories: [
+        { title: "Credential", body: "api_key=example-secret-value", scope: "project", evidence: "api_key=example-secret-value" },
+        { title: "Storage", body: "Use SQLite for session state", scope: "project", evidence: "Use SQLite for session state" },
+      ] })),
+      model: "test-model",
+      messages: [
+        { type: "user", content: "api_key=example-secret-value; Use SQLite for session state" },
+        { type: "assistant", content: "noted" },
+      ],
+      manager,
+      memoryDir: resolve("memory"),
+      cwd: resolve("project"),
+      sessionId: "session-credential-test",
+      automatic: true,
+    });
+
+    expect(result.titles).toEqual(["Storage"]);
+    expect((await manager.getAll()).map((entry) => entry.content)).toEqual(["Use SQLite for session state"]);
+  });
+
   it("writes only project memories backed by a user quote and keeps their source", async () => {
     const memoryDir = await mkdtemp(join(tmpdir(), "vk-memory-source-"));
     try {

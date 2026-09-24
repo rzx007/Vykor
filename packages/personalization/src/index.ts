@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { detectCredentialValue } from "@vykor/memory";
 
 /**
  * Personalization：从会话历史抽取环境事实（移植自 Python personalization/）。
@@ -206,6 +207,7 @@ export function updateRulesFromSession(messages: SessionMessageLike[], cwd: stri
       : msg.content.map((block) => (block as { text?: unknown } | null)?.text)
           .filter((value): value is string => typeof value === "string").join("\n");
     for (const fact of extractFactsFromText(text)) {
+      if (detectCredentialValue(fact.value)) continue;
       newFacts.push({
         ...fact,
         sourceSessionId: sessionId,

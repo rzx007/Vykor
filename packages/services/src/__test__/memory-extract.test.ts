@@ -83,6 +83,22 @@ describe("extractMemoriesFromTurn", () => {
     { role: "assistant", content: "noted" },
   ];
 
+  it("continues after a credential candidate in the exported extraction helper", async () => {
+    const manager = new MemoryManager();
+    const result = await extractMemoriesFromTurn({
+      apiClient: fakeClient(JSON.stringify({ memories: [
+        { title: "Credential", body: "api_key=example-secret-value" },
+        { title: "Storage", body: "Use SQLite for session state" },
+      ] })),
+      model: "test-model",
+      messages,
+      manager,
+    });
+
+    expect(result.writtenIds).toHaveLength(1);
+    expect((await manager.getAll()).map((entry) => entry.content)).toEqual(["Use SQLite for session state"]);
+  });
+
   it("writes parsed records into the MemoryManager", async () => {
     const manager = new MemoryManager(100);
     const result = await extractMemoriesFromTurn({
