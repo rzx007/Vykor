@@ -322,7 +322,7 @@ export async function createVykorRuntime(
     : undefined;
 
   const engineOptions = {
-    trustedToolOverrides: trustedOverrides,
+    trustedToolOverrides: new Map([...trustedOverrides].map((name) => [name, baseToolRegistry.get(name)!])),
     maxTurns: configuration.maxTurns ?? settings.maxTurns,
     systemPrompt,
     model: runtimeModel,

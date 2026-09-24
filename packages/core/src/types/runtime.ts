@@ -552,8 +552,8 @@ export interface MemoryRetriever {
 }
 
 export interface QueryEngineOptions {
-  /** Names validated by the host as trusted replacements for builtin tools. */
-  trustedToolOverrides?: ReadonlySet<string>;
+  /** Exact tool definitions validated by the host as trusted builtin replacements. */
+  trustedToolOverrides?: ReadonlyMap<string, import("./tools").ToolDefinition>;
   /** Host-provided Run prompt. With a View, takes precedence over systemPrompt/setSystemPrompt(). */
   systemPromptForRun?: (view: RunCapabilityView) => Promise<string>;
   maxTurns?: number;

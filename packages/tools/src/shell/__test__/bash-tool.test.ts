@@ -12,6 +12,33 @@ import type {
 const posixShell: HostShellLauncher = { kind: "posix-sh" };
 
 describe("createBashTool", () => {
+  it("keeps a legacy failed command with null exit code unknown", async () => {
+    const tool = createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: null, output: "partial diagnostic" })));
+    const feedback = await tool.execute({ command: "inspect" }, { cwd: process.cwd() });
+    expect(feedback).toMatchObject({ isError: true, failureKind: "unknown_outcome", executionState: "unknown", content: [{ text: "partial diagnostic" }] });
+    expect(feedback.recoveryHint ?? "").not.toContain("null");
+    expect(feedback.compactSummary ?? "").not.toContain("null");
+  });
+
+  it("keeps an environment process with null exit code unknown", async () => {
+    const tool = createBashTool();
+    const feedback = await tool.execute({ command: "inspect" }, {
+      cwd: "/work",
+      environment: {
+        info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
+        workspace: { executionRoot: "/work" },
+        paths: { resolve: async () => ({ executionPath: "/work" }) },
+        process: { execShell: async () => ({
+          onOutput: (listener: (chunk: Uint8Array) => void) => { listener(new TextEncoder().encode("partial diagnostic")); return () => {}; },
+          wait: async () => ({ exitCode: null }),
+        }) },
+      },
+    } as any);
+    expect(feedback).toMatchObject({ isError: true, failureKind: "unknown_outcome", executionState: "unknown", content: [{ text: "partial diagnostic" }] });
+    expect(feedback.recoveryHint ?? "").not.toContain("null");
+    expect(feedback.compactSummary ?? "").not.toContain("null");
+  });
+
   it("uses the actual exit code for a failed command without copying its command into the summary", async () => {
     const tool = createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: 7, output: "diagnostic" })));
     const feedback = await tool.execute({ command: "echo SECRET_VALUE" }, { cwd: process.cwd() });

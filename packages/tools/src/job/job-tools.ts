@@ -206,17 +206,33 @@ function resolveHost(context: ToolContext): { jobs: NonNullable<ToolContext["job
 function result(action: string, value: object): ToolResult {
   const job = value as { jobId?: string; cursor?: number; snapshot?: { id?: string; status?: string; exitCode?: number | null }; results?: Array<{ jobId: string; cursor?: number; snapshot?: { id?: string; status?: string; exitCode?: number | null } }> };
   const all = job.results ?? (job.snapshot?.id ? [job] : []);
-  const observed = all.filter((item) => item.snapshot?.id).slice(-8);
-  const facts = observed.map((item) => [
-    `jobId=${item.snapshot!.id!.slice(0, 40).replace(/[^A-Za-z0-9._:-]/g, "?")}`,
-    item.snapshot?.status ? `status=${item.snapshot.status}` : undefined,
-    item.cursor !== undefined ? `cursor=${item.cursor}` : undefined,
-    item.snapshot?.exitCode !== undefined ? `exitCode=${item.snapshot.exitCode}` : undefined,
-  ].filter(Boolean).join("; ")).join(" | ");
+  const snapshots = all.filter((item) => item.snapshot?.id);
+  const withoutSnapshot = all.length - snapshots.length;
+  const facts: string[] = [];
+  for (const item of snapshots.slice().reverse()) {
+    if (facts.length === 8) break;
+    const id = item.snapshot!.id!;
+    if (!/^[A-Za-z0-9._:-]+$/.test(id)) continue;
+    const fact = [
+      `jobId=${id}`,
+      item.snapshot?.status ? `status=${item.snapshot.status}` : undefined,
+      item.cursor !== undefined ? `cursor=${item.cursor}` : undefined,
+      item.snapshot?.exitCode !== undefined ? `exitCode=${item.snapshot.exitCode}` : undefined,
+    ].filter(Boolean).join("; ");
+    if (`Job${action} completed: ${[fact, ...facts].join(" | ")}`.length > 900) continue;
+    facts.unshift(fact);
+  }
+  const omitted = snapshots.length - facts.length;
+  const summary = [
+    `Job${action} completed`,
+    ...(withoutSnapshot ? [`${withoutSnapshot} observation without snapshot`] : []),
+    ...(omitted ? [`${omitted} observation omitted from summary`] : []),
+    ...facts,
+  ].join("; ");
   return {
     content: [{ type: "text", text: JSON.stringify({ kind: "job", action, ...value }) }],
     executionState: "completed",
-    compactSummary: `Job${action} completed${all.length > observed.length ? `: ${all.length - observed.length} earlier jobs omitted; latest ${observed.length}: ` : facts ? ": " : ""}${facts}`,
+    compactSummary: summary,
   };
 }
 

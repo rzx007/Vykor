@@ -135,12 +135,38 @@ describe("job tools", () => {
     });
   });
 
+  it("preserves the complete 41-character task id", async () => {
+    const id = `task_${"a".repeat(36)}`;
+    const read = vi.fn(async () => ({ text: "", cursor: 2, truncated: false, snapshot: { ...snapshot, id } }));
+    const result = await jobReadTool.execute({ jobId: id }, context({ read }));
+    expect(result.compactSummary).toContain(`jobId=${id};`);
+  });
+
+  it("omits a whole oversized job id instead of inventing a truncated one", async () => {
+    const id = `task_${"a".repeat(1100)}`;
+    const read = vi.fn(async () => ({ text: "", cursor: 2, truncated: false, snapshot: { ...snapshot, id } }));
+    const result = await jobReadTool.execute({ jobId: id }, context({ read }));
+    expect(result.compactSummary).toContain("1 observation omitted");
+    expect(result.compactSummary).not.toContain("jobId=task_");
+    expect(result.compactSummary!.length).toBeLessThanOrEqual(1000);
+  });
+
+  it("counts missing snapshots separately from summary omissions", async () => {
+    const wait = vi.fn(async (input) => {
+      if (input.jobId === "missing") throw new Error("not found");
+      return { text: "", cursor: 1, truncated: false, snapshot: { ...snapshot, id: input.jobId }, timedOut: true };
+    });
+    const result = await jobWaitTool.execute({ jobIds: ["missing", "terminal-1"] }, context({ wait }));
+    expect(result.compactSummary).toContain("1 observation without snapshot");
+    expect(result.compactSummary).not.toContain("omitted");
+  });
+
   it("bounds multi-job summaries and marks omitted earlier jobs", async () => {
     const wait = vi.fn(async (input) => ({ text: "private output", cursor: 1, truncated: false,
       snapshot: { ...snapshot, id: input.jobId, exitCode: null }, timedOut: true }));
     const jobIds = Array.from({ length: 10 }, (_, index) => `job-${index}`);
     const result = await jobWaitTool.execute({ jobIds }, context({ wait }));
-    expect(result.compactSummary).toContain("2 earlier jobs omitted");
+    expect(result.compactSummary).toContain("2 observation omitted from summary");
     expect(result.compactSummary).toContain("jobId=job-9; status=running; cursor=1; exitCode=null");
     expect(result.compactSummary).not.toContain("private output");
   });

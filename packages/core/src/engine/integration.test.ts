@@ -172,19 +172,22 @@ describe("tool execution feedback", () => {
 
 describe("Integration: Full Agent Loop", () => {
   it("preserves a host-approved Read override summary but drops an ordinary agent override summary", async () => {
-    const run = async (trustedToolOverrides?: ReadonlySet<string>, source: "agent" | "plugin" = "agent") => {
+    const run = async (trustedToolOverrides?: ReadonlySet<string>, source: "agent" | "plugin" = "agent", replaceAgentAfterApproval = false) => {
       const registry = new ToolRegistry();
       registry.register({ name: "Read", description: "base", inputSchema: { type: "object" }, execute: async () => ({ content: [] }) });
-      registry.override({ name: "Read", description: "wrapper", inputSchema: { type: "object" }, execute: async () => ({
+      const approved: ToolDefinition = { name: "Read", description: "wrapper", inputSchema: { type: "object" }, execute: async () => ({
         content: [{ type: "text" as const, text: "1: secret body" }],
         executionState: "completed" as const,
         compactSummary: "Read completed: attachment://att-1/notes.txt; lines=1-1",
-      }) }, source === "agent" ? { kind: "agent" } : { kind: "plugin", id: "test-plugin" });
+      }) };
+      registry.override(approved, source === "agent" ? { kind: "agent" } : { kind: "plugin", id: "test-plugin" });
+      const approvedDefinitions = trustedToolOverrides ? new Map([...trustedToolOverrides].map((name) => [name, registry.get(name)!])) : undefined;
+      if (replaceAgentAfterApproval) registry.override({ ...approved, description: "replacement using same execute" }, { kind: "agent" });
       const client = createMockStreamClient([
         [{ type: "tool_use_start", toolUse: { type: "tool_use", id: "read-1", name: "Read", input: {} } }, { type: "complete", stopReason: "tool_use" }],
         [{ type: "complete", stopReason: "end_turn" }],
       ]);
-      const engine = new QueryEngine(client.client, registry, allowAll(), noopHooks(), { trustedToolOverrides, trajectoryTrackerFactory: false });
+      const engine = new QueryEngine(client.client, registry, allowAll(), noopHooks(), { trustedToolOverrides: approvedDefinitions, trajectoryTrackerFactory: false });
       const events: StreamEvent[] = [];
       for await (const event of engine.submitMessage("read")) events.push(event);
       return events.find((event) => event.type === "tool_use_end");
@@ -192,9 +195,11 @@ describe("Integration: Full Agent Loop", () => {
     const trusted = await run(new Set(["Read"]));
     const untrusted = await run();
     const pluginReplacement = await run(new Set(["Read"]), "plugin");
+    const agentReplacement = await run(new Set(["Read"]), "agent", true);
     expect(trusted?.type === "tool_use_end" && trusted.result.compactSummary).toContain("attachment://att-1/notes.txt");
     expect(untrusted?.type === "tool_use_end" && untrusted.result.compactSummary).toBeUndefined();
     expect(pluginReplacement?.type === "tool_use_end" && pluginReplacement.result.compactSummary).toBeUndefined();
+    expect(agentReplacement?.type === "tool_use_end" && agentReplacement.result.compactSummary).toBeUndefined();
   });
 
   it("single turn: user → API text → complete", async () => {

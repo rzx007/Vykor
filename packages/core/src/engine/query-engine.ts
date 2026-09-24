@@ -972,7 +972,7 @@ export class QueryEngine implements IQueryEngine {
               metadata: externalToolMetadata(result.metadata),
               compactSummary: (toolRegistry.inspect(toolUse.name)?.source.kind === "builtin"
                 || (toolRegistry.inspect(toolUse.name)?.source.kind === "agent"
-                  && this.options.trustedToolOverrides?.has(toolUse.name)))
+                  && this.options.trustedToolOverrides?.get(toolUse.name) === tool))
                 ? toolFeedbackFields(result).compactSummary : undefined,
             } as ToolExecutionResult,
           };
