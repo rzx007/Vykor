@@ -35,7 +35,7 @@ export interface SessionMaintenanceServiceContext {
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
   operationGate: Pick<DaemonOperationGate, "enter" | "tryEnterBarrier">;
   events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
-  personalizationUpdater?: (messages: SessionMessageLike[], cwd: string) => number;
+  personalizationUpdater?: (messages: SessionMessageLike[], cwd: string, sessionId: string) => number;
   contextUsageCache?: Pick<ContextUsageCache, "invalidate">;
   refreshContextUsage?: (sessionId: string, agent: SessionContextUsageAgent) => Promise<void>;
 }
@@ -308,7 +308,7 @@ export class SessionMaintenanceService {
         this.context.data.conversations.listMessageParts(sessionId),
       );
       const updater = this.context.personalizationUpdater ?? updateRulesFromSession;
-      updater(messages, cwd);
+      updater(messages, cwd, sessionId);
     } catch {
       // Local personalization is best-effort and must not block the remember flow.
     }
@@ -339,7 +339,7 @@ function transcriptToPersonalizationMessages(
         .map((part) => part.text)
         .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
         .join("\n");
-      return { role: message.role, content };
+      return { id: message.id, createdAt: message.createdAt, role: message.role, content };
     })
     .filter((message) => message.content.length > 0);
 }

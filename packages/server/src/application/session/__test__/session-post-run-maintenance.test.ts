@@ -11,7 +11,7 @@ function createStore(runStatus = "completed") {
       updatedAt: 20,
     })),
     getRun: vi.fn(() => ({ id: "run-1", sessionId: "s1", status: runStatus })),
-    listMessages: vi.fn(() => [{ id: "m1", seq: 1, role: "user" }]),
+    listMessages: vi.fn(() => [{ id: "m1", seq: 1, role: "user", createdAt: 1 }]),
     listMessageParts: vi.fn(() => [
       { id: "p1", seq: 1, type: "text", text: "ssh ops@10.0.0.9" },
       { id: "p2", seq: 2, type: "reasoning", text: "private reasoning" },
@@ -48,7 +48,7 @@ describe("SessionPostRunMaintenance", () => {
     await maintenance.run("s1", "run-1", { remember: vi.fn() } as any);
 
     expect(sessionMemoryWriter).toHaveBeenCalledWith("/repo", [
-      { role: "user", content: "ssh ops@10.0.0.9" },
+      { id: "m1", createdAt: 1, role: "user", content: "ssh ops@10.0.0.9" },
     ], "s1", "Fix the auth bug");
   });
 
@@ -75,10 +75,10 @@ describe("SessionPostRunMaintenance", () => {
     await maintenance.run("s1", "run-1", { remember } as any);
 
     expect(personalizationUpdater).toHaveBeenCalledWith([
-      { role: "user", content: "ssh ops@10.0.0.9" },
-    ], "/repo");
+      { id: "m1", createdAt: 1, role: "user", content: "ssh ops@10.0.0.9" },
+    ], "/repo", "s1");
     expect(sessionMemoryWriter).toHaveBeenCalledWith("/repo", [
-      { role: "user", content: "ssh ops@10.0.0.9" },
+      { id: "m1", createdAt: 1, role: "user", content: "ssh ops@10.0.0.9" },
     ], "s1");
     expect(remember).toHaveBeenCalledWith({ automatic: true });
   });

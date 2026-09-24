@@ -8,14 +8,14 @@
 
 ## 它做什么
 
-每个 root Run 成功收尾后，用 10 个正则从当前 durable transcript 抽「环境事实」（SSH 主机、服务器 IP、数据
+每个 root Run 成功收尾后，用 10 个正则从当前 durable transcript 中有 ID 和创建时间的用户消息抽「环境事实」（SSH 主机、服务器 IP、数据
 路径、conda 环境、Python 版本、API 端点、环境变量、git 远端、Ray 集群、cron
 表达式），按项目去重合并持久化到 `~/.vykor/local_rules/projects/<项目>-<hash>/`：
 
 ```
 local_rules/
 └── projects/<项目>-<hash>/
-    ├── facts.json   # {facts: [{key,type,label,value,confidence}], last_updated}
+    ├── facts.json   # facts 还含 sourceSessionId、sourceMessageId、observedAt
     └── rules.md     # 由 facts 重新生成的分组 Markdown（自动生成，勿手改）
 ```
 
@@ -29,8 +29,9 @@ local_rules/
 - `rules.ts`：`loadLocalRules`/`saveLocalRules`/`loadFacts`/`saveFacts`
   （写入带 last_updated ISO 时间戳）/`mergeFacts`（按 key 去重，置信度高者胜）。
 - `session-hook.ts`：`updateRulesFromSession(messages, cwd)`——抽取 → 按项目合并 →
-  双写 facts.json + rules.md，返回新增数。消息形状取 TS 的
-  `{role, content: string | {text?}[]}` 宽松结构。
+  双写 facts.json + rules.md，返回新增数。调用方传入 sessionId；消息包含
+  `{id, createdAt, role, content}`。只处理带有效来源的用户消息，`observedAt`
+  使用消息创建时间，重复扫描旧消息不会刷新观察时间。
 
 ## 接线（R2）
 

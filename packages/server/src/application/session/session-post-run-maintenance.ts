@@ -9,7 +9,7 @@ import { isPublicTextPart } from "../../session/transcript-text.js";
 export interface SessionPostRunMaintenanceContext {
   data: Pick<SessionStore, "conversations" | "runs" | "sessions" | "goals">;
   getSettings(cwd: string): Promise<Settings | undefined>;
-  personalizationUpdater?: (messages: SessionMessageLike[], cwd: string) => number;
+  personalizationUpdater?: (messages: SessionMessageLike[], cwd: string, sessionId: string) => number;
   sessionMemoryWriter?: (cwd: string, messages: SessionMessageLike[], sessionId: string, goal?: string) => void;
   lastConsolidatedAt?: (memoryDir: string) => number;
   autoDream?: (input: {
@@ -54,7 +54,7 @@ export class SessionPostRunMaintenance {
 
     await this.bestEffort("session.personalization.extract_failed", sessionId, runId, async () => {
       const update = this.context.personalizationUpdater ?? updateRulesFromSession;
-      update(messages, session.cwd);
+      update(messages, session.cwd, sessionId);
     });
 
     const settings = await this.context.getSettings(session.cwd);
@@ -130,7 +130,7 @@ function transcriptMessages(
         .map((part) => part.text ?? (typeof part.output === "string" ? part.output : ""))
         .filter(Boolean)
         .join("\n");
-      return { role: message.role, content };
+      return { id: message.id, createdAt: message.createdAt, role: message.role, content };
     })
     .filter((message) => message.content.length > 0);
 }

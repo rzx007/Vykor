@@ -17,6 +17,9 @@ export interface ExtractedFact {
   label: string;
   value: string;
   confidence: number;
+  sourceSessionId?: string;
+  sourceMessageId?: string;
+  observedAt?: string;
 }
 
 export interface FactsFile {
@@ -26,6 +29,8 @@ export interface FactsFile {
 
 /** 宽松的消息形状：兼容引擎 Message 联合（SystemMessage 无 role，块按 unknown 收）。 */
 export interface SessionMessageLike {
+  id?: string;
+  createdAt?: number;
   role?: string;
   content: string | ReadonlyArray<unknown>;
 }
@@ -189,23 +194,26 @@ export function mergeFacts(existing: FactsFile, newFacts: ExtractedFact[]): Fact
  * 会话结束时调用：抽取 → 合并 → 双写 facts.json + rules.md。
  * 返回新增事实数。调用方应 try/catch（best-effort，绝不阻塞退出）。
  */
-export function updateRulesFromSession(messages: SessionMessageLike[], cwd: string): number {
-  const allText: string[] = [];
+export function updateRulesFromSession(messages: SessionMessageLike[], cwd: string, sessionId: string): number {
+  const newFacts: ExtractedFact[] = [];
   for (const msg of messages) {
-    if (typeof msg.content === "string") {
-      if (msg.content) allText.push(msg.content);
-    } else if (Array.isArray(msg.content)) {
-      for (const block of msg.content) {
-        const text = (block as { text?: unknown } | null)?.text;
-        if (typeof text === "string" && text) {
-          allText.push(text);
-        }
-      }
+    if (msg.role !== "user" || !msg.id || !sessionId ||
+        typeof msg.createdAt !== "number" || !Number.isFinite(msg.createdAt)) continue;
+    const observedAt = new Date(msg.createdAt);
+    if (Number.isNaN(observedAt.getTime())) continue;
+    const text = typeof msg.content === "string"
+      ? msg.content
+      : msg.content.map((block) => (block as { text?: unknown } | null)?.text)
+          .filter((value): value is string => typeof value === "string").join("\n");
+    for (const fact of extractFactsFromText(text)) {
+      newFacts.push({
+        ...fact,
+        sourceSessionId: sessionId,
+        sourceMessageId: msg.id,
+        observedAt: observedAt.toISOString(),
+      });
     }
   }
-  if (allText.length === 0) return 0;
-
-  const newFacts = extractFactsFromText(allText.join("\n"));
   if (newFacts.length === 0) return 0;
 
   const existing = loadFacts(cwd);

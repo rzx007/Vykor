@@ -207,7 +207,7 @@ describe("SessionMaintenanceService", () => {
     }] as any);
 
     await expect(maintenance.remember("s1")).resolves.toBe(remembered);
-    expect(personalizationUpdater).toHaveBeenCalledWith([{ role: "user", content: "ssh ops@10.0.0.9" }], "/repo");
+    expect(personalizationUpdater).toHaveBeenCalledWith([{ id: "m1", createdAt: 1, role: "user", content: "ssh ops@10.0.0.9" }], "/repo", "s1");
     expect(agentPool.closeForCwd).toHaveBeenCalledWith("/repo");
   });
 

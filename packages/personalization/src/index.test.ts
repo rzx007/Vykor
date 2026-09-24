@@ -120,6 +120,23 @@ describe("rules persistence", () => {
 });
 
 describe("updateRulesFromSession", () => {
+  it("records user fact provenance without promoting assistant guesses or refreshing old observations", () => {
+    const messages = [
+      { id: "u1", createdAt: Date.parse("2026-09-24T00:00:00.000Z"), role: "user", content: "ssh ops@10.1.2.3" },
+      { id: "a1", createdAt: Date.parse("2026-09-24T00:00:01.000Z"), role: "assistant", content: "ssh ops@10.9.9.9" },
+    ];
+
+    expect(updateRulesFromSession(messages, projectDir, "s1")).toBe(2);
+    const first = loadFacts(projectDir).facts;
+    expect(first).toHaveLength(2);
+    expect(first.every((fact) => fact.sourceSessionId === "s1" && fact.sourceMessageId === "u1")).toBe(true);
+    expect(first.every((fact) => fact.observedAt === "2026-09-24T00:00:00.000Z")).toBe(true);
+    expect(first.some((fact) => fact.value.includes("10.9.9.9"))).toBe(false);
+
+    expect(updateRulesFromSession(messages, projectDir, "s1")).toBe(0);
+    expect(loadFacts(projectDir).facts).toEqual(first);
+  });
+
   it("keeps environment facts within their project and ignores old global rules", () => {
     const projectA = join(cfgDir, "project-a");
     const projectB = join(cfgDir, "project-b");
@@ -128,7 +145,7 @@ describe("updateRulesFromSession", () => {
     writeFileSync(join(legacyDir, "rules.md"), "# Old global fact\n- 10.9.9.9\n");
 
     expect(loadLocalRules(projectA)).toBe("");
-    expect(updateRulesFromSession([{ role: "user", content: "ssh ops@10.1.2.3" }], projectA)).toBe(2);
+    expect(updateRulesFromSession([{ id: "u-project-a", createdAt: 1, role: "user", content: "ssh ops@10.1.2.3" }], projectA, "s-project-a")).toBe(2);
     expect(loadLocalRules(projectA)).toContain("10.1.2.3");
     expect(loadLocalRules(projectB)).toBe("");
     expect(loadFacts(projectB).facts).toEqual([]);
@@ -137,20 +154,20 @@ describe("updateRulesFromSession", () => {
 
   it("extracts from messages, persists both files, returns new fact count", () => {
     const count = updateRulesFromSession([
-      { role: "user", content: "deploy via ssh ops@172.16.0.2 please" },
-      { role: "assistant", content: [{ text: "ok, conda activate prod-env first" }] },
-    ], projectDir);
+      { id: "u-deploy", createdAt: 1, role: "user", content: "deploy via ssh ops@172.16.0.2 please" },
+      { id: "a-deploy", createdAt: 2, role: "assistant", content: [{ text: "ok, conda activate prod-env first" }] },
+    ], projectDir, "s-deploy");
     expect(count).toBeGreaterThanOrEqual(2);
     expect(loadLocalRules(projectDir)).toContain("ops@172.16.0.2");
     expect(loadFacts(projectDir).facts.length).toBe(count);
 
     // 再跑一遍同样内容：无新增。
-    const again = updateRulesFromSession([{ role: "user", content: "ssh ops@172.16.0.2" }], projectDir);
+    const again = updateRulesFromSession([{ id: "u-deploy", createdAt: 1, role: "user", content: "ssh ops@172.16.0.2" }], projectDir, "s-deploy");
     expect(again).toBe(0);
   });
 
   it("returns 0 for empty or fact-free sessions", () => {
-    expect(updateRulesFromSession([], projectDir)).toBe(0);
-    expect(updateRulesFromSession([{ role: "user", content: "hello there" }], projectDir)).toBe(0);
+    expect(updateRulesFromSession([], projectDir, "s1")).toBe(0);
+    expect(updateRulesFromSession([{ id: "u-hello", createdAt: 1, role: "user", content: "hello there" }], projectDir, "s1")).toBe(0);
   });
 });
