@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -90,10 +90,43 @@ describe("factsToRulesMarkdown", () => {
 });
 
 describe("rules persistence", () => {
-  it("round-trips rules.md and facts.json with last_updated stamp", () => {
+  it("loads only facts with a durable source, regardless of cached rules text", () => {
+    saveFacts({ facts: [
+      { key: "ip_address:10.9.9.9", type: "ip_address", label: "Server IP", value: "10.9.9.9", confidence: 0.7 },
+      { key: "ip_address:10.1.2.3", type: "ip_address", label: "Server IP", value: "10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
+    ] }, projectDir);
+    saveLocalRules("# Local Environment Rules\n- `10.9.9.9`", projectDir);
+
+    expect(loadLocalRules(projectDir)).toContain("10.1.2.3");
+    expect(loadLocalRules(projectDir)).not.toContain("10.9.9.9");
+  });
+
+  it("does not treat blank source identifiers as provenance", () => {
+    saveFacts({ facts: [{
+      key: "ip_address:10.8.8.8", type: "ip_address", label: "Server IP", value: "10.8.8.8", confidence: 0.7,
+      sourceSessionId: " ", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, projectDir);
+
+    expect(loadLocalRules(projectDir)).toBe("");
+  });
+
+  it("does not inject previously stored credential-like facts with provenance", () => {
+    saveFacts({ facts: [{
+      key: "ssh_host:ops@sk-examplelongtoken123", type: "ssh_host", label: "SSH connection",
+      value: "ops@sk-examplelongtoken123", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, projectDir);
+
+    expect(loadLocalRules(projectDir)).toBe("");
+    expect(loadFacts(projectDir).facts).toHaveLength(1);
+  });
+
+  it("persists rules.md and facts.json without trusting an unsourced cache", () => {
     expect(loadLocalRules(projectDir)).toBe("");
     saveLocalRules("# Rules\n- x", projectDir);
-    expect(loadLocalRules(projectDir)).toBe("# Rules\n- x");
+    expect(readFileSync(join(dir, "rules.md"), "utf-8")).toBe("# Rules\n- x\n");
+    expect(loadLocalRules(projectDir)).toBe("");
 
     expect(loadFacts(projectDir)).toEqual({ facts: [], last_updated: null });
     saveFacts({ facts: [{ key: "k", type: "t", label: "l", value: "v", confidence: 0.7 }] }, projectDir);

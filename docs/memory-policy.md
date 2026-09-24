@@ -2,7 +2,7 @@
 
 > 状态：待实施的产品规则，用于评审和验收；当前接线见 [记忆系统总览](./memory-system.md) 和 [Context And Memory Map](./context-memory-map.md)。本文不表示代码已满足这些规则。
 
-实施进度：自动项目记忆现要求用户原话证据，并保存来源会话 ID；环境事实已按项目 cwd 隔离，并记录用户消息 ID 与观察时间。旧全局 `facts.json` 和 `rules.md` 已按用户要求移除，项目目录保留。长期记忆的 `disabled` 与明确 `supersedes` 已用于检索过滤。受管记忆写入会拒绝几类明显的凭据值；这只是有限的模式检查，不能识别所有秘密，也不检查用户直接编辑的 Markdown 文件。工具核验来源、有依据的环境旧值替换和旧无来源事实的读取隔离仍待实施。
+实施进度：自动项目记忆现要求用户原话证据，并保存来源会话 ID；环境事实已按项目 cwd 隔离，并记录用户消息 ID 与观察时间。旧全局 `facts.json` 和 `rules.md` 已按用户要求移除，项目目录保留；旧的无来源项目事实保留在文件中，但不进入提示词。长期记忆的 `disabled` 与明确 `supersedes` 已用于检索过滤。受管记忆写入会拒绝几类明显的凭据值；这只是有限的模式检查，不能识别所有秘密，也不检查用户直接编辑的 Markdown 文件。工具核验来源和有依据的环境旧值替换仍待实施。
 
 参考 OpenAI 的 [Codex 长任务实践](https://developers.openai.com/blog/run-long-horizon-tasks-with-codex)和 [Goals 说明](https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex)：项目资料可以留在可回读的文件中，当前目标属于会话。本文借鉴这种分工，不假定 Vykor 与 Codex 使用相同的内部存储。
 

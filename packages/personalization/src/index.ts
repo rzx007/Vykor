@@ -28,6 +28,14 @@ export interface FactsFile {
   last_updated?: string | null;
 }
 
+export function hasFactSource(fact: ExtractedFact): boolean {
+  if (typeof fact.sourceSessionId !== "string" || !fact.sourceSessionId.trim() ||
+      typeof fact.sourceMessageId !== "string" || !fact.sourceMessageId.trim() ||
+      typeof fact.observedAt !== "string") return false;
+  const observedMs = Date.parse(fact.observedAt);
+  return Number.isFinite(observedMs) && new Date(observedMs).toISOString() === fact.observedAt;
+}
+
 /** 宽松的消息形状：兼容引擎 Message 联合（SystemMessage 无 role，块按 unknown 收）。 */
 export interface SessionMessageLike {
   id?: string;
@@ -139,13 +147,9 @@ const rulesFile = (cwd: string): string => join(getLocalRulesDir(cwd), "rules.md
 const factsFile = (cwd: string): string => join(getLocalRulesDir(cwd), "facts.json");
 
 export function loadLocalRules(cwd: string): string {
-  const path = rulesFile(cwd);
-  if (!existsSync(path)) return "";
-  try {
-    return readFileSync(path, "utf-8").trim();
-  } catch {
-    return "";
-  }
+  const sourced = loadFacts(cwd).facts.filter((fact) =>
+    hasFactSource(fact) && !detectCredentialValue(fact.value));
+  return sourced.length ? factsToRulesMarkdown(sourced).trim() : "";
 }
 
 export function saveLocalRules(content: string, cwd: string): string {

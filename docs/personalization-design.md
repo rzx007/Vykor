@@ -19,7 +19,7 @@ local_rules/
     └── rules.md     # 由 facts 重新生成的分组 Markdown（自动生成，勿手改）
 ```
 
-同项目下次会话启动时 `rules.md` 注入 system prompt（CLAUDE.md 段之后）。旧全局文件留在原位，不自动注入或迁移，因为它没有可靠的项目来源。
+同项目下次会话启动时，只从 `facts.json` 中有来源的条目生成 system prompt 内容（CLAUDE.md 段之后）。`rules.md` 供人查看；旧全局文件即使存在也不自动注入或迁移。
 
 ## 模块（对齐 Python）
 
@@ -36,7 +36,7 @@ local_rules/
 ## 接线（R2）
 
 - **prompt 注入**：`packages/prompts` 的 system prompt 构建在 CLAUDE.md 段后
-  追加 `# Local Environment Rules\n\n<rules.md 内容>`（非空才注入）。
+  追加由有来源的 `facts.json` 条目生成的 Local Environment Rules（非空才注入）。
 - **Run 收尾触发**：`SessionPostRunMaintenance` 只在 durable Run 已经是 `completed` 后读取 Store transcript，再调用 `updateRulesFromSession(messages)`。失败只记告警，不回退 Run 终态。
 - **手动触发**：`/remember` 成功后也会扫描当前 transcript。
 - **边界**：framework 的 `VykorAgent.close()` 只管理 live 执行资源，不写 personalization；这项持久化由拥有 transcript 的 daemon Application 负责。
@@ -47,9 +47,9 @@ local_rules/
 |----|--------|----|------|
 | 触发点 | ui/runtime 关停一处 | durable root Run 成功收尾；`/remember` 也会触发 | 不依赖某个界面是否正常退出 |
 | 日志 | logging.info | 无（静默） | TS 无 logger 基建 |
-| 消息形状 | ConversationMessage.content blocks | 宽松 `{role?, content: string \| unknown[]}` | 适配 TS 引擎消息（SystemMessage 无 role） |
+| 消息形状 | ConversationMessage.content blocks | `{id?, createdAt?, role?, content: string \| unknown[]}`；只自动抽有来源的 user 消息 | 适配 TS 消息，并保留 durable 来源 |
 | git_remote 正则 | 懒惰 `\S+?` 后仅跟可选组 → 恒捕获 1 字符,被长度过滤丢弃(死代码) | 追加 `(?=\s\|$)` 锚,真正捕获 `owner/repo` | 修 Python 的失效模式 |
-| prompt 注入包装 | 外层再包一层 `# Local Environment Rules` 标题(与 rules.md 自带标题重复) | 直接注入 rules.md 原文 | 避免双标题 |
+| prompt 注入包装 | 外层再包一层 `# Local Environment Rules` 标题(与 rules.md 自带标题重复) | 从有来源的 facts 生成一次 Local Environment Rules | 旧缓存不能绕过来源筛选 |
 | 信号路径 | 单一关停钩子 | 只处理已经 durable completed 的 Run；进程中断的 Run 不假装完成抽取 | 与 durable 终态一致 |
 | 配置目录 | 默认 ~/.vykor | 尊重 VYKOR_CONFIG_DIR(仓库既有约定) | 测试隔离/Electron 预留 |
 
@@ -60,6 +60,6 @@ local_rules/
 - rules：load/save 往返、mergeFacts 置信度胜出与新 key 追加、目录懒建。
 - session-hook：端到端（消息 → facts.json + rules.md 落盘 → 返回新增数）、
   空会话返回 0。
-- prompts 注入：rules.md 存在时进 prompt、为空不注入。
+- prompts 注入：有来源的 facts 存在时进 prompt；只有旧缓存或无来源事实时不注入。
 
 每轮 `pnpm check-types` + `pnpm test` 全绿。

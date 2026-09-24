@@ -26,7 +26,7 @@ import {
 } from "./index.js";
 import type { EnvironmentInfo } from "./index.js";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
-import { saveLocalRules } from "@vykor/personalization";
+import { saveFacts, saveLocalRules } from "@vykor/personalization";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -545,6 +545,10 @@ describe("prompt layers with SOUL.md and USER.md", () => {
         "utf-8",
       );
       saveLocalRules("# Local Environment Rules\n\n- `ops@10.0.0.9`\n", cwdDir);
+      saveFacts({ facts: [{
+        key: "ssh_host:ops@10.0.0.9", type: "ssh_host", label: "SSH connection", value: "ops@10.0.0.9", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+      }] }, cwdDir);
 
       const profile = await loadUserProfile();
       expect(profile).toContain("# User Profile");
@@ -896,9 +900,21 @@ describe("local rules injection (C.5)", () => {
       expect(oldGlobal).not.toContain("ops@10.0.0.9");
 
       saveLocalRules("# Local Environment Rules\n\n## SSH Hosts\n\n- `ops@10.0.0.9`", cfgDir);
+      saveFacts({ facts: [{
+        key: "ssh_host:ops@10.0.0.9", type: "ssh_host", label: "SSH connection", value: "ops@10.0.0.9", confidence: 0.7,
+      }] }, cfgDir);
+      const unverified = await buildRuntimeSystemPrompt({ cwd: cfgDir });
+      expect(unverified).not.toContain("ops@10.0.0.9");
+
+      saveFacts({ facts: [
+        { key: "ssh_host:ops@10.0.0.9", type: "ssh_host", label: "SSH connection", value: "ops@10.0.0.9", confidence: 0.7 },
+        { key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+          sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
+      ] }, cfgDir);
       const withRules = await buildRuntimeSystemPrompt({ cwd: cfgDir });
       expect(withRules).toContain("# Local Environment Rules");
-      expect(withRules).toContain("ops@10.0.0.9");
+      expect(withRules).toContain("ops@10.1.2.3");
+      expect(withRules).not.toContain("ops@10.0.0.9");
     } finally {
       delete process.env.VYKOR_CONFIG_DIR;
       rmSync(cfgDir, { recursive: true, force: true });

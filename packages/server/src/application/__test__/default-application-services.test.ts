@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerPluginAgents } from "@vykor/coordinator";
+import { saveFacts } from "@vykor/personalization";
 
 vi.mock("@vykor/services", () => ({
   startDreamNow: vi.fn(),
@@ -85,6 +86,21 @@ describe("default daemon application services", () => {
     expect(status.report).toContain("settings.systemPrompt");
     expect(status.report).toContain("Project Memory");
     expect(status.report).toContain("Credentials");
+  });
+
+  it("reports sourced and unverified project facts separately", async () => {
+    saveFacts({ facts: [
+      { key: "ip_address:10.9.9.9", type: "ip_address", label: "Server IP", value: "10.9.9.9", confidence: 0.7 },
+      { key: "ip_address:10.1.2.3", type: "ip_address", label: "Server IP", value: "10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
+    ] }, temporaryDirectory);
+    const context = createDefaultContextService({
+      current: { model: "m", apiFormat: "anthropic", maxTurns: 50, permission: { mode: "default" } } as never,
+    });
+
+    const status = await context.status({ cwd: temporaryDirectory });
+    expect(status.report).toContain("1 sourced, 1 unverified");
+    expect(status.report).not.toContain("10.9.9.9");
   });
 
   it("reports preserved legacy global rules without injecting them", async () => {

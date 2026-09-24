@@ -19,7 +19,7 @@ import {
   type PersonalPromptFileDiagnostic,
   type PromptLayers,
 } from "@vykor/prompts";
-import { getLocalRulesDir, loadFacts, loadLocalRules } from "@vykor/personalization";
+import { getLocalRulesDir, hasFactSource, loadFacts } from "@vykor/personalization";
 import { loadOutputStyles } from "@vykor/output-styles";
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
 
@@ -106,8 +106,9 @@ export function createDefaultContextService(
       const { manager, directory: memoryDirectory } = await openMemoryManager(cwd);
       const memoryEntries = await manager.getAll();
       const { skillRegistry } = await discoverVykorExtensions(cwd, settings);
-      const localRules = loadLocalRules(cwd);
       const facts = loadFacts(cwd);
+      const sourcedFacts = facts.facts.filter(hasFactSource).length;
+      const unverifiedFacts = facts.facts.length - sourcedFacts;
       const legacyRulesExist = await pathExists(join(getConfigDir(), "local_rules", "rules.md"));
       const credentialsPath = getCredentialsFilePath();
       const credentialsConfigured = await pathExists(credentialsPath);
@@ -137,7 +138,7 @@ export function createDefaultContextService(
         },
         {
           source: "local_rules",
-          status: `${localRules ? `${facts.facts.length} fact(s)` : "missing"}${legacyRulesExist ? "; legacy global rules preserved" : ""}`,
+          status: `${sourcedFacts} sourced, ${unverifiedFacts} unverified${legacyRulesExist ? "; legacy global rules preserved" : ""}`,
           written: "/remember success best-effort",
           injected: "system prompt volatile local rules",
           purpose: "machine environment facts",
