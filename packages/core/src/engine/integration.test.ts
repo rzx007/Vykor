@@ -172,7 +172,7 @@ describe("tool execution feedback", () => {
 
 describe("Integration: Full Agent Loop", () => {
   it("preserves a host-approved Read override summary but drops an ordinary agent override summary", async () => {
-    const run = async (trustedToolOverrides?: ReadonlySet<string>, source: "agent" | "plugin" = "agent", replaceAgentAfterApproval = false) => {
+    const run = async (trustedToolOverrides?: ReadonlySet<string>, source: "agent" | "plugin" = "agent", replaceAgentAfterApproval = false, changeExecuteAfterApproval = false) => {
       const registry = new ToolRegistry();
       registry.register({ name: "Read", description: "base", inputSchema: { type: "object" }, execute: async () => ({ content: [] }) });
       const approved: ToolDefinition = { name: "Read", description: "wrapper", inputSchema: { type: "object" }, execute: async () => ({
@@ -188,6 +188,7 @@ describe("Integration: Full Agent Loop", () => {
         [{ type: "complete", stopReason: "end_turn" }],
       ]);
       const engine = new QueryEngine(client.client, registry, allowAll(), noopHooks(), { trustedToolOverrides: approvedDefinitions, trajectoryTrackerFactory: false });
+      if (changeExecuteAfterApproval) approved.execute = async () => ({ content: [{ type: "text", text: "changed" }], compactSummary: "changed function summary" });
       const events: StreamEvent[] = [];
       for await (const event of engine.submitMessage("read")) events.push(event);
       return events.find((event) => event.type === "tool_use_end");
@@ -196,10 +197,12 @@ describe("Integration: Full Agent Loop", () => {
     const untrusted = await run();
     const pluginReplacement = await run(new Set(["Read"]), "plugin");
     const agentReplacement = await run(new Set(["Read"]), "agent", true);
+    const changedFunction = await run(new Set(["Read"]), "agent", false, true);
     expect(trusted?.type === "tool_use_end" && trusted.result.compactSummary).toContain("attachment://att-1/notes.txt");
     expect(untrusted?.type === "tool_use_end" && untrusted.result.compactSummary).toBeUndefined();
     expect(pluginReplacement?.type === "tool_use_end" && pluginReplacement.result.compactSummary).toBeUndefined();
     expect(agentReplacement?.type === "tool_use_end" && agentReplacement.result.compactSummary).toBeUndefined();
+    expect(changedFunction?.type === "tool_use_end" && changedFunction.result.compactSummary).toBeUndefined();
   });
 
   it("single turn: user → API text → complete", async () => {

@@ -1,4 +1,4 @@
-import type { IToolRegistry, RunAgentBinding, RunCapabilityView, RunMcpServerBinding, RunSkillBinding, RunToolBinding } from "@vykor/core";
+import { toolDefinitionIdentity, type IToolRegistry, type RunAgentBinding, type RunCapabilityView, type RunMcpServerBinding, type RunSkillBinding, type RunToolBinding } from "@vykor/core";
 
 export interface RunCapabilitySources {
   toolRegistry: IToolRegistry;
@@ -43,6 +43,7 @@ export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?
     if (!visible({ ownerPluginId })) continue;
     tools.push([definition.name, frozenCopy({
       ownerPluginId, definition, source, serverId: server?.serverId,
+      definitionIdentity: toolDefinitionIdentity(definition),
       // Capture both the function and its original receiver (some tools use WeakMap identity).
       invoke: definition.execute.bind(definition),
     })]);

@@ -391,6 +391,8 @@ export interface AgentRunContribution {
 
 /** Objects captured from the host's already-filtered runtime for one Run. */
 export interface RunToolBinding {
+  /** Opaque identity of the original registered definition; omitted by JSON serialization. */
+  readonly definitionIdentity?: symbol;
   readonly ownerPluginId?: string;
   readonly definition: import("./tools").ToolDefinition;
   readonly source?: import("./tools").ToolRegistrationSource;

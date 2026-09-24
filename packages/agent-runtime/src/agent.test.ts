@@ -25,6 +25,40 @@ afterEach(() => {
 });
 
 describe("createDefaultNodeAgent", () => {
+  it("keeps a host-trusted Read summary through a real Run capability view", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-trusted-read-"));
+    tempDirs.push(cwd);
+    const completed: AgentEvent[] = [];
+    let turn = 0;
+    const agent = await createDefaultNodeAgent({
+      cwd,
+      settings: {
+        apiFormat: "anthropic", model: "test-model", maxTurns: 3,
+        permission: { mode: "default" }, sandbox: { enabled: false },
+        memory: { enabled: false }, plugins: { enabled: false },
+      },
+      toolOverrides: [{ name: "Read", description: "host attachment Read", inputSchema: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] },
+        execute: async () => ({ content: [{ type: "text", text: "1: private body" }], executionState: "completed", compactSummary: "Read completed: attachment://att-1/notes.txt; lines=1-1" }) }],
+      trustedToolOverrides: ["Read"],
+      client: { async *streamMessage() {
+        if (turn++ === 0) yield { type: "tool_use_start" as const,
+          toolUse: { type: "tool_use" as const, id: "read-1", name: "Read", input: { file_path: "attachment://att-1/notes.txt" } } };
+        yield { type: "complete" as const, stopReason: turn === 1 ? "tool_use" as const : "end_turn" as const };
+      } },
+      onEvent: (event) => completed.push(event),
+    });
+    try {
+      await agent.runMessage("read attachment");
+      const result = completed.find((event) => event.type === "tool.completed")?.data.result;
+      expect(result).toBeDefined();
+      expect(result?.isError).toBeFalsy();
+      expect(result?.compactSummary).toContain("attachment://att-1/notes.txt");
+      expect(result?.compactSummary).not.toContain("private body");
+    } finally {
+      await agent.close();
+    }
+  });
+
   it("clears an explicit effort without restoring the startup default", async () => {
     const requests: Array<{ effort?: string; system?: string }> = [];
     const agent = await createDefaultNodeAgent({

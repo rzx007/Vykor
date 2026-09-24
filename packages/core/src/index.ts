@@ -46,6 +46,7 @@ export type {
 } from "./types/tools";
 
 export { formatToolResultForModel, toolFeedbackFields, externalToolMetadata } from "./engine/tool-result-feedback";
+export { toolDefinitionIdentity } from "./engine/tool-definition-identity";
 
 export type { StreamingMessageClient, StreamMessageParams } from "./types/client";
 

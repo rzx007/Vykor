@@ -31,6 +31,7 @@ import { sanitizeMessageHistory } from "../utils/message-history";
 import { normalizeToolInput, validateToolInput } from "./tool-input-schema";
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
+import { toolDefinitionIdentity } from "./tool-definition-identity";
 import {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,
@@ -177,6 +178,7 @@ export class QueryEngine implements IQueryEngine {
   private sessionId: string | undefined;
   private reasoningEffort: string | undefined;
   private appliedRequestConfiguration: QueryRequestConfiguration | undefined;
+  private readonly trustedOverrides: ReadonlyMap<string, { identity: symbol; execute: ToolDefinition["execute"] }>;
 
   constructor(
     private apiClient: StreamingMessageClient,
@@ -185,6 +187,9 @@ export class QueryEngine implements IQueryEngine {
     private hookExecutor: IHookExecutor,
     private options: QueryEngineOptions = {},
   ) {
+    this.trustedOverrides = new Map([...options.trustedToolOverrides ?? []].map(([name, definition]) => [
+      name, { identity: toolDefinitionIdentity(definition), execute: definition.execute },
+    ]));
     this.model = options.model ?? "deepchat-chat";
     this.compactService = new CompactService(
       options.maxTokens ?? 100_000,
@@ -972,7 +977,7 @@ export class QueryEngine implements IQueryEngine {
               metadata: externalToolMetadata(result.metadata),
               compactSummary: (toolRegistry.inspect(toolUse.name)?.source.kind === "builtin"
                 || (toolRegistry.inspect(toolUse.name)?.source.kind === "agent"
-                  && this.options.trustedToolOverrides?.get(toolUse.name) === tool))
+                  && this.isTrustedOverride(toolUse.name, tool, execution?.capabilityView)))
                 ? toolFeedbackFields(result).compactSummary : undefined,
             } as ToolExecutionResult,
           };
@@ -1035,6 +1040,18 @@ export class QueryEngine implements IQueryEngine {
       }
       return result;
     });
+  }
+
+  private isTrustedOverride(name: string, tool: ToolDefinition, view?: AgentExecutionContext["capabilityView"]): boolean {
+    const approved = this.trustedOverrides.get(name);
+    if (!approved) return false;
+    if (view) {
+      const binding = view.tools.get(name);
+      return binding?.definitionIdentity === approved.identity
+        && binding.definition.execute === approved.execute
+        && tool.execute === binding.invoke;
+    }
+    return toolDefinitionIdentity(tool) === approved.identity && tool.execute === approved.execute;
   }
 
   private async executeToolWithTimeout(
