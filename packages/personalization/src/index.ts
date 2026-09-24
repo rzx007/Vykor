@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { isIP } from "node:net";
 import { detectCredentialValue } from "@vykor/memory";
 
 /**
@@ -21,6 +22,9 @@ export interface ExtractedFact {
   sourceSessionId?: string;
   sourceMessageId?: string;
   observedAt?: string;
+  status?: "superseded";
+  replacement?: { byKey: string; operationId: string; at: string };
+  manualSource?: { kind: "manual_replace"; operationId: string; oldKey: string; at: string; sessionId?: string };
 }
 
 export interface FactsFile {
@@ -29,11 +33,24 @@ export interface FactsFile {
 }
 
 export function hasFactSource(fact: ExtractedFact): boolean {
+  if (fact.manualSource) {
+    const source = fact.manualSource;
+    return source.kind === "manual_replace" &&
+      typeof source.operationId === "string" && Boolean(source.operationId.trim()) &&
+      typeof source.oldKey === "string" && Boolean(source.oldKey.trim()) &&
+      isIsoTime(source.at) && fact.observedAt === source.at &&
+      (source.sessionId === undefined || (typeof source.sessionId === "string" && Boolean(source.sessionId.trim())));
+  }
   if (typeof fact.sourceSessionId !== "string" || !fact.sourceSessionId.trim() ||
       typeof fact.sourceMessageId !== "string" || !fact.sourceMessageId.trim() ||
       typeof fact.observedAt !== "string") return false;
-  const observedMs = Date.parse(fact.observedAt);
-  return Number.isFinite(observedMs) && new Date(observedMs).toISOString() === fact.observedAt;
+  return isIsoTime(fact.observedAt);
+}
+
+function isIsoTime(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) && new Date(ms).toISOString() === value;
 }
 
 function isPersistedFact(value: unknown): value is ExtractedFact {
@@ -41,7 +58,13 @@ function isPersistedFact(value: unknown): value is ExtractedFact {
   const fact = value as ExtractedFact;
   return [fact.key, fact.type, fact.label, fact.value].every(
     (field) => typeof field === "string" && field.trim().length > 0,
-  ) && typeof fact.confidence === "number" && Number.isFinite(fact.confidence) && hasFactSource(fact);
+  ) && typeof fact.confidence === "number" && Number.isFinite(fact.confidence) && hasFactSource(fact) &&
+    (fact.status === undefined || fact.status === "superseded") &&
+    (fact.status !== "superseded" || (
+      typeof fact.replacement?.byKey === "string" && Boolean(fact.replacement.byKey.trim()) &&
+      typeof fact.replacement?.operationId === "string" && Boolean(fact.replacement.operationId.trim()) &&
+      isIsoTime(fact.replacement.at)
+    ));
 }
 
 /** 宽松的消息形状：兼容引擎 Message 联合（SystemMessage 无 role，块按 unknown 收）。 */
@@ -111,6 +134,7 @@ const SECTION_TITLES: Record<string, string> = {
 
 /** facts → 分组 Markdown（注入 system prompt 用）。 */
 export function factsToRulesMarkdown(facts: ExtractedFact[]): string {
+  facts = facts.filter((fact) => fact.status !== "superseded");
   if (facts.length === 0) return "";
 
   const grouped = new Map<string, ExtractedFact[]>();
@@ -159,7 +183,7 @@ const factsFile = (cwd: string): string => join(getLocalRulesDir(cwd), "facts.js
 
 export function loadLocalRules(cwd: string): string {
   try {
-    const sourced = loadFacts(cwd).facts.filter((fact) => !detectCredentialValue(fact.value));
+    const sourced = loadFacts(cwd).facts.filter((fact) => fact.status !== "superseded" && !detectCredentialValue(fact.value));
     return sourced.length ? factsToRulesMarkdown(sourced).trim() : "";
   } catch {
     return "";
@@ -215,11 +239,104 @@ export function mergeFacts(existing: FactsFile, newFacts: ExtractedFact[]): Fact
   for (const fact of newFacts) {
     if (!fact.key) continue;
     const old = byKey.get(fact.key);
+    if (old?.status === "superseded") continue;
     if (!old || (fact.confidence ?? 0) >= (old.confidence ?? 0)) {
       byKey.set(fact.key, fact);
     }
   }
   return { facts: [...byKey.values()] };
+}
+
+export type FactMutationErrorCode = "INVALID_VALUE" | "NOT_FOUND" | "CONFLICT" | "UNREADABLE";
+
+export class FactMutationError extends Error {
+  constructor(readonly code: FactMutationErrorCode, message: string) {
+    super(message);
+  }
+}
+
+export interface ReplaceFactResult {
+  oldKey: string;
+  newKey: string;
+  operationId: string;
+  relatedActiveKeys: string[];
+  cacheWarning?: string;
+}
+
+const FACT_VALUE_CONTEXT: Record<string, (value: string) => string> = {
+  ssh_host: (value) => `ssh ${value}`,
+  ip_address: (value) => value,
+  data_path: (value) => value,
+  conda_env: (value) => `conda activate ${value}`,
+  python_env: (value) => `Python ${value}`,
+  api_endpoint: (value) => value,
+  env_var: (value) => `export ${value}`,
+  git_remote: (value) => `github.com/${value}`,
+  ray_cluster: (value) => `ray start ${value}`,
+  cron_schedule: (value) => `${value} /bin/true`,
+};
+
+/** 精确替换一条项目事实；取代状态留在 facts.json，避免旧消息重扫时复活。 */
+export function replaceFact(
+  cwd: string, oldKey: string, newValue: string, options: { sessionId?: string } = {},
+): ReplaceFactResult {
+  let existing: FactsFile;
+  try { existing = loadFacts(cwd); }
+  catch { throw new FactMutationError("UNREADABLE", "Project facts file is unreadable"); }
+  const old = existing.facts.find((fact) => fact.key === oldKey);
+  if (!old) throw new FactMutationError("NOT_FOUND", "Project fact not found");
+  const newKey = `${old.type}:${newValue}`;
+  if (old.status === "superseded") {
+    if (old.replacement?.byKey !== newKey) throw new FactMutationError("CONFLICT", "Project fact was already replaced");
+    return {
+      oldKey, newKey, operationId: old.replacement.operationId,
+      relatedActiveKeys: relatedActiveKeys(existing.facts, old),
+    };
+  }
+  const makeContext = FACT_VALUE_CONTEXT[old.type];
+  if (!newValue || newValue !== newValue.trim() || /[\r\n]/.test(newValue) ||
+      detectCredentialValue(newValue) ||
+      (old.type === "ip_address" && isIP(newValue) !== 4) ||
+      !makeContext ||
+      !extractFactsFromText(makeContext(newValue))
+        .some((fact) => fact.type === old.type && fact.value === newValue)) {
+    throw new FactMutationError("INVALID_VALUE", "Invalid replacement fact value");
+  }
+  if (newKey === oldKey || existing.facts.some((fact) => fact.key === newKey)) {
+    throw new FactMutationError("CONFLICT", "Replacement fact already exists");
+  }
+  if (options.sessionId !== undefined && (!options.sessionId.trim())) {
+    throw new FactMutationError("INVALID_VALUE", "Invalid session ID");
+  }
+  const at = new Date().toISOString();
+  const operationId = randomUUID();
+  const replacement = { byKey: newKey, operationId, at };
+  const newFact: ExtractedFact = {
+    key: newKey, type: old.type, label: old.label, value: newValue, confidence: old.confidence,
+    observedAt: at,
+    manualSource: { kind: "manual_replace", operationId, oldKey, at, ...(options.sessionId ? { sessionId: options.sessionId } : {}) },
+  };
+  const facts = existing.facts.map((fact) => fact.key === oldKey
+    ? { ...fact, status: "superseded" as const, replacement }
+    : fact);
+  facts.push(newFact);
+  saveFacts({ facts }, cwd);
+  const result: ReplaceFactResult = {
+    oldKey, newKey, operationId, relatedActiveKeys: relatedActiveKeys(facts, old),
+  };
+  try { saveLocalRules(factsToRulesMarkdown(facts), cwd); }
+  catch { result.cacheWarning = "rules.md cache could not be updated"; }
+  return result;
+}
+
+function relatedActiveKeys(facts: ExtractedFact[], old: ExtractedFact): string[] {
+  const ip = old.value.match(/(?:\d{1,3}\.){3}\d{1,3}/)?.[0];
+  return facts.filter((fact) => {
+    const otherIps: string[] = fact.value.match(/(?:\d{1,3}\.){3}\d{1,3}/g) ?? [];
+    return fact.key !== old.key && fact.status !== "superseded" &&
+      (fact.value === old.value || (ip && otherIps.includes(ip)));
+  })
+    .map((fact) => fact.key);
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import {
   saveLocalRules,
   getLocalRulesDir,
   updateRulesFromSession,
+  replaceFact,
 } from "./index.js";
 
 // 经 VYKOR_CONFIG_DIR 指向临时目录（仓库既有约定）：完全不碰真实
@@ -262,5 +263,132 @@ describe("updateRulesFromSession", () => {
   it("returns 0 for empty or fact-free sessions", () => {
     expect(updateRulesFromSession([], projectDir, "s1")).toBe(0);
     expect(updateRulesFromSession([{ id: "u-hello", createdAt: 1, role: "user", content: "hello there" }], projectDir, "s1")).toBe(0);
+  });
+});
+
+describe("replaceFact", () => {
+  it("supersedes only the selected fact and survives rescanning old messages", () => {
+    const oldMessages = [{
+      id: "u1", createdAt: Date.parse("2026-09-24T00:00:00.000Z"), role: "user",
+      content: "ssh ops@10.1.2.3; ssh admin@10.9.8.7",
+    }];
+    updateRulesFromSession(oldMessages, projectDir, "s1");
+
+    const result = replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4", { sessionId: "s1" });
+    expect(result.relatedActiveKeys).toContain("ip_address:10.1.2.3");
+    expect(loadFacts(projectDir).facts.find((fact) => fact.key === result.oldKey)?.status).toBe("superseded");
+    expect(loadFacts(projectDir).facts.find((fact) => fact.key === result.newKey)?.manualSource)
+      .toMatchObject({ kind: "manual_replace", operationId: result.operationId, oldKey: result.oldKey, sessionId: "s1" });
+    expect(loadLocalRules(projectDir)).toContain("ops@10.1.2.4");
+    expect(loadLocalRules(projectDir)).not.toContain("ops@10.1.2.3");
+
+    updateRulesFromSession(oldMessages, projectDir, "s1");
+    const facts = loadFacts(projectDir).facts;
+    expect(facts.find((fact) => fact.key === result.oldKey)?.status).toBe("superseded");
+    expect(facts.find((fact) => fact.key === "ssh_host:admin@10.9.8.7")?.status).toBeUndefined();
+    expect(replaceFact(projectDir, result.oldKey, "ops@10.1.2.4", { sessionId: "s1" }).operationId)
+      .toBe(result.operationId);
+  });
+
+  it("does not report a different IP with the same prefix as related", () => {
+    saveFacts({ facts: [
+      { key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
+      { key: "ip_address:10.1.2.30", type: "ip_address", label: "Server IP", value: "10.1.2.30", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u2", observedAt: "2026-09-24T00:00:00.000Z" },
+    ] }, projectDir);
+
+    const result = replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4");
+    expect(result.relatedActiveKeys).toEqual([]);
+  });
+
+  it("accepts canonical replacement values for every extracted fact type", () => {
+    const examples = [
+      ["ssh_host", "ops@10.1.2.3", "ops@10.1.2.4"],
+      ["ip_address", "10.1.2.3", "10.1.2.4"],
+      ["data_path", "/mnt/data/landing/old", "/mnt/data/landing/new"],
+      ["conda_env", "old-env", "new-env"],
+      ["python_env", "3.11.2", "3.12.1"],
+      ["api_endpoint", "https://api.example.com/v2", "https://api.example.com/v3"],
+      ["env_var", "DATA_ROOT", "MODEL_ROOT"],
+      ["git_remote", "acme/old", "acme/new"],
+      ["ray_cluster", "--address 10.1.2.3:6379", "--address 10.1.2.4:6379"],
+      ["cron_schedule", "0 3 * * *", "0 4 * * *"],
+    ] as const;
+    for (const [type, oldValue, newValue] of examples) {
+      saveFacts({ facts: [{
+        key: `${type}:${oldValue}`, type, label: type, value: oldValue, confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+      }] }, projectDir);
+      try {
+        expect(replaceFact(projectDir, `${type}:${oldValue}`, newValue).newKey).toBe(`${type}:${newValue}`);
+      } catch (error) {
+        throw new Error(`${type}: ${String(error)}`);
+      }
+    }
+  });
+
+  it("rejects invalid replacements without modifying the facts file", () => {
+    saveFacts({ facts: [{
+      key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }, {
+      key: "ssh_host:ops@10.1.2.4", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.4", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u2", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, projectDir);
+    const path = join(dir, "facts.json");
+    const before = readFileSync(path, "utf-8");
+    for (const [oldKey, value, code] of [
+      ["ssh_host:missing", "ops@10.1.2.5", "NOT_FOUND"],
+      ["ssh_host:ops@10.1.2.3", "not-an-ssh-host", "INVALID_VALUE"],
+      ["ssh_host:ops@10.1.2.3", "ops@sk-examplelongtoken123", "INVALID_VALUE"],
+      ["ssh_host:ops@10.1.2.3", "ops@10.1.2.4", "CONFLICT"],
+    ]) {
+      expect(() => replaceFact(projectDir, oldKey!, value!)).toThrowError(expect.objectContaining({ code }));
+      expect(readFileSync(path, "utf-8")).toBe(before);
+    }
+  });
+
+  it("rejects an invalid IPv4 address even if the extractor matches its shape", () => {
+    saveFacts({ facts: [{
+      key: "ip_address:10.1.2.3", type: "ip_address", label: "Server IP", value: "10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, projectDir);
+    expect(() => replaceFact(projectDir, "ip_address:10.1.2.3", "999.999.999.999"))
+      .toThrowError(expect.objectContaining({ code: "INVALID_VALUE" }));
+  });
+
+  it("does not overwrite an unreadable facts file", () => {
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, "facts.json");
+    writeFileSync(path, "{broken", "utf-8");
+    expect(() => replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4"))
+      .toThrowError(expect.objectContaining({ code: "UNREADABLE" }));
+    expect(readFileSync(path, "utf-8")).toBe("{broken");
+  });
+
+  it("keeps the replacement inside one project", () => {
+    const projectB = join(cfgDir, "project-b");
+    const old = {
+      key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    };
+    saveFacts({ facts: [old] }, projectDir);
+    saveFacts({ facts: [old] }, projectB);
+    replaceFact(projectDir, old.key, "ops@10.1.2.4");
+    expect(loadLocalRules(projectDir)).toContain("ops@10.1.2.4");
+    expect(loadLocalRules(projectB)).toContain("ops@10.1.2.3");
+  });
+
+  it("keeps the authoritative replacement when the human-readable cache cannot be written", () => {
+    saveFacts({ facts: [{
+      key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, projectDir);
+    mkdirSync(join(dir, "rules.md"));
+    const result = replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4");
+    expect(result.cacheWarning).toBeTruthy();
+    expect(loadLocalRules(projectDir)).toContain("ops@10.1.2.4");
+    expect(loadLocalRules(projectDir)).not.toContain("ops@10.1.2.3");
   });
 });

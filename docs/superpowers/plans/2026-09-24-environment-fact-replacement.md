@@ -8,7 +8,9 @@
 
 **技术栈：** TypeScript、Node `fs`、Hono、Vitest；复用现有包和 `facts.json`，不加依赖或数据库表。
 
-**设计依据：** [环境事实时效与旧值替换设计](../specs/2026-09-24-environment-fact-freshness-and-replacement-design.md)。执行前在隔离 worktree 中确认工作区状态；每个任务单独做红灯、绿灯、审查和提交。
+**设计依据：** [环境事实时效与旧值替换设计](../specs/2026-09-24-environment-fact-freshness-and-replacement-design.md)。执行前确认工作区状态；每个任务单独做红灯、绿灯、审查和提交。
+
+**执行进度：** 用户明确选择直接在 `main` 执行。任务 1 的代码与测试已完成，待提交；任务 2–4 未开始。
 
 ---
 

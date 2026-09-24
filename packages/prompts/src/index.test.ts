@@ -26,7 +26,7 @@ import {
 } from "./index.js";
 import type { EnvironmentInfo } from "./index.js";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
-import { saveFacts, saveLocalRules } from "@vykor/personalization";
+import { replaceFact, saveFacts, saveLocalRules } from "@vykor/personalization";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -895,6 +895,29 @@ describe("prompt layers with SOUL.md and USER.md", () => {
 });
 
 describe("local rules injection (C.5)", () => {
+  it("excludes a superseded SSH fact even when rules.md still contains the old value", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const cfgDir = mkdtempSync(join(tmpdir(), "vk-prompts-fact-replace-"));
+    const previous = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = cfgDir;
+    try {
+      saveFacts({ facts: [{
+        key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+      }] }, cfgDir);
+      replaceFact(cfgDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4");
+      saveLocalRules("# Local Environment Rules\n\n- `ops@10.1.2.3`", cfgDir);
+
+      const prompt = await buildRuntimeSystemPrompt({ cwd: cfgDir });
+      expect(prompt).toContain("ops@10.1.2.4");
+      expect(prompt).not.toContain("ops@10.1.2.3");
+    } finally {
+      if (previous === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previous;
+      rmSync(cfgDir, { recursive: true, force: true });
+    }
+  });
+
   it("injects rules.md into the runtime prompt and skips when absent", async () => {
     const { mkdtempSync, rmSync } =
       await import("node:fs");
