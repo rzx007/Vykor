@@ -125,6 +125,33 @@ describe("createDsmlRecoveryScanner", () => {
     expect(outcome.visible).toBe("");
   });
 
+  it("recovers the doubled-pipe calls wrapper emitted by DeepSeek", () => {
+    const leaked = String.raw`< | | DSML | | calls> < | | DSML | | invoke name="Shell"> < | | DSML | | parameter name="command" string="true">Get-Content "$env:USERPROFILE\.openharness-ts\settings.json"</ | | DSML | | parameter> </ | | DSML | | calls>`;
+    const outcome = scan([...leaked], ["Shell"]);
+
+    expect(outcome.calls).toHaveLength(1);
+    expect(outcome.calls[0]!.input).toEqual({
+      command: String.raw`Get-Content "$env:USERPROFILE\.openharness-ts\settings.json"`,
+    });
+    expect(outcome.visible).toBe("");
+  });
+
+  it("removes markdown escapes from leaked parameter names and closing tags", () => {
+    const leaked = String.raw`<｜｜DSML｜｜ calls> <｜｜DSML｜｜ invoke name="Edit"> <｜｜DSML｜｜ parameter name="file\_path" string="true">C:\tmp\styles.css\</｜｜DSML｜｜ parameter> <｜｜DSML｜｜ parameter name="new\_string" string="true">.card {}\</｜｜DSML｜｜ parameter> <｜｜DSML｜｜ parameter name="old\_string" string="true">/* APPEND:05 */\</｜｜DSML｜｜ parameter> \</｜｜DSML｜｜ invoke> \</｜｜DSML｜｜ calls>`;
+    const outcome = scan([...leaked], ["Edit"]);
+
+    expect(outcome.calls).toEqual([{
+      id: "dsml_0",
+      name: "Edit",
+      input: {
+        file_path: String.raw`C:\tmp\styles.css`,
+        new_string: ".card {}",
+        old_string: "/* APPEND:05 */",
+      },
+    }]);
+    expect(outcome.visible).toBe("");
+  });
+
   it("closes a parameter when the model writes a bare DSML close tag", () => {
     const body = [
       openTag("invoke", 'name="Write"'),

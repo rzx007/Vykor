@@ -14,14 +14,14 @@ export interface DsmlRecoveryScanner {
   flush(): DsmlScanResult;
 }
 
-const TOOL_CALLS_KEYWORDS = ["tool_calls", "toolcalls", "tool-calls"] as const;
+const TOOL_CALLS_KEYWORDS = ["tool_calls", "toolcalls", "tool-calls", "calls"] as const;
 
 // Safety valve: never hold more than this many characters waiting for a block
 // to close. Beyond it the held text is released as plain content.
 const MAX_HELD_CHARS = 4_000_000;
 
-const INVOKE_CLOSE_RE = /<\/[^<>]*invoke[^<>]*>/i;
-const TRAILING_WRAPPER_CLOSE_RE = /<\/[^<>]*tool[_\-]?calls[^<>]*>/i;
+const INVOKE_CLOSE_RE = /<\/(?:(?:[|｜▁\s]*DSML[|｜▁\s]*)?invoke|[|｜▁\s]*DSML[|｜▁\s]*(?:tool[_\-]?calls|toolcalls|calls))[|｜▁\s]*>/i;
+const TRAILING_WRAPPER_CLOSE_RE = /<\/[^<>]*(?:tool[_\-]?calls|toolcalls|calls)[^<>]*>/i;
 const PARAM_TAG_RE = /<(?![\/])[^<>]*?parameter[^<>]*>/i;
 const PARAM_CLOSE_RE = /<\/[^<>]*?parameter[^<>]*>/i;
 const PARAM_BARE_CLOSE_RE = /<\/[|｜▁\s]*DSML[|｜▁\s]*>/i;
@@ -76,7 +76,8 @@ type InvokeOpenRead =
  *
  * Tolerates the degraded shapes DeepSeek V4 emits at long context: fullwidth
  * or ASCII bar fillers, a missing `<｜DSML｜tool_calls>` wrapper, misspelled
- * wrapper names, and compact markup without newlines.
+ * wrapper names (including a bare `calls`), a missing invoke close tag, and
+ * compact markup without newlines.
  */
 function readInvokeOpen(s: string, start: number): InvokeOpenRead {
   let i = start + 1;
@@ -148,6 +149,10 @@ function finishInvokeOpen(s: string, i: number): InvokeOpenRead {
 function readTrailingWrapperClose(s: string, start: number): InvokeOpenRead {
   let i = start;
   if (i >= s.length) return { kind: "prefix" };
+  if (s[i] === "\\") {
+    i++;
+    if (i >= s.length) return { kind: "prefix" };
+  }
   if (s[i] !== "<") return { kind: "no" };
   i++;
   if (i >= s.length) return { kind: "prefix" };
@@ -207,8 +212,12 @@ function parseParameters(body: string): Record<string, unknown> {
     ].filter((index) => index !== -1);
     const valueEnd = tagEnd + (boundaries.length ? Math.min(...boundaries) : rest.length);
 
-    const name = extractAttribute(tag, "name");
-    if (name) input[name] = coerceParameterValue(body.slice(tagEnd, valueEnd), tag);
+    const name = extractAttribute(tag, "name")?.replace(/\\([_-])/g, "$1");
+    const rawValue = body.slice(tagEnd, valueEnd);
+    const value = rawValue.endsWith("\\") && body[valueEnd] === "<"
+      ? rawValue.slice(0, -1)
+      : rawValue;
+    if (name) input[name] = coerceParameterValue(value, tag);
 
     cursor = Math.max(valueEnd, tagEnd);
   }
