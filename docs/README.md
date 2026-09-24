@@ -180,6 +180,8 @@
 
 ## 第 5 层：可执行验证
 
+- [跨任务行为评测基线](./agent-behavior-evaluation.md)：本地脚本场景、工具链路验证、真实模型评测的授权与证据边界。
+
 - [真实运行验收提示词](./runtime-acceptance-prompts.md)：把典型用户输入直接发给真实模型，人工核对 Run、Tool、Child、Job、Permission、Workflow、Memory、Bot 和 Schedule 是否真的工作。
 - [契约与测试索引](./contract-test-index.md)：把 Runtime、durable 数据、协议、Client、Workflow、Jobs、Channel、Permission 和 Sandbox 的硬规则映射到具体测试文件。
 - `pnpm check-docs`：检查文档状态、总目录必备入口和所有本地 Markdown 链接。
