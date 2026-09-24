@@ -27,8 +27,8 @@ describe("normalizeBrowserUrl", () => {
 
 describe("toLocalFileUrl", () => {
   it("joins a project root and relative HTML path", () => {
-    expect(toLocalFileUrl("D:\\code\\OpenHarness", "examples/page demo/index.html")).toBe(
-      "file:///D:/code/OpenHarness/examples/page%20demo/index.html"
+    expect(toLocalFileUrl("D:\\code\\Vykor", "examples/page demo/index.html")).toBe(
+      "file:///D:/code/Vykor/examples/page%20demo/index.html"
     )
   })
 })

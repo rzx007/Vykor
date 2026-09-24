@@ -27,7 +27,7 @@
 | `packages/core/src/types/runtime.ts` | `QueryEngineOptions.reasoningEffort` |
 | `packages/core/src/engine/query-engine.ts` | 透传 `reasoningEffort` |
 | `packages/api/src/providers/openai.ts` | 请求体写 `reasoning_effort` |
-| `packages/agent-runtime/src/agent-options.ts` | `OpenHarnessAgentConfiguration.reasoningEffort` |
+| `packages/agent-runtime/src/agent-options.ts` | `VykorAgentConfiguration.reasoningEffort` |
 | `packages/agent-runtime/src/default-runtime.ts` | `engineOptions.reasoningEffort` |
 | `packages/agent-runtime/src/child-agent-options.ts` | 子代理继承规则 |
 | `packages/server/src/daemon/daemon-agent.ts` | 校验 + `resolveReasoningEfforts` 注入点 |
@@ -140,7 +140,7 @@ import type {
   ModelsDevCatalog,
   ModelsDevModel,
   ModelsDevProvider,
-} from "@openharness/api";
+} from "@vykor/api";
 ```
 
 文件末尾追加：
@@ -513,7 +513,7 @@ git commit -m "feat(api): forward reasoning effort to openai-compatible requests
 
 - [ ] **步骤 3：加 Agent 配置字段**
 
-`packages/agent-runtime/src/agent-options.ts` 的 `OpenHarnessAgentConfiguration` 内、`effort?: Settings["effort"];` 之后加：
+`packages/agent-runtime/src/agent-options.ts` 的 `VykorAgentConfiguration` 内、`effort?: Settings["effort"];` 之后加：
 
 ```ts
   reasoningEffort?: string;
@@ -546,7 +546,7 @@ git commit -m "feat(api): forward reasoning effort to openai-compatible requests
   }): Promise<string[] | undefined> | string[] | undefined;
 ```
 
-在 loader 回调内，把 `const agentOptions: OpenHarnessAgentOptions = {` 之前改为先算配置：
+在 loader 回调内，把 `const agentOptions: VykorAgentOptions = {` 之前改为先算配置：
 
 ```ts
     const configuration = agentConfigurationFromSession(session, settings);
@@ -579,7 +579,7 @@ git commit -m "feat(api): forward reasoning effort to openai-compatible requests
 ```ts
 import {
   createModelCatalogService,
-} from "@openharness/api";
+} from "@vykor/api";
 import { catalogModelReasoningEfforts } from "./default-services/catalog-provider-mapping.js";
 ```
 
@@ -685,7 +685,7 @@ git commit -m "feat(daemon): validate and forward reasoning effort per session"
 ```ts
 function isSupportedEffort(
   effort: string | undefined,
-): effort is NonNullable<OpenHarnessAgentConfiguration["effort"]> {
+): effort is NonNullable<VykorAgentConfiguration["effort"]> {
   return typeof effort === "string" && effort.trim().length > 0;
 }
 ```
@@ -1313,15 +1313,15 @@ git commit -m "feat(desktop): add per-session reasoning effort picker"
 运行（仓库根目录）：
 
 ```bash
-pnpm --filter @openharness/api test
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/coordinator test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/api test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/coordinator test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/desktop test
 ```
 
 预期：全部 PASS。

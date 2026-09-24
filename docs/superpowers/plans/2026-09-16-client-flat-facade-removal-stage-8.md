@@ -4,7 +4,7 @@
 
 ## 1. 最终目标
 
-在外部使用者经历完整迁移窗口后，物理删除 `OpenHarnessClient` 顶层 118 个平铺兼容方法，只保留命名领域 Resource。删除必须进入明确的 major breaking release。
+在外部使用者经历完整迁移窗口后，物理删除 `VykorClient` 顶层 118 个平铺兼容方法，只保留命名领域 Resource。删除必须进入明确的 major breaking release。
 
 本阶段不自动删除 `transport`、`sse`、`baseUrl`、`token`、`fetchImpl`。这些是高级入口，不属于 118 个平铺 facade。
 

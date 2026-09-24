@@ -1,5 +1,5 @@
 /**
- * TUI 前端入口（进程 B，Bun 运行时）。配置经 OPENHARNESS_FRONTEND_CONFIG 注入；
+ * TUI 前端入口（进程 B，Bun 运行时）。配置经 VYKOR_FRONTEND_CONFIG 注入；
  * daemon 主线由 useServerSync attach。
  * 详见 docs/tui-flow.md 与 docs/client-sync-flow.md。
  */
@@ -7,23 +7,23 @@ import { getTheme } from "./theme/builtinThemes";
 import { assertSupportedTuiRuntime } from "./runtime";
 import type { FrontendConfig } from "./types";
 
-const rawConfig = process.env.OPENHARNESS_FRONTEND_CONFIG;
+const rawConfig = process.env.VYKOR_FRONTEND_CONFIG;
 let config: FrontendConfig;
 try {
   const parsed = rawConfig ? JSON.parse(rawConfig) : {};
   config = {
     daemon: parsed.daemon ?? (
-      process.env.OPENHARNESS_DAEMON_URL
+      process.env.VYKOR_DAEMON_URL
         ? {
-            url: process.env.OPENHARNESS_DAEMON_URL,
-            token: process.env.OPENHARNESS_DAEMON_TOKEN ?? null,
-            cwd: process.env.OPENHARNESS_DAEMON_CWD ?? null,
-            model: process.env.OPENHARNESS_DAEMON_MODEL ?? null,
+            url: process.env.VYKOR_DAEMON_URL,
+            token: process.env.VYKOR_DAEMON_TOKEN ?? null,
+            cwd: process.env.VYKOR_DAEMON_CWD ?? null,
+            model: process.env.VYKOR_DAEMON_MODEL ?? null,
           }
         : null
     ),
-    initial_prompt: parsed.initial_prompt ?? process.env.OPENHARNESS_INITIAL_PROMPT ?? null,
-    theme: parsed.theme ?? process.env.OPENHARNESS_THEME ?? "default",
+    initial_prompt: parsed.initial_prompt ?? process.env.VYKOR_INITIAL_PROMPT ?? null,
+    theme: parsed.theme ?? process.env.VYKOR_THEME ?? "default",
     version: parsed.version ?? null,
   };
 } catch {
@@ -45,9 +45,9 @@ try {
     backgroundColor: initialBg,
     onDestroy: () => process.exit(process.exitCode ?? 0),
   });
-  renderer.setTerminalTitle("OpenHarness");
+  renderer.setTerminalTitle("Vykor");
   createRoot(renderer).render(createElement(App, { config }));
 } catch (err) {
-  console.error("[openharness] 终端渲染器初始化失败（需要 Bun + 支持的平台）：", err);
+  console.error("[vykor] 终端渲染器初始化失败（需要 Bun + 支持的平台）：", err);
   process.exit(1);
 }

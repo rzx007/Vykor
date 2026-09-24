@@ -33,13 +33,13 @@ function findSessionNotification(
     if (!previousRun || !isActiveRun(previousRun) || !isTerminalRun(nextRun)) continue
     if (nextRun.status === "completed") {
       return {
-        title: "OpenHarness",
+        title: "Vykor",
         body: `${sessionTitle(next)} 已完成。`,
       }
     }
     if (nextRun.status === "failed") {
       return {
-        title: "OpenHarness",
+        title: "Vykor",
         body: `${sessionTitle(next)} 运行失败。`,
       }
     }
@@ -55,7 +55,7 @@ function findSessionNotification(
   )
   if (permission) {
     return {
-      title: "OpenHarness 需要处理",
+      title: "Vykor 需要处理",
       body: `${sessionTitle(next)} 正在等待 ${permissionToolName(permission)} 授权。`,
     }
   }

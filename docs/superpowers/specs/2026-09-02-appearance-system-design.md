@@ -1,12 +1,12 @@
-# OpenHarness 桌面端外观系统设计
+# Vykor 桌面端外观系统设计
 
 ## 背景
 
 桌面端设置导航已经包含“外观”入口，但页面目前仍是占位内容。渲染端已有 `ThemeProvider`，能够处理 `system`、`light`、`dark` 三种模式；`main.css` 也已经通过 shadcn/ui 语义变量定义浅色和深色主题。因此，本次工作不重新设计组件库，而是在现有基础上补齐一套正式、可扩展的外观配置系统。
 
-当前主题保存在旧键 `openharness-desktop-theme`，应用入口把默认主题设置为浅色。本次功能明确采用不兼容升级：新外观系统不读取、不迁移、也不维护旧键；首次运行新版本时，无论用户过去使用什么主题，都按照新配置的默认值“跟随系统”启动。设备上即使残留旧键值，也只是不会再被访问的无效数据。
+当前主题保存在旧键 `vykor-desktop-theme`，应用入口把默认主题设置为浅色。本次功能明确采用不兼容升级：新外观系统不读取、不迁移、也不维护旧键；首次运行新版本时，无论用户过去使用什么主题，都按照新配置的默认值“跟随系统”启动。设备上即使残留旧键值，也只是不会再被访问的无效数据。
 
-参考界面只用于确认功能组织方式。OpenHarness 保持现有设置页布局和 shadcn/ui `base-nova` 视觉语言，不逐像素复制其他产品。
+参考界面只用于确认功能组织方式。Vykor 保持现有设置页布局和 shadcn/ui `base-nova` 视觉语言，不逐像素复制其他产品。
 
 ## 目标
 
@@ -37,7 +37,7 @@
 - Diff 标记颜色编辑；
 - 集成终端的字体和配色设置；
 - 扫描并枚举操作系统中的全部字体；
-- 读取或迁移旧主题键 `openharness-desktop-theme`；
+- 读取或迁移旧主题键 `vykor-desktop-theme`；
 - 保留旧 `ThemeProvider`、`useTheme()` 或裸 `D` 主题快捷键的兼容行为。
 
 终端继续由独立的“终端”设置页管理，避免两个设置入口控制同一行为。
@@ -91,7 +91,7 @@ Provider 将解析结果写入根节点：
 
 ## 配置模型
 
-配置保存在单个键 `openharness-desktop-appearance-v1` 下：
+配置保存在单个键 `vykor-desktop-appearance-v1` 下：
 
 ```ts
 type AppearancePreferences = {
@@ -359,7 +359,7 @@ Provider 将三态偏好解析成唯一的 `resolvedReducedMotion: boolean`。�
 - 写入失败时保持上一份有效配置；
 - 卸载时清理监听器。
 
-Provider 测试还要证明新键不存在时直接使用新默认值，不读取 `openharness-desktop-theme`，并证明模块不再导出 `useTheme()` 兼容接口。
+Provider 测试还要证明新键不存在时直接使用新默认值，不读取 `vykor-desktop-theme`，并证明模块不再导出 `useTheme()` 兼容接口。
 
 ### 页面交互测试
 

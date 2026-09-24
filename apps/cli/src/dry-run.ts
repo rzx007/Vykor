@@ -1,5 +1,5 @@
-import type { Settings, McpServerConfig } from "@openharness/core";
-import { findByName } from "@openharness/api";
+import type { Settings, McpServerConfig } from "@vykor/core";
+import { findByName } from "@vykor/api";
 import { checkApiKey } from "./doctor";
 
 /**
@@ -19,7 +19,7 @@ export type Readiness = {
 export function computeReadiness(input: { hasKey: boolean; hasModel: boolean }): Readiness {
   const notes: string[] = [];
   if (!input.hasKey) {
-    notes.push("No API key resolved — model calls will fail. Run 'ohs setup' or 'ohs provider add'.");
+    notes.push("No API key resolved — model calls will fail. Run 'vk setup' or 'vk provider add'.");
     return { verdict: "blocked", notes };
   }
   if (!input.hasModel) {
@@ -155,8 +155,8 @@ export function buildDryRunReport(input: {
  */
 export async function runDryRun(settings: Settings, options: DryRunOptions): Promise<void> {
   const chalk = (await import("chalk")).default;
-  const { createDefaultToolRegistry } = await import("@openharness/tools");
-  const { SkillRegistry } = await import("@openharness/skills");
+  const { createDefaultToolRegistry } = await import("@vykor/tools");
+  const { SkillRegistry } = await import("@vykor/skills");
   const { loadSkillsThreeSources } = await import("./commands/main");
 
   const keyCheck = await checkApiKey(settings);

@@ -4,8 +4,8 @@ import {
   findByName,
   type ModelsDevCatalog,
   type ModelsDevModel,
-} from "@openharness/api";
-import { CredentialStorage, describeCodexAuthState } from "@openharness/auth";
+} from "@vykor/api";
+import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
 
 import type {
   ModelInfo,

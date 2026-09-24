@@ -11,13 +11,13 @@
 
 ## Global Constraints
 
-- 密钥只落默认 `~/.openharness-ts/channel-credentials.json`（`OPENHARNESS_CONFIG_DIR` 可覆盖）；任何响应、IPC、日志、错误消息不回显 `appSecret`。
+- 密钥只落默认 `~/.vykor/channel-credentials.json`（`VYKOR_CONFIG_DIR` 可覆盖）；任何响应、IPC、日志、错误消息不回显 `appSecret`。
 - `appSecret` 只允许出现在 `connectFeishu` 的 JSON body；不得出现在 query/path/日志/持久化。
 - `qrUrl`/data URL 只允许通过注册接口响应与 Desktop IPC 快照传给发起注册的客户端；不写日志、不进错误消息、不落盘；`attempt` 变化即清除。
 - 白名单空 = 全拒（fail-closed）；缺字段/非法值直接拒绝，不猜测、不降级、不引入 fallback。
-- 不改 `@openharness/protocol` durable 类型；只新增 `channel-runtime.ts`。
-- `@openharness/channels` 在 server 内动态 import；Desktop 不新增 `@openharness/*` 依赖（边界脚本只允许 client/server）。
-- `@openharness/auth` 保留在 CLI（其他命令仍用）。
+- 不改 `@vykor/protocol` durable 类型；只新增 `channel-runtime.ts`。
+- `@vykor/channels` 在 server 内动态 import；Desktop 不新增 `@vykor/*` 依赖（边界脚本只允许 client/server）。
+- `@vykor/auth` 保留在 CLI（其他命令仍用）。
 - 每个任务一个 commit；严格 TDD（先红后绿）。
 - 只改本计划列出的文件。
 
@@ -40,7 +40,7 @@
 | `packages/server/src/http/server.ts` | 挂载新路由 | 修改 |
 | `packages/server/src/application/daemon-application.ts` | 装配、自动启动、停机顺序、接口暴露 | 修改 |
 | `packages/server/src/application/default-node-application.ts` | 默认注入 `ChannelConfigStore` | 修改 |
-| `packages/server/package.json` | 新增 `@openharness/channels` | 修改 |
+| `packages/server/package.json` | 新增 `@vykor/channels` | 修改 |
 | `packages/client/src/resources/channel-resource.ts` | 新方法 | 修改 |
 | `packages/client/src/index.ts` | 导出新 DTO 类型 | 修改 |
 | `scripts/client-public-api-contract.json` | 导出清单 | 修改 |
@@ -97,7 +97,7 @@ it("rejects allow ids outside ou_/oc_", () => {
 
 - [x] **步骤 2：运行确认失败**
 
-`pnpm --filter @openharness/protocol test -- --run src/channel-runtime.test.ts`
+`pnpm --filter @vykor/protocol test -- --run src/channel-runtime.test.ts`
 
 - [x] **步骤 3：实现**
 
@@ -106,7 +106,7 @@ it("rejects allow ids outside ou_/oc_", () => {
 - [x] **步骤 4：运行确认通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/protocol test -- --run
+pnpm --filter @vykor/protocol test -- --run
 git add packages/protocol/src/channel-runtime.ts packages/protocol/src/channel-runtime.test.ts packages/protocol/src/index.ts
 git commit -m "feat(protocol): add channel runtime DTOs and parsers"
 ```
@@ -158,7 +158,7 @@ it("stopInbound disconnects adapters but still dispatches queued outbound", asyn
 
 - [x] **步骤 2：运行确认失败**
 
-`pnpm --filter @openharness/channels test -- --run src/__test__/durable-bridge.test.ts src/__test__/manager.test.ts`
+`pnpm --filter @vykor/channels test -- --run src/__test__/durable-bridge.test.ts src/__test__/manager.test.ts`
 
 - [x] **步骤 3：实现**
 
@@ -169,7 +169,7 @@ it("stopInbound disconnects adapters but still dispatches queued outbound", asyn
 - [x] **步骤 4：运行确认通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/channels test -- --run
+pnpm --filter @vykor/channels test -- --run
 git add packages/channels/src/core/durable-bridge.ts packages/channels/src/core/manager.ts packages/channels/src/__test__/durable-bridge.test.ts packages/channels/src/__test__/manager.test.ts
 git commit -m "feat(channels): add per-message cwd, bounded stop and stopInbound"
 ```
@@ -182,13 +182,13 @@ git commit -m "feat(channels): add per-message cwd, bounded stop and stopInbound
 - 修改：`packages/core/src/config/paths.ts`、`packages/core/src/index.ts`
 - 测试：`packages/core/src/config/paths.test.ts`
 
-- [x] **步骤 1：编写失败的测试**：默认 `join(getConfigDir(), "channels")`；`OPENHARNESS_CHANNELS_DIR` 覆盖（测试内设置/还原 env）。
-- [x] **步骤 2：运行确认失败**：`pnpm --filter @openharness/core test -- --run src/config/paths.test.ts`
+- [x] **步骤 1：编写失败的测试**：默认 `join(getConfigDir(), "channels")`；`VYKOR_CHANNELS_DIR` 覆盖（测试内设置/还原 env）。
+- [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/core test -- --run src/config/paths.test.ts`
 - [x] **步骤 3：实现**：新增并导出函数（spec §6.2）。
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/core test -- --run
+pnpm --filter @vykor/core test -- --run
 git add packages/core/src/config/paths.ts packages/core/src/config/paths.test.ts packages/core/src/index.ts
 git commit -m "feat(core): add channel workspace root path"
 ```
@@ -278,17 +278,17 @@ it("keeps a single runtime across restarts", async () => {
 });
 ```
 
-- [x] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/daemon/channel-runtime-service.test.ts`
+- [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/server test -- --run src/daemon/channel-runtime-service.test.ts`
 - [x] **步骤 3：实现**（按 spec §8.1）
   - per-connector lane（promise chain）+ `generation`；`closed` 标志；`startEnabled` 逐 connector 捕获、入 lane 前同步置 `starting`。
   - `applyFeishuConfig` 固定优先级：指纹变化 → 重启；指纹不变 → 原地更新 `acl.allowFrom`（splice）与 `policy` 字段。
   - cwd 解析：`sanitize` + `sha1(connector|accountId|chatId|threadId)` 后缀 + `mkdir recursive`；失败写 `lastError` 并跳过该消息（由 resolveCwd 抛错 → bridge 走 onWarning；runtime 在 resolveCwd 内 catch 并记 `lastError` 后重抛）。
-  - 默认 `createRuntime`：动态 `import("@openharness/channels")`，组装 `FeishuAdapter` + `MessageBus` + `ChannelManager`（`allowFrom`/`channelPolicies` 传引用）+ `DurableChannelBridge`（`cwd: resolveCwd`）；`onDeliveryResult` 直连 application。
+  - 默认 `createRuntime`：动态 `import("@vykor/channels")`，组装 `FeishuAdapter` + `MessageBus` + `ChannelManager`（`allowFrom`/`channelPolicies` 传引用）+ `DurableChannelBridge`（`cwd: resolveCwd`）；`onDeliveryResult` 直连 application。
   - `verify` 默认动态 import `verifyFeishuCredentials`，best-effort 取 `botName`，按 `(appId, domain)` 缓存。
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/server test -- --run src/daemon/channel-runtime-service.test.ts
+pnpm --filter @vykor/server test -- --run src/daemon/channel-runtime-service.test.ts
 git add packages/server/src/daemon/channel-runtime-service.ts packages/server/src/daemon/channel-runtime-service.test.ts
 git commit -m "feat(server): add daemon channel runtime service"
 ```
@@ -327,7 +327,7 @@ export class ChannelOnboardingService {
 ```
 
 - [x] **步骤 1：编写失败的测试**：手填校验失败不写文件；domain 缺省归一 `feishu`；换 appId 清空 allowFrom、同 appId 保留；`patch` 局部合并；扫码 onCredentials 写配置后 `succeeded`，`onConfigChanged` 抛错仍是 `succeeded` 且文件只写一次；缺 `open_id` → `warning`；扫码路径清空旧 allowFrom；并发 start attempt 递增；`cancel` 幂等；新实例 `status()=idle`；allow 空 name/同名覆盖/含 `/` key。
-- [x] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/application/channel/__test__/channel-onboarding-service.test.ts`
+- [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/server test -- --run src/application/channel/__test__/channel-onboarding-service.test.ts`
 - [x] **步骤 3：实现**（按 spec §8.2）
   - 默认 `createRegistration` = `new FeishuRegistration({ onCredentials })`（动态 import）。
   - 扫码路径不做前置 verify；手填必须先 verify。
@@ -335,7 +335,7 @@ export class ChannelOnboardingService {
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/server test -- --run src/application/channel/__test__/channel-onboarding-service.test.ts
+pnpm --filter @vykor/server test -- --run src/application/channel/__test__/channel-onboarding-service.test.ts
 git add packages/server/src/application/channel/channel-onboarding-service.ts packages/server/src/application/channel/__test__/channel-onboarding-service.test.ts
 git commit -m "feat(server): add channel onboarding service"
 ```
@@ -355,17 +355,17 @@ git commit -m "feat(server): add channel onboarding service"
 - [x] **步骤 1：编写失败的测试**
   - 路由：每条路由 200/400/404/409/503；`connect` 的 4xx/5xx 与日志不含 `appSecret`；无 token 实例写路由 503（`runtime`/`onboarding` 为 undefined 时同样 503）。
   - 装配：`DaemonApplication` 在提供 store 时暴露两个服务；`ready()` 触发 `startEnabled`（spy）；`close()` 在 `control.shutdown` 之前调用 `runtime.shutdown`（顺序 spy）。
-- [x] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/http/routes/channel-control.test.ts`
+- [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/server test -- --run src/http/routes/channel-control.test.ts`
 - [x] **步骤 3：实现**
   - `channel-control.ts` 按 spec §7.2 表格实现；`server.ts` 追加 `this.app.route("/channels", createChannelControlRoutes({...}))`；写路由校验 `authorization`（server 已有 token 时由中间件统一 401，无 token 实例在此返回 503）。
   - `daemon-application.ts`：`channelConfigStore` 可选；提供时构造两个服务并适配 `application` 端口（`handleMessage`/`pendingDeliveries`/`recordDelivery` → bridge 端口命名），`ready()` 后台 `void startEnabled()`，`closeWork()` 在 `schedules.shutdown()` 后、`control.shutdown()` 前 `await channelRuntime.shutdown()`。
-  - `default-node-application.ts` 默认注入 `new ChannelConfigStore()`；`application/channel/index.ts` 导出新服务；`package.json` 加 `@openharness/channels`。
+  - `default-node-application.ts` 默认注入 `new ChannelConfigStore()`；`application/channel/index.ts` 导出新服务；`package.json` 加 `@vykor/channels`。
   - 现有 server 测试若因新字段/构造变化失败，注入临时空 store 或断言可选字段，不改产品行为。
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/server test -- --run
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- --run
+pnpm --filter @vykor/server check-types
 git add packages/server/src/http/routes/channel-control.ts packages/server/src/http/routes/channel-control.test.ts packages/server/src/http/server.ts packages/server/src/application/daemon-application.ts packages/server/src/application/default-node-application.ts packages/server/src/application/channel/index.ts packages/server/package.json
 git commit -m "feat(server): expose channel runtime and onboarding over HTTP"
 ```
@@ -379,12 +379,12 @@ git commit -m "feat(server): expose channel runtime and onboarding over HTTP"
 - 测试：`packages/client/src/resources/channel-resource.test.ts`（若无则新建）
 
 - [x] **步骤 1：编写失败的测试**：每个方法的路径/方法/body/返回解包与 spec §7.3 一致；`removeFeishuAllow` 对 key 做 `encodeURIComponent`。
-- [x] **步骤 2：运行确认失败**：`pnpm --filter @openharness/client test -- --run src/resources/channel-resource.test.ts`
+- [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/client test -- --run src/resources/channel-resource.test.ts`
 - [x] **步骤 3：实现**：新增方法；`index.ts` 无条件导出新 DTO 类型；按 public-api 测试报错补 `scripts/client-public-api-contract.json` 条目；`consumer.ts` 增加代表性调用。
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/client test -- --run
+pnpm --filter @vykor/client test -- --run
 git add packages/client/src/resources/channel-resource.ts packages/client/src/resources/channel-resource.test.ts packages/client/src/index.ts scripts/client-public-api-contract.json tests/client-public-api/consumer.ts packages/client/src/__test__/public-api.test.ts
 git commit -m "feat(client): add channel runtime and onboarding methods"
 ```
@@ -402,7 +402,7 @@ git commit -m "feat(client): add channel runtime and onboarding methods"
   - `status`：daemon 不可用打印“daemon 未运行，无法读取渠道配置”；可用时打印运行时状态与白名单。
   - `add feishu`：扫码调 `startFeishuRegistration` 并轮询、按 `attempt` 丢弃旧二维码；手填调 `connectFeishu`；`allow` 调 `addFeishuAllow`。
 - [x] **步骤 2：运行确认失败**：`pnpm --filter @rzx/ohs test -- --run src/commands/channels.test.ts src/commands/channels-onboarding.test.ts`
-- [x] **步骤 3：实现**：删除本地 `assembleChannelAdapters`/bus/manager/bridge 与本地 store 读写；保留 readline 交互与终端二维码渲染；`@openharness/auth` 依赖保留。
+- [x] **步骤 3：实现**：删除本地 `assembleChannelAdapters`/bus/manager/bridge 与本地 store 读写；保留 readline 交互与终端二维码渲染；`@vykor/auth` 依赖保留。
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
@@ -425,16 +425,16 @@ git commit -m "refactor(cli): delegate channel commands to the daemon"
 - Produces：`IpcChannels.connections*`、`DesktopAPI.connections`、`DesktopChannelService`（`snapshot`、`runtimeStatus` → `{ runtime, newDenials }`、`connect`、`patch`、`remove`、`allowAdd`、`allowRemove`、`registrationStart/Status/Cancel`、`runtimeStart/Stop`）。
 
 - [x] **步骤 1：编写失败的测试**：snapshot 合成；QR data URL 生成与 `attempt` 变化失效；secret 不出现在返回值/日志（spy logger）；`runtimeStatus` 首轮只建基线、`bootId` 变化重基线、只返回新增 `seq`；ipc handler 转发。
-- [x] **步骤 2：运行确认失败**：`pnpm --filter @openharness/desktop test -- --run src/main/features/channels`
+- [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/desktop test -- --run src/main/features/channels`
 - [x] **步骤 3：实现**
-  - `package.json` 加 `qrcode`（devDeps 加 `@types/qrcode`）；`channel-types.ts` 从 `@openharness/client` 复用类型并补 `qrDataUrl`。
+  - `package.json` 加 `qrcode`（devDeps 加 `@types/qrcode`）；`channel-types.ts` 从 `@vykor/client` 复用类型并补 `qrDataUrl`。
   - `ipc-channels.ts` 按 spec §10.1 增加 channels 与 `IpcInvokeMap`；`desktop-api-contract.ts` 增加 `connections`；preload 暴露。
   - `channel-service.ts` 注入 `getClient: () => desktopSessionService.daemonClient()`、`generateQrDataUrl`；main 持有 `bootId`+`seq` 高水位。
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/desktop test -- --run src/main/features/channels
-pnpm --filter @openharness/desktop typecheck:node
+pnpm --filter @vykor/desktop test -- --run src/main/features/channels
+pnpm --filter @vykor/desktop typecheck:node
 git add apps/desktop/package.json apps/desktop/src/shared/channel-types.ts apps/desktop/src/shared/ipc-channels.ts apps/desktop/src/shared/desktop-api-contract.ts apps/desktop/src/preload/desktop-api.ts apps/desktop/src/main/features/channels apps/desktop/src/main/features/index.ts pnpm-lock.yaml
 git commit -m "feat(desktop): add channel connections IPC and service"
 ```
@@ -448,13 +448,13 @@ git commit -m "feat(desktop): add channel connections IPC and service"
 - 修改：`apps/desktop/src/renderer/src/components/desktop/settings-page/settings-content.tsx`
 
 - [x] **步骤 1：编写失败的测试**（参考 `mcp-settings.test.tsx` 的挂载方式）：状态徽章（含“停止中”/“已停止（临时）”/“已停用”）、主开关调 `patch`、扫码显示二维码与取消、白名单增删、`patch` 开关、denial 增量提示与“加入白名单”、重试连接与移除接入确认。
-- [x] **步骤 2：运行确认失败**：`pnpm --filter @openharness/desktop test -- --run connections-settings`
+- [x] **步骤 2：运行确认失败**：`pnpm --filter @vykor/desktop test -- --run connections-settings`
 - [x] **步骤 3：实现**：页面按 spec §10.2；轮询由渲染层每 3s 串行执行（in-flight 跳过），失败保留上次快照并退避，卸载停止；`settings-content.tsx` 为“连接”补描述与分支。
 - [x] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/desktop test -- --run connections-settings
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test -- --run connections-settings
+pnpm --filter @vykor/desktop typecheck
 git add apps/desktop/src/renderer/src/components/desktop/settings-page/connections-settings.tsx apps/desktop/src/renderer/src/components/desktop/settings-page/connections-settings.test.tsx apps/desktop/src/renderer/src/components/desktop/settings-page/settings-content.tsx
 git commit -m "feat(desktop): add channel connections settings page"
 ```
@@ -484,16 +484,16 @@ git commit -m "docs: document daemon-owned channel runtime"
 - [x] **步骤 1：相关包全量测试**
 
 ```bash
-pnpm --filter @openharness/protocol test -- --run
-pnpm --filter @openharness/channels test -- --run
-pnpm --filter @openharness/auth test -- --run
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/client test -- --run
-pnpm --filter @openharness/server test -- --run
-pnpm --filter @openharness/tools test -- --run
+pnpm --filter @vykor/protocol test -- --run
+pnpm --filter @vykor/channels test -- --run
+pnpm --filter @vykor/auth test -- --run
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/client test -- --run
+pnpm --filter @vykor/server test -- --run
+pnpm --filter @vykor/tools test -- --run
 pnpm --filter @rzx/ohs test -- --run
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop typecheck
 ```
 
 - [x] **步骤 2：构建与校验**
@@ -506,13 +506,13 @@ git diff --check
 
 - [x] **步骤 3：打包体积测量（决定是否外置 lark SDK）**
 
-检查 `apps/desktop/out/main` 是否出现含 lark SDK 的 chunk；若不可接受，按 spec §14 把 `@larksuiteoapi/node-sdk` 加入 `apps/desktop/package.json` dependencies 与 `electron.vite.config.ts` 的 `externalizeDeps.include`，重跑构建与 `pnpm --filter @openharness/desktop build`。
+检查 `apps/desktop/out/main` 是否出现含 lark SDK 的 chunk；若不可接受，按 spec §14 把 `@larksuiteoapi/node-sdk` 加入 `apps/desktop/package.json` dependencies 与 `electron.vite.config.ts` 的 `externalizeDeps.include`，重跑构建与 `pnpm --filter @vykor/desktop build`。
 
 - [x] **步骤 4：人工验收**
   1. Desktop → 设置 → 连接：扫码接入（二维码显示、成功后白名单含本人 open_id）；
   2. 发消息收到回复；发一条被拒消息，Desktop 出现提示并可“加入白名单”，加入后无需重启即可对话；
   3. 主开关停用 → 飞书不再响应；重启 daemon 仍不连接；启用后恢复；
-  4. `ohs channels serve` 委托可用，Ctrl+C 有界停止；
+  4. `vk channels serve` 委托可用，Ctrl+C 有界停止；
   5. 启停期间 TUI/Desktop 既有会话不受影响。
 
 ---
@@ -522,4 +522,4 @@ git diff --check
 - daemon 是唯一长连接所有者与唯一配置写入者；Desktop/CLI 全部走 API。
 - Desktop“连接”板块满足 spec §13 全部验收项。
 - 相关包测试、类型检查、全仓构建、`check-docs`、`git diff --check` 全绿。
-- 无兼容 fallback；`@openharness/protocol` durable 类型未变。
+- 无兼容 fallback；`@vykor/protocol` durable 类型未变。

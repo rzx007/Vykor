@@ -447,7 +447,7 @@ export function PermissionCard({
         <div className="min-w-0 flex-1">
           <h3 className="text-ui-small font-semibold text-foreground">需要你的批准</h3>
           <p className="mt-1 text-xs text-ui-muted">
-            {"OpenHarness 请求运行 "}
+            {"Vykor 请求运行 "}
             {permission.toolName}
           </p>
           {replyError ? (

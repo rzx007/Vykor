@@ -70,7 +70,7 @@
 
 - [ ] **步骤 5：运行旧实现**
 
-运行：pnpm --filter @openharness/services test -- src/database/delta-checkpoint.test.ts src/session-runtime
+运行：pnpm --filter @vykor/services test -- src/database/delta-checkpoint.test.ts src/session-runtime
 
 预期：PASS；若发现旧实现无法满足规格，停止迁移并把它作为独立 bug 报告，不在搬迁 commit 中暗修。
 
@@ -91,7 +91,7 @@
 
 - [ ] **步骤 2：验证红灯**
 
-运行：pnpm --filter @openharness/services test -- src/database/delta-checkpoint.test.ts
+运行：pnpm --filter @vykor/services test -- src/database/delta-checkpoint.test.ts
 
 - [ ] **步骤 3：实现最小 API**
 
@@ -99,7 +99,7 @@
 
 - [ ] **步骤 4：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/database/delta-checkpoint.test.ts src/database/transaction-coordinator.test.ts
+运行：pnpm --filter @vykor/services test -- src/database/delta-checkpoint.test.ts src/database/transaction-coordinator.test.ts
 运行：git add packages/services/src/database
 运行：git commit -m "refactor(services): formalize delta checkpoint lifecycle"
 
@@ -116,7 +116,7 @@
 
 - [ ] **步骤 2：确认红灯**
 
-运行：pnpm --filter @openharness/services test -- src/conversations/incremental-output.test.ts
+运行：pnpm --filter @vykor/services test -- src/conversations/incremental-output.test.ts
 
 预期：FAIL，模块不存在。
 
@@ -134,8 +134,8 @@
 
 - [ ] **步骤 6：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/conversations/incremental-output.test.ts src/database
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/conversations/incremental-output.test.ts src/database
+运行：pnpm --filter @vykor/services check-types
 运行：git add packages/services/src/conversations
 运行：git commit -m "refactor(services): extract incremental message output"
 
@@ -165,8 +165,8 @@ close 必须先完整 flush，再关闭数据库；flush 失败不得悄悄清�
 
 - [ ] **步骤 5：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/conversations src/session-runtime src/database
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/conversations src/session-runtime src/database
+运行：pnpm --filter @vykor/services check-types
 运行：git add packages/services/src/session-runtime packages/services/src/conversations
 运行：git commit -m "refactor(services): delegate incremental output persistence"
 
@@ -190,7 +190,7 @@ Server 只获得 flush 或 terminalize 所需能力，不 import IncrementalOutp
 
 - [ ] **步骤 4：验证 Server 投影**
 
-运行：pnpm --filter @openharness/server test -- src/application/session/__test__/transcript-projection.test.ts src/application/session/__test__/session-run-executor.test.ts src/application/session/__test__/session-run-engine.test.ts
+运行：pnpm --filter @vykor/server test -- src/application/session/__test__/transcript-projection.test.ts src/application/session/__test__/session-run-executor.test.ts src/application/session/__test__/session-run-engine.test.ts
 
 - [ ] **步骤 5：提交**
 
@@ -218,8 +218,8 @@ outer atomic 内 append 多次并调用 flush，嵌套返回时 SQLite 不提前
 
 - [ ] **步骤 4：运行定向集成**
 
-运行：pnpm --filter @openharness/services test -- src/conversations src/database src/session-runtime
-运行：pnpm --filter @openharness/server test -- src/application/session src/http
+运行：pnpm --filter @vykor/services test -- src/conversations src/database src/session-runtime
+运行：pnpm --filter @vykor/server test -- src/application/session src/http
 
 - [ ] **步骤 5：提交**
 
@@ -254,10 +254,10 @@ rg -n "context\.store\." packages/server/src packages/services/src
 - [ ] **步骤 4：运行最终验证**
 
 运行：
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server test -- src/application/session src/permissions src/jobs src/http
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server test -- src/application/session src/permissions src/jobs src/http
+pnpm --filter @vykor/server check-types
 node --test scripts/architecture-boundaries.test.mjs
 pnpm check:architecture
 node scripts/check-docs.mjs

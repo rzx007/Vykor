@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 
 export const teamCreateTool: ToolDefinition = {
   name: "TeamCreate",
@@ -12,7 +12,7 @@ export const teamCreateTool: ToolDefinition = {
     required: ["name"],
   },
   async execute(input) {
-    const { getTeamRegistry } = await import("@openharness/coordinator");
+    const { getTeamRegistry } = await import("@vykor/coordinator");
     try {
       const team = getTeamRegistry().createTeam(input.name as string, (input.description as string) ?? "");
       return { content: [{ type: "text", text: `Created team ${team.name}` }] };
@@ -31,7 +31,7 @@ export const teamDeleteTool: ToolDefinition = {
     required: ["name"],
   },
   async execute(input) {
-    const { getTeamRegistry } = await import("@openharness/coordinator");
+    const { getTeamRegistry } = await import("@vykor/coordinator");
     try {
       getTeamRegistry().deleteTeam(input.name as string);
       return { content: [{ type: "text", text: `Deleted team ${input.name}` }] };

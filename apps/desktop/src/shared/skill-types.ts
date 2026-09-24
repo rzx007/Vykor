@@ -1,4 +1,4 @@
-import type { SkillInfo, SkillProject, SkillSnapshot } from "@openharness/client"
+import type { SkillInfo, SkillProject, SkillSnapshot } from "@vykor/client"
 
 export type DesktopSkillInfo = SkillInfo
 export type DesktopSkillProject = SkillProject

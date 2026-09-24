@@ -7,7 +7,7 @@ import type {
   ReplaceTranscriptMessageInput,
   SessionMessagePartRecord,
   SessionMessageRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { publicTextFromParts } from "./transcript-text.js";
 
 export interface RewindTranscriptResult {

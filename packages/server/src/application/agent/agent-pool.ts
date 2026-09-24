@@ -1,13 +1,13 @@
 import {
   createCompactContextProvider,
-  type OpenHarnessAgent,
-} from "@openharness/agent-runtime";
-import type { CompactContextSection } from "@openharness/core";
+  type VykorAgent,
+} from "@vykor/agent-runtime";
+import type { CompactContextSection } from "@vykor/core";
 import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { LoadDaemonAgent } from "../../daemon/daemon-agent.js";
 
@@ -30,8 +30,8 @@ export interface AgentPoolContext {
 }
 
 interface AgentPoolEntry {
-  promise: Promise<OpenHarnessAgent>;
-  agent?: OpenHarnessAgent;
+  promise: Promise<VykorAgent>;
+  agent?: VykorAgent;
   state: "active" | "closing";
   closePromise?: Promise<void>;
   /** Soft settings changed while this agent was busy; close once idle. */
@@ -80,16 +80,16 @@ export class AgentPool {
     await this.acquireSession(sessionId).catch(() => {});
   }
 
-  async get(sessionId: string): Promise<OpenHarnessAgent | undefined> {
+  async get(sessionId: string): Promise<VykorAgent | undefined> {
     const entry = this.agents.get(sessionId);
     return entry?.state === "active" ? await entry.promise : undefined;
   }
 
-  async acquireSession(sessionId: string): Promise<OpenHarnessAgent> {
+  async acquireSession(sessionId: string): Promise<VykorAgent> {
     return await this.acquire(sessionId);
   }
 
-  private async acquire(sessionId: string): Promise<OpenHarnessAgent> {
+  private async acquire(sessionId: string): Promise<VykorAgent> {
     if (!this.configured) throw new Error("Agent runtime is not configured");
     if (this.context.isSessionExternallyOwned?.(sessionId)) {
       throw new Error(`Session runtime is owned by a live child agent: ${sessionId}`);
@@ -134,7 +134,7 @@ export class AgentPool {
     entry.state = "closing";
     const closing = (async () => {
       try {
-        let agent: OpenHarnessAgent;
+        let agent: VykorAgent;
         try {
           agent = await entry.promise;
         } catch {
@@ -189,7 +189,7 @@ export class AgentPool {
     history: SessionMessageRecord[],
     parts: SessionMessagePartRecord[],
     entry: AgentPoolEntry,
-  ): Promise<OpenHarnessAgent> {
+  ): Promise<VykorAgent> {
     const loadAgent = this.context.loadAgent;
     if (!loadAgent) throw new Error("Agent runtime is not configured");
     const agent = await loadAgent({ session, history, parts });

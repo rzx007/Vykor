@@ -56,7 +56,7 @@ export function selectSessionPermissions(bucket: SessionBucket | undefined) {
 }
 
 export function selectFirstPendingPermission(
-  state: import("../types/index.js").OpenHarnessClientState,
+  state: import("../types/index.js").VykorClientState,
   sessionId?: string,
 ): import("../types/index.js").PermissionRequestRecord | undefined {
   if (!sessionId) return undefined;

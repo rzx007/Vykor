@@ -5,7 +5,7 @@
 - core 的 `CompactAttachments`、`CompactAttachmentsProvider` 与 `setAttachmentsProvider` 已一次性改为 `CompactContext`、`CompactContextProvider` 与 `setCompactContextProvider`，没有保留兼容别名。
 - `CompactService` 的 options、内部字段、prompt 参数和合并变量统一使用 context 命名；外部 context provider 获取失败会拒绝本次 compact，并用 `Error.cause` 保留原始错误。模型摘要等其他失败仍沿用原有 `simpleCompact` 兜底。
 - agent-runtime 新增 `createCompactContextProvider()`，独立组合附件目录和 Session Memory。来源缺省、返回 `undefined`/`null` 或 Session Memory 返回空字符串时，不写入对应字段；来源错误原样向上传播。
-- `OpenHarnessAgent` 公共方法改为 `setCompactContextProvider()`，旧 `setCompactAttachmentsProvider()` 已删除。组合 helper 从 agent-runtime 公共入口导出，供 Task 4 的 server 接线复用。
+- `VykorAgent` 公共方法改为 `setCompactContextProvider()`，旧 `setCompactAttachmentsProvider()` 已删除。组合 helper 从 agent-runtime 公共入口导出，供 Task 4 的 server 接线复用。
 - 附件目录继续使用现有结构化 `CompactAttachmentCatalog`，没有按计划示例把它降成字符串；这是为了满足同一任务中“`CompactContext` 保留现有字段结构”的要求，并继续支持有界 catalog formatting。
 
 ## 修改文件
@@ -40,7 +40,7 @@ git diff --check
 ```
 
 - core：2 个测试文件，23/23 通过；TypeScript 类型检查退出 0。
-- agent-runtime：2 个测试文件，17/17 通过。首次在沙箱内运行 `agent.test.ts` 时，既有 Memory 测试因不能创建 `C:\Users\ruanz\.openharness-ts\data\memory\...` 而得到 `EPERM`，Remember tool result 正确标记为 `isError: true`；允许测试写入其现有受管 Memory 目录后，相同代码与相同测试 17/17 通过，未修改 Memory 逻辑或放宽断言。
+- agent-runtime：2 个测试文件，17/17 通过。首次在沙箱内运行 `agent.test.ts` 时，既有 Memory 测试因不能创建 `C:\Users\ruanz\.vykor\data\memory\...` 而得到 `EPERM`，Remember tool result 正确标记为 `isError: true`；允许测试写入其现有受管 Memory 目录后，相同代码与相同测试 17/17 通过，未修改 Memory 逻辑或放宽断言。
 - agent-runtime 直接类型检查被未修改的 `packages/services/src/session-runtime/store.ts` 阻断：本地 TypeScript 无法解析 `drizzle-orm/better-sqlite3` 及其 `migrator` 子路径。
 - server 直接类型检查另外准确报出 `agent-pool.ts` 仍导入已删除的 `CompactAttachments`；这是计划中的 Task 4 迁移点。
 - 完整 `turbo check-types` 在进入下游迁移检查前，被本机 pnpm 启动器的 registry 签名验证/网络失败阻断。pre-commit hook 运行同一 `pnpm check-types`，因此本计划中间提交按任务约定使用 `--no-verify`。

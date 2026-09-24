@@ -4,7 +4,7 @@ import {
   syncEvents,
   type SessionEventRecord,
   type SyncEventUpdate,
-} from "@openharness/client"
+} from "@vykor/client"
 import { reduceActivityEvent } from "./activity-reducer"
 
 const session = {

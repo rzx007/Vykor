@@ -1,4 +1,4 @@
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import { normalizeSandboxConfig } from "./config.js";
 import type { ResolvedSandboxConfig } from "./types.js";
 

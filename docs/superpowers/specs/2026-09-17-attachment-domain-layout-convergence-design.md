@@ -34,7 +34,7 @@ Desktop 的 `attachment-service.ts` 同时承担来源暂存、上传队列、�
 
 ## 3. 不在范围内
 
-- 不创建新的 `@openharness/attachments` workspace 包。
+- 不创建新的 `@vykor/attachments` workspace 包。
 - 不修改 Attachment 协议类型、错误码、HTTP 路由或数据库 schema。
 - 不重新设计 OCR、附件路由策略、Blob 格式或上传协议。
 - 不因为文件较长就拆分职责仍然单一的 `AttachmentBlobStore`。
@@ -153,7 +153,7 @@ Desktop attachment feature
 ## 6. 公开 API 与命名
 
 - 删除 `AttachmentApplicationService`，统一使用 `AttachmentService`。
-- `@openharness/services` 不再导出应用服务，只导出 Repository、Transaction、Blob Store、完整性检查、OCR 与内容工具等基础能力。
+- `@vykor/services` 不再导出应用服务，只导出 Repository、Transaction、Blob Store、完整性检查、OCR 与内容工具等基础能力。
 - Server 内部类型从 `application/attachments/attachment-service.ts` 导入；HTTP server 和 routes 使用该 Server 类型。
 - 不保留旧类名 alias，也不保留旧目录 re-export。
 - 对外 HTTP、Client Resource、Desktop IPC 名称不变，因为本次整理的是代码所有权，不是产品协议。
@@ -182,7 +182,7 @@ Desktop attachment feature
 - Services Attachment persistence、storage、processing 和 content 的现有测试。
 - Server AttachmentService、resources、routing、tools、HTTP attachment routes 和 daemon application 测试。
 - Desktop attachment service、IPC、上传取消/重试、预览、打开、另存为及临时文件测试。
-- `@openharness/services`、`@openharness/server`、`@openharness/client` 和 Desktop 类型检查。
+- `@vykor/services`、`@vykor/server`、`@vykor/client` 和 Desktop 类型检查。
 - 架构边界与文档检查。
 - 负向搜索确认旧目录、`AttachmentApplicationService` 和旧深度导入均不存在。
 

@@ -1,4 +1,4 @@
-import { ToolRegistry, type ToolExecutionSpec } from "@openharness/core";
+import { ToolRegistry, type ToolExecutionSpec } from "@vykor/core";
 import {
   agentTool,
   createAgentTool,
@@ -6,8 +6,8 @@ import {
   teamDeleteTool,
   createWorkflowTool,
 } from "./agent/index.js";
-import type { AgentDefinition, WorkflowRunRepository } from "@openharness/coordinator";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+import type { AgentDefinition, WorkflowRunRepository } from "@vykor/coordinator";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { feishuPushTool } from "./channels/index.js";
 import {
   fileEditTool,

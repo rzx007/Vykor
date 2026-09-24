@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { McpOAuthCredentialRecord } from "@openharness/core";
+import type { McpOAuthCredentialRecord } from "@vykor/core";
 import { McpOAuthCredentialStore, shouldReuseCredentialAfterLock } from "./mcp-oauth-credential-store.js";
 
 const directories: string[] = [];

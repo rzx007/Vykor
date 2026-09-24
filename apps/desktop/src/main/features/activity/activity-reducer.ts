@@ -1,8 +1,8 @@
 import {
   applyEvent,
-  type OpenHarnessClientState,
+  type VykorClientState,
   type SessionEventRecord,
-} from "@openharness/client"
+} from "@vykor/client"
 
 const projectedTypes = new Set([
   "session.created",
@@ -16,9 +16,9 @@ const projectedTypes = new Set([
 ])
 
 export function reduceActivityEvent(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   event: SessionEventRecord
-): OpenHarnessClientState {
+): VykorClientState {
   if (event.seq <= state.lastSeq) return state
   if (event.type === "session.message.created") {
     const id = event.sessionId

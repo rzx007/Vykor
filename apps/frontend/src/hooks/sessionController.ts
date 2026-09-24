@@ -3,7 +3,7 @@ import type {
   SelectOptionPayload,
   TranscriptItem,
 } from "../types";
-import type { JobSnapshot, ModelProviderInfo } from "@openharness/client";
+import type { JobSnapshot, ModelProviderInfo } from "@vykor/client";
 import type { JobDetailRemoteState, JobRemoteState } from "../jobs/job-remote-state";
 
 export type JobRequestAction =

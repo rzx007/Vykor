@@ -20,16 +20,16 @@ function readPositiveIntEnv(name: string, defaultValue: number, minimum: number)
 }
 
 export function toolOutputInlineChars(): number {
-  return readPositiveIntEnv("OPENHARNESS_TOOL_OUTPUT_INLINE_CHARS", DEFAULT_TOOL_OUTPUT_INLINE_CHARS, 256);
+  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_INLINE_CHARS", DEFAULT_TOOL_OUTPUT_INLINE_CHARS, 256);
 }
 
 export function toolOutputPreviewChars(): number {
-  return readPositiveIntEnv("OPENHARNESS_TOOL_OUTPUT_PREVIEW_CHARS", DEFAULT_TOOL_OUTPUT_PREVIEW_CHARS, 128);
+  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_PREVIEW_CHARS", DEFAULT_TOOL_OUTPUT_PREVIEW_CHARS, 128);
 }
 
 export function microcompactToolResultChars(): number {
   return readPositiveIntEnv(
-    "OPENHARNESS_MICROCOMPACT_TOOL_RESULT_CHARS",
+    "VYKOR_MICROCOMPACT_TOOL_RESULT_CHARS",
     DEFAULT_MICROCOMPACT_TOOL_RESULT_CHARS,
     256,
   );

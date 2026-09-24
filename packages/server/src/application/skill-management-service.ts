@@ -9,13 +9,13 @@ import {
   resolve,
   sep,
 } from "node:path";
-import { getSkillsDir } from "@openharness/core";
+import { getSkillsDir } from "@vykor/core";
 import {
   BUNDLED_SKILLS,
   SkillLoader,
   SkillRegistry,
   standardUserSkillDirs,
-} from "@openharness/skills";
+} from "@vykor/skills";
 import type {
   SkillInfo,
   SkillProject,
@@ -87,7 +87,7 @@ export class SkillManagementService implements SkillService {
         warnings,
         project,
       );
-      const managed = join(project.root, ".openharness-ts", "skills");
+      const managed = join(project.root, ".vykor", "skills");
       if (key(managed) !== key(this.personalSkillsDir)) {
         await this.load(managed, "project", skills, seen, warnings, project);
       }
@@ -130,7 +130,7 @@ export class SkillManagementService implements SkillService {
     const project = await realpath(item.projectPath);
     await assertTarget(
       project,
-      join(project, ".openharness-ts", "skills"),
+      join(project, ".vykor", "skills"),
       target,
     );
     return target;

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 
-import { resolveGitRepository } from "@openharness/core";
+import { resolveGitRepository } from "@vykor/core";
 
 interface GitRunner {
   (args: string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }>;

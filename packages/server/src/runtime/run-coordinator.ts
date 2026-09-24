@@ -2,7 +2,7 @@ import {
   AgentRunNotAcceptingInputError,
   type AgentRunHandle,
   type AgentSteerInput,
-} from "@openharness/core";
+} from "@vykor/core";
 
 export class RunInterruptedError extends Error {
   constructor(message = "Run interrupted") {

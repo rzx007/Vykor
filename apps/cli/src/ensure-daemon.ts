@@ -32,7 +32,7 @@ export interface EnsureLocalDaemonOptions {
 }
 
 /**
- * Ensure a local OpenHarness daemon is ready (registry + health).
+ * Ensure a local Vykor daemon is ready (registry + health).
  * Shared by TUI launcher and print/headless Session API client.
  */
 export async function ensureLocalDaemon(
@@ -48,7 +48,7 @@ export async function ensureLocalDaemon(
   };
 
   const { clearDaemonRegistry, readDaemonRegistry } =
-    await import("@openharness/server");
+    await import("@vykor/server");
 
   const waitForDaemonRegistry = async (
     spawned: SpawnedDaemonProcess,
@@ -102,7 +102,7 @@ export async function ensureLocalDaemon(
       ) {
         const status = reconciliation.service.status();
         throw new Error(
-          `The OpenHarness daemon system service did not become ready (state: ${status.state})`,
+          `The Vykor daemon system service did not become ready (state: ${status.state})`,
         );
       }
     } else {

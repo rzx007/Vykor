@@ -40,7 +40,7 @@ function withStore(
   test: (store: SessionStore, path: string) => void,
   options: Omit<SessionStoreOptions, "path"> = {},
 ): void {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-session-runtime-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-session-runtime-"));
   const path = join(dir, "store.db");
   const store = new SessionStore({ path, ...options });
   try {
@@ -78,7 +78,7 @@ function createReadyAttachment(
 
 describe("SessionStore", () => {
   it("persists structured plugin input items and failed runs across disk reopen with required item JSON", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-structured-input-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-structured-input-"));
     const path = join(directory, "store.db");
     try {
       const store = new SessionStore({ path });
@@ -1239,7 +1239,7 @@ describe("SessionStore", () => {
   });
 
   it("does not read legacy JSON stores as a migration source", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-session-runtime-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-session-runtime-"));
     const path = join(dir, "legacy.json");
     try {
       writeFileSync(
@@ -1763,7 +1763,7 @@ describe("SessionStore", () => {
   });
 
   it("flushes pending text deltas when the store closes", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-session-runtime-close-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-session-runtime-close-"));
     const path = join(dir, "store.db");
     const store = new SessionStore({
       path,
@@ -1944,7 +1944,7 @@ describe("SessionStore", () => {
   });
 
   it("flushes grouped deltas on the timer and retries a failed checkpoint", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-session-runtime-timer-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-session-runtime-timer-"));
     const path = join(dir, "store.db");
     const store = new SessionStore({
       path,
@@ -2090,7 +2090,7 @@ describe("SessionStore", () => {
   });
 
   it("does not reuse a live delta sequence after restart", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-session-runtime-sequence-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-session-runtime-sequence-"));
     const path = join(dir, "store.db");
     try {
       const store = new SessionStore({ path, deltaFlushIntervalMs: 60_000 });
@@ -2726,7 +2726,7 @@ describe("SessionStore", () => {
 
   it("owns projects in SQLite and keeps session identity when the directory is rebound", () => {
     withStore((store) => {
-      const root = mkdtempSync(join(tmpdir(), "ohs-project-"));
+      const root = mkdtempSync(join(tmpdir(), "vk-project-"));
       const moved = join(root, "moved");
       const nested = join(root, "source", "apps", "desktop");
       mkdirSync(nested, { recursive: true });
@@ -2759,7 +2759,7 @@ describe("SessionStore", () => {
 
   it("keeps unpinned project order stable when a project is inspected again", () => {
     withStore((store, databasePath) => {
-      const root = mkdtempSync(join(tmpdir(), "ohs-project-order-"));
+      const root = mkdtempSync(join(tmpdir(), "vk-project-order-"));
       const firstPath = join(root, "first");
       const secondPath = join(root, "second");
       mkdirSync(firstPath);
@@ -2797,7 +2797,7 @@ describe("SessionStore", () => {
 
   it("stores and clears a project default shell", () => {
     withStore((store) => {
-      const root = mkdtempSync(join(tmpdir(), "ohs-project-shell-"));
+      const root = mkdtempSync(join(tmpdir(), "vk-project-shell-"));
       try {
         const project = store.projects.inspect(root);
         expect(project.defaultShell).toBeUndefined();

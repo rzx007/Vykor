@@ -110,8 +110,8 @@ interface CustomProviderSettings {
 `settings.json` 保存的始终是上面的模板原文。真实会话 ID 不持久化到设置文件。
 
 供应商清单是用户级配置，`customProviders` 以用户目录下的
-`~/.openharness-ts/settings.json` 为唯一权威来源。项目级
-`.openharness/settings.json` 不得覆盖 `customProviders`。该规则在
+`~/.vykor/settings.json` 为唯一权威来源。项目级
+`.vykor/settings.json` 不得覆盖 `customProviders`。该规则在
 `packages/core` 的 `loadSettings` 合并边界统一实现，而不是只在 daemon 组装时
 修补，因此 daemon、CLI 和 SDK 得到相同结果；其他项目设置字段仍保持现有优先级。
 这样 Desktop 修改的请求头与各运行入口实际造 client 时读取的请求头一致。
@@ -212,7 +212,7 @@ function normalizeRequestHeaderTemplates(
 统一 User-Agent 常量由通用模块导出，第一版为：
 
 ```text
-openharness-ts/1.0
+vykor/1.0
 ```
 
 它属于客户端身份，不属于 OpenCode Go。
@@ -252,8 +252,8 @@ Settings.customProviders[].headers
 
 ```text
 durable SessionRecord.id
-  -> OpenHarnessAgentOptions.sessionId
-  -> createOpenHarnessRuntime
+  -> VykorAgentOptions.sessionId
+  -> createVykorRuntime
   -> resolveApiClient
 ```
 
@@ -269,8 +269,8 @@ session ID，因此会自然得到独立的请求头值。
 校验上下文使用固定且非敏感的值：
 
 ```text
-sessionId = openharness-credential-validation
-userAgent = openharness-ts/1.0
+sessionId = vykor-credential-validation
+userAgent = vykor/1.0
 ```
 
 固定值只用于短暂的凭证校验请求，不写入 settings。正式请求仍使用真实会话 ID。

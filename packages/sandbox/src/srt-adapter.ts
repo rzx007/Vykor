@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SandboxConfig } from "@openharness/core";
+import type { SandboxConfig } from "@vykor/core";
 import { normalizeSandboxConfig } from "./config.js";
 
 export interface SrtRuntimeConfig {
@@ -29,7 +29,7 @@ export async function wrapCommandForSrt(
   options: { tmpRoot?: string } = {},
 ): Promise<WrappedSrtCommand> {
   const resolved = normalizeSandboxConfig(config);
-  const dir = await mkdtemp(join(options.tmpRoot ?? tmpdir(), "openharness-sandbox-"));
+  const dir = await mkdtemp(join(options.tmpRoot ?? tmpdir(), "vykor-sandbox-"));
   const settingsPath = join(dir, "settings.json");
   await writeFile(
     settingsPath,

@@ -5,7 +5,7 @@
 
 export interface SettingsService {
   agentEnvironmentCapabilities?(): Promise<
-    import("@openharness/protocol").AgentEnvironmentCapabilities
+    import("@vykor/protocol").AgentEnvironmentCapabilities
   >;
   get(): Promise<Record<string, unknown>> | Record<string, unknown>;
   patch(patch: Record<string, unknown>):
@@ -166,7 +166,7 @@ export interface AuthService {
 }
 
 export interface ContextService {
-  plugins?(input: { cwd: string }): Promise<{ plugins: import("@openharness/protocol").PluginCatalogEntry[] }>;
+  plugins?(input: { cwd: string }): Promise<{ plugins: import("@vykor/protocol").PluginCatalogEntry[] }>;
   preview(input: {
     cwd: string;
   }): Promise<{ report: string }> | { report: string };
@@ -179,7 +179,7 @@ export interface ContextService {
     refresh?: boolean;
     previousContextWindow?: number;
   }): Promise<{
-    snapshot: import("@openharness/core").ContextUsageSnapshot;
+    snapshot: import("@vykor/core").ContextUsageSnapshot;
     report: string;
   }>;
 }
@@ -412,4 +412,4 @@ export interface GitService {
     message: string;
   }): Promise<{ output: string }> | { output: string };
 }
-import type { InputSupport, ModelInputCapabilities } from "@openharness/core";
+import type { InputSupport, ModelInputCapabilities } from "@vykor/core";

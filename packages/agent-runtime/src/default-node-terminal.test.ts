@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { AgentJobHost } from "@openharness/jobs";
-import type { AgentTerminalHost } from "@openharness/terminal";
+import type { AgentJobHost } from "@vykor/jobs";
+import type { AgentTerminalHost } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
@@ -17,7 +17,7 @@ import {
 
 describe("createDefaultNodeTerminal", () => {
   it("creates one owned bundle containing both terminal and job hosts", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-default-terminal-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-default-terminal-"));
 
     try {
       const created = await createDefaultNodeTerminal({

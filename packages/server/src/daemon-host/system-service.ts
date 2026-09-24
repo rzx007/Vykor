@@ -5,21 +5,21 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { getLogsDir } from "@openharness/core";
+import { getLogsDir } from "@vykor/core";
 
-const WINDOWS_TASK_NAME = "OpenHarness Daemon";
+const WINDOWS_TASK_NAME = "Vykor Daemon";
 const WINDOWS_LAUNCHER_NAME = "daemon-watchdog.vbs";
-const SERVICE_LABEL = "dev.openharness.daemon";
+const SERVICE_LABEL = "dev.vykor.daemon";
 const WINDOWS_REGISTER_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
   "$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name",
-  "$action = New-ScheduledTaskAction -Execute $env:OHS_EXECUTABLE -Argument $env:OHS_TASK_ARGUMENTS -WorkingDirectory $env:OHS_WORKING_DIRECTORY",
+  "$action = New-ScheduledTaskAction -Execute $env:VK_EXECUTABLE -Argument $env:VK_TASK_ARGUMENTS -WorkingDirectory $env:VK_WORKING_DIRECTORY",
   "$logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $identity",
   "$watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(2) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)",
   "$triggers = @($logonTrigger, $watchdogTrigger)",
   "$principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited",
   "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew",
-  `Register-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -Description 'Keeps the local OpenHarness daemon running after sign-in.' -Action $action -Trigger $triggers -Principal $principal -Settings $settings -Force | Out-Null`,
+  `Register-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -Description 'Keeps the local Vykor daemon running after sign-in.' -Action $action -Trigger $triggers -Principal $principal -Settings $settings -Force | Out-Null`,
   `Start-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}'`,
 ].join("; ");
 
@@ -161,13 +161,13 @@ export class DaemonSystemService {
           WINDOWS_REGISTER_SCRIPT,
         ],
         {
-          OHS_EXECUTABLE: windowsScriptHostPath(),
-          OHS_TASK_ARGUMENTS: serializeWindowsArguments([
+          VK_EXECUTABLE: windowsScriptHostPath(),
+          VK_TASK_ARGUMENTS: serializeWindowsArguments([
             "//B",
             "//Nologo",
             launcherPath,
           ]),
-          OHS_WORKING_DIRECTORY: this.options.invocation.cwd,
+          VK_WORKING_DIRECTORY: this.options.invocation.cwd,
         },
       );
       return;
@@ -349,7 +349,7 @@ export class DaemonSystemService {
 
   private assertInstalled(): void {
     if (!this.isInstalled())
-      throw new Error("OpenHarness daemon system service is not installed");
+      throw new Error("Vykor daemon system service is not installed");
   }
 
   private writeWindowsLauncher(): string {
@@ -465,7 +465,7 @@ ${programArguments}
       .map(systemdQuote)
       .join(" ");
     return `[Unit]
-Description=OpenHarness daemon
+Description=Vykor daemon
 After=network.target
 
 [Service]

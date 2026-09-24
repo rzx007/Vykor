@@ -1,12 +1,12 @@
-import type { ChannelConfigStore, FeishuChannelConfig } from "@openharness/auth";
+import type { ChannelConfigStore, FeishuChannelConfig } from "@vykor/auth";
 import type {
   FeishuRegistrationCredentials,
   FeishuRegistrationStatus,
-} from "@openharness/channels";
+} from "@vykor/channels";
 import type {
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 
@@ -172,7 +172,7 @@ export class ChannelOnboardingService {
       const create =
         this.options.createRegistration ??
         (async (onCredentials: (credentials: FeishuRegistrationCredentials) => Promise<void>) => {
-          const { FeishuRegistration } = await import("@openharness/channels");
+          const { FeishuRegistration } = await import("@vykor/channels");
           return new FeishuRegistration({ onCredentials });
         });
       return await create((credentials) => this.onCredentials(credentials));
@@ -226,7 +226,7 @@ export class ChannelOnboardingService {
     domain: "feishu" | "lark";
   }): Promise<{ name?: string }> {
     if (this.options.verify) return this.options.verify(input);
-    const { verifyFeishuCredentials } = await import("@openharness/channels");
+    const { verifyFeishuCredentials } = await import("@vykor/channels");
     return verifyFeishuCredentials(input);
   }
 

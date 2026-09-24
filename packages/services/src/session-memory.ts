@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
-import { getDataDir } from "@openharness/core";
+import { getDataDir } from "@vykor/core";
 import { estimateTokens } from "./token-estimation/index.js";
 
 /**
@@ -100,15 +100,22 @@ export function buildSessionMemoryDocument(
   if (nextStep) lines.push("## Next Step", nextStep, "");
   if (verified.length > 0) lines.push("## Verified Work", ...verified.slice(-10).map((v) => `- ${v}`), "");
   if (artifacts.length > 0) lines.push("## Active Artifacts", ...artifacts.slice(-10).map((a) => `- ${a}`), "");
-  lines.push("## Recent Conversation", ...recentMessageLines(messages), "");
-
-  let text = lines.join("\n").trim() + "\n";
+  const recent = recentMessageLines(messages);
+  const render = () => [...lines, "## Recent Conversation", ...recent, ""].join("\n").trim() + "\n";
+  let text = render();
+  let truncated = false;
+  while (text.length > MAX_SESSION_MEMORY_CHARS && recent.length > 1) {
+    recent.shift();
+    text = render();
+    truncated = true;
+  }
   if (text.length > MAX_SESSION_MEMORY_CHARS) {
     text = text.slice(0, MAX_SESSION_MEMORY_CHARS);
     const lastNewline = text.lastIndexOf("\n");
     if (lastNewline > 0) text = text.slice(0, lastNewline);
-    text += "\n\n> Session memory was truncated to stay within budget.\n";
+    truncated = true;
   }
+  if (truncated) text += "\n> Session memory was truncated to stay within budget.\n";
   return text;
 }
 

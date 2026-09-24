@@ -28,12 +28,12 @@ function createFixture() {
   mkdirSync(join(root, "apps", "cli"), { recursive: true });
   writeFileSync(
     rootPath,
-    `${JSON.stringify({ name: "openharness-ts", private: true, version: "0.0.0" }, null, 2)}\n`,
+    `${JSON.stringify({ name: "vykor", private: true, version: "0.0.0" }, null, 2)}\n`,
     "utf8",
   );
   writeFileSync(
     desktopPath,
-    `${JSON.stringify({ name: "@openharness/desktop", version: "0.0.0" }, null, 2)}\n`,
+    `${JSON.stringify({ name: "@vykor/desktop", version: "0.0.0" }, null, 2)}\n`,
     "utf8",
   );
   writeFileSync(
@@ -51,7 +51,7 @@ function runCli(args, root) {
     encoding: "utf8",
     env: {
       ...process.env,
-      OPENHARNESS_TAG_RELEASE_ROOT: root,
+      VYKOR_TAG_RELEASE_ROOT: root,
     },
   });
 }
@@ -123,10 +123,10 @@ test("setManifestVersion writes version while preserving other manifest fields",
     const cli = JSON.parse(readFileSync(cliPath, "utf8"));
 
     assert.equal(workspace.version, "1.0.1");
-    assert.equal(workspace.name, "openharness-ts");
+    assert.equal(workspace.name, "vykor");
     assert.equal(workspace.private, true);
     assert.equal(desktop.version, "1.0.1");
-    assert.equal(desktop.name, "@openharness/desktop");
+    assert.equal(desktop.name, "@vykor/desktop");
     assert.equal(cli.version, "1.0.1");
     assert.equal(cli.name, "@rzx/ohs");
     assert.deepEqual(cli.repository, { type: "git" });

@@ -5,7 +5,7 @@ import {
   parseAttachmentLimits,
   type AttachmentAssetRecord,
   type AttachmentLimits,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   AttachmentBlobStore,
   AttachmentError,
@@ -15,7 +15,7 @@ import {
   type AttachmentBlobRange,
   type AttachmentTextEncoding,
   type AttachmentTransactions,
-} from "@openharness/services";
+} from "@vykor/services";
 
 export interface AttachmentServiceOptions {
   store: Pick<AttachmentTransactions,

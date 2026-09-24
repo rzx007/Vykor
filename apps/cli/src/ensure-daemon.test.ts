@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DaemonRegistry } from "@openharness/server";
+import type { DaemonRegistry } from "@vykor/server";
 
 const statMock = vi.hoisted(() => vi.fn());
 const readDaemonRegistryMock = vi.hoisted(() => vi.fn());
@@ -16,7 +16,7 @@ const systemServiceMock = vi.hoisted(() => ({
   restart: vi.fn(),
 }));
 
-vi.mock("@openharness/core", () => ({
+vi.mock("@vykor/core", () => ({
   loadSettings: vi.fn(async () => ({ daemon: { autoStart: false } })),
 }));
 
@@ -24,12 +24,12 @@ vi.mock("node:fs/promises", () => ({
   stat: statMock,
 }));
 
-vi.mock("@openharness/server", () => ({
+vi.mock("@vykor/server", () => ({
   readDaemonRegistry: readDaemonRegistryMock,
   clearDaemonRegistry: clearDaemonRegistryMock,
 }));
 
-vi.mock("@openharness/server/daemon-host", () => ({
+vi.mock("@vykor/server/daemon-host", () => ({
   shouldStartManagedDaemon: vi.fn(async () => false),
   saveDaemonAutoStartPreference: vi.fn(),
   reconcileDaemonSystemService: (

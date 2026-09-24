@@ -5,7 +5,7 @@ import type {
   ToolDefinition,
   ToolFailureKind,
   ToolResult,
-} from "@openharness/core";
+} from "@vykor/core";
 
 import type {
   AttachmentAuthorizationSessionResolver,

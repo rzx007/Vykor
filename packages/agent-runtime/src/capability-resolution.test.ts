@@ -1,6 +1,6 @@
-import type { AgentBackgroundShellHost } from "@openharness/core";
-import type { AgentJobHost } from "@openharness/jobs";
-import type { AgentTerminalHost } from "@openharness/terminal";
+import type { AgentBackgroundShellHost } from "@vykor/core";
+import type { AgentJobHost } from "@vykor/jobs";
+import type { AgentTerminalHost } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 import type {

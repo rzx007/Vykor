@@ -16,7 +16,7 @@
 
 执行期间保持以下约束：
 
-- `@openharness/services` 公共导出不变；
+- `@vykor/services` 公共导出不变；
 - `SessionStore` 构造参数和公开方法不变；
 - SQLite schema、migration 文件和存储格式版本不变；
 - HTTP/SSE、CLI 和 Desktop 行为不变；
@@ -81,8 +81,8 @@ import {
 
 test("services cannot depend on server", () => {
   assert.deepEqual(
-    checkPackageDependency("@openharness/services", "@openharness/server"),
-    ["@openharness/services must not depend on @openharness/server"],
+    checkPackageDependency("@vykor/services", "@vykor/server"),
+    ["@vykor/services must not depend on @vykor/server"],
   )
 })
 
@@ -115,9 +115,9 @@ node --test scripts/architecture-boundaries.test.mjs
 
 ```js
 const forbiddenPackageEdges = new Map([
-  ["@openharness/protocol", new Set(["@openharness/services", "@openharness/server", "@openharness/client"])],
-  ["@openharness/services", new Set(["@openharness/server", "@openharness/client"])],
-  ["@openharness/agent-runtime", new Set(["@openharness/server"])],
+  ["@vykor/protocol", new Set(["@vykor/services", "@vykor/server", "@vykor/client"])],
+  ["@vykor/services", new Set(["@vykor/server", "@vykor/client"])],
+  ["@vykor/agent-runtime", new Set(["@vykor/server"])],
 ])
 ```
 
@@ -202,7 +202,7 @@ expect(() => database.connection.prepare("select 1").get()).toThrow()
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- session-database
+pnpm --filter @vykor/services test -- session-database
 ```
 
 预期：FAIL，缺少 `SessionDatabase`。
@@ -244,8 +244,8 @@ this.database = this.databaseKernel.connection
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- session-database store
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- session-database store
+pnpm --filter @vykor/services check-types
 pnpm check:architecture
 ```
 
@@ -283,7 +283,7 @@ expect(source.deletedInputs.size).toBe(0)
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- mutation-buffer
+pnpm --filter @vykor/services test -- mutation-buffer
 ```
 
 预期：FAIL，缺少模块。
@@ -304,8 +304,8 @@ const previousMutations = cloneMutationBuffer(this.mutations)
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- mutation-buffer store
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- mutation-buffer store
+pnpm --filter @vykor/services check-types
 git diff --check
 ```
 
@@ -345,7 +345,7 @@ expect(loaded.nextReservedEventSeq).toBeGreaterThanOrEqual(loaded.state.nextEven
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- read-model
+pnpm --filter @vykor/services test -- read-model
 ```
 
 预期：FAIL，缺少 `loadSessionReadModel`。
@@ -387,8 +387,8 @@ private reloadState(): void {
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- read-model store session-goals
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- read-model store session-goals
+pnpm --filter @vykor/services check-types
 pnpm check:architecture
 ```
 
@@ -430,7 +430,7 @@ expect(sequence.next).toBe(snapshot.next)
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- event-sequence
+pnpm --filter @vykor/services test -- event-sequence
 ```
 
 预期：FAIL，缺少 `DurableEventSequence`。
@@ -448,8 +448,8 @@ pnpm --filter @openharness/services test -- event-sequence
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- event-sequence store event-registry
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- event-sequence store event-registry
+pnpm --filter @vykor/services check-types
 ```
 
 预期：全部通过，现有跨 daemon restart 序号测试保持通过。
@@ -489,7 +489,7 @@ expect(flush).toHaveBeenCalledTimes(1)
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- delta-checkpoint
+pnpm --filter @vykor/services test -- delta-checkpoint
 ```
 
 预期：FAIL，缺少 `DeltaCheckpoint`。
@@ -519,8 +519,8 @@ close(): void
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- delta-checkpoint store
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- delta-checkpoint store
+pnpm --filter @vykor/services check-types
 git diff --check
 ```
 
@@ -570,7 +570,7 @@ expect(reopened.getSessionState("s1")).toMatchObject({
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- store
+pnpm --filter @vykor/services test -- store
 ```
 
 预期：新增测试通过。这是 characterization test，不要求先红；它锁定阶段 1 收口前的公开行为。
@@ -608,8 +608,8 @@ Store 内部用一个 `storage` 字段组合这些对象。为避免一次性改
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
 pnpm check:architecture
 pnpm check-types
 node scripts/check-docs.mjs

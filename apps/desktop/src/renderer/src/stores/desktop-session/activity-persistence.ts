@@ -1,6 +1,6 @@
 import type { ActivityState } from "./activity-state"
 
-const key = "openharness.desktop.activity.v1"
+const key = "vykor.desktop.activity.v1"
 
 type PersistedActivity = Pick<
   ActivityState,

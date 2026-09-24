@@ -4,8 +4,8 @@
 
 Agent 写个人 skill、`USER.md` 等文件时，工具入参里的路径经常是盘上的绝对路径，例如：
 
-- Windows：`C:\Users\ruanz\.openharness-ts\skills\show-me\SKILL.md`
-- Unix：`/Users/ruanz/.openharness-ts/skills/show-me/SKILL.md`
+- Windows：`C:\Users\ruanz\.vykor\skills\show-me\SKILL.md`
+- Unix：`/Users/ruanz/.vykor/skills/show-me/SKILL.md`
 
 对话里的「已编辑文件」卡片会原样列出这条路径。点开后有两道门都会丢掉它：
 
@@ -21,13 +21,13 @@ Agent 写个人 skill、`USER.md` 等文件时，工具入参里的路径经常�
 
 ## 非目标
 
-- 不开放整盘任意路径，也不把整个 `~/.openharness-ts` 当成可读树（`credentials.json`、`settings.json` 不在本次预览范围）。
+- 不开放整盘任意路径，也不把整个 `~/.vykor` 当成可读树（`credentials.json`、`settings.json` 不在本次预览范围）。
 - 不把个人配置或文档目录挂进右侧文件树。
 - 不给项目外文件做 git diff / Review。
 - 不恢复上次会话里打开过的项目外标签页。
 - 不改 Agent 沙箱、写文件权限或 skill 安装流程。
 - 不新增 `pathe`、`is-path-inside` 等依赖。
-- 不把 `@openharness/core` 加进桌面 production 依赖（打包约束，见 `apps/desktop/docs/packaging.md`）。
+- 不把 `@vykor/core` 加进桌面 production 依赖（打包约束，见 `apps/desktop/docs/packaging.md`）。
 
 ## 允许范围
 
@@ -36,9 +36,9 @@ Agent 写个人 skill、`USER.md` 等文件时，工具入参里的路径经常�
 | 范围 | 怎么得到 | 放行条件 | 面包屑左侧 |
 |---|---|---|---|
 | 当前项目 | IPC 传入的 `rootPath`（当前选中项目，或项目外会话自己的工作目录） | 落在该目录内 | 现有项目名 |
-| 个人 skill | `join(configDir, "skills")`。`configDir` = `OPENHARNESS_CONFIG_DIR`，否则 `join(homedir(), ".openharness-ts")` | 落在 `skills` 目录内 | 个人配置 |
+| 个人 skill | `join(configDir, "skills")`。`configDir` = `VYKOR_CONFIG_DIR`，否则 `join(homedir(), ".vykor")` | 落在 `skills` 目录内 | 个人配置 |
 | 用户档案 | `join(configDir, "USER.md")` | 规范化后等于该文件 | 个人配置 |
-| 项目外工作区 | 已有的 `buildOutsideProjectRoot(documentsPath)`，即文档目录下的 `OpenHarness` | 落在该目录内 | 项目外工作区 |
+| 项目外工作区 | 已有的 `buildOutsideProjectRoot(documentsPath)`，即文档目录下的 `Vykor` | 落在该目录内 | 项目外工作区 |
 
 `configDir`、`documentsPath` 由主进程启动时注入 `WorkspaceService`，分类函数不调用 `app.getPath`、`homedir` 或 `process.cwd()`。
 
@@ -46,11 +46,11 @@ Agent 写个人 skill、`USER.md` 等文件时，工具入参里的路径经常�
 
 **先当前项目，再额外范围。重叠时 `kind` 必须是 `project`。**
 
-项目外会话的 cwd 已是 `Documents/OpenHarness/<日期>/xN`：该目录内的文件按项目文件处理（进树、可持久化、面包屑用项目名）。隔壁 `x2` 下的文件才是 `extra-root`。
+项目外会话的 cwd 已是 `Documents/Vykor/<日期>/xN`：该目录内的文件按项目文件处理（进树、可持久化、面包屑用项目名）。隔壁 `x2` 下的文件才是 `extra-root`。
 
-当前项目恰好是 `~/.openharness-ts` 时同样：项目内文件仍是 `project`，面包屑用项目名，不用「个人配置」。
+当前项目恰好是 `~/.vykor` 时同样：项目内文件仍是 `project`，面包屑用项目名，不用「个人配置」。
 
-个人配置只放行 `skills/` 与 `USER.md`。项目仓库里的 `.openharness-ts` 若位于当前项目下，按当前项目处理，不用特判。
+个人配置只放行 `skills/` 与 `USER.md`。项目仓库里的 `.vykor` 若位于当前项目下，按当前项目处理，不用特判。
 
 ## 路径分类（两轮）
 
@@ -60,7 +60,7 @@ Agent 写个人 skill、`USER.md` 等文件时，工具入参里的路径经常�
 状态：只读字符串，不碰磁盘。  
 结果：`{ kind: "project" | "extra-root", rootPath, relativePath, tabPath, rootLabel }`，或不接受。
 
-`relativePath` 相对**展示根**：个人 skill 相对 `configDir`，所以面包屑是 `个人配置 / skills / show-me / SKILL.md`；`USER.md` 是 `个人配置 / USER.md`；项目外工作区相对 `OpenHarness` 根。  
+`relativePath` 相对**展示根**：个人 skill 相对 `configDir`，所以面包屑是 `个人配置 / skills / show-me / SKILL.md`；`USER.md` 是 `个人配置 / USER.md`；项目外工作区相对 `Vykor` 根。
 `tabPath` 是标签页身份：项目文件仍用相对路径；项目外文件用规范化后的绝对路径（统一 `/`），避免和项目里同名相对路径撞车。
 
 ### 预处理
@@ -73,7 +73,7 @@ Agent 写个人 skill、`USER.md` 等文件时，工具入参里的路径经常�
 
 1. `win32.isAbsolute(raw)` 为真 → 收一条规范化后的 Windows 绝对路径（去掉 `\\?\` 再 `win32.resolve` 该路径自身，**不要**对 POSIX 路径做一次无根的 `win32.resolve`）。
 2. 把 `\` 换成 `/` 后 `posix.isAbsolute` 为真 → 收一条 POSIX 规范化结果。
-3. Windows 上要把 POSIX 绝对路径映射到本机时：**对每个允许根，用该根自己的盘符**做 `win32.resolve(rootDrive, posixPath)`。例如项目在 `E:\code\...`、个人配置在 `C:\Users\ruanz\.openharness-ts` 时，`/Users/ruanz/.openharness-ts/skills/x.md` 只会对着 `C:\` 映射成 `C:\Users\ruanz\.openharness-ts\skills\x.md`，不会变成 `E:\Users\...`。
+3. Windows 上要把 POSIX 绝对路径映射到本机时：**对每个允许根，用该根自己的盘符**做 `win32.resolve(rootDrive, posixPath)`。例如项目在 `E:\code\...`、个人配置在 `C:\Users\ruanz\.vykor` 时，`/Users/ruanz/.vykor/skills/x.md` 只会对着 `C:\` 映射成 `C:\Users\ruanz\.vykor\skills\x.md`，不会变成 `E:\Users\...`。
 
 对每个候选，判断是否落在某个允许范围内：`relative(root, candidate)` 为空，或不以 `..` 开头、也不是另一条绝对路径。比较前：Windows 上 `resolve`、去掉 `\\?\`、按该平台规则处理大小写。短路径（`8.3`）若分类阶段无法展开，留给读文件前的 `realpath`。
 
@@ -169,7 +169,7 @@ Review 只处理能转成当前项目相对路径的文件。盘符 / UNC 落在
 5. `realpath` 仍在允许范围内，读文件，返回内容、`tabPath`、`relativePath`、`rootLabel`。
 6. 面板用返回的 `path` 建标签。面包屑显示「个人配置 / skills / show-me / SKILL.md」。文件树不动。
 
-项目内 `src/foo.ts`、`/src/foo.ts` 或 `E:\code\openharness-ts\src\foo.ts` 仍走原来的预览 / Review。
+项目内 `src/foo.ts`、`/src/foo.ts` 或 `E:\code\vykor\src\foo.ts` 仍走原来的预览 / Review。
 
 ## 错误处理
 
@@ -197,10 +197,10 @@ Review 只处理能转成当前项目相对路径的文件。盘符 / UNC 落在
 4. `/Users/.../skills/...`、`/home/.../skills/...`：用**该根自己的盘符**映射后命中；项目在 `E:`、配置在 `C:` 时也要命中，不能变成 `E:\Users\...`。
 5. `/src/foo.ts` → 不当成盘根下的绝对文件，回退为项目相对 `src/foo.ts`。
 6. `/etc/passwd`、其它盘上的任意文件 → 不能变成 `extra-root`；若项目里存在 `etc/passwd`，第二轮可以打开那个项目文件。
-7. `Documents/OpenHarness/...` 下、且不是当前项目内的文件 → `extra-root`。
-8. 当前项目是 `Documents/OpenHarness/2026-09-06/x1` 时：该目录内 → `project`；隔壁 `x2` → `extra-root`。当前项目是 `~/.openharness-ts` 时：项目内 → `project`。
+7. `Documents/Vykor/...` 下、且不是当前项目内的文件 → `extra-root`。
+8. 当前项目是 `Documents/Vykor/2026-09-06/x1` 时：该目录内 → `project`；隔壁 `x2` → `extra-root`。当前项目是 `~/.vykor` 时：项目内 → `project`。
 9. 配置根尚未创建：仍按字符串匹配，不因 `exists === false` 跳过。
-10. `OPENHARNESS_CONFIG_DIR` 指到别的盘时，POSIX 路径按那个根的盘符映射。
+10. `VYKOR_CONFIG_DIR` 指到别的盘时，POSIX 路径按那个根的盘符映射。
 
 `WorkspaceService.readFile`：
 

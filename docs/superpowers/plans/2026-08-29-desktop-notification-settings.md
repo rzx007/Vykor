@@ -82,7 +82,7 @@ it("rejects unknown desktop notification values by falling back safely", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop test -- settings-service.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- settings-service.test.ts`
 预期：FAIL，原因是 snapshot 还没有 `notificationMode`，也还不能接收桌面偏好输入。
 
 - [ ] **步骤 3：实现 desktop-only 类型和快照读取**
@@ -207,7 +207,7 @@ updateNotificationMode: (
 
 - [ ] **步骤 7：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop test -- settings-service.test.ts desktop-preferences.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- settings-service.test.ts desktop-preferences.test.ts`
 预期：PASS。
 
 ## 任务 2：设置页 UI
@@ -244,7 +244,7 @@ const notificationModeLabels = {
 
 - [ ] **步骤 3：手动或组件测试验证 UI 文案**
 
-运行：`pnpm --filter @openharness/desktop test -- settings`
+运行：`pnpm --filter @vykor/desktop test -- settings`
 预期：现有设置测试通过；如果新增组件测试，应覆盖加载成功、保存失败回滚、非法值不提交。
 
 ## 任务 3：对话状态通知观察器
@@ -269,7 +269,7 @@ it("uses showWhenFocused only for always mode", async () => {})
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop test -- notification-observer.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- notification-observer.test.ts`
 预期：FAIL，文件和函数不存在。
 
 - [ ] **步骤 3：实现 observer**
@@ -303,7 +303,7 @@ void notifyForSessionViewChange({ previous: current, next: view })
 
 - [ ] **步骤 5：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop test -- notification-observer.test.ts session-view-state.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- notification-observer.test.ts session-view-state.test.ts`
 预期：PASS。
 
 ## 任务 4：已安排任务 unread 通知
@@ -339,7 +339,7 @@ const unreadRuns = await window.desktop.schedules.listRuns({ unread: true, limit
 
 - [ ] **步骤 4：运行测试或手动验证**
 
-运行：`pnpm --filter @openharness/desktop test -- scheduled-page`
+运行：`pnpm --filter @vykor/desktop test -- scheduled-page`
 预期：现有 scheduled page 测试通过；如果没有合适测试入口，至少跑 desktop test 并手动说明缺口。
 
 ## 任务 5：最终验证
@@ -352,7 +352,7 @@ const unreadRuns = await window.desktop.schedules.listRuns({ unread: true, limit
 运行：
 
 ```bash
-pnpm --filter @openharness/desktop test -- settings-service.test.ts notification-observer.test.ts scheduled-page
+pnpm --filter @vykor/desktop test -- settings-service.test.ts notification-observer.test.ts scheduled-page
 ```
 
 预期：PASS。
@@ -362,7 +362,7 @@ pnpm --filter @openharness/desktop test -- settings-service.test.ts notification
 运行：
 
 ```bash
-pnpm --filter @openharness/desktop check-types
+pnpm --filter @vykor/desktop check-types
 ```
 
 预期：PASS。

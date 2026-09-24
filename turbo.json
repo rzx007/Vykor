@@ -10,7 +10,7 @@
       "cache": false,
       "persistent": true
     },
-    "@openharness/desktop#dev": {
+    "@vykor/desktop#dev": {
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
@@ -21,11 +21,11 @@
     "test": {
       "dependsOn": ["^build"]
     },
-    "@openharness/agent-runtime#test": {
+    "@vykor/agent-runtime#test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**"]
     },
-    "@openharness/server#test": {
+    "@vykor/server#test": {
       "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -34,7 +34,7 @@
         "$TURBO_ROOT$/packages/agent-runtime/test-helpers/**"
       ]
     },
-    "@openharness/desktop#test": {
+    "@vykor/desktop#test": {
       "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -47,7 +47,7 @@
         "$TURBO_ROOT$/packages/client/src/types/index.ts"
       ]
     },
-    "@openharness/plugins#check-types": {
+    "@vykor/plugins#check-types": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**"]
     },

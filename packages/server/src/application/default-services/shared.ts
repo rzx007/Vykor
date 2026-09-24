@@ -1,7 +1,7 @@
 import {
   updateSettings,
   type Settings,
-} from "@openharness/core";
+} from "@vykor/core";
 
 export interface DaemonSettingsRef {
   current: Settings;

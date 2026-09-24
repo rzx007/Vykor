@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/terminal-node",
+  "name": "@vykor/terminal-node",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,10 +17,10 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/core": "workspace:*",
-    "@openharness/environment": "workspace:*",
-    "@openharness/jobs": "workspace:*",
-    "@openharness/terminal": "workspace:*",
+    "@vykor/core": "workspace:*",
+    "@vykor/environment": "workspace:*",
+    "@vykor/jobs": "workspace:*",
+    "@vykor/terminal": "workspace:*",
     "node-pty": "^1.0.0"
   },
   "devDependencies": {

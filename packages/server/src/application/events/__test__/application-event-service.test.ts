@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SessionEventRecord } from "@openharness/protocol";
+import type { SessionEventRecord } from "@vykor/protocol";
 
 import { ApplicationEventService } from "../application-event-service.js";
 

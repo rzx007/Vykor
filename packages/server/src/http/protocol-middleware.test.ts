@@ -14,7 +14,7 @@ describe("protocol middleware", () => {
         .post("/sessions", (c) => { write(); spawn(); return c.json({ ok: true }); });
       const response = await app.request("/sessions", {
         method: "POST",
-        headers: version === undefined ? {} : { "x-openharness-protocol-version": version },
+        headers: version === undefined ? {} : { "x-vykor-protocol-version": version },
       });
       expect(response.status).toBe(426);
       expect(await response.json()).toEqual({
@@ -38,7 +38,7 @@ describe("protocol middleware", () => {
       expect((await app.request(path)).status).toBe(200);
     }
     expect((await app.request("/sessions", {
-      headers: { "x-openharness-protocol-version": "4" },
+      headers: { "x-vykor-protocol-version": "4" },
     })).status).toBe(200);
     expect(handler).toHaveBeenCalledTimes(3);
     expect((await app.request("/health/extra")).status).toBe(426);

@@ -17,12 +17,12 @@ import {
 } from "./paths";
 
 describe("project config directory", () => {
-  it("uses .openharness-ts as the project-level directory name", () => {
+  it("uses .vykor as the project-level directory name", () => {
     // Use a POSIX absolute path so resolve() is stable on Linux CI and Windows.
     const root = resolve("/work/alpha");
-    expect(PROJECT_CONFIG_DIR_NAME).toBe(".openharness-ts");
-    expect(getProjectConfigDir(root)).toBe(join(root, ".openharness-ts"));
-    expect(getMemoryDir(root)).toBe(join(root, ".openharness-ts", "memory"));
+    expect(PROJECT_CONFIG_DIR_NAME).toBe(".vykor");
+    expect(getProjectConfigDir(root)).toBe(join(root, ".vykor"));
+    expect(getMemoryDir(root)).toBe(join(root, ".vykor", "memory"));
   });
 });
 
@@ -38,70 +38,70 @@ describe("getProjectMemoryDir", () => {
 });
 
 describe("Native plugin paths", () => {
-  it("keeps cache, data, sources and installed state under OPENHARNESS_CONFIG_DIR", () => {
-    const previous = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = resolve("/tmp/openharness-test");
+  it("keeps cache, data, sources and installed state under VYKOR_CONFIG_DIR", () => {
+    const previous = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = resolve("/tmp/vykor-test");
     try {
-      const root = join(process.env.OPENHARNESS_CONFIG_DIR, "plugins");
+      const root = join(process.env.VYKOR_CONFIG_DIR, "plugins");
       expect(getPluginCacheDir()).toBe(join(root, "cache"));
       expect(getPluginDataDir()).toBe(join(root, "data"));
       expect(getPluginSourcesDir()).toBe(join(root, "sources"));
       expect(getInstalledPluginStorePath()).toBe(join(root, "installed.json"));
     } finally {
-      if (previous === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previous;
+      if (previous === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previous;
     }
   });
 });
 
 describe("MCP OAuth path", () => {
   it("stores credentials in a separate config file", () => {
-    const previous = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = resolve("/tmp/openharness-oauth-test");
+    const previous = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = resolve("/tmp/vykor-oauth-test");
     try {
-      expect(getMcpOAuthFilePath()).toBe(join(process.env.OPENHARNESS_CONFIG_DIR, "mcp-oauth.json"));
+      expect(getMcpOAuthFilePath()).toBe(join(process.env.VYKOR_CONFIG_DIR, "mcp-oauth.json"));
     } finally {
-      if (previous === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previous;
+      if (previous === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previous;
     }
   });
 });
 
 describe("resolveChannelWorkspaceRoot", () => {
   it("prefers the env override, then the outside-project root, then homedir/Documents", () => {
-    const home = resolve("/tmp/openharness-home");
+    const home = resolve("/tmp/vykor-home");
     expect(
       resolveChannelWorkspaceRoot({
-        envDir: resolve("/tmp/openharness-channels-env"),
-        outsideProjectWorkspaceRoot: resolve("/tmp/openharness-out"),
+        envDir: resolve("/tmp/vykor-channels-env"),
+        outsideProjectWorkspaceRoot: resolve("/tmp/vykor-out"),
         homedir: home,
       }),
-    ).toBe(resolve("/tmp/openharness-channels-env"));
+    ).toBe(resolve("/tmp/vykor-channels-env"));
     expect(
       resolveChannelWorkspaceRoot({
-        outsideProjectWorkspaceRoot: resolve("/tmp/openharness-out"),
+        outsideProjectWorkspaceRoot: resolve("/tmp/vykor-out"),
         homedir: home,
       }),
-    ).toBe(join(resolve("/tmp/openharness-out"), "channels"));
+    ).toBe(join(resolve("/tmp/vykor-out"), "channels"));
     expect(resolveChannelWorkspaceRoot({ homedir: home })).toBe(
-      join(home, "Documents", "OpenHarness", "channels"),
+      join(home, "Documents", "Vykor", "channels"),
     );
   });
 });
 
 describe("getChannelWorkspaceRoot", () => {
-  it("defaults under Documents/OpenHarness and honors OPENHARNESS_CHANNELS_DIR", () => {
-    const previousChannels = process.env.OPENHARNESS_CHANNELS_DIR;
-    delete process.env.OPENHARNESS_CHANNELS_DIR;
+  it("defaults under Documents/Vykor and honors VYKOR_CHANNELS_DIR", () => {
+    const previousChannels = process.env.VYKOR_CHANNELS_DIR;
+    delete process.env.VYKOR_CHANNELS_DIR;
     try {
       expect(getChannelWorkspaceRoot()).toBe(
-        join(homedir(), "Documents", "OpenHarness", "channels"),
+        join(homedir(), "Documents", "Vykor", "channels"),
       );
-      process.env.OPENHARNESS_CHANNELS_DIR = resolve("/tmp/openharness-channels-workspace");
-      expect(getChannelWorkspaceRoot()).toBe(resolve("/tmp/openharness-channels-workspace"));
+      process.env.VYKOR_CHANNELS_DIR = resolve("/tmp/vykor-channels-workspace");
+      expect(getChannelWorkspaceRoot()).toBe(resolve("/tmp/vykor-channels-workspace"));
     } finally {
-      if (previousChannels === undefined) delete process.env.OPENHARNESS_CHANNELS_DIR;
-      else process.env.OPENHARNESS_CHANNELS_DIR = previousChannels;
+      if (previousChannels === undefined) delete process.env.VYKOR_CHANNELS_DIR;
+      else process.env.VYKOR_CHANNELS_DIR = previousChannels;
     }
   });
 });

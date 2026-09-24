@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 function tempRoot(): string {
-  const path = mkdtempSync(join(tmpdir(), "ohs-daemon-service-"));
+  const path = mkdtempSync(join(tmpdir(), "vk-daemon-service-"));
   cleanup.push(path);
   return path;
 }
@@ -54,11 +54,11 @@ describe("DaemonSystemService", () => {
     service.install();
 
     const register = calls.find((call) => call.args.includes("Bypass") && call.args.at(-1)?.includes("Register-ScheduledTask"));
-    expect(register?.env?.OHS_EXECUTABLE).toMatch(/wscript\.exe$/i);
-    expect(register?.env?.OHS_TASK_ARGUMENTS).toContain("//B");
-    expect(register?.env?.OHS_TASK_ARGUMENTS).toContain("daemon-watchdog.vbs");
+    expect(register?.env?.VK_EXECUTABLE).toMatch(/wscript\.exe$/i);
+    expect(register?.env?.VK_TASK_ARGUMENTS).toContain("//B");
+    expect(register?.env?.VK_TASK_ARGUMENTS).toContain("daemon-watchdog.vbs");
     expect(register?.args.at(-1)).toContain("RepetitionInterval");
-    expect(register?.env?.OHS_WORKING_DIRECTORY).toBe("D:\\repo");
+    expect(register?.env?.VK_WORKING_DIRECTORY).toBe("D:\\repo");
 
     const launcher = readFileSync(join(root, "daemon", "daemon-watchdog.vbs"), "utf-8");
     expect(launcher).toContain('""C:\\Program Files\\node.exe""');
@@ -94,7 +94,7 @@ describe("DaemonSystemService", () => {
     });
 
     service.install();
-    const taskArguments = calls.find((call) => call.env?.OHS_TASK_ARGUMENTS)?.env?.OHS_TASK_ARGUMENTS;
+    const taskArguments = calls.find((call) => call.env?.VK_TASK_ARGUMENTS)?.env?.VK_TASK_ARGUMENTS;
     expect(taskArguments).toContain("daemon-watchdog.vbs");
     const launcher = readFileSync(join(root, "daemon", "daemon-watchdog.vbs"), "utf-8");
     expect(launcher).toContain('""daemon"" ""watchdog"" ""serve"" ""--register""');
@@ -120,11 +120,11 @@ describe("DaemonSystemService", () => {
 
     service.install();
 
-    const unitPath = join(root, ".config", "systemd", "user", "dev.openharness.daemon.service");
+    const unitPath = join(root, ".config", "systemd", "user", "dev.vykor.daemon.service");
     const unit = readFileSync(unitPath, "utf-8");
     expect(unit).toContain('ExecStart="/usr/bin/node" "/repo with spaces/dist/index.js" "serve" "--register"');
     expect(unit).toContain("Restart=on-failure");
-    expect(calls).toContainEqual(["systemctl", "--user", "enable", "--now", "dev.openharness.daemon"]);
+    expect(calls).toContainEqual(["systemctl", "--user", "enable", "--now", "dev.vykor.daemon"]);
     expect(service.status().state).toBe("running");
   });
 
@@ -149,7 +149,7 @@ describe("DaemonSystemService", () => {
 
     service.install();
 
-    const plistPath = join(root, "Library", "LaunchAgents", "dev.openharness.daemon.plist");
+    const plistPath = join(root, "Library", "LaunchAgents", "dev.vykor.daemon.plist");
     const plist = readFileSync(plistPath, "utf-8");
     expect(plist).toContain("<key>KeepAlive</key>");
     expect(plist).toContain("/repo/a&amp;b/index.js");

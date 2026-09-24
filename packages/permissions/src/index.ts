@@ -5,8 +5,8 @@ import type {
   IPermissionChecker,
   PermissionSettings,
   PathRuleConfig,
-} from "@openharness/core";
-import { canonicalToolName, canonicalToolNames } from "@openharness/core";
+} from "@vykor/core";
+import { canonicalToolName, canonicalToolNames } from "@vykor/core";
 import { isAbsolute, posix, relative, resolve } from "node:path";
 
 export type {

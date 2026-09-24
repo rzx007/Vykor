@@ -23,8 +23,8 @@ import type {
   ToolRegistryView,
   ToolDescriptor,
 } from "../types/tools";
-import type { AgentTerminalHost } from "@openharness/terminal";
-import type { AgentJobHost } from "@openharness/jobs";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import type { AgentJobHost } from "@vykor/jobs";
 import { CompactService, type CompactClient, type CompactContextProvider } from "./compact-service";
 import { CostTracker } from "./cost-tracker";
 import { sanitizeMessageHistory } from "../utils/message-history";
@@ -57,16 +57,16 @@ function readPositiveIntEnv(name: string, defaultValue: number, minimum: number)
 }
 
 function toolOutputInlineChars(): number {
-  return readPositiveIntEnv("OPENHARNESS_TOOL_OUTPUT_INLINE_CHARS", 16_000, 256);
+  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_INLINE_CHARS", 16_000, 256);
 }
 
 function toolOutputPreviewChars(): number {
-  return readPositiveIntEnv("OPENHARNESS_TOOL_OUTPUT_PREVIEW_CHARS", 3_000, 128);
+  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_PREVIEW_CHARS", 3_000, 128);
 }
 
 function toolExecutionTimeoutMs(override: number | undefined): number {
   if (typeof override === "number" && Number.isInteger(override) && override > 0) return override;
-  return readPositiveIntEnv("OPENHARNESS_TOOL_TIMEOUT_MS", DEFAULT_TOOL_TIMEOUT_MS, 1);
+  return readPositiveIntEnv("VYKOR_TOOL_TIMEOUT_MS", DEFAULT_TOOL_TIMEOUT_MS, 1);
 }
 
 class ToolTimeoutError extends Error {

@@ -11,11 +11,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const cwd = process.cwd();
-const temp = mkdtempSync(join(tmpdir(), "openharness-agent-runtime-pack-"));
+const temp = mkdtempSync(join(tmpdir(), "vykor-agent-runtime-pack-"));
 const packagesRoot = resolve(cwd, "..");
-const pnpmCli = process.env.OPENHARNESS_PNPM_CLI ?? process.env.npm_execpath;
+const pnpmCli = process.env.VYKOR_PNPM_CLI ?? process.env.npm_execpath;
 if (!pnpmCli) {
-  throw new Error("OPENHARNESS_PNPM_CLI and npm_execpath are unavailable");
+  throw new Error("VYKOR_PNPM_CLI and npm_execpath are unavailable");
 }
 const npmCli = join(
   dirname(process.execPath),
@@ -29,7 +29,7 @@ try {
   const workspaceTarballs = workspaceDependencyClosure(cwd).map((packageCwd) =>
     packWorkspacePackage(packageCwd, JSON.parse(
       readFileSync(join(packageCwd, "package.json"), "utf8"),
-    ).name.replace("@openharness/", ""))
+    ).name.replace("@vykor/", ""))
   );
   const app = join(temp, "consumer.mjs");
   writeFileSync(
@@ -54,7 +54,7 @@ try {
 
   const installedManifest = JSON.parse(
     readFileSync(
-      join(temp, "node_modules", "@openharness", "agent-runtime", "package.json"),
+      join(temp, "node_modules", "@vykor", "agent-runtime", "package.json"),
       "utf8",
     ),
   );
@@ -73,9 +73,9 @@ import {
   createAgentKernel,
   createBasicAgentKernelRuntime,
   createInProcessChildEnvironmentProvider,
-} from "@openharness/agent-runtime/kernel";
+} from "@vykor/agent-runtime/kernel";
 
-const defaultEntry = await import("@openharness/agent-runtime");
+const defaultEntry = await import("@vykor/agent-runtime");
 if (typeof defaultEntry.createDefaultNodeAgent !== "function") {
   throw new Error("packed default Node entry is unavailable");
 }
@@ -83,7 +83,7 @@ if (typeof defaultEntry.createDefaultNodeAgent !== "function") {
 const nativeEntry = resolve("packed-native-tool.mjs");
 writeFileSync(nativeEntry, 'export function registerTools() { return [{ name: "PackedNative", description: "pack check", inputSchema: {}, invoke() { return { content: [{ type: "text", text: "packed native result" }] }; } }]; }');
 const nativeHost = new defaultEntry.NativeToolHost({
-  manifest: { id: "dev.openharness.packed-test", name: "packed-test", version: "1.0.0" },
+  manifest: { id: "dev.vykor.packed-test", name: "packed-test", version: "1.0.0" },
   root: process.cwd(),
   components: { tools: { value: [{ entryPath: nativeEntry, effectivePermissions: {} }] } },
 });

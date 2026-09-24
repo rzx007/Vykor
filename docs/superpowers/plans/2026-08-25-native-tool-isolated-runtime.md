@@ -9,8 +9,8 @@
 
 2026-08-26 已完成 Node Tool v1：
 
-- `@openharness/plugins` 只解析并返回 Tool 入口、运行时和有效权限，不 import Tool 模块；
-- `@openharness/agent-runtime` 为每个插件版本启动一个 Node 子进程，在子进程内执行 `registerTools()` 和 `invoke()`；
+- `@vykor/plugins` 只解析并返回 Tool 入口、运行时和有效权限，不 import Tool 模块；
+- `@vykor/agent-runtime` 为每个插件版本启动一个 Node 子进程，在子进程内执行 `registerTools()` 和 `invoke()`；
 - Tool Host 支持健康检查、注册、调用、取消、超时、关闭、崩溃清理和结构化错误；
 - Tool 调用入口已增加 runtime guard：每次调用写审计摘要，执行前按 `inputSchema` 校验输入，限制同一插件版本并发调用数；
 - Tool Host 已对 stdout、stderr 和插件主动日志做大小限制，超出后截断并抑制后续输出；
@@ -20,11 +20,11 @@
 - Server/Client/CLI 可以显示已声明和可激活的 Tool 入口数，并聚合同一 daemon 进程里所有 Agent Runtime 的 Host 数量、状态、已注册 Tool 数和最近错误；没有活跃 Runtime 时明确显示 `reload-required`，不把安装状态冒充成已激活；
 - Wasm Tool 继续返回 `native_tool_runtime_unsupported`，没有被静默当成 Node Tool 执行。
 
-当前隔离边界是“进程与环境变量隔离”，不是操作系统级沙箱。Node Tool 仍可能直接使用 Node 自带的文件、网络和进程 API；manifest 权限目前约束 OpenHarness 后续提供给 Tool 的宿主能力，不能替代容器、受限系统用户或系统调用过滤。这个限制必须在引入更强的插件权限承诺前解决。
+当前隔离边界是“进程与环境变量隔离”，不是操作系统级沙箱。Node Tool 仍可能直接使用 Node 自带的文件、网络和进程 API；manifest 权限目前约束 Vykor 后续提供给 Tool 的宿主能力，不能替代容器、受限系统用户或系统调用过滤。这个限制必须在引入更强的插件权限承诺前解决。
 
-**目标：** 为 OpenHarness Native Plugin v1 增加真正可运行的 `tools` 组件，但工具代码不能进入 daemon 主进程，也不能直接复用此前 `tools_dir` 的动态 `import` 模型。Native Tool 必须运行在单独的隔离执行层，具备明确的权限、超时、资源和生命周期边界，并能被 Runtime、Server、CLI 和后续 Desktop 统一观测。
+**目标：** 为 Vykor Native Plugin v1 增加真正可运行的 `tools` 组件，但工具代码不能进入 daemon 主进程，也不能直接复用此前 `tools_dir` 的动态 `import` 模型。Native Tool 必须运行在单独的隔离执行层，具备明确的权限、超时、资源和生命周期边界，并能被 Runtime、Server、CLI 和后续 Desktop 统一观测。
 
-**当前状态：** `@openharness/plugins` 已经可以识别 `components.tools`，但在加载阶段只返回 `unsupported`。这保证了 schema 和安装格式已经稳定，但执行路径仍然缺失。现阶段第三方原生插件和转换后的 Claude 插件都不能真正提供 OpenHarness Tool。
+**当前状态：** `@vykor/plugins` 已经可以识别 `components.tools`，但在加载阶段只返回 `unsupported`。这保证了 schema 和安装格式已经稳定，但执行路径仍然缺失。现阶段第三方原生插件和转换后的 Claude 插件都不能真正提供 Vykor Tool。
 
 **设计输入：**
 
@@ -95,7 +95,7 @@ Installed Native Plugin
 
 Tool 需要两层权限：
 
-1. 插件级权限：写在 `.openharness-plugin/plugin.json` 的 `permissions`。
+1. 插件级权限：写在 `.vykor-plugin/plugin.json` 的 `permissions`。
 2. Tool 级权限：写在 `components.tools` 的对象声明里。
 
 真正激活时取二者交集，不允许 tool 运行时扩大权限。如果插件只声明 `workspace:read`，某个 tool 即使写了 `workspace:write` 也只能得到拒绝或 blocked。
@@ -276,17 +276,17 @@ Server/CLI 暴露的插件状态建议补充：
 ## 包边界
 
 ```text
-@openharness/plugins
+@vykor/plugins
   - manifest schema
   - tool component normalization
   - validation and diagnostics
 
-@openharness/agent-runtime
+@vykor/agent-runtime
   - tool activation
   - host lifecycle
   - runtime registry bridge
 
-@openharness/server
+@vykor/server
   - plugin/tool runtime status query
   - reload and lifecycle operations
 
@@ -294,7 +294,7 @@ apps/cli
   - details / diagnostics / validation surface
 ```
 
-如果实现过程中出现明显的通用子层，可以新建一个小包，例如 `@openharness/plugin-tool-runtime`。但第一轮不强制拆包，避免先做“包设计工程”再做功能。
+如果实现过程中出现明显的通用子层，可以新建一个小包，例如 `@vykor/plugin-tool-runtime`。但第一轮不强制拆包，避免先做“包设计工程”再做功能。
 
 ## 测试策略
 

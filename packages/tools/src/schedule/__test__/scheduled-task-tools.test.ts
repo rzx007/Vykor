@@ -1,4 +1,4 @@
-import type { AgentScheduleEffects, ToolContext } from "@openharness/core";
+import type { AgentScheduleEffects, ToolContext } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { scheduleCreateTool } from "../scheduled-task-tools.js";

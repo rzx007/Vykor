@@ -18,9 +18,9 @@ afterEach(async () => {
 });
 
 async function createConfigDirectory(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "openharness-model-catalog-"));
+  const directory = await mkdtemp(join(tmpdir(), "vykor-model-catalog-"));
   temporaryDirectories.push(directory);
-  vi.stubEnv("OPENHARNESS_CONFIG_DIR", directory);
+  vi.stubEnv("VYKOR_CONFIG_DIR", directory);
   return directory;
 }
 
@@ -53,7 +53,7 @@ describe("ModelCatalogService sources", () => {
 
   it("uses the bundled api.json snapshot when online fetching is disabled", async () => {
     await createConfigDirectory();
-    vi.stubEnv("OPENHARNESS_DISABLE_MODELS_FETCH", "1");
+    vi.stubEnv("VYKOR_DISABLE_MODELS_FETCH", "1");
 
     const { createModelCatalogService } = await import("./catalog");
     const catalog = await createModelCatalogService().load();
@@ -97,7 +97,7 @@ describe("ModelCatalogService sources", () => {
       }),
       "utf8",
     );
-    vi.stubEnv("OPENHARNESS_MODELS_PATH", configuredPath);
+    vi.stubEnv("VYKOR_MODELS_PATH", configuredPath);
 
     const { createModelCatalogService } = await import("./catalog");
     const catalog = await createModelCatalogService().load();

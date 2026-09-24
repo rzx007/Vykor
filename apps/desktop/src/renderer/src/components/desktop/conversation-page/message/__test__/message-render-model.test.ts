@@ -146,8 +146,8 @@ describe("message render model", () => {
   })
 
   it("strips the Markdown slash only from Windows drive paths", () => {
-    expect(parseFileReference("/E:/code/openharness-ts/My File.ts:7")).toEqual({
-      path: "E:/code/openharness-ts/My File.ts",
+    expect(parseFileReference("/E:/code/vykor/My File.ts:7")).toEqual({
+      path: "E:/code/vykor/My File.ts",
       line: 7,
     })
     expect(parseFileReference("src/a.ts:1")).toEqual({ path: "src/a.ts", line: 1 })

@@ -13,7 +13,7 @@ import {
   getMcpOAuthFilePath,
   type McpOAuthCredentialRecord,
   type McpOAuthStoreFile,
-} from "@openharness/core";
+} from "@vykor/core";
 
 export class McpOAuthStoreError extends Error {
   constructor(readonly code: string, message: string) {

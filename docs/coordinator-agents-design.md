@@ -37,7 +37,7 @@ flowchart TD
   Host["framework AgentChildAgentHost"]
   Manager["AgentChildManager"]
   Projection["optional daemon projection"]
-  Child["child OpenHarnessAgent"]
+  Child["child VykorAgent"]
 
   Definition --> Tool --> Host --> Manager --> Child
   Manager -. durable observation .-> Projection

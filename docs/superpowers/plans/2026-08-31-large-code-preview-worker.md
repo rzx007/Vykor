@@ -58,7 +58,7 @@ describe("code preview worker options", () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/code-preview-worker-options.test.ts
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/code-preview-worker-options.test.ts
 ```
 
 预期：FAIL，提示无法解析 `./code-preview-worker-options`。
@@ -88,7 +88,7 @@ export function createCodePreviewWorkerPoolOptions(
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/code-preview-worker-options.test.ts
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/code-preview-worker-options.test.ts
 ```
 
 预期：2 个测试通过。
@@ -156,8 +156,8 @@ Pierre Worker 会按需加载语言模块，ES module 输出允许 Vite 为这�
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/code-preview-worker-options.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/code-preview-worker-options.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：相关测试和 node/web TypeScript 检查全部通过。
@@ -167,7 +167,7 @@ pnpm --filter @openharness/desktop typecheck
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop build
+pnpm --filter @vykor/desktop build
 ```
 
 预期：构建成功，输出中包含独立 Worker 资源，且不存在 `?worker` 解析错误。

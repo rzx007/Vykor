@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Do not execute or parse `ohs auth` or `ohs provider` commands from Desktop.
+- Do not execute or parse `vk auth` or `vk provider` commands from Desktop.
 - API keys remain in `CredentialStorage`; do not persist them in `Settings.customProviders`.
 - Custom providers are OpenAI-compatible only in this iteration.
 - Keep providers and detected subscriptions in one list and preserve the current resizable settings layout.
@@ -65,7 +65,7 @@ it("resolves a selected custom provider as an OpenAI-compatible endpoint", async
 
 - [ ] **Step 2: Run focused tests and verify expected failures**
 
-Run: `pnpm --filter @openharness/core test -- settings.test.ts && pnpm --filter @openharness/agent-runtime test -- default-runtime.test.ts`
+Run: `pnpm --filter @vykor/core test -- settings.test.ts && pnpm --filter @vykor/agent-runtime test -- default-runtime.test.ts`
 
 Expected: FAIL because `customProviders` and the custom runtime resolver do not exist.
 
@@ -104,17 +104,17 @@ it("forwards custom provider headers to the OpenAI SDK", () => {
 
 - [ ] **Step 5: Run the test, implement `defaultHeaders`, and rerun**
 
-Run: `pnpm --filter @openharness/api test -- openai.test.ts`
+Run: `pnpm --filter @vykor/api test -- openai.test.ts`
 
 Expected before implementation: FAIL because headers are ignored. Add `defaultHeaders: config.headers` to the SDK constructor, then expect PASS.
 
 - [ ] **Step 6: Remove Ollama/vLLM from the registry under a failing consumer behavior test**
 
-Change the registry test to assert the available provider names do not contain false local services, run it to observe failure, remove both entries, and rerun `pnpm --filter @openharness/api test -- registry.test.ts`.
+Change the registry test to assert the available provider names do not contain false local services, run it to observe failure, remove both entries, and rerun `pnpm --filter @vykor/api test -- registry.test.ts`.
 
 - [ ] **Step 7: Run package checks and commit**
 
-Run: `pnpm --filter @openharness/core test && pnpm --filter @openharness/api test && pnpm --filter @openharness/agent-runtime test && pnpm --filter @openharness/agent-runtime check-types`
+Run: `pnpm --filter @vykor/core test && pnpm --filter @vykor/api test && pnpm --filter @vykor/agent-runtime test && pnpm --filter @vykor/agent-runtime check-types`
 
 Commit: `feat(providers): 支持自定义 OpenAI 兼容运行时`
 
@@ -154,7 +154,7 @@ it("lists configured custom providers and their declared models", async () => {
 
 - [ ] **Step 2: Run the service test and verify it fails**
 
-Run: `pnpm --filter @openharness/server test -- default-application-services.test.ts`
+Run: `pnpm --filter @vykor/server test -- default-application-services.test.ts`
 
 Expected: FAIL because services only iterate `PROVIDERS`.
 
@@ -177,7 +177,7 @@ Add `POST /providers/custom`, `PATCH /providers/custom/:id`, and `DELETE /provid
 
 - [ ] **Step 6: Run package checks and commit**
 
-Run: `pnpm --filter @openharness/server test && pnpm --filter @openharness/client test && pnpm --filter @openharness/server check-types && pnpm --filter @openharness/client check-types`
+Run: `pnpm --filter @vykor/server test && pnpm --filter @vykor/client test && pnpm --filter @vykor/server check-types && pnpm --filter @vykor/client check-types`
 
 Commit: `feat(server): 添加自定义供应商资源接口`
 
@@ -214,7 +214,7 @@ Exercise create/update/remove against a complete fake daemon client and assert r
 
 - [ ] **Step 2: Run the service tests and verify failure**
 
-Run: `pnpm --filter @openharness/desktop test -- provider-service.test.ts`
+Run: `pnpm --filter @vykor/desktop test -- provider-service.test.ts`
 
 Expected: FAIL because custom metadata and mutation methods are absent.
 
@@ -249,7 +249,7 @@ Verify every Dialog has a title, destructive confirmation uses AlertDialog, icon
 
 - [ ] **Step 7: Run Desktop checks and commit**
 
-Run: `pnpm --filter @openharness/desktop test && pnpm --filter @openharness/desktop check-types`
+Run: `pnpm --filter @vykor/desktop test && pnpm --filter @vykor/desktop check-types`
 
 Commit: `feat(desktop): 添加自定义供应商管理表单`
 
@@ -263,7 +263,7 @@ Commit: `feat(desktop): 添加自定义供应商管理表单`
 
 - [ ] **Step 1: Run focused lint and all impacted package tests**
 
-Run: `pnpm --filter @openharness/core test && pnpm --filter @openharness/api test && pnpm --filter @openharness/agent-runtime test && pnpm --filter @openharness/server test && pnpm --filter @openharness/client test && pnpm --filter @openharness/desktop test`
+Run: `pnpm --filter @vykor/core test && pnpm --filter @vykor/api test && pnpm --filter @vykor/agent-runtime test && pnpm --filter @vykor/server test && pnpm --filter @vykor/client test && pnpm --filter @vykor/desktop test`
 
 - [ ] **Step 2: Run repository type checks and lint**
 

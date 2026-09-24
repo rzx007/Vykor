@@ -1,7 +1,7 @@
 # Slash Commands Flow
 
 > 状态：当前 daemon/TUI 主线。斜杠命令**不是**通用 `runCommand`；按三层分流。
-> 呈现/派发层在 `@openharness/client`（`dispatchSessionCommand`），TUI/Web/Desktop 共用。
+> 呈现/派发层在 `@vykor/client`（`dispatchSessionCommand`），TUI/Web/Desktop 共用。
 > 命令清单参考 [slash-commands.md](./slash-commands.md)；daemon 协议见 [daemon-application-architecture.md](./daemon-application-architecture.md)、[client-sync-flow.md](./client-sync-flow.md)。
 
 ## 目标
@@ -17,7 +17,7 @@
 
 - Server **不**托管旧 REPL `slash-commands.ts` registry。
 - Server catalog（`GET /commands`）只提供元数据；状态变更走资源 API。
-- 呈现层（拼系统消息、调 `OpenHarnessClient`）放在 `@openharness/client`，不绑 TUI React。
+- 呈现层（拼系统消息、调 `VykorClient`）放在 `@vykor/client`，不绑 TUI React。
 
 ## 分层
 
@@ -30,7 +30,7 @@
                              │ slash line
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  @openharness/client  dispatchSessionCommand(host)               │
+│  @vykor/client  dispatchSessionCommand(host)               │
 │  · parseSlashLine / mergeCommandDetails / LOCAL_COMMAND_*        │
 │  · /config /memory /jobs list|show|cancel /background … 呈现 + API│
 │  · emit(text) 把系统消息交回宿主                                  │
@@ -39,7 +39,7 @@
                              │ unhandled + catalog.kind===template
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  OpenHarnessClient.admitPrompt                                   │
+│  VykorClient.admitPrompt                                   │
 │  · items 保留 Skill 引用与用户任务的原始顺序                       │
 │  · Skill item 携带 catalog 的 name/path，不携带正文                │
 │  → run executor 生成显式调用要求 → Agent 原生 Skill 工具加载       │
@@ -47,12 +47,12 @@
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Daemon (@openharness/server)                                    │
+│  Daemon (@vykor/server)                                    │
 │  · GET /commands          catalog（builtin session + skills）    │
 │  · PATCH /sessions/:id    runtime config 等                     │
 │  · GET/PATCH /settings    /config /effort /fast /turns …         │
 │  · 其它资源 API           memory / jobs / background-shells …   │
-│  · MaintenanceService -> AgentPool / OpenHarnessAgent            │
+│  · MaintenanceService -> AgentPool / VykorAgent            │
 │                           compact / remember / mcp inspect …     │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -121,14 +121,14 @@ Web/Desktop 应复用同一语义：session 命令仍由宿主或共享 dispatch
 
 ```ts
 type SessionCommandHost = {
-  client: OpenHarnessClient;
+  client: VykorClient;
   sessionId?: string;
   cwd: string;
   model?: string;
   permissionMode?: string;
   statusSessionId?: string;
   commandCatalog: CommandCatalogEntry[];
-  clientState: OpenHarnessClientState;
+  clientState: VykorClientState;
   busy: boolean;
   emit(text: string): void;
   patchStatus?(patch: Record<string, unknown>): void;
@@ -203,7 +203,7 @@ print 走 daemon Session API，不走本 flow。旧 `--task-worker` 入口已退
 
 ## Web/Desktop 接入清单
 
-1. 用 `@openharness/client`：`OpenHarnessClient` + `hydrateState`/`syncEvents`。
+1. 用 `@vykor/client`：`VykorClient` + `hydrateState`/`syncEvents`。
 2. 拉取 `listCommands({ cwd })`，与 `LOCAL_COMMAND_DETAILS` 合并做 autocomplete。
 3. 提交行：本地 UI → `dispatchSessionCommand` → Skill 则 `admitPrompt({ items: [skill, text] })` → unknown 拦截 → 普通文本 `admitPrompt`。
 4. 实现 `emit`（transcript / toast）与可选 `patchStatus`。

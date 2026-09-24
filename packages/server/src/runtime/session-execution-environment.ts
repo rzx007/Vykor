@@ -1,8 +1,8 @@
-import { getSkillsDir, type Settings } from "@openharness/core";
-import { createWorkspaceBinding, type ExecutionEnvironmentHandle } from "@openharness/environment";
-import type { SessionRecord } from "@openharness/protocol";
-import { createExecutionEnvironment, hostPathToWslPath, resolveExecutionEnvironmentConfig } from "@openharness/sandbox";
-import { createEnvironmentFileSystem } from "@openharness/tools";
+import { getSkillsDir, type Settings } from "@vykor/core";
+import { createWorkspaceBinding, type ExecutionEnvironmentHandle } from "@vykor/environment";
+import type { SessionRecord } from "@vykor/protocol";
+import { createExecutionEnvironment, hostPathToWslPath, resolveExecutionEnvironmentConfig } from "@vykor/sandbox";
+import { createEnvironmentFileSystem } from "@vykor/tools";
 
 export function createSessionEnvironmentAcquirer(_input?: unknown) {
   return async (session: SessionRecord, settings: Settings): Promise<ExecutionEnvironmentHandle> => {

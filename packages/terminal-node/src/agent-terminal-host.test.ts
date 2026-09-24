@@ -7,7 +7,7 @@ import type {
   TerminalWaitRequest,
   TerminalWaitResult,
   TerminalWriteRequest,
-} from "@openharness/terminal";
+} from "@vykor/terminal";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {

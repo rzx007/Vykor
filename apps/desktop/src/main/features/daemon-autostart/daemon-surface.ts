@@ -1,4 +1,4 @@
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
 

@@ -26,12 +26,12 @@
 - [ ] 将 baseUrl/token/fetchImpl 和 header 构造迁入 HttpTransport。
 - [ ] 提供 requestUnknown、requestJson<T>、requestResponse、requestEmpty；仅实现现有调用需要的选项。
 - [ ] 保持 GET 默认、JSON content-type、Bearer token、AbortSignal、204/空 body 和非 2xx 错误语义。
-- [ ] OpenHarnessApiError 仍公开，status/body/message/name 不变。
+- [ ] VykorApiError 仍公开，status/body/message/name 不变。
 - [ ] normalizeDaemonBaseUrl 保持凭据、query、fragment 和协议拒绝行为。
 - [ ] 创建 SseTransport，迁入 streamServerSentEvents 与 frame parser。
 - [ ] 保持 data 多行拼接、event/id/retry、CRLF、空 frame、malformed data、abort 和 Last-Event-ID 行为。
 - [ ] 保持 Attachment 原始 upload body、download Response/Range 和 duplex 能力，不能统一成 JSON。
-- [ ] OpenHarnessClient 构造一个 HttpTransport/SseTransport；旧 endpoint 暂时通过内核请求。
+- [ ] VykorClient 构造一个 HttpTransport/SseTransport；旧 endpoint 暂时通过内核请求。
 - [ ] 删除 http-client.ts 中第二套 request/header/error/SSE 实现。
 - [ ] 快检：packages/client TypeScript；不跑 Client 全量测试。
 - [ ] 提交：refactor(client): extract http and sse transport kernel

@@ -87,7 +87,7 @@ pnpm test
 pnpm test:client-browser
 ```
 
-只改一个包时可以先跑该包，例如 `pnpm --filter @openharness/agent-runtime test`；提交前仍应按改动风险运行上面的全局检查。
+只改一个包时可以先跑该包，例如 `pnpm --filter @vykor/agent-runtime test`；提交前仍应按改动风险运行上面的全局检查。
 
 ## 维护规则
 

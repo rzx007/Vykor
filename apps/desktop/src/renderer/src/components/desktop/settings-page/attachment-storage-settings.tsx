@@ -16,7 +16,7 @@ import type {
   AttachmentStorageIssue,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@openharness/client"
+} from "@vykor/client"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import {
   AlertDialog,
@@ -230,7 +230,7 @@ export function AttachmentStorageSettings(): React.JSX.Element {
       <Alert>
         <HardDrive />
         <AlertTitle>当前环境不支持附件存储诊断</AlertTitle>
-        <AlertDescription>请在 OpenHarness 桌面应用中打开这一页。</AlertDescription>
+        <AlertDescription>请在 Vykor 桌面应用中打开这一页。</AlertDescription>
       </Alert>
     )
   }

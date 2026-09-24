@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSettings, saveProjectSettings } from "@openharness/core";
-import { createDefaultNodeAgent } from "@openharness/agent-runtime";
+import { loadSettings, saveProjectSettings } from "@vykor/core";
+import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 
 import { createDaemonAgentLoader } from "../daemon-agent.js";
 
@@ -93,7 +93,7 @@ describe("daemon request settings refresh", () => {
   });
 
   it("uses a project settings edit for the next model request in the same run", async () => {
-    const project = mkdtempSync(join(tmpdir(), "openharness-effort-run-"));
+    const project = mkdtempSync(join(tmpdir(), "vykor-effort-run-"));
     let release!: () => void;
     let started!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });
@@ -166,8 +166,8 @@ describe("daemon request settings refresh", () => {
   });
 
   it("applies a changed project settings file only to that project's session", async () => {
-    const projectA = mkdtempSync(join(tmpdir(), "openharness-settings-a-"));
-    const projectB = mkdtempSync(join(tmpdir(), "openharness-settings-b-"));
+    const projectA = mkdtempSync(join(tmpdir(), "vykor-settings-a-"));
+    const projectB = mkdtempSync(join(tmpdir(), "vykor-settings-b-"));
     try {
       await saveProjectSettings({ effort: "low" }, projectA);
       await saveProjectSettings({ effort: "medium" }, projectB);

@@ -1,4 +1,4 @@
-import type { AgentEvent } from "@openharness/core";
+import type { AgentEvent } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
 import {

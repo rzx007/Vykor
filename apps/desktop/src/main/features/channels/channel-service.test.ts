@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import type { ChannelRuntimeStatus } from "@openharness/client"
+import type { ChannelRuntimeStatus } from "@vykor/client"
 
 import { DesktopChannelService, type DesktopChannelClient } from "./channel-service"
 

@@ -6,7 +6,7 @@
 
 **架构：** 全局设置由跨进程读改写入口持久化。Desktop 主进程提供无敏感字段的 MCP 列表快照与按需读取的编辑配置，应用服务负责配置变更、凭据清理和通知 daemon。活动 Session 按服务名及来源核对最新有效配置，更新连接、工具和运行能力视图。
 
-**技术栈：** TypeScript、Node.js 文件系统、Electron IPC、React、Vitest、现有 `@openharness/core/server/mcp` 包。
+**技术栈：** TypeScript、Node.js 文件系统、Electron IPC、React、Vitest、现有 `@vykor/core/server/mcp` 包。
 
 **规格：** `docs/superpowers/specs/2026-09-23-desktop-mcp-management-convergence-design.md`
 
@@ -29,7 +29,7 @@
 
 **文件：** 新增 `packages/core/src/config/settings-mutation.ts` 及测试；修改 `packages/core/src/config/settings.ts`、`packages/core/src/index.ts`；迁移生产调用处：`apps/cli/src/commands/{mcp,provider,sandbox,setup}.ts`、`apps/cli/src/index.ts`、`packages/tools/src/{mode/plan-mode,meta/config}.ts`、`packages/server/src/{daemon-host/auto-start-controller,application/default-services/shared,application/mcp-oauth-application-service}.ts`。
 
-- [ ] 先写设置并发测试：两个独立调用同时修改不同字段，最终两项都存在；第二个调用在锁内看到第一个调用的最新值；编辑目标已变化时返回冲突且不写入。运行 `pnpm --filter @openharness/core exec vitest run src/config/settings-mutation.test.ts`，确认测试因缺少入口失败。
+- [ ] 先写设置并发测试：两个独立调用同时修改不同字段，最终两项都存在；第二个调用在锁内看到第一个调用的最新值；编辑目标已变化时返回冲突且不写入。运行 `pnpm --filter @vykor/core exec vitest run src/config/settings-mutation.test.ts`，确认测试因缺少入口失败。
 - [ ] 新增统一入口。用标准库原子创建锁文件并在 `finally` 释放；等待有上限，崩溃遗留锁有受限恢复策略。锁内加载最新配置、执行修改函数、调用现有原子 JSON 写入。契约示例：
 
   ```ts
@@ -67,7 +67,7 @@
 
 **文件：** `packages/core/src/types/mcp-oauth.ts`、`packages/server/src/application/mcp-runtime-connection-coordinator.ts`、`packages/server/src/http/routes/mcp.ts`、`packages/client/src/` 中 MCP 控制请求、`packages/agent-runtime/src/runtime-integrations.ts`、`packages/server/src/daemon/default-daemon.ts` 及目标测试。
 
-- [ ] 先写失败测试：活动 Session 中新增全局服务能连接；停用、删除、改址可撤下旧工具并断开旧连接；重新启用 stdio、HTTP、SSE 能连接；慢连接完成前发生停用时不能重新发布工具；当前项目若覆盖 `mcpServers`，同名同 URL 也不参与全局核对。运行 `pnpm --filter @openharness/agent-runtime exec vitest run src/runtime-integrations.test.ts` 与 server 协调器测试，确认失败。
+- [ ] 先写失败测试：活动 Session 中新增全局服务能连接；停用、删除、改址可撤下旧工具并断开旧连接；重新启用 stdio、HTTP、SSE 能连接；慢连接完成前发生停用时不能重新发布工具；当前项目若覆盖 `mcpServers`，同名同 URL 也不参与全局核对。运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/runtime-integrations.test.ts` 与 server 协调器测试，确认失败。
 - [ ] 为配置变更增加与现有 OAuth 指纹入口并列的控制请求，例如 `POST /mcp/:name/reconcile-global`；daemon Bearer 中间件继续保护该请求。协调器按服务名串行并推进代次，将请求送达所有活动 Session 的通用句柄，句柄自行判断该名称是否由全局配置提供。现有 OAuth `synchronize(identity)` 继续按 HTTP 指纹工作，不改登录协议。
 - [ ] Session 句柄保留 `cwd`、原连接状态和配置来源。核对时检查 `loadProjectSettings(cwd)` 是否声明了 `mcpServers`；若声明，当前项目配置整体覆盖全局，该 Session 跳过全局核对。否则读取最新全局服务配置及原有插件来源，与已连接的旧配置比较；对被删除、改址或停用的连接先撤下工具并断开，再按最新有效配置连接：
 
@@ -107,7 +107,7 @@
 
 **文件：** `apps/desktop/src/shared/{mcp-types,desktop-api-contract,ipc-channels}.ts`、`apps/desktop/src/preload/desktop-api.ts`、`apps/desktop/src/main/features/mcp/{mcp-service,ipc,mcp-runtime-coordinator}.ts` 及测试。
 
-- [ ] 先写失败测试：Desktop 快照含 `enabled`、安全摘要、auth/runtime 分离；`getConfig/exportConfig` 只按需返回完整配置；增删改、启停调用应用服务；保存成功但同步失败保留 `persisted:true`；公开 HTTP 无 OAuth 动作。运行 `pnpm --filter @openharness/desktop exec vitest run src/main/features/mcp/mcp-service.test.ts` 确认失败。
+- [ ] 先写失败测试：Desktop 快照含 `enabled`、安全摘要、auth/runtime 分离；`getConfig/exportConfig` 只按需返回完整配置；增删改、启停调用应用服务；保存成功但同步失败保留 `persisted:true`；公开 HTTP 无 OAuth 动作。运行 `pnpm --filter @vykor/desktop exec vitest run src/main/features/mcp/mcp-service.test.ts` 确认失败。
 - [ ] 扩展 IPC 的入参与返回类型，并在 preload 暴露 `snapshot/getConfig/exportConfig/add/update/remove/setEnabled/login/logout`；对名称、配置、expectedConfig 做主进程校验。复用现有 daemon registry 与 client，增加任务 3 的按服务名核对调用：
 
   ```ts

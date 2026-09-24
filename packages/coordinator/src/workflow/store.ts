@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { getProjectConfigDir } from "@openharness/core";
+import { getProjectConfigDir } from "@vykor/core";
 import { createWorkflowPlan } from "./validation.js";
 import {
   createWorkflowRunId,

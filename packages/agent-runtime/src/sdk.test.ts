@@ -6,12 +6,12 @@ import type {
   AgentEvent,
   Settings,
   StreamingMessageClient,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   createWorkflowPlan,
   createWorkflowRunSnapshot,
   FileWorkflowRunRepository,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDefaultNodeAgent } from "./index.js";
@@ -48,7 +48,7 @@ describe("programmatic agent SDK", () => {
 
     await expect(
       withTemporaryAgent(
-        "openharness-sdk-init-failure-",
+        "vykor-sdk-init-failure-",
         async (temporaryCwd) => {
           cwd = temporaryCwd;
           throw new Error("initialization failed");
@@ -66,7 +66,7 @@ describe("programmatic agent SDK", () => {
 
     await expect(
       withTemporaryAgent(
-        "openharness-sdk-close-failure-",
+        "vykor-sdk-close-failure-",
         async (temporaryCwd) => {
           cwd = temporaryCwd;
           return {
@@ -125,7 +125,7 @@ describe("programmatic agent SDK", () => {
       },
     };
     await withTemporaryAgent(
-      "openharness-sdk-real-terminal-",
+      "vykor-sdk-real-terminal-",
       (cwd) => createDefaultNodeAgent({
         cwd,
         sessionId: "real-terminal-session",
@@ -213,7 +213,7 @@ describe("programmatic agent SDK", () => {
       },
     };
     await withTemporaryAgent(
-      "openharness-sdk-real-stdin-",
+      "vykor-sdk-real-stdin-",
       (cwd) => createDefaultNodeAgent({
         cwd,
         sessionId: "stdin-terminal-session",
@@ -269,7 +269,7 @@ describe("programmatic agent SDK", () => {
       },
     };
     await withTemporaryAgent(
-      "openharness-sdk-real-cancel-",
+      "vykor-sdk-real-cancel-",
       (cwd) => createDefaultNodeAgent({
         cwd,
         sessionId: "cancel-terminal-session",
@@ -291,7 +291,7 @@ describe("programmatic agent SDK", () => {
   }, 15_000);
 
   it("installs the complete standalone Node capability set without a Host", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-default-capabilities-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-default-capabilities-"));
     const agent = await createDefaultNodeAgent({
       cwd,
       settings: testSettingsWithDefaultMemory(),
@@ -316,7 +316,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("creates managed memory by default without exposing managed paths to the model", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-default-memory-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-default-memory-"));
     const requests: Array<Parameters<StreamingMessageClient["streamMessage"]>[0]> = [];
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
@@ -345,7 +345,7 @@ describe("programmatic agent SDK", () => {
       const serializedTool = JSON.stringify(rememberTool);
       expect(rememberTool).toBeDefined();
       expect(serializedTool).not.toContain("USER.md");
-      expect(serializedTool).not.toContain(".openharness-ts");
+      expect(serializedTool).not.toContain(".vykor");
       expect(serializedTool).not.toContain(cwd);
     } finally {
       await agent.close();
@@ -354,8 +354,8 @@ describe("programmatic agent SDK", () => {
   });
 
   it("gives settings and capability override memory disables identical behavior", async () => {
-    const settingsCwd = mkdtempSync(join(tmpdir(), "openharness-sdk-settings-memory-disabled-"));
-    const overrideCwd = mkdtempSync(join(tmpdir(), "openharness-sdk-override-memory-disabled-"));
+    const settingsCwd = mkdtempSync(join(tmpdir(), "vykor-sdk-settings-memory-disabled-"));
+    const overrideCwd = mkdtempSync(join(tmpdir(), "vykor-sdk-override-memory-disabled-"));
     const settingsDisabled = await createDefaultNodeAgent({
       cwd: settingsCwd,
       settings: testSettings(),
@@ -387,7 +387,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("keeps disabled long-running capabilities out of diagnostics, tools, and the model prompt", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-disabled-capabilities-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-disabled-capabilities-"));
     const requests: Array<Parameters<StreamingMessageClient["streamMessage"]>[0]> = [];
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
@@ -448,7 +448,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("routes Workflow jobs through the injected repository", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-workflow-jobs-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-workflow-jobs-"));
     const workflows = new FileWorkflowRunRepository({ dir: join(cwd, "external-workflows") });
     const spec = { mode: "sequential" as const, tasks: [{ id: "review" }] };
     workflows.save(createWorkflowRunSnapshot({
@@ -512,7 +512,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("does not register Schedule tools when schedules are explicitly disabled", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-schedule-capability-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-schedule-capability-"));
     const agent = await createDefaultNodeAgent({
       cwd,
       capabilityOverrides: { schedules: false },
@@ -529,7 +529,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("runs a complete turn without daemon, including events and permission decisions", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-"));
     const reliableEvents: AgentEvent[] = [];
     const observedEvents: AgentEvent[] = [];
     const requestPermission = vi.fn(async () => ({
@@ -610,7 +610,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("closes Agent -> JobWait through the standalone Jobs host", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-child-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-child-"));
     const events: AgentEvent[] = [];
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
@@ -693,7 +693,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("runs Workflow through framework children without daemon services", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-workflow-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-workflow-"));
     const events: AgentEvent[] = [];
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
@@ -764,7 +764,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("runs Coordinator -> Workflow -> worker -> Read/Shell/Edit with worker tools", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-coordinator-workflow-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-coordinator-workflow-"));
     const targetFile = join(cwd, "target.txt");
     writeFileSync(targetFile, "alpha\n", "utf-8");
     const events: AgentEvent[] = [];
@@ -899,7 +899,7 @@ describe("programmatic agent SDK", () => {
   });
 
   it("keeps child worker tools under the SDK host allowlist", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-sdk-child-ceiling-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-sdk-child-ceiling-"));
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
         const firstUser = params.messages.find((message) => message.type === "user");

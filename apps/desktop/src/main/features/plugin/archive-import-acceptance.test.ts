@@ -11,7 +11,7 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }))
 
-import { OpenHarnessClient } from "@openharness/client"
+import { VykorClient } from "@vykor/client"
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,
@@ -35,7 +35,7 @@ let previousTempEnv: { TEMP?: string; TMP?: string; TMPDIR?: string }
 beforeEach(async () => {
   // 解析器把临时目录建在 os.tmpdir() 下，而它是全局共享的；这里把本用例的
   // 临时目录收窄到独立作用域，避免与其它并行运行的包互相看到对方的残留目录。
-  scopedTmpdir = await mkdtemp(join(tmpdir(), "ohs-desktop-plugin-tmp-"))
+  scopedTmpdir = await mkdtemp(join(tmpdir(), "vk-desktop-plugin-tmp-"))
   previousTempEnv = {
     TEMP: process.env.TEMP,
     TMP: process.env.TMP,
@@ -44,14 +44,14 @@ beforeEach(async () => {
   process.env.TEMP = scopedTmpdir
   process.env.TMP = scopedTmpdir
   process.env.TMPDIR = scopedTmpdir
-  root = await mkdtemp(join(tmpdir(), "ohs-desktop-plugin-archive-"))
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR
-  process.env.OPENHARNESS_CONFIG_DIR = join(root, "config")
+  root = await mkdtemp(join(tmpdir(), "vk-desktop-plugin-archive-"))
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR
+  process.env.VYKOR_CONFIG_DIR = join(root, "config")
 })
 
 afterEach(async () => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir
   if (previousTempEnv.TEMP === undefined) delete process.env.TEMP
   else process.env.TEMP = previousTempEnv.TEMP
   if (previousTempEnv.TMP === undefined) delete process.env.TMP
@@ -125,7 +125,7 @@ function createDesktopService(archivePath: string): DesktopPluginService {
       listProjectionDiagnostics: () => { throw new Error("Projection diagnostics are outside this archive test") },
     },
   }))
-  const client = new OpenHarnessClient({
+  const client = new VykorClient({
     baseUrl: "http://desktop-archive.test",
     fetch: async (input, init) => await routes.request(input, init),
   })

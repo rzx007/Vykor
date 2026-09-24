@@ -6,7 +6,7 @@
 
 **架构：** `DefaultNodeAgent` 解析 Settings 和调用方 overrides，形成唯一的能力结果；`AgentKernel` 只接收解析后的实现。Jobs 通过具体的 `CompositeAgentJobHost` 合并非重叠来源，daemon 将现有聚合 Job 服务收窄为 Terminal、后台 Shell等 producer 对应的视图。
 
-**技术栈：** TypeScript、Vitest、pnpm workspace、Turbo、现有 `@openharness/agent-runtime`、`@openharness/jobs`、`@openharness/server`。
+**技术栈：** TypeScript、Vitest、pnpm workspace、Turbo、现有 `@vykor/agent-runtime`、`@vykor/jobs`、`@vykor/server`。
 
 ---
 
@@ -88,7 +88,7 @@ it("does not call the factory for false", async () => {
 运行：
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/capability-resolution.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/capability-resolution.test.ts
 ```
 
 预期：FAIL，错误指出无法导入 `capability-resolution.js` 或缺少 `resolveCapability`。
@@ -174,8 +174,8 @@ expect(() => assertJobConfiguration({
 - [ ] **步骤 6：运行阶段测试与类型检查**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/capability-resolution.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime exec vitest run src/capability-resolution.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：测试 PASS，类型检查退出码为 0。
@@ -218,7 +218,7 @@ it("rejects an id claimed by different sources", async () => {
 - [ ] **步骤 2：运行测试并确认失败**
 
 ```bash
-pnpm --filter @openharness/jobs exec vitest run src/composite-agent-job-host.test.ts
+pnpm --filter @vykor/jobs exec vitest run src/composite-agent-job-host.test.ts
 ```
 
 预期：FAIL，缺少 `CompositeAgentJobHost`。
@@ -258,8 +258,8 @@ expect(shellJobs.send).not.toHaveBeenCalled();
 - [ ] **步骤 6：运行 Jobs 包测试**
 
 ```bash
-pnpm --filter @openharness/jobs exec vitest run src/index.test.ts src/composite-agent-job-host.test.ts
-pnpm --filter @openharness/jobs check-types
+pnpm --filter @vykor/jobs exec vitest run src/index.test.ts src/composite-agent-job-host.test.ts
+pnpm --filter @vykor/jobs check-types
 ```
 
 预期：全部 PASS。
@@ -311,14 +311,14 @@ expect(agent.getCapabilities()).toMatchObject({
 - [ ] **步骤 3：运行定向测试确认旧装配不满足新契约**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/kernel.test.ts src/default-runtime.test.ts src/sdk.test.ts src/agent.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/kernel.test.ts src/default-runtime.test.ts src/sdk.test.ts src/agent.test.ts
 ```
 
 预期：FAIL，主要为新 options、`getCapabilities()` 和默认值断言不存在。
 
 - [ ] **步骤 4：更新公开 Agent API**
 
-`OpenHarnessAgentOptions` 使用：
+`VykorAgentOptions` 使用：
 
 ```ts
 capabilityOverrides?: AgentCapabilityOverrides;
@@ -363,8 +363,8 @@ const effects: AgentEffects = {
 - [ ] **步骤 9：运行 agent-runtime 测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。若此时其他 workspace 因旧 API 还未迁移而类型失败，记录在下一任务解决，但 agent-runtime 自身不得保留旧别名。
@@ -401,7 +401,7 @@ expect(await shellJobs.list({ sessionId: root.id, includeFinished: true }))
 - [ ] **步骤 2：运行 daemon Job 测试确认失败**
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/jobs/daemon-job-service.test.ts
+pnpm --filter @vykor/server exec vitest run src/jobs/daemon-job-service.test.ts
 ```
 
 预期：FAIL，新的视图方法不存在。
@@ -431,8 +431,8 @@ daemon application 将 Terminal host 与 terminal-only jobs 配对，将 Backgro
 - [ ] **步骤 5：运行 daemon 定向测试**
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/jobs/daemon-job-service.test.ts src/daemon/__test__/daemon-agent.test.ts src/application/__test__/durable-agent-application.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server exec vitest run src/jobs/daemon-job-service.test.ts src/daemon/__test__/daemon-agent.test.ts src/application/__test__/durable-agent-application.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部 PASS；测试明确断言传给 Agent 的 Terminal 和 Shell bundle 可共享或使用不同 Job Host。
@@ -473,9 +473,9 @@ rg -n "AgentHostCapabilities|hostCapabilities|effects\.schedules" packages apps 
 - [ ] **步骤 3：运行三个核心 workspace 的测试**
 
 ```bash
-pnpm --filter @openharness/jobs test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/jobs test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
 ```
 
 预期：全部 PASS，0 failed。

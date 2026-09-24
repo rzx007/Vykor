@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 import { agentTool, createAgentTool } from "../index.js";
-import type { AgentChildController, AgentExecutionContext } from "@openharness/core";
-import type { AgentDefinition } from "@openharness/coordinator";
+import type { AgentChildController, AgentExecutionContext } from "@vykor/core";
+import type { AgentDefinition } from "@vykor/coordinator";
 
 type SpawnInput = Parameters<AgentChildController["spawnChildAgent"]>[0];
 type SpawnResult = Awaited<ReturnType<AgentChildController["spawnChildAgent"]>>;
@@ -143,10 +143,10 @@ describe("agentTool framework child controller", () => {
 
   it("resolves builtin < user < scoped plugin precedence inside each Agent tool", async () => {
     const configDir = mkdtempSync(
-      join(tmpdir(), "ohs-agent-tool-definitions-"),
+      join(tmpdir(), "vk-agent-tool-definitions-"),
     );
-    const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = configDir;
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
     mkdirSync(join(configDir, "agents"), { recursive: true });
     writeFileSync(
       join(configDir, "agents", "worker.md"),
@@ -187,9 +187,9 @@ describe("agentTool framework child controller", () => {
       });
     } finally {
       if (previousConfigDir === undefined) {
-        delete process.env.OPENHARNESS_CONFIG_DIR;
+        delete process.env.VYKOR_CONFIG_DIR;
       } else {
-        process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+        process.env.VYKOR_CONFIG_DIR = previousConfigDir;
       }
       rmSync(configDir, { recursive: true, force: true });
     }

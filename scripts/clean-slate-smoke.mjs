@@ -94,7 +94,7 @@ export async function runCleanSlateSmoke(options, runtime = createDefaultRuntime
   const context = {
     ...options,
     daemonToken: "clean-slate-smoke-daemon-token",
-    storePath: join(options.configDir, "data", "session-runtime", "openharness.db"),
+    storePath: join(options.configDir, "data", "session-runtime", "vykor.db"),
   };
   let provider;
   let daemon;
@@ -271,7 +271,7 @@ export async function probeCliBundle(url, context, dependencies = {}) {
       ...process.env,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
-      OPENHARNESS_CONFIG_DIR: context.configDir,
+      VYKOR_CONFIG_DIR: context.configDir,
     },
   };
   const configResult = await spawnCommand(process.execPath, [cliEntrypoint, "config", "show"], spawnOptions, dependencies.activeChildren);
@@ -333,15 +333,15 @@ export function createDefaultRuntime() {
     startFakeProvider,
     async startDaemon(context) {
       const previous = {
-        config: process.env.OPENHARNESS_CONFIG_DIR,
-        models: process.env.OPENHARNESS_DISABLE_MODELS_FETCH,
+        config: process.env.VYKOR_CONFIG_DIR,
+        models: process.env.VYKOR_DISABLE_MODELS_FETCH,
         home: process.env.HOME,
         userProfile: process.env.USERPROFILE,
       };
       const restore = () => {
         for (const [name, value] of Object.entries({
-          OPENHARNESS_CONFIG_DIR: previous.config,
-          OPENHARNESS_DISABLE_MODELS_FETCH: previous.models,
+          VYKOR_CONFIG_DIR: previous.config,
+          VYKOR_DISABLE_MODELS_FETCH: previous.models,
           HOME: previous.home,
           USERPROFILE: previous.userProfile,
         })) {
@@ -349,13 +349,13 @@ export function createDefaultRuntime() {
           else process.env[name] = value;
         }
       };
-      process.env.OPENHARNESS_CONFIG_DIR = context.configDir;
-      process.env.OPENHARNESS_DISABLE_MODELS_FETCH = "1";
+      process.env.VYKOR_CONFIG_DIR = context.configDir;
+      process.env.VYKOR_DISABLE_MODELS_FETCH = "1";
       process.env.HOME = join(context.tempRoot, "home");
       process.env.USERPROFILE = join(context.tempRoot, "home");
       try {
-        const { startOpenHarnessDaemon } = await import(sourceUrl("packages/server/src/index.ts"));
-        const started = await startOpenHarnessDaemon({
+        const { startVykorDaemon } = await import(sourceUrl("packages/server/src/index.ts"));
+        const started = await startVykorDaemon({
           host: "127.0.0.1",
           port: 0,
           storePath: context.storePath,
@@ -375,8 +375,8 @@ export function createDefaultRuntime() {
     },
     waitForHealth: pollHealth,
     async createClient(url, context) {
-      const { OpenHarnessClient } = await import(sourceUrl("packages/client/src/index.ts"));
-      const client = new OpenHarnessClient({ baseUrl: url, token: context.daemonToken });
+      const { VykorClient } = await import(sourceUrl("packages/client/src/index.ts"));
+      const client = new VykorClient({ baseUrl: url, token: context.daemonToken });
       return {
         capabilities: () => client.protocol.capabilities(),
         createSession: (context) => client.sessions.create({ cwd: context.projectDir, model: "smoke-model", title: "clean-slate-smoke" }),
@@ -412,7 +412,7 @@ export function createDefaultRuntime() {
 }
 
 async function main() {
-  const tempRoot = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(tmpdir(), "openharness-clean-slate-")));
+  const tempRoot = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(tmpdir(), "vykor-clean-slate-")));
   const options = {
     tempRoot,
     configDir: join(tempRoot, "config"),

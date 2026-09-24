@@ -4,9 +4,9 @@
 
 **Goal:** Replace TUI placeholder state and silent action loss with typed, tested client-backed behavior, while removing production-only fields that have no data source.
 
-**Architecture:** `useServerSync` owns daemon/client state and exposes named typed actions. `App` owns visual open/closed state. Workflow, MCP and task data come from `@openharness/client`; unsupported Todo/Swarm/Bridge presentation fields leave the production controller instead of remaining permanently empty.
+**Architecture:** `useServerSync` owns daemon/client state and exposes named typed actions. `App` owns visual open/closed state. Workflow, MCP and task data come from `@vykor/client`; unsupported Todo/Swarm/Bridge presentation fields leave the production controller instead of remaining permanently empty.
 
-**Tech Stack:** TypeScript, React 19, OpenTUI, Bun test, `@openharness/client`
+**Tech Stack:** TypeScript, React 19, OpenTUI, Bun test, `@vykor/client`
 
 **Spec:** `docs/superpowers/specs/2026-08-19-layered-cleanup-design.md`
 
@@ -55,6 +55,6 @@
 - Fields without a current data source are removed from the production controller/view model rather than filled with constants.
 
 - [ ] Add failing tests for MCP/task hydration and active-session reset.
-- [ ] Load supported data through `@openharness/client` and project it into the controller.
+- [ ] Load supported data through `@vykor/client` and project it into the controller.
 - [ ] Remove unsupported permanent-empty fields and unreachable presentation branches, preserving transcript-derived historical summaries.
 - [ ] Run frontend typecheck, strict unused diagnostics and the full Bun test suite.

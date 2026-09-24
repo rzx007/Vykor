@@ -125,7 +125,7 @@ export function TitleBar({
   }
 
   const openDocumentation = (): void => {
-    window.open("https://github.com/openharness/openharness-ts#readme", "_blank", "noopener")
+    window.open("https://github.com/rzx007/openharness-ts#readme", "_blank", "noopener")
   }
 
   return (
@@ -173,7 +173,7 @@ export function TitleBar({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void window.desktop.app.quit()}>
-                退出 OpenHarness
+                退出 Vykor
                 <DropdownMenuShortcut>{shortcutLabel("quit", isMac)}</DropdownMenuShortcut>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -301,7 +301,7 @@ export function TitleBar({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setInfoDialog("about")}>
-                关于 OpenHarness
+                关于 Vykor
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -341,7 +341,7 @@ export function TitleBar({
       <Dialog open={infoDialog === "about"} onOpenChange={(open) => !open && setInfoDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>OpenHarness</DialogTitle>
+            <DialogTitle>Vykor</DialogTitle>
             <DialogDescription>面向本地项目和智能代理协作的桌面工作区。</DialogDescription>
           </DialogHeader>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg bg-muted/55 p-3 text-xs">

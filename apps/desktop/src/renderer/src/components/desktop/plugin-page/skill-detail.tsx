@@ -27,7 +27,7 @@ const sourceLabels: Record<DesktopSkillInfo["source"], string> = {
   agent: "Agent 目录 · 只读",
   standard: "通用 · 只读",
   project: "项目技能",
-  personal: "个人 · OHS 全局技能",
+  personal: "个人 · VK 全局技能",
 }
 
 export function SkillDetail({

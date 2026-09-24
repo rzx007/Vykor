@@ -9,7 +9,7 @@ import { SessionRepository } from "./session-repository.js";
 
 describe("SessionRepository read operations", () => {
   it("gets a session by id and returns deep clones", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-session-repo-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-session-repo-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new SessionRepository((store as any).storage);
@@ -42,7 +42,7 @@ describe("SessionRepository read operations", () => {
   });
 
   it("lists sessions with cwd filtering, limit, archiving, and updatedAt descending sort", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-session-repo-list-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-session-repo-list-"));
     const dirA = join(directory, "dirA");
     const dirB = join(directory, "dirB");
     const store = new SessionStore({ path: join(directory, "store.db") });
@@ -88,7 +88,7 @@ describe("SessionRepository read operations", () => {
   });
 
   it("lists child sessions sorted by createdAt asc and errors when parent is not found", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-session-repo-child-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-session-repo-child-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new SessionRepository((store as any).storage);
@@ -123,7 +123,7 @@ describe("SessionRepository read operations", () => {
 
   describe("SessionRepository write operations", () => {
     it("creates sessions with project inspection, parent project inheritance, defaults, and events", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-session-repo-write-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-session-repo-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new SessionRepository({
@@ -177,7 +177,7 @@ describe("SessionRepository read operations", () => {
     });
 
     it("updates sessions, handles agent deletion, replaces metadata, enforces mutable guard, and emits events", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-session-repo-update-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-session-repo-update-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new SessionRepository({

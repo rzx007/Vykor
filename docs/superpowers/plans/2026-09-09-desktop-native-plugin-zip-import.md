@@ -6,7 +6,7 @@
 
 **目标：** 在 Desktop 插件页面一键导入本地 Native Plugin ZIP，后台安全校验，只有申请权限时出现一次确认。
 
-**架构：** `@openharness/plugin-sources` 负责安全解压；Server PluginService 负责 preview/install；Desktop main 持有文件路径与短期 selection；Renderer 只显示成功、失败或权限确认。Native Installer 保持只接收目录。
+**架构：** `@vykor/plugin-sources` 负责安全解压；Server PluginService 负责 preview/install；Desktop main 持有文件路径与短期 selection；Renderer 只显示成功、失败或权限确认。Native Installer 保持只接收目录。
 
 **技术栈：** TypeScript、Node.js streams、yauzl、Hono、Electron IPC、React、Vitest。
 

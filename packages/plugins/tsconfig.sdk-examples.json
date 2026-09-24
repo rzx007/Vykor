@@ -6,7 +6,7 @@
     "allowJs": true,
     "checkJs": true,
     "paths": {
-      "@openharness/plugins/sdk": ["./src/sdk.ts"]
+      "@vykor/plugins/sdk": ["./src/sdk.ts"]
     }
   },
   "include": ["../../examples/plugins/text-inspector/tools/**/*.mjs"]

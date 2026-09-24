@@ -1,5 +1,5 @@
-import type { Settings } from "@openharness/core";
-import type { HostShellLauncher, SandboxBackend, SandboxPolicy } from "@openharness/sandbox";
+import type { Settings } from "@vykor/core";
+import type { HostShellLauncher, SandboxBackend, SandboxPolicy } from "@vykor/sandbox";
 
 export interface ShellExecRequest {
   command: string;

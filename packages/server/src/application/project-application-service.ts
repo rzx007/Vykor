@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 
-import type { ProjectRecord } from "@openharness/protocol";
+import type { ProjectRecord } from "@vykor/protocol";
 
 export interface ProjectOperations {
   list(options?: { includeArchived?: boolean }): ProjectRecord[];

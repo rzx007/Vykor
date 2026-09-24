@@ -6,9 +6,9 @@ import { configTool } from "../config.js";
 import { toolSearchTool } from "../tool-search.js";
 import { askUserTool } from "../ask-user.js";
 import { hostPathDirectory, listSkillsTool, skillTool } from "../skill.js";
-import { ToolRegistry } from "@openharness/core";
-import { SkillRegistry, type SkillDefinition } from "@openharness/skills";
-import { hostPathToWslPath } from "@openharness/sandbox";
+import { ToolRegistry } from "@vykor/core";
+import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
+import { hostPathToWslPath } from "@vykor/sandbox";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -196,7 +196,7 @@ describe("skillTool", () => {
     registry.register(makeSkill({
       name: "review",
       source: "plugin",
-      path: "C:\\Users\\ruanz\\.openharness-ts\\skills\\review\\SKILL.md",
+      path: "C:\\Users\\ruanz\\.vykor\\skills\\review\\SKILL.md",
       content: "# review",
     }));
     const presentHostPath = (hostPath: string) => hostPathToWslPath(hostPath);
@@ -208,8 +208,8 @@ describe("skillTool", () => {
     } as any);
 
     const text = (result.content[0] as any).text;
-    expect(text).toContain("Skill file: /mnt/c/Users/ruanz/.openharness-ts/skills/review/SKILL.md");
-    expect(text).toContain("Skill root: /mnt/c/Users/ruanz/.openharness-ts/skills/review");
+    expect(text).toContain("Skill file: /mnt/c/Users/ruanz/.vykor/skills/review/SKILL.md");
+    expect(text).toContain("Skill root: /mnt/c/Users/ruanz/.vykor/skills/review");
     expect(text).not.toContain("C:\\Users\\");
   });
 
@@ -314,14 +314,14 @@ describe("listSkillsTool", () => {
   });
 
   it("freshly scans current project skill directories and ignores unrelated tool directories", async () => {
-    const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oh-list-skills-"));
-    process.env.OPENHARNESS_CONFIG_DIR = path.join(dir, "config");
+    process.env.VYKOR_CONFIG_DIR = path.join(dir, "config");
     try {
       await fs.mkdir(path.join(dir, ".git"), { recursive: true });
       for (const [root, name, description] of [
         [".agents", "agent-skill", "Fresh agent skill"],
-        [".openharness-ts", "local-skill", "Fresh local skill"],
+        [".vykor", "local-skill", "Fresh local skill"],
         [".claude", "old-skill", "Ignored old skill"],
       ]) {
         const skillDir = path.join(dir, root, "skills", name);
@@ -350,16 +350,16 @@ describe("listSkillsTool", () => {
       expect(text).toContain("local-skill — Fresh local skill");
       expect(text).not.toContain("old-skill");
     } finally {
-      if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
 
   it("freshly scans project .agents/skills directory skills", async () => {
-    const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oh-list-agent-skills-"));
-    process.env.OPENHARNESS_CONFIG_DIR = path.join(dir, "config");
+    process.env.VYKOR_CONFIG_DIR = path.join(dir, "config");
     try {
       const skillDir = path.join(dir, ".agents", "skills", "agent-skill");
       await fs.mkdir(path.join(dir, ".git"), { recursive: true });
@@ -379,16 +379,16 @@ describe("listSkillsTool", () => {
       expect(text).toContain("agent-skill — Project agent skill");
       expect(text).toContain("source=project");
     } finally {
-      if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
 
   it("refreshes WSL project Skills from the host workspace root", async () => {
-    const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oh-wsl-project-skills-"));
-    process.env.OPENHARNESS_CONFIG_DIR = path.join(dir, "config");
+    process.env.VYKOR_CONFIG_DIR = path.join(dir, "config");
     try {
       const skillDir = path.join(dir, ".agents", "skills", "wsl-project-skill");
       await fs.mkdir(path.join(dir, ".git"), { recursive: true });
@@ -403,8 +403,8 @@ describe("listSkillsTool", () => {
 
       expect((result.content[0] as { text: string }).text).toContain("wsl-project-skill — WSL project skill");
     } finally {
-      if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
       await fs.rm(dir, { recursive: true, force: true });
     }
   });

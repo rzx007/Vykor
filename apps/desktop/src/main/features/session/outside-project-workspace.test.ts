@@ -24,7 +24,7 @@ describe("outside-project workspace paths", () => {
 
   it("builds the Windows Documents path", () => {
     expect(buildOutsideProjectDayRoot("C:\\Users\\tester\\Documents", date, win32.join)).toBe(
-      "C:\\Users\\tester\\Documents\\OpenHarness\\2026-08-24"
+      "C:\\Users\\tester\\Documents\\Vykor\\2026-08-24"
     )
   })
 
@@ -33,21 +33,21 @@ describe("outside-project workspace paths", () => {
     ["Linux", "/home/tester/Documents"],
   ])("builds the %s Documents path", (_platform, documentsPath) => {
     expect(buildOutsideProjectDayRoot(documentsPath, date, posix.join)).toBe(
-      `${documentsPath}/OpenHarness/2026-08-24`
+      `${documentsPath}/Vykor/2026-08-24`
     )
   })
 
   it("recognizes only managed Windows workspaces", () => {
     expect(
       isOutsideProjectWorkspacePath(
-        "C:\\Users\\tester\\Documents\\OpenHarness\\2026-08-24\\x1",
+        "C:\\Users\\tester\\Documents\\Vykor\\2026-08-24\\x1",
         "C:\\Users\\tester\\Documents",
         win32
       )
     ).toBe(true)
     expect(
       isOutsideProjectWorkspacePath(
-        "C:\\Users\\tester\\Documents\\OpenHarness-backup\\x1",
+        "C:\\Users\\tester\\Documents\\Vykor-backup\\x1",
         "C:\\Users\\tester\\Documents",
         win32
       )
@@ -55,14 +55,14 @@ describe("outside-project workspace paths", () => {
   })
 
   it.each([
-    ["macOS", "/Users/tester/Documents", "/Users/tester/Documents/OpenHarness/2026-08-24/x1"],
-    ["Linux", "/home/tester/Documents", "/home/tester/Documents/OpenHarness/2026-08-24/x1"],
+    ["macOS", "/Users/tester/Documents", "/Users/tester/Documents/Vykor/2026-08-24/x1"],
+    ["Linux", "/home/tester/Documents", "/home/tester/Documents/Vykor/2026-08-24/x1"],
   ])("recognizes a managed %s workspace", (_platform, documentsPath, workspacePath) => {
     expect(isOutsideProjectWorkspacePath(workspacePath, documentsPath, posix)).toBe(true)
   })
 
   it("atomically allocates a different xN directory for concurrent sessions", async () => {
-    const documentsPath = await mkdtemp(join(tmpdir(), "openharness-documents-"))
+    const documentsPath = await mkdtemp(join(tmpdir(), "vykor-documents-"))
     temporaryRoots.push(documentsPath)
 
     const allocated = await Promise.all([
@@ -87,10 +87,10 @@ describe("outside-project workspace paths", () => {
     expect(isChannelProjectHidden("/work/alpha", channelCwds, "/Users/tester/Documents")).toBe(false)
   })
 
-  it("still hides documents/OpenHarness projects by path", () => {
+  it("still hides documents/Vykor projects by path", () => {
     expect(
       isChannelProjectHidden(
-        "/Users/tester/Documents/OpenHarness/x1",
+        "/Users/tester/Documents/Vykor/x1",
         new Set(),
         "/Users/tester/Documents"
       )
@@ -98,12 +98,12 @@ describe("outside-project workspace paths", () => {
   })
 
   it("allocates a real cwd without requiring a project record", async () => {
-    const documentsPath = await mkdtemp(join(tmpdir(), "openharness-projectless-"))
+    const documentsPath = await mkdtemp(join(tmpdir(), "vykor-projectless-"))
     temporaryRoots.push(documentsPath)
 
     const cwd = await allocateOutsideProjectWorkspace(documentsPath, date)
 
     expect(isOutsideProjectWorkspacePath(cwd, documentsPath)).toBe(true)
-    expect(cwd).toContain(join("OpenHarness", "2026-08-24", "x1"))
+    expect(cwd).toContain(join("Vykor", "2026-08-24", "x1"))
   })
 })

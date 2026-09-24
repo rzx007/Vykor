@@ -1,6 +1,6 @@
-import type { PermissionRequestRecord, PermissionStatus } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
-import type { AgentPermissionDecision } from "@openharness/core";
+import type { PermissionRequestRecord, PermissionStatus } from "@vykor/protocol";
+import type { SessionStore } from "@vykor/services";
+import type { AgentPermissionDecision } from "@vykor/core";
 import type { StructuredLogger } from "../shared/observability.js";
 import { PermissionController } from "./permission-controller.js";
 

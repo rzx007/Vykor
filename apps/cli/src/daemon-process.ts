@@ -2,7 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 
-import { getLogsDir } from "@openharness/core";
+import { getLogsDir } from "@vykor/core";
 
 export interface DaemonInvocationOptions {
   bunRuntime?: boolean;
@@ -35,7 +35,7 @@ export function resolveDaemonInvocation(
   const bunRuntime = options.bunRuntime ?? "bun" in process.versions;
   const command = bunRuntime
     ? options.nodePath
-      ?? process.env.OPENHARNESS_NODE_EXECUTABLE
+      ?? process.env.VYKOR_NODE_EXECUTABLE
       ?? options.locateNode?.()
       ?? locateNodeExecutable()
       ?? "node"
@@ -101,7 +101,7 @@ export function daemonStartupError(spawned: SpawnedDaemonProcess, reason?: strin
   const detail = reason ?? spawned.failure() ?? "did not become ready";
   const tail = daemonLogTail(spawned.logPath);
   return new Error([
-    `The OpenHarness daemon ${detail}.`,
+    `The Vykor daemon ${detail}.`,
     `Daemon log: ${spawned.logPath}`,
     ...(tail ? ["", tail] : []),
   ].join("\n"));

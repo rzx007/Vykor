@@ -1,4 +1,4 @@
-import type { AgentRunContribution } from "@openharness/core";
+import type { AgentRunContribution } from "@vykor/core";
 import { createGoalAssessmentTool } from "./goal-assessment-tool.js";
 
 export interface GoalRunBinding {

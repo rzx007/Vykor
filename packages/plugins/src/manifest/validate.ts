@@ -7,21 +7,21 @@ import {
   type NativePluginComponentKind,
   type NativePluginValidationResult,
   type NativeToolComponent,
-  type OpenHarnessPluginManifestV1,
+  type VykorPluginManifestV1,
   type ValidatedNativePlugin,
 } from "../types.js";
-import { OpenHarnessPluginManifestV1Schema } from "./schema-v1.js";
+import { VykorPluginManifestV1Schema } from "./schema-v1.js";
 
 export type { NativePluginValidationResult } from "../types.js";
 
-const MANIFEST_RELATIVE_PATH = join(".openharness-plugin", "plugin.json");
+const MANIFEST_RELATIVE_PATH = join(".vykor-plugin", "plugin.json");
 
 interface ComponentSource {
   kind: NativePluginComponentKind;
   declaredPath: string;
 }
 
-function getComponentSources(manifest: OpenHarnessPluginManifestV1): ComponentSource[] {
+function getComponentSources(manifest: VykorPluginManifestV1): ComponentSource[] {
   const sources: ComponentSource[] = [];
   for (const kind of NATIVE_PLUGIN_COMPONENT_KINDS) {
     const declarations = manifest.components[kind] as
@@ -42,7 +42,7 @@ function invalid(diagnostics: PluginDiagnostic[]): NativePluginValidationResult 
   return { status: "invalid", diagnostics };
 }
 
-/** 只接受 `.openharness-plugin/plugin.json`，并验证所有声明组件的真实路径边界。 */
+/** 只接受 `.vykor-plugin/plugin.json`，并验证所有声明组件的真实路径边界。 */
 export async function validateNativePlugin(root: string): Promise<NativePluginValidationResult> {
   const manifestPath = join(root, MANIFEST_RELATIVE_PATH);
   let source: string;
@@ -79,7 +79,7 @@ export async function validateNativePlugin(root: string): Promise<NativePluginVa
     ]);
   }
 
-  const parsed = OpenHarnessPluginManifestV1Schema.safeParse(raw);
+  const parsed = VykorPluginManifestV1Schema.safeParse(raw);
   if (!parsed.success) {
     return invalid(
       parsed.error.issues.map((issue) => ({

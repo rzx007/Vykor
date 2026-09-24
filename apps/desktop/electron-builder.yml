@@ -1,5 +1,5 @@
-appId: app.openharness.desktop
-productName: OpenHarness
+appId: app.vykor.desktop
+productName: Vykor
 directories:
   buildResources: resources
 # 只带编译产物。node_modules 由 electron-builder 按 production dependencies 另收，
@@ -22,7 +22,7 @@ asarUnpack:
   - node_modules/@img/**
   - node_modules/sharp/**
 win:
-  executableName: OpenHarness
+  executableName: Vykor
 nsis:
   artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -42,8 +42,8 @@ linux:
   target:
     - AppImage
     - deb
-  executableName: OpenHarness
-  maintainer: OpenHarness
+  executableName: Vykor
+  maintainer: Vykor
   category: Utility
 appImage:
   artifactName: ${productName}-${version}.${ext}

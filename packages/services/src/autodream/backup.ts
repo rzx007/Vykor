@@ -1,7 +1,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
 import { join, basename, resolve } from "node:path";
 
-import { getDataDir } from "@openharness/core";
+import { getDataDir } from "@vykor/core";
 import { LOCK_FILE } from "./lock.js";
 
 /**
@@ -9,8 +9,8 @@ import { LOCK_FILE } from "./lock.js";
  * dream 跑前整目录备份，失败可还原；完成后 diff 出 added/changed/removed。
  */
 
-export function defaultBackupRoot(appLabel = "openharness"): string {
-  const safeLabel = appLabel.replace(/[^A-Za-z0-9_-]/g, "-").replace(/^-+|-+$/g, "") || "openharness";
+export function defaultBackupRoot(appLabel = "vykor"): string {
+  const safeLabel = appLabel.replace(/[^A-Za-z0-9_-]/g, "-").replace(/^-+|-+$/g, "") || "vykor";
   return join(getDataDir(), "memory-backups", safeLabel);
 }
 
@@ -77,7 +77,7 @@ export function formatMemoryDiff(diff: { added: string[]; removed: string[]; cha
   return lines.length > 0 ? lines.join("\n") : "no markdown file changes";
 }
 
-export function latestMemoryBackup(appLabel = "openharness"): string | null {
+export function latestMemoryBackup(appLabel = "vykor"): string | null {
   const root = defaultBackupRoot(appLabel);
   if (!existsSync(root)) return null;
   const backups = readdirSync(root)

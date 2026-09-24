@@ -1,4 +1,4 @@
-import type { ContextUsageSnapshot } from "@openharness/core";
+import type { ContextUsageSnapshot } from "@vykor/core";
 
 /** In-memory sessionId → ContextUsageSnapshot cache (not persisted to disk). */
 export class ContextUsageCache {

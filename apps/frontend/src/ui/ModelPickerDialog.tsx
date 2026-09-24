@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
-import type { ModelInfo, ModelProviderInfo } from "@openharness/client";
+import type { ModelInfo, ModelProviderInfo } from "@vykor/client";
 
 import { useTheme } from "../theme/ThemeContext";
 import { AC_VISIBLE_ITEMS } from "./constants";

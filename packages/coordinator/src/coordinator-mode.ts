@@ -1,5 +1,5 @@
 import { COORDINATOR_MODE_ENV, COORDINATOR_SYSTEM_PROMPT, isCoordinatorMode } from "./index.js";
-import { resolveAllowedToolNames } from "@openharness/core";
+import { resolveAllowedToolNames } from "@vykor/core";
 
 /**
  * Coordinator 模式辅助（移植自 Python coordinator_mode.py 的 mode/上下文段）。
@@ -27,7 +27,7 @@ const WORKER_TOOLS = [
 const SIMPLE_WORKER_TOOLS = ["Shell", "Read", "Edit"] as const;
 
 const TRUTHY = new Set(["1", "true", "yes"]);
-export const COORDINATOR_SIMPLE_MODE_ENV = "OPENHARNESS_COORDINATOR_SIMPLE";
+export const COORDINATOR_SIMPLE_MODE_ENV = "VYKOR_COORDINATOR_SIMPLE";
 
 /** 简单模式：worker 只配最小工具集。 */
 export function isSimpleMode(): boolean {

@@ -53,7 +53,7 @@ export function parseReleaseTag(tag) {
   return version;
 }
 
-export function resolveReleaseRoot(root = process.env.OPENHARNESS_TAG_RELEASE_ROOT) {
+export function resolveReleaseRoot(root = process.env.VYKOR_TAG_RELEASE_ROOT) {
   if (root) return resolve(root);
   return resolve(dirname(fileURLToPath(import.meta.url)), "..");
 }

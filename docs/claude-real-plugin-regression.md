@@ -28,7 +28,7 @@ Claude Code plugin source
 下载方式示例：
 
 ```powershell
-$root = Join-Path $env:TEMP 'ohs-real-plugins'
+$root = Join-Path $env:TEMP 'vk-real-plugins'
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 git clone --depth 1 --filter=blob:none --sparse https://github.com/anthropics/claude-plugins-official.git (Join-Path $root 'claude-plugins-official')
 Set-Location (Join-Path $root 'claude-plugins-official')
@@ -42,21 +42,21 @@ git rev-parse HEAD
 
 ```powershell
 pnpm exec tsx scripts/claude-real-plugin-regression.mjs `
-  --cwd D:\code\personal-project\OpenHarness-ts `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\frontend-design `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\commit-commands `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\plugin-dev `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\example-plugin `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\claude-security `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\ralph-loop `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\explanatory-output-style `
-  $env:TEMP\ohs-real-plugins\claude-plugins-official\plugins\hookify
+  --cwd D:\code\personal-project\Vykor `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\frontend-design `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\commit-commands `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\plugin-dev `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\example-plugin `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\claude-security `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\ralph-loop `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\explanatory-output-style `
+  $env:TEMP\vk-real-plugins\claude-plugins-official\plugins\hookify
 ```
 
 脚本只把转换产物、cache 和 installed store 写到系统临时目录。默认结束后删除临时目录；需要保留现场时设置：
 
 ```powershell
-$env:OPENHARNESS_KEEP_REAL_PLUGIN_REGRESSION = '1'
+$env:VYKOR_KEEP_REAL_PLUGIN_REGRESSION = '1'
 ```
 
 ## 当前样本结果
@@ -72,7 +72,7 @@ $env:OPENHARNESS_KEEP_REAL_PLUGIN_REGRESSION = '1'
 | `explanatory-output-style` | supported hook | passed | hook 文件 adapted 为 Native hooks。 |
 | `hookify` | skills + commands + agents + mixed hooks | passed / partial | `PreToolUse` / `PostToolUse` adapted；`Stop` / `UserPromptSubmit` unsupported。 |
 
-所有样本都完成了 `convert -> validate -> install -> Runtime discover`。本轮没有样本生成 Native Tool；这是预期行为。Claude Code 的普通命令、hook 脚本和辅助脚本不能被自动升级成 OpenHarness Native Tool。
+所有样本都完成了 `convert -> validate -> install -> Runtime discover`。本轮没有样本生成 Native Tool；这是预期行为。Claude Code 的普通命令、hook 脚本和辅助脚本不能被自动升级成 Vykor Native Tool。
 
 ## 本轮修复
 

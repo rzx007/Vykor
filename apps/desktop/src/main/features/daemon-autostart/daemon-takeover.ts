@@ -1,9 +1,9 @@
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 import {
   clearDaemonRegistry,
   readDaemonRegistry,
   stopDaemonProcess,
-} from "@openharness/server/daemon-host"
+} from "@vykor/server/daemon-host"
 
 import { createDesktopDaemonSystemService } from "./daemon-autostart-service"
 import { isDesktopManagedRegistry, isLoopbackDaemonUrl } from "./daemon-surface"

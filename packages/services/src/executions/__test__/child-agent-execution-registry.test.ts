@@ -56,7 +56,7 @@ describe("ChildAgentExecutionRegistry", () => {
 });
 
 function tempDirectory(): string {
-  const directory = mkdtempSync(join(tmpdir(), "openharness-child-registry-"));
+  const directory = mkdtempSync(join(tmpdir(), "vykor-child-registry-"));
   directories.push(directory);
   return directory;
 }

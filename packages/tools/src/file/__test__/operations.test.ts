@@ -11,7 +11,7 @@ afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root,
 
 describe("file operations", () => {
   it("reads and writes native workspace files", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "ohs-files-")); roots.push(cwd);
+    const cwd = await mkdtemp(join(tmpdir(), "vk-files-")); roots.push(cwd);
     const file = join(cwd, "note.txt");
     await fileWriteTool.execute!({ file_path: file, content: "hello" }, { cwd });
     const readResult = await fileReadTool.execute!({ file_path: file }, { cwd });

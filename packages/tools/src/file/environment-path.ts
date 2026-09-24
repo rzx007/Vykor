@@ -1,5 +1,5 @@
-import type { ToolContext } from "@openharness/core";
-import type { EnvironmentPathOperation } from "@openharness/environment";
+import type { ToolContext } from "@vykor/core";
+import type { EnvironmentPathOperation } from "@vykor/environment";
 
 import { resolveToolPath } from "./path.js";
 

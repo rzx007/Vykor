@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { ToolContext } from "@openharness/core";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
-import { createWslPathResolver } from "@openharness/sandbox";
+import type { ToolContext } from "@vykor/core";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
+import { createWslPathResolver } from "@vykor/sandbox";
 
 import { resolveToolPathInContext } from "../environment-path.js";
 import { fileReadTool } from "../read.js";
@@ -11,7 +11,7 @@ describe("resolveToolPathInContext", () => {
   it("uses the execution environment path namespace", async () => {
     const resolve = vi.fn(async () => ({
       executionPath: "/workspace/src/app.ts",
-      hostPath: "D:\\code\\ohs\\src\\app.ts",
+      hostPath: "D:\\code\\vk\\src\\app.ts",
       mountPurpose: "workspace" as const,
       mountMode: "rw" as const,
     }));
@@ -35,17 +35,17 @@ describe("resolveToolPathInContext", () => {
       environment: {
         workspace: {
           kind: "wsl",
-          hostRoot: "D:\\code\\ohs",
+          hostRoot: "D:\\code\\vk",
           executionRoot: "/workspace",
         },
         paths: {
           resolve: vi.fn(async (path: string) => ({
             executionPath: `/workspace/${path}`,
-            hostPath: `D:\\code\\ohs\\${path}`,
+            hostPath: `D:\\code\\vk\\${path}`,
             mountPurpose: "workspace" as const,
             mountMode: "rw" as const,
           })),
-          toHostPath: (path: string) => path.replace("/workspace/", "D:\\code\\ohs\\"),
+          toHostPath: (path: string) => path.replace("/workspace/", "D:\\code\\vk\\"),
         },
         files: {
           stat: vi.fn(async () => ({ isFile: true, isDirectory: false })),

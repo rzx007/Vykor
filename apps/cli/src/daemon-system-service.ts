@@ -2,7 +2,7 @@ import {
   createDaemonAutoStartController,
   DaemonSystemService,
   type DaemonAutoStartController,
-} from "@openharness/server/daemon-host";
+} from "@vykor/server/daemon-host";
 
 import {
   resolveDaemonInvocation,
@@ -17,7 +17,7 @@ export {
   type DaemonSystemServiceState,
   type DaemonSystemServiceStatus,
   type SystemCommandResult,
-} from "@openharness/server/daemon-host";
+} from "@vykor/server/daemon-host";
 
 export interface CreateDaemonSystemServiceOptions extends DaemonInvocationOptions {
   platform?: NodeJS.Platform;

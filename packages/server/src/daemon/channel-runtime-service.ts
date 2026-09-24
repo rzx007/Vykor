@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { getChannelWorkspaceRoot, type Settings } from "@openharness/core";
-import type { FeishuChannelConfig } from "@openharness/auth";
+import { getChannelWorkspaceRoot, type Settings } from "@vykor/core";
+import type { FeishuChannelConfig } from "@vykor/auth";
 import type {
   ChannelConnectorRuntimeStatus,
   ChannelDeliveryRecord,
@@ -13,8 +13,8 @@ import type {
   DurableChannelMessageInput,
   DurableChannelMessageResult,
   RecordChannelDeliveryInput,
-} from "@openharness/protocol";
-import type { InboundMessage } from "@openharness/channels";
+} from "@vykor/protocol";
+import type { InboundMessage } from "@vykor/channels";
 
 import type { ObservabilityEvent } from "../shared/observability.js";
 
@@ -498,7 +498,7 @@ export class ChannelRuntimeService {
   private async defaultCreateRuntime(
     input: CreateConnectorRuntimeInput,
   ): Promise<ConnectorRuntimeHandle> {
-    const channels = await import("@openharness/channels");
+    const channels = await import("@vykor/channels");
     const adapter = new channels.FeishuAdapter({
       appId: input.config.appId,
       appSecret: input.config.appSecret,
@@ -643,7 +643,7 @@ export class ChannelRuntimeService {
     const verify =
       this.options.verify ??
       (async (input: { appId: string; appSecret: string; domain: "feishu" | "lark" }) => {
-        const channels = await import("@openharness/channels");
+        const channels = await import("@vykor/channels");
         return channels.verifyFeishuCredentials(input);
       });
     try {

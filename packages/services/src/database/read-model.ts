@@ -13,7 +13,7 @@ import {
   type SessionRunAttemptRecord,
   type SessionRunRecord,
   type SessionUserInputItem,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { DurableEventRegistry } from "../session-runtime/event-registry.js";
 import {

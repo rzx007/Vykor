@@ -4,15 +4,15 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { ChannelConfigStore } from "@openharness/auth";
-import type { Settings } from "@openharness/core";
-import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@openharness/protocol";
+import { ChannelConfigStore } from "@vykor/auth";
+import type { Settings } from "@vykor/core";
+import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 
-import { OpenHarnessHttpServer } from "../../http/server.js";
+import { VykorHttpServer } from "../../http/server.js";
 import { createDefaultNodeApplication } from "../default-node-application.js";
 
 function tempPaths() {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-daemon-channel-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-daemon-channel-"));
   return {
     storePath: join(dir, "sessions.db"),
     configPath: join(dir, "channel-credentials.json"),
@@ -48,7 +48,7 @@ describe("daemon channel assembly", () => {
 
   it("serves channel control routes and rejects starting an unconfigured channel", async () => {
     const { storePath, configPath } = tempPaths();
-    const server = new OpenHarnessHttpServer({
+    const server = new VykorHttpServer({
       storePath,
       token: "token-1",
       settings,

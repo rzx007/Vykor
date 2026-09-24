@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Do not execute or parse `ohs auth` or `ohs provider`.
+- Do not execute or parse `vk auth` or `vk provider`.
 - Do not add dependencies or overwrite unrelated dirty-worktree changes.
 - Use existing shadcn components and semantic theme tokens.
 - Only render subscription providers returned by the existing provider/auth data flow.
@@ -36,7 +36,7 @@ Add literal assertions that the snapshot has no `subscriptions` property and tha
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @openharness/desktop test -- src/main/features/provider/provider-service.test.ts`
+Run: `pnpm --filter @vykor/desktop test -- src/main/features/provider/provider-service.test.ts`
 
 Expected: FAIL because the snapshot still contains the fixed subscription array.
 
@@ -46,7 +46,7 @@ Delete `DesktopSubscriptionInfo`, `DesktopSubscriptionState`, the `subscriptions
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @openharness/desktop test -- src/main/features/provider/provider-service.test.ts`
+Run: `pnpm --filter @vykor/desktop test -- src/main/features/provider/provider-service.test.ts`
 
 Expected: PASS.
 
@@ -67,7 +67,7 @@ Use Vitest fake timers to assert the clear callback is not called before the lit
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/settings-page/provider-feedback.test.ts`
+Run: `pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/settings-page/provider-feedback.test.ts`
 
 Expected: FAIL because `provider-feedback.ts` does not exist.
 
@@ -77,7 +77,7 @@ Implement the scheduling helper, add 4-second success and 6-second error effects
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/settings-page/provider-feedback.test.ts`
+Run: `pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/settings-page/provider-feedback.test.ts`
 
 Expected: PASS.
 

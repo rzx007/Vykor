@@ -7,10 +7,10 @@ import type {
   StreamingMessageClient,
   StreamMessageParams,
   Settings,
-} from "@openharness/core";
-import { canonicalToolName } from "@openharness/core";
-import { createShellProcess } from "@openharness/sandbox";
-import type { EnvironmentProcessExecutor } from "@openharness/environment";
+} from "@vykor/core";
+import { canonicalToolName } from "@vykor/core";
+import { createShellProcess } from "@vykor/sandbox";
+import type { EnvironmentProcessExecutor } from "@vykor/environment";
 
 export type { HookEvent, HookType, HookDefinition, HookResult };
 
@@ -288,8 +288,8 @@ export class HookExecutor implements IHookExecutor {
   ): Promise<HookResult> {
     const resolved = payload ? injectArguments(command, payload, true) : command;
     const env: Record<string, string> = {};
-    if (event) env.OPENHARNESS_HOOK_EVENT = event;
-    if (payload) env.OPENHARNESS_HOOK_PAYLOAD = JSON.stringify(payload);
+    if (event) env.VYKOR_HOOK_EVENT = event;
+    if (payload) env.VYKOR_HOOK_PAYLOAD = JSON.stringify(payload);
 
     if (this.processExecutor) {
       try {
@@ -346,7 +346,7 @@ export class HookExecutor implements IHookExecutor {
       proc.on("close", (code) => {
         // Mirror Python's executor: success = (returncode === 0);
         // blocked = blockOnFailure && !success. No exit-code-2 special case
-        // (that is a Claude Code convention, not an openharness one).
+        // (that is a Claude Code convention, not an vykor one).
         const success = code === 0;
         if (success || !blockOnFailure) {
           resolve({ blocked: false });
@@ -416,7 +416,7 @@ export class HookExecutor implements IHookExecutor {
 
     const prompt = injectArguments(hook.prompt, context);
     let system =
-      "You are validating whether a hook condition passes in OpenHarness. " +
+      "You are validating whether a hook condition passes in Vykor. " +
       'Return strict JSON: {"ok": true} or {"ok": false, "reason": "..."}.';
     if (agentMode) {
       system += " Be more thorough and reason over the payload before deciding.";

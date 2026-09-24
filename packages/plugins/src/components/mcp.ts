@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { McpServerConfig } from "@openharness/core";
+import type { McpServerConfig } from "@vykor/core";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
 

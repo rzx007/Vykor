@@ -1,9 +1,9 @@
-import type { OpenHarnessPluginPermissions } from "@openharness/plugins";
+import type { VykorPluginPermissions } from "@vykor/plugins";
 import type {
   NativeToolDefinition,
   NativeToolInvocationContext,
   NativeToolPluginIdentity,
-} from "@openharness/plugins/sdk";
+} from "@vykor/plugins/sdk";
 
 export type NativeToolRegistration = Pick<
   NativeToolDefinition,
@@ -41,6 +41,6 @@ export interface RegisterToolsPayload {
   plugin: NativeToolPluginIdentity;
   entries: Array<{
     entryPath: string;
-    permissions: OpenHarnessPluginPermissions;
+    permissions: VykorPluginPermissions;
   }>;
 }

@@ -95,7 +95,7 @@ it("resolves MCP OAuth credentials beside credentials.json", () => {
 
 - [ ] **步骤 2：运行测试并确认因类型、路径和嵌套校验缺失而失败**
 
-运行：`pnpm --filter @openharness/core test -- src/config/settings.test.ts src/config/paths.test.ts`
+运行：`pnpm --filter @vykor/core test -- src/config/settings.test.ts src/config/paths.test.ts`
 
 预期：FAIL，缺少 `oauth` 类型、`mcpOAuthFilePath` 或嵌套字段校验。
 
@@ -153,9 +153,9 @@ export interface McpOAuthCredentialRecord {
 
 - [ ] **步骤 5：运行核心测试和类型检查**
 
-运行：`pnpm --filter @openharness/core test -- src/config/settings.test.ts src/config/paths.test.ts`
+运行：`pnpm --filter @vykor/core test -- src/config/settings.test.ts src/config/paths.test.ts`
 
-运行：`pnpm --filter @openharness/core check-types`
+运行：`pnpm --filter @vykor/core check-types`
 
 预期：PASS。
 
@@ -211,7 +211,7 @@ it("does not treat a diagnostic-only revision as a completed refresh", async () 
 
 - [ ] **步骤 3：运行测试并确认缺少 store 而失败**
 
-运行：`pnpm --filter @openharness/auth test -- src/mcp-oauth-credential-store.test.ts`
+运行：`pnpm --filter @vykor/auth test -- src/mcp-oauth-credential-store.test.ts`
 
 预期：FAIL，模块不存在。
 
@@ -255,9 +255,9 @@ export class McpOAuthCredentialStore {
 
 - [ ] **步骤 6：运行 auth 测试与类型检查**
 
-运行：`pnpm --filter @openharness/auth test -- src/mcp-oauth-credential-store.test.ts src/index.test.ts`
+运行：`pnpm --filter @vykor/auth test -- src/mcp-oauth-credential-store.test.ts src/index.test.ts`
 
-运行：`pnpm --filter @openharness/auth check-types`
+运行：`pnpm --filter @vykor/auth check-types`
 
 预期：PASS，且测试临时目录无残留 `.lock`/`.tmp`。
 
@@ -312,7 +312,7 @@ it("rejects a second callback and mismatched issuer", async () => {
 
 - [ ] **步骤 3：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/mcp test -- src/oauth/security.test.ts src/oauth/callback.test.ts`
+运行：`pnpm --filter @vykor/mcp test -- src/oauth/security.test.ts src/oauth/callback.test.ts`
 
 预期：FAIL，模块不存在。
 
@@ -340,9 +340,9 @@ export function assertOAuthEndpoint(url: URL, options?: { allowLoopbackHttp?: bo
 
 - [ ] **步骤 6：运行测试和类型检查**
 
-运行：`pnpm --filter @openharness/mcp test -- src/oauth/security.test.ts src/oauth/callback.test.ts`
+运行：`pnpm --filter @vykor/mcp test -- src/oauth/security.test.ts src/oauth/callback.test.ts`
 
-运行：`pnpm --filter @openharness/mcp check-types`
+运行：`pnpm --filter @vykor/mcp check-types`
 
 预期：PASS。
 
@@ -402,7 +402,7 @@ it("rejects and revokes a token that grants extra scope", async () => {
 
 - [ ] **步骤 3：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/mcp test -- src/oauth/login.test.ts`
+运行：`pnpm --filter @vykor/mcp test -- src/oauth/login.test.ts`
 
 预期：FAIL，`loginMcpOAuth` 不存在。
 
@@ -447,7 +447,7 @@ export async function loginMcpOAuth(input: {
 
 - [ ] **步骤 6：运行登录测试与现有 MCP 测试**
 
-运行：`pnpm --filter @openharness/mcp test -- src/oauth/login.test.ts src/index.test.ts`
+运行：`pnpm --filter @vykor/mcp test -- src/oauth/login.test.ts src/index.test.ts`
 
 预期：PASS，现有静态 Header/SSE/stdio 测试不变。
 
@@ -507,7 +507,7 @@ it("retries one 401 exactly once and never retries insufficient_scope", async ()
 
 - [ ] **步骤 3：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/mcp test -- src/oauth/runtime-auth.test.ts src/oauth/status.test.ts`
+运行：`pnpm --filter @vykor/mcp test -- src/oauth/runtime-auth.test.ts src/oauth/status.test.ts`
 
 预期：FAIL，runtime auth 尚不存在。
 
@@ -551,11 +551,11 @@ HTTP 且没有显式 `Authorization` Header 时，为 `StreamableHTTPClientTrans
 
 - [ ] **步骤 8：运行相关测试**
 
-运行：`pnpm --filter @openharness/mcp test -- src/oauth/runtime-auth.test.ts src/oauth/status.test.ts src/index.test.ts`
+运行：`pnpm --filter @vykor/mcp test -- src/oauth/runtime-auth.test.ts src/oauth/status.test.ts src/index.test.ts`
 
-运行：`pnpm --filter @openharness/agent-runtime test -- src/runtime-integrations.test.ts src/mcp-auth.test.ts`
+运行：`pnpm --filter @vykor/agent-runtime test -- src/runtime-integrations.test.ts src/mcp-auth.test.ts`
 
-运行：`pnpm --filter @openharness/mcp check-types && pnpm --filter @openharness/agent-runtime check-types`
+运行：`pnpm --filter @vykor/mcp check-types && pnpm --filter @vykor/agent-runtime check-types`
 
 预期：PASS。
 
@@ -706,7 +706,7 @@ it("logs in, persists, reconnects, refreshes once, and logs out", async () => {
 
 - [ ] **步骤 3：运行集成测试并实现完整本地协议夹具**
 
-运行：`pnpm --filter @openharness/mcp test -- src/oauth/test-server.test.ts`
+运行：`pnpm --filter @vykor/mcp test -- src/oauth/test-server.test.ts`
 
 预期初次 FAIL 于缺少本地 server 行为。实现 `startOAuthMcpTestServer()`：逐一注册步骤 1 所列七类 endpoint，返回与 SDK 1.29.0 兼容的 metadata/challenge/JSON，并暴露 authorize 跟随器、Token 失效开关和 DCR/token/refresh/revoke/tools-list 请求计数器；完成后测试 PASS。
 
@@ -715,23 +715,23 @@ it("logs in, persists, reconnects, refreshes once, and logs out", async () => {
 README 和 MCP 设计文档必须包含：
 
 ```bash
-ohs mcp add linear --url https://mcp.linear.app/mcp
-ohs mcp login linear --scopes read
-ohs mcp get linear
-ohs mcp logout linear
+vk mcp add linear --url https://mcp.linear.app/mcp
+vk mcp login linear --scopes read
+vk mcp get linear
+vk mcp logout linear
 ```
 
 同时说明：凭据位于 `mcp-oauth.json`、首版没有 keyring、`add --url` 不自动登录、运行中的 session 不即时重连、HTTP 只允许测试 loopback、`--no-browser` 可粘贴完整 callback URL。
 
 - [ ] **步骤 5：运行相关包测试和全仓类型检查**
 
-运行：`pnpm --filter @openharness/core test`
+运行：`pnpm --filter @vykor/core test`
 
-运行：`pnpm --filter @openharness/auth test`
+运行：`pnpm --filter @vykor/auth test`
 
-运行：`pnpm --filter @openharness/mcp test`
+运行：`pnpm --filter @vykor/mcp test`
 
-运行：`pnpm --filter @openharness/agent-runtime test -- src/runtime-integrations.test.ts src/mcp-auth.test.ts`
+运行：`pnpm --filter @vykor/agent-runtime test -- src/runtime-integrations.test.ts src/mcp-auth.test.ts`
 
 运行：`pnpm --filter @rzx/ohs test -- src/commands/mcp.test.ts src/index.test.ts`
 
@@ -744,14 +744,14 @@ ohs mcp logout linear
 准备测试 Linear workspace 后运行：
 
 ```bash
-ohs mcp add linear --url https://mcp.linear.app/mcp
-ohs mcp get linear
-ohs mcp login linear --scopes read
-ohs mcp get linear --json
-ohs mcp list
+vk mcp add linear --url https://mcp.linear.app/mcp
+vk mcp get linear
+vk mcp login linear --scopes read
+vk mcp get linear --json
+vk mcp list
 ```
 
-确认登录前 `not-logged-in`，登录后本地状态 `valid`，`tools/list` 和一个只读调用成功，重启 CLI/新 session 后无需重新登录。最后运行 `ohs mcp logout linear` 并确认回到 `not-logged-in`。人工验收不得把真实 Token 写入测试夹具、日志或提交。
+确认登录前 `not-logged-in`，登录后本地状态 `valid`，`tools/list` 和一个只读调用成功，重启 CLI/新 session 后无需重新登录。最后运行 `vk mcp logout linear` 并确认回到 `not-logged-in`。人工验收不得把真实 Token 写入测试夹具、日志或提交。
 
 - [ ] **步骤 7：提交**
 
@@ -763,10 +763,10 @@ git commit -m "test(mcp): cover OAuth CLI end to end"
 ## 最终验证
 
 - [ ] 运行 `git diff --check`。
-- [ ] 运行 `pnpm --filter @openharness/core test`。
-- [ ] 运行 `pnpm --filter @openharness/auth test`。
-- [ ] 运行 `pnpm --filter @openharness/mcp test`。
-- [ ] 运行 `pnpm --filter @openharness/agent-runtime test -- src/runtime-integrations.test.ts src/mcp-auth.test.ts`。
+- [ ] 运行 `pnpm --filter @vykor/core test`。
+- [ ] 运行 `pnpm --filter @vykor/auth test`。
+- [ ] 运行 `pnpm --filter @vykor/mcp test`。
+- [ ] 运行 `pnpm --filter @vykor/agent-runtime test -- src/runtime-integrations.test.ts src/mcp-auth.test.ts`。
 - [ ] 运行 `pnpm --filter @rzx/ohs test -- src/commands/mcp.test.ts src/index.test.ts`。
 - [ ] 运行 `pnpm check-types`。
 - [ ] 检查 `git status --short`，确保没有提交 `mcp-oauth.json`、真实 Token、测试临时文件或工作区中原有的无关改动。

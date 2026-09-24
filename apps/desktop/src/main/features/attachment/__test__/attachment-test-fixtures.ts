@@ -8,7 +8,7 @@ import type {
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
   UploadAttachmentInput,
-} from "@openharness/client"
+} from "@vykor/client"
 import { vi } from "vitest"
 
 import { createSolidPng } from "../../image-preview/safe-image-test-bytes"
@@ -79,7 +79,7 @@ export function createService(
 }
 
 export async function temporaryDirectory(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), "openharness-attachment-"))
+  const path = await mkdtemp(join(tmpdir(), "vykor-attachment-"))
   temporaryDirectories.push(path)
   return path
 }

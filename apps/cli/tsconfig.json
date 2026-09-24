@@ -6,22 +6,22 @@
     "types": ["bun"],
     "baseUrl": ".",
     "paths": {
-      "@openharness/coordinator": [
+      "@vykor/coordinator": [
         "../../packages/coordinator/src/index.ts"
       ],
-      "@openharness/core": [
+      "@vykor/core": [
         "../../packages/core/src/index.ts"
       ],
-      "@openharness/memory": [
+      "@vykor/memory": [
         "../../packages/memory/src/index.ts"
       ],
-      "@openharness/server": [
+      "@vykor/server": [
         "../../packages/server/src/index.ts"
       ],
-      "@openharness/server/daemon-host": [
+      "@vykor/server/daemon-host": [
         "../../packages/server/src/daemon-host/index.ts"
       ],
-      "@openharness/services": [
+      "@vykor/services": [
         "../../packages/services/src/index.ts"
       ]
     }

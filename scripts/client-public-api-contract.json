@@ -47,11 +47,11 @@
       "kind": "runtime-export"
     },
     {
-      "name": "OpenHarnessApiError",
+      "name": "VykorApiError",
       "kind": "runtime-export"
     },
     {
-      "name": "OpenHarnessClient",
+      "name": "VykorClient",
       "kind": "runtime-export"
     },
     {
@@ -507,15 +507,15 @@
       "kind": "type-export"
     },
     {
-      "name": "OpenHarnessClientOptions",
+      "name": "VykorClientOptions",
       "kind": "type-export"
     },
     {
-      "name": "OpenHarnessClientState",
+      "name": "VykorClientState",
       "kind": "type-export"
     },
     {
-      "name": "OpenHarnessServerHealth",
+      "name": "VykorServerHealth",
       "kind": "type-export"
     },
     {

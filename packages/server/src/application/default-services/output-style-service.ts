@@ -1,4 +1,4 @@
-import { loadOutputStyles } from "@openharness/output-styles";
+import { loadOutputStyles } from "@vykor/output-styles";
 
 import type { OutputStyleService } from "../settings-api.js";
 

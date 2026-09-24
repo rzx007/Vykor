@@ -1,6 +1,6 @@
 import type { StdioOptions } from "node:child_process";
-import type { SandboxConfig, Settings } from "@openharness/core";
-import type { EnvironmentExecutionOwner } from "@openharness/environment";
+import type { SandboxConfig, Settings } from "@vykor/core";
+import type { EnvironmentExecutionOwner } from "@vykor/environment";
 
 export type SandboxBackend = "srt";
 export type SandboxPlatform = "linux" | "wsl" | "macos" | "windows" | "unknown";

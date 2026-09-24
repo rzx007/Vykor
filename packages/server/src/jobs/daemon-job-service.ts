@@ -4,7 +4,7 @@ import {
   createWorkflowResultFromSnapshot,
   type WorkflowRunRepository,
   type WorkflowRunSnapshot,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import {
   filterJobSnapshots,
   type AgentJobHost,
@@ -17,10 +17,10 @@ import {
   type JobStatus,
   type JobWaitRequest,
   type JobWaitResult,
-} from "@openharness/jobs";
-import { DEFAULT_RETENTION_POLICY } from "@openharness/services";
-import type { SessionRecord, SessionExecutionRecord } from "@openharness/protocol";
-import type { TerminalSessionInfo } from "@openharness/terminal";
+} from "@vykor/jobs";
+import { DEFAULT_RETENTION_POLICY } from "@vykor/services";
+import type { SessionRecord, SessionExecutionRecord } from "@vykor/protocol";
+import type { TerminalSessionInfo } from "@vykor/terminal";
 
 import type { DaemonTerminalService } from "../terminal/index.js";
 

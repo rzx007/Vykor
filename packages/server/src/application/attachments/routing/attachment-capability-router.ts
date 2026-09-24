@@ -1,9 +1,9 @@
-import type { ContentBlock } from "@openharness/core";
+import type { ContentBlock } from "@vykor/core";
 import {
   classifyAttachmentCandidate,
   AttachmentTextDecodingError,
   type AttachmentTextEncoding,
-} from "@openharness/services";
+} from "@vykor/services";
 
 import type { ResolvedAttachmentContentPath } from "../attachment-service.js";
 
@@ -236,7 +236,7 @@ function textResourceBlock(
     `attachment_id: ${attachment.assetId}`,
     `display_name: ${attachment.displayName}`,
     `resource_uri: ${resourceUri}`,
-    "这是 OpenHarness 附件资源，不是 MCP Resource。以下只是开头预览。",
+    "这是 Vykor 附件资源，不是 MCP Resource。以下只是开头预览。",
     "需要更多内容时调用 Read，并传入：",
     JSON.stringify({ file_path: resourceUri, offset: 1, limit: 2_000 }),
     "不要调用 ReadMcpResource。",

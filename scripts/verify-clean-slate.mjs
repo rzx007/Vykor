@@ -109,7 +109,7 @@ async function checkContract(root) {
   const keys = entries.map((entry) => `${entry.kind}:${entry.name}`);
   if (new Set(keys).size !== keys.length) results.push(problem("contract", contractFile, 1, "duplicate contract entries"));
   const expectedResources = entries.filter((entry) => entry.kind === "client-resource").map((entry) => entry.name).sort();
-  const classBody = clientSource.match(/export class OpenHarnessClient\s*\{([\s\S]*)\}/)?.[1] ?? "";
+  const classBody = clientSource.match(/export class VykorClient\s*\{([\s\S]*)\}/)?.[1] ?? "";
   const actualResources = [...classBody.matchAll(/\breadonly\s+([A-Za-z_$][\w$]*)\s*:/g)].map((match) => match[1]).sort();
   if (JSON.stringify(actualResources) !== JSON.stringify(expectedResources)) {
     results.push(problem("contract", clientFile, 1, `Resource contract mismatch; expected [${expectedResources.join(", ")}], found [${actualResources.join(", ")}]`));
@@ -126,7 +126,7 @@ async function checkContract(root) {
       const indexPath = resolve(root, "packages/client/src/index.ts");
       const sourceFile = program.getSourceFile(indexPath);
       const moduleSymbol = sourceFile && checker.getSymbolAtLocation(sourceFile);
-      if (!moduleSymbol) throw new Error("cannot resolve @openharness/client module symbol");
+      if (!moduleSymbol) throw new Error("cannot resolve @vykor/client module symbol");
       const runtime = [];
       const types = [];
       for (const exported of checker.getExportsOfModule(moduleSymbol)) {
@@ -190,7 +190,7 @@ function requirePattern(results, category, root, file, pattern, message) {
 function checkProtocol(root) {
   const results = [];
   requirePattern(results, "protocol", root, "packages/protocol/src/capabilities.ts", /CURRENT_PROTOCOL_VERSION\s*=\s*4\b/, "CURRENT_PROTOCOL_VERSION must be 4");
-  requirePattern(results, "protocol", root, "packages/protocol/src/capabilities.ts", /PROTOCOL_VERSION_HEADER\s*=\s*["']x-openharness-protocol-version["']/, "protocol header constant is missing or wrong");
+  requirePattern(results, "protocol", root, "packages/protocol/src/capabilities.ts", /PROTOCOL_VERSION_HEADER\s*=\s*["']x-vykor-protocol-version["']/, "protocol header constant is missing or wrong");
   requirePattern(results, "protocol", root, "packages/client/src/transport/http-transport.ts", /requestUnknown\(["']\/capabilities["']/, "Client must perform the capabilities handshake");
   requirePattern(results, "protocol", root, "packages/client/src/transport/http-transport.ts", /headers\[PROTOCOL_VERSION_HEADER\]\s*=\s*String\(CURRENT_PROTOCOL_VERSION\)/, "Client business requests must carry the protocol header");
   requirePattern(results, "protocol", root, "packages/server/src/http/protocol-middleware.ts", /path\s*===\s*["']\/health["'][\s\S]*path\s*===\s*["']\/capabilities["']/, "Server must exempt only health and capabilities before exact validation");

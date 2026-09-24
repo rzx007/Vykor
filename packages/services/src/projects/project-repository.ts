@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 
-import type { ProjectRecord } from "@openharness/protocol";
+import type { ProjectRecord } from "@vykor/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
 import {

@@ -4,7 +4,7 @@ import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRunRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   RunControlService,
   type RunControlServiceOptions,

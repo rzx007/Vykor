@@ -9,7 +9,7 @@ flowchart LR
   Tool["Agent / Workflow producers + Job controls"]
   Manager["AgentChildManager"]
   Registry["tree-wide AgentChildRegistry"]
-  Child["child OpenHarnessAgent"]
+  Child["child VykorAgent"]
   Events["shared AgentEventBus"]
   Projector["DaemonAgentEventProjector"]
   Store["child session/run/task/transcript"]
@@ -30,7 +30,7 @@ flowchart LR
 4. `AgentChildEnvironmentProvider` 获取 shared cwd 或 git worktree lease。环境申请或后续创建失败会回滚这次未成功的预算预占。
 5. manager 把 handle 放入 root tree 共享的 `AgentChildRegistry`，发布并等待 `child.created`。
 6. daemon projector 创建 durable child session、parent-visible task，并登记 `rootAgent + childId` 路由；既有 durable session 还必须匹配同一个 childId。
-7. framework 递归创建共享 effects/event bus 的 child `OpenHarnessAgent`。
+7. framework 递归创建共享 effects/event bus 的 child `VykorAgent`。
 8. child 启动普通 run，发布 input/run/output/tool/terminal events；`run.started` 投影成功且 receipt 与 manager 预分配的 session/input/run ID 完全一致后，spawn receipt 才返回。
 9. daemon 使用同一个 event reducer 创建 child input/run/transcript 并绑定/完成 task；child input metadata 由 `input.accepted` 原样携带，application 不再补造记录。
 

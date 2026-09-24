@@ -1,16 +1,16 @@
-import type { AgentChildSpawnInput, RunCapabilityView, Settings } from "@openharness/core";
-import { canonicalToolName, canonicalToolNames } from "@openharness/core";
+import type { AgentChildSpawnInput, RunCapabilityView, Settings } from "@vykor/core";
+import { canonicalToolName, canonicalToolNames } from "@vykor/core";
 import { readonlyMap } from "./run-capability-view.js";
 
-import type { OpenHarnessAgentOptions } from "./agent.js";
+import type { VykorAgentOptions } from "./agent.js";
 import type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
-  OpenHarnessAgentConfiguration,
+  VykorAgentConfiguration,
 } from "./agent-options.js";
 
 export interface DeriveChildAgentOptionsInput {
-  configuration: OpenHarnessAgentConfiguration;
+  configuration: VykorAgentConfiguration;
   settings: Settings;
   capabilityOverrides?: AgentCapabilityOverrides;
   effects?: AgentEffectOverrides;
@@ -22,7 +22,7 @@ export interface DeriveChildAgentOptionsInput {
 /** Derive one child runtime without widening the host's tool or capability boundary. */
 export function deriveChildAgentOptions(
   input: DeriveChildAgentOptionsInput,
-): OpenHarnessAgentOptions {
+): VykorAgentOptions {
   const { configuration, child } = input;
   const childModel = child.model ?? configuration.model;
   const childEffort = isSupportedEffort(child.effort)
@@ -64,7 +64,7 @@ export function deriveChildAgentOptions(
 
 function isSupportedEffort(
   effort: string | undefined,
-): effort is NonNullable<OpenHarnessAgentConfiguration["effort"]> {
+): effort is NonNullable<VykorAgentConfiguration["effort"]> {
   return typeof effort === "string" && effort.trim().length > 0;
 }
 

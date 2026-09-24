@@ -1,4 +1,4 @@
-import { SessionStore } from "@openharness/services";
+import { SessionStore } from "@vykor/services";
 
 import { getDefaultSessionStorePath } from "../daemon/paths.js";
 import {

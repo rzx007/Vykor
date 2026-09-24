@@ -163,7 +163,7 @@ describe("createSkillRegistrySnapshot", () => {
     expect(registry.get("winner")?.source).toBe("project");
   });
 
-  it("loads standard user directories before the OHS user directory", async () => {
+  it("loads standard user directories before the VK user directory", async () => {
     const standardA = path.resolve("/standard-a");
     const standardB = path.resolve("/standard-b");
     const personal = path.resolve("/personal");
@@ -406,9 +406,8 @@ describe("BUNDLED_SKILLS", () => {
     const skill = BUNDLED_SKILLS.find((s) => s.name === "create-skill");
     expect(skill).toBeDefined();
     expect(skill!.description.toLowerCase()).toMatch(/install|create|write/);
-    expect(skill!.content).toContain("~/.openharness-ts/skills/");
-    expect(skill!.content).toContain(".openharness-ts/skills/");
-    expect(skill!.content).not.toContain(".openharness/skills");
+    expect(skill!.content).toContain("~/.vykor/skills/");
+    expect(skill!.content).toContain(".vykor/skills/");
   });
 
   it("every bundled skill has valid fields", () => {
@@ -434,7 +433,7 @@ describe("SkillRegistry.registerBundled + source priority", () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: "create-skill",
-          description: expect.stringMatching(/~\/\.openharness-ts\/skills/),
+          description: expect.stringMatching(/~\/\.vykor\/skills/),
         }),
       ]),
     );
@@ -611,10 +610,10 @@ describe("SkillLoader.discoverMarkdownFiles path-traversal protection", () => {
 describe("findProjectSkillDirs", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    delete process.env.OPENHARNESS_CONFIG_DIR;
+    delete process.env.VYKOR_CONFIG_DIR;
   });
 
-  it("collects only .agents and .openharness-ts skill dirs from git root to cwd", async () => {
+  it("collects only .agents and .vykor skill dirs from git root to cwd", async () => {
     mockedStat.mockImplementation(async (target) => {
       if (String(target).endsWith(path.join("repo", ".git"))) return {} as any;
       throw new Error("not found");
@@ -625,11 +624,11 @@ describe("findProjectSkillDirs", () => {
 
     expect(dirs).toEqual([
       path.join(path.resolve("/repo"), ".agents", "skills"),
-      path.join(path.resolve("/repo"), ".openharness-ts", "skills"),
+      path.join(path.resolve("/repo"), ".vykor", "skills"),
       path.join(path.resolve("/repo/packages"), ".agents", "skills"),
-      path.join(path.resolve("/repo/packages"), ".openharness-ts", "skills"),
+      path.join(path.resolve("/repo/packages"), ".vykor", "skills"),
       path.join(path.resolve("/repo/packages/app"), ".agents", "skills"),
-      path.join(path.resolve("/repo/packages/app"), ".openharness-ts", "skills"),
+      path.join(path.resolve("/repo/packages/app"), ".vykor", "skills"),
     ]);
   });
 
@@ -641,16 +640,16 @@ describe("findProjectSkillDirs", () => {
 
     expect(dirs).toEqual([
       path.join(cwd, ".agents", "skills"),
-      path.join(cwd, ".openharness-ts", "skills"),
+      path.join(cwd, ".vykor", "skills"),
     ]);
-    expect(dirs.some((dir) => dir.includes(path.join("home", "user", ".openharness-ts")))).toBe(
+    expect(dirs.some((dir) => dir.includes(path.join("home", "user", ".vykor")))).toBe(
       false,
     );
   });
 
   it("excludes the personal skills directory even when home is the git root", async () => {
     const home = path.resolve("/home/user");
-    process.env.OPENHARNESS_CONFIG_DIR = path.join(home, ".openharness-ts");
+    process.env.VYKOR_CONFIG_DIR = path.join(home, ".vykor");
     mockedHomedir.mockReturnValue(home);
     mockedStat.mockImplementation(async (target) => {
       if (String(target) === path.join(home, ".git")) return {} as any;
@@ -659,7 +658,7 @@ describe("findProjectSkillDirs", () => {
 
     const dirs = await findProjectSkillDirs(home);
 
-    expect(dirs).not.toContain(path.join(home, ".openharness-ts", "skills"));
+    expect(dirs).not.toContain(path.join(home, ".vykor", "skills"));
     expect(dirs).not.toContain(path.join(home, ".claude", "skills"));
     expect(dirs).not.toContain(path.join(home, ".agents", "skills"));
     expect(dirs).not.toContain(path.join(home, ".config", "agents", "skills"));

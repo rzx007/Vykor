@@ -2,7 +2,7 @@
 
 > 状态：描述当前实现，并作为内部代码索引。
 >
-> 用代码直接调用 agent 时，见 [OpenHarness Agent SDK](./agent-sdk.md)。
+> 用代码直接调用 agent 时，见 [Vykor Agent SDK](./agent-sdk.md)。
 >
 > 一次运行怎样算成功/失败，见 [Agent Lifecycle Contract](./agent-lifecycle-contract.md)。
 >
@@ -14,7 +14,7 @@
 把整套东西想成：
 
 ```text
-OpenHarnessAgent = 对话引擎 + 历史记录 + 资源 + 当前这一轮运行 + 子 agent 目录
+VykorAgent = 对话引擎 + 历史记录 + 资源 + 当前这一轮运行 + 子 agent 目录
 AgentEvent       = 「已经发生了什么」的事实记录
 onEvent          = 框架要求上层「必须可靠地处理」这些事实
 subscribe        = 旁观记录/渲染，不参与执行结果
@@ -25,7 +25,7 @@ Run/ChildHandle  = 调用方用来控制「还在跑的那一轮」的把手
 框架本身不依赖 HTTP、daemon、SQLite 会话表或 UI。最小用法：
 
 ```ts
-import { createDefaultNodeAgent } from "@openharness/agent-runtime";
+import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 
 const agent = await createDefaultNodeAgent({ cwd: process.cwd() });
 const unsubscribe = agent.subscribe((event) => console.log(event.type));
@@ -39,7 +39,7 @@ await agent.close();
 
 | 对象 | 文件 | 职责（白话） |
 |---|---|---|
-| `OpenHarnessAgent` | `packages/agent-runtime/src/agent.ts` | 对外主入口；管资源，以及当前这一轮运行归谁 |
+| `VykorAgent` | `packages/agent-runtime/src/agent.ts` | 对外主入口；管资源，以及当前这一轮运行归谁 |
 | `FrameworkAgentRun` | `packages/agent-runtime/src/agent.ts` | 一轮执行：把内部事件整理成对外事件，支持中途插话、打断、等结束 |
 | `AgentEventBus` | `packages/agent-runtime/src/event-source.ts` | 按顺序把事件交给「必须处理」的监听器；旁观者不互相拖累 |
 | `AgentChildManager` | `packages/agent-runtime/src/child-agent.ts` | 管当前 agent **直接创建** 的子 agent：创建、运行、关闭 |
@@ -59,7 +59,7 @@ flowchart TD
   Session["createAgentSession(QueryEngine)"]
   Bus["事件总线 + 权限回调"]
   Children["AgentChildManager"]
-  Agent["OpenHarnessAgent"]
+  Agent["VykorAgent"]
 
   Create --> Runtime --> MCP --> Session
   Create --> Bus
@@ -68,15 +68,15 @@ flowchart TD
   Bus --> Agent
 ```
 
-需要 OpenHarness 默认 Node 能力的应用调用 `createDefaultNodeAgent()`。它在内部组装：模型提供方、QueryEngine、工具、hooks、权限策略、prompt、skills、插件、MCP、memory、沙箱、事件/回调边界，以及子 agent 生命周期。只需要执行内核的宿主改用 `createAgentKernel()`，并显式提供 runtime 和宿主能力。
-`createOpenHarnessRuntime()` 已不再从包的公开入口导出。
+需要 Vykor 默认 Node 能力的应用调用 `createDefaultNodeAgent()`。它在内部组装：模型提供方、QueryEngine、工具、hooks、权限策略、prompt、skills、插件、MCP、memory、沙箱、事件/回调边界，以及子 agent 生命周期。只需要执行内核的宿主改用 `createAgentKernel()`，并显式提供 runtime 和宿主能力。
+`createVykorRuntime()` 已不再从包的公开入口导出。
 
 ## 一轮 submitMessage
 
 ```mermaid
 sequenceDiagram
   participant Caller as 调用方
-  participant Agent as OpenHarnessAgent
+  participant Agent as VykorAgent
   participant Run as AgentRunHandle
   participant Session as AgentSession
   participant QE as QueryEngine
@@ -169,7 +169,7 @@ QueryEngine
 2. 在整棵树的目录里预检 `sessionId`；若活体已冲突，在申请工作目录之前就失败。
 3. 通过 `AgentChildEnvironmentProvider` 申请 cwd / worktree。
 4. 把 handle 登记到根树共享的 `AgentChildRegistry`，再发布 `child.created`。
-5. 递归创建一个新的 `OpenHarnessAgent`，与父级共享：必须处理的事件出口、旁观者流、权限回调。
+5. 递归创建一个新的 `VykorAgent`，与父级共享：必须处理的事件出口、旁观者流、权限回调。
 6. 启动子 run；子 run 使用普通的 input / run / output / tool 事件。
 7. 活跃跟进：调用当前 run 的 `steer()`；排队跟进：串行启动下一轮。
 8. 空闲超时（TTL）到期后：保存历史、关掉重资源、发布 suspended；之后再有输入，会恢复同一个子 agent。
@@ -190,7 +190,7 @@ daemon 不会向框架回传 taskId、host、controls 或「投影用的不透�
 
 ## Agent 操作状态机
 
-`OpenHarnessAgent.state` 是公开只读状态：
+`VykorAgent.state` 是公开只读状态：
 
 ```text
 idle --submitMessage--> running --run.result 完成--> idle

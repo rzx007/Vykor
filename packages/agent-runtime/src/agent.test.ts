@@ -9,8 +9,8 @@ import {
   RuntimeBundle,
   type StreamingMessageClient,
   type Settings,
-} from "@openharness/core";
-import { McpClientManager } from "@openharness/mcp";
+} from "@vykor/core";
+import { McpClientManager } from "@vykor/mcp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentOperationConflictError } from "./agent.js";
@@ -79,7 +79,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("accepts a model and effort update while a run waits for its first response", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-request-config-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-request-config-"));
     tempDirs.push(cwd);
     const requests: Array<{ model: string; reasoningEffort?: string; system?: string }> = [];
     let releaseFirstRequest!: () => void;
@@ -145,7 +145,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("denies an ask decision when no permission effect is configured", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-permission-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-permission-"));
     tempDirs.push(cwd);
     const events: AgentEvent[] = [];
     let turn = 0;
@@ -200,7 +200,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("constructs a standalone programmatic agent without daemon services", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const settings: Settings = {
       apiKey: "test-key",
@@ -251,7 +251,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("exposes caller tool override provenance through the public API", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-tool-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-tool-"));
     tempDirs.push(cwd);
     const replacement = {
       name: "Read",
@@ -284,7 +284,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("closes the runtime exactly once and preserves an extension setup failure", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const setupError = new Error("extension setup failed");
     const runtimeClose = vi.spyOn(RuntimeBundle.prototype, "close");
@@ -307,7 +307,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("isolates a failed MCP connection and records it without leaking resources", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const connectionError = new Error("MCP connection setup failed");
     const runtimeClose = vi.spyOn(RuntimeBundle.prototype, "close");
@@ -339,7 +339,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("aggregates creation and cleanup failures in original-first order", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const setupError = new Error("extension setup failed");
     const cleanupError = new Error("runtime cleanup failed");
@@ -366,7 +366,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("rolls back an owned default terminal after MCP initialization fails", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const connectionError = new Error("MCP initialization failed");
     const cleanup = vi.fn(async () => {});
@@ -413,7 +413,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("composes default terminal jobs and disposes the owned bundle once", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const cleanup = vi.fn(async () => {});
     const terminalJob = {
@@ -474,7 +474,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("borrows a Host terminal without calling its cleanup hooks", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-host-terminal-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-host-terminal-"));
     tempDirs.push(cwd);
     const createLocalTerminal = vi.spyOn(
       defaultNodeTerminal,
@@ -517,7 +517,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("rejects an accepted steer when the run fails before a turn boundary", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const settings: Settings = {
       apiKey: "test-key",
@@ -543,7 +543,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("settles concurrent steers one boundary at a time", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const settings: Settings = {
       apiKey: "test-key",
@@ -583,11 +583,11 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("tracks completed memory run boundaries across steering and later submissions", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-memory-run-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-memory-run-"));
     tempDirs.push(cwd);
-    const configDir = mkdtempSync(join(tmpdir(), "openharness-agent-memory-config-"));
-    const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = configDir;
+    const configDir = mkdtempSync(join(tmpdir(), "vykor-agent-memory-config-"));
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
     const events: AgentEvent[] = [];
     let conversationTurns = 0;
     let extractionCalls = 0;
@@ -717,8 +717,8 @@ describe("createDefaultNodeAgent", () => {
         await agent.close();
       }
     } finally {
-      if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
       rmSync(configDir, { recursive: true, force: true });
     }
   });
@@ -726,7 +726,7 @@ describe("createDefaultNodeAgent", () => {
   it.each(["failure", "cancellation"] as const)(
     "does not keep successful tool activity from a run ending in %s",
     async (ending) => {
-      const cwd = mkdtempSync(join(tmpdir(), `openharness-agent-memory-${ending}-`));
+      const cwd = mkdtempSync(join(tmpdir(), `vykor-agent-memory-${ending}-`));
       tempDirs.push(cwd);
       let conversationTurns = 0;
       let extractionCalls = 0;
@@ -803,7 +803,7 @@ describe("createDefaultNodeAgent", () => {
   );
 
   it("serializes runs, maintenance, context mutation, and close through one lifecycle", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const settings: Settings = {
       apiKey: "test-key",
@@ -853,7 +853,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("attempts every cleanup stage and reports failures after becoming closed", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const agent = await createDefaultNodeAgent({
       cwd,
@@ -877,7 +877,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("still closes children, events, and runtime when default terminal cleanup fails", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const capabilityError = new Error("terminal cleanup failed");
     const terminalCleanup = vi.fn(async () => { throw capabilityError; });
@@ -914,7 +914,7 @@ describe("createDefaultNodeAgent", () => {
   });
 
   it("aggregates multiple cleanup failures in lifecycle order", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "openharness-agent-"));
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-"));
     tempDirs.push(cwd);
     const agent = await createDefaultNodeAgent({
       cwd,

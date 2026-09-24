@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import type { DetachedProcessExecution } from "../../executions/index.js";
 import {
   readLastConsolidatedAt,
@@ -24,17 +24,17 @@ let tmp: string;
 let memoryDir: string;
 
 beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), "ohs-dream-"));
+  tmp = mkdtempSync(join(tmpdir(), "vk-dream-"));
   memoryDir = join(tmp, "memory");
   mkdirSync(memoryDir, { recursive: true });
-  process.env.OPENHARNESS_CONFIG_DIR = join(tmp, "cfg");
-  delete process.env.OPENHARNESS_AUTODREAM_CHILD;
+  process.env.VYKOR_CONFIG_DIR = join(tmp, "cfg");
+  delete process.env.VYKOR_AUTODREAM_CHILD;
   _resetAutodreamStateForTests();
 });
 
 afterEach(() => {
-  delete process.env.OPENHARNESS_CONFIG_DIR;
-  delete process.env.OPENHARNESS_AUTODREAM_CHILD;
+  delete process.env.VYKOR_CONFIG_DIR;
+  delete process.env.VYKOR_AUTODREAM_CHILD;
   rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -163,7 +163,7 @@ describe("startDreamNow", () => {
       staleSection: "- old-memory.md",
     });
     expect(task).not.toBeNull();
-    expect(task!.env?.OPENHARNESS_AUTODREAM_CHILD).toBe("1");
+    expect(task!.env?.VYKOR_AUTODREAM_CHILD).toBe("1");
     const argv = task!.argv!;
     expect(argv).toContain("--print");
     expect(argv).toContain("--dangerously-skip-permissions");
@@ -178,11 +178,11 @@ describe("startDreamNow", () => {
 
   it("refuses inside a dream child process and when memory is disabled", async () => {
     const runner = fakeRunner();
-    process.env.OPENHARNESS_AUTODREAM_CHILD = "1";
+    process.env.VYKOR_AUTODREAM_CHILD = "1";
     expect(
       await startDreamNow({ cwd: tmp, settings: settings(mem), memoryDir, force: true, taskRunner: runner }),
     ).toBeNull();
-    delete process.env.OPENHARNESS_AUTODREAM_CHILD;
+    delete process.env.VYKOR_AUTODREAM_CHILD;
     expect(
       await startDreamNow({ cwd: tmp, settings: settings({ enabled: false }), memoryDir, force: true, taskRunner: runner }),
     ).toBeNull();

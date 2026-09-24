@@ -89,7 +89,7 @@ Client README 只展示 Resource；Services README 说明 Repository/Transaction
 
 - [ ] **步骤 3：编写数据重置手册**
 
-手册固定要求：列出 override config 的 OpenHarness 独占叶子、默认配置叶子、项目 `.openharness-ts`、Desktop userData 和 cache；对每项输出输入路径、规范绝对路径、symlink/junction 最终路径、允许根、可恢复性。禁止盘符根、home、workspace root 及其祖先。
+手册固定要求：列出 override config 的 Vykor 独占叶子、默认配置叶子、项目 `.vykor`、Desktop userData 和 cache；对每项输出输入路径、规范绝对路径、symlink/junction 最终路径、允许根、可恢复性。禁止盘符根、home、workspace root 及其祖先。
 
 手册中的 PowerShell 预检使用 `Resolve-Path` 与 `[IO.Path]::GetFullPath()`，删除前后各执行一次；停止 daemon/CLI/Desktop 后重新解析同一清单。删除命令只在用户逐项明确授权后手工填写精确 `-LiteralPath`，文档不得提供通配符或递归删除用户目录的示例。
 
@@ -125,14 +125,14 @@ pnpm test:clean-slate
 - [ ] **步骤 3：执行包级重点回归**
 
 ```powershell
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/plugins test
-pnpm --filter @openharness/plugin-converters test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/plugin-converters test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/desktop test
 ```
 
 预期：全部 PASS。

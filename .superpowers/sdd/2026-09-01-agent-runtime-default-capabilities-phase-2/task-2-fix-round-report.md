@@ -33,9 +33,9 @@
 ## 验证结果
 
 ```powershell
-pnpm --filter @openharness/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
-pnpm --filter @openharness/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
+pnpm --filter @vykor/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 git diff --check
 ```
 

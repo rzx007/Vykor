@@ -1,4 +1,4 @@
-# @openharness/mcp
+# @vykor/mcp
 
 MCP (Model Context Protocol) client with stdio transport support.
 
@@ -12,7 +12,7 @@ MCP (Model Context Protocol) client with stdio transport support.
 ## 使用
 
 ```ts
-import { McpClientManager } from "@openharness/mcp";
+import { McpClientManager } from "@vykor/mcp";
 
 const manager = new McpClientManager();
 await manager.connect("my-server", {
@@ -34,5 +34,5 @@ const tools = manager.getAsToolDefinitions();
 ## 测试
 
 ```bash
-pnpm --filter @openharness/mcp test
+pnpm --filter @vykor/mcp test
 ```

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "dev.openharness.minimal-skill",
+  "id": "dev.vykor.minimal-skill",
   "name": "minimal-skill",
   "version": "1.0.0",
   "components": { "skills": ["./skills"] }

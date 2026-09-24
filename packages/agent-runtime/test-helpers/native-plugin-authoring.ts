@@ -2,9 +2,9 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ToolRegistry, type Settings } from "@openharness/core";
+import { ToolRegistry, type Settings } from "@vykor/core";
 import { expect } from "vitest";
-import { discoverOpenHarnessExtensions } from "../src/extensions.js";
+import { discoverVykorExtensions } from "../src/extensions.js";
 import { activateNativePluginTools, type NativeToolActivationResult } from "../src/native-tools/activate.js";
 
 export const pluginId = "example.text-inspector";
@@ -38,7 +38,7 @@ export class NativePluginFixture {
     this.config = join(root, "user-config");
     this.cwds = [join(root, "project-a"), join(root, "project-b")];
     this.entry = join(this.source, "tools", "index.mjs");
-    this.manifest = join(this.source, ".openharness-plugin", "plugin.json");
+    this.manifest = join(this.source, ".vykor-plugin", "plugin.json");
     this.marker = join(root, "entry-executions.jsonl");
   }
 
@@ -48,7 +48,7 @@ export class NativePluginFixture {
     // Only the temporary copy gains an observation marker; the reference plugin stays untouched.
     const source = await readFile(this.entry, "utf8");
     await writeFile(this.entry, `import { appendFileSync } from "node:fs";
-appendFileSync(${JSON.stringify(this.marker)}, JSON.stringify({ pid: process.pid, host: process.env.OPENHARNESS_NATIVE_TOOL_HOST }) + "\\n");
+appendFileSync(${JSON.stringify(this.marker)}, JSON.stringify({ pid: process.pid, host: process.env.VYKOR_NATIVE_TOOL_HOST }) + "\\n");
 ${source}`);
   }
 
@@ -63,7 +63,7 @@ ${source}`);
   }
 
   discover(cwd = this.cwds[0]) {
-    return discoverOpenHarnessExtensions(cwd, settings);
+    return discoverVykorExtensions(cwd, settings);
   }
 
   async activate(cwd = this.cwds[0]): Promise<TestPluginRuntime> {
@@ -125,9 +125,9 @@ export async function expectRuntimeStopped(runtime: TestPluginRuntime): Promise<
 
 export async function withNativePluginFixture(run: (fixture: NativePluginFixture) => Promise<void>): Promise<void> {
   const fixture = new NativePluginFixture(await mkdtemp(join(tmpdir(), "oh-native-authoring-")));
-  const previousConfig = process.env.OPENHARNESS_CONFIG_DIR;
+  const previousConfig = process.env.VYKOR_CONFIG_DIR;
   try {
-    process.env.OPENHARNESS_CONFIG_DIR = fixture.config;
+    process.env.VYKOR_CONFIG_DIR = fixture.config;
     await fixture.prepare();
     await run(fixture);
   } finally {
@@ -135,8 +135,8 @@ export async function withNativePluginFixture(run: (fixture: NativePluginFixture
       await fixture.closeAll();
       for (const execution of await fixture.executions()) await expectProcessStopped(execution.pid);
     } finally {
-      if (previousConfig === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previousConfig;
+      if (previousConfig === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfig;
       await rm(fixture.root, { recursive: true, force: true });
     }
   }

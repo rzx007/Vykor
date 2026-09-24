@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { access, cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { validateNativePlugin } from "@openharness/plugins";
+import { validateNativePlugin } from "@vykor/plugins";
 import { digestSource, digestValue } from "../core/digest.js";
 import type { ConversionItem, ConversionPlan, ConversionReport, PluginConverter, SourceInspection } from "../core/converter.js";
 import { detectClaudeCodePlugin } from "./detector.js";
@@ -137,13 +137,13 @@ export class ClaudeCodePluginConverter implements PluginConverter {
         version: input.inspection.identity.version,
         metadata: { origin: "converted", sourceFormat: this.sourceFormat, converterId: this.id, converterVersion: this.version },
         components };
-      await mkdir(join(temporary, ".openharness-plugin"));
-      await writeFile(join(temporary, ".openharness-plugin", "plugin.json"), JSON.stringify(manifest, null, 2));
+      await mkdir(join(temporary, ".vykor-plugin"));
+      await writeFile(join(temporary, ".vykor-plugin", "plugin.json"), JSON.stringify(manifest, null, 2));
       const report: ConversionReport = { schemaVersion: 1, status: input.plan.items.some((x) => x.fidelity === "unsupported") ? "partial" : "success", items: input.plan.items, diagnostics: input.plan.diagnostics };
-      await mkdir(join(temporary, ".openharness-conversion"));
-      await writeFile(join(temporary, ".openharness-conversion", "plan.json"), JSON.stringify(input.plan, null, 2));
-      await writeFile(join(temporary, ".openharness-conversion", "report.json"), JSON.stringify(report, null, 2));
-      await writeFile(join(temporary, ".openharness-conversion", "provenance.json"), JSON.stringify({ sourceFormat: this.sourceFormat, sourceDigest: input.plan.sourceDigest, converterId: this.id, converterVersion: this.version, mappingVersion: CLAUDE_MAPPING_VERSION }, null, 2));
+      await mkdir(join(temporary, ".vykor-conversion"));
+      await writeFile(join(temporary, ".vykor-conversion", "plan.json"), JSON.stringify(input.plan, null, 2));
+      await writeFile(join(temporary, ".vykor-conversion", "report.json"), JSON.stringify(report, null, 2));
+      await writeFile(join(temporary, ".vykor-conversion", "provenance.json"), JSON.stringify({ sourceFormat: this.sourceFormat, sourceDigest: input.plan.sourceDigest, converterId: this.id, converterVersion: this.version, mappingVersion: CLAUDE_MAPPING_VERSION }, null, 2));
       const validation = await validateNativePlugin(temporary); if (validation.status !== "valid") throw new Error(validation.diagnostics.map((x) => x.message).join("; "));
       await rename(temporary, output); return report;
     } catch (error) { await rm(temporary, { recursive: true, force: true }); throw error; }

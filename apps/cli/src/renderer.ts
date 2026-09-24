@@ -1,4 +1,4 @@
-import type { StreamEvent } from "@openharness/core";
+import type { StreamEvent } from "@vykor/core";
 
 export interface RenderOptions {
   verbose?: boolean;

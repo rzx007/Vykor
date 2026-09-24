@@ -6,7 +6,7 @@ import { SessionStore } from "../store.js"
 
 describe("SessionStore goals", () => {
   it("persists plugin selection across revisions and database reopen", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-plugin-"))
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-plugin-"))
     const path = join(directory, "store.db")
     let store = new SessionStore({ path })
     try {
@@ -21,7 +21,7 @@ describe("SessionStore goals", () => {
     } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
   })
   it("counts a started automatic run once and preserves waiting/blocked goals during restart recovery", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-recovery-"))
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-recovery-"))
     const store = new SessionStore({ path: join(directory, "store.db") })
     try {
       for (const id of ["active", "waiting", "blocked"]) store.sessions.create({ id, cwd: process.cwd(), model: "m" })
@@ -45,7 +45,7 @@ describe("SessionStore goals", () => {
   })
 
   it("commits a continuation with its input/run identities and rolls back a duplicated intent", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-intent-"))
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-intent-"))
     const path = join(directory, "store.db")
     let store = new SessionStore({ path })
     try {
@@ -69,7 +69,7 @@ describe("SessionStore goals", () => {
   })
 
   it("persists one open goal and protects revisions", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-"))
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-"))
     const path = join(directory, "store.db")
     const store = new SessionStore({ path })
     try {

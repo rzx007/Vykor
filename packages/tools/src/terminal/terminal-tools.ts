@@ -2,7 +2,7 @@ import type {
   ToolContext,
   ToolDefinition,
   ToolResult,
-} from "@openharness/core";
+} from "@vykor/core";
 
 export const terminalOpenTool: ToolDefinition = {
   name: "TerminalOpen",

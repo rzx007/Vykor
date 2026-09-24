@@ -25,7 +25,7 @@ export class DuckDuckGoSearchProvider implements WebSearchProvider {
   constructor(options: DuckDuckGoSearchProviderOptions = {}) {
     this.endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
     this.fetchFn = options.fetchFn ?? defaultFetch;
-    this.userAgent = options.userAgent ?? "OpenHarness/0.1";
+    this.userAgent = options.userAgent ?? "Vykor/0.1";
   }
 
   available() {

@@ -7,7 +7,7 @@ import type {
   ScheduledTaskRecord,
   UpdateScheduledRunInput,
   UpdateScheduledTaskInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { StorageContext } from "../database/storage-context.js";
 import {
   encodeScheduleValue as encode,

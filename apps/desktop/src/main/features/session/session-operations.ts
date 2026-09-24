@@ -4,12 +4,12 @@ import { resolve } from "node:path"
 import { promisify } from "node:util"
 
 import {
-  OpenHarnessClient,
+  VykorClient,
   parseCreateSessionGoalInput,
   parseUpdateSessionGoalInput,
   parseGoalActionInput,
   type ProjectRecord,
-} from "@openharness/client"
+} from "@vykor/client"
 
 import type {
   CheckoutDesktopProjectBranchInput,
@@ -56,7 +56,7 @@ import { readDesktopMetadata, toDesktopSessionRecord } from "./session-subscript
 import { app } from "electron"
 
 type SessionOperationsClient = Pick<
-  OpenHarnessClient,
+  VykorClient,
   "projects" | "development" | "system" | "sessions" | "permissions" | "providers"
 >
 
@@ -475,11 +475,11 @@ export class SessionOperations {
     )
   }
 
-  private ephemeralClient: OpenHarnessClient | null = null
-  private async getEphemeralClient(cwd: string): Promise<OpenHarnessClient> {
+  private ephemeralClient: VykorClient | null = null
+  private async getEphemeralClient(cwd: string): Promise<VykorClient> {
     return this.ephemeralClient!
   }
-  setEphemeralClient(client: OpenHarnessClient) {
+  setEphemeralClient(client: VykorClient) {
     this.ephemeralClient = client
   }
 }

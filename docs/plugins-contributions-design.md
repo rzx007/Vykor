@@ -23,14 +23,14 @@ Plugin Agent 由 root 的 Agent 工具创建 Child，继承所选插件的父 Vi
 Runtime 唯一识别的 manifest 是：
 
 ```text
-<plugin-root>/.openharness-plugin/plugin.json
+<plugin-root>/.vykor-plugin/plugin.json
 ```
 
 根级旧 `plugin.json`、snake_case 字段和 Claude/Codex manifest 不会被 Runtime 猜测或兼容。
 
 ## Manifest
 
-原生插件作者可从 [开发指南](./native-plugin-authoring.md)和[文本检查参考插件](../examples/plugins/text-inspector/README.md)开始。`@openharness/plugins/sdk` 提供开发期工具类型，真实 `.mjs` 参考代码也纳入 checkJs；该类型入口不需要运行期导入。
+原生插件作者可从 [开发指南](./native-plugin-authoring.md)和[文本检查参考插件](../examples/plugins/text-inspector/README.md)开始。`@vykor/plugins/sdk` 提供开发期工具类型，真实 `.mjs` 参考代码也纳入 checkJs；该类型入口不需要运行期导入。
 
 Native v1 使用 `schemaVersion: 1`、稳定 dotted `id`、kebab-case `name` 和显式 `components`。每条组件路径必须以 `./` 开头。Validator 会同时检查规范化路径和符号链接后的真实路径，越界、缺失或重复来源都会产生结构化诊断。
 
@@ -39,7 +39,7 @@ Skills、Agents、Hooks、MCP 和 Node Tool 已进入加载闭环。Tool 不会�
 ## 安装状态
 
 ```text
-~/.openharness-ts/plugins/
+~/.vykor/plugins/
 ├─ cache/<plugin-id>/<version>-<digest>/
 ├─ data/<plugin-id>/
 ├─ sources/
@@ -56,13 +56,13 @@ Desktop 插件页现可从右上角“添加”菜单导入本地 Native Plugin 
 
 Plugin Service 会为每个已安装插件计算 `runtimeStatus`，Desktop 列表和详情直接显示这条主状态。当前状态只分为已禁用、等待下次对话生效、已加载、部分能力不可用和加载失败；失败时只给一个建议动作，例如重新导入插件包、重新确认权限或先禁用插件。内部 `diagnostics` 和 Tool Runtime 统计仍保留在详情里，不要求用户理解 cache、digest 或 manifest diff。
 
-作者打包时不需要理解 Source Resolver 的内部细节。当前推荐做法是把完整插件目录压成 `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，包内允许有一层包装目录，但必须只有一个 `.openharness-plugin/plugin.json`；如果从 Git 安装，仓库 checkout 后也必须满足同一目录规则。Desktop 导入失败只向用户反馈失败原因和一个动作；具体校验项留在插件详情和诊断里。
+作者打包时不需要理解 Source Resolver 的内部细节。当前推荐做法是把完整插件目录压成 `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，包内允许有一层包装目录，但必须只有一个 `.vykor-plugin/plugin.json`；如果从 Git 安装，仓库 checkout 后也必须满足同一目录规则。Desktop 导入失败只向用户反馈失败原因和一个动作；具体校验项留在插件详情和诊断里。
 
 Desktop 尚不支持自动更新、独立 Repair 命令、版本回滚、旧快照垃圾回收界面、Agent 对话安装、Claude Code/Codex 转换、npm、归档 URL 或 Marketplace。被旧插件页面隐藏的 localStorage 配置仍原样保留，未执行迁移或删除。
 
 ## 外部转换
 
-`@openharness/plugin-converters` 拥有外部格式逻辑。Claude Code Converter 按以下流程工作：
+`@vykor/plugin-converters` 拥有外部格式逻辑。Claude Code Converter 按以下流程工作：
 
 ```text
 detect -> inspect -> plan -> approve -> convert -> Native validate
@@ -70,7 +70,7 @@ detect -> inspect -> plan -> approve -> convert -> Native validate
 
 转换产物保存 `provenance.json`、`plan.json` 和 `report.json`，并逐项标记 exact、adapted、unsupported 或 blocked。转换过程只读源文件，不 import JavaScript、不启动 Hook/MCP、不联网或安装依赖。
 
-转换完成后，目录本身就是普通 Native Plugin：组件直接位于 `skills/`、`agents/`、`hooks.json` 和 `mcp.json`，不会再套 `payload/` 或 `generated/`。`plugin.json.metadata` 只保留 converted/sourceFormat/Converter 信息；Installer、Runtime、UI 和 CLI 均按 Native Plugin 管理，`.openharness-conversion/` 仅供审计，删除它不影响安装和运行。
+转换完成后，目录本身就是普通 Native Plugin：组件直接位于 `skills/`、`agents/`、`hooks.json` 和 `mcp.json`，不会再套 `payload/` 或 `generated/`。`plugin.json.metadata` 只保留 converted/sourceFormat/Converter 信息；Installer、Runtime、UI 和 CLI 均按 Native Plugin 管理，`.vykor-conversion/` 仅供审计，删除它不影响安装和运行。
 
 ### Codex 导入
 
@@ -79,15 +79,15 @@ Codex 转换器识别 `.codex-plugin/plugin.json`，以及 schema 明确为 Agen
 先查看转换预览：
 
 ```sh
-ohs plugin convert ./my-codex-plugin --from codex --dry-run
-ohs plugin convert ./my-codex-plugin --from codex --dry-run --json
+vk plugin convert ./my-codex-plugin --from codex --dry-run
+vk plugin convert ./my-codex-plugin --from codex --dry-run --json
 ```
 
 确认预览中的每项变化后，重复传入对应 `--approve <item>`，选择输出目录或直接安装：
 
 ```sh
-ohs plugin convert ./my-codex-plugin --from codex --output ./native-plugin
-ohs plugin install ./my-codex-plugin --from codex
+vk plugin convert ./my-codex-plugin --from codex --output ./native-plugin
+vk plugin install ./my-codex-plugin --from codex
 ```
 
 以上两条命令适用于不需要额外批准的纯 Skills 插件。有 MCP、有损项或 `agents/openai.yaml` 时，必须补上预览列出的批准参数。输出目录必须不存在，且不能位于源目录内。
@@ -115,6 +115,6 @@ Native Tool 调用路径有 runtime 级控制：
 - stdout、stderr 和插件主动日志都有大小限制，超出后截断并抑制后续输出；
 - installed record 中缺少已批准权限时，Runtime 会跳过该插件并提示重新批准或重装。
 
-当前隔离边界仍是“进程与环境变量隔离”，不是操作系统级沙箱。第三方 Node Tool 仍可直接调用 Node 文件、网络和进程 API；manifest 权限目前用于 OpenHarness 宿主能力和运行时闸门，不能替代容器、受限系统用户或系统调用过滤。
+当前隔离边界仍是“进程与环境变量隔离”，不是操作系统级沙箱。第三方 Node Tool 仍可直接调用 Node 文件、网络和进程 API；manifest 权限目前用于 Vykor 宿主能力和运行时闸门，不能替代容器、受限系统用户或系统调用过滤。
 
 会话 `/reload-plugins` 关闭当前 cwd 的旧 Runtime，下一次使用时重新加载；输出显示安装校验状态、组件诊断和需要重新登记/批准的提示。HTTP 重载成功不等于插件已激活。没有发现插件时仍保留顶层 warnings，便于处理被忽略的旧安装记录。

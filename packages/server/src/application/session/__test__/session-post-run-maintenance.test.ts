@@ -30,6 +30,28 @@ function createStore(runStatus = "completed") {
 }
 
 describe("SessionPostRunMaintenance", () => {
+  it("passes a bound session goal into the checkpoint", async () => {
+    const store = createStore();
+    store.getRun.mockReturnValue({ id: "run-1", sessionId: "s1", status: "completed", metadata: { goalId: "goal-1" } } as any);
+    const sessionMemoryWriter = vi.fn();
+    const maintenance = new SessionPostRunMaintenance({
+      data: {
+        ...store,
+        goals: { getGoal: () => ({ id: "goal-1", objective: "Fix the auth bug" }) },
+      } as any,
+      getSettings: async () => ({ memory: { enabled: true, sessionMemoryEnabled: true, autoExtractEnabled: false } } as any),
+      personalizationUpdater: () => 0,
+      sessionMemoryWriter,
+      log: vi.fn(),
+    });
+
+    await maintenance.run("s1", "run-1", { remember: vi.fn() } as any);
+
+    expect(sessionMemoryWriter).toHaveBeenCalledWith("/repo", [
+      { role: "user", content: "ssh ops@10.0.0.9" },
+    ], "s1", "Fix the auth bug");
+  });
+
   it("runs personalization and semantic memory after a completed run", async () => {
     const store = createStore();
     const remember = vi.fn(async () => ({ skipped: true, writtenIds: [], titles: [] }));

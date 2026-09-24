@@ -1,4 +1,4 @@
-# @openharness/swarm
+# @vykor/swarm
 
 Reusable filesystem-based swarm infrastructure.
 
@@ -21,5 +21,5 @@ Removed from the public surface:
 ## Tests
 
 ```bash
-pnpm --filter @openharness/swarm test
+pnpm --filter @vykor/swarm test
 ```

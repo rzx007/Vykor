@@ -52,7 +52,7 @@ export function DaemonAutoStartCard(): React.JSX.Element | null {
       >
         <h2 className="text-ui-small font-medium">保持后台运行</h2>
         <p className="mt-1 text-xs leading-5 text-sidebar-muted">
-          关闭 OpenHarness 后，定时任务和后台工作仍可继续。
+          关闭 Vykor 后，定时任务和后台工作仍可继续。
         </p>
         {error ? (
           <p role="alert" className="mt-1 text-xs leading-5 text-destructive">

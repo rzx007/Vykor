@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/plugins",
+  "name": "@vykor/plugins",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -20,10 +20,10 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/core": "workspace:*",
+    "@vykor/core": "workspace:*",
     "zod": "catalog:",
-    "@openharness/skills": "workspace:*",
-    "@openharness/coordinator": "workspace:*"
+    "@vykor/skills": "workspace:*",
+    "@vykor/coordinator": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

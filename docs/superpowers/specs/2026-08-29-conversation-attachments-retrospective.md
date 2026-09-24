@@ -565,7 +565,7 @@ OCR 的问题证明，包含原生依赖和运行时资源的功能不能只靠�
 
 - 用户对设置页最终真实页面做最后一次视觉确认。
 - 用正式打包产物完成一次图片原生输入、OCR、文本资源和不支持格式阻止的烟测。
-- 验证 `OPENHARNESS_DESKTOP_ATTACHMENTS=0` 时功能可以完整关闭，没有残留入口或运行错误。
+- 验证 `VYKOR_DESKTOP_ATTACHMENTS=0` 时功能可以完整关闭，没有残留入口或运行错误。
 - 明确发布说明中的支持矩阵，避免用户误以为 PDF 和 Office 已支持。
 - 当前功能仍在 `codex/attachment-release-closeout` 分支，尚未合并回 `main`。
 

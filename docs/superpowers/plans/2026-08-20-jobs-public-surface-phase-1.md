@@ -105,7 +105,7 @@ export interface CreateBackgroundShellResult {
   snapshot: JobSnapshot;
 }
 
-OpenHarnessClient.createBackgroundShell(
+VykorClient.createBackgroundShell(
   input: CreateBackgroundShellInput,
   options?: { signal?: AbortSignal },
 ): Promise<CreateBackgroundShellResult>
@@ -186,14 +186,14 @@ describe("background shell routes", () => {
 Run:
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/http/routes/background-shell.test.ts
+pnpm --filter @vykor/server exec vitest run src/http/routes/background-shell.test.ts
 ```
 
 Expected: FAIL because `./background-shell.js` and `createBackgroundShellRoutes` do not exist.
 
 - [ ] **Step 3: Give `SessionTaskService.create` a concrete result and accept an optional description**
 
-In `packages/server/src/http/session/session-task-service.ts`, import `TaskInfo` from `@openharness/services`, change the input/result signature, and use the provided description only for the internal task label:
+In `packages/server/src/http/session/session-task-service.ts`, import `TaskInfo` from `@vykor/services`, change the input/result signature, and use the provided description only for the internal task label:
 
 ```ts
 async create(input: {
@@ -225,7 +225,7 @@ Create `packages/server/src/http/routes/background-shell.ts`:
 
 ```ts
 import { Hono } from "hono";
-import type { JobReadResult } from "@openharness/jobs";
+import type { JobReadResult } from "@vykor/jobs";
 import type { SessionTaskService } from "../session/index.js";
 import { errorResponse, jsonResponse, readJson } from "../support.js";
 
@@ -264,7 +264,7 @@ Mount it in `packages/server/src/http/server.ts` at `/background-shells` with `t
 Run:
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/http/routes/background-shell.test.ts src/http/session/__test__/session-task-service.test.ts
+pnpm --filter @vykor/server exec vitest run src/http/routes/background-shell.test.ts src/http/session/__test__/session-task-service.test.ts
 ```
 
 Expected: PASS. Existing session-task tests must still prove projection and event publication.
@@ -277,7 +277,7 @@ In `packages/client/src/transport/__test__/http-client.test.ts`, add:
 it("creates a producer-specific background shell", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const snapshot = jobSnapshot({ id: "task-1", kind: "shell" });
-  const client = new OpenHarnessClient({
+  const client = new VykorClient({
     baseUrl: "http://127.0.0.1:3456",
     fetch: (async (url, init) => {
       calls.push({ url: String(url), init: init ?? {} });
@@ -305,14 +305,14 @@ If the file has no `jobSnapshot` factory, declare the full `JobSnapshot` object 
 Run:
 
 ```bash
-pnpm --filter @openharness/client exec vitest run src/transport/__test__/http-client.test.ts
+pnpm --filter @vykor/client exec vitest run src/transport/__test__/http-client.test.ts
 ```
 
-Expected: FAIL because `OpenHarnessClient.createBackgroundShell` is not defined.
+Expected: FAIL because `VykorClient.createBackgroundShell` is not defined.
 
 - [ ] **Step 8: Implement and export the client contract**
 
-Add `CreateBackgroundShellInput` and `CreateBackgroundShellResult` to `packages/client/src/types/index.ts`, importing `JobSnapshot` as a type from `@openharness/jobs`. Re-export them from `packages/client/src/index.ts`. Add this method beside Jobs methods in `packages/client/src/transport/http-client.ts`:
+Add `CreateBackgroundShellInput` and `CreateBackgroundShellResult` to `packages/client/src/types/index.ts`, importing `JobSnapshot` as a type from `@vykor/jobs`. Re-export them from `packages/client/src/index.ts`. Add this method beside Jobs methods in `packages/client/src/transport/http-client.ts`:
 
 ```ts
 async createBackgroundShell(
@@ -357,10 +357,10 @@ Reuse the platform-safe successful shell command already used by this test file;
 Run:
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/http/routes/background-shell.test.ts src/http/session/__test__/session-task-service.test.ts src/http/__test__/http.test.ts
-pnpm --filter @openharness/client exec vitest run src/transport/__test__/http-client.test.ts
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
+pnpm --filter @vykor/server exec vitest run src/http/routes/background-shell.test.ts src/http/session/__test__/session-task-service.test.ts src/http/__test__/http.test.ts
+pnpm --filter @vykor/client exec vitest run src/transport/__test__/http-client.test.ts
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
 ```
 
 Expected: all PASS.
@@ -386,7 +386,7 @@ Before committing, `git diff --cached --name-only` must contain exactly the file
 
 **Interfaces:**
 
-- Consumes: `JobSnapshot` and `JobReadResult` from `@openharness/client` re-exports.
+- Consumes: `JobSnapshot` and `JobReadResult` from `@vykor/client` re-exports.
 - Produces:
 
 ```ts
@@ -418,7 +418,7 @@ Create `apps/frontend/src/jobs/job-remote-state.test.ts`:
 
 ```ts
 import { describe, expect, test } from "bun:test";
-import type { JobSnapshot } from "@openharness/client";
+import type { JobSnapshot } from "@vykor/client";
 import { beginJobList, mergeJobSnapshot, rejectJobList, resolveJobList } from "./job-remote-state";
 
 const job: JobSnapshot = {
@@ -543,7 +543,7 @@ Run:
 
 ```bash
 pnpm --dir apps/frontend exec bun test src/jobs/job-remote-state.test.ts
-pnpm --filter @openharness/frontend check-types
+pnpm --filter @vykor/frontend check-types
 ```
 
 Expected: the pure tests PASS; typecheck FAILS only at `useServerSync` and test fixtures still returning `tasks`, which Task 3 immediately migrates. Do not commit this temporarily red task separately.
@@ -756,7 +756,7 @@ Run:
 
 ```bash
 pnpm --dir apps/frontend exec bun test src/jobs/job-remote-state.test.ts src/hooks/useServerSync.test.tsx
-pnpm --filter @openharness/frontend check-types
+pnpm --filter @vykor/frontend check-types
 ```
 
 Expected: PASS. There must be no `/tasks` call in production hook code.
@@ -877,7 +877,7 @@ Run:
 
 ```bash
 pnpm --dir apps/frontend exec bun test src/components/JobsPanel.test.tsx
-pnpm --filter @openharness/frontend check-types
+pnpm --filter @vykor/frontend check-types
 ```
 
 Expected: PASS with no React `act` warning and no state update after `renderer.destroy()`.
@@ -1024,7 +1024,7 @@ Run:
 
 ```bash
 pnpm --dir apps/frontend exec bun test src/App.test.tsx src/components/JobsPanel.test.tsx src/hooks/useServerSync.test.tsx
-pnpm --filter @openharness/frontend check-types
+pnpm --filter @vykor/frontend check-types
 ```
 
 Expected: PASS.
@@ -1061,7 +1061,7 @@ git commit -m "refactor(tui): converge workflow views into Jobs"
 
 **Interfaces:**
 
-- Consumes: `OpenHarnessClient.listJobs/readJob/cancelJob/createBackgroundShell`.
+- Consumes: `VykorClient.listJobs/readJob/cancelJob/createBackgroundShell`.
 - Produces:
 
 ```text
@@ -1117,7 +1117,7 @@ Assert:
 Run:
 
 ```bash
-pnpm --filter @openharness/client exec vitest run src/commands/__test__/session-commands.test.ts
+pnpm --filter @vykor/client exec vitest run src/commands/__test__/session-commands.test.ts
 ```
 
 Expected: FAIL because `/jobs` and `/background` are not handled and `/tasks` is still active.
@@ -1186,12 +1186,12 @@ In `useServerSync.test.tsx`, replace command catalog fixtures containing `/tasks
 Run:
 
 ```bash
-pnpm --filter @openharness/client exec vitest run src/commands/__test__/session-commands.test.ts
-pnpm --filter @openharness/server exec vitest run src/commands
+pnpm --filter @vykor/client exec vitest run src/commands/__test__/session-commands.test.ts
+pnpm --filter @vykor/server exec vitest run src/commands
 pnpm --dir apps/frontend exec bun test src/hooks/useServerSync.test.tsx
-pnpm --filter @openharness/client check-types
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/frontend check-types
+pnpm --filter @vykor/client check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/frontend check-types
 ```
 
 Expected: PASS.
@@ -1240,7 +1240,7 @@ Classify every match before deleting anything:
 - Remove background HTTP/client/TUI matches.
 - Internal `SessionTaskService.list/get/stop` matches used by `DaemonJobService` remain.
 
-The command must show no unmigrated public consumer of `OpenHarnessClient` Task CRUD.
+The command must show no unmigrated public consumer of `VykorClient` Task CRUD.
 
 - [ ] **Step 2: Add failing hard-cut HTTP assertions**
 
@@ -1265,7 +1265,7 @@ Keep the Task 1 assertion that `/background-shells` works and returns a Job.
 Run:
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/http/__test__/http.test.ts
+pnpm --filter @vykor/server exec vitest run src/http/__test__/http.test.ts
 ```
 
 Expected: FAIL because `/tasks` returns a success/validation response instead of 404.
@@ -1312,7 +1312,7 @@ Delete `TodoPanel.tsx` and `SwarmPanel.tsx`. If their only remaining references 
 Run:
 
 ```bash
-rg -n --glob '!docs/**' --glob '!node_modules/**' "OpenHarnessClient\.(listTasks|getTask|stopTask|createTask)|client\.(listTasks|getTask|stopTask|createTask)|TaskSnapshot|ListTasksOptions|CreateTaskInput" apps packages
+rg -n --glob '!docs/**' --glob '!node_modules/**' "VykorClient\.(listTasks|getTask|stopTask|createTask)|client\.(listTasks|getTask|stopTask|createTask)|TaskSnapshot|ListTasksOptions|CreateTaskInput" apps packages
 rg -n --glob '!node_modules/**' 'name: "/tasks"|slash\?\.name === "/tasks"|route\("/tasks"' apps packages
 ```
 
@@ -1323,12 +1323,12 @@ Expected: no matches. A separate audit for `/schedules/tasks`, `TaskManager`, `S
 Run:
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/http/__test__/http.test.ts src/http/routes src/http/session
-pnpm --filter @openharness/client exec vitest run
+pnpm --filter @vykor/server exec vitest run src/http/__test__/http.test.ts src/http/routes src/http/session
+pnpm --filter @vykor/client exec vitest run
 pnpm --dir apps/frontend exec bun test src
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
-pnpm --filter @openharness/frontend check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
+pnpm --filter @vykor/frontend check-types
 ```
 
 Expected: PASS.
@@ -1424,10 +1424,10 @@ Expected: no whitespace errors.
 Run:
 
 ```bash
-pnpm --filter @openharness/jobs test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/frontend test
+pnpm --filter @vykor/jobs test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/frontend test
 pnpm check-types
 pnpm lint
 ```

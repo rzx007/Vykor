@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { ChannelConfigStore } from "../channel-config-store.js";
 
 function tempPath() {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-channel-config-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-channel-config-"));
   return join(directory, "channel-credentials.json");
 }
 

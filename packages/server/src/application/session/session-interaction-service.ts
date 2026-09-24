@@ -2,7 +2,7 @@ import {
   AttachmentError,
   normalizePromptAttachments,
   promptAttachmentFingerprint,
-} from "@openharness/services";
+} from "@vykor/services";
 import {
   sessionUserInputText,
   type AdmitPromptAttachmentInput,
@@ -13,7 +13,7 @@ import {
   type SessionRecord,
   type SessionRunRecord,
   type SessionUserInputItem,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type {
   AdmitPromptInput,

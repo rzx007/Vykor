@@ -20,7 +20,7 @@
 
 ## Trace ID：把同一次操作串起来
 
-`traceId` 是一次请求链的关联 ID。客户端可以通过 `x-openharness-trace-id` 传入，daemon 也会在响应中返回同名 header；没有传入时由 daemon 生成。
+`traceId` 是一次请求链的关联 ID。客户端可以通过 `x-vykor-trace-id` 传入，daemon 也会在响应中返回同名 header；没有传入时由 daemon 生成。
 
 ```text
 CLI / TUI / Web 请求
@@ -34,7 +34,7 @@ CLI / TUI / Web 请求
 
 ## 结构化日志
 
-`@openharness/server` 的 logger 每行输出一个 JSON 对象。公共字段是 `level`、`event`、`traceId`；按事件还会带 `sessionId`、`runId`、`requestId`、`taskId`、`toolName`、HTTP 状态和耗时。
+`@vykor/server` 的 logger 每行输出一个 JSON 对象。公共字段是 `level`、`event`、`traceId`；按事件还会带 `sessionId`、`runId`、`requestId`、`taskId`、`toolName`、HTTP 状态和耗时。
 
 当前主路径事件包括：
 
@@ -66,21 +66,21 @@ CLI / TUI / Web 请求
 
 | 指标 | 实际含义 |
 |---|---|
-| `openharness_runs_total{status}` | 数据库中各状态 Run 数 |
-| `openharness_runs_active` | pending 或 running 的 Run 数 |
-| `openharness_run_duration_ms` | 已有开始和结束时间的 Run 耗时 |
-| `openharness_run_attempts_total{provider,model,status}` | 模型尝试次数 |
-| `openharness_model_request_duration_ms{...}` | 模型尝试耗时 |
-| `openharness_tokens_total{provider,model,direction}` | Attempt 记录的输入、输出 token |
-| `openharness_tool_calls_total{tool,status,failure_kind}` | Tool Part 的状态和失败分类 |
-| `openharness_tool_call_duration_ms{tool}` | Tool Part 从创建到更新的耗时 |
-| `openharness_permissions_pending` | 待回答的权限请求数 |
-| `openharness_child_agents_active` | pending 或 running 的 Agent Task 数 |
-| `openharness_workflows_total{status}` | 各状态 Workflow 数 |
-| `openharness_workflows_active` | running Workflow 数 |
-| `openharness_workflow_duration_ms` | 已结束 Workflow 的耗时 |
-| `openharness_projection_settlements_pending` | pending 或 retrying 的 Settlement 数 |
-| `openharness_projection_failures_total{projector,action}` | Settlement 已记录的修复尝试次数 |
+| `vykor_runs_total{status}` | 数据库中各状态 Run 数 |
+| `vykor_runs_active` | pending 或 running 的 Run 数 |
+| `vykor_run_duration_ms` | 已有开始和结束时间的 Run 耗时 |
+| `vykor_run_attempts_total{provider,model,status}` | 模型尝试次数 |
+| `vykor_model_request_duration_ms{...}` | 模型尝试耗时 |
+| `vykor_tokens_total{provider,model,direction}` | Attempt 记录的输入、输出 token |
+| `vykor_tool_calls_total{tool,status,failure_kind}` | Tool Part 的状态和失败分类 |
+| `vykor_tool_call_duration_ms{tool}` | Tool Part 从创建到更新的耗时 |
+| `vykor_permissions_pending` | 待回答的权限请求数 |
+| `vykor_child_agents_active` | pending 或 running 的 Agent Task 数 |
+| `vykor_workflows_total{status}` | 各状态 Workflow 数 |
+| `vykor_workflows_active` | running Workflow 数 |
+| `vykor_workflow_duration_ms` | 已结束 Workflow 的耗时 |
+| `vykor_projection_settlements_pending` | pending 或 retrying 的 Settlement 数 |
+| `vykor_projection_failures_total{projector,action}` | Settlement 已记录的修复尝试次数 |
 
 指标 label 只用有限枚举或已有名称，不放 traceId、sessionId、runId 这类无限增长的值。这样不会因为运行越多而无限制造指标序列。
 
@@ -99,11 +99,11 @@ CLI / TUI / Web 请求
 系统没有工作时，下面这些值应长期回到零：
 
 - `coordinator.activeRunCount` 和 `coordinator.queuedRunCount`；
-- `openharness_runs_active`；
-- `openharness_permissions_pending`；
-- `openharness_child_agents_active`；
-- `openharness_workflows_active`；
-- `openharness_projection_settlements_pending`。
+- `vykor_runs_active`；
+- `vykor_permissions_pending`；
+- `vykor_child_agents_active`；
+- `vykor_workflows_active`；
+- `vykor_projection_settlements_pending`。
 
 如果 Run 已是终态但 Attempt、Tool 或 Task 仍是 running，Run Inspector 应产生 warning；不要只看顶层 Run 状态就判断成功。
 

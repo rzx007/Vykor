@@ -6,7 +6,7 @@
 
 **最终架构：** `GET /commands` 提供当前 cwd 可调用的 Skill 目录和可信候选 path。Desktop 把 `/`、`$` 选择变成 composer item，TUI 把 template slash 变成 Skill + text items；durable input 保存有序 items。`SessionRunExecutor` 在执行时重新校验 catalog，materializer 只生成工具调用要求，正文由 `Skill { name, path }` 现读。
 
-**技术栈：** TypeScript、Vitest、React、Lexical、Electron IPC、Hono、OpenHarness Session Runtime。
+**技术栈：** TypeScript、Vitest、React、Lexical、Electron IPC、Hono、Vykor Session Runtime。
 
 ## 演进
 

@@ -6,7 +6,7 @@
 
 **架构：** ProtocolClient 只接 HttpTransport。它解析 ServerCapabilities 并执行兼容检查，不缓存全局协议状态，也不让业务 Resource 隐式发 capabilities 请求。
 
-**技术栈：** TypeScript、@openharness/protocol、Vitest。
+**技术栈：** TypeScript、@vykor/protocol、Vitest。
 
 ---
 
@@ -27,7 +27,7 @@
 - [ ] 使用 parseServerCapabilities、checkProtocolCompatibility、CURRENT_PROTOCOL_VERSION。
 - [ ] incompatible 时抛原错误，不包装 ProtocolDataError。
 - [ ] 不新增 capabilities cache、自动 retry 或 Resource 前置握手。
-- [ ] OpenHarnessClient 暴露 readonly protocol。
+- [ ] VykorClient 暴露 readonly protocol。
 - [ ] 旧 health/capabilities 方法转发到 protocol。
 - [ ] 公共 export 保持旧路径，同时可导出 ProtocolClient。
 - [ ] 快检 Client 类型。

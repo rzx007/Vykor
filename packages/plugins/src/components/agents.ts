@@ -4,7 +4,7 @@ import {
   buildAgentDefinition,
   parseAgentFrontmatter,
   type AgentDefinition,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
 

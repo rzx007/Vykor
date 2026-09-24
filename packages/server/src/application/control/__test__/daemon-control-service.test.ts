@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionStore } from "@openharness/services";
-import { createWorkflowPlan, createWorkflowRunSnapshot } from "@openharness/coordinator";
+import { SessionStore } from "@vykor/services";
+import { createWorkflowPlan, createWorkflowRunSnapshot } from "@vykor/coordinator";
 import { describe, expect, it, vi } from "vitest";
 
 import { DaemonControlService } from "../daemon-control-service.js";
@@ -88,7 +88,7 @@ describe("DaemonControlService", () => {
     expect(runControl.stopAndDrain).toHaveBeenCalledOnce();
   });
   it("uses the Workflow queries supplied by daemon composition for snapshots and run inspection", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-control-workflows-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-control-workflows-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     const application = new DaemonApplication({
       store,

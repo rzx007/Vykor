@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import type { McpOAuthCredentialRecord } from "@openharness/core";
+import type { McpOAuthCredentialRecord } from "@vykor/core";
 import type { McpOAuthCredentialStore } from "./login.js";
 import { McpOAuthRuntime } from "./runtime-auth.js";
 import { verifyMcpOAuthConnection } from "./verify-connection.js";

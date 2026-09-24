@@ -47,7 +47,7 @@ Executor 不在 4C 修改业务体。
 
 - [ ] **步骤 3：运行旧实现**
 
-运行：pnpm --filter @openharness/server test -- src/application/session/__test__/session-run-engine.test.ts src/application/session/__test__/session-application-service-queue-actions.test.ts src/application/session/__test__/session-application-service-edit.test.ts
+运行：pnpm --filter @vykor/server test -- src/application/session/__test__/session-run-engine.test.ts src/application/session/__test__/session-application-service-queue-actions.test.ts src/application/session/__test__/session-application-service-edit.test.ts
 
 - [ ] **步骤 4：提交**
 

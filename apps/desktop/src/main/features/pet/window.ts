@@ -34,7 +34,7 @@ export function createPetWindow(ctx: AppContext): BrowserWindow {
     options: {
       width: PET_WIDTH,
       height: PET_HEIGHT,
-      title: "OpenHarness Pet",
+      title: "Vykor Pet",
       frame: false,
       transparent: true,
       backgroundColor: TRANSPARENT_BACKGROUND,

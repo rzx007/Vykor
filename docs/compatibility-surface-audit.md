@@ -142,7 +142,7 @@
 
 | 符号/字符串或命中族 | 主要定义位置 | 当前调用者 | 当前入口 | 结论 | 理由 |
 |---|---|---|---|---|---|
-| OpenAI-compatible Provider | `packages/api`、Provider 配置 | Server/Desktop 当前 Provider 流程 | 当前 Provider API | 保留 | 外部互操作能力，不是 OpenHarness 历史入口 |
+| OpenAI-compatible Provider | `packages/api`、Provider 配置 | Server/Desktop 当前 Provider 流程 | 当前 Provider API | 保留 | 外部互操作能力，不是 Vykor 历史入口 |
 | Codex/Claude plugin converter | `packages/plugin-converters` | CLI/Desktop 当前显式导入 | converter API | 保留 | 主动导入外部格式 |
 | capability / attachment capability | `packages/protocol`、attachment routing | Client/Server 当前请求 | 精确能力与路由检查 | 保留 | 当前模型能力路由 |
 | Windows/WSL/PowerShell/Bash 分支 | `packages/environment`、`packages/tools`、Desktop/CLI | 当前平台启动与 shell 执行 | 平台选择器 | 保留 | 平台适配 |
@@ -156,7 +156,7 @@
 |---|---|---|---|---|---|
 | `--bare` / `options.bare` | `apps/cli/src/index.ts` | CLI 启动参数 | `--no-plugins` / `options.plugins` | 删除 | 8C |
 | 旧 shell 标量、`legacyShellDescriptor` | environment/tools | 环境与 shell 测试 | `shellDescriptor` | 删除 | 8C |
-| `.claude/skills` 扫描 | skills | skills 发现测试 | `.agents/skills`、`.openharness-ts/skills` | 删除 | 8C |
+| `.claude/skills` 扫描 | skills | skills 发现测试 | `.agents/skills`、`.vykor/skills` | 删除 | 8C |
 | plugin manifest compatibility / environment aliases / project-local scope | plugins/agent-runtime/converters | 插件加载与转换测试 | 当前 Native Plugin schema、user/managed scope | 删除 | 8C |
 | 历史数据库 migration 与旧配置/schema 字段 | services/config/protocol | 启动与数据库测试 | 单一当前 schema 基线 | 删除 | 8D |
 | 旧/未来协议协商降级 | protocol/client/server | 首次业务请求 | 精确 `/capabilities` 握手 | 删除并提升版本 | 8D |

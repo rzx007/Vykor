@@ -11,7 +11,7 @@ import {
 import { AttachmentRepository } from "./attachment-repository.js";
 
 function withStore(test: (store: SessionStore, path: string) => void): void {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-attachments-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-attachments-"));
   const path = join(directory, "sessions.db");
   const store = new SessionStore({ path });
   try {

@@ -9,7 +9,7 @@ import {
   type CreateShellProcessOptions,
   type HostShellLauncher,
   type SandboxPolicy,
-} from "@openharness/sandbox";
+} from "@vykor/sandbox";
 import { decodeShellChunk, DEFAULT_MAX_OUTPUT_CHARS } from "./output.js";
 import type {
   ShellExecContext,

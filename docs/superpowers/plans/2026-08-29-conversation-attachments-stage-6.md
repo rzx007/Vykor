@@ -43,7 +43,7 @@ classifyAttachmentCandidate({ displayName, mediaType }): "image" | "text" | "doc
 decodeAttachmentText(bytes): { text: string; encoding: "utf-8" | "utf-16le" | "utf-16be" }
 ```
 
-运行：`pnpm --filter @openharness/services test -- attachment-text.test.ts`
+运行：`pnpm --filter @vykor/services test -- attachment-text.test.ts`
 
 预期：FAIL，模块尚不存在。
 
@@ -55,7 +55,7 @@ decodeAttachmentText(bytes): { text: string; encoding: "utf-8" | "utf-16le" | "u
 
 断言小文本得到 `text_inline` 和完整性标志，大文本得到 `text_resource`、3,000 字符内预览与 `attachment://` URI；PDF/DOCX/XLSX/PPTX/ZIP/未知二进制分别得到稳定错误码，且 `resolveReadyContentPath` 或文本读取器不会在 blocked 路径后继续调用 Provider。
 
-运行：`pnpm --filter @openharness/server test -- attachment-capability-router.test.ts`
+运行：`pnpm --filter @vykor/server test -- attachment-capability-router.test.ts`
 
 预期：FAIL，现有路由只接受图片。
 
@@ -66,8 +66,8 @@ decodeAttachmentText(bytes): { text: string; encoding: "utf-8" | "utf-16le" | "u
 运行：
 
 ```bash
-pnpm --filter @openharness/services test -- attachment-text.test.ts attachment-media-type.test.ts
-pnpm --filter @openharness/server test -- attachment-capability-router.test.ts attachment-capabilities.test.ts
+pnpm --filter @vykor/services test -- attachment-text.test.ts attachment-media-type.test.ts
+pnpm --filter @vykor/server test -- attachment-capability-router.test.ts attachment-capabilities.test.ts
 ```
 
 预期：PASS。
@@ -98,7 +98,7 @@ git commit -m "feat(attachments): route safe text resources"
 
 断言 `attachment://att_123/report.log` 调用 `context.attachments.readText({ assetId: "att_123", offset, limit })`；普通绝对路径仍使用现有 file operations；编码后的斜杠、空 asset ID、userinfo、port、query 和 fragment 被拒绝；宿主缺失返回稳定错误而不是尝试本地路径。
 
-运行：`pnpm --filter @openharness/tools test -- read.test.ts`
+运行：`pnpm --filter @vykor/tools test -- read.test.ts`
 
 预期：FAIL，Read 尚不理解附件 URI。
 
@@ -128,9 +128,9 @@ Read 在调用 `resolveToolPath` 前识别 URI，校验 `offset`、`limit` 为�
 运行：
 
 ```bash
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/tools test -- read.test.ts
-pnpm --filter @openharness/server test -- agent-attachment-resource-host.test.ts
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/tools test -- read.test.ts
+pnpm --filter @vykor/server test -- agent-attachment-resource-host.test.ts
 ```
 
 预期：PASS。
@@ -161,13 +161,13 @@ git commit -m "feat(tools): read conversation attachment resources"
 
 - [x] **步骤 1：写资源生命周期和挂载失败测试**
 
-断言每个 session 使用独立目录；物化名只含 asset ID；只允许已路由为 text 的 ready asset；文件为只读；同一 asset 重用；run 完成/失败/中断均清理本次条目。Docker argv 只能出现 `<session-resource-root>:/mnt/openharness-attachments:ro`，不能出现 blob store 根目录。
+断言每个 session 使用独立目录；物化名只含 asset ID；只允许已路由为 text 的 ready asset；文件为只读；同一 asset 重用；run 完成/失败/中断均清理本次条目。Docker argv 只能出现 `<session-resource-root>:/mnt/vykor-attachments:ro`，不能出现 blob store 根目录。
 
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- session-attachment-resources.test.ts session-run-executor.test.ts
-pnpm --filter @openharness/sandbox test
+pnpm --filter @vykor/server test -- session-attachment-resources.test.ts session-run-executor.test.ts
+pnpm --filter @vykor/sandbox test
 ```
 
 预期：FAIL，资源生命周期尚未接线。
@@ -180,7 +180,7 @@ pnpm --filter @openharness/sandbox test
 
 用 shared classifier 断言 PDF、DOCX、XLSX、PPTX、ZIP 卡片显示不支持原因且 `canSend` 为 false；TXT/MD/TS/JSON 和图片保持可发送；“添加文件夹”菜单项仍存在且禁用。
 
-运行：`pnpm --filter @openharness/desktop test -- attachment-types.test.ts composer-attachments.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- attachment-types.test.ts composer-attachments.test.ts`
 
 预期：FAIL，草稿没有支持状态。
 
@@ -191,9 +191,9 @@ pnpm --filter @openharness/sandbox test
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- session-attachment-resources.test.ts session-run-executor.test.ts
-pnpm --filter @openharness/sandbox test
-pnpm --filter @openharness/desktop test -- attachment-types.test.ts composer-attachments.test.ts composer-attachment-preview.test.ts
+pnpm --filter @vykor/server test -- session-attachment-resources.test.ts session-run-executor.test.ts
+pnpm --filter @vykor/sandbox test
+pnpm --filter @vykor/desktop test -- attachment-types.test.ts composer-attachments.test.ts composer-attachment-preview.test.ts
 ```
 
 预期：PASS。
@@ -225,8 +225,8 @@ git commit -m "feat(attachments): isolate text resources and block documents"
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- http.test.ts transcript-projection.test.ts
-pnpm --filter @openharness/services test -- prompt-attachments.test.ts
+pnpm --filter @vykor/server test -- http.test.ts transcript-projection.test.ts
+pnpm --filter @vykor/services test -- prompt-attachments.test.ts
 ```
 
 预期：PASS。
@@ -246,8 +246,8 @@ git diff --check
 - [x] **步骤 4：运行 Desktop 生产构建和打包 smoke**
 
 ```bash
-pnpm --filter @openharness/desktop build
-pnpm --filter @openharness/desktop exec electron-builder --win --x64 --dir
+pnpm --filter @vykor/desktop build
+pnpm --filter @vykor/desktop exec electron-builder --win --x64 --dir
 ```
 
 使用打包产物启动 smoke，确认 TXT/代码可发送、PDF/DOCX/XLSX/PPTX 禁止发送、“添加文件夹”仍显示、图片原生与 OCR 路线可用。

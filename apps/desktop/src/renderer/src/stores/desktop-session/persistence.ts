@@ -1,4 +1,4 @@
-const persistedActiveSessionKey = "openharness.desktop.active-session.v1"
+const persistedActiveSessionKey = "vykor.desktop.active-session.v1"
 
 export function readPersistedActiveSessionId(): string | null {
   try {

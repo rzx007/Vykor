@@ -1,23 +1,23 @@
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import type {
   ExecutionEnvironmentConsumer,
   ExecutionEnvironmentHandle,
   ShellDescriptor,
-} from "@openharness/environment";
+} from "@vykor/environment";
 import type {
   SessionExecutionRecord,
   SessionRecord,
   SessionStatus,
   SessionTaskStatus,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type {
   DetachedProcessExecution,
   DetachedProcessSupervisor,
-} from "@openharness/services/executions";
+} from "@vykor/services/executions";
 
 import type { SessionExecutionProjector } from "./session-execution-projector.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";

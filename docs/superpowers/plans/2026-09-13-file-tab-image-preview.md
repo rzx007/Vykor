@@ -83,7 +83,7 @@ describe("safe image preview", () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/shared/safe-image-preview.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/shared/safe-image-preview.test.ts
 ```
 
 预期：FAIL，提示无法解析 `./safe-image-preview`。
@@ -116,7 +116,7 @@ export function validateSafeImageBytes(
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/shared/safe-image-preview.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/shared/safe-image-preview.test.ts
 ```
 
 预期：共享安全函数测试全部通过。
@@ -143,7 +143,7 @@ pnpm --filter @openharness/desktop exec vitest run src/shared/safe-image-preview
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/shared/safe-image-preview.test.ts src/main/features/attachment/attachment-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/shared/safe-image-preview.test.ts src/main/features/attachment/attachment-service.test.ts
 ```
 
 预期：全部通过；附件 10 MB 行为没有改成文件 tab 的 50 MB。
@@ -207,7 +207,7 @@ it("returns validated PNG bytes for file tab preview", async () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/main/features/workspace/workspace-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/workspace/workspace-service.test.ts
 ```
 
 预期：FAIL，返回结果没有图片字段。
@@ -263,7 +263,7 @@ toImageFailureResult(...)
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/main/features/workspace/workspace-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/workspace/workspace-service.test.ts
 ```
 
 预期：合法图片、伪装图片、SVG、文本和 extra-root 用例通过。
@@ -296,7 +296,7 @@ async function createSizedPng(path: string, size: number): Promise<void> {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/main/features/workspace/workspace-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/workspace/workspace-service.test.ts
 ```
 
 预期：50 MB 等于边界成功，大于边界失败，文本 1.25 MB 行为不变。
@@ -306,7 +306,7 @@ pnpm --filter @openharness/desktop exec vitest run src/main/features/workspace/w
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop typecheck:node
+pnpm --filter @vykor/desktop typecheck:node
 ```
 
 预期：通过。
@@ -383,7 +383,7 @@ expect(
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/file-viewer-model.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/file-viewer-model.test.ts
 ```
 
 预期：FAIL，`fileViewerTypeForPreview` 尚不存在且 `image` 还不在联合类型中。
@@ -422,7 +422,7 @@ imagePreviewError: null,
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts
 ```
 
 预期：新分类和原有 tab 合并用例全部通过。
@@ -469,7 +469,7 @@ Object.defineProperty(URL, "revokeObjectURL", {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/file-image-preview.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/file-image-preview.test.tsx
 ```
 
 预期：FAIL，组件模块不存在。
@@ -500,7 +500,7 @@ type FileImagePreviewProps = {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/file-image-preview.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/file-image-preview.test.tsx
 ```
 
 预期：Blob URL、布局和生命周期测试全部通过。
@@ -538,7 +538,7 @@ null              -> "这类文件的预览后续接入，这里先保留标签�
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/file-image-preview.test.tsx src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/renderer-security-policy.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/file-image-preview.test.tsx src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/renderer-security-policy.test.ts
 ```
 
 预期：全部通过，CSP 继续允许 `blob:` 且拒绝远程图片源。
@@ -548,7 +548,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：通过。
@@ -571,7 +571,7 @@ git commit -m "feat(desktop): preview images in file tabs"
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/shared/safe-image-preview.test.ts src/main/features/attachment/attachment-service.test.ts src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-image-preview.test.tsx src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/renderer-security-policy.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/shared/safe-image-preview.test.ts src/main/features/attachment/attachment-service.test.ts src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-image-preview.test.tsx src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/renderer-security-policy.test.ts
 ```
 
 预期：全部通过，0 个失败。
@@ -581,7 +581,7 @@ pnpm --filter @openharness/desktop exec vitest run src/shared/safe-image-preview
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：Node 与 Web 类型检查都通过。
@@ -591,7 +591,7 @@ pnpm --filter @openharness/desktop typecheck
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec eslint src/shared/safe-image-preview.ts src/shared/safe-image-preview.test.ts src/shared/workspace-types.ts src/main/features/attachment/attachment-service.ts src/main/features/attachment/attachment-service.test.ts src/main/features/workspace/workspace-service.ts src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer.tsx src/renderer/src/components/desktop/tools/file-viewer-model.ts src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-image-preview.tsx src/renderer/src/components/desktop/tools/file-image-preview.test.tsx src/renderer/src/components/desktop/tools/files-tool.tsx src/renderer/src/components/desktop/tools/file-viewer.test.ts
+pnpm --filter @vykor/desktop exec eslint src/shared/safe-image-preview.ts src/shared/safe-image-preview.test.ts src/shared/workspace-types.ts src/main/features/attachment/attachment-service.ts src/main/features/attachment/attachment-service.test.ts src/main/features/workspace/workspace-service.ts src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer.tsx src/renderer/src/components/desktop/tools/file-viewer-model.ts src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-image-preview.tsx src/renderer/src/components/desktop/tools/file-image-preview.test.tsx src/renderer/src/components/desktop/tools/files-tool.tsx src/renderer/src/components/desktop/tools/file-viewer.test.ts
 ```
 
 预期：0 error。
@@ -601,7 +601,7 @@ pnpm --filter @openharness/desktop exec eslint src/shared/safe-image-preview.ts 
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop dev
+pnpm --filter @vykor/desktop dev
 ```
 
 检查：

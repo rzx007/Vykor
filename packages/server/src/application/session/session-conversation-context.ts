@@ -2,7 +2,7 @@ import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { SessionInputConversationCatalog } from "./session-input-materializer.js";
 import { isPublicTextPart } from "../../session/transcript-text.js";
 

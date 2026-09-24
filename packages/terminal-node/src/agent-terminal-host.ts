@@ -4,14 +4,14 @@ import {
   type AgentJobHost,
   type JobReadResult,
   type JobSnapshot,
-} from "@openharness/jobs";
+} from "@vykor/jobs";
 import {
   type AgentTerminalHost,
   type TerminalCreateRequest,
   type TerminalEventListener,
   type TerminalProvider,
   type TerminalSessionInfo,
-} from "@openharness/terminal";
+} from "@vykor/terminal";
 
 import { LocalTerminalProvider } from "./local-terminal-provider.js";
 

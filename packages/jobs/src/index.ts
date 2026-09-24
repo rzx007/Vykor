@@ -4,7 +4,7 @@ import type {
   JobSnapshot,
   JobStatus,
   JobWaitResult,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export { CompositeAgentJobHost } from "./composite-agent-job-host.js";
 
@@ -16,7 +16,7 @@ export type {
   JobSnapshot,
   JobStatus,
   JobWaitResult,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface JobReadRequest {
   sessionId: string;

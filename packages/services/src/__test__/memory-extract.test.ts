@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { join } from "node:path";
-import { MemoryManager } from "@openharness/memory";
-import type { StreamEvent, StreamingMessageClient } from "@openharness/core";
+import { MemoryManager } from "@vykor/memory";
+import type { StreamEvent, StreamingMessageClient } from "@vykor/core";
 import {
   hasMemoryWritesSince,
   buildExtractionPrompt,
@@ -10,7 +10,7 @@ import {
   EXTRACTION_SYSTEM_PROMPT,
 } from "../memory-extract.js";
 
-const MEMORY_DIR = join("/proj", ".openharness-ts", "memory");
+const MEMORY_DIR = join("/proj", ".vykor", "memory");
 
 function fakeClient(responseText: string): StreamingMessageClient {
   return {
@@ -30,7 +30,7 @@ describe("hasMemoryWritesSince", () => {
     expect(hasMemoryWritesSince(inDir, MEMORY_DIR)).toBe(true);
 
     const relative = [
-      { role: "assistant", content: [{ type: "tool_use", name: "Edit", input: { path: join(".openharness-ts", "memory", "b.md") } }] },
+      { role: "assistant", content: [{ type: "tool_use", name: "Edit", input: { path: join(".vykor", "memory", "b.md") } }] },
     ];
     expect(hasMemoryWritesSince(relative, MEMORY_DIR, "/proj")).toBe(true);
   });

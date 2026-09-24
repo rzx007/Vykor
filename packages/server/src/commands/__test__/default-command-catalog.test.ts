@@ -4,12 +4,12 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import {
   getAgentDefinition,
   registerPluginAgents,
-} from "@openharness/coordinator";
-import { discoverOpenHarnessExtensions } from "@openharness/agent-runtime";
+} from "@vykor/coordinator";
+import { discoverVykorExtensions } from "@vykor/agent-runtime";
 
 import { createDefaultCommandCatalog } from "../default-command-catalog.js";
 
@@ -24,7 +24,7 @@ function minimalSettings(): Settings {
 
 describe("createDefaultCommandCatalog", () => {
   it("lists bundled user-invocable skills as template commands", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-catalog-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-catalog-"));
     try {
       const catalog = createDefaultCommandCatalog(minimalSettings());
       const commands = await catalog.list({ cwd: dir });
@@ -41,9 +41,9 @@ describe("createDefaultCommandCatalog", () => {
   });
 
   it("includes project skills from cwd", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-catalog-project-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-catalog-project-"));
     try {
-      const skillDir = join(dir, ".openharness-ts", "skills");
+      const skillDir = join(dir, ".vykor", "skills");
       mkdirSync(skillDir, { recursive: true });
       writeFileSync(
         join(skillDir, "ship.md"),
@@ -64,20 +64,20 @@ describe("createDefaultCommandCatalog", () => {
   });
 
   it("reads commands for cwd B without replacing the agent definitions already active for cwd A", async () => {
-    const root = mkdtempSync(join(tmpdir(), "ohs-catalog-scoped-agents-"));
+    const root = mkdtempSync(join(tmpdir(), "vk-catalog-scoped-agents-"));
     const cwdA = join(root, "workspace-a");
     const cwdB = join(root, "workspace-b");
-    const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = join(root, "config");
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = join(root, "config");
 
     function writePlugin(cwd: string, suffix: string, model: string, command: string): void {
       const pluginDir = join(root, "cache", suffix);
-      mkdirSync(join(pluginDir, ".openharness-plugin"), { recursive: true });
+      mkdirSync(join(pluginDir, ".vykor-plugin"), { recursive: true });
       mkdirSync(join(pluginDir, "agents"), { recursive: true });
       mkdirSync(join(pluginDir, "skills", command), { recursive: true });
       writeFileSync(
-        join(pluginDir, ".openharness-plugin", "plugin.json"),
-        JSON.stringify({ schemaVersion: 1, id: `dev.openharness.${suffix}`, name: "scoped", version: "1.0.0", components: { agents: ["./agents"], skills: ["./skills"] } }),
+        join(pluginDir, ".vykor-plugin", "plugin.json"),
+        JSON.stringify({ schemaVersion: 1, id: `dev.vykor.${suffix}`, name: "scoped", version: "1.0.0", components: { agents: ["./agents"], skills: ["./skills"] } }),
       );
       writeFileSync(
         join(pluginDir, "agents", "reviewer.md"),
@@ -91,7 +91,7 @@ describe("createDefaultCommandCatalog", () => {
       mkdirSync(join(storePath, ".."), { recursive: true });
       let store: { schemaVersion: 1; revision: number; plugins: Record<string, unknown> } = { schemaVersion: 1, revision: 0, plugins: {} };
       try { store = JSON.parse(readFileSync(storePath, "utf8")); } catch {}
-      store.plugins[`user::dev.openharness.${suffix}`] = { id: `dev.openharness.${suffix}`, scope: "user", enabled: true, currentVersion: "1.0.0", cachePath: pluginDir, linkedSourcePath: pluginDir, origin: "native", requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now" };
+      store.plugins[`user::dev.vykor.${suffix}`] = { id: `dev.vykor.${suffix}`, scope: "user", enabled: true, currentVersion: "1.0.0", cachePath: pluginDir, linkedSourcePath: pluginDir, origin: "native", requestedPermissions: [], approvedPermissions: [], installedAt: "now", updatedAt: "now" };
       writeFileSync(storePath, JSON.stringify(store));
     }
 
@@ -100,7 +100,7 @@ describe("createDefaultCommandCatalog", () => {
     try {
       writePlugin(cwdA, "plugin-a", "model-a", "command-a");
       writePlugin(cwdB, "plugin-b", "model-b", "command-b");
-      const discoveryA = await discoverOpenHarnessExtensions(cwdA, settings);
+      const discoveryA = await discoverVykorExtensions(cwdA, settings);
       registerPluginAgents(discoveryA.agentDefinitions);
 
       const commands = await createDefaultCommandCatalog(settings).list({
@@ -110,13 +110,13 @@ describe("createDefaultCommandCatalog", () => {
       expect(commands.map((command) => command.name)).toContain(
         "/scoped:command-b",
       );
-      expect(getAgentDefinition("dev.openharness.plugin-a:reviewer")?.model).toBe("model-a");
+      expect(getAgentDefinition("dev.vykor.plugin-a:reviewer")?.model).toBe("model-a");
     } finally {
       registerPluginAgents([]);
       if (previousConfigDir === undefined) {
-        delete process.env.OPENHARNESS_CONFIG_DIR;
+        delete process.env.VYKOR_CONFIG_DIR;
       } else {
-        process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+        process.env.VYKOR_CONFIG_DIR = previousConfigDir;
       }
       rmSync(root, { recursive: true, force: true });
     }

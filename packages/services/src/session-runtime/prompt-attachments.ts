@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type {
   AdmitPromptAttachmentInput,
   AttachmentIntent,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import { AttachmentError } from "../attachments/attachment-errors.js";
 

@@ -1,25 +1,25 @@
-# OpenHarness 原生插件与外部转换器设计
+# Vykor 原生插件与外部转换器设计
 
 日期：2026-08-25
 状态：已确认，待实施
 
 ## 1. 决策
 
-OpenHarness 建立独立、版本化的 Native Plugin（原生插件）规范。它是 Runtime 唯一加载和激活的插件格式，也承载 OpenHarness 自己的完整扩展能力。
+Vykor 建立独立、版本化的 Native Plugin（原生插件）规范。它是 Runtime 唯一加载和激活的插件格式，也承载 Vykor 自己的完整扩展能力。
 
-Claude Code、Codex 等外部插件格式不进入 Runtime，也不由 `packages/plugins` 直接兼容。它们通过独立、可版本化的 Converter（转换器）在安装或导入阶段转换为 OpenHarness Native Plugin：
+Claude Code、Codex 等外部插件格式不进入 Runtime，也不由 `packages/plugins` 直接兼容。它们通过独立、可版本化的 Converter（转换器）在安装或导入阶段转换为 Vykor Native Plugin：
 
 ```text
 Claude Code Plugin / Codex Plugin / 其他来源
   -> 对应格式 Converter
   -> Conversion Plan + Report
-  -> OpenHarness Native Plugin
+  -> Vykor Native Plugin
   -> Native Plugin Validator
   -> Installer / Version Cache
   -> Runtime Activation
 ```
 
-本设计替换此前“Claude Code 是唯一公开插件规范、Runtime 创建时直接适配 Claude 插件”的方案。当前仓库中的临时 OpenHarness 插件格式同样不保留：
+本设计替换此前“Claude Code 是唯一公开插件规范、Runtime 创建时直接适配 Claude 插件”的方案。当前仓库中的临时 Vykor 插件格式同样不保留：
 
 - 不兼容当前根级 `plugin.json` 和 snake_case 字段；
 - 不提供旧格式探测、字段别名或自动迁移；
@@ -30,21 +30,21 @@ Claude Code Plugin / Codex Plugin / 其他来源
 
 ## 2. 背景
 
-当前 `packages/plugins` 同时承担目录发现、Claude 风格文件解析、OpenHarness 专用字段解释和 Runtime 贡献组装。这个模型在只有一种外部格式时已经出现边界混乱：
+当前 `packages/plugins` 同时承担目录发现、Claude 风格文件解析、Vykor 专用字段解释和 Runtime 贡献组装。这个模型在只有一种外部格式时已经出现边界混乱：
 
 - 目录布局参考 Claude Code，但 manifest、Hook 事件和 MCP 规则不是 Claude 的完整语义；
-- `tools_dir` 是 OpenHarness 自有能力，却和 Claude 风格组件放在同一个 schema；
+- `tools_dir` 是 Vykor 自有能力，却和 Claude 风格组件放在同一个 schema；
 - 不同应用存在重复的插件注册路径和进程缓存；
 - 坏插件会在部分路径中静默消失；
 - 外部格式变化会直接推动 Runtime loader 变化；
 - 如果继续兼容 Codex 或其他格式，Runtime 将逐渐充满来源格式判断。
 
-OpenHarness 需要的不只是“能读取某个外部 manifest”，而是一套适合自身 Runtime、Desktop、权限、Job、Channel、Workflow 和 Provider 能力的稳定插件平台。同时，已有 Claude Code、Codex 生态仍有直接使用价值。独立转换器把这两个目标分开：OpenHarness 可以发展原生能力，外部生态通过可审计转换进入，不要求 Runtime 同时实现多套协议。
+Vykor 需要的不只是“能读取某个外部 manifest”，而是一套适合自身 Runtime、Desktop、权限、Job、Channel、Workflow 和 Provider 能力的稳定插件平台。同时，已有 Claude Code、Codex 生态仍有直接使用价值。独立转换器把这两个目标分开：Vykor 可以发展原生能力，外部生态通过可审计转换进入，不要求 Runtime 同时实现多套协议。
 
 ## 3. 目标
 
-1. 定义 OpenHarness Native Plugin v1，作为 Runtime 唯一插件契约。
-2. 原生插件可以贡献 Skills、Agents、Hooks、MCP、LSP、Tools、Workflows、Channels、Providers、UI 等 OpenHarness 能力。
+1. 定义 Vykor Native Plugin v1，作为 Runtime 唯一插件契约。
+2. 原生插件可以贡献 Skills、Agents、Hooks、MCP、LSP、Tools、Workflows、Channels、Providers、UI 等 Vykor 能力。
 3. 外部插件只能通过 Converter 进入，不在 Runtime 中按来源格式分支。
 4. Converter 是独立功能和独立包，支持检测、检查、规划、转换和报告。
 5. 转换前必须展示 exact、adapted、unsupported、blocked 四类结果。
@@ -53,7 +53,7 @@ OpenHarness 需要的不只是“能读取某个外部 manifest”，而是一�
 8. 源插件更新、Converter 更新或目标 schema 更新时，可以判断是否需要重新转换。
 9. Runtime 激活、Server API、CLI 和 Desktop 只消费 Native Plugin 及其统一状态。
 10. 新原生 Tool 具备明确 Runtime 和权限边界，不直接复用当前无隔离动态 import。
-11. 当前 OpenHarness 临时格式硬切删除，不写兼容层。
+11. 当前 Vykor 临时格式硬切删除，不写兼容层。
 
 ## 4. 非目标
 
@@ -63,8 +63,8 @@ OpenHarness 需要的不只是“能读取某个外部 manifest”，而是一�
 - 不对无法表达的语义做无提示猜测。
 - 不在第一阶段同时完成 Marketplace、自动更新和所有外部格式。
 - 不在 Converter 中执行 Hook、import JS、启动 MCP/LSP 或运行安装脚本。
-- 不要求手写的 OpenHarness Native Plugin 保留任何 Claude/Codex 字段。
-- 不要求 OpenHarness 内部 Tool、模型和 Hook 名称与某个外部产品一致。
+- 不要求手写的 Vykor Native Plugin 保留任何 Claude/Codex 字段。
+- 不要求 Vykor 内部 Tool、模型和 Hook 名称与某个外部产品一致。
 - 不把完整 provenance、conversion report 或 installer state 塞入 Runtime 的业务 manifest；manifest metadata 只保留 `origin`、`sourceFormat` 和 Converter identity 这类轻量来源字段。
 
 ## 5. 术语与所有权
@@ -76,7 +76,7 @@ OpenHarness 需要的不只是“能读取某个外部 manifest”，而是一�
 | Conversion Plan | 转换前的能力、映射、权限和损失说明 | Converter core |
 | Conversion Report | 转换完成后的逐组件结果和诊断 | Converter core |
 | Provenance | 来源位置、版本、内容哈希和转换器信息 | Installer / converted artifact |
-| Native Plugin | 符合 OpenHarness schema、可被 Runtime 加载的插件包 | `packages/plugins` |
+| Native Plugin | 符合 Vykor schema、可被 Runtime 加载的插件包 | `packages/plugins` |
 | Installed Plugin | 已复制到当前 cache 并进入安装状态的 Native Plugin | Plugin installer/store |
 | Activated Plugin | 已把组件注册或连接到某个 Runtime 的插件版本 | `agent-runtime` composition root |
 
@@ -107,7 +107,7 @@ flowchart TB
   Converter --> Artifact
   Converter --> Report
 
-  subgraph Native["OpenHarness 原生插件子系统"]
+  subgraph Native["Vykor 原生插件子系统"]
     Validate["Native Plugin Validator"]
     Install["Installer / Version Cache"]
     Store["Installed Plugin Store"]
@@ -159,13 +159,13 @@ packages/plugins -> Claude/Codex parser
 Native Plugin loader -> source format guessing
 ```
 
-## 7. OpenHarness Native Plugin v1
+## 7. Vykor Native Plugin v1
 
 ### 7.1 目录布局
 
 ```text
 my-plugin/
-├─ .openharness-plugin/
+├─ .vykor-plugin/
 │  └─ plugin.json
 ├─ skills/
 ├─ agents/
@@ -183,13 +183,13 @@ my-plugin/
 └─ LICENSE
 ```
 
-`.openharness-plugin/plugin.json` 是唯一原生 manifest。原生插件不使用根级 `plugin.json`，避免与其他生态或普通 npm 包混淆。
+`.vykor-plugin/plugin.json` 是唯一原生 manifest。原生插件不使用根级 `plugin.json`，避免与其他生态或普通 npm 包混淆。
 
 ### 7.2 Manifest 示例
 
 ```json
 {
-  "$schema": "https://openharness.dev/schemas/plugin-v1.json",
+  "$schema": "https://vykor.dev/schemas/plugin-v1.json",
   "schemaVersion": 1,
   "id": "example.quality-tools",
   "name": "quality-tools",
@@ -227,7 +227,7 @@ my-plugin/
 ### 7.3 核心类型
 
 ```ts
-interface OpenHarnessPluginManifestV1 {
+interface VykorPluginManifestV1 {
   $schema?: string;
   schemaVersion: 1;
   id: string;
@@ -244,13 +244,13 @@ interface OpenHarnessPluginManifestV1 {
   repository?: string;
   license?: string;
   keywords?: string[];
-  components: OpenHarnessPluginComponents;
-  permissions?: OpenHarnessPluginPermissions;
-  runtime?: OpenHarnessPluginRuntime;
-  compatibility?: OpenHarnessPluginCompatibility;
+  components: VykorPluginComponents;
+  permissions?: VykorPluginPermissions;
+  runtime?: VykorPluginRuntime;
+  compatibility?: VykorPluginCompatibility;
 }
 
-interface OpenHarnessPluginComponents {
+interface VykorPluginComponents {
   skills?: string[];
   agents?: string[];
   hooks?: string[];
@@ -306,7 +306,7 @@ manifest 描述包本身，不保存：
 | Hooks | 在 Runtime 事件上执行声明动作 | 必须支持 |
 | MCP Servers | 通过标准协议提供外部工具 | 必须支持 |
 | LSP Servers | 提供诊断、定义、引用和代码导航 | 后续阶段 |
-| Native Tools | 提供 OpenHarness 原生工具 | Node Tool 已通过独立子进程支持；Wasm 待实现 |
+| Native Tools | 提供 Vykor 原生工具 | Node Tool 已通过独立子进程支持；Wasm 待实现 |
 | Workflows | 提供 DAG/步骤执行模板 | 后续阶段 |
 | Channels | 提供外部消息入口和回复能力 | 后续阶段 |
 | Providers | 增加模型 Provider 或认证适配 | 后续阶段 |
@@ -385,7 +385,7 @@ packages/plugin-converters/
 
 第一阶段只要求实现 core 和 Claude Code Converter。Codex Converter 在取得明确输入规范和 fixture 后按同一接口增加，不能把预想字段提前写进 core。
 
-Converter v1 是随 OpenHarness 发布的受信任应用组件，不是普通 Native Plugin，也不能由待转换的第三方插件动态提供。Converter 需要读取未信任 source 并生成安装候选，如果允许普通插件注册 Converter，会形成“未信任插件负责解释另一个未信任插件”的递归信任边界。未来若开放第三方 Converter，必须使用独立签名、隔离进程和管理员级授权，不复用普通插件启停流程。
+Converter v1 是随 Vykor 发布的受信任应用组件，不是普通 Native Plugin，也不能由待转换的第三方插件动态提供。Converter 需要读取未信任 source 并生成安装候选，如果允许普通插件注册 Converter，会形成“未信任插件负责解释另一个未信任插件”的递归信任边界。未来若开放第三方 Converter，必须使用独立签名、隔离进程和管理员级授权，不复用普通插件启停流程。
 
 ## 11. Converter SPI
 
@@ -463,9 +463,9 @@ type ConversionFidelity =
 
 需要确定性映射，例如：
 
-- `PostToolUse` 转为 OpenHarness `tool.after`；
+- `PostToolUse` 转为 Vykor `tool.after`；
 - Claude `sonnet` 转为当前 Provider 的 `balanced` 模型角色；
-- Claude `Read` 转为 OpenHarness workspace read Tool；
+- Claude `Read` 转为 Vykor workspace read Tool；
 - 省略 transport 的 MCP 配置推断为 stdio；
 - 源 namespace 转为 Native Plugin qualified name。
 
@@ -494,7 +494,7 @@ type PluginConversionStatus =
 interface PluginConversionPlan {
   planVersion: 1;
   source: PluginSourceIdentity;
-  target: OpenHarnessPluginIdentity;
+  target: VykorPluginIdentity;
   converter: {
     id: string;
     version: string;
@@ -511,7 +511,7 @@ interface PluginComponentConversion {
   sourceKind: string;
   sourcePath?: string;
   sourceName?: string;
-  targetKind?: OpenHarnessPluginComponentKind;
+  targetKind?: VykorPluginComponentKind;
   targetPath?: string;
   fidelity: ConversionFidelity;
   mappings: PluginSemanticMapping[];
@@ -527,9 +527,9 @@ plan 必须稳定排序和可序列化。相同 source digest、Converter 版本
 
 ```text
 converted-plugin/
-├─ .openharness-plugin/
+├─ .vykor-plugin/
 │  └─ plugin.json
-├─ .openharness-conversion/
+├─ .vykor-conversion/
 │  ├─ provenance.json
 │  ├─ plan.json
 │  └─ report.json
@@ -546,10 +546,10 @@ converted-plugin/
 - Converter 把已支持的组件直接写入 Native 目录；Skill 同目录的 scripts、assets 和 references 随 Skill 复制，保持相对引用可用；
 - `plugin.json` 只引用 `./skills`、`./agents`、`./hooks.json`、`./mcp.json` 等 Native component 路径；
 - `plugin.json.metadata` 记录 `origin: "converted"`、`sourceFormat`、`converterId` 和 `converterVersion`，Installer 只依赖这组通用字段区分来源；
-- `.openharness-conversion/` 只用于本地审计和查看转换损失，不作为 Runtime component，Installer 和 Runtime 都不依赖它；
+- `.vykor-conversion/` 只用于本地审计和查看转换损失，不作为 Runtime component，Installer 和 Runtime 都不依赖它；
 - Converter 不复制 `.claude-plugin/`，也不把 source 中未知或 unsupported 的文件自动加入目标插件。
 
-手写 Native Plugin 不需要 `.openharness-conversion/`。
+手写 Native Plugin 不需要 `.vykor-conversion/`。
 
 ## 15. Provenance
 
@@ -683,9 +683,9 @@ Converter 应优先复制组件实际需要的资源，不批量改写 `.sh`、`
 Native 路径变量：
 
 ```text
-OPENHARNESS_PLUGIN_ROOT
-OPENHARNESS_PLUGIN_DATA
-OPENHARNESS_PROJECT_DIR
+VYKOR_PLUGIN_ROOT
+VYKOR_PLUGIN_DATA
+VYKOR_PROJECT_DIR
 ```
 
 手写和转换生成的 Native Plugin 使用同一组 Native 变量。
@@ -718,7 +718,7 @@ detect、inspect、plan 和 convert 允许：
 ## 20. 安装、scope 和当前 cache
 
 ```text
-~/.openharness-ts/plugins/
+~/.vykor/plugins/
 ├─ cache/
 │  └─ <plugin-id>/current/
 ├─ data/
@@ -757,7 +757,7 @@ managed
 - Converter 版本改变并声明会影响输出；
 - Native Plugin schema 目标版本改变；
 - 用户 conversion options 改变；
-- OpenHarness 新增原先 unsupported 的目标 component；
+- Vykor 新增原先 unsupported 的目标 component；
 - Tool/模型/Hook mapping table 的语义版本改变。
 
 更新流程：
@@ -783,7 +783,7 @@ managed
 ### 22.1 自动检测并安装
 
 ```text
-ohs plugin install ./some-plugin
+vk plugin install ./some-plugin
 ```
 
 流程：detect → inspect → plan → 展示报告 → 用户确认 → convert → validate → install。
@@ -791,7 +791,7 @@ ohs plugin install ./some-plugin
 本地 Native Plugin 默认复制进当前 cache；开发时使用显式 link 模式，不把普通 install 隐式变成原地执行：
 
 ```text
-ohs plugin link ./native-plugin
+vk plugin link ./native-plugin
 ```
 
 link 记录 canonical source path，按工作区或用户 scope 单独信任，并在 source 变化后标记 reload-required。
@@ -799,13 +799,13 @@ link 记录 canonical source path，按工作区或用户 scope 单独信任，�
 ### 22.2 显式来源格式
 
 ```text
-ohs plugin install --from claude-code ./some-plugin
+vk plugin install --from claude-code ./some-plugin
 ```
 
 ### 22.3 只转换
 
 ```text
-ohs plugin convert \
+vk plugin convert \
   --from claude-code \
   ./some-plugin \
   --output ./converted-plugin
@@ -814,7 +814,7 @@ ohs plugin convert \
 ### 22.4 预览
 
 ```text
-ohs plugin convert \
+vk plugin convert \
   --from claude-code \
   ./some-plugin \
   --dry-run
@@ -823,20 +823,20 @@ ohs plugin convert \
 ### 22.5 校验 Native Plugin
 
 ```text
-ohs plugin validate ./converted-plugin
+vk plugin validate ./converted-plugin
 ```
 
 `plugin validate` 只校验 Native Plugin。外部 source 的检查通过：
 
 ```text
-ohs plugin source inspect --format claude-code ./some-plugin
+vk plugin source inspect --format claude-code ./some-plugin
 ```
 
 ### 22.6 查看报告
 
 ```text
-ohs plugin conversion show <plugin-id>
-ohs plugin details <plugin-id>
+vk plugin conversion show <plugin-id>
+vk plugin details <plugin-id>
 ```
 
 安装后启停和 reload 只操作 Native Plugin identity，不接受 source plugin 内部名字的模糊匹配。
@@ -847,14 +847,14 @@ ohs plugin details <plugin-id>
 
 ```ts
 interface PluginInfo {
-  identity: OpenHarnessPluginIdentity;
+  identity: VykorPluginIdentity;
   origin: "native" | "converted";
   sourceFormat?: string;
   scope: PluginScope;
   enabled: boolean;
   installation: "installed" | "missing" | "invalid";
   activation: "inactive" | "active" | "partial" | "reload-required";
-  inventory: Record<OpenHarnessPluginComponentKind, number>;
+  inventory: Record<VykorPluginComponentKind, number>;
   permissions: PluginPermissionSummary;
   conversion?: {
     status: PluginConversionStatus;
@@ -926,7 +926,7 @@ mcp_file
 当前 Claude 风格 loader 与 Runtime 的直接耦合
 ```
 
-旧格式插件显示 `unsupported legacy OpenHarness plugin`，不尝试转换。它不是一个需要长期维护的 Source Converter。
+旧格式插件显示 `unsupported legacy Vykor plugin`，不尝试转换。它不是一个需要长期维护的 Source Converter。
 
 ## 25. 实施分期
 
@@ -1018,7 +1018,7 @@ CI 使用固定离线 fixture，不实时下载外部 Marketplace。
 
 ### 27.1 Native Plugin v1
 
-1. Runtime 只加载 `.openharness-plugin/plugin.json`。
+1. Runtime 只加载 `.vykor-plugin/plugin.json`。
 2. Skills、Agents、Hooks 和 MCP 通过统一 Native schema 注册。
 3. 路径越界、符号链接逃逸和无效 component 被拒绝并显示诊断。
 4. 安装包、持久 data 和 Runtime 激活状态分离。
@@ -1067,9 +1067,9 @@ Claude Code Converter 的外部格式以官方文档和固定 fixture 为准：
 ## 29. 最终边界
 
 ```text
-OpenHarness Native Plugin
+Vykor Native Plugin
   是唯一 Runtime 插件格式
-  可以表达 OpenHarness 完整扩展能力
+  可以表达 Vykor 完整扩展能力
 
 External Plugin Converter
   是独立导入功能
@@ -1085,4 +1085,4 @@ Provenance / Report
   不污染 Runtime component 协议
 ```
 
-这个边界允许 OpenHarness 发展自己的插件平台，同时持续吸收外部生态，而不把 Runtime 绑定到任何一个外部产品的目录、事件、模型或安装规则。
+这个边界允许 Vykor 发展自己的插件平台，同时持续吸收外部生态，而不把 Runtime 绑定到任何一个外部产品的目录、事件、模型或安装规则。

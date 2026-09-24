@@ -142,7 +142,7 @@ export async function loadSettings(
 }
 
 /**
- * 将设置对象保存为 JSON 文件到用户主目录下的 .openharness-ts 配置文件夹中。
+ * 将设置对象保存为 JSON 文件到用户主目录下的 .vykor 配置文件夹中。
  *
  * @param settings - 要保存的设置对象，将被序列化为格式化的 JSON 字符串。
  * @returns 无返回值（Promise<void>），表示保存操作完成。
@@ -201,21 +201,21 @@ function loadFromEnv(): SettingsPatch {
   const apiKey = process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY;
   if (apiKey !== undefined) result.apiKey = apiKey;
   if (process.env.ANTHROPIC_MODEL !== undefined) result.model = process.env.ANTHROPIC_MODEL;
-  if (process.env.OPENHARNESS_MODEL !== undefined) result.model = process.env.OPENHARNESS_MODEL;
-  if (process.env.OPENHARNESS_API_FORMAT !== undefined) result.apiFormat = process.env.OPENHARNESS_API_FORMAT as Settings["apiFormat"];
-  // 通用 baseUrl 只认 OPENHARNESS_BASE_URL。不要用 ANTHROPIC_BASE_URL ——
+  if (process.env.VYKOR_MODEL !== undefined) result.model = process.env.VYKOR_MODEL;
+  if (process.env.VYKOR_API_FORMAT !== undefined) result.apiFormat = process.env.VYKOR_API_FORMAT as Settings["apiFormat"];
+  // 通用 baseUrl 只认 VYKOR_BASE_URL。不要用 ANTHROPIC_BASE_URL ——
   // 它是 Anthropic 专属（很多人为 Claude Code 设了 ANTHROPIC_BASE_URL=api.anthropic.com），
   // 灌进通用 baseUrl 会污染非 Anthropic provider（如 deepseek 的请求被发到 anthropic 端点）。
   // anthropic provider 的 baseURL 由 Anthropic SDK 自行读取 ANTHROPIC_BASE_URL。
-  if (process.env.OPENHARNESS_BASE_URL !== undefined) {
-    result.baseUrl = process.env.OPENHARNESS_BASE_URL;
+  if (process.env.VYKOR_BASE_URL !== undefined) {
+    result.baseUrl = process.env.VYKOR_BASE_URL;
   }
-  if (process.env.OPENHARNESS_MAX_TOKENS !== undefined) result.maxTokens = parseInt(process.env.OPENHARNESS_MAX_TOKENS, 10);
-  if (process.env.OPENHARNESS_MAX_TURNS !== undefined) result.maxTurns = parseInt(process.env.OPENHARNESS_MAX_TURNS, 10);
+  if (process.env.VYKOR_MAX_TOKENS !== undefined) result.maxTokens = parseInt(process.env.VYKOR_MAX_TOKENS, 10);
+  if (process.env.VYKOR_MAX_TURNS !== undefined) result.maxTurns = parseInt(process.env.VYKOR_MAX_TURNS, 10);
   const sandbox = buildSandboxEnvOverrides();
   if (sandbox !== undefined) result.sandbox = sandbox;
-  if (process.env.OPENHARNESS_AGENT_ENVIRONMENT === "native" || process.env.OPENHARNESS_AGENT_ENVIRONMENT === "wsl") {
-    result.agentEnvironment = { kind: process.env.OPENHARNESS_AGENT_ENVIRONMENT };
+  if (process.env.VYKOR_AGENT_ENVIRONMENT === "native" || process.env.VYKOR_AGENT_ENVIRONMENT === "wsl") {
+    result.agentEnvironment = { kind: process.env.VYKOR_AGENT_ENVIRONMENT };
   }
 
   return result;
@@ -223,16 +223,16 @@ function loadFromEnv(): SettingsPatch {
 
 function buildSandboxEnvOverrides(): Partial<NonNullable<Settings["sandbox"]>> | undefined {
   const sandbox: Partial<NonNullable<Settings["sandbox"]>> = {};
-  if (process.env.OPENHARNESS_SANDBOX_ENABLED !== undefined) {
-    sandbox.enabled = parseBooleanEnv(process.env.OPENHARNESS_SANDBOX_ENABLED);
+  if (process.env.VYKOR_SANDBOX_ENABLED !== undefined) {
+    sandbox.enabled = parseBooleanEnv(process.env.VYKOR_SANDBOX_ENABLED);
   }
-  if (process.env.OPENHARNESS_SANDBOX_FAIL_IF_UNAVAILABLE !== undefined) {
+  if (process.env.VYKOR_SANDBOX_FAIL_IF_UNAVAILABLE !== undefined) {
     sandbox.failIfUnavailable = parseBooleanEnv(
-      process.env.OPENHARNESS_SANDBOX_FAIL_IF_UNAVAILABLE,
+      process.env.VYKOR_SANDBOX_FAIL_IF_UNAVAILABLE,
     );
   }
-  if (process.env.OPENHARNESS_SANDBOX_NETWORK_MODE !== undefined) {
-    const mode = process.env.OPENHARNESS_SANDBOX_NETWORK_MODE;
+  if (process.env.VYKOR_SANDBOX_NETWORK_MODE !== undefined) {
+    const mode = process.env.VYKOR_SANDBOX_NETWORK_MODE;
     if (mode === "none" || mode === "bridge" || mode === "host" || mode === "proxy") {
       sandbox.network = { mode };
     }
@@ -264,7 +264,7 @@ function mergeSandboxConfig(
 /**
  * 从用户主目录下的配置文件中加载设置信息。
  * 
- * 该函数尝试读取位于 `~/.openharness-ts/settings.json` 的配置文件。
+ * 该函数尝试读取位于 `~/.vykor/settings.json` 的配置文件。
  * 如果文件存在且内容合法，则解析并返回部分设置对象；
  * 如果文件不存在、无法访问或解析失败，则返回 null。
  * 

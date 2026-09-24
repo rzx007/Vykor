@@ -1,4 +1,4 @@
-import { createModelCatalogService } from "@openharness/api";
+import { createModelCatalogService } from "@vykor/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -21,7 +21,7 @@ describe("attachment input capabilities", () => {
   });
 
   it("publishes explicit image support for every Codex subscription model", async () => {
-    vi.stubEnv("OPENHARNESS_DISABLE_MODELS_FETCH", "1");
+    vi.stubEnv("VYKOR_DISABLE_MODELS_FETCH", "1");
     const catalog = await createModelCatalogService().load();
     const models = catalog.codex?.models ?? {};
 

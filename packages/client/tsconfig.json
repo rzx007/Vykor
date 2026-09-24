@@ -6,13 +6,13 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
-      "@openharness/core": [
+      "@vykor/core": [
         "../core/src/index.ts"
       ],
-      "@openharness/memory": [
+      "@vykor/memory": [
         "../memory/src/index.ts"
       ],
-      "@openharness/services": [
+      "@vykor/services": [
         "../services/src/index.ts"
       ]
     }

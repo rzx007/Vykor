@@ -123,7 +123,7 @@ describe("DesktopSessionEventBridge", () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx
 ```
 
 预期：FAIL，提示无法找到 `./desktop-session-event-bridge`。
@@ -164,8 +164,8 @@ const pathname = useRouterState({ select: (state) => state.location.pathname })
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/router.test.ts
-pnpm --filter @openharness/desktop run typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/router.test.ts
+pnpm --filter @vykor/desktop run typecheck:web
 ```
 
 预期：两个测试文件 PASS；`typecheck:web` 退出码为 0。
@@ -292,7 +292,7 @@ describe("queryGitChanges", () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/lib/git-changes-query.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/lib/git-changes-query.test.ts
 ```
 
 预期：FAIL，提示无法找到 `./git-changes-query`。
@@ -381,8 +381,8 @@ export function resetGitChangesQueryCacheForTests(): void {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/lib/git-changes-query.test.ts
-pnpm --filter @openharness/desktop run typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/lib/git-changes-query.test.ts
+pnpm --filter @vykor/desktop run typecheck:web
 ```
 
 预期：测试 PASS；`typecheck:web` 退出码为 0。
@@ -464,7 +464,7 @@ it("shares one git request across changed-file summaries", async () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx
 ```
 
 预期：测试在实现接入前 FAIL，`changes` 实际调用 2 次。
@@ -503,8 +503,8 @@ void queryGitChanges({
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
-pnpm --filter @openharness/desktop run typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
+pnpm --filter @vykor/desktop run typecheck:web
 ```
 
 预期：两个测试文件 PASS；类型检查退出码为 0。
@@ -583,7 +583,7 @@ it("forces a fresh query from the refresh button and keeps errors visible", asyn
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx
 ```
 
 预期：FAIL，因为组件仍直接调用 `window.desktop.git.changes()`，mock 的协调器没有收到调用。
@@ -639,8 +639,8 @@ onClick={() => void loadChanges({ force: true })}
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/lib/git-changes-query.test.ts
-pnpm --filter @openharness/desktop run typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/lib/git-changes-query.test.ts
+pnpm --filter @vykor/desktop run typecheck:web
 ```
 
 预期：两个测试文件 PASS；类型检查退出码为 0。
@@ -661,7 +661,7 @@ git commit -m "fix(desktop): preserve review refresh semantics"
 - [ ] **步骤 1：运行本次新增和直接相关的测试**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/lib/git-changes-query.test.ts src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/router.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/lib/git-changes-query.test.ts src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/router.test.ts
 ```
 
 预期：全部 PASS，无未处理 Promise rejection 和 React `act` 警告。
@@ -669,8 +669,8 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [ ] **步骤 2：运行 Desktop renderer 类型检查与 lint**
 
 ```powershell
-pnpm --filter @openharness/desktop run typecheck:web
-pnpm --filter @openharness/desktop exec eslint src/renderer/src/components/desktop/desktop-session-event-bridge.tsx src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/git-changes-query.test.ts src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/routes/__root.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx
+pnpm --filter @vykor/desktop run typecheck:web
+pnpm --filter @vykor/desktop exec eslint src/renderer/src/components/desktop/desktop-session-event-bridge.tsx src/renderer/src/components/desktop/desktop-session-event-bridge.test.tsx src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/git-changes-query.test.ts src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/routes/__root.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx
 ```
 
 预期：两条命令退出码均为 0。

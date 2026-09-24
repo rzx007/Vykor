@@ -4,7 +4,7 @@
 
 设置页「常规 → 默认文件打开目标」现在是写死的「VS Code」按钮，点了不会保存，也不会改对话右上角的打开方式。
 
-右上角打开按钮和文件树里的「打开方式」已经能扫描本机应用并打开项目或文件。右上角选过一次后，会把 id 写进 `localStorage`（`openharness.desktop.open-with.v1`）。设置页和右上角没有共用默认值。
+右上角打开按钮和文件树里的「打开方式」已经能扫描本机应用并打开项目或文件。右上角选过一次后，会把 id 写进 `localStorage`（`vykor.desktop.open-with.v1`）。设置页和右上角没有共用默认值。
 
 设置页是 `/settings` 路由，对话页是 `/_main` 路由，同一窗口里不同页面，不会同时挂着。主窗口之外的宠物窗口不读这项设置。
 
@@ -55,7 +55,7 @@
 
 `launchWorkspaceOpener` 去掉 `persist`。右上角和文件树调用时只打开。
 
-不再读、不再写 `localStorage` 键 `openharness.desktop.open-with.v1`。已经存在的旧值忽略。用户需要在设置页重新选一次默认应用。不再使用旧事件名 `openharness:open-with-changed`。
+不再读、不再写 `localStorage` 键 `vykor.desktop.open-with.v1`。已经存在的旧值忽略。用户需要在设置页重新选一次默认应用。不再使用旧事件名 `vykor:open-with-changed`。
 
 ### 对话页怎么拿到新默认
 

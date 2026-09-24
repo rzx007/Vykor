@@ -163,7 +163,7 @@ export function outsideProjectDraftWorkspace(root: string): DesktopProject {
   const normalized = root.replace(/[\\/]+$/, "")
   return {
     id: "outside-project-draft",
-    name: normalized.split(/[\\/]/).pop() || "OpenHarness",
+    name: normalized.split(/[\\/]/).pop() || "Vykor",
     path: root,
     lastOpenedAt: 0,
     available: true,

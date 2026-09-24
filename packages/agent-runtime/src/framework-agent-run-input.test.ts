@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { FrameworkAgentRun } from "./framework-agent-run.js";
 import { AgentEventBus } from "./event-source.js";
-import { ToolRegistry } from "@openharness/core";
+import { ToolRegistry } from "@vykor/core";
 import { AgentChildManager } from "./child-agent.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import { agentTool } from "../../tools/src/agent/agent-tools.js";

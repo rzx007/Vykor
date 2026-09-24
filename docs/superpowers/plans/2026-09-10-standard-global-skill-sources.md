@@ -2,9 +2,9 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** OHS 不干预 `npx skills add`，直接发现 `~/.agents/skills` 和 `~/.config/agents/skills`，并在技能管理界面把它们归入独立、只读的“通用”类型。
+**目标：** VK 不干预 `npx skills add`，直接发现 `~/.agents/skills` 和 `~/.config/agents/skills`，并在技能管理界面把它们归入独立、只读的“通用”类型。
 
-**架构：** `@openharness/skills` 负责生成、规范化和去重标准全局目录，并让 registry snapshot 按“通用 → OHS 个人 → 项目”加载。Agent runtime 和 Skill 工具复用该入口；Skill management service 使用同一目录函数，但向管理 API 返回独立的 `standard` 来源，Desktop 再将其映射到“通用”标签页。
+**架构：** `@vykor/skills` 负责生成、规范化和去重标准全局目录，并让 registry snapshot 按“通用 → VK 个人 → 项目”加载。Agent runtime 和 Skill 工具复用该入口；Skill management service 使用同一目录函数，但向管理 API 返回独立的 `standard` 来源，Desktop 再将其映射到“通用”标签页。
 
 **技术栈：** TypeScript、Node.js path/os、Vitest、React、Electron Desktop
 
@@ -76,7 +76,7 @@ expect(dirs).not.toContain(path.join(home, ".config", "agents", "skills"));
 - [ ] **步骤 4：运行测试确认红灯**
 
 ```powershell
-pnpm --filter @openharness/skills test -- src/index.test.ts
+pnpm --filter @vykor/skills test -- src/index.test.ts
 ```
 
 预期：`standardUserSkillDirs` 和 `userDirs` 尚不存在，测试失败。
@@ -119,7 +119,7 @@ for (const directory of uniqueDirectories([
 - [ ] **步骤 6：运行 Skills 完整测试**
 
 ```powershell
-pnpm --filter @openharness/skills test
+pnpm --filter @vykor/skills test
 ```
 
 预期：全部 PASS。
@@ -153,7 +153,7 @@ expect(createSkillRegistrySnapshot).toHaveBeenCalledWith(
 );
 ```
 
-如果现有测试不适合模块 mock，则在临时 home 标准目录创建真实 Skill，通过 `discoverOpenHarnessExtensions` 断言 registry 能取到该技能。
+如果现有测试不适合模块 mock，则在临时 home 标准目录创建真实 Skill，通过 `discoverVykorExtensions` 断言 registry 能取到该技能。
 
 - [ ] **步骤 2：编写 Skill 工具刷新失败测试**
 
@@ -162,15 +162,15 @@ expect(createSkillRegistrySnapshot).toHaveBeenCalledWith(
 - [ ] **步骤 3：运行测试确认红灯**
 
 ```powershell
-pnpm --filter @openharness/agent-runtime test -- src/capability-resolution.test.ts
-pnpm --filter @openharness/tools test -- src/meta/__test__/meta.test.ts
+pnpm --filter @vykor/agent-runtime test -- src/capability-resolution.test.ts
+pnpm --filter @vykor/tools test -- src/meta/__test__/meta.test.ts
 ```
 
 预期：两个入口都没有传 `userDirs`，标准技能不可见。
 
 - [ ] **步骤 4：接入两个统一调用点**
 
-在 `extensions.ts` 和 `meta/skill.ts` 从 `@openharness/skills` 引入 `standardUserSkillDirs`，并传入：
+在 `extensions.ts` 和 `meta/skill.ts` 从 `@vykor/skills` 引入 `standardUserSkillDirs`，并传入：
 
 ```ts
 userDirs: standardUserSkillDirs(),
@@ -182,8 +182,8 @@ userDir: getSkillsDir(),
 - [ ] **步骤 5：运行两个包完整测试**
 
 ```powershell
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/tools test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/tools test
 ```
 
 预期：全部 PASS。
@@ -239,12 +239,12 @@ expect(snapshot.skills).toEqual(
 
 - [ ] **步骤 2：编写路径重复与优先顺序测试**
 
-将相同标准目录重复传入，并把 `personalSkillsDir` 也放进 `standardSkillsDirs`。断言每个真实文件只出现一次，OHS 目录项目最终标为 `personal` 而不是 `standard`。
+将相同标准目录重复传入，并把 `personalSkillsDir` 也放进 `standardSkillsDirs`。断言每个真实文件只出现一次，VK 目录项目最终标为 `personal` 而不是 `standard`。
 
 - [ ] **步骤 3：运行测试确认红灯**
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/skill-management-service.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/skill-management-service.test.ts
 ```
 
 预期：`standard` 不在 `SkillSource` 中，service 也不读取标准目录。
@@ -270,12 +270,12 @@ standardSkillsDirs?: readonly string[]
 readOnly: source === "bundled" || source === "agent" || source === "standard";
 ```
 
-按规范化真实路径去重；OHS personal 目录与标准目录重合时，由 personal 分类覆盖。
+按规范化真实路径去重；VK personal 目录与标准目录重合时，由 personal 分类覆盖。
 
 - [ ] **步骤 5：运行 Server 相关测试**
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/skill-management-service.test.ts src/http/__test__/http.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/skill-management-service.test.ts src/http/__test__/http.test.ts
 ```
 
 预期：全部 PASS，HTTP 快照可序列化 `standard`。
@@ -321,7 +321,7 @@ git commit -m "feat(skills): expose standard skills in management API"
 - [ ] **步骤 3：运行 Desktop 测试确认红灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/main/features/skill/skill-service.test.ts src/renderer/src/components/desktop/plugin-page/skill-manager.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/main/features/skill/skill-service.test.ts src/renderer/src/components/desktop/plugin-page/skill-manager.test.tsx
 ```
 
 预期：standard 被主进程过滤，界面没有“通用”标签。
@@ -348,8 +348,8 @@ type SkillCategory =
 - [ ] **步骤 6：运行 Desktop 完整测试与 Web 类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop run typecheck:web
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop run typecheck:web
 ```
 
 预期：全部 PASS。
@@ -370,11 +370,11 @@ git commit -m "feat(desktop): group standard skills separately"
 - [ ] **步骤 1：运行相关包测试**
 
 ```powershell
-pnpm --filter @openharness/skills test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/skills test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/desktop test
 ```
 
 预期：全部 PASS；平台或真机 smoke 超时必须隔离复跑并如实记录。

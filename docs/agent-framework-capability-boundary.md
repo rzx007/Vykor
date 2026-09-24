@@ -24,21 +24,21 @@ flowchart LR
 真实依赖方向：
 
 ```text
-@openharness/core <- @openharness/agent-runtime <- @openharness/server <- clients/apps
+@vykor/core <- @vykor/agent-runtime <- @vykor/server <- clients/apps
 ```
 
 `agent-runtime` 禁止依赖 server、HTTP、SSE、daemon store 或 durable session schema。
 
 ## Kernel 与默认 Node 组装
 
-`@openharness/agent-runtime` 现在有两个入口，名字代表它们会做多少事：
+`@vykor/agent-runtime` 现在有两个入口，名字代表它们会做多少事：
 
 | 入口 | 实际做什么 |
 |---|---|
 | `createAgentKernel()` | 只运行 Agent/Run/Child；settings、runtime 和宿主能力都必须由调用方交进来 |
 | `createDefaultNodeAgent()` | 读取本机配置并组装 provider、工具、插件、Skill、MCP、Memory、Sandbox 和 Git child environment |
 
-`createOpenHarnessAgent()` 已删除，不提供兼容别名。调用方必须明确选择最小 Kernel 或 Node 默认组装。
+`createVykorAgent()` 已删除，不提供兼容别名。调用方必须明确选择最小 Kernel 或 Node 默认组装。
 
 能力归属清单：
 
@@ -55,7 +55,7 @@ flowchart LR
 | Terminal、后台 Shell | `capabilityOverrides` | 接受 Host `{ value, jobs }` bundle，逐项替换或关闭；Kernel 不创建 Node 备用实现 |
 | child environment、Workflow repository、Schedule | `capabilityOverrides` | 接受 Host 对象，或用 `false` 逐项关闭 |
 | Jobs、Memory | `capabilityOverrides` | 只接受 `false`；不能传入 Host 对象替换 |
-| 附件读取、图生文、文生图 | daemon Tool 组装 | 默认 Agent 和 `@openharness/tools` 都不提供视觉 Tool；daemon 完整定义视觉 Tool，并通过统一的 `tools(context)` 动态注册 |
+| 附件读取、图生文、文生图 | daemon Tool 组装 | 默认 Agent 和 `@vykor/tools` 都不提供视觉 Tool；daemon 完整定义视觉 Tool，并通过统一的 `tools(context)` 动态注册 |
 | HTTP、SQLite、SSE、durable Session/Run | Durable Application | 这是多客户端和进程重启后的状态 |
 
 Kernel 的硬规则：
@@ -71,20 +71,20 @@ Kernel 的硬规则：
 
 可传入 Host 对象的 override 是 `terminal`、`backgroundShell`、`childEnvironment`、`workflowRepository` 和 `schedules`；Terminal 与后台 Shell 都使用 `{ value, jobs }`，确保其 Job 可观察。`jobs` 与 `memory` 只能设为 `false`，分别禁用本地 Jobs 或受管 Memory，不能用 Host 对象替换。若设 `jobs: false`，还必须同时设 `terminal: false`、`backgroundShell: false`、`childEnvironment: false` 和 `workflowRepository: false`，因为这些能力会产生或依赖 Job。权限通过 `effects.requestPermission` 提供。Artifact 与更细的 Workspace 操作还没有稳定接口，因此本阶段没有添加两个只占名字、不能工作的空对象；以后出现真实调用方时再加入。
 
-附件与视觉能力走 Tool 扩展边界：`DefaultNodeAgent` 保留纯本地 `Read`，默认 Registry 不注册 `ImageToText` 或 `ImageGeneration`，`@openharness/tools` 也不定义或导出它们。daemon 用第一方可信 `Read` 覆盖处理授权附件，在 server 内完整定义图生文与文生图 Tool，并通过 `createDaemonAgentLoader.tools(context)` 注册。附件存储、Child → Root 授权、本地 OCR 和附件 compact 文案都留在 server。core 和 agent-runtime 只看到 ToolDefinition 与通用 compact 章节，不看到附件类型。
+附件与视觉能力走 Tool 扩展边界：`DefaultNodeAgent` 保留纯本地 `Read`，默认 Registry 不注册 `ImageToText` 或 `ImageGeneration`，`@vykor/tools` 也不定义或导出它们。daemon 用第一方可信 `Read` 覆盖处理授权附件，在 server 内完整定义图生文与文生图 Tool，并通过 `createDaemonAgentLoader.tools(context)` 注册。附件存储、Child → Root 授权、本地 OCR 和附件 compact 文案都留在 server。core 和 agent-runtime 只看到 ToolDefinition 与通用 compact 章节，不看到附件类型。
 
 ## 发布形式
 
-当前明确公开发布 `@openharness/agent-runtime`，其他 workspace 包仍按内部包处理。发布包提供两个路径：
+当前明确公开发布 `@vykor/agent-runtime`，其他 workspace 包仍按内部包处理。发布包提供两个路径：
 
 ```text
-@openharness/agent-runtime          默认 Node 入口
-@openharness/agent-runtime/kernel   只包含 Kernel、最小 runtime builder 和显式能力类型
+@vykor/agent-runtime          默认 Node 入口
+@vykor/agent-runtime/kernel   只包含 Kernel、最小 runtime builder 和显式能力类型
 ```
 
 构建结果在 `dist`，`main`、`types` 和 `exports` 不再指向 TypeScript 源码。Kernel ESM bundle 不需要仓库源码就能运行；完整入口也会生成可直接加载的 ESM bundle。workspace 包只作为开发期和类型 peer，`pnpm pack` 会把发布清单中的 `workspace:*` 转成正常版本号。
 
-`package.json` 里这些 peer 标了 `optional: true`，且源码对它们是**值导入**（不是 `import type`）。这不表示第三方可以自行提供替代实现：发布构建会用 esbuild 把 api/auth/core/tools/mcp/plugins 等一并打进 `dist/`，运行时不依赖消费者再装一套可互换的 peer。`optional: true` 只是避免 monorepo / 局部安装时 peer 警告噪声；消费方仍应把 `@openharness/agent-runtime` 当作自带组装内核的意见化 SDK，而不是可热插拔的 facade。
+`package.json` 里这些 peer 标了 `optional: true`，且源码对它们是**值导入**（不是 `import type`）。这不表示第三方可以自行提供替代实现：发布构建会用 esbuild 把 api/auth/core/tools/mcp/plugins 等一并打进 `dist/`，运行时不依赖消费者再装一套可互换的 peer。`optional: true` 只是避免 monorepo / 局部安装时 peer 警告噪声；消费方仍应把 `@vykor/agent-runtime` 当作自带组装内核的意见化 SDK，而不是可热插拔的 facade。
 
 `pnpm run test:pack` 每次都会：
 
@@ -151,7 +151,7 @@ daemon 可以保存 `rootAgent + childId` 的路由索引，但不复制 child c
 | durable child session/task/run | daemon |
 | per-session request lane | daemon |
 | warm root agent cache | daemon `AgentPool` |
-| 单 agent operation 互斥 | framework `OpenHarnessAgent.state` |
+| 单 agent operation 互斥 | framework `VykorAgent.state` |
 | session/cwd/global 请求互斥 | daemon `DaemonOperationGate` |
 | UI selection/render/prompt controls | surface |
 

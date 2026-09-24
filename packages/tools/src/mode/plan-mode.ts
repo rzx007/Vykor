@@ -1,11 +1,11 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 
 export const enterPlanModeTool: ToolDefinition = {
   name: "EnterPlanMode",
   description: "Switch permission mode to plan.",
   inputSchema: { type: "object", properties: {} },
   async execute() {
-    const { updateSettings } = await import("@openharness/core");
+    const { updateSettings } = await import("@vykor/core");
     await updateSettings((settings) => ({
       ...settings,
       permission: { ...settings.permission, mode: "plan" },
@@ -19,7 +19,7 @@ export const exitPlanModeTool: ToolDefinition = {
   description: "Switch permission mode back to default.",
   inputSchema: { type: "object", properties: {} },
   async execute() {
-    const { updateSettings } = await import("@openharness/core");
+    const { updateSettings } = await import("@vykor/core");
     await updateSettings((settings) => ({
       ...settings,
       permission: { ...settings.permission, mode: "default" },

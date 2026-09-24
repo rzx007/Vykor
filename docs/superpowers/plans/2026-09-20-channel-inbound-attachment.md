@@ -3,7 +3,7 @@
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 > 设计与契约以 `docs/superpowers/specs/2026-09-20-channel-inbound-attachment-design.md` 为准；本计划只拆任务与顺序。
 
-**目标：** 飞书机器人收到图片/文件时，下载真实字节、存入 OpenHarness 附件库，并作为附件交给 Agent（vision / tool_resource）。
+**目标：** 飞书机器人收到图片/文件时，下载真实字节、存入 Vykor 附件库，并作为附件交给 Agent（vision / tool_resource）。
 
 **架构：** `FeishuAdapter` 新增 `downloadAttachment`（走 `im.messageResource.get`）；`ChannelRuntimeService` 持有并暴露一个可随连接变化更新的下载回调（方案 A）；`ChannelApplicationService` 在 `admitPrompt` 前下载 → `AttachmentService.import` → 传入 `attachments`。不动 protocol durable 类型。
 
@@ -12,7 +12,7 @@
 ## Global Constraints
 
 - 只做入站；出站上传不做；`ChannelAttachment.data`/`url` 不得作为入站输入被信任或自行 fetch。
-- 不改 `@openharness/protocol` 的 durable 类型（`DurableChannelMessageInput`、`ChannelDeliveryRecord`）。
+- 不改 `@vykor/protocol` 的 durable 类型（`DurableChannelMessageInput`、`ChannelDeliveryRecord`）。
 - 失败即整条消息失败，不降级、不静默丢附件。
 - 下载必须用 `im.messageResource.get`（`im.image.get`/`im.file.get` 是错的端点）。
 - 线程资源用 `externalMessageId`，不得用 `platformMeta.rootMessageId`。
@@ -49,7 +49,7 @@
   - `type` 透传正确（`file` 分支）；
   - 未连接（client 为 null）时抛明确错误；
   - 不调用 `im.image.get`/`im.file.get`。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts`
 - [ ] **步骤 3：实现**
   - 扩展 `LarkClient`（`feishu.ts:13-34`）加 `im.messageResource.get`；
   - 用 `import { Readable } from "node:stream"` 的 `Readable.toWeb(...)` 转流；
@@ -72,7 +72,7 @@
   - `import` 抛 `attachment_too_large` → 整条消息失败；
   - **重投递**：同一 `externalMessageId` 再次到达（`getInput` 已有附件引用）→ 复用、`import` 不再被调用、不 409；
   - `metadata.attachments` 里带 `data`/`url` 时被忽略（只读 `type`/`externalId`/`name`）。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
 - [ ] **步骤 3：实现**
   - `handleMessageInLane`（`:90-169`）：取 `input.metadata?.attachments`（可信字段）→ 幂等查询 → 下载 → `import` → 组装 `AdmitPromptAttachmentInput[]` → 传入 `admitPrompt` 的 `attachments`；
   - `displayName` 优先级：`descriptor.name ?? download.name ?? descriptor.externalId`（飞书文件的实际文件名在 `descriptor.name`，adapter 不返回 `name`）；
@@ -93,7 +93,7 @@
   - fake `createRuntime` 返回的 handle 带 `downloadAttachment`；`service.start*` 之后 `service.downloadAttachment(...)` 转发到该 handle 的实现；
   - handle 未提供 `downloadAttachment` 时返回 `undefined`；
   - `stop()` 之后返回 `undefined`（不残留已断开客户端）。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/daemon/channel-runtime-service.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/server test -- --run src/daemon/channel-runtime-service.test.ts`
 - [ ] **步骤 3：实现**
   - `ConnectorRuntimeHandle`（`:35-40`）增加可选 `downloadAttachment?(input): Promise<...>`；
   - `defaultCreateRuntime` 返回的 handle 里把 `downloadAttachment` 实现为闭包捕获的 `adapter.downloadAttachment`；
@@ -128,11 +128,11 @@
 - [ ] **步骤 1：相关包全量测试**
 
 ```bash
-pnpm --filter @openharness/channels test -- --run
-pnpm --filter @openharness/server test -- --run
-pnpm --filter @openharness/auth test -- --run
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/tools test -- --run
+pnpm --filter @vykor/channels test -- --run
+pnpm --filter @vykor/server test -- --run
+pnpm --filter @vykor/auth test -- --run
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/tools test -- --run
 pnpm --filter @rzx/ohs test -- --run
 ```
 
@@ -155,6 +155,6 @@ git diff --check
 ## 阶段完成标准
 
 - 飞书入站图片/文件被下载并落入附件库，进入 Agent 会话。
-- `@openharness/protocol` 的 durable 类型未变。
+- `@vykor/protocol` 的 durable 类型未变。
 - 失败口径为整条消息失败，无降级。
 - 相关包测试、类型检查、`turbo build`、`check-docs`、`git diff --check` 全绿。

@@ -24,19 +24,19 @@ import type {
   ToolDescriptor,
   ToolRegistrationSource,
   UsageSnapshot,
-} from "@openharness/core";
-import type { McpConnection } from "@openharness/mcp";
+} from "@vykor/core";
+import type { McpConnection } from "@vykor/mcp";
 
 import type { AgentIdentity } from "./agent-composition.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import {
   AgentOperationConflictError,
-  type OpenHarnessAgentState,
+  type VykorAgentState,
 } from "./agent-errors.js";
 import type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
-  OpenHarnessAgentConfiguration,
+  VykorAgentConfiguration,
 } from "./agent-options.js";
 import {
   toAgentCapabilitySnapshot,
@@ -49,7 +49,7 @@ import {
 } from "./child-agent.js";
 import { AgentEventBus } from "./event-source.js";
 import { createMemoryRequestConfigurationStore } from "./request-configuration.js";
-import type { OpenHarnessAgentExtension } from "./extensions.js";
+import type { VykorAgentExtension } from "./extensions.js";
 import {
   FrameworkAgentRun,
   type FrameworkAgentRunToolActivity,
@@ -61,15 +61,15 @@ import type {
 
 export {
   AgentOperationConflictError,
-  type OpenHarnessAgentState,
+  type VykorAgentState,
 } from "./agent-errors.js";
 
-export interface OpenHarnessAgentOptions extends OpenHarnessAgentConfiguration {
+export interface VykorAgentOptions extends VykorAgentConfiguration {
   settings?: Settings;
   cwd?: string;
   sessionId?: string;
   mcpServers?: Settings["mcpServers"];
-  extensions?: OpenHarnessAgentExtension[];
+  extensions?: VykorAgentExtension[];
   childIdleTtlMs?: number;
   /** Host-owned registry that coordinates OAuth-driven MCP Runtime reconnects. */
   mcpRuntimeRegistry?: McpRuntimeRegistry;
@@ -81,7 +81,7 @@ export interface OpenHarnessAgentOptions extends OpenHarnessAgentConfiguration {
   effects?: AgentEffectOverrides;
 }
 
-export interface OpenHarnessAgentSubmitOptions {
+export interface VykorAgentSubmitOptions {
   capabilityView?: RunCapabilityView;
   goal?: { goalId: string; revision: number; objective?: string };
   signal?: AbortSignal;
@@ -132,20 +132,20 @@ export interface ContextUsagePromptSource {
   memoryReminderText?: string;
 }
 
-export interface OpenHarnessAgent {
+export interface VykorAgent {
   readonly id: string;
-  readonly state: OpenHarnessAgentState;
+  readonly state: VykorAgentState;
   readonly children: AgentChildDirectory;
   createRunCapabilityView(pluginId?: string): RunCapabilityView;
   /** Subscribe to ordered observations. Observer failures never fail agent execution. */
   subscribe(listener: AgentEventListener): AgentEventSubscription;
   submitMessage(
     content: string | ContentBlock[],
-    options?: OpenHarnessAgentSubmitOptions,
+    options?: VykorAgentSubmitOptions,
   ): AgentRunHandle;
   runMessage(
     content: string | ContentBlock[],
-    options?: OpenHarnessAgentSubmitOptions,
+    options?: VykorAgentSubmitOptions,
   ): Promise<AgentRunResult>;
   getHistory(): Message[];
   loadHistory(messages: Message[]): void;
@@ -169,14 +169,14 @@ export interface OpenHarnessAgent {
   close(): Promise<void>;
 }
 
-class DefaultOpenHarnessAgent implements OpenHarnessAgent {
+class DefaultVykorAgent implements VykorAgent {
   private activeRun?: FrameworkAgentRun;
   private completedRunToolActivity?: FrameworkAgentRunToolActivity;
   private maintenance?: {
     kind: "compact" | "remember";
     settled: Promise<void>;
   };
-  private lifecycleState: OpenHarnessAgentState = "idle";
+  private lifecycleState: VykorAgentState = "idle";
   private closePromise?: Promise<void>;
 
   constructor(
@@ -200,7 +200,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
     return this.session.id;
   }
 
-  get state(): OpenHarnessAgentState {
+  get state(): VykorAgentState {
     return this.lifecycleState;
   }
 
@@ -210,7 +210,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
 
   submitMessage(
     content: string | ContentBlock[],
-    options: OpenHarnessAgentSubmitOptions = {},
+    options: VykorAgentSubmitOptions = {},
   ): AgentRunHandle {
     this.assertIdle("submit a message");
     this.completedRunToolActivity = { toolUses: [], toolResults: [] };
@@ -258,7 +258,7 @@ class DefaultOpenHarnessAgent implements OpenHarnessAgent {
 
   async runMessage(
     content: string | ContentBlock[],
-    options: OpenHarnessAgentSubmitOptions = {},
+    options: VykorAgentSubmitOptions = {},
   ): Promise<AgentRunResult> {
     return await this.submitMessage(content, options).result;
   }
@@ -480,8 +480,8 @@ export interface AssembledAgentOptions {
 /** Kernel 与默认 Node 组装共用的最后一步；这里只接收已经准备好的对象。 */
 export function createAssembledAgent(
   options: AssembledAgentOptions,
-): OpenHarnessAgent {
-  return new DefaultOpenHarnessAgent(
+): VykorAgent {
+  return new DefaultVykorAgent(
     options.runtime,
     options.session,
     options.mcpConnections,

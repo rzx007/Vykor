@@ -45,13 +45,13 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
           <h1 className="font-heading text-xl tracking-tight">{selectedSection}</h1>
           <p className="text-sm text-muted-foreground">
             {selectedSection === "常规"
-              ? "调整 OpenHarness 的默认工作方式。工作风格会保存到全局配置，并用于后续任务。"
+              ? "调整 Vykor 的默认工作方式。工作风格会保存到全局配置，并用于后续任务。"
               : selectedSection === "供应商"
-                ? "连接模型服务和开发工具订阅，选择 OpenHarness 默认使用的供应商。"
+                ? "连接模型服务和开发工具订阅，选择 Vykor 默认使用的供应商。"
                 : selectedSection === "外观"
-                  ? "调整 OpenHarness 在当前设备上的显示方式。更改会立即预览并自动保存。"
+                  ? "调整 Vykor 在当前设备上的显示方式。更改会立即预览并自动保存。"
                   : selectedSection === "连接"
-                    ? "把飞书接入 OpenHarness：扫码或手填创建机器人，管理白名单，并查看真实连接状态。"
+                    ? "把飞书接入 Vykor：扫码或手填创建机器人，管理白名单，并查看真实连接状态。"
                   : selectedSection === "存储"
                     ? "查看并维护当前设备上的对话附件存储。"
                     : `${selectedSection}页面将在后续迭代中接入。`}
@@ -169,7 +169,7 @@ function GeneralSettings(): React.JSX.Element {
         <Separator />
         <SettingRow
           title="界面语言"
-          description="OpenHarness 桌面应用使用的语言"
+          description="Vykor 桌面应用使用的语言"
           control={<SettingSelect label="简体中文" />}
         />
         <Separator />
@@ -193,7 +193,7 @@ function GeneralSettings(): React.JSX.Element {
         <Separator />
         <SettingRow
           title="导入设置"
-          description="从已有的 OpenHarness 配置中恢复偏好"
+          description="从已有的 Vykor 配置中恢复偏好"
           control={
             <Button variant="secondary" size="sm">
               再次导入
@@ -202,7 +202,7 @@ function GeneralSettings(): React.JSX.Element {
         />
         <Separator />
         <SettingRow
-          title="关于 OpenHarness"
+          title="关于 Vykor"
           description={versionLabel}
           control={
             <Button variant="ghost" size="sm" onClick={() => setAboutOpen(true)}>
@@ -215,7 +215,7 @@ function GeneralSettings(): React.JSX.Element {
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>OpenHarness</DialogTitle>
+            <DialogTitle>Vykor</DialogTitle>
             <DialogDescription>面向本地项目和智能代理协作的桌面工作区。</DialogDescription>
           </DialogHeader>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg bg-muted/55 p-3 text-xs">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assembleContextUsageSnapshot } from "@openharness/core";
+import { assembleContextUsageSnapshot } from "@vykor/core";
 
 import { ContextUsageCache } from "./context-usage-cache.js";
 

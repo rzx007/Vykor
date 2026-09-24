@@ -4,7 +4,7 @@
 
 **目标：** 将 Desktop 输入框从字符串开头的单 Skill 命令升级为有序结构化文档，支持通过 `/` 或 `$` 插入多个 Skill 引用，并在发送、排队、重试、编辑、恢复和 transcript 中保留引用顺序。
 
-**最终架构：** `@openharness/protocol` 定义 `SessionUserInputItem` 和派生纯文本规则；Session store 持久化 `items_json`；Desktop 使用 Lexical 文档作为编辑期事实来源。Skill catalog 提供 `name + path`，daemon 在 run 执行前按当前 cwd registry 校验，materializer 生成 `{ name, path }` 工具调用要求，原生 `Skill` 工具读取正文。
+**最终架构：** `@vykor/protocol` 定义 `SessionUserInputItem` 和派生纯文本规则；Session store 持久化 `items_json`；Desktop 使用 Lexical 文档作为编辑期事实来源。Skill catalog 提供 `name + path`，daemon 在 run 执行前按当前 cwd registry 校验，materializer 生成 `{ name, path }` 工具调用要求，原生 `Skill` 工具读取正文。
 
 **技术栈：** TypeScript、React、Lexical、Zustand、Electron IPC、Drizzle/SQLite、Vitest、Tailwind CSS。
 

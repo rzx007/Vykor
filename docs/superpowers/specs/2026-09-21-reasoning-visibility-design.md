@@ -137,7 +137,7 @@ reasoning part 的来源记录在 `metadata.source`（`"reasoning_content" | "th
 
 - 累积 `assistantReasoning` 与 `assistantReasoningReplay`，在装配 assistant 消息时写入；事件照常向下 yield。
 - `packages/api/src/providers/openai.ts` 的 `convertMessages` 改为读 `msg.reasoningReplay`，删除 `reasoningHistory` 及其两处读写。
-- `OPENHARNESS_REQUIRE_EMPTY_REASONING_CONTENT` 语义不变：assistant 消息带 `toolUses` 但无 `reasoningReplay` 时，按开关补空串。
+- `VYKOR_REQUIRE_EMPTY_REASONING_CONTENT` 语义不变：assistant 消息带 `toolUses` 但无 `reasoningReplay` 时，按开关补空串。
 - 压缩把消息丢弃时，思考内容随消息一起消失（不发这条消息就不需要回传，符合上游规则）；压缩采用 `...msg` 展开的路径会自然保留字段。
 
 ### 2.1 历史重建与压缩重写（不改会污染正文、回传也会丢）
@@ -200,5 +200,5 @@ reasoning part 的来源记录在 `metadata.source`（`"reasoning_content" | "th
 
 - Anthropic extended thinking 的请求配置与展示。
 - Codex 加密 reasoning / 摘要的展示。
-- `ohs --print` 等非交互输出的思考内容。
+- `vk --print` 等非交互输出的思考内容。
 - 思考内容的检索、导出、复制增强。

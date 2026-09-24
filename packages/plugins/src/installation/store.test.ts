@@ -6,7 +6,7 @@ import { discoverInstalledNativePlugins, readInstalledPluginStore, updateInstall
 
 let dir: string;
 let file: string;
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), "ohs-plugin-store-")); file = join(dir, "installed.json"); });
+beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), "vk-plugin-store-")); file = join(dir, "installed.json"); });
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
 describe("installed plugin store", () => {

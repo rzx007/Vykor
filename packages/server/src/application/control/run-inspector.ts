@@ -1,14 +1,14 @@
 import {
   defaultDurableEventRegistry,
   type SessionStore,
-} from "@openharness/services";
+} from "@vykor/services";
 import type {
   PermissionRequestRecord,
   ProjectionSettlementRecord,
   SessionEventRecord,
   SessionInputRecord,
   SessionMessagePartRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface RunInspectionWarning {
   code: "orphan_input" | "active_attempt_on_closed_run" | "unknown_event" | "pending_settlement" | "unknown_tool_outcome";

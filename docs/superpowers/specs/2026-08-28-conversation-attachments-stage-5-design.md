@@ -22,7 +22,7 @@
 
 ### `LightOcrEngine`
 
-`packages/services/src/attachment-processing/light-ocr-engine.ts` 是 `@arcships/light-ocr@0.5.7` 的唯一适配层。它懒加载并复用一个 engine，队列容量固定且可配置，把 `AbortSignal` 传给 `recognizeEncoded`，在 daemon 关闭时显式 `close()`。单次任务有宿主超时，engine 的稳定错误码映射成 OpenHarness OCR 错误；初始化失败和推理失败不能伪装成无文字。
+`packages/services/src/attachment-processing/light-ocr-engine.ts` 是 `@arcships/light-ocr@0.5.7` 的唯一适配层。它懒加载并复用一个 engine，队列容量固定且可配置，把 `AbortSignal` 传给 `recognizeEncoded`，在 daemon 关闭时显式 `close()`。单次任务有宿主超时，engine 的稳定错误码映射成 Vykor OCR 错误；初始化失败和推理失败不能伪装成无文字。
 
 ### 图片归一化
 
@@ -80,7 +80,7 @@ daemon 拥有一个 `LocalOcrService`，启动不预热，首次调用才创建 
 
 原生路径继续显示“已作为原生图片输入”。OCR 路由不创建虚假的系统 transformation；真正调用后，现有工具卡显示 `ImageToText`，并补充“已使用本地 OCR 提取文字”或“未检测到文字”。附件级失败显示可重试文案。
 
-阶段 5 验收后，打包版默认开放附件交互，不再依赖 `OPENHARNESS_DESKTOP_ATTACHMENTS=1`；环境变量只保留显式关闭用途。发布清单包含 light-ocr、runtime、当前平台原生包、模型、Apache-2.0 NOTICE，以及 sharp 的许可证和 Electron asar unpack/签名检查。支持 Windows/macOS/Linux 的 x64/arm64 组合以依赖声明和打包 smoke test 为准。
+阶段 5 验收后，打包版默认开放附件交互，不再依赖 `VYKOR_DESKTOP_ATTACHMENTS=1`；环境变量只保留显式关闭用途。发布清单包含 light-ocr、runtime、当前平台原生包、模型、Apache-2.0 NOTICE，以及 sharp 的许可证和 Electron asar unpack/签名检查。支持 Windows/macOS/Linux 的 x64/arm64 组合以依赖声明和打包 smoke test 为准。
 
 ## 验收标准
 
@@ -98,4 +98,4 @@ daemon 拥有一个 `LocalOcrService`，启动不预热，首次调用才创建 
 - 全仓 `pnpm test` 首次暴露运行时打包后的 `createRequire` 重名，修复后真实 daemon + SSE 用例单独通过；最终全仓测试重新执行并以零失败为完成门槛。
 - `pnpm check-types` 为 57/57 个任务通过；`pnpm check-docs` 检查 108 个 Markdown 文件通过。根 `pnpm lint` 因仓库没有任何 Turbo `lint` 任务而无法运行，改用定向静态检查和 `git diff --check`，不把脚本缺失描述成 lint 通过。
 - Desktop production build 和 Windows x64 `electron-builder --dir` 通过；解包产物验证确认模型 manifest、light-ocr runtime、`light_ocr_node.node`、PDFium 原生模块、Sharp 原生模块及许可文件均存在。
-- 生产附件入口默认开放；设置 `OPENHARNESS_DESKTOP_ATTACHMENTS=0` 时明确关闭。“添加文件夹”图标和禁用菜单项保留。
+- 生产附件入口默认开放；设置 `VYKOR_DESKTOP_ATTACHMENTS=0` 时明确关闭。“添加文件夹”图标和禁用菜单项保留。

@@ -1,6 +1,6 @@
-import type { AttachmentAssetRecord } from "@openharness/protocol";
-import { DEFAULT_ATTACHMENT_LIMITS } from "@openharness/protocol";
-import { AttachmentError } from "@openharness/services";
+import type { AttachmentAssetRecord } from "@vykor/protocol";
+import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/protocol";
+import { AttachmentError } from "@vykor/services";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -72,7 +72,7 @@ describe("attachment routes", () => {
       method: "POST",
       headers: {
         "content-length": "9",
-        "x-openharness-filename": "a.bin",
+        "x-vykor-filename": "a.bin",
       },
       body: new Blob([Uint8Array.of(1)]),
     });
@@ -83,7 +83,7 @@ describe("attachment routes", () => {
       method: "POST",
       headers: {
         "content-length": "-1",
-        "x-openharness-filename": "a.bin",
+        "x-vykor-filename": "a.bin",
       },
     });
     expect(invalidLength.status).toBe(400);
@@ -113,7 +113,7 @@ describe("attachment routes", () => {
       method: "POST",
       headers: {
         "content-type": "IMAGE/PNG; charset=binary",
-        "x-openharness-filename": encodeURIComponent("截图.png"),
+        "x-vykor-filename": encodeURIComponent("截图.png"),
       },
       body: new Blob([Uint8Array.of(1, 2, 3)]),
     });
@@ -126,7 +126,7 @@ describe("attachment routes", () => {
 
     const empty = await app.request("/", {
       method: "POST",
-      headers: { "x-openharness-filename": "empty.txt" },
+      headers: { "x-vykor-filename": "empty.txt" },
     });
     expect(empty.status).toBe(201);
     expect(imported[1]).toEqual({

@@ -2,7 +2,7 @@
 /**
  * 飞书推送 MCP Server（stdio 模式）
  *
- * 暴露 send_feishu_message 工具，读取 ~/.openharness-ts/settings.json 中的
+ * 暴露 send_feishu_message 工具，读取 ~/.vykor/settings.json 中的
  * channels.feishu 配置，将消息推送到指定的飞书群或个人会话。
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -19,7 +19,7 @@ interface FeishuConfig {
 }
 
 async function loadConfig(): Promise<FeishuConfig> {
-  const base = process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts");
+  const base = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
   const raw = JSON.parse(await readFile(join(base, "settings.json"), "utf-8")) as {
     channels?: { feishu?: Partial<FeishuConfig> };
   };

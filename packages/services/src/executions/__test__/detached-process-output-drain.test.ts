@@ -8,8 +8,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const children: ChildProcess[] = [];
 
-vi.mock("@openharness/sandbox", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@openharness/sandbox")>()),
+vi.mock("@vykor/sandbox", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@vykor/sandbox")>()),
   createShellProcess: vi.fn(async () => {
     const child = new EventEmitter() as ChildProcess;
     Object.assign(child, {

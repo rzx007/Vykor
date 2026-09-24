@@ -56,7 +56,7 @@ export class AttachmentFileService {
     const client = await this.dependencies.getClient()
     const asset = await client.attachments.get(assetId)
     const directory = await this.dependencies.fileSystem.mkdtemp(
-      join(this.dependencies.temporaryRoot, "openharness-attachment-")
+      join(this.dependencies.temporaryRoot, "vykor-attachment-")
     )
     this.managedTemporaryDirectories.add(directory)
     const targetPath = join(directory, safeDisplayName(asset.displayName))

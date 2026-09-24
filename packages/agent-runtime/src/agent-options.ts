@@ -8,12 +8,12 @@ import type {
   Settings,
   StreamingMessageClient,
   ToolDefinition,
-} from "@openharness/core";
-import type { AgentTerminalHost } from "@openharness/terminal";
-import type { AgentJobHost } from "@openharness/jobs";
-import type { WorkflowRunRepository } from "@openharness/coordinator";
+} from "@vykor/core";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import type { AgentJobHost } from "@vykor/jobs";
+import type { WorkflowRunRepository } from "@vykor/coordinator";
 import type { AgentChildEnvironmentProvider } from "./child-environment.js";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export type CapabilityOverride<T> = T | false;
 
@@ -40,7 +40,7 @@ export interface AgentEffectOverrides {
 }
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
-export interface OpenHarnessAgentConfiguration {
+export interface VykorAgentConfiguration {
   client?: StreamingMessageClient;
   apiKey?: string;
   apiFormat?: Settings["apiFormat"];

@@ -1,5 +1,5 @@
-import type { AttachmentAssetRecord } from "@openharness/protocol";
-import { parseAttachmentAssetRecord } from "@openharness/protocol";
+import type { AttachmentAssetRecord } from "@vykor/protocol";
+import { parseAttachmentAssetRecord } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import { attachmentRangeHeader } from "../transport/http-transport.js";
 import type {
@@ -16,7 +16,7 @@ export class AttachmentResource {
   /** `POST /attachments` — upload bytes without JSON or multipart buffering. */
   async upload(input: UploadAttachmentInput): Promise<AttachmentAssetRecord> {
     const headers: Record<string, string> = {};
-    headers["x-openharness-filename"] = encodeURIComponent(input.displayName);
+    headers["x-vykor-filename"] = encodeURIComponent(input.displayName);
     if (input.mediaType) headers["content-type"] = input.mediaType;
     const response = await this.transport.requestResponse("/attachments", {
       method: "POST",

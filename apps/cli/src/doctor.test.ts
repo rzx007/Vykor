@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CredentialStorage } from "@openharness/auth";
-import type { Settings } from "@openharness/core";
+import { CredentialStorage } from "@vykor/auth";
+import type { Settings } from "@vykor/core";
 import { checkApiKey } from "./doctor";
 
 function mkSettings(partial: Partial<Settings>): Settings {

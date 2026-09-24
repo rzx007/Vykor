@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import type { McpOAuthCredentialRecord, McpServerConfig } from "@openharness/core";
+import type { McpOAuthCredentialRecord, McpServerConfig } from "@vykor/core";
 import {
   buildMcpAuthServerSnapshot,
   createMcpServerIdentity,

@@ -1,6 +1,6 @@
 import type { AgentDefinition } from "./index";
 import { join } from "node:path";
-import { getConfigDir } from "@openharness/core";
+import { getConfigDir } from "@vykor/core";
 import { loadAgentsDir, mergeAgentDefinitions } from "./agent-loader.js";
 
 const SHARED_AGENT_PREFIX =
@@ -503,7 +503,7 @@ export function getAgentDefinition(name: string, agents?: AgentDefinition[]): Ag
 }
 
 /**
- * 全量 agent 定义：builtin < user(~/.openharness-ts/agents) < plugin，
+ * 全量 agent 定义：builtin < user(~/.vykor/agents) < plugin，
  * 同名后者覆盖（对齐 Python get_all_agent_definitions 的 merge order）。
  *
  * 与 Python 差异：plugin agents 由调用方注入（Python 在函数内 lazy import

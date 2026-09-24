@@ -1,4 +1,4 @@
 provider: github
 owner: rzx007
 repo: openharness-ts
-updaterCacheDirName: openharness-desktop-updater
+updaterCacheDirName: vykor-desktop-updater

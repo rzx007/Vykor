@@ -1,9 +1,9 @@
-import type { OpenHarnessPluginManifestV1 } from "@openharness/plugins";
+import type { VykorPluginManifestV1 } from "@vykor/plugins";
 import { object } from "./source.js";
 
 export interface MappedMcp {
   config?: Record<string, unknown>;
-  permissions?: OpenHarnessPluginManifestV1["permissions"];
+  permissions?: VykorPluginManifestV1["permissions"];
   reason: string;
 }
 

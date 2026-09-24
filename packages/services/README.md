@@ -1,4 +1,4 @@
-# @openharness/services
+# @vykor/services
 
 共享持久化与领域服务。业务代码通过 Repository（负责一个领域的读写）和 Transaction（负责需要原子完成的跨表操作）访问状态；`SessionStore` 只保留数据库生命周期、owner lease、事件 waiter/listener、启动恢复和维护入口。
 
@@ -13,12 +13,12 @@
 - **LspClient**: 代码智能服务 (stub；ripgrep 查询走统一 Sandbox argv 入口)
 - **Execution services**: detached process 和 framework child 的进程内句柄；durable 投影仍由 daemon 保存
 
-外部工作负载进程不在 services 内直接 `spawn/exec`：`DetachedProcessSupervisor`、autodream 和 LSP 查询统一委托 `@openharness/sandbox`。framework child Agent 的回调句柄只放在 `ChildAgentExecutionRegistry`；跨端执行投影与 Scheduled Task 状态仍由 daemon `SessionStore` 持久化。
+外部工作负载进程不在 services 内直接 `spawn/exec`：`DetachedProcessSupervisor`、autodream 和 LSP 查询统一委托 `@vykor/sandbox`。framework child Agent 的回调句柄只放在 `ChildAgentExecutionRegistry`；跨端执行投影与 Scheduled Task 状态仍由 daemon `SessionStore` 持久化。
 
 数据库包含基线 `0000_current_schema.sql` 及其后的增量迁移。从空目录一次建立当前 schema，之后每次打开都应用迁移链。不做旧库接管：与当前基线不匹配的库会带提示失败，删除后重建即可。
 
 ## 测试
 
 ```bash
-pnpm --filter @openharness/services test
+pnpm --filter @vykor/services test
 ```

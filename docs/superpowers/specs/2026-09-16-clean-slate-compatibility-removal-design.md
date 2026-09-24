@@ -1,12 +1,12 @@
 # Clean-slate 全仓兼容层清理设计
 
-> 状态：已确认设计，等待实施计划。适用于 OpenHarness-ts 快速迭代期；当前唯一用户接受一次性重置全部本地数据、配置和缓存。
+> 状态：已确认设计，等待实施计划。适用于 Vykor 快速迭代期；当前唯一用户接受一次性重置全部本地数据、配置和缓存。
 
 ## 1. 背景与决策
 
-OpenHarness-ts 尚未进入需要维护外部兼容承诺的阶段，也没有其他用户依赖旧 API、旧配置、旧数据库或旧协议。继续保留兼容门面、历史迁移和双发行删除门禁，会让当前架构同时维护新旧两套入口，增加理解、测试和修改成本。
+Vykor 尚未进入需要维护外部兼容承诺的阶段，也没有其他用户依赖旧 API、旧配置、旧数据库或旧协议。继续保留兼容门面、历史迁移和双发行删除门禁，会让当前架构同时维护新旧两套入口，增加理解、测试和修改成本。
 
-本轮采用 clean-slate（只保留当前设计）策略：仓库中的当前领域边界、当前 API 和当前数据结构是唯一标准。旧入口直接删除，不经历弃用发行、保留发行或 major 删除窗口。清理对象是 OpenHarness 自身演进留下的旧入口和旧持久化格式，不是删除当前产品主动支持的外部互操作能力。
+本轮采用 clean-slate（只保留当前设计）策略：仓库中的当前领域边界、当前 API 和当前数据结构是唯一标准。旧入口直接删除，不经历弃用发行、保留发行或 major 删除窗口。清理对象是 Vykor 自身演进留下的旧入口和旧持久化格式，不是删除当前产品主动支持的外部互操作能力。
 
 ## 2. 目标
 
@@ -51,12 +51,12 @@ OpenHarness-ts 尚未进入需要维护外部兼容承诺的阶段，也没有�
 
 | 能力 | 结论 | 原因 |
 |---|---|---|
-| OpenHarness 旧 Client、Store、Application、CLI、HTTP、配置、数据库入口 | 删除 | 已有当前替代入口，仅服务自身历史版本 |
-| `.claude/skills` 兼容扫描 | 删除 | 当前项目技能目录是 `.agents/skills` 与 `.openharness-ts/skills` |
+| Vykor 旧 Client、Store、Application、CLI、HTTP、配置、数据库入口 | 删除 | 已有当前替代入口，仅服务自身历史版本 |
+| `.claude/skills` 兼容扫描 | 删除 | 当前项目技能目录是 `.agents/skills` 与 `.vykor/skills` |
 | 旧 shell 标量到 `ShellDescriptor` 的回退 | 删除 | 当前环境必须直接提供完整 `shellDescriptor` |
 | 旧 plugin scope、manifest compatibility 字段和环境变量别名 | 删除 | Native Plugin 只接受当前 manifest；保留正式的 `user` 与 `managed` scope，只删除旧 `project`、`local` scope |
-| OpenAI-compatible Provider | 保留 | 这是当前 Provider 类型和用户选择，不是旧 OpenHarness API |
-| Codex/Claude 插件导入转换器 | 保留 | 这是显式导入外部格式的当前产品功能；转换结果必须是当前 Native Plugin，不承担旧 OpenHarness 数据升级 |
+| OpenAI-compatible Provider | 保留 | 这是当前 Provider 类型和用户选择，不是旧 Vykor API |
+| Codex/Claude 插件导入转换器 | 保留 | 这是显式导入外部格式的当前产品功能；转换结果必须是当前 Native Plugin，不承担旧 Vykor 数据升级 |
 | Attachment capability 匹配 | 保留 | 当前模型能力路由 |
 | Windows/WSL/PowerShell/Bash 选择 | 保留 | 当前平台适配 |
 | 事务、恢复、重试、取消和安全失败 fallback | 保留 | 当前可靠性机制 |
@@ -65,7 +65,7 @@ OpenHarness-ts 尚未进入需要维护外部兼容承诺的阶段，也没有�
 
 ### 5.1 Client 公共 API
 
-- 从 `OpenHarnessClient` 删除 118 个顶层平铺转发方法。
+- 从 `VykorClient` 删除 118 个顶层平铺转发方法。
 - 只保留 `client.sessions`、`client.projects`、`client.system`、`client.providers`、`client.plugins`、`client.auth`、`client.development`、`client.protocol` 等当前领域 Resource。
 - 审核 `transport`、`sse`、`baseUrl`、`token` 和 `fetchImpl` 等底层入口；没有当前生产用途或明确设计职责的直接删除。
 - 从公共契约删除 compatibility 分类、deprecated 元数据和 release gate 字段。
@@ -129,7 +129,7 @@ OpenHarness-ts 尚未进入需要维护外部兼容承诺的阶段，也没有�
 - `environment` 与 `tools`：移除旧 shell 标量和 `legacyShellDescriptor`；当前环境必须提供 `shellDescriptor`。
 - `skills`：移除 `.claude/skills` 扫描、说明和测试，只保留当前技能目录。
 - `plugins` 与 `agent-runtime`：移除 manifest `compatibility` 字段、environment aliases、旧 `project`/`local` 安装 scope 的读取/警告路径；保留当前 `user` 与 `managed` scope 及 managed 插件不可修改、不可卸载、不可覆盖的安全规则。旧记录无需识别。
-- `plugin-converters`：保留显式的外部插件导入功能，但删除其中仅为旧 OpenHarness manifest 或旧 Native Plugin schema 服务的分支。
+- `plugin-converters`：保留显式的外部插件导入功能，但删除其中仅为旧 Vykor manifest 或旧 Native Plugin schema 服务的分支。
 - `protocol`、`core`、`tools`、`skills`、`plugins`、`environment`、`agent-runtime` 全部进入实施与回归测试范围，不能只验证六个上层包。
 
 ## 6. 实施顺序
@@ -173,9 +173,9 @@ OpenHarness-ts 尚未进入需要维护外部兼容承诺的阶段，也没有�
 
 执行前必须：
 
-- 枚举配置覆盖目录、默认配置目录、项目 `.openharness-ts`、Desktop `userData` 和缓存，列出 OpenHarness 独占的叶子路径；不得直接把 `OPENHARNESS_CONFIG_DIR` 指向的整个目录视为可删除根。
+- 枚举配置覆盖目录、默认配置目录、项目 `.vykor`、Desktop `userData` 和缓存，列出 Vykor 独占的叶子路径；不得直接把 `VYKOR_CONFIG_DIR` 指向的整个目录视为可删除根。
 - 对每个目标解析规范绝对路径以及 junction/symlink 最终目标；禁止盘符根、用户主目录、工作区根和它们的任何祖先。
-- 确认每个目标位于用户最终确认的允许根内，且只属于 OpenHarness 开发数据、配置和缓存。
+- 确认每个目标位于用户最终确认的允许根内，且只属于 Vykor 开发数据、配置和缓存。
 - 停止正在运行的 daemon、CLI、Desktop 和相关后台进程。
 - 停止进程后重新解析并验证同一清单，防止路径在检查与删除之间变化。
 - 向用户展示最终精确路径、链接解析结果和是否可恢复，并获得逐项明确授权。
@@ -205,7 +205,7 @@ OpenHarness-ts 尚未进入需要维护外部兼容承诺的阶段，也没有�
 ### 8.3 当前行为
 
 - 根级 `check-types`、`test`、`build`、`check:architecture`、`check-docs` 与脚本测试通过。
-- 使用临时 `OPENHARNESS_CONFIG_DIR`、临时项目目录、临时 Desktop `userData` 和本地假 Provider/HTTP fixture，从空目录完成默认配置加载、数据库创建和 daemon 启动；不得读取真实 home、项目旧状态或访问公网。
+- 使用临时 `VYKOR_CONFIG_DIR`、临时项目目录、临时 Desktop `userData` 和本地假 Provider/HTTP fixture，从空目录完成默认配置加载、数据库创建和 daemon 启动；不得读取真实 home、项目旧状态或访问公网。
 - 单一数据库基线创建全部表、索引、外键并写入当前 generation；通过 schema inventory 与压缩前最终结构对比，二次打开保持幂等。
 - CLI 和 Desktop 打包产物都包含同一基线，并能从各自临时空目录完成建库。
 - 通过当前 Client/CLI 完成一次 Session 创建、使用本地假 Provider 的 Prompt 执行、状态读取和退出清理。
@@ -225,7 +225,7 @@ OpenHarness-ts 尚未进入需要维护外部兼容承诺的阶段，也没有�
 
 ## 10. 完成标准
 
-- OpenHarness 自有生产代码只存在一套 API、配置、协议和数据结构；明确保留的外部格式导入和 Provider 互操作能力不计为历史兼容层。
+- Vykor 自有生产代码只存在一套 API、配置、协议和数据结构；明确保留的外部格式导入和 Provider 互操作能力不计为历史兼容层。
 - 118 个 Client 平铺方法及其他纯兼容 facade 全部删除。
 - `SessionStore` 和 Application 层不再承担已迁出的领域转发职责。
 - 历史 migrations 已压成当前基线，空数据目录可直接初始化。

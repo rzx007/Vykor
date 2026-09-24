@@ -1,6 +1,6 @@
-# OpenHarness-ts — 补齐计划（对比 Python 原版 v0.1.9）
+# Vykor — 补齐计划（对比 Python 原版 v0.1.9）
 
-基于对 Python 原版 `openharness` **v0.1.9** 源码的逐模块审计整理。核心 harness（引擎 / 工具 / 权限 / 会话 / 前端协议）已可用，但相对原版仍有大量功能未对齐。本文档按**影响面 + 优先级**排序，给出可执行的补齐路线。
+基于对 Python 原版 `vykor` **v0.1.9** 源码的逐模块审计整理。核心 harness（引擎 / 工具 / 权限 / 会话 / 前端协议）已可用，但相对原版仍有大量功能未对齐。本文档按**影响面 + 优先级**排序，给出可执行的补齐路线。
 
 > 状态图例：✅ 基本对齐 · 🟡 可用但简化 · 🟠 骨架/部分 · 🔴 未实现 · ⛔ 不在复刻范围
 
@@ -98,7 +98,7 @@
 - OpenAI 兼容流式补 `<think>` 块跨 chunk 过滤（对齐 `_strip_think_blocks`）。
 - 图片消息转换：`convertMessages` 对非字符串 content 用 `JSON.stringify`，导致 ImageBlock 无法传给 OpenAI 端 → 转为 `image_url` data-uri。
 - gpt-5 / o1 / o3 / o4 系列改用 `max_completion_tokens`（当前恒用 `max_tokens` 会报错）。
-- reasoning_content 重放加 `OPENHARNESS_REQUIRE_EMPTY_REASONING_CONTENT` 开关（当前无条件发空 reasoning_content，严格端点会 400）。
+- reasoning_content 重放加 `VYKOR_REQUIRE_EMPTY_REASONING_CONTENT` 开关（当前无条件发空 reasoning_content，严格端点会 400）。
 - **文件**：`packages/api/src/providers/openai.ts`、`anthropic.ts`
 
 ### A.2 channels Feishu 修复
@@ -118,8 +118,8 @@
 - **文件**：`packages/memory/src/index.ts`
 
 ### A.5 coordinator mode env 一致性 ✅ 已收口
-- `isCoordinatorMode()` 统一读取 `OPENHARNESS_COORDINATOR_MODE`；不再兼容 `CLAUDE_CODE_COORDINATOR_MODE` / `COORDINATOR_MODE` / `OPENHARNESS_COORDINATOR` / `CLAUDE_CODE_COORDINATOR`。
-- 简单模式统一读取 `OPENHARNESS_COORDINATOR_SIMPLE`。
+- `isCoordinatorMode()` 统一读取 `VYKOR_COORDINATOR_MODE`；不再兼容 `CLAUDE_CODE_COORDINATOR_MODE` / `COORDINATOR_MODE` / `VYKOR_COORDINATOR` / `CLAUDE_CODE_COORDINATOR`。
+- 简单模式统一读取 `VYKOR_COORDINATOR_SIMPLE`。
 - **文件**：`packages/coordinator/src/index.ts`、`packages/coordinator/src/coordinator-mode.ts`
 
 ---
@@ -133,13 +133,13 @@
 - 补 `priority` 字段 + 同事件内按 priority 降序稳定排序。
 - 事件类型补齐到 10 种（新增 pre/post_compact、user_prompt_submit、notification、stop、subagent_stop）。
 - 实现 prompt / agent 类型 hook（真正调模型返回 `{ok, reason}`）。
-- `$ARGUMENTS` 注入 + shell 转义（防注入）；matcher（fnmatch）过滤；`OPENHARNESS_HOOK_EVENT/PAYLOAD` 环境变量。
+- `$ARGUMENTS` 注入 + shell 转义（防注入）；matcher（fnmatch）过滤；`VYKOR_HOOK_EVENT/PAYLOAD` 环境变量。
 - **文件**：`packages/hooks/src/index.ts`、`packages/core/src/types/hooks.ts`
 
 ### B.2 Compact 高级链路 ✅ 已完成
 - ✅ context collapse（确定性折叠超长文本）、PTL（prompt-too-long）重试 + 头部截断、tool_use/result 配对保护、图片占位替换。
 - ✅ boundary marker、PRE/POST_COMPACT hooks、progress/checkpoint。
-- ✅ compact attachments（B.2 尾巴）：`extractRecentFiles()`（Read/Write/Edit tool_use 历史，最近 20）、`deriveWorkLog()`（工具调用计数摘要）、`buildCompactPrompt()`（拼入 `<context>` 段）；`setAttachmentsProvider()` 可外部注入 taskFocus/plan。当前 `OpenHarnessAgent` 默认 composition 尚未注入 daemon task focus/plan provider。
+- ✅ compact attachments（B.2 尾巴）：`extractRecentFiles()`（Read/Write/Edit tool_use 历史，最近 20）、`deriveWorkLog()`（工具调用计数摘要）、`buildCompactPrompt()`（拼入 `<context>` 段）；`setAttachmentsProvider()` 可外部注入 taskFocus/plan。当前 `VykorAgent` 默认 composition 尚未注入 daemon task focus/plan provider。
 - **文件**：`packages/core/src/engine/compact-service.ts`、`packages/core/src/types/runtime.ts`、`packages/core/src/engine/query-engine.ts`、`apps/cli/src/commands/main.ts`
 
 ### B.3 Tasks 真实执行
@@ -159,14 +159,14 @@
 - permission-mode 段、delegation/subagent 段。
 - **文件**：`packages/prompts/src/index.ts`
 
-> B.5 per-turn 相关记忆检索已于后续完成：`QueryEngine.memoryRetriever` 回调 + `composeTurnSystemPrompt()` 瞬态注入。当前由 `createOpenHarnessAgent()` 统一创建 `AgentMemoryRuntime` 并接入所有 standalone/daemon agent。
+> B.5 per-turn 相关记忆检索已于后续完成：`QueryEngine.memoryRetriever` 回调 + `composeTurnSystemPrompt()` 瞬态注入。当前由 `createVykorAgent()` 统一创建 `AgentMemoryRuntime` 并接入所有 standalone/daemon agent。
 
 ---
 
 ## Phase C — 扩展层补齐（P2）
 
 ### C.1 Native Plugin 与外部转换 ✅ 第一阶段完成
-- ✅ Runtime 唯一接受 `.openharness-plugin/plugin.json`，不解析 Claude/Codex manifest。
+- ✅ Runtime 唯一接受 `.vykor-plugin/plugin.json`，不解析 Claude/Codex manifest。
 - ✅ installed store、user/project/local/managed scope、原子版本 cache、权限批准和结构化诊断。
 - ✅ Native Skills、Agents、Hooks、MCP 加载；单组件失败保持其他组件并报告 degraded。
 - ✅ Claude Code Converter 执行 detect/inspect/plan/convert，产物保留 provenance/plan/report。
@@ -192,7 +192,7 @@
   `getAllAgentDefinitions` 三源合并 builtin < user < plugin。
 - ✅ Native plugin agents 使用稳定 plugin ID 命名，hooks/mcpServers/omitClaudeMd 信任面剥除。
 - ✅ coordinator system prompt 经核对本就全量（「大幅精简」描述过时）；补
-  `OPENHARNESS_COORDINATOR_SIMPLE` 简单模式分支、`matchSessionMode`、`getCoordinatorTools`、
+  `VYKOR_COORDINATOR_SIMPLE` 简单模式分支、`matchSessionMode`、`getCoordinatorTools`、
   `getCoordinatorUserContext`（scratchpad/worker-tools 注入）。
 - ✅ CLI 接线：session 快照存 `session_mode`；`--continue/--resume` 恢复时调
   `matchSessionMode` 自动同步 env；REPL 启动时若 coordinator 模式
@@ -206,7 +206,7 @@
 ### C.5 Personalization（新模块）✅ 核心完成 / daemon 未接
 - ✅ `packages/personalization`：10 类环境事实正则抽取（SSH/IP/数据路径/conda/
   Python/端点/env/git remote/Ray/cron），去重合并 + 置信度胜出。
-- ✅ `local_rules/` rules.md + facts.json 持久化（尊重 OPENHARNESS_CONFIG_DIR）。
+- ✅ `local_rules/` rules.md + facts.json 持久化（尊重 VYKOR_CONFIG_DIR）。
 - ✅ `rules.md` 已注入 framework 默认 system prompt；`updateRulesFromSession()` 抽取能力已实现
   system prompt（CLAUDE.md 后，含 daemon bootstrap）。
 - 留待：standalone host 与 daemon/TUI session archive 或进程退出时调用 `updateRulesFromSession`。
@@ -237,7 +237,7 @@
   空全拒/`"*"`全放/`"|"`分段）、`ChannelManager`（注入式 adapter、启停/出站
   分发、单通道失败不拖垮）、`ChannelBridge`（inbound → `agent.submitMessage`
   聚合 text_delta → outbound）。
-- ✅ 接线（TS 自有，Python 侧是 ohmo 消费的库）：`ohs channels serve|status`
+- ✅ 接线（TS 自有，Python 侧是 ohmo 消费的库）：`vk channels serve|status`
   长驻模式；渠道配置（含密钥）在 `channel-credentials.json`，`settings.json`
   不再承载 `channels`；飞书基础版（文本收发 + @bot 过滤，
   ACL 上移 manager）。微信不做（用户裁决，Python 本无）。serve 无头模式
@@ -255,7 +255,7 @@
 - **文件**：`packages/sandbox/src/*`、`packages/tools/src/file/operations.ts`、`packages/mcp/src/sandbox-stdio-transport.ts`
 
 ### D.4 Bridge 多进程会话（按需）
-- ✅ `spawn(command, cwd)`：`child_process.spawn(shell:true)`，stdout+stderr 并行泵入 `~/.openharness-ts/bridge/logs/<id>.log`。
+- ✅ `spawn(command, cwd)`：`child_process.spawn(shell:true)`，stdout+stderr 并行泵入 `~/.vykor/bridge/logs/<id>.log`。
 - ✅ `stop(sessionId)`：SIGTERM → 3s 超时 → SIGKILL，对齐 Python `SessionHandle.kill()`。
 - ✅ `listSpawnedSessions()`：返回 `BridgeSessionRecord`（pid / status / outputPath），按启动时间倒序。
 - ✅ `readOutput(sessionId, maxBytes=12000)`：读末尾日志，对齐 Python `read_output()`。
@@ -280,7 +280,7 @@
   `/reload-plugins`（先清后注册，disable 立即生效）、`/subagents`（三源人格列表；
   差异：Python 为任务视图，TS 由既有 `/agents` 覆盖）、`/plugin list|enable|disable`
   （持久化 settings.plugins；install/uninstall 不做——无插件市场）。
-  顺带修：`getUserPluginsDir` 尊重 `OPENHARNESS_CONFIG_DIR`。
+  顺带修：`getUserPluginsDir` 尊重 `VYKOR_CONFIG_DIR`。
 - `/export` `/agents` `/output-style` 此前已有；skill 作 `/<skill>` 已随 E.5 落地。
 - 留待：`/keybindings` `/vim` `/passes` `/release-notes` `/login` `/logout` 等低频项（按需）。
 - **文件**：`packages/client/src/commands/session-commands.ts`、`packages/server/src/commands/commands.ts`、`apps/frontend/src/hooks/useServerSync.ts`、`packages/plugins/src/discovery.ts`
@@ -290,7 +290,7 @@
   改文件前在 TUI 权限框显示 +/− 着色 diff，`[y]` 本次 / `[a]` 整个会话(按工具名) / `[n]` 拒绝。
   仅 TUI（REPL/print 无交互权限确认）。详见 `docs/permission-flow.md`。
 - ✅ **Output styles**（输出样式,忠实复刻 v0.1.9）——`default/minimal/codex` 三内置 +
-  用户 `~/.openharness-ts/output_styles/*.md`;REPL `EventRenderer` 按 name 分支(`minimal` 极简纯文本);
+  用户 `~/.vykor/output_styles/*.md`;REPL `EventRenderer` 按 name 分支(`minimal` 极简纯文本);
   `/output-style [show|list|NAME]` 命令(REPL 热切换+持久化);TUI render-branch 已随
   E.3 收口补齐。详见 `docs/output-styles-design.md`。
 - ✅ 语法高亮（cli-highlight，无 lang 不 auto-detect）、TUI output-style
@@ -308,7 +308,7 @@
 - ✅ frontmatter 补 user-invocable / disable-model-invocation / model / argument-hint。
 - ✅ 内置 bundled skills（commit/review/test/plan/debug/create-skill，TS 内嵌）；user/project 多源（bundled<user<project）+ 同名覆盖。
 - ✅ user-invocable skill 作 `/<skill>` 斜杠命令（REPL；内置命令优先）；model 可见性过滤（disable-model-invocation 不进 system prompt）。daemon 会加载 skills 供模型/工具使用，但 TUI 侧 `/<skill>` 斜杠路由仍需按 client-local vs server API 分层设计。
-- ✅ project skills **git-root 向上逐级遍历**：`findProjectSkillDirs(cwd)` 从 cwd 走到 `.git` 根，每层各收 `.openharness-ts/skills` + `.claude/skills`，root→cwd 顺序加载（cwd 层最高优先）。
+- ✅ project skills **git-root 向上逐级遍历**：`findProjectSkillDirs(cwd)` 从 cwd 走到 `.git` 根，每层各收 `.vykor/skills` + `.claude/skills`，root→cwd 顺序加载（cwd 层最高优先）。
 - ✅ **路径穿越防护**：`discoverMarkdownFiles` 用 `resolve + sep` 校验每个文件的绝对路径必须在 `dirPath` 内（防 symlink/`..` 逃逸）。
 - ✅ **每命令 model 覆盖**：`/<skill>` 调用时若 `skill.model` 非空，在 `submitMessage` 前
   临时 `setModel(skill.model)`，finally 块恢复原 model（REPL 接线；旧 BackendHost 路径已删除）。
@@ -334,7 +334,7 @@
 - ✅ Ctrl+C 保存：REPL `rl.on("close")` 退出前 `await saveSessionSnapshot`。
 - ✅ `/export` 命令：`/export [filename] [--json]`，文件名 `.json` 后缀或 `--json` 标志
   输出结构化 JSON（session_id/model/exported_at/messages），否则输出 Markdown；
-  默认写入 `~/.openharness-ts/data/exports/`。
+  默认写入 `~/.vykor/data/exports/`。
 - 留待：tool_outputs 接 microcompact。
   详见 `docs/session-storage-design.md`。
 - lsp 用真实 AST 解析（当前为正则/rg 近似）。

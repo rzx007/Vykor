@@ -8,7 +8,7 @@ let root: string;
 let outside: string;
 
 beforeEach(async () => {
-  const base = await mkdtemp(join(tmpdir(), "ohs-native-paths-"));
+  const base = await mkdtemp(join(tmpdir(), "vk-native-paths-"));
   root = join(base, "plugin");
   outside = join(base, "outside");
   await mkdir(root);

@@ -27,16 +27,16 @@ import { DesktopSkillService } from "./skill-service"
 
 const snapshot = {
   skills: [],
-  projects: [{ name: "OpenHarness", path: "D:/code/OpenHarness-ts" }],
+  projects: [{ name: "Vykor", path: "D:/code/Vykor" }],
   warnings: [],
 }
 
 const mixedSnapshot = {
   warnings: [],
   projects: [
-    { name: "OpenHarness", path: "D:/code/OpenHarness-ts" },
+    { name: "Vykor", path: "D:/code/Vykor" },
     { name: "Other", path: "D:/code/other" },
-    { name: "x10", path: "D:/Documents/OpenHarness/2026-09-09/x10" },
+    { name: "x10", path: "D:/Documents/Vykor/2026-09-09/x10" },
   ],
   skills: [
     {
@@ -53,29 +53,29 @@ const mixedSnapshot = {
       name: "current-project",
       description: "current project",
       content: "project",
-      path: "D:/code/OpenHarness-ts/.openharness-ts/skills/current/SKILL.md",
+      path: "D:/code/Vykor/.vykor/skills/current/SKILL.md",
       source: "project",
       readOnly: false,
-      projectPath: "D:/code/OpenHarness-ts",
-      projectName: "OpenHarness",
+      projectPath: "D:/code/Vykor",
+      projectName: "Vykor",
     },
     {
       id: "current-agent",
       name: "current-agent",
       description: "current agent",
       content: "agent",
-      path: "D:/code/OpenHarness-ts/.agents/skills/current/SKILL.md",
+      path: "D:/code/Vykor/.agents/skills/current/SKILL.md",
       source: "agent",
       readOnly: true,
-      projectPath: "D:/code/OpenHarness-ts",
-      projectName: "OpenHarness",
+      projectPath: "D:/code/Vykor",
+      projectName: "Vykor",
     },
     {
       id: "other-project",
       name: "other-project",
       description: "other project",
       content: "other",
-      path: "D:/code/other/.openharness-ts/skills/other/SKILL.md",
+      path: "D:/code/other/.vykor/skills/other/SKILL.md",
       source: "project",
       readOnly: false,
       projectPath: "D:/code/other",
@@ -95,7 +95,7 @@ const mixedSnapshot = {
       name: "personal",
       description: "personal",
       content: "personal",
-      path: "C:/Users/ruanz/.openharness-ts/skills/personal/SKILL.md",
+      path: "C:/Users/ruanz/.vykor/skills/personal/SKILL.md",
       source: "personal",
       readOnly: false,
     },
@@ -104,10 +104,10 @@ const mixedSnapshot = {
       name: "outside-project",
       description: "outside project workspace",
       content: "outside",
-      path: "D:/Documents/OpenHarness/2026-09-09/x10/.openharness-ts/skills/outside/SKILL.md",
+      path: "D:/Documents/Vykor/2026-09-09/x10/.vykor/skills/outside/SKILL.md",
       source: "project",
       readOnly: false,
-      projectPath: "D:/Documents/OpenHarness/2026-09-09/x10",
+      projectPath: "D:/Documents/Vykor/2026-09-09/x10",
       projectName: "x10",
     },
   ],
@@ -126,10 +126,10 @@ describe("DesktopSkillService", () => {
     daemon.development.listSkills.mockResolvedValueOnce(mixedSnapshot)
     const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
-    await expect(service.snapshot({ projectPath: "D:/code/OpenHarness-ts" })).resolves.toEqual({
+    await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual({
       warnings: [],
       projects: [
-        { name: "OpenHarness", path: "D:/code/OpenHarness-ts" },
+        { name: "Vykor", path: "D:/code/Vykor" },
         { name: "Other", path: "D:/code/other" },
       ],
       skills: [
@@ -152,7 +152,7 @@ describe("DesktopSkillService", () => {
 
     await expect(service.snapshot({ projectPath: "D:/code/hidden" })).resolves.toMatchObject({
       projects: [
-        { name: "OpenHarness", path: "D:/code/OpenHarness-ts" },
+        { name: "Vykor", path: "D:/code/Vykor" },
         { name: "Other", path: "D:/code/other" },
       ],
     })
@@ -163,7 +163,7 @@ describe("DesktopSkillService", () => {
     const input = {
       id: "skill_personal",
       expectedContent: "current skill contents",
-      projectPath: "D:/code/OpenHarness-ts",
+      projectPath: "D:/code/Vykor",
     }
 
     await expect(service.remove(input)).resolves.toEqual(snapshot)
@@ -179,7 +179,7 @@ describe("DesktopSkillService", () => {
       daemon.development.listSkills.mockRejectedValueOnce(new Error(message))
       const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
-      await expect(service.snapshot({ projectPath: "D:/code/OpenHarness-ts" })).resolves.toEqual(
+      await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual(
         snapshot
       )
       expect(daemon.development.listSkills).toHaveBeenCalledOnce()
@@ -197,7 +197,7 @@ describe("DesktopSkillService", () => {
       service.remove({
         id: "skill_personal",
         expectedContent: "stale contents",
-        projectPath: "D:/code/OpenHarness-ts",
+        projectPath: "D:/code/Vykor",
       })
     ).rejects.toBe(error)
     expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()

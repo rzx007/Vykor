@@ -1,6 +1,6 @@
 # Conversation Attachments Release Closeout Implementation Plan
 
-> **For Codex:** Execute this plan inline in the current branch. Use test-driven development for every behavior change and run each verification command from `D:\code\personal-project\OpenHarness-ts`.
+> **For Codex:** Execute this plan inline in the current branch. Use test-driven development for every behavior change and run each verification command from `D:\code\personal-project\Vykor`.
 
 **Goal:** Add a production-ready attachment storage diagnostics and maintenance page to Desktop Settings without changing attachment storage semantics.
 
@@ -35,7 +35,7 @@ Add assertions for:
 Run:
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/settings-navigation.test.ts src/renderer/src/components/desktop/settings-page/attachment-storage-format.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/settings-navigation.test.ts src/renderer/src/components/desktop/settings-page/attachment-storage-format.test.ts
 ```
 
 Expected: failures because storage navigation and helper module do not exist yet.
@@ -80,7 +80,7 @@ Use semantic queries or DOM role/text assertions. Do not test Tailwind class str
 Run:
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/attachment-storage-settings.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/attachment-storage-settings.test.tsx
 ```
 
 Expected: failure because the component has not been implemented.
@@ -113,8 +113,8 @@ Run the focused Vitest command again. Fix only implementation defects revealed b
 Run:
 
 ```powershell
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop typecheck
 ```
 
 Expected: both commands exit successfully.
@@ -157,7 +157,7 @@ Run fresh commands:
 ```powershell
 pnpm test
 pnpm check-types
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop lint
 git diff --check
 git status --short
 ```

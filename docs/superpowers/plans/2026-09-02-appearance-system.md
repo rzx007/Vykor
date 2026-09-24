@@ -1,8 +1,8 @@
-# OpenHarness 桌面端外观系统实现计划
+# Vykor 桌面端外观系统实现计划
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 为 OpenHarness 桌面端实现当前设备全局生效的外观系统，包括主题、强调色、字体、字号、减少动效和恢复默认，并保证设置确实覆盖主要界面。
+**目标：** 为 Vykor 桌面端实现当前设备全局生效的外观系统，包括主题、强调色、字体、字号、减少动效和恢复默认，并保证设置确实覆盖主要界面。
 
 **架构：** 用渲染端 `AppearanceProvider` 直接替换现有 `ThemeProvider`，以单个版本化 JSON 保存配置，并由 Provider 统一输出主题 class、颜色/排版 CSS 变量和最终减少动效状态。外观页只调用 Provider；颜色推导、配置解析和字体注册表保持为可独立测试的纯模块。旧主题键、旧 Hook 和裸 `D` 快捷键不做任何兼容。
 
@@ -89,7 +89,7 @@ expect(normalizeHexColor("#abc")).toBeNull();
 - [x] **步骤 2：运行测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-preferences.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-preferences.test.ts
 ```
 
 预期：FAIL，模块和导出尚不存在。
@@ -99,7 +99,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/a
 导出以下稳定接口：
 
 ```ts
-export const APPEARANCE_STORAGE_KEY = "openharness-desktop-appearance-v1";
+export const APPEARANCE_STORAGE_KEY = "vykor-desktop-appearance-v1";
 export const UI_FONT_SIZE_RANGE = { min: 12, max: 18 } as const;
 export const CODE_FONT_SIZE_RANGE = { min: 11, max: 18 } as const;
 
@@ -125,7 +125,7 @@ export function parseAppearancePreferences(
 export function normalizeHexColor(value: string): `#${string}` | null;
 ```
 
-解析器先检查普通对象和 `version === 1`，再逐字段保留合法值；数字使用 `Math.round()` 后限制范围。未知版本、非对象或坏 JSON 返回全新默认对象。不要声明旧存储键常量，也不要读取 `openharness-desktop-theme`。
+解析器先检查普通对象和 `version === 1`，再逐字段保留合法值；数字使用 `Math.round()` 后限制范围。未知版本、非对象或坏 JSON 返回全新默认对象。不要声明旧存储键常量，也不要读取 `vykor-desktop-theme`。
 
 - [x] **步骤 4：运行测试验证通过**
 
@@ -183,7 +183,7 @@ expect(tokens.accent).not.toBe("#006AFF");
 - [x] **步骤 2：运行测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-colors.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-colors.test.ts
 ```
 
 预期：FAIL，颜色模块尚不存在。
@@ -261,7 +261,7 @@ expect(availability.consolas).toBe(false);
 - [x] **步骤 2：运行字体测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-fonts.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-fonts.test.ts
 ```
 
 预期：FAIL，字体注册表尚不存在。
@@ -293,7 +293,7 @@ export async function detectLocalFontAvailability(
 - [x] **步骤 4：加入并导入 Geist Mono**
 
 ```powershell
-pnpm --filter @openharness/desktop add -D @fontsource-variable/geist-mono@^5.3.0
+pnpm --filter @vykor/desktop add -D @fontsource-variable/geist-mono@^5.3.0
 ```
 
 在 `main.css` 顶部现有 Inter 导入旁增加：
@@ -305,8 +305,8 @@ pnpm --filter @openharness/desktop add -D @fontsource-variable/geist-mono@^5.3.0
 - [x] **步骤 5：运行字体测试和桌面类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-fonts.test.ts
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-fonts.test.ts
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：全部通过，锁文件只增加 Geist Mono 相关条目。
@@ -331,7 +331,7 @@ git commit -m "feat(desktop): register appearance fonts"
 
 测试文件使用 `// @vitest-environment jsdom`，通过 `React.createElement()` 避免在 `.test.ts` 中写 JSX。建立可控的 `matchMedia`，覆盖：
 
-- 新键不存在且只有 `openharness-desktop-theme=dark` 时仍得到 `theme=system`；
+- 新键不存在且只有 `vykor-desktop-theme=dark` 时仍得到 `theme=system`；
 - `system` 随系统明暗模式变化；
 - `reducedMotion=system/on/off` 得到正确布尔值，`off` 可以覆盖系统 reduce；
 - 根节点得到 class、`data-reduced-motion`、字体/字号和全部颜色 token；
@@ -354,7 +354,7 @@ function Probe() {
 - [x] **步骤 2：运行 Provider 测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-provider.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-provider.test.ts
 ```
 
 预期：FAIL，Provider 尚不存在。
@@ -405,8 +405,8 @@ Provider 用 `MotionConfig` 包裹 children：
 - [x] **步骤 5：运行定向测试和类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-provider.test.ts
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-provider.test.ts
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：Provider 测试和类型检查全部通过。新 Provider 此时尚未挂到应用根部，现有 ThemeProvider 暂时保持原状，任务 5 将以一个完整提交完成切换和删除。
@@ -450,7 +450,7 @@ expect(nextExplicitTheme("light")).toBe("dark");
 - [x] **步骤 2：运行相关测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-actions.test.ts src/renderer/src/components/desktop/layout/main-layout/main-layout-project-operation-error.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-actions.test.ts src/renderer/src/components/desktop/layout/main-layout/main-layout-project-operation-error.test.ts
 ```
 
 预期：FAIL，调用方仍依赖旧 Hook 或缺少 helper。
@@ -492,7 +492,7 @@ const { resolvedReducedMotion } = useAppearance();
 - [x] **步骤 6：确认没有旧入口**
 
 ```powershell
-rg -n "ThemeProvider|useTheme|openharness-desktop-theme|prefers-reduced-motion|useReducedMotion" apps/desktop/src/renderer/src
+rg -n "ThemeProvider|useTheme|vykor-desktop-theme|prefers-reduced-motion|useReducedMotion" apps/desktop/src/renderer/src
 ```
 
 预期：生产代码零命中；测试中只允许“不读取旧键”的字符串断言。`main.css` 不再有 `@media (prefers-reduced-motion: reduce)`。
@@ -500,8 +500,8 @@ rg -n "ThemeProvider|useTheme|openharness-desktop-theme|prefers-reduced-motion|u
 - [x] **步骤 7：运行测试和类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-provider.test.ts src/renderer/src/components/appearance/appearance-actions.test.ts src/renderer/src/components/desktop/layout/main-layout/main-layout-project-operation-error.test.ts
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-provider.test.ts src/renderer/src/components/appearance/appearance-actions.test.ts src/renderer/src/components/desktop/layout/main-layout/main-layout-project-operation-error.test.ts
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：全部通过。
@@ -546,7 +546,7 @@ expect(css).toContain("font-size: var(--ui-font-size)");
 - [ ] **步骤 2：运行契约测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts
 ```
 
 预期：FAIL，列出对话界面的固定像素字号和 Markdown 固定值。
@@ -575,8 +575,8 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/a
 - [x] **步骤 5：运行契约、对话测试和类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts src/renderer/src/components/desktop/conversation-page/transcript.test.ts src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts src/renderer/src/components/desktop/conversation-page/transcript.test.ts src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：全部通过。
@@ -629,8 +629,8 @@ git commit -m "refactor(desktop): apply appearance typography to conversations"
 - [x] **步骤 4：运行契约、相关测试和类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts src/renderer/src/components/desktop/settings-page/attachment-storage-settings.test.ts
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts src/renderer/src/components/desktop/settings-page/attachment-storage-settings.test.ts
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：契约测试、存储设置回归测试和类型检查全部通过；调度页面当前没有专用渲染测试，由排版契约与 TypeScript 编译共同覆盖。
@@ -702,8 +702,8 @@ line-height: var(--code-line-height);
 - [x] **步骤 5：运行契约、工具测试和类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-typography-contract.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：全部通过。额外运行：
@@ -777,7 +777,7 @@ expect(setPreference).toHaveBeenCalledWith("accent", {
 - [x] **步骤 3：运行页面测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts
 ```
 
 预期：FAIL，页面组件尚不存在。
@@ -807,13 +807,13 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/a
 selectedSection === "外观" ? <AppearanceSettings /> : ...
 ```
 
-页面头部说明改为“调整 OpenHarness 在当前设备上的显示方式。更改会立即预览并自动保存。”，不再显示占位卡。
+页面头部说明改为“调整 Vykor 在当前设备上的显示方式。更改会立即预览并自动保存。”，不再显示占位卡。
 
 - [x] **步骤 6：运行页面、设置导航测试和类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts src/renderer/src/components/desktop/settings-page/settings-navigation.test.ts
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts src/renderer/src/components/desktop/settings-page/settings-navigation.test.ts
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：全部通过。
@@ -837,7 +837,7 @@ git commit -m "feat(desktop): add appearance settings page"
 - [x] **步骤 1：运行全部外观定向测试**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance
 ```
 
 预期：配置、颜色、字体、Provider、排版契约和页面测试全部通过。
@@ -845,9 +845,9 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/a
 - [x] **步骤 2：运行桌面端完整质量检查**
 
 ```powershell
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 git diff --check
 ```
 
@@ -856,7 +856,7 @@ git diff --check
 - [x] **步骤 3：检查不兼容升级和范围边界**
 
 ```powershell
-rg -n "ThemeProvider|useTheme|openharness-desktop-theme|@media \(prefers-reduced-motion: reduce\)|useReducedMotion|text-\[[0-9.]+px\]" apps/desktop/src/renderer/src
+rg -n "ThemeProvider|useTheme|vykor-desktop-theme|@media \(prefers-reduced-motion: reduce\)|useReducedMotion|text-\[[0-9.]+px\]" apps/desktop/src/renderer/src
 rg -n "fontSize: 13|Cascadia Mono, CaskaydiaCove" apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx
 ```
 
@@ -865,7 +865,7 @@ rg -n "fontSize: 13|Cascadia Mono, CaskaydiaCove" apps/desktop/src/renderer/src/
 - [ ] **步骤 4：运行应用并检查真实计算样式**
 
 ```powershell
-pnpm --filter @openharness/desktop dev
+pnpm --filter @vykor/desktop dev
 ```
 
 在外观页依次设为 UI 12/18 px、代码 11/18 px，并在 DevTools Console 对实际元素运行：
@@ -921,7 +921,7 @@ git commit -m "docs(desktop): record appearance verification"
 
 - 任务 6–8 原计划新增的 `appearance-typography-contract.test.ts` 属于扫描源码字符串的伪测试，按测试规范不落库；改为运行真实组件测试、Web 类型检查以及固定字号静态扫描。对话、页面、工具和 Shadow DOM 的实际改造均已完成。
 - 外观定向测试共 6 个文件、36 个用例，全部通过；`typecheck:web` 和外观目录定向 ESLint 通过。
-- 初次验收时，桌面测试因 `packages/server/src/application/daemon-application.ts` 引用未声明的 `@openharness/tools` 而有 1 个套件无法加载。合并远端 `main` 的修复提交 `e23c6d10` 后，桌面测试 74 个文件、464 个用例全部通过，完整桌面类型检查和正式构建也通过。
+- 初次验收时，桌面测试因 `packages/server/src/application/daemon-application.ts` 引用未声明的 `@vykor/tools` 而有 1 个套件无法加载。合并远端 `main` 的修复提交 `e23c6d10` 后，桌面测试 74 个文件、464 个用例全部通过，完整桌面类型检查和正式构建也通过。
 - 完整应用无法启动后，使用只加载真实 `AppearanceProvider`、`AppearanceSettings` 和正式样式的临时渲染预览完成视觉检查；临时文件已删除。验证了浅色/深色/系统主题、预设与自定义颜色、UI 12/18 px、代码 11/18 px、本机字体、方向键加空格键操作、恢复默认，以及 480 px 窄窗口无横向滚动。
 - 视觉检查发现并修复两项问题：单值 Slider 误渲染两个手柄；恢复默认成功后确认框未关闭。两项均先增加失败断言，再完成修复并通过回归。
 - 任务 10 的步骤 4–5 保持未勾选：设置页已完成真实渲染、响应式和键盘验收，但对话区、输入框、代码块、Diff 与 xterm 的同窗计算样式未逐项手工记录；自动测试、静态边界检查和正式构建均已覆盖对应代码路径。

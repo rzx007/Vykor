@@ -5,7 +5,7 @@ import type {
   McpRuntimeSyncResult,
   McpRuntimeRegistry,
   McpServerIdentity,
-} from "@openharness/core";
+} from "@vykor/core";
 
 /**
  * Process-wide coordinator over the active MCP Runtimes.

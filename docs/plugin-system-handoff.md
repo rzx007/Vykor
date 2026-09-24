@@ -1,4 +1,4 @@
-# OpenHarness 插件系统最终形态交接
+# Vykor 插件系统最终形态交接
 
 > 状态：当前架构与实现交接。
 
@@ -10,7 +10,7 @@
 
 ## 1. 交接结论
 
-OpenHarness 插件系统最终只保留一种运行格式：**OpenHarness Native Plugin（原生插件）**。
+Vykor 插件系统最终只保留一种运行格式：**Vykor Native Plugin（原生插件）**。
 
 Claude Code、Codex、Git 仓库、npm 包、压缩包和 Marketplace 都只是不同的来源。它们可以有不同的下载与解析方式，但进入安装器之前必须变成同一种 Native Plugin。Runtime 不解析 Claude Code 或 Codex 的 manifest，也不根据来源格式走不同的执行分支。
 
@@ -86,7 +86,7 @@ Converter: claude-code@1.0.0
 
 ### 3.1 Source Plugin
 
-Source Plugin 是尚未进入 OpenHarness 的输入，例如：
+Source Plugin 是尚未进入 Vykor 的输入，例如：
 
 - Claude Code 插件目录；
 - Codex 插件目录；
@@ -99,12 +99,12 @@ Source Plugin 不可信。检查和转换阶段只能静态读取文件，不能
 
 ### 3.2 Native Plugin Artifact
 
-Native Plugin Artifact 是符合 OpenHarness 规范、可以送入 Validator 的完整目录。它可能由开发者直接编写，也可能由 Converter 生成。
+Native Plugin Artifact 是符合 Vykor 规范、可以送入 Validator 的完整目录。它可能由开发者直接编写，也可能由 Converter 生成。
 
 Runtime 唯一认可的 manifest 是：
 
 ```text
-<plugin-root>/.openharness-plugin/plugin.json
+<plugin-root>/.vykor-plugin/plugin.json
 ```
 
 ### 3.3 Installed Plugin
@@ -132,7 +132,7 @@ Desktop 插件页目前支持两个最小安装入口：从本地 Native Plugin 
 
 ```text
 my-plugin/
-├─ .openharness-plugin/
+├─ .vykor-plugin/
 │  └─ plugin.json
 ├─ skills/
 │  └─ review/
@@ -166,7 +166,7 @@ my-plugin/
 转换产物可以额外包含：
 
 ```text
-.openharness-conversion/
+.vykor-conversion/
 ├─ provenance.json
 ├─ plan.json
 └─ report.json
@@ -182,7 +182,7 @@ my-plugin/
 
 ```json
 {
-  "$schema": "https://openharness.dev/schemas/plugin-v1.json",
+  "$schema": "https://vykor.dev/schemas/plugin-v1.json",
   "schemaVersion": 1,
   "id": "example.quality-tools",
   "name": "quality-tools",
@@ -261,7 +261,7 @@ manifest 描述插件包本身，不保存以下运行状态：
 | Agents | 提供可委派的专门 Agent | Coordinator / Agent Runtime | 已实现 |
 | Hooks | 响应 Session、Tool 等 Runtime 事件 | Hook Executor | 已实现 |
 | MCP Servers | 连接外部工具与数据 | MCP Runtime | 已实现 |
-| Native Tools | 提供 OpenHarness 原生 Tool | 独立 Tool Host | Node 已实现，Wasm 未实现 |
+| Native Tools | 提供 Vykor 原生 Tool | 独立 Tool Host | Node 已实现，Wasm 未实现 |
 | LSP Servers | 提供诊断、定义、引用和代码导航 | LSP Runtime | 暂缓 |
 | Output Styles | 提供输出组织方式 | Output Style Registry | 未实现插件贡献 |
 | Themes | 提供界面主题与 token | Desktop Theme Registry | 未实现插件贡献 |
@@ -272,7 +272,7 @@ manifest 描述插件包本身，不保存以下运行状态：
 | UI | 提供页面、面板、设置和渲染贡献 | Desktop Contribution Host | 未实现插件贡献 |
 | Binaries | 提供受管理的命令入口 | Binary Resolver | 未实现 |
 
-“OpenHarness 自身已有某个系统”不等于“插件已经能贡献该能力”。只有完成 schema、静态校验、Loader、激活、卸载、诊断和测试闭环，才能把对应 Component 标记为已实现。
+“Vykor 自身已有某个系统”不等于“插件已经能贡献该能力”。只有完成 schema、静态校验、Loader、激活、卸载、诊断和测试闭环，才能把对应 Component 标记为已实现。
 
 尚未支持的 Component 可以被 schema 识别，但加载时必须返回明确的 `unsupported` 诊断，不能静默忽略。
 
@@ -360,7 +360,7 @@ Source Resolver 负责下载、解压、固定版本和校验摘要。压缩包�
 
 - 在安装前展示依赖、来源和安装脚本；
 - 默认禁止 npm lifecycle script，除非有更强隔离和明确批准；
-- 使用插件专属目录，不污染 OpenHarness 自身依赖；
+- 使用插件专属目录，不污染 Vykor 自身依赖；
 - 保存 lock、解析版本和完整性摘要；
 - 支持失败回滚、卸载清理和离线复用；
 - 将网络、进程和文件写入纳入权限审批与审计。
@@ -376,7 +376,7 @@ Installer 不关心输入来自本地、Git、npm、archive、Marketplace、Clau
 目标目录：
 
 ```text
-~/.openharness-ts/plugins/
+~/.vykor/plugins/
 ├─ installed.json
 ├─ cache/
 │  └─ <plugin-id>/
@@ -502,17 +502,17 @@ Native Tool 在 WSL、远程主机或其他执行环境中必须显式声明可�
 最终 CLI 建议保留以下稳定命令：
 
 ```text
-ohs plugin list [--verbose] [--json]
-ohs plugin details <id>
-ohs plugin validate <path>
-ohs plugin install <source> [--from <format>]
-ohs plugin link <native-directory>
-ohs plugin convert <source> --from <format> --output <directory>
-ohs plugin enable <id>
-ohs plugin disable <id>
-ohs plugin reload
-ohs plugin uninstall <id>
-ohs plugin repair <id>
+vk plugin list [--verbose] [--json]
+vk plugin details <id>
+vk plugin validate <path>
+vk plugin install <source> [--from <format>]
+vk plugin link <native-directory>
+vk plugin convert <source> --from <format> --output <directory>
+vk plugin enable <id>
+vk plugin disable <id>
+vk plugin reload
+vk plugin uninstall <id>
+vk plugin repair <id>
 ```
 
 默认文本输出和 `--json` 必须由同一份结构化结果生成，不能依赖解析 stderr。
@@ -574,7 +574,7 @@ resolve new source
 - Native schema 目标版本改变；
 - conversion options 改变；
 - mapping semantic version 改变；
-- OpenHarness 新增了之前 unsupported 的组件。
+- Vykor 新增了之前 unsupported 的组件。
 
 ### 卸载
 
@@ -588,11 +588,11 @@ resolve new source
 
 | 模块 | 负责 | 不负责 |
 |---|---|---|
-| `@openharness/plugins` | Native schema、路径校验、组件加载、安装记录、快照校验 | Claude/Codex 解析、网络下载、Marketplace UI |
-| `@openharness/plugin-converters` | detect、inspect、plan、convert、report | 安装、运行、依赖安装、远程下载 |
+| `@vykor/plugins` | Native schema、路径校验、组件加载、安装记录、快照校验 | Claude/Codex 解析、网络下载、Marketplace UI |
+| `@vykor/plugin-converters` | detect、inspect、plan、convert、report | 安装、运行、依赖安装、远程下载 |
 | Source Resolver | Git/npm/archive/Marketplace 来源解析与完整性校验 | 组件转换、Runtime 激活 |
 | Dependency Preparer | 准备经过批准的插件依赖 | 猜测依赖、执行未批准脚本 |
-| `@openharness/agent-runtime` | 发现已安装插件并激活组件 | 安装插件、解析外部 manifest |
+| `@vykor/agent-runtime` | 发现已安装插件并激活组件 | 安装插件、解析外部 manifest |
 | Server Plugin Service | 管理用例、状态变更、Runtime 失效 | 自己实现另一套 Validator |
 | Desktop / CLI | 用户交互和结果展示 | 直接写 cache 或 `installed.json` |
 | Marketplace | 发现、版本和可信来源 metadata | 定义新的运行格式、绕过 Installer |
@@ -651,7 +651,7 @@ Native Plugin → 在 daemon 主进程注册 Converter
 
 ### 暂缓
 
-- Native LSP。等 OpenHarness 的 LSP 工具与 Runtime 契约稳定后再设计插件贡献，不提前写兼容层。
+- Native LSP。等 Vykor 的 LSP 工具与 Runtime 契约稳定后再设计插件贡献，不提前写兼容层。
 
 ## 17. 建议实施顺序
 
@@ -708,7 +708,7 @@ LSP 不进入以上近期顺序。
 
 后续实现和评审至少要守住这些约束：
 
-1. Runtime 只接受 `.openharness-plugin/plugin.json`。
+1. Runtime 只接受 `.vykor-plugin/plugin.json`。
 2. 外部格式只能在安装前通过 Converter 进入。
 3. Converter 不执行 Source Plugin。
 4. Installer 不解析 Claude Code、Codex 或 Marketplace 私有格式。
@@ -718,7 +718,7 @@ LSP 不进入以上近期顺序。
 8. 项目目录不能自动把项目级授权扩大成用户级授权。
 9. 第三方 Tool 不在 daemon 主进程中 import。
 10. 未支持的 Component 返回 `unsupported`，不能静默忽略。
-11. `.openharness-conversion/` 不参与 Runtime 行为。
+11. `.vykor-conversion/` 不参与 Runtime 行为。
 12. Desktop、CLI 和 Marketplace 不直接写 cache 或安装记录。
 13. 插件来源、安装、激活和连接状态分别建模。
 14. 打开一个项目不能触发未经确认的下载、转换、授权或执行。

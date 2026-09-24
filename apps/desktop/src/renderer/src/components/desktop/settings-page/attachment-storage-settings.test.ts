@@ -9,7 +9,7 @@ import type {
   AttachmentStorageIssue,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@openharness/client"
+} from "@vykor/client"
 import { AttachmentStorageSettings } from "./attachment-storage-settings"
 
 describe("AttachmentStorageSettings", () => {

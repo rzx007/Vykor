@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpRuntimeSyncResult, McpServerIdentity } from "@openharness/core";
+import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/core";
 import { createMcpRoutes } from "./mcp.js";
 
 const fingerprint = "A".repeat(43);

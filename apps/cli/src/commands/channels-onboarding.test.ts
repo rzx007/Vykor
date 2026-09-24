@@ -63,7 +63,7 @@ describe("runChannelsAddFeishu", () => {
     expect(result).toMatchObject({ ok: true, appId: "cli_scanned", domain: "feishu" });
     expect(client.channels.startFeishuRegistration).toHaveBeenCalledWith({ domain: "feishu" });
     const logs = log.mock.calls.map(([message]) => String(message)).join("\n");
-    expect(logs).toContain("ohs channels serve");
+    expect(logs).toContain("vk channels serve");
     expect(logs).toContain("使用长连接接收事件");
   });
 

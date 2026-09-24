@@ -127,7 +127,7 @@ describe("goal actions", () => {
     draft(scope, "目标正文", [attachment()])
     useDesktopSessionStore.getState().setGoalMode(scope, true)
     vi.mocked(window.desktop.sessions.createGoal).mockRejectedValueOnce(
-      new Error("OpenHarnessApiError: Daemon operation is blocked by maintenance: 压缩上下文")
+      new Error("VykorApiError: Daemon operation is blocked by maintenance: 压缩上下文")
     )
     await useDesktopSessionStore.getState().submitGoal(scope)
     expect(useDesktopSessionStore.getState().goalComposersByScope[scope]?.error).toBe(

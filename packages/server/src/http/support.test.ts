@@ -1,4 +1,4 @@
-import { AttachmentError } from "@openharness/services";
+import { AttachmentError } from "@vykor/services";
 import { describe, expect, it } from "vitest";
 
 import { applicationErrorResponse, attachmentErrorResponse } from "./support.js";

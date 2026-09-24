@@ -35,7 +35,7 @@ export interface SessionOperationRunner {
 
 - [ ] **步骤 2：运行目标测试确认失败**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-operation-runner.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-operation-runner.test.ts`
 
 预期：FAIL，模块不存在。
 
@@ -52,8 +52,8 @@ export interface SessionOperationRunner {
 运行：
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-operation-runner.test.ts src/application/session/__test__/session-goal-service.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-operation-runner.test.ts src/application/session/__test__/session-goal-service.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：PASS。
@@ -76,7 +76,7 @@ cancelQueuedPrompt(sessionId: string, inputId: string): Promise<CancelQueuedProm
 
 - [ ] **步骤 2：运行新测试确认类尚不存在**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-interaction-service*.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-interaction-service*.test.ts`
 
 预期：FAIL。
 
@@ -98,8 +98,8 @@ cancelQueuedPrompt(sessionId: string, inputId: string): Promise<CancelQueuedProm
 
 ```powershell
 rg -n 'SessionApplicationService|session-application-service|withSessionOperation' packages/server/src
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/server test
 ```
 
 预期：`rg` 无输出；测试 PASS。
@@ -142,10 +142,10 @@ return {
 运行：
 
 ```powershell
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/server test
 pnpm check:architecture
 ```
 

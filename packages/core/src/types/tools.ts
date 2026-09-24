@@ -6,9 +6,9 @@ import type {
   AgentPermissionRequest,
   AgentScheduleEffects,
 } from "./runtime";
-import type { AgentTerminalHost } from "@openharness/terminal";
-import type { AgentJobHost } from "@openharness/jobs";
-import type { ExecutionEnvironmentHandle, ShellDescriptor } from "@openharness/environment";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import type { AgentJobHost } from "@vykor/jobs";
+import type { ExecutionEnvironmentHandle, ShellDescriptor } from "@vykor/environment";
 
 export interface McpAuthConfigureInput {
   serverName: string;

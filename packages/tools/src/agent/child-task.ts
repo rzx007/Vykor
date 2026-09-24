@@ -1,5 +1,5 @@
-import type { AgentChildController } from "@openharness/core";
-import type { AwaitExecutionResult } from "@openharness/services";
+import type { AgentChildController } from "@vykor/core";
+import type { AwaitExecutionResult } from "@vykor/services";
 
 export async function awaitFrameworkChildTask(
   children: AgentChildController,

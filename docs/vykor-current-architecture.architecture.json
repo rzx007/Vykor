@@ -2,9 +2,9 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "OpenHarness-ts 当前架构图",
+    "title": "Vykor 当前架构图",
     "locale": "zh-CN",
-    "output": "docs/openharness-current-architecture.html",
+    "output": "docs/vykor-current-architecture.html",
     "quality_profile": "showcase",
     "repository": {
       "url": "https://github.com/rzx007/openharness-ts.git",
@@ -49,7 +49,7 @@
     {
       "id": "client",
       "type": "backend",
-      "label": "@openharness/client",
+      "label": "@vykor/client",
       "sublabel": "snapshot + SSE reducer",
       "tag": "packages/client",
       "pos": [250, 270],
@@ -62,7 +62,7 @@
     {
       "id": "protocol",
       "type": "security",
-      "label": "@openharness/protocol",
+      "label": "@vykor/protocol",
       "sublabel": "请求/响应/事件公共类型",
       "tag": "packages/protocol",
       "pos": [250, 120],
@@ -126,7 +126,7 @@
     {
       "id": "runtime",
       "type": "backend",
-      "label": "@openharness/agent-runtime",
+      "label": "@vykor/agent-runtime",
       "sublabel": "Agent / child agent",
       "tag": "Runtime Kernel",
       "pos": [900, 270],

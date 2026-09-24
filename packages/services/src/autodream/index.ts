@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import {
   getDetachedProcessSupervisor,
   type DetachedProcessExecution,
@@ -35,15 +35,15 @@ export { buildConsolidationPrompt, MAX_ENTRYPOINT_LINES, ENTRYPOINT_NAME } from 
 /**
  * Auto-dream 服务（移植自 Python autodream/service.py）。
  *
- * dream = 拉一个 `ohs --print <整合 prompt>` 子进程（type:"dream"），让模型
+ * dream = 拉一个 `vk --print <整合 prompt>` 子进程（type:"dream"），让模型
  * 反思性地重组 memory 目录。跑前整目录备份 + 抢整合锁；失败/被杀回滚锁 mtime。
  *
  * 与 Python 差异：① argv 不带 api-key（TS teammate 同约定，key 走 settings/env）；
  * ② stale 候选由调用方经 staleSection 传入（TS MemoryManager.findStaleCandidates
- *   是实例方法，服务层不持有实例）；③ runner 只有 openharness 形态（无 ohmo）。
+ *   是实例方法，服务层不持有实例）；③ runner 只有 vykor 形态（无 ohmo）。
  */
 
-const CHILD_ENV = "OPENHARNESS_AUTODREAM_CHILD";
+const CHILD_ENV = "VYKOR_AUTODREAM_CHILD";
 const SESSION_SCAN_INTERVAL_SECONDS = 10 * 60;
 const DEFAULT_MIN_HOURS = 24;
 const DEFAULT_MIN_SESSIONS = 3;
@@ -146,7 +146,7 @@ export async function startDreamNow(options: StartDreamOptions): Promise<Detache
     : createMemoryBackup(memoryDir, { appLabel: options.appLabel });
 
   const extra =
-    `Application context: \`${options.appLabel ?? "openharness"}\`.\n` +
+    `Application context: \`${options.appLabel ?? "vykor"}\`.\n` +
     "Tool constraints for this run: only modify files under the memory directory. " +
     "Use shell commands only for read-only inspection.\n\n" +
     `Sessions since last consolidation (${sessionIds.length}):\n` +
@@ -158,7 +158,7 @@ export async function startDreamNow(options: StartDreamOptions): Promise<Detache
 
   const env: Record<string, string> = {
     [CHILD_ENV]: "1",
-    OPENHARNESS_AUTODREAM_MEMORY_DIR: memoryDir,
+    VYKOR_AUTODREAM_MEMORY_DIR: memoryDir,
   };
   const settings = options.settings;
   const cliEntry = options.cliEntry ?? process.argv[1] ?? "";
@@ -172,7 +172,7 @@ export async function startDreamNow(options: StartDreamOptions): Promise<Detache
   // 同一 memoryDir 的 dream 被锁互斥，env 标记可唯一定位本任务。
   const unregister = runner.registerExecutionListener((done, event) => {
     if (event !== "completed") return;
-    if (done.type !== "dream" || done.env?.OPENHARNESS_AUTODREAM_MEMORY_DIR !== memoryDir) return;
+    if (done.type !== "dream" || done.env?.VYKOR_AUTODREAM_MEMORY_DIR !== memoryDir) return;
     unregister();
     const status = done.status as string;
     if (status === "failed" || status === "stopped" || (done.exitCode ?? 0) !== 0 || options.preview) {

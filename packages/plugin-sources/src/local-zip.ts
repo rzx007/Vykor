@@ -16,7 +16,7 @@ const MAX_COMPRESSION_RATIO = 200;
 const MAX_PATH_BYTES = 1_024;
 const MAX_DEPTH = 32;
 const PRIVATE_PREFIX = "oh-plugin-zip-";
-const MANIFEST_PATH = ".openharness-plugin/plugin.json";
+const MANIFEST_PATH = ".vykor-plugin/plugin.json";
 
 export interface ResolvedLocalPluginZip {
   archiveDigest: string;
@@ -149,7 +149,7 @@ function candidateWrapper(entries: readonly { path: string; directory: boolean }
     .flatMap((entry) => {
       if (entry.path === MANIFEST_PATH) return [undefined];
       const segments = entry.path.split("/");
-      return segments.length === 3 && segments[1] === ".openharness-plugin" && segments[2] === "plugin.json" ? [segments[0]] : [];
+      return segments.length === 3 && segments[1] === ".vykor-plugin" && segments[2] === "plugin.json" ? [segments[0]] : [];
     });
   if (candidates.length !== 1) throw archiveError("archive must contain exactly one manifest at its root or under one wrapper directory");
   const wrapper = candidates[0];

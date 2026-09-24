@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/swarm",
+  "name": "@vykor/swarm",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,7 +17,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/core": "workspace:*"
+    "@vykor/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { resolveLocalPluginArchive, resolveLocalPluginZip } from "./index.js";
 
 const temporaryRoots: string[] = [];
-const manifest = ".openharness-plugin/plugin.json";
+const manifest = ".vykor-plugin/plugin.json";
 
 let scopedTmpdir: string;
 let previousTempEnv: { TEMP?: string; TMP?: string; TMPDIR?: string };
@@ -163,7 +163,7 @@ it.each([
 
 it("resolves a single wrapper directory only when every archive entry is inside it", async () => {
   const archive = await writeZip({
-    "my-plugin/.openharness-plugin/plugin.json": '{"id":"example"}',
+    "my-plugin/.vykor-plugin/plugin.json": '{"id":"example"}',
     "my-plugin/index.js": "export default 1;",
   });
   const resolved = await resolveLocalPluginZip(archive);
@@ -175,13 +175,13 @@ it.each([
   ["a backslash path", `${manifest.replace("/", "\\")}`],
   ["an absolute path", `/${manifest}`],
   ["a drive path", `C:/${manifest}`],
-  ["a NUL path", ".openharness-plugin/\0plugin.json"],
-  ["a reserved Windows name", ".openharness-plugin/CON"],
-  ["a colon segment", ".openharness-plugin/a:b"],
-  ["a trailing-dot segment", ".openharness-plugin/file."],
-  ["an empty segment", ".openharness-plugin//plugin.json"],
-  ["a dot segment", ".openharness-plugin/./plugin.json"],
-  ["a dot-dot segment", ".openharness-plugin/../plugin.json"],
+  ["a NUL path", ".vykor-plugin/\0plugin.json"],
+  ["a reserved Windows name", ".vykor-plugin/CON"],
+  ["a colon segment", ".vykor-plugin/a:b"],
+  ["a trailing-dot segment", ".vykor-plugin/file."],
+  ["an empty segment", ".vykor-plugin//plugin.json"],
+  ["a dot segment", ".vykor-plugin/./plugin.json"],
+  ["a dot-dot segment", ".vykor-plugin/../plugin.json"],
 ] as const)("rejects %s before extraction", async (_label, name) => {
   await expectRejected(await writeStoredZip([{ name }]), /unsafe archive entry path|absolute path|invalid relative path|invalid characters|backslash/i);
 });
@@ -256,17 +256,17 @@ it("rejects TAR symlinks and special entry types before extraction", async () =>
 
 it.each([
   ["an absolute path", `/${manifest}`],
-  ["a dot-dot path", ".openharness-plugin/../plugin.json"],
-  ["a trailing-space path", ".openharness-plugin/plugin.json "],
+  ["a dot-dot path", ".vykor-plugin/../plugin.json"],
+  ["a trailing-space path", ".vykor-plugin/plugin.json "],
 ] as const)("rejects TAR %s before extraction", async (_label, name) => {
   await expect(resolveLocalPluginArchive(await writeTar({ [manifest]: "{}", [name]: "bad" }))).rejects.toThrow(/unsafe archive entry path/i);
 });
 
 it("rejects archives with zero, multiple, deep, or wrapper-escaping manifests", async () => {
   await expectRejected(await writeZip({ "index.js": "export {};" }), /exactly one manifest/i);
-  await expectRejected(await writeZip({ [manifest]: "{}", "wrapped/.openharness-plugin/plugin.json": "{}" }), /exactly one manifest/i);
-  await expectRejected(await writeZip({ "a/b/.openharness-plugin/plugin.json": "{}" }), /exactly one manifest/i);
-  await expectRejected(await writeZip({ "wrapped/.openharness-plugin/plugin.json": "{}", "README.md": "outside" }), /outside/i);
+  await expectRejected(await writeZip({ [manifest]: "{}", "wrapped/.vykor-plugin/plugin.json": "{}" }), /exactly one manifest/i);
+  await expectRejected(await writeZip({ "a/b/.vykor-plugin/plugin.json": "{}" }), /exactly one manifest/i);
+  await expectRejected(await writeZip({ "wrapped/.vykor-plugin/plugin.json": "{}", "README.md": "outside" }), /outside/i);
 });
 
 it("rejects a truncated archive, a bad CRC, and a declared-versus-actual byte mismatch", async () => {

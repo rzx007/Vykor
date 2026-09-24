@@ -2,11 +2,11 @@ import type { IOType } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import process from "node:process";
 import { PassThrough, type Stream } from "node:stream";
-import type { Settings } from "@openharness/core";
-import type { EnvironmentProcess, EnvironmentProcessExecutor } from "@openharness/environment";
+import type { Settings } from "@vykor/core";
+import type { EnvironmentProcess, EnvironmentProcessExecutor } from "@vykor/environment";
 import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
-import { createProcess, type SandboxPolicy } from "@openharness/sandbox";
+import { createProcess, type SandboxPolicy } from "@vykor/sandbox";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import {
@@ -23,7 +23,7 @@ export interface SandboxStdioClientTransportOptions extends StdioServerParameter
 }
 
 /**
- * MCP stdio transport that starts the server through OpenHarness' process
+ * MCP stdio transport that starts the server through Vykor' process
  * factory, so local SRT and execution-environment rules apply to MCP servers too.
  */
 export class SandboxStdioClientTransport implements Transport {

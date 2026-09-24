@@ -7,7 +7,7 @@ import { SessionStore } from "../store.js";
 
 describe("SessionStore task waiting & notification contracts", () => {
   it("wakes up waiters upon successful update, reserve, and transition, but avoids false wakeups", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-task-wait-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-task-wait-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
 
     try {
@@ -97,7 +97,7 @@ describe("SessionStore task waiting & notification contracts", () => {
   });
 
   it("handles double-read race condition when task is modified before or during wait registration", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-task-race-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-task-race-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
 
     try {
@@ -122,7 +122,7 @@ describe("SessionStore task waiting & notification contracts", () => {
   });
 
   it("cleans up listener on abort signal and on timeout", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-task-clean-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-task-clean-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
 
     try {

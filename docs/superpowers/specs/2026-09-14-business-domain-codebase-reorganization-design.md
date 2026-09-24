@@ -1,4 +1,4 @@
-# OpenHarness 按业务域重组长期设计
+# Vykor 按业务域重组长期设计
 
 ## 状态
 
@@ -249,7 +249,7 @@ HTTP/SSE 只负责协议输入解析、调用 application service、结果映射
 
 ```text
 packages/client/src/
-├─ openharness-client.ts
+├─ vykor-client.ts
 ├─ transport/
 │  ├─ http-transport.ts
 │  ├─ sse-transport.ts

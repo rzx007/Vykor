@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDefaultToolRegistry } from "../registry.js";
-import { SkillRegistry } from "@openharness/skills";
+import { SkillRegistry } from "@vykor/skills";
 
 describe("createDefaultToolRegistry", () => {
   it("registers all built-in tools", () => {

@@ -8,7 +8,7 @@ import { readInstalledPluginStore, updateInstalledPluginStore } from "./store.js
 
 const fixture = fileURLToPath(new URL("../../fixtures/native-v1/minimal-skill", import.meta.url));
 let root: string;
-beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "ohs-plugin-install-")); });
+beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vk-plugin-install-")); });
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("installLocalNativePlugin", () => {
@@ -20,10 +20,10 @@ describe("installLocalNativePlugin", () => {
     expect(result.status).toBe("installed");
     const store = await readInstalledPluginStore(join(root, "installed.json"));
     const record = Object.values(store.plugins)[0];
-    expect(record?.id).toBe("dev.openharness.minimal-skill");
-    expect(record?.cachePath).toBe(join(root, "cache", "dev.openharness.minimal-skill", `1.0.0-${record?.behaviorDigest}`));
+    expect(record?.id).toBe("dev.vykor.minimal-skill");
+    expect(record?.cachePath).toBe(join(root, "cache", "dev.vykor.minimal-skill", `1.0.0-${record?.behaviorDigest}`));
     expect((record as { behaviorDigest?: string } | undefined)?.behaviorDigest).toMatch(/^[a-f0-9]{64}$/);
-    expect(await readdir(join(root, "cache", "dev.openharness.minimal-skill"))).toEqual([`1.0.0-${record?.behaviorDigest}`]);
+    expect(await readdir(join(root, "cache", "dev.vykor.minimal-skill"))).toEqual([`1.0.0-${record?.behaviorDigest}`]);
   });
 
   it("preserves enabled state and installedAt when reinstalling the same user plugin", async () => {
@@ -89,7 +89,7 @@ describe("installLocalNativePlugin", () => {
 
   it("records converted origin from Native manifest metadata without conversion side files", async () => {
     const source = join(root, "converted-native");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
     await mkdir(join(source, "skills", "metadata-only"), { recursive: true });
     await writeFile(join(source, "skills", "metadata-only", "SKILL.md"), [
       "---",
@@ -98,7 +98,7 @@ describe("installLocalNativePlugin", () => {
       "---",
       "Use the fixture.",
     ].join("\n"));
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), JSON.stringify({
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), JSON.stringify({
       schemaVersion: 1,
       id: "converted.claude.metadata-only",
       name: "metadata-only",

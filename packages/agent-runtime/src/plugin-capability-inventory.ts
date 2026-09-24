@@ -2,7 +2,7 @@ import type {
   InstalledPluginRecord,
   LoadedNativePlugin,
   PluginDiagnostic,
-} from "@openharness/plugins";
+} from "@vykor/plugins";
 
 export interface PluginCapabilityOwner {
   pluginId: string;

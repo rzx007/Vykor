@@ -50,15 +50,15 @@ type McpServerConfig =
 ## OAuth CLI
 
 ```bash
-ohs mcp add linear --url https://mcp.linear.app/mcp
-ohs mcp login linear --scopes read
-ohs mcp get linear --json
-ohs mcp logout linear
+vk mcp add linear --url https://mcp.linear.app/mcp
+vk mcp login linear --scopes read
+vk mcp get linear --json
+vk mcp logout linear
 ```
 
 - `add --url` 只保存配置，不自动发起授权；scope 必须在 `login --scopes` 显式确认。
 - `--no-browser` 会打印授权 URL，并允许粘贴完整 callback URL。
-- Token 与动态注册 secret 存在 `$OPENHARNESS_CONFIG_DIR/mcp-oauth.json`，不进入 settings 或命令输出；首版尚未接入系统 keyring。
+- Token 与动态注册 secret 存在 `$VYKOR_CONFIG_DIR/mcp-oauth.json`，不进入 settings 或命令输出；首版尚未接入系统 keyring。
 - 配置里的显式 `Authorization` Header 优先于 OAuth。存在冲突 Header 时，`mcp login` 会拒绝继续。
 - runtime 不打开浏览器、不执行 DCR、不扩大 scope。首次 401 可刷新并重发底层 HTTP 请求一次；403 `insufficient_scope` 要求用户显式重新登录。
 - 独立 CLI 修改凭据不会主动断开已经运行的 session，新连接会读取最新凭据。

@@ -1,5 +1,5 @@
-import type { IHookExecutor, IToolRegistry } from "@openharness/core";
-import type { LoadedNativePlugin, PluginDiagnostic } from "@openharness/plugins";
+import type { IHookExecutor, IToolRegistry } from "@vykor/core";
+import type { LoadedNativePlugin, PluginDiagnostic } from "@vykor/plugins";
 import { activateNativePluginTools, type NativeToolActivationResult } from "./native-tools/activate.js";
 
 export interface ActivateDiscoveredPluginsOptions {

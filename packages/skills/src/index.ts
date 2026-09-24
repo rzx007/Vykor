@@ -561,10 +561,10 @@ function uniqueDirectories(directories: readonly string[]): string[] {
  * 返回的目录列表按"低优先级在前、高优先级在后"排序（root 先、cwd 后），
  * 调用方按顺序加载时，cwd 层技能会覆盖 git-root 层的同名技能。
  *
- * 每层收集顺序：.agents/skills → .openharness-ts/skills。
+ * 每层收集顺序：.agents/skills → .vykor/skills。
  *
  * 若祖先链上没有 `.git`，只扫描 cwd 自身，避免把家目录下的个人技能
- * （如 `~/.openharness-ts/skills`）误标成 project。个人技能目录始终排除。
+ * （如 `~/.vykor/skills`）误标成 project。个人技能目录始终排除。
  */
 export async function findProjectSkillDirs(cwd: string): Promise<string[]> {
   const levels: string[] = [];
@@ -592,7 +592,7 @@ export async function findProjectSkillDirs(cwd: string): Promise<string[]> {
   for (const level of orderedLevels) {
     for (const dir of [
       join(level, ".agents", "skills"),
-      join(level, ".openharness-ts", "skills"),
+      join(level, ".vykor", "skills"),
     ]) {
       if (excluded.has(normalizePathKey(dir))) continue;
       dirs.push(dir);
@@ -604,7 +604,7 @@ export async function findProjectSkillDirs(cwd: string): Promise<string[]> {
 /** 与 user 源加载路径对齐；这些目录绝不能再被标成 project。 */
 function personalSkillDirectories(): Set<string> {
   const configDir =
-    process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts");
+    process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
   const home = homedir();
   return new Set(
     [

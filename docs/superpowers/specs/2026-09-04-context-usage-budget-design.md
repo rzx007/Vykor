@@ -6,7 +6,7 @@
 
 ## 结论
 
-OpenHarness 在与「下一跳发送」**同源**的组装路径上，产出带桶标签的 ledger 段，再生成只读 `ContextUsageSnapshot`：按固定桶统计启发式 token，对照**当前 session 模型**的裸 `contextWindow` 计算占用百分比。桌面端提供与 Cursor Context 托盘同构的环 + 分段条 + 分类列表；CLI/HTTP 通过 `/context usage` 消费同一快照（优先读该同源缓存）。本版只做观测与软提示，不拦截发送、不自动裁剪。
+Vykor 在与「下一跳发送」**同源**的组装路径上，产出带桶标签的 ledger 段，再生成只读 `ContextUsageSnapshot`：按固定桶统计启发式 token，对照**当前 session 模型**的裸 `contextWindow` 计算占用百分比。桌面端提供与 Cursor Context 托盘同构的环 + 分段条 + 分类列表；CLI/HTTP 通过 `/context usage` 消费同一快照（优先读该同源缓存）。本版只做观测与软提示，不拦截发送、不自动裁剪。
 
 ## 已确认决策
 

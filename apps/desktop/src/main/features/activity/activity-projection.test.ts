@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { OpenHarnessClientState, SessionEventRecord } from "@openharness/client"
-import { createInitialClientState } from "@openharness/client"
+import type { VykorClientState, SessionEventRecord } from "@vykor/client"
+import { createInitialClientState } from "@vykor/client"
 import { projectSessionActivity, projectScheduledActivity } from "./activity-projection"
 
 const session = {
@@ -25,7 +25,7 @@ const event: SessionEventRecord = {
 
 describe("activity projection", () => {
   it("gives pending permission priority over a running session and sends no transcript", () => {
-    const state: OpenHarnessClientState = createInitialClientState()
+    const state: VykorClientState = createInitialClientState()
     state.buckets.s1 = {
       session,
       inputs: [],

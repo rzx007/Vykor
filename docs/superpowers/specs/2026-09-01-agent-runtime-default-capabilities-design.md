@@ -4,7 +4,7 @@
 
 ## 1. 背景
 
-OpenHarness 已经具备 Terminal、后台 Shell、Jobs、附件、长期记忆、Workflow、Schedules 等能力，但这些能力目前主要由 Host 注入。结果是：同一个 Agent 在 daemon 中功能完整，换成 CLI、SDK 或测试调用后，只要 Host 没有完成同样的接线，能力就会缺失。
+Vykor 已经具备 Terminal、后台 Shell、Jobs、附件、长期记忆、Workflow、Schedules 等能力，但这些能力目前主要由 Host 注入。结果是：同一个 Agent 在 daemon 中功能完整，换成 CLI、SDK 或测试调用后，只要 Host 没有完成同样的接线，能力就会缺失。
 
 问题不在这些功能本身，而在默认装配的责任放错了位置：
 

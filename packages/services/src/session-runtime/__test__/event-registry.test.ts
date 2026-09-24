@@ -122,7 +122,7 @@ describe("DurableEventRegistry", () => {
   });
 
   it("makes the store enforce the registry before allocating a cursor", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-event-registry-write-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-event-registry-write-"));
     const path = join(dir, "store.db");
     try {
       const store = new SessionStore({ path });

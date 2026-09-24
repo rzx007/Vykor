@@ -3,9 +3,9 @@ import type {
   McpOAuthCredentialRecord,
   McpRuntimeSyncResult,
   Settings,
-} from "@openharness/core";
-import type { McpOAuthCredentialStore } from "@openharness/mcp";
-import { buildMcpAuthServerSnapshot } from "@openharness/mcp";
+} from "@vykor/core";
+import type { McpOAuthCredentialStore } from "@vykor/mcp";
+import { buildMcpAuthServerSnapshot } from "@vykor/mcp";
 import {
   McpConfigApplicationService,
   type McpConfigApplicationServiceDeps,

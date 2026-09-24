@@ -10,7 +10,7 @@ import { SessionDatabase } from "./session-database.js";
 
 describe("DurableEventSequence", () => {
   it("restores its in-memory cursor from a transaction snapshot", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-event-sequence-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-event-sequence-"));
     const path = join(directory, "sessions.db");
     try {
       const database = SessionDatabase.open({ path });
@@ -30,7 +30,7 @@ describe("DurableEventSequence", () => {
   });
 
   it("does not reuse a reserved sequence window after restart", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-event-sequence-restart-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-event-sequence-restart-"));
     const path = join(directory, "sessions.db");
     try {
       const firstDatabase = SessionDatabase.open({ path });

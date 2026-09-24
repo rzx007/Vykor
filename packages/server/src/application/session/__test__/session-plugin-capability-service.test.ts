@@ -1,12 +1,12 @@
-import type { PluginCapabilityInventory, PluginCapabilityOwner } from "@openharness/agent-runtime";
-import type { SessionRecord, SessionUserInputItem } from "@openharness/protocol";
+import type { PluginCapabilityInventory, PluginCapabilityOwner } from "@vykor/agent-runtime";
+import type { SessionRecord, SessionUserInputItem } from "@vykor/protocol";
 import { describe, expect, it, vi } from "vitest";
 
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 import { SessionInteractionService } from "../session-interaction-service.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 
-const pluginId = "dev.openharness.quality";
+const pluginId = "dev.vykor.quality";
 const agentId = `${pluginId}:reviewer`;
 const session = { id: "s1", cwd: "/repo" } as SessionRecord;
 
@@ -54,17 +54,17 @@ describe("SessionPluginCapabilityService", () => {
   });
 
   it.each([
-    ["unknown", "dev.openharness.unknown", []],
-    ["disabled", "dev.openharness.disabled", []],
+    ["unknown", "dev.vykor.unknown", []],
+    ["disabled", "dev.vykor.disabled", []],
     [
       "conflicting",
-      "dev.openharness.conflicting",
+      "dev.vykor.conflicting",
       [{
         severity: "error",
         phase: "discover",
         code: "plugin_component_name_conflict",
         message: "conflict",
-        pluginId: "dev.openharness.conflicting",
+        pluginId: "dev.vykor.conflicting",
       }],
     ],
   ] as const)("rejects a %s plugin that is absent from the current inventory", async (_case, requestedId, diagnostics) => {
@@ -82,7 +82,7 @@ describe("SessionPluginCapabilityService", () => {
   });
 
   it("rejects references owned by different plugins", async () => {
-    const second = "dev.openharness.release";
+    const second = "dev.vykor.release";
     const service = capabilityService(inventory({ extraPluginId: second }));
 
     await expect(service.admit(session, [
@@ -95,7 +95,7 @@ describe("SessionPluginCapabilityService", () => {
   });
 
   it("uses inventory ownership when a plugin Skill source is forged", async () => {
-    const second = "dev.openharness.release";
+    const second = "dev.vykor.release";
     const service = capabilityService(inventory({ extraPluginId: second }));
 
     await expect(service.admit(session, [
@@ -172,7 +172,7 @@ describe("SessionPluginCapabilityService", () => {
       items: [{
         type: "capability",
         kind: "plugin",
-        pluginId: "dev.openharness.missing",
+        pluginId: "dev.vykor.missing",
         displayName: "Missing",
       }],
     })).rejects.toThrow("session_plugin_capability_unavailable");
@@ -188,8 +188,8 @@ describe("SessionPluginCapabilityService", () => {
     await application.admitPrompt("s1", {
       id: "ordinary-input",
       items: [{ type: "text", text: "hello" }],
-      metadata: { pluginId: "dev.openharness.forged", source: "desktop" },
-      runMetadata: { pluginId: "dev.openharness.forged", source: "desktop" },
+      metadata: { pluginId: "dev.vykor.forged", source: "desktop" },
+      runMetadata: { pluginId: "dev.vykor.forged", source: "desktop" },
     });
 
     expect(admitPromptAndMaybeRun).toHaveBeenCalledWith("s1", {
@@ -280,7 +280,7 @@ describe("SessionPluginCapabilityService", () => {
 
     await application.resumeRun("s1", sourceRun.id, {
       id: "ordinary-recovery-run",
-      metadata: { pluginId: "dev.openharness.forged", source: "desktop" },
+      metadata: { pluginId: "dev.vykor.forged", source: "desktop" },
       traceId: "trace-recovery",
     });
 
@@ -344,7 +344,7 @@ describe("SessionPluginCapabilityService", () => {
       items: [{
         type: "capability",
         kind: "plugin",
-        pluginId: "dev.openharness.missing",
+        pluginId: "dev.vykor.missing",
         displayName: "Missing",
       }],
       sourceMessageId: "latest-user-message",

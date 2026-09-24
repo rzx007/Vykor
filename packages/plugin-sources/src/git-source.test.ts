@@ -15,9 +15,9 @@ afterEach(async () => {
 function runnerWithHead(commit = "a".repeat(40)): GitRunner {
   return async (args, options) => {
     if (args.includes("checkout")) {
-      await mkdir(join(options.cwd, ".openharness-plugin"), { recursive: true });
+      await mkdir(join(options.cwd, ".vykor-plugin"), { recursive: true });
       await mkdir(join(options.cwd, ".git"), { recursive: true });
-      await writeFile(join(options.cwd, ".openharness-plugin", "plugin.json"), JSON.stringify({
+      await writeFile(join(options.cwd, ".vykor-plugin", "plugin.json"), JSON.stringify({
         schemaVersion: 1,
         id: "dev.example.git",
         name: "Git Plugin",
@@ -40,7 +40,7 @@ it("resolves a git plugin source by fetching a ref and removing git metadata", a
 
   expect(resolved.commit).toBe("a".repeat(40));
   expect(resolved.sourceDigest).toMatch(/^[a-f0-9]{64}$/);
-  expect(await readFile(join(resolved.candidateRoot, ".openharness-plugin", "plugin.json"), "utf8"))
+  expect(await readFile(join(resolved.candidateRoot, ".vykor-plugin", "plugin.json"), "utf8"))
     .toContain("dev.example.git");
   await expect(stat(join(resolved.candidateRoot, ".git"))).rejects.toThrow();
 });

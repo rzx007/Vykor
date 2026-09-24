@@ -5,7 +5,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@openharness/client"
+} from "@vykor/client"
 
 import type { DesktopAttachmentCandidate, DesktopAttachmentUploadEvent } from "@shared/attachment-types"
 

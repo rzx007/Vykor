@@ -26,8 +26,8 @@
 - 文件与目录的尾部提示都**不计入** `MAX_READ_BYTES`。
 - 缺失路径建议只能在父目录也通过 sandbox read 校验后生成；未授权时不得调用 `listDir` 或泄露兄弟条目名。
 - **必须同步更新三处既有文本精确断言**（否则实现后必红）：`read.test.ts:37`、`operations.test.ts:17`、`environment-path.test.ts:63`；现有图片测试不得删除或弱化。
-- 测试命令：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`（全量为 `pnpm --filter @openharness/tools exec vitest run`）。
-- 类型检查：`pnpm --filter @openharness/tools run check-types`。
+- 测试命令：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`（全量为 `pnpm --filter @vykor/tools exec vitest run`）。
+- 类型检查：`pnpm --filter @vykor/tools run check-types`。
 
 ---
 
@@ -164,7 +164,7 @@ describe("read helpers", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：FAIL，报错这些导出不存在（`isBinaryContent is not a function` 等）。
 
 - [ ] **步骤 3：新增常量与纯函数**
@@ -295,7 +295,7 @@ export function suggestSimilarNames(target: string, entries: string[]): string[]
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：PASS（现有 7 条 + 新增 10 条全绿；`execute` 未改动，现有断言不受影响）。
 
 - [ ] **步骤 5：Commit**
@@ -564,7 +564,7 @@ it("advertises offset-based continuation in its description", () => {
 
 - [ ] **步骤 3：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：FAIL。文件分支新用例失败（无尾部提示、控制字符二进制文案不一致、无越界报错、无有限数归一）；`description` 用例失败。现有图片测试应继续通过。
 
 - [ ] **步骤 4：改写 `execute` 的文件分支与 `description`**
@@ -697,17 +697,17 @@ import { fileOperationsFor, type FileOperations } from "./operations.js";
 
 - [ ] **步骤 5：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：PASS（现有 7 条 + 任务 1 的 10 条 + 本次 13 条全绿，包括既有图片用例）。
 
 - [ ] **步骤 6：跑整个 tools 包测试（含另两处断言）**
 
-运行：`pnpm --filter @openharness/tools exec vitest run`
+运行：`pnpm --filter @vykor/tools exec vitest run`
 预期：全绿。若 `operations.test.ts` 或 `environment-path.test.ts` 仍红，说明步骤 1 的断言未改到位，回去修正。
 
 - [ ] **步骤 7：类型检查**
 
-运行：`pnpm --filter @openharness/tools run check-types`
+运行：`pnpm --filter @vykor/tools run check-types`
 预期：通过。
 
 - [ ] **步骤 8：Commit**
@@ -911,7 +911,7 @@ it("preserves POSIX and Windows path namespaces in suggestions", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：FAIL。目录计数、行数截断、字节截断与越界用例失败；普通建议用例失败（缺失路径走外层 catch）；父目录未授权用例会错误泄露 `secret.txt`；`missingPathMessage` 尚未导出。
 
 - [ ] **步骤 3：替换 `readDirectoryListing` 并新增缺失路径分支**
@@ -1064,15 +1064,15 @@ async function describeMissingPath(
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：PASS（现有 7 条 + 任务 1 的 10 条 + 任务 2 的 13 条 + 本次 11 条全绿）。
 
 - [ ] **步骤 5：全量测试与类型检查**
 
-运行：`pnpm --filter @openharness/tools exec vitest run`
+运行：`pnpm --filter @vykor/tools exec vitest run`
 预期：全绿。
 
-运行：`pnpm --filter @openharness/tools run check-types`
+运行：`pnpm --filter @vykor/tools run check-types`
 预期：通过。
 
 - [ ] **步骤 6：Commit**

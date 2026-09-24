@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentRunNotAcceptingInputError,
   type AgentRunHandle,
-} from "@openharness/core";
+} from "@vykor/core";
 
 import {
   RunInterruptedError,

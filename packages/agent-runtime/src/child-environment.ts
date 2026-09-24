@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 
-import { getConfigDir, resolveGitRepository, type AgentChildSpawnInput, type AgentChildResult } from "@openharness/core";
+import { getConfigDir, resolveGitRepository, type AgentChildSpawnInput, type AgentChildResult } from "@vykor/core";
 
 export interface AgentChildEnvironmentLease {
   cwd: string;

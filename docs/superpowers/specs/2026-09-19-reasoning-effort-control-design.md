@@ -101,7 +101,7 @@ reasoningEfforts?: string[];
 
 - `packages/core/src/types/client.ts:5-13` `StreamMessageParams` 增加 `reasoningEffort?: string`。
 - `packages/core/src/types/runtime.ts:488` `QueryEngineOptions` 增加 `reasoningEffort?: string`。
-- `packages/agent-runtime/src/agent-options.ts:41-73` `OpenHarnessAgentConfiguration` 增加 `reasoningEffort?: string`。
+- `packages/agent-runtime/src/agent-options.ts:41-73` `VykorAgentConfiguration` 增加 `reasoningEffort?: string`。
 
 ### 设置与协议放宽
 

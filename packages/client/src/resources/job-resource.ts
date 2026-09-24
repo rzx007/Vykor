@@ -4,12 +4,12 @@ import type {
   JobSnapshot,
   JobStatus,
   JobWaitResult,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   decodeJobReadResult,
   decodeJobSnapshot,
   decodeJobWaitResult,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type {
   CreateBackgroundShellInput,
   CreateBackgroundShellResult,

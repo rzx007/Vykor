@@ -22,8 +22,8 @@
 - `Write` 成功后**不**把文件标为已读。
 - 存在性判定用 `operations.stat`，**不得**用 `readText` 探测（会把「存在但读不了」误判为不存在而绕过检查）。
 - 不修改 `operations.ts`、`edit.ts`、`read.ts` 的既有输出格式。
-- 测试命令：`pnpm --filter @openharness/core exec vitest run <file>`、`pnpm --filter @openharness/tools exec vitest run <file>`。
-- 类型检查：`pnpm --filter @openharness/core run typecheck`、`pnpm --filter @openharness/tools run typecheck`。
+- 测试命令：`pnpm --filter @vykor/core exec vitest run <file>`、`pnpm --filter @vykor/tools exec vitest run <file>`。
+- 类型检查：`pnpm --filter @vykor/core run typecheck`、`pnpm --filter @vykor/tools run typecheck`。
 
 ## 已知行为变化
 
@@ -110,7 +110,7 @@ describe("createReadFileRegistry", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/core exec vitest run src/engine/read-file-registry.test.ts`
+运行：`pnpm --filter @vykor/core exec vitest run src/engine/read-file-registry.test.ts`
 预期：FAIL，报错无法解析 `./read-file-registry.js`。
 
 - [ ] **步骤 3：新增类型**
@@ -181,7 +181,7 @@ export function createReadFileRegistry(
 
 - [ ] **步骤 5：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/core exec vitest run src/engine/read-file-registry.test.ts`
+运行：`pnpm --filter @vykor/core exec vitest run src/engine/read-file-registry.test.ts`
 预期：PASS。
 
 - [ ] **步骤 6：Commit**
@@ -266,7 +266,7 @@ it("shares one read-file registry across turns of the same engine", async () => 
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/core exec vitest run src/engine/query-engine-read-files.test.ts`
+运行：`pnpm --filter @vykor/core exec vitest run src/engine/query-engine-read-files.test.ts`
 预期：FAIL，`first.readFiles` 为 `undefined`。
 
 - [ ] **步骤 3：在 `QueryEngine` 上构造并注入**
@@ -291,15 +291,15 @@ import { createReadFileRegistry } from "./read-file-registry.js";
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/core exec vitest run src/engine/query-engine-read-files.test.ts`
+运行：`pnpm --filter @vykor/core exec vitest run src/engine/query-engine-read-files.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：跑 core 全量测试与类型检查**
 
-运行：`pnpm --filter @openharness/core exec vitest run`
+运行：`pnpm --filter @vykor/core exec vitest run`
 预期：全绿。
 
-运行：`pnpm --filter @openharness/core run typecheck`
+运行：`pnpm --filter @vykor/core run typecheck`
 预期：通过。
 
 - [ ] **步骤 6：Commit**
@@ -404,12 +404,12 @@ describe("fileReadTool read registry", () => {
 并在文件顶部补类型导入：
 
 ```ts
-import type { ReadFileRegistry } from "@openharness/core";
+import type { ReadFileRegistry } from "@vykor/core";
 ```
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：FAIL。前 3 条断言 `seen` 为空（现在没有任何登记），图片那条同样失败。
 
 - [ ] **步骤 3：在两个成功分支登记**
@@ -432,7 +432,7 @@ import type { ReadFileRegistry } from "@openharness/core";
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/read.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/read.test.ts`
 预期：PASS（既有用例 + 新增 4 条）。
 
 - [ ] **步骤 5：Commit**
@@ -460,7 +460,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { ReadFileRegistry } from "@openharness/core";
+import type { ReadFileRegistry } from "@vykor/core";
 
 import { fileWriteTool } from "../write.js";
 
@@ -628,7 +628,7 @@ describe("fileWriteTool", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/write.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/write.test.ts`
 预期：FAIL。当前 `Write` 返回 `Successfully wrote to ...`，没有拒绝逻辑、没有 BOM 处理。
 
 - [ ] **步骤 3：改写 `write.ts`**
@@ -695,15 +695,15 @@ import { splitReadLines } from "./read.js";
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/write.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/write.test.ts`
 预期：PASS（10 条）。
 
 - [ ] **步骤 5：跑 tools 全量测试与类型检查**
 
-运行：`pnpm --filter @openharness/tools exec vitest run`
+运行：`pnpm --filter @vykor/tools exec vitest run`
 预期：全绿（重点确认 `operations.test.ts`、`edit.test.ts`、`read.test.ts`、`preview.test.ts` 不回归）。
 
-运行：`pnpm --filter @openharness/tools run typecheck`
+运行：`pnpm --filter @vykor/tools run typecheck`
 预期：通过。
 
 - [ ] **步骤 6：Commit**

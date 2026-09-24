@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getFeishu = vi.hoisted(() => vi.fn());
 
-vi.mock("@openharness/auth", () => ({
+vi.mock("@vykor/auth", () => ({
   ChannelConfigStore: class {
     getFeishu = getFeishu;
   },
@@ -10,7 +10,7 @@ vi.mock("@openharness/auth", () => ({
 
 import { feishuApiBase, feishuPushTool, getTenantToken } from "../feishu-push.js";
 
-import type { ToolContext } from "@openharness/core";
+import type { ToolContext } from "@vykor/core";
 
 const context: ToolContext = {
   cwd: process.cwd(),
@@ -70,7 +70,7 @@ describe("FeishuPush tool", () => {
     const result = await feishuPushTool.execute({ target: "个人", message: "hi" }, context);
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]!.text).toContain("ohs channels add feishu");
+    expect(result.content[0]!.text).toContain("vk channels add feishu");
   });
 
   it("surfaces a corrupt channel store as a tool error instead of throwing", async () => {
@@ -146,7 +146,7 @@ describe("FeishuPush tool", () => {
     const result = await feishuPushTool.execute({ target: "个人", message: "hi" }, context);
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]!.text).toContain("ohs channels add feishu");
+    expect(result.content[0]!.text).toContain("vk channels add feishu");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

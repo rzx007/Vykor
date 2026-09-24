@@ -1,7 +1,7 @@
-import { discoverOpenHarnessExtensions } from "@openharness/agent-runtime";
-import type { Settings } from "@openharness/core";
-import { readSessionRuntimeConfig, type SessionRecord, type SessionUserInputItem } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
+import { discoverVykorExtensions } from "@vykor/agent-runtime";
+import type { Settings } from "@vykor/core";
+import { readSessionRuntimeConfig, type SessionRecord, type SessionUserInputItem } from "@vykor/protocol";
+import type { SessionStore } from "@vykor/services";
 
 import type { AttachmentService } from "../attachments/attachment-service.js";
 import { AttachmentCapabilityRouter } from "../attachments/routing/attachment-capability-router.js";
@@ -33,7 +33,7 @@ export function assembleSessionRunExecutor(options: SessionRunExecutorAssemblyOp
   const resolveSkillCatalog = async (session: SessionRecord) => {
     const settings = await options.resolveSessionSettings(session.cwd);
     if (!settings) throw new Error("session_input_skill_catalog_unavailable");
-    return (await discoverOpenHarnessExtensions(session.cwd, settings)).skillRegistry;
+    return (await discoverVykorExtensions(session.cwd, settings)).skillRegistry;
   };
   const materializeSteerInput = async (sessionId: string, items: readonly SessionUserInputItem[]) => {
     const session = options.store.sessions.get(sessionId);

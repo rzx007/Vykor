@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans。完成本波生产迁移并核对 AST 明细；类型检查和测试统一留到 7F。
 
-**目标：** 让 `@openharness/client` 自己的 commands/state 代码只依赖 Protocol/Resource 窄能力，除 facade 和兼容测试外不调用平铺入口。
+**目标：** 让 `@vykor/client` 自己的 commands/state 代码只依赖 Protocol/Resource 窄能力，除 facade 和兼容测试外不调用平铺入口。
 
 **架构：** commands 根据实际行为接收 `protocol/system/sessions/...` 结构能力；sync/controller 保持现有 `SyncEventsClient`。不为了收窄类型创建第二个 Client 门面，也不改变命令与同步行为。
 
@@ -50,13 +50,13 @@ export interface SessionCommandClient {
 
 - [ ] 将测试中完整 Client mock 改成 `protocol/system/sessions/...` 嵌套对象。
 - [ ] 每个命令继续断言调用参数、返回 outcome、错误消息；不要把“调用了某个 mock”替代用户可观察断言。
-- [ ] 增加类型级测试：缺少命令实际需要的 Resource 方法时 fixture 编译失败；不使用 `as unknown as OpenHarnessClient`。
+- [ ] 增加类型级测试：缺少命令实际需要的 Resource 方法时 fixture 编译失败；不使用 `as unknown as VykorClient`。
 - [ ] 保留一处兼容 facade 测试在 `http-client.test.ts`，本计划不删除它。
 
 ## 任务 4：审计 state/sync
 
 - [ ] 确认 `SyncEventsClient` 只包含 `sessions.getState` 和 `events.list/stream`。
-- [ ] 确认 `SessionSyncControllerOptions.client` 使用该窄接口而非 `OpenHarnessClient`。
+- [ ] 确认 `SessionSyncControllerOptions.client` 使用该窄接口而非 `VykorClient`。
 - [ ] 检查 `hydrateState`、reducer、selectors 不导入 transport、Resource class 或 Client。
 - [ ] 如果 7A AST 报告 state 旧调用，按报告最小迁移；否则不改 state 文件。
 

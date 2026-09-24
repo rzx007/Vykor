@@ -23,7 +23,7 @@
 - **LLM 调用**：memory_extract/autodream 经 `StreamingMessageClient`（TS api 包
   统一接口）注入，测试用 fake client 返回固定 JSON。
 - **memory 体系对接**：Python 用 add_memory_entry/scan_memory_files/
-  build_memory_manifest；TS 对应 `@openharness/memory` 的 MemoryManager（B.4
+  build_memory_manifest；TS 对应 `@vykor/memory` 的 MemoryManager（B.4
   已有 frontmatter/MEMORY.md 维护）。接口名不同处做薄适配。
 - **team memory secrets 检查**：Python memory_extract 调
   check_team_memory_secrets/validate_team_memory_write_path——TS memory 没有

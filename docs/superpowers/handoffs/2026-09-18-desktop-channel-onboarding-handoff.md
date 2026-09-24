@@ -5,15 +5,15 @@
 
 ## 背景一句话
 
-飞书 CLI 扫码接入（`ohs channels add feishu`）已完成；Desktop 的「渠道接入」（连接）板块也已落地，详见下方状态。
+飞书 CLI 扫码接入（`vk channels add feishu`）已完成；Desktop 的「渠道接入」（连接）板块也已落地，详见下方状态。
 
 ## 已完成（全部合并、已推送）
 
 1. IM runtime 阶段二：入站/出站 image、file，thread/topic，mention/bot，capability gate（严格 fail-closed）。
 2. durable 出站平台上下文：rootMessageId 一路带到 adapter，线程回复可用。
 3. 飞书 CLI 扫码接入：
-   - `ohs channels add feishu`（扫码优先、手填兜底）、`ohs channels allow`、`status`、`serve`；
-   - 渠道配置与密钥统一到 `~/.openharness-ts/channel-credentials.json`；`settings.json` 不再承载 `channels`（该统一在 `docs/superpowers/specs/2026-09-19-channel-config-unification-design.md` 落地）；
+   - `vk channels add feishu`（扫码优先、手填兜底）、`vk channels allow`、`status`、`serve`；
+   - 渠道配置与密钥统一到 `~/.vykor/channel-credentials.json`；`settings.json` 不再承载 `channels`（该统一在 `docs/superpowers/specs/2026-09-19-channel-config-unification-design.md` 落地）；
    - ACL 改为“发送者或会话任一命中”；
    - 提交：`12b4d907`..`1323936a`、`642df4bb`、`6f0220f4`；渠道配置统一见 `50298128`..`9d595dc4`。
 
@@ -39,11 +39,11 @@ Desktop 新增设置板块参考 MCP 设置：`apps/desktop/src/renderer/src/com
 - 不引入兼容性 fallback；旧 `settings.channels` 不再容忍（出现即 `SettingsFileError`，需手动删除）；旧 v1 `channel-credentials.json` 视为“未配置渠道”。
 - 白名单空 = 全拒（fail-closed）。
 - 复用上一阶段核心，桌面与 CLI 共用同一核心。
-- 不擅改 `@openharness/protocol` durable 类型。
+- 不擅改 `@vykor/protocol` durable 类型。
 
 ## 已知遗留 / 非目标
 
-- 真人端到端验收已通过（扫码接入、收发、被拒提示 + 加白名单、主开关停用、`ohs channels serve` 有界停止）。
+- 真人端到端验收已通过（扫码接入、收发、被拒提示 + 加白名单、主开关停用、`vk channels serve` 有界停止）。
 - `apps/mcp-feishu`（独立目录、不构建）仍读磁盘 `appSecret`；非目标。
 - 暂不做其他平台与 Feishu media upload / Agent 出站附件。
 
@@ -54,10 +54,10 @@ superpowers 流程（brainstorm → spec → plan → subagent-driven/TDD）；�
 验收命令：
 
 ```bash
-pnpm --filter @openharness/channels test -- --run
-pnpm --filter @openharness/auth test -- --run
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/tools test -- --run
+pnpm --filter @vykor/channels test -- --run
+pnpm --filter @vykor/auth test -- --run
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/tools test -- --run
 pnpm --filter @rzx/ohs test -- --run
 pnpm exec turbo build --output-logs=full
 pnpm check-docs

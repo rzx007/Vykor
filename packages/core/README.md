@@ -1,6 +1,6 @@
-# @openharness/core
+# @vykor/core
 
-Core engine for OpenHarness query execution, settings management, and tool registry.
+Core engine for Vykor query execution, settings management, and tool registry.
 
 ## 功能
 
@@ -12,7 +12,7 @@ Core engine for OpenHarness query execution, settings management, and tool regis
 ## 使用
 
 ```ts
-import { QueryEngine, loadSettings, ToolRegistry } from "@openharness/core";
+import { QueryEngine, loadSettings, ToolRegistry } from "@vykor/core";
 ```
 
 ## API
@@ -36,5 +36,5 @@ import { QueryEngine, loadSettings, ToolRegistry } from "@openharness/core";
 ## 测试
 
 ```bash
-pnpm --filter @openharness/core test
+pnpm --filter @vykor/core test
 ```

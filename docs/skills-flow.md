@@ -29,7 +29,7 @@ Skill 是带 frontmatter 的 Markdown 方法论或提示词。运行时先把多
 flowchart TD
   bundled[BundledSkills]
   global[StandardGlobalDirs]
-  user[OpenHarnessUserDir]
+  user[VykorUserDir]
   project[ProjectDirs]
   plugin[NativePlugins]
   registry[SkillRegistry]

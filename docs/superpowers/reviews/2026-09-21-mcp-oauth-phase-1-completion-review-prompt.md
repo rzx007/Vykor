@@ -2,7 +2,7 @@
 
 > 把本文档整体作为 prompt 交给审查者（人或审查 Agent）。只读审查，不要修改代码、不要提交、不要创建 PR。
 
-你是一名资深代码审查者，请审查 OpenHarness-ts 仓库中「MCP OAuth 第一阶段补全」的实现。
+你是一名资深代码审查者，请审查 Vykor 仓库中「MCP OAuth 第一阶段补全」的实现。
 
 ## 背景资料（先读）
 
@@ -59,14 +59,14 @@
 请运行并报告结果：
 
 ```
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/mcp test
-pnpm --filter @openharness/auth test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/mcp test
+pnpm --filter @vykor/auth test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
 pnpm --filter @rzx/ohs test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/desktop test
 pnpm check-types
 pnpm check:client-api
 node scripts/check-docs.mjs

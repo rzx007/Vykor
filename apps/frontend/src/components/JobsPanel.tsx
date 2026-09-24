@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
-import type { JobReadResult, JobSnapshot } from "@openharness/client";
+import type { JobReadResult, JobSnapshot } from "@vykor/client";
 import { useListNavigation } from "../hooks/useListNavigation";
 import type { JobDetailRemoteState, JobRemoteState } from "../jobs/job-remote-state";
 import { useTheme } from "../theme/ThemeContext";

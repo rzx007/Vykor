@@ -299,7 +299,7 @@ describe("WorkspaceService.readFile extra-root", () => {
 })
 
 async function createTemporaryDirectory(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), "openharness-workspace-"))
+  const path = await mkdtemp(join(tmpdir(), "vykor-workspace-"))
   temporaryDirectories.push(path)
   return path
 }

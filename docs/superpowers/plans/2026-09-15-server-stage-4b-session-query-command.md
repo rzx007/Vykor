@@ -49,7 +49,7 @@ create 覆盖默认字段和 runtime metadata；fork 覆盖 source/before/after 
 
 - [ ] **步骤 3：运行旧实现**
 
-运行：pnpm --filter @openharness/server test -- src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-edit.test.ts
+运行：pnpm --filter @vykor/server test -- src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-edit.test.ts
 
 预期：新增断言通过。
 
@@ -84,7 +84,7 @@ fake 只提供 listSessions/getSession/getSessionState/listMessages/listMessageP
 
 - [ ] **步骤 4：验证并提交**
 
-运行：pnpm --filter @openharness/server test -- src/application/session/__test__/session-query-service.test.ts
+运行：pnpm --filter @vykor/server test -- src/application/session/__test__/session-query-service.test.ts
 提交：git commit -m "refactor(server): complete session query service"
 
 ### 任务 3：创建 SessionCommandService
@@ -114,8 +114,8 @@ context 分为 sessions、transactions、runtimeControl、operationGate、events
 
 - [ ] **步骤 6：验证并提交**
 
-运行：pnpm --filter @openharness/server test -- src/application/session/__test__/session-command-service.test.ts
-运行：pnpm --filter @openharness/server check-types
+运行：pnpm --filter @vykor/server test -- src/application/session/__test__/session-command-service.test.ts
+运行：pnpm --filter @vykor/server check-types
 提交：git commit -m "refactor(server): extract session command service"
 
 ### 任务 4：旧 SessionApplicationService 转发

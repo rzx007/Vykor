@@ -6,7 +6,7 @@ import type {
   StreamingMessageClient,
   StreamMessageParams,
   ToolDefinition,
-} from "@openharness/core";
+} from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import { AuthenticationFailure, RateLimitFailure, RequestFailure, requestFailure } from "../errors/index";
 import {
@@ -38,8 +38,8 @@ export function buildCodexHeaders(token: string, sessionId?: string): Record<str
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     "chatgpt-account-id": accountId,
-    originator: "openharness",
-    "User-Agent": `openharness (${platform().toLowerCase()} ${machine() || "unknown"})`,
+    originator: "vykor",
+    "User-Agent": `vykor (${platform().toLowerCase()} ${machine() || "unknown"})`,
     "OpenAI-Beta": "responses=experimental",
     accept: "text/event-stream",
     "content-type": "application/json",
@@ -89,7 +89,7 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
       model: params.model,
       store: false,
       stream: true,
-      instructions: params.system || "You are OpenHarness.",
+      instructions: params.system || "You are Vykor.",
       input,
       text: { verbosity: "medium" },
       include: ["reasoning.encrypted_content"],

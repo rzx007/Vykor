@@ -21,7 +21,7 @@
 - 创建 `packages/tools/src/shell/shell.ts`：动态创建唯一 `Shell` 工具并返回结构化结果。
 - 删除 `packages/tools/src/shell/bash.ts`：不保留可调用别名。
 - 修改 `packages/tools/src/registry.ts` 和 `packages/tools/src/background-shell/background-shell-tools.ts`：根据 descriptor 创建前后台工具。
-- 创建 `packages/core/src/tools/tool-name-migration.ts`：迁移 OpenHarness 自有配置中的 `Bash`→`Shell`。
+- 创建 `packages/core/src/tools/tool-name-migration.ts`：迁移 Vykor 自有配置中的 `Bash`→`Shell`。
 - 修改 Prompt、Permissions、Hooks、Coordinator、Agent Runtime、Server 和 Plugin 名称消费者。
 - 修改 `packages/core/src/engine/query-engine.ts`：在现有 repeated failed call guard 上增加 run-scoped evidence revision。
 - 修改 Session Transcript 和 Desktop message model：持久化新 metadata，只在读取层兼容历史 `Bash`。
@@ -58,7 +58,7 @@ it("keeps executable and launch arguments separate", () => {
 
 - [ ] **步骤 2：运行契约测试并确认正确失败**
 
-运行：`pnpm --filter @openharness/environment test -- src/types.test.ts`  
+运行：`pnpm --filter @vykor/environment test -- src/types.test.ts`
 预期：FAIL，`shell-descriptor.js` 尚不存在。
 
 - [ ] **步骤 3：实现最小契约**
@@ -103,7 +103,7 @@ export interface EffectiveEnvironmentInfo {
 
 - [ ] **步骤 5：运行测试和类型检查**
 
-运行：`pnpm --filter @openharness/environment test && pnpm --filter @openharness/environment check-types`  
+运行：`pnpm --filter @vykor/environment test && pnpm --filter @vykor/environment check-types`
 预期：PASS。
 
 - [ ] **步骤 6：提交**
@@ -144,7 +144,7 @@ it("fails an explicit unusable shell instead of silently falling back", async ()
 
 - [ ] **步骤 2：运行测试确认现状优先 bash.exe 而失败**
 
-运行：`pnpm --filter @openharness/sandbox test -- src/execution-environment.test.ts`  
+运行：`pnpm --filter @vykor/sandbox test -- src/execution-environment.test.ts`
 预期：FAIL，解析器未实现且旧顺序为 bash→powershell→cmd。
 
 - [ ] **步骤 3：实现可注入的探测器**
@@ -175,7 +175,7 @@ WSL descriptor 明确为 `/bin/sh` + `-lc`，不从 Windows 宿主重新探测�
 
 - [ ] **步骤 6：运行 sandbox/environment 测试**
 
-运行：`pnpm --filter @openharness/sandbox test && pnpm --filter @openharness/sandbox check-types`  
+运行：`pnpm --filter @vykor/sandbox test && pnpm --filter @vykor/sandbox check-types`
 预期：PASS。
 
 - [ ] **步骤 7：提交**
@@ -214,7 +214,7 @@ expect(createDefaultToolRegistry({ environment })).not.toHaveProperty("Bash");
 
 - [ ] **步骤 3：运行测试确认因只存在 Bash 而失败**
 
-运行：`pnpm --filter @openharness/tools test -- src/shell src/__test__/registry.test.ts`  
+运行：`pnpm --filter @vykor/tools test -- src/shell src/__test__/registry.test.ts`
 预期：FAIL，工具名仍为 `Bash`。
 
 - [ ] **步骤 4：实现 createShellDescription 和 createShellTool**
@@ -261,7 +261,7 @@ export function createDefaultToolRegistry(options: {
 
 - [ ] **步骤 7：运行 tools 全量测试和类型检查**
 
-运行：`pnpm --filter @openharness/tools test && pnpm --filter @openharness/tools check-types`  
+运行：`pnpm --filter @vykor/tools test && pnpm --filter @vykor/tools check-types`
 预期：PASS，registry 中只有 `Shell`。
 
 - [ ] **步骤 8：提交**
@@ -294,7 +294,7 @@ expect(tool.description).toContain("Windows PowerShell 5.1");
 
 - [ ] **步骤 2：运行测试并确认 request 缺少 descriptor**
 
-运行：`pnpm --filter @openharness/tools test -- src/background-shell`  
+运行：`pnpm --filter @vykor/tools test -- src/background-shell`
 预期：FAIL，当前 request 只携带 command/cwd/settings。
 
 - [ ] **步骤 3：扩展 AgentBackgroundShellHost 请求契约**
@@ -312,7 +312,7 @@ Daemon Job Service 用 `shellArgv(request.shellDescriptor, request.command)` 启
 
 - [ ] **步骤 4：运行 tools/server 测试和类型检查**
 
-运行：`pnpm --filter @openharness/tools test && pnpm --filter @openharness/server test && pnpm --filter @openharness/server check-types`  
+运行：`pnpm --filter @vykor/tools test && pnpm --filter @vykor/server test && pnpm --filter @vykor/server check-types`
 预期：PASS。
 
 - [ ] **步骤 5：提交**
@@ -348,7 +348,7 @@ expect(() => registerPluginTool({ name: "Bash" })).toThrow(/reserved/i);
 
 - [ ] **步骤 2：运行定向测试确认迁移缺失**
 
-运行：`pnpm --filter @openharness/core test -- tool-name-migration && pnpm --filter @openharness/permissions test && pnpm --filter @openharness/hooks test`  
+运行：`pnpm --filter @vykor/core test -- tool-name-migration && pnpm --filter @vykor/permissions test && pnpm --filter @vykor/hooks test`
 预期：FAIL。
 
 - [ ] **步骤 3：实现唯一 canonicalizer**
@@ -360,7 +360,7 @@ export const canonicalToolList = (names: readonly string[]): string[] =>
   [...new Set(names.map(canonicalToolName))];
 ```
 
-它只用于 OpenHarness 自有配置/hook matcher 的读时迁移，不在 ToolRegistry 的 `get("Bash")` 中重定向。
+它只用于 Vykor 自有配置/hook matcher 的读时迁移，不在 ToolRegistry 的 `get("Bash")` 中重定向。
 
 - [ ] **步骤 4：接入所有名称消费者**
 
@@ -372,7 +372,7 @@ export const canonicalToolList = (names: readonly string[]): string[] =>
 
 - [ ] **步骤 6：运行跨包测试**
 
-运行：`pnpm --filter @openharness/core test && pnpm --filter @openharness/permissions test && pnpm --filter @openharness/hooks test && pnpm --filter @openharness/agent-runtime test && pnpm --filter @openharness/coordinator test`  
+运行：`pnpm --filter @vykor/core test && pnpm --filter @vykor/permissions test && pnpm --filter @vykor/hooks test && pnpm --filter @vykor/agent-runtime test && pnpm --filter @vykor/coordinator test`
 预期：PASS。
 
 - [ ] **步骤 7：提交**
@@ -403,7 +403,7 @@ expect(prompt).not.toContain("may be bash.exe, PowerShell, or cmd");
 
 - [ ] **步骤 2：运行 Prompt 测试确认旧 Bash 说明仍存在**
 
-运行：`pnpm --filter @openharness/prompts test`  
+运行：`pnpm --filter @vykor/prompts test`
 预期：FAIL，基础 prompt 仍包含 `Use Bash`。
 
 - [ ] **步骤 3：删除 getEnvironmentInfo 的独立 Shell 探测**
@@ -420,7 +420,7 @@ After a tool has obtained the target data, do not fetch the same target again wi
 
 - [ ] **步骤 5：运行 prompts/agent-runtime 测试和类型检查**
 
-运行：`pnpm --filter @openharness/prompts test && pnpm --filter @openharness/prompts check-types && pnpm --filter @openharness/agent-runtime test`  
+运行：`pnpm --filter @vykor/prompts test && pnpm --filter @vykor/prompts check-types && pnpm --filter @vykor/agent-runtime test`
 预期：PASS。
 
 - [ ] **步骤 6：提交**
@@ -451,7 +451,7 @@ expect(toolDisplayName(legacyBashCall)).toBe("Shell");
 
 - [ ] **步骤 2：运行测试确认新 metadata 尚未被消费**
 
-运行：`pnpm --filter @openharness/server test -- transcript-projection && pnpm --filter @openharness/desktop test -- message-render-model`  
+运行：`pnpm --filter @vykor/server test -- transcript-projection && pnpm --filter @vykor/desktop test -- message-render-model`
 预期：FAIL。
 
 - [ ] **步骤 3：投影层原样持久化 ShellResultMetadata**
@@ -464,7 +464,7 @@ Transcript 只展开允许的 ShellResultMetadata 字段，不持久化 argsPref
 
 - [ ] **步骤 5：运行 server/desktop 测试**
 
-运行：`pnpm --filter @openharness/server test && pnpm --filter @openharness/desktop test`  
+运行：`pnpm --filter @vykor/server test && pnpm --filter @vykor/desktop test`
 预期：PASS。
 
 - [ ] **步骤 6：提交**
@@ -496,7 +496,7 @@ expect(memory.shouldReplayFailure("Shell", { command: "curl.exe URL" })).toBe(fa
 
 - [ ] **步骤 2：运行测试确认现有 Set 不支持 evidence revision**
 
-运行：`pnpm --filter @openharness/core test -- tool-failure-memory integration`  
+运行：`pnpm --filter @vykor/core test -- tool-failure-memory integration`
 预期：FAIL。
 
 - [ ] **步骤 3：实现状态机并替换 failedUnsafeCalls**
@@ -515,7 +515,7 @@ type FailureEntry = {
 
 - [ ] **步骤 4：运行 core 全量测试和类型检查**
 
-运行：`pnpm --filter @openharness/core test && pnpm --filter @openharness/core check-types`  
+运行：`pnpm --filter @vykor/core test && pnpm --filter @vykor/core check-types`
 预期：PASS。
 
 - [ ] **步骤 5：提交**
@@ -561,8 +561,8 @@ expect(evaluateShellTrace(improvedFixture)).toMatchObject({
 运行：
 
 ```powershell
-pnpm --filter @openharness/tools test -- src/shell/trace-eval.test.ts
-pnpm --filter @openharness/server test -- src/http/__test__/http.test.ts
+pnpm --filter @vykor/tools test -- src/shell/trace-eval.test.ts
+pnpm --filter @vykor/server test -- src/http/__test__/http.test.ts
 pnpm test
 pnpm check-types
 pnpm lint

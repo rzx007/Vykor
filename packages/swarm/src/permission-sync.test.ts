@@ -37,7 +37,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(join(homedir(), ".openharness-ts", "teams", team), { recursive: true, force: true });
+  rmSync(join(homedir(), ".vykor", "teams", team), { recursive: true, force: true });
   for (const key of SWARM_ENV) delete process.env[key];
 });
 

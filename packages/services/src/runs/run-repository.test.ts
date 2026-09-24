@@ -9,7 +9,7 @@ import { RunRepository } from "./run-repository.js";
 
 describe("RunRepository read operations", () => {
   it("gets and lists runs with input ownership, promotion, sorting and clone protection", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new RunRepository((store as any).storage);
@@ -59,7 +59,7 @@ describe("RunRepository read operations", () => {
   });
 
   it("gets and lists run attempts with sequence sorting and error on missing run", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-att-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-att-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new RunRepository((store as any).storage);
@@ -92,7 +92,7 @@ describe("RunRepository read operations", () => {
   });
 
   it("gets and lists tasks with metadata matching for runtimeExecutionId and taskManagerId", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-task-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-task-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new RunRepository((store as any).storage);
@@ -155,7 +155,7 @@ describe("RunRepository read operations", () => {
 
 describe("RunRepository write operations", () => {
     it("creates and updates runs with session status refresh, input alignment, terminal guards, and events", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-write-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new RunRepository({
@@ -234,7 +234,7 @@ describe("RunRepository write operations", () => {
     });
 
     it("creates and updates run attempts with auto sequence, terminal guards, tokens, and events", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-att-write-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-att-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new RunRepository({
@@ -310,7 +310,7 @@ describe("RunRepository write operations", () => {
     });
 
     it("creates, reserves, transitions and updates session tasks with validation, events and clone protection", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-run-repo-task-write-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-task-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new RunRepository({

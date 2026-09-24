@@ -4,13 +4,13 @@ import type {
   NativeToolPluginIdentity,
   NativeToolRegister,
   NativeToolRegistrationContext,
-  OpenHarnessPluginPermissions,
+  VykorPluginPermissions,
   ToolResult,
-} from "@openharness/plugins/sdk";
+} from "@vykor/plugins/sdk";
 
 export const registerTools: NativeToolRegister = (registration) => {
   const plugin: NativeToolPluginIdentity = registration.plugin;
-  const permissions: OpenHarnessPluginPermissions = registration.permissions;
+  const permissions: VykorPluginPermissions = registration.permissions;
   const context: NativeToolRegistrationContext = registration;
   context.log("debug", `${plugin.id}:${plugin.name}:${plugin.version}:${plugin.root}`);
   context.log("info", JSON.stringify(permissions));

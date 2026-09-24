@@ -1,7 +1,7 @@
 import { Command } from "commander";
-import { CODEX_DEFAULT_MODEL, detectProvider } from "@openharness/api";
-import type { ProviderSpec } from "@openharness/api";
-import type { Settings } from "@openharness/core";
+import { CODEX_DEFAULT_MODEL, detectProvider } from "@vykor/api";
+import type { ProviderSpec } from "@vykor/api";
+import type { Settings } from "@vykor/core";
 
 export type KeySource = "credentials" | "env" | "external" | "none";
 
@@ -64,9 +64,9 @@ export function createProviderCommand(): Command {
     .description("List known providers, their key source and active status")
     .action(async () => {
       const chalk = (await import("chalk")).default;
-      const { PROVIDERS } = await import("@openharness/api");
-      const { CredentialStorage, describeCodexAuthState } = await import("@openharness/auth");
-      const { loadSettings } = await import("@openharness/core");
+      const { PROVIDERS } = await import("@vykor/api");
+      const { CredentialStorage, describeCodexAuthState } = await import("@vykor/auth");
+      const { loadSettings } = await import("@vykor/core");
 
       const settings = await loadSettings();
       const storage = new CredentialStorage();
@@ -125,8 +125,8 @@ export function createProviderCommand(): Command {
     .option("-m, --model <model>", "Also set the model")
     .action(async (name: string, opts: { model?: string }) => {
       const chalk = (await import("chalk")).default;
-      const { findByName } = await import("@openharness/api");
-      const { updateSettings } = await import("@openharness/core");
+      const { findByName } = await import("@vykor/api");
+      const { updateSettings } = await import("@vykor/core");
 
       if (!findByName(name)) {
         await warnUnknownProvider(chalk, name);
@@ -158,9 +158,9 @@ export function createProviderCommand(): Command {
         opts: { apiKey: string; model?: string; baseUrl?: string; use?: boolean }
       ) => {
         const chalk = (await import("chalk")).default;
-        const { findByName } = await import("@openharness/api");
-        const { CredentialStorage } = await import("@openharness/auth");
-        const { updateSettings } = await import("@openharness/core");
+        const { findByName } = await import("@vykor/api");
+        const { CredentialStorage } = await import("@vykor/auth");
+        const { updateSettings } = await import("@vykor/core");
 
         if (!findByName(name)) {
           await warnUnknownProvider(chalk, name);
@@ -199,8 +199,8 @@ export function createProviderCommand(): Command {
     .action(
       async (name: string, opts: { apiKey?: string; model?: string; baseUrl?: string }) => {
         const chalk = (await import("chalk")).default;
-        const { CredentialStorage } = await import("@openharness/auth");
-        const { updateSettings } = await import("@openharness/core");
+        const { CredentialStorage } = await import("@vykor/auth");
+        const { updateSettings } = await import("@vykor/core");
 
         if (
           opts.apiKey === undefined &&
@@ -244,8 +244,8 @@ export function createProviderCommand(): Command {
     .argument("<name>", "Provider name")
     .action(async (name: string) => {
       const chalk = (await import("chalk")).default;
-      const { CredentialStorage } = await import("@openharness/auth");
-      const { loadSettings } = await import("@openharness/core");
+      const { CredentialStorage } = await import("@vykor/auth");
+      const { loadSettings } = await import("@vykor/core");
 
       const storage = new CredentialStorage();
       await storage.clearProviderCredentials(name);
@@ -256,7 +256,7 @@ export function createProviderCommand(): Command {
         console.log(
           chalk.yellow(
             `Note: ${name} is the current active provider. settings.provider was not changed; ` +
-              `use 'ohs provider use <name>' to switch.`
+              `use 'vk provider use <name>' to switch.`
           )
         );
       }
@@ -269,7 +269,7 @@ async function warnUnknownProvider(
   chalk: typeof import("chalk").default,
   name: string
 ): Promise<void> {
-  const { PROVIDERS } = await import("@openharness/api");
+  const { PROVIDERS } = await import("@vykor/api");
   console.log(
     chalk.yellow(`Warning: '${name}' is not a known provider. Setting it anyway.`)
   );

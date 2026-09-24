@@ -4,7 +4,7 @@ import type {
   SessionGoal,
   SessionMessagePartRecord,
   SessionMessageRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface GoalEvidenceReader {
   listMessages(sessionId: string): SessionMessageRecord[];

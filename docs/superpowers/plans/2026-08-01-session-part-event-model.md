@@ -1,8 +1,8 @@
-# OpenHarness Session Part Event Model 计划
+# Vykor Session Part Event Model 计划
 
 > 日期：2026-08-01
 > 状态：已完成第二轮回归修正。canonical parts、snapshot attach、TUI busy/streaming、Windows runtime 初始化无子进程已完成定向验收。
-> 实施背景（问题已解决）：`ohs --tui` 迁到 daemon/client 主线后，流式输出、工具调用展示、busy 状态和跨客户端恢复曾依赖临时 `runtime.*` 事件。本任务已将 server 事件模型升级为 durable message parts，并删除旧 `session.message.appended` 主模型。
+> 实施背景（问题已解决）：`vk --tui` 迁到 daemon/client 主线后，流式输出、工具调用展示、busy 状态和跨客户端恢复曾依赖临时 `runtime.*` 事件。本任务已将 server 事件模型升级为 durable message parts，并删除旧 `session.message.appended` 主模型。
 
 ## 目标
 
@@ -10,9 +10,9 @@
 
 ```text
 TUI / Web / Desktop / remote attach
-  -> @openharness/client
+  -> @vykor/client
   -> HTTP snapshot/actions + SSE live
-  -> @openharness/server
+  -> @vykor/server
   -> SessionStore
   -> SessionRuntime / QueryEngine
 ```
@@ -22,7 +22,7 @@ TUI / Web / Desktop / remote attach
 - 文本、工具调用、工具结果、reasoning、workflow/task 状态都进入统一 event log。
 - 客户端不再消费 `runtime.text_delta`、`runtime.tool_use_start`、`runtime.tool_use_end`。
 - server 不再只在 run 结束后追加完整 assistant message。
-- `@openharness/client` reducer 成为 TUI/Web/Desktop 的唯一状态归并层。
+- `@vykor/client` reducer 成为 TUI/Web/Desktop 的唯一状态归并层。
 - 当前 message-part 数据结构是唯一实现；旧事件和旧 store 代码已删除。
 
 ## 2026-08-01 回归复盘
@@ -37,13 +37,13 @@ Task 9 初次实现后把现场问题完全归因于 stale daemon 是错误结�
 本次修正：
 
 - `/health` 返回存活状态与 release version；不暴露 session schema/protocol 版本。
-- daemon registry 写入 version/startedAt；`ohs --tui` 和 `ohs daemon start` 会探测 health，发现 daemon 早于当前 CLI 构建或 release 不同时停止它并启动当前构建。
-- 新增 `GET /sessions/:sessionId/state`，在单一 cursor 下返回 session、inputs、messages、parts、runs、permissions；`@openharness/client` 使用 snapshot + SSE delta attach。
+- daemon registry 写入 version/startedAt；`vk --tui` 和 `vk daemon start` 会探测 health，发现 daemon 早于当前 CLI 构建或 release 不同时停止它并启动当前构建。
+- 新增 `GET /sessions/:sessionId/state`，在单一 cursor 下返回 session、inputs、messages、parts、runs、permissions；`@vykor/client` 使用 snapshot + SSE delta attach。
 - TUI 用服务端返回的 run id 跟踪提交，直到对应 run 进入 terminal 状态；running part 显式交给 OpenTUI streaming markdown，transcript item 使用稳定 id。
 - daemon 启动时将前一进程遗留的 pending/running run 标记为 interrupted，避免恢复后永久 busy。
 - repo root/branch 检测改为读取 `.git` marker/HEAD，不再在 runtime 初始化时 spawn Git。
-- 唯一默认存储为 `~/.openharness-ts/data/session-runtime/sessions.db`；旧 `~/.openharness` 与 JSON store 都不读取、不迁移。
-- `@openharness/client.health()` 只负责 transport 探活，stale daemon 判断归 CLI 生命周期所有。
+- 唯一默认存储为 `~/.vykor/data/session-runtime/sessions.db`；旧 `~/.vykor` 与 JSON store 都不读取、不迁移。
+- `@vykor/client.health()` 只负责 transport 探活，stale daemon 判断归 CLI 生命周期所有。
 - 修正多轮工具执行边界：工具调用后的下一轮模型输出创建新的 assistant message，不再混入上一轮 message。
 
 真实 daemon 验收结果：
@@ -52,7 +52,7 @@ Task 9 初次实现后把现场问题完全归因于 stale daemon 是错误结�
 - OpenTUI 完整 `AppView` 与 `useServerSync` 共 9 个测试通过，覆盖“先出现 user、随后 live assistant part”、历史/live 工具调用和工具结果。
 - core/prompts 共 69 个测试通过，包含纯文件系统 Git repository/worktree marker 识别。
 - core/client/services/server/prompts/frontend 六个 package 定向类型检查通过；CLI 与 frontend 生产构建通过。
-- 使用生产构建启动真实 daemon，registry/store 仅写入 `~/.openharness-ts`，并完成 create session → atomic snapshot → archive → stop。
+- 使用生产构建启动真实 daemon，registry/store 仅写入 `~/.vykor`，并完成 create session → atomic snapshot → archive → stop。
 - CLI workspace 总类型检查仍存在既有长时间不退出问题；本轮按约定跳过，不把它误写为已通过。
 
 ## 实施前代码地图
@@ -62,11 +62,11 @@ Task 9 初次实现后把现场问题完全归因于 stale daemon 是错误结�
 ### CLI / TUI 启动
 
 - `apps/cli/src/index.ts`
-  - 暴露 `ohs --tui`、`ohs serve`、`ohs daemon`。
+  - 暴露 `vk --tui`、`vk serve`、`vk daemon`。
 - `apps/cli/src/commands/main.ts`
   - `mainAction()` 进入 `runTuiMode()`。
   - `runTuiMode()` 读取 daemon registry；没有可用 daemon 时 spawn `node <cli> serve --register --host 127.0.0.1 --port 0`。
-  - 再 spawn Bun frontend，并通过 `OPENHARNESS_FRONTEND_CONFIG` 注入 daemon url/token/cwd/model。
+  - 再 spawn Bun frontend，并通过 `VYKOR_FRONTEND_CONFIG` 注入 daemon url/token/cwd/model。
 - `apps/cli/src/commands/daemon.ts`
   - `serve` 前台启动 Hono server。
   - `daemon start/status/stop` 管理后台 daemon。
@@ -80,7 +80,7 @@ Task 9 初次实现后把现场问题完全归因于 stale daemon 是错误结�
 ### Server（实施前基线）
 
 - `packages/server/src/http.ts`
-  - `OpenHarnessHttpServer` 基于 Hono。
+  - `VykorHttpServer` 基于 Hono。
   - 路由包括 sessions、messages、prompts、interrupt、permissions、events、SSE。
   - 内部维护：
     - `SessionStore`
@@ -143,7 +143,7 @@ Task 9 初次实现后把现场问题完全归因于 stale daemon 是错误结�
 ### TUI Frontend（实施前基线）
 
 - `apps/frontend/src/hooks/useServerSync.ts`
-  - 创建 `OpenHarnessClient`。
+  - 创建 `VykorClient`。
   - 选择/创建 active session。
   - 订阅 `syncEvents()`。
   - 将 bucket messages 映射为 transcript。
@@ -197,7 +197,7 @@ opencode 的关键不是“有没有 HTTP”，而是：
   - tool/text/reasoning 都是 part
 - prompt async 提交后立即返回，真实输出靠 event bus。
 
-OpenHarness 当前已经有 daemon、run coordinator、SSE、client reducer 的骨架。缺的是 durable message parts。因此本任务先做 event/state 模型，不先做 worker direct fetch 拓扑。
+Vykor 当前已经有 daemon、run coordinator、SSE、client reducer 的骨架。缺的是 durable message parts。因此本任务先做 event/state 模型，不先做 worker direct fetch 拓扑。
 
 ## 新模型
 
@@ -316,7 +316,7 @@ type MessagePartDeltaPayload = {
 
 ## Runtime 翻译策略
 
-在 `OpenHarnessHttpServer.executeRun()` 内维护本次 run 的 transient builder：
+在 `VykorHttpServer.executeRun()` 内维护本次 run 的 transient builder：
 
 ```ts
 type ActiveRunRenderState = {
@@ -360,7 +360,7 @@ type ActiveRunRenderState = {
 
 ## Client reducer 改造
 
-`OpenHarnessClientState` 改为：
+`VykorClientState` 改为：
 
 ```ts
 interface SessionBucket {

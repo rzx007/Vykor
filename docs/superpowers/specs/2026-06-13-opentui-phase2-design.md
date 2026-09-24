@@ -1,4 +1,4 @@
-# 归档：OpenHarness TUI 二期设计文档
+# 归档：Vykor TUI 二期设计文档
 
 > 历史设计记录。本文的 UI 功能描述可作背景参考，但运行时和 session 协议以 [../../tui-flow.md](../../tui-flow.md) 与 [../../client-sync-flow.md](../../client-sync-flow.md) 为准。
 
@@ -140,7 +140,7 @@ export function rank(kind: "command" | "file"): Map<string, number>
 **得分公式**：`score(key) = Σ 2^(−Δ天/14)` 对每次使用的时间戳，即半衰期 14 天的指数衰减。
 
 **持久化**：
-- 路径 `$OPENHARNESS_CONFIG_DIR/frecency.json`，默认 `~/.openharness-ts/frecency.json`
+- 路径 `$VYKOR_CONFIG_DIR/frecency.json`，默认 `~/.vykor/frecency.json`
 - 格式：`{ command: { id: timestamp[] }, file: { path: timestamp[] } }`
 - 懒加载（首次 `rank/record` 时读），防抖写入（500ms debounce）
 - 文件损坏（JSON.parse 异常）静默重置为空对象，不崩进程

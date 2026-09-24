@@ -1,6 +1,6 @@
-import type { AgentSerializedError } from "@openharness/core";
+import type { AgentSerializedError } from "@vykor/core";
 
-export type OpenHarnessAgentState =
+export type VykorAgentState =
   | "idle"
   | "running"
   | "maintaining"
@@ -10,7 +10,7 @@ export type OpenHarnessAgentState =
 export class AgentOperationConflictError extends Error {
   constructor(
     readonly agentId: string,
-    readonly state: OpenHarnessAgentState,
+    readonly state: VykorAgentState,
     readonly operation: string,
   ) {
     super(`Agent cannot ${operation} while ${state}: ${agentId}`);

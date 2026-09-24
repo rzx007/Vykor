@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { McpClientManager, resolveTransportKind } from "./index.js";
 import type { McpConnection, McpToolInfo, McpResourceInfo } from "./index.js";
 import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
-import { createProcess } from "@openharness/sandbox";
-import type { SandboxPolicy } from "@openharness/sandbox";
+import { createProcess } from "@vykor/sandbox";
+import type { SandboxPolicy } from "@vykor/sandbox";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 
@@ -38,7 +38,7 @@ vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
   getDefaultEnvironment: vi.fn(() => ({ PATH: "/usr/bin" })),
 }));
 
-vi.mock("@openharness/sandbox", () => ({
+vi.mock("@vykor/sandbox", () => ({
   createProcess: vi.fn(),
 }));
 

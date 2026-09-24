@@ -5,7 +5,7 @@
 > 交互主线是 daemon TUI：`GET /commands` catalog + client-local UI +
 > Skill 普通 prompt metadata。**流程权威文档**：[slash-commands-flow.md](./slash-commands-flow.md)。
 > 运行时以 TUI `/help` 与 `packages/server/src/commands/default-command-catalog.ts` 为准；
-> 共享呈现层在 `@openharness/client` `dispatchSessionCommand`；TUI 适配层
+> 共享呈现层在 `@vykor/client` `dispatchSessionCommand`；TUI 适配层
 > `apps/frontend/src/hooks/sessionSlashCommands.ts`。`slash-helpers.ts` 仅
 > formatters。工具以 `ToolRegistry.getAll()` 为准。
 
@@ -64,7 +64,7 @@ skill 经 command catalog 以 template 形式出现。
 | `/mcp`            | MCP 服务器连接状态                                                                                       |
 | `/hooks`          | 已配置 hooks                                                                                             |
 
-外部 Claude Code 插件不由斜杠命令直接解析；使用 `ohs plugin convert` 或 `ohs plugin install --from claude-code` 先生成、审阅并安装 Native Plugin。
+外部 Claude Code 插件不由斜杠命令直接解析；使用 `vk plugin convert` 或 `vk plugin install --from claude-code` 先生成、审阅并安装 Native Plugin。
 
 ### Agent / Jobs
 
@@ -91,7 +91,7 @@ skill 经 command catalog 以 template 形式出现。
 
 | 命令      | 用法 / 说明                              |
 | --------- | ---------------------------------------- |
-| `/init`   | 初始化 OpenHarness 项目文件              |
+| `/init`   | 初始化 Vykor 项目文件              |
 | `/commit` | git status 或 stage-all + 提交（带 MSG） |
 | `/diff`   | git diff（`--stat` 或完整）              |
 | `/branch` | `show \| list` 分支                      |
@@ -142,7 +142,7 @@ skill 经 command catalog 以 template 形式出现。
 | 工具                        | 说明                                                                          |
 | --------------------------- | ----------------------------------------------------------------------------- |
 | `Agent`                     | 派发子代理执行任务                                                            |
-| `TeamCreate` / `TeamDelete` | 创建/解散 swarm 团队（`~/.openharness-ts/teams/<team>/`，team.json 生命周期） |
+| `TeamCreate` / `TeamDelete` | 创建/解散 swarm 团队（`~/.vykor/teams/<team>/`，team.json 生命周期） |
 
 ### 后台任务（task/）
 

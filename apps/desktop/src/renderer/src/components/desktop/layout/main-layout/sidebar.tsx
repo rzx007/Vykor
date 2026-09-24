@@ -152,7 +152,7 @@ export function Sidebar({
 
   const notify = (): void => {
     void window.desktop.tray.notify({
-      title: "OpenHarness",
+      title: "Vykor",
       body: "通知中心已连接。",
       showWhenFocused: true,
     })
@@ -224,7 +224,7 @@ export function Sidebar({
             type="button"
             className="flex h-8 items-center gap-1 rounded-md px-1.5 text-base font-semibold hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            OpenHarness-ts
+            Vykor
           </button>
           <div className="ml-auto flex items-center gap-0.5">
             <Button
@@ -497,7 +497,7 @@ export function Sidebar({
             <DialogHeader>
               <DialogTitle>重命名项目</DialogTitle>
               <DialogDescription>
-                只修改 OpenHarness 中显示的名称，不会重命名磁盘目录。
+                只修改 Vykor 中显示的名称，不会重命名磁盘目录。
               </DialogDescription>
             </DialogHeader>
             <FieldGroup>

@@ -1,5 +1,5 @@
-import type { ModelsDevCatalog } from "@openharness/api";
-import type { CustomProviderSettings } from "@openharness/core";
+import type { ModelsDevCatalog } from "@vykor/api";
+import type { CustomProviderSettings } from "@vykor/core";
 
 import {
   catalogProviderModelIds,

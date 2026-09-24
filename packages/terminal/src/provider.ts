@@ -8,7 +8,7 @@ import type {
   TerminalSignalRequest,
   TerminalWaitResult,
   TerminalWriteRequest,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 /** Terminal 包对外汇总它实际使用的跨端协议类型。 */
 export type {
@@ -25,7 +25,7 @@ export type {
   TerminalSource,
   TerminalWaitResult,
   TerminalWriteRequest,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface TerminalWaitRequest extends TerminalReadRequest {
   timeoutMs: number;

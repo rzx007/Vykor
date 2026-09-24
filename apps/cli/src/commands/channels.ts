@@ -1,10 +1,10 @@
 import { Command } from "commander";
 
-import type { ChannelRuntimeStatus } from "@openharness/client";
+import type { ChannelRuntimeStatus } from "@vykor/client";
 import { runChannelsAddFeishu, runChannelsAllow } from "./channels-onboarding.js";
 
 /**
- * `ohs channels` 子命令（D.2）。渠道长连接与配置都归 daemon 所有，
+ * `vk channels` 子命令（D.2）。渠道长连接与配置都归 daemon 所有，
  * CLI 只是客户端：serve/status 读 daemon，add/allow 委托 daemon 写配置。
  */
 
@@ -98,7 +98,7 @@ export async function followChannelRuntime(
         highWater = Math.max(highWater, ...fresh.map((denial) => denial.seq));
         for (const denial of fresh) {
           options.warn(
-            `[channels] 拒绝来自 ${denial.sender} 的消息（${denial.chatId}）：ohs channels allow ${denial.sender}`,
+            `[channels] 拒绝来自 ${denial.sender} 的消息（${denial.chatId}）：vk channels allow ${denial.sender}`,
           );
         }
       }
@@ -127,8 +127,8 @@ function messageOf(error: unknown): string {
 async function createDefaultRuntimeClient(): Promise<ChannelsRuntimeClientLike> {
   const { ensureLocalDaemon } = await import("../ensure-daemon.js");
   const daemon = await ensureLocalDaemon();
-  const { OpenHarnessClient } = await import("@openharness/client");
-  return new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+  const { VykorClient } = await import("@vykor/client");
+  return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
 }
 
 async function runChannelsServe(): Promise<void> {
@@ -160,7 +160,7 @@ async function runChannelsServe(): Promise<void> {
 }
 
 async function runChannelsStatus(): Promise<void> {
-  const { readDaemonRegistry } = await import("@openharness/server");
+  const { readDaemonRegistry } = await import("@vykor/server");
   let daemon: ReturnType<typeof readDaemonRegistry>;
   try {
     daemon = readDaemonRegistry();
@@ -171,8 +171,8 @@ async function runChannelsStatus(): Promise<void> {
     console.log("daemon: not running；无法读取渠道配置");
     return;
   }
-  const { OpenHarnessClient } = await import("@openharness/client");
-  const client = new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+  const { VykorClient } = await import("@vykor/client");
+  const client = new VykorClient({ baseUrl: daemon.url, token: daemon.token });
   try {
     await client.protocol.health();
     const feishu = await client.channels.getFeishu();

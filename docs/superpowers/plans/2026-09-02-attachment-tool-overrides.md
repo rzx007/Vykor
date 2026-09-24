@@ -1,14 +1,14 @@
 # 附件能力退出 Agent Runtime 实现计划
 
-> **后续修订：** 本计划已经完成，但其中“`@openharness/tools` 保留可复用视觉 Tool”和“按图片服务配置注册”的实现结论已被 [Daemon 视觉工具所有权实现计划](./2026-09-02-daemon-visual-tools-ownership.md) 取代。当前边界是：视觉 Tool 完整属于 daemon/server，loader 通过唯一的 `tools(context)` 入口取得固定和动态工具。
+> **后续修订：** 本计划已经完成，但其中“`@vykor/tools` 保留可复用视觉 Tool”和“按图片服务配置注册”的实现结论已被 [Daemon 视觉工具所有权实现计划](./2026-09-02-daemon-visual-tools-ownership.md) 取代。当前边界是：视觉 Tool 完整属于 daemon/server，loader 通过唯一的 `tools(context)` 入口取得固定和动态工具。
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 让默认 `Read` 独立可用，把附件文本读取、本地 OCR、图生文、文生图、Child → Root 授权和附件 compact 文案收回 daemon 装配，并让默认 Agent 不注册任何视觉 Tool。
 
-**架构：** `@openharness/tools` 保留本地文件读取和可复用视觉 Tool 定义，但默认 Registry 只注册非视觉基础 Tool。`@openharness/core` 与 `@openharness/agent-runtime` 不再包含附件 Host、附件 Catalog、视觉服务装配或附件目录挂载。daemon 通过 `tools` 按配置注册 `ImageToText` / `ImageGeneration`，通过 `toolOverrides` 覆盖 `Read`，并用 `trustedToolOverrides: ["Read"]` 保留第一方 `Read` 的内置权限分类。
+**架构：** `@vykor/tools` 保留本地文件读取和可复用视觉 Tool 定义，但默认 Registry 只注册非视觉基础 Tool。`@vykor/core` 与 `@vykor/agent-runtime` 不再包含附件 Host、附件 Catalog、视觉服务装配或附件目录挂载。daemon 通过 `tools` 按配置注册 `ImageToText` / `ImageGeneration`，通过 `toolOverrides` 覆盖 `Read`，并用 `trustedToolOverrides: ["Read"]` 保留第一方 `Read` 的内置权限分类。
 
-**技术栈：** TypeScript、Vitest、pnpm workspace、Turbo、OpenHarness ToolRegistry/QueryEngine、SessionStore、LocalOcrService。
+**技术栈：** TypeScript、Vitest、pnpm workspace、Turbo、Vykor ToolRegistry/QueryEngine、SessionStore、LocalOcrService。
 
 **执行约束：** 用户明确要求直接在 `main` 实现，不创建 worktree。工作区存在其他任务的未提交改动；每次只用精确路径 `git add -- <files>`，提交前必须检查 `git diff --cached --stat`，不得暂存或修改计划范围外文件。
 
@@ -16,7 +16,7 @@
 
 ## 文件结构与职责
 
-### `@openharness/agent-runtime`
+### `@vykor/agent-runtime`
 
 - 修改 `packages/agent-runtime/src/agent-options.ts`：声明 `trustedToolOverrides`，删除附件/OCR Capability override。
 - 修改 `packages/agent-runtime/src/default-runtime.ts`：校验第一方可信覆盖，恢复可信 builtin 权限分类；删除附件 Host、视觉 Capability 和附件目录挂载接线。
@@ -27,7 +27,7 @@
 - 修改 `packages/agent-runtime/src/agent.ts`、`agent-composition.ts`、相关测试：删除 `attachmentResourceRoot`。
 - 修改 `packages/agent-runtime/src/compact-context.ts` 与测试：只组合 `sessionMemory` 和通用 `supplementalSections`。
 
-### `@openharness/core`
+### `@vykor/core`
 
 - 修改 `packages/core/src/types/tools.ts`：删除附件/OCR Host 类型和 `ToolContext` 字段。
 - 修改 `packages/core/src/types/runtime.ts`：删除 `setAttachments()`、`setImageToText()`。
@@ -36,7 +36,7 @@
 - 修改 `packages/core/src/engine/compact-service-advanced.test.ts`：锁定通用章节的格式化、折叠和限额。
 - 修改 `packages/core/src/index.ts`：停止导出附件/OCR Host 和附件 Catalog，导出 `CompactContextSection`。
 
-### `@openharness/tools`
+### `@vykor/tools`
 
 - 修改 `packages/tools/src/file/read.ts` 与测试：恢复纯本地文件/目录读取。
 - 删除 `packages/tools/src/file/attachment-uri.ts`：附件 URI 解析迁到 server。
@@ -44,7 +44,7 @@
 - 修改 `packages/tools/src/media/image-generation.ts` 与测试：让可复用文生图定义使用调用上下文配置并安全处理错误。
 - 修改 `packages/tools/src/registry.ts` 与测试：删除 `imageToText` 开关，默认不注册 `ImageToText` 或 `ImageGeneration`。
 
-### `@openharness/server`
+### `@vykor/server`
 
 - 创建 `packages/server/src/application/attachment-tools/attachment-access.ts`：server 私有类型、Child → Root 解析器、文本/OCR 的 session 引用授权边界。
 - 创建 `packages/server/src/application/attachment-tools/attachment-uri.ts`：严格解析 `attachment://<assetId>/<displayName>`。
@@ -86,7 +86,7 @@
 
 ```ts
 it("rejects a trusted name that is not part of toolOverrides", async () => {
-  await expect(createOpenHarnessRuntime({
+  await expect(createVykorRuntime({
     settings: BASE_SETTINGS,
     configuration: {
       client: {
@@ -110,14 +110,14 @@ it("rejects a trusted name that is not part of toolOverrides", async () => {
 运行：
 
 ```bash
-pnpm --filter @openharness/agent-runtime test -- src/default-runtime.test.ts
+pnpm --filter @vykor/agent-runtime test -- src/default-runtime.test.ts
 ```
 
 预期：FAIL，原因是 `trustedToolOverrides` 尚未进入配置或无对应校验错误。
 
 - [x] **步骤 3：声明配置并在应用覆盖前验证来源**
 
-在 `OpenHarnessAgentConfiguration` 增加：
+在 `VykorAgentConfiguration` 增加：
 
 ```ts
 /** First-party overrides that retain the replaced builtin's permission classification. */
@@ -129,7 +129,7 @@ trustedToolOverrides?: string[];
 ```ts
 function applyConfiguredTools(
   registry: IToolRegistry,
-  configuration: OpenHarnessAgentConfiguration,
+  configuration: VykorAgentConfiguration,
 ): ReadonlySet<string> {
   const overrideNames = assertUniqueToolNames(
     configuration.toolOverrides ?? [],
@@ -209,8 +209,8 @@ trustedToolOverrides: configuration.trustedToolOverrides,
 运行：
 
 ```bash
-pnpm --filter @openharness/agent-runtime test -- src/default-runtime.test.ts src/child-agent-options.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime test -- src/default-runtime.test.ts src/child-agent-options.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。
@@ -264,7 +264,7 @@ it("treats attachment URIs as ordinary invalid local paths", async () => {
 运行：
 
 ```bash
-pnpm --filter @openharness/tools test -- src/file/__test__/read.test.ts
+pnpm --filter @vykor/tools test -- src/file/__test__/read.test.ts
 ```
 
 预期：FAIL，当前描述仍宣称支持附件，并尝试读取 `context.attachments`。
@@ -311,7 +311,7 @@ it("sends a local image and prompt to an OpenAI-compatible vision endpoint", asy
 运行：
 
 ```bash
-pnpm --filter @openharness/tools test -- src/media/__test__/image-to-text.test.ts
+pnpm --filter @vykor/tools test -- src/media/__test__/image-to-text.test.ts
 ```
 
 预期：FAIL，当前 Tool 只接受本地 OCR Host，拒绝 prompt。
@@ -347,7 +347,7 @@ const prompt = parsed.prompt ?? "Describe this image in detail.";
 imageToText?: boolean;
 ```
 
-删除默认注册 `imageToTextTool` 和 `imageGenerationTool`。更新 registry 测试，断言默认名称集合不包含 `ImageToText` 或 `ImageGeneration`；视觉定义仍从 `@openharness/tools` 导出，供 daemon 显式装配。
+删除默认注册 `imageToTextTool` 和 `imageGenerationTool`。更新 registry 测试，断言默认名称集合不包含 `ImageToText` 或 `ImageGeneration`；视觉定义仍从 `@vykor/tools` 导出，供 daemon 显式装配。
 
 - [x] **步骤 6：用失败测试锁定文生图上下文配置和安全错误**
 
@@ -356,8 +356,8 @@ imageToText?: boolean;
 - [x] **步骤 7：运行 Tools 全包测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/tools check-types
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/tools check-types
 ```
 
 预期：全部 PASS；搜索生产代码时，`packages/tools/src` 中不存在 `context.attachments`、`context.imageToText` 或 `attachment_id`。
@@ -402,7 +402,7 @@ expect(resolver.resolve("missing")).toBeUndefined();
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- src/application/attachment-tools/__test__/attachment-access.test.ts
+pnpm --filter @vykor/server test -- src/application/attachment-tools/__test__/attachment-access.test.ts
 ```
 
 预期：FAIL，模块尚不存在。
@@ -523,8 +523,8 @@ Schema 用 `oneOf` 表达：
 - [x] **步骤 8：运行 server 新模块测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/server test -- src/application/attachment-tools/__test__/attachment-access.test.ts src/application/attachment-tools/__test__/attachment-read-tool.test.ts src/application/attachment-tools/__test__/attachment-image-to-text-tool.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- src/application/attachment-tools/__test__/attachment-access.test.ts src/application/attachment-tools/__test__/attachment-read-tool.test.ts src/application/attachment-tools/__test__/attachment-image-to-text-tool.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部 PASS。
@@ -585,7 +585,7 @@ toolOverrides?: ToolDefinition[];
 trustedToolOverrides?: string[];
 ```
 
-删除 `imageToText`、`attachments`、`attachmentResourceRoot`。构造 `OpenHarnessAgentOptions` 时直接传递 `tools`、`toolOverrides`、`trustedToolOverrides`，不放进 `capabilityOverrides`。
+删除 `imageToText`、`attachments`、`attachmentResourceRoot`。构造 `VykorAgentOptions` 时直接传递 `tools`、`toolOverrides`、`trustedToolOverrides`，不放进 `capabilityOverrides`。
 
 - [x] **步骤 3：在 DaemonApplication 创建共享服务和覆盖 Tool**
 
@@ -670,9 +670,9 @@ rg -n "AgentAttachmentResourceHost|AgentImageToTextHost|createAgentAttachmentRes
 - [x] **步骤 7：运行 server 定向与全包测试**
 
 ```bash
-pnpm --filter @openharness/server test -- src/daemon/__test__/daemon-agent.test.ts src/application/session/__test__/session-run-executor.test.ts src/application/attachment-routing/__test__/attachment-capability-router.test.ts src/application/__test__/durable-agent-application.test.ts
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- src/daemon/__test__/daemon-agent.test.ts src/application/session/__test__/session-run-executor.test.ts src/application/attachment-routing/__test__/attachment-capability-router.test.ts src/application/__test__/durable-agent-application.test.ts
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部 PASS。
@@ -759,9 +759,9 @@ ToolContext.attachments
 删除：
 
 ```text
-OpenHarnessAgentOptions.attachmentResourceRoot
+VykorAgentOptions.attachmentResourceRoot
 AgentCompositionOptions.attachmentResourceRoot
-OpenHarnessRuntimeOptions.attachmentResourceRoot
+VykorRuntimeOptions.attachmentResourceRoot
 attachSandboxRuntime(..., attachmentResourceRoot)
 managedReadOnlyMounts 中的附件 mount
 ```
@@ -779,11 +779,11 @@ rg -n "AgentAttachmentResourceHost|AgentImageToTextHost|setAttachments|setImageT
 - [x] **步骤 6：运行 core 与 agent-runtime 全包验证**
 
 ```bash
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/core check-types
-pnpm --filter @openharness/agent-runtime check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/core check-types
+pnpm --filter @vykor/agent-runtime check-types
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部 PASS。
@@ -903,12 +903,12 @@ daemon provider 调用 server builder，并把有值的单节包装成数组。�
 - [x] **步骤 6：运行三包定向测试**
 
 ```bash
-pnpm --filter @openharness/core test -- src/engine/compact-service-advanced.test.ts
-pnpm --filter @openharness/agent-runtime test -- src/compact-context.test.ts
-pnpm --filter @openharness/server test -- src/application/attachment-resource/__test__/compact-attachment-catalog.test.ts src/application/agent/__test__/agent-pool.test.ts src/application/__test__/durable-agent-application.test.ts
-pnpm --filter @openharness/core check-types
-pnpm --filter @openharness/agent-runtime check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/core test -- src/engine/compact-service-advanced.test.ts
+pnpm --filter @vykor/agent-runtime test -- src/compact-context.test.ts
+pnpm --filter @vykor/server test -- src/application/attachment-resource/__test__/compact-attachment-catalog.test.ts src/application/agent/__test__/agent-pool.test.ts src/application/__test__/durable-agent-application.test.ts
+pnpm --filter @vykor/core check-types
+pnpm --filter @vykor/agent-runtime check-types
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部 PASS。
@@ -979,10 +979,10 @@ rg -n "context\.attachments|context\.imageToText|capabilities\.attachments|capab
 - [x] **步骤 3：运行四个核心包的全包测试**
 
 ```bash
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
 ```
 
 预期：全部 PASS。Windows 上若出现 node-pty `AttachConsole failed` 噪音，以测试进程退出码和 Vitest 汇总为准，并在交接记录中说明。

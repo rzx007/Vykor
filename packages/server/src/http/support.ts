@@ -2,12 +2,12 @@ import {
   ProtocolValidationError,
   PROTOCOL_VERSION_HEADER,
   type ProtocolError,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { Context } from "hono";
 import {
   isAttachmentError,
   type AttachmentErrorCode,
-} from "@openharness/services";
+} from "@vykor/services";
 import {
   APPLICATION_ERROR_HTTP_STATUS,
   ApplicationError,
@@ -24,14 +24,14 @@ export {
   runtimeSessionMetadataChanged,
   withoutTraceId,
   workflowRunIdFromSessionEvent,
-  type OpenHarnessRuntimeSnapshot,
+  type VykorRuntimeSnapshot,
 } from "../application/support.js";
 
 export type JsonRecord = Record<string, unknown>;
 
 export type HttpPermissionStatus = "pending" | "approved" | "denied" | "expired";
 
-export interface OpenHarnessServerHealth {
+export interface VykorServerHealth {
   ok: true;
   version?: string;
   startedAt: number;
@@ -55,9 +55,9 @@ export const SSE_HEADERS = {
 };
 export const CORS_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
 export const CORS_HEADERS =
-  `authorization, content-type, last-event-id, x-openharness-filename, x-openharness-trace-id, range, if-none-match, ${PROTOCOL_VERSION_HEADER}`;
+  `authorization, content-type, last-event-id, x-vykor-filename, x-vykor-trace-id, range, if-none-match, ${PROTOCOL_VERSION_HEADER}`;
 export const CORS_EXPOSE_HEADERS =
-  "x-openharness-trace-id, content-range, content-disposition, etag, accept-ranges";
+  "x-vykor-trace-id, content-range, content-disposition, etag, accept-ranges";
 
 export function isRecord(value: unknown): value is JsonRecord {
   return !!value && typeof value === "object" && !Array.isArray(value);

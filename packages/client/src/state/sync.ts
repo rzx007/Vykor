@@ -17,7 +17,7 @@ import {
 import type {
   EventSyncOptions,
   ListEventsOptions,
-  OpenHarnessClientState,
+  VykorClientState,
   SessionEventRecord,
   SessionStateSnapshot,
   SyncEventUpdate,
@@ -34,9 +34,9 @@ export interface SyncEventsClient {
 }
 
 type GlobalEventReducer = (
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   event: SessionEventRecord,
-) => OpenHarnessClientState;
+) => VykorClientState;
 
 const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
   Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
@@ -45,7 +45,7 @@ const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 60_000;
 
 /** 用已有事件列表一次性 hydrate 出客户端状态（离线/测试常用）。 */
-export function hydrateState(events: Iterable<SessionEventRecord>): OpenHarnessClientState {
+export function hydrateState(events: Iterable<SessionEventRecord>): VykorClientState {
   return applyEvents(createInitialClientState(), events);
 }
 
@@ -92,12 +92,12 @@ export async function* syncEvents(
 
 async function* liveWithReconnect(
   client: SyncEventsClient,
-  initialState: OpenHarnessClientState,
+  initialState: VykorClientState,
   options: EventSyncOptions,
   initialCursor: number,
   resync?: (
-    current: OpenHarnessClientState,
-  ) => Promise<{ state: OpenHarnessClientState; cursor: number }>,
+    current: VykorClientState,
+  ) => Promise<{ state: VykorClientState; cursor: number }>,
   reduce: GlobalEventReducer = applyEvent,
 ): AsyncIterable<SyncEventUpdate> {
   let state = initialState;

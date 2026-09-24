@@ -4,7 +4,7 @@ import type {
   ScheduledTaskRecord,
   ScheduledTaskStatusSummary,
   UpdateScheduledTaskInput,
-} from "@openharness/client"
+} from "@vykor/client"
 
 export type DesktopScheduledTask = ScheduledTaskRecord
 export type DesktopScheduledRun = ScheduledRunRecord

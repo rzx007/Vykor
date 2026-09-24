@@ -6,13 +6,13 @@ import type {
   AgentChildDirectory,
   AgentChildHandle,
   AgentChildResult,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   createWorkflowPlan,
   createWorkflowRunSnapshot,
   FileWorkflowRunRepository,
-} from "@openharness/coordinator";
-import { getDetachedProcessSupervisor, resetExecutionRuntimes } from "@openharness/services/executions";
+} from "@vykor/coordinator";
+import { getDetachedProcessSupervisor, resetExecutionRuntimes } from "@vykor/services/executions";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LocalAgentJobHost } from "./local-job-host.js";
@@ -383,7 +383,7 @@ function directory(...handles: AgentChildHandle[]): AgentChildDirectory {
 }
 
 function temporaryDirectory(): string {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-local-jobs-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-local-jobs-"));
   createdDirectories.push(cwd);
   return cwd;
 }

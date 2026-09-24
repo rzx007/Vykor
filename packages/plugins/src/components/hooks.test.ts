@@ -9,7 +9,7 @@ import { loadNativeHooks } from "./hooks.js";
 const fixture = fileURLToPath(new URL("../../fixtures/native-v1/agents-hooks-mcp", import.meta.url));
 
 describe("loadNativeHooks", () => {
-  it("loads OpenHarness event names", async () => {
+  it("loads Vykor event names", async () => {
     const validation = await validateNativePlugin(fixture);
     const result = await loadNativeHooks(validation.plugin!);
     expect(result.status).toBe("loaded");
@@ -17,12 +17,12 @@ describe("loadNativeHooks", () => {
   });
 
   it("rejects Claude event names instead of translating them at runtime", async () => {
-    const root = await mkdtemp(join(tmpdir(), "ohs-native-hooks-"));
+    const root = await mkdtemp(join(tmpdir(), "vk-native-hooks-"));
     try {
-      await mkdir(join(root, ".openharness-plugin"));
+      await mkdir(join(root, ".vykor-plugin"));
       await mkdir(join(root, "hooks"));
-      await writeFile(join(root, ".openharness-plugin", "plugin.json"), JSON.stringify({
-        schemaVersion: 1, id: "dev.openharness.claude-event", name: "claude-event", version: "1",
+      await writeFile(join(root, ".vykor-plugin", "plugin.json"), JSON.stringify({
+        schemaVersion: 1, id: "dev.vykor.claude-event", name: "claude-event", version: "1",
         components: { hooks: ["./hooks/hooks.json"] },
       }));
       await writeFile(join(root, "hooks", "hooks.json"), JSON.stringify({

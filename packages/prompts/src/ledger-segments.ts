@@ -1,5 +1,5 @@
-import type { ContextLedgerSegment } from "@openharness/core";
-import type { WorkStyle } from "@openharness/core";
+import type { ContextLedgerSegment } from "@vykor/core";
+import type { WorkStyle } from "@vykor/core";
 import type { PromptPermissionMode } from "./index.js";
 import {
   buildTaggedPromptSegments,

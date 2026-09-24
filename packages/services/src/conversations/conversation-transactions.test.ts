@@ -33,7 +33,7 @@ function createReadyAttachment(
 describe("ConversationTransactions.admitPrompt", () => {
   describe("admission matrix", () => {
     it("admits plain text prompt and updates placeholder title on first prompt", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-matrix-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-matrix-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -64,7 +64,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("admits structured items with skills and text", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-struct-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-struct-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -92,7 +92,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("rejects empty text and empty items when attachments are empty", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-empty-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-empty-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -117,7 +117,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("handles idempotency: returns same record if same content, throws conflict if different content", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-idemp-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-idemp-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -161,7 +161,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("steer delivery: preserved if no attachments, downgraded to queue if attachments present", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-steer-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-steer-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -195,7 +195,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("validates attachment errors: not found, deleted, not ready, too large, count exceeded, prompt bytes, session bytes", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-att-err-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-att-err-"));
       const store = new SessionStore({
         path: join(dir, "store.db"),
         attachmentLimits: {
@@ -347,7 +347,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("preserves attachment reference positions, display names, and metadata", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-pos-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-pos-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -403,7 +403,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     ] as const)(
       "rolls back all changes when error thrown at %s",
       (failurePoint) => {
-        const dir = mkdtempSync(join(tmpdir(), `ohs-admit-fail-${failurePoint}-`));
+        const dir = mkdtempSync(join(tmpdir(), `vk-admit-fail-${failurePoint}-`));
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
 
@@ -471,7 +471,7 @@ describe("ConversationTransactions.admitPrompt", () => {
 
   describe("admitPromptWithRun", () => {
     it("admits queued prompt and creates owning root run atomically", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-run-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -503,7 +503,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("returns existing input and owning run on retry with same content", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-retry-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-run-retry-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -532,7 +532,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("throws if delivery is steer", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-steer-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-run-steer-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -556,7 +556,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("rolls back input if run creation fails", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-fail-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-run-fail-"));
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
@@ -598,7 +598,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("does not create a run if input id exists with different content", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-admit-run-conflict-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-admit-run-conflict-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -628,7 +628,7 @@ describe("ConversationTransactions.admitPrompt", () => {
 
   describe("createReplayRun", () => {
     it("creates replay run for existing input with metadata", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-replay-run-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-replay-run-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -658,7 +658,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("throws if source input does not exist", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-replay-missing-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-replay-missing-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -680,7 +680,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("supports explicit id idempotency and throws on explicit id conflict", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-replay-idemp-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-replay-idemp-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         const tx = new ConversationTransactions({
@@ -727,7 +727,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     }
 
     it("replaces every message and part, preserves all part fields, and survives reopen", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-transcript-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-replace-transcript-"));
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
@@ -826,7 +826,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("rolls back transcript replacement after an injected failure", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-transcript-fail-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-replace-transcript-fail-"));
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
@@ -865,7 +865,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it.each([false, true])("replaces transcript and admits a prompt with createRun=%s", (createRun) => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-and-admit-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-replace-and-admit-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         store.sessions.create({ id: "s1", cwd: dir, model: "m" });
@@ -886,7 +886,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("rolls back replacement and admission when run creation fails", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-replace-admit-fail-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-replace-admit-fail-"));
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
@@ -915,7 +915,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("edits the latest prompt by removing its dependent graph and keeping earlier history", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-edit-latest-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         store.sessions.create({ id: "s1", cwd: dir, model: "m" });
@@ -954,7 +954,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("edits the latest prompt and creates its owning run", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-run-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-edit-latest-run-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         store.sessions.create({ id: "s1", cwd: dir, model: "m" });
@@ -985,7 +985,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("restores the entire removed graph when edited prompt run creation fails", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-run-fail-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-edit-latest-run-fail-"));
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
       try {
@@ -1056,7 +1056,7 @@ describe("ConversationTransactions.admitPrompt", () => {
     });
 
     it("validates edit source ownership and rolls back deletion when admission fails", () => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-edit-latest-fail-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-edit-latest-fail-"));
       const store = new SessionStore({ path: join(dir, "store.db") });
       try {
         store.sessions.create({ id: "s1", cwd: dir, model: "m" });
@@ -1148,7 +1148,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       }
 
       it("copies complete history with deduplicated inputs, attachment positions, all part fields, and requested session fields", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-fork-full-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-fork-full-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           const source = seedForkSource(store, dir);
@@ -1193,7 +1193,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("honors before and after boundaries and rejects unknown fork points", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-fork-boundary-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-fork-boundary-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           const source = seedForkSource(store, dir);
@@ -1218,7 +1218,7 @@ describe("ConversationTransactions.admitPrompt", () => {
         "afterForkMessagesCopied",
         "afterForkPartsCopied",
       ] as const)("rolls back memory and disk when %s fails", (failurePoint) => {
-        const dir = mkdtempSync(join(tmpdir(), `ohs-fork-fail-${failurePoint}-`));
+        const dir = mkdtempSync(join(tmpdir(), `vk-fork-fail-${failurePoint}-`));
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
         try {
@@ -1265,7 +1265,7 @@ describe("ConversationTransactions.admitPrompt", () => {
 
     describe("deleteSessionTree", () => {
       it("writes one durable global deletion event for the removed session tree", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-event-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-delete-event-"));
         const sessionStore = new SessionStore({ path: join(dir, "store.db") });
         try {
           sessionStore.sessions.create({ id: "root", cwd: dir, model: "m" });
@@ -1328,7 +1328,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       }
 
       it("invalidates scheduled links to every deleted session in the same transaction", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-scheduled-links-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-delete-scheduled-links-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           store.sessions.create({ id: "root", cwd: dir, model: "m" });
@@ -1404,7 +1404,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("deletes a three-level tree in DFS order while preserving outside state and pending mutation", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-tree-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-delete-tree-"));
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
         try {
@@ -1445,7 +1445,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it.each(["sql", "memory"] as const)("rolls back all state and disk on %s failure", (kind) => {
-        const dir = mkdtempSync(join(tmpdir(), `ohs-delete-tree-${kind}-`));
+        const dir = mkdtempSync(join(tmpdir(), `vk-delete-tree-${kind}-`));
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
         try {
@@ -1476,7 +1476,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("rejects deletion from inside another store transaction", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-delete-tree-nested-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-delete-tree-nested-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           store.sessions.create({ id: "root", cwd: dir, model: "m" });
@@ -1493,7 +1493,7 @@ describe("ConversationTransactions.admitPrompt", () => {
 
     describe("recovery transactions", () => {
       it("settles only active attempts and interrupts only active tasks with defaults", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-attempt-task-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-recovery-attempt-task-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           store.sessions.create({ id: "s1", cwd: dir, model: "m" });
@@ -1522,7 +1522,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("interrupts active runs, marks unknown tool outcomes, terminalizes orphans, and finalizes eligible closing sessions", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-runs-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-recovery-runs-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           store.sessions.create({ id: "active", cwd: dir, model: "m" });
@@ -1563,7 +1563,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("rolls back a failed recovery batch in memory and after reopen", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-recovery-fail-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-recovery-fail-"));
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
         try {
@@ -1583,7 +1583,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("rolls back active run, attempt, and running parts when run recovery fails", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-run-recovery-fail-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-run-recovery-fail-"));
         const dbPath = join(dir, "store.db");
         let store = new SessionStore({ path: dbPath });
         try {
@@ -1629,7 +1629,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("notifies task listeners only after outer commit, never on rollback, and once per batch task", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-task-notify-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-task-notify-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           store.sessions.create({ id: "s1", cwd: dir, model: "m" });
@@ -1661,7 +1661,7 @@ describe("ConversationTransactions.admitPrompt", () => {
 
     describe("getSessionState", () => {
       it("rejects a missing session", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-snapshot-missing-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-snapshot-missing-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           expect(() => createTransactions(store).getSessionState("missing"))
@@ -1673,7 +1673,7 @@ describe("ConversationTransactions.admitPrompt", () => {
       });
 
       it("returns the complete canonical aggregate at one cursor as a deep clone without children", () => {
-        const dir = mkdtempSync(join(tmpdir(), "ohs-snapshot-full-"));
+        const dir = mkdtempSync(join(tmpdir(), "vk-snapshot-full-"));
         const store = new SessionStore({ path: join(dir, "store.db") });
         try {
           store.sessions.create({ id: "s1", cwd: dir, model: "m", metadata: { nested: { value: 1 } } });
@@ -1744,7 +1744,7 @@ describe("ConversationTransactions.admitPrompt", () => {
 
 describe("ConversationTransactions.recordAppliedRequestConfiguration", () => {
   function createFixture() {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-model-switch-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-model-switch-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const tx = new ConversationTransactions({
       storage: (store as any).storage,

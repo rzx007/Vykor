@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/hooks",
+  "name": "@vykor/hooks",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,9 +17,9 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/environment": "workspace:*",
-    "@openharness/core": "workspace:*",
-    "@openharness/sandbox": "workspace:*"
+    "@vykor/environment": "workspace:*",
+    "@vykor/core": "workspace:*",
+    "@vykor/sandbox": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -24,7 +24,7 @@ test("the compile-time negative fixture checks every removed method exactly once
 });
 
 test("reports a removed Client method used by production code", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-forbidden-"));
   try {
     mkdirSync(join(cwd, "src"));
     writeFileSync(join(cwd, "src", "demo.ts"), 'await client.getSession("s1");\n');
@@ -53,7 +53,7 @@ test("reports a removed Client method used by production code", () => {
 });
 
 test("reports optional-chain and bracket access to removed Client methods", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-forbidden-"));
   try {
     mkdirSync(join(cwd, "src"));
     writeFileSync(
@@ -84,7 +84,7 @@ test("reports optional-chain and bracket access to removed Client methods", () =
 });
 
 test("reports aliases and destructuring of removed Client methods", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-forbidden-"));
   try {
     mkdirSync(join(cwd, "src"));
     writeFileSync(
@@ -115,7 +115,7 @@ test("reports aliases and destructuring of removed Client methods", () => {
 });
 
 test("does not report current Resource methods", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-forbidden-"));
   try {
     mkdirSync(join(cwd, "src"));
     writeFileSync(
@@ -145,7 +145,7 @@ test("does not report current Resource methods", () => {
 });
 
 test("does not scan the forbidden manifest itself", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-forbidden-"));
   try {
     mkdirSync(join(cwd, "scripts"));
     writeFileSync(
@@ -175,7 +175,7 @@ test("does not scan the forbidden manifest itself", () => {
 });
 
 test("reports removed Server application facades in current code and docs", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-server-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-forbidden-server-"));
   try {
     mkdirSync(join(cwd, "src"));
     writeFileSync(join(cwd, "src", "current.ts"), "class SessionApplicationService {}\nconst path = 'session-application-service';\nwithSessionOperation();\n");
@@ -199,7 +199,7 @@ test("reports removed Server application facades in current code and docs", () =
 });
 
 test("reports terminal create payload aliases without flagging terminal session info", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-forbidden-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-forbidden-"));
   try {
     mkdirSync(join(cwd, "src"));
     writeFileSync(join(cwd, "src", "terminal.ts"), [

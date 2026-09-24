@@ -6,7 +6,7 @@
 
 **架构：** Memory 继续使用现有 `AgentMemoryRuntime`，只由 agent-runtime 创建并允许显式关闭；Workflow 工具与 Jobs 共用一份 Repository；compact 直接组合附件目录和 Session Memory 两个 provider；Attachments 没有真实 Host 时明确 unavailable；Host overrides 被定义为整个 root session tree 可用的借用对象。
 
-**技术栈：** TypeScript、Vitest、现有 `@openharness/core` compact service、`@openharness/agent-runtime` Memory、`@openharness/coordinator` Workflow、`@openharness/server` session/attachment services。
+**技术栈：** TypeScript、Vitest、现有 `@vykor/core` compact service、`@vykor/agent-runtime` Memory、`@vykor/coordinator` Workflow、`@vykor/server` session/attachment services。
 
 ---
 
@@ -90,7 +90,7 @@ await expect(host.read({ sessionId: "session-1", jobId: "workflow-1" }))
 - [ ] **步骤 3：运行 LocalAgentJobHost 测试确认失败**
 
 ```bash
-pnpm --filter @openharness/tools exec vitest run src/job/local-job-host.test.ts
+pnpm --filter @vykor/tools exec vitest run src/job/local-job-host.test.ts
 ```
 
 预期：FAIL，构造函数仍要求三个位置参数并自行创建 Repository。
@@ -121,8 +121,8 @@ export interface LocalAgentJobHostOptions {
 - [ ] **步骤 6：运行 Workflow、Jobs 与 SDK 测试**
 
 ```bash
-pnpm --filter @openharness/tools exec vitest run src/job/local-job-host.test.ts src/agent/workflow/__test__/workflow-smoke.test.ts src/agent/workflow/__test__/tool.test.ts
-pnpm --filter @openharness/agent-runtime exec vitest run src/sdk.test.ts
+pnpm --filter @vykor/tools exec vitest run src/job/local-job-host.test.ts src/agent/workflow/__test__/workflow-smoke.test.ts src/agent/workflow/__test__/tool.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/sdk.test.ts
 ```
 
 预期：全部 PASS。
@@ -159,12 +159,12 @@ await expect(disabledAgent.remember()).resolves.toMatchObject({
 
 - [ ] **步骤 2：先写现有受管语义回归测试**
 
-保留并补强：user scope 走 `appendUserProfileUpdate`；project scope 走 `MemoryManager`；模型工具参数不出现 `USER.md`、`.openharness` 或真实记忆目录；同一 Run 主动 Remember 后不会再自动提取。
+保留并补强：user scope 走 `appendUserProfileUpdate`；project scope 走 `MemoryManager`；模型工具参数不出现 `USER.md`、`.vykor` 或真实记忆目录；同一 Run 主动 Remember 后不会再自动提取。
 
 - [ ] **步骤 3：运行 Memory 定向测试确认新关闭路径失败**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
 ```
 
 预期：FAIL，旧实现只读取 Settings，不识别 `capabilityOverrides.memory` 或新的诊断结果。
@@ -185,8 +185,8 @@ const memory = memoryDisabled
 - [ ] **步骤 5：运行 Memory 与受管文件安全测试**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
-pnpm --filter @openharness/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
+pnpm --filter @vykor/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
 ```
 
 预期：全部 PASS。
@@ -230,7 +230,7 @@ await expect(provider()).resolves.toEqual({
 - [ ] **步骤 2：运行组合测试并确认失败**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/compact-context.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/compact-context.test.ts
 ```
 
 预期：FAIL，缺少 `compact-context.ts`。
@@ -265,8 +265,8 @@ Agent 公开方法改为 `setCompactContextProvider(provider)`；删除 `setComp
 - [ ] **步骤 5：运行 core 与 agent-runtime 定向测试**
 
 ```bash
-pnpm --filter @openharness/core exec vitest run src/engine/compact-service-advanced.test.ts src/agent-session.test.ts
-pnpm --filter @openharness/agent-runtime exec vitest run src/compact-context.test.ts src/agent.test.ts
+pnpm --filter @vykor/core exec vitest run src/engine/compact-service-advanced.test.ts src/agent-session.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/compact-context.test.ts src/agent.test.ts
 ```
 
 预期：全部 PASS。
@@ -309,7 +309,7 @@ sessionMemory?(sessionId: string): string | Promise<string>;
 - [ ] **步骤 2：运行 AgentPool 测试确认失败**
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/application/agent/__test__/agent-pool.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/agent/__test__/agent-pool.test.ts
 ```
 
 预期：FAIL，当前 context 仍只有 `compactAttachments`。
@@ -339,7 +339,7 @@ sessionMemoryToCompactText(
 - [ ] **步骤 5：运行 daemon compact 回归**
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/application/agent/__test__/agent-pool.test.ts src/application/__test__/durable-agent-application.test.ts src/application/attachment-resource/__test__/compact-attachment-catalog.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/agent/__test__/agent-pool.test.ts src/application/__test__/durable-agent-application.test.ts src/application/attachment-resource/__test__/compact-attachment-catalog.test.ts
 ```
 
 预期：全部 PASS；durable 测试明确断言 `sessionMemory` 与 `attachmentCatalog` 同时存在。
@@ -392,7 +392,7 @@ expect(agent.inspect().tools.map((tool) => tool.name)).not.toContain("ReadAttach
 - [ ] **步骤 4：运行测试确认旧行为不满足契约**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/sdk.test.ts src/default-runtime.test.ts src/child-agent.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/sdk.test.ts src/default-runtime.test.ts src/child-agent.test.ts
 ```
 
 预期：至少新 attachments snapshot 和 session-tree 测试失败。
@@ -408,10 +408,10 @@ pnpm --filter @openharness/agent-runtime exec vitest run src/sdk.test.ts src/def
 - [ ] **步骤 7：运行阶段二相关测试与全仓检查**
 
 ```bash
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
 pnpm check-types
 pnpm check-docs
 ```

@@ -227,7 +227,7 @@ export function PluginSettings(): React.JSX.Element {
       <Alert>
         <CircleAlert />
         <AlertDescription>
-          插件管理接口尚未加载。请完全退出并重新启动 OpenHarness，以更新 Desktop preload。
+          插件管理接口尚未加载。请完全退出并重新启动 Vykor，以更新 Desktop preload。
         </AlertDescription>
       </Alert>
     )
@@ -355,7 +355,7 @@ export function PluginSettings(): React.JSX.Element {
               <EmptyDescription className="max-w-sm text-xs leading-5">
                 {plugins.length
                   ? "调整搜索词或筛选条件后再试。"
-                  : "可先使用 ohs plugin install-local 或 ohs plugin link 添加本地插件。"}
+                  : "可先使用 vk plugin install-local 或 vk plugin link 添加本地插件。"}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -520,7 +520,7 @@ export function PluginDetailsDialog({
               value={
                 plugin.origin === "converted"
                   ? `转换自 ${plugin.sourceFormat ?? "外部格式"}`
-                  : "OpenHarness 原生"
+                  : "Vykor 原生"
               }
             />
             <DetailRow label="安装" value={plugin.installation} />

@@ -4,9 +4,9 @@
 
 **目标：** 用 daemon 拥有的结构化 Context Persistence 服务替换 `USER.md`、local rules 和 Markdown Project Memory，使 Agent 只能通过语义工具记住、查询、修改和忘记上下文。
 
-**架构：** Context 领域类型和纯策略位于新的 `@openharness/context` 包；SQLite repository 位于 `@openharness/services`，并复用现有 SessionStore 的事务和迁移体系。daemon application service 组合 Resolver、Repository、自动提取和 Prompt 查询，并通过 host capability 向 Agent 安装语义工具。所有客户端使用 `/context/*` 资源 API；最后一次性删除旧 memory/personalization/USER 链路，不做双写和兼容读取。
+**架构：** Context 领域类型和纯策略位于新的 `@vykor/context` 包；SQLite repository 位于 `@vykor/services`，并复用现有 SessionStore 的事务和迁移体系。daemon application service 组合 Resolver、Repository、自动提取和 Prompt 查询，并通过 host capability 向 Agent 安装语义工具。所有客户端使用 `/context/*` 资源 API；最后一次性删除旧 memory/personalization/USER 链路，不做双写和兼容读取。
 
-**技术栈：** TypeScript、Vitest、Drizzle ORM、better-sqlite3、Hono、React/Electron、OpenHarness Agent runtime 和 SessionStore。
+**技术栈：** TypeScript、Vitest、Drizzle ORM、better-sqlite3、Hono、React/Electron、Vykor Agent runtime 和 SessionStore。
 
 ---
 
@@ -127,7 +127,7 @@ it("treats same semantic slot with different content as a conflict", () => {
 - [ ] **步骤 2：运行测试确认红灯**
 
 ```bash
-pnpm --filter @openharness/context test
+pnpm --filter @vykor/context test
 ```
 
 预期：包或导出函数尚不存在，测试失败。
@@ -139,8 +139,8 @@ pnpm --filter @openharness/context test
 - [ ] **步骤 4：验证绿灯和类型**
 
 ```bash
-pnpm --filter @openharness/context test
-pnpm --filter @openharness/context check-types
+pnpm --filter @vykor/context test
+pnpm --filter @vykor/context check-types
 ```
 
 - [ ] **步骤 5：提交**
@@ -177,7 +177,7 @@ expect(repository.listRevisions(created.id)).toMatchObject([
 - [ ] **步骤 2：运行红灯测试**
 
 ```bash
-pnpm --filter @openharness/services test -- context-repository.test.ts
+pnpm --filter @vykor/services test -- context-repository.test.ts
 ```
 
 预期：迁移表和 repository 不存在。
@@ -189,8 +189,8 @@ SQL 创建 `context_entry`、`context_revision`、`context_candidate`、`context
 - [ ] **步骤 4：运行迁移和 store 回归测试**
 
 ```bash
-pnpm --filter @openharness/services test -- context-repository.test.ts store.test.ts
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- context-repository.test.ts store.test.ts
+pnpm --filter @vykor/services check-types
 ```
 
 - [ ] **步骤 5：提交**
@@ -226,7 +226,7 @@ await expect(service.remember(explicit("记住这个项目统一使用 pnpm", pr
 - [ ] **步骤 2：运行测试确认失败**
 
 ```bash
-pnpm --filter @openharness/server test -- context-intent-resolver.test.ts context-persistence-service.test.ts
+pnpm --filter @vykor/server test -- context-intent-resolver.test.ts context-persistence-service.test.ts
 ```
 
 - [ ] **步骤 3：实现确定性 Resolver 和受控分类边界**
@@ -251,8 +251,8 @@ interface ContextClassification {
 - [ ] **步骤 4：运行绿灯和 server 类型检查**
 
 ```bash
-pnpm --filter @openharness/server test -- context-intent-resolver.test.ts context-persistence-service.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- context-intent-resolver.test.ts context-persistence-service.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 - [ ] **步骤 5：提交**
@@ -285,9 +285,9 @@ git commit -m "feat(context): resolve and govern context mutations"
 - [ ] **步骤 2：运行红灯测试**
 
 ```bash
-pnpm --filter @openharness/tools test -- context-tools.test.ts registry.test.ts
-pnpm --filter @openharness/agent-runtime test -- default-runtime.test.ts child-agent.test.ts
-pnpm --filter @openharness/server test -- durable-agent-application.test.ts
+pnpm --filter @vykor/tools test -- context-tools.test.ts registry.test.ts
+pnpm --filter @vykor/agent-runtime test -- default-runtime.test.ts child-agent.test.ts
+pnpm --filter @vykor/server test -- durable-agent-application.test.ts
 ```
 
 - [ ] **步骤 3：实现 capability 和工具**
@@ -301,11 +301,11 @@ pnpm --filter @openharness/server test -- durable-agent-application.test.ts
 - [ ] **步骤 5：运行相关测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test -- durable-agent-application.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test -- durable-agent-application.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 - [ ] **步骤 6：提交**
@@ -341,9 +341,9 @@ expect(agentFactory).toHaveBeenCalledTimes(1);
 - [ ] **步骤 2：运行红灯测试**
 
 ```bash
-pnpm --filter @openharness/context test -- prompt.test.ts
-pnpm --filter @openharness/server test -- context-query-service.test.ts session-run-executor.test.ts
-pnpm --filter @openharness/prompts test
+pnpm --filter @vykor/context test -- prompt.test.ts
+pnpm --filter @vykor/server test -- context-query-service.test.ts session-run-executor.test.ts
+pnpm --filter @vykor/prompts test
 ```
 
 - [ ] **步骤 3：实现每轮 retriever**
@@ -353,9 +353,9 @@ pnpm --filter @openharness/prompts test
 - [ ] **步骤 4：验证 Prompt 分层和 compact 不受影响**
 
 ```bash
-pnpm --filter @openharness/core test -- query-engine compact-service-advanced
-pnpm --filter @openharness/prompts test
-pnpm --filter @openharness/server test -- context-query-service.test.ts session-run-executor.test.ts
+pnpm --filter @vykor/core test -- query-engine compact-service-advanced
+pnpm --filter @vykor/prompts test
+pnpm --filter @vykor/server test -- context-query-service.test.ts session-run-executor.test.ts
 ```
 
 - [ ] **步骤 5：提交**
@@ -382,7 +382,7 @@ git commit -m "feat(context): inject fresh scoped context per turn"
 - [ ] **步骤 2：运行红灯测试**
 
 ```bash
-pnpm --filter @openharness/server test -- context-extraction-service.test.ts session-post-run-maintenance.test.ts
+pnpm --filter @vykor/server test -- context-extraction-service.test.ts session-post-run-maintenance.test.ts
 ```
 
 - [ ] **步骤 3：实现提取和维护接线**
@@ -392,7 +392,7 @@ pnpm --filter @openharness/server test -- context-extraction-service.test.ts ses
 - [ ] **步骤 4：运行绿灯测试**
 
 ```bash
-pnpm --filter @openharness/server test -- context-extraction-service.test.ts session-post-run-maintenance.test.ts durable-agent-application.test.ts
+pnpm --filter @vykor/server test -- context-extraction-service.test.ts session-post-run-maintenance.test.ts durable-agent-application.test.ts
 ```
 
 - [ ] **步骤 5：提交**
@@ -427,8 +427,8 @@ git commit -m "feat(context): extract governed context after completed runs"
 - [ ] **步骤 3：运行红灯测试**
 
 ```bash
-pnpm --filter @openharness/server test -- context.test.ts http.test.ts
-pnpm --filter @openharness/client test -- http-client.test.ts session-commands.test.ts
+pnpm --filter @vykor/server test -- context.test.ts http.test.ts
+pnpm --filter @vykor/client test -- http-client.test.ts session-commands.test.ts
 ```
 
 - [ ] **步骤 4：实现 routes、client 和 commands**
@@ -438,10 +438,10 @@ pnpm --filter @openharness/client test -- http-client.test.ts session-commands.t
 - [ ] **步骤 5：运行 package 测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
 ```
 
 - [ ] **步骤 6：提交**
@@ -472,8 +472,8 @@ git commit -m "feat(context): add resource API and client commands"
 - [ ] **步骤 2：运行红灯测试**
 
 ```bash
-pnpm --filter @openharness/tools test -- managed-resource-policy.test.ts operations.test.ts
-pnpm --filter @openharness/server test -- default-application-services.test.ts
+pnpm --filter @vykor/tools test -- managed-resource-policy.test.ts operations.test.ts
+pnpm --filter @vykor/server test -- default-application-services.test.ts
 ```
 
 - [ ] **步骤 3：实现 host-owned policy**
@@ -487,9 +487,9 @@ ToolContext 增加 `managedResources.check(path, operation)`；Write/Edit 在 sa
 - [ ] **步骤 5：验证**
 
 ```bash
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test -- default-application-services.test.ts http.test.ts
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test -- default-application-services.test.ts http.test.ts
 ```
 
 - [ ] **步骤 6：提交**
@@ -520,7 +520,7 @@ git commit -m "feat(context): protect managed state from file tools"
 - [ ] **步骤 3：运行红灯测试**
 
 ```bash
-pnpm --filter @openharness/desktop test -- context-panel-model.test.ts context-panel.test.tsx utility-panel-state.test.ts
+pnpm --filter @vykor/desktop test -- context-panel-model.test.ts context-panel.test.tsx utility-panel-state.test.ts
 ```
 
 - [ ] **步骤 4：实现最小面板**
@@ -530,8 +530,8 @@ pnpm --filter @openharness/desktop test -- context-panel-model.test.ts context-p
 - [ ] **步骤 5：验证桌面测试和类型**
 
 ```bash
-pnpm --filter @openharness/desktop test -- context-panel utility-panel
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test -- context-panel utility-panel
+pnpm --filter @vykor/desktop typecheck
 ```
 
 - [ ] **步骤 6：提交**
@@ -564,8 +564,8 @@ git commit -m "feat(desktop): manage persistent context"
 - [ ] **步骤 2：运行测试观察旧结构仍生效**
 
 ```bash
-pnpm --filter @openharness/prompts test
-pnpm --filter @openharness/server test -- http.test.ts durable-agent-application.test.ts
+pnpm --filter @vykor/prompts test
+pnpm --filter @vykor/server test -- http.test.ts durable-agent-application.test.ts
 ```
 
 预期：旧文件标记仍进入 Prompt，或旧路由仍返回成功。
@@ -602,15 +602,15 @@ rg -n "USER\.md|local_rules|MemoryManager|isMemoryWriteToolCall|openMemoryManage
 - [ ] **步骤 5：运行全量相关测试与类型检查**
 
 ```bash
-pnpm --filter @openharness/context test
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/prompts test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/context test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/prompts test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/desktop test
 pnpm check-types
 ```
 
@@ -640,7 +640,7 @@ git commit -m "refactor(context): remove legacy file memory systems"
 - [ ] **步骤 2：运行集成测试**
 
 ```bash
-pnpm --filter @openharness/server test -- context-lifecycle.integration.test.ts durable-agent-application.test.ts
+pnpm --filter @vykor/server test -- context-lifecycle.integration.test.ts durable-agent-application.test.ts
 ```
 
 - [ ] **步骤 3：更新文档和人工验收脚本**

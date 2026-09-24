@@ -24,10 +24,10 @@
 ## 验证结果
 
 ```powershell
-pnpm --filter @openharness/tools exec vitest run src/job/local-job-host.test.ts src/agent/workflow/__test__/workflow-smoke.test.ts src/agent/workflow/__test__/tool.test.ts
-pnpm --filter @openharness/agent-runtime exec vitest run src/sdk.test.ts
-pnpm --filter @openharness/tools check-types
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/tools exec vitest run src/job/local-job-host.test.ts src/agent/workflow/__test__/workflow-smoke.test.ts src/agent/workflow/__test__/tool.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/sdk.test.ts
+pnpm --filter @vykor/tools check-types
+pnpm --filter @vykor/agent-runtime check-types
 git diff --check
 ```
 

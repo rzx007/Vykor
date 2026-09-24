@@ -5,7 +5,7 @@ import type {
   ListPermissionRequestsOptions,
   PermissionRequestRecord,
   ReplyPermissionInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { PermissionRepositoryOptions } from "./permission-records.js";
 

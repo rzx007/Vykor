@@ -1,7 +1,7 @@
 import { webContents, type WebContents } from "electron"
 import { isAbsolute, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { BrowserAction, BrowserHost, BrowserObservation } from "@openharness/server"
+import type { BrowserAction, BrowserHost, BrowserObservation } from "@vykor/server"
 
 type ElementTarget = {
   webContentsId: number

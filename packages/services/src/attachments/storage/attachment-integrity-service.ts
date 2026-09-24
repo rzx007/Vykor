@@ -1,4 +1,4 @@
-import type { AttachmentAssetRecord } from "@openharness/protocol";
+import type { AttachmentAssetRecord } from "@vykor/protocol";
 
 import type {
   AttachmentLeaseRecord,

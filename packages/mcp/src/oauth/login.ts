@@ -4,7 +4,7 @@ import {
   registerClient,
   startAuthorization,
 } from "@modelcontextprotocol/sdk/client/auth.js";
-import type { McpOAuthCredentialRecord, McpRemoteServerConfig } from "@openharness/core";
+import type { McpOAuthCredentialRecord, McpRemoteServerConfig } from "@vykor/core";
 import { createOAuthCallback, type OAuthCallbackController } from "./callback.js";
 import { McpOAuthError } from "./errors.js";
 import {
@@ -292,7 +292,7 @@ async function resolveRegistration(
   const body = await registerClient(metadata.issuer, {
     metadata: metadata as any,
     clientMetadata: {
-      client_name: "OpenHarness CLI",
+      client_name: "Vykor CLI",
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],

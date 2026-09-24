@@ -9,10 +9,10 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@opentui/react",
     "paths": {
-      "@openharness/client": ["../../packages/client/src/index.ts"],
-      "@openharness/services": ["../../packages/services/src/index.ts"],
-      "@openharness/core": ["../../packages/core/src/index.ts"],
-      "@openharness/memory": ["../../packages/memory/src/index.ts"],
+      "@vykor/client": ["../../packages/client/src/index.ts"],
+      "@vykor/services": ["../../packages/services/src/index.ts"],
+      "@vykor/core": ["../../packages/core/src/index.ts"],
+      "@vykor/memory": ["../../packages/memory/src/index.ts"],
       "react": ["./node_modules/@types/react"],
       "react/*": ["./node_modules/@types/react/*"]
     }

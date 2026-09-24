@@ -14,7 +14,7 @@ afterEach(() => {
 
 describe("resolveGitRepository", () => {
   it("finds a parent repository and branch without invoking Git", () => {
-    const root = mkdtempSync(join(tmpdir(), "openharness-git-"));
+    const root = mkdtempSync(join(tmpdir(), "vykor-git-"));
     roots.push(root);
     mkdirSync(join(root, ".git"));
     writeFileSync(join(root, ".git", "HEAD"), "ref: refs/heads/feature/no-flash\n");
@@ -29,7 +29,7 @@ describe("resolveGitRepository", () => {
   });
 
   it("resolves a worktree gitdir file", () => {
-    const parent = mkdtempSync(join(tmpdir(), "openharness-worktree-"));
+    const parent = mkdtempSync(join(tmpdir(), "vykor-worktree-"));
     roots.push(parent);
     const root = join(parent, "checkout");
     const gitDir = join(parent, "metadata");

@@ -3,7 +3,7 @@ import { resolveNativePluginPath } from "../paths.js";
 import type {
   NativeToolComponent,
   NativeToolMetadata,
-  OpenHarnessPluginPermissions,
+  VykorPluginPermissions,
   PluginComponentResult,
   ValidatedNativePlugin,
 } from "../types.js";
@@ -24,10 +24,10 @@ function parseToolPermission(value: string): { category: PermissionCategory; val
 }
 
 export function resolveEffectiveToolPermissions(
-  pluginPermissions: OpenHarnessPluginPermissions | undefined,
+  pluginPermissions: VykorPluginPermissions | undefined,
   requestedPermissions: readonly string[],
-): { permissions: OpenHarnessPluginPermissions; denied: string[] } {
-  const permissions: OpenHarnessPluginPermissions = {};
+): { permissions: VykorPluginPermissions; denied: string[] } {
+  const permissions: VykorPluginPermissions = {};
   const denied: string[] = [];
   for (const request of requestedPermissions) {
     const parsed = parseToolPermission(request);

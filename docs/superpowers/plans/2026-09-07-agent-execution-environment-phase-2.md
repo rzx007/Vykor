@@ -6,7 +6,7 @@
 
 **目标：** 让 Agent Terminal 和用户默认集成终端跟随当前 Agent 环境，在 Docker 中使用真实 PTY，并让项目、项目外会话、fork 和非隔离子 Agent 通过内存 lease 安全共享同一个环境。
 
-**架构：** daemon 持有唯一 `ExecutionEnvironmentManager`，Agent、终端和后台任务只能向它取得带 owner 的 lease。`@openharness/environment` 定义通用 PTY 启动契约，Sandbox 负责生成并监督 Docker `exec -it`，`@openharness/terminal-node` 只负责用 `node-pty` 驱动目标。第二期保持“重启后切换配置”，不加入第三期的运行中 switching、持久 lease 或崩溃恢复。
+**架构：** daemon 持有唯一 `ExecutionEnvironmentManager`，Agent、终端和后台任务只能向它取得带 owner 的 lease。`@vykor/environment` 定义通用 PTY 启动契约，Sandbox 负责生成并监督 Docker `exec -it`，`@vykor/terminal-node` 只负责用 `node-pty` 驱动目标。第二期保持“重启后切换配置”，不加入第三期的运行中 switching、持久 lease 或崩溃恢复。
 
 **技术栈：** TypeScript、Node.js、Electron、Hono、node-pty、Docker CLI、Vitest、React。
 
@@ -112,7 +112,7 @@ expect(decodeTerminalSessionInfo({
 
 - [ ] **步骤 2：运行协议测试并确认失败**
 
-运行：`pnpm --filter @openharness/protocol test -- serialization.test.ts`
+运行：`pnpm --filter @vykor/protocol test -- serialization.test.ts`
 
 预期：FAIL，当前 `TerminalCreateRequest` 强制 `projectId`，响应也没有 scope。
 
@@ -163,10 +163,10 @@ throw new DaemonTerminalError(400, "terminal scope is required");
 运行：
 
 ```bash
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/server test -- terminal.test.ts
-pnpm --filter @openharness/protocol check-types
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/server test -- terminal.test.ts
+pnpm --filter @vykor/protocol check-types
 ```
 
 预期：全部通过。
@@ -195,15 +195,15 @@ git commit -m "feat(terminal): add project and session scopes"
 ```ts
 expect(buildDockerPtyTarget({
   dockerCommand: "docker",
-  containerName: "ohs-project",
-  hostCwd: "D:\\code\\ohs",
+  containerName: "vk-project",
+  hostCwd: "D:\\code\\vk",
   executionCwd: "/workspace",
   shell: "/bin/sh",
   executionId: "terminal-1",
 })).toMatchObject({
   command: "docker",
-  hostCwd: "D:\\code\\ohs",
-  args: expect.arrayContaining(["exec", "-it", "-w", "/workspace", "ohs-project"]),
+  hostCwd: "D:\\code\\vk",
+  args: expect.arrayContaining(["exec", "-it", "-w", "/workspace", "vk-project"]),
 });
 ```
 
@@ -211,7 +211,7 @@ expect(buildDockerPtyTarget({
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/sandbox test -- index.test.ts execution-environment.test.ts`
+运行：`pnpm --filter @vykor/sandbox test -- index.test.ts execution-environment.test.ts`
 
 预期：FAIL，当前环境句柄没有交互终端工厂。
 
@@ -260,9 +260,9 @@ Docker shell 只接受 `settings.terminal.dockerShell` 的 `/bin/sh` 或 `/bin/b
 运行：
 
 ```bash
-pnpm --filter @openharness/environment test
-pnpm --filter @openharness/sandbox test -- index.test.ts execution-environment.test.ts
-pnpm --filter @openharness/sandbox check-types
+pnpm --filter @vykor/environment test
+pnpm --filter @vykor/sandbox test -- index.test.ts execution-environment.test.ts
+pnpm --filter @vykor/sandbox check-types
 ```
 
 预期：全部通过。
@@ -300,7 +300,7 @@ expect(manager.inspect("project:D:/repo")?.leaseCount).toBe(2);
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/sandbox test -- execution-environment-manager.test.ts`
+运行：`pnpm --filter @vykor/sandbox test -- execution-environment-manager.test.ts`
 
 预期：FAIL，Manager 尚不存在。
 
@@ -334,8 +334,8 @@ interface EnvironmentRecord {
 运行：
 
 ```bash
-pnpm --filter @openharness/sandbox test -- execution-environment-manager.test.ts
-pnpm --filter @openharness/sandbox check-types
+pnpm --filter @vykor/sandbox test -- execution-environment-manager.test.ts
+pnpm --filter @vykor/sandbox check-types
 ```
 
 预期：全部通过。
@@ -369,7 +369,7 @@ expect(resolveEnvironmentOwner(projectlessFork, store, { reuseContainer: false }
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/server test -- environment-owner.test.ts`
+运行：`pnpm --filter @vykor/server test -- environment-owner.test.ts`
 
 预期：FAIL，当前没有统一 owner 解析器。
 
@@ -392,8 +392,8 @@ export interface ResolvedEnvironmentOwner {
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- environment-owner.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- environment-owner.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部通过。
@@ -436,8 +436,8 @@ expect(childOptions.executionEnvironment?.environmentId)
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- daemon-agent.test.ts
-pnpm --filter @openharness/agent-runtime test -- agent.test.ts
+pnpm --filter @vykor/server test -- daemon-agent.test.ts
+pnpm --filter @vykor/agent-runtime test -- agent.test.ts
 ```
 
 预期：FAIL，daemon 尚未向 Agent 注入共享 lease。
@@ -448,16 +448,16 @@ pnpm --filter @openharness/agent-runtime test -- agent.test.ts
 
 - [ ] **步骤 4：把 lease 作为现有 ExecutionEnvironmentHandle 注入**
 
-`OpenHarnessAgentOptions.executionEnvironment` 接收 lease。Agent composition 保留 standalone fallback，但只在宿主没有传入环境时创建自己的句柄。Agent close 调用 lease.release()，不能直接停止共享容器。
+`VykorAgentOptions.executionEnvironment` 接收 lease。Agent composition 保留 standalone fallback，但只在宿主没有传入环境时创建自己的句柄。Agent close 调用 lease.release()，不能直接停止共享容器。
 
 - [ ] **步骤 5：运行 Agent/Server 测试**
 
 运行：
 
 ```bash
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test -- daemon-agent.test.ts durable-agent-application.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test -- daemon-agent.test.ts durable-agent-application.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部通过。
@@ -497,7 +497,7 @@ expect(fakePty.resize).toHaveBeenCalledWith(120, 40);
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/terminal-node test -- local-terminal-provider.test.ts environment-terminal-target.test.ts`
+运行：`pnpm --filter @vykor/terminal-node test -- local-terminal-provider.test.ts environment-terminal-target.test.ts`
 
 预期：FAIL，sandbox 分支仍使用普通 ChildProcess pipe。
 
@@ -525,8 +525,8 @@ terminate 顺序固定为：标记 stopping → `target.signal("terminate")` →
 运行：
 
 ```bash
-pnpm --filter @openharness/terminal-node test
-pnpm --filter @openharness/terminal-node check-types
+pnpm --filter @vykor/terminal-node test
+pnpm --filter @vykor/terminal-node check-types
 ```
 
 预期：全部通过。
@@ -569,7 +569,7 @@ expect(manager.acquire).toHaveBeenCalledWith(expect.objectContaining({
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/server test -- daemon-terminal-service.test.ts terminal.test.ts`
+运行：`pnpm --filter @vykor/server test -- daemon-terminal-service.test.ts terminal.test.ts`
 
 预期：FAIL，当前服务强制 projectId 且会自己创建 sandbox runtime。
 
@@ -590,8 +590,8 @@ expect(manager.acquire).toHaveBeenCalledWith(expect.objectContaining({
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- daemon-terminal-service.test.ts terminal.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- daemon-terminal-service.test.ts terminal.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部通过。
@@ -632,8 +632,8 @@ expect(runtime.toolRegistry.get("TerminalOpen")?.execution).toEqual({
 运行：
 
 ```bash
-pnpm --filter @openharness/agent-runtime test -- default-runtime.test.ts
-pnpm --filter @openharness/server test -- daemon-agent.test.ts
+pnpm --filter @vykor/agent-runtime test -- default-runtime.test.ts
+pnpm --filter @vykor/server test -- daemon-agent.test.ts
 ```
 
 预期：FAIL，第一期明确隐藏了 Docker TerminalOpen。
@@ -654,9 +654,9 @@ Agent composition 不再对 Docker 写入 `terminal: false`。Daemon 注入的 `
 运行：
 
 ```bash
-pnpm --filter @openharness/tools test -- terminal-tools.test.ts
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test -- daemon-agent.test.ts daemon-terminal-service.test.ts
+pnpm --filter @vykor/tools test -- terminal-tools.test.ts
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test -- daemon-agent.test.ts daemon-terminal-service.test.ts
 ```
 
 预期：全部通过。
@@ -692,7 +692,7 @@ expect(await backgroundShells.read(execution.id)).toContain("still-running");
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/server test -- background-shell-service.test.ts`
+运行：`pnpm --filter @vykor/server test -- background-shell-service.test.ts`
 
 预期：FAIL，后台任务当前借用 Agent Runtime 的活动环境，没有自己的 lease。
 
@@ -709,9 +709,9 @@ dispose 顺序固定为：停止本 daemon 创建的后台任务 → 等待 term
 运行：
 
 ```bash
-pnpm --filter @openharness/services test -- detached-process-supervisor.test.ts
-pnpm --filter @openharness/server test -- background-shell-service.test.ts durable-agent-application.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test -- detached-process-supervisor.test.ts
+pnpm --filter @vykor/server test -- background-shell-service.test.ts durable-agent-application.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部通过。
@@ -752,7 +752,7 @@ expect(resolveTerminalCreateTarget({
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- terminal-runtime-model.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- terminal-runtime-model.test.ts`
 
 预期：FAIL，当前 UI 固定 `runtime: local` 且依赖 projectId。
 
@@ -780,9 +780,9 @@ Terminal Tool 加载 `settings.snapshot()`，保存 `agentEnvironment`。默认�
 运行：
 
 ```bash
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 ```
 
 预期：全部通过。
@@ -826,8 +826,8 @@ terminate 停止单个 exec 进程组
 运行：
 
 ```bash
-pnpm --filter @openharness/terminal-node e2e:docker
-pnpm --filter @openharness/sandbox e2e:docker
+pnpm --filter @vykor/terminal-node e2e:docker
+pnpm --filter @vykor/sandbox e2e:docker
 ```
 
 预期：Docker daemon 可用时全部通过；只允许外网用例按既有环境开关 skip，PTY/shared-container 用例不能 skip。
@@ -837,8 +837,8 @@ pnpm --filter @openharness/sandbox e2e:docker
 运行：
 
 ```bash
-pnpm --filter @openharness/server test -- durable-agent-application.test.ts daemon-terminal-service.test.ts
-pnpm --filter @openharness/agent-runtime test
+pnpm --filter @vykor/server test -- durable-agent-application.test.ts daemon-terminal-service.test.ts
+pnpm --filter @vykor/agent-runtime test
 ```
 
 预期：全部通过。

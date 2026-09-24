@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FileWorkflowRunRepository, parseWorkflowNotification } from "@openharness/coordinator";
-import type { AgentChildController, AgentExecutionContext } from "@openharness/core";
+import { FileWorkflowRunRepository, parseWorkflowNotification } from "@vykor/coordinator";
+import type { AgentChildController, AgentExecutionContext } from "@vykor/core";
 import { createAgentWorkflowRunner } from "../runner";
 import { createWorkflowTool } from "../tool";
 
@@ -11,14 +11,14 @@ let tempDir: string | undefined;
 let savedConfigDir: string | undefined;
 
 beforeEach(() => {
-  savedConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+  savedConfigDir = process.env.VYKOR_CONFIG_DIR;
   tempDir = mkdtempSync(join(tmpdir(), "oh-workflow-smoke-"));
-  process.env.OPENHARNESS_CONFIG_DIR = join(tempDir, "config");
+  process.env.VYKOR_CONFIG_DIR = join(tempDir, "config");
 });
 
 afterEach(() => {
-  if (savedConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = savedConfigDir;
+  if (savedConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = savedConfigDir;
   if (tempDir) rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   tempDir = undefined;
 });

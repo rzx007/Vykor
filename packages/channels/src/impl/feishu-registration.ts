@@ -131,12 +131,12 @@ export class FeishuRegistration {
     this.#snapshot = { state: "starting", attempt: run.id, domain };
 
     const registerOptions: Record<string, unknown> = {
-      source: options.source ?? "openharness",
+      source: options.source ?? "vykor",
       domain: domain === "lark" ? "accounts.larksuite.com" : "accounts.feishu.cn",
       createOnly: true,
       appPreset: {
-        name: options.appName ?? "{user} 的 OpenHarness 机器人",
-        desc: options.appDesc ?? "把飞书接入 OpenHarness。",
+        name: options.appName ?? "{user} 的 Vykor 机器人",
+        desc: options.appDesc ?? "把飞书接入 Vykor。",
       },
       addons: {
         preset: true,

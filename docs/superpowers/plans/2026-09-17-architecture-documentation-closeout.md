@@ -27,14 +27,14 @@
 - `docs/session-storage-design.md`：仅在历史状态栏补当前存储文档链接，不改历史正文。
 - `docs/README.md`：重排当前架构、操作手册、验证入口与历史记录。
 - `README.md`：更新项目目录、架构摘要、模块表和客户端调用流程。
-- `docs/openharness-current-architecture.architecture.json`：独立架构图唯一可编辑图源。
-- `docs/openharness-current-architecture.html`：由 Archify 从图源重新生成。
-- `docs/openharness-current-architecture.visual-check.html`：由 visual-check 重新生成的联系表。
-- `docs/openharness-current-architecture.visual-check.json`：由 visual-check 重新生成的检查结果。
-- `docs/openharness-current-architecture.visual-check.1440x900.light.png`
-- `docs/openharness-current-architecture.visual-check.1440x900.dark.png`
-- `docs/openharness-current-architecture.visual-check.2048x1320.light.png`
-- `docs/openharness-current-architecture.visual-check.2048x1320.dark.png`
+- `docs/vykor-current-architecture.architecture.json`：独立架构图唯一可编辑图源。
+- `docs/vykor-current-architecture.html`：由 Archify 从图源重新生成。
+- `docs/vykor-current-architecture.visual-check.html`：由 visual-check 重新生成的联系表。
+- `docs/vykor-current-architecture.visual-check.json`：由 visual-check 重新生成的检查结果。
+- `docs/vykor-current-architecture.visual-check.1440x900.light.png`
+- `docs/vykor-current-architecture.visual-check.1440x900.dark.png`
+- `docs/vykor-current-architecture.visual-check.2048x1320.light.png`
+- `docs/vykor-current-architecture.visual-check.2048x1320.dark.png`
 
 ### 只读事实来源
 
@@ -71,7 +71,7 @@
 ```powershell
 rg -n "readonly (projects|channels|permissions|sessions|runs)|new (Project|Channel|Permission|Session|Run|Attachment|Goal)Repository" packages/services/src/session-runtime/store.ts
 rg -n "SessionOperationRunner|SessionQueryService|SessionCommandService|SessionInteractionService|RunControlService" packages/server/src/application
-rg -n "PROTOCOL_VERSION|x-openharness-protocol-version" packages scripts
+rg -n "PROTOCOL_VERSION|x-vykor-protocol-version" packages scripts
 Get-ChildItem packages/services/src/session-runtime/migrations -File -Recurse | Select-Object FullName
 ```
 
@@ -187,7 +187,7 @@ Mermaid 和示例中的协议版本必须是 4。说明入口、关键步骤、�
 运行：
 
 ```powershell
-rg -n "OpenHarnessClient\.admitPrompt|protocol.*version.: 2|\"version\": 2|下一阶段" docs/architecture-overview.md docs/daemon-application-architecture.md docs/client-sync-flow.md docs/session-runtime-storage-architecture.md
+rg -n "VykorClient\.admitPrompt|protocol.*version.: 2|\"version\": 2|下一阶段" docs/architecture-overview.md docs/daemon-application-architecture.md docs/client-sync-flow.md docs/session-runtime-storage-architecture.md
 rg -n "client\.sessions\.|SessionOperationRunner|Repository|Transaction|version.: 4" docs/daemon-application-architecture.md docs/client-sync-flow.md docs/session-runtime-storage-architecture.md
 ```
 
@@ -232,7 +232,7 @@ Get-ChildItem packages -Directory | Sort-Object Name | Select-Object -ExpandProp
 
 ```text
 CLI / TUI / Desktop / Web / Bot
--> @openharness/client Resources + protocol
+-> @vykor/client Resources + protocol
 -> HTTP routes
 -> application services + SessionOperationRunner
 -> repositories / transactions + SQLite
@@ -256,8 +256,8 @@ CLI / TUI / Desktop / Web / Bot
 运行：
 
 ```powershell
-rg -n "packages/(bridge|utils|keybindings|vim|voice)|OpenHarnessClient\.admitPrompt|@openharness/client admitPrompt|下一步" README.md docs/README.md
-rg -n "session-runtime-storage-architecture|architecture-migration-status|openharness-current-architecture.html" README.md docs/README.md
+rg -n "packages/(bridge|utils|keybindings|vim|voice)|VykorClient\.admitPrompt|@vykor/client admitPrompt|下一步" README.md docs/README.md
+rg -n "session-runtime-storage-architecture|architecture-migration-status|vykor-current-architecture.html" README.md docs/README.md
 ```
 
 预期：第一条无匹配；第二条包含当前文档入口。
@@ -280,10 +280,10 @@ git commit -m "docs: refresh project and architecture entry points"
 > 2026-09-17 范围调整：维护者决定后续自行修改架构图。本任务保留为操作参考，本次没有修改或重新生成下列图源与产物。
 
 **文件：**
-- 修改：`docs/openharness-current-architecture.architecture.json`
-- 生成：`docs/openharness-current-architecture.html`
-- 生成：`docs/openharness-current-architecture.visual-check.html`
-- 生成：`docs/openharness-current-architecture.visual-check.json`
+- 修改：`docs/vykor-current-architecture.architecture.json`
+- 生成：`docs/vykor-current-architecture.html`
+- 生成：`docs/vykor-current-architecture.visual-check.html`
+- 生成：`docs/vykor-current-architecture.visual-check.json`
 - 生成：四张 `.png` 视觉检查截图
 - 参考：任务 1–3 完成后的权威文档和真实代码
 - 工具：`C:/Users/ruanz/.agents/skills/archify`
@@ -312,7 +312,7 @@ Get-Content -Raw C:/Users/ruanz/.agents/skills/archify/examples/production-deplo
 
 ```powershell
 node C:/Users/ruanz/.agents/skills/archify/scripts/check-update.mjs
-node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs validate architecture docs/openharness-current-architecture.architecture.json --quality showcase --json
+node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs validate architecture docs/vykor-current-architecture.architecture.json --quality showcase --json
 ```
 
 预期：validation 报告 9 项 artifact checks、0 composition errors、0 warnings。若失败，只按诊断修复 JSON 后重新验证。
@@ -322,8 +322,8 @@ node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs validate architecture
 仅在最终 validation 通过后运行：
 
 ```powershell
-node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs deliver architecture docs/openharness-current-architecture.architecture.json docs/openharness-current-architecture.html --quality showcase --json
-node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs visual-check docs/openharness-current-architecture.html --json
+node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs deliver architecture docs/vykor-current-architecture.architecture.json docs/vykor-current-architecture.html --quality showcase --json
+node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs visual-check docs/vykor-current-architecture.html --json
 ```
 
 预期：deliver 退出码为 0 并给出 specification/artifact SHA-256；visual-check 在四种桌面尺寸无横向或纵向溢出，并生成明暗截图和 JSON receipt。
@@ -338,7 +338,7 @@ node C:/Users/ruanz/.agents/skills/archify/bin/archify.mjs visual-check docs/ope
 
 ```powershell
 git diff --check
-git add docs/openharness-current-architecture.architecture.json docs/openharness-current-architecture.html docs/openharness-current-architecture.visual-check.html docs/openharness-current-architecture.visual-check.json docs/openharness-current-architecture.visual-check.1440x900.light.png docs/openharness-current-architecture.visual-check.1440x900.dark.png docs/openharness-current-architecture.visual-check.2048x1320.light.png docs/openharness-current-architecture.visual-check.2048x1320.dark.png
+git add docs/vykor-current-architecture.architecture.json docs/vykor-current-architecture.html docs/vykor-current-architecture.visual-check.html docs/vykor-current-architecture.visual-check.json docs/vykor-current-architecture.visual-check.1440x900.light.png docs/vykor-current-architecture.visual-check.1440x900.dark.png docs/vykor-current-architecture.visual-check.2048x1320.light.png docs/vykor-current-architecture.visual-check.2048x1320.dark.png
 git commit -m "docs: regenerate current architecture diagram"
 ```
 
@@ -357,7 +357,7 @@ git commit -m "docs: regenerate current architecture diagram"
 运行：
 
 ```powershell
-rg -n "OpenHarnessClient\.admitPrompt|OpenHarnessClient\.createSession|protocol.*version.: 2|\"version\": 2|等待下一|下一阶段|双发行|兼容发行" README.md docs/README.md docs/architecture-overview.md docs/architecture-migration-status.md docs/daemon-application-architecture.md docs/client-sync-flow.md docs/session-runtime-storage-architecture.md
+rg -n "VykorClient\.admitPrompt|VykorClient\.createSession|protocol.*version.: 2|\"version\": 2|等待下一|下一阶段|双发行|兼容发行" README.md docs/README.md docs/architecture-overview.md docs/architecture-migration-status.md docs/daemon-application-architecture.md docs/client-sync-flow.md docs/session-runtime-storage-architecture.md
 ```
 
 预期：无匹配。历史文档不纳入该负向搜索，因为它们需要保留当时语境。

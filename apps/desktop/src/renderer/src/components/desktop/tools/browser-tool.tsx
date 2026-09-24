@@ -283,7 +283,7 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
             {...{
               ref: bindWebview,
               src: tab.url,
-              partition: "persist:openharness-browser",
+              partition: "persist:vykor-browser",
               className: "h-full w-full bg-background",
             }}
           />

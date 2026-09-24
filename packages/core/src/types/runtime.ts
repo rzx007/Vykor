@@ -6,8 +6,8 @@ import type { ContentBlock, Message } from "./messages";
 import type { StreamEvent } from "./events";
 import type { Settings } from "./settings";
 import type { CompactContextProvider } from "../engine/compact-service";
-import type { AgentTerminalHost } from "@openharness/terminal";
-import type { AgentJobHost } from "@openharness/jobs";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import type { AgentJobHost } from "@vykor/jobs";
 
 /** The user-selected values that are safe to change between model requests. */
 export type AgentRequestConfiguration = {
@@ -564,13 +564,13 @@ export interface QueryEngineOptions {
     signal?: AbortSignal;
     capabilityView?: RunCapabilityView;
   }) => Promise<QueryRequestConfiguration>;
-  /** Default 300000 ms; can also be set with OPENHARNESS_TOOL_TIMEOUT_MS. */
+  /** Default 300000 ms; can also be set with VYKOR_TOOL_TIMEOUT_MS. */
   toolTimeoutMs?: number;
   settings?: Settings;
   compactKeepRecent?: number;
   skillRegistry?: unknown;
   memoryRetriever?: MemoryRetriever;
-  executionEnvironment?: import("@openharness/environment").ExecutionEnvironmentHandle;
+  executionEnvironment?: import("@vykor/environment").ExecutionEnvironmentHandle;
   /** Optional per-run trajectory policy factory. False disables the default tracker. */
   trajectoryTrackerFactory?: false | (() => import("../engine/trajectory/tracker").TrajectoryTracker);
   compactProgressCallback?: import("../engine/compact-service").CompactProgressCallback;

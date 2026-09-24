@@ -2,9 +2,9 @@ import type {
   ContextBucketId,
   ContextLedgerSegment,
   WorkStyle,
-} from "@openharness/core";
-import type { EffectiveEnvironmentInfo } from "@openharness/environment";
-import { loadLocalRules } from "@openharness/personalization";
+} from "@vykor/core";
+import type { EffectiveEnvironmentInfo } from "@vykor/environment";
+import { loadLocalRules } from "@vykor/personalization";
 import type { PromptLayers, PromptPermissionMode } from "./index.js";
 import {
   buildDelegationSection,

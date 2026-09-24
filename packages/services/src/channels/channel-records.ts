@@ -2,7 +2,7 @@ import type {
   ChannelDeliveryRecord,
   ChannelDeliveryStatus,
   ExternalConversationRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export function externalConversationFromRow(
   row: Record<string, unknown>,

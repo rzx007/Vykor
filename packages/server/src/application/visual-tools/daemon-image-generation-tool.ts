@@ -1,5 +1,5 @@
-import type { ToolDefinition } from "@openharness/core";
-import { sniffAttachmentMediaType } from "@openharness/services";
+import type { ToolDefinition } from "@vykor/core";
+import { sniffAttachmentMediaType } from "@vykor/services";
 
 import type { AttachmentService } from "../attachments/attachment-service.js";
 import {

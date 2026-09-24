@@ -3,7 +3,7 @@ import type {
   AgentRequestConfigurationPatch,
   AgentRequestConfigurationSnapshot,
   AgentRequestConfigurationStore,
-} from "@openharness/core";
+} from "@vykor/core";
 
 export type ValidateRequestConfiguration = (
   next: AgentRequestConfiguration,

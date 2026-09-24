@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { extname, resolve } from "node:path"
 
-import type { OpenHarnessClient, PluginResource } from "@openharness/client"
+import type { VykorClient, PluginResource } from "@vykor/client"
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 
 import type {
@@ -22,7 +22,7 @@ import type {
 import { desktopSessionService } from "../session/session-service"
 import { PluginArchiveSelectionStore, PluginGitSelectionStore } from "./selection-store"
 
-type PluginClient = Pick<OpenHarnessClient, "plugins">
+type PluginClient = Pick<VykorClient, "plugins">
 
 const SELECTION_TTL_MS = 10 * 60 * 1_000
 
@@ -30,16 +30,16 @@ export interface DesktopPluginServiceOptions {
   chooseArchive?: (sender: WebContents) => Promise<string | null>
   now?: () => number
   createSelectionId?: () => string
-  daemonClient?: () => Promise<OpenHarnessClient>
-  refreshDaemonClient?: () => Promise<OpenHarnessClient>
+  daemonClient?: () => Promise<VykorClient>
+  refreshDaemonClient?: () => Promise<VykorClient>
 }
 
 export class DesktopPluginService {
   private readonly chooseArchive: (sender: WebContents) => Promise<string | null>
   private readonly now: () => number
   private readonly createSelectionId: () => string
-  private readonly daemonClient: () => Promise<OpenHarnessClient>
-  private readonly refreshDaemonClient: () => Promise<OpenHarnessClient>
+  private readonly daemonClient: () => Promise<VykorClient>
+  private readonly refreshDaemonClient: () => Promise<VykorClient>
   private readonly selections: PluginArchiveSelectionStore
   private readonly gitSelections: PluginGitSelectionStore
 

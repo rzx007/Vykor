@@ -4,7 +4,7 @@ import {
   assembleContextUsageSnapshot,
   estimateTokens,
   type Settings,
-} from "@openharness/core";
+} from "@vykor/core";
 
 import { assembleSessionContextUsage } from "./assemble-session-context-usage.js";
 import { ContextUsageCache } from "./context-usage-cache.js";

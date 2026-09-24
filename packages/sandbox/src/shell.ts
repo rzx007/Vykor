@@ -1,8 +1,8 @@
 import { spawn, spawnSync, type ChildProcess, type StdioOptions } from "node:child_process";
 import { resolve } from "node:path";
-import { loadSettings, type Settings } from "@openharness/core";
-import type { EnvironmentExecutionOwner } from "@openharness/environment";
-import { shellArgv, type ShellDescriptor } from "@openharness/environment";
+import { loadSettings, type Settings } from "@vykor/core";
+import type { EnvironmentExecutionOwner } from "@vykor/environment";
+import { shellArgv, type ShellDescriptor } from "@vykor/environment";
 import { getSrtAvailability } from "./availability.js";
 import { SandboxUnavailableError } from "./errors.js";
 import { bindProcessAbortSignal } from "./process-control.js";

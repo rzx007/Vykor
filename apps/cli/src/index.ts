@@ -18,9 +18,9 @@ const program = new Command();
 program.enablePositionalOptions();
 
 program
-  .name("ohs")
+  .name("vykor")
   .description(
-    "OpenHarness-ts - Open Source AI Agent Framework. Interactive default: TUI/daemon (requires Bun). One-shot: pass a prompt or use -p/--print.",
+    "Vykor - Open Source AI Agent Framework. Interactive default: TUI/daemon (requires Bun). One-shot: pass a prompt or use -p/--print.",
   )
   .version(VERSION)
   .argument(
@@ -91,7 +91,7 @@ program
   .argument("[key]", "Config key")
   .argument("[value]", "Config value")
   .action(async (action: string, key?: string, value?: string) => {
-    const { loadSettings, updateSettings } = await import("@openharness/core");
+    const { loadSettings, updateSettings } = await import("@vykor/core");
     const settings = await loadSettings();
     if (action === "show" || !key) {
       console.log(JSON.stringify(settings, null, 2));
@@ -132,7 +132,7 @@ program
   .command("version")
   .description("Show version information")
   .action(() => {
-    console.log(`OpenHarness v${VERSION}`);
+    console.log(`Vykor v${VERSION}`);
     console.log(`Node ${process.version}`);
     console.log(`Platform: ${process.platform} ${process.arch}`);
   });
@@ -142,13 +142,13 @@ program
   .description("Check environment and dependencies")
   .action(async () => {
     const chalk = (await import("chalk")).default;
-    console.log(chalk.cyan("OpenHarness-ts Doctor"));
+    console.log(chalk.cyan("Vykor Doctor"));
     console.log();
     const checks: Array<{ label: string; ok: boolean; detail?: string }> = [];
 
-    let settings: import("@openharness/core").Settings | undefined;
+    let settings: import("@vykor/core").Settings | undefined;
     try {
-      const { loadSettings } = await import("@openharness/core");
+      const { loadSettings } = await import("@vykor/core");
       settings = await loadSettings();
       checks.push({
         label: "Settings loaded",

@@ -135,7 +135,7 @@ type AttachmentRoute =
 - 上传后的文本候选使用严格 UTF-8/UTF-16 解码，真实测试包含中文、BOM、大小端 UTF-16、伪装二进制和 5 MiB 日志。
 - 路由使用 `text_inline`、`text_resource` 和稳定 blocked decision；大文本上下文只保留 3,000 字符预览。
 - 现有 `Read` 已支持 `attachment://`，读取前校验 URI、会话引用、ready 状态、文本类型和行范围。
-- Docker 使用 daemon 管理的独立会话目录，只读挂载到 `/mnt/openharness-attachments`；不暴露 Blob Store。使用附件挂载时关闭容器跨会话复用，避免旧挂载泄漏。
+- Docker 使用 daemon 管理的独立会话目录，只读挂载到 `/mnt/vykor-attachments`；不暴露 Blob Store。使用附件挂载时关闭容器跨会话复用，避免旧挂载泄漏。
 - Desktop 在发送前阻止 PDF、Office、压缩包和未知二进制；daemon 仍是最终裁决者。“添加文件夹”入口保持显示且禁用。
 - route、完整性和资源 URI 写入运行 metadata 与 transcript transformation metadata，重放不依赖重新猜测文件类型。
 
@@ -146,5 +146,5 @@ type AttachmentRoute =
 - Desktop 完整测试：52 个测试文件、336 个测试通过；Frontend 24 个测试文件、141 个测试通过。
 - Core、Sandbox、Services、Tools、Agent Runtime 完整测试分别为 104、58、214、188、87 个测试通过；Sandbox 的 11 个 Docker/SRT 环境测试按原条件跳过。
 - 全仓类型检查 57/57 个任务通过；文档检查覆盖 110 个 Markdown 文件并通过；`git diff --check` 通过。
-- Desktop 生产构建、Windows x64 `win-unpacked` 打包和 OCR 产物闭包检查通过。打包程序启动返回退出码 0；由于当前已有 OpenHarness 实例，单实例保护让第二个进程正常退出，没有终止现有实例。
+- Desktop 生产构建、Windows x64 `win-unpacked` 打包和 OCR 产物闭包检查通过。打包程序启动返回退出码 0；由于当前已有 Vykor 实例，单实例保护让第二个进程正常退出，没有终止现有实例。
 - 根 `pnpm lint` 仍因仓库没有 Turbo `lint` 任务而无法运行。对本阶段修改的 5 个 Desktop 文件单独执行 ESLint，结果为 0 error；保留仓库既有的 Prettier/CRLF warning，不做全仓机械格式化。

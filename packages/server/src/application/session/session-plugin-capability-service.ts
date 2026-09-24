@@ -1,10 +1,10 @@
 import type {
   PluginCapabilityInventory,
-} from "@openharness/agent-runtime";
+} from "@vykor/agent-runtime";
 import type {
   SessionRecord,
   SessionUserInputItem,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { SessionApplicationError } from "./session-application-error.js";
 
 export interface SessionPluginCapabilityServiceContext {

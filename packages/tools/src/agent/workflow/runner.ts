@@ -5,12 +5,12 @@ import type {
   WorkflowRunner,
   WorkflowTask,
   WorkflowWorkerResult,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { AwaitExecutionResult } from "@openharness/services";
-import type { AgentExecutionContext } from "@openharness/core";
+import type { AwaitExecutionResult } from "@vykor/services";
+import type { AgentExecutionContext } from "@vykor/core";
 import { promisify } from "node:util";
 import { awaitFrameworkChildTask } from "../child-task.js";
 
@@ -66,7 +66,7 @@ export interface AgentWorkflowRunnerOptions {
  * Framework children are awaited directly; externally spawned workers use the
  * durable detached-process representation supplied by their host.
  *
- * This lives in @openharness/tools, not @openharness/coordinator, so the
+ * This lives in @vykor/tools, not @vykor/coordinator, so the
  * coordinator package can stay a pure scheduler with no dependency on services
  * or runtime host wiring.
  */
@@ -485,7 +485,7 @@ async function defaultAwaitTask(
   if (agent?.children.hasChildAgent(taskId)) {
     return await awaitFrameworkChildTask(agent.children, taskId, options?.timeoutMs);
   }
-  const { getDetachedProcessSupervisor } = await import("@openharness/services");
+  const { getDetachedProcessSupervisor } = await import("@vykor/services");
   return getDetachedProcessSupervisor({ cwd, sessionId }).awaitExecution(taskId, options);
 }
 
@@ -499,12 +499,12 @@ async function defaultStopTask(
     await agent.children.interruptChildAgent(taskId, "Workflow task timed out");
     return;
   }
-  const { getDetachedProcessSupervisor } = await import("@openharness/services");
+  const { getDetachedProcessSupervisor } = await import("@vykor/services");
   return getDetachedProcessSupervisor({ cwd, sessionId }).stopExecution(taskId);
 }
 
 async function defaultGetAgentDefinition(name: string): Promise<AgentDefinition | undefined> {
-  const { getAgentDefinition } = await import("@openharness/coordinator");
+  const { getAgentDefinition } = await import("@vykor/coordinator");
   return getAgentDefinition(name);
 }
 

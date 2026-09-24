@@ -2,27 +2,27 @@
 
 ## 1. 背景与问题
 
-目前接入飞书机器人只有一条路：用户手改 `~/.openharness-ts/settings.json`，手写 `channels.feishu`
+目前接入飞书机器人只有一条路：用户手改 `~/.vykor/settings.json`，手写 `channels.feishu`
 的 `appId/appSecret/allowFrom`，`appSecret` 还是明文，`allowFrom` 需要用户自己想办法找到
 `ou_xxx`/`oc_xxx`。没有向导、没有校验、没有密钥保护。
 
-`ohs config set` 也帮不上：它只支持一层嵌套，遇到 `channels.feishu.appId` 这种三段 key 时
+`vk config set` 也帮不上：它只支持一层嵌套，遇到 `channels.feishu.appId` 这种三段 key 时
 会把整个 `channels.feishu` 覆盖成裸值（`apps/cli/src/config-coerce.ts`），不是报错拒绝。
 
 参考仓库 `dsh-im` 证明了飞书有官方“**扫码创建应用**”能力（Node SDK 的 `registerApp`）：
 用户用飞书 App 扫码并确认，SDK 直接返回新应用的 `app_id/app_secret`。本设计把这条能力落到
-OpenHarness 的 CLI 上：`ohs channels add feishu`，**扫码优先、手填兜底**。本仓库已完成一次
+Vykor 的 CLI 上：`vk channels add feishu`，**扫码优先、手填兜底**。本仓库已完成一次
 spike（附录 A），确认扫码建应用与长连接收消息均可行。
 
 ## 2. 目标与非目标
 
 ### 2.1 目标
 
-- 新增 CLI 向导 `ohs channels add feishu`：扫码创建应用（默认）或手填 App ID/Secret。
+- 新增 CLI 向导 `vk channels add feishu`：扫码创建应用（默认）或手填 App ID/Secret。
 - 拿到凭据后**当场校验**（必做：换 tenant access token；尽力：查机器人名称）。
 - 密钥写**独立凭据文件**，不再明文进 `settings.json`。
 - 默认把**扫码者本人**加入白名单，接入后即可私聊验证。
-- 新增 `ohs channels allow <id>` 把用户/群加入白名单；被拒时给可执行提示。
+- 新增 `vk channels allow <id>` 把用户/群加入白名单；被拒时给可执行提示。
 - 让白名单支持“按群放行”（ACL 同时匹配发送者和会话）。
 - 抽一个可复用的“飞书接入核心”，CLI 先用，未来桌面复用。
 
@@ -41,8 +41,8 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
 | 决策 | 结论 |
 |---|---|
 | 落地位置 | 共享核心 + CLI 向导；桌面后续复用 |
-| 密钥存储 | 独立凭据文件 `~/.openharness-ts/channel-credentials.json`（异步 API + 原子写 + POSIX 0600） |
-| 接入与运行 | 分开：`add` 只接入，运行仍用 `ohs channels serve` |
+| 密钥存储 | 独立凭据文件 `~/.vykor/channel-credentials.json`（异步 API + 原子写 + POSIX 0600） |
+| 接入与运行 | 分开：`add` 只接入，运行仍用 `vk channels serve` |
 | 默认白名单 | 只放扫码者本人（`user_info.open_id`）；手填路径默认空并提示 |
 | 手填字段 | `App ID` + `App Secret` + 地区（feishu/lark，默认 feishu），当场校验 |
 | 机器人数量 | 单机器人 |
@@ -117,7 +117,7 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
 - **但字段白名单仍保留这三个旧键**（`packages/core/src/config/settings.ts`）：
   否则 `assertKnownFields` 会对旧 `settings.json` 直接抛 `SettingsFileError`，
   导致 CLI/TUI/daemon 启动即挂。保留即“接受但忽略”，运行时得不到、也不使用旧密钥。
-- 这是行为上的破坏性变更：旧 `appSecret` 不再生效，用户需重新 `ohs channels add feishu`。
+- 这是行为上的破坏性变更：旧 `appSecret` 不再生效，用户需重新 `vk channels add feishu`。
 
 ### 4.5 白名单 ACL 扩展（`packages/channels`）
 
@@ -139,12 +139,12 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
 - 终端二维码用 `qrcode-terminal`；始终同时打印授权链接兜底（非 TTY/CI 下只打印链接）。
 - **被拒提示**：给 `ChannelManager` 增加结构化回调 `onDenied?({ channel, sender, chatId })`
   （不改现有 `onWarning` 字符串签名）。CLI 在 `serve` 里接上，打印
-  `拒绝来自 <sender> 的消息；如需放行：ohs channels allow <sender>（改完需重启 channels serve）`。
+  `拒绝来自 <sender> 的消息；如需放行：vk channels allow <sender>（改完需重启 channels serve）`。
 - **连带改造**：`packages/tools/src/channels/feishu-push.ts` 改为
   `settings` 取 `appId/domain`、`ChannelCredentialStore` 取 `appSecret`；
-  `packages/tools/package.json` 增加 `@openharness/auth` 依赖。
+  `packages/tools/package.json` 增加 `@vykor/auth` 依赖。
 
-## 5. 交互流程：`ohs channels add feishu`
+## 5. 交互流程：`vk channels add feishu`
 
 ### 5.1 选择方式
 
@@ -163,7 +163,7 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
 1. 输入 `App ID`、`App Secret`、地区（默认 `feishu`；非法输入重新询问）。
 2. 校验（§5.5）→ 写配置与凭据（§5.6）。
 3. 没有扫码者身份，白名单保持用户已有的（不新增），提示用
-   `ohs channels allow <id>` 添加。
+   `vk channels allow <id>` 添加。
 
 ### 5.4 旧明文密钥
 
@@ -188,18 +188,18 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
 - **重复 `add`**：若已是 `enabled` 且有凭据，先提示“将覆盖现有接入配置”，确认后才继续；
   拒绝则不做任何修改。
 - 收尾提示：
-  - 运行 `ohs channels serve` 开始收发；
+  - 运行 `vk channels serve` 开始收发；
   - 提醒在飞书开发者后台确认事件订阅方式为“使用长连接接收事件”。
 
 ## 6. `allow` 命令与被拒提示
 
-- `ohs channels allow <id> [--name <备注>]`：
+- `vk channels allow <id> [--name <备注>]`：
   - `<id>` 必须是 `ou_...`（个人）或 `oc_...`（群聊），否则报错；
   - `--name` 缺省时用 id 本身做 key；
   - 写入 `settings.channels.feishu.allowFrom`，同名 key 幂等覆盖；
   - 未接入（无 `appId`）时报错提示先 `add`；
-  - 命令末尾提示“已写入，重启 `ohs channels serve` 生效”（运行中不热重载）。
-- 被拒提示：见 §4.6，由 `onDenied` 结构化回调驱动，附 `ohs channels allow <sender>` 与重启提示。
+  - 命令末尾提示“已写入，重启 `vk channels serve` 生效”（运行中不热重载）。
+- 被拒提示：见 §4.6，由 `onDenied` 结构化回调驱动，附 `vk channels allow <sender>` 与重启提示。
 
 ## 7. 严格性与安全
 
@@ -231,16 +231,16 @@ spike（附录 A），确认扫码建应用与长连接收消息均可行。
 ## 9. 验收标准
 
 - 以下测试全绿：
-  - `pnpm --filter @openharness/channels test -- --run`
-  - `pnpm --filter @openharness/auth test -- --run`
-  - `pnpm --filter @openharness/core test -- --run`
-  - `pnpm --filter @openharness/tools test -- --run`
+  - `pnpm --filter @vykor/channels test -- --run`
+  - `pnpm --filter @vykor/auth test -- --run`
+  - `pnpm --filter @vykor/core test -- --run`
+  - `pnpm --filter @vykor/tools test -- --run`
   - `pnpm --filter @rzx/ohs test -- --run`
 - 相关包 `check-types` 退出码 0。
 - `pnpm exec turbo build --output-logs=full` 全部成功。
 - `git diff --check` 无格式错误。
-- 手工验收（人工执行一次，记录结果）：`ohs channels add feishu` 扫码 → 校验通过 →
-  写入配置与凭据 → `ohs channels serve` 能收发一条私聊消息。
+- 手工验收（人工执行一次，记录结果）：`vk channels add feishu` 扫码 → 校验通过 →
+  写入配置与凭据 → `vk channels serve` 能收发一条私聊消息。
 
 ## 10. 风险
 

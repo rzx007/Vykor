@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createInitialClientState, type SyncEventUpdate } from "@openharness/client"
+import { createInitialClientState, type SyncEventUpdate } from "@vykor/client"
 import { GlobalActivitySubscriptionService } from "./global-activity-subscription-service"
 
 function source() {

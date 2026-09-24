@@ -1,4 +1,4 @@
-import { PROJECT_CONFIG_DIR_NAME, type ToolDefinition } from "@openharness/core";
+import { PROJECT_CONFIG_DIR_NAME, type ToolDefinition } from "@vykor/core";
 
 export const enterWorktreeTool: ToolDefinition = {
   name: "EnterWorktree",

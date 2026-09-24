@@ -20,8 +20,8 @@
 createDefaultNodeAgent
   -> 解析 cwd/settings/session/discovery
   -> resolveDefaultNodeAgentCapabilities
-  -> createOpenHarnessRuntime
-  -> installOpenHarnessRuntimeIntegrations
+  -> createVykorRuntime
+  -> installVykorRuntimeIntegrations
   -> createAgentSession
   -> createAssembledAgent
 ```

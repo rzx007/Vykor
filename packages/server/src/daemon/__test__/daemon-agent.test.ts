@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@openharness/coordinator", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@openharness/coordinator")>();
+vi.mock("@vykor/coordinator", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vykor/coordinator")>();
   return {
     ...actual,
     getCoordinatorSystemPrompt: () => "You are a **coordinator** test prompt.",
@@ -20,14 +20,14 @@ vi.mock("@openharness/coordinator", async (importOriginal) => {
   };
 });
 
-vi.mock("@openharness/agent-runtime", () => ({
+vi.mock("@vykor/agent-runtime", () => ({
   createDefaultNodeAgent: vi.fn(async () => {
     throw new Error("createDefaultNodeAgent should not be used by this test");
   }),
 }));
 
 import { createDaemonAgentLoader } from "../daemon-agent.js";
-import { getCoordinatorUserContext } from "@openharness/coordinator";
+import { getCoordinatorUserContext } from "@vykor/coordinator";
 import { createDefaultNodeAgentWithInternals } from "../../../../agent-runtime/src/default-agent.js";
 import { AgentPool } from "../../application/agent/agent-pool.js";
 import { SessionCommandService } from "../../application/session/session-command-service.js";
@@ -59,7 +59,7 @@ describe("createDaemonAgentLoader", () => {
   it("passes a projectless cwd into the desktop-managed Agent environment", async () => {
     const projectless = {
       ...session,
-      cwd: "D:\\Documents\\OpenHarness\\2026-09-07\\x1",
+      cwd: "D:\\Documents\\Vykor\\2026-09-07\\x1",
       projectId: undefined,
     };
     const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
@@ -394,7 +394,7 @@ describe("createDaemonAgentLoader", () => {
     ]);
     expect(getCoordinatorUserContext).toHaveBeenCalledWith(
       [],
-      expect.stringContaining(".openharness-ts"),
+      expect.stringContaining(".vykor"),
       { enabled: true, hostToolCeiling: ["Shell"] },
     );
   });

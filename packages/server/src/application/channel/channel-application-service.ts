@@ -9,7 +9,7 @@ import {
   type RecordChannelDeliveryInput,
   type SessionInputRecord,
   type SessionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";

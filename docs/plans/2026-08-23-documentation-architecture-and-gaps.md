@@ -1,4 +1,4 @@
-# OpenHarness 文档体系设计与缺口
+# Vykor 文档体系设计与缺口
 
 > 状态：P0/P1/P2 和旧文档整理已全部完成，2026-08-23。本文保留当时的文档缺口和设计理由；当前入口见 [文档总目录](../README.md)。
 
@@ -189,7 +189,7 @@ Session
 
 - `agent-lifecycle-contract.md` P1-P8 定义事务、事件版本、注册校验和 Settlement；
 - `daemon-application-architecture.md` 解释 Run Attempt、Tool Attempt、Event、Workflow 和恢复；
-- `@openharness/protocol` 类型和 `SessionStore` schema 定义真实字段；
+- `@vykor/protocol` 类型和 `SessionStore` schema 定义真实字段；
 - migration 和测试证明数据库格式。
 
 完成结果：[Durable Execution Data Model](../durable-execution-data-model.md) 已集中记录关系、字段责任、ID、状态枚举和当前版本规则。

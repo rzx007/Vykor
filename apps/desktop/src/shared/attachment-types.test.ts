@@ -1,4 +1,4 @@
-import type { ServerCapabilities } from "@openharness/client"
+import type { ServerCapabilities } from "@vykor/client"
 import { describe, expect, it } from "vitest"
 
 import {

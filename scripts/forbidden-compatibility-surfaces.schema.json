@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openharness.dev/schemas/forbidden-compatibility-surfaces.schema.json",
-  "title": "Forbidden OpenHarness compatibility surfaces",
+  "$id": "https://vykor.dev/schemas/forbidden-compatibility-surfaces.schema.json",
+  "title": "Forbidden Vykor compatibility surfaces",
   "type": "object",
   "additionalProperties": false,
   "required": [

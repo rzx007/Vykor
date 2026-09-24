@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { HttpTransport } from "@openharness/client";
+import { HttpTransport } from "@vykor/client";
 
 interface DebugOptions {
   json?: boolean;
@@ -90,10 +90,10 @@ async function resolveDaemon(options: DebugOptions): Promise<{ url: string; toke
     if (!options.daemonToken) throw new Error("--daemon-token is required with --daemon-url");
     return { url: url.toString(), token: options.daemonToken };
   }
-  const { readDaemonRegistry } = await import("@openharness/server");
+  const { readDaemonRegistry } = await import("@vykor/server");
   const registry = readDaemonRegistry();
   if (!registry) {
-    throw new Error("No running daemon is registered. Start it explicitly with `ohs daemon start` before using read-only diagnostics.");
+    throw new Error("No running daemon is registered. Start it explicitly with `vk daemon start` before using read-only diagnostics.");
   }
   return { url: registry.url, token: registry.token };
 }

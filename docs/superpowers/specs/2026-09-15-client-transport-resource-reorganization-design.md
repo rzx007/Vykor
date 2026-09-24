@@ -10,8 +10,8 @@
 
 - 约 1854 行；
 - 同时拥有 base URL、鉴权、fetch、错误转换、response 解码、上传下载、SSE，以及约 100 个业务 endpoint；
-- System、Session、Attachment、Schedule、Terminal、Plugin 等业务方法平铺在 OpenHarnessClient；
-- Desktop、Frontend、CLI、Client commands 和 tests 直接依赖完整 OpenHarnessClient；
+- System、Session、Attachment、Schedule、Terminal、Plugin 等业务方法平铺在 VykorClient；
+- Desktop、Frontend、CLI、Client commands 和 tests 直接依赖完整 VykorClient；
 - http-client.test.ts 也已接近 40 KB，难以判断一项修改影响哪个业务；
 - Server routes 已使用阶段 4 Application Service，但个别 Route 仍可能夹带业务判断。
 
@@ -23,7 +23,7 @@
 2. 建立唯一 SSE transport，拥有 frame、cursor、abort 和重连基础语义。
 3. 协议协商由 ProtocolClient 独立拥有。
 4. endpoint 按业务进入 Resource。
-5. OpenHarnessClient 保留现有构造方式和全部平铺方法，通过 Resource 转发。
+5. VykorClient 保留现有构造方式和全部平铺方法，通过 Resource 转发。
 6. 新内部调用方改用窄 Resource，不依赖完整 Client。
 7. Server route 只做 HTTP/SSE 适配，不拥有 Application 业务。
 8. 上传、下载 Range 和 stream 不退化为全量缓冲。
@@ -33,7 +33,7 @@
 ## 3. 不在本阶段处理
 
 - 不改 URL、method、header、query、body、response、status 或错误 body。
-- 不删除 OpenHarnessClient 平铺方法。
+- 不删除 VykorClient 平铺方法。
 - 不改 reducer、sync 算法、React hook、Desktop IPC 或 UI。
 - 不修改 Server Application/Runtime 业务。
 - 不引入 axios、ky、OpenAPI generator、GraphQL、WebSocket 或新状态库。
@@ -87,7 +87,7 @@ packages/client/src：
 - resources/terminal-resource.ts。
 - resources/channel-resource.ts。
 - resources/event-resource.ts。
-- transport/http-client.ts：OpenHarnessClient 组合根和兼容转发。
+- transport/http-client.ts：VykorClient 组合根和兼容转发。
 - state 与 commands 保持目录，阶段 5 仅收窄其 Client 依赖。
 
 实际 Resource 数量按真实共享规则合并。方法很少且共同变化的 Memory/Profile/Dream 可放 SystemResource；不得为一个方法强制建文件。
@@ -102,7 +102,7 @@ HttpTransport 拥有：
 - URL path 与 URLSearchParams；
 - request JSON；
 - response JSON/empty/Response；
-- OpenHarnessApiError；
+- VykorApiError；
 - responseField/responseArray；
 - AbortSignal 透传；
 - content-type 处理。
@@ -161,7 +161,7 @@ ProtocolClient 拥有：
 - 保持 query 参数是否省略；
 - 使用现有协议 decoder；
 - 有独立测试文件；
-- 不导入 OpenHarnessClient。
+- 不导入 VykorClient。
 
 ## 9. 5D Session Resource
 
@@ -216,9 +216,9 @@ EventResource：
 
 Terminal/Event 可以共享 SseTransport，但各自调用 decoder。
 
-## 11. 5F OpenHarnessClient 兼容门面
+## 11. 5F VykorClient 兼容门面
 
-OpenHarnessClient 构造：
+VykorClient 构造：
 
 1. 建立一个 HttpTransport；
 2. 建立一个 SseTransport；
@@ -268,7 +268,7 @@ Route 不可以：
 
 ## 13. 错误语义
 
-OpenHarnessApiError 保持 name、status、body 和 message。网络错误、AbortError、JSON parse error 和 ProtocolDataError 不统一包成新的通用错误。
+VykorApiError 保持 name、status、body 和 message。网络错误、AbortError、JSON parse error 和 ProtocolDataError 不统一包成新的通用错误。
 
 规则：
 
@@ -309,11 +309,11 @@ OpenHarnessApiError 保持 name、status、body 和 message。网络错误、Abo
 
 ## 15. 架构护栏
 
-- Resource 不得导入 OpenHarnessClient。
+- Resource 不得导入 VykorClient。
 - Resource 不得直接 import Server。
 - Transport 不得 import Client 业务 types 以外的 Resource。
 - http-client.ts 新业务 endpoint 字符串只减不增。
-- 新内部模块不得接受完整 OpenHarnessClient，除兼容公共入口和明确外部适配。
+- 新内部模块不得接受完整 VykorClient，除兼容公共入口和明确外部适配。
 - Server Route 不得 import Store/Repository。
 - httpClientFlatCalls 只能下降。
 - 禁止 any 绕过 Resource capability。
@@ -341,7 +341,7 @@ OpenHarnessApiError 保持 name、status、body 和 message。网络错误、Abo
 - Transport 不含业务 endpoint。
 - ProtocolClient 是协议协商唯一所有者。
 - 所有平铺 endpoint 已进入 Resource。
-- OpenHarnessClient 只组合和转发。
+- VykorClient 只组合和转发。
 - commands/sync 使用窄 capability。
 - Server Route 不拥有业务状态机。
 - HTTP/SSE/上传/下载/Range 行为兼容。

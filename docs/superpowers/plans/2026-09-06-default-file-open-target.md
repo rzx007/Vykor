@@ -101,7 +101,7 @@ it("rejects blank default opener ids", () => {
 - [ ] **步骤 3：运行测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/settings-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/settings-service.test.ts
 ```
 
 预期：FAIL，snapshot 还没有 `defaultOpenerId`。
@@ -144,7 +144,7 @@ export function buildDesktopSettingsSnapshot(
 - [ ] **步骤 5：运行 snapshot 测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/settings-service.test.ts src/renderer/src/stores/desktop-session/notification-observer.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/settings-service.test.ts src/renderer/src/stores/desktop-session/notification-observer.test.ts
 ```
 
 预期：PASS。
@@ -208,7 +208,7 @@ it("throws when the preferences file cannot be written", async () => {
 - [ ] **步骤 7：运行偏好测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/desktop-preferences.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/desktop-preferences.test.ts
 ```
 
 预期：FAIL，读回没有 `defaultOpenerId`，写失败也不抛。
@@ -222,7 +222,7 @@ pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/de
 - [ ] **步骤 9：运行偏好测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/desktop-preferences.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/desktop-preferences.test.ts
 ```
 
 预期：PASS。
@@ -310,7 +310,7 @@ preload 实现：`invoke(IpcChannels.settingsUpdateDefaultOpener, input)`。
 - [ ] **步骤 4：类型检查**
 
 ```bash
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：PASS。若还有其它 snapshot 字面量缺 `defaultOpenerId`，按同样方式补 `null`，不要改那些测试的行为断言。
@@ -380,7 +380,7 @@ describe("resolveSelectedOpener", () => {
 - [ ] **步骤 2：运行解析测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts
 ```
 
 预期：FAIL，模块不存在。
@@ -412,7 +412,7 @@ export function resolveSelectedOpener(
 - [ ] **步骤 4：运行解析测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts
 ```
 
 预期：PASS。
@@ -449,7 +449,7 @@ describe("launchWorkspaceOpener", () => {
       rootPath: undefined,
     })
     expect(updateDefaultOpener).not.toHaveBeenCalled()
-    expect(localStorage.getItem("openharness.desktop.open-with.v1")).toBeNull()
+    expect(localStorage.getItem("vykor.desktop.open-with.v1")).toBeNull()
   })
 })
 ```
@@ -459,7 +459,7 @@ describe("launchWorkspaceOpener", () => {
 - [ ] **步骤 6：运行写入方向测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/open-with/use-workspace-openers.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/open-with/use-workspace-openers.test.ts
 ```
 
 预期：在改掉 `persist` 之前，若测试里仍传 `persist: true` 会写 localStorage。此测试不传 `persist`，当前实现已经不写；下一步是删掉 `persist` 参数本身，并让 hook 改读 snapshot。
@@ -468,7 +468,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 
 `useWorkspaceOpeners`：
 
-- 删掉 `persistedOpenerKey`、`openharness:open-with-changed`、`readPersistedOpenerId`、`writePersistedOpenerId`。
+- 删掉 `persistedOpenerKey`、`vykor:open-with-changed`、`readPersistedOpenerId`、`writePersistedOpenerId`。
 - `selectedId` 初始为 `null`，另加 `preferenceReady` 初始 `false`。
 - 挂载时 `window.desktop.settings.snapshot()`，把 `defaultOpenerId` 写入 state；失败则当成 `null`。无论成败都把 `preferenceReady` 设为 `true`。
 - `selected = preferenceReady ? resolveSelectedOpener(openers, selectedId) : null`。偏好没读完不要先画 Cursor / VS Code。
@@ -487,7 +487,7 @@ await launchWorkspaceOpener({ openerId, path: folderPath })
 - [ ] **步骤 8：运行打开方式测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts src/renderer/src/components/desktop/open-with/use-workspace-openers.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts src/renderer/src/components/desktop/open-with/use-workspace-openers.test.ts
 ```
 
 预期：PASS。
@@ -575,7 +575,7 @@ it("saves from the settings page only", async () => {
 - [ ] **步骤 2：运行设置页测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
 ```
 
 预期：FAIL，控件还不存在。
@@ -598,7 +598,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [ ] **步骤 4：运行设置页测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
 ```
 
 预期：PASS。
@@ -633,9 +633,9 @@ className={cn(
 - [ ] **步骤 2：跑相关测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/settings-service.test.ts src/main/features/settings/desktop-preferences.test.ts src/renderer/src/stores/desktop-session/notification-observer.test.ts src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts src/renderer/src/components/desktop/open-with/use-workspace-openers.test.ts src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/settings-service.test.ts src/main/features/settings/desktop-preferences.test.ts src/renderer/src/stores/desktop-session/notification-observer.test.ts src/renderer/src/components/desktop/open-with/resolve-selected-opener.test.ts src/renderer/src/components/desktop/open-with/use-workspace-openers.test.ts src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 ```
 
 预期：全部 PASS。lint 只报这次改动的文件。

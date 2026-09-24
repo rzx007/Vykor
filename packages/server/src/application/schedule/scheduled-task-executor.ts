@@ -1,9 +1,9 @@
 import { mkdir, rmdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { buildChildAgentWorktreeSlug, createChildAgentWorktreeManager } from "@openharness/agent-runtime";
-import type { Settings } from "@openharness/core";
-import type { ScheduledRunRecord, ScheduledTaskRecord } from "@openharness/protocol";
+import { buildChildAgentWorktreeSlug, createChildAgentWorktreeManager } from "@vykor/agent-runtime";
+import type { Settings } from "@vykor/core";
+import type { ScheduledRunRecord, ScheduledTaskRecord } from "@vykor/protocol";
 import type { SessionCommandService } from "../session/session-command-service.js";
 import type { SessionInteractionService } from "../session/session-interaction-service.js";
 import type { SessionQueryService } from "../session/session-query-service.js";
@@ -104,7 +104,7 @@ export class ScheduledTaskExecutor {
 async function allocateWorkspace(root: string | undefined, runId: string): Promise<string> {
   const now = new Date();
   const day = [String(now.getFullYear()).padStart(4, "0"), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
-  const workspace = join(root ?? join(homedir(), "Documents", "OpenHarness"), day, `scheduled-${runId}`);
+  const workspace = join(root ?? join(homedir(), "Documents", "Vykor"), day, `scheduled-${runId}`);
   await mkdir(workspace, { recursive: true });
   return workspace;
 }

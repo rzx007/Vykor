@@ -14,7 +14,7 @@
 
 - 本阶段只实现 Feishu 的 image/file、thread/topic、mention/bot 语义。
 - 不接入 Telegram、Slack、Discord、微信、企业微信或钉钉。
-- 不修改 `@openharness/protocol` 的 durable channel input/output 类型；入站附件通过 channels 内部字段和 durable metadata 透传，但本阶段不承诺 Agent 通过 durable delivery 生成附件回复。
+- 不修改 `@vykor/protocol` 的 durable channel input/output 类型；入站附件通过 channels 内部字段和 durable metadata 透传，但本阶段不承诺 Agent 通过 durable delivery 生成附件回复。
 - 不把附件内容下载或上传到本地/Feishu；入站 attachment 只携带平台稳定标识和可用元数据，出站 attachment 只接受已有 Feishu media key。
 - `ChannelAttachment.data`、`url` 在本阶段不是 Feishu 出站输入；出现时必须明确拒绝，不能自行 fetch 或猜测编码。
 - 不把 image 降级为 file，不把 file 降级为 text，不把 thread 降级为普通 chat。
@@ -75,7 +75,7 @@ expect(fake.sent[0]).toMatchObject({
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/bus/queue.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/bus/queue.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
 预期：FAIL，原因是 `InboundMessage`、`OutboundMessage` 和 manager 当前没有附件字段。
 
 - [ ] **步骤 3：实现最小传输字段**
@@ -95,7 +95,7 @@ manager 入站映射必须直接复制 `msg.attachments`、`msg.messageType`，�
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/bus/queue.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/bus/queue.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -140,7 +140,7 @@ const imageEvent = {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts`
 预期：FAIL，当前 adapter 只读取 `{ text }` 并固定生成 `messageType: "text"`。
 
 - [ ] **步骤 3：实现严格入站解析**
@@ -163,7 +163,7 @@ if (msg.msg_type === "text") {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -202,7 +202,7 @@ interface CreateCall {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts`
 预期：FAIL，当前 `send()` 固定调用 `msg_type: "text"`，没有 media upload 或 attachment 分支。
 
 - [ ] **步骤 3：实现严格出站分派**
@@ -229,7 +229,7 @@ switch (message.messageType ?? "text") {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -274,7 +274,7 @@ git commit -m "feat(feishu): send image and file attachments"
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
 预期：FAIL，当前 manager 的 outbound contract 没有传递 threadId，Feishu send 也没有 thread 分支。
 
 - [ ] **步骤 3：实现 thread 透传和 Feishu 路由**
@@ -283,7 +283,7 @@ manager 出站构造原样传递 `threadId` 和 `platformMeta`；Feishu 入站�
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -315,7 +315,7 @@ git add packages/channels/src/impl/feishu.ts packages/channels/src/core/manager.
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/index.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/index.test.ts`
 预期：新增的 capability 断言失败，具体表现为 `supports` 不包含 `image` / `file`，或 `supportsImages/supportsFiles` 仍为 `false`；mention/bot 边界测试必须分别指出当前缺口。
 
 - [ ] **步骤 3：实现最终能力声明和过滤规则**
@@ -324,7 +324,7 @@ git add packages/channels/src/impl/feishu.ts packages/channels/src/core/manager.
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/index.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts src/__test__/index.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -345,12 +345,12 @@ git commit -m "feat(feishu): finalize media and mention capabilities"
 
 - [ ] **步骤 1：运行 channels 全量测试**
 
-运行：`pnpm --filter @openharness/channels test -- --run`
+运行：`pnpm --filter @vykor/channels test -- --run`
 预期：所有测试文件通过，测试数量以 Vitest 实际输出为准。
 
 - [ ] **步骤 2：运行 channels 类型检查**
 
-运行：`pnpm --filter @openharness/channels check-types`
+运行：`pnpm --filter @vykor/channels check-types`
 预期：退出码 0。
 
 - [ ] **步骤 3：运行全仓构建**

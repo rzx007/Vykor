@@ -54,7 +54,7 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 
 | 组件 | 文件 | 职责 |
 |------|------|------|
-| 公共调度入口 | `packages/coordinator/src/workflow/index.ts` | 从这里或 `@openharness/coordinator` 导入调度 API |
+| 公共调度入口 | `packages/coordinator/src/workflow/index.ts` | 从这里或 `@vykor/coordinator` 导入调度 API |
 | 调度循环 | `packages/coordinator/src/workflow/runner.ts` | `runWorkflow`、ready queue、并发、失败策略、budget、blocked task |
 | task attempt | `packages/coordinator/src/workflow/task-runner.ts` | 单 task 执行、retry、timeout、progress budget |
 | plan / 校验 | `packages/coordinator/src/workflow/validation.ts` | `WorkflowSpec` 展开、DAG、mode、writeScope 校验 |
@@ -63,7 +63,7 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 | notification | `packages/coordinator/src/workflow/notification.ts` | `<workflow-notification>` formatter/parser |
 | reconciliation | `packages/coordinator/src/workflow/reconciliation.ts` | changed-file / write-scope overlap 检测、summary、follow-up spec |
 | 公共持久化入口 | `packages/coordinator/src/workflow/index.ts` | 导出 repository contract 与持久运行 API |
-| 文件持久化实现 | `packages/coordinator/src/workflow/store.ts` | `FileWorkflowRunRepository`；`.openharness-ts/workflows/<runId>.json` + `.events.ndjson` |
+| 文件持久化实现 | `packages/coordinator/src/workflow/store.ts` | `FileWorkflowRunRepository`；`.vykor/workflows/<runId>.json` + `.events.ndjson` |
 | daemon 持久化实现 | `packages/server/src/application/workflow/session-workflow-run-repository.ts` | `SessionWorkflowRunRepository`；写入统一 SQLite |
 | Coordinator 模式 | `packages/coordinator/src/coordinator-mode.ts` | `getCoordinatorTools()` 含 `Workflow`；prompt / user context |
 | System prompt | `packages/coordinator/src/index.ts` | `COORDINATOR_SYSTEM_PROMPT` 说明何时用 Workflow vs Agent |
@@ -72,13 +72,13 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 | Agent runner | `packages/tools/src/agent/workflow/runner.ts` | 默认 spawn/await framework child；也接受显式 external worker adapter |
 | 工具注册 | `packages/tools/src/registry.ts` | 只有宿主显式提供 Workflow repository 时才注册 Workflow 工具 |
 | CLI 白名单 | `apps/cli/src/commands/main.ts` | coordinator 模式 `setAllowedTools(getCoordinatorTools())` |
-| Workflow CLI | `apps/cli/src/commands/workflow.ts` | `ohs workflow list/status/validate/template/reconcile/cancel`；JSON-first 管理面 |
+| Workflow CLI | `apps/cli/src/commands/workflow.ts` | `vk workflow list/status/validate/template/reconcile/cancel`；JSON-first 管理面 |
 
 ## A. 入口阶段
 
 ### A1. Coordinator 模式工具面
 
-开启 `OPENHARNESS_COORDINATOR_MODE` 后，CLI 启动时：
+开启 `VYKOR_COORDINATOR_MODE` 后，CLI 启动时：
 
 ```text
 apps/cli/src/commands/main.ts
@@ -91,15 +91,15 @@ Leader 不能直接 Read/Bash；简单委托使用 `Agent` + `JobWait`，后续�
 
 ### A1.5. Workflow CLI 管理面
 
-`ohs workflow` 是面向人的项目文件 CLI，不是 Coordinator 模式本身。它明确创建 `FileWorkflowRunRepository`，只读取 `.openharness-ts/workflows/`：
+`vk workflow` 是面向人的项目文件 CLI，不是 Coordinator 模式本身。它明确创建 `FileWorkflowRunRepository`，只读取 `.vykor/workflows/`：
 
 ```text
-ohs workflow list       # 历史 run 列表，可按状态/时间/reconcile/budget 过滤
-ohs workflow status     # latest 或指定 runId 的 snapshot + events
-ohs workflow validate   # dry-run 校验 spec，不启动 worker
-ohs workflow template   # 展示/参数化内置 workflow spec 模板
-ohs workflow reconcile  # 从 reconciliationPlan 生成 follow-up spec
-ohs workflow cancel     # stop backing task，并写 terminal snapshot
+vk workflow list       # 历史 run 列表，可按状态/时间/reconcile/budget 过滤
+vk workflow status     # latest 或指定 runId 的 snapshot + events
+vk workflow validate   # dry-run 校验 spec，不启动 worker
+vk workflow template   # 展示/参数化内置 workflow spec 模板
+vk workflow reconcile  # 从 reconciliationPlan 生成 follow-up spec
+vk workflow cancel     # stop backing task，并写 terminal snapshot
 ```
 
 完整命令和示例见 [`workflow-cli.md`](./workflow-cli.md)。daemon/TUI/Web 使用 SQLite repository 和 Jobs API，不会把这些项目文件当成 daemon 的权威状态。
@@ -124,7 +124,7 @@ ohs workflow cancel     # stop backing task，并写 terminal snapshot
             → synchronous: formatWorkflowNotification(result)
 ```
 
-`persist` 默认 `true`，但调用方必须显式注入 repository。daemon 注入 `SessionWorkflowRunRepository`，快照进入统一 SQLite；standalone Node Agent 只有显式注入 `FileWorkflowRunRepository` 时才写项目 `.openharness-ts/workflows/`。没有 repository 时，持久化 action 会明确失败，不会创建文件 fallback。
+`persist` 默认 `true`，但调用方必须显式注入 repository。daemon 注入 `SessionWorkflowRunRepository`，快照进入统一 SQLite；standalone Node Agent 只有显式注入 `FileWorkflowRunRepository` 时才写项目 `.vykor/workflows/`。没有 repository 时，持久化 action 会明确失败，不会创建文件 fallback。
 
 常用 input 字段：
 
@@ -226,7 +226,7 @@ createAgentWorkflowRunner()(context)
             metadata: agentId, workerTaskId, backendType, worktree, diff, changedFiles
 ```
 
-调度器本身不依赖 swarm；adapter 放在 `@openharness/tools`，`@openharness/coordinator` 保持纯调度。显式注入的 external worker 仍可通过 `awaitTask` / `stopTask` adapter 接入；默认 framework worker 直接使用 child handle。
+调度器本身不依赖 swarm；adapter 放在 `@vykor/tools`，`@vykor/coordinator` 保持纯调度。显式注入的 external worker 仍可通过 `awaitTask` / `stopTask` adapter 接入；默认 framework worker 直接使用 child handle。
 
 ## D. 持久化与恢复
 
@@ -235,12 +235,12 @@ createAgentWorkflowRunner()(context)
 | 使用场景 | Repository | 状态放在哪里 |
 |---|---|---|
 | daemon、多客户端、Bot、TUI/Web/Desktop | `SessionWorkflowRunRepository` | 与 Session/Run 相同的 SQLite |
-| 独立项目文件 CLI 或显式 standalone 配置 | `FileWorkflowRunRepository` | `.openharness-ts/workflows/` |
+| 独立项目文件 CLI 或显式 standalone 配置 | `FileWorkflowRunRepository` | `.vykor/workflows/` |
 
 文件实现的目录结构：
 
 ```text
-.openharness-ts/workflows/
+.vykor/workflows/
   <runId>.json           # WorkflowRunSnapshot
   <runId>.events.ndjson  # 一行一个 WorkflowRunEvent
 ```

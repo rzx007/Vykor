@@ -1,4 +1,4 @@
-import type { ToolContext, ToolDefinition } from "@openharness/core";
+import type { ToolContext, ToolDefinition } from "@vykor/core";
 import {
   WORKFLOW_SPEC_TEMPLATES,
   cancelPersistentWorkflow,
@@ -22,7 +22,7 @@ import {
   type WorkflowSpec,
   type WorkflowTask,
   type WorkflowTemplateName,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import { createAgentWorkflowRunner } from "./runner.js";
 
 const WORKFLOW_MODES = new Set<WorkflowMode>(["parallel", "sequential", "pipeline"]);
@@ -242,7 +242,7 @@ export function createWorkflowTool(options: WorkflowToolOptions): ToolDefinition
         },
         persist: {
           type: "boolean",
-          description: "Persist workflow run snapshots under the project .openharness-ts/workflows directory. Defaults to true.",
+          description: "Persist workflow run snapshots under the project .vykor/workflows directory. Defaults to true.",
         },
         runId: {
           type: "string",
@@ -974,7 +974,7 @@ async function stopTaskInCwd(cwd: string, sessionId: string | undefined, taskId:
   const {
     getChildAgentExecutionRegistry,
     getDetachedProcessSupervisor,
-  } = await import("@openharness/services");
+  } = await import("@vykor/services");
   try {
     return await getChildAgentExecutionRegistry({ cwd, sessionId }).stopExecution(taskId);
   } catch {

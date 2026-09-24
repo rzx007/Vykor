@@ -153,9 +153,9 @@ rg -n "DaemonApplication" packages/server/src/application packages/server/src/ru
 - [ ] **步骤 3：全验证**
 
 运行：
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/services test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/services test
 pnpm check-types
 node --test scripts/architecture-boundaries.test.mjs
 pnpm check:architecture

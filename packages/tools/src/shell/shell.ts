@@ -1,13 +1,13 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 import {
   shellResultMetadata,
   type ShellDescriptor,
-} from "@openharness/environment";
+} from "@vykor/environment";
 import {
   describeHostShellLauncher,
   resolveHostShellLauncher,
   type HostShellLauncher,
-} from "@openharness/sandbox";
+} from "@vykor/sandbox";
 import { defaultShellExecutor } from "./executor.js";
 import { formatOutput } from "./output.js";
 import type { ShellExecSpec, ShellExecutor } from "./types.js";

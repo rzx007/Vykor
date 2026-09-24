@@ -1,6 +1,6 @@
 # Codex fixtures
 
-These minimal fixtures were independently authored for OpenHarness on 2026-09-09.
+These minimal fixtures were independently authored for Vykor on 2026-09-09.
 They model the legacy layout documented at https://developers.openai.com/plugins/build/plugins
 and the `skills`, `apps`, and `interface` declarations observed in locally installed
 Figma 2.0.21 and Plugin Management 0.1.0 manifests. No proprietary skill content,

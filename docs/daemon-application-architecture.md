@@ -10,14 +10,14 @@ daemon          = HTTP + durable state + multi-client policy + event projection
 TUI/Web/Desktop = interaction surfaces
 ```
 
-daemon 直接依赖 `@openharness/agent-runtime`，不经过 runtime adapter。framework 可以脱离 daemon 独立运行；daemon 是它的一种有 durable state 和多 UI 协调能力的应用形态。
+daemon 直接依赖 `@vykor/agent-runtime`，不经过 runtime adapter。framework 可以脱离 daemon 独立运行；daemon 是它的一种有 durable state 和多 UI 协调能力的应用形态。
 
 ## 核心请求链
 
 ```mermaid
 flowchart TD
   Surface["TUI / Web / Desktop / print"]
-  Client["OpenHarnessClient Resources"]
+  Client["VykorClient Resources"]
   Routes["HTTP routes"]
   App["Query / Command / Interaction / Run Control"]
   Runner["SessionOperationRunner"]
@@ -25,7 +25,7 @@ flowchart TD
   Lane["SessionRunCoordinator"]
   Executor["SessionRunExecutor"]
   Pool["AgentPool"]
-  Agent["OpenHarnessAgent"]
+  Agent["VykorAgent"]
   QE["QueryEngine"]
   Events["AgentEventBus"]
   Projector["DaemonAgentEventProjector"]
@@ -47,9 +47,9 @@ Surface -> Client Resource -> route -> application service
   -> RunAdmissionService
   -> SessionRunCoordinator (per-session lane)
   -> SessionRunExecutor (one admitted root run)
-  -> AgentPool -> OpenHarnessAgent -> QueryEngine
+  -> AgentPool -> VykorAgent -> QueryEngine
 
-OpenHarnessAgent onEvent sink
+VykorAgent onEvent sink
   -> DaemonAgentEventProjector.apply(event)
   -> Repository / Transaction -> transcript/session/run/task/event durable state
   -> SSE
@@ -72,12 +72,12 @@ OpenHarnessAgent onEvent sink
 | 位置                             | 大白话含义                        | 谁会使用                             |
 | -------------------------------- | --------------------------------- | ------------------------------------ |
 | `session.model`                  | 列表、导出和统计使用的展示列       | UI 展示、导出、统计展示              |
-| `session.metadata.runtime.model` | 这条 session 下一轮真正要用的模型 | daemon 创建或重建 `OpenHarnessAgent` |
+| `session.metadata.runtime.model` | 这条 session 下一轮真正要用的模型 | daemon 创建或重建 `VykorAgent` |
 
 当前规则：
 
 1. 新建 session 时，CLI/TUI/Web 会把默认模型写入 `metadata.runtime.model`，同时同步写入 `session.model` 展示列。
-2. `ohs provider use <provider> -m <model>` 或 Home 页 `/models` 只改 settings，作用是“以后新建 session 的默认模型”。
+2. `vk provider use <provider> -m <model>` 或 Home 页 `/models` 只改 settings，作用是“以后新建 session 的默认模型”。
 3. 已经打开的 session 改模型时，只能 PATCH `metadata.runtime.model`。旧写法 `PATCH /sessions/:id { model }` 会被拒绝。
 4. runtime 读取只认 `metadata.runtime.model`。缺少这个字段时不会从展示用的 `session.model` 猜测运行配置。
 5. `SessionCommandService.updateSession()` 发现 runtime metadata 变化后，会先通过 `RunControlService` 确认当前 session 没有正在跑的任务，再关闭 `AgentPool` 里当前 agent。下一次发送消息时，pool 会重新读 session repository，用新的 runtime 配置创建 agent。
@@ -138,7 +138,7 @@ sequenceDiagram
   participant L as SessionRunCoordinator
   participant X as SessionRunExecutor
   participant P as AgentPool
-  participant G as OpenHarnessAgent
+  participant G as VykorAgent
   participant Q as QueryEngine
   participant D as DaemonAgentEventProjector
   participant S as Repository/Transaction + SSE
@@ -200,7 +200,7 @@ packages/server/src/application/agent/daemon-agent-event-projector.ts
 `AgentPool` 缓存一个带代际所有权的 entry：
 
 ```text
-sessionId -> { promise: Promise<OpenHarnessAgent>, agent?, state, closePromise? }
+sessionId -> { promise: Promise<VykorAgent>, agent?, state, closePromise? }
 ```
 
 职责分工：
@@ -366,7 +366,7 @@ Agent tool -> framework AgentChildManager
      -> durable child session
      -> SessionExecutionProjector 创建 durable task (id = childId)
      -> LiveChildAgentDirectory(sessionId -> rootAgent + childId)
-  -> recursive child OpenHarnessAgent
+  -> recursive child VykorAgent
   -> ordinary input/run/output/tool terminal events
 ```
 
@@ -406,7 +406,7 @@ Workflow tool / daemon command
   -> HTTP client / TUI / Web / Desktop
 ```
 
-`SessionWorkflowRunRepository` 是 daemon 唯一注入的 Workflow 仓库。它保存完整快照、每个 task 的 attempt 和 Workflow 事件；不会读取 `.openharness-ts/workflows`，也不会在启动时迁移旧 JSON。独立 CLI 如果要查看项目文件，必须明确创建 `FileWorkflowRunRepository`，详见 [Workflow CLI](./workflow-cli.md)。
+`SessionWorkflowRunRepository` 是 daemon 唯一注入的 Workflow 仓库。它保存完整快照、每个 task 的 attempt 和 Workflow 事件；不会读取 `.vykor/workflows`，也不会在启动时迁移旧 JSON。独立 CLI 如果要查看项目文件，必须明确创建 `FileWorkflowRunRepository`，详见 [Workflow CLI](./workflow-cli.md)。
 
 Workflow run ID 只能创建一次。scheduler 开始或恢复前必须 claim，意思是先在数据库里取得这次运行的处理权；重复 ID、重复 claim 或已经被其他执行者取得的 run 会直接失败。Daemon 重启不会重放模型或 Tool，而是先 claim 遗留的 running Workflow，再把 running task 记为 killed、未开始 task 记为 skipped，并写入 terminal 状态。
 
@@ -448,8 +448,8 @@ Application backup 包含 SQLite 数据库，以及明确配置的 artifacts、m
 
 ## 启动与关闭
 
-- `startOpenHarnessDaemon()`：默认完整应用，CLI daemon command 使用。
-- `startOpenHarnessServer()`：低层 embedding API，通过 `services` 注入 HTTP resource services，测试可注入 agent creator。
+- `startVykorDaemon()`：默认完整应用，CLI daemon command 使用。
+- `startVykorServer()`：低层 embedding API，通过 `services` 注入 HTTP resource services，测试可注入 agent creator。
 - 默认组合：`default-daemon.ts` 调用 `createDefaultApplicationServices()` 与 `createDefaultCommandCatalog()`，具体实现分别位于 `default-application-services.ts`、`default-command-catalog.ts`。
 - CLI `commands/daemon.ts` 只处理 host/port/token、registry 与进程信号。
 
@@ -468,7 +468,7 @@ shutdown 先把 `DaemonOperationGate` 置为 closing 并等待现有 shared/barr
 
 `GET /debug/runtime` 的 `metrics` 从 durable 数据汇总 Run、Attempt、Tool、token、Permission、Child 和 Projection 状态。它只用有限类别做标签，不把 sessionId、runId、traceId、文件路径、提示词或 Tool 参数塞进指标。指标汇总失败时返回空指标，不影响 Run 执行。
 
-排查单次 Run 可使用 `ohs debug inspect-run <runId>`；查看投影补偿队列可使用 `ohs debug settlements`。两条命令都只读，也不会自动启动 Daemon；本机没有已注册的运行中 Daemon 时会提示用户先显式启动。默认隐藏正文和 Tool/Permission payload；`--include-content` 才展开并提示敏感信息风险，`--json` 用于脚本处理。发现数据断链、关闭 Run 仍有活动 Attempt、未知事件、待处理 settlement 或 Tool 结果未知时，命令会给出具体 warning 并返回非零退出码。当前没有自动 repair 命令。
+排查单次 Run 可使用 `vk debug inspect-run <runId>`；查看投影补偿队列可使用 `vk debug settlements`。两条命令都只读，也不会自动启动 Daemon；本机没有已注册的运行中 Daemon 时会提示用户先显式启动。默认隐藏正文和 Tool/Permission payload；`--include-content` 才展开并提示敏感信息风险，`--json` 用于脚本处理。发现数据断链、关闭 Run 仍有活动 Attempt、未知事件、待处理 settlement 或 Tool 结果未知时，命令会给出具体 warning 并返回非零退出码。当前没有自动 repair 命令。
 
 ## 不变量
 

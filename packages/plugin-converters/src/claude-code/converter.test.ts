@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadNativeAgents, validateNativePlugin } from "@openharness/plugins";
+import { loadNativeAgents, validateNativePlugin } from "@vykor/plugins";
 import { ClaudeCodePluginConverter } from "./converter.js";
 const source = fileURLToPath(
   new URL("../../fixtures/claude-code/mixed-plugin", import.meta.url),
@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 describe("ClaudeCodePluginConverter", () => {
   it("detects, inspects, plans and materializes a valid Native Plugin", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "ohs-convert-"));
+    const parent = await mkdtemp(join(tmpdir(), "vk-convert-"));
     outputs.push(parent);
     const output = join(parent, "native");
     const converter = new ClaudeCodePluginConverter();
@@ -33,8 +33,8 @@ describe("ClaudeCodePluginConverter", () => {
     expect((await validateNativePlugin(output)).status).toBe("valid");
 
     expect((await readdir(output)).sort()).toEqual([
-      ".openharness-conversion",
-      ".openharness-plugin",
+      ".vykor-conversion",
+      ".vykor-plugin",
       "agents",
       "hooks.json",
       "mcp.json",
@@ -45,7 +45,7 @@ describe("ClaudeCodePluginConverter", () => {
     await expect(access(join(output, ".claude-plugin"))).rejects.toMatchObject({ code: "ENOENT" });
 
     const manifest = JSON.parse(
-      await readFile(join(output, ".openharness-plugin", "plugin.json"), "utf8"),
+      await readFile(join(output, ".vykor-plugin", "plugin.json"), "utf8"),
     ) as {
       metadata?: Record<string, unknown>;
       components?: Record<string, unknown>;
@@ -67,7 +67,7 @@ describe("ClaudeCodePluginConverter", () => {
   });
 
   it("does not mark unsupported-only hook files as adapted", async () => {
-    const root = await mkdtemp(join(tmpdir(), "ohs-convert-hooks-"));
+    const root = await mkdtemp(join(tmpdir(), "vk-convert-hooks-"));
     outputs.push(root);
     await mkdir(join(root, ".claude-plugin"), { recursive: true });
     await mkdir(join(root, "hooks"), { recursive: true });
@@ -95,7 +95,7 @@ describe("ClaudeCodePluginConverter", () => {
 
   it("quotes Claude agent descriptions that contain YAML mapping syntax", async () => {
     const root = await mkdtemp(
-      join(tmpdir(), "ohs-convert-agent-description-"),
+      join(tmpdir(), "vk-convert-agent-description-"),
     );
     outputs.push(root);
     const output = join(root, "native");

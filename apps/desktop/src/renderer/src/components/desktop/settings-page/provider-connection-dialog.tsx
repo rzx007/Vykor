@@ -103,7 +103,7 @@ export function ProviderConnectionDialog({
           <DialogHeader>
             <DialogTitle>连接 {provider?.displayName}</DialogTitle>
             <DialogDescription>
-              API 密钥会由 OpenHarness 认证服务保存到本地凭证文件，不会写入普通设置。
+              API 密钥会由 Vykor 认证服务保存到本地凭证文件，不会写入普通设置。
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>

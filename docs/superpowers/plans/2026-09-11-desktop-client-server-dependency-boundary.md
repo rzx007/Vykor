@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 将 Desktop 的 OpenHarness workspace 直接依赖收敛为 `@openharness/client` 和 `@openharness/server`，同时保持 terminal、WSL 与 daemon 常驻行为不回归。
+**目标：** 将 Desktop 的 Vykor workspace 直接依赖收敛为 `@vykor/client` 和 `@vykor/server`，同时保持 terminal、WSL 与 daemon 常驻行为不回归。
 
 **架构：** 所有 HTTP/SSE 操作和协议类型归 `client`；daemon 未启动时也必须可用的 registry、系统服务和 autostart 协调归 `server/daemon-host` 本地子入口。`core`、`sandbox`、`terminal-node` 继续作为 server 内部实现依赖，Desktop 不直接感知。
 
@@ -61,7 +61,7 @@
 在后续边界脚本落地前，先用现有打包检查锁定包清单：
 
 ```js
-for (const name of ["@openharness/terminal", "@openharness/terminal-node"]) {
+for (const name of ["@vykor/terminal", "@vykor/terminal-node"]) {
   if (packageJson.devDependencies?.[name]) {
     failures.push(`${name} must be consumed through client/server`)
   }
@@ -91,20 +91,20 @@ import type {
   TerminalResizeRequest,
   TerminalSessionInfo,
   TerminalWriteRequest,
-} from "@openharness/client"
+} from "@vykor/client"
 ```
 
-`terminal-service.ts` 也从 client 的同一个 import 中取得 `OpenHarnessClient` 和 terminal 类型。删除 package.json 与 lockfile 中两个直接声明，但保留 electron-vite 的 terminal/terminal-node bundling exclude。
+`terminal-service.ts` 也从 client 的同一个 import 中取得 `VykorClient` 和 terminal 类型。删除 package.json 与 lockfile 中两个直接声明，但保留 electron-vite 的 terminal/terminal-node bundling exclude。
 
 - [ ] **步骤 4：运行类型、测试、构建和裸导入扫描**
 
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop exec electron-vite build
-rg 'from ["'']@openharness/|require\(["'']@openharness/' apps/desktop/out/main -g '*.js'
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop exec electron-vite build
+rg 'from ["'']@vykor/|require\(["'']@vykor/' apps/desktop/out/main -g '*.js'
 ```
 
 预期：前三条通过；最后一条没有输出。
@@ -167,9 +167,9 @@ HTTP 测试断言 `GET /settings/environment-capabilities` 返回 daemon 宿主�
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test -- default-application-services http
-pnpm --filter @openharness/client test -- http-client
-pnpm --filter @openharness/desktop test -- settings-service
+pnpm --filter @vykor/server test -- default-application-services http
+pnpm --filter @vykor/client test -- http-client
+pnpm --filter @vykor/desktop test -- settings-service
 ```
 
 预期：FAIL，缺少 environment service、HTTP 路由和 client 方法。
@@ -192,12 +192,12 @@ Desktop `SettingsClient` 增加 `getAgentEnvironmentCapabilities`，删除 `pref
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：全部通过。随后删除 Desktop package.json/lockfile 的 sandbox 直接依赖并重新运行 Desktop typecheck。
@@ -261,10 +261,10 @@ export function shouldStartManagedDaemon(): Promise<boolean>
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test -- auto-start-controller
+pnpm --filter @vykor/server test -- auto-start-controller
 ```
 
-预期：FAIL，`@openharness/server/daemon-host` 和 controller 尚不存在。
+预期：FAIL，`@vykor/server/daemon-host` 和 controller 尚不存在。
 
 - [ ] **步骤 3：实现 server 子入口与 controller**
 
@@ -277,7 +277,7 @@ pnpm --filter @openharness/server test -- auto-start-controller
 }
 ```
 
-`daemon-host/index.ts` 只导出 registry、`startOpenHarnessDaemon`、系统服务管理器、autostart controller 和对应类型。根入口不再导出 `DaemonSystemService`，避免本机高权限能力混入普通 server API。
+`daemon-host/index.ts` 只导出 registry、`startVykorDaemon`、系统服务管理器、autostart controller 和对应类型。根入口不再导出 `DaemonSystemService`，避免本机高权限能力混入普通 server API。
 
 controller 内部使用 core 的 `loadSettings/saveSettings`，按期望状态 reconcile，并在每次操作后重新查询系统服务。系统服务管理器不接受 renderer 输入。
 
@@ -298,12 +298,12 @@ Desktop `daemon-entry` 使用 `shouldStartManagedDaemon()`，不再读取 core�
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/server test
 pnpm --filter @rzx/ohs test -- daemon
-pnpm --filter @openharness/desktop test -- daemon-autostart session-service
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/desktop test -- daemon-autostart session-service
+pnpm --filter @vykor/server check-types
 pnpm --filter @rzx/ohs check-types
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：全部通过；CLI 与 Desktop 可以互相识别同一系统服务和 `daemon.autoStart`。
@@ -331,20 +331,20 @@ git commit -m "refactor(server): centralize daemon host lifecycle"
 
 ```js
 const allowedWorkspacePackages = new Set([
-  "@openharness/client",
-  "@openharness/server",
-  "@openharness/server/daemon-host",
+  "@vykor/client",
+  "@vykor/server",
+  "@vykor/server/daemon-host",
 ])
 ```
 
-另加两条约束：renderer/preload 不得导入任何 server 入口；Desktop package.json 中 `@openharness/*` 只能是 client/server。发现违规时输出文件、包名并以非零状态退出。
+另加两条约束：renderer/preload 不得导入任何 server 入口；Desktop package.json 中 `@vykor/*` 只能是 client/server。发现违规时输出文件、包名并以非零状态退出。
 
 - [ ] **步骤 2：先注入一个临时违规 fixture 验证脚本会失败**
 
-在脚本测试数据中传入 `import "@openharness/core"`，预期报告：
+在脚本测试数据中传入 `import "@vykor/core"`，预期报告：
 
 ```text
-Desktop workspace import is not allowed: @openharness/core
+Desktop workspace import is not allowed: @vykor/core
 ```
 
 随后传入 main 的 daemon-host import 和 renderer 的 client type import，预期通过。测试数据留在脚本单元测试中，不创建真实违规源码。
@@ -368,14 +368,14 @@ Desktop workspace import is not allowed: @openharness/core
 
 ```powershell
 node apps/desktop/scripts/verify-workspace-boundaries.mjs
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
 pnpm --filter @rzx/ohs test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/desktop test
 pnpm check-types
-pnpm --filter @openharness/desktop exec electron-vite build
+pnpm --filter @vykor/desktop exec electron-vite build
 node apps/desktop/scripts/verify-update-packaging.mjs
-rg 'from ["'']@openharness/|require\(["'']@openharness/' apps/desktop/out/main -g '*.js'
+rg 'from ["'']@vykor/|require\(["'']@vykor/' apps/desktop/out/main -g '*.js'
 git diff --check
 ```
 
@@ -390,7 +390,7 @@ git commit -m "docs(desktop): enforce client server dependency boundary"
 
 ## 最终验收清单
 
-- [ ] Desktop package.json 的 OpenHarness workspace 依赖只剩 client/server。
+- [ ] Desktop package.json 的 Vykor workspace 依赖只剩 client/server。
 - [ ] Desktop 源码不导入 core、sandbox、terminal 或 terminal-node。
 - [ ] renderer/preload 不导入 server 或 daemon-host。
 - [ ] terminal 类型和所有 terminal 操作从 client 边界取得。
@@ -398,6 +398,6 @@ git commit -m "docs(desktop): enforce client server dependency boundary"
 - [ ] daemon autostart 在 CLI 与 Desktop 中使用同一个 server controller。
 - [ ] daemon 未启动时 watchdog 仍能读取期望状态并正确启动。
 - [ ] 系统服务安装与卸载没有暴露成 HTTP API。
-- [ ] Desktop 构建产物没有 `@openharness/*` 裸导入。
+- [ ] Desktop 构建产物没有 `@vykor/*` 裸导入。
 - [ ] 已知 migration 构建路径保持不变。
 - [ ] 相关设计、系统服务、Desktop 与打包文档均与新边界一致。

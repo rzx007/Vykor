@@ -4,7 +4,7 @@
 
 ## 一句话
 
-OpenHarness-ts 已经能拉起子 agent，也能用 swarm 管通信、任务和 worktree。
+Vykor 已经能拉起子 agent，也能用 swarm 管通信、任务和 worktree。
 
 硬调度器补的是一层“排班表”：由代码明确决定哪个子 agent 先跑、哪个后跑、哪些能并行、失败后怎么办，而不是只靠 Coordinator prompt 让模型自己记住。
 
@@ -243,7 +243,7 @@ Hermes 值得借鉴的是思想，不是重量级形态：
 - dashboard board；
 - 多层 orchestrator。
 
-OpenHarness-ts 可以先做内存版，等稳定后再考虑持久化。
+Vykor 可以先做内存版，等稳定后再考虑持久化。
 
 ## 推荐落地顺序
 
@@ -303,7 +303,7 @@ adapter 里面复用现有：
 等内存版稳定后，再考虑把 workflow run 写入：
 
 ```text
-.openharness-ts/workflows/<runId>.json
+.vykor/workflows/<runId>.json
 ```
 
 这样中断后能恢复：
@@ -390,7 +390,7 @@ adapter 里面复用现有：
 
 交付：
 
-- `.openharness-ts/workflows/<runId>.json`；
+- `.vykor/workflows/<runId>.json`；
 - 保存 task 状态、attempt、taskManagerTaskId、输出摘要；
 - 启动时能识别仍在运行的后台 task；
 - 已完成 task 不重复跑；
@@ -493,15 +493,15 @@ V1 内存调度核心
 
 运行时细节（工具入口、调度循环、持久化路径、信封格式）见 [`coordinator-hard-scheduler-flow.md`](./coordinator-hard-scheduler-flow.md)。
 
-以下 V0-V14.2 条目记录能力演进；其中旧 TUI Workflow Runs 面板及其 `f` follow-up 操作已经被统一 Jobs Panel 收口取代。当前 TUI 只通过 Jobs list/read/cancel 管理 Workflow Job，并在选中详情中展示 Steps；timeline、history、reconcile 和 follow-up spec 生成继续由 Workflow 工具或 `ohs workflow` CLI 提供。
+以下 V0-V14.2 条目记录能力演进；其中旧 TUI Workflow Runs 面板及其 `f` follow-up 操作已经被统一 Jobs Panel 收口取代。当前 TUI 只通过 Jobs list/read/cancel 管理 Workflow Job，并在选中详情中展示 Steps；timeline、history、reconcile 和 follow-up spec 生成继续由 Workflow 工具或 `vk workflow` CLI 提供。
 
 - V0：已完成。边界和路线图写在本文档里。
-- V1：已完成。`@openharness/coordinator` 提供纯内存 `WorkflowSpec`、DAG 校验、三种 mode、并发上限、失败策略、retry 和结构化结果。
-- V2：已完成基础版。`@openharness/tools` 提供 `createAgentWorkflowRunner`；默认通过 framework child controller 启动并直接等待 worker，显式 external backend 通过注入的 task adapter 等待结果。
+- V1：已完成。`@vykor/coordinator` 提供纯内存 `WorkflowSpec`、DAG 校验、三种 mode、并发上限、失败策略、retry 和结构化结果。
+- V2：已完成基础版。`@vykor/tools` 提供 `createAgentWorkflowRunner`；默认通过 framework child controller 启动并直接等待 worker，显式 external backend 通过注入的 task adapter 等待结果。
 - V2.5：已完成。默认工具注册表新增 `Workflow` 工具，Coordinator/Leader 可以一次提交 workflow spec，让代码负责调度顺序、依赖、重试和聚合。
 - V2.6：已完成。增加 smoke 测试，覆盖 `Workflow` 工具 -> scheduler -> agent runner -> framework child spawn/await 的无 daemon 闭环。
 - V2.7：已完成。固定 `<workflow-notification>` envelope，提供 formatter/parser，并让 `Workflow` 工具返回结构化结果。
-- V3.1：已完成。新增 workflow snapshot / store：运行开始、worker 运行中、task terminal、最终完成都会产出快照；`Workflow` 工具默认把 run 写到项目 `.openharness-ts/workflows`。
+- V3.1：已完成。新增 workflow snapshot / store：运行开始、worker 运行中、task terminal、最终完成都会产出快照；`Workflow` 工具默认把 run 写到项目 `.vykor/workflows`。
 - V3.2：已完成。新增恢复入口：scheduler 支持 `initialResults` 续跑；store 支持 `latest/load/resume/resumeLatest`；`Workflow` 工具支持 `action: "status"` 和 `action: "resume"`，恢复时不会重跑已完成 terminal task。
 - V3.3：已完成。running snapshot 会记录 runner 上报的 `taskManagerTaskId` 等 metadata；恢复时 agent runner 会优先等待仍存活的 framework child 或 external task，不可达时才 spawn replacement worker。
 - V4.1：已完成。scheduler 会检测声明了 `writeScope` 的非隔离写任务；重叠 scope 在共享 cwd 下自动串行，不重叠 scope 可以并行；`readOnly: true` 和 `isolate: true` 不参与共享 cwd 写冲突。
@@ -532,11 +532,11 @@ V1 内存调度核心
 - V12.1：已完成基础版。新增 `createWorkflowValidationReport` 和 `Workflow action: "validate"`，可在启动 worker 前 dry-run 展开 DAG、预算 preset 和非隔离写范围冲突。
 - V12.2：已完成基础版。新增 `cancelPersistentWorkflow` 和 `Workflow action: "cancel"`，会停止 backing framework child 或 external task，并把 running task 标记为 killed、未启动 task 标记为 skipped 后持久化 terminal snapshot。
 - V12.3：已完成基础版。内置 workflow templates 增加 `version` 字段，模板输出可明确说明模板版本和含义。
-- V13.1：已完成基础版。新增普通 CLI 管理面 `ohs workflow list/status/validate/template/reconcile/cancel`，对接同一份 `.openharness-ts/workflows` 持久化数据，输出 JSON，方便脚本和后续 TUI/Web 复用。完整用法见 [`workflow-cli.md`](./workflow-cli.md)。
+- V13.1：已完成基础版。新增普通 CLI 管理面 `vk workflow list/status/validate/template/reconcile/cancel`，对接同一份 `.vykor/workflows` 持久化数据，输出 JSON，方便脚本和后续 TUI/Web 复用。完整用法见 [`workflow-cli.md`](./workflow-cli.md)。
 - V13.2（历史、已被收口）：当时完成过独立 TUI Workflow Runs 管理面板，读取同一份 workflow JSON 状态。该面板现已删除并由统一 Jobs Panel 取代；timeline/filter/reconcile 等 Workflow 领域查询保留在 Workflow 工具和 CLI。
 - V13.3：已完成基础版。持久化 `Workflow action: "run"` 默认 detached 提交，快速返回 running snapshot 和 runId，后台继续调度 worker；不再给 worker wait 隐式套 300s 默认超时，只有显式 `timeoutSeconds` / task timeout 才会判超时。
 - V13.4：已完成基础版。修复 subprocess task-worker 一轮完成后 stdin pipe 未释放导致 child process 不退出、TaskManager task 长时间停留在 running、Workflow awaitTask 卡住的问题；worker 结束时会释放 stdin 并关闭 runtime cleanup。
-- V14.1（历史、已被收口）：独立 TUI `/workflow` 面板曾支持数字键选择 reconciliation action，并用 `f` 提交 detached follow-up run；该面板和快捷键现已删除。当前 follow-up spec 由 Workflow `action: "reconcile"` 或 `ohs workflow reconcile` 生成，后续执行由调用方显式提交。
+- V14.1（历史、已被收口）：独立 TUI `/workflow` 面板曾支持数字键选择 reconciliation action，并用 `f` 提交 detached follow-up run；该面板和快捷键现已删除。当前 follow-up spec 由 Workflow `action: "reconcile"` 或 `vk workflow reconcile` 生成，后续执行由调用方显式提交。
 - V14.2：已完成。模型侧 Workflow 生命周期控制硬切到 Jobs：detached run 返回 `jobId`，普通状态/列表/取消使用 `JobRead/JobList/JobCancel`；Workflow 工具只保留 run/resume/validate/template/reconcile 以及明确的 timeline/history 领域查询。CLI 继续提供领域管理命令；TUI `/workflow(s)` 现在只是统一 Jobs Panel 的别名，不再恢复独立管理面。
 
 下一步建议：

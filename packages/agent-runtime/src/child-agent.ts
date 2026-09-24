@@ -16,14 +16,14 @@ import type {
   AgentRunScope,
   RunCapabilityView,
   Settings,
-} from "@openharness/core";
-import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@openharness/core";
+} from "@vykor/core";
+import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@vykor/core";
 
-import type { OpenHarnessAgent, OpenHarnessAgentOptions } from "./agent.js";
+import type { VykorAgent, VykorAgentOptions } from "./agent.js";
 import type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
-  OpenHarnessAgentConfiguration,
+  VykorAgentConfiguration,
 } from "./agent-options.js";
 import {
   createInProcessChildEnvironmentProvider,
@@ -43,10 +43,10 @@ interface ChildRecord {
   parentScope: AgentRunScope;
   capabilityView?: RunCapabilityView;
   lease: AgentChildEnvironmentLease;
-  createAgent(): Promise<OpenHarnessAgent>;
-  agent?: OpenHarnessAgent;
-  creating?: Promise<OpenHarnessAgent>;
-  suspendedHistory?: ReturnType<OpenHarnessAgent["getHistory"]>;
+  createAgent(): Promise<VykorAgent>;
+  agent?: VykorAgent;
+  creating?: Promise<VykorAgent>;
+  suspendedHistory?: ReturnType<VykorAgent["getHistory"]>;
   idleTimer?: ReturnType<typeof setTimeout>;
   suspending?: Promise<void>;
   abortController?: AbortController;
@@ -78,8 +78,8 @@ interface AgentChildBudgetReservation {
 
 export interface AgentChildManagerOptions {
   settings: Settings;
-  configuration: OpenHarnessAgentConfiguration;
-  configurationForChild?: () => OpenHarnessAgentConfiguration;
+  configuration: VykorAgentConfiguration;
+  configurationForChild?: () => VykorAgentConfiguration;
   capabilityOverrides?: AgentCapabilityOverrides;
   effects?: AgentEffectOverrides;
   cwd: string;
@@ -89,9 +89,9 @@ export interface AgentChildManagerOptions {
   environment?: AgentChildEnvironmentProvider;
   onWarning?(event: Record<string, unknown>): void;
   createAgent(
-    options: OpenHarnessAgentOptions,
+    options: VykorAgentOptions,
     identity: { childId: string; parentSessionId: string; parentRunId: string },
-  ): Promise<OpenHarnessAgent>;
+  ): Promise<VykorAgent>;
 }
 
 /** Shared live-handle index for the complete descendant tree of one root agent. */
@@ -530,7 +530,7 @@ export class AgentChildManager implements AgentChildDirectory {
     }
   }
 
-  private async ensureAgent(record: ChildRecord, announceResume = true): Promise<OpenHarnessAgent> {
+  private async ensureAgent(record: ChildRecord, announceResume = true): Promise<VykorAgent> {
     this.clearIdleTimer(record);
     await record.suspending;
     if (isChildUnavailable(record)) throw new Error(`Child agent is closing or closed: ${record.id}`);

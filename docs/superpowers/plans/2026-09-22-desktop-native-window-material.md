@@ -21,11 +21,11 @@
 | 项 | 事实 | 证据位置 |
 | --- | --- | --- |
 | 桌面壳 | Electron `39.8.10`，electron-vite `5.0.0`，electron-builder `26.0.12` | `apps/desktop/package.json`；`node -e "console.log(require('./apps/desktop/node_modules/electron/package.json').version)"` |
-| 应用包 | `@openharness/desktop`，`main: ./out/main/index.js` | `apps/desktop/package.json` |
-| 开发 | `pnpm --filter @openharness/desktop dev`（= `electron-vite dev`） | 同上 scripts |
-| 构建 | `pnpm --filter @openharness/desktop build`（先 `verify-workspace-boundaries.mjs` + `typecheck`，再 `electron-vite build`） | 同上 |
-| 单测 | `pnpm --filter @openharness/desktop exec vitest run`；配置 `apps/desktop/vitest.config.ts`，`include: src/**/*.test.{ts,tsx}`，alias `@renderer` / `@main` / `@shared` | 同上 |
-| 类型检查 | `pnpm --filter @openharness/desktop typecheck`（`typecheck:node` + `typecheck:web`） | 同上 |
+| 应用包 | `@vykor/desktop`，`main: ./out/main/index.js` | `apps/desktop/package.json` |
+| 开发 | `pnpm --filter @vykor/desktop dev`（= `electron-vite dev`） | 同上 scripts |
+| 构建 | `pnpm --filter @vykor/desktop build`（先 `verify-workspace-boundaries.mjs` + `typecheck`，再 `electron-vite build`） | 同上 |
+| 单测 | `pnpm --filter @vykor/desktop exec vitest run`；配置 `apps/desktop/vitest.config.ts`，`include: src/**/*.test.{ts,tsx}`，alias `@renderer` / `@main` / `@shared` | 同上 |
+| 类型检查 | `pnpm --filter @vykor/desktop typecheck`（`typecheck:node` + `typecheck:web`） | 同上 |
 | 本机环境 | Windows `10.0.26200`（Win11 24H2+），`HKCU\...\Themes\Personalize\EnableTransparency = 1` | `Get-ItemProperty`、`node -e "os.release()"` |
 
 ### 0.2 主窗口创建现状
@@ -38,7 +38,7 @@ options: {
   height: 760,
   minWidth: 960,
   minHeight: 640,
-  title: "OpenHarness",
+  title: "Vykor",
   autoHideMenuBar: true,
   ...mainWindowChromeOptions(process.platform),   // frame / titleBarStyle / trafficLightPosition
   backgroundColor: mainWindowBackgroundColor(nativeTheme.shouldUseDarkColors), // 纯色
@@ -78,13 +78,13 @@ options: {
 
 | 项 | 事实 | 证据位置 |
 | --- | --- | --- |
-| 偏好存储 | renderer `localStorage`，键 `openharness-desktop-appearance-v1`，`version: 1` | `components/appearance/appearance-preferences.ts:1,12-32` |
+| 偏好存储 | renderer `localStorage`，键 `vykor-desktop-appearance-v1`，`version: 1` | `components/appearance/appearance-preferences.ts:1,12-32` |
 | 已有字段 | `theme`(system/light/dark)、`accent`、`uiFont`、`codeFont`、`uiFontSize`、`codeFontSize`、`reducedMotion` | 同上 |
 | 写入点 | `AppearanceProvider.applyAppearanceToRoot()` → `root.classList.add(resolvedTheme)` 等 | `appearance-provider.tsx:93-111,164-171` |
 | 启动期抢先应用 | `startup-theme.ts` → `applyStartupTheme()`（React 之前写 `html.light/dark`） | `startup-theme.ts`、`apply-startup-theme.ts:6-18` |
 | 主进程主题耦合 | 仅用 `nativeTheme.shouldUseDarkColors` 取窗口底色；**主进程不写 `nativeTheme.themeSource`** | `window.ts:31` |
 | 外观页结构 | 4 个 `AppearanceSection`：主题 / 颜色 / 字体 / 动效；交互用 `ToggleGroup` + `Field` + `FieldDescription` | `appearance-settings.tsx:85-232` |
-| 外观页文案 | `settings-content.tsx:52-53`「调整 OpenHarness 在当前设备上的显示方式…」 | `settings-content.tsx` |
+| 外观页文案 | `settings-content.tsx:52-53`「调整 Vykor 在当前设备上的显示方式…」 | `settings-content.tsx` |
 | 恢复默认弹窗 | 文案 `「恢复默认外观？」`、`「主题、颜色、字体、字号和动效」`，两处都被测试断言 | `appearance-settings.test.ts:140-141` |
 
 主进程侧另有一套 `desktop-preferences.json`（`notificationMode` / `defaultOpenerId` / `defaultTerminalShellId` / `installIdentity` / `daemonOnboardingState`，见 `desktop-preferences-storage.ts:13-19`），经 `settingsUpdate*` 逐字段 IPC 暴露。本任务**不使用**这套存储（它没有「窗口材质」字段，硬塞进去需要改既有契约与测试）；材质偏好新建独立的 `desktop-window-material.json`，理由见修订后的 D3。renderer 的 `AppearancePreferences` **第 2 版不再新增字段**。
@@ -156,7 +156,7 @@ CSS 选择器用 `html[data-window-shell="..."]`。第 1 版 D7 提到的 `data-
 
 ### 0.7 工作区保护
 
-主工作区 `E:/code/openharness-ts`（`main`）**长期存在与本任务无关的未提交改动**（第 1 版记录时的快照是：`MEMORIES.md`、`uploadClipboardImage → uploadMemoryAttachment` 改名、composer / conversation-page / attachment-actions 等一批改动）。执行时以当时的 `git status` 为准，不要相信本段列出的文件清单是完整的。
+主工作区 `E:/code/vykor`（`main`）**长期存在与本任务无关的未提交改动**（第 1 版记录时的快照是：`MEMORIES.md`、`uploadClipboardImage → uploadMemoryAttachment` 改名、composer / conversation-page / attachment-actions 等一批改动）。执行时以当时的 `git status` 为准，不要相信本段列出的文件清单是完整的。
 
 - `MEMORIES.md` 是定时审阅任务写的，**绝对不要提交**。
 - 本计划要改 `desktop-api.ts` / `desktop-api-contract.ts` / `ipc-channels.ts`，但只动 `window` 命名空间（材质 IPC），不要碰 `attachments` / `sessions` 等其它命名空间。
@@ -269,26 +269,26 @@ describe("windowMaterialArguments", () => {
     expect(parseWindowMaterialArguments(["--no-sandbox"])).toBeNull()
     expect(
       parseWindowMaterialArguments([
-        "--openharness-window-material=glass",
-        "--openharness-window-material-active=holographic",
-        "--openharness-window-material-reason=none",
-        "--openharness-window-material-shell=transparent",
+        "--vykor-window-material=glass",
+        "--vykor-window-material-active=holographic",
+        "--vykor-window-material-reason=none",
+        "--vykor-window-material-shell=transparent",
       ])
     ).toBeNull()
     expect(
       parseWindowMaterialArguments([
-        "--openharness-window-material=mirror",
-        "--openharness-window-material-active=glass",
-        "--openharness-window-material-reason=none",
-        "--openharness-window-material-shell=translucent",
+        "--vykor-window-material=mirror",
+        "--vykor-window-material-active=glass",
+        "--vykor-window-material-reason=none",
+        "--vykor-window-material-shell=translucent",
       ])
     ).toBeNull()
     expect(
       parseWindowMaterialArguments([
-        "--openharness-window-material=glass",
-        "--openharness-window-material-active=glass",
-        "--openharness-window-material-reason=none",
-        "--openharness-window-material-shell=holographic",
+        "--vykor-window-material=glass",
+        "--vykor-window-material-active=glass",
+        "--vykor-window-material-reason=none",
+        "--vykor-window-material-shell=holographic",
       ])
     ).toBeNull()
   })
@@ -299,7 +299,7 @@ describe("windowMaterialArguments", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/shared/window-material-types.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/shared/window-material-types.test.ts`
 预期：FAIL，报错 `Failed to resolve import "./window-material-types"`。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -334,10 +334,10 @@ export interface DesktopWindowMaterialState {
 
 export const DEFAULT_WINDOW_MATERIAL_PREFERENCE: DesktopWindowMaterialPreference = "glass"
 
-export const WINDOW_MATERIAL_ARGUMENT_PREFIX = "--openharness-window-material="
-export const WINDOW_MATERIAL_ACTIVE_ARGUMENT_PREFIX = "--openharness-window-material-active="
-export const WINDOW_MATERIAL_REASON_ARGUMENT_PREFIX = "--openharness-window-material-reason="
-export const WINDOW_MATERIAL_SHELL_ARGUMENT_PREFIX = "--openharness-window-material-shell="
+export const WINDOW_MATERIAL_ARGUMENT_PREFIX = "--vykor-window-material="
+export const WINDOW_MATERIAL_ACTIVE_ARGUMENT_PREFIX = "--vykor-window-material-active="
+export const WINDOW_MATERIAL_REASON_ARGUMENT_PREFIX = "--vykor-window-material-reason="
+export const WINDOW_MATERIAL_SHELL_ARGUMENT_PREFIX = "--vykor-window-material-shell="
 export const NO_WINDOW_MATERIAL_REASON = "none"
 
 const PREFERENCES = new Set<DesktopWindowMaterialPreference>(["glass", "opaque"])
@@ -412,7 +412,7 @@ function readArgument(argv: readonly string[], prefix: string): string | null {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/shared/window-material-types.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/shared/window-material-types.test.ts`
 预期：PASS，4 个用例全绿。
 
 - [ ] **步骤 5：Commit**
@@ -608,7 +608,7 @@ describe("mainWindowMaterialOptions", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/main-window/window-material.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/main-window/window-material.test.ts`
 预期：FAIL，报错 `Failed to resolve import "./window-material"`。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -766,7 +766,7 @@ export function applyMainWindowMaterial(
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/main-window/window-material.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/main-window/window-material.test.ts`
 预期：PASS，12 个用例全绿（1 个 `supportsNativeWindowMaterial` + 6 个 `resolveWindowMaterialState` + 5 个 `mainWindowMaterialOptions`）。
 
 - [ ] **步骤 5：Commit**
@@ -866,7 +866,7 @@ describe("attachWindowsMaterialRepaint", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/main-window/window-material-repaint.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/main-window/window-material-repaint.test.ts`
 预期：FAIL，报错 `Failed to resolve import "./window-material-repaint"`。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -919,7 +919,7 @@ export function attachWindowsMaterialRepaint(win: BrowserWindow): void {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/main-window/window-material-repaint.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/main-window/window-material-repaint.test.ts`
 预期：PASS，4 个用例全绿。
 
 - [ ] **步骤 5：Commit**
@@ -1002,7 +1002,7 @@ describe("resolveWindowMaterialPreferencePath", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/main-window/window-material-preference.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/main-window/window-material-preference.test.ts`
 预期：FAIL，报错 `Failed to resolve import "./window-material-preference"`。
 
 - [ ] **步骤 3：编写实现代码**
@@ -1133,7 +1133,7 @@ import {
       height: 760,
       minWidth: 960,
       minHeight: 640,
-      title: "OpenHarness",
+      title: "Vykor",
       autoHideMenuBar: true,
       ...mainWindowChromeOptions(platform),
       ...mainWindowMaterialOptions({
@@ -1205,7 +1205,7 @@ export function setMainWindowMaterial(
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/main-window/window-material-preference.test.ts src/main/features/main-window/window-material.test.ts src/main/features/main-window/window.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/main-window/window-material-preference.test.ts src/main/features/main-window/window-material.test.ts src/main/features/main-window/window.test.ts`
 预期：PASS（`window.test.ts` 的既有 `mainWindowChromeOptions` 用例不动，仍然绿）。
 
 - [ ] **步骤 5：Commit**
@@ -1250,7 +1250,7 @@ it("exposes the argv material snapshot and routes the material command", async (
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/preload/desktop-api.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/preload/desktop-api.test.ts`
 预期：FAIL。`desktopAPI.window.material` 此刻是 `undefined`，第一条断言报 `expected undefined to be null`。
 
 - [ ] **步骤 3：编写实现代码**
@@ -1347,7 +1347,7 @@ import { setMainWindowMaterial, showMainWindow } from "../main-window/window"
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/preload/desktop-api.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/preload/desktop-api.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -1462,7 +1462,7 @@ describe("writeWindowMaterialAttributes", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/apply-startup-theme.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/apply-startup-theme.test.ts`
 预期：FAIL，`applyWindowMaterialToRoot is not a function`。
 
 - [ ] **步骤 3：编写实现代码（apply-startup-theme）**
@@ -1692,7 +1692,7 @@ export function windowMaterialDescription(state: DesktopWindowMaterialState | nu
 
 - [ ] **步骤 7：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/apply-startup-theme.test.ts src/renderer/src/components/appearance/appearance-provider.test.ts src/renderer/src/components/appearance/window-material-copy.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/apply-startup-theme.test.ts src/renderer/src/components/appearance/appearance-provider.test.ts src/renderer/src/components/appearance/window-material-copy.test.ts`
 预期：全 PASS。（`appearance-preferences.test.ts` 第 2 版不修改，也应保持全绿。）
 
 - [ ] **步骤 8：Commit**
@@ -1743,7 +1743,7 @@ expect(document.body.textContent).toContain("主题、颜色、字体、字号�
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts`
 预期：FAIL（找不到 `透明磨玻璃窗口背景` 控件）。
 
 - [ ] **步骤 3：编写实现代码**
@@ -1802,7 +1802,7 @@ const WINDOW_MATERIAL_OPTIONS: readonly { value: DesktopWindowMaterialPreference
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/appearance/appearance-settings.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -1886,9 +1886,9 @@ git commit -m "feat(desktop): 外观页新增窗口背景（透明/不透明）�
 并把 `<body>` 里的徽标文案改成同一个内容（保留 `data-startup-dot`，`aria-label` 保持不变）：
 
 ```html
-    <div id="startup-loading" role="status" aria-label="正在启动 OpenHarness">
+    <div id="startup-loading" role="status" aria-label="正在启动 Vykor">
       <div class="startup-loading-content" data-startup-badge="true" aria-hidden="true">
-        <span class="startup-loading-wordmark">OpenHarness-ts</span>
+        <span class="startup-loading-wordmark">Vykor</span>
         <span class="startup-loading-dots">
           <span class="startup-loading-dot" data-startup-dot="true"></span>
           <span class="startup-loading-dot" data-startup-dot="true"></span>
@@ -2175,7 +2175,7 @@ export function dismissStartupLoading(): void {
 
 - [ ] **步骤 7：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/startup-loading.test.ts src/renderer/src/startup-overlay.test.ts src/renderer/src/dismiss-startup-loading.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/startup-loading.test.ts src/renderer/src/startup-overlay.test.ts src/renderer/src/dismiss-startup-loading.test.ts`
 预期：全 PASS。
 
 - [ ] **步骤 8：Commit**
@@ -2193,23 +2193,23 @@ git commit -m "feat(desktop): 启动遮罩去掉不透明底色并接入卸载�
 
 - [ ] **步骤 1：跑 desktop 全量单测**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run`
+运行：`pnpm --filter @vykor/desktop exec vitest run`
 预期：全 PASS（含既有用例）。
 
 - [ ] **步骤 2：类型检查**
 
-运行：`pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop typecheck`
 预期：`typecheck:node` 与 `typecheck:web` 均通过。第 2 版特别注意两点：`tsconfig.web.json` 的 `noUnusedLocals` 是开着的（renderer 里不要留未使用的 import）；node 侧是 `strict`（`window-material.ts` 的类型导入必须齐全，第 1 版就漏了 `DesktopWindowMaterialUnavailableReason`）。
 
 - [ ] **步骤 3：构建**
 
-运行：`pnpm --filter @openharness/desktop build`
+运行：`pnpm --filter @vykor/desktop build`
 预期：`verify-workspace-boundaries.mjs` + `typecheck` + `electron-vite build` 全通过。
 
 - [ ] **步骤 4：Windows 实机冒烟（先于完整验收，结果决定 Windows 分支要不要关掉）**
 
-1. 启动 `pnpm --filter @openharness/desktop dev`，把窗口拖到彩色壁纸上，确认标题栏 / 侧边栏区域能看到被模糊的壁纸（Acrylic 生效），并且没有出现「整窗全黑 / 全白」。
-2. 若材质不可见：先在 DevTools 里确认 `document.documentElement.dataset.windowShell === "transparent"`（renderer 侧正确），然后按 D2 处置——把 `supportsNativeWindowMaterial()` 里的 `win32` 移除，让 Windows 玻璃降级为 `unsupported-platform`；重跑 `pnpm --filter @openharness/desktop exec vitest run src/main/features/main-window`，把「关闭 Windows 玻璃」写进交付记录。**不要**改用 `transparent: true`（Electron 39 的 resizable 回归）。
+1. 启动 `pnpm --filter @vykor/desktop dev`，把窗口拖到彩色壁纸上，确认标题栏 / 侧边栏区域能看到被模糊的壁纸（Acrylic 生效），并且没有出现「整窗全黑 / 全白」。
+2. 若材质不可见：先在 DevTools 里确认 `document.documentElement.dataset.windowShell === "transparent"`（renderer 侧正确），然后按 D2 处置——把 `supportsNativeWindowMaterial()` 里的 `win32` 移除，让 Windows 玻璃降级为 `unsupported-platform`；重跑 `pnpm --filter @vykor/desktop exec vitest run src/main/features/main-window`，把「关闭 Windows 玻璃」写进交付记录。**不要**改用 `transparent: true`（Electron 39 的 resizable 回归）。
 3. 无论材质是否可见，都要回归窗口基础行为：拖拽边缘缩放、双击标题栏最大化/还原、Win+方向键 Snap、PowerToys FancyZones（若安装）。这些是 Windows 玻璃的连带风险面（D2）。
 
 - [ ] **步骤 5：手工验收（Windows 实机，逐条记录证据）**

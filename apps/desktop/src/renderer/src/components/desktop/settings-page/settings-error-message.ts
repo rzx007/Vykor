@@ -9,5 +9,5 @@ export function errorMessage(error: unknown): string {
   if (/credentials were removed .* failed to disconnect/i.test(raw)) {
     return "凭据已删除，但 MCP 断开失败。可稍后重试或查看 MCP 状态。"
   }
-  return raw.replace(/^Error invoking remote method '[^']+': (?:Error|OpenHarnessApiError): /, "")
+  return raw.replace(/^Error invoking remote method '[^']+': (?:Error|VykorApiError): /, "")
 }

@@ -2,7 +2,7 @@ import {
   type AttachmentIntegrityService,
   DEFAULT_RETENTION_POLICY,
   type RetentionPolicy,
-} from "@openharness/services";
+} from "@vykor/services";
 
 export interface RetentionStoreOperations {
   applyRetention(policy: RetentionPolicy, timestamp: number): unknown;

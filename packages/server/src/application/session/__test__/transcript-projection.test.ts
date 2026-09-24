@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SessionInputRecord } from "@openharness/protocol";
+import type { SessionInputRecord } from "@vykor/protocol";
 
 import { SessionTranscriptProjection } from "../transcript-projection.js";
 

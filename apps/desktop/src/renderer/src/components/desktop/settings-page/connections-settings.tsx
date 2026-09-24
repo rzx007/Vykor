@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { ChannelDenialNotice } from "@openharness/client"
+import type { ChannelDenialNotice } from "@vykor/client"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
 import { Card, CardContent } from "@renderer/components/ui/card"

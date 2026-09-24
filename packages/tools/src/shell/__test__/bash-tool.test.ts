@@ -1,4 +1,4 @@
-import { resolveSandboxPolicy, type HostShellLauncher } from "@openharness/sandbox";
+import { resolveSandboxPolicy, type HostShellLauncher } from "@vykor/sandbox";
 import { describe, expect, it, vi } from "vitest";
 import { createShellTool as createBashTool } from "../shell.js";
 import type {

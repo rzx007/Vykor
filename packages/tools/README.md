@@ -1,4 +1,4 @@
-# @openharness/tools
+# @vykor/tools
 
 Tool registry with built-in tools for file operations, shell execution, web requests, and more.
 
@@ -32,7 +32,7 @@ Tool registry with built-in tools for file operations, shell execution, web requ
 ## 使用
 
 ```ts
-import { createDefaultToolRegistry } from "@openharness/tools";
+import { createDefaultToolRegistry } from "@vykor/tools";
 
 const registry = createDefaultToolRegistry();
 const tools = registry.getAll();
@@ -79,11 +79,11 @@ ToolCall
 - `context.abortSignal` 总是由 QueryEngine 注入。长耗时工具应监听它，或把它传给支持
   `AbortSignal` 的 API（如 `fetch`），以便统一超时时真正取消底层工作。
 - 默认统一超时是 `300000ms`，可通过 `QueryEngineOptions.toolTimeoutMs` 或
-  `OPENHARNESS_TOOL_TIMEOUT_MS` 调整。
+  `VYKOR_TOOL_TIMEOUT_MS` 调整。
 - 工具仍应保留领域内的错误处理和输出截断；统一 Output Budget 只负责限制结果回灌给模型的文本量。
 
 ## 测试
 
 ```bash
-pnpm --filter @openharness/tools test
+pnpm --filter @vykor/tools test
 ```

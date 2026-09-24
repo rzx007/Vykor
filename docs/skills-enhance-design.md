@@ -53,7 +53,7 @@ daemon 先用当前 cwd catalog 校验 `name + path`，再要求模型调用 `Sk
 
 ## 来源与覆盖
 
-当前 registry 统一接收 bundled、标准全局目录、OpenHarness 用户目录、项目目录和 Native Plugin 基线。项目目录从 git root 向 cwd 逐层发现，越接近 cwd 的定义优先。路径解析只接受当前 registry 中仍然有效的赢家。
+当前 registry 统一接收 bundled、标准全局目录、Vykor 用户目录、项目目录和 Native Plugin 基线。项目目录从 git root 向 cwd 逐层发现，越接近 cwd 的定义优先。路径解析只接受当前 registry 中仍然有效的赢家。
 
 当前 bundled Skill 是内嵌定义，`path` 为空。虽然定义保留 `userInvocable` 元数据，但结构化用户调用必须有可校验 path：Desktop 会从 picker 目录过滤 bundled 条目，TUI 若提交空 path 会在执行前校验失败。因此 bundled 当前可靠入口是模型按 name 调用，不应宣传为用户可直接选择。
 

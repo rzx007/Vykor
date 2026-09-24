@@ -1,6 +1,6 @@
-# @openharness/api
+# @vykor/api
 
-LLM provider registry and streaming clients for OpenHarness.
+LLM provider registry and streaming clients for Vykor.
 
 ## Features
 
@@ -60,7 +60,7 @@ import {
   CodexSubscriptionClient,
   detectProvider,
   findByName,
-} from "@openharness/api";
+} from "@vykor/api";
 
 const provider = detectProvider("deepseek-chat", undefined, undefined);
 
@@ -79,5 +79,5 @@ const codex = new CodexSubscriptionClient({
 ## Tests
 
 ```bash
-pnpm --filter @openharness/api test
+pnpm --filter @vykor/api test
 ```

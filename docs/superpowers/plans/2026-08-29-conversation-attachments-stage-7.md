@@ -41,8 +41,8 @@
 运行：
 
 ```powershell
-pnpm --filter @openharness/core test -- compact-service-advanced.test.ts
-pnpm --filter @openharness/server test -- compact-attachment-catalog.test.ts session-maintenance-service.test.ts
+pnpm --filter @vykor/core test -- compact-service-advanced.test.ts
+pnpm --filter @vykor/server test -- compact-attachment-catalog.test.ts session-maintenance-service.test.ts
 ```
 
 预期：新增断言失败，证明当前压缩没有附件目录。

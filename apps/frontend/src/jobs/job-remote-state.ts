@@ -1,4 +1,4 @@
-import type { JobReadResult, JobSnapshot } from "@openharness/client";
+import type { JobReadResult, JobSnapshot } from "@vykor/client";
 
 export type JobRemoteState =
   | { status: "idle"; jobs: JobSnapshot[] }

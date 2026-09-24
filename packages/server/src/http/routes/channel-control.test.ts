@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { ChannelRuntimeStatus } from "@openharness/protocol";
+import type { ChannelRuntimeStatus } from "@vykor/protocol";
 
 import { ChannelRuntimeError, type ChannelRuntimeService } from "../../daemon/channel-runtime-service.js";
 import {

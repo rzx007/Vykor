@@ -1,4 +1,4 @@
-import type { IHookExecutor } from "@openharness/core";
+import type { IHookExecutor } from "@vykor/core";
 import type { LoadedNativePlugin, NativePluginComponentKind } from "../types.js";
 import type { PluginDiagnostic } from "../diagnostics.js";
 

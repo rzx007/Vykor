@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpOAuthCredentialRecord, McpRuntimeSyncResult, Settings } from "@openharness/core";
-import { McpOAuthError, type McpOAuthCredentialStore, type McpOAuthLoginResult } from "@openharness/mcp";
+import type { McpOAuthCredentialRecord, McpRuntimeSyncResult, Settings } from "@vykor/core";
+import { McpOAuthError, type McpOAuthCredentialStore, type McpOAuthLoginResult } from "@vykor/mcp";
 import { McpOAuthApplicationService, type McpOAuthApplicationServiceDeps } from "./mcp-oauth-application-service.js";
 
 function credential(scopes: string[] = ["read"]): McpOAuthCredentialRecord {

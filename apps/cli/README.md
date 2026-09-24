@@ -1,8 +1,8 @@
-# @rzx/ohs
+# Vykor CLI
 
-OpenHarness-ts 终端 CLI：在终端里跑 AI Agent。默认进入交互式 TUI（需 [Bun](https://bun.sh)），也可一次性打印结果后退出。会话由本机 daemon 持久化，可与 Desktop 等客户端共用同一后端。
+Vykor 终端 CLI：在终端里跑 AI Agent。默认进入交互式 TUI（需 [Bun](https://bun.sh)），也可一次性打印结果后退出。会话由本机 daemon 持久化，可与 Desktop 等客户端共用同一后端。
 
-命令行入口：`ohs` 与 `openharness`（等价）。
+命令行入口：`vk` 与 `vykor`（等价）。
 
 ## 要求
 
@@ -21,41 +21,41 @@ pnpm add -g @rzx/ohs
 验证：
 
 ```bash
-ohs --version
-ohs doctor
+vk --version
+vk doctor
 ```
 
 ## 快速开始
 
 ```bash
 # 首次配置（Provider / API Key / 模型）
-ohs setup
+vk setup
 
 # 或手动登录
-ohs auth login <provider> <api-key>
-ohs provider list
-ohs provider use <name> -m <model>
+vk auth login <provider> <api-key>
+vk provider list
+vk provider use <name> -m <model>
 
 # 交互式 TUI（默认；会 attach 或启动本机 daemon）
-ohs
+vk
 
 # 单次提问后退出
-ohs "explain this codebase"
-ohs -p "explain this codebase"
+vk "explain this codebase"
+vk -p "explain this codebase"
 
 # 只检查配置，不调模型
-ohs --dry-run
+vk --dry-run
 ```
 
-用户配置与数据默认在 `~/.openharness-ts/`（例如 `settings.json`、daemon registry、会话库）。
+用户配置与数据默认在 `~/.vykor/`（例如 `settings.json`、daemon registry、会话库）。
 
 ## 常用用法
 
 ```bash
-ohs -m <model> "你的问题"
-ohs --provider <name> --permission-mode full_auto "重构这段代码"
-ohs --cwd /path/to/project
-ohs --tui "带初始提示打开 TUI"
+vk -m <model> "你的问题"
+vk --provider <name> --permission-mode full_auto "重构这段代码"
+vk --cwd /path/to/project
+vk --tui "带初始提示打开 TUI"
 ```
 
 ### 主要选项
@@ -76,37 +76,37 @@ ohs --tui "带初始提示打开 TUI"
 | `--daemon-url` / `--daemon-token` | 连接到指定 daemon，而不是本机自动启动             |
 
 
-完整参数见 `ohs --help`。
+完整参数见 `vk --help`。
 
 ## 常用子命令
 
 ```bash
-ohs setup
-ohs doctor
-ohs auth login <provider> <api-key>
-ohs auth status
-ohs provider list|use|add|edit|remove
-ohs mcp list|add|remove
+vk setup
+vk doctor
+vk auth login <provider> <api-key>
+vk auth status
+vk provider list|use|add|edit|remove
+vk mcp list|add|remove
 # 公开 HTTP MCP：只提供 URL
-ohs mcp add beui --url https://mcp.beui.dev/mcp
+vk mcp add beui --url https://mcp.beui.dev/mcp
 # OAuth HTTP MCP：显式声明 scope，再授权
-ohs mcp add linear --url https://mcp.linear.app/mcp --scope read
-ohs mcp login linear --scopes read
-ohs plugin list|install|uninstall|enable|disable
-ohs sandbox enable|disable|status|check
-ohs daemon start|status|stop|install|uninstall
-ohs config show
-ohs config set <key> <value>
-ohs workflow list|status|validate|template|reconcile|cancel
-ohs channels add|allow|status|serve
+vk mcp add linear --url https://mcp.linear.app/mcp --scope read
+vk mcp login linear --scopes read
+vk plugin list|install|uninstall|enable|disable
+vk sandbox enable|disable|status|check
+vk daemon start|status|stop|install|uninstall
+vk config show
+vk config set <key> <value>
+vk workflow list|status|validate|template|reconcile|cancel
+vk channels add|allow|status|serve
 ```
 
 开启登录后自动拉起 daemon（可选）：
 
 ```bash
-ohs daemon install
+vk daemon install
 # 或
-ohs config set daemon.autoStart true
+vk config set daemon.autoStart true
 ```
 
 ## 说明

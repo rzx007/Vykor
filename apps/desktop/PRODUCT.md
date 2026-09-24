@@ -6,11 +6,11 @@ product
 
 ## Users
 
-OpenHarness Desktop is for developers who work with an AI coding agent across projects and long-running conversations. They need to move quickly between workspaces, keep the current task readable, and open supporting tools without losing the conversation context.
+Vykor Desktop is for developers who work with an AI coding agent across projects and long-running conversations. They need to move quickly between workspaces, keep the current task readable, and open supporting tools without losing the conversation context.
 
 ## Product Purpose
 
-Provide a focused desktop workspace for running OpenHarness sessions. Success means the user can navigate projects, follow an agent's work, compose the next instruction, and reveal supporting tools from one predictable application shell.
+Provide a focused desktop workspace for running Vykor sessions. Success means the user can navigate projects, follow an agent's work, compose the next instruction, and reveal supporting tools from one predictable application shell.
 
 ## Brand Personality
 

@@ -4,9 +4,9 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 交付 Desktop 的本机/Docker 运行环境选择，使 Docker 模式下所有仍可调用的 Agent 本地工作负载都在容器中执行，并统一使用 `/workspace` 与 `/opt/openharness/skills`。
+**目标：** 交付 Desktop 的本机/Docker 运行环境选择，使 Docker 模式下所有仍可调用的 Agent 本地工作负载都在容器中执行，并统一使用 `/workspace` 与 `/opt/vykor/skills`。
 
-**架构：** 新增纯契约包 `@openharness/environment`，由 Sandbox 提供本机和 Docker 的进程、文件、路径与环境事实实现；Agent Runtime 只接收环境句柄。第一期设置变化重启后生效，单个工作区只保留最新配置容器，Docker PTY、共享终端 lease 和运行中热切换留到后续计划。
+**架构：** 新增纯契约包 `@vykor/environment`，由 Sandbox 提供本机和 Docker 的进程、文件、路径与环境事实实现；Agent Runtime 只接收环境句柄。第一期设置变化重启后生效，单个工作区只保留最新配置容器，Docker PTY、共享终端 lease 和运行中热切换留到后续计划。
 
 **技术栈：** TypeScript、Node.js、Electron、React、Docker CLI、Vitest、pnpm workspace、Turborepo
 
@@ -107,11 +107,11 @@ describe("createWorkspaceBinding", () => {
   it("keeps host and execution roots separate for Docker", () => {
     expect(createWorkspaceBinding({
       kind: "docker",
-      hostRoot: "D:\\code\\ohs",
+      hostRoot: "D:\\code\\vk",
       executionRoot: "/workspace",
     })).toEqual({
       kind: "docker",
-      hostRoot: "D:\\code\\ohs",
+      hostRoot: "D:\\code\\vk",
       executionRoot: "/workspace",
     });
   });
@@ -119,8 +119,8 @@ describe("createWorkspaceBinding", () => {
   it("rejects a non-POSIX Docker execution root", () => {
     expect(() => createWorkspaceBinding({
       kind: "docker",
-      hostRoot: "D:\\code\\ohs",
-      executionRoot: "D:\\code\\ohs",
+      hostRoot: "D:\\code\\vk",
+      executionRoot: "D:\\code\\vk",
     })).toThrow("Docker execution root must be an absolute POSIX path");
   });
 });
@@ -128,7 +128,7 @@ describe("createWorkspaceBinding", () => {
 
 - [ ] **步骤 2：运行测试并确认缺少实现**
 
-运行：`pnpm --filter @openharness/environment test`
+运行：`pnpm --filter @vykor/environment test`
 
 预期：FAIL，包或 `createWorkspaceBinding` 尚不存在。
 
@@ -173,7 +173,7 @@ export interface EffectiveEnvironmentInfo {
 
 - [ ] **步骤 4：运行包测试和类型检查**
 
-运行：`pnpm --filter @openharness/environment test && pnpm --filter @openharness/environment check-types`
+运行：`pnpm --filter @vykor/environment test && pnpm --filter @vykor/environment check-types`
 
 预期：全部通过。
 
@@ -203,7 +203,7 @@ it("maps the Desktop Docker choice to fail-closed Docker", () => {
   expect(resolveExecutionEnvironmentConfig({
     surface: "desktop_managed",
     settings: settings({ sandbox: { enabled: true, backend: "docker" } }),
-    cwd: "D:\\code\\ohs",
+    cwd: "D:\\code\\vk",
   })).toMatchObject({ kind: "docker", failClosed: true });
 });
 
@@ -211,7 +211,7 @@ it("rejects SRT and extra mounts on the managed Desktop surface", () => {
   expect(() => resolveExecutionEnvironmentConfig({
     surface: "desktop_managed",
     settings: settings({ sandbox: { enabled: true, backend: "srt" } }),
-    cwd: "D:\\code\\ohs",
+    cwd: "D:\\code\\vk",
   })).toThrow("Desktop does not support the configured SRT environment");
 
   expect(() => resolveExecutionEnvironmentConfig({
@@ -219,7 +219,7 @@ it("rejects SRT and extra mounts on the managed Desktop surface", () => {
     settings: settings({
       sandbox: { enabled: true, backend: "docker", docker: { extraMounts: ["C:\\:/host"] } },
     }),
-    cwd: "D:\\code\\ohs",
+    cwd: "D:\\code\\vk",
   })).toThrow("Desktop managed Docker does not allow extraMounts");
 });
 
@@ -246,7 +246,7 @@ it("rejects version markers and deprecated fields", async () => {
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/sandbox test -- execution-config.test.ts`
+运行：`pnpm --filter @vykor/sandbox test -- execution-config.test.ts`
 
 预期：FAIL，解析函数不存在。
 
@@ -296,7 +296,7 @@ export interface Settings {
 
 - [ ] **步骤 5：运行配置相关测试**
 
-运行：`pnpm --filter @openharness/core test -- settings && pnpm --filter @openharness/sandbox test -- execution-config.test.ts`
+运行：`pnpm --filter @vykor/core test -- settings && pnpm --filter @vykor/sandbox test -- execution-config.test.ts`
 
 预期：全部通过，`ProjectRecord.defaultShell` 仍作为当前项目的本机 Shell。
 
@@ -324,27 +324,27 @@ git commit -m "feat(sandbox): resolve managed execution environment settings"
 it("mounts only the workspace and user skills on the Desktop surface", () => {
   const argv = buildDockerRunArgs({
     surface: "desktop_managed",
-    cwd: "D:\\code\\ohs",
-    userSkillsRoot: "C:\\Users\\me\\.openharness-ts\\skills",
+    cwd: "D:\\code\\vk",
+    userSkillsRoot: "C:\\Users\\me\\.vykor\\skills",
     config: dockerConfig(),
   });
-  expect(argv).toContain("D:\\code\\ohs:/workspace");
-  expect(argv).toContain("C:\\Users\\me\\.openharness-ts\\skills:/opt/openharness/skills");
+  expect(argv).toContain("D:\\code\\vk:/workspace");
+  expect(argv).toContain("C:\\Users\\me\\.vykor\\skills:/opt/vykor/skills");
   expect(argv.join(" ")).not.toContain("docker.sock");
 });
 
 it("uses /workspace on POSIX hosts too", () => {
-  expect(toContainerWorkspacePath("/home/me/ohs")).toBe("/workspace");
+  expect(toContainerWorkspacePath("/home/me/vk")).toBe("/workspace");
 });
 ```
 
 - [ ] **步骤 2：编写过期容器替换测试**
 
-构造同一 owner、旧 hash 的已验证 OHS 容器，断言启动流程按顺序调用 `stop/remove/run`，且没有创建第二个容器名。再构造缺少 owner label 的同名容器，断言返回 `container_owner_conflict` 且没有删除调用。
+构造同一 owner、旧 hash 的已验证 VK 容器，断言启动流程按顺序调用 `stop/remove/run`，且没有创建第二个容器名。再构造缺少 owner label 的同名容器，断言返回 `container_owner_conflict` 且没有删除调用。
 
 - [ ] **步骤 3：运行测试并确认现有行为不符**
 
-运行：`pnpm --filter @openharness/sandbox test -- index.test.ts`
+运行：`pnpm --filter @vykor/sandbox test -- index.test.ts`
 
 预期：FAIL，POSIX 仍使用宿主绝对路径，Skills 尚未挂载，旧容器只报 hash 不匹配。
 
@@ -354,7 +354,7 @@ it("uses /workspace on POSIX hosts too", () => {
 export interface ManagedMount {
   purpose: "workspace" | "user_skills";
   source: string;
-  target: "/workspace" | "/opt/openharness/skills";
+  target: "/workspace" | "/opt/vykor/skills";
   mode: "rw";
 }
 ```
@@ -363,17 +363,17 @@ export interface ManagedMount {
 
 - [ ] **步骤 5：实现单版本替换**
 
-容器名称只由 workspace owner 生成，hash 只保存到 label。只有名称、owner label 和 OHS 管理 label 全部匹配时，才能删除旧容器并按最新配置重建；任何所有权不确定都 fail-closed。
+容器名称只由 workspace owner 生成，hash 只保存到 label。只有名称、owner label 和 VK 管理 label 全部匹配时，才能删除旧容器并按最新配置重建；任何所有权不确定都 fail-closed。
 
 - [ ] **步骤 6：运行 Sandbox 单元测试**
 
-运行：`pnpm --filter @openharness/sandbox test`
+运行：`pnpm --filter @vykor/sandbox test`
 
 预期：全部通过。
 
 - [ ] **步骤 7：运行真实 Docker 定向测试**
 
-运行：`pnpm --filter @openharness/sandbox e2e:docker`
+运行：`pnpm --filter @vykor/sandbox e2e:docker`
 
 预期：Docker 可用时验证 `/workspace`、Skills rw 和单一容器；Docker 不可用时明确显示 skip 原因，不把 skip 记录为通过证据。
 
@@ -419,7 +419,7 @@ it("publishes Docker facts only after the runtime is ready", async () => {
 
 - [ ] **步骤 2：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/sandbox test -- execution-environment.test.ts`
+运行：`pnpm --filter @vykor/sandbox test -- execution-environment.test.ts`
 
 预期：FAIL，环境句柄不存在。
 
@@ -450,7 +450,7 @@ export async function createExecutionEnvironment(
 
 - [ ] **步骤 5：运行测试与类型检查**
 
-运行：`pnpm --filter @openharness/sandbox test && pnpm --filter @openharness/sandbox check-types`
+运行：`pnpm --filter @vykor/sandbox test && pnpm --filter @vykor/sandbox check-types`
 
 预期：全部通过。
 
@@ -490,7 +490,7 @@ it("resolves Docker paths in the execution namespace", async () => {
   const resolved = await resolveToolPath("/workspace/src/app.ts", dockerEnvironment());
   expect(resolved).toMatchObject({
     executionPath: "/workspace/src/app.ts",
-    hostPath: "D:\\code\\ohs\\src\\app.ts",
+    hostPath: "D:\\code\\vk\\src\\app.ts",
     mountPurpose: "workspace",
     mountMode: "rw",
   });
@@ -513,7 +513,7 @@ it("rejects traversal and symlink escape", async () => {
 
 - [ ] **步骤 3：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/tools test -- environment-path.test.ts && pnpm --filter @openharness/permissions test`
+运行：`pnpm --filter @vykor/tools test -- environment-path.test.ts && pnpm --filter @vykor/permissions test`
 
 预期：FAIL，现有代码先使用宿主 `node:path`。
 
@@ -538,7 +538,7 @@ PermissionChecker 接收 `ResolvedEnvironmentPath`。Docker 中规则以 executi
 
 - [ ] **步骤 7：运行文件和权限测试**
 
-运行：`pnpm --filter @openharness/tools test && pnpm --filter @openharness/permissions test`
+运行：`pnpm --filter @vykor/tools test && pnpm --filter @vykor/permissions test`
 
 预期：全部通过。
 
@@ -567,7 +567,7 @@ git commit -m "refactor(tools): resolve files through execution environment"
 ```ts
 it("starts the environment before building the model prompt", async () => {
   const order: string[] = [];
-  await composeOpenHarnessAgent({
+  await composeVykorAgent({
     createEnvironment: async () => {
       order.push("environment-ready");
       return fakeDockerEnvironment();
@@ -589,7 +589,7 @@ it("starts the environment before building the model prompt", async () => {
 
 - [ ] **步骤 3：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/agent-runtime test -- default-runtime.test.ts && pnpm --filter @openharness/prompts test`
+运行：`pnpm --filter @vykor/agent-runtime test -- default-runtime.test.ts && pnpm --filter @vykor/prompts test`
 
 预期：FAIL，现有 Prompt 在 Sandbox attach 前按宿主生成。
 
@@ -625,7 +625,7 @@ export async function buildRuntimeSystemPrompt(input: {
 
 - [ ] **步骤 7：运行 Agent Runtime 与 Prompt 测试**
 
-运行：`pnpm --filter @openharness/agent-runtime test && pnpm --filter @openharness/prompts test`
+运行：`pnpm --filter @vykor/agent-runtime test && pnpm --filter @vykor/prompts test`
 
 预期：全部通过。
 
@@ -709,7 +709,7 @@ const data = await context.environment.files.readBytes(resolved.executionPath);
 
 - [ ] **步骤 6：运行旁路安全测试**
 
-运行：`pnpm --filter @openharness/core test && pnpm --filter @openharness/agent-runtime test -- native-tools && pnpm --filter @openharness/server test -- daemon-image-to-text-tool.test.ts`
+运行：`pnpm --filter @vykor/core test && pnpm --filter @vykor/agent-runtime test -- native-tools && pnpm --filter @vykor/server test -- daemon-image-to-text-tool.test.ts`
 
 预期：Docker 场景没有 Native Tool Host fork，ImageToText 路径没有宿主 readFile。
 
@@ -735,8 +735,8 @@ git commit -m "feat(runtime): enforce tool execution domains"
 ```ts
 it("returns execution-visible Skill file and root paths", async () => {
   const result = await skillTool.execute({ name: "review" }, dockerToolContext());
-  expect(textOf(result)).toContain("Skill file: /opt/openharness/skills/review/SKILL.md");
-  expect(textOf(result)).toContain("Skill root: /opt/openharness/skills/review");
+  expect(textOf(result)).toContain("Skill file: /opt/vykor/skills/review/SKILL.md");
+  expect(textOf(result)).toContain("Skill root: /opt/vykor/skills/review");
   expect(textOf(result)).not.toContain("C:\\Users\\");
 });
 ```
@@ -749,7 +749,7 @@ it("returns execution-visible Skill file and root paths", async () => {
 
 - [ ] **步骤 3：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/skills test && pnpm --filter @openharness/tools test -- meta.test.ts`
+运行：`pnpm --filter @vykor/skills test && pnpm --filter @vykor/tools test -- meta.test.ts`
 
 预期：FAIL，现有刷新复制共享 Registry，路径仍为宿主路径。
 
@@ -763,7 +763,7 @@ Skill 工具对 `skill.path` 和 `dirname(skill.path)` 都调用 `context.enviro
 
 - [ ] **步骤 6：运行 Skills 和 Tools 测试**
 
-运行：`pnpm --filter @openharness/skills test && pnpm --filter @openharness/tools test`
+运行：`pnpm --filter @vykor/skills test && pnpm --filter @vykor/tools test`
 
 预期：全部通过。
 
@@ -812,7 +812,7 @@ expect(buildDesktopSettingsSnapshot(settings({
 
 - [ ] **步骤 3：运行 Desktop 定向测试并确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- settings-service.test.ts runtime-setting-model.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- settings-service.test.ts runtime-setting-model.test.ts`
 
 预期：FAIL，新字段和控件不存在。
 
@@ -838,7 +838,7 @@ Docker 配置下的现有集成终端继续显式创建 `runtime: local`，标�
 
 - [ ] **步骤 7：运行 Desktop 测试和类型检查**
 
-运行：`pnpm --filter @openharness/desktop test && pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop test && pnpm --filter @vykor/desktop typecheck`
 
 预期：全部通过。
 
@@ -871,11 +871,11 @@ expect(binding).toEqual({
 
 - [ ] **步骤 2：编写功能边界测试**
 
-断言项目外 Docker Agent 注册 Shell 和文件工具、不注册 TerminalOpen 和 Native Plugin Tools；Skill root 仍为 `/opt/openharness/skills`。
+断言项目外 Docker Agent 注册 Shell 和文件工具、不注册 TerminalOpen 和 Native Plugin Tools；Skill root 仍为 `/opt/vykor/skills`。
 
 - [ ] **步骤 3：运行测试并确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- outside-project-workspace.test.ts && pnpm --filter @openharness/server test -- daemon-agent.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- outside-project-workspace.test.ts && pnpm --filter @vykor/server test -- daemon-agent.test.ts`
 
 预期：至少环境绑定断言失败，随后实现只补通用环境接线，不增加 Projectless 专用 Runtime。
 
@@ -885,7 +885,7 @@ Session 没有 projectId 时使用现有受管 cwd 作为 hostRoot。项目配�
 
 - [ ] **步骤 5：运行项目外和 Agent Runtime 测试**
 
-运行：`pnpm --filter @openharness/desktop test -- outside-project-workspace.test.ts && pnpm --filter @openharness/server test -- daemon-agent.test.ts && pnpm --filter @openharness/agent-runtime test -- default-runtime.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- outside-project-workspace.test.ts && pnpm --filter @vykor/server test -- daemon-agent.test.ts && pnpm --filter @vykor/agent-runtime test -- default-runtime.test.ts`
 
 预期：全部通过。
 
@@ -913,7 +913,7 @@ git commit -m "test(runtime): cover projectless Docker agents"
 pwd = /workspace
 Read/Write/Edit/Glob/Grep 接受容器路径
 /workspace 写入同步到宿主工作区
-/opt/openharness/skills 写入同步到用户 Skill 根
+/opt/vykor/skills 写入同步到用户 Skill 根
 未挂载宿主目录不可见
 同一 owner 只有一个容器名
 旧 hash 容器被最新配置替换
@@ -922,7 +922,7 @@ Docker 不可用时没有宿主 spawn
 
 - [ ] **步骤 2：运行真实 Docker E2E**
 
-运行：`pnpm --filter @openharness/sandbox e2e:docker && pnpm --filter @openharness/tools e2e:docker`
+运行：`pnpm --filter @vykor/sandbox e2e:docker && pnpm --filter @vykor/tools e2e:docker`
 
 预期：有 Docker daemon 时全部通过；无 Docker 时记录明确 skip，并在交付说明中注明未取得真实 E2E 证据。
 

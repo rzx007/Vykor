@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  OPENHARNESS_USER_AGENT,
+  VYKOR_USER_AGENT,
   RequestHeaderTemplateError,
   expandRequestHeaderTemplates,
   normalizeRequestHeaderTemplates,
@@ -18,10 +18,10 @@ describe("request header templates", () => {
     expect(
       expandRequestHeaderTemplates(input, {
         sessionId: "session-1",
-        userAgent: OPENHARNESS_USER_AGENT,
+        userAgent: VYKOR_USER_AGENT,
       }),
     ).toEqual({
-      "User-Agent": "openharness-ts/1.0",
+      "User-Agent": "vykor/1.0",
       "x-session": "prefix-session-1-session-1",
       "X-Tenant": "desktop",
     });
@@ -44,13 +44,13 @@ describe("request header templates", () => {
     expect(() =>
       expandRequestHeaderTemplates(
         { "X-Session": "{{sessionId}}" },
-        { userAgent: OPENHARNESS_USER_AGENT },
+        { userAgent: VYKOR_USER_AGENT },
       ),
     ).toThrow("sessionId");
     expect(
       expandRequestHeaderTemplates(
         { "X-Static": "value" },
-        { userAgent: OPENHARNESS_USER_AGENT },
+        { userAgent: VYKOR_USER_AGENT },
       ),
     ).toEqual({ "X-Static": "value" });
   });

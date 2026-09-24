@@ -1,4 +1,4 @@
-import { McpOAuthCredentialStore as FileMcpOAuthCredentialStore } from "@openharness/auth";
+import { McpOAuthCredentialStore as FileMcpOAuthCredentialStore } from "@vykor/auth";
 import {
   createUnavailableMcpRuntimeCoordinator,
   loadSettings,
@@ -10,7 +10,7 @@ import {
   type McpRuntimeSyncResult,
   type McpServerConfig,
   type Settings,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   buildMcpAuthServerSnapshot,
   createMcpServerIdentity,
@@ -21,7 +21,7 @@ import {
   verifyMcpOAuthConnection,
   type McpOAuthCredentialStore,
   type McpOAuthLoginResult,
-} from "@openharness/mcp";
+} from "@vykor/mcp";
 
 export type McpOAuthServerSnapshot = McpAuthServerSnapshot;
 

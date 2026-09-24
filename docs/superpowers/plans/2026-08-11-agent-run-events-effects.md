@@ -1,6 +1,6 @@
 # Agent Run Events / Effects 实施计划
 
-> 状态：已完成。当前架构见 [OpenHarness Agent SDK](../../agent-sdk.md) 与 [Agent Runtime Framework Architecture](../../agent-runtime-framework-architecture.md)。
+> 状态：已完成。当前架构见 [Vykor Agent SDK](../../agent-sdk.md) 与 [Agent Runtime Framework Architecture](../../agent-runtime-framework-architecture.md)。
 >
 > 迁移原则：**不做兼容**。不提交双 public API、deprecated alias、daemon adapter 或旧 projection fallback；每个提交都必须通过相关 typecheck/tests。
 
@@ -24,7 +24,7 @@ daemon consumes events and projects durable state
 
 ## 改造前基线
 
-- root：`SessionRunExecutor -> DaemonRunProjection.createHost -> OpenHarnessAgent.submitMessage`。
+- root：`SessionRunExecutor -> DaemonRunProjection.createHost -> VykorAgent.submitMessage`。
 - permission：`QueryEngine -> AgentRunHost.requestPermission -> StorePermissionBroker`。
 - steer：`mergeWake -> wakeCount -> drainSteeredInputs -> pullFollowUps`。
 - child：`AgentChildManager <-> AgentChildProjection <-> DaemonChildAgentProjection`。
@@ -34,7 +34,7 @@ daemon consumes events and projects durable state
 ## Task 1：一次性切换 framework execution API
 
 - [x] 在 core/agent-runtime 定义 serializable `AgentEvent` union、event envelope、`AgentEventSource`、`AgentEffects`、`AgentRunHandle`、`AgentChildHandle`。
-- [x] `OpenHarnessAgent.submitMessage()` 改为返回 active `AgentRunHandle`；`runMessage()` 作为 await-result convenience API。
+- [x] `VykorAgent.submitMessage()` 改为返回 active `AgentRunHandle`；`runMessage()` 作为 await-result convenience API。
 - [x] event source 支持一个 agent-level ordered/awaited required subscriber；terminal event 被消费后才 settle `run.result`。
 - [x] agent-level effects 在 child agent 中继承；无 permission effect 时默认 denied。
 - [x] 将 provider `StreamEvent` 在 framework 内归一化为 output/tool/usage/run events；error 改为 serializable DTO。
@@ -177,7 +177,7 @@ daemon consumes events and projects durable state
 
 > 状态：已完成。delta 立即更新内存 read model 并 live publish；durable text 默认按 `150ms/8KB` checkpoint。异常退出最多丢失一个 checkpoint 尾窗，正常 terminal/close 不丢失。
 
-对照 OpenCode 当前实现后确认这里是有意增强，而不是逐 delta event sourcing：OpenCode 的 `Text.Delta` / `message.part.delta` 同样是 live-only，完整文本只在可 replay 的 `Text.Ended` / `PartUpdated` 边界持久化；OpenHarness 保留相同的 transient delta + full-value terminal 边界，并额外 checkpoint 聚合后的 part row，以较小的固定写放大换取有界的 daemon 崩溃尾窗。该策略仍归 `SessionStore` 所有，不进入 framework 或 projector 的业务协议。
+对照 OpenCode 当前实现后确认这里是有意增强，而不是逐 delta event sourcing：OpenCode 的 `Text.Delta` / `message.part.delta` 同样是 live-only，完整文本只在可 replay 的 `Text.Ended` / `PartUpdated` 边界持久化；Vykor 保留相同的 transient delta + full-value terminal 边界，并额外 checkpoint 聚合后的 part row，以较小的固定写放大换取有界的 daemon 崩溃尾窗。该策略仍归 `SessionStore` 所有，不进入 framework 或 projector 的业务协议。
 
 - [x] delta 先更新内存 read model 并立即发布 SSE，以 part 为单位累计 dirty checkpoint。
 - [x] delta hot path 不再触发整份 `SessionState` 的 `structuredClone` 或全量 `save()`；事务回滚覆盖 dirty part/checkpoint 状态。

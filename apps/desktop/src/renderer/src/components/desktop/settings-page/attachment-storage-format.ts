@@ -1,4 +1,4 @@
-import type { AttachmentStorageIssue, AttachmentStorageReport } from "@openharness/client"
+import type { AttachmentStorageIssue, AttachmentStorageReport } from "@vykor/client"
 
 export type GroupedStorageIssue = Pick<AttachmentStorageIssue, "code" | "severity"> & {
   count: number

@@ -4,9 +4,9 @@
 
 > **实施结果（2026-08-25）：** Native v1、安装状态、Runtime/Server/Client/CLI 硬切、Converter core、Claude Code 转换与仓库级验收均已落地。下方逐步复选框保留为实现过程和回归清单；建议提交步骤未执行，因为本次没有获得创建 Git commit 的明确授权。
 
-**目标：** 用版本化 OpenHarness Native Plugin v1 替换当前临时插件格式，让 Runtime 只加载原生插件；随后实现独立 Converter core 和 Claude Code Converter，把 Claude Skills、Commands、Agents、Hooks、MCP 转换、校验并安装为原生插件。
+**目标：** 用版本化 Vykor Native Plugin v1 替换当前临时插件格式，让 Runtime 只加载原生插件；随后实现独立 Converter core 和 Claude Code Converter，把 Claude Skills、Commands、Agents、Hooks、MCP 转换、校验并安装为原生插件。
 
-**架构：** `@openharness/plugins` 拥有 Native schema、组件加载、安装状态、当前 cache 和 Runtime 激活；新的 `@openharness/plugin-converters` 只负责外部 source 的 detect、inspect、plan、convert，并生成可直接安装的 Native Plugin 与 provenance/report。CLI 的转换命令可以本地只读运行，所有 installed state 变更经 daemon PluginService 和 mutation barrier 完成。Runtime、Server、Client 和 CLI 不直接解析 Claude manifest。
+**架构：** `@vykor/plugins` 拥有 Native schema、组件加载、安装状态、当前 cache 和 Runtime 激活；新的 `@vykor/plugin-converters` 只负责外部 source 的 detect、inspect、plan、convert，并生成可直接安装的 Native Plugin 与 provenance/report。CLI 的转换命令可以本地只读运行，所有 installed state 变更经 daemon PluginService 和 mutation barrier 完成。Runtime、Server、Client 和 CLI 不直接解析 Claude manifest。
 
 **技术栈：** TypeScript 5.7、Zod、Node.js fs/path/crypto、Hono、Commander、Vitest、pnpm/Turbo。
 
@@ -29,7 +29,7 @@
 - Workflows、Channels、Providers、UI contributions；
 - 第三方 Converter；
 - Native Tool 激活。v1 schema 可以识别 Tool component，但在隔离 Runtime 完成前必须返回 `unsupported`/`blocked`；后续计划见 `docs/superpowers/plans/2026-08-25-native-tool-isolated-runtime.md`；
-- 自动转换旧 OpenHarness 插件。
+- 自动转换旧 Vykor 插件。
 
 ## 全局约束
 
@@ -41,7 +41,7 @@
 - Runtime 行为 digest 排除时间戳和本机绝对路径。
 - installed store 是安装/启停真相；manifest 不保存安装状态。
 - 生产安装状态的唯一写 owner 是 daemon PluginService。CLI 不直接并发改 `installed.json`。
-- `composeOpenHarnessAgent()` 等独立 SDK 入口可以只读 installed store，但不能从 Runtime 修改插件。
+- `composeVykorAgent()` 等独立 SDK 入口可以只读 installed store，但不能从 Runtime 修改插件。
 - Runtime reload 继续使用 daemon mutation barrier；active run 存在时返回 409。
 - 插件版本切换必须先写完整新 cache，再原子更新 installed state；失败保留旧版本。
 - 使用 TDD：先写行为测试并看到预期失败，再实现最小生产变化。
@@ -51,19 +51,19 @@
 ## 目标包边界
 
 ```text
-@openharness/plugins
+@vykor/plugins
   Native schema / validate / load / install / activate
 
-@openharness/plugin-converters
+@vykor/plugin-converters
   Converter core / Claude Code Converter
 
-@openharness/agent-runtime
+@vykor/agent-runtime
   消费已验证 Native Plugin，不解析外部格式
 
-@openharness/server
+@vykor/server
   PluginService、mutation barrier、HTTP resources
 
-@openharness/client
+@vykor/client
   PluginInfo、install/enable/disable/reload/conversion transport
 
 apps/cli
@@ -136,7 +136,7 @@ apps/cli
 **产出接口：**
 
 ```ts
-export const OpenHarnessPluginManifestV1Schema: z.ZodType<OpenHarnessPluginManifestV1>;
+export const VykorPluginManifestV1Schema: z.ZodType<VykorPluginManifestV1>;
 
 export interface NativePluginValidationResult {
   status: "valid" | "invalid";
@@ -170,7 +170,7 @@ export async function resolveNativePluginPath(
 - [x] **Step 2：运行测试并确认旧 schema 不满足新接口**
 
 ```bash
-pnpm --filter @openharness/plugins exec vitest run src/manifest/schema-v1.test.ts
+pnpm --filter @vykor/plugins exec vitest run src/manifest/schema-v1.test.ts
 ```
 
 预期：FAIL，因为 Native v1 schema 尚不存在。
@@ -207,8 +207,8 @@ UNC path
 - [x] **Step 7：运行包检查**
 
 ```bash
-pnpm --filter @openharness/plugins exec vitest run src/manifest src/paths.test.ts
-pnpm --filter @openharness/plugins check-types
+pnpm --filter @vykor/plugins exec vitest run src/manifest src/paths.test.ts
+pnpm --filter @vykor/plugins check-types
 git diff --check
 ```
 
@@ -238,7 +238,7 @@ git diff --check
 
 ```ts
 export interface LoadedNativePlugin {
-  manifest: OpenHarnessPluginManifestV1;
+  manifest: VykorPluginManifestV1;
   root: string;
   components: NativePluginComponents;
   diagnostics: PluginDiagnostic[];
@@ -266,7 +266,7 @@ packages/plugins/fixtures/native-v1/unsupported-tool/
 
 - Skill namespace 使用 manifest `name`；
 - Agent identity 使用 plugin ID + scoped name；
-- Native Hook 文件使用 OpenHarness 事件名，不接受 Claude `PostToolUse`；
+- Native Hook 文件使用 Vykor 事件名，不接受 Claude `PostToolUse`；
 - Native MCP 要求明确内部 transport/type；
 - 一个 component 文件损坏时其他独立 component 继续加载，插件状态变为 degraded；
 - Tools 在本阶段返回 recognized-but-unsupported diagnostic；
@@ -275,12 +275,12 @@ packages/plugins/fixtures/native-v1/unsupported-tool/
 - [x] **Step 3：运行失败测试**
 
 ```bash
-pnpm --filter @openharness/plugins exec vitest run src/components src/load-native-plugin.test.ts
+pnpm --filter @vykor/plugins exec vitest run src/components src/load-native-plugin.test.ts
 ```
 
 - [x] **Step 4：复用内部 Skill/Agent/Hook/MCP 类型实现 loader**
 
-Native loader 可以复用 `@openharness/skills` 和 `@openharness/coordinator` 的解析器，但不得复用旧 Claude 风格默认目录逻辑。所有文件必须来自已验证 manifest source。
+Native loader 可以复用 `@vykor/skills` 和 `@vykor/coordinator` 的解析器，但不得复用旧 Claude 风格默认目录逻辑。所有文件必须来自已验证 manifest source。
 
 - [x] **Step 5：定义 component 级结果**
 
@@ -297,8 +297,8 @@ interface PluginComponentResult<T> {
 - [x] **Step 6：运行包测试和 typecheck**
 
 ```bash
-pnpm --filter @openharness/plugins exec vitest run src/components src/load-native-plugin.test.ts
-pnpm --filter @openharness/plugins check-types
+pnpm --filter @vykor/plugins exec vitest run src/components src/load-native-plugin.test.ts
+pnpm --filter @vykor/plugins check-types
 ```
 
 - [ ] **Step 7：提交 component slice**
@@ -357,7 +357,7 @@ getPluginSourcesDir()
 getInstalledPluginStorePath()
 ```
 
-设置 `OPENHARNESS_CONFIG_DIR` 时所有路径必须跟随测试目录。
+设置 `VYKOR_CONFIG_DIR` 时所有路径必须跟随测试目录。
 
 - [ ] **Step 2：写原子 store 更新测试**
 
@@ -397,9 +397,9 @@ Runtime 可以调用只读发现；只有 PluginService 调用 mutation API。
 - [ ] **Step 6：运行检查**
 
 ```bash
-pnpm --filter @openharness/core exec vitest run src/config/paths.test.ts
-pnpm --filter @openharness/plugins exec vitest run src/installation
-pnpm --filter @openharness/plugins check-types
+pnpm --filter @vykor/core exec vitest run src/config/paths.test.ts
+pnpm --filter @vykor/plugins exec vitest run src/installation
+pnpm --filter @vykor/plugins check-types
 ```
 
 - [ ] **Step 7：提交 installation slice**
@@ -446,13 +446,13 @@ MCP 连接失败不移除已注册 Skill，但 activation 为 partial；Runtime 
 - [ ] **Step 3：运行失败测试**
 
 ```bash
-pnpm --filter @openharness/plugins exec vitest run src/activation
-pnpm --filter @openharness/agent-runtime exec vitest run src/extensions.test.ts
+pnpm --filter @vykor/plugins exec vitest run src/activation
+pnpm --filter @vykor/agent-runtime exec vitest run src/extensions.test.ts
 ```
 
 - [ ] **Step 4：改写 extension discovery**
 
-`discoverOpenHarnessExtensions()` 改为：
+`discoverVykorExtensions()` 改为：
 
 ```text
 read installed store for cwd
@@ -470,9 +470,9 @@ read installed store for cwd
 - [ ] **Step 6：运行 Runtime 检查**
 
 ```bash
-pnpm --filter @openharness/plugins test
-pnpm --filter @openharness/agent-runtime exec vitest run src/extensions.test.ts src/agent-composition.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/agent-runtime exec vitest run src/extensions.test.ts src/agent-composition.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 - [ ] **Step 7：提交 Runtime hard cut**
@@ -499,7 +499,7 @@ pnpm --filter @openharness/agent-runtime check-types
 
 ```ts
 interface PluginInfo {
-  identity: OpenHarnessPluginIdentity;
+  identity: VykorPluginIdentity;
   origin: "native" | "converted";
   sourceFormat?: string;
   scope: PluginScope;
@@ -546,10 +546,10 @@ install/link body 同时携带用户明确批准的 `approvedPermissions`。Serv
 - [ ] **Step 5：运行 Server/Client 检查**
 
 ```bash
-pnpm --filter @openharness/server exec vitest run src/application/__test__/default-application-services.test.ts src/http/routes/__test__/routes.test.ts src/http/__test__/http.test.ts
-pnpm --filter @openharness/client exec vitest run src/transport/__test__/http-client.test.ts
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
+pnpm --filter @vykor/server exec vitest run src/application/__test__/default-application-services.test.ts src/http/routes/__test__/routes.test.ts src/http/__test__/http.test.ts
+pnpm --filter @vykor/client exec vitest run src/transport/__test__/http-client.test.ts
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
 ```
 
 - [ ] **Step 6：提交 service contract**
@@ -577,14 +577,14 @@ pnpm --filter @openharness/client check-types
 - [ ] **Step 1：写 CLI 目标行为测试**
 
 ```text
-ohs plugin list
-ohs plugin install-local <path> --scope user|project|local
-ohs plugin link <path> --scope user|project|local
-ohs plugin enable <id>
-ohs plugin disable <id>
-ohs plugin uninstall <id>
-ohs plugin validate <path>
-ohs plugin details <id>
+vk plugin list
+vk plugin install-local <path> --scope user|project|local
+vk plugin link <path> --scope user|project|local
+vk plugin enable <id>
+vk plugin disable <id>
+vk plugin uninstall <id>
+vk plugin validate <path>
+vk plugin details <id>
 ```
 
 安装/启停/卸载调用 daemon Client；`validate` 是本地只读操作。
@@ -619,13 +619,13 @@ rg -n "enabled_by_default|skills_dir|tools_dir|hooks_file|mcp_file|allowProjectP
 - [ ] **Step 5：运行核心回归**
 
 ```bash
-pnpm --filter @openharness/plugins test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/cli test
-pnpm --filter @openharness/core check-types
-pnpm --filter @openharness/cli check-types
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/cli test
+pnpm --filter @vykor/core check-types
+pnpm --filter @vykor/cli check-types
 ```
 
 - [ ] **Step 6：提交旧格式删除**
@@ -647,7 +647,7 @@ pnpm --filter @openharness/cli check-types
 
 ---
 
-## Task 7：创建 `@openharness/plugin-converters` 和 Converter core
+## Task 7：创建 `@vykor/plugin-converters` 和 Converter core
 
 **文件：**
 
@@ -671,7 +671,7 @@ pnpm --filter @openharness/cli check-types
 
 Converter v1 只允许应用内建注册，不提供 Native Plugin 注册 Converter 的入口。
 
-新 package 至少依赖 `@openharness/plugins` 的 Native schema/types 和 `zod`；不得依赖 `@openharness/agent-runtime`、Server 或应用包。`package.json`、`tsconfig.json` 和 workspace export 规则对齐现有 packages，并增加 `test`、`check-types`、`clean` scripts。
+新 package 至少依赖 `@vykor/plugins` 的 Native schema/types 和 `zod`；不得依赖 `@vykor/agent-runtime`、Server 或应用包。`package.json`、`tsconfig.json` 和 workspace export 规则对齐现有 packages，并增加 `test`、`check-types`、`clean` scripts。
 
 - [ ] **Step 3：写 plan 稳定性和 digest 测试**
 
@@ -684,8 +684,8 @@ Converter v1 只允许应用内建注册，不提供 Native Plugin 注册 Conver
 - [ ] **Step 5：运行新包检查**
 
 ```bash
-pnpm --filter @openharness/plugin-converters test
-pnpm --filter @openharness/plugin-converters check-types
+pnpm --filter @vykor/plugin-converters test
+pnpm --filter @vykor/plugin-converters check-types
 ```
 
 - [ ] **Step 6：提交 Converter core**
@@ -725,8 +725,8 @@ pnpm --filter @openharness/plugin-converters check-types
 - [ ] **Step 5：运行检查**
 
 ```bash
-pnpm --filter @openharness/plugin-converters exec vitest run src/claude-code/detector.test.ts src/claude-code/parser.test.ts
-pnpm --filter @openharness/plugin-converters check-types
+pnpm --filter @vykor/plugin-converters exec vitest run src/claude-code/detector.test.ts src/claude-code/parser.test.ts
+pnpm --filter @vykor/plugin-converters check-types
 ```
 
 - [ ] **Step 6：提交 Claude inspection**
@@ -765,7 +765,7 @@ mapping table 有独立语义版本，记录到 plan/provenance。未知模型�
 - [ ] **Step 5：运行检查**
 
 ```bash
-pnpm --filter @openharness/plugin-converters exec vitest run src/claude-code/convert-skills.test.ts src/claude-code/convert-agents.test.ts
+pnpm --filter @vykor/plugin-converters exec vitest run src/claude-code/convert-skills.test.ts src/claude-code/convert-agents.test.ts
 ```
 
 - [ ] **Step 6：提交 prompt components**
@@ -805,7 +805,7 @@ Converter 只生成配置，不连接 Server。
 
 - [ ] **Step 3：写 Native 环境测试（由 2026-08-30 收口计划修订）**
 
-转换后的插件只使用 OpenHarness Native 环境。`origin/sourceFormat` 不能触发 `CLAUDE_PLUGIN_ROOT`、`CLAUDE_PLUGIN_DATA` 或 `CLAUDE_PROJECT_DIR` 注入；无法转换的源脚本必须在 report 中标为 adapted/unsupported。
+转换后的插件只使用 Vykor Native 环境。`origin/sourceFormat` 不能触发 `CLAUDE_PLUGIN_ROOT`、`CLAUDE_PLUGIN_DATA` 或 `CLAUDE_PROJECT_DIR` 注入；无法转换的源脚本必须在 report 中标为 adapted/unsupported。
 
 - [ ] **Step 4：实现 Hook/MCP/environment converter**
 
@@ -814,8 +814,8 @@ Converter 只生成配置，不连接 Server。
 - [ ] **Step 5：运行 Converter 和 activation 测试**
 
 ```bash
-pnpm --filter @openharness/plugin-converters exec vitest run src/claude-code/convert-hooks.test.ts src/claude-code/convert-mcp.test.ts src/claude-code/environment.test.ts
-pnpm --filter @openharness/plugins exec vitest run src/activation
+pnpm --filter @vykor/plugin-converters exec vitest run src/claude-code/convert-hooks.test.ts src/claude-code/convert-mcp.test.ts src/claude-code/environment.test.ts
+pnpm --filter @vykor/plugins exec vitest run src/activation
 ```
 
 - [ ] **Step 6：提交 executable component conversion**
@@ -840,10 +840,10 @@ pnpm --filter @openharness/plugins exec vitest run src/activation
 对 mixed Claude fixture 执行：detect → inspect → plan → approve → convert，断言目标包含：
 
 ```text
-.openharness-plugin/plugin.json
-.openharness-conversion/provenance.json
-.openharness-conversion/plan.json
-.openharness-conversion/report.json
+.vykor-plugin/plugin.json
+.vykor-conversion/provenance.json
+.vykor-conversion/plan.json
+.vykor-conversion/report.json
 skills/
 agents/
 hooks.json
@@ -856,7 +856,7 @@ mcp.json
 
 转换中断、Native validation 失败、目标已存在、复制越界、blocked 未批准时，不留下被误认为成功的目标目录。临时目录在失败后清理或明确标记 incomplete。
 
-- [ ] **Step 3：实现 `ohs plugin convert`**
+- [ ] **Step 3：实现 `vk plugin convert`**
 
 支持：
 
@@ -872,7 +872,7 @@ dry-run 不写文件；默认文本和 `--json` 使用同一 plan/report 数据�
 
 - [ ] **Step 4：接入 converted install**
 
-`ohs plugin install --from claude-code <source>` 在本地生成临时转换产物，通过 Client 请求 daemon 安装该 Native Plugin。安装成功后清理临时目录；失败保留可诊断路径或复制 report 到安全临时位置，并在输出中说明。
+`vk plugin install --from claude-code <source>` 在本地生成临时转换产物，通过 Client 请求 daemon 安装该 Native Plugin。安装成功后清理临时目录；失败保留可诊断路径或复制 report 到安全临时位置，并在输出中说明。
 
 Converter plan 中批准的权限必须与最终 Native manifest 重新计算的 requested permissions 一致；daemon 安装时再次校验并保存批准。CLI 不能仅凭本地 plan 绕过 PluginService 权限检查。
 
@@ -883,11 +883,11 @@ PluginInfo 从 provenance/report 得到 origin/sourceFormat/converterVersion/sta
 - [ ] **Step 6：运行端到端检查**
 
 ```bash
-pnpm --filter @openharness/plugin-converters test
-pnpm --filter @openharness/plugins test
-pnpm --filter @openharness/server exec vitest run src/application/__test__/default-application-services.test.ts src/http/__test__/http.test.ts
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/cli test
+pnpm --filter @vykor/plugin-converters test
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/server exec vitest run src/application/__test__/default-application-services.test.ts src/http/__test__/http.test.ts
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/cli test
 ```
 
 - [ ] **Step 7：提交完整转换链路**
@@ -938,12 +938,12 @@ rg -n "claude-plugin|ClaudePlugin|PostToolUse|CLAUDE_PLUGIN_ROOT" packages/agent
 - [ ] **Step 6：运行完整验证**
 
 ```bash
-pnpm --filter @openharness/plugins test
-pnpm --filter @openharness/plugin-converters test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/cli test
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/plugin-converters test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/cli test
 pnpm check-types
 node scripts/check-docs.mjs
 git diff --check
@@ -982,9 +982,9 @@ source inspect -> dry-run plan -> exact/adapted/unsupported 报告
 
 本计划完成必须同时满足：
 
-1. `.openharness-plugin/plugin.json` 是 Runtime 唯一插件 manifest。
-2. `@openharness/plugins` 不解析 Claude/Codex 格式。
-3. `@openharness/plugin-converters` 不依赖 Agent Runtime，也不执行 source plugin。
+1. `.vykor-plugin/plugin.json` 是 Runtime 唯一插件 manifest。
+2. `@vykor/plugins` 不解析 Claude/Codex 格式。
+3. `@vykor/plugin-converters` 不依赖 Agent Runtime，也不执行 source plugin。
 4. Native Skills、Agents、Hooks、MCP 完成安装到 Runtime 的闭环。
 5. Native Tool 不再由 daemon 主进程动态 import；隔离实现前保持 unsupported/blocked。
 6. 当前旧 schema、旧 Installer、旧 CLI cache、`Settings.plugins` 和 `allowProjectPlugins` 已删除。

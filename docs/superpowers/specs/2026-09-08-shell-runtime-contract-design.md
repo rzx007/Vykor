@@ -2,12 +2,12 @@
 
 **状态：** 已实施，已完成定向验证  
 **日期：** 2026-09-08  
-**范围：** OpenHarness Agent Runtime、Shell Tool、Execution Environment、Desktop 展示  
+**范围：** Vykor Agent Runtime、Shell Tool、Execution Environment、Desktop 展示
 **取代：** `docs/superpowers/plans/2026-09-08-cross-platform-shell-consistency.md` 中以扩充方言正则为主的方向
 
 ## 1. 结论
 
-OpenHarness 应将当前模型可见的 `Bash` 工具直接替换为中性的 `Shell` 工具，不注册 `Bash` 兼容别名。
+Vykor 应将当前模型可见的 `Bash` 工具直接替换为中性的 `Shell` 工具，不注册 `Bash` 兼容别名。
 
 Shell 类型由 Execution Environment 在会话启动时确定并验证。工具名称、模型说明、执行器、权限判断、结果元数据和 UI 必须共用同一份 Shell 描述，不得各自推测。
 
@@ -18,7 +18,7 @@ Shell 类型由 Execution Environment 在会话启动时确定并验证。工具
 2026-09-08 的“AI圈有什么新鲜事”会话正确读取了用户级 `ai-radar` 技能，位置为：
 
 ```text
-C:\Users\ruanz\.openharness-ts\skills\ai-radar\SKILL.md
+C:\Users\ruanz\.vykor\skills\ai-radar\SKILL.md
 ```
 
 该会话的工具执行统计：
@@ -179,7 +179,7 @@ PowerShell 7、cmd 和 POSIX Shell 分别生成自己的说明。说明中不出
 
 ## 7. 第三方技能边界
 
-OpenHarness 不改写第三方 `SKILL.md`，不在安装时替换命令示例，不为某个具体技能注入特例。
+Vykor 不改写第三方 `SKILL.md`，不在安装时替换命令示例，不为某个具体技能注入特例。
 
 技能与环境冲突时，模型应保留技能的目标和数据流，把命令翻译成当前 Shell 的原生写法。例如：
 
@@ -241,9 +241,9 @@ Shell Tool 只报告它能客观确定的进程事实。它不从任意 stderr �
 - hook 和插件 hook 的 `tool_name`/`matcher`；
 - 指标、导出、compact worklog 和其他按 toolName 聚合的消费者。
 
-所有 OpenHarness 自有的持久化配置在读取时 canonicalize `Bash`→`Shell`，下次保存写回新名。已发放但未使用的会话级 approval 按旧 toolName 作废，不自动扩大为新工具权限。
+所有 Vykor 自有的持久化配置在读取时 canonicalize `Bash`→`Shell`，下次保存写回新名。已发放但未使用的会话级 approval 按旧 toolName 作废，不自动扩大为新工具权限。
 
-hook 的 `matcher: Bash` 在加载时迁移为 `Shell`，并记录一次弃用警告。这只迁移 OpenHarness 对工具名称的引用，不改写第三方文件。
+hook 的 `matcher: Bash` 在加载时迁移为 `Shell`，并记录一次弃用警告。这只迁移 Vykor 对工具名称的引用，不改写第三方文件。
 
 内置名 `Shell` 和历史名 `Bash` 都为保留工具名：插件不得注册或覆盖它们。插件尝试注册时在加载阶段明确失败，避免模型可见工具重名。
 
@@ -255,7 +255,7 @@ CLI 展示、轨迹导出、compact worklog 和 metrics 同样保持“历史原
 
 ### 9.4 第三方工具声明
 
-当 OpenHarness 将来开始消费第三方技能的结构化工具约束时，Skill loader 必须对工具名 token 做 canonicalize：`Bash`→`Shell`，同时保留 `Bash(npm *)` 中的 `(npm *)` 约束后缀。当前 SkillDefinition 尚未把该字段解析为 typed allowed-tools，因此这是未来解析器的边界要求，不是首期迁移任务。技能正文里的普通文本和代码块始终不做替换。
+当 Vykor 将来开始消费第三方技能的结构化工具约束时，Skill loader 必须对工具名 token 做 canonicalize：`Bash`→`Shell`，同时保留 `Bash(npm *)` 中的 `(npm *)` 约束后缀。当前 SkillDefinition 尚未把该字段解析为 typed allowed-tools，因此这是未来解析器的边界要求，不是首期迁移任务。技能正文里的普通文本和代码块始终不做替换。
 
 ## 10. 三端行为
 

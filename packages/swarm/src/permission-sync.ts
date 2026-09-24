@@ -76,7 +76,7 @@ export interface SwarmPermissionResponse {
   updatedRules: unknown[];
 }
 
-/** 结构化裁决接口：对齐 @openharness/permissions 的 PermissionChecker.checkTool，避免跨包依赖。 */
+/** 结构化裁决接口：对齐 @vykor/permissions 的 PermissionChecker.checkTool，避免跨包依赖。 */
 export interface PermissionDecider {
   checkTool(
     toolName: string,
@@ -388,7 +388,7 @@ export async function getLeaderName(teamName?: string): Promise<string | null> {
 /**
  * 只读工具直接批；其余走 leader 的 checkTool：allow→批、deny/ask→拒（带 reason）。
  * `ask` 视为「leader 也做不了主」保守拒——leader 开 full_auto/白名单时写操作才放行。
- * readOnlyTools 由调用方传入（接线处用 @openharness/permissions 的 READ_ONLY_TOOLS）。
+ * readOnlyTools 由调用方传入（接线处用 @vykor/permissions 的 READ_ONLY_TOOLS）。
  */
 export async function handlePermissionRequest(
   request: SwarmPermissionRequest,

@@ -1,12 +1,12 @@
-import type { AgentEffects } from "@openharness/core";
+import type { AgentEffects } from "@vykor/core";
 
 import {
   createAssembledAgent,
-  type OpenHarnessAgent,
-  type OpenHarnessAgentOptions,
+  type VykorAgent,
+  type VykorAgentOptions,
 } from "./agent.js";
 import {
-  composeOpenHarnessAgent,
+  composeVykorAgent,
   type AgentIdentity,
 } from "./agent-composition.js";
 import { AgentChildRegistry } from "./child-agent.js";
@@ -28,8 +28,8 @@ interface DefaultNodeAgentInternals {
 
 /** 默认 Node 组装：会读取本机配置、发现扩展，并安装 Node 能力。 */
 export async function createDefaultNodeAgent(
-  options: OpenHarnessAgentOptions = {},
-): Promise<OpenHarnessAgent> {
+  options: VykorAgentOptions = {},
+): Promise<VykorAgent> {
   return await createDefaultNodeAgentWithInternals(options, {
     createLocalTerminal: createDefaultNodeTerminal,
   });
@@ -37,9 +37,9 @@ export async function createDefaultNodeAgent(
 
 /** @internal Test seam for verifying host-provided Terminal precedence. */
 export async function createDefaultNodeAgentWithInternals(
-  options: OpenHarnessAgentOptions,
+  options: VykorAgentOptions,
   internals: DefaultNodeAgentInternals,
-): Promise<OpenHarnessAgent> {
+): Promise<VykorAgent> {
   const eventBus = new AgentEventBus(options.onEvent);
   return await createDefaultNodeAgentInternal(
     options,
@@ -52,10 +52,10 @@ export async function createDefaultNodeAgentWithInternals(
 }
 
 async function createDefaultNodeAgentInternal(
-  options: OpenHarnessAgentOptions,
+  options: VykorAgentOptions,
   internal: InternalAgentOptions,
   internals: DefaultNodeAgentInternals,
-): Promise<OpenHarnessAgent> {
+): Promise<VykorAgent> {
   const effects: AgentEffects = {
     requestPermission: options.effects?.requestPermission ?? (async () => ({
       status: "denied",
@@ -63,7 +63,7 @@ async function createDefaultNodeAgentInternal(
     })),
     ...(options.effects?.askUserPrompt ? { askUserPrompt: options.effects.askUserPrompt } : {}),
   };
-  const composition = await composeOpenHarnessAgent(options, {
+  const composition = await composeVykorAgent(options, {
     ...internal,
     resolveDefaultTerminal: ({ override, cwd, sessionId }) =>
       resolveDefaultNodeTerminal({

@@ -1,13 +1,13 @@
-export { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@openharness/core";
+export { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@vykor/core";
 export {
   AgentOperationConflictError,
   type AgentCompactResult,
   type AgentInspection,
   type ModelVisibleTool,
-  type OpenHarnessAgent,
-  type OpenHarnessAgentOptions,
-  type OpenHarnessAgentState,
-  type OpenHarnessAgentSubmitOptions,
+  type VykorAgent,
+  type VykorAgentOptions,
+  type VykorAgentState,
+  type VykorAgentSubmitOptions,
 } from "./agent.js";
 export { createDefaultNodeAgent } from "./default-agent.js";
 export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";
@@ -17,7 +17,7 @@ export type {
   AgentEffectOverrides,
   CapabilityOverride,
   ObservableJobProducer,
-  OpenHarnessAgentConfiguration,
+  VykorAgentConfiguration,
 } from "./agent-options.js";
 export {
   assertJobConfiguration,
@@ -41,8 +41,8 @@ export {
 } from "./kernel.js";
 export type { AgentRememberResult } from "./memory-runtime.js";
 export { createRememberTool, type RememberToolOptions } from "./remember-tool.js";
-export type { OpenHarnessAgentExtension, OpenHarnessExtensionContext } from "./extensions.js";
-export { discoverOpenHarnessExtensions } from "./extensions.js";
+export type { VykorAgentExtension, VykorExtensionContext } from "./extensions.js";
+export { discoverVykorExtensions } from "./extensions.js";
 export { activateDiscoveredPlugins, type ActivateDiscoveredPluginsOptions } from "./plugin-activation.js";
 export {
   createPluginCapabilityInventory,

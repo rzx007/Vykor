@@ -2,7 +2,7 @@ import type {
   ModelsDevCatalog,
   ModelsDevModel,
   ModelsDevProvider,
-} from "@openharness/api";
+} from "@vykor/api";
 
 const CATALOG_PROVIDER_ALIASES: Record<string, string[]> = {
   bedrock: ["amazon-bedrock"],

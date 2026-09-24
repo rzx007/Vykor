@@ -4,9 +4,9 @@
 
 ## 一句话结论
 
-OpenHarness 不自己实现语言语义，也不手写 JSON-RPC framing。
+Vykor 不自己实现语言语义，也不手写 JSON-RPC framing。
 
-第一版使用微软的 `vscode-languageserver-protocol/node` 处理 LSP 消息、请求响应关联、取消和协议类型；OpenHarness 自己负责语言服务器配置、受沙箱约束的进程启动、连接复用、文档同步、路径映射、权限和 Tool 结果。
+第一版使用微软的 `vscode-languageserver-protocol/node` 处理 LSP 消息、请求响应关联、取消和协议类型；Vykor 自己负责语言服务器配置、受沙箱约束的进程启动、连接复用、文档同步、路径映射、权限和 Tool 结果。
 
 ```text
 模型调用 Lsp
@@ -17,7 +17,7 @@ OpenHarness 不自己实现语言语义，也不手写 JSON-RPC framing。
   -> DocumentTracker 确保文件已 didOpen / didChange
   -> vscode-languageserver-protocol 发送真实 textDocument/* 请求
   -> 服务器返回 Location / Hover / Symbol / Diagnostic
-  -> OpenHarness 转回宿主机路径、1-based 坐标和受限文本结果
+  -> Vykor 转回宿主机路径、1-based 坐标和受限文本结果
 ```
 
 ## 为什么要替换当前实现
@@ -56,7 +56,7 @@ OpenHarness 不自己实现语言语义，也不手写 JSON-RPC framing。
 第一阶段不追求：
 
 - 同时内置所有语言服务器；
-- 在 OpenHarness 中重新实现 TypeScript/Python/Go AST；
+- 在 Vykor 中重新实现 TypeScript/Python/Go AST；
 - 接入桌面编辑器的未保存 buffer；
 - 自动安装语言服务器；
 - 自动执行 server 发起的 command 或 applyEdit；
@@ -82,15 +82,15 @@ vscode-languageserver-protocol/node
 - `DidOpenTextDocumentNotification` 等通知；
 - `Location`、`LocationLink`、`Diagnostic`、`Hover` 等协议类型。
 
-它依赖 `vscode-jsonrpc`，后者负责 Content-Length framing、请求 ID、pending response、消息队列、取消和连接关闭。OpenHarness 不再新增自己的 framing、dispatcher 或 pending-request 实现。
+它依赖 `vscode-jsonrpc`，后者负责 Content-Length framing、请求 ID、pending response、消息队列、取消和连接关闭。Vykor 不再新增自己的 framing、dispatcher 或 pending-request 实现。
 
-`@openharness/services` 应直接声明它实际 import 的包。若代码从 `vscode-jsonrpc` 直接 import `CancellationTokenSource` 等对象，也要把 `vscode-jsonrpc` 声明为直接依赖，不依赖传递依赖偶然存在。
+`@vykor/services` 应直接声明它实际 import 的包。若代码从 `vscode-jsonrpc` 直接 import `CancellationTokenSource` 等对象，也要把 `vscode-jsonrpc` 声明为直接依赖，不依赖传递依赖偶然存在。
 
 安装时必须固定经过本仓库 Node 版本验证的版本，不写宽泛范围。当前开发环境使用 Node 24 和 ESM；旧版 `vscode-jsonrpc` 曾存在 Node 24 子路径解析问题，因此合入前必须运行 ESM import smoke test，确认最终 lockfile 解析出的版本具有正确的 `exports["./node"]`。
 
 ### 不选择完整 `vscode-languageclient`
 
-`vscode-languageclient` 面向 VS Code 扩展，依赖 VS Code workspace、document、diagnostic collection、output channel、extension lifecycle 和类型转换。OpenHarness 运行在 CLI/daemon Runtime 中，不应为了复用高层 client 而模拟 VS Code Extension Host。
+`vscode-languageclient` 面向 VS Code 扩展，依赖 VS Code workspace、document、diagnostic collection、output channel、extension lifecycle 和类型转换。Vykor 运行在 CLI/daemon Runtime 中，不应为了复用高层 client 而模拟 VS Code Extension Host。
 
 ### 不选择 `monaco-languageclient`
 
@@ -102,7 +102,7 @@ vscode-languageserver-protocol/node
 
 ## 所有权和包边界
 
-### `@openharness/core`
+### `@vykor/core`
 
 只定义工具可依赖的抽象能力，不依赖 services 或具体 LSP 库：
 
@@ -122,11 +122,11 @@ export interface ToolContext {
 }
 ```
 
-这些 core 类型是 OpenHarness 自己的稳定 DTO，不直接把三方 `ProtocolConnection`、`Location` 或 `Diagnostic` 泄漏到 tools 和客户端包。
+这些 core 类型是 Vykor 自己的稳定 DTO，不直接把三方 `ProtocolConnection`、`Location` 或 `Diagnostic` 泄漏到 tools 和客户端包。
 
 `QueryEngine` 增加 `setLspHost()`，构造 ToolContext 时注入。其模式与现有 MCP、Terminal 和 Jobs host 一致。
 
-### `@openharness/services`
+### `@vykor/services`
 
 拥有真实实现：
 
@@ -150,7 +150,7 @@ packages/services/src/lsp/
 - `normalize.ts`：把协议结果规整成 core DTO。
 - `errors.ts`：稳定错误分类和可操作提示。
 
-### `@openharness/agent-runtime`
+### `@vykor/agent-runtime`
 
 在 composition root 创建 `LspManager`，把它注入 QueryEngine，并注册 Runtime cleanup：
 
@@ -168,7 +168,7 @@ runtime.addCleanup(() => lspManager.close());
 
 LspManager 构造时不启动进程。第一次有适用请求时才延迟启动，这保证执行环境已经就绪，也避免没有使用 LSP 的会话承担启动成本。
 
-### `@openharness/tools`
+### `@vykor/tools`
 
 `packages/tools/src/search/lsp.ts` 不再 import services 和 `new LspClient()`。它只负责：
 
@@ -730,7 +730,7 @@ export function greet(name: string): string {
   return `hello ${name}`;
 }
 
-const message = greet("OpenHarness");
+const message = greet("Vykor");
 ```
 
 验收：

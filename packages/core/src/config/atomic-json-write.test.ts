@@ -67,7 +67,7 @@ describe("writeJsonFileAtomically", () => {
 });
 
 async function createTemporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "openharness-atomic-settings-"));
+  const directory = await mkdtemp(join(tmpdir(), "vykor-atomic-settings-"));
   temporaryDirectories.push(directory);
   return directory;
 }

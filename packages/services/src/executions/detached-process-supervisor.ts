@@ -5,15 +5,15 @@ import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
-import { getTasksDir, PROJECT_CONFIG_DIR_NAME, type Settings } from "@openharness/core";
-import type { EnvironmentProcess, EnvironmentProcessExecutor } from "@openharness/environment";
+import { getTasksDir, PROJECT_CONFIG_DIR_NAME, type Settings } from "@vykor/core";
+import type { EnvironmentProcess, EnvironmentProcessExecutor } from "@vykor/environment";
 import {
   createProcess,
   createShellProcess,
   signalProcessTree,
   terminateProcessTree,
   type SandboxPolicy,
-} from "@openharness/sandbox";
+} from "@vykor/sandbox";
 import type {
   AwaitExecutionResult,
   DetachedProcessExecution,
@@ -30,7 +30,7 @@ const MAX_OUTPUT_BYTES = 12_000;
 const STOP_GRACE_MS = 3_000;
 const MAX_RESTARTS = 5;
 const RESTART_NOTICE =
-  "[OpenHarness] Agent task restarted; prior interactive context was not preserved.\n";
+  "[Vykor] Agent task restarted; prior interactive context was not preserved.\n";
 
 interface RunState {
   child: ChildProcess;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { runWorkflow, type WorkflowTaskRunResult } from "@openharness/coordinator";
-import type { AwaitExecutionResult } from "@openharness/services";
+import { runWorkflow, type WorkflowTaskRunResult } from "@vykor/coordinator";
+import type { AwaitExecutionResult } from "@vykor/services";
 import {
   createAgentWorkflowRunner,
   type WorkflowWorkerSpawnConfig,

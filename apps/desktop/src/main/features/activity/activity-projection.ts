@@ -1,4 +1,4 @@
-import type { OpenHarnessClientState, ScheduledRunRecord, SessionBucket } from "@openharness/client"
+import type { VykorClientState, ScheduledRunRecord, SessionBucket } from "@vykor/client"
 import type {
   DesktopExecutionState,
   DesktopScheduledActivity,
@@ -6,7 +6,7 @@ import type {
 } from "@shared/activity-types"
 
 export function projectSessionActivity(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   sessionId: string,
   activitySeq: number
 ): DesktopSessionActivity | undefined {

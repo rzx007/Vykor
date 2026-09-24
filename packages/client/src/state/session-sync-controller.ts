@@ -14,7 +14,7 @@ import {
 } from "./reducer.js";
 import type { SyncEventsClient } from "./sync.js";
 import type {
-  OpenHarnessClientState,
+  VykorClientState,
   SyncEventUpdate,
 } from "../types/index.js";
 
@@ -23,7 +23,7 @@ export type SyncConnectionStatus = "idle" | "connecting" | "connected" | "reconn
 export interface SessionSyncControllerOptions {
   client: SyncEventsClient;
   sessionId?: string;
-  initialState?: OpenHarnessClientState;
+  initialState?: VykorClientState;
   cursor?: number;
   generation?: number;
   signal?: AbortSignal;
@@ -48,7 +48,7 @@ export class SessionSyncController {
   private readonly onError?: (error: unknown, generation: number) => void;
 
   private readonly abortController = new AbortController();
-  private state: OpenHarnessClientState;
+  private state: VykorClientState;
   private status: SyncConnectionStatus = "idle";
   private running = false;
 
@@ -84,7 +84,7 @@ export class SessionSyncController {
     return this.status;
   }
 
-  get currentState(): OpenHarnessClientState {
+  get currentState(): VykorClientState {
     return this.state;
   }
 

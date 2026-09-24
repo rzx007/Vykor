@@ -42,7 +42,7 @@
 - [x] 先写失败测试：engine 懒初始化一次、容量有界、signal 能取消排队和运行任务、超时映射稳定、close 幂等且拒绝新任务；逐项验证红灯原因是实现缺失。
 - [x] 先写失败测试：JPEG/PNG 直通，GIF/WebP/BMP 只取第一帧转 PNG，EXIF 修正；非法图片、40 MiB、40 MP、超长边分别返回稳定错误。
 - [x] 新增 representation 表和 Store API，实现 `LightOcrEngine`、normalizer、`LocalOcrService`。OCR 输出保留 reading order、confidence、quadrilateral、timing，文本限制 100,000 字符，空行集合返回 `no_text_detected`。
-- [x] 运行 `pnpm --filter @openharness/services test` 和 `check-types`，确认新增测试及既有 attachment/store 测试全绿后提交任务 1。
+- [x] 运行 `pnpm --filter @vykor/services test` 和 `check-types`，确认新增测试及既有 attachment/store 测试全绿后提交任务 1。
 
 ### 任务 2：ImageToText 宿主、工具契约和降级路由
 
@@ -87,7 +87,7 @@
 - [x] 先写失败测试：attachment ID 直接复用；本地路径按 cwd 读取后导入；URL 只允许 HTTP(S)，DNS/重定向每跳复检并阻止环回、私网、链路本地和非图片，且受大小与超时控制；三者最终调用同一个 LocalOcrService。
 - [x] 先写失败测试：tool result metadata 把 asset/representation/processor 写入 tool part；UI 区分 OCR completed、no text、failed；用户可以重试；原生 transformation 文案不变。
 - [x] 实现 daemon OCR 宿主并接入 close 生命周期；扩展 transcript projection 的 metadata 提取。删除 `Settings.visionModel` 及全部使用点，不迁移旧设置。
-- [x] 把 packaged Desktop 的 `interactionEnabled` 改为 daemon 支持即启用，并允许 `OPENHARNESS_DESKTOP_ATTACHMENTS=0` 显式关闭；保留“添加文件夹”图标和禁用菜单项。
+- [x] 把 packaged Desktop 的 `interactionEnabled` 改为 daemon 支持即启用，并允许 `VYKOR_DESKTOP_ATTACHMENTS=0` 显式关闭；保留“添加文件夹”图标和禁用菜单项。
 - [x] 运行 services/server/desktop 回归、类型检查和快照测试；搜索确认生产代码不存在 `visionModel`、ImageToText Provider fetch、Data URL 和 prompt 字段后提交任务 3。
 
 ### 任务 4：真实 OCR、打包与全链路验收

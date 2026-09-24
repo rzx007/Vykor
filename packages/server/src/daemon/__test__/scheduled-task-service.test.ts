@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { SessionStore } from "@openharness/services";
+import { SessionStore } from "@vykor/services";
 import type {
   ScheduledRunRecord,
   ScheduledTaskRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -36,7 +36,7 @@ function createHarness(
     };
   }),
 ) {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-scheduled-service-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-scheduled-service-"));
   const store = new SessionStore({ path: join(dir, "store.db") });
   store.sessions.create({
     id: "scheduled-session",
@@ -57,7 +57,7 @@ function createHarness(
 
 describe("ScheduledTaskService", () => {
   it("publishes committed run transitions without a Scheduled page subscriber", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-schedule-publish-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-schedule-publish-"));
     const scheduleStore = new SessionStore({ path: join(dir, "store.db") });
     const published: number[] = [];
     const deleted: string[] = [];
@@ -138,7 +138,7 @@ describe("ScheduledTaskService", () => {
   });
 
   it("is composed with store.schedules instead of legacy Store methods", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-schedule-composition-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-schedule-composition-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const application = new DaemonApplication({
       store,
@@ -414,7 +414,7 @@ describe("ScheduledTaskService", () => {
   it("runs one missed occurrence after daemon recovery when requested", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-18T09:00:00Z"));
-    const dir = mkdtempSync(join(tmpdir(), "ohs-scheduled-recovery-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-scheduled-recovery-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     store.schedules.createTask({
       id: "missed-task",

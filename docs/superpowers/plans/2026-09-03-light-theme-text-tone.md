@@ -34,6 +34,6 @@
 
 - [ ] **步骤 3：运行桌面端验证**
 
-运行：`pnpm --filter @openharness/desktop typecheck && pnpm --filter @openharness/desktop build`
+运行：`pnpm --filter @vykor/desktop typecheck && pnpm --filter @vykor/desktop build`
 
 预期：类型检查与 Electron Vite 生产构建均以退出码 0 完成。

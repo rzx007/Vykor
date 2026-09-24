@@ -1,7 +1,7 @@
 import {
   computeNextScheduledTime,
   validateScheduledRecurrence,
-} from "@openharness/services";
+} from "@vykor/services";
 import type {
   CreateScheduledRunInput,
   CreateScheduledTaskInput,
@@ -9,7 +9,7 @@ import type {
   ScheduledTaskRecord,
   UpdateScheduledRunInput,
   UpdateScheduledTaskInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 const MAX_TIMER_DELAY_MS = 2_147_000_000;
 const DAEMON_RESTART_REASON =

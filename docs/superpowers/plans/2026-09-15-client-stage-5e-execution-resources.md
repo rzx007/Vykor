@@ -32,7 +32,7 @@
 - [ ] Terminal stream 使用 SseTransport + decodeTerminalEvent。
 - [ ] Channel：handle message/record delivery/status/pending。
 - [ ] Event：list durable、stream；保持 afterSeq/Last-Event-ID。
-- [ ] OpenHarnessClient 公开所有 Resource；旧方法一行转发。
+- [ ] VykorClient 公开所有 Resource；旧方法一行转发。
 - [ ] Desktop feature service 可逐步改用 resource property，但不重组 IPC/状态。
 - [ ] CLI 新代码可用 Resource；公共调用保留。
 - [ ] 快检 Client/Server/CLI/Desktop 类型。

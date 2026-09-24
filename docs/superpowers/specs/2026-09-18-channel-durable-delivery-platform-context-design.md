@@ -48,7 +48,7 @@ Feishu adapter 支持了 thread/topic 路由、入站 image/file、mention/bot �
 
 ### 2.3 与阶段二约束的关系
 
-阶段二计划第 17 行明确「不修改 `@openharness/protocol` 的 durable channel
+阶段二计划第 17 行明确「不修改 `@vykor/protocol` 的 durable channel
 input/output 类型」。本设计**取代**该限制：本阶段的核心动作就是给这两个类型增加
 可选字段。除此之外，阶段二的严格契约（不降级、不伪造、thread/root 语义分离）
 全部继续有效。
@@ -221,12 +221,12 @@ Feishu 入站事件
 1. 修改 `packages/services/src/session-runtime/schema.ts`，给 `channelDelivery`
    加 `platformMetaJson: text("platform_meta_json")`。
 2. 清空 `packages/services/src/session-runtime/migrations` 后运行
-   `pnpm --filter @openharness/services db:generate`。drizzle-kit 生成的是
+   `pnpm --filter @vykor/services db:generate`。drizzle-kit 生成的是
    `0000_<随机tag>.sql`，需要：
    - 把 SQL 重命名为 `0000_current_schema.sql`；
    - 改 `meta/_journal.json`，使 `entries` 只有一条，`idx: 0`、
      `tag: "0000_current_schema"`；顶层/entry 的 `version` 字段保留 drizzle 生成值；
-   - 运行 `pnpm --filter @openharness/services db:check` 检查迁移文件无冲突
+   - 运行 `pnpm --filter @vykor/services db:check` 检查迁移文件无冲突
      （它是迁移历史一致性检查，不是 schema 与快照等价校验；schema 正确性由第 4 步
      的 inventory 测试兜底）。
 3. 在基线 SQL **末尾追加两条手工数据行**（drizzle-kit 不生成数据行）。现有基线
@@ -315,12 +315,12 @@ channels：
 ## 10. 验收标准
 
 - 上述测试全部通过。
-- `pnpm --filter @openharness/protocol test -- --run`、
-  `pnpm --filter @openharness/services test -- --run`、
-  `pnpm --filter @openharness/server test -- --run`、
-  `pnpm --filter @openharness/channels test -- --run` 全绿。
+- `pnpm --filter @vykor/protocol test -- --run`、
+  `pnpm --filter @vykor/services test -- --run`、
+  `pnpm --filter @vykor/server test -- --run`、
+  `pnpm --filter @vykor/channels test -- --run` 全绿。
 - 相关包 `check-types` 退出码 0。
-- `pnpm --filter @openharness/services db:check` 通过。
+- `pnpm --filter @vykor/services db:check` 通过。
 - `pnpm check:clean-slate` 通过；`pnpm check-docs` 通过。
 - `pnpm exec turbo build --output-logs=full` 全部成功。
 - `git diff --check` 无格式错误。

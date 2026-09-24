@@ -8,7 +8,7 @@ import { IncrementalOutput } from "./incremental-output.js";
 afterEach(() => vi.useRealTimers());
 
 function setup(bytes = 1024) {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-incremental-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-incremental-"));
   const path = join(dir, "store.db");
   const store = new SessionStore({ path, deltaFlushBytes: bytes, deltaFlushIntervalMs: 60_000 });
   store.sessions.create({ id: "s", cwd: dir, model: "m" });
@@ -108,7 +108,7 @@ describe("IncrementalOutput", () => {
 
   it("flushes on the interval timer", async () => {
     vi.useFakeTimers();
-    const dir = mkdtempSync(join(tmpdir(), "ohs-incremental-timer-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-incremental-timer-"));
     const store = new SessionStore({ path: join(dir, "store.db"), deltaFlushBytes: 1024, deltaFlushIntervalMs: 10 });
     try {
       store.sessions.create({ id: "s", cwd: dir, model: "m" });

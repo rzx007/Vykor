@@ -1,14 +1,14 @@
 import {
   IncompatibleProtocolError,
-  OpenHarnessApiError,
-  OpenHarnessClient,
-} from "@openharness/client";
+  VykorApiError,
+  VykorClient,
+} from "@vykor/client";
 import type {
   McpRuntimeConnectionCoordinator,
   McpRuntimeSyncResult,
   McpServerIdentity,
-} from "@openharness/core";
-import { readDaemonRegistry } from "@openharness/server";
+} from "@vykor/core";
+import { readDaemonRegistry } from "@vykor/server";
 
 export interface CliMcpRuntimeClient {
   mcp: {
@@ -32,7 +32,7 @@ const unavailable = (): McpRuntimeSyncResult => ({
 /**
  * CLI-side Runtime coordinator.
  *
- * It reuses the daemon registry and the typed `@openharness/client` resource.
+ * It reuses the daemon registry and the typed `@vykor/client` resource.
  * A missing registry or an unreachable daemon is reported as `unavailable`;
  * daemon authentication, protocol and server errors are surfaced as real sync
  * failures so they are never mistaken for an offline daemon.
@@ -42,7 +42,7 @@ export function createCliMcpRuntimeCoordinator(
 ): McpRuntimeConnectionCoordinator {
   const readRegistry = options.readRegistry ?? (() => readDaemonRegistry());
   const createClient =
-    options.createClient ?? ((clientOptions) => new OpenHarnessClient(clientOptions));
+    options.createClient ?? ((clientOptions) => new VykorClient(clientOptions));
 
   const invoke = async (
     identity: McpServerIdentity,
@@ -90,7 +90,7 @@ export function createCliMcpRuntimeCoordinator(
 }
 
 function isDaemonUnreachable(error: unknown): boolean {
-  if (error instanceof OpenHarnessApiError || error instanceof IncompatibleProtocolError) {
+  if (error instanceof VykorApiError || error instanceof IncompatibleProtocolError) {
     return false;
   }
   if (error instanceof TypeError && /fetch failed/i.test(error.message)) return true;

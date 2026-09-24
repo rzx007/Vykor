@@ -4,7 +4,7 @@ import type {
   TerminalEvent,
   TerminalRuntime,
   TerminalSignal,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import {
   DaemonTerminalError,

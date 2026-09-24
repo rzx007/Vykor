@@ -41,7 +41,7 @@
 ## 任务 3：收窄依赖类型
 
 - [ ] 业务模块用小型 capability interface 或 `Pick<Resource, ...>` 表达真实依赖。
-- [ ] 将 `OpenHarnessClient["previewPluginArchive"]`、`OpenHarnessClient["previewPluginGit"]` 等兼容方法类型索引改为对应 Resource 方法类型，不能只迁移运行时调用。
+- [ ] 将 `VykorClient["previewPluginArchive"]`、`VykorClient["previewPluginGit"]` 等兼容方法类型索引改为对应 Resource 方法类型，不能只迁移运行时调用。
 - [ ] 不把 transport、token 或 Client 全对象传进只需一个 Resource 的纯业务函数。
 - [ ] Client owner/connection manager 可保留完整 Client，避免复制生命周期管理。
 - [ ] 不新增容器、注册表或第二套依赖注入框架。

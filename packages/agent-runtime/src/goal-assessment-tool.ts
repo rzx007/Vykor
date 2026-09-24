@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 
 const textSchema = { type: "string", minLength: 1, maxLength: 4000 };
 export const GOAL_ASSESSMENT_TOOL_NAME = "GoalAssessment";

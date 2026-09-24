@@ -75,5 +75,5 @@ export class CredentialStorage {
 }
 
 function getDefaultConfigDir(): string {
-  return process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts");
+  return process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
 }

@@ -5,7 +5,7 @@ import {
   countEffectiveTools,
   buildDryRunReport,
 } from "./dry-run";
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 
 function makeSettings(partial: Partial<Settings> = {}): Settings {
   return {

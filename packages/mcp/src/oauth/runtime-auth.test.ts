@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpOAuthCredentialRecord } from "@openharness/core";
+import type { McpOAuthCredentialRecord } from "@vykor/core";
 import type { McpOAuthCredentialStore } from "./login.js";
 import { McpOAuthRuntime } from "./runtime-auth.js";
 
@@ -83,7 +83,7 @@ describe("McpOAuthRuntime", () => {
     configuredScopes = ["write"];
     await expect(request(config.url)).rejects.toMatchObject({
       code: "oauth-reauthentication-required",
-      message: expect.stringContaining("ohs mcp login linear"),
+      message: expect.stringContaining("vk mcp login linear"),
     });
     expect(fetch).toHaveBeenCalledTimes(1);
     await expect(runtime.getConnectionAction("linear", config)).resolves.toBe("disconnect");

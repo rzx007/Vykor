@@ -6,7 +6,7 @@
 
 ## 结论
 
-OpenHarness 将用统一的 `ContextPersistenceService` 接管所有由对话产生、需要跨轮次或跨会话生效的上下文。Agent 只表达“记住、查询、修改、忘记”这些语义，不知道也不选择文件路径、目录或数据库表。
+Vykor 将用统一的 `ContextPersistenceService` 接管所有由对话产生、需要跨轮次或跨会话生效的上下文。Agent 只表达“记住、查询、修改、忘记”这些语义，不知道也不选择文件路径、目录或数据库表。
 
 本设计采用一次性切换，不兼容旧结构：
 
@@ -55,8 +55,8 @@ OpenHarness 将用统一的 `ContextPersistenceService` 接管所有由对话产
 这套设计不是把某一个产品照搬过来，而是取它们已经验证过的共同边界：
 
 - Claude Code、OpenCode 一类工具把仓库指令文件当作开发者维护的静态规则，而不是让普通“记住”请求任意改文件。因此 `AGENTS.md/CLAUDE.md` 继续独立，`project_rule` 只保存对话产生的个人项目规则。
-- ChatGPT Memory、Letta、Mem0 一类长期记忆方案都强调语义操作、作用域和可管理记录。对应到 OpenHarness，就是 Remember/Recall/Update/Forget 工具、user/project/machine scope，以及可查询的 entry/revision/candidate。
-- LangGraph 一类 Agent runtime 明确区分线程 checkpoint 和跨线程 store。对应到 OpenHarness，就是 Session Memory 继续只服务 compact，Context Persistence 才负责跨会话信息。
+- ChatGPT Memory、Letta、Mem0 一类长期记忆方案都强调语义操作、作用域和可管理记录。对应到 Vykor，就是 Remember/Recall/Update/Forget 工具、user/project/machine scope，以及可查询的 entry/revision/candidate。
+- LangGraph 一类 Agent runtime 明确区分线程 checkpoint 和跨线程 store。对应到 Vykor，就是 Session Memory 继续只服务 compact，Context Persistence 才负责跨会话信息。
 - 主流系统对自动写入都需要更严格的门槛和用户管理入口。因此本设计只让高置信度、非敏感、作用域明确的环境事实自动提交，其余自动发现进入候选；显式请求则在冲突、敏感或含糊时询问。
 
 这些共同模式解释了为什么不能继续让 Agent 自己猜 `USER.md`、`rules.md`、`MEMORY.md` 或其他路径：路径只是旧实现细节，用户表达的是“记住什么、在哪个范围生效、何时更新或忘记”。
@@ -99,7 +99,7 @@ OpenHarness 将用统一的 `ContextPersistenceService` 接管所有由对话产
 
 - Git 安装在本机特定目录。
 - 当前项目测试服务器是 `10.0.0.7`。
-- 当前项目使用 conda 环境 `openharness`。
+- 当前项目使用 conda 环境 `vykor`。
 
 作用域可以是 `machine` 或 `project`。密码、令牌、私钥和连接串中的秘密字段不属于环境事实，必须拒绝持久化。
 
@@ -125,7 +125,7 @@ export interface ContextScopeRef {
 }
 ```
 
-- `user`：当前本地 OpenHarness 用户，`scopeKey = "local-user"`。
+- `user`：当前本地 Vykor 用户，`scopeKey = "local-user"`。
 - `machine`：当前 daemon 安装，`scopeKey = "local-machine"`。
 - `project`：使用 SessionStore 中稳定的 `projectId`，不能使用原始 cwd 作为身份。
 
@@ -489,10 +489,10 @@ sessionContinuity: {
 
 切换提交完成后：
 
-- 删除 `@openharness/memory` 包和 `MemoryManager`。
-- 删除 `@openharness/personalization` 包和 `updateRulesFromSession`。
+- 删除 `@vykor/memory` 包和 `MemoryManager`。
+- 删除 `@vykor/personalization` 包和 `updateRulesFromSession`。
 - 删除 prompts 中 USER、pending update、local rules 读取逻辑。
-- 删除 agent-runtime 的 `memory-runtime.ts` 和 `OpenHarnessAgent.remember()`。
+- 删除 agent-runtime 的 `memory-runtime.ts` 和 `VykorAgent.remember()`。
 - 删除 services 的旧 `memory-extract.ts` 和依赖 Markdown 的 autodream 流程。
 - 删除 server 的 `MemoryService`、旧 memory routes 和 profile 中 USER 部分。
 - 删除 client 的 `MemoryEntryRecord/MemoryListResponse` 和旧 HTTP 方法。

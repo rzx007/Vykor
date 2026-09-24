@@ -9,15 +9,15 @@ import {
 import { join, resolve, dirname } from "node:path";
 import { platform, machine, homedir, hostname } from "node:os";
 import { randomUUID } from "node:crypto";
-import { getConfigDir, resolveGitRepository } from "@openharness/core";
-import type { WorkStyle } from "@openharness/core";
-import type { EffectiveEnvironmentInfo } from "@openharness/environment";
-import { loadLocalRules } from "@openharness/personalization";
+import { getConfigDir, resolveGitRepository } from "@vykor/core";
+import type { WorkStyle } from "@vykor/core";
+import type { EffectiveEnvironmentInfo } from "@vykor/environment";
+import { loadLocalRules } from "@vykor/personalization";
 import {
   describeHostShellLauncher,
   resolveHostShellLauncher,
   type HostShellLauncher,
-} from "@openharness/sandbox";
+} from "@vykor/sandbox";
 
 export type PromptPermissionMode = "default" | "plan" | "full_auto";
 
@@ -37,7 +37,7 @@ export interface EnvironmentInfo {
 }
 
 const DEFAULT_IDENTITY =
-  "You are OpenHarness, an open-source AI coding assistant CLI. You are an interactive agent that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.";
+  "You are Vykor, an open-source AI coding assistant CLI. You are an interactive agent that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.";
 
 const LONG_RUNNING_SHELL_GUIDANCE =
   " - Use Shell only for short-lived commands. For long-running shell commands such as dev servers, watchers, installs, builds, migrations, docker compose, or anything likely to keep running, use BackgroundShellCreate, then follow progress with JobWait or JobRead.";
@@ -94,7 +94,7 @@ const MAX_SOUL_CHARS = 12_000;
 const MAX_USER_PROFILE_CHARS = 8_000;
 const USER_PROFILE_PENDING_DIR = "user_profile_pending";
 
-const SOUL_TEMPLATE = `You are OpenHarness, a careful local coding agent.
+const SOUL_TEMPLATE = `You are Vykor, a careful local coding agent.
 
 Default tone:
 - Be concise, warm, and technically direct.
@@ -400,7 +400,7 @@ export function buildDelegationSection(): string {
   return [
     "# Delegation And Subagents",
     "",
-    "OpenHarness can delegate background work with the `Agent` tool.",
+    "Vykor can delegate background work with the `Agent` tool.",
     "Use it when the user explicitly asks for a subagent, background worker, or parallel investigation, " +
       "or when the task clearly benefits from splitting off a focused worker.",
     "",

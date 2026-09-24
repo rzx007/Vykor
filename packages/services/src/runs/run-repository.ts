@@ -14,7 +14,7 @@ import type {
   UpdateRunAttemptInput,
   UpdateRunInput,
   UpdateSessionTaskInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
 import {

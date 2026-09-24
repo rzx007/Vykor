@@ -53,7 +53,7 @@ afterEach(async () => {
 
 describe("WorkspaceService.listFiles", () => {
   it("returns files beyond the former 5,000-entry boundary", async () => {
-    const rootPath = await mkdtemp(join(tmpdir(), "openharness-workspace-"))
+    const rootPath = await mkdtemp(join(tmpdir(), "vykor-workspace-"))
     temporaryDirectories.push(rootPath)
     await Promise.all(
       Array.from({ length: 5_001 }, (_, index) =>
@@ -74,7 +74,7 @@ describe("WorkspaceService.listFiles", () => {
 运行：
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace-service.test.ts
+pnpm --filter @vykor/desktop test -- src/main/features/workspace/workspace-service.test.ts
 ```
 
 预期：测试以数量断言失败；实际为 `5,000`，期望为 `5,001`。失败不能来自 Electron import、临时目录权限或测试超时。
@@ -117,7 +117,7 @@ it("sorts directories before files and names within each group", async () => {
 
 ```ts
 async function createTemporaryDirectory(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), "openharness-workspace-"))
+  const path = await mkdtemp(join(tmpdir(), "vykor-workspace-"))
   temporaryDirectories.push(path)
   return path
 }
@@ -164,7 +164,7 @@ export interface WorkspaceListFilesResult {
 运行：
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace-service.test.ts
+pnpm --filter @vykor/desktop test -- src/main/features/workspace/workspace-service.test.ts
 ```
 
 预期：3 个测试全部通过，退出码为 0，且无未处理异常。
@@ -174,9 +174,9 @@ pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace
 依次运行：
 
 ```bash
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 git diff --check
 ```
 

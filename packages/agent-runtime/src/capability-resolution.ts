@@ -1,10 +1,10 @@
 import type {
   AgentBackgroundShellHost,
   AgentScheduleEffects,
-} from "@openharness/core";
-import type { WorkflowRunRepository } from "@openharness/coordinator";
-import type { AgentJobHost } from "@openharness/jobs";
-import type { AgentTerminalHost } from "@openharness/terminal";
+} from "@vykor/core";
+import type { WorkflowRunRepository } from "@vykor/coordinator";
+import type { AgentJobHost } from "@vykor/jobs";
+import type { AgentTerminalHost } from "@vykor/terminal";
 
 import type {
   AgentCapabilityOverrides,

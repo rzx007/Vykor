@@ -4,7 +4,7 @@ import {
   McpOAuthApplicationService,
   type McpConfigOperationResult,
   type McpServerSummary,
-} from "@openharness/server"
+} from "@vykor/server"
 import type {
   DesktopMcpAddInput,
   DesktopMcpExportResult,

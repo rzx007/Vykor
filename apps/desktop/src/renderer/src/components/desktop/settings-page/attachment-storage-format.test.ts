@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { AttachmentStorageIssue, AttachmentStorageReport } from "@openharness/client"
+import type { AttachmentStorageIssue, AttachmentStorageReport } from "@vykor/client"
 import {
   canCollectStorage,
   canRepairStorage,

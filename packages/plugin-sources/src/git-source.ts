@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 
 const execFileAsync = promisify(execFile);
-const PRIVATE_PREFIX = "openharness-plugin-git-";
+const PRIVATE_PREFIX = "vykor-plugin-git-";
 const GIT_TIMEOUT_MS = 2 * 60 * 1_000;
 const MAX_GIT_OUTPUT = 512 * 1024;
 
@@ -70,7 +70,7 @@ function normalizeGitRef(value: string | undefined): string | undefined {
 
 function sourceDigest(input: { url: string; ref?: string; commit: string }): string {
   return createHash("sha256")
-    .update("openharness-plugin-git-source-v1\0")
+    .update("vykor-plugin-git-source-v1\0")
     .update(input.url)
     .update("\0")
     .update(input.ref ?? "")

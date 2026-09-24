@@ -48,7 +48,7 @@ Feature 用于同一基本协议下的能力选择。例如客户端使用 Workf
 
 ## 请求解码
 
-HTTP route 必须通过 `@openharness/protocol` 的 request decoder 读取 JSON。规则是：
+HTTP route 必须通过 `@vykor/protocol` 的 request decoder 读取 JSON。规则是：
 
 - body 必须是 JSON object；
 - 必填字段缺失、类型不对或枚举值无效时返回 `invalid_request`；

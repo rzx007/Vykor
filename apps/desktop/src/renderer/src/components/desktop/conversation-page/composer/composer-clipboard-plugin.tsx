@@ -18,7 +18,7 @@ import { readComposerClipboard } from "./composer-file-input"
 import { composerDocumentFromLexical, composerParagraphs, descendantLeaves, textLeaves } from "./composer-lexical-document"
 import type { ComposerSkill } from "./composer-types"
 
-const COMPOSER_CLIPBOARD_TYPE = "application/x-openharness-composer"
+const COMPOSER_CLIPBOARD_TYPE = "application/x-vykor-composer"
 
 function selectedComposerDocument(selection: RangeSelection): ComposerDocument {
   const leaves = textLeaves()

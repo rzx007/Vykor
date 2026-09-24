@@ -1,5 +1,5 @@
-import { RESERVED_SHELL_TOOL_NAMES, type IToolRegistry } from "@openharness/core";
-import type { LoadedNativePlugin, PluginDiagnostic } from "@openharness/plugins";
+import { RESERVED_SHELL_TOOL_NAMES, type IToolRegistry } from "@vykor/core";
+import type { LoadedNativePlugin, PluginDiagnostic } from "@vykor/plugins";
 import { formatNativeToolAuditEvent, NativeToolCallGuard, type NativeToolAuditEvent } from "./guard.js";
 import { NativeToolHost, NativeToolHostError, type NativeToolHostState } from "./tool-host.js";
 import { beginNativeToolRuntimeStatus } from "./status.js";

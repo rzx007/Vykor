@@ -14,8 +14,8 @@ import {
   type WorkflowRunSnapshot,
   type WorkflowSpec,
   type WorkflowTemplateName,
-} from "@openharness/coordinator";
-import { getDetachedProcessSupervisor } from "@openharness/services";
+} from "@vykor/coordinator";
+import { getDetachedProcessSupervisor } from "@vykor/services";
 
 interface CwdOption {
   cwd?: string;

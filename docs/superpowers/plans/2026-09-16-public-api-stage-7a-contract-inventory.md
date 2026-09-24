@@ -4,7 +4,7 @@
 
 **目标：** 建立可审查的 Client 公共契约清单、可靠的旧平铺调用 AST 扫描、runtime export 快照和代表性 type consumer fixture，为 7B–7F 提供真实基线。
 
-**架构：** 使用仓库已有 `typescript` Compiler API 解析各 workspace tsconfig，通过类型信息识别 `OpenHarnessClient` 兼容方法调用；人工维护兼容方法与替代入口映射，机器负责验证映射和调用位置。runtime export 由 Vitest 锁定，type-only export 由穷尽清单加独立编译 fixture 约束。
+**架构：** 使用仓库已有 `typescript` Compiler API 解析各 workspace tsconfig，通过类型信息识别 `VykorClient` 兼容方法调用；人工维护兼容方法与替代入口映射，机器负责验证映射和调用位置。runtime export 由 Vitest 锁定，type-only export 由穷尽清单加独立编译 fixture 约束。
 
 **技术栈：** TypeScript Compiler API、Node test、Vitest、现有 architecture/docs 脚本。
 
@@ -64,13 +64,13 @@ type LegacyReference = {
 };
 ```
 
-- [ ] 使用各 workspace `tsconfig.json` 创建 Program；通过 TypeChecker 确认 receiver 类型包含 `OpenHarnessClient`，不按变量名猜测。
-- [ ] 对 property call、属性取值/传递、element access、解构 alias 和 `OpenHarnessClient["method"]` 类型索引做符号追踪。
-- [ ] 对 `Pick<OpenHarnessClient, "compatMethod">` 等 mapped type，从 transient property symbol/declaration/alias target 追溯回 `OpenHarnessClient` 的兼容成员；不能只检查 receiver 表面类型名称。
-- [ ] 已确认来源是 `OpenHarnessClient` 但无法解析具体成员的 production diagnostic 直接令门禁失败；动态字符串属性列入人工审计清单。
+- [ ] 使用各 workspace `tsconfig.json` 创建 Program；通过 TypeChecker 确认 receiver 类型包含 `VykorClient`，不按变量名猜测。
+- [ ] 对 property call、属性取值/传递、element access、解构 alias 和 `VykorClient["method"]` 类型索引做符号追踪。
+- [ ] 对 `Pick<VykorClient, "compatMethod">` 等 mapped type，从 transient property symbol/declaration/alias target 追溯回 `VykorClient` 的兼容成员；不能只检查 receiver 表面类型名称。
+- [ ] 已确认来源是 `VykorClient` 但无法解析具体成员的 production diagnostic 直接令门禁失败；动态字符串属性列入人工审计清单。
 - [ ] 从契约清单读取 compatibility method names，禁止在扫描器重复维护第二份列表。
 - [ ] 排除 `packages/client/src/transport/http-client.ts` facade 自身；将 `http-client.test.ts` 的转发测试归为 `compatibility-test`，其他 test/spec 归为 `other-test`。
-- [ ] 默认扫描设计规格 6.7 矩阵中的 packages/apps；同时扫描所有生产 `.ts/.tsx` 对 `@openharness/client` 的导入，避免新文件漏网。
+- [ ] 默认扫描设计规格 6.7 矩阵中的 packages/apps；同时扫描所有生产 `.ts/.tsx` 对 `@vykor/client` 的导入，避免新文件漏网。
 
 ## 任务 3：锁定扫描形态
 
@@ -82,9 +82,9 @@ const api = client; api.listJobs();
 this.client.replyPermission("p1", input);
 (await clientFactory()).listPlugins({ cwd });
 const { getSession } = client; getSession("s1");
-type CancelResult = ReturnType<OpenHarnessClient["cancelJob"]>;
+type CancelResult = ReturnType<VykorClient["cancelJob"]>;
 const fn = client.getSession;
-type Capability = Pick<OpenHarnessClient, "capabilities">;
+type Capability = Pick<VykorClient, "capabilities">;
 declare const narrowed: Capability; narrowed.capabilities();
 declare function invoke(callback: (client: Capability) => void): void;
 invoke((client) => client.capabilities());
@@ -117,15 +117,15 @@ unrelated.getSession("s1"); // 不应报告
 ## 任务 5：锁定 runtime export 与代表性类型消费
 
 - [ ] `public-api.test.ts` 动态导入 `../index.js`，将排序后的 runtime keys 与契约清单中 runtime exports 比较。
-- [ ] 测试还应反射 `OpenHarnessClient.prototype`，确认 compatibility method、getter 和清单一致；构造器实例 properties 用注入 fetch 构造后核对。
+- [ ] 测试还应反射 `VykorClient.prototype`，确认 compatibility method、getter 和清单一致；构造器实例 properties 用注入 fetch 构造后核对。
 - [ ] 用 TypeChecker 自动枚举根入口全部 exports，验证 runtime/type-only 分类和清单完全一致。
-- [ ] `consumer.ts` 从 `@openharness/client` 导入 Client、关键错误、协议检查、每个 Resource 代表性输入/输出类型、state/sync 能力，并实际写出能通过类型检查的调用。
+- [ ] `consumer.ts` 从 `@vykor/client` 导入 Client、关键错误、协议检查、每个 Resource 代表性输入/输出类型、state/sync 能力，并实际写出能通过类型检查的调用。
 - [ ] fixture 同时引用一个 deprecated 平铺方法，证明 Stage 7 仍兼容；不要使用 `@ts-ignore`、`any` 或相对源码导入。
 - [ ] `tsconfig.json` 使用 `noEmit`、`strict`、`moduleResolution` 与项目一致，并通过 workspace paths 解析包根入口。
 - [ ] `package.json` 新增：
 
 ```json
-"check:client-api": "tsc -p tests/client-public-api/tsconfig.json && node --test scripts/client-legacy-calls.test.mjs && pnpm --filter @openharness/client exec vitest run src/__test__/public-api.test.ts"
+"check:client-api": "tsc -p tests/client-public-api/tsconfig.json && node --test scripts/client-legacy-calls.test.mjs && pnpm --filter @vykor/client exec vitest run src/__test__/public-api.test.ts"
 ```
 - [ ] 根 `package.json` 将脚本明确改为 `"check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs"`；这样固定串联 consumer 编译、scanner test、runtime/type-only contract comparison 和架构扫描。
 

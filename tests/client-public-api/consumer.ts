@@ -1,10 +1,10 @@
 /**
- * Representative external consumer type fixture for @openharness/client.
+ * Representative external consumer type fixture for @vykor/client.
  * Verifies public contract can be cleanly consumed without any relative imports, any, or ts-ignore.
  */
 import {
-  OpenHarnessClient,
-  OpenHarnessApiError,
+  VykorClient,
+  VykorApiError,
   IncompatibleProtocolError,
   CURRENT_PROTOCOL_VERSION,
   checkProtocolCompatibility,
@@ -33,7 +33,7 @@ import {
   type FeishuRegistrationSnapshot,
   type ListEventsOptions,
   type SessionEventRecord,
-  type OpenHarnessServerHealth,
+  type VykorServerHealth,
   type ModelProviderInfo,
   type AuthStatus,
   type ProjectRecord,
@@ -41,9 +41,9 @@ import {
   type SkillSnapshot,
   type McpRuntimeSyncResult,
   type McpRuntimeStatus,
-} from "@openharness/client";
+} from "@vykor/client";
 
-export async function consumePublicApi(client: OpenHarnessClient): Promise<void> {
+export async function consumePublicApi(client: VykorClient): Promise<void> {
   // Protocol checks
   const serverCaps: ServerCapabilities = await client.protocol.capabilities();
   const currentVersion: number = CURRENT_PROTOCOL_VERSION;
@@ -56,9 +56,9 @@ export async function consumePublicApi(client: OpenHarnessClient): Promise<void>
   }
 
   // Protocol Resource
-  const health: OpenHarnessServerHealth = await client.protocol.health();
+  const health: VykorServerHealth = await client.protocol.health();
   if (!health.ok) {
-    throw new OpenHarnessApiError("Health check failed", 500, { error: "unhealthy" });
+    throw new VykorApiError("Health check failed", 500, { error: "unhealthy" });
   }
 
   // System Resource
@@ -185,7 +185,7 @@ export async function consumePublicApi(client: OpenHarnessClient): Promise<void>
   void [controller, permission, task, shellJob, terminal, channelRes, models, authStatus, projects, pluginResult, skills];
 }
 
-export function rejectRemovedFlatApi(client: OpenHarnessClient): void {
+export function rejectRemovedFlatApi(client: VykorClient): void {
   // @ts-expect-error removed flat compatibility API
   client.addMemory;
   // @ts-expect-error removed flat compatibility API

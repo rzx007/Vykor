@@ -2,7 +2,7 @@
 
 > 状态：当前实现，最后核对：2026-09-08。
 
-OpenHarness 把“在哪里运行”和“允许做什么”分成两层：
+Vykor 把“在哪里运行”和“允许做什么”分成两层：
 
 - `agentEnvironment` 选择 Native 或 WSL；
 - `sandbox` 是可选的本机 SRT 权限边界。
@@ -38,7 +38,7 @@ SRT 保留既有 `enabled`、`failIfUnavailable`、filesystem/network 和 `runti
 | macOS | Native | 需要 `sandbox-exec` |
 | Linux | Native | 需要 `bwrap` |
 
-WSL 首期支持 Windows 盘符项目，例如 `D:\code\ohs ↔ /mnt/d/code/ohs`。`\\wsl.localhost\...` 与 `\\wsl$\...` 项目根暂不支持，避免宿主 Git/worktree 与 Linux 文件系统的所有权不一致。
+WSL 首期支持 Windows 盘符项目，例如 `D:\code\vk ↔ /mnt/d/code/vk`。`\\wsl.localhost\...` 与 `\\wsl$\...` 项目根暂不支持，避免宿主 Git/worktree 与 Linux 文件系统的所有权不一致。
 
 ## 安全边界
 
@@ -49,11 +49,11 @@ Permission/approval 先决定工具调用是否允许，SRT 再限制 Native 进
 真实 WSL 验收覆盖 cwd、环境变量、退出码、文件读写、glob/grep、后台 Shell、stdio MCP、PTY resize 和 Ctrl-C：
 
 ```powershell
-pnpm --filter @openharness/sandbox e2e:wsl
+pnpm --filter @vykor/sandbox e2e:wsl
 ```
 
 SRT 验收：
 
 ```powershell
-pnpm --filter @openharness/sandbox e2e:srt
+pnpm --filter @vykor/sandbox e2e:srt
 ```

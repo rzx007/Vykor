@@ -5,7 +5,7 @@ import {
   parseFeishuPatchInput,
   parseFeishuRegistrationStartInput,
   ProtocolValidationError,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { Hono } from "hono";
 
 import type { ChannelRuntimeService } from "../../daemon/channel-runtime-service.js";

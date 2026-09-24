@@ -30,7 +30,7 @@ function normalize(value: unknown): unknown {
 }
 
 function withTempPath(test: (path: string) => void): void {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-session-database-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-session-database-"));
   const path = join(directory, "sessions.db");
   try {
     test(path);
@@ -86,7 +86,7 @@ describe("SessionDatabase", () => {
   });
 
   it("creates parent directories before opening the SQLite file", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-session-database-parent-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-session-database-parent-"));
     const path = join(directory, "nested", "sessions.db");
     try {
       const database = SessionDatabase.open({ path });

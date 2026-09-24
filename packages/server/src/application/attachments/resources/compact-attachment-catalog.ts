@@ -1,9 +1,9 @@
-import type { CompactContextSection } from "@openharness/core";
+import type { CompactContextSection } from "@vykor/core";
 import type {
   AttachmentAssetRecord,
   AttachmentRepresentationRecord,
   SessionInputAttachmentRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface CompactAttachmentAssetQueries {
   getAttachment(

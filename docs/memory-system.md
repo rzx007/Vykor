@@ -2,7 +2,7 @@
 
 > 状态：当前实现。持久记忆格式只接受 Markdown + frontmatter schema 1，不读取旧 JSON memory。
 
-OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每层解决不同的问题：
+Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解决不同的问题：
 
 ```
 问题                     解决方案             作用域
@@ -34,7 +34,7 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 │                  ↓                                                │
 │  ┌─────────────────────────────┐                                  │
 │  │  session_memory 写 checkpoint│ ← 每轮自动，原子写               │
-│  │  goal / next_step / 摘要    │   ~/.openharness-ts/data/        │
+│  │  显式 Goal / 近期消息       │   ~/.vykor/data/        │
 │  │  （最多 12k 字符 / 80 行）  │   session-memory/<项目>/<id>.md  │
 │  └─────────────────────────────┘                                  │
 └──────────────────────────────────────────────────────────────────┘
@@ -74,7 +74,7 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 | `microcompact` | 4 000 字符  | 老工具结果超此值 → 可被微压缩清理       |
 
 
-可用环境变量覆盖：`OPENHARNESS_TOOL_OUTPUT_INLINE_CHARS` 等。
+可用环境变量覆盖：`VYKOR_TOOL_OUTPUT_INLINE_CHARS` 等。
 
 > 状态：✅ 已实现。工具结果写入 messages 前经 `applyToolOutputBudget` 截断（`query-engine.ts`）；microCompact 已扩展支持 MCP 工具（`compact-service.ts`）。阈值均可环境变量覆盖。
 
@@ -92,21 +92,22 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 
 执行 /compact 之后（设计中）：
   [摘要：整段对话做了什么]
-  [session-memory: 当前目标/下一步/关键状态]  ← 从文件读回来补上
+  [session-memory: 显式 Goal（若有）/近期消息]  ← 从文件读回来补上
 
 效果：即使原始对话被替换，模型仍然知道自己在做什么
 ```
 
 **写什么**：每轮结束自动将以下内容写入一个 Markdown 文件：
 
-- 当前目标（`task_focus_state.goal`）
-- 下一步（`task_focus_state.next_step`）
-- 最近 80 行消息的文本摘要
+- 绑定到本轮运行的显式 Goal（若有）
+- 最近最多 80 条消息的文本摘要；超出预算时优先保留最新消息
+
+`next_step`、`verified_state`、`active_artifacts` 仅在调用方提供 `task_focus_state` 时渲染；当前 daemon 收尾链路尚未提供这些字段。没有显式 Goal 时，当前目标显示占位文本。
 
 **文件位置**：
 
 ```
-~/.openharness-ts/data/session-memory/
+~/.vykor/data/session-memory/
   <项目名>-<sha1前12>/
     <sessionId>.md
 ```
@@ -119,14 +120,12 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 ## Current State
 正在修复 TUI 权限弹窗死锁问题
 
-## Next Step
-验证 readline handler 中 permission_response 的处理是否正确
-
-## Recent Work
-...（最近消息的文字摘要）
+## Recent Conversation
+- user: 修复 TUI 权限弹窗死锁问题
+- assistant: 已检查权限响应处理
 ```
 
-> **当前实现状态：✅ 已完整接线。**
+> **当前实现状态：✅ 检查点读写已接线；状态字段仅接入显式 Goal。**
 >
 > - 写入：daemon root Run 成功收尾后，从 durable transcript 自动写（可用 `memory.sessionMemoryEnabled=false` 关闭）
 > - 读回：`/compact` 和 autocompact 触发时，通过 `setCompactContextProvider` 读取 checkpoint，注入摘要 prompt 的 `## Session Memory Checkpoint` 段落
@@ -148,7 +147,7 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 **写哪里**（全局，跨项目共享）：
 
 ```
-~/.openharness-ts/local_rules/
+~/.vykor/local_rules/
   facts.json     ← 结构化事实（按 type:value 去重）
   rules.md       ← 人类可读的摘要，下次启动注入 system prompt
 ```
@@ -210,9 +209,9 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 
 **原理**：
 
-1. 整目录备份（`~/.openharness-ts/data/memory-backups/`）
+1. 整目录备份（`~/.vykor/data/memory-backups/`）
 2. 抢整合锁（防止并发两次 dream）
-3. 拉起一个 `ohs --print <整合 prompt>` 后台子进程（type: "dream"）
+3. 拉起一个 `vk --print <整合 prompt>` 后台子进程（type: "dream"）
 4. 模型读 memory 目录，输出整合指令：合并近重复、纠错矛盾、相对日期改绝对、过时条目标 `disabled: true`、重建 MEMORY.md 索引
 5. 失败/被杀 → 自动回滚锁 mtime
 
@@ -231,9 +230,9 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 
 | 时机             | 产生什么                                    | 写哪里                                                           |
 | -------------- | --------------------------------------- | ------------------------------------------------------------- |
-| 本轮结束           | session_memory checkpoint（goal + 消息摘要）  | `~/.openharness-ts/data/session-memory/<project>-<hash>/<id>.md` |
-| root Run 成功收尾 | personalization 抽出 `10.0.0.7`、`prod-ml` | `~/.openharness-ts/local_rules/facts.json` + `rules.md`          |
-| 你敲 `/remember` | LLM 提取"移除 /clear 的决策"                   | `~/.openharness-ts/data/memory/<project>-<hash>/xxx.md`          |
+| 本轮结束           | session_memory checkpoint（goal + 消息摘要）  | `~/.vykor/data/session-memory/<project>-<hash>/<id>.md` |
+| root Run 成功收尾 | personalization 抽出 `10.0.0.7`、`prod-ml` | `~/.vykor/local_rules/facts.json` + `rules.md`          |
+| 你敲 `/remember` | LLM 提取"移除 /clear 的决策"                   | `~/.vykor/data/memory/<project>-<hash>/xxx.md`          |
 | 你敲 `/dream`    | 整理 memory 目录，合并重复                       | 原地修改 + 备份                                                     |
 
 
@@ -253,7 +252,7 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 | **方法**   | 正则（10 个模式）                        | LLM 语义理解                                       |
 | **抓什么**  | 机械事实：IP、路径、环境名、端点                 | 语义事实：决策、偏好、约束                                  |
 | **成本**   | 零（无 LLM 调用）                       | 有成本（一次 LLM 调用）                                 |
-| **存放位置** | `~/.openharness-ts/local_rules/`（全局） | `~/.openharness-ts/data/memory/<项目>-<hash>/`（项目级） |
+| **存放位置** | `~/.vykor/local_rules/`（全局） | `~/.vykor/data/memory/<项目>-<hash>/`（项目级） |
 
 
 ---
@@ -263,7 +262,7 @@ OpenHarness 的"记忆"不是单一模块，而是**四层互补体系**。每�
 
 |         | session_memory checkpoint                         | session 快照                                  |
 | ------- | ------------------------------------------------- | ------------------------------------------- |
-| **目录**  | `~/.openharness-ts/data/session-memory/<项目>-<hash>/` | daemon SQLite |
+| **目录**  | `~/.vykor/data/session-memory/<项目>-<hash>/` | daemon SQLite |
 | **内容**  | goal + 消息摘要（12k 上限）                               | 完整 durable Session、Input、Run、Message 和 Part |
 | **用途**  | 给 compact 提供连续性                                   | 多端恢复、审计和运行状态 |
 | **由谁读** | compact 边界（`setCompactContextProvider` 注入）        | daemon Application 和共享 client |

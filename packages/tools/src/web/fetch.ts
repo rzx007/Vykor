@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 import { createToolAbortScope } from "../abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
 import { formatWebError } from "./tool-errors.js";

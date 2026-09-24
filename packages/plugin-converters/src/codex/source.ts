@@ -53,7 +53,7 @@ function pathDeclaration(root: string, value: string): string {
   const full = resolve(root, value);
   if (full === root || !isWithin(root, full)) throw new Error(`Codex component path escapes source: ${value}`);
   const path = relative(root, full).replaceAll("\\", "/");
-  if (path.split("/").some(part => [".git", ".codex-plugin", ".claude-plugin", ".openharness-plugin", ".openharness-conversion"].includes(part))) {
+  if (path.split("/").some(part => [".git", ".codex-plugin", ".claude-plugin", ".vykor-plugin", ".vykor-conversion"].includes(part))) {
     throw new Error(`Reserved Codex component path: ${value}`);
   }
   return path;

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { ContentBlock, Settings } from "@openharness/core";
-import { loadSettings, getSkillsDir, getDataDir } from "@openharness/core";
-import { CommandRegistry } from "@openharness/commands";
-import { SkillRegistry, SkillLoader, findProjectSkillDirs, type SkillDefinition } from "@openharness/skills";
-import { buildRuntimeSystemPrompt } from "@openharness/prompts";
-import { resolveToolPath } from "@openharness/tools";
-import { discoverInstalledNativePlugins, loadNativePlugin, verifyInstalledNativePlugin } from "@openharness/plugins";
-import { isCoordinatorMode } from "@openharness/coordinator";
+import type { ContentBlock, Settings } from "@vykor/core";
+import { loadSettings, getSkillsDir, getDataDir } from "@vykor/core";
+import { CommandRegistry } from "@vykor/commands";
+import { SkillRegistry, SkillLoader, findProjectSkillDirs, type SkillDefinition } from "@vykor/skills";
+import { buildRuntimeSystemPrompt } from "@vykor/prompts";
+import { resolveToolPath } from "@vykor/tools";
+import { discoverInstalledNativePlugins, loadNativePlugin, verifyInstalledNativePlugin } from "@vykor/plugins";
+import { isCoordinatorMode } from "@vykor/coordinator";
 import { resolveBun } from "./resolveBun";
 import { VERSION } from "../version";
 import { join } from "node:path";
@@ -77,11 +77,11 @@ function positiveIntegerEnv(name: string, fallback: number): number {
 }
 
 function maxImageAttachments(): number {
-  return positiveIntegerEnv("OPENHARNESS_MAX_IMAGE_ATTACHMENTS", DEFAULT_MAX_IMAGE_ATTACHMENTS);
+  return positiveIntegerEnv("VYKOR_MAX_IMAGE_ATTACHMENTS", DEFAULT_MAX_IMAGE_ATTACHMENTS);
 }
 
 function maxImageBytes(): number {
-  return positiveIntegerEnv("OPENHARNESS_MAX_IMAGE_BYTES", DEFAULT_MAX_IMAGE_BYTES);
+  return positiveIntegerEnv("VYKOR_MAX_IMAGE_BYTES", DEFAULT_MAX_IMAGE_BYTES);
 }
 
 function normalizeMediaType(mediaType: string): string {
@@ -119,7 +119,7 @@ function assertImageSize(sizeBytes: number): void {
 }
 
 function imageAttachmentCacheDir(): string {
-  return process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR
+  return process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR
     ?? join(getDataDir(), "attachments", "images");
 }
 
@@ -293,8 +293,8 @@ async function runPrintMode(
 /**
  * 启动 TUI (Terminal User Interface) 模式。
  *
- * 本进程仅作**启动器**（默认 `ohs` 与显式 `ohs --tui`）：spawn opentui 前端（Bun 运行时）子进程，经
- * `OPENHARNESS_FRONTEND_CONFIG` 传入 daemon attach 信息。
+ * 本进程仅作**启动器**（默认 `vk` 与显式 `vk --tui`）：spawn opentui 前端（Bun 运行时）子进程，经
+ * `VYKOR_FRONTEND_CONFIG` 传入 daemon attach 信息。
  * 前端通过 `useServerSync` 与 daemon 通信。
  * 本进程 stdio inherit 终端给 opentui，等前端退出后 process.exit。详见 docs/tui-flow.md。
  *
@@ -311,7 +311,7 @@ async function runTuiMode(
   const bun = resolveBun();
   if (!bun) {
     console.error(
-      "openharness TUI 需要 Bun 运行时（opentui 原生渲染器）。\n" +
+      "vykor TUI 需要 Bun 运行时（opentui 原生渲染器）。\n" +
       "安装：https://bun.sh — Windows: powershell -c \"irm bun.sh/install.ps1 | iex\"\n" +
       "或使用 -p/--print 模式无 TUI 运行。",
     );
@@ -374,7 +374,7 @@ async function runTuiMode(
     windowsHide: true,
     env: {
       ...process.env,
-      OPENHARNESS_FRONTEND_CONFIG: frontendConfig,
+      VYKOR_FRONTEND_CONFIG: frontendConfig,
     },
   });
 
@@ -385,7 +385,7 @@ async function runTuiMode(
 
 /**
  * 三源加载技能到给定 registry：bundled（最先）→ user（getSkillsDir）→
- * project（cwd/.agents/skills + cwd/.openharness-ts/skills）。
+ * project（cwd/.agents/skills + cwd/.vykor/skills）。
  * register 是覆盖语义，
  * 同名后者覆盖前者，故顺序即优先级：bundled < user < project。
  * 1. 创建 SkillRegistry 实例

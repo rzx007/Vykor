@@ -4,10 +4,10 @@ import type {
   CreateSessionGoalInput,
   UpdateSessionGoalInput,
   GoalActionInput,
-} from "@openharness/client"
+} from "@vykor/client"
 
-export type { SessionUserInputItem, SessionGoal } from "@openharness/client"
-export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@openharness/client"
+export type { SessionUserInputItem, SessionGoal } from "@vykor/client"
+export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@vykor/client"
 
 export interface GetDesktopSessionGoalInput {
   sessionId: string

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { parseCreateSessionGoalInput, parseGoalActionInput, parseUpdateSessionGoalInput } from "@openharness/protocol";
+import { parseCreateSessionGoalInput, parseGoalActionInput, parseUpdateSessionGoalInput } from "@vykor/protocol";
 import type { SessionGoalService } from "../../application/session/session-goal-service.js";
 import { applicationErrorResponse, jsonResponse, readJson } from "../support.js";
 

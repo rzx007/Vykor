@@ -8,7 +8,7 @@
 
 ## 实施进度
 
-- [x] A1：创建 `@openharness/protocol`。Session/Run/Schedule/Job/Terminal 跨端类型、runtime metadata 纯函数、主路径请求校验、统一错误、主要成功响应校验及 snapshot/event JSON 往返测试已经完成。
+- [x] A1：创建 `@vykor/protocol`。Session/Run/Schedule/Job/Terminal 跨端类型、runtime metadata 纯函数、主路径请求校验、统一错误、主要成功响应校验及 snapshot/event JSON 往返测试已经完成。
 - [x] A2：移除 `client -> services` 依赖；client 测试不再加载 SQLite Store。
 - [x] A3：共享 client 不再直接读取 Node `process`；`/doctor` 的本机信息由宿主提供。
 - [x] A4：增加无 Node polyfill 的 Vite 浏览器构建 fixture。
@@ -36,9 +36,9 @@ client
 
 这三块各自已经可用，但连接方式还没有完全收口：
 
-1. `@openharness/client` 仍依赖带 SQLite 实现的 `@openharness/services`，浏览器或 IDE webview 很难只拿一个轻量客户端包。
-2. 真正负责 durable 业务的 `DaemonApplication` 仍放在 `@openharness/server` 内部，很多实现文件也仍位于 `http/` 目录。
-3. `ohs channels serve` 直接创建 standalone Agent，Bot 消息没有进入 daemon 的 durable Session/Run。
+1. `@vykor/client` 仍依赖带 SQLite 实现的 `@vykor/services`，浏览器或 IDE webview 很难只拿一个轻量客户端包。
+2. 真正负责 durable 业务的 `DaemonApplication` 仍放在 `@vykor/server` 内部，很多实现文件也仍位于 `http/` 目录。
+3. `vk channels serve` 直接创建 standalone Agent，Bot 消息没有进入 daemon 的 durable Session/Run。
 4. `agent-runtime` 的运行规则已经像独立内核，但默认组装同时读取本机配置、凭据、插件、Skill、MCP、Sandbox 和 Git worktree，包本身也还不能脱离 monorepo 发布。
 5. 当时 Workflow 使用项目目录中的 JSON/NDJSON 文件保存状态，没有和 Session/Run 使用同一份 durable 状态与诊断入口。
 
@@ -146,29 +146,29 @@ A 是后面所有多端工作的基础。B 完成后，HTTP 和 Bot 才能真正
 
 ## 目标
 
-让 `@openharness/client` 只包含浏览器可以运行的代码，不再因为复用 Session 类型而加载 `@openharness/services` 和 SQLite。
+让 `@vykor/client` 只包含浏览器可以运行的代码，不再因为复用 Session 类型而加载 `@vykor/services` 和 SQLite。
 
 完成后的依赖关系：
 
 ```text
-@openharness/protocol
-  <- @openharness/client
+@vykor/protocol
+  <- @vykor/client
   <- Web / Desktop renderer / IDE webview / TUI
 
-@openharness/protocol
-  <- @openharness/services
-  <- @openharness/application
+@vykor/protocol
+  <- @vykor/services
+  <- @vykor/application
   <- HTTP server
 ```
 
 `protocol` 的意思是“客户端和服务端都同意的数据格式”。它只放请求、响应、事件、错误和版本信息，不放数据库代码。
 
-## Task A1：创建 `@openharness/protocol`
+## Task A1：创建 `@vykor/protocol`
 
 ### 要做的事
 
 1. 新建 `packages/protocol`。
-2. 从 `@openharness/services/session-runtime/types` 移出客户端会用到的公开数据类型：
+2. 从 `@vykor/services/session-runtime/types` 移出客户端会用到的公开数据类型：
    - Session
    - Input
    - Run
@@ -197,17 +197,17 @@ interface ProtocolError {
 ```
 
 6. 为 HTTP 请求和响应增加运行时校验。运行时校验实际做的是：收到 JSON 后检查字段和类型，而不是只相信 TypeScript 编译期类型。
-7. `protocol` 不得依赖任何 `@openharness/services`、`better-sqlite3`、Drizzle 或 Node builtin。
+7. `protocol` 不得依赖任何 `@vykor/services`、`better-sqlite3`、Drizzle 或 Node builtin。
 
 ### 兼容方式
 
-- 第一阶段 `@openharness/services` 可以 re-export 新 protocol 类型，减少一次性改动。
+- 第一阶段 `@vykor/services` 可以 re-export 新 protocol 类型，减少一次性改动。
 - re-export 只作为迁移入口，并在注释中标记后续删除版本。
 - 数据库内部类型若含有 SQL 专用字段，保留单独的 storage record，不要重新塞回 protocol。
 
 ### 完成标准
 
-- `@openharness/protocol` 可在只包含 DOM/ES 标准库的 TypeScript 项目中通过类型检查。
+- `@vykor/protocol` 可在只包含 DOM/ES 标准库的 TypeScript 项目中通过类型检查。
 - 包依赖树不包含 Node、SQLite、Drizzle。
 - Session snapshot 和 event envelope 有序列化/反序列化测试。
 - 非法请求字段在进入 application 前被拒绝，并返回稳定错误 code。
@@ -216,17 +216,17 @@ interface ProtocolError {
 
 ### 要做的事
 
-1. `packages/client/src/types/index.ts` 改从 `@openharness/protocol` 导入。
-2. `packages/client/src/index.ts` 不再从 `@openharness/services` re-export。
+1. `packages/client/src/types/index.ts` 改从 `@vykor/protocol` 导入。
+2. `packages/client/src/index.ts` 不再从 `@vykor/services` re-export。
 3. `packages/client/src/commands/session-commands.ts` 改用 protocol 中的 runtime metadata helper。
-4. 从 `packages/client/package.json` 删除 `@openharness/services`。
+4. 从 `packages/client/package.json` 删除 `@vykor/services`。
 5. 检查 client 公共入口的整个依赖树，确保没有通过其他包间接带回 SQLite。
 
 ### 完成标准
 
 - `packages/client` 测试不需要解析 `services/session-runtime/store.ts`。
 - 人为移除 `better-sqlite3` 后，client 的 transport/reducer/command 测试仍能运行。
-- `rg '@openharness/services' packages/client` 没有生产代码命中。
+- `rg '@vykor/services' packages/client` 没有生产代码命中。
 
 ## Task A3：把 Node 专用命令能力交给宿主
 
@@ -282,7 +282,7 @@ tests/browser-client/
 
 它只做三件事：
 
-1. 创建 `OpenHarnessClient`；
+1. 创建 `VykorClient`；
 2. 解析一段 mock SSE；
 3. 用 reducer 合并 snapshot 和 event。
 
@@ -399,7 +399,7 @@ interface DurableAgentApplication {
 
 ### 要做的事
 
-1. `OpenHarnessHttpServer` constructor 改为接收已经创建好的 application，或调用一个明确的 `createDefaultNodeApplication()`。
+1. `VykorHttpServer` constructor 改为接收已经创建好的 application，或调用一个明确的 `createDefaultNodeApplication()`。
 2. routes 只调用 application 的公开入口。
 3. routes 不直接操作 `SessionStore`；只有纯事件流读取可通过 application query/event port 完成。
 4. route 内所有 request body 使用 protocol schema 校验。
@@ -441,7 +441,7 @@ interface ApplicationEventSubscription {
 
 - `DaemonApplication` 是可直接调用的应用入口。调用方先等 `ready()`，之后可以创建 Session、提交输入、等待 Run、查询状态，最后重复调用 `close()` 也不会重复释放资源。
 - 默认 Node 组装集中在 `createDefaultNodeApplication()`。它自己创建 SQLite Store 时也负责关闭；Store 由外部传入时，默认仍由外部关闭，也可以明确把所有权交给 Application。
-- `OpenHarnessHttpServer` 可以接收已经创建好的 Application。外部注入时，HTTP Server 默认只关闭 listener 和自己的 SSE 连接，不关闭 Application。
+- `VykorHttpServer` 可以接收已经创建好的 Application。外部注入时，HTTP Server 默认只关闭 listener 和自己的 SSE 连接，不关闭 Application。
 - Project、Job、Terminal 和事件路由都通过 Application 调用，不再由 HTTP Server 直接组装这些服务。
 - `ApplicationEventService` 只发布已经写入 Store 的事件。订阅建立时先记住当前游标、补齐历史事件，再接收实时事件，避免建立连接的空档丢事件。
 - Application 错误带稳定 code；HTTP 状态码集中转换，不再要求各个路由靠错误文字猜状态。
@@ -456,7 +456,7 @@ interface ApplicationEventSubscription {
 把当前：
 
 ```text
-Channel -> ChannelBridge -> standalone OpenHarnessAgent
+Channel -> ChannelBridge -> standalone VykorAgent
 ```
 
 改为：
@@ -544,7 +544,7 @@ pending -> sent | failed | unknown
 - 回复失败不会产生第二个 Run。
 - daemon 关闭时停止接收新消息，等待或中断当前应用操作，再关闭通道接入层。
 
-## Task C4：迁移 `ohs channels serve`
+## Task C4：迁移 `vk channels serve`
 
 ### 要做的事
 
@@ -665,7 +665,7 @@ createDefaultNodeAgent(...)
 
 ## 目标
 
-保留 WorkflowRunner 的独立性，但 daemon 产品不再把 Workflow 的唯一事实放在 `.openharness/workflows/*.json`。
+保留 WorkflowRunner 的独立性，但 daemon 产品不再把 Workflow 的唯一事实放在 `.vykor/workflows/*.json`。
 
 ## Task E1：给 WorkflowStore 定义接口
 

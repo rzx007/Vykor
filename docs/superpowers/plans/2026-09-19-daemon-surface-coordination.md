@@ -4,7 +4,7 @@
 
 **目标：** 让桌面端启动时只复用「桌面托管」的本地 daemon，遇到 CLI daemon 时按 autoStart 设置停进程重启或重协调系统服务；CLI 各入口保持有活 daemon 就复用。
 
-**架构：** registry 增加 `executionSurface` 标记；把守护进程生命周期工具收口到 `@openharness/server/daemon-host`；桌面连接层按标记决策，桌面服务/watchdog 也按标记判定接管；顺带修服务模式缺 `outsideProjectWorkspaceRoot`。
+**架构：** registry 增加 `executionSurface` 标记；把守护进程生命周期工具收口到 `@vykor/server/daemon-host`；桌面连接层按标记决策，桌面服务/watchdog 也按标记判定接管；顺带修服务模式缺 `outsideProjectWorkspaceRoot`。
 
 **技术栈：** TypeScript、Vitest、Electron、pnpm/turbo。
 
@@ -54,7 +54,7 @@ import {
 } from "../paths.js";
 
 function tempPath(): string {
-  return join(mkdtempSync(join(tmpdir(), "ohs-registry-")), "registry.json");
+  return join(mkdtempSync(join(tmpdir(), "vk-registry-")), "registry.json");
 }
 
 describe("daemon registry execution surface", () => {
@@ -93,7 +93,7 @@ describe("daemon registry execution surface", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/daemon/__test__/paths.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/daemon/__test__/paths.test.ts`
 预期：FAIL，`createDaemonRegistryEntry is not a function` / 类型报错。
 
 - [ ] **步骤 3：实现 registry 改动**
@@ -144,9 +144,9 @@ const {
   createBearerToken,
   createDaemonRegistryEntry,
   readDaemonRegistry,
-  startOpenHarnessDaemon,
+  startVykorDaemon,
   writeDaemonRegistry,
-} = await import("@openharness/server");
+} = await import("@vykor/server");
 // ...
 if (options.register) {
   writeDaemonRegistry(
@@ -164,9 +164,9 @@ if (options.register) {
 
 - [ ] **步骤 5：运行测试与类型检查**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/daemon/__test__/paths.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/daemon/__test__/paths.test.ts`
 预期：PASS。
-运行：`pnpm --filter @openharness/server check-types`
+运行：`pnpm --filter @vykor/server check-types`
 预期：PASS。
 
 - [ ] **步骤 6：Commit**
@@ -227,7 +227,7 @@ describe("daemon lifecycle", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/daemon-host/__test__/lifecycle.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/daemon-host/__test__/lifecycle.test.ts`
 预期：FAIL，模块不存在。
 
 - [ ] **步骤 3：实现共享工具**
@@ -296,7 +296,7 @@ export async function stopDaemonProcess(
 
 ```ts
 // apps/cli/src/daemon-lifecycle.ts（顶部替换本地定义）
-import { daemonPidAlive, terminateDaemonProcess } from "@openharness/server/daemon-host";
+import { daemonPidAlive, terminateDaemonProcess } from "@vykor/server/daemon-host";
 
 export { daemonPidAlive, terminateDaemonProcess };
 ```
@@ -307,7 +307,7 @@ export { daemonPidAlive, terminateDaemonProcess };
 
 ```ts
 // apps/cli/src/commands/daemon.ts
-import { stopDaemonProcess } from "@openharness/server/daemon-host";
+import { stopDaemonProcess } from "@vykor/server/daemon-host";
 // 删除文件末尾本地 waitForProcessExit（约 428-434 行），
 // 并把成对的 terminateDaemonProcess(pid) + await waitForProcessExit(pid) 替换为：
 //   await stopDaemonProcess(pid);
@@ -337,9 +337,9 @@ it("treats an EPERM pid as alive and still probes /health", async () => {
 
 - [ ] **步骤 6：运行测试与类型检查**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/daemon-host/__test__/lifecycle.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/daemon-host/__test__/lifecycle.test.ts`
 运行：`pnpm --filter @rzx/ohs exec vitest run src/daemon-lifecycle.test.ts`
-运行：`pnpm --filter @openharness/server check-types; pnpm --filter @rzx/ohs check-types`
+运行：`pnpm --filter @vykor/server check-types; pnpm --filter @rzx/ohs check-types`
 预期：全部 PASS。
 
 - [ ] **步骤 7：Commit**
@@ -372,7 +372,7 @@ const host = vi.hoisted(() => ({
 }))
 
 vi.mock("electron", () => ({ app: { isPackaged: true } }))
-vi.mock("@openharness/server/daemon-host", () => host)
+vi.mock("@vykor/server/daemon-host", () => host)
 
 import {
   isDesktopManagedRegistry,
@@ -442,7 +442,7 @@ describe("daemon takeover helpers", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/daemon-autostart/daemon-takeover.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/daemon-autostart/daemon-takeover.test.ts`
 预期：FAIL，模块不存在。
 
 - [ ] **步骤 3：实现 `createDesktopDaemonSystemService()`**
@@ -453,7 +453,7 @@ import {
   createDaemonAutoStartController,
   DaemonSystemService,
   type DaemonAutoStartController,
-} from "@openharness/server/daemon-host"
+} from "@vykor/server/daemon-host"
 // ...
 export function createDesktopDaemonSystemService(): DaemonSystemService {
   const flag = process.platform === "win32" ? "--daemon-watchdog" : "--daemon-service"
@@ -474,7 +474,7 @@ export function createDesktopDaemonAutoStartController(): DaemonAutoStartControl
 
 ```ts
 // apps/desktop/src/main/features/daemon-autostart/daemon-surface.ts
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
 
@@ -495,12 +495,12 @@ export function isLoopbackDaemonUrl(url: string): boolean {
 
 ```ts
 // apps/desktop/src/main/features/daemon-autostart/daemon-takeover.ts
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 import {
   clearDaemonRegistry,
   readDaemonRegistry,
   stopDaemonProcess,
-} from "@openharness/server/daemon-host"
+} from "@vykor/server/daemon-host"
 
 import { createDesktopDaemonSystemService } from "./daemon-autostart-service"
 import { isDesktopManagedRegistry, isLoopbackDaemonUrl } from "./daemon-surface"
@@ -566,9 +566,9 @@ async function defaultRegistryHealthy(registry: DaemonRegistry): Promise<boolean
 
 - [ ] **步骤 5：运行测试与类型检查**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/daemon-autostart/`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/daemon-autostart/`
 预期：PASS（含既有 autostart 测试）。
-运行：`pnpm --filter @openharness/desktop typecheck:node`
+运行：`pnpm --filter @vykor/desktop typecheck:node`
 预期：PASS。
 
 - [ ] **步骤 6：Commit**
@@ -624,7 +624,7 @@ vi.mock("../daemon-autostart/daemon-takeover", () => ({
 //   clearDaemonRegistry: vi.fn(),
 //   createBearerToken: vi.fn(() => "token"),
 //   createDaemonRegistryEntry: vi.fn((input: unknown) => input),
-//   startOpenHarnessDaemon: vi.fn(),
+//   startVykorDaemon: vi.fn(),
 //   shouldStartManagedDaemon: vi.fn(async () => false),
 // }))
 
@@ -632,12 +632,12 @@ it("reuses a desktop-managed healthy daemon", async () => {
   daemonHost.readDaemonRegistry.mockReturnValue(registry())
   const service = new DaemonConnectionService({ pidAlive: () => true })
   await expect(service.getClient()).resolves.toBeDefined()
-  expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+  expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
 })
 
 it("restarts an ephemeral CLI daemon when autoStart is off", async () => {
   daemonHost.readDaemonRegistry.mockReturnValue(registry({ executionSurface: "cli_advanced" }))
-  daemonHost.startOpenHarnessDaemon.mockResolvedValue(embedded)
+  daemonHost.startVykorDaemon.mockResolvedValue(embedded)
   const stop = vi.fn(async () => undefined)
   const service = new DaemonConnectionService({
     pidAlive: () => true,
@@ -646,7 +646,7 @@ it("restarts an ephemeral CLI daemon when autoStart is off", async () => {
   })
   await expect(service.getClient()).resolves.toBeDefined()
   expect(stop).toHaveBeenCalledOnce()
-  expect(daemonHost.startOpenHarnessDaemon).toHaveBeenCalledOnce()
+  expect(daemonHost.startVykorDaemon).toHaveBeenCalledOnce()
   expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledWith(
     expect.objectContaining({ executionSurface: "desktop_managed" }),
   )
@@ -664,7 +664,7 @@ it("reconciles the OS service when autoStart is on", async () => {
   })
   await expect(service.getClient()).resolves.toBeDefined()
   expect(reconcile).toHaveBeenCalledOnce()
-  expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+  expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
 })
 ```
 
@@ -672,7 +672,7 @@ it("reconciles the OS service when autoStart is on", async () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/session/daemon-connection-service.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/session/daemon-connection-service.test.ts`
 预期：FAIL（新选项不存在 / 非桌面托管走了旧分支）。
 
 - [ ] **步骤 3：实现连接决策**
@@ -690,10 +690,10 @@ import {
   createDaemonRegistryEntry,
   readDaemonRegistry,
   shouldStartManagedDaemon,
-  startOpenHarnessDaemon,
+  startVykorDaemon,
   writeDaemonRegistry,
   type DaemonRegistry,
-} from "@openharness/server/daemon-host"
+} from "@vykor/server/daemon-host"
 
 export interface DaemonConnectionServiceOptions {
   pidAlive?: (pid: number) => boolean
@@ -715,7 +715,7 @@ this.reconcileDesktopService = options.reconcileDesktopService ?? reconcileDeskt
 `connect()` 结构改为：只在 try/catch 里做校验，接管放在 catch 之后。
 
 ```ts
-private async connect(): Promise<OpenHarnessClient> {
+private async connect(): Promise<VykorClient> {
   let registry: DaemonRegistry | undefined
   try {
     this.setDaemonStatus("discovering", "正在查找 daemon")
@@ -725,11 +725,11 @@ private async connect(): Promise<OpenHarnessClient> {
     registry = undefined
   }
 
-  let verified: OpenHarnessClient | undefined
+  let verified: VykorClient | undefined
   if (registry) {
     try {
       this.setDaemonStatus("connecting", "正在连接已运行的 daemon", { url: registry.url })
-      const client = new OpenHarnessClient({ baseUrl: registry.url, token: registry.token })
+      const client = new VykorClient({ baseUrl: registry.url, token: registry.token })
       await this.verifyDaemon(client)
       verified = client
     } catch (error) {
@@ -755,7 +755,7 @@ private async connect(): Promise<OpenHarnessClient> {
   return await this.startEmbeddedDaemon()
 }
 
-private async takeOverNonDesktopDaemon(registry: DaemonRegistry): Promise<OpenHarnessClient> {
+private async takeOverNonDesktopDaemon(registry: DaemonRegistry): Promise<VykorClient> {
   try {
     if (await this.shouldAutoStart()) {
       this.setDaemonStatus("starting", "正在将 daemon 切换为桌面托管服务", { url: registry.url })
@@ -765,7 +765,7 @@ private async takeOverNonDesktopDaemon(registry: DaemonRegistry): Promise<OpenHa
         throw new Error("Desktop-managed daemon was not registered after service reconciliation")
       }
       this.setDaemonStatus("ready", "daemon 已连接", { url: next.url })
-      return new OpenHarnessClient({ baseUrl: next.url, token: next.token })
+      return new VykorClient({ baseUrl: next.url, token: next.token })
     }
     this.setDaemonStatus("starting", "正在重启为桌面托管 daemon", { url: registry.url })
     await this.stopNonDesktopDaemon(registry)
@@ -788,13 +788,13 @@ private readonly stopNonDesktopDaemon: (registry: DaemonRegistry) => Promise<voi
 private readonly reconcileDesktopService: (registry: DaemonRegistry) => Promise<void>
 ```
 
-`startEmbeddedDaemon()` 的 `writeDaemonRegistry` 改为 `createDaemonRegistryEntry({ ..., executionSurface: "desktop_managed" })`（其余字段不变），并保留 `executionSurface: "desktop_managed"` 传给 `startOpenHarnessDaemon`。
+`startEmbeddedDaemon()` 的 `writeDaemonRegistry` 改为 `createDaemonRegistryEntry({ ..., executionSurface: "desktop_managed" })`（其余字段不变），并保留 `executionSurface: "desktop_managed"` 传给 `startVykorDaemon`。
 
 - [ ] **步骤 4：运行测试与类型检查**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/session/daemon-connection-service.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/session/daemon-connection-service.test.ts`
 预期：PASS。
-运行：`pnpm --filter @openharness/desktop typecheck:node`
+运行：`pnpm --filter @vykor/desktop typecheck:node`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -816,7 +816,7 @@ git commit -m "feat(desktop): only reuse desktop-managed daemons"
 
 ```ts
 // apps/desktop/src/main/features/daemon-autostart/daemon-entry.test.ts（追加）
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 
 import { registeredDaemonHealthy } from "./daemon-entry"
 
@@ -840,15 +840,15 @@ it("treats a cli_advanced registry as not adoptable", async () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/daemon-autostart/daemon-entry.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/daemon-autostart/daemon-entry.test.ts`
 预期：FAIL，`registeredDaemonHealthy` 未导出或未按 surface 判断。
 
 - [ ] **步骤 3：实现 daemon-entry 改动**
 
 ```ts
 // daemon-entry.ts
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
-import { stopDaemonProcess } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
+import { stopDaemonProcess } from "@vykor/server/daemon-host"
 import { isDesktopManagedRegistry, isLoopbackDaemonUrl } from "./daemon-surface"
 import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
 
@@ -882,13 +882,13 @@ if (stale && !isDesktopManagedRegistry(stale) && isLoopbackDaemonUrl(stale.url))
 clearDaemonRegistry()
 ```
 
-`startOpenHarnessDaemon` 增加 `outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents"))`；`writeDaemonRegistry` 改用 `createDaemonRegistryEntry({ ..., executionSurface: "desktop_managed" })`。
+`startVykorDaemon` 增加 `outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents"))`；`writeDaemonRegistry` 改用 `createDaemonRegistryEntry({ ..., executionSurface: "desktop_managed" })`。
 
 - [ ] **步骤 4：运行测试与类型检查**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/daemon-autostart/daemon-entry.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/daemon-autostart/daemon-entry.test.ts`
 预期：PASS。
-运行：`pnpm --filter @openharness/desktop typecheck:node`
+运行：`pnpm --filter @vykor/desktop typecheck:node`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**

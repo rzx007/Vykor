@@ -1,10 +1,10 @@
 import type {
   CommandCatalogEntry,
-  OpenHarnessClient,
-  OpenHarnessClientState,
+  VykorClient,
+  VykorClientState,
   PresentationReadRequest,
   SlashLine,
-} from "@openharness/client";
+} from "@vykor/client";
 import {
   LOCAL_COMMAND_DETAILS,
   LOCAL_COMMAND_NAMES,
@@ -13,7 +13,7 @@ import {
   mergeCommandDetails,
   parseSlashLine,
   resolveSessionCwd,
-} from "@openharness/client";
+} from "@vykor/client";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import type { FrontendConfig } from "../types";
@@ -27,7 +27,7 @@ export {
 };
 
 type SessionSlashClient = Pick<
-  OpenHarnessClient,
+  VykorClient,
   "protocol" | "system" | "providers" | "auth" | "projects" | "plugins" | "development" | "sessions" | "jobs"
 >;
 
@@ -38,7 +38,7 @@ export type SessionSlashCtx = {
   presentSystem: (title: string, content: string) => void;
   statusRef: MutableRefObject<Record<string, unknown>>;
   commandCatalogRef: MutableRefObject<CommandCatalogEntry[]>;
-  clientState: OpenHarnessClientState;
+  clientState: VykorClientState;
   localBusy: boolean;
   cacheFirstRead?: (request: PresentationReadRequest) => void;
   daemon?: FrontendConfig["daemon"];

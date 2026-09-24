@@ -138,8 +138,8 @@ revision 只用于保证迁移后的新 scope 读取已经移动完成的运行�
 当前使用以下稳定存储键：
 
 ```text
-openharness.desktop.utility-panel-states
-openharness.desktop.file-tabs
+vykor.desktop.utility-panel-states
+vykor.desktop.file-tabs
 ```
 
 不读取或迁移其他历史键。调整数据结构时直接更新当前解析规则，不通过在键名后追加版本号来保留旧格式。

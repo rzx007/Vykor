@@ -122,7 +122,7 @@ describe("DesktopSessionService.sendPrompt attachments", () => {
       {
         type: "capability" as const,
         kind: "plugin" as const,
-        pluginId: "dev.openharness.text-inspector",
+        pluginId: "dev.vykor.text-inspector",
         displayName: "text-inspector",
       },
       { type: "text" as const, text: "检查这段内容" },

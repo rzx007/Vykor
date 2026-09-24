@@ -38,20 +38,20 @@ describe("createWorkspaceBinding", () => {
   it("keeps host and execution roots separate for WSL", () => {
     expect(createWorkspaceBinding({
       kind: "wsl",
-      hostRoot: "D:\\code\\ohs",
-      executionRoot: "/mnt/d/code/ohs",
+      hostRoot: "D:\\code\\vk",
+      executionRoot: "/mnt/d/code/vk",
     })).toEqual({
       kind: "wsl",
-      hostRoot: "D:\\code\\ohs",
-      executionRoot: "/mnt/d/code/ohs",
+      hostRoot: "D:\\code\\vk",
+      executionRoot: "/mnt/d/code/vk",
     });
   });
 
   it("rejects a non-POSIX WSL execution root", () => {
     expect(() => createWorkspaceBinding({
       kind: "wsl",
-      hostRoot: "D:\\code\\ohs",
-      executionRoot: "D:\\code\\ohs",
+      hostRoot: "D:\\code\\vk",
+      executionRoot: "D:\\code\\vk",
     })).toThrow("WSL execution root must be an absolute POSIX path");
   });
 
@@ -59,7 +59,7 @@ describe("createWorkspaceBinding", () => {
     expect(() =>
       createWorkspaceBinding({
         kind: "local",
-        hostRoot: "D:\\code\\ohs",
+        hostRoot: "D:\\code\\vk",
         executionRoot: "/workspace",
       }),
     ).toThrow("Local workspace roots must match");

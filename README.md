@@ -1,6 +1,6 @@
-# OpenHarness-ts
+# Vykor
 
-OpenHarness 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、IDE、Bot 和 Workflow 可以共用同一个 Durable Application；`@openharness/agent-runtime` 则是可独立嵌入的 Agent Runtime Kernel。
+Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、IDE、Bot 和 Workflow 可以共用同一个 Durable Application；`@vykor/agent-runtime` 则是可独立嵌入的 Agent Runtime Kernel。
 
 第一次了解项目请从 [文档总目录](docs/README.md) 开始：先看 [架构总览](docs/architecture-overview.md)，再按 Runtime、持久化数据、协议、产品接入和运维逐层下钻。
 
@@ -10,15 +10,15 @@ OpenHarness 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、W
 
 - ✅ **多模型支持** — Provider catalog 自动检测（`packages/api` `PROVIDERS`；Anthropic 原生 + OpenAI 兼容 + Codex 订阅），含 `<think>` 块过滤、图片/vision 传递、gpt-5/o 系列 token 字段适配。🟡 暂缺 Copilot 订阅；CLI/`settings.effort` 已有，模型原生 reasoning tokens 仍简化
 - ✅ **工具能力** — 基础 registry 提供文件 / Bash / Web / Grep / MCP / `BackgroundShellCreate` / Agent / 媒体与元工具；runtime host 按能力注入 `Workflow`、`JobList/Read/Wait/Send/Cancel`、`TerminalOpen` 和 5 个 `Schedule*` 工具。bash/grep/glob 健壮性已对齐 v0.1.8（超时保留输出、进程组杀除、gitignore/超长行处理）
-- ✅ **多 Agent 编排** — 内置 7 agent + 用户/插件自定义 agent（`~/.openharness-ts/agents/*.md`），以及统一 Jobs 控制、`Workflow` DAG、sequential/parallel/pipeline、retry、预算、timeline、reconcile/cancel、Workflow 工具/CLI 的 reconciliation follow-up spec 生成和 `ohs workflow` 管理命令。daemon/TUI/print 主路径使用 daemon 内 child session；task、child session 与 child run 的关联通过 daemon 事件持久化，跨客户端可重放。
+- ✅ **多 Agent 编排** — 内置 7 agent + 用户/插件自定义 agent（`~/.vykor/agents/*.md`），以及统一 Jobs 控制、`Workflow` DAG、sequential/parallel/pipeline、retry、预算、timeline、reconcile/cancel、Workflow 工具/CLI 的 reconciliation follow-up spec 生成和 `vk workflow` 管理命令。daemon/TUI/print 主路径使用 daemon 内 child session；task、child session 与 child run 的关联通过 daemon 事件持久化，跨客户端可重放。
 - ✅ **MCP 协议** — stdio + HTTP(streamable)/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权，以及 Streamable HTTP 的 OAuth 2.1 登录、独立凭据存储、刷新、状态查询和失败隔离
 - ✅ **权限系统** — default / plan / full_auto + 工具黑白名单、路径规则、命令拒绝；swarm worker 只读自动放行 + 写操作转 leader 集中裁决；TUI 下 Edit/Write 改文件前显示 unified diff 预览，可本次/整个会话批准
 - ✅ **Hook 生命周期** — 10 类事件、priority 排序、command/http/prompt/agent 四种类型、matcher 过滤、`$ARGUMENTS` 注入+shell 转义
 - ✅ **会话持久化** — TUI / 用户 print / 跨端主线使用 daemon 的 Repository/Transaction + SQLite；单会话通过原子 snapshot + SSE 恢复。daemon 持久化 child session、task 与 child run 的关联；重启会保留审计记录，并将失去进程所有权的 run/task/workflow 明确标记为中断，不会伪造自动续跑。TUI 可用 `/resume` 明确重放某次中断 run 的原始 prompt。
-- ✅ **插件系统** — Runtime 只加载版本化 OpenHarness Native Plugin；Skills、Agents、Hooks、MCP 通过统一 manifest、安装状态和版本 cache 激活。Claude Code 插件先经独立 Converter 生成带 plan/report/provenance 的 Native Plugin；第三方 Tool 在隔离 Runtime 完成前不会执行
-- ✅ **生产级 Durable Channels Agent 桥接** — 面向正常运行的单 daemon 场景，`MessageBus` 背压队列 + `ChannelManager`（fail-closed ACL 集中过滤）+ `DurableChannelBridge` 接 daemon，提供会话/Run/回复持久化、平台消息幂等和重启恢复；`ohs channels add feishu` 支持扫码/手填接入，`ohs channels serve` 长驻跑通飞书对话（文本、image/file、thread/topic、@bot 过滤）。异常崩溃窗口下的入站零丢失、持续平台故障自动重试和 `unknown` 对账暂不承诺；Telegram/Discord/Slack、媒体上传、长消息分片待补。渠道配置（含密钥）存放在 `~/.openharness-ts/channel-credentials.json`；`settings.json` 不再承载 `channels`。完整边界见 [docs/channels-flow.md](docs/channels-flow.md#生产使用范围)
-- ✅ **TUI 前端** — opentui + React 19 终端 UI（Bun 运行时）：经 `@openharness/client` attach daemon，Markdown 渲染 + 代码块语法高亮、output style 热切换（minimal 极简工具行）、tool 行分组折叠、Edit/Write 权限框 unified diff 预览（`[y]`本次/`[a]`整个会话/`[n]`拒绝）。统一 Jobs Panel 展示和控制 Terminal、后台 shell、child Agent、dream 与 Workflow；Workflow Steps 在所选 Workflow Job 的详情中展示，不再保留独立的后台 Task/Swarm/Workflow Runs 执行面板
-- 🟢 **Daemon Application** — 主线具备 `ohs serve` / `ohs daemon start/status/stop`、Hono HTTP API、durable session/transcript、SSE、单 session 串行 run lane、持久化 PermissionBroker、child durable projection 和共享 `@openharness/client` reducer。`DaemonApplication` 集中组装 durable 应用，HTTP server 只负责 transport；`AgentPool` 按 session 缓存真实 `OpenHarnessAgent`。权威导览见 [docs/daemon-application-architecture.md](docs/daemon-application-architecture.md)，framework 见 [docs/agent-runtime-framework-architecture.md](docs/agent-runtime-framework-architecture.md)，客户端同步见 [docs/client-sync-flow.md](docs/client-sync-flow.md)。
+- ✅ **插件系统** — Runtime 只加载版本化 Vykor Native Plugin；Skills、Agents、Hooks、MCP 通过统一 manifest、安装状态和版本 cache 激活。Claude Code 插件先经独立 Converter 生成带 plan/report/provenance 的 Native Plugin；第三方 Tool 在隔离 Runtime 完成前不会执行
+- ✅ **生产级 Durable Channels Agent 桥接** — 面向正常运行的单 daemon 场景，`MessageBus` 背压队列 + `ChannelManager`（fail-closed ACL 集中过滤）+ `DurableChannelBridge` 接 daemon，提供会话/Run/回复持久化、平台消息幂等和重启恢复；`vk channels add feishu` 支持扫码/手填接入，`vk channels serve` 长驻跑通飞书对话（文本、image/file、thread/topic、@bot 过滤）。异常崩溃窗口下的入站零丢失、持续平台故障自动重试和 `unknown` 对账暂不承诺；Telegram/Discord/Slack、媒体上传、长消息分片待补。渠道配置（含密钥）存放在 `~/.vykor/channel-credentials.json`；`settings.json` 不再承载 `channels`。完整边界见 [docs/channels-flow.md](docs/channels-flow.md#生产使用范围)
+- ✅ **TUI 前端** — opentui + React 19 终端 UI（Bun 运行时）：经 `@vykor/client` attach daemon，Markdown 渲染 + 代码块语法高亮、output style 热切换（minimal 极简工具行）、tool 行分组折叠、Edit/Write 权限框 unified diff 预览（`[y]`本次/`[a]`整个会话/`[n]`拒绝）。统一 Jobs Panel 展示和控制 Terminal、后台 shell、child Agent、dream 与 Workflow；Workflow Steps 在所选 Workflow Job 的详情中展示，不再保留独立的后台 Task/Swarm/Workflow Runs 执行面板
+- 🟢 **Daemon Application** — 主线具备 `vk serve` / `vk daemon start/status/stop`、Hono HTTP API、durable session/transcript、SSE、单 session 串行 run lane、持久化 PermissionBroker、child durable projection 和共享 `@vykor/client` reducer。`DaemonApplication` 集中组装 durable 应用，HTTP server 只负责 transport；`AgentPool` 按 session 缓存真实 `VykorAgent`。权威导览见 [docs/daemon-application-architecture.md](docs/daemon-application-architecture.md)，framework 见 [docs/agent-runtime-framework-architecture.md](docs/agent-runtime-framework-architecture.md)，客户端同步见 [docs/client-sync-flow.md](docs/client-sync-flow.md)。
 - ✅ **Terminal** — daemon 统一持有终端 runtime，Desktop 右侧 Panel 与 Agent 终端跟随同一个 Native/WSL 会话环境；支持多终端、输出快照恢复、REST/SSE 传输和对话卡片挂接。模型用 `TerminalOpen` 创建持久终端，后续统一通过 `JobList/Read/Wait/Send/Cancel` 观察和控制。
 - ✅ **记忆体系** — 四层：工具输出预算 / 每轮 checkpoint / 持久记忆（`/remember` LLM 提取 + personalization 环境事实抽取自动注入 prompt）/ `/dream` 梦境整合（备份+锁+回滚）。详见 [docs/memory-system.md](docs/memory-system.md)
 - ✅ **Native / WSL 运行环境** — Desktop 在本机运行，Windows 可选择 WSL；Bash、文件工具、后台任务、MCP stdio 和终端共享同一环境。可选 SRT 作为独立的本机权限边界。
@@ -36,8 +36,8 @@ OpenHarness 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、W
 ### 安装
 
 ```bash
-git clone https://github.com/rzx007/openharness-ts.git
-cd OpenHarness-ts
+git clone https://github.com/rzx007/openharness-ts.git vykor
+cd vykor
 pnpm install
 ```
 
@@ -59,18 +59,18 @@ pnpm test
 # 设置 API Key（按所用 Provider 选择，见下方“配置”）
 export ANTHROPIC_API_KEY="sk-ant-..."
 
-# CLI 安装后提供两个等价命令：ohs 与 openharness
+# CLI 安装后提供两个等价命令：vk 与 vykor
 
 # 单次执行（headless：attach/启动 daemon，经 Session API）
-ohs "explain this codebase"
-ohs -p "explain this codebase"
+vk "explain this codebase"
+vk -p "explain this codebase"
 
 # 交互式 TUI（默认；attach/启动 daemon，需安装 Bun）
-ohs
-ohs --tui
+vk
+vk --tui
 
 # TUI 带初始提示
-ohs --tui "explain this project"
+vk --tui "explain this project"
 ```
 
 ### 开发阶段运行
@@ -80,8 +80,8 @@ ohs --tui "explain this project"
 pnpm build
 cd apps/cli
 pnpm link --global
-openharness "hello"        # 任意目录可用（ohs 等价）
-openharness --tui
+vykor "hello"        # 任意目录可用（vk 等价）
+vykor --tui
 # 取消链接：pnpm unlink --global
 
 # 方式二：Bun 直跑源码（改代码立刻生效，无需 build）
@@ -108,8 +108,8 @@ pnpm clean         # 清理各 workspace 的构建产物
 # 只跑某个包
 pnpm --filter @rzx/ohs build
 pnpm --filter @rzx/ohs test
-pnpm --filter @openharness/frontend dev
-pnpm --filter @openharness/tools test
+pnpm --filter @vykor/frontend dev
+pnpm --filter @vykor/tools test
 
 # 发布 Desktop 和 CLI（在 GitHub Actions 页面手动触发 Tag Release，输入版本号）
 # 详见 docs/release-process.md
@@ -127,7 +127,7 @@ bun apps/cli/src/index.ts --tui
 ### CLI 常用参数
 
 ```bash
-ohs [options] [prompt]
+vk [options] [prompt]
 
 Options:
   --model <model>              模型名称（默认 minimax/minimax-m2.5:free）
@@ -161,95 +161,95 @@ Options:
 
 ```bash
 # 首次配置 / 健康检查
-ohs setup
-ohs doctor
-ohs version
+vk setup
+vk doctor
+vk version
 
 # Auth / Provider / Model
-ohs auth login <provider> <api-key>
-ohs auth login codex
-ohs auth status
-ohs auth logout <provider>
+vk auth login <provider> <api-key>
+vk auth login codex
+vk auth status
+vk auth logout <provider>
 
-ohs provider list
-ohs provider use <name> [-m <model>]
-ohs provider add <name> -k <key> [-m <model>] [-b <base-url>] [--use]
-ohs provider edit <name> [-k <key>] [-m <model>] [-b <base-url>]
-ohs provider remove <name>
+vk provider list
+vk provider use <name> [-m <model>]
+vk provider add <name> -k <key> [-m <model>] [-b <base-url>] [--use]
+vk provider edit <name> [-k <key>] [-m <model>] [-b <base-url>]
+vk provider remove <name>
 
 # 本机 SRT Sandbox
-ohs sandbox enable
-ohs sandbox enable --global
-ohs sandbox enable --fail-open
-ohs sandbox disable
-ohs sandbox status
-ohs sandbox check
+vk sandbox enable
+vk sandbox enable --global
+vk sandbox enable --fail-open
+vk sandbox disable
+vk sandbox status
+vk sandbox check
 
 # MCP server 配置（写入 settings.mcpServers）
-ohs mcp list
-ohs mcp get linear
-ohs mcp add linear --url https://mcp.linear.app/mcp
-ohs mcp add local -- node server.js
-ohs mcp login linear --scopes read
-ohs mcp login linear --scopes read --no-browser
-ohs mcp logout linear
-ohs mcp remove linear
+vk mcp list
+vk mcp get linear
+vk mcp add linear --url https://mcp.linear.app/mcp
+vk mcp add local -- node server.js
+vk mcp login linear --scopes read
+vk mcp login linear --scopes read --no-browser
+vk mcp logout linear
+vk mcp remove linear
 
 # 插件
-ohs plugin list
-ohs plugin install <path-or-package>
-ohs plugin uninstall <name>
+vk plugin list
+vk plugin install <path-or-package>
+vk plugin uninstall <name>
 
 # 已安排任务
 # 在 Agent 对话中描述任务内容、时间和项目；Desktop 的【已安排】用于暂停、继续、立即运行、删除和查看历史。
 # 任务由主 daemon 托管并保存到 SQLite；支持一次性时间和 RRULE 重复规则。
 
-# Workflow run 管理（持久化到项目 .openharness-ts/workflows）
-ohs workflow list [--status running,failed] [--limit 10] [--needs-reconciliation]
-ohs workflow status [runId] [--no-events]
-ohs workflow validate --spec <path>
-ohs workflow template [research-implement-verify|parallel-review|safe-write]
-ohs workflow reconcile [runId] [--action-ids <ids>] [--budget-preset <preset>]
-ohs workflow cancel [runId] [--reason <reason>]
+# Workflow run 管理（持久化到项目 .vykor/workflows）
+vk workflow list [--status running,failed] [--limit 10] [--needs-reconciliation]
+vk workflow status [runId] [--no-events]
+vk workflow validate --spec <path>
+vk workflow template [research-implement-verify|parallel-review|safe-write]
+vk workflow reconcile [runId] [--action-ids <ids>] [--budget-preset <preset>]
+vk workflow cancel [runId] [--reason <reason>]
 
-# Channels 长驻桥接（当前实现：feishu；配置在 ~/.openharness-ts/channel-credentials.json）
-ohs channels add feishu
-ohs channels status
-ohs channels allow <ou_...|oc_...> [--name <备注>]
-ohs channels serve
+# Channels 长驻桥接（当前实现：feishu；配置在 ~/.vykor/channel-credentials.json）
+vk channels add feishu
+vk channels status
+vk channels allow <ou_...|oc_...> [--name <备注>]
+vk channels serve
 
 # Daemon / shared session runtime（TUI/Web/Desktop 的共同后端）
-ohs serve --host 127.0.0.1 --port 0 --register
-ohs daemon start
-ohs daemon status
-ohs daemon stop
+vk serve --host 127.0.0.1 --port 0 --register
+vk daemon start
+vk daemon status
+vk daemon stop
 # 开启或关闭登录启动与崩溃恢复，同时写入 settings.json
-ohs daemon install
-ohs daemon uninstall
+vk daemon install
+vk daemon uninstall
 
 # 配置
-ohs config show
-ohs config set <key> <value>
-ohs config set daemon.autoStart true|false
+vk config show
+vk config set <key> <value>
+vk config set daemon.autoStart true|false
 # 持久关闭或重新开启所有已安装 Native Plugin 的运行贡献
-ohs config set plugins.enabled false|true
+vk config set plugins.enabled false|true
 ```
 
-`plugins.enabled=false` 和 `--no-plugins` 只跳过已安装 Native Plugin 提供的 Skills、Agents、Commands、Hooks、MCP Servers 和 Tools，不关闭插件安装、卸载、查看等管理命令，也不影响 OpenHarness 内置 Skill、普通用户/项目 Skill、Settings Hooks 或 Settings MCP。`plugins.enabled` 是持久设置；`--no-plugins` 只影响本次新建 Session。单个插件仍可使用 `ohs plugin enable <id>` 和 `ohs plugin disable <id>` 管理。全局开关关闭后，Session 参数不能绕过它重新启用插件。
+`plugins.enabled=false` 和 `--no-plugins` 只跳过已安装 Native Plugin 提供的 Skills、Agents、Commands、Hooks、MCP Servers 和 Tools，不关闭插件安装、卸载、查看等管理命令，也不影响 Vykor 内置 Skill、普通用户/项目 Skill、Settings Hooks 或 Settings MCP。`plugins.enabled` 是持久设置；`--no-plugins` 只影响本次新建 Session。单个插件仍可使用 `vk plugin enable <id>` 和 `vk plugin disable <id>` 管理。全局开关关闭后，Session 参数不能绕过它重新启用插件。
 
 修改持久开关后，新建或重新加载的 Session 会应用新设置；正在执行的旧 Agent Runtime 不会在一轮任务中途卸载插件。完整的 Native Plugin 说明见 [packages/plugins/README.md](packages/plugins/README.md)。
 
 Auth、provider、model 的关系和本地存储规则见 [docs/auth-provider-model.md](docs/auth-provider-model.md)。
 Workflow CLI 和 TUI `/workflow`（统一 Jobs Panel 的别名）的完整用法见 [docs/workflow-cli.md](docs/workflow-cli.md)。
-`ohs provider use <name>` 默认只切换供应商；要同时切模型请加 `-m/--model`，例如 `ohs provider use deepseek -m deepseek-chat`。
+`vk provider use <name>` 默认只切换供应商；要同时切模型请加 `-m/--model`，例如 `vk provider use deepseek -m deepseek-chat`。
 
-TUI 内斜杠命令走 daemon command catalog + client-local UI + template expand；共享呈现/派发在 `@openharness/client` `dispatchSessionCommand`（TUI 适配层 `sessionSlashCommands.ts`）。流程见 [docs/slash-commands-flow.md](docs/slash-commands-flow.md)，清单见 [docs/slash-commands.md](docs/slash-commands.md)；运行时以 TUI `/help` 与 `GET /commands` 为准。
+TUI 内斜杠命令走 daemon command catalog + client-local UI + template expand；共享呈现/派发在 `@vykor/client` `dispatchSessionCommand`（TUI 适配层 `sessionSlashCommands.ts`）。流程见 [docs/slash-commands-flow.md](docs/slash-commands-flow.md)，清单见 [docs/slash-commands.md](docs/slash-commands.md)；运行时以 TUI `/help` 与 `GET /commands` 为准。
 
 ### TUI、Web、Desktop 的共享会话
 
-默认 `ohs`（与 `ohs --tui`）会连接已有 daemon；没有可用/stale daemon 时会启动一个。后续 Web、Desktop 或 remote attach 客户端都应通过 `@openharness/client` 连接同一个 daemon，而不是各自启动 agent runtime。
+默认 `vk`（与 `vk --tui`）会连接已有 daemon；没有可用/stale daemon 时会启动一个。后续 Web、Desktop 或 remote attach 客户端都应通过 `@vykor/client` 连接同一个 daemon，而不是各自启动 agent runtime。
 
-`~/.openharness-ts/settings.json` 的 `daemon.autoStart` 控制本地 daemon 是否在登录后自动启动并在异常退出后恢复，默认关闭。`ohs daemon install/uninstall` 是修改该开关并立即应用的便捷命令。完整说明见 [docs/daemon-system-service.md](docs/daemon-system-service.md)。
+`~/.vykor/settings.json` 的 `daemon.autoStart` 控制本地 daemon 是否在登录后自动启动并在异常退出后恢复，默认关闭。`vk daemon install/uninstall` 是修改该开关并立即应用的便捷命令。完整说明见 [docs/daemon-system-service.md](docs/daemon-system-service.md)。
 
 远程 attach 使用显式 URL + bearer token，不读取本机 daemon registry；浏览器还必须命中 daemon 的精确 `--allow-origin` 白名单。部署与 SDK 示例见 [docs/remote-attach.md](docs/remote-attach.md)。
 
@@ -265,16 +265,16 @@ TUI 内斜杠命令走 daemon command catalog + client-local UI + template expan
 
 每个 part 都带稳定 ID、顺序和 `pending/running/completed/failed` 状态。客户端 attach 单个 session 时先读取原子 snapshot，再从 snapshot cursor 订阅 SSE 增量，因此切换客户端、重启 TUI 或中途进入会话都能恢复同一份文本和工具状态。
 
-用户与项目配置目录名均为 `.openharness-ts`：用户级在 `~/`，项目级在仓库根。旧用户目录 `~/.openharness/` 与旧项目目录 `.openharness/` 都不读取、不迁移。本地技能写在 `~/.openharness-ts/skills/<name>/SKILL.md`（用户级）或 `<cwd>/.openharness-ts/skills/<name>/SKILL.md`（项目级）；让模型安装时用 `/create-skill` 或 `Skill` 工具加载 `create-skill`。
+用户与项目配置目录名均为 `.vykor`：用户级在 `~/`，项目级在仓库根。旧用户目录 `~/.vykor/` 与旧项目目录 `.vykor/` 都不读取、不迁移。本地技能写在 `~/.vykor/skills/<name>/SKILL.md`（用户级）或 `<cwd>/.vykor/skills/<name>/SKILL.md`（项目级）；让模型安装时用 `/create-skill` 或 `Skill` 工具加载 `create-skill`。
 
-历史迁移材料保留在 `docs/superpowers/` 供追溯；其中带“归档”标题的文件描述已经退场的 Ink、BackendHost 或 OHJSON 方案，不能作为当前实现依据。
+历史迁移材料保留在 `docs/superpowers/` 供追溯；其中带“归档”标题的文件描述已经退场的 Ink、BackendHost 或 LegacyJSON 方案，不能作为当前实现依据。
 
 ---
 
 ## 项目结构
 
 ```
-OpenHarness-ts/
+Vykor/
 ├── apps/
 │   ├── cli/                  # CLI 应用（Commander.js）
 │   ├── desktop/              # Electron Desktop 主进程、preload 与 renderer
@@ -323,21 +323,21 @@ OpenHarness-ts/
 
 ### 架构图
 
-当前主线采用 daemon/session runtime。TUI 不再经过 BackendHost/OHJSON，也不为每个会话派生后端进程。本机入口通过私有 registry 发现 daemon；远程入口只接受显式 URL 与 bearer token，二者最终连接同一套领域 Resource、HTTP routes 和 SSE。完整分层见 [架构总览](docs/architecture-overview.md) 与 [可交互架构图](docs/openharness-current-architecture.html)，启动链路见 [TUI Flow](docs/tui-flow.md)。
+当前主线采用 daemon/session runtime。TUI 不再经过 BackendHost/LegacyJSON，也不为每个会话派生后端进程。本机入口通过私有 registry 发现 daemon；远程入口只接受显式 URL 与 bearer token，二者最终连接同一套领域 Resource、HTTP routes 和 SSE。完整分层见 [架构总览](docs/architecture-overview.md) 与 [可交互架构图](docs/vykor-current-architecture.html)，启动链路见 [TUI Flow](docs/tui-flow.md)。
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                              客户端入口                             │
 │  ┌───────────────────────┐    ┌──────────────────────────────────┐ │
 │  │ 本机 CLI / TUI / print │    │ 远程 TUI / Web / Desktop         │ │
-│  │ `ohs` / `ohs --tui`   │    │ 显式 daemon URL + bearer token   │ │
+│  │ `vk` / `vk --tui`   │    │ 显式 daemon URL + bearer token   │ │
 │  │ 私有本机 registry     │    │ 不读取、不复制本机 registry      │ │
 │  └───────────┬───────────┘    └───────────────┬──────────────────┘ │
 │              │ 启动或复用本机 daemon           │ HTTP action + SSE  │
 │              └───────────────┬────────────────┘                    │
 │                              ▼                                     │
 │                 ┌─────────────────────────────┐                    │
-│                 │ `ohs serve` / daemon        │                    │
+│                 │ `vk serve` / daemon        │                    │
 │                 │ Hono routes                    │                    │
 │                 │ Query / Command / Interaction │                    │
 │                 │ SessionOperationRunner         │                    │
@@ -346,7 +346,7 @@ OpenHarness-ts/
 │                                │ AgentPool.acquireSession(id)      │
 │                 ┌──────────────▼──────────────┐                    │
 │                 │ `AgentPool`                   │                    │
-│                 │ `OpenHarnessAgent`             │                    │
+│                 │ `VykorAgent`             │                    │
 │                 │ `AgentSession` → QueryEngine  │                    │
 │                 └──────────────┬──────────────┘                    │
 └────────────────────────────────┼────────────────────────────────────┘
@@ -472,7 +472,7 @@ OpenHarness-ts/
 | **后台工作**   | `BackgroundShellCreate`（创建后台 shell）、`JobList/Read/Wait/Send/Cancel`（统一控制 Terminal、shell、Agent、Workflow）                       |
 | **Agent/团队** | `Agent`（创建 daemon child session 并返回 `jobId`）、`Workflow`（硬调度 DAG）、`TeamCreate/Delete`（团队管理）                                |
 | **调度**       | `ScheduleCreate/Update/Delete/List/RunNow`（创建和管理运行 Agent 的已安排任务；仅 daemon/host 注入 schedules capability 后注册）              |
-| **MCP**        | `McpToolCall/ListMcpResources/ReadMcpResource/McpAuth`（4 个 MCP 工具；`McpAuth` 负责静态 Bearer/Header/env，OAuth 由 `ohs mcp login` 管理）             |
+| **MCP**        | `McpToolCall/ListMcpResources/ReadMcpResource/McpAuth`（4 个 MCP 工具；`McpAuth` 负责静态 Bearer/Header/env，OAuth 由 `vk mcp login` 管理）             |
 | **媒体/通道**  | `ImageToText`（视觉 fallback）、`ImageGeneration`（DALL-E 兼容）、`FeishuPush`                                                                |
 | **元工具**     | `TodoWrite、Config、Sleep、Skill、ToolSearch、AskUser、Brief、EnterPlanMode、ExitPlanMode、EnterWorktree、ExitWorktree`                       |
 
@@ -498,18 +498,18 @@ OpenHarness-ts/
 | `HookExecutor`          | Hook 系统：10 类事件（`session_start/end`、`pre/post_tool_use`、`pre/post_compact`、`user_prompt_submit`、`notification`、`stop`、`subagent_stop`），支持 command/http/prompt/agent 四种类型、priority、matcher、`$ARGUMENTS`                                                                                            |
 | `Swarm`                 | 多 Agent 团队：framework 创建并执行 child agent，daemon 投影 parent task、child session 与 child run。详见 [docs/agent-child-session-flow.md](docs/agent-child-session-flow.md)                                                                                                                                          |
 | `PluginLoader`          | Native Plugin v1 校验、安装状态、版本 cache 和 Skills/Agents/Hooks/MCP 激活；外部 Claude Code 插件由独立 Converter 导入，Runtime 不解析来源格式，Tool 隔离完成前不执行。详见 [docs/plugins-contributions-design.md](docs/plugins-contributions-design.md)             |
-| `SkillRegistry`         | Skill 管理：Markdown + frontmatter 解析（user-invocable/disable-model-invocation/model/argument-hint）；内置 bundled skills（commit/review/test/plan/debug/create-skill）；用户技能 `~/.openharness-ts/skills`，项目技能 `.openharness-ts/skills`；三源加载 bundled<user<project；daemon catalog 将 user-invocable skill 暴露为 template 斜杠（`POST /sessions/:id/commands` 展开后 admit）；model 可见性过滤 |
+| `SkillRegistry`         | Skill 管理：Markdown + frontmatter 解析（user-invocable/disable-model-invocation/model/argument-hint）；内置 bundled skills（commit/review/test/plan/debug/create-skill）；用户技能 `~/.vykor/skills`，项目技能 `.vykor/skills`；三源加载 bundled<user<project；daemon catalog 将 user-invocable skill 暴露为 template 斜杠（`POST /sessions/:id/commands` 展开后 admit）；model 可见性过滤 |
 | `PermissionChecker`     | 权限系统：`default / plan / full_auto` 三种模式 + 工具黑白名单 + 路径规则 + 命令拒绝                                                                                                                                                                                                                                     |
 | `DaemonApplication`     | daemon composition root：组装 recovery、应用服务、`SessionOperationRunner`、Agent loader/pool、permission、task 与 projection，本身不实现各领域业务动作                                                                                                    |
-| `OpenHarnessHttpServer` | daemon HTTP/SSE transport：Hono 路由、bearer token、CORS、listener、SSE client lifecycle；通过单个 `DaemonApplication` 调用应用能力                                                                                                                                                                                      |
-| `OpenHarnessClient`     | 跨端客户端 SDK：typed API、SSE 解析、session snapshot+live 合并、按 session bucket 的 event reducer。详见 [docs/client-sync-flow.md](docs/client-sync-flow.md)                                                                                                                                                           |
+| `VykorHttpServer` | daemon HTTP/SSE transport：Hono 路由、bearer token、CORS、listener、SSE client lifecycle；通过单个 `DaemonApplication` 调用应用能力                                                                                                                                                                                      |
+| `VykorClient`     | 跨端客户端 SDK：typed API、SSE 解析、session snapshot+live 合并、按 session bucket 的 event reducer。详见 [docs/client-sync-flow.md](docs/client-sync-flow.md)                                                                                                                                                           |
 
 ### UI 层
 
 | 模块                | 说明                                                                                                                                                                         |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CLI`               | Commander.js 命令行：主命令 + auth/mcp/plugin/channels/workflow/sandbox/daemon/serve/config 子命令；已安排任务通过 Agent 对话创建并由 Desktop 管理                           |
-| `TUI Frontend`      | 默认交互面：opentui + React 19（Bun）。`ohs` / `ohs --tui` 经 `useServerSync` attach daemon，消费 `@openharness/client` reducer。流程见 [docs/tui-flow.md](docs/tui-flow.md) |
+| `TUI Frontend`      | 默认交互面：opentui + React 19（Bun）。`vk` / `vk --tui` 经 `useServerSync` attach daemon，消费 `@vykor/client` reducer。流程见 [docs/tui-flow.md](docs/tui-flow.md) |
 | `Print`             | 用户 headless：ensure daemon → `client.sessions.admitPrompt()` + SSE 渲染 stdout                                                                                              |
 ---
 
@@ -528,7 +528,7 @@ OpenHarness-ts/
                            │
            ┌───────────────┴──────────────────┐
            ▼                                  ▼
-     ohs / --tui                       --print / prompt
+     vk / --tui                       --print / prompt
    (daemon 客户端,默认)                (daemon 客户端,单次)
            │                                  │
            └──────────────────┬───────────────┘
@@ -537,21 +537,21 @@ OpenHarness-ts/
 ┌──────────────────────────────────────────────────────────┐
 │  ensure / attach daemon                                  │
 │  ├─ 读取 daemon registry + GET /health                   │
-│  ├─ 无可用/stale daemon 时 spawn `ohs serve --register`  │
+│  ├─ 无可用/stale daemon 时 spawn `vk serve --register`  │
 │  ├─ TUI: spawn Bun frontend                              │
-│  └─ print: @openharness/client + SSE stdout              │
+│  └─ print: @vykor/client + SSE stdout              │
 └──────────────────────────┬───────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│  @openharness/client                                     │
+│  @vykor/client                                     │
 │  TUI: snapshot/actions + SSE live events                 │
 │  print: sessions.admitPrompt + SSE stdout，run idle 后退出│
 └──────────────────────────┬───────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│  ohs serve / daemon                                      │
+│  vk serve / daemon                                      │
 │  Hono transport → DaemonApplication                      │
 │  Application Services · SessionOperationRunner · AgentPool│
 │  PermissionBroker · PermissionController                 │
@@ -560,8 +560,8 @@ OpenHarness-ts/
                            │ AgentPool.acquireSession(sessionId)
                            ▼
 ┌──────────────────────────────────────────────────────────┐
-│  @openharness/agent-runtime                              │
-│  OpenHarnessAgent → AgentSession → QueryEngine          │
+│  @vykor/agent-runtime                              │
+│  VykorAgent → AgentSession → QueryEngine          │
 │  → QueryEngine / tools / hooks / MCP                    │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -647,10 +647,10 @@ submitMessage(userInput)
 用户 print（daemon Session API）：
 
 ```
-ohs -p "…" / ohs "…"
+vk -p "…" / vk "…"
        │
        ▼
-  ensureLocalDaemon → OpenHarnessClient
+  ensureLocalDaemon → VykorClient
   sessions.create → SessionSyncController → sessions.admitPrompt
   → 渲染 stdout → run idle 退出
 ```
@@ -658,10 +658,10 @@ ohs -p "…" / ohs "…"
 TUI / Web / Desktop（daemon 权威状态）：
 
 ```
-ohs --tui  (或其它 client attach)
+vk --tui  (或其它 client attach)
        │
        ▼
-  @openharness/client
+  @vykor/client
        │
        ├─ GET /sessions/:id/state   → 原子 snapshot
        │    (session / inputs / messages / parts / runs / attempts / tasks / permissions)
@@ -692,15 +692,15 @@ ohs --tui  (或其它 client attach)
 
 ## 配置
 
-配置文件路径：`~/.openharness-ts/settings.json`（首次运行无需手动创建，使用默认值即可）
+配置文件路径：`~/.vykor/settings.json`（首次运行无需手动创建，使用默认值即可）
 
 SRT Sandbox 推荐用子命令切换，不必手写配置：
 
 ```bash
-ohs sandbox enable
-ohs sandbox disable
-ohs sandbox status
-ohs sandbox check
+vk sandbox enable
+vk sandbox disable
+vk sandbox status
+vk sandbox check
 ```
 
 ```json
@@ -738,19 +738,19 @@ ohs sandbox check
 }
 ```
 
-> MCP 配置必须显式写 `type`：`stdio` 需要 `command`，`http` / `sse` 需要 `url`。缺字段直接报错，不推断旧格式。HTTP/SSE 可用 `headers` 静态鉴权；Streamable HTTP 还可通过 `ohs mcp login` 使用 OAuth。
+> MCP 配置必须显式写 `type`：`stdio` 需要 `command`，`http` / `sse` 需要 `url`。缺字段直接报错，不推断旧格式。HTTP/SSE 可用 `headers` 静态鉴权；Streamable HTTP 还可通过 `vk mcp login` 使用 OAuth。
 
 ### 设置 API Key
 
-**方式一：CLI（推荐）—— 存进 `~/.openharness-ts/credentials.json`，无需手改文件**
+**方式一：CLI（推荐）—— 存进 `~/.vykor/credentials.json`，无需手改文件**
 
 ```bash
-ohs setup                                   # 交互向导：选 provider → 输 key → 选 model
+vk setup                                   # 交互向导：选 provider → 输 key → 选 model
 # 或非交互直接配：
-ohs provider add deepseek -k sk-xxxx --use --model deepseek-chat
-ohs provider list                           # 查看 provider + key 来源，标注 active
-ohs doctor                                  # 验证 key 来源
-ohs --dry-run                               # 预览解析后的运行时配置(不调模型)
+vk provider add deepseek -k sk-xxxx --use --model deepseek-chat
+vk provider list                           # 查看 provider + key 来源，标注 active
+vk doctor                                  # 验证 key 来源
+vk --dry-run                               # 预览解析后的运行时配置(不调模型)
 ```
 
 **方式二：环境变量**
@@ -804,14 +804,14 @@ setx ANTHROPIC_API_KEY "sk-ant-..."
 | `MOONSHOT_API_KEY`       | Moonshot/Kimi API Key                                                       |
 | `MINIMAX_API_KEY`        | MiniMax API Key                                                             |
 | `ZHIPUAI_API_KEY`        | 智谱 AI（GLM）API Key                                                       |
-| `OPENHARNESS_CONFIG_DIR` | 自定义 settings/credentials/plugins/data 等目录（默认 `~/.openharness-ts`） |
-| `OPENHARNESS_MODEL`      | 默认模型名称                                                                |
-| `OPENHARNESS_BASE_URL`   | 通用 API Base URL 覆盖（**所有 provider**）                                 |
-| `OPENHARNESS_API_FORMAT` | API 格式（anthropic / openai）                                              |
-| `OPENHARNESS_MAX_TOKENS` | 最大输出 token 数                                                           |
-| `OPENHARNESS_MAX_TURNS`  | 最大 agent 轮次                                                             |
+| `VYKOR_CONFIG_DIR` | 自定义 settings/credentials/plugins/data 等目录（默认 `~/.vykor`） |
+| `VYKOR_MODEL`      | 默认模型名称                                                                |
+| `VYKOR_BASE_URL`   | 通用 API Base URL 覆盖（**所有 provider**）                                 |
+| `VYKOR_API_FORMAT` | API 格式（anthropic / openai）                                              |
+| `VYKOR_MAX_TOKENS` | 最大输出 token 数                                                           |
+| `VYKOR_MAX_TURNS`  | 最大 agent 轮次                                                             |
 
-> ⚠️ `ANTHROPIC_BASE_URL` 仅 Anthropic provider 生效（由 Anthropic SDK 自行读取），**不会**影响 deepseek/openrouter 等其它 provider——要全局覆盖 baseURL 请用 `OPENHARNESS_BASE_URL`。
+> ⚠️ `ANTHROPIC_BASE_URL` 仅 Anthropic provider 生效（由 Anthropic SDK 自行读取），**不会**影响 deepseek/openrouter 等其它 provider——要全局覆盖 baseURL 请用 `VYKOR_BASE_URL`。
 
 ---
 
@@ -824,7 +824,7 @@ DeepSeek 使用 OpenAI 兼容格式，框架会根据 `provider: deepseek`、`de
 **方式一：CLI（推荐）**
 
 ```bash
-ohs provider add deepseek -k sk-xxxxxxxx --use --model deepseek-chat
+vk provider add deepseek -k sk-xxxxxxxx --use --model deepseek-chat
 ```
 
 **方式二：环境变量**
@@ -848,7 +848,7 @@ export DEEPSEEK_API_KEY="sk-xxxxxxxxxxxxxxxx"
 **方式四：CLI 参数**
 
 ```bash
-ohs --model deepseek-chat \
+vk --model deepseek-chat \
    --api-format openai \
    --base-url https://api.deepseek.com/v1 \
    --api-key sk-xxxxxxxxxxxxxxxx \
@@ -884,7 +884,7 @@ export ZHIPUAI_API_KEY="xxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxx"
 **方式三：CLI 参数**
 
 ```bash
-ohs --model glm-4-plus \
+vk --model glm-4-plus \
    --api-format openai \
    --base-url https://open.bigmodel.cn/api/paas/v4 \
    --api-key "xxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxx" \
@@ -920,10 +920,10 @@ ohs --model glm-4-plus \
 
 ```bash
 # DeepSeek — 自动检测（DEEPSEEK_API_KEY 已设置）
-ohs --model deepseek-chat "hello"
+vk --model deepseek-chat "hello"
 
 # GLM — 自动检测（ZHIPUAI_API_KEY 已设置）
-ohs --model glm-4-plus "hello"
+vk --model glm-4-plus "hello"
 ```
 
 ## License

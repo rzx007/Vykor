@@ -8,9 +8,9 @@
 
 阶段 0–6 已完成存储、业务 Repository、Session/Conversation/Run、Server Application/Runtime、Client Transport/Resource，以及 Desktop/Frontend 状态边界重组。现在主要剩余问题不再是业务逻辑放错位置，而是旧公共入口仍然掩盖新边界：
 
-- `OpenHarnessClient` 已拥有 `sessions`、`projects`、`jobs`、`attachments` 等 Resource，但仍保留一百多个平铺转发方法；
+- `VykorClient` 已拥有 `sessions`、`projects`、`jobs`、`attachments` 等 Resource，但仍保留一百多个平铺转发方法；
 - 仓库内部生产代码还有 `clientLegacyFlatCalls: 79`，调用方仍容易绕过命名 Resource；
-- `@openharness/client` 根入口同时导出 transport、resources、state、commands、protocol 类型和兼容门面，长期承诺范围不清楚；
+- `@vykor/client` 根入口同时导出 transport、resources、state、commands、protocol 类型和兼容门面，长期承诺范围不清楚；
 - 外部使用者无法从类型和文档判断哪些入口会长期保留，哪些只是迁移桥梁；
 - 如果直接删除平铺方法，Desktop、Frontend、CLI 和潜在外部使用者会在同一个版本中承受过大的破坏面。
 
@@ -20,7 +20,7 @@ Stage 7 因此只完成“迁移和告知”：仓库内部停止依赖旧入口
 
 1. 把 Client 导出分为长期公共契约、受控高级契约和兼容入口。
 2. 将仓库内部生产调用全部迁移到命名 Resource 或更窄 capability。
-3. 让新业务模块不再接收完整 `OpenHarnessClient`，只接收实际需要的 Resource 组合。
+3. 让新业务模块不再接收完整 `VykorClient`，只接收实际需要的 Resource 组合。
 4. 为平铺兼容方法增加准确的 `@deprecated` 迁移目标，不改变运行行为。
 5. 建立可自动比较的公共导出快照和旧调用基线。
 6. 保持 HTTP、SSE、IPC、CLI、UI、错误类型和返回结构兼容。
@@ -28,10 +28,10 @@ Stage 7 因此只完成“迁移和告知”：仓库内部停止依赖旧入口
 
 ## 3. 不处理
 
-- 不删除 `OpenHarnessClient` 平铺方法。
+- 不删除 `VykorClient` 平铺方法。
 - 不删除根入口现有导出。
 - 不改变包名、HTTP/SSE/IPC schema、请求路径或认证方式。
-- 不改变 `OpenHarnessApiError`、`IncompatibleProtocolError` 及 Resource decoder 的现有错误语义。
+- 不改变 `VykorApiError`、`IncompatibleProtocolError` 及 Resource decoder 的现有错误语义。
 - 不增加产品功能、视觉改版或新的状态库。
 - 不拆分 npm 包，也不引入 API Extractor、Changesets 等新依赖。
 - 不为尚不存在的第三方使用场景增加抽象。
@@ -42,10 +42,10 @@ Stage 7 因此只完成“迁移和告知”：仓库内部停止依赖旧入口
 
 以下入口是普通调用方应使用的稳定表面：
 
-- `OpenHarnessClient` 构造器；
+- `VykorClient` 构造器；
 - Client 的命名 Resource 属性：`protocol`、`system`、`providers`、`auth`、`projects`、`plugins`、`development`、`sessions`、`attachments`、`permissions`、`schedules`、`jobs`、`terminals`、`channels`、`events`；
 - Resource 方法使用的输入、输出和稳定 record 类型；
-- `OpenHarnessApiError`、`IncompatibleProtocolError`；
+- `VykorApiError`、`IncompatibleProtocolError`；
 - 协议兼容检查：`CURRENT_PROTOCOL_VERSION`、`checkProtocolCompatibility`、`supportsFeature`。
 
 构造器继续作为 transport、protocol 和 resources 的组合根。普通调用方不需要自行创建 transport 或 resource。
@@ -60,15 +60,15 @@ Stage 7 因此只完成“迁移和告知”：仓库内部停止依赖旧入口
 - `applyEvent`、`applySessionSnapshot`、`SessionSyncController`、`syncEvents` 和 selectors；
 - commands parser/dispatcher。
 
-`OpenHarnessClient.transport`、`sse`、`baseUrl`、`token`、`fetchImpl` 暂列为“保留但待 Stage 8 评估”的高级表面：Stage 7 不删除、不新增使用，也不把它们写成普通业务调用的推荐入口。`health` 和 `capabilities` 是兼容方法，长期目标分别是 `client.protocol.health()` 和 `client.protocol.capabilities()`。
+`VykorClient.transport`、`sse`、`baseUrl`、`token`、`fetchImpl` 暂列为“保留但待 Stage 8 评估”的高级表面：Stage 7 不删除、不新增使用，也不把它们写成普通业务调用的推荐入口。`health` 和 `capabilities` 是兼容方法，长期目标分别是 `client.protocol.health()` 和 `client.protocol.capabilities()`。
 
-Stage 7 建立穷尽式契约清单，逐项记录根入口每个 runtime export、每个 type-only export，以及 `OpenHarnessClient` 每个 public property、getter 和 method，并标明分类、替代入口、Stage 7 行为和 Stage 8 决策。大量协议 record type 继续作为长期类型契约，但以该清单为准，不在正文重复数百个名称。`ProtocolDataError` 当前不是根入口导出，Stage 7 不新增对它的根包导出承诺。
+Stage 7 建立穷尽式契约清单，逐项记录根入口每个 runtime export、每个 type-only export，以及 `VykorClient` 每个 public property、getter 和 method，并标明分类、替代入口、Stage 7 行为和 Stage 8 决策。大量协议 record type 继续作为长期类型契约，但以该清单为准，不在正文重复数百个名称。`ProtocolDataError` 当前不是根入口导出，Stage 7 不新增对它的根包导出承诺。
 
-Stage 7 不建立新的 subpath export。原因是当前包只发布源码入口，贸然增加 `@openharness/client/state` 等子路径会形成新的长期兼容承诺。Stage 8 删除兼容层后再根据真实外部使用情况决定是否增加子路径。
+Stage 7 不建立新的 subpath export。原因是当前包只发布源码入口，贸然增加 `@vykor/client/state` 等子路径会形成新的长期兼容承诺。Stage 8 删除兼容层后再根据真实外部使用情况决定是否增加子路径。
 
 ### 4.3 兼容入口
 
-`OpenHarnessClient` 上所有与 Resource 或 ProtocolClient 一对一转发的平铺方法属于兼容入口，例如：
+`VykorClient` 上所有与 Resource 或 ProtocolClient 一对一转发的平铺方法属于兼容入口，例如：
 
 ```ts
 client.getSession(id)        // 兼容入口
@@ -108,10 +108,10 @@ await client.permissions.reply(requestId, input)
 
 ### 5.2 窄 capability
 
-如果函数只使用一个或少量 Resource，不再接受完整 `OpenHarnessClient`：
+如果函数只使用一个或少量 Resource，不再接受完整 `VykorClient`：
 
 ```ts
-type SessionReadClient = Pick<OpenHarnessClient, "sessions">
+type SessionReadClient = Pick<VykorClient, "sessions">
 ```
 
 更优先直接描述结构能力：
@@ -140,21 +140,21 @@ interface SessionReadResources {
 
 ### 6.1 7A：契约清单与自动化护栏
 
-- 从 `OpenHarnessClient` 实际属性和方法生成/维护人工可审查的契约清单；
+- 从 `VykorClient` 实际属性和方法生成/维护人工可审查的契约清单；
 - 建立根入口 runtime export 快照和代表性 type consumer fixture；
-- 将旧调用统计从正则表达式升级为基于仓库现有 `typescript` 包的 AST（语法树）扫描，同时覆盖调用、属性取值/传递、解构和 `OpenHarnessClient["method"]` 类型索引引用，并按文件、方法和生产/测试分类；
+- 将旧调用统计从正则表达式升级为基于仓库现有 `typescript` 包的 AST（语法树）扫描，同时覆盖调用、属性取值/传递、解构和 `VykorClient["method"]` 类型索引引用，并按文件、方法和生产/测试分类；
 - 建立经过人工核对的兼容方法名清单，扫描 `client/api/this.client`、`(await client())`、可识别别名与解构引用；
 - 用架构测试 fixture 证明直接调用、别名、await factory、成员字段和解构形态都能被识别；
 - 将 `clientLegacyFlatCalls: 79` 只记录为旧正则脚本的历史基线，不把它当作真实迁移分母；7A 输出新的 AST 基线后，后续阶段只使用新指标；
 - 规则允许兼容门面自身和专门的兼容测试，禁止新增生产调用。
 
-不新增依赖：AST 扫描直接使用仓库已有的 `typescript`。runtime export 使用动态 import 后排序比较；type-only export 使用 TypeChecker 的 `getExportsOfModule` 枚举并按 SymbolFlags 分类后与穷尽契约清单比较，另用只编译、不执行的代表性 consumer fixture 验证关键导入和签名。fixture 使用独立 `tests/client-public-api/tsconfig.json`，通过 workspace package resolution 指向 `@openharness/client`。扫描器测试、契约比较和 consumer 编译统一接入根 `check:architecture`，避免成为可漏跑的旁路命令。
+不新增依赖：AST 扫描直接使用仓库已有的 `typescript`。runtime export 使用动态 import 后排序比较；type-only export 使用 TypeChecker 的 `getExportsOfModule` 枚举并按 SymbolFlags 分类后与穷尽契约清单比较，另用只编译、不执行的代表性 consumer fixture 验证关键导入和签名。fixture 使用独立 `tests/client-public-api/tsconfig.json`，通过 workspace package resolution 指向 `@vykor/client`。扫描器测试、契约比较和 consumer 编译统一接入根 `check:architecture`，避免成为可漏跑的旁路命令。
 
 ### 6.2 7B：Client commands 与 state
 
 - commands 使用所需 Resource capability；
 - state/sync/controller 只依赖 `sessions.getState`、`events.list/stream`；
-- 不让 Resource 反向依赖 `OpenHarnessClient`；
+- 不让 Resource 反向依赖 `VykorClient`；
 - 保持 reducer、cursor、abort、reconnect 行为不变。
 
 这一波应使 Client 包内部除 facade 和兼容测试外不再调用平铺方法。
@@ -234,7 +234,7 @@ Stage 7 不承诺具体发布日期，但固定以下退场条件：
 5. Stage 8 只能在明确 breaking version 中删除；
 6. 删除前再次搜索仓库、发布文档和已知外部适配器。
 
-Stage 7 的契约清单是唯一事实源，每个兼容符号记录 `deprecatedSince`、`deprecatedCarrierRelease` 和 `retentionCarrierRelease`。两份 release 字段都包含 version、date、channel 与 release-note URL 或提交 hash；未知值必须为 `null`/`pending`。若 `@openharness/client` 没有独立发布物，项目必须预先固定一个实际 carrier（默认使用发布 Client 的 CLI；只有发行流程明确由 Desktop 承载时才改为 Desktop），全部符号使用同一关联规则，不能逐项任意选择。Stage 8 仅在首次弃用发行与至少一个后续保留发行两份证据齐全后才能删除；任一字段 pending 就继续保留。
+Stage 7 的契约清单是唯一事实源，每个兼容符号记录 `deprecatedSince`、`deprecatedCarrierRelease` 和 `retentionCarrierRelease`。两份 release 字段都包含 version、date、channel 与 release-note URL 或提交 hash；未知值必须为 `null`/`pending`。若 `@vykor/client` 没有独立发布物，项目必须预先固定一个实际 carrier（默认使用发布 Client 的 CLI；只有发行流程明确由 Desktop 承载时才改为 Desktop），全部符号使用同一关联规则，不能逐项任意选择。Stage 8 仅在首次弃用发行与至少一个后续保留发行两份证据齐全后才能删除；任一字段 pending 就继续保留。
 
 如果项目在 Stage 8 前仍按 `0.x` 发布，也必须在 release notes 明确标注 breaking change，不能以 `0.x` 为由静默删除。
 
@@ -242,13 +242,13 @@ Stage 7 的契约清单是唯一事实源，每个兼容符号记录 `deprecated
 
 ### 8.1 Runtime export 快照
 
-测试动态导入 `@openharness/client` 根入口，比较排序后的关键 runtime export 名称。快照关注“意外删除或新增承诺”，不记录函数源码、属性顺序或构建器内部字段。
+测试动态导入 `@vykor/client` 根入口，比较排序后的关键 runtime export 名称。快照关注“意外删除或新增承诺”，不记录函数源码、属性顺序或构建器内部字段。
 
 ### 8.2 代表性 Type consumer fixture
 
 建立独立 TypeScript fixture，验证：
 
-- 能从根入口构造 `OpenHarnessClient`；
+- 能从根入口构造 `VykorClient`；
 - 能访问每个长期 Resource；
 - 关键 Resource 输入/输出类型可导入；
 - 高级 state/sync 能力仍可导入；
@@ -266,7 +266,7 @@ Stage 7 的契约清单是唯一事实源，每个兼容符号记录 `deprecated
 - 按文件和方法的详细位置；
 - 允许列表仅包含 `http-client.ts` facade 实现和专门兼容测试。
 
-完成 Stage 7 时，生产旧调用和旧成员引用都必须为 0。兼容测试引用不计入生产基线，但必须保留到 Stage 8。对已经确认来源为 `OpenHarnessClient`、却无法解析具体成员的 production diagnostic，门禁直接失败；动态字符串成员另列人工审计结果，不允许静默跳过。
+完成 Stage 7 时，生产旧调用和旧成员引用都必须为 0。兼容测试引用不计入生产基线，但必须保留到 Stage 8。对已经确认来源为 `VykorClient`、却无法解析具体成员的 production diagnostic，门禁直接失败；动态字符串成员另列人工审计结果，不允许静默跳过。
 
 ## 9. 错误与行为兼容
 
@@ -276,7 +276,7 @@ Stage 7 的契约清单是唯一事实源，每个兼容符号记录 `deprecated
 - 相同 decoder 和返回结构；
 - 相同 AbortSignal 传递；
 - 相同 retry 所有者，不能同时由 transport 和平台重连；
-- 相同 `OpenHarnessApiError` status/body/message；
+- 相同 `VykorApiError` status/body/message；
 - 相同 CLI 输出、Desktop IPC payload、Frontend Hook 返回值；
 - upload/download/SSE 继续保持流式，不为了统一类型改成缓冲读取。
 

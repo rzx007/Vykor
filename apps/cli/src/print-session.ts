@@ -1,18 +1,18 @@
 import {
-  OpenHarnessClient,
+  VykorClient,
   applySessionSnapshot,
   createPromptRequestId,
   hasActiveRun,
   normalizeDaemonBaseUrl,
   patchSessionRuntimeMetadata,
   syncEvents,
-  type OpenHarnessClientState,
+  type VykorClientState,
   type SessionEventRecord,
   type SessionMessagePartRecord,
   type SessionStateSnapshot,
-} from "@openharness/client";
-import type { Settings } from "@openharness/core";
-import { isCoordinatorMode } from "@openharness/coordinator";
+} from "@vykor/client";
+import type { Settings } from "@vykor/core";
+import { isCoordinatorMode } from "@vykor/coordinator";
 
 import { ensureLocalDaemon } from "./ensure-daemon.js";
 import { EventRenderer } from "./renderer.js";
@@ -35,7 +35,7 @@ export interface PrintSessionOptions {
   daemonToken?: string;
 }
 
-type PermissionClient = Pick<OpenHarnessClient, "permissions">;
+type PermissionClient = Pick<VykorClient, "permissions">;
 
 /** Build daemon session.metadata from CLI overrides / settings. */
 export function buildPrintSessionMetadata(
@@ -80,7 +80,7 @@ export function buildPrintSessionMetadata(
 }
 
 function runTerminalStatus(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   sessionId: string,
   runId: string | undefined,
 ): "active" | "completed" | "failed" | "unknown" {
@@ -96,7 +96,7 @@ function runTerminalStatus(
 
 async function autoReplyPermissions(
   client: PermissionClient,
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   sessionId: string,
   approve: boolean,
   seen: Set<string>,
@@ -183,7 +183,7 @@ function renderSessionEvent(
 }
 
 function renderSessionSnapshot(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   sessionId: string,
   renderer: EventRenderer,
   outputFormat: string | undefined,
@@ -216,9 +216,9 @@ function renderSessionSnapshot(
 }
 
 function mergeSessionSnapshot(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   snapshot: SessionStateSnapshot,
-): OpenHarnessClientState {
+): VykorClientState {
   return applySessionSnapshot(state, snapshot);
 }
 
@@ -241,7 +241,7 @@ export async function runPrintSession(
   } else {
     daemon = await ensureLocalDaemon();
   }
-  const client = new OpenHarnessClient({
+  const client = new VykorClient({
     baseUrl: daemon.url,
     token: daemon.token,
   });

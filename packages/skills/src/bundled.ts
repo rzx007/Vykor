@@ -175,7 +175,7 @@ a fix, especially when the cause isn't obvious.
 const CREATE_SKILL = `
 # create-skill
 
-Create or install a local OpenHarness skill by writing a \`SKILL.md\` to disk.
+Create or install a local Vykor skill by writing a \`SKILL.md\` to disk.
 
 ## When to use
 The user asks to create, write, install, or add a local skill; to turn a workflow
@@ -192,11 +192,11 @@ Do not guess. Default only if the user already said so.
 
 | Type | Path | Scope |
 |------|------|-------|
-| Personal | \`~/.openharness-ts/skills/<skill-name>/\` | Available across all projects for this user |
-| Project | \`<cwd>/.openharness-ts/skills/<skill-name>/\` | Shared with the repository |
+| Personal | \`~/.vykor/skills/<skill-name>/\` | Available across all projects for this user |
+| Project | \`<cwd>/.vykor/skills/<skill-name>/\` | Shared with the repository |
 
 The runtime also **scans** \`.agents/skills\` (git-root to cwd). When *creating*
-a skill, write to \`.openharness-ts/skills\` unless the user explicitly asks
+a skill, write to \`.vykor/skills\` unless the user explicitly asks
 for the other project directory.
 
 Load order is last-writer-wins: bundled < plugin < user < project.
@@ -245,7 +245,7 @@ export const BUNDLED_SKILLS: SkillDefinition[] = [
   bundled("debug", "Systematically reproduce, localize, and fix the root cause of a bug, then add a regression test.", DEBUG),
   bundled(
     "create-skill",
-    "Create or install a local skill by writing SKILL.md under ~/.openharness-ts/skills or the project .openharness-ts/skills directory. Use when the user asks to add, write, or install a skill on disk.",
+    "Create or install a local skill by writing SKILL.md under ~/.vykor/skills or the project .vykor/skills directory. Use when the user asks to add, write, or install a skill on disk.",
     CREATE_SKILL,
   ),
 ];

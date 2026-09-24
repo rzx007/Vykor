@@ -1,12 +1,12 @@
 # 归档：TUI 迁移 ink → opentui 实施计划
 
-> 历史实施计划，禁止作为当前任务执行。计划中的 BackendHost/OHJSON 三进程模型已退场；当前架构见 [../../tui-flow.md](../../tui-flow.md) 和 [../../client-sync-flow.md](../../client-sync-flow.md)。
+> 历史实施计划，禁止作为当前任务执行。计划中的 BackendHost/LegacyJSON 三进程模型已退场；当前架构见 [../../tui-flow.md](../../tui-flow.md) 和 [../../client-sync-flow.md](../../client-sync-flow.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 `apps/frontend` 从 ink + React 18 迁移到 `@opentui/react`，交互全面对齐 opencode（spec：`docs/superpowers/specs/2026-06-12-opentui-migration-design.md`）。
 
-**Architecture:** 三进程模型不变（CLI 启动器 → 前端 TUI → Node BackendHost，OHJSON/stdio）。前端进程改由 Bun 运行；组件层按 opencode 架构重建（routes/Home+Session、栈式 Dialog、命令注册表、textarea Prompt），`useBackendSession`/协议/后端零改动。
+**Architecture:** 三进程模型不变（CLI 启动器 → 前端 TUI → Node BackendHost，LegacyJSON/stdio）。前端进程改由 Bun 运行；组件层按 opencode 架构重建（routes/Home+Session、栈式 Dialog、命令注册表、textarea Prompt），`useBackendSession`/协议/后端零改动。
 
 **Tech Stack:** Bun、@opentui/core 0.4.x、@opentui/react 0.4.x、React 19（@opentui/react peer 要求 ≥19.2，Task 0 实测）、bun test（前端测试，替代 vitest）。
 
@@ -16,7 +16,7 @@
 
 - 工作目录：仓库根（worktree）。前端包目录 `apps/frontend`。
 - opentui 原生渲染器**只能在 Bun 下跑**，前端所有测试用 `bun test`（jest 风格 API，`import { test, expect } from "bun:test"`），不要用 vitest。React 组件测试用 `import { testRender } from "@opentui/react/test-utils"`（返回 renderer/renderOnce/captureCharFrame/mockInput 等，规避 createRoot 异步 commit 时序问题）；后文测试代码片段中的 `createTestRenderer + createRoot` 写法一律按此替换。
-- 每个任务结束跑 `pnpm --filter @openharness/frontend check-types`（build/test 不查类型，这是本仓已知坑）。
+- 每个任务结束跑 `pnpm --filter @vykor/frontend check-types`（build/test 不查类型，这是本仓已知坑）。
 - 提交信息末尾加 `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`。
 - opentui API 参考：本机 skill 文档 `C:\Users\ruanz\.claude\skills\opentui\docs\`（components/、bindings/react.mdx、core-concepts/testing.mdx）。交互参考源码（已克隆）：`$TEMP/opencode-ref/packages/tui/src/`（Solid 实现，只抄交互语义不抄代码）。
 - React JSX 内置元素全小写：`<box>` `<text>` `<scrollbox>` `<textarea>` `<input>` `<select>` `<markdown>` `<code>` `<span>`。颜色一律用 hex 字符串。
@@ -72,7 +72,7 @@ import { spawn } from "node:child_process";
 import readline from "node:readline";
 
 const child = spawn(process.execPath.includes("bun") ? "node" : process.execPath,
-  ["-e", "console.log('OHJSON:{\"type\":\"ready\"}'); process.stdin.on('data', d => { console.log('OHJSON:{\"type\":\"echo\"}'); process.exit(0); });"],
+  ["-e", "console.log('LegacyJSON:{\"type\":\"ready\"}'); process.stdin.on('data', d => { console.log('LegacyJSON:{\"type\":\"echo\"}'); process.exit(0); });"],
   { stdio: ["pipe", "pipe", "inherit"] });
 const reader = readline.createInterface({ input: child.stdout! });
 reader.on("line", (line) => {
@@ -83,7 +83,7 @@ child.on("exit", (code) => { console.error("exit", code); process.exit(0); });
 ```
 
 Run: `bun spawn-test.ts`
-Expected: stderr 依次输出 `got: OHJSON:{"type":"ready"}`、`got: OHJSON:{"type":"echo"}`、`exit 0`。这验证了 useBackendSession 的核心链路（node:child_process + readline）在 Bun 下可用。
+Expected: stderr 依次输出 `got: LegacyJSON:{"type":"ready"}`、`got: LegacyJSON:{"type":"echo"}`、`exit 0`。这验证了 useBackendSession 的核心链路（node:child_process + readline）在 Bun 下可用。
 
 - [ ] **Step 4: 测试渲染器验证**
 
@@ -242,7 +242,7 @@ git add -A apps/frontend/src/theme && git commit --no-verify -m "feat(frontend):
 
 ```tsx
 /**
- * TUI 前端入口（进程 B，Bun 运行时）。配置经 OPENHARNESS_FRONTEND_CONFIG 注入；
+ * TUI 前端入口（进程 B，Bun 运行时）。配置经 VYKOR_FRONTEND_CONFIG 注入；
  * backend 由 useBackendSession spawn。详见 docs/tui-flow.md。
  */
 import { createCliRenderer } from "@opentui/core";
@@ -250,26 +250,26 @@ import { createRoot } from "@opentui/react";
 import { App } from "./App";
 import type { FrontendConfig } from "./types";
 
-const rawConfig = process.env.OPENHARNESS_FRONTEND_CONFIG;
+const rawConfig = process.env.VYKOR_FRONTEND_CONFIG;
 let config: FrontendConfig;
 try {
   const parsed = rawConfig ? JSON.parse(rawConfig) : {};
   config = {
     backend_command: parsed.backend_command
-      ?? (process.env.OPENHARNESS_BACKEND_COMMAND?.split(" ") ?? ["ohs", "--backend-only"]),
-    initial_prompt: parsed.initial_prompt ?? process.env.OPENHARNESS_INITIAL_PROMPT ?? null,
-    theme: parsed.theme ?? process.env.OPENHARNESS_THEME ?? "default",
+      ?? (process.env.VYKOR_BACKEND_COMMAND?.split(" ") ?? ["vk", "--backend-only"]),
+    initial_prompt: parsed.initial_prompt ?? process.env.VYKOR_INITIAL_PROMPT ?? null,
+    theme: parsed.theme ?? process.env.VYKOR_THEME ?? "default",
     version: parsed.version ?? null,
   };
 } catch {
-  config = { backend_command: ["ohs", "--backend-only"], theme: "default" };
+  config = { backend_command: ["vk", "--backend-only"], theme: "default" };
 }
 
 try {
   const renderer = await createCliRenderer({ exitOnCtrlC: false });
   createRoot(renderer).render(<App config={config} />);
 } catch (err) {
-  console.error("[openharness] 终端渲染器初始化失败（需要 Bun + 支持的平台）：", err);
+  console.error("[vykor] 终端渲染器初始化失败（需要 Bun + 支持的平台）：", err);
   process.exit(1);
 }
 ```
@@ -281,9 +281,9 @@ try {
 - [ ] **Step 4: 手工验证 + 提交**
 
 Run: `cd apps/frontend && bun run build && cd ../.. && node apps/cli/dist/... ` 不可行（CLI 还没改）。改用 dev 直跑：
-`cd apps/frontend && OPENHARNESS_BACKEND_COMMAND="node ../cli/dist/index.js --backend-only" bun src/index.tsx`（若 cli 未 build，先 `pnpm --filter @openharness/cli build`；backend 失败也至少应看到 Connecting 文案）。
+`cd apps/frontend && VYKOR_BACKEND_COMMAND="node ../cli/dist/index.js --backend-only" bun src/index.tsx`（若 cli 未 build，先 `pnpm --filter @vykor/cli build`；backend 失败也至少应看到 Connecting 文案）。
 Expected: 屏幕出现 Connecting/ready 文案，ctrl+c 退出。
-Run: `pnpm --filter @openharness/frontend check-types` → 仍会因旧组件报错，可暂忽略（本任务只保证 index/App/types/theme 无错：`bunx tsc --noEmit src/index.tsx` 不可行，靠下一任务批量删旧文件后收敛）。
+Run: `pnpm --filter @vykor/frontend check-types` → 仍会因旧组件报错，可暂忽略（本任务只保证 index/App/types/theme 无错：`bunx tsc --noEmit src/index.tsx` 不可行，靠下一任务批量删旧文件后收敛）。
 
 ```bash
 git add -A apps/frontend/src && git commit --no-verify -m "feat(frontend): opentui 入口 + App 骨架"
@@ -305,7 +305,7 @@ git rm -r apps/frontend/src/components
 
 - [ ] **Step 2: 类型收敛验证**
 
-Run: `pnpm --filter @openharness/frontend check-types`
+Run: `pnpm --filter @vykor/frontend check-types`
 Expected: PASS（只剩 index/App/hooks/theme/types）。
 
 - [ ] **Step 3: 检查根 vitest 配置**
@@ -596,7 +596,7 @@ git add -A apps/frontend/src/keymap && git commit -m "feat(frontend): 命令注�
 
 - [ ] **Step 1: Logo.tsx**
 
-用 `<ascii-font>`（参考 `docs/components/ascii-font.mdx` 选可用字体）渲染 `openharness`；终端窄于 logo 宽度时回退为普通 `<text bold>`。前景 `theme.colors.foreground`，副词缀（如 "code"）可用 `theme.colors.muted` 分段——照 opencode 截图双色风格：`open` 用 muted、`harness` 用 foreground。
+用 `<ascii-font>`（参考 `docs/components/ascii-font.mdx` 选可用字体）渲染 `vykor`；终端窄于 logo 宽度时回退为普通 `<text bold>`。前景 `theme.colors.foreground`，副词缀（如 "code"）可用 `theme.colors.muted` 分段——照 opencode 截图双色风格：`open` 用 muted、`harness` 用 foreground。
 
 - [ ] **Step 2: Home.tsx**
 
@@ -784,7 +784,7 @@ Run: `bun test src` → 全绿。
 
 - [ ] **Step 6: 手工验证 + 提交**
 
-`cd apps/frontend && OPENHARNESS_BACKEND_COMMAND="node <repo>/apps/cli/dist/index.js --backend-only" bun src/index.tsx`
+`cd apps/frontend && VYKOR_BACKEND_COMMAND="node <repo>/apps/cli/dist/index.js --backend-only" bun src/index.tsx`
 Expected: Home 界面 → 输入消息 → 切 Session、流式 markdown → tab 切模式 → ctrl+p 面板 → ctrl+c 退出。
 
 ```bash
@@ -825,7 +825,7 @@ export function resolveBun(): string | null {
 const bun = resolveBun();
 if (!bun) {
   console.error(
-    "openharness TUI 需要 Bun 运行时（opentui 原生渲染器）。\n" +
+    "vykor TUI 需要 Bun 运行时（opentui 原生渲染器）。\n" +
     "安装：https://bun.sh — Windows: powershell -c \"irm bun.sh/install.ps1 | iex\"\n" +
     "或使用 --print 模式无 TUI 运行。",
   );
@@ -842,7 +842,7 @@ frontendConfig 增加 `version`：从 cli 自身 package.json 读（main.ts 现�
 
 ```bash
 pnpm build && pnpm check-types && pnpm test
-node apps/cli/dist/index.js   # 或 ohs，若有 bin link
+node apps/cli/dist/index.js   # 或 vk，若有 bin link
 ```
 
 Expected: spec §7 验收路径全过 —— Home → 提交消息 → 流式 markdown → 权限弹窗 y/a/n → ctrl+p 执行命令 → tab 切模式 → ctrl+c 退出、终端恢复正常。

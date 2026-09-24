@@ -27,13 +27,13 @@
   不引 pydantic 式校验。配对修复做在 **load 侧**（Python save/load 双侧）：
   读回时剔除尾部悬挂 tool_use 与孤儿 tool_result——崩溃/MaxTurns 中断落盘的
   断链历史 resume 后会被 API 直接 400，必须修复。
-- 旧项目级 JSON snapshot API 已从 `@openharness/services` 导出中移除。
+- 旧项目级 JSON snapshot API 已从 `@vykor/services` 导出中移除。
 - ✅ `/export` 命令：`/export [filename] [--json]`，`.json` 后缀或 `--json` 标志
   输出 JSON（session_id/model/exported_at/messages），否则 Markdown；默认写
-  `~/.openharness-ts/data/exports/`。`/export` 走独立渲染路径（不依赖旧 cwd/storage）。
+  `~/.vykor/data/exports/`。`/export` 走独立渲染路径（不依赖旧 cwd/storage）。
 - 留待：systemPrompt 传空串、usage 为 TS camelCase（与 Python 快照不互换）；
   compact 侧读回 checkpoint。
-- 已删除未被主线使用的 `SessionStorage` 类、`~/.openharness-ts/sessions/<id>.json`
+- 已删除未被主线使用的 `SessionStorage` 类、`~/.vykor/sessions/<id>.json`
   平铺回退，以及项目级 JSON snapshot functions。
 - `/dream` 的 `listSessionsTouchedSince` 当前扫 `getSessionsDir()` 平铺根，
   接线后改传项目分目录。

@@ -7,8 +7,8 @@ import type {
   GoalActionInput,
   SessionGoal,
   UpdateSessionGoalInput,
-} from "@openharness/protocol";
-import { decodeSessionStateSnapshot } from "@openharness/protocol";
+} from "@vykor/protocol";
+import { decodeSessionStateSnapshot } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type {
   AdmitClientPromptInput,

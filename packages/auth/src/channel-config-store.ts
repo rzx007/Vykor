@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { getChannelCredentialsFilePath } from "@openharness/core";
+import { getChannelCredentialsFilePath } from "@vykor/core";
 
 export type FeishuDomain = "feishu" | "lark";
 

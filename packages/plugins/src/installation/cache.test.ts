@@ -5,14 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computePluginBehaviorDigest, materializePluginCache } from "./cache.js";
 
 let root: string;
-beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "ohs-plugin-cache-")); });
+beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vk-plugin-cache-")); });
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("plugin cache", () => {
   it("computes a stable content digest and materializes an immutable versioned directory", async () => {
     const source = join(root, "source");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), "{}");
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), "{}");
     const digest = await computePluginBehaviorDigest(source);
     expect(await computePluginBehaviorDigest(source)).toBe(digest);
     const target = await materializePluginCache(source, join(root, "cache"), "dev.example.plugin", "1.0.0", digest);
@@ -22,8 +22,8 @@ describe("plugin cache", () => {
 
   it("keeps the previously installed snapshot intact when the same plugin ID is reinstalled", async () => {
     const source = join(root, "source");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), "{}");
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), "{}");
     await writeFile(join(source, "payload.txt"), "first");
 
     const cacheRoot = join(root, "cache");
@@ -48,8 +48,8 @@ describe("plugin cache", () => {
 
   it("keeps the previous immutable cache when candidate validation fails", async () => {
     const source = join(root, "source");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), "{}");
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), "{}");
     await writeFile(join(source, "payload.txt"), "known-good");
 
     const cacheRoot = join(root, "cache");
@@ -73,8 +73,8 @@ describe("plugin cache", () => {
 
   it("rejects a copied snapshot when the source changed after its digest was computed", async () => {
     const source = join(root, "source");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), "{}");
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), "{}");
     await writeFile(join(source, "payload.txt"), "approved content");
     const digest = await computePluginBehaviorDigest(source);
     await writeFile(join(source, "payload.txt"), "changed content");
@@ -92,8 +92,8 @@ describe("plugin cache", () => {
   it("rejects a pre-created snapshot root symlink or junction", async () => {
     const source = join(root, "source");
     const external = join(root, "external");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), "{}");
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), "{}");
     const digest = await computePluginBehaviorDigest(source);
     await mkdir(external, { recursive: true });
     await writeFile(join(external, "payload.txt"), "external mutable content");
@@ -113,8 +113,8 @@ describe("plugin cache", () => {
 
   it("repairs a corrupted snapshot when reinstalling the original content", async () => {
     const source = join(root, "source");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), "{}");
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), "{}");
     await writeFile(join(source, "payload.txt"), "known-good");
     const digest = await computePluginBehaviorDigest(source);
     const cacheRoot = join(root, "cache");
@@ -131,8 +131,8 @@ describe("plugin cache", () => {
   it("repairs a snapshot whose contents prevent digest calculation without deleting the link target", async () => {
     const source = join(root, "source");
     const external = join(root, "external");
-    await mkdir(join(source, ".openharness-plugin"), { recursive: true });
-    await writeFile(join(source, ".openharness-plugin", "plugin.json"), "{}");
+    await mkdir(join(source, ".vykor-plugin"), { recursive: true });
+    await writeFile(join(source, ".vykor-plugin", "plugin.json"), "{}");
     await writeFile(join(source, "payload.txt"), "known-good");
     await mkdir(external, { recursive: true });
     await writeFile(join(external, "sentinel.txt"), "must survive cache repair");
@@ -144,7 +144,7 @@ describe("plugin cache", () => {
     const repaired = await materializePluginCache(source, cacheRoot, "dev.example.plugin", "1.0.0", digest);
 
     expect(repaired).toBe(target);
-    expect(await readdir(repaired)).toEqual([".openharness-plugin", "payload.txt"]);
+    expect(await readdir(repaired)).toEqual([".vykor-plugin", "payload.txt"]);
     expect(await readFile(join(external, "sentinel.txt"), "utf8")).toBe("must survive cache repair");
     expect(await readdir(join(cacheRoot, "dev.example.plugin"))).toEqual([`1.0.0-${digest}`]);
   });

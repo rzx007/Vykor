@@ -139,7 +139,7 @@ GoalAssessment 增加 `evidenceRefs: GoalEvidenceRef[]` 和可选 wait；evidenc
 - [ ] 详情显示完整正文、阻塞原因、证据与额度。等待批准显示原批准入口，不提供绕过权限的继续按钮。
 - [ ] 取消保留对话和产物；请求失败保留真实状态，错误可关闭。
 - [ ] 最终执行各包相关测试：protocol 的 Goal 解析；services 的目标存储；server 的目标服务/路由/续跑/上下文；desktop 的 IPC、goal-actions、goal-mode、Banner，以及现有 Composer/附件回归。
-- [ ] 类型检查使用各包 check-types；Desktop 使用 `pnpm --filter @openharness/desktop typecheck`，不能以不展开项目引用的根 tsconfig 检查代替 node/web 检查。
+- [ ] 类型检查使用各包 check-types；Desktop 使用 `pnpm --filter @vykor/desktop typecheck`，不能以不展开项目引用的根 tsconfig 检查代替 node/web 检查。
 - [ ] 手动验证：创建目标 → 发送 → Banner → 普通消息插入 → 暂停 → 继续 → 完成；补充编辑、取消、刷新与网络断开。只有真实完成这些检查后才勾选完成。
 
 ## 交付记录

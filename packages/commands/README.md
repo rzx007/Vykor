@@ -1,4 +1,4 @@
-# @openharness/commands
+# @vykor/commands
 
 斜杠命令注册表。
 
@@ -10,7 +10,7 @@
 ## 使用
 
 ```ts
-import { CommandRegistry } from "@openharness/commands";
+import { CommandRegistry } from "@vykor/commands";
 
 const registry = new CommandRegistry();
 registry.register({ name: "test", handler: async (ctx) => {} });
@@ -19,5 +19,5 @@ registry.register({ name: "test", handler: async (ctx) => {} });
 ## 测试
 
 ```bash
-pnpm --filter @openharness/commands test
+pnpm --filter @vykor/commands test
 ```

@@ -1,6 +1,6 @@
-import type { SessionInputAttachmentRecord } from "@openharness/protocol";
+import type { SessionInputAttachmentRecord } from "@vykor/protocol";
 import { describe, expect, it, vi } from "vitest";
-import { AttachmentTextDecodingError } from "@openharness/services";
+import { AttachmentTextDecodingError } from "@vykor/services";
 
 import { AttachmentCapabilityRouter } from "../attachment-capability-router.js";
 

@@ -1,4 +1,4 @@
-import type { ToolContext, ToolResult } from "@openharness/core";
+import type { ToolContext, ToolResult } from "@vykor/core";
 import { NativeToolHostError } from "./tool-host.js";
 
 export interface NativeToolAuditEvent {

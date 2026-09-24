@@ -41,10 +41,10 @@ export default defineConfig({
         // workspace 包打进主进程 bundle，安装包就不必再拷整棵 monorepo 依赖树
         exclude: [
           "@electron-toolkit/utils",
-          "@openharness/client",
-          "@openharness/server",
-          "@openharness/terminal",
-          "@openharness/terminal-node",
+          "@vykor/client",
+          "@vykor/server",
+          "@vykor/terminal",
+          "@vykor/terminal-node",
         ],
         // 原生模块不能打进 JS；飞书 SDK 整体外置，让它的依赖（protobufjs/ws 等）
         // 由 SDK 自己的 node_modules 解析，避免子路径 require 在 bundle 里解析不到。

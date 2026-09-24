@@ -12,7 +12,7 @@ import type {
   FeishuRegistrationSnapshot,
   FeishuRegistrationStartInput,
   RecordChannelDeliveryInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 
 export interface FeishuComposedSnapshot {

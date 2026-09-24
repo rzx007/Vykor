@@ -11,7 +11,7 @@ Fix Round 2 从 `AgentRunResult.history` 按 run 起始索引复制消息；但 
   - `tool_use_end` 保存 `toolUseId` 与 `isError`；
   - 记录不依赖、也不反推 QueryEngine history。
 - 只有成功完成的 run 才通过内部 `onSettled` 回传 tool activity 快照；失败或取消传 `undefined`。
-- `DefaultOpenHarnessAgent` 在新 run 开始时先保存一个明确的空 activity，成功时替换为该 run 的快照。因此失败/取消 run 不会回退扫描 history 中已经执行过的成功工具调用，也不会沿用前一 run 的事实。
+- `DefaultVykorAgent` 在新 run 开始时先保存一个明确的空 activity，成功时替换为该 run 的快照。因此失败/取消 run 不会回退扫描 history 中已经执行过的成功工具调用，也不会沿用前一 run 的事实。
 - Memory runtime 的重复写入判定改用 completed-run activity，并继续要求：
   - 工具是 `Remember`，或是通过既有受管 Memory 路径检查的 `Write`/`Edit`；
   - `tool_use_id` 匹配；
@@ -39,9 +39,9 @@ Fix Round 2 从 `AgentRunResult.history` 按 run 起始索引复制消息；但 
 ## 验证结果
 
 ```powershell
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/agent-runtime check-types
-pnpm --filter @openharness/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/agent-runtime check-types
+pnpm --filter @vykor/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
 git diff --check
 ```
 

@@ -34,7 +34,7 @@ describe("SkillManagementService", () => {
       "claude",
     );
     await skill(
-      join(project, ".openharness-ts", "skills", "project.md"),
+      join(project, ".vykor", "skills", "project.md"),
       "project",
     );
     await skill(join(config, "skills", "personal.md"), "personal");
@@ -66,12 +66,12 @@ describe("SkillManagementService", () => {
     ).rejects.toThrow(/只读/);
   });
 
-  it("uses the authoritative project catalog and keeps OHS global skills personal", async () => {
+  it("uses the authoritative project catalog and keeps VK global skills personal", async () => {
     const root = await temp();
-    const config = join(root, ".openharness-ts");
+    const config = join(root, ".vykor");
     await skill(join(config, "skills", "global.md"), "global");
     await skill(
-      join(root, "unregistered", ".openharness-ts", "skills", "hidden.md"),
+      join(root, "unregistered", ".vykor", "skills", "hidden.md"),
       "hidden",
     );
     const service = createSkillManagementService({
@@ -92,7 +92,7 @@ describe("SkillManagementService", () => {
     const root = await temp();
     const project = join(root, "project");
     const outside = join(root, "outside");
-    const linked = join(project, ".openharness-ts", "skills");
+    const linked = join(project, ".vykor", "skills");
     await mkdir(dirname(linked), { recursive: true });
     await mkdir(outside, { recursive: true });
     await symlink(
@@ -146,7 +146,7 @@ describe("SkillManagementService", () => {
 });
 
 async function temp(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), "openharness-skill-service-"));
+  const path = await mkdtemp(join(tmpdir(), "vykor-skill-service-"));
   temporaryDirectories.push(path);
   return path;
 }

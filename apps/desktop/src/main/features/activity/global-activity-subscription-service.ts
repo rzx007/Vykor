@@ -4,7 +4,7 @@ import {
   type ScheduledRunRecord,
   type SessionEventRecord,
   type SyncEventUpdate,
-} from "@openharness/client"
+} from "@vykor/client"
 import type {
   DesktopActivityUpdate,
   DesktopScheduledActivity,

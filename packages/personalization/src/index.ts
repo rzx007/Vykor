@@ -6,7 +6,7 @@ import { homedir } from "node:os";
  * Personalization：从会话历史抽取环境事实（移植自 Python personalization/）。
  *
  * 10 个正则识别 SSH/IP/数据路径/conda/Python 版本/API 端点/env 变量/git 远端/
- * Ray 集群/cron；按 key 去重合并后持久化到 `~/.openharness-ts/local_rules/`
+ * Ray 集群/cron；按 key 去重合并后持久化到 `~/.vykor/local_rules/`
  * （facts.json + 重新生成的 rules.md）。rules.md 由 prompts 包注入 system prompt。
  */
 
@@ -121,8 +121,8 @@ export function factsToRulesMarkdown(facts: ExtractedFact[]): string {
 // ---------------------------------------------------------------------------
 
 export function getLocalRulesDir(): string {
-  // 与 core/paths、auth 同约定：OPENHARNESS_CONFIG_DIR 可重定向（测试隔离/Electron 预留）。
-  const base = process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts");
+  // 与 core/paths、auth 同约定：VYKOR_CONFIG_DIR 可重定向（测试隔离/Electron 预留）。
+  const base = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
   return join(base, "local_rules");
 }
 

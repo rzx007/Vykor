@@ -1,9 +1,9 @@
-import type { ToolContext } from "@openharness/core";
-import type { AgentJobHost, JobSnapshot } from "@openharness/jobs";
+import type { ToolContext } from "@vykor/core";
+import type { AgentJobHost, JobSnapshot } from "@vykor/jobs";
 import type {
   AgentTerminalHost,
   TerminalSessionInfo,
-} from "@openharness/terminal";
+} from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 import {

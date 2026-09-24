@@ -9,14 +9,14 @@ let testConfigDir: string;
 let previousConfigDir: string | undefined;
 
 beforeAll(() => {
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
   testConfigDir = mkdtempSync(join(tmpdir(), "oh-background-shell-config-"));
-  process.env.OPENHARNESS_CONFIG_DIR = testConfigDir;
+  process.env.VYKOR_CONFIG_DIR = testConfigDir;
 });
 
 afterAll(() => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
   rmSync(testConfigDir, { recursive: true, force: true });
 });
 

@@ -1,4 +1,4 @@
-import type { IToolRegistry, RunAgentBinding, RunCapabilityView, RunMcpServerBinding, RunSkillBinding, RunToolBinding } from "@openharness/core";
+import type { IToolRegistry, RunAgentBinding, RunCapabilityView, RunMcpServerBinding, RunSkillBinding, RunToolBinding } from "@vykor/core";
 
 export interface RunCapabilitySources {
   toolRegistry: IToolRegistry;

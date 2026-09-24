@@ -13,9 +13,9 @@ describe("buildRuntimeMetricsSnapshot", () => {
       settlements: [],
     } as any);
 
-    expect(snapshot.gauges.openharness_permissions_pending).toBe(1);
-    expect(snapshot.counters['openharness_tool_calls_total{failure_kind="timeout",status="failed",tool="shell"}']).toBe(1);
-    expect(snapshot.histograms.openharness_run_duration_ms).toEqual({ count: 1, sum: 6, min: 6, max: 6 });
+    expect(snapshot.gauges.vykor_permissions_pending).toBe(1);
+    expect(snapshot.counters['vykor_tool_calls_total{failure_kind="timeout",status="failed",tool="shell"}']).toBe(1);
+    expect(snapshot.histograms.vykor_run_duration_ms).toEqual({ count: 1, sum: 6, min: 6, max: 6 });
     expect(JSON.stringify(snapshot)).not.toContain("do not expose");
     expect(JSON.stringify(snapshot)).not.toContain("run-secret");
     expect(JSON.stringify(snapshot)).not.toContain("hide");

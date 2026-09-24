@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/tools",
+  "name": "@vykor/tools",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,16 +17,16 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/auth": "workspace:*",
-    "@openharness/coordinator": "workspace:*",
-    "@openharness/core": "workspace:*",
-    "@openharness/environment": "workspace:*",
-    "@openharness/jobs": "workspace:*",
-    "@openharness/mcp": "workspace:*",
-    "@openharness/sandbox": "workspace:*",
-    "@openharness/services": "workspace:*",
-    "@openharness/skills": "workspace:*",
-    "@openharness/terminal": "workspace:*",
+    "@vykor/auth": "workspace:*",
+    "@vykor/coordinator": "workspace:*",
+    "@vykor/core": "workspace:*",
+    "@vykor/environment": "workspace:*",
+    "@vykor/jobs": "workspace:*",
+    "@vykor/mcp": "workspace:*",
+    "@vykor/sandbox": "workspace:*",
+    "@vykor/services": "workspace:*",
+    "@vykor/skills": "workspace:*",
+    "@vykor/terminal": "workspace:*",
     "diff": "catalog:"
   },
   "devDependencies": {

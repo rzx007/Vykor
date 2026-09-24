@@ -4,10 +4,10 @@
  * 幂等：同一 `seq` 只应用一次。多端用同一套事件流应收敛到相同状态。
  */
 
-import { sessionEventSchemaVersion } from "@openharness/protocol";
+import { sessionEventSchemaVersion } from "@vykor/protocol";
 
 import type {
-  OpenHarnessClientState,
+  VykorClientState,
   PermissionRequestRecord,
   SessionBucket,
   SessionEventRecord,
@@ -39,7 +39,7 @@ export class UnsupportedSessionEventSchemaVersionError extends Error {
 }
 
 /** 空客户端状态，作为 replay/hydrate 起点。 */
-export function createInitialClientState(): OpenHarnessClientState {
+export function createInitialClientState(): VykorClientState {
   return {
     sessions: {},
     sessionOrder: [],
@@ -53,9 +53,9 @@ export function createInitialClientState(): OpenHarnessClientState {
 
 /** 按序批量应用事件。 */
 export function applyEvents(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   events: Iterable<SessionEventRecord>,
-): OpenHarnessClientState {
+): VykorClientState {
   let next = state;
   for (const event of events) next = applyEvent(next, event);
   return next;
@@ -63,9 +63,9 @@ export function applyEvents(
 
 /** Replace one session bucket with an atomic server snapshot. */
 export function applySessionSnapshot(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   snapshot: SessionStateSnapshot,
-): OpenHarnessClientState {
+): VykorClientState {
   const knownCursor = state.snapshotCursorBySession[snapshot.session.id] ?? 0;
   if (snapshot.cursor < knownCursor) return state;
 
@@ -111,9 +111,9 @@ export function applySessionSnapshot(
  * 应用单条事件。已见过的 `seq` 直接返回原 state（引用相等，便于 live 去重）。
  */
 export function applyEvent(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   event: SessionEventRecord,
-): OpenHarnessClientState {
+): VykorClientState {
   if (event.schemaVersion !== sessionEventSchemaVersion(event.type)) {
     throw new UnsupportedSessionEventSchemaVersionError(event);
   }
@@ -126,7 +126,7 @@ export function applyEvent(
   if (!transient && state.eventsBySeq[event.seq]) return state;
   if (!transient) state.eventsBySeq[event.seq] = event;
 
-  let next: OpenHarnessClientState = {
+  let next: VykorClientState = {
     ...state,
     eventsBySeq: state.eventsBySeq,
     transientCursor: transient ? event.seq : state.transientCursor,
@@ -185,7 +185,7 @@ function readPayloadRecord<T>(event: SessionEventRecord, key: string): T | undef
   return value && typeof value === "object" && !Array.isArray(value) ? value as T : undefined;
 }
 
-function upsertSession(state: OpenHarnessClientState, session: SessionRecord | undefined): OpenHarnessClientState {
+function upsertSession(state: VykorClientState, session: SessionRecord | undefined): VykorClientState {
   if (!session) return state;
   const bucket = cloneBucket(state.buckets[session.id]);
   bucket.session = session;
@@ -198,7 +198,7 @@ function upsertSession(state: OpenHarnessClientState, session: SessionRecord | u
   };
 }
 
-function archiveSession(state: OpenHarnessClientState, event: SessionEventRecord): OpenHarnessClientState {
+function archiveSession(state: VykorClientState, event: SessionEventRecord): VykorClientState {
   const sessionId = typeof event.payload.sessionId === "string" ? event.payload.sessionId : event.sessionId;
   if (!sessionId) return state;
   const current = state.sessions[sessionId];
@@ -212,7 +212,7 @@ function archiveSession(state: OpenHarnessClientState, event: SessionEventRecord
   return upsertSession(state, archived);
 }
 
-function deleteSessions(state: OpenHarnessClientState, event: SessionEventRecord): OpenHarnessClientState {
+function deleteSessions(state: VykorClientState, event: SessionEventRecord): VykorClientState {
   const ids = new Set(Array.isArray(event.payload.sessionIds)
     ? event.payload.sessionIds.filter((id): id is string => typeof id === "string") : []);
   if (ids.size === 0) return state;
@@ -226,21 +226,21 @@ function deleteSessions(state: OpenHarnessClientState, event: SessionEventRecord
   };
 }
 
-function upsertInput(state: OpenHarnessClientState, input: SessionInputRecord | undefined): OpenHarnessClientState {
+function upsertInput(state: VykorClientState, input: SessionInputRecord | undefined): VykorClientState {
   if (!input) return state;
   const bucket = cloneBucket(state.buckets[input.sessionId]);
   bucket.inputs = upsertSorted(bucket.inputs, input, (row) => row.seq);
   return { ...state, buckets: { ...state.buckets, [input.sessionId]: bucket } };
 }
 
-function upsertMessage(state: OpenHarnessClientState, message: SessionMessageRecord | undefined): OpenHarnessClientState {
+function upsertMessage(state: VykorClientState, message: SessionMessageRecord | undefined): VykorClientState {
   if (!message) return state;
   const bucket = cloneBucket(state.buckets[message.sessionId]);
   bucket.messages = upsertSorted(bucket.messages, message, (row) => row.seq);
   return { ...state, buckets: { ...state.buckets, [message.sessionId]: bucket } };
 }
 
-function replaceTranscript(state: OpenHarnessClientState, event: SessionEventRecord): OpenHarnessClientState {
+function replaceTranscript(state: VykorClientState, event: SessionEventRecord): VykorClientState {
   const sessionId = event.sessionId;
   if (!sessionId) return state;
   const messages = Array.isArray(event.payload.messages)
@@ -278,7 +278,7 @@ function replaceTranscript(state: OpenHarnessClientState, event: SessionEventRec
   };
 }
 
-function upsertPart(state: OpenHarnessClientState, part: SessionMessagePartRecord | undefined): OpenHarnessClientState {
+function upsertPart(state: VykorClientState, part: SessionMessagePartRecord | undefined): VykorClientState {
   if (!part) return state;
   const bucket = cloneBucketForPartWrite(state.buckets[part.sessionId]);
   const existing = bucket.partsByMessageId[part.messageId] ?? [];
@@ -289,7 +289,7 @@ function upsertPart(state: OpenHarnessClientState, part: SessionMessagePartRecor
   return { ...state, buckets: { ...state.buckets, [part.sessionId]: bucket } };
 }
 
-function appendPartDelta(state: OpenHarnessClientState, event: SessionEventRecord): OpenHarnessClientState {
+function appendPartDelta(state: VykorClientState, event: SessionEventRecord): VykorClientState {
   const sessionId = typeof event.payload.sessionId === "string" ? event.payload.sessionId : event.sessionId;
   const messageId = typeof event.payload.messageId === "string" ? event.payload.messageId : undefined;
   const partId = typeof event.payload.partId === "string" ? event.payload.partId : undefined;
@@ -334,7 +334,7 @@ function appendPartDelta(state: OpenHarnessClientState, event: SessionEventRecor
   return { ...state, buckets: { ...state.buckets, [sessionId]: bucket } };
 }
 
-function upsertRun(state: OpenHarnessClientState, run: SessionRunRecord | undefined): OpenHarnessClientState {
+function upsertRun(state: VykorClientState, run: SessionRunRecord | undefined): VykorClientState {
   if (!run) return state;
   const bucket = cloneBucket(state.buckets[run.sessionId]);
   bucket.runs = { ...bucket.runs, [run.id]: run };
@@ -350,9 +350,9 @@ function upsertRun(state: OpenHarnessClientState, run: SessionRunRecord | undefi
 }
 
 function upsertRunAttempt(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   attempt: SessionRunAttemptRecord | undefined,
-): OpenHarnessClientState {
+): VykorClientState {
   if (!attempt) return state;
   const run = Object.values(state.buckets)
     .flatMap((bucket) => Object.values(bucket.runs))
@@ -380,16 +380,16 @@ function refreshSessionStatusFromRuns(
 }
 
 function upsertPermission(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   request: PermissionRequestRecord | undefined,
-): OpenHarnessClientState {
+): VykorClientState {
   if (!request) return state;
   const bucket = cloneBucket(state.buckets[request.sessionId]);
   bucket.permissions = { ...bucket.permissions, [request.id]: request };
   return { ...state, buckets: { ...state.buckets, [request.sessionId]: bucket } };
 }
 
-function upsertTask(state: OpenHarnessClientState, task: SessionExecutionRecord | undefined): OpenHarnessClientState {
+function upsertTask(state: VykorClientState, task: SessionExecutionRecord | undefined): VykorClientState {
   if (!task) return state;
   const bucket = cloneBucket(state.buckets[task.sessionId]);
   bucket.tasks = { ...bucket.tasks, [task.id]: task };

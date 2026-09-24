@@ -1,4 +1,4 @@
-import { cancelPersistentWorkflow, type WorkflowRunRepository } from "@openharness/coordinator";
+import { cancelPersistentWorkflow, type WorkflowRunRepository } from "@vykor/coordinator";
 import { DAEMON_RESTART_WORKFLOW_REASON } from "../support.js";
 export interface WorkflowRecoveryContext {
   workflows: WorkflowRunRepository;

@@ -18,7 +18,7 @@ export class HttpFetchProvider implements WebFetchProvider {
 
   constructor(options: HttpFetchProviderOptions = {}) {
     this.fetchFn = options.fetchFn ?? defaultFetch;
-    this.userAgent = options.userAgent ?? "OpenHarness/0.1";
+    this.userAgent = options.userAgent ?? "Vykor/0.1";
   }
 
   available() {

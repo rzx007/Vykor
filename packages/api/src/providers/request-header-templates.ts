@@ -1,4 +1,4 @@
-export const OPENHARNESS_USER_AGENT = "openharness-ts/1.0";
+export const VYKOR_USER_AGENT = "vykor/1.0";
 const SUPPORTED_VARIABLES = new Set(["sessionId", "userAgent"]);
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const TEMPLATE = /\{\{([^{}]+)\}\}/g;

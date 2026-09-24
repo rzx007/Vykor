@@ -1,19 +1,19 @@
-import type { Settings, StreamingMessageClient } from "@openharness/core";
+import type { Settings, StreamingMessageClient } from "@vykor/core";
 import {
   AnthropicClient,
   CodexSubscriptionClient,
-  OPENHARNESS_USER_AGENT,
+  VYKOR_USER_AGENT,
   OpenAICompatibleClient,
   detectProvider,
   detectProviderFromEnv,
   expandRequestHeaderTemplates,
   findByName,
   resolveProviderScopedBaseUrl,
-} from "@openharness/api";
-import type { BackendType, ProviderSpec } from "@openharness/api";
-import { CredentialStorage, resolveApiKey } from "@openharness/auth";
+} from "@vykor/api";
+import type { BackendType, ProviderSpec } from "@vykor/api";
+import { CredentialStorage, resolveApiKey } from "@vykor/auth";
 
-import type { OpenHarnessAgentConfiguration } from "./agent-options.js";
+import type { VykorAgentConfiguration } from "./agent-options.js";
 
 export interface CustomProviderRuntimeConfig {
   backendType: "openai_compat";
@@ -50,7 +50,7 @@ export function resolveRuntimeModel(
  */
 export async function resolveApiClient(
   settings: Settings,
-  configuration?: OpenHarnessAgentConfiguration,
+  configuration?: VykorAgentConfiguration,
   storage?: CredentialStorage,
   sessionId?: string,
 ): Promise<StreamingMessageClient> {
@@ -69,7 +69,7 @@ export async function resolveApiClient(
   const requestHeaders = customProvider?.headers
     ? expandRequestHeaderTemplates(customProvider.headers, {
         sessionId,
-        userAgent: OPENHARNESS_USER_AGENT,
+        userAgent: VYKOR_USER_AGENT,
       })
     : undefined;
 

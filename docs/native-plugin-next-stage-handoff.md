@@ -24,7 +24,7 @@ Plugin Agent 可用性收口已完成：核心 Runtime 已能加载插件 Agent�
 
 ### 原生插件基础能力
 
-- Native Plugin 使用 `.openharness-plugin/plugin.json` 作为唯一运行时 manifest；
+- Native Plugin 使用 `.vykor-plugin/plugin.json` 作为唯一运行时 manifest；
 - manifest、组件路径、权限、平台要求和内容摘要会在安装时校验；
 - 非 link 安装会复制到不可变快照目录，不原地覆盖旧版本；
 - Runtime 激活前会重新校验快照、manifest ID、版本、权限和 digest；

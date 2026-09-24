@@ -1,4 +1,4 @@
-import { startDreamNow } from "@openharness/services";
+import { startDreamNow } from "@vykor/services";
 
 import type { DreamService } from "../settings-api.js";
 import { openMemoryManager } from "./memory-service.js";

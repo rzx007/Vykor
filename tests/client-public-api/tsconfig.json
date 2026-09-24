@@ -7,7 +7,7 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
-      "@openharness/client": ["../../packages/client/src/index.ts"]
+      "@vykor/client": ["../../packages/client/src/index.ts"]
     }
   },
   "include": ["consumer.ts"]

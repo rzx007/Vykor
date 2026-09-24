@@ -1,11 +1,11 @@
 import {
   patchSessionRuntimeMetadata,
   type SessionRuntimeConfigPatch,
-  type OpenHarnessClientState,
+  type VykorClientState,
   type SessionBucket,
   type SessionRecord,
   type SyncEventUpdate,
-} from "@openharness/client";
+} from "@vykor/client";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -50,10 +50,10 @@ export function sessionRuntimeMetadata(input: {
 }
 
 export function archiveClientSession(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   sessionId: string,
   archivedAt: number
-): OpenHarnessClientState {
+): VykorClientState {
   const current = state.sessions[sessionId];
   if (!current || current.status === "archived") return state;
   const archived: SessionRecord = {

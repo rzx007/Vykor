@@ -8,11 +8,11 @@ const mocks = vi.hoisted(() => ({
   readDaemonRegistry: vi.fn(),
 }));
 
-vi.mock("@openharness/server", () => ({
+vi.mock("@vykor/server", () => ({
   readDaemonRegistry: mocks.readDaemonRegistry,
 }));
-vi.mock("@openharness/client", () => ({
-  OpenHarnessClient: class {
+vi.mock("@vykor/client", () => ({
+  VykorClient: class {
     protocol = { health: mocks.health };
     channels = {
       getFeishu: mocks.getFeishu,

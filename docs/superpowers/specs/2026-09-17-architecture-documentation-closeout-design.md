@@ -52,8 +52,8 @@
 | `docs/daemon-application-architecture.md` | HTTP route 到应用服务、`SessionOperationRunner`、事件发布和结果返回的流程 |
 | `docs/client-sync-flow.md` | Resource API、snapshot、SSE、断线恢复和客户端状态同步流程 |
 | `docs/architecture-migration-status.md` | Stage 0–8 最终收口记录、最终边界、验收证据和长期门禁 |
-| `docs/openharness-current-architecture.architecture.json` | 当前架构图的唯一可编辑图源 |
-| `docs/openharness-current-architecture.html` | 从图源生成的可交互架构图 |
+| `docs/vykor-current-architecture.architecture.json` | 当前架构图的唯一可编辑图源 |
+| `docs/vykor-current-architecture.html` | 从图源生成的可交互架构图 |
 
 `docs/architecture-migration-status.md` 保留现有文件名，避免制造无意义的链接迁移；正文标题和定位改为“架构重构收口与当前边界”，不再描述“下一阶段”。
 
@@ -158,7 +158,7 @@
 
 1. 根 `README.md` 的 ASCII 架构图只保留首次阅读所需的高层主链路；
 2. `docs/daemon-application-architecture.md` 等权威文档中的 Mermaid 图随正文一起校准，确保 Resource、Application Service、Runner、Repository 和 Runtime 的方向正确；
-3. `docs/openharness-current-architecture.architecture.json` 是独立架构图的唯一图源，使用 Archify 重新生成 HTML 和视觉检查资产。
+3. `docs/vykor-current-architecture.architecture.json` 是独立架构图的唯一图源，使用 Archify 重新生成 HTML 和视觉检查资产。
 
 独立架构图当前固定在 2026-08-31 的旧 revision，并把持久层概括成单体 `SessionStore / SQLite`。新图需要表达：
 

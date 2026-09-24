@@ -257,7 +257,7 @@ function fakeRegistry(initial: string[] = []) {
 
 ### 集成验证
 
-跑 `pnpm --filter @openharness/tools exec vitest run` 与 `pnpm --filter @openharness/core exec vitest run`，确认既有 `operations.test.ts`、`edit.test.ts`、`query-engine` 相关测试不回归。
+跑 `pnpm --filter @vykor/tools exec vitest run` 与 `pnpm --filter @vykor/core exec vitest run`，确认既有 `operations.test.ts`、`edit.test.ts`、`query-engine` 相关测试不回归。
 
 ## 风险与缓解
 

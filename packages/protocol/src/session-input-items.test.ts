@@ -44,13 +44,13 @@ describe("session input items", () => {
       {
         type: "capability",
         kind: "plugin",
-        pluginId: "dev.openharness.quality",
+        pluginId: "dev.vykor.quality",
         displayName: "Quality Tools",
       },
       {
         type: "capability",
         kind: "plugin_agent",
-        pluginId: "dev.openharness.quality",
+        pluginId: "dev.vykor.quality",
         agentId: "reviewer",
         displayName: "Reviewer",
       },
@@ -65,7 +65,7 @@ describe("session input items", () => {
       {
         type: "capability",
         kind: "plugin_agent",
-        pluginId: "dev.openharness.quality",
+        pluginId: "dev.vykor.quality",
         agentId: "reviewer",
         displayName: "Reviewer",
       },
@@ -73,7 +73,7 @@ describe("session input items", () => {
       {
         type: "capability",
         kind: "plugin_agent",
-        pluginId: "dev.openharness.quality",
+        pluginId: "dev.vykor.quality",
         agentId: "reviewer",
         displayName: "Reviewer",
       },

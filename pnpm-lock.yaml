@@ -123,75 +123,6 @@ importers:
         specifier: 0.34.4
         version: 0.34.4
     devDependencies:
-      '@openharness/agent-runtime':
-        specifier: workspace:*
-        version: link:../../packages/agent-runtime
-      '@openharness/api':
-        specifier: workspace:*
-        version: link:../../packages/api
-      '@openharness/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
-      '@openharness/channels':
-        specifier: workspace:*
-        version: link:../../packages/channels
-      '@openharness/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@openharness/commands':
-        specifier: workspace:*
-        version: link:../../packages/commands
-      '@openharness/coordinator':
-        specifier: workspace:*
-        version: link:../../packages/coordinator
-      '@openharness/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@openharness/hooks':
-        specifier: workspace:*
-        version: link:../../packages/hooks
-      '@openharness/mcp':
-        specifier: workspace:*
-        version: link:../../packages/mcp
-      '@openharness/memory':
-        specifier: workspace:*
-        version: link:../../packages/memory
-      '@openharness/output-styles':
-        specifier: workspace:*
-        version: link:../../packages/output-styles
-      '@openharness/permissions':
-        specifier: workspace:*
-        version: link:../../packages/permissions
-      '@openharness/personalization':
-        specifier: workspace:*
-        version: link:../../packages/personalization
-      '@openharness/plugin-converters':
-        specifier: workspace:*
-        version: link:../../packages/plugin-converters
-      '@openharness/plugins':
-        specifier: workspace:*
-        version: link:../../packages/plugins
-      '@openharness/prompts':
-        specifier: workspace:*
-        version: link:../../packages/prompts
-      '@openharness/sandbox':
-        specifier: workspace:*
-        version: link:../../packages/sandbox
-      '@openharness/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@openharness/services':
-        specifier: workspace:*
-        version: link:../../packages/services
-      '@openharness/skills':
-        specifier: workspace:*
-        version: link:../../packages/skills
-      '@openharness/themes':
-        specifier: workspace:*
-        version: link:../../packages/themes
-      '@openharness/tools':
-        specifier: workspace:*
-        version: link:../../packages/tools
       '@types/bun':
         specifier: ^1.3.14
         version: 1.3.14
@@ -201,6 +132,75 @@ importers:
       '@types/qrcode-terminal':
         specifier: ^0.12.2
         version: 0.12.2
+      '@vykor/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@vykor/api':
+        specifier: workspace:*
+        version: link:../../packages/api
+      '@vykor/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@vykor/channels':
+        specifier: workspace:*
+        version: link:../../packages/channels
+      '@vykor/client':
+        specifier: workspace:*
+        version: link:../../packages/client
+      '@vykor/commands':
+        specifier: workspace:*
+        version: link:../../packages/commands
+      '@vykor/coordinator':
+        specifier: workspace:*
+        version: link:../../packages/coordinator
+      '@vykor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@vykor/hooks':
+        specifier: workspace:*
+        version: link:../../packages/hooks
+      '@vykor/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@vykor/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@vykor/output-styles':
+        specifier: workspace:*
+        version: link:../../packages/output-styles
+      '@vykor/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@vykor/personalization':
+        specifier: workspace:*
+        version: link:../../packages/personalization
+      '@vykor/plugin-converters':
+        specifier: workspace:*
+        version: link:../../packages/plugin-converters
+      '@vykor/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@vykor/prompts':
+        specifier: workspace:*
+        version: link:../../packages/prompts
+      '@vykor/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+      '@vykor/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@vykor/services':
+        specifier: workspace:*
+        version: link:../../packages/services
+      '@vykor/skills':
+        specifier: workspace:*
+        version: link:../../packages/skills
+      '@vykor/themes':
+        specifier: workspace:*
+        version: link:../../packages/themes
+      '@vykor/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -277,12 +277,6 @@ importers:
       '@lobehub/icons':
         specifier: ^5.16.0
         version: 5.16.0(@lobehub/ui@5.32.2)(@types/react@19.2.17)(antd@6.6.1(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@openharness/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@openharness/server':
-        specifier: workspace:*
-        version: link:../../packages/server
       '@pierre/diffs':
         specifier: ^1.3.5
         version: 1.3.5(@shikijs/themes@4.4.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -325,6 +319,12 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5.1.1
         version: 5.2.0(vite@7.3.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
+      '@vykor/client':
+        specifier: workspace:*
+        version: link:../../packages/client
+      '@vykor/server':
+        specifier: workspace:*
+        version: link:../../packages/server
       '@xterm/addon-fit':
         specifier: ^0.10.0
         version: 0.10.0(@xterm/xterm@5.5.0)
@@ -448,21 +448,21 @@ importers:
 
   apps/frontend:
     dependencies:
-      '@openharness/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@openharness/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@openharness/themes':
-        specifier: workspace:*
-        version: link:../../packages/themes
       '@opentui/core':
         specifier: 'catalog:'
         version: 0.4.5(typescript@5.9.3)(web-tree-sitter@0.25.10)
       '@opentui/react':
         specifier: 'catalog:'
         version: 0.4.5(react-devtools-core@7.0.1)(react@19.2.7)(typescript@5.9.3)(web-tree-sitter@0.25.10)(ws@8.20.0)
+      '@vykor/client':
+        specifier: workspace:*
+        version: link:../../packages/client
+      '@vykor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@vykor/themes':
+        specifier: workspace:*
+        version: link:../../packages/themes
       diff:
         specifier: 'catalog:'
         version: 7.0.0
@@ -470,9 +470,6 @@ importers:
         specifier: 'catalog:'
         version: 19.2.7
     devDependencies:
-      '@openharness/server':
-        specifier: workspace:*
-        version: link:../../packages/server
       '@types/bun':
         specifier: ^1.3.14
         version: 1.3.14
@@ -485,13 +482,16 @@ importers:
       '@types/react':
         specifier: ^19.2.0
         version: 19.2.17
+      '@vykor/server':
+        specifier: workspace:*
+        version: link:../../packages/server
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
 
   packages/agent-runtime:
     dependencies:
-      '@openharness/terminal-node':
+      '@vykor/terminal-node':
         specifier: workspace:*
         version: link:../terminal-node
       better-sqlite3:
@@ -504,57 +504,57 @@ importers:
         specifier: 0.34.4
         version: 0.34.4
     devDependencies:
-      '@openharness/api':
-        specifier: workspace:*
-        version: link:../api
-      '@openharness/auth':
-        specifier: workspace:*
-        version: link:../auth
-      '@openharness/coordinator':
-        specifier: workspace:*
-        version: link:../coordinator
-      '@openharness/core':
-        specifier: workspace:*
-        version: link:../core
-      '@openharness/environment':
-        specifier: workspace:*
-        version: link:../environment
-      '@openharness/hooks':
-        specifier: workspace:*
-        version: link:../hooks
-      '@openharness/jobs':
-        specifier: workspace:*
-        version: link:../jobs
-      '@openharness/mcp':
-        specifier: workspace:*
-        version: link:../mcp
-      '@openharness/memory':
-        specifier: workspace:*
-        version: link:../memory
-      '@openharness/permissions':
-        specifier: workspace:*
-        version: link:../permissions
-      '@openharness/plugins':
-        specifier: workspace:*
-        version: link:../plugins
-      '@openharness/prompts':
-        specifier: workspace:*
-        version: link:../prompts
-      '@openharness/sandbox':
-        specifier: workspace:*
-        version: link:../sandbox
-      '@openharness/skills':
-        specifier: workspace:*
-        version: link:../skills
-      '@openharness/terminal':
-        specifier: workspace:*
-        version: link:../terminal
-      '@openharness/tools':
-        specifier: workspace:*
-        version: link:../tools
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
+      '@vykor/api':
+        specifier: workspace:*
+        version: link:../api
+      '@vykor/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@vykor/coordinator':
+        specifier: workspace:*
+        version: link:../coordinator
+      '@vykor/core':
+        specifier: workspace:*
+        version: link:../core
+      '@vykor/environment':
+        specifier: workspace:*
+        version: link:../environment
+      '@vykor/hooks':
+        specifier: workspace:*
+        version: link:../hooks
+      '@vykor/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@vykor/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@vykor/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@vykor/permissions':
+        specifier: workspace:*
+        version: link:../permissions
+      '@vykor/plugins':
+        specifier: workspace:*
+        version: link:../plugins
+      '@vykor/prompts':
+        specifier: workspace:*
+        version: link:../prompts
+      '@vykor/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
+      '@vykor/skills':
+        specifier: workspace:*
+        version: link:../skills
+      '@vykor/terminal':
+        specifier: workspace:*
+        version: link:../terminal
+      '@vykor/tools':
+        specifier: workspace:*
+        version: link:../tools
       esbuild:
         specifier: ^0.27.7
         version: 0.27.7
@@ -570,7 +570,7 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 'catalog:'
         version: 0.40.1
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
       openai:
@@ -592,10 +592,10 @@ importers:
 
   packages/auth:
     dependencies:
-      '@openharness/api':
+      '@vykor/api':
         specifier: workspace:*
         version: link:../api
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -614,7 +614,7 @@ importers:
       '@larksuiteoapi/node-sdk':
         specifier: ^1.73.0
         version: 1.74.0
-      '@openharness/protocol':
+      '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -630,7 +630,7 @@ importers:
 
   packages/client:
     dependencies:
-      '@openharness/protocol':
+      '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -658,7 +658,7 @@ importers:
 
   packages/coordinator:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
       yaml:
@@ -677,13 +677,13 @@ importers:
 
   packages/core:
     dependencies:
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/jobs':
+      '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
-      '@openharness/terminal':
+      '@vykor/terminal':
         specifier: workspace:*
         version: link:../terminal
     devDependencies:
@@ -711,13 +711,13 @@ importers:
 
   packages/hooks:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/sandbox':
+      '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
     devDependencies:
@@ -733,7 +733,7 @@ importers:
 
   packages/jobs:
     dependencies:
-      '@openharness/protocol':
+      '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -752,13 +752,13 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.29.0(zod@4.4.3)
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/sandbox':
+      '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
     devDependencies:
@@ -798,10 +798,10 @@ importers:
 
   packages/permissions:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
     devDependencies:
@@ -829,7 +829,7 @@ importers:
 
   packages/plugin-converters:
     dependencies:
-      '@openharness/plugins':
+      '@vykor/plugins':
         specifier: workspace:*
         version: link:../plugins
       zod:
@@ -873,13 +873,13 @@ importers:
 
   packages/plugins:
     dependencies:
-      '@openharness/coordinator':
+      '@vykor/coordinator':
         specifier: workspace:*
         version: link:../coordinator
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/skills':
+      '@vykor/skills':
         specifier: workspace:*
         version: link:../skills
       zod:
@@ -898,16 +898,16 @@ importers:
 
   packages/prompts:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/personalization':
+      '@vykor/personalization':
         specifier: workspace:*
         version: link:../personalization
-      '@openharness/sandbox':
+      '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
     devDependencies:
@@ -932,10 +932,10 @@ importers:
 
   packages/sandbox:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
     devDependencies:
@@ -954,70 +954,70 @@ importers:
       '@hono/node-server':
         specifier: 'catalog:'
         version: 1.19.13(hono@4.12.12)
-      '@openharness/agent-runtime':
+      '@vykor/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
-      '@openharness/api':
+      '@vykor/api':
         specifier: workspace:*
         version: link:../api
-      '@openharness/auth':
+      '@vykor/auth':
         specifier: workspace:*
         version: link:../auth
-      '@openharness/channels':
+      '@vykor/channels':
         specifier: workspace:*
         version: link:../channels
-      '@openharness/coordinator':
+      '@vykor/coordinator':
         specifier: workspace:*
         version: link:../coordinator
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/jobs':
+      '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
-      '@openharness/mcp':
+      '@vykor/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@openharness/memory':
+      '@vykor/memory':
         specifier: workspace:*
         version: link:../memory
-      '@openharness/output-styles':
+      '@vykor/output-styles':
         specifier: workspace:*
         version: link:../output-styles
-      '@openharness/personalization':
+      '@vykor/personalization':
         specifier: workspace:*
         version: link:../personalization
-      '@openharness/plugin-sources':
+      '@vykor/plugin-sources':
         specifier: workspace:*
         version: link:../plugin-sources
-      '@openharness/plugins':
+      '@vykor/plugins':
         specifier: workspace:*
         version: link:../plugins
-      '@openharness/prompts':
+      '@vykor/prompts':
         specifier: workspace:*
         version: link:../prompts
-      '@openharness/protocol':
+      '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@openharness/sandbox':
+      '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
-      '@openharness/services':
+      '@vykor/services':
         specifier: workspace:*
         version: link:../services
-      '@openharness/skills':
+      '@vykor/skills':
         specifier: workspace:*
         version: link:../skills
-      '@openharness/terminal':
+      '@vykor/terminal':
         specifier: workspace:*
         version: link:../terminal
-      '@openharness/terminal-node':
+      '@vykor/terminal-node':
         specifier: workspace:*
         version: link:../terminal-node
-      '@openharness/tools':
+      '@vykor/tools':
         specifier: workspace:*
         version: link:../tools
       hono:
@@ -1039,19 +1039,19 @@ importers:
       '@arcships/light-ocr':
         specifier: 'catalog:'
         version: 0.5.7
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/memory':
+      '@vykor/memory':
         specifier: workspace:*
         version: link:../memory
-      '@openharness/protocol':
+      '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@openharness/sandbox':
+      '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
       better-sqlite3:
@@ -1098,7 +1098,7 @@ importers:
 
   packages/swarm:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -1114,7 +1114,7 @@ importers:
 
   packages/terminal:
     dependencies:
-      '@openharness/protocol':
+      '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -1130,16 +1130,16 @@ importers:
 
   packages/terminal-node:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/jobs':
+      '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
-      '@openharness/terminal':
+      '@vykor/terminal':
         specifier: workspace:*
         version: link:../terminal
       node-pty:
@@ -1158,7 +1158,7 @@ importers:
 
   packages/themes:
     dependencies:
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -1174,34 +1174,34 @@ importers:
 
   packages/tools:
     dependencies:
-      '@openharness/auth':
+      '@vykor/auth':
         specifier: workspace:*
         version: link:../auth
-      '@openharness/coordinator':
+      '@vykor/coordinator':
         specifier: workspace:*
         version: link:../coordinator
-      '@openharness/core':
+      '@vykor/core':
         specifier: workspace:*
         version: link:../core
-      '@openharness/environment':
+      '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
-      '@openharness/jobs':
+      '@vykor/jobs':
         specifier: workspace:*
         version: link:../jobs
-      '@openharness/mcp':
+      '@vykor/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@openharness/sandbox':
+      '@vykor/sandbox':
         specifier: workspace:*
         version: link:../sandbox
-      '@openharness/services':
+      '@vykor/services':
         specifier: workspace:*
         version: link:../services
-      '@openharness/skills':
+      '@vykor/skills':
         specifier: workspace:*
         version: link:../skills
-      '@openharness/terminal':
+      '@vykor/terminal':
         specifier: workspace:*
         version: link:../terminal
       diff:

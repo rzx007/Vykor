@@ -6,7 +6,7 @@ const { show, noteUnfocusedAttention } = vi.hoisted(() => ({
 }))
 
 vi.mock("electron", () => ({
-  app: { getName: vi.fn(() => "OpenHarness") },
+  app: { getName: vi.fn(() => "Vykor") },
   BrowserWindow: {},
   Menu: {},
   nativeImage: {},
@@ -35,7 +35,7 @@ describe("sendTrayNotification", () => {
       isFocused: () => false,
     })
 
-    sendTrayNotification({ title: "OpenHarness", body: "任务已完成。" }, getMainWindow as never)
+    sendTrayNotification({ title: "Vykor", body: "任务已完成。" }, getMainWindow as never)
 
     expect(noteUnfocusedAttention).toHaveBeenCalledWith(getMainWindow)
     expect(show).toHaveBeenCalledOnce()
@@ -44,7 +44,7 @@ describe("sendTrayNotification", () => {
   it("does not increment attention while the main window is focused", () => {
     sendTrayNotification(
       {
-        title: "OpenHarness",
+        title: "Vykor",
         body: "任务已完成。",
         showWhenFocused: true,
       },

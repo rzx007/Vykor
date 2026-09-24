@@ -1,5 +1,5 @@
 import { isAbsolute, normalize, relative, resolve } from "node:path";
-import { getConfigDir, getProjectMemoryDir } from "@openharness/core";
+import { getConfigDir, getProjectMemoryDir } from "@vykor/core";
 
 export type ManagedPersistencePathKind = "user-profile" | "project-memory";
 

@@ -1,7 +1,7 @@
 import { parseAttachmentLimits, type AttachmentLimits } from "./attachment.js";
 
 export const CURRENT_PROTOCOL_VERSION = 4;
-export const PROTOCOL_VERSION_HEADER = "x-openharness-protocol-version";
+export const PROTOCOL_VERSION_HEADER = "x-vykor-protocol-version";
 
 export interface ProtocolVersion {
   version: number;

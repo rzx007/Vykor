@@ -3,7 +3,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { chmod, copyFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
-import { classifyAttachmentCandidate } from "@openharness/services";
+import { classifyAttachmentCandidate } from "@vykor/services";
 
 import type { AttachmentService } from "../attachment-service.js";
 import type { AttachmentRoutingDecision } from "../routing/attachment-routing-types.js";

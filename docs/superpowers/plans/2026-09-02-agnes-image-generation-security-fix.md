@@ -26,7 +26,7 @@
 运行：
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/visual-tools/__test__/daemon-image-generation-tool.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/visual-tools/__test__/daemon-image-generation-tool.test.ts
 ```
 
 预期：凭据、端点和缺少凭据用例失败。
@@ -77,8 +77,8 @@ AGNES_IMAGE_MODEL         可选，默认 agnes-image-2.5-flash
 - 检查：`packages/server/src/application/visual-tools/daemon-image-generation-tool.ts`
 - 检查：`packages/server/src/application/visual-tools/__test__/daemon-image-generation-tool.test.ts`
 
-- [x] 运行 `pnpm --filter @openharness/server test`。
-- [x] 运行 `pnpm --filter @openharness/server check-types`。
+- [x] 运行 `pnpm --filter @vykor/server test`。
+- [x] 运行 `pnpm --filter @vykor/server check-types`。
 - [x] 运行 `git diff --check`。
 - [x] 搜索当前工作树，确认旧密钥文本已不在受版本控制文件中。
 - [x] 检查 `git diff`，确认没有改动用户已有的无关文件。

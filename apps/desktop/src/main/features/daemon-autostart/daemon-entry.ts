@@ -5,12 +5,12 @@ import {
   createBearerToken,
   createDaemonRegistryEntry,
   readDaemonRegistry,
-  startOpenHarnessDaemon,
+  startVykorDaemon,
   stopDaemonProcess,
   writeDaemonRegistry,
   shouldStartManagedDaemon,
   type DaemonRegistry,
-} from "@openharness/server/daemon-host"
+} from "@vykor/server/daemon-host"
 import { app } from "electron"
 
 import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
@@ -49,7 +49,7 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
   }
   clearDaemonRegistry()
   const token = createBearerToken()
-  const { server, listen } = await startOpenHarnessDaemon({
+  const { server, listen } = await startVykorDaemon({
     host: "127.0.0.1",
     port: 0,
     token,

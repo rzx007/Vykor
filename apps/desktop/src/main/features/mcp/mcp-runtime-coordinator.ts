@@ -1,10 +1,10 @@
 import {
   IncompatibleProtocolError,
-  OpenHarnessApiError,
-  OpenHarnessClient,
+  VykorApiError,
+  VykorClient,
   type McpRuntimeSyncResult,
-} from "@openharness/client"
-import { readDaemonRegistry } from "@openharness/server"
+} from "@vykor/client"
+import { readDaemonRegistry } from "@vykor/server"
 
 interface McpRuntimeIdentity {
   name: string
@@ -35,7 +35,7 @@ const unavailable = (): McpRuntimeSyncResult => ({
 /**
  * Desktop-side MCP Runtime coordinator.
  *
- * It calls the same daemon control plane through `@openharness/client` and the
+ * It calls the same daemon control plane through `@vykor/client` and the
  * daemon registry the main process already owns. A missing registry or an
  * unreachable daemon is `unavailable`; daemon auth, protocol and server errors
  * stay real sync failures so the page can show "saved, but reconnect failed".
@@ -49,7 +49,7 @@ export function createDesktopMcpRuntimeCoordinator(
 } {
   const readRegistry = options.readRegistry ?? (() => readDaemonRegistry())
   const createClient =
-    options.createClient ?? ((clientOptions) => new OpenHarnessClient(clientOptions))
+    options.createClient ?? ((clientOptions) => new VykorClient(clientOptions))
 
   const invoke = async (
     identity: McpRuntimeIdentity,
@@ -97,7 +97,7 @@ export function createDesktopMcpRuntimeCoordinator(
 }
 
 function isDaemonUnreachable(error: unknown): boolean {
-  if (error instanceof OpenHarnessApiError || error instanceof IncompatibleProtocolError) {
+  if (error instanceof VykorApiError || error instanceof IncompatibleProtocolError) {
     return false
   }
   if (error instanceof TypeError && /fetch failed/i.test(error.message)) return true

@@ -1,5 +1,5 @@
-import type { SessionExecutionRecord } from "@openharness/protocol";
-import type { TerminalSessionInfo } from "@openharness/terminal";
+import type { SessionExecutionRecord } from "@vykor/protocol";
+import type { TerminalSessionInfo } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 import { DaemonJobService } from "./daemon-job-service.js";
@@ -313,7 +313,7 @@ describe("DaemonJobService", () => {
     const {
       createWorkflowPlan,
       createWorkflowRunSnapshot,
-    } = await import("@openharness/coordinator");
+    } = await import("@vykor/coordinator");
     const worker: SessionExecutionRecord = {
       ...task,
       id: "worker-child-1",

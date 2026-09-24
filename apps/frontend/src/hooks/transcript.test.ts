@@ -5,7 +5,7 @@ import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRecord,
-} from "@openharness/client";
+} from "@vykor/client";
 
 import { bucketToTranscript } from "./transcript";
 

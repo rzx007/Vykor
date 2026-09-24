@@ -21,14 +21,14 @@ describe("global settings transactional writes", () => {
   let previousConfigDir: string | undefined;
 
   beforeEach(() => {
-    configDir = mkdtempSync(join(tmpdir(), "openharness-mutation-"));
-    previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = configDir;
+    configDir = mkdtempSync(join(tmpdir(), "vykor-mutation-"));
+    previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-    else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+    if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+    else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
     rmSync(configDir, { recursive: true, force: true });
   });
 

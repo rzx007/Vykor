@@ -21,13 +21,13 @@ maybeDescribe("WSL execution environment e2e", () => {
       return;
     }
 
-    const hostRoot = await mkdtemp(join(tmpdir(), "ohs wsl e2e "));
+    const hostRoot = await mkdtemp(join(tmpdir(), "vk wsl e2e "));
     const executionRoot = hostPathToWslPath(hostRoot);
     try {
       const success = spawnWslProcess({
-        argv: ["/bin/sh", "-lc", "printf '%s|%s' \"$PWD\" \"$OHS_WSL_VALUE\"; printf payload > result.txt"],
+        argv: ["/bin/sh", "-lc", "printf '%s|%s' \"$PWD\" \"$VK_WSL_VALUE\"; printf payload > result.txt"],
         cwd: executionRoot,
-        env: { OHS_WSL_VALUE: "works" },
+        env: { VK_WSL_VALUE: "works" },
       });
       const output = await collect(success);
       expect(output.code).toBe(0);
@@ -49,7 +49,7 @@ maybeDescribe("WSL execution environment e2e", () => {
       return;
     }
     const controller = new AbortController();
-    const marker = `ohs-wsl-abort-${Date.now()}`;
+    const marker = `vk-wsl-abort-${Date.now()}`;
     const child = spawnWslProcess({
       argv: ["/bin/sh", "-c", `exec -a ${marker} sleep 30`],
       cwd: hostPathToWslPath(process.cwd()),
@@ -71,8 +71,8 @@ maybeDescribe("WSL execution environment e2e", () => {
 
   it("runs file search and a detached background shell through WSL", async (context) => {
     if (!(await requireWsl(context))) return;
-    const hostRoot = await mkdtemp(join(tmpdir(), "ohs wsl tools "));
-    const tasksRoot = await mkdtemp(join(tmpdir(), "ohs wsl tasks "));
+    const hostRoot = await mkdtemp(join(tmpdir(), "vk wsl tools "));
+    const tasksRoot = await mkdtemp(join(tmpdir(), "vk wsl tasks "));
     const executionRoot = hostPathToWslPath(hostRoot);
     const handle = await wslHandle(hostRoot);
     const environment = { ...handle, files: createEnvironmentFileSystem(handle) };
@@ -103,7 +103,7 @@ maybeDescribe("WSL execution environment e2e", () => {
 
   it("runs stdio MCP and a real PTY in WSL", async (context) => {
     if (!(await requireWsl(context))) return;
-    const hostRoot = await mkdtemp(join(tmpdir(), "ohs wsl terminal "));
+    const hostRoot = await mkdtemp(join(tmpdir(), "vk wsl terminal "));
     const handle = await wslHandle(hostRoot);
     const transport = new SandboxStdioClientTransport({
       command: "/bin/cat",

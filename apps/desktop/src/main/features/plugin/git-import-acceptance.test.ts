@@ -12,7 +12,7 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }))
 
-import { OpenHarnessClient } from "@openharness/client"
+import { VykorClient } from "@vykor/client"
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,
@@ -32,14 +32,14 @@ let root: string
 let previousConfigDir: string | undefined
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "ohs-desktop-plugin-git-acceptance-"))
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR
-  process.env.OPENHARNESS_CONFIG_DIR = join(root, "config")
+  root = await mkdtemp(join(tmpdir(), "vk-desktop-plugin-git-acceptance-"))
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR
+  process.env.VYKOR_CONFIG_DIR = join(root, "config")
 })
 
 afterEach(async () => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir
   await rm(root, { recursive: true, force: true })
 })
 
@@ -56,11 +56,11 @@ async function createPluginRepository(): Promise<{ path: string; commit: string 
   const path = join(root, "repository")
   await copyDirectory(exampleSource, path)
   await execFileAsync("git", ["init"], { cwd: path, windowsHide: true })
-  await execFileAsync("git", ["config", "user.name", "OpenHarness Acceptance"], {
+  await execFileAsync("git", ["config", "user.name", "Vykor Acceptance"], {
     cwd: path,
     windowsHide: true,
   })
-  await execFileAsync("git", ["config", "user.email", "acceptance@openharness.test"], {
+  await execFileAsync("git", ["config", "user.email", "acceptance@vykor.test"], {
     cwd: path,
     windowsHide: true,
   })
@@ -75,7 +75,7 @@ async function createPluginRepository(): Promise<{ path: string; commit: string 
 
 function resolverRoots(): Promise<string[]> {
   return readdir(tmpdir()).then((entries) =>
-    entries.filter((entry) => entry.startsWith("openharness-plugin-git-")).sort()
+    entries.filter((entry) => entry.startsWith("vykor-plugin-git-")).sort()
   )
 }
 
@@ -117,7 +117,7 @@ function createDesktopService(): DesktopPluginService {
       },
     })
   )
-  const client = new OpenHarnessClient({
+  const client = new VykorClient({
     baseUrl: "http://desktop-git.test",
     fetch: async (input, init) => await routes.request(input, init),
   })

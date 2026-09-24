@@ -32,13 +32,13 @@
 - [ ] 插件操作改用 `client.plugins.*`。
 - [ ] 健康检查和能力协商改用 `client.protocol.health()`、`client.protocol.capabilities()`，不得放入 `system`。
 - [ ] 设置与系统信息使用 `client.system.*`；附件、权限、任务等按 7A 契约表选择同名 Resource。
-- [ ] 若业务函数当前接收 `OpenHarnessClient`，把参数缩成实际使用的 `Pick<Resource, ...>` 组合；连接创建/刷新边界可以保留完整 Client。
+- [ ] 若业务函数当前接收 `VykorClient`，把参数缩成实际使用的 `Pick<Resource, ...>` 组合；连接创建/刷新边界可以保留完整 Client。
 - [ ] 保留原参数对象、错误包装、输出序列化、重试次数与时序。
 
 ## 任务 3：迁移测试替身
 
 - [ ] 把平铺 mock 改为 `sessions/channels/plugins/protocol/system` 等嵌套对象。
-- [ ] 不用 `as unknown as OpenHarnessClient` 掩盖类型问题。
+- [ ] 不用 `as unknown as VykorClient` 掩盖类型问题。
 - [ ] 保留对 stdout/stderr、退出码、调用参数和错误分支的原有断言。
 - [ ] 为 `plugin.ts` 的异步 Client 工厂/别名路径保留一个回归用例，证明迁移未绕过 AST 门禁。
 

@@ -1,5 +1,5 @@
 import type { AgentPersonaService } from "./settings-api.js";
-import { preflightWsl } from "@openharness/sandbox";
+import { preflightWsl } from "@vykor/sandbox";
 import {
   createDefaultAuthService,
   createDefaultContextService,
@@ -38,7 +38,7 @@ export function createDefaultAgentPersonaService(): AgentPersonaService {
   return {
     async list() {
       const { getAllAgentDefinitions } =
-        await import("@openharness/coordinator");
+        await import("@vykor/coordinator");
       const agents = getAllAgentDefinitions([]);
       return {
         agents: agents.map((agent) => ({

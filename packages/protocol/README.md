@@ -1,6 +1,6 @@
-# @openharness/protocol
+# @vykor/protocol
 
-OpenHarness 客户端和服务端共同使用的数据格式。
+Vykor 客户端和服务端共同使用的数据格式。
 
 这个包只包含 Session、Run、Message、Permission、Schedule、Job、Terminal、事件和运行配置的数据定义与纯函数。它不读取文件，不连接数据库，也不依赖 Node.js，可以被浏览器、IDE webview、TUI、Desktop 和服务端共同使用。
 
@@ -10,7 +10,7 @@ HTTP 接入层在调用应用前，也使用这里的解析函数检查 Session�
 
 ## HTTP 协议版本
 
-当前协议版本是 `4`，请求头是 `x-openharness-protocol-version`。
+当前协议版本是 `4`，请求头是 `x-vykor-protocol-version`。
 
 - `/health` 与 `/capabilities` 不要求协议头，供启动探测和握手使用。
 - Client 在第一个业务请求前调用 `/capabilities`，版本不是 4 时不发送该业务请求。

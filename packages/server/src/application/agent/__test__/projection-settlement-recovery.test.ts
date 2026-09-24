@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { AgentEvent } from "@openharness/core";
-import { SessionStore } from "@openharness/services";
+import type { AgentEvent } from "@vykor/core";
+import { SessionStore } from "@vykor/services";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -158,7 +158,7 @@ function childEvent(
 }
 
 function withStorePath(test: (path: string) => void): void {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-projection-settlement-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-projection-settlement-"));
   try {
     test(join(dir, "store.db"));
   } finally {

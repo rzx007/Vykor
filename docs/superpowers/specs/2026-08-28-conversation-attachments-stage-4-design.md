@@ -307,16 +307,16 @@ Executor 记录是否已经获取 Agent。预检失败时不调用 `agentPool.cl
 实施阶段至少执行：
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/api test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/desktop test -- --maxWorkers=1
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/api check-types
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/agent-runtime check-types
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/api test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/desktop test -- --maxWorkers=1
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/api check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/agent-runtime check-types
+pnpm --filter @vykor/desktop typecheck
 pnpm check-docs
 git diff --check
 ```
@@ -360,4 +360,4 @@ git diff --check
 - Desktop：本阶段新增/相关定向 10 个测试通过；全量 305 个测试中 304 个通过，另有一个既有 5,000 文件枚举超时；`session-service.test.ts` 因隔离工作树 Electron postinstall 未完整执行而无法收集，和本阶段源码无关。
 - Core、API、Services、Server、Desktop Node、Desktop Web、CLI 的直接 TypeScript 检查均通过。
 
-生产附件入口仍由 `OPENHARNESS_DESKTOP_ATTACHMENTS=1` 控制，默认未开放。`packages/tools/src/media/image-to-text.ts` 没有改动，也没有被接成自动降级；本地 OCR 继续归阶段 5。
+生产附件入口仍由 `VYKOR_DESKTOP_ATTACHMENTS=1` 控制，默认未开放。`packages/tools/src/media/image-to-text.ts` 没有改动，也没有被接成自动降级；本地 OCR 继续归阶段 5。

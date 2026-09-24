@@ -16,9 +16,9 @@
 - 说明：`登录系统后自动启动 daemon，并在异常退出后恢复，让定时任务和后台工作持续执行。`
 - 控件：开关
 
-开启开关等同现有 `ohs daemon install`：写入 `daemon.autoStart = true`，安装当前用户范围的系统启动项，并立即启动 daemon。
+开启开关等同现有 `vk daemon install`：写入 `daemon.autoStart = true`，安装当前用户范围的系统启动项，并立即启动 daemon。
 
-关闭开关等同现有 `ohs daemon uninstall`：写入 `daemon.autoStart = false`，停止 daemon 并删除系统启动项，但不删除会话、定时任务或其他用户数据。之后 Desktop 需要本地 daemon 时，仍可沿用当前的按需启动行为。
+关闭开关等同现有 `vk daemon uninstall`：写入 `daemon.autoStart = false`，停止 daemon 并删除系统启动项，但不删除会话、定时任务或其他用户数据。之后 Desktop 需要本地 daemon 时，仍可沿用当前的按需启动行为。
 
 操作期间开关不可重复点击。操作失败时恢复原来的界面状态，并在设置项附近显示具体、可重试的错误。设置页加载和应用重新获得焦点时刷新真实状态，以反映 CLI 或其他客户端做出的修改。
 
@@ -27,7 +27,7 @@
 引导复用侧边栏底部当前静态的「开始使用 1/3」位置，不新增弹窗、悬浮层或系统通知。符合条件时，原占位替换为一张紧凑卡片：
 
 - 标题：`保持后台运行`
-- 说明：`关闭 OpenHarness 后，定时任务和后台工作仍可继续。`
+- 说明：`关闭 Vykor 后，定时任务和后台工作仍可继续。`
 - 主操作：`开启`
 - 次操作：`暂不开启`
 
@@ -67,7 +67,7 @@ Desktop 偏好增加独立的安装身份和引导状态。引导状态使用明
 
 ## 组件边界与数据流
 
-Electron 主进程新增 Desktop daemon 常驻适配层。它组合 `@openharness/server/daemon-host` 的统一 controller 与 Desktop 自己的首次引导状态。server controller 负责配置值、系统服务安装状态、协调与失败恢复；Desktop 适配层负责：
+Electron 主进程新增 Desktop daemon 常驻适配层。它组合 `@vykor/server/daemon-host` 的统一 controller 与 Desktop 自己的首次引导状态。server controller 负责配置值、系统服务安装状态、协调与失败恢复；Desktop 适配层负责：
 
 - 调用 controller 查询、开启和关闭常驻；
 - 初始化安装身份；

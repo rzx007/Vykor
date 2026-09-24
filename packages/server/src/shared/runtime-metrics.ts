@@ -5,7 +5,7 @@ import type {
   SessionMessagePartRecord,
   SessionRunAttemptRecord,
   SessionRunRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface RuntimeMetricHistogram {
   count: number;
@@ -37,40 +37,40 @@ export function buildRuntimeMetricsSnapshot(input: {
   try {
     const result = emptyRuntimeMetricsSnapshot();
     for (const run of input.runs) {
-      increment(result.counters, metric("openharness_runs_total", { status: run.status }));
-      observe(result.histograms, "openharness_run_duration_ms", duration(run.startedAt, run.finishedAt));
+      increment(result.counters, metric("vykor_runs_total", { status: run.status }));
+      observe(result.histograms, "vykor_run_duration_ms", duration(run.startedAt, run.finishedAt));
     }
-    result.gauges.openharness_runs_active = input.runs.filter((run) => run.status === "pending" || run.status === "running").length;
+    result.gauges.vykor_runs_active = input.runs.filter((run) => run.status === "pending" || run.status === "running").length;
     for (const attempt of input.attempts) {
       const labels = { provider: attempt.provider ?? "unknown", model: attempt.model ?? "unknown", status: attempt.status };
-      increment(result.counters, metric("openharness_run_attempts_total", labels));
-      observe(result.histograms, metric("openharness_model_request_duration_ms", labels), duration(attempt.startedAt, attempt.finishedAt));
-      incrementBy(result.counters, metric("openharness_tokens_total", { provider: labels.provider, model: labels.model, direction: "input" }), attempt.inputTokens ?? 0);
-      incrementBy(result.counters, metric("openharness_tokens_total", { provider: labels.provider, model: labels.model, direction: "output" }), attempt.outputTokens ?? 0);
+      increment(result.counters, metric("vykor_run_attempts_total", labels));
+      observe(result.histograms, metric("vykor_model_request_duration_ms", labels), duration(attempt.startedAt, attempt.finishedAt));
+      incrementBy(result.counters, metric("vykor_tokens_total", { provider: labels.provider, model: labels.model, direction: "input" }), attempt.inputTokens ?? 0);
+      incrementBy(result.counters, metric("vykor_tokens_total", { provider: labels.provider, model: labels.model, direction: "output" }), attempt.outputTokens ?? 0);
     }
     for (const part of input.parts.filter((part) => part.type === "tool")) {
       const failureKind = typeof part.metadata.failureKind === "string" ? part.metadata.failureKind : "none";
-      increment(result.counters, metric("openharness_tool_calls_total", {
+      increment(result.counters, metric("vykor_tool_calls_total", {
         tool: part.toolName ?? "unknown",
         status: part.status,
         failure_kind: failureKind,
       }));
-      observe(result.histograms, metric("openharness_tool_call_duration_ms", { tool: part.toolName ?? "unknown" }), duration(part.createdAt, part.updatedAt));
+      observe(result.histograms, metric("vykor_tool_call_duration_ms", { tool: part.toolName ?? "unknown" }), duration(part.createdAt, part.updatedAt));
     }
-    result.gauges.openharness_permissions_pending = input.permissions.filter((row) => row.status === "pending").length;
-    result.gauges.openharness_child_agents_active = input.tasks.filter((row) =>
+    result.gauges.vykor_permissions_pending = input.permissions.filter((row) => row.status === "pending").length;
+    result.gauges.vykor_child_agents_active = input.tasks.filter((row) =>
       row.type === "agent" && (row.status === "pending" || row.status === "running")).length;
-    result.gauges.openharness_workflows_active = (input.workflows ?? []).filter((row) => row.status === "running").length;
+    result.gauges.vykor_workflows_active = (input.workflows ?? []).filter((row) => row.status === "running").length;
     for (const workflow of input.workflows ?? []) {
-      increment(result.counters, metric("openharness_workflows_total", { status: workflow.status }));
+      increment(result.counters, metric("vykor_workflows_total", { status: workflow.status }));
       if (workflow.status !== "running") {
-        observe(result.histograms, "openharness_workflow_duration_ms", duration(workflow.createdAt, workflow.updatedAt));
+        observe(result.histograms, "vykor_workflow_duration_ms", duration(workflow.createdAt, workflow.updatedAt));
       }
     }
-    result.gauges.openharness_projection_settlements_pending = input.settlements.filter((row) =>
+    result.gauges.vykor_projection_settlements_pending = input.settlements.filter((row) =>
       row.status === "pending" || row.status === "retrying").length;
     for (const row of input.settlements) {
-      incrementBy(result.counters, metric("openharness_projection_failures_total", {
+      incrementBy(result.counters, metric("vykor_projection_failures_total", {
         projector: row.projector,
         action: row.action,
       }), row.attemptCount);

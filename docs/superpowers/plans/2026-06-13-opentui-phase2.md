@@ -1,10 +1,10 @@
-# 归档：OpenHarness TUI Phase 2 Implementation Plan
+# 归档：Vykor TUI Phase 2 Implementation Plan
 
-> 历史实施计划。功能状态请以当前源码、README 和 [../../tui-flow.md](../../tui-flow.md) 为准；不要从本文推导 BackendHost/OHJSON 或旧 session 数据流。
+> 历史实施计划。功能状态请以当前源码、README 和 [../../tui-flow.md](../../tui-flow.md) 为准；不要从本文推导 BackendHost/LegacyJSON 或旧 session 数据流。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add inline diff viewer, `@` file completion with frecency ranking, and a responsive sidebar panel to the OpenHarness opentui TUI.
+**Goal:** Add inline diff viewer, `@` file completion with frecency ranking, and a responsive sidebar panel to the Vykor opentui TUI.
 
 **Architecture:** Four independent sub-features built in order of dependency: (1) ToolDiff component wires `@opentui/core`'s native `<diff>` element into the message stream; (2) Autocomplete is generalized to a common `AutocompleteItem[]` interface so both slash commands and file paths share one renderer; (3) frecency module provides a score map used by both autocomplete paths; (4) Sidebar lifts `sidebarOpen` state into `AppInner` and renders session metadata in a fixed 40-column right panel.
 
@@ -108,7 +108,7 @@ git commit -m "chore(frontend): add diff component Windows smoke probe"
 - [ ] Run:
 
 ```bash
-cd /d/code/personal-project/OpenHarness-ts
+cd /d/code/personal-project/Vykor
 pnpm install
 ```
 
@@ -360,9 +360,9 @@ export function TranscriptPart({
 - [ ] Run build + existing tests:
 
 ```bash
-cd /d/code/personal-project/OpenHarness-ts
-pnpm --filter @openharness/frontend build
-pnpm --filter @openharness/frontend test
+cd /d/code/personal-project/Vykor
+pnpm --filter @vykor/frontend build
+pnpm --filter @vykor/frontend test
 ```
 
 Expected: build succeeds, all tests pass.
@@ -658,13 +658,13 @@ The only change needed in the Tab block is confirming that `acSuggestions[acInde
 - [ ] Run build to verify no type errors:
 
 ```bash
-pnpm --filter @openharness/frontend build
+pnpm --filter @vykor/frontend build
 ```
 
 - [ ] Run all frontend tests:
 
 ```bash
-pnpm --filter @openharness/frontend test
+pnpm --filter @vykor/frontend test
 ```
 
 Expected: all pass.
@@ -982,8 +982,8 @@ if (fileAcOpen) {
 - [ ] Build and test:
 
 ```bash
-pnpm --filter @openharness/frontend build
-pnpm --filter @openharness/frontend test
+pnpm --filter @vykor/frontend build
+pnpm --filter @vykor/frontend test
 ```
 
 Expected: build succeeds, all tests pass.
@@ -1047,7 +1047,7 @@ test("record and rank roundtrip via JSON file", async () => {
   const dir = mkdtempSync(join(tmpdir(), "frecency-test-"));
   try {
     // Set env to point at temp dir
-    process.env.OPENHARNESS_CONFIG_DIR = dir;
+    process.env.VYKOR_CONFIG_DIR = dir;
 
     // Dynamically import to pick up env var
     const mod = await import("./frecency?t=" + Date.now());
@@ -1066,7 +1066,7 @@ test("record and rank roundtrip via JSON file", async () => {
     const filePath = join(dir, "frecency.json");
     expect(fs.existsSync(filePath)).toBe(true);
   } finally {
-    delete process.env.OPENHARNESS_CONFIG_DIR;
+    delete process.env.VYKOR_CONFIG_DIR;
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -1076,13 +1076,13 @@ test("rank returns empty map when JSON is corrupted", async () => {
   try {
     const filePath = join(dir, "frecency.json");
     writeFileSync(filePath, "NOT JSON {{{");
-    process.env.OPENHARNESS_CONFIG_DIR = dir;
+    process.env.VYKOR_CONFIG_DIR = dir;
 
     const mod = await import("./frecency?t=" + Date.now() + "b");
     const scores = mod.rank("command");
     expect(scores.size).toBe(0); // silent reset, no throw
   } finally {
-    delete process.env.OPENHARNESS_CONFIG_DIR;
+    delete process.env.VYKOR_CONFIG_DIR;
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -1116,7 +1116,7 @@ let dirty = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function configPath(): string {
-  const dir = process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness");
+  const dir = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
   mkdirSync(dir, { recursive: true });
   return join(dir, "frecency.json");
 }
@@ -1262,8 +1262,8 @@ frecencyRecord("file", selected.id);
 - [ ] Build and test:
 
 ```bash
-pnpm --filter @openharness/frontend build
-pnpm --filter @openharness/frontend test
+pnpm --filter @vykor/frontend build
+pnpm --filter @vykor/frontend test
 ```
 
 ### Step 4: Commit
@@ -1766,8 +1766,8 @@ onToggleSidebar: () => {},
 - [ ] Build and all tests:
 
 ```bash
-pnpm --filter @openharness/frontend build
-pnpm --filter @openharness/frontend test
+pnpm --filter @vykor/frontend build
+pnpm --filter @vykor/frontend test
 ```
 
 Expected: build succeeds, all tests pass (including App.test.tsx — update baseProps there if needed).
@@ -1789,8 +1789,8 @@ git commit -m "feat(frontend): Sidebar panel with session info, modified files, 
 - [ ] **Step 1: Run full test suite**
 
 ```bash
-cd /d/code/personal-project/OpenHarness-ts
-pnpm --filter @openharness/frontend test
+cd /d/code/personal-project/Vykor
+pnpm --filter @vykor/frontend test
 ```
 
 Expected: all tests pass, 0 failures.
@@ -1806,7 +1806,7 @@ Expected: 27 packages, 0 errors.
 - [ ] **Step 3: Run build**
 
 ```bash
-pnpm --filter @openharness/frontend build
+pnpm --filter @vykor/frontend build
 ```
 
 Expected: `Build complete: 2 files`

@@ -28,7 +28,7 @@
 
 ### Client
 
-- `OpenHarnessClient` 暴露 `client.protocol` 和各领域 Resource；业务调用进入 `client.sessions`、`client.projects`、`client.permissions` 等资源。
+- `VykorClient` 暴露 `client.protocol` 和各领域 Resource；业务调用进入 `client.sessions`、`client.projects`、`client.permissions` 等资源。
 - transport 只负责 HTTP、SSE、鉴权、协议 header 和错误转换，不拥有 endpoint 业务规则。
 - snapshot 是某一时刻的完整基线，SSE 从 checkpoint 之后补增量，state reducer 负责去重与合并。
 - 顶层业务转发方法和底层 transport 公共属性已经删除。
@@ -54,18 +54,18 @@
 
 ## 当前协议与数据基线
 
-- HTTP 协议版本是 `4`，请求头是 `x-openharness-protocol-version`。
+- HTTP 协议版本是 `4`，请求头是 `x-vykor-protocol-version`。
 - `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 4 的版本。
 - SQLite 以 `packages/services/src/session-runtime/migrations/0000_current_schema.sql` 为基线，其后为 `drizzle-kit generate` 产出的增量迁移链。
 - 每次打开都应用迁移链（基线 + 增量）；不做旧库接管或字段猜测，与当前基线不匹配的库删除重建。
-- Native Plugin 只接受严格 v1 manifest，安装 scope 只有 `user` 与 `managed`；外部格式先通过 `@openharness/plugin-converters` 显式转换。
-- 项目 Skill 目录只有 `.agents/skills` 与 `.openharness-ts/skills`；用户 Skill 默认位于 `~/.openharness-ts/skills`。
+- Native Plugin 只接受严格 v1 manifest，安装 scope 只有 `user` 与 `managed`；外部格式先通过 `@vykor/plugin-converters` 显式转换。
+- 项目 Skill 目录只有 `.agents/skills` 与 `.vykor/skills`；用户 Skill 默认位于 `~/.vykor/skills`。
 
 ## 已删除的兼容面
 
 以下内容不是隐藏能力，也不应在新代码或文档中重新出现：
 
-- `OpenHarnessClient` 顶层 session/project/job 等业务方法；
+- `VykorClient` 顶层 session/project/job 等业务方法；
 - 对外暴露的底层 Client transport；
 - `SessionStore` 和 Application 层只做一跳转发的平铺业务方法；
 - 旧 Client 字段名、旧插件 scope/manifest、旧 Skill 目录和旧 shell fallback；

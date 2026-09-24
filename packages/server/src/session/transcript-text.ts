@@ -1,4 +1,4 @@
-import type { SessionMessagePartRecord } from "@openharness/protocol";
+import type { SessionMessagePartRecord } from "@vykor/protocol";
 
 /** Only ordinary text may become a public reply or conversation memory. */
 export function isPublicTextPart(part: SessionMessagePartRecord): boolean {

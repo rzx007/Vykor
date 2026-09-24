@@ -49,7 +49,7 @@ it("preserves enabled state and installedAt when reinstalling the same user plug
   if (first.status !== "installed") throw new Error("expected first install");
 
   await updateInstalledPluginStore(storePath, (store) => {
-    const record = store.plugins["user::dev.openharness.minimal-skill"]!;
+    const record = store.plugins["user::dev.vykor.minimal-skill"]!;
     record.enabled = false;
     record.installedAt = "2026-01-01T00:00:00.000Z";
     record.updatedAt = "2026-01-01T00:00:00.000Z";
@@ -65,7 +65,7 @@ it("preserves enabled state and installedAt when reinstalling the same user plug
   });
   expect(second.status).toBe("installed");
   const record = (await readInstalledPluginStore(storePath)).plugins[
-    "user::dev.openharness.minimal-skill"
+    "user::dev.vykor.minimal-skill"
   ]!;
   expect(record.enabled).toBe(false);
   expect(record.installedAt).toBe("2026-01-01T00:00:00.000Z");
@@ -80,7 +80,7 @@ it("preserves enabled state and installedAt when reinstalling the same user plug
 运行：
 
 ```sh
-pnpm --filter @openharness/plugins exec vitest run src/installation/installer.test.ts
+pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts
 ```
 
 预期：新增测试在 `enabled` 断言失败，当前重新安装会写回 `true`。
@@ -106,7 +106,7 @@ await updateInstalledPluginStore(input.storePath ?? getInstalledPluginStorePath(
 运行：
 
 ```sh
-pnpm --filter @openharness/plugins exec vitest run src/installation/installer.test.ts
+pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts
 ```
 
 预期：该文件全部通过。
@@ -134,7 +134,7 @@ git commit -m "fix(plugins): preserve state on reinstall"
 function permissionManifest(version: string, includeNetwork = false): string {
   return JSON.stringify({
     schemaVersion: 1,
-    id: "dev.openharness.archive",
+    id: "dev.vykor.archive",
     name: "archive",
     version,
     permissions: {
@@ -153,7 +153,7 @@ function permissionManifest(version: string, includeNetwork = false): string {
 ```ts
 it("reuses previous approval when reinstalling with the same permissions", async () => {
   const archive = await writeNativeArchive("same-permissions.zip", {
-    ".openharness-plugin/plugin.json": permissionManifest("1.0.0"),
+    ".vykor-plugin/plugin.json": permissionManifest("1.0.0"),
   });
   const plugins = service() as any;
   const firstPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
@@ -172,12 +172,12 @@ it("reuses previous approval when reinstalling with the same permissions", async
     archivePath: archive,
     expectedArchiveDigest: secondPreview.archiveDigest,
     approvedPermissions: [],
-  })).resolves.toMatchObject({ message: "Installed plugin 'dev.openharness.archive'." });
+  })).resolves.toMatchObject({ message: "Installed plugin 'dev.vykor.archive'." });
 });
 
 it("requires approval when a reinstall adds a permission", async () => {
   const first = await writeNativeArchive("add-permission.zip", {
-    ".openharness-plugin/plugin.json": permissionManifest("1.0.0"),
+    ".vykor-plugin/plugin.json": permissionManifest("1.0.0"),
   });
   const plugins = service() as any;
   const firstPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: first });
@@ -189,7 +189,7 @@ it("requires approval when a reinstall adds a permission", async () => {
   });
 
   await writeNativeArchive("add-permission.zip", {
-    ".openharness-plugin/plugin.json": permissionManifest("1.1.0", true),
+    ".vykor-plugin/plugin.json": permissionManifest("1.1.0", true),
   });
   const nextPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: first });
   expect(nextPreview.approvalRequired).toBe(true);
@@ -255,7 +255,7 @@ expect(preview.approvalRequired).toBe(true);
 运行：
 
 ```sh
-pnpm --filter @openharness/server exec vitest run src/application/default-services/plugin-service.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-service.test.ts
 ```
 
 预期：`approvalRequired` 不存在，且已批准插件用空数组重新安装仍被拒绝。
@@ -345,9 +345,9 @@ const effectiveApprovals = [...preview.requestedPermissions];
 运行：
 
 ```sh
-pnpm --filter @openharness/server exec vitest run src/application/default-services/plugin-service.test.ts
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
+pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-service.test.ts
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
 ```
 
 预期：测试及类型检查全部通过。
@@ -407,7 +407,7 @@ it("reinstalls immediately when the server says existing approval covers permiss
 运行：
 
 ```sh
-pnpm --filter @openharness/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts
 ```
 
 预期：当前代码仍按 `requestedPermissions.length` 弹确认，新增测试失败。
@@ -447,8 +447,8 @@ result.snapshot
 运行：
 
 ```sh
-pnpm --filter @openharness/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
-pnpm --filter @openharness/desktop exec tsc --noEmit -p tsconfig.node.json --composite false
+pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
+pnpm --filter @vykor/desktop exec tsc --noEmit -p tsconfig.node.json --composite false
 ```
 
 预期：测试及 node TypeScript 检查通过。
@@ -478,13 +478,13 @@ git commit -m "feat(desktop): support safe plugin reinstall"
 - [ ] **步骤 1：运行聚焦验证**
 
 ```sh
-pnpm --filter @openharness/plugins exec vitest run src/installation/installer.test.ts
-pnpm --filter @openharness/server exec vitest run src/application/default-services/plugin-service.test.ts
-pnpm --filter @openharness/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
-pnpm --filter @openharness/plugins check-types
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
-pnpm --filter @openharness/desktop exec tsc --noEmit -p tsconfig.node.json --composite false
+pnpm --filter @vykor/plugins exec vitest run src/installation/installer.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
+pnpm --filter @vykor/plugins check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
+pnpm --filter @vykor/desktop exec tsc --noEmit -p tsconfig.node.json --composite false
 ```
 
 预期：所有命令退出码为 0。

@@ -1,10 +1,10 @@
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 
-import { SessionStore } from "@openharness/services";
-import type { Settings } from "@openharness/core";
-import type { ChannelConfigStore } from "@openharness/auth";
-import type { AttachmentLimits } from "@openharness/protocol";
+import { SessionStore } from "@vykor/services";
+import type { Settings } from "@vykor/core";
+import type { ChannelConfigStore } from "@vykor/auth";
+import type { AttachmentLimits } from "@vykor/protocol";
 
 import type { CommandCatalogProvider } from "../commands/commands.js";
 import type { DurableAgentApplication } from "../application/daemon-application.js";
@@ -72,7 +72,7 @@ import type { DaemonTerminalService } from "../terminal/index.js";
 import type { DaemonJobService } from "../jobs/index.js";
 import { protocolMiddleware } from "./protocol-middleware.js";
 
-export interface OpenHarnessServerServices {
+export interface VykorServerServices {
   commandCatalog?: CommandCatalogProvider;
   settings?: SettingsService;
   provider?: ProviderService;
@@ -91,7 +91,7 @@ export interface OpenHarnessServerServices {
   skill?: SkillService;
 }
 
-export interface OpenHarnessServerOptions {
+export interface VykorServerOptions {
   host?: string;
   port?: number;
   token?: string;
@@ -117,14 +117,14 @@ export interface OpenHarnessServerOptions {
   createAgent?: CreateDaemonAgent;
   /** Optional browser capability supplied by an embedding desktop application. */
   browserHost?: BrowserHost;
-  services?: OpenHarnessServerServices;
+  services?: VykorServerServices;
   version?: string;
   logger?: StructuredLogger;
 }
 
 export type {
-  OpenHarnessRuntimeSnapshot,
-  OpenHarnessServerHealth,
+  VykorRuntimeSnapshot,
+  VykorServerHealth,
 } from "./support.js";
 
 export interface ListenResult {
@@ -135,12 +135,12 @@ export interface ListenResult {
 
 type Listener = ReturnType<typeof serve>;
 
-export class OpenHarnessHttpServer {
+export class VykorHttpServer {
   readonly app: Hono;
   readonly store: SessionStore;
   readonly token?: string;
   private readonly allowedOrigins: ReadonlySet<string>;
-  private readonly services: OpenHarnessServerServices;
+  private readonly services: VykorServerServices;
   private readonly version?: string;
   private readonly logger: StructuredLogger;
   private readonly eventHub: HttpEventHub;
@@ -154,7 +154,7 @@ export class OpenHarnessHttpServer {
   private listenResult?: ListenResult;
   private closePromise?: Promise<void>;
 
-  constructor(options: OpenHarnessServerOptions = {}) {
+  constructor(options: VykorServerOptions = {}) {
     this.app = new Hono();
     this.token = options.token;
     this.allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins ?? []);
@@ -198,7 +198,7 @@ export class OpenHarnessHttpServer {
   }
 
   async listen(
-    options: Pick<OpenHarnessServerOptions, "host" | "port"> = {},
+    options: Pick<VykorServerOptions, "host" | "port"> = {},
   ): Promise<ListenResult> {
     await this.application.ready();
     const host = options.host ?? "127.0.0.1";
@@ -260,7 +260,7 @@ export class OpenHarnessHttpServer {
     for (const result of settled) {
       if (result.status === "rejected") failures.push(result.reason);
     }
-    throwFailures(failures, "OpenHarness server shutdown failed");
+    throwFailures(failures, "Vykor server shutdown failed");
   }
 
   private mountRoutes(): void {
@@ -456,13 +456,13 @@ export class OpenHarnessHttpServer {
   }
 }
 
-export async function startOpenHarnessServer(
-  options: OpenHarnessServerOptions = {},
+export async function startVykorServer(
+  options: VykorServerOptions = {},
 ): Promise<{
-  server: OpenHarnessHttpServer;
+  server: VykorHttpServer;
   listen: ListenResult;
 }> {
-  const server = new OpenHarnessHttpServer(options);
+  const server = new VykorHttpServer(options);
   try {
     const listen = await server.listen(options);
     return { server, listen };
@@ -472,7 +472,7 @@ export async function startOpenHarnessServer(
     } catch (closeError) {
       throw new AggregateError(
         [error, closeError],
-        "OpenHarness server startup and cleanup failed",
+        "Vykor server startup and cleanup failed",
       );
     }
     throw error;

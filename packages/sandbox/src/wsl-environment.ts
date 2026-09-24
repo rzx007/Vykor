@@ -9,7 +9,7 @@ import type {
   EnvironmentPathResolver,
   ResolvedEnvironmentPath,
   WorkspaceBinding,
-} from "@openharness/environment";
+} from "@vykor/environment";
 import { signalProcessTree } from "./process-control.js";
 
 const execFileAsync = promisify(execFile);
@@ -107,10 +107,10 @@ export function spawnWslProcess(input: {
   const envArgs = Object.entries(input.env ?? {}).map(([key, value]) => `${key}=${value}`);
   const executionArgv = envArgs.length > 0 ? ["/usr/bin/env", ...envArgs, ...input.argv] : input.argv;
   const cancelHostPath = input.signal
-    ? win32.join(tmpdir(), `openharness-wsl-cancel-${randomUUID()}`)
+    ? win32.join(tmpdir(), `vykor-wsl-cancel-${randomUUID()}`)
     : undefined;
   const supervisedArgv = cancelHostPath
-    ? ["/bin/sh", "-c", WSL_CANCEL_SUPERVISOR, "openharness-wsl", hostPathToWslPath(cancelHostPath), ...executionArgv]
+    ? ["/bin/sh", "-c", WSL_CANCEL_SUPERVISOR, "vykor-wsl", hostPathToWslPath(cancelHostPath), ...executionArgv]
     : executionArgv;
   const child = spawn("wsl.exe", ["--cd", input.cwd, "--exec", ...supervisedArgv], {
     windowsHide: true,

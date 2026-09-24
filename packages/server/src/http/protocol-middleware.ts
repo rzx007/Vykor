@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
-import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@openharness/protocol";
+import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 
-/** Reject a different OpenHarness wire version before authentication or route side effects. */
+/** Reject a different Vykor wire version before authentication or route side effects. */
 export const protocolMiddleware: MiddlewareHandler = async (c, next) => {
   if (c.req.path === "/health" || c.req.path === "/capabilities") {
     await next();

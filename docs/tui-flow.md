@@ -5,16 +5,16 @@
 ## 启动
 
 ```text
-ohs
+vk
   -> apps/cli/src/index.ts
   -> commands/main.ts runTuiMode()
   -> attach explicit daemon or ensure local daemon
   -> spawn apps/frontend/dist/index.js with Bun
-  -> OPENHARNESS_FRONTEND_CONFIG carries daemon URL/token/options
-  -> frontend useServerSync attaches through OpenHarnessClient
+  -> VYKOR_FRONTEND_CONFIG carries daemon URL/token/options
+  -> frontend useServerSync attaches through VykorClient
 ```
 
-CLI 进程只是 launcher，不组装 QueryEngine，也不注入 daemon services。daemon 前台入口调用 server 的 `startOpenHarnessDaemon()`。
+CLI 进程只是 launcher，不组装 QueryEngine，也不注入 daemon services。daemon 前台入口调用 server 的 `startVykorDaemon()`。
 
 ## 输入 `hi`
 
@@ -22,12 +22,12 @@ CLI 进程只是 launcher，不组装 QueryEngine，也不注入 daemon services
 sequenceDiagram
   participant Input as OpenTUI input
   participant Sync as useServerSync
-  participant Client as OpenHarnessClient
+  participant Client as VykorClient
   participant App as SessionInteractionService
   participant Admission as RunAdmissionService
   participant Lane as SessionRunCoordinator
   participant Exec as SessionRunExecutor
-  participant Agent as OpenHarnessAgent
+  participant Agent as VykorAgent
   participant QE as QueryEngine
   participant Projection as DaemonAgentEventProjector
   participant Store as SessionStore/SSE

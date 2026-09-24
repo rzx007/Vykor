@@ -6,8 +6,8 @@ Refine the desktop provider settings page so feedback is temporary, development-
 
 ## Data behavior
 
-- Keep the existing renderer -> typed IPC -> Electron main -> `@openharness/client` -> daemon flow.
-- Never invoke or parse `ohs auth` or `ohs provider` commands.
+- Keep the existing renderer -> typed IPC -> Electron main -> `@vykor/client` -> daemon flow.
+- Never invoke or parse `vk auth` or `vk provider` commands.
 - Remove the fixed Codex, Claude Code, and Qoder subscription cards.
 - Treat an externally detected subscription as a provider whose `credentialSource` is `subscription`.
 - Only display subscription providers that the existing service actually detects. The current daemon contract detects Codex; future providers can join the same list without a dedicated UI section.

@@ -10,9 +10,9 @@ vi.mock("streamdown", () => ({
 
 const snapshot = {
   projects: [
-    { name: "OpenHarness", path: "D:/OpenHarness" },
+    { name: "Vykor", path: "D:/Vykor" },
     { name: "Client", path: "D:/Client" },
-    { name: "x10", path: "D:/Documents/OpenHarness/2026-09-09/x10" },
+    { name: "x10", path: "D:/Documents/Vykor/2026-09-09/x10" },
   ],
   warnings: [],
   skills: [
@@ -30,18 +30,18 @@ const snapshot = {
       name: "agent-browser",
       description: "Agent folder",
       content: "# Agent",
-      path: "D:/OpenHarness/.agents/skills/agent-browser/SKILL.md",
+      path: "D:/Vykor/.agents/skills/agent-browser/SKILL.md",
       source: "agent",
       readOnly: true,
-      projectPath: "D:/OpenHarness",
-      projectName: "OpenHarness",
+      projectPath: "D:/Vykor",
+      projectName: "Vykor",
     },
     {
       id: "project",
       name: "release",
       description: "Project release",
       content: "---\nname: release\ndescription: Project release\n---\n\n# Release",
-      path: "D:/Client/.openharness-ts/skills/release/SKILL.md",
+      path: "D:/Client/.vykor/skills/release/SKILL.md",
       source: "project",
       readOnly: false,
       projectPath: "D:/Client",
@@ -61,7 +61,7 @@ const snapshot = {
       name: "docs",
       description: "Global docs",
       content: "---\nname: docs\ndescription: Global docs\n---\n\n# Docs",
-      path: "C:/ohs/skills/docs/SKILL.md",
+      path: "C:/vk/skills/docs/SKILL.md",
       source: "personal",
       readOnly: false,
     },
@@ -70,10 +70,10 @@ const snapshot = {
       name: "outside-work",
       description: "Temporary outside-project skill",
       content: "# Outside",
-      path: "D:/Documents/OpenHarness/2026-09-09/x10/.openharness-ts/skills/outside/SKILL.md",
+      path: "D:/Documents/Vykor/2026-09-09/x10/.vykor/skills/outside/SKILL.md",
       source: "project",
       readOnly: false,
-      projectPath: "D:/Documents/OpenHarness/2026-09-09/x10",
+      projectPath: "D:/Documents/Vykor/2026-09-09/x10",
       projectName: "x10",
     },
   ],
@@ -118,7 +118,7 @@ beforeEach(() => {
   props = {
     query: "",
     refreshRequest: 0,
-    projectPath: "D:/OpenHarness",
+    projectPath: "D:/Vykor",
     notify: vi.fn(),
   }
 })
@@ -131,12 +131,12 @@ afterEach(() => {
 describe("SkillManager filesystem management", () => {
   it("loads all real sources and offers standard separately from personal", async () => {
     await render()
-    expect(api.snapshot).toHaveBeenCalledWith({ projectPath: "D:/OpenHarness" })
+    expect(api.snapshot).toHaveBeenCalledWith({ projectPath: "D:/Vykor" })
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("agent-browser")
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("docs")
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("archify")
     expect([...host.querySelectorAll('[role="tab"]')].map((node) => node.textContent)).toEqual([
-      "OpenHarness",
+      "Vykor",
       "通用",
       "个人",
       "Client",
@@ -148,7 +148,7 @@ describe("SkillManager filesystem management", () => {
     expect(host.textContent).not.toContain("outside-work")
   })
 
-  it("filters project and OHS global skills into their real categories", async () => {
+  it("filters project and VK global skills into their real categories", async () => {
     await render()
     await click(
       [...host.querySelectorAll('[role="tab"]')].find((node) => node.textContent === "Client")
@@ -265,7 +265,7 @@ function filteredSnapshot(): typeof snapshot {
     projects: snapshot.projects.filter((item) => item.name !== "x10"),
     skills: snapshot.skills.filter((skill) => {
       if (skill.source === "bundled" || skill.source === "personal") return true
-      return pathKey(skill.projectPath ?? "") !== pathKey("D:/Documents/OpenHarness/2026-09-09/x10")
+      return pathKey(skill.projectPath ?? "") !== pathKey("D:/Documents/Vykor/2026-09-09/x10")
     }),
   }
 }

@@ -1,4 +1,4 @@
-import type { AgentPermissionDecision } from "@openharness/core";
+import type { AgentPermissionDecision } from "@vykor/core";
 
 export interface PermissionControllerWaitInput {
   requestId: string;

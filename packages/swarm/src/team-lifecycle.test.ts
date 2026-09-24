@@ -23,7 +23,7 @@ import {
   cleanupTeamDirectories,
 } from "./team-lifecycle.js";
 
-// 与 mailbox 测试同一套约定：唯一团队名写真实 ~/.openharness-ts/teams，用后清理。
+// 与 mailbox 测试同一套约定：唯一团队名写真实 ~/.vykor/teams，用后清理。
 const createdTeams: string[] = [];
 
 function uniqueTeam(): string {
@@ -33,7 +33,7 @@ function uniqueTeam(): string {
 }
 
 function teamJsonPath(team: string): string {
-  return join(homedir(), ".openharness-ts", "teams", team, "team.json");
+  return join(homedir(), ".vykor", "teams", team, "team.json");
 }
 
 function makeMember(overrides: Partial<TeamMember> = {}): TeamMember {
@@ -67,7 +67,7 @@ beforeEach(() => {
 afterEach(async () => {
   for (const team of createdTeams.splice(0)) {
     unregisterTeamForSessionCleanup(team);
-    rmSync(join(homedir(), ".openharness-ts", "teams", team), { recursive: true, force: true });
+    rmSync(join(homedir(), ".vykor", "teams", team), { recursive: true, force: true });
   }
   delete process.env.CLAUDE_CODE_TEAM_NAME;
   delete process.env.CLAUDE_CODE_AGENT_NAME;
@@ -108,13 +108,13 @@ describe("TeamLifecycleManager CRUD", () => {
   it("getTeam returns null for missing data and rejects corrupted data", () => {
     const manager = new TeamLifecycleManager();
     // 旧实现的 getTeamDir 读路径也 mkdir，可能留有历史空目录：先清掉再验证。
-    rmSync(join(homedir(), ".openharness-ts", "teams", "__test_tl_never_created"), { recursive: true, force: true });
+    rmSync(join(homedir(), ".vykor", "teams", "__test_tl_never_created"), { recursive: true, force: true });
     expect(manager.getTeam("__test_tl_never_created")).toBeNull();
     // 查询不存在的团队不应留下空目录（getTeamDir 读路径不再 mkdir）。
-    expect(existsSync(join(homedir(), ".openharness-ts", "teams", "__test_tl_never_created"))).toBe(false);
+    expect(existsSync(join(homedir(), ".vykor", "teams", "__test_tl_never_created"))).toBe(false);
 
     const team = uniqueTeam();
-    mkdirSync(join(homedir(), ".openharness-ts", "teams", team), { recursive: true });
+    mkdirSync(join(homedir(), ".vykor", "teams", team), { recursive: true });
     writeFileSync(teamJsonPath(team), "not json");
     expect(() => manager.getTeam(team)).toThrow();
   });
@@ -312,7 +312,7 @@ describe("cleanup", () => {
     const team = uniqueTeam();
     const manager = new TeamLifecycleManager();
     manager.createTeam(team);
-    const fakeWorktree = join(tmpdir(), `ohs-wt-${Date.now()}`);
+    const fakeWorktree = join(tmpdir(), `vk-wt-${Date.now()}`);
     mkdirSync(fakeWorktree, { recursive: true });
     manager.addMember(team, makeMember({ worktreePath: fakeWorktree }));
 
@@ -343,7 +343,7 @@ describe("cleanup", () => {
     const team1 = uniqueTeam();
     const manager = new TeamLifecycleManager();
     manager.createTeam(team1);
-    const fakeWorktree = join(tmpdir(), `ohs-wt-sync-${Date.now()}`);
+    const fakeWorktree = join(tmpdir(), `vk-wt-sync-${Date.now()}`);
     mkdirSync(fakeWorktree, { recursive: true });
     manager.addMember(team1, makeMember({ worktreePath: fakeWorktree }));
     registerTeamForSessionCleanup(team1);

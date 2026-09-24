@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-OpenHarness includes the following components for local attachment OCR. The packaged application must retain the license and notice files shipped by each npm package.
+Vykor includes the following components for local attachment OCR. The packaged application must retain the license and notice files shipped by each npm package.
 
 | Component | Version | License | Purpose |
 | --- | ---: | --- | --- |

@@ -1,13 +1,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { getDataDir } from "@openharness/core";
+import { getDataDir } from "@vykor/core";
 
 import type {
   SessionInputRecord,
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { isPublicTextPart, publicTextFromParts } from "./transcript-text.js";
 
 export type SessionExportFormat = "md" | "json";
@@ -58,7 +58,7 @@ function markdownFromParts(parts: SessionMessagePartRecord[]): string {
 
 function buildMarkdown(input: BuildSessionExportInput): string {
   const lines = [
-    "# OpenHarness Conversation Export",
+    "# Vykor Conversation Export",
     "",
     `- **Date:** ${new Date().toISOString()}`,
     `- **Model:** ${input.session.model}`,

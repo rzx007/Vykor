@@ -86,7 +86,7 @@ describe("preview policy", () => {
 - [ ] **步骤 2：运行测试确认模块不存在**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/file-preview-policy.test.ts
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/file-preview-policy.test.ts
 ```
 
 预期：FAIL，无法解析 `./file-preview-policy`。
@@ -152,7 +152,7 @@ export function resolveCodeRenderMode(
 - [ ] **步骤 2：运行并确认失败**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
 ```
 
 - [ ] **步骤 3：实现提示和模式化 FileContents**
@@ -173,8 +173,8 @@ options 改为 `tokenizeMaxLength: previewLimits.file.lines`、`tokenizeMaxLineL
 - [ ] **步骤 4：运行测试、类型检查并提交**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/file-preview-policy.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/file-preview-policy.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
+pnpm --filter @vykor/desktop typecheck
 git add apps/desktop/src/renderer/src/components/desktop/tools/file-viewer.tsx apps/desktop/src/renderer/src/components/desktop/tools/file-viewer.test.ts apps/desktop/src/renderer/src/components/desktop/tools/large-preview-notice.tsx apps/desktop/src/renderer/src/components/desktop/tools/virtualized-code-preview.tsx apps/desktop/src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
 git commit -m "perf(desktop): degrade oversized code previews safely"
 ```
@@ -208,9 +208,9 @@ Mock `Virtualizer`、`useVirtualizer`、`PierreFile`。验证 Pierre 位于 Virt
 - [ ] **步骤 3：验证和提交**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 git add apps/desktop/src/renderer/src/components/desktop/tools/virtualized-code-preview.tsx apps/desktop/src/renderer/src/components/desktop/tools/virtualized-code-preview.test.ts apps/desktop/src/renderer/src/components/desktop/tools/file-viewer.tsx
 git commit -m "perf(desktop): virtualize file preview rows"
 ```
@@ -250,9 +250,9 @@ const poolOptions = {
 - [ ] **步骤 3：验证 Worker 打包和 CSP**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/code-renderer-provider.test.ts src/renderer/src/renderer-security-policy.test.ts
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop build
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/code-renderer-provider.test.ts src/renderer/src/renderer-security-policy.test.ts
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop build
 ```
 
 确认 `out/renderer/assets` 有独立 Worker 产物，启动后无 CSP/Worker 初始化错误；强制高亮时主要 Shiki 计算位于 Worker 轨道。只有默认 `?worker` 失败时才修改 electron-vite 配置，不使用运行时网络 URL。
@@ -301,9 +301,9 @@ it("marks an oversized fenced block as plain text", () => {
 - [ ] **步骤 5：验证和提交**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/theme-provider.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/conversation-page/message/streamdown-renderers.test.ts
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/theme-provider.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts src/renderer/src/components/desktop/conversation-page/message/streamdown-renderers.test.ts
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 git add apps/desktop/src/renderer/src/components/theme-provider.tsx apps/desktop/src/renderer/src/components/theme-provider.test.ts apps/desktop/src/renderer/src/components/desktop/tools/file-viewer.tsx apps/desktop/src/renderer/src/components/desktop/tools/files-tool.tsx apps/desktop/src/renderer/src/components/ui/code-block.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/message/streamdown-renderers.tsx apps/desktop/src/renderer/src/components/desktop/conversation-page/message/streamdown-renderers.test.ts
 git commit -m "perf(desktop): bound markdown and code block rendering"
 ```
@@ -334,9 +334,9 @@ export function resolveDiffRenderState(patch: string): {
 - [ ] **步骤 3：验证 unified/split、四个 review range、主题和大 patch，然后提交**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/review-tool.test.ts
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/review-tool.test.ts
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 git add apps/desktop/src/renderer/src/components/desktop/tools/review-tool.tsx apps/desktop/src/renderer/src/components/desktop/tools/review-tool.test.ts
 git commit -m "perf(desktop): protect review panel from oversized diffs"
 ```
@@ -365,7 +365,7 @@ export function startPreviewMeasurement(input: PreviewMeasurement): () => void
 - [ ] **步骤 2：运行单测**
 
 ```powershell
-pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/tools/file-preview-performance.test.ts
+pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/tools/file-preview-performance.test.ts
 ```
 
 - [ ] **步骤 3：建立固定临时样本并记录基线**
@@ -395,10 +395,10 @@ Benchmark 文档表格：
 - [ ] **步骤 5：运行完整验证**
 
 ```powershell
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
-pnpm --filter @openharness/desktop build
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
+pnpm --filter @vykor/desktop build
 ```
 
 所有命令必须退出码 0。若存在无关既有失败，benchmark 文档记录完整命令和失败项，不得描述为通过。

@@ -11,7 +11,7 @@
  *   3. llmCompact         —— 用 LLM 把旧消息摘要成一条 summary
  *   4. simpleCompact      —— 无 client / LLM 失败时的占位兜底
  *
- * 对齐 Python openharness v0.1.9 services/compact。
+ * 对齐 Python vykor v0.1.9 services/compact。
  */
 import type {
   Message,
@@ -27,7 +27,7 @@ import {
 } from "../utils/message-history";
 
 // ---------------------------------------------------------------------------
-// 常量（与 Python openharness v0.1.9 services/compact 对齐）
+// 常量（与 Python vykor v0.1.9 services/compact 对齐）
 // ---------------------------------------------------------------------------
 
 /** 自动压缩阈值缓冲：在 maxTokens 之外再留出的安全余量，避免刚压完又立刻超限。 */
@@ -1191,5 +1191,5 @@ export class CompactService {
   }
 }
 
-/** 类型再导出：消费者也可从本模块拿到 ToolUseBlock（主入口仍推荐 @openharness/core）。 */
+/** 类型再导出：消费者也可从本模块拿到 ToolUseBlock（主入口仍推荐 @vykor/core）。 */
 export type { ToolUseBlock };

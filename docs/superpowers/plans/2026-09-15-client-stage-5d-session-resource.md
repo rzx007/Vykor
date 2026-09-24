@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 先完成 Session Resource、兼容转发和窄调用方改造，阶段末统一运行测试。
 
-**目标：** 将 Session、Prompt、Goal 和 Session utility endpoint 迁入 SessionResource，并让 commands/sync 不再依赖完整 OpenHarnessClient。
+**目标：** 将 Session、Prompt、Goal 和 Session utility endpoint 迁入 SessionResource，并让 commands/sync 不再依赖完整 VykorClient。
 
 **架构：** SessionResource 只做请求映射；Session commands 保留用户命令规则；state sync 保留 replay+live 对账。createPromptRequestId 保持 caller-stable。
 
@@ -27,7 +27,7 @@
 - [ ] attachment ordered refs、delivery、plugin/skill items 不重排。
 - [ ] edit/promote/cancel/resume 返回类型保持。
 - [ ] Goal null/record、expected revision/action body 保持。
-- [ ] OpenHarnessClient 暴露 sessions，旧 Session/Goal/utility 方法全部转发。
+- [ ] VykorClient 暴露 sessions，旧 Session/Goal/utility 方法全部转发。
 - [ ] 修改 commands/session-commands.ts 的 host 接口为 Pick<SessionResource,...> 或明确 SessionCommandClient。
 - [ ] 修改 state/sync.ts，只依赖 getSessionState/listEvents/streamEvents 所需 capability，不接完整 Client。
 - [ ] 不改 reducer、busy、selected session 或 Slash command 语义。

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import {
   parseCreateSessionRequest,
   parseUpdateSessionRequest,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import {
   applicationErrorResponse,

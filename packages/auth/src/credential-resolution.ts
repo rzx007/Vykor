@@ -1,5 +1,5 @@
-import { detectProvider, findByName } from "@openharness/api";
-import type { Settings } from "@openharness/core";
+import { detectProvider, findByName } from "@vykor/api";
+import type { Settings } from "@vykor/core";
 
 import { CredentialStorage } from "./credential-storage.js";
 import { loadCodexCredential } from "./external.js";

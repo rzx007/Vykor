@@ -98,11 +98,11 @@ test("AppView with empty transcript renders Home route and Footer", async () => 
     await renderOnce();
     await new Promise((r) => setTimeout(r, 20));
     frame = captureCharFrame();
-    if (frame.includes("╭") || frame.includes("openharness")) break;
+    if (frame.includes("██╗") || frame.includes("╭") || frame.includes("Vykor")) break;
   }
 
-  // Logo area present (box-drawing char from slick font, or fallback text)
-  const hasLogo = frame.includes("╭") || frame.includes("openharness");
+  // Logo area present in block, slick, or narrow fallback mode.
+  const hasLogo = frame.includes("██╗") || frame.includes("╭") || frame.includes("Vykor");
   expect(hasLogo).toBe(true);
 
   // ctrl+p hint rendered by Home component

@@ -1,16 +1,16 @@
 export {
-  OpenHarnessHttpServer,
-  startOpenHarnessServer,
+  VykorHttpServer,
+  startVykorServer,
   type ListenResult,
-  type OpenHarnessServerHealth,
-  type OpenHarnessServerOptions,
-  type OpenHarnessServerServices,
-  type OpenHarnessRuntimeSnapshot,
+  type VykorServerHealth,
+  type VykorServerOptions,
+  type VykorServerServices,
+  type VykorRuntimeSnapshot,
 } from "./http/index.js";
 export type { BrowserAction, BrowserHost, BrowserObservation } from "./application/browser-tools/browser-host.js";
 export {
-  startOpenHarnessDaemon,
-  type OpenHarnessDaemonOptions,
+  startVykorDaemon,
+  type VykorDaemonOptions,
 } from "./daemon/index.js";
 export type {
   CreateDaemonAgent,
@@ -103,7 +103,7 @@ export type {
   AgentPermissionRequest,
   AgentRunHandle,
   AgentRunScope,
-} from "@openharness/core";
+} from "@vykor/core";
 export { estimateCostUsd } from "./shared/index.js";
 export {
   APPLICATION_ERROR_HTTP_STATUS,

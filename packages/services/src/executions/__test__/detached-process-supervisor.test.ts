@@ -3,7 +3,7 @@ import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getDetachedProcessSupervisor, resetExecutionRuntimes, DetachedProcessSupervisor } from "../index.js";
-import { resolveSandboxPolicy } from "@openharness/sandbox";
+import { resolveSandboxPolicy } from "@vykor/sandbox";
 
 const NODE = process.execPath;
 const NODE_COMMAND = JSON.stringify(NODE);
@@ -11,13 +11,13 @@ let testConfigDir: string;
 let previousConfigDir: string | undefined;
 
 beforeAll(() => {
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
   testConfigDir = mkdtempSync(join(tmpdir(), "oh-execution-config-"));
-  process.env.OPENHARNESS_CONFIG_DIR = testConfigDir;
+  process.env.VYKOR_CONFIG_DIR = testConfigDir;
 });
 afterAll(() => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
   rmSync(testConfigDir, { recursive: true, force: true });
 });
 

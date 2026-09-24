@@ -118,13 +118,13 @@ Keyring 保存每个配置目录的随机 256 位主密钥；现有凭据文件�
 
 优先采用 `@napi-rs/keyring` 的原生绑定，平台调用封装在 `packages/auth` 一个适配文件内。Linux 明确选择持久化 Secret Service，不接受库自动降级到重启即丢失的内核 keyutils。首次实现需固定兼容版本并完成 Node/Bun/Electron 打包验收；原生模块加载失败按“后端不可用”分类，而不是让 CLI 启动崩溃。
 
-主密钥使用 service `openharness.mcp-oauth`，account 为规范化配置目录绝对路径的 SHA-256 摘要；Windows 路径大小写按现有路径策略统一。CLI、daemon、Desktop 在同一 OS 用户和配置目录下使用同一个键。不同配置目录独立。
+主密钥使用 service `vykor.mcp-oauth`，account 为规范化配置目录绝对路径的 SHA-256 摘要；Windows 路径大小写按现有路径策略统一。CLI、daemon、Desktop 在同一 OS 用户和配置目录下使用同一个键。不同配置目录独立。
 
 ### 格式与选择规则
 
 凭据文件升级为 version 2：`servers[name]` 为 `file` 明文记录或 `keyring` 加密 envelope，另保留非秘密的 `logoutEpochs[name]`（见授权并发规则）。每个 envelope 使用独立随机 nonce；认证附加数据绑定格式版本、配置目录摘要和 server name。Token、registration client secret 及完整 binding 均在密文内。内存中仍还原为现有 `McpOAuthCredentialRecord`，上层不感知加密细节。
 
-使用一个非秘密配置开关 `OPENHARNESS_MCP_CREDENTIAL_STORAGE=auto|keyring|file`，默认 `auto`，作用于新登录的存储选择：
+使用一个非秘密配置开关 `VYKOR_MCP_CREDENTIAL_STORAGE=auto|keyring|file`，默认 `auto`，作用于新登录的存储选择：
 
 | 模式/状态 | 行为 |
 |---|---|
@@ -215,7 +215,7 @@ logout 必须尽早持锁递增 epoch 并从本地可读集合删除记录，再
 
 ### CLI、Desktop 与无浏览器模式
 
-- daemon 可用且声明该能力时，CLI/Desktop 使用 `@openharness/client` 的操作接口；浏览器由 CLI/Desktop 本机打开，daemon 不执行系统 open 命令。
+- daemon 可用且声明该能力时，CLI/Desktop 使用 `@vykor/client` 的操作接口；浏览器由 CLI/Desktop 本机打开，daemon 不执行系统 open 命令。
 - CLI 的 `--no-browser` 明确打印授权 URL 并接收粘贴 callback URL；本地与 daemon 两条路径保持同样的 URL/state/issuer 校验。
 - CLI 未运行 daemon 时保留现有本地应用服务执行，不为 login 启动 daemon。401、协议不兼容或操作已经被受理后的网络中断不触发本地重新登录；受理响应丢失时用同一 requestId 恢复。
 - Desktop 在创建授权操作前完成现有 daemon 连接/接管动作；创建后固定 instanceId/loginId，不在掉线时切到其他 daemon 或本地授权。已启动的旧 daemon 不支持该功能时提示更新/重启。只有操作尚未受理、也未发出可能已受理的请求时，明确离线才可沿用现有本地应用服务路径。

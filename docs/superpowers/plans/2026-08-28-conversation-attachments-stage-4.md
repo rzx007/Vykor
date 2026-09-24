@@ -100,8 +100,8 @@ expect(resolveEffectiveImageSupport({ image: "native" }, { image: "unknown", ima
 - [ ] **步骤 2：运行定向测试，确认因字段和解析器不存在而失败**
 
 ```powershell
-pnpm --filter @openharness/server test -- attachment-capabilities default-application-services
-pnpm --filter @openharness/desktop exec vitest run custom-provider-form provider-service --maxWorkers=1
+pnpm --filter @vykor/server test -- attachment-capabilities default-application-services
+pnpm --filter @vykor/desktop exec vitest run custom-provider-form provider-service --maxWorkers=1
 ```
 
 预期：新增断言 FAIL，错误指向 `inputCapabilities` / `imageInputSupport` 或解析函数尚不存在；既有纯文本模型字段测试不能被删除。
@@ -129,12 +129,12 @@ export interface CustomProviderModelSettings {
 - [ ] **步骤 4：跑能力链路测试和相关类型检查**
 
 ```powershell
-pnpm --filter @openharness/server test -- attachment-capabilities default-application-services
-pnpm --filter @openharness/desktop exec vitest run custom-provider-form provider-service --maxWorkers=1
-pnpm --filter @openharness/core check-types
-pnpm --filter @openharness/api check-types
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/server test -- attachment-capabilities default-application-services
+pnpm --filter @vykor/desktop exec vitest run custom-provider-form provider-service --maxWorkers=1
+pnpm --filter @vykor/core check-types
+pnpm --filter @vykor/api check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：全部 exit 0；测试覆盖 catalog 三态、自定义设置往返和缺省 unknown。
@@ -183,8 +183,8 @@ it.each([
 - [ ] **步骤 2：运行测试确认红灯**
 
 ```powershell
-pnpm --filter @openharness/services test -- attachment-blob-store attachment-application-service
-pnpm --filter @openharness/server test -- attachment-capability-router
+pnpm --filter @vykor/services test -- attachment-blob-store attachment-application-service
+pnpm --filter @vykor/server test -- attachment-capability-router
 ```
 
 预期：`resolveReadOnlyPath`、`resolveReadyContentPath`、路由类型或错误码不存在导致 FAIL。
@@ -209,10 +209,10 @@ AttachmentApplicationService.resolveReadyContentPath(
 - [ ] **步骤 4：跑服务与路由全量测试、类型检查和泄漏扫描**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server test -- attachment-capability-router
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server test -- attachment-capability-router
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
 rg -n "originalPath" packages/core packages/server/src/application/attachment-routing packages/services/src/attachment
 ```
 
@@ -267,7 +267,7 @@ expect(stream).toHaveBeenCalledWith(
 - [ ] **步骤 2：运行 Provider 测试确认 Anthropic 红灯、既有 OpenAI/Codex 约束可见**
 
 ```powershell
-pnpm --filter @openharness/api test -- openai codex anthropic
+pnpm --filter @vykor/api test -- openai codex anthropic
 ```
 
 预期：Anthropic 图片请求因当前错误强转而 FAIL；新增严格 MIME/失败语义测试按缺口失败。
@@ -287,10 +287,10 @@ OpenAI 与 Codex 保留现有正确 Data URL 形状，补 MIME 收窄、错误�
 - [ ] **步骤 4：运行 API/agent-runtime 全量测试和类型检查**
 
 ```powershell
-pnpm --filter @openharness/api test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/api check-types
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/api test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/api check-types
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 exit 0；三家请求 contract 覆盖相同顺序和失败不降级。
@@ -336,7 +336,7 @@ expect(submitMessage).toHaveBeenCalledWith([
 - [ ] **步骤 2：运行 Server 定向测试确认红灯**
 
 ```powershell
-pnpm --filter @openharness/server test -- session-run-executor transcript-projection daemon-agent-event-projector session-run-engine
+pnpm --filter @vykor/server test -- session-run-executor transcript-projection daemon-agent-event-projector session-run-engine
 ```
 
 预期：Executor 仍只提交字符串，路由依赖和 transformation API 不存在导致 FAIL。
@@ -356,10 +356,10 @@ resolveCapabilities(session: SessionRecord): Promise<ResolvedAttachmentCapabilit
 - [ ] **步骤 4：跑 Server 全量测试、类型检查和敏感字段扫描**
 
 ```powershell
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/protocol check-types
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/protocol check-types
 rg -n "data:image|base64,|originalPath" packages/server/src/application/session packages/server/src/application/attachment-routing
 ```
 
@@ -409,11 +409,11 @@ direct completed 显示“已作为原生图片输入”；failed 根据稳定�
 - [ ] **步骤 3：先跑所有受影响包的完整测试**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/api test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/desktop exec vitest run --maxWorkers=1
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/api test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/desktop exec vitest run --maxWorkers=1
 ```
 
 预期：全部 exit 0；不得只凭定向测试进入收束。如果 Desktop 全量失败，先确认是否为已有基线，并对本阶段相关测试单独复现和修复新增失败。

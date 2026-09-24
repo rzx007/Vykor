@@ -1,5 +1,5 @@
 {
-  "source": "sanitized OpenHarness AI Radar trace, 2026-09-08",
+  "source": "sanitized Vykor AI Radar trace, 2026-09-08",
   "events": [
     { "status": "failed", "failureFingerprint": "python-syntax-1" },
     { "status": "failed", "failureFingerprint": "python-syntax-2" },

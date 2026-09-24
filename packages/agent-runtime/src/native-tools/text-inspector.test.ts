@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { IToolRegistry, ToolDefinition } from "@openharness/core";
-import { loadNativePlugin, validateNativePlugin } from "@openharness/plugins";
+import type { IToolRegistry, ToolDefinition } from "@vykor/core";
+import { loadNativePlugin, validateNativePlugin } from "@vykor/plugins";
 import { describe, expect, it } from "vitest";
 import { activateNativePluginTools } from "./activate.js";
 
@@ -19,7 +19,7 @@ class TestRegistry implements IToolRegistry {
 }
 
 async function withInspector(run: (tool: ToolDefinition, cwd: string) => Promise<void>) {
-  const cwd = mkdtempSync(join(tmpdir(), "openharness-text-inspector-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vykor-text-inspector-"));
   const registry = new TestRegistry();
   const cleanups: Array<() => Promise<void> | void> = [];
   let activation: Awaited<ReturnType<typeof activateNativePluginTools>> | undefined;

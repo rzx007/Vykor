@@ -38,7 +38,7 @@ test("aggregates every clean-slate violation with category, file and line", asyn
     write(root, "apps/cli/build.ts", "// no migration copy\n");
     write(root, "apps/desktop/electron.vite.config.ts", "// no migration copy\n");
     write(root, "scripts/client-public-api-contract.json", JSON.stringify({ version: 1, entries: [] }));
-    write(root, "packages/client/src/transport/http-client.ts", "export class OpenHarnessClient { readonly sessions: unknown; }\n");
+    write(root, "packages/client/src/transport/http-client.ts", "export class VykorClient { readonly sessions: unknown; }\n");
 
     const problems = await verifyCleanSlate({ root, requireBuildArtifacts: true });
     const output = problems.map((problem) => `${problem.category} ${problem.file}:${problem.line} ${problem.message}`).join("\n");

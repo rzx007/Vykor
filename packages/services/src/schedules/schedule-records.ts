@@ -1,7 +1,7 @@
 import type {
   ScheduledRunRecord,
   ScheduledTaskRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export const encodeScheduleValue = (value: unknown): string =>
   JSON.stringify(value ?? {});

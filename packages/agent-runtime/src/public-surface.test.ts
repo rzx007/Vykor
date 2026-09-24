@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentChildBudgetExceededError as CoreBudgetError,
   AgentRunNotAcceptingInputError as CoreSteerError,
-} from "@openharness/core";
+} from "@vykor/core";
 
 import * as runtime from "./index.js";
 import * as kernel from "./kernel-entry.js";

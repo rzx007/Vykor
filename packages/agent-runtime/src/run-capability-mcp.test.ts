@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
-import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type McpServerConfig, type ToolDefinition } from "@openharness/core";
-import { McpClientManager } from "@openharness/mcp";
+import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type McpServerConfig, type ToolDefinition } from "@vykor/core";
+import { McpClientManager } from "@vykor/mcp";
 import { mcpToolCallTool, listMcpResourcesTool, readMcpResourceTool, mcpAuthTool } from "../../tools/src/mcp/mcp-tools.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 

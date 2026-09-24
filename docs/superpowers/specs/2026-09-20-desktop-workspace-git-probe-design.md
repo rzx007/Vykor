@@ -12,7 +12,7 @@
 
 ### 现象
 
-用户有一个「不在项目进行」的会话（`metadata.desktop.workspaceMode === "outside_project"`），它的 `cwd` 是一个真实 git 仓库（在本机是 `Documents\OpenHarness\2026-09-17\x6`）。该会话里：
+用户有一个「不在项目进行」的会话（`metadata.desktop.workspaceMode === "outside_project"`），它的 `cwd` 是一个真实 git 仓库（在本机是 `Documents\Vykor\2026-09-17\x6`）。该会话里：
 
 - 右侧工具面板没有「审阅」入口（快捷键 `Ctrl+Shift+G` 也打不开）。
 - 消息里「已编辑 N 个文件」卡片没有 `+/−` 行数，也不能点进审阅。
@@ -61,7 +61,7 @@
 
 - **统一探测**：`git:isRepository` 通道，只读回答「该目录是不是 git 仓库」，返回仓库根路径。
 - **项目会话**：`session.workspaceMode !== "outside_project"` 且 `session.projectId` 存在的会话。
-- **项目外会话**：`workspaceMode === "outside_project"` 的会话，其 cwd 由桌面端在 `Documents\OpenHarness\<date>\xN` 下分配。
+- **项目外会话**：`workspaceMode === "outside_project"` 的会话，其 cwd 由桌面端在 `Documents\Vykor\<date>\xN` 下分配。
 - **工作区项目（workspace project）**：右侧面板与对话实际使用的目录，由 `selectActiveWorkspaceProject`（`apps/desktop/src/renderer/src/stores/desktop-session/selectors.ts:144`）给出。项目会话返回 store 里的 `selectedProject`；项目外会话返回由**会话 cwd 合成**的 workspace（`projectFromSession`，`apps/desktop/src/renderer/src/stores/desktop-session/helpers.ts:133`，其 `path === session.cwd`）。
 - **`selectActiveWorkspaceProject` 与 `state.selectedProject` 的区别**：前者对项目外会话非空，后者对项目外会话恒为 `null`。本次多处改动就是把消费点从后者换到前者。
 - **`useActiveWorkspaceIsGit`**：新增 hook，返回值类型 `boolean | null`（`null` = 尚未判定）。它内部产出本节所说的 `activeWorkspaceIsGit` 语义。

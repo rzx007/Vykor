@@ -4,8 +4,8 @@ import type {
   SessionInputRecord,
   SessionRunRecord,
   SessionUserInputItem,
-} from "@openharness/protocol";
-import { AttachmentError } from "@openharness/services";
+} from "@vykor/protocol";
+import { AttachmentError } from "@vykor/services";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 import {
   RunAdmissionService,

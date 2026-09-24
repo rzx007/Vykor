@@ -116,7 +116,7 @@ describe("parseDurableChannelMessageInput platformMeta", () => {
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/protocol test -- --run src/channel.test.ts`
+运行：`pnpm --filter @vykor/protocol test -- --run src/channel.test.ts`
 预期：FAIL，`platformMeta` 字段不存在、非法输入不抛错。
 
 - [ ] **步骤 3：最小实现**
@@ -168,7 +168,7 @@ function optionalObject(
 
 - [ ] **步骤 4：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/protocol test -- --run src/channel.test.ts`
+运行：`pnpm --filter @vykor/protocol test -- --run src/channel.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -292,7 +292,7 @@ git commit -m "feat(protocol): carry platformMeta on durable channel delivery"
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
 预期：FAIL，`InboundMessage` 无 `platformMeta`；bridge 不传/不转发。
 
 - [ ] **步骤 3：最小实现**
@@ -340,7 +340,7 @@ git commit -m "feat(protocol): carry platformMeta on durable channel delivery"
 
 - [ ] **步骤 4：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/manager.test.ts src/__test__/durable-bridge.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -379,7 +379,7 @@ git commit -m "feat(channels): propagate platformMeta through the durable runtim
 
 ```powershell
 Remove-Item -Recurse -Force packages/services/src/session-runtime/migrations
-pnpm --filter @openharness/services db:generate
+pnpm --filter @vykor/services db:generate
 ```
 
 drizzle-kit 会生成 `migrations\0000_<随机tag>.sql` 与 `migrations\meta\`。然后：
@@ -397,7 +397,7 @@ INSERT INTO application_storage_format (id, version) VALUES (1, 3);
 INSERT INTO session_event_sequence (id, reserved_through) VALUES (1, 0);
 ```
 
-运行：`pnpm --filter @openharness/services db:check`
+运行：`pnpm --filter @vykor/services db:check`
 预期：通过（迁移文件无冲突）。
 
 - [ ] **步骤 4：重新生成 inventory fixture**
@@ -414,7 +414,7 @@ import { it } from "vitest";
 import { SessionDatabase } from "./session-database.js";
 
 it("dump inventory", () => {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-dump-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-dump-"));
   const database = SessionDatabase.open({ path: join(directory, "sessions.db") });
   const schema = database.connection
     .prepare(
@@ -454,7 +454,7 @@ it("dump inventory", () => {
 });
 ```
 
-运行：`pnpm --filter @openharness/services exec vitest run src/database/__dump-inventory.test.ts`
+运行：`pnpm --filter @vykor/services exec vitest run src/database/__dump-inventory.test.ts`
 预期：PASS；fixture 被覆盖，`format` 为 `[{ "id": 1, "version": 3 }]`。
 运行后**删除**临时文件 `packages/services/src/database/__dump-inventory.test.ts`。
 
@@ -468,7 +468,7 @@ it("dump inventory", () => {
 
 - [ ] **步骤 6：运行相关测试**
 
-运行：`pnpm --filter @openharness/services test -- --run src/database/session-database.test.ts src/session-runtime/__test__/store.test.ts`
+运行：`pnpm --filter @vykor/services test -- --run src/database/session-database.test.ts src/session-runtime/__test__/store.test.ts`
 预期：PASS。
 
 - [ ] **步骤 7：更新受影响的文档**
@@ -505,7 +505,7 @@ git commit -m "chore(services): add channel_delivery.platform_meta_json and re-b
 
 ```ts
   it("round-trips platformMeta and omits absent or corrupt values", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-channel-meta-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-channel-meta-"));
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {
@@ -596,7 +596,7 @@ git commit -m "chore(services): add channel_delivery.platform_meta_json and re-b
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/services test -- --run src/channels/channel-repository.test.ts`
+运行：`pnpm --filter @vykor/services test -- --run src/channels/channel-repository.test.ts`
 预期：FAIL，`platformMeta` 参数不存在 / 未持久化。
 
 - [ ] **步骤 3：最小实现**
@@ -701,7 +701,7 @@ import { channelDeliveryFromRow, encodePlatformMeta, externalConversationFromRow
 
 - [ ] **步骤 4：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/services test -- --run src/channels/channel-repository.test.ts`
+运行：`pnpm --filter @vykor/services test -- --run src/channels/channel-repository.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -764,7 +764,7 @@ git commit -m "feat(services): persist platformMeta on channel deliveries"
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
+运行：`pnpm --filter @vykor/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
 预期：FAIL，createDelivery 调用未含 platformMeta。
 
 - [ ] **步骤 3：最小实现**
@@ -783,7 +783,7 @@ git commit -m "feat(services): persist platformMeta on channel deliveries"
 
 - [ ] **步骤 4：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
+运行：`pnpm --filter @vykor/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -811,7 +811,7 @@ git commit -m "feat(server): pass channel platformMeta into delivery"
 ```ts
 import { describe, expect, it, vi } from "vitest";
 
-import type { ChannelDeliveryRecord } from "@openharness/protocol";
+import type { ChannelDeliveryRecord } from "@vykor/protocol";
 
 import { MessageBus } from "../bus/queue.js";
 import { DurableChannelBridge, type DurableChannelPort } from "../core/durable-bridge.js";
@@ -937,12 +937,12 @@ describe("durable Feishu thread reply", () => {
 
 - [ ] **步骤 2：运行测试确认失败（在改动前应失败）**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/durable-thread-reply.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/durable-thread-reply.test.ts`
 预期：若任务 1-5 未完成则 FAIL（`reply` 未被调用，因为出站缺 `platformMeta.rootMessageId`）。任务 1-5 已完成时该测试应当 PASS；若仍 FAIL，说明链路有缺口，按失败信息回到对应任务修复。
 
 - [ ] **步骤 3：确认通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/durable-thread-reply.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/durable-thread-reply.test.ts`
 预期：PASS。
 
 - [ ] **步骤 4：Commit**
@@ -961,10 +961,10 @@ git commit -m "test(channels): prove durable Feishu thread replies reach the rep
 - [ ] **步骤 1：四个包全量测试**
 
 ```bash
-pnpm --filter @openharness/protocol test -- --run
-pnpm --filter @openharness/services test -- --run
-pnpm --filter @openharness/server test -- --run
-pnpm --filter @openharness/channels test -- --run
+pnpm --filter @vykor/protocol test -- --run
+pnpm --filter @vykor/services test -- --run
+pnpm --filter @vykor/server test -- --run
+pnpm --filter @vykor/channels test -- --run
 ```
 
 预期：全部通过。
@@ -972,10 +972,10 @@ pnpm --filter @openharness/channels test -- --run
 - [ ] **步骤 2：类型检查**
 
 ```bash
-pnpm --filter @openharness/protocol check-types
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/channels check-types
+pnpm --filter @vykor/protocol check-types
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/channels check-types
 ```
 
 预期：退出码 0。
@@ -983,7 +983,7 @@ pnpm --filter @openharness/channels check-types
 - [ ] **步骤 3：DB 与 clean-slate 校验**
 
 ```bash
-pnpm --filter @openharness/services db:check
+pnpm --filter @vykor/services db:check
 pnpm check:clean-slate
 pnpm check-docs
 ```

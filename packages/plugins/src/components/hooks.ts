@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { HOOK_EVENTS, type HookDefinition, type HookEvent } from "@openharness/core";
+import { HOOK_EVENTS, type HookDefinition, type HookEvent } from "@vykor/core";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
 

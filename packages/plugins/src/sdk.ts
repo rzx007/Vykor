@@ -1,8 +1,8 @@
-import type { ToolResult } from "@openharness/core";
-import type { OpenHarnessPluginPermissions } from "./types.js";
+import type { ToolResult } from "@vykor/core";
+import type { VykorPluginPermissions } from "./types.js";
 
-export type { ToolResult } from "@openharness/core";
-export type { OpenHarnessPluginPermissions } from "./types.js";
+export type { ToolResult } from "@vykor/core";
+export type { VykorPluginPermissions } from "./types.js";
 
 export interface NativeToolPluginIdentity {
   id: string;
@@ -13,13 +13,13 @@ export interface NativeToolPluginIdentity {
 
 export interface NativeToolRegistrationContext {
   plugin: NativeToolPluginIdentity;
-  permissions: OpenHarnessPluginPermissions;
+  permissions: VykorPluginPermissions;
   log(level: "debug" | "info" | "warn" | "error", message: string): void;
 }
 
 export interface NativeToolInvocationContext {
   plugin: NativeToolPluginIdentity;
-  permissions: OpenHarnessPluginPermissions;
+  permissions: VykorPluginPermissions;
   cwd: string;
   sessionId?: string;
   /** Unix timestamp in milliseconds at which the call expires. */

@@ -564,18 +564,18 @@ interface SessionRunAttemptRecord {
 ### 最小指标
 
 ```text
-openharness_runs_total{status}
-openharness_runs_active
-openharness_run_duration_ms
-openharness_run_attempts_total{provider,model,status}
-openharness_model_request_duration_ms{provider,model}
-openharness_tool_calls_total{tool,status,failure_kind}
-openharness_tool_call_duration_ms{tool}
-openharness_tokens_total{provider,model,direction}
-openharness_permissions_pending
-openharness_child_agents_active
-openharness_projection_settlements_pending
-openharness_projection_failures_total{projector,action}
+vykor_runs_total{status}
+vykor_runs_active
+vykor_run_duration_ms
+vykor_run_attempts_total{provider,model,status}
+vykor_model_request_duration_ms{provider,model}
+vykor_tool_calls_total{tool,status,failure_kind}
+vykor_tool_call_duration_ms{tool}
+vykor_tokens_total{provider,model,direction}
+vykor_permissions_pending
+vykor_child_agents_active
+vykor_projection_settlements_pending
+vykor_projection_failures_total{projector,action}
 ```
 
 ### 约束
@@ -604,8 +604,8 @@ openharness_projection_failures_total{projector,action}
 ### 第一阶段命令
 
 ```bash
-ohs debug inspect-run <runId>
-ohs debug settlements
+vk debug inspect-run <runId>
+vk debug settlements
 ```
 
 `inspect-run` 输出：
@@ -636,8 +636,8 @@ Run
 只有 B3 完成并稳定后，才能另开 Issue 评估：
 
 ```bash
-ohs debug retry-projection <settlementId>
-ohs debug abandon-projection <settlementId> --reason ...
+vk debug retry-projection <settlementId>
+vk debug abandon-projection <settlementId> --reason ...
 ```
 
 `abandon` 属于有数据影响的操作，必须有审计事件和显式确认；不在本计划第一阶段实现。
@@ -651,7 +651,7 @@ ohs debug abandon-projection <settlementId> --reason ...
 ### 已落地说明
 
 - HTTP 只读入口：`GET /debug/runs/:runId`、`GET /debug/projection-settlements`。
-- CLI：`ohs debug inspect-run <runId>`、`ohs debug settlements`；两者支持 `--json` 和显式 `--include-content`。旧命令 `list-projection-settlements` 保留为兼容别名。
+- CLI：`vk debug inspect-run <runId>`、`vk debug settlements`；两者支持 `--json` 和显式 `--include-content`。旧命令 `list-projection-settlements` 保留为兼容别名。
 - 默认对 Input、消息正文、Tool 参数/结果、Permission payload、Child output、Event/Settlement payload 打码。
 - orphan input、已关闭 Run 上仍活动的 Attempt、未知事件、pending settlement 和 `unknown_outcome` Tool 会产生 warning，并让 CLI 设置退出码 2。
 - 没有实现 retry/abandon 等修复命令，Inspector 不 warm Agent，也不修改 Store。
@@ -733,22 +733,22 @@ ohs debug abandon-projection <settlementId> --reason ...
 - [x] 全量测试或明确记录未执行原因。
 - [x] `git diff --check` 通过。
 
-验收记录：全仓 `check-types` 为 33/33；受影响包的完整测试均通过（Core 101、Agent Runtime 74、Tools 158、Services 140、Client 52、Server 225、CLI 182）。全仓 `bun run test` 被仓库既有的 `@openharness/terminal`“没有测试文件即退出 1”配置中止；并发负载下前端一个 5 秒用例曾超时，单独复跑为 10/10 通过。
+验收记录：全仓 `check-types` 为 33/33；受影响包的完整测试均通过（Core 101、Agent Runtime 74、Tools 158、Services 140、Client 52、Server 225、CLI 182）。全仓 `bun run test` 被仓库既有的 `@vykor/terminal`“没有测试文件即退出 1”配置中止；并发负载下前端一个 5 秒用例曾超时，单独复跑为 10/10 通过。
 
 # 八、验证命令
 
 依赖安装完整后，至少执行：
 
 ```bash
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
 
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/agent-runtime check-types
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/agent-runtime check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
 
 git diff --check
 ```

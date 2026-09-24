@@ -23,11 +23,11 @@
 
 ## 组件改动
 
-### `@openharness/prompts`
+### `@vykor/prompts`
 
 提取一个可复用的 `appendUserProfileUpdate()`：负责清理输入、运行现有安全扫描、初始化配置目录并追加 `USER.md`。现有 pending 审批函数也复用它，避免出现两套写入规则；旧 pending API 保留，但 `Remember` 不使用它。
 
-### `@openharness/agent-runtime`
+### `@vykor/agent-runtime`
 
 新增一个很薄的 `Remember` 工具工厂，并在 Agent 组合阶段注册。工具只负责校验 `scope/content` 并路由到：
 
@@ -36,7 +36,7 @@
 
 路径不会成为工具参数，也不会要求模型知道实际文件位置。
 
-### `@openharness/tools`
+### `@vykor/tools`
 
 在 `Write` 和 `Edit` 的路径校验中增加受管理持久化路径保护：
 

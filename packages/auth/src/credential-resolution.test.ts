@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { CredentialStorage } from "./credential-storage.js";

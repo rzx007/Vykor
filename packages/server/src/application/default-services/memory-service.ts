@@ -1,5 +1,5 @@
-import { getProjectMemoryDir } from "@openharness/core";
-import { MemoryManager, type MemoryEntry } from "@openharness/memory";
+import { getProjectMemoryDir } from "@vykor/core";
+import { MemoryManager, type MemoryEntry } from "@vykor/memory";
 
 import type { MemoryEntryRecord, MemoryService } from "../settings-api.js";
 

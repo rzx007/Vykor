@@ -1,4 +1,4 @@
-# @openharness/sandbox
+# @vykor/sandbox
 
 这个包目前承担两项职责：
 
@@ -22,20 +22,20 @@ WSL 与 SRT 的组合目前不支持并 fail-closed。WSL 不是安全沙箱。
 ## CLI
 
 ```bash
-ohs sandbox enable
-ohs sandbox enable --global
-ohs sandbox enable --fail-open
-ohs sandbox disable
-ohs sandbox status
-ohs sandbox check
+vk sandbox enable
+vk sandbox enable --global
+vk sandbox enable --fail-open
+vk sandbox disable
+vk sandbox status
+vk sandbox check
 ```
 
 ## 验证
 
 ```bash
-pnpm --filter @openharness/sandbox test
-pnpm --filter @openharness/sandbox e2e:wsl
-pnpm --filter @openharness/sandbox e2e:srt
+pnpm --filter @vykor/sandbox test
+pnpm --filter @vykor/sandbox e2e:wsl
+pnpm --filter @vykor/sandbox e2e:srt
 ```
 
 SRT 或其平台依赖不可用时，SRT E2E 会明确跳过；WSL E2E 只在 Windows 且默认发行版可用时运行。

@@ -42,7 +42,7 @@ export {
   RequestFailure,
 } from "./errors";
 export {
-  OPENHARNESS_USER_AGENT,
+  VYKOR_USER_AGENT,
   RequestHeaderTemplateError,
   expandRequestHeaderTemplates,
   normalizeRequestHeaderTemplates,

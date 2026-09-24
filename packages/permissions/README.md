@@ -1,4 +1,4 @@
-# @openharness/permissions
+# @vykor/permissions
 
 权限模式 + 拒绝规则系统。
 
@@ -10,7 +10,7 @@
 ## 使用
 
 ```ts
-import { PermissionMode, checkPermission } from "@openharness/permissions";
+import { PermissionMode, checkPermission } from "@vykor/permissions";
 
 const allowed = checkPermission("Read", "/path/to/file", PermissionMode.DEFAULT);
 ```
@@ -18,5 +18,5 @@ const allowed = checkPermission("Read", "/path/to/file", PermissionMode.DEFAULT)
 ## 测试
 
 ```bash
-pnpm --filter @openharness/permissions test
+pnpm --filter @vykor/permissions test
 ```

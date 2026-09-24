@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/auth",
+  "name": "@vykor/auth",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,8 +17,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/api": "workspace:*",
-    "@openharness/core": "workspace:*"
+    "@vykor/api": "workspace:*",
+    "@vykor/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

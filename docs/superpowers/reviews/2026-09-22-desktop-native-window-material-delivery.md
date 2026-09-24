@@ -36,14 +36,14 @@
 
 | 项目 | 命令 / 方式 | 结果 |
 | --- | --- | --- |
-| 基线（改动前） | `pnpm --filter @openharness/desktop exec vitest run` | 183 文件 / 1107 用例全绿 |
+| 基线（改动前） | `pnpm --filter @vykor/desktop exec vitest run` | 183 文件 / 1107 用例全绿 |
 | 全量单测（修复波后） | 同上 | **190 文件 / 1168 用例全绿** |
-| 类型检查 | `pnpm --filter @openharness/desktop typecheck` | `typecheck:node` + `typecheck:web` 通过 |
-| 构建 | `pnpm --filter @openharness/desktop build` | `verify-workspace-boundaries.mjs` + typecheck + `electron-vite build` 通过（修复波后复跑） |
+| 类型检查 | `pnpm --filter @vykor/desktop typecheck` | `typecheck:node` + `typecheck:web` 通过 |
+| 构建 | `pnpm --filter @vykor/desktop build` | `verify-workspace-boundaries.mjs` + typecheck + `electron-vite build` 通过（修复波后复跑） |
 | 任务级审查 | 8 个任务各一轮独立审查 | 无未解决的 Critical/Important；2 个任务各 1 轮修复后通过 |
 | 整分支最终审查 | base `d2285157`..head `e5d3cc80` | 结论「修完再合」：C1（实机裁决）+ I1（重载陈旧）+ M1/M3/M4 |
 | 修复波定向复审 | base `e5d3cc80`..head `6f613d20` | 6 条发现全部 ADDRESSED，无新 Critical/Important |
-| Windows 实机验收 | `pnpm --filter @openharness/desktop dev`（用户执行） | **材质可见、玻璃效果正常**；深浅色主题修复后复验通过 |
+| Windows 实机验收 | `pnpm --filter @vykor/desktop dev`（用户执行） | **材质可见、玻璃效果正常**；深浅色主题修复后复验通过 |
 
 实机环境：Windows 11 `10.0.26200`，`AppsUseLightTheme=1`、`EnableTransparency=1`，Electron 39.8.10。
 

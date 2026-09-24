@@ -28,6 +28,6 @@ export {
   type DaemonRegistry,
 } from "../daemon/paths.js";
 export {
-  startOpenHarnessDaemon,
-  type OpenHarnessDaemonOptions,
+  startVykorDaemon,
+  type VykorDaemonOptions,
 } from "../daemon/default-daemon.js";

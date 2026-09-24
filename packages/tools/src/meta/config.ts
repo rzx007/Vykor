@@ -1,8 +1,8 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 
 export const configTool: ToolDefinition = {
   name: "Config",
-  description: "Read or update OpenHarness settings.",
+  description: "Read or update Vykor settings.",
   inputSchema: {
     type: "object",
     properties: {
@@ -14,7 +14,7 @@ export const configTool: ToolDefinition = {
   },
   async execute(input) {
     const action = (input.action as string) ?? "show";
-    const { loadSettings, updateSettings } = await import("@openharness/core");
+    const { loadSettings, updateSettings } = await import("@vykor/core");
     const settings = await loadSettings();
     if (action === "show") {
       return { content: [{ type: "text", text: JSON.stringify(settings, null, 2) }] };

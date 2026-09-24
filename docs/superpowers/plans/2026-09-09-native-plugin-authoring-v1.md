@@ -4,7 +4,7 @@
 
 **目标：** 提供与真实 Runtime 一致的插件开发类型、开发指南和可以安装调用的文本检查样例。
 
-**架构：** 复用 Native v1 manifest、用户安装快照和独立 Tool Host。公开类型置于 `@openharness/plugins/sdk`，参考插件为零运行依赖的 `.mjs`，测试通过现有激活器运行。
+**架构：** 复用 Native v1 manifest、用户安装快照和独立 Tool Host。公开类型置于 `@vykor/plugins/sdk`，参考插件为零运行依赖的 `.mjs`，测试通过现有激活器运行。
 
 **技术栈：** TypeScript、ESM、Vitest、Node.js 子进程。
 
@@ -16,7 +16,7 @@
 
 - [x] 先编写类型样例，定义正确的 `NativeToolRegister`，并以 `@ts-expect-error` 覆盖缺少 invoke、结果类型错误、调用 context.terminal/context.settings 的情况。
 - [x] 配置独立类型测试的 tsconfig：继承包配置、rootDir 为包根、include 为类型测试目录、noEmit 为 true；从公开子路径导入类型，验证 package exports 可被解析。
-- [x] 执行 `pnpm --filter @openharness/plugins exec tsc -p tsconfig.sdk-tests.json`，确认公共入口尚不存在导致失败。
+- [x] 执行 `pnpm --filter @vykor/plugins exec tsc -p tsconfig.sdk-tests.json`，确认公共入口尚不存在导致失败。
 - [x] 根据设计新增类型和 `./sdk` 的 types 导出；只使用 type import/export，不添加运行期工具包装器。注册与调用的关键签名为：
 
 ```ts
@@ -56,26 +56,26 @@ expect(result).toEqual({ content: [{ type: "text", text: JSON.stringify({
 ```
 
 - [x] 实现 manifest、Skill 与规则资源，Tool 使用 `.mjs` 导出 registerTools。输入 schema 使用 object、required text、string maxLength 100000、additionalProperties false。
-- [x] 实际 `.mjs` 使用 `@type {import('@openharness/plugins/sdk').NativeToolRegister}`；checkJs 直接检查这份文件，验证类型接口与参考插件相连。
+- [x] 实际 `.mjs` 使用 `@type {import('@vykor/plugins/sdk').NativeToolRegister}`；checkJs 直接检查这份文件，验证类型接口与参考插件相连。
 - [x] Turbo 中相关包 test/check-types 的 inputs 包含默认包文件及 `$TURBO_ROOT$/examples/plugins/text-inspector/**`。用 dry-run 检查文件进入输入，并对临时修改样例前后的任务 hash 做一次比较，随后恢复样例。
 - [x] 实现逐行检查与 100 条结果上限；按设计固定问题顺序；返回文本内容块中的 JSON，不读写文件或调用外部进程。
 - [x] 添加空文本、CRLF、同一行两个问题、101 个问题、无 text、text 类型错误、超长文本和多余参数用例；错误输入断言现有 `tool_input_invalid`。
 - [x] 测试在 finally 中完成清理；断言注册表移除工具、Host inactive。保留既有超时、进程错误和名称冲突用例；新增调用前 AbortSignal 已取消、调用进行中主动取消、协作结束后 Host 可继续调用的真实子进程回归。
 
-运行：`pnpm --filter @openharness/agent-runtime exec vitest run src/native-tools/text-inspector.test.ts src/native-tools/tool-host.test.ts`。
+运行：`pnpm --filter @vykor/agent-runtime exec vitest run src/native-tools/text-inspector.test.ts src/native-tools/tool-host.test.ts`。
 
 ## 任务 3：正式安装与开发链接验收
 
 **文件：** 新建 `packages/agent-runtime/src/native-tools/native-plugin-authoring.test.ts`、Server 插件生命周期集成测试；修改 `packages/client/src/commands/session-commands.ts` 的重载结果展示并补测试。只在回归证明必要时调整安装/发现/激活代码。
 
-- [x] 每个用例复制参考插件到独立临时源目录，将 `OPENHARNESS_CONFIG_DIR` 指向另一临时目录，并在 finally 恢复环境变量和停止 Tool Host。
+- [x] 每个用例复制参考插件到独立临时源目录，将 `VYKOR_CONFIG_DIR` 指向另一临时目录，并在 finally 恢复环境变量和停止 Tool Host。
 - [x] 正式安装：调用 `installLocalNativePlugin`，删除临时源目录，使用 `discoverInstalledNativePlugins` 和 `verifyInstalledNativePlugin` 从快照继续加载并调用。断言 origin native、user scope、已持久化摘要和空权限请求。
 - [x] 开发 link：在真实 Host 首次调用后修改工具实现，通过 reload 路由调用 Runtime 清理，再经现有发现/激活入口重建，确认新 Host 返回新结果；断言旧实例工具注销。
 - [x] 在链接目录增加权限声明，经 reload 路由获取结果，再验证实际 slash 输出展示 invalid、权限诊断及重新 link/批准的建议；随后确认新发现阶段跳过插件。输出明确“下次使用时重新加载”，不声称已经激活。
 - [x] 静态校验与 discover 阶段不得执行插件入口，用临时样例的顶层标记副作用验证这一点；只有激活时才允许在 Tool Host 子进程中执行该入口。
 - [x] 必须新增 disable/uninstall 生命周期验收：两个不同 cwd 都激活真实 Host，路由使用实际 Plugin Service 和 Runtime 清理（可用只负责持有 cleanup 的测试适配器，不能空 mock），断言两边工具注销、Host 停止、安装记录更新及后续发现不加载。无须调用模型，不改变用户级安装模型。
 
-运行：`pnpm --filter @openharness/agent-runtime exec vitest run src/native-tools/native-plugin-authoring.test.ts`，再运行 plugins 包测试和相关服务测试。
+运行：`pnpm --filter @vykor/agent-runtime exec vitest run src/native-tools/native-plugin-authoring.test.ts`，再运行 plugins 包测试和相关服务测试。
 
 ## 任务 4：作者指南、文档入口与交接
 
@@ -85,14 +85,14 @@ expect(result).toEqual({ content: [{ type: "text", text: JSON.stringify({
 - [x] 写明从仓库根目录运行的已有命令：
 
 ```sh
-ohs plugin validate ./examples/plugins/text-inspector
-ohs plugin link ./examples/plugins/text-inspector
-ohs plugin list --verbose
-ohs plugin details example.text-inspector
-ohs plugin install-local ./examples/plugins/text-inspector
-ohs plugin disable example.text-inspector
-ohs plugin enable example.text-inspector
-ohs plugin uninstall example.text-inspector
+vk plugin validate ./examples/plugins/text-inspector
+vk plugin link ./examples/plugins/text-inspector
+vk plugin list --verbose
+vk plugin details example.text-inspector
+vk plugin install-local ./examples/plugins/text-inspector
+vk plugin disable example.text-inspector
+vk plugin enable example.text-inspector
+vk plugin uninstall example.text-inspector
 ```
 
 上面的安装/管理命令属于作者手册；自动验收使用临时用户配置，不能修改开发者真实安装状态。开发修改后的重载使用会话 `/reload-plugins`。

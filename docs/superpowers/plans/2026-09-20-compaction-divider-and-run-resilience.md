@@ -101,7 +101,7 @@ describe("compaction presentation", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/compaction-presentation.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/compaction-presentation.test.ts`
 Expected: FAIL（模块不存在 / 导入报错）
 
 - [ ] **Step 3: 新建模块**
@@ -201,10 +201,10 @@ import { readContextCompactionPresentation } from "./compaction-presentation"
 
 - [ ] **Step 6: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/compaction-presentation.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/compaction-presentation.test.ts`
 Expected: PASS（2 个用例）
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page`
 Expected: 现有相关用例全部 PASS
 
 ---
@@ -345,7 +345,7 @@ function compactionMessage(
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/conversation-turn-model.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/conversation-turn-model.test.ts`
 Expected: FAIL（`turn.blocks` 为 undefined / 分割线是顶层 system entry）
 
 - [ ] **Step 3: 实现 turn model**
@@ -676,7 +676,7 @@ function compareMessages(a: DesktopSessionMessage, b: DesktopSessionMessage): nu
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/conversation-turn-model.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/conversation-turn-model.test.ts`
 Expected: PASS（含全部既有用例）
 
 ---
@@ -803,7 +803,7 @@ function message(id: string, seq: number): ConversationTurn["assistantMessages"]
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript/__test__/turn-block-plan.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript/__test__/turn-block-plan.test.ts`
 Expected: FAIL（模块不存在）
 
 - [ ] **Step 3: 新建渲染计划模块**
@@ -944,10 +944,10 @@ import { planTurnBlocks } from "./turn-block-plan"
 
 - [ ] **Step 5: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page`
 Expected: 全部 PASS
 
-Run: `pnpm --filter @openharness/desktop typecheck`
+Run: `pnpm --filter @vykor/desktop typecheck`
 Expected: 无错误
 
 ---
@@ -1058,7 +1058,7 @@ describe("SseTransport idle timeout", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/transport/__test__/sse-transport.test.ts`
+Run: `pnpm --filter @vykor/client exec vitest run src/transport/__test__/sse-transport.test.ts`
 Expected: 第 1 个用例挂起/超时失败（没有空闲超时）
 
 - [ ] **Step 3: 实现空闲超时**
@@ -1183,10 +1183,10 @@ async function* readRawSseFrames(
 
 - [ ] **Step 5: 跑测试**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/transport/__test__/sse-transport.test.ts`
+Run: `pnpm --filter @vykor/client exec vitest run src/transport/__test__/sse-transport.test.ts`
 Expected: PASS（2 个用例）
 
-Run: `pnpm --filter @openharness/client test`
+Run: `pnpm --filter @vykor/client test`
 Expected: 全部 PASS
 
 ---
@@ -1313,7 +1313,7 @@ describe("syncEvents reconnect", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/state/__test__/sync.test.ts`
+Run: `pnpm --filter @vykor/client exec vitest run src/state/__test__/sync.test.ts`
 Expected: FAIL（第二次 yield 是 `live` 而不是 `snapshot`；`getState` 只调用一次）
 
 - [ ] **Step 3: 改 sync.ts**
@@ -1343,12 +1343,12 @@ Expected: FAIL（第二次 yield 是 `live` 而不是 `snapshot`；`getState` �
 ```ts
 async function* liveWithReconnect(
   client: SyncEventsClient,
-  initialState: OpenHarnessClientState,
+  initialState: VykorClientState,
   options: EventSyncOptions,
   initialCursor: number,
   resync?: (
-    current: OpenHarnessClientState,
-  ) => Promise<{ state: OpenHarnessClientState; cursor: number }>,
+    current: VykorClientState,
+  ) => Promise<{ state: VykorClientState; cursor: number }>,
 ): AsyncIterable<SyncEventUpdate> {
   let state = initialState
   let cursor = initialCursor
@@ -1432,10 +1432,10 @@ const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 60_000
 
 - [ ] **Step 4: 跑测试**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/state/__test__/sync.test.ts`
+Run: `pnpm --filter @vykor/client exec vitest run src/state/__test__/sync.test.ts`
 Expected: PASS（2 个用例）
 
-Run: `pnpm --filter @openharness/client test`
+Run: `pnpm --filter @vykor/client test`
 Expected: 全部 PASS
 
 ---
@@ -1542,7 +1542,7 @@ describe("pumpSubscription", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/main/features/session/session-subscription-pump.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/main/features/session/session-subscription-pump.test.ts`
 Expected: FAIL（模块不存在）
 
 - [ ] **Step 3: 新建 pump 模块**
@@ -1671,10 +1671,10 @@ import { pumpSubscription } from "./session-subscription-pump"
 
 - [ ] **Step 5: 跑测试**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/main/features/session`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/main/features/session`
 Expected: 全部 PASS（含既有 `session-subscriptions.test.ts`）
 
-Run: `pnpm --filter @openharness/desktop typecheck`
+Run: `pnpm --filter @vykor/desktop typecheck`
 Expected: 无错误
 
 ---
@@ -1800,7 +1800,7 @@ describe("RunStallWatchdog", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/session/__test__/run-stall-watchdog.test.ts`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/session/__test__/run-stall-watchdog.test.ts`
 Expected: FAIL（模块不存在）
 
 - [ ] **Step 3: 实现看门狗**
@@ -1881,7 +1881,7 @@ export class RunStallWatchdog {
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/session/__test__/run-stall-watchdog.test.ts`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/session/__test__/run-stall-watchdog.test.ts`
 Expected: PASS（5 个用例）
 
 ---
@@ -1966,7 +1966,7 @@ function hangingHandle(): AgentRunHandle {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-run-executor.test.ts`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-run-executor.test.ts`
 Expected: 类型/断言失败（`permissions` 不在 `data` 类型中；看门狗不存在）
 
 - [ ] **Step 3: 改 executor**
@@ -2059,10 +2059,10 @@ const DEFAULT_RUN_STALL_CHECK_INTERVAL_MS = 30 * 1_000;
 
 - [ ] **Step 5: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-run-executor.test.ts src/application/session/__test__/run-stall-watchdog.test.ts`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-run-executor.test.ts src/application/session/__test__/run-stall-watchdog.test.ts`
 Expected: PASS
 
-Run: `pnpm --filter @openharness/server check-types`
+Run: `pnpm --filter @vykor/server check-types`
 Expected: 无错误
 
 ---
@@ -2082,16 +2082,16 @@ Expected: 无错误
 
 ## 最终验证（Task V）- [ ] **Step 1: 三个包各自全量测试**
 
-Run: `pnpm --filter @openharness/desktop test`
-Run: `pnpm --filter @openharness/client test`
-Run: `pnpm --filter @openharness/server test`
+Run: `pnpm --filter @vykor/desktop test`
+Run: `pnpm --filter @vykor/client test`
+Run: `pnpm --filter @vykor/server test`
 Expected: 全绿（desktop 的 test 脚本还会跑 node 校验脚本）
 
 - [ ] **Step 2: 类型检查**
 
-Run: `pnpm --filter @openharness/desktop typecheck`
-Run: `pnpm --filter @openharness/client check-types`
-Run: `pnpm --filter @openharness/server check-types`
+Run: `pnpm --filter @vykor/desktop typecheck`
+Run: `pnpm --filter @vykor/client check-types`
+Run: `pnpm --filter @vykor/server check-types`
 Expected: 无错误
 
 - [ ] **Step 3: 人工验收（用户参与）**

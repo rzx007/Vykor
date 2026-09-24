@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "dev.openharness.invalid-component",
+  "id": "dev.vykor.invalid-component",
   "name": "invalid-component",
   "version": "1.0.0",
   "components": {

@@ -4,10 +4,10 @@ import {
   findByName,
   resolveProviderScopedBaseUrl,
   type ModelsDevCatalog,
-} from "@openharness/api";
+} from "@vykor/api";
 
 import type { SettingsService } from "../settings-api.js";
-import type { AgentEnvironmentCapabilities } from "@openharness/protocol";
+import type { AgentEnvironmentCapabilities } from "@vykor/protocol";
 import { catalogProviderModelIds } from "./catalog-provider-mapping.js";
 import {
   mergeSettingsPatch,

@@ -1,5 +1,5 @@
-import type { ToolDefinition } from "@openharness/core";
-import type { McpClientManager } from "@openharness/mcp";
+import type { ToolDefinition } from "@vykor/core";
+import type { McpClientManager } from "@vykor/mcp";
 
 function mcpManagerFrom(context: { mcpManager?: unknown }): McpClientManager | undefined {
   return context.mcpManager as McpClientManager | undefined;

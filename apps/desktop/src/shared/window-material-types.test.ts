@@ -37,26 +37,26 @@ describe("windowMaterialArguments", () => {
     expect(parseWindowMaterialArguments(["--no-sandbox"])).toBeNull()
     expect(
       parseWindowMaterialArguments([
-        "--openharness-window-material=glass",
-        "--openharness-window-material-active=holographic",
-        "--openharness-window-material-reason=none",
-        "--openharness-window-material-shell=transparent",
+        "--vykor-window-material=glass",
+        "--vykor-window-material-active=holographic",
+        "--vykor-window-material-reason=none",
+        "--vykor-window-material-shell=transparent",
       ])
     ).toBeNull()
     expect(
       parseWindowMaterialArguments([
-        "--openharness-window-material=mirror",
-        "--openharness-window-material-active=glass",
-        "--openharness-window-material-reason=none",
-        "--openharness-window-material-shell=translucent",
+        "--vykor-window-material=mirror",
+        "--vykor-window-material-active=glass",
+        "--vykor-window-material-reason=none",
+        "--vykor-window-material-shell=translucent",
       ])
     ).toBeNull()
     expect(
       parseWindowMaterialArguments([
-        "--openharness-window-material=glass",
-        "--openharness-window-material-active=glass",
-        "--openharness-window-material-reason=none",
-        "--openharness-window-material-shell=holographic",
+        "--vykor-window-material=glass",
+        "--vykor-window-material-active=glass",
+        "--vykor-window-material-reason=none",
+        "--vykor-window-material-shell=holographic",
       ])
     ).toBeNull()
   })

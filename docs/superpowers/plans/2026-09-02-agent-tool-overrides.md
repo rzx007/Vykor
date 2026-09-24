@@ -6,7 +6,7 @@
 
 **架构：** `ToolRegistry` 负责严格的新增、覆盖和来源记录；`DefaultNodeAgent` 在计算工具 ceiling/allow/deny 前原子应用 `tools` 与 `toolOverrides`；Extension、Plugin、MCP 只使用新增入口。覆盖实现继续走 QueryEngine 的统一执行管线，并从内置只读隐式批准集合中剔除。
 
-**技术栈：** TypeScript、Vitest、pnpm workspace、Turbo、现有 `@openharness/core` / `@openharness/permissions` / `@openharness/tools` / `@openharness/agent-runtime` 包。
+**技术栈：** TypeScript、Vitest、pnpm workspace、Turbo、现有 `@vykor/core` / `@vykor/permissions` / `@vykor/tools` / `@vykor/agent-runtime` 包。
 
 ---
 
@@ -82,7 +82,7 @@ it("rejects an override whose target does not exist", () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/core test -- src/engine/index.test.ts
+pnpm --filter @vykor/core test -- src/engine/index.test.ts
 ```
 
 预期：FAIL，原因是 `register()` 仍然隐式覆盖，且 `override()`、`inspect()` 和来源类型不存在。
@@ -151,8 +151,8 @@ inspect: (name) => inner.inspect(name),
 运行：
 
 ```powershell
-pnpm --filter @openharness/core test -- src/engine/index.test.ts
-pnpm --filter @openharness/core check-types
+pnpm --filter @vykor/core test -- src/engine/index.test.ts
+pnpm --filter @vykor/core check-types
 ```
 
 预期：PASS；现有依赖包可能因尚未补齐来源参数而在后续任务修复，但 Core 自身类型检查通过。
@@ -241,22 +241,22 @@ it("does not auto-approve an overridden local read-only tool", async () => {
 运行：
 
 ```powershell
-pnpm --filter @openharness/permissions test -- src/index.test.ts
-pnpm --filter @openharness/agent-runtime test -- src/default-runtime.test.ts src/agent.test.ts src/child-agent-options.test.ts
+pnpm --filter @vykor/permissions test -- src/index.test.ts
+pnpm --filter @vykor/agent-runtime test -- src/default-runtime.test.ts src/agent.test.ts src/child-agent-options.test.ts
 ```
 
 预期：FAIL，原因是 API、配置校验、来源诊断和权限降级尚未实现。
 
 - [x] **步骤 4：增加公共配置并原子应用 Tool**
 
-在 `OpenHarnessAgentConfiguration` 增加：
+在 `VykorAgentConfiguration` 增加：
 
 ```ts
 tools?: ToolDefinition[];
 toolOverrides?: ToolDefinition[];
 ```
 
-在 `createOpenHarnessRuntime()` 中：
+在 `createVykorRuntime()` 中：
 
 1. 先创建默认 Registry，默认工具来源统一为 `{ kind: "builtin" }`。
 2. 用纯函数验证两个数组内部无重名、彼此无交集、所有 override 目标存在。
@@ -273,7 +273,7 @@ toolOverrides?: ToolDefinition[];
 untrustedToolNames?: string[];
 ```
 
-`PermissionChecker` 在 `isLocalReadOnlyToolAllowed()` 前检查该集合。`createOpenHarnessRuntime()` 将 `toolOverrides` 名称传入该选项。
+`PermissionChecker` 在 `isLocalReadOnlyToolAllowed()` 前检查该集合。`createVykorRuntime()` 将 `toolOverrides` 名称传入该选项。
 
 将 `resolveAutoApproveTools()` 扩为接收 `implicitlyUntrustedToolNames`。只过滤 `autoApproveReadOnly` 自动注入的名称，不过滤 Settings 或 Agent 配置中的显式 `autoApproveTools`。
 
@@ -296,9 +296,9 @@ untrustedToolNames?: string[];
 运行：
 
 ```powershell
-pnpm --filter @openharness/permissions test -- src/index.test.ts
-pnpm --filter @openharness/agent-runtime test -- src/default-runtime.test.ts src/agent.test.ts src/child-agent-options.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/permissions test -- src/index.test.ts
+pnpm --filter @vykor/agent-runtime test -- src/default-runtime.test.ts src/agent.test.ts src/child-agent-options.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。
@@ -327,7 +327,7 @@ git commit -m "feat(agent-runtime): support explicit tool overrides"
 ```ts
 it("does not let an extension replace a builtin tool", async () => {
   const extension = {
-    setup({ toolRegistry }: OpenHarnessExtensionContext) {
+    setup({ toolRegistry }: VykorExtensionContext) {
       toolRegistry.register(testTool("Read"));
     },
   };
@@ -348,7 +348,7 @@ it("keeps a caller override when a later integration uses the same name", async 
 运行：
 
 ```powershell
-pnpm --filter @openharness/agent-runtime test -- src/extensions.test.ts src/mcp-auth.test.ts
+pnpm --filter @vykor/agent-runtime test -- src/extensions.test.ts src/mcp-auth.test.ts
 ```
 
 预期：冲突因任务 1 的严格 Registry 已经不会覆盖，但来源诊断和受限 Extension 视图尚未满足断言。
@@ -371,7 +371,7 @@ pnpm --filter @openharness/agent-runtime test -- src/extensions.test.ts src/mcp-
 { kind: "runtime", id: "memory" }
 ```
 
-Extension 上下文暴露一个受限 Registry 包装器：`register()` 强制使用 Extension 来源；`override()` 不暴露给 `OpenHarnessExtensionContext` 的公开类型。Native Plugin 和 MCP 继续使用内部完整 Registry，但只能调用 `register()`。
+Extension 上下文暴露一个受限 Registry 包装器：`register()` 强制使用 Extension 来源；`override()` 不暴露给 `VykorExtensionContext` 的公开类型。Native Plugin 和 MCP 继续使用内部完整 Registry，但只能调用 `register()`。
 
 - [x] **步骤 4：保证失败回滚不删除原有 Tool**
 
@@ -384,8 +384,8 @@ MCP connect/reconnect 遇到冲突时保持当前连接错误策略，同时断�
 运行：
 
 ```powershell
-pnpm --filter @openharness/agent-runtime test -- src/extensions.test.ts src/mcp-auth.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime test -- src/extensions.test.ts src/mcp-auth.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。
@@ -430,8 +430,8 @@ expect(block.text).toContain("不要调用 ReadMcpResource");
 运行：
 
 ```powershell
-pnpm --filter @openharness/tools test -- src/file/__test__/read.test.ts
-pnpm --filter @openharness/server test -- src/application/attachment-routing/__test__/attachment-capability-router.test.ts
+pnpm --filter @vykor/tools test -- src/file/__test__/read.test.ts
+pnpm --filter @vykor/server test -- src/application/attachment-routing/__test__/attachment-capability-router.test.ts
 ```
 
 预期：FAIL，当前描述只声明绝对本地路径，大文本提示没有完整 Tool 参数示例。
@@ -442,7 +442,7 @@ pnpm --filter @openharness/server test -- src/application/attachment-routing/__t
 
 ```ts
 description:
-  "Read a local file, directory, or OpenHarness attachment resource. " +
+  "Read a local file, directory, or Vykor attachment resource. " +
   "Use Read, not ReadMcpResource, for attachment:// resources."
 ```
 
@@ -455,7 +455,7 @@ description:
 大文本资源块明确输出：
 
 ```text
-这是 OpenHarness 附件资源，不是 MCP Resource。
+这是 Vykor 附件资源，不是 MCP Resource。
 需要更多内容时调用 Read，并传入：
 {"file_path":"attachment://...","offset":1,"limit":2000}
 不要调用 ReadMcpResource。
@@ -466,8 +466,8 @@ description:
 运行：
 
 ```powershell
-pnpm --filter @openharness/tools test -- src/file/__test__/read.test.ts
-pnpm --filter @openharness/server test -- src/application/attachment-routing/__test__/attachment-capability-router.test.ts
+pnpm --filter @vykor/tools test -- src/file/__test__/read.test.ts
+pnpm --filter @vykor/server test -- src/application/attachment-routing/__test__/attachment-capability-router.test.ts
 ```
 
 预期：全部 PASS，并且现有 `AgentAttachmentResourceHost.readText()` 行为测试保持通过。
@@ -488,11 +488,11 @@ git commit -m "fix(tools): clarify attachment reads"
 - [x] **步骤 1：运行受影响包测试**
 
 ```powershell
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/permissions test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/permissions test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
 ```
 
 预期：全部 PASS。Windows `node-pty AttachConsole failed` 的子进程噪音只有在测试退出码为 0 且断言全部通过时才可视为非阻塞信息。

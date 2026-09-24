@@ -75,7 +75,7 @@ RunRepository：
 
 - [ ] **步骤 4：运行迁移前测试**
 
-运行：pnpm --filter @openharness/services test -- src/session-runtime
+运行：pnpm --filter @vykor/services test -- src/session-runtime
 
 预期：PASS。新增测试必须在旧实现上通过，证明固定的是现状。
 
@@ -97,7 +97,7 @@ RunRepository：
 
 - [ ] **步骤 2：验证红灯**
 
-运行：pnpm --filter @openharness/services test -- src/sessions/session-repository.test.ts
+运行：pnpm --filter @vykor/services test -- src/sessions/session-repository.test.ts
 
 预期：FAIL，原因是 SessionRepository 尚不存在。
 
@@ -107,8 +107,8 @@ RunRepository：
 
 - [ ] **步骤 4：验证绿灯**
 
-运行：pnpm --filter @openharness/services test -- src/sessions/session-repository.test.ts
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/sessions/session-repository.test.ts
+运行：pnpm --filter @vykor/services check-types
 
 预期：PASS。
 
@@ -130,7 +130,7 @@ RunRepository：
 
 - [ ] **步骤 2：验证红灯**
 
-运行：pnpm --filter @openharness/services test -- src/conversations/conversation-repository.test.ts
+运行：pnpm --filter @vykor/services test -- src/conversations/conversation-repository.test.ts
 
 预期：FAIL，模块不存在。
 
@@ -140,8 +140,8 @@ RunRepository：
 
 - [ ] **步骤 4：验证**
 
-运行：pnpm --filter @openharness/services test -- src/conversations/conversation-repository.test.ts
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/conversations/conversation-repository.test.ts
+运行：pnpm --filter @vykor/services check-types
 
 - [ ] **步骤 5：提交**
 
@@ -161,7 +161,7 @@ RunRepository：
 
 - [ ] **步骤 2：验证红灯**
 
-运行：pnpm --filter @openharness/services test -- src/runs/run-repository.test.ts
+运行：pnpm --filter @vykor/services test -- src/runs/run-repository.test.ts
 
 预期：FAIL，模块不存在。
 
@@ -171,8 +171,8 @@ RunRepository：
 
 - [ ] **步骤 4：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/runs/run-repository.test.ts
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/runs/run-repository.test.ts
+运行：pnpm --filter @vykor/services check-types
 运行：git add packages/services/src/runs
 运行：git commit -m "refactor(services): add run read repository"
 
@@ -197,8 +197,8 @@ RunRepository：
 
 - [ ] **步骤 4：兼容验证**
 
-运行：pnpm --filter @openharness/services test -- src/sessions src/conversations src/runs src/session-runtime
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/sessions src/conversations src/runs src/session-runtime
+运行：pnpm --filter @vykor/services check-types
 
 - [ ] **步骤 5：提交**
 
@@ -242,9 +242,9 @@ RunRepository：
 - [ ] **步骤 6：最终验证**
 
 运行：
-pnpm --filter @openharness/services test -- src/sessions src/conversations src/runs src/session-runtime
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test -- src/sessions src/conversations src/runs src/session-runtime
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
 node --test scripts/architecture-boundaries.test.mjs
 pnpm check:architecture
 node scripts/check-docs.mjs

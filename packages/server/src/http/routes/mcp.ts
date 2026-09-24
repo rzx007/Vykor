@@ -1,7 +1,7 @@
 import type {
   McpRuntimeConnectionCoordinator,
   McpServerIdentity,
-} from "@openharness/core";
+} from "@vykor/core";
 import { Hono } from "hono";
 
 import { errorResponse, jsonResponse, readJson, type JsonRecord } from "../support.js";

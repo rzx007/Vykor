@@ -108,7 +108,7 @@ expect(() => parseAdmitPromptRequest({
 
 - [ ] **步骤 2：运行协议测试并确认失败**
 
-运行：`pnpm --filter @openharness/protocol test -- src/requests.test.ts src/serialization.test.ts src/attachment.test.ts`
+运行：`pnpm --filter @vykor/protocol test -- src/requests.test.ts src/serialization.test.ts src/attachment.test.ts`
 
 预期：FAIL，错误指向 `attachments` 尚未解析或新 part 类型尚未被接受。
 
@@ -148,12 +148,12 @@ export type {
   SessionInputAttachmentRecord,
   SessionAttachmentMessagePartRecord,
   SessionTransformationMessagePartRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 ```
 
 - [ ] **步骤 5：运行协议、Client 类型检查和测试**
 
-运行：`pnpm --filter @openharness/protocol test && pnpm --filter @openharness/protocol check-types && pnpm --filter @openharness/client check-types`
+运行：`pnpm --filter @vykor/protocol test && pnpm --filter @vykor/protocol check-types && pnpm --filter @vykor/client check-types`
 
 预期：全部 PASS。
 
@@ -200,7 +200,7 @@ expect(() => openFormatOneDatabase(path)).toThrow(/format 1.*delete|move/i);
 
 - [ ] **步骤 2：运行 Store 测试并确认失败**
 
-运行：`pnpm --filter @openharness/services test -- src/session-runtime/__test__/store.test.ts`
+运行：`pnpm --filter @vykor/services test -- src/session-runtime/__test__/store.test.ts`
 
 预期：FAIL，当前 format 为 1、引用表不存在、第二个 run 触发唯一约束。
 
@@ -222,7 +222,7 @@ index("session_run_input_idx").on(table.inputId),
 
 - [ ] **步骤 5：运行 migration 检查和 Store 测试**
 
-运行：`pnpm --filter @openharness/services db:check && pnpm --filter @openharness/services test -- src/session-runtime/__test__/store.test.ts`
+运行：`pnpm --filter @vykor/services db:check && pnpm --filter @vykor/services test -- src/session-runtime/__test__/store.test.ts`
 
 预期：全部 PASS。
 
@@ -267,7 +267,7 @@ Store 测试用触发器让 ref 或 run 插入失败，随后断言 input、refs
 
 - [ ] **步骤 2：运行新增测试并确认失败**
 
-运行：`pnpm --filter @openharness/services test -- src/session-runtime/__test__/prompt-attachments.test.ts src/session-runtime/__test__/store.test.ts`
+运行：`pnpm --filter @vykor/services test -- src/session-runtime/__test__/prompt-attachments.test.ts src/session-runtime/__test__/store.test.ts`
 
 预期：FAIL，辅助函数和引用 Store API 尚不存在。
 
@@ -314,7 +314,7 @@ owning run 是按 `createdAt`、再按 `id` 排序的第一条；启动恢复与
 
 - [ ] **步骤 6：运行 Store 测试和类型检查**
 
-运行：`pnpm --filter @openharness/services test -- src/session-runtime/__test__/prompt-attachments.test.ts src/session-runtime/__test__/store.test.ts && pnpm --filter @openharness/services check-types`
+运行：`pnpm --filter @vykor/services test -- src/session-runtime/__test__/prompt-attachments.test.ts src/session-runtime/__test__/store.test.ts && pnpm --filter @vykor/services check-types`
 
 预期：全部 PASS，包括关闭并重开数据库后附件顺序和快照不变。
 
@@ -362,7 +362,7 @@ await expect(engine.admitPromptAndMaybeRun("s1", {
 
 - [ ] **步骤 2：运行 application 测试并确认失败**
 
-运行：`pnpm --filter @openharness/server test -- src/application/session/__test__/session-run-engine.test.ts src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-queue-actions.test.ts`
+运行：`pnpm --filter @vykor/server test -- src/application/session/__test__/session-run-engine.test.ts src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-queue-actions.test.ts`
 
 预期：FAIL，当前并发指纹只比较文字，steer 仍尝试直接送 active run。
 
@@ -390,7 +390,7 @@ const finalDelivery = normalizedAttachments.length > 0 && requestedDelivery === 
 
 - [ ] **步骤 6：运行 application 测试和类型检查**
 
-运行：`pnpm --filter @openharness/server test -- src/application/session/__test__/session-run-engine.test.ts src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-queue-actions.test.ts && pnpm --filter @openharness/server check-types`
+运行：`pnpm --filter @vykor/server test -- src/application/session/__test__/session-run-engine.test.ts src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-queue-actions.test.ts && pnpm --filter @vykor/server check-types`
 
 预期：全部 PASS。
 
@@ -441,7 +441,7 @@ expect(buildAgentTranscript(messages, parts)).toEqual({
 
 - [ ] **步骤 3：运行投影测试并确认失败**
 
-运行：`pnpm --filter @openharness/server test -- src/application/session/__test__/transcript-projection.test.ts src/application/agent/__test__/agent-transcript.test.ts`
+运行：`pnpm --filter @vykor/server test -- src/application/session/__test__/transcript-projection.test.ts src/application/agent/__test__/agent-transcript.test.ts`
 
 预期：FAIL，当前投影无条件创建 text part，Agent transcript 丢弃附件。
 
@@ -464,7 +464,7 @@ agent.loadHistory(transcript.messages);
 
 - [ ] **步骤 6：运行投影、Agent 和 Store 测试**
 
-运行：`pnpm --filter @openharness/server test -- src/application/session/__test__/transcript-projection.test.ts src/application/agent/__test__/agent-transcript.test.ts && pnpm --filter @openharness/services test -- src/session-runtime/__test__/store.test.ts`
+运行：`pnpm --filter @vykor/server test -- src/application/session/__test__/transcript-projection.test.ts src/application/agent/__test__/agent-transcript.test.ts && pnpm --filter @vykor/services test -- src/session-runtime/__test__/store.test.ts`
 
 预期：全部 PASS。
 
@@ -508,7 +508,7 @@ expect(resumed.input.attachments).toEqual(sourceInput.attachments);
 
 - [ ] **步骤 3：运行生命周期测试并确认失败**
 
-运行：`pnpm --filter @openharness/services test -- src/session-runtime/__test__/store.test.ts && pnpm --filter @openharness/server test -- src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-edit.test.ts src/application/session/__test__/session-run-engine.test.ts`
+运行：`pnpm --filter @vykor/services test -- src/session-runtime/__test__/store.test.ts && pnpm --filter @vykor/server test -- src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-edit.test.ts src/application/session/__test__/session-run-engine.test.ts`
 
 预期：FAIL，当前 resume 创建新 input，fork 只复制 messages/parts，edit 不删除旧 input refs。
 
@@ -530,7 +530,7 @@ forkSessionWithHistory(command): SessionRecord;
 
 - [ ] **步骤 6：运行生命周期测试和类型检查**
 
-运行：`pnpm --filter @openharness/services test -- src/session-runtime/__test__/store.test.ts && pnpm --filter @openharness/server test -- src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-edit.test.ts src/application/session/__test__/session-run-engine.test.ts && pnpm --filter @openharness/server check-types`
+运行：`pnpm --filter @vykor/services test -- src/session-runtime/__test__/store.test.ts && pnpm --filter @vykor/server test -- src/application/session/__test__/session-application-service.test.ts src/application/session/__test__/session-application-service-edit.test.ts src/application/session/__test__/session-run-engine.test.ts && pnpm --filter @vykor/server check-types`
 
 预期：全部 PASS。
 
@@ -570,7 +570,7 @@ HTTP 响应断言 status 409 且 body 的 `error` 以 `attachment_in_use:` 开�
 
 - [ ] **步骤 2：运行附件服务和路由测试并确认失败**
 
-运行：`pnpm --filter @openharness/services test -- src/attachment/__test__/attachment-application-service.test.ts && pnpm --filter @openharness/server test -- src/http/routes/attachment.test.ts src/http/routes/__test__/routes.test.ts`
+运行：`pnpm --filter @vykor/services test -- src/attachment/__test__/attachment-application-service.test.ts && pnpm --filter @vykor/server test -- src/http/routes/attachment.test.ts src/http/routes/__test__/routes.test.ts`
 
 预期：FAIL，当前 delete 不检查 refs。
 
@@ -584,7 +584,7 @@ Store 暴露 `countInputAttachmentReferences(assetId)` 和 `softDeleteUnreferenc
 
 - [ ] **步骤 5：运行测试和类型检查**
 
-运行：`pnpm --filter @openharness/services test -- src/attachment && pnpm --filter @openharness/server test -- src/http/routes/attachment.test.ts src/http/routes/__test__/routes.test.ts && pnpm --filter @openharness/services check-types && pnpm --filter @openharness/server check-types`
+运行：`pnpm --filter @vykor/services test -- src/attachment && pnpm --filter @vykor/server test -- src/http/routes/attachment.test.ts src/http/routes/__test__/routes.test.ts && pnpm --filter @vykor/services check-types && pnpm --filter @vykor/server check-types`
 
 预期：全部 PASS。
 
@@ -629,7 +629,7 @@ attachments: [
 
 - [ ] **步骤 3：运行 Client 和 route 测试并确认失败**
 
-运行：`pnpm --filter @openharness/client test -- src/transport/__test__/http-client.test.ts src/state/__test__/reducer.test.ts && pnpm --filter @openharness/server test -- src/http/routes/__test__/protocol-validation.test.ts src/http/routes/__test__/routes.test.ts`
+运行：`pnpm --filter @vykor/client test -- src/transport/__test__/http-client.test.ts src/state/__test__/reducer.test.ts && pnpm --filter @vykor/server test -- src/http/routes/__test__/protocol-validation.test.ts src/http/routes/__test__/routes.test.ts`
 
 预期：FAIL，edit route 尚未解析附件，测试 fixture 缺少必填 attachments。
 
@@ -643,7 +643,7 @@ attachments: [
 
 - [ ] **步骤 6：运行 Client、route 和协议测试**
 
-运行：`pnpm --filter @openharness/protocol test && pnpm --filter @openharness/client test && pnpm --filter @openharness/server test -- src/http/routes`
+运行：`pnpm --filter @vykor/protocol test && pnpm --filter @vykor/client test && pnpm --filter @vykor/server test -- src/http/routes`
 
 预期：全部 PASS。
 
@@ -686,7 +686,7 @@ JSON 导出保留 typed attachment part 和完整 input refs。compaction 前后
 
 - [ ] **步骤 3：运行专项测试并确认失败**
 
-运行：`pnpm --filter @openharness/server test -- src/session/__test__/export-session.test.ts src/application/session/__test__/session-maintenance-service.test.ts src/http/__test__/http.test.ts`
+运行：`pnpm --filter @vykor/server test -- src/session/__test__/export-session.test.ts src/application/session/__test__/session-maintenance-service.test.ts src/http/__test__/http.test.ts`
 
 预期：FAIL，导出和端到端断言尚未满足。
 
@@ -703,11 +703,11 @@ Markdown 只输出显示名、MIME、大小和 assetId，不输出 storage key�
 运行：
 
 ```bash
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/services db:check
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/services db:check
 pnpm check-types
 node scripts/check-docs.mjs
 git diff --check

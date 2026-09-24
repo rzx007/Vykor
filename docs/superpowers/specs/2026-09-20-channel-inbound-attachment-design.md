@@ -11,7 +11,7 @@
 - 文件消息同理，Agent 不知道文件里是什么。
 - `ChannelAttachment.data`/`url` 一直是空的。
 
-目标：机器人收到图片/文件时，把**真实字节**从飞书下载到本机，存进 OpenHarness 附件库（`AttachmentService`），作为附件交给 Agent；Agent 用现有 vision / read 工具就能看图、读文件。
+目标：机器人收到图片/文件时，把**真实字节**从飞书下载到本机，存进 Vykor 附件库（`AttachmentService`），作为附件交给 Agent；Agent 用现有 vision / read 工具就能看图、读文件。
 
 不做（本次）：出站回复附件、上传到飞书、`ChannelAttachment.data`/`url` 作为入站输入。
 
@@ -27,7 +27,7 @@
 ## 3. 范围与硬约束
 
 - 只做**入站**：飞书 → 本机附件库 → Agent 会话。
-- **不改** `@openharness/protocol` 的 durable 类型（`DurableChannelMessageInput`、`ChannelDeliveryRecord`）。入站附件继续通过 `metadata.attachments` 透传（`packages/channels/src/core/durable-bridge.ts:104-107` 已具备）。
+- **不改** `@vykor/protocol` 的 durable 类型（`DurableChannelMessageInput`、`ChannelDeliveryRecord`）。入站附件继续通过 `metadata.attachments` 透传（`packages/channels/src/core/durable-bridge.ts:104-107` 已具备）。
 - 失败即**整条消息失败**（落 durable delivery failed 语义），**不降级、不静默丢附件**。
 - 只信任 `ChannelAttachment` 的 `type`/`externalId`/`name`；**忽略** `data`/`url`，绝不自行 fetch。
 - 不引入兼容性 fallback。
@@ -138,4 +138,4 @@ im.messageResource.get({ params: { type: "image" | "file" }, path: { message_id,
 - 重复投递同一消息不产生新 asset、不 409。
 - 下载失败/超限 → 消息明确失败，无降级。
 - 相关包测试、类型检查、`turbo build`、`check-docs`、`git diff --check` 全绿。
-- 不需要改动 `@openharness/protocol` 的 durable 类型。
+- 不需要改动 `@vykor/protocol` 的 durable 类型。

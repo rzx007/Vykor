@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import type { Settings } from "@openharness/core";
-import { createProcess, SandboxUnavailableError } from "@openharness/sandbox";
+import type { Settings } from "@vykor/core";
+import { createProcess, SandboxUnavailableError } from "@vykor/sandbox";
 
 export interface LspServerConfig {
   command: string;

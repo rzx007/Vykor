@@ -103,7 +103,7 @@ Builtin session command 与 Skill command 重名时 builtin 胜出。
 
 ### Desktop
 
-picker 选择 Skill 后创建 `SkillMentionNode`，不触发 IPC。发送时 composer document 变为有序 items，经 `window.desktop.sessions.sendPrompt()` 和 `OpenHarnessClient.admitPrompt()` 进入普通 prompt API。
+picker 选择 Skill 后创建 `SkillMentionNode`，不触发 IPC。发送时 composer document 变为有序 items，经 `window.desktop.sessions.sendPrompt()` 和 `VykorClient.admitPrompt()` 进入普通 prompt API。
 
 ### TUI
 

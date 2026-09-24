@@ -6,23 +6,23 @@ import type {
   McpServerConfig,
   RuntimeBundle,
   Settings,
-} from "@openharness/core";
-import { createAgentSession, getSkillsDir, loadSettings } from "@openharness/core";
-import type { McpClientManager } from "@openharness/mcp";
-import type { AgentRequestConfigurationReader } from "@openharness/core";
-import { createWorkspaceBinding } from "@openharness/environment";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+} from "@vykor/core";
+import { createAgentSession, getSkillsDir, loadSettings } from "@vykor/core";
+import type { McpClientManager } from "@vykor/mcp";
+import type { AgentRequestConfigurationReader } from "@vykor/core";
+import { createWorkspaceBinding } from "@vykor/environment";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import {
   createExecutionEnvironment,
   hostPathToWslPath,
   resolveExecutionEnvironmentConfig,
-} from "@openharness/sandbox";
-import { createEnvironmentFileSystem } from "@openharness/tools";
+} from "@vykor/sandbox";
+import { createEnvironmentFileSystem } from "@vykor/tools";
 
 import type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
-  OpenHarnessAgentConfiguration,
+  VykorAgentConfiguration,
 } from "./agent-options.js";
 import type { ResolvedAgentCapabilities } from "./capability-resolution.js";
 import type {
@@ -36,22 +36,22 @@ import {
 } from "./cleanup-stack.js";
 import type { DefaultNodeTerminalResolution } from "./default-node-terminal.js";
 import { resolveDefaultAgentCapabilities } from "./default-agent-capabilities.js";
-import { createOpenHarnessRuntime } from "./default-runtime.js";
+import { createVykorRuntime } from "./default-runtime.js";
 import type { AgentEventBus } from "./event-source.js";
 import {
-  discoverOpenHarnessExtensions,
-  type OpenHarnessAgentExtension,
+  discoverVykorExtensions,
+  type VykorAgentExtension,
 } from "./extensions.js";
 import type { AgentMemoryRuntime } from "./memory-runtime.js";
 import { installRuntimeIntegrations } from "./runtime-integrations.js";
 import { createMemoryRequestConfigurationStore } from "./request-configuration.js";
 
-interface AgentCompositionOptions extends OpenHarnessAgentConfiguration {
+interface AgentCompositionOptions extends VykorAgentConfiguration {
   settings?: Settings;
   cwd?: string;
   sessionId?: string;
   mcpServers?: Record<string, McpServerConfig>;
-  extensions?: OpenHarnessAgentExtension[];
+  extensions?: VykorAgentExtension[];
   childIdleTtlMs?: number;
   mcpRuntimeRegistry?: McpRuntimeRegistry;
   capabilityOverrides?: AgentCapabilityOverrides;
@@ -89,7 +89,7 @@ export interface AgentComposition {
   cleanup: CleanupStack;
 }
 
-export async function composeOpenHarnessAgent(
+export async function composeVykorAgent(
   options: AgentCompositionOptions,
   internal: AgentCompositionContext,
 ): Promise<AgentComposition> {
@@ -97,7 +97,7 @@ export async function composeOpenHarnessAgent(
   const rollback = new CleanupStack();
   rollback.add(() => cleanup.close(), cleanup);
   try {
-    return await composeOpenHarnessAgentInternal(
+    return await composeVykorAgentInternal(
       options,
       internal,
       cleanup,
@@ -108,7 +108,7 @@ export async function composeOpenHarnessAgent(
   }
 }
 
-async function composeOpenHarnessAgentInternal(
+async function composeVykorAgentInternal(
   options: AgentCompositionOptions,
   internal: AgentCompositionContext,
   cleanup: CleanupStack,
@@ -116,7 +116,7 @@ async function composeOpenHarnessAgentInternal(
 ): Promise<AgentComposition> {
   const cwd = options.cwd ?? process.cwd();
   const settings = options.settings ?? (await loadSettings({}));
-  const discovery = await discoverOpenHarnessExtensions(cwd, settings, {
+  const discovery = await discoverVykorExtensions(cwd, settings, {
     pluginsEnabled: options.pluginsEnabled,
   });
   for (const warning of discovery.warnings) {
@@ -186,7 +186,7 @@ async function composeOpenHarnessAgentInternal(
       async (next) => next,
     );
 
-  const runtime = await createOpenHarnessRuntime({
+  const runtime = await createVykorRuntime({
     settings,
     cwd,
     sessionId,

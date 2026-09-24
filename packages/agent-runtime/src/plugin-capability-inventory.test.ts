@@ -1,4 +1,4 @@
-import type { LoadedNativePlugin, InstalledPluginRecord } from "@openharness/plugins";
+import type { LoadedNativePlugin, InstalledPluginRecord } from "@vykor/plugins";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -83,7 +83,7 @@ describe("plugin capability inventory", () => {
   });
 
   it("records current installation metadata and static component ownership", () => {
-    const installation = record("dev.openharness.quality");
+    const installation = record("dev.vykor.quality");
     const inventory = createPluginCapabilityInventory([
       loaded(installation, {
         skills: {
@@ -93,9 +93,9 @@ describe("plugin capability inventory", () => {
             commandName: "quality:workspace-review",
             description: "Review a workspace",
             content: "Review.",
-            path: "/plugins/user/dev.openharness.quality/skills/review/SKILL.md",
+            path: "/plugins/user/dev.vykor.quality/skills/review/SKILL.md",
             source: "plugin",
-            metadata: { pluginId: "dev.openharness.quality" },
+            metadata: { pluginId: "dev.vykor.quality" },
             userInvocable: true,
             disableModelInvocation: false,
           }],
@@ -110,7 +110,7 @@ describe("plugin capability inventory", () => {
           status: "loaded",
           value: [{
             declaredEntry: "./tools/index.mjs",
-            entryPath: "/plugins/user/dev.openharness.quality/tools/index.mjs",
+            entryPath: "/plugins/user/dev.vykor.quality/tools/index.mjs",
             runtime: "node",
             requestedPermissions: [],
             effectivePermissions: {},
@@ -120,7 +120,7 @@ describe("plugin capability inventory", () => {
         agents: {
           status: "loaded",
           value: [{
-            name: "dev.openharness.quality:reviewer",
+            name: "dev.vykor.quality:reviewer",
             description: "Review changes",
             source: "plugin",
           }],
@@ -129,38 +129,38 @@ describe("plugin capability inventory", () => {
       }),
     ]);
 
-    expect(inventory.plugins.get("dev.openharness.quality")).toEqual({
-      pluginId: "dev.openharness.quality",
+    expect(inventory.plugins.get("dev.vykor.quality")).toEqual({
+      pluginId: "dev.vykor.quality",
       displayName: "Quality Suite",
       description: "Checks a workspace",
       version: "1.2.3",
       scope: "user",
       origin: "converted",
       skillNames: ["workspace-review"],
-      mcpServerIds: ["plugin:dev.openharness.quality:mcp:github"],
-      nativeToolEntries: ["plugin:dev.openharness.quality:tool:./tools/index.mjs"],
-      agentNames: ["dev.openharness.quality:reviewer"],
+      mcpServerIds: ["plugin:dev.vykor.quality:mcp:github"],
+      nativeToolEntries: ["plugin:dev.vykor.quality:tool:./tools/index.mjs"],
+      agentNames: ["dev.vykor.quality:reviewer"],
     });
     expect(inventory.skills.get("workspace-review")).toEqual({
-      pluginId: "dev.openharness.quality",
-      path: "/plugins/user/dev.openharness.quality/skills/review/SKILL.md",
+      pluginId: "dev.vykor.quality",
+      path: "/plugins/user/dev.vykor.quality/skills/review/SKILL.md",
     });
-    expect(inventory.mcpServers.get("plugin:dev.openharness.quality:mcp:github")).toEqual({
-      pluginId: "dev.openharness.quality",
+    expect(inventory.mcpServers.get("plugin:dev.vykor.quality:mcp:github")).toEqual({
+      pluginId: "dev.vykor.quality",
       serverName: "github",
     });
-    expect(inventory.nativeToolEntries.get("plugin:dev.openharness.quality:tool:./tools/index.mjs")).toEqual({
-      pluginId: "dev.openharness.quality",
+    expect(inventory.nativeToolEntries.get("plugin:dev.vykor.quality:tool:./tools/index.mjs")).toEqual({
+      pluginId: "dev.vykor.quality",
     });
-    expect(inventory.agents.get("dev.openharness.quality:reviewer")).toEqual({
-      pluginId: "dev.openharness.quality",
+    expect(inventory.agents.get("dev.vykor.quality:reviewer")).toEqual({
+      pluginId: "dev.vykor.quality",
     });
     expect(inventory.diagnostics).toEqual([]);
   });
 
   it("prefers managed over user and rejects an ambiguous highest-priority installation", () => {
-    const user = record("dev.openharness.quality", "user");
-    const managed = record("dev.openharness.quality", "managed");
+    const user = record("dev.vykor.quality", "user");
+    const managed = record("dev.vykor.quality", "managed");
     const resolved = selectPluginInstallationWinners([user, managed]);
 
     expect(resolved.winners).toEqual([managed]);
@@ -168,22 +168,22 @@ describe("plugin capability inventory", () => {
 
     const ambiguous = selectPluginInstallationWinners([
       managed,
-      { ...managed, cachePath: "/plugins/managed-copy/dev.openharness.quality" },
+      { ...managed, cachePath: "/plugins/managed-copy/dev.vykor.quality" },
     ]);
     expect(ambiguous.winners).toEqual([]);
     expect(ambiguous.diagnostics).toEqual([{
       severity: "error",
       phase: "discover",
       code: "plugin_installation_ambiguous",
-      message: "Cannot choose one managed installation for plugin dev.openharness.quality",
-      pluginId: "dev.openharness.quality",
+      message: "Cannot choose one managed installation for plugin dev.vykor.quality",
+      pluginId: "dev.vykor.quality",
       details: { scope: "managed", count: 2 },
     }]);
   });
 
   it("excludes every plugin involved in a bare component name collision", () => {
-    const firstRecord = record("dev.openharness.first", "user", { origin: "native" });
-    const secondRecord = record("dev.openharness.second", "user", { origin: "native" });
+    const firstRecord = record("dev.vykor.first", "user", { origin: "native" });
+    const secondRecord = record("dev.vykor.second", "user", { origin: "native" });
     const skill = (pluginId: string, path: string) => ({
       status: "loaded" as const,
       value: [{
@@ -211,18 +211,18 @@ describe("plugin capability inventory", () => {
       severity: "error",
       phase: "discover",
       code: "plugin_component_name_conflict",
-      message: "Plugin component name 'review' is owned by multiple plugins: dev.openharness.first, dev.openharness.second",
+      message: "Plugin component name 'review' is owned by multiple plugins: dev.vykor.first, dev.vykor.second",
       component: "skills",
       details: {
         name: "review",
-        pluginIds: ["dev.openharness.first", "dev.openharness.second"],
+        pluginIds: ["dev.vykor.first", "dev.vykor.second"],
       },
     }]);
   });
 
   it("keeps identical plugin-relative Native Tool entries under distinct owner identities", () => {
-    const firstRecord = record("dev.openharness.first", "user", { origin: "native" });
-    const secondRecord = record("dev.openharness.second", "user", { origin: "native" });
+    const firstRecord = record("dev.vykor.first", "user", { origin: "native" });
+    const secondRecord = record("dev.vykor.second", "user", { origin: "native" });
     const tools = {
       status: "loaded" as const,
       value: [{
@@ -241,12 +241,12 @@ describe("plugin capability inventory", () => {
     ]);
 
     expect([...inventory.plugins.keys()]).toEqual([
-      "dev.openharness.first",
-      "dev.openharness.second",
+      "dev.vykor.first",
+      "dev.vykor.second",
     ]);
     expect([...inventory.nativeToolEntries.entries()]).toEqual([
-      ["plugin:dev.openharness.first:tool:./tools/index.mjs", { pluginId: firstRecord.id }],
-      ["plugin:dev.openharness.second:tool:./tools/index.mjs", { pluginId: secondRecord.id }],
+      ["plugin:dev.vykor.first:tool:./tools/index.mjs", { pluginId: firstRecord.id }],
+      ["plugin:dev.vykor.second:tool:./tools/index.mjs", { pluginId: secondRecord.id }],
     ]);
     expect(inventory.diagnostics).toEqual([]);
   });

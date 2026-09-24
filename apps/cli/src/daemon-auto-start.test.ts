@@ -9,7 +9,7 @@ const serviceMock = vi.hoisted(() => ({
   start: vi.fn(),
 }));
 
-vi.mock("@openharness/server/daemon-host", () => ({
+vi.mock("@vykor/server/daemon-host", () => ({
   shouldStartManagedDaemon: async () =>
     (await loadSettingsMock()).daemon?.autoStart ?? false,
   saveDaemonAutoStartPreference: async (autoStart: boolean) => {

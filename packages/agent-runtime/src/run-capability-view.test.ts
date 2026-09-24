@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type StreamMessageParams, type ToolDefinition } from "@openharness/core";
+import { QueryEngine, ToolRegistry, type AgentExecutionContext, type IHookExecutor, type StreamMessageParams, type ToolDefinition } from "@vykor/core";
 import { createVisibilityToolRegistry } from "./default-runtime-tools.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 import { createAgentTool } from "../../tools/src/agent/agent-tools.js";

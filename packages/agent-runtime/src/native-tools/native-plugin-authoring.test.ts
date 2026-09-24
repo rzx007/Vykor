@@ -1,9 +1,9 @@
 import { access, rm } from "node:fs/promises";
-import { getInstalledPluginStorePath } from "@openharness/core";
+import { getInstalledPluginStorePath } from "@vykor/core";
 import {
   discoverInstalledNativePlugins, installLocalNativePlugin, loadNativePlugin,
   readInstalledPluginStore, validateNativePlugin, verifyInstalledNativePlugin,
-} from "@openharness/plugins";
+} from "@vykor/plugins";
 import { describe, expect, it } from "vitest";
 import {
   callInspector, expectRuntimeStopped, pluginId, withNativePluginFixture,

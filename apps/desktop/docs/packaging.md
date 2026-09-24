@@ -12,14 +12,14 @@
 | `devDependencies` | React、Tailwind、图标、workspace 包、electron-vite 等 | 开发期用；渲染进程和主进程 JS 已经打进 `out/` |
 | `electron-builder.yml` 的 `files` | `out/**`、`resources/**`、`package.json` | 不要默认拷整个 `apps/desktop` |
 
-Desktop 只直接依赖 `@openharness/client` 和 `@openharness/server`。主进程把 server 及其 `core`、`sandbox`、`terminal-node` 等传递实现打进 `out/main`；renderer/preload 不允许导入 server。SQLite 迁移文件仍由 `electron.vite.config.ts` 拷到 `out/session-runtime/migrations`，以匹配 bundle 后迁移加载器相对于 `out/main/index.js` 的路径。原生模块保持外置，asar 里再解开 `prebuilds` / `build`。
+Desktop 只直接依赖 `@vykor/client` 和 `@vykor/server`。主进程把 server 及其 `core`、`sandbox`、`terminal-node` 等传递实现打进 `out/main`；renderer/preload 不允许导入 server。SQLite 迁移文件仍由 `electron.vite.config.ts` 拷到 `out/session-runtime/migrations`，以匹配 bundle 后迁移加载器相对于 `out/main/index.js` 的路径。原生模块保持外置，asar 里再解开 `prebuilds` / `build`。
 
 正式发布时，各平台会从实际生成的 `dist/*-unpacked/resources/app.asar` 读取 migration，生成 `clean-slate-migrations-<platform>.json`。Tag 创建前必须同时拿到 Windows 和 Linux inventory，确认包含基线与全部增量迁移（`.sql` 与 `meta/*.json`，清单从源迁移目录推导），并且两边文件哈希一致；只检查构建目录 `out/` 不算发布产物验证。
 
 ## 不要把这些加回 `dependencies`
 
 - 渲染层 UI 包（`react`、`lucide-react`、`@lobehub/icons`、`streamdown`…）。窗口页面已经在 `out/renderer`。
-- `@openharness/server`、`@openharness/core` 以及其它 workspace 包。放进 production 依赖后，builder 会顺着链接扫完整棵 monorepo，又回到“搜索 node modules 停很久”；主进程还会按 CJS `require` 外置加载，而 workspace 包的 `exports` 通常只有 `import`，会直接炸成 `ERR_PACKAGE_PATH_NOT_EXPORTED`。
+- `@vykor/server`、`@vykor/core` 以及其它 workspace 包。放进 production 依赖后，builder 会顺着链接扫完整棵 monorepo，又回到“搜索 node modules 停很久”；主进程还会按 CJS `require` 外置加载，而 workspace 包的 `exports` 通常只有 `import`，会直接炸成 `ERR_PACKAGE_PATH_NOT_EXPORTED`。
 - Tailwind / lightningcss 的全平台可选二进制。它们是构建工具，不是运行时。
 
 以后主进程如果真的要运行时 `require` 某个 npm 包，再把它放进 `dependencies`，并确认 Vite 没有把它打进 bundle（原生模块用 `externalizeDeps.include`）。
@@ -32,13 +32,13 @@ Desktop 只直接依赖 `@openharness/client` 和 `@openharness/server`。主进
 
 ```bash
 # 只验证 JS 能不能编过
-pnpm --filter @openharness/desktop exec electron-vite build
+pnpm --filter @vykor/desktop exec electron-vite build
 
 # 解包到 dist/win-unpacked，不打 NSIS，够日常看体积和启动
-pnpm --filter @openharness/desktop build:unpack
+pnpm --filter @vykor/desktop build:unpack
 
 # 真正出 Windows 安装包
-pnpm --filter @openharness/desktop build:win
+pnpm --filter @vykor/desktop build:win
 ```
 
 `searching for node modules` 之后如果很快出现 `asar` / `win-unpacked`，说明依赖树是瘦的。如果又开始刷 `duplicate dependency references` 和一长串 `antd-style`、`@tailwindcss/oxide-*`，就是有 UI 或 workspace 包被加回了 production 依赖。

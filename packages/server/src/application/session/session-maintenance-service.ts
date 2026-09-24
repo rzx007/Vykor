@@ -1,7 +1,7 @@
-import type { SessionMessagePartRecord, SessionMessageRecord } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
-import type { AgentRememberResult } from "@openharness/agent-runtime";
-import { updateRulesFromSession, type SessionMessageLike } from "@openharness/personalization";
+import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/protocol";
+import type { SessionStore } from "@vykor/services";
+import type { AgentRememberResult } from "@vykor/agent-runtime";
+import { updateRulesFromSession, type SessionMessageLike } from "@vykor/personalization";
 
 import { writeSessionExport, type SessionExportFormat } from "../../session/export-session.js";
 import { rewindTranscript } from "../../session/rewind.js";

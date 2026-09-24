@@ -1,6 +1,6 @@
-# @openharness/skills
+# @vykor/skills
 
-Markdown skill loading, parsing, and registry utilities for OpenHarness.
+Markdown skill loading, parsing, and registry utilities for Vykor.
 
 ## What A Skill Is
 
@@ -46,8 +46,8 @@ The CLI loads skills into a single `SkillRegistry` in this order:
 
 1. Bundled skills from `BUNDLED_SKILLS`
 2. Plugin skills and plugin command projections
-3. User skills from `getSkillsDir()` (`~/.openharness-ts/skills` by default)
-4. Project skills from `.openharness-ts/skills` and `.agents/skills`, walking
+3. User skills from `getSkillsDir()` (`~/.vykor/skills` by default)
+4. Project skills from `.vykor/skills` and `.agents/skills`, walking
    from the git root toward the current working
    directory
 
@@ -56,7 +56,7 @@ directory above. The bundled `create-skill` skill documents those paths for the
 model; invoke it with `/create-skill` or the `Skill` tool. Do not write new
 skills to `.agents/skills` unless the user asks for that layout.
 
-Only these current directories are scanned. Other tool-specific skill directories are not OpenHarness project sources.
+Only these current directories are scanned. Other tool-specific skill directories are not Vykor project sources.
 
 Registration is last-writer-wins, so the effective priority is:
 
@@ -109,5 +109,5 @@ the full Markdown content for a selected skill.
 ## Tests
 
 ```bash
-pnpm --filter @openharness/skills test
+pnpm --filter @vykor/skills test
 ```

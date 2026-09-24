@@ -6,7 +6,7 @@ import type {
   McpRuntimeStatus,
   McpServerConfig,
   McpServerIdentity,
-} from "@openharness/core";
+} from "@vykor/core";
 import { oauthScopesChanged, resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
 
 /**

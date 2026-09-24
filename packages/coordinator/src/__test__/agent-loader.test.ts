@@ -8,7 +8,7 @@ import type { AgentDefinition } from "../index.js";
 let tmp: string;
 
 beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), "ohs-agents-"));
+  tmp = mkdtempSync(join(tmpdir(), "vk-agents-"));
 });
 
 afterEach(() => {

@@ -28,7 +28,7 @@ describe("launchWorkspaceOpener", () => {
       rootPath: undefined,
     })
     expect(updateDefaultOpener).not.toHaveBeenCalled()
-    expect(localStorage.getItem("openharness.desktop.open-with.v1")).toBeNull()
+    expect(localStorage.getItem("vykor.desktop.open-with.v1")).toBeNull()
   })
 
   it("opens a project folder with the folder as both path and rootPath", async () => {

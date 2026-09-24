@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { McpServerSummary } from "@openharness/server"
+import type { McpServerSummary } from "@vykor/server"
 import { DesktopMcpService } from "./mcp-service"
 
 function summary(overrides: Partial<McpServerSummary> = {}): McpServerSummary {

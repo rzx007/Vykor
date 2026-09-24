@@ -1,15 +1,15 @@
-import type { OpenHarnessAgent } from "@openharness/agent-runtime";
-import type { AgentEvent, ContentBlock, StreamEvent } from "@openharness/core";
+import type { VykorAgent } from "@vykor/agent-runtime";
+import type { AgentEvent, ContentBlock, StreamEvent } from "@vykor/core";
 import {
   type SessionStore,
-} from "@openharness/services";
+} from "@vykor/services";
 import {
   patchSessionRuntimeMetadata,
   readSessionRuntimeConfig,
   parseSessionInputItems,
   parseGoalAssessment,
   type SessionInputRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { LiveChildAgentDirectory } from "./live-child-agent-directory.js";
@@ -47,7 +47,7 @@ export interface DaemonAgentEventProjectorContext {
   /** Required in production; optional only for narrow projector test doubles. */
   projectorId?: string;
   rootSessionId?: string;
-  rootAgent: OpenHarnessAgent;
+  rootAgent: VykorAgent;
   store: Pick<SessionStore,
     "conversations" | "conversationTransactions" | "runs" | "sessions" |
     "createProjectionSettlement" | "failProjectionSettlement" | "getProjectionSettlement" |

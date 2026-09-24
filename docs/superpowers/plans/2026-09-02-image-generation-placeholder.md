@@ -34,7 +34,7 @@
 - [x] **步骤 2：运行测试验证红灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
 ```
 
 预期：失败，因为当前模型只有 `tool` 和通用 `attachments` 单元。
@@ -64,7 +64,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [x] **步骤 2：运行组件测试验证红灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts
 ```
 
 预期：失败，因为组件文件尚不存在。
@@ -76,7 +76,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [x] **步骤 4：运行组件和模型测试验证绿灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
 ```
 
 预期：全部通过。
@@ -101,7 +101,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [x] **步骤 2：运行拼图测试验证红灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts src/renderer/src/components/desktop/conversation-page/message-attachment.test.ts src/renderer/src/components/desktop/conversation-page/transcript.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts src/renderer/src/components/desktop/conversation-page/message-attachment.test.ts src/renderer/src/components/desktop/conversation-page/transcript.test.ts
 ```
 
 预期：新增拼图与 `fill` 断言失败。
@@ -119,7 +119,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [x] **步骤 1：运行桌面类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：Node 和 Web 两套 TypeScript 检查均退出 0。
@@ -127,7 +127,7 @@ pnpm --filter @openharness/desktop typecheck
 - [x] **步骤 2：运行完整桌面测试**
 
 ```powershell
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/desktop test
 ```
 
 预期：失败数为 0。
@@ -150,7 +150,7 @@ pnpm --filter @openharness/desktop test
 - [x] **步骤 2：运行测试验证红灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts
 ```
 
 预期：失败，因为当前标题仍是 `图片生成失败`，且卡片仍使用 destructive 红色样式。
@@ -177,7 +177,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [x] **步骤 2：运行测试验证红灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/image-generation-message.test.ts
 ```
 
 预期：失败，因为当前外层仍固定为 `max-w-xl`，内部 `9:16` 区域使用 `max-w-64`，从而在卡片右侧留下空白。

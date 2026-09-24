@@ -110,7 +110,7 @@ expect(JSON.parse(await fs.readFile(target, "utf8")))
 - [ ] **步骤 2：运行测试并确认失败**
 
 ```bash
-pnpm --filter @openharness/core test -- atomic-json-write.test.ts settings.test.ts
+pnpm --filter @vykor/core test -- atomic-json-write.test.ts settings.test.ts
 ```
 
 预期：FAIL，helper 尚不存在，当前实现直接覆盖 `settings.json`。
@@ -139,8 +139,8 @@ export async function writeJsonFileAtomically(
 - [ ] **步骤 4：运行 Core 全套测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/core check-types
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/core check-types
 git diff --check
 ```
 
@@ -182,16 +182,16 @@ git commit -m "fix(settings): save configuration atomically (task 1/4)"
 installation ID 只依赖规范化数据目录：
 
 ```ts
-expect(deriveInstallationId("C:\\Users\\A\\.openharness-ts\\data"))
-  .toBe(deriveInstallationId("c:/Users/A/.openharness-ts/data/"))
+expect(deriveInstallationId("C:\\Users\\A\\.vykor\\data"))
+  .toBe(deriveInstallationId("c:/Users/A/.vykor/data/"))
 expect(deriveInstallationId("D:\\other\\data"))
-  .not.toBe(deriveInstallationId("C:\\Users\\A\\.openharness-ts\\data"))
+  .not.toBe(deriveInstallationId("C:\\Users\\A\\.vykor\\data"))
 ```
 
 算法固定为：
 
 ```text
-sha256("openharness-installation-v1\0" + normalizedAbsoluteDataDir).slice(0, 32)
+sha256("vykor-installation-v1\0" + normalizedAbsoluteDataDir).slice(0, 32)
 ```
 
 Windows 统一分隔符、盘符和大小写；POSIX 保持大小写。只把 hash 写入 Docker label，不暴露宿主绝对数据目录。
@@ -203,36 +203,36 @@ Manager 测试断言 `create(identity)` 在 handle 创建前拿到 environment I
 `docker run` 必须包含：
 
 ```text
-org.openharness.sandbox.managed=true
-org.openharness.sandbox.installation=<installationId>
-org.openharness.sandbox.workspace-owner=<workspaceOwnerId>
-org.openharness.sandbox.config-hash=<configHash>
-org.openharness.sandbox.reusable=true|false
-org.openharness.sandbox.created-by-owner=<daemonOwnerId>
-org.openharness.sandbox.created-by-generation=<daemonGeneration>
-org.openharness.sandbox.environment-id=<environmentId>
+org.vykor.sandbox.managed=true
+org.vykor.sandbox.installation=<installationId>
+org.vykor.sandbox.workspace-owner=<workspaceOwnerId>
+org.vykor.sandbox.config-hash=<configHash>
+org.vykor.sandbox.reusable=true|false
+org.vykor.sandbox.created-by-owner=<daemonOwnerId>
+org.vykor.sandbox.created-by-generation=<daemonGeneration>
+org.vykor.sandbox.environment-id=<environmentId>
 ```
 
 环境进程和 PTY 必须带：
 
 ```text
-OPENHARNESS_INSTALLATION_ID
-OPENHARNESS_DAEMON_OWNER_ID
-OPENHARNESS_DAEMON_GENERATION
-OPENHARNESS_ENVIRONMENT_ID
-OPENHARNESS_EXECUTION_KIND
-OPENHARNESS_EXECUTION_ID
+VYKOR_INSTALLATION_ID
+VYKOR_DAEMON_OWNER_ID
+VYKOR_DAEMON_GENERATION
+VYKOR_ENVIRONMENT_ID
+VYKOR_EXECUTION_KIND
+VYKOR_EXECUTION_ID
 ```
 
-后台任务使用 durable task ID；Terminal 使用服务端生成的 terminal ID。用户传入的同名 `OPENHARNESS_*` 环境变量必须被覆盖或拒绝，不能伪造 owner。
+后台任务使用 durable task ID；Terminal 使用服务端生成的 terminal ID。用户传入的同名 `VYKOR_*` 环境变量必须被覆盖或拒绝，不能伪造 owner。
 
 - [ ] **步骤 3：运行测试并确认失败**
 
 ```bash
-pnpm --filter @openharness/sandbox test -- execution-environment-manager.test.ts index.test.ts
-pnpm --filter @openharness/terminal-node test -- environment-terminal-target.test.ts
-pnpm --filter @openharness/services test -- detached-process-supervisor.test.ts
-pnpm --filter @openharness/server test -- installation-id.test.ts session-execution-environment.test.ts daemon-terminal-service.test.ts
+pnpm --filter @vykor/sandbox test -- execution-environment-manager.test.ts index.test.ts
+pnpm --filter @vykor/terminal-node test -- environment-terminal-target.test.ts
+pnpm --filter @vykor/services test -- detached-process-supervisor.test.ts
+pnpm --filter @vykor/server test -- installation-id.test.ts session-execution-environment.test.ts daemon-terminal-service.test.ts
 ```
 
 预期：FAIL，当前环境创建没有 installation/application owner identity，Docker 只有 managed/config/workspace labels。
@@ -277,14 +277,14 @@ execution.daemonGeneration === current.generation
 - [ ] **步骤 5：运行相关包测试、类型检查和现有 Docker E2E**
 
 ```bash
-pnpm --filter @openharness/environment test
-pnpm --filter @openharness/sandbox test
-pnpm --filter @openharness/terminal-node test
-pnpm --filter @openharness/services test -- detached-process-supervisor.test.ts
-pnpm --filter @openharness/server test -- installation-id.test.ts session-execution-environment.test.ts daemon-terminal-service.test.ts
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/sandbox e2e:docker
-pnpm --filter @openharness/terminal-node e2e:docker
+pnpm --filter @vykor/environment test
+pnpm --filter @vykor/sandbox test
+pnpm --filter @vykor/terminal-node test
+pnpm --filter @vykor/services test -- detached-process-supervisor.test.ts
+pnpm --filter @vykor/server test -- installation-id.test.ts session-execution-environment.test.ts daemon-terminal-service.test.ts
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/sandbox e2e:docker
+pnpm --filter @vykor/terminal-node e2e:docker
 ```
 
 预期：全部通过；现有 PTY 输入、resize、Ctrl-C、EOF、terminate 和 lease 隔离行为不变。
@@ -342,7 +342,7 @@ expect(planDockerOrphanReconciliation(inventory, {
 - [ ] **步骤 2：运行测试并确认失败**
 
 ```bash
-pnpm --filter @openharness/sandbox test -- docker-orphan-reconciler.test.ts
+pnpm --filter @vykor/sandbox test -- docker-orphan-reconciler.test.ts
 ```
 
 预期：FAIL，reconciler 尚不存在。
@@ -359,7 +359,7 @@ reconcileDockerOrphans(input): Promise<DockerReconciliationReport>
 
 执行顺序：
 
-1. `docker ps -a --filter label=org.openharness.sandbox.managed=true`；
+1. `docker ps -a --filter label=org.vykor.sandbox.managed=true`；
 2. inspect 候选容器并读取 labels/state；
 3. 只对匹配 installation 的运行容器扫描 `/proc/*/environ`；
 4. 先杀复用容器里的旧 exec 进程组；
@@ -386,10 +386,10 @@ reconcileDockerOrphans(input): Promise<DockerReconciliationReport>
 - [ ] **步骤 5：运行 Sandbox 与 Server 测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/sandbox test -- docker-orphan-reconciler.test.ts
-pnpm --filter @openharness/server test -- durable-agent-application.test.ts durability-boundaries.test.ts
-pnpm --filter @openharness/sandbox check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/sandbox test -- docker-orphan-reconciler.test.ts
+pnpm --filter @vykor/server test -- durable-agent-application.test.ts durability-boundaries.test.ts
+pnpm --filter @vykor/sandbox check-types
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部通过；application 在 reconciliation 完成前不进入 ready。
@@ -426,7 +426,7 @@ git commit -m "feat(runtime): reconcile Docker orphans on startup (task 3/4)"
 - [ ] **步骤 2：运行 E2E 并确认失败**
 
 ```bash
-pnpm --filter @openharness/sandbox e2e:docker
+pnpm --filter @vykor/sandbox e2e:docker
 ```
 
 预期：FAIL，新 E2E 需要的 labels 和 reconciler 尚未实现。
@@ -467,8 +467,8 @@ daemon 重启 → 用当前 settings + Docker labels 清理/重建
 pnpm exec turbo test --concurrency=4 --env-mode=loose
 pnpm exec turbo check-types --concurrency=4 --env-mode=loose
 node --test scripts/prepare-tag-release.test.mjs scripts/npm-release.test.mjs
-pnpm --filter @openharness/sandbox e2e:docker
-pnpm --filter @openharness/terminal-node e2e:docker
+pnpm --filter @vykor/sandbox e2e:docker
+pnpm --filter @vykor/terminal-node e2e:docker
 git diff --check
 ```
 

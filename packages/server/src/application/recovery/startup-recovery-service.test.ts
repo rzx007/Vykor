@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionStore } from "@openharness/services";
+import { SessionStore } from "@vykor/services";
 import { afterEach, describe, expect, it } from "vitest";
 import { StartupRecoveryService } from "./startup-recovery-service.js";
 
@@ -10,7 +10,7 @@ afterEach(() => cleanup.splice(0).forEach((dispose) => dispose()));
 
 describe("StartupRecoveryService", () => {
   it("runs durable SQLite recovery in order and remains idempotent", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-startup-recovery-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-startup-recovery-"));
     const databasePath = join(directory, "store.db");
     let store = new SessionStore({ path: databasePath });
     cleanup.push(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });

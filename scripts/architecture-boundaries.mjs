@@ -8,11 +8,11 @@ const baselinePath = join(root, "scripts", "architecture-baseline.json");
 
 const forbiddenPackageEdges = new Map([
   [
-    "@openharness/protocol",
-    new Set(["@openharness/services", "@openharness/server", "@openharness/client"]),
+    "@vykor/protocol",
+    new Set(["@vykor/services", "@vykor/server", "@vykor/client"]),
   ],
-  ["@openharness/services", new Set(["@openharness/server", "@openharness/client"])],
-  ["@openharness/agent-runtime", new Set(["@openharness/server"])],
+  ["@vykor/services", new Set(["@vykor/server", "@vykor/client"])],
+  ["@vykor/agent-runtime", new Set(["@vykor/server"])],
 ]);
 
 const storeCallPattern = /\b(?:this\.)?(?:context\.)?store\.([A-Za-z_$][\w$]*)\s*\(/g;
@@ -30,8 +30,8 @@ export function checkImportBoundary(fromFile, specifier) {
   const normalized = fromFile.replaceAll("\\", "/");
   const isDomain = /(?:^|\/)(?:packages\/services\/src\/)?(sessions|conversations|runs)\//.test(normalized);
   if (isDomain) {
-    if (specifier === "@openharness/server" || specifier.startsWith("@openharness/server/")) {
-      return [`${fromFile} must not depend on @openharness/server`];
+    if (specifier === "@vykor/server" || specifier.startsWith("@vykor/server/")) {
+      return [`${fromFile} must not depend on @vykor/server`];
     }
     if (/(?:^|\/)session-runtime\/store(?:\.[a-zA-Z]+)?$/.test(specifier)) {
       return [`${fromFile} must not depend on session-runtime/store`];
@@ -50,13 +50,13 @@ export function checkImportBoundary(fromFile, specifier) {
     if (/(?:^|\/)session-runtime\/store(?:\.[a-zA-Z]+)?$/.test(specifier) || /SessionStore(?:\.[a-zA-Z]+)?$/.test(specifier)) {
       return [`${fromFile} must not depend on SessionStore`];
     }
-    if (/(?:^|\/|\.\.\/)(?:sessions\/session-repository|@openharness\/services\/sessions)(?:\/|\.|$)/.test(specifier) || specifier === "@openharness/services/sessions") {
+    if (/(?:^|\/|\.\.\/)(?:sessions\/session-repository|@vykor\/services\/sessions)(?:\/|\.|$)/.test(specifier) || specifier === "@vykor/services/sessions") {
       return [`${fromFile} must not depend on session repository`];
     }
-    if (/(?:^|\/|\.\.\/)(?:conversations\/conversation-repository|@openharness\/services\/conversations)(?:\/|\.|$)/.test(specifier) || specifier === "@openharness/services/conversations") {
+    if (/(?:^|\/|\.\.\/)(?:conversations\/conversation-repository|@vykor\/services\/conversations)(?:\/|\.|$)/.test(specifier) || specifier === "@vykor/services/conversations") {
       return [`${fromFile} must not depend on conversation repository`];
     }
-    if (/(?:^|\/|\.\.\/)(?:runs\/run-repository|@openharness\/services\/runs)(?:\/|\.|$)/.test(specifier) || specifier === "@openharness/services/runs") {
+    if (/(?:^|\/|\.\.\/)(?:runs\/run-repository|@vykor\/services\/runs)(?:\/|\.|$)/.test(specifier) || specifier === "@vykor/services/runs") {
       return [`${fromFile} must not depend on run repository`];
     }
   }
@@ -106,8 +106,8 @@ export function checkImportBoundary(fromFile, specifier) {
 
   const isClientResource = /(?:^|\/)(?:packages\/client\/src\/)?resources\//.test(normalized);
   if (isClientResource) {
-    if (/(?:^|\/)http-client(?:\.[a-zA-Z]+)?$/.test(specifier) || specifier === "@openharness/server" || specifier.startsWith("@openharness/server/")) {
-      return [`${fromFile} must not depend on OpenHarnessClient or Server`];
+    if (/(?:^|\/)http-client(?:\.[a-zA-Z]+)?$/.test(specifier) || specifier === "@vykor/server" || specifier.startsWith("@vykor/server/")) {
+      return [`${fromFile} must not depend on VykorClient or Server`];
     }
   }
 
@@ -123,7 +123,7 @@ export function checkImportBoundary(fromFile, specifier) {
     if (specifier === "electron" || specifier.startsWith("electron/")) {
       return [`${fromFile} must not depend on Electron`];
     }
-    if (specifier === "@openharness/desktop" || /(?:^|\/|\.\.\/)desktop(?:\/|\.|$)/.test(specifier)) {
+    if (specifier === "@vykor/desktop" || /(?:^|\/|\.\.\/)desktop(?:\/|\.|$)/.test(specifier)) {
       return [`${fromFile} must not depend on Desktop`];
     }
   }

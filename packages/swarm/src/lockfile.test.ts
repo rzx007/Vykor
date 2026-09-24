@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { exclusiveFileLock, SwarmLockError } from "./lockfile.js";
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), "ohs-lock-"));
+  return mkdtempSync(join(tmpdir(), "vk-lock-"));
 }
 
 describe("exclusiveFileLock", () => {

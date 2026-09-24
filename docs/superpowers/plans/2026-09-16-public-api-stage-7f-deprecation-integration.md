@@ -43,16 +43,16 @@
 
 按顺序运行并保存摘要：
 
-- [ ] `pnpm --filter @openharness/client check-types`
-- [ ] `pnpm --filter @openharness/client test`
-- [ ] `pnpm --filter @openharness/frontend check-types`
-- [ ] `pnpm --filter @openharness/frontend test`
-- [ ] `pnpm --filter @openharness/desktop typecheck`
-- [ ] `pnpm --filter @openharness/desktop test`
+- [ ] `pnpm --filter @vykor/client check-types`
+- [ ] `pnpm --filter @vykor/client test`
+- [ ] `pnpm --filter @vykor/frontend check-types`
+- [ ] `pnpm --filter @vykor/frontend test`
+- [ ] `pnpm --filter @vykor/desktop typecheck`
+- [ ] `pnpm --filter @vykor/desktop test`
 - [ ] `pnpm --filter @rzx/ohs check-types`
 - [ ] `pnpm --filter @rzx/ohs test`
-- [ ] `pnpm --filter @openharness/server check-types`
-- [ ] `pnpm --filter @openharness/server test`
+- [ ] `pnpm --filter @vykor/server check-types`
+- [ ] `pnpm --filter @vykor/server test`
 - [ ] `pnpm check-types`
 - [ ] `pnpm check:architecture`（必须固定串联 scanner tests、runtime/type-only contract comparison 与 consumer fixture 编译）
 - [ ] `node scripts/check-docs.mjs`

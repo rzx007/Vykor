@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { SkillRegistry, type SkillDefinition } from "@openharness/skills";
-import type { AgentExecutionContext } from "@openharness/core";
-import { createOpenHarnessRuntime } from "./default-runtime.js";
+import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
+import type { AgentExecutionContext } from "@vykor/core";
+import { createVykorRuntime } from "./default-runtime.js";
 import { installRuntimeIntegrations } from "./runtime-integrations.js";
 
 it("keeps baseline Skills and selects only the current Run's plugin summaries", async () => {
@@ -16,7 +16,7 @@ it("keeps baseline Skills and selects only the current Run's plugin summaries", 
   const prompts: string[] = [];
   const toolNames: string[][] = [];
   const userInputs: string[] = [];
-  const runtime = await createOpenHarnessRuntime({
+  const runtime = await createVykorRuntime({
     cwd: process.cwd(), settings: { model: "test", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" } }, skillRegistry,
     configuration: { client: { async *streamMessage(input) {
       prompts.push(input.system ?? "");

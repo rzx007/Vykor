@@ -23,9 +23,8 @@ test("Home renders logo area, children slot, and hint row (80x24)", async () => 
   expect(frame).toContain("ctrl+p commands");
   expect(frame).toContain("tab mode");
 
-  // ascii-font "slick" renders box-drawing chars — verify logo is present
-  // The slick font uses ╭ ╮ ╯ ╰ characters for its letter outlines
-  expect(frame).toContain("╭");
+  // At 80 columns the shorter Vykor name fits the block logo.
+  expect(frame).toContain("██╗");
 
   renderer.destroy();
 });
@@ -43,8 +42,8 @@ test("Home narrow fallback text at width 30", async () => {
   await renderOnce();
   const frame = captureCharFrame();
 
-  // At narrow width the Logo falls back to plain "openharness" text
-  expect(frame).toContain("openharness");
+  // At narrow width the Logo falls back to plain text.
+  expect(frame).toContain("Vykor");
 
   renderer.destroy();
 });

@@ -3,7 +3,7 @@ import type {
   ToolContext,
   ToolDefinition,
   ToolResult,
-} from "@openharness/core";
+} from "@vykor/core";
 
 function host(context: ToolContext): AgentScheduleEffects | undefined {
   return context.schedules;

@@ -1,4 +1,4 @@
-import { loadSettings, updateSettings, type Settings } from "@openharness/core";
+import { loadSettings, updateSettings, type Settings } from "@vykor/core";
 
 import {
   DaemonSystemService,

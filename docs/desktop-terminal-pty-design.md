@@ -11,7 +11,7 @@ daemon 是终端的唯一运行时所有者。Desktop 和 Agent 通过同一套 
 ```text
 Renderer (@xterm/xterm)
   → Electron preload / main
-  → OpenHarnessClient
+  → VykorClient
   → daemon Terminal HTTP/SSE
   → DaemonTerminalService
   → LocalTerminalProvider
@@ -130,7 +130,7 @@ daemon 从 Store 解析真实 cwd。请求中的 projectId/sessionId/cwd 如果�
 单元测试覆盖创建、输入、输出、resize、signal、退出、scope 校验和 Shell 注入。真实 WSL E2E 还覆盖 stdio MCP、真实 PTY、resize、Ctrl-C 后继续交互，以及关闭时资源回收：
 
 ```bash
-pnpm --filter @openharness/sandbox e2e:wsl
+pnpm --filter @vykor/sandbox e2e:wsl
 ```
 
 相关权威文档：

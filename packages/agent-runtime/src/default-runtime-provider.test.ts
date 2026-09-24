@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  OPENHARNESS_USER_AGENT,
+  VYKOR_USER_AGENT,
   OpenAICompatibleClient,
   RequestHeaderTemplateError,
-} from "@openharness/api";
-import type { Settings } from "@openharness/core";
+} from "@vykor/api";
+import type { Settings } from "@vykor/core";
 
 import { resolveApiClient } from "./default-runtime-provider.js";
 
@@ -80,7 +80,7 @@ describe("resolveApiClient request header templates", () => {
     );
 
     expect(readDefaultHeaders(client)).toEqual({
-      "User-Agent": OPENHARNESS_USER_AGENT,
+      "User-Agent": VYKOR_USER_AGENT,
       "X-Session": "session-42",
     });
   });
@@ -163,7 +163,7 @@ describe("resolveApiClient request header templates", () => {
     });
 
     expect(headerValues[0]).toEqual({
-      "User-Agent": OPENHARNESS_USER_AGENT,
+      "User-Agent": VYKOR_USER_AGENT,
       "X-Session": "session-stable",
     });
     expect(headerValues[1]).toEqual(headerValues[0]);

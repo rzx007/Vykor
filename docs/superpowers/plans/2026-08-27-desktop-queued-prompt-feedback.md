@@ -119,7 +119,7 @@ interface QueuedPromptAction {
 
 ```powershell
 pnpm check-types
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop lint
 git diff --check
 ```
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelsDevCatalog } from "@openharness/api";
+import type { ModelsDevCatalog } from "@vykor/api";
 
 import { validateRequestSelection } from "./request-selection-validation.js";
 

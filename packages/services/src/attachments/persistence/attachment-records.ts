@@ -1,9 +1,9 @@
-import { parseAttachmentAssetRecord } from "@openharness/protocol";
+import { parseAttachmentAssetRecord } from "@vykor/protocol";
 import type {
   AttachmentAssetRecord,
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface CreateAttachmentRepresentationInput {
   id: string;

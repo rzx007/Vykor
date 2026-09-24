@@ -30,7 +30,7 @@
 - [ ] **步骤 2：运行测试确认失败**
 
 ```powershell
-pnpm --filter @openharness/services test -- schedule-repository
+pnpm --filter @vykor/services test -- schedule-repository
 ```
 
 预期：FAIL，缺少 ScheduleRepository。
@@ -42,8 +42,8 @@ pnpm --filter @openharness/services test -- schedule-repository
 - [ ] **步骤 4：验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test -- schedule-repository store
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- schedule-repository store
+pnpm --filter @vykor/services check-types
 git diff --check
 git add packages/services/src/schedules packages/services/src/session-runtime/store-state.ts
 git commit --no-verify -m "refactor(services): add schedule repository"
@@ -62,7 +62,7 @@ git commit --no-verify -m "refactor(services): add schedule repository"
 - [ ] **步骤 2：运行特征测试**
 
 ```powershell
-pnpm --filter @openharness/services test -- store
+pnpm --filter @vykor/services test -- store
 ```
 
 预期：现有和新增兼容测试通过。
@@ -74,8 +74,8 @@ Store 增加 `readonly schedules: ScheduleRepository`，在 StorageContext 完�
 - [ ] **步骤 4：验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
 git diff -- packages/services/src/session-runtime/schema.ts packages/services/src/session-runtime/migrations
 git add packages/services/src/session-runtime/store.ts packages/services/src/session-runtime/__test__/store.test.ts
 git commit --no-verify -m "refactor(services): delegate schedules from session store"
@@ -108,7 +108,7 @@ expect(calls.slice(0, 2)).toEqual([
 - [ ] **步骤 2：运行测试确认旧 Store 依赖失败**
 
 ```powershell
-pnpm --filter @openharness/server test -- scheduled-task-service
+pnpm --filter @vykor/server test -- scheduled-task-service
 ```
 
 预期：FAIL，旧 Service 调用 `interruptActiveScheduledRuns/listScheduledTasks`。
@@ -129,10 +129,10 @@ node scripts/architecture-boundaries.mjs --write-baseline
 - [ ] **步骤 5：最终验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server test -- scheduled-task-service
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server test -- scheduled-task-service
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
 pnpm check:architecture
 node scripts/check-docs.mjs
 git diff --check

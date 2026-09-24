@@ -13,8 +13,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   createWorkflowPlan,
   createWorkflowRunSnapshot,
-} from "@openharness/coordinator";
-import type { JobSnapshot } from "@openharness/jobs";
+} from "@vykor/coordinator";
+import type { JobSnapshot } from "@vykor/jobs";
 import type {
   AgentChildInput,
   AgentChildDirectory,
@@ -28,29 +28,29 @@ import type {
   AgentRunHandle,
   AgentRunResult,
   Message,
-} from "@openharness/core";
+} from "@vykor/core";
 import type {
   AgentCapabilitySnapshot,
   AgentCompactResult,
   AgentInspection,
   AgentRememberResult,
-  OpenHarnessAgent,
-} from "@openharness/agent-runtime";
+  VykorAgent,
+} from "@vykor/agent-runtime";
 import type { CommandCatalogProvider } from "../../commands/commands.js";
 import {
   getDetachedProcessSupervisor,
   SessionStore,
-} from "@openharness/services";
-import { DEFAULT_ATTACHMENT_LIMITS } from "@openharness/protocol";
+} from "@vykor/services";
+import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/protocol";
 import type {
   CreateDaemonAgent,
   CreateDaemonAgentContext,
 } from "../../daemon/daemon-agent.js";
-import { OpenHarnessHttpServer, startOpenHarnessServer } from "../server.js";
+import { VykorHttpServer, startVykorServer } from "../server.js";
 import { getDefaultSessionStorePath } from "../../daemon/paths.js";
 import type {
-  OpenHarnessServerOptions,
-  OpenHarnessServerServices,
+  VykorServerOptions,
+  VykorServerServices,
 } from "../server.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import { projectionSettlementInput } from "../../application/agent/projection-settlement-recovery.js";
@@ -59,20 +59,20 @@ const serverTestConfigDir = mkdtempSync(join(tmpdir(), "oh-server-config-"));
 // HTTP fixtures represent current clients; version rejection has dedicated middleware tests.
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
-  headers.set("x-openharness-protocol-version", "4");
+  headers.set("x-vykor-protocol-version", "4");
   return globalThis.fetch(input, { ...init, headers });
 };
 let previousConfigDir: string | undefined;
 
 beforeAll(() => {
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-  process.env.OPENHARNESS_CONFIG_DIR = serverTestConfigDir;
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  process.env.VYKOR_CONFIG_DIR = serverTestConfigDir;
 });
 
 afterAll(() => {
   if (previousConfigDir === undefined)
-    delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+    delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
   rmSync(serverTestConfigDir, { recursive: true, force: true });
 });
 
@@ -86,7 +86,7 @@ interface TestAgentProgram {
     transcript: Array<{ role: string; parts: Array<Record<string, any>> }>;
   }>;
   remember?(): Promise<AgentRememberResult>;
-  getUsage?(): ReturnType<OpenHarnessAgent["getUsage"]> & {
+  getUsage?(): ReturnType<VykorAgent["getUsage"]> & {
     messageCount?: number;
   };
 }
@@ -113,7 +113,7 @@ function adaptTestAgentFactory(
     let history: Message[] = [];
     const listeners = new Set<AgentEventListener>();
     let sequence = 0;
-    let state: OpenHarnessAgent["state"] = "idle";
+    let state: VykorAgent["state"] = "idle";
     let activeHandle: AgentRunHandle | undefined;
     let closePromise: Promise<void> | undefined;
     const emit = async (
@@ -443,13 +443,13 @@ async function withServer(
     baseUrl: string;
     token: string;
     storePath: string;
-    server: OpenHarnessHttpServer;
+    server: VykorHttpServer;
   }) => Promise<void>,
   options: TestServerOptions = {},
 ): Promise<void> {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-server-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-server-"));
   const token = "test-token";
-  const server = new OpenHarnessHttpServer({
+  const server = new VykorHttpServer({
     token,
     allowedOrigins: options.allowedOrigins,
     storePath: join(dir, "sessions.db"),
@@ -491,25 +491,25 @@ async function withServer(
 }
 
 interface TestServerOptions extends Pick<
-  OpenHarnessServerOptions,
+  VykorServerOptions,
   "allowedOrigins" | "logger"
 > {
   runtimeFactory?: TestAgentProgramFactory;
   createAgent?: CreateDaemonAgent;
-  commandCatalog?: OpenHarnessServerServices["commandCatalog"];
-  settingsService?: OpenHarnessServerServices["settings"];
-  providerService?: OpenHarnessServerServices["provider"];
-  memoryService?: OpenHarnessServerServices["memory"];
-  authService?: OpenHarnessServerServices["auth"];
-  contextService?: OpenHarnessServerServices["context"];
-  dreamService?: OpenHarnessServerServices["dream"];
-  profileService?: OpenHarnessServerServices["profile"];
-  outputStyleService?: OpenHarnessServerServices["outputStyle"];
-  projectInitService?: OpenHarnessServerServices["projectInit"];
-  pluginService?: OpenHarnessServerServices["plugin"];
-  agentPersonaService?: OpenHarnessServerServices["agentPersona"];
-  hooksService?: OpenHarnessServerServices["hooks"];
-  gitService?: OpenHarnessServerServices["git"];
+  commandCatalog?: VykorServerServices["commandCatalog"];
+  settingsService?: VykorServerServices["settings"];
+  providerService?: VykorServerServices["provider"];
+  memoryService?: VykorServerServices["memory"];
+  authService?: VykorServerServices["auth"];
+  contextService?: VykorServerServices["context"];
+  dreamService?: VykorServerServices["dream"];
+  profileService?: VykorServerServices["profile"];
+  outputStyleService?: VykorServerServices["outputStyle"];
+  projectInitService?: VykorServerServices["projectInit"];
+  pluginService?: VykorServerServices["plugin"];
+  agentPersonaService?: VykorServerServices["agentPersona"];
+  hooksService?: VykorServerServices["hooks"];
+  gitService?: VykorServerServices["git"];
 }
 
 function auth(token: string): HeadersInit {
@@ -562,7 +562,7 @@ async function waitForEvent(
   );
 }
 
-describe("OpenHarnessHttpServer", () => {
+describe("VykorHttpServer", () => {
   it("can use an injected application without creating or closing its resources", async () => {
     const ready = vi.fn(async () => {});
     const close = vi.fn(async () => {});
@@ -602,7 +602,7 @@ describe("OpenHarnessHttpServer", () => {
       schedules: {},
       control: { runtimeSnapshot },
     } as any;
-    const server = new OpenHarnessHttpServer({ application, logger: () => {} });
+    const server = new VykorHttpServer({ application, logger: () => {} });
 
     const response = await server.app.request("/health");
     expect(response.status).toBe(200);
@@ -612,8 +612,8 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("serves protocol capabilities without bearer authentication", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-capabilities-"));
-    const server = new OpenHarnessHttpServer({
+    const dir = mkdtempSync(join(tmpdir(), "vk-capabilities-"));
+    const server = new VykorHttpServer({
       storePath: join(dir, "sessions.db"),
       token: "secret",
       version: "0.4.0",
@@ -663,7 +663,7 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("serves durable authenticated attachments and recovers interrupted imports", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-attachments-e2e-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-attachments-e2e-"));
     const storePath = join(dir, "sessions.db");
     const token = "attachment-secret";
     const attachmentLimits = {
@@ -680,10 +680,10 @@ describe("OpenHarnessHttpServer", () => {
     });
     interruptedStore.close();
 
-    let first: OpenHarnessHttpServer | undefined;
-    let second: OpenHarnessHttpServer | undefined;
+    let first: VykorHttpServer | undefined;
+    let second: VykorHttpServer | undefined;
     try {
-      first = new OpenHarnessHttpServer({
+      first = new VykorHttpServer({
         storePath,
         token,
         attachmentLimits,
@@ -708,7 +708,7 @@ describe("OpenHarnessHttpServer", () => {
       const pdf = new TextEncoder().encode("%PDF-1.7\nsame bytes");
       const unauthorizedUpload = await fetch(`${firstListen.url}/attachments`, {
         method: "POST",
-        headers: { "x-openharness-filename": "report.pdf" },
+        headers: { "x-vykor-filename": "report.pdf" },
         body: pdf,
       });
       expect(unauthorizedUpload.status).toBe(401);
@@ -719,7 +719,7 @@ describe("OpenHarnessHttpServer", () => {
           headers: {
             ...auth(token),
             "content-type": "image/png",
-            "x-openharness-filename": encodeURIComponent(displayName),
+            "x-vykor-filename": encodeURIComponent(displayName),
           },
           body: pdf,
         });
@@ -802,7 +802,7 @@ describe("OpenHarnessHttpServer", () => {
 
       await first.close();
       first = undefined;
-      second = new OpenHarnessHttpServer({
+      second = new VykorHttpServer({
         storePath,
         token,
         attachmentLimits,
@@ -827,7 +827,7 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("keeps prompt attachment references through restart, replay, fork, and branch deletion", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-attachment-lifecycle-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-attachment-lifecycle-"));
     const storePath = join(dir, "sessions.db");
     const token = "attachment-lifecycle-secret";
     const runtimeFactory: TestAgentProgramFactory = {
@@ -840,10 +840,10 @@ describe("OpenHarnessHttpServer", () => {
         };
       },
     };
-    let first: OpenHarnessHttpServer | undefined;
-    let second: OpenHarnessHttpServer | undefined;
+    let first: VykorHttpServer | undefined;
+    let second: VykorHttpServer | undefined;
     try {
-      first = new OpenHarnessHttpServer({
+      first = new VykorHttpServer({
         storePath,
         token,
         createAgent: adaptTestAgentFactory(runtimeFactory),
@@ -856,7 +856,7 @@ describe("OpenHarnessHttpServer", () => {
           headers: {
             ...auth(token),
             "content-type": "application/pdf",
-            "x-openharness-filename": encodeURIComponent(name),
+            "x-vykor-filename": encodeURIComponent(name),
           },
           body,
         });
@@ -947,7 +947,7 @@ describe("OpenHarnessHttpServer", () => {
 
       await first.close();
       first = undefined;
-      second = new OpenHarnessHttpServer({
+      second = new VykorHttpServer({
         storePath,
         token,
         createAgent: adaptTestAgentFactory(runtimeFactory),
@@ -1087,7 +1087,7 @@ describe("OpenHarnessHttpServer", () => {
             headers: {
               ...auth(token),
               "content-type": mediaType,
-              "x-openharness-filename": encodeURIComponent(displayName),
+              "x-vykor-filename": encodeURIComponent(displayName),
             },
             body,
           });
@@ -1190,8 +1190,8 @@ describe("OpenHarnessHttpServer", () => {
   }, 45_000);
 
   it("aggregates application, listener, and SSE close failures after attempting every stage", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-server-close-matrix-"));
-    const server = new OpenHarnessHttpServer({
+    const dir = mkdtempSync(join(tmpdir(), "vk-server-close-matrix-"));
+    const server = new VykorHttpServer({
       storePath: join(dir, "sessions.db"),
     });
     await server.application.ready();
@@ -1232,8 +1232,8 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("closes the durable store even when daemon shutdown fails", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-close-"));
-    const server = new OpenHarnessHttpServer({
+    const dir = mkdtempSync(join(tmpdir(), "vk-close-"));
+    const server = new VykorHttpServer({
       storePath: join(dir, "sessions.db"),
       logger: () => {},
     });
@@ -1253,9 +1253,9 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("waits for background process trees to exit before shutdown completes", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-process-shutdown-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-process-shutdown-"));
     const pidFile = join(dir, "child.pid");
-    const server = new OpenHarnessHttpServer({
+    const server = new VykorHttpServer({
       storePath: join(dir, "sessions.db"),
       logger: () => {},
     });
@@ -1289,8 +1289,8 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("closes a provided durable store when the HTTP listener cannot start", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-listen-failure-"));
-    const blocker = new OpenHarnessHttpServer({
+    const dir = mkdtempSync(join(tmpdir(), "vk-listen-failure-"));
+    const blocker = new VykorHttpServer({
       storePath: join(dir, "blocker.db"),
       logger: () => {},
     });
@@ -1300,7 +1300,7 @@ describe("OpenHarnessHttpServer", () => {
 
     try {
       await expect(
-        startOpenHarnessServer({
+        startVykorServer({
           host: occupied.host,
           port: occupied.port,
           store,
@@ -1663,13 +1663,13 @@ describe("OpenHarnessHttpServer", () => {
             headers: {
               ...auth(token),
               "content-type": "application/json",
-              "x-openharness-trace-id": traceId,
+              "x-vykor-trace-id": traceId,
             },
             body: JSON.stringify({ id: "prompt-trace-1", content: "inspect" }),
           },
         );
         expect(response.status).toBe(202);
-        expect(response.headers.get("x-openharness-trace-id")).toBe(traceId);
+        expect(response.headers.get("x-vykor-trace-id")).toBe(traceId);
         const admitted = (await response.json()) as {
           input: { metadata: Record<string, unknown> };
           run: { id: string; metadata: Record<string, unknown> };
@@ -1741,10 +1741,10 @@ describe("OpenHarnessHttpServer", () => {
           "authorization",
         );
         expect(preflight.headers.get("access-control-allow-headers")).toContain(
-          "x-openharness-trace-id",
+          "x-vykor-trace-id",
         );
         expect(preflight.headers.get("access-control-allow-headers")).toContain(
-          "x-openharness-filename",
+          "x-vykor-filename",
         );
         expect(preflight.headers.get("access-control-allow-headers")).toContain(
           "range",
@@ -1758,7 +1758,7 @@ describe("OpenHarnessHttpServer", () => {
           "https://desk.example",
         );
         expect(allowed.headers.get("access-control-expose-headers")).toContain(
-          "x-openharness-trace-id",
+          "x-vykor-trace-id",
         );
         expect(allowed.headers.get("access-control-expose-headers")).toContain(
           "content-range",
@@ -1780,7 +1780,7 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("reloads sessions/messages/events after a daemon restart and interrupts leftover runs", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-server-restart-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-server-restart-"));
     const storePath = join(dir, "sessions.db");
     const token = "test-token";
     const runtimeFactory: TestAgentProgramFactory = {
@@ -1811,7 +1811,7 @@ describe("OpenHarnessHttpServer", () => {
       },
     };
     try {
-      const first = new OpenHarnessHttpServer({
+      const first = new VykorHttpServer({
         token,
         storePath,
         createAgent: adaptTestAgentFactory(runtimeFactory),
@@ -1916,7 +1916,7 @@ describe("OpenHarnessHttpServer", () => {
         await first.close();
       }
 
-      const second = new OpenHarnessHttpServer({ token, storePath });
+      const second = new VykorHttpServer({ token, storePath });
       const listen2 = await second.listen();
       try {
         const sessions = (await (
@@ -2138,17 +2138,17 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("keeps traced recovery, permission, SSE replay, and another session independent after restart", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-server-e2e-recovery-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-server-e2e-recovery-"));
     const storePath = join(dir, "sessions.db");
     const token = "test-token";
     const recoveryTraceId = "trace-recovery-e2e-001";
     const parallelTraceId = "trace-parallel-e2e-001";
     const logs: ObservabilityEvent[] = [];
-    let first: OpenHarnessHttpServer | undefined;
-    let second: OpenHarnessHttpServer | undefined;
+    let first: VykorHttpServer | undefined;
+    let second: VykorHttpServer | undefined;
 
     try {
-      first = new OpenHarnessHttpServer({
+      first = new VykorHttpServer({
         token,
         storePath,
         logger: (event) => logs.push(event),
@@ -2214,7 +2214,7 @@ describe("OpenHarnessHttpServer", () => {
           };
         },
       };
-      second = new OpenHarnessHttpServer({
+      second = new VykorHttpServer({
         token,
         storePath,
         createAgent: adaptTestAgentFactory(runtimeFactory),
@@ -2254,13 +2254,13 @@ describe("OpenHarnessHttpServer", () => {
           headers: {
             ...auth(token),
             "content-type": "application/json",
-            "x-openharness-trace-id": recoveryTraceId,
+            "x-vykor-trace-id": recoveryTraceId,
           },
           body: JSON.stringify({ id: "recover-request" }),
         },
       );
       expect(resumedResponse.status).toBe(202);
-      expect(resumedResponse.headers.get("x-openharness-trace-id")).toBe(
+      expect(resumedResponse.headers.get("x-vykor-trace-id")).toBe(
         recoveryTraceId,
       );
       const resumed = (await resumedResponse.json()) as {
@@ -2293,7 +2293,7 @@ describe("OpenHarnessHttpServer", () => {
           headers: {
             ...auth(token),
             "content-type": "application/json",
-            "x-openharness-trace-id": parallelTraceId,
+            "x-vykor-trace-id": parallelTraceId,
           },
           body: JSON.stringify({
             id: "parallel-input",
@@ -2322,7 +2322,7 @@ describe("OpenHarnessHttpServer", () => {
           headers: {
             ...auth(token),
             "content-type": "application/json",
-            "x-openharness-trace-id": recoveryTraceId,
+            "x-vykor-trace-id": recoveryTraceId,
           },
           body: JSON.stringify({
             status: "approved",
@@ -2375,7 +2375,7 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("terminalizes durable running workflows after restart", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-server-workflow-restart-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-server-workflow-restart-"));
     const storePath = join(dir, "sessions.db");
     const projectCwd = join(dir, "project");
     const spec = {
@@ -2411,7 +2411,7 @@ describe("OpenHarnessHttpServer", () => {
       });
     const daemonRunId = "wf-daemon-owned";
     try {
-      const first = new OpenHarnessHttpServer({ storePath });
+      const first = new VykorHttpServer({ storePath });
       await first.application.ready();
       const parent = first.store.sessions.create({
         id: "parent",
@@ -2439,7 +2439,7 @@ describe("OpenHarnessHttpServer", () => {
       first.application.workflows.claim(daemonRunId);
 
       await first.close();
-      const second = new OpenHarnessHttpServer({ storePath });
+      const second = new VykorHttpServer({ storePath });
       await second.listen();
       try {
         const recovered = second.application.workflows.load(daemonRunId)!;
@@ -3954,7 +3954,7 @@ describe("OpenHarnessHttpServer", () => {
   });
 
   it("archives descendants after interrupting runs and closing runtimes", async () => {
-    let serverRef: OpenHarnessHttpServer | undefined;
+    let serverRef: VykorHttpServer | undefined;
     const lifecycle: string[] = [];
     const runtimeFactory: TestAgentProgramFactory = {
       async createRuntime(context) {

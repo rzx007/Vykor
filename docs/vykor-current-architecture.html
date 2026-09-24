@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.16.0">
-  <title>OpenHarness-ts 当前架构图</title>
+  <title>Vykor 当前架构图</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4955,7 +4955,7 @@
            data-preset-badge-blueprint="蓝图 / 修订 01"
            data-preset-badge-editorial="编辑风格 / 现场笔记">
         <div class="pulse-dot"></div>
-        <h1>OpenHarness-ts 当前架构图</h1>
+        <h1>Vykor 当前架构图</h1>
       </div>
     </div>
 
@@ -5005,7 +5005,7 @@
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
       <svg viewBox="0 0 1320 680" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
-        <title id="archify-diagram-title">OpenHarness-ts 当前架构图</title>
+        <title id="archify-diagram-title">Vykor 当前架构图</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
         <defs>
@@ -5069,27 +5069,27 @@
         <text data-detail="fine" x="124" y="338" class="t-frontend" font-size="7" text-anchor="middle">apps/*</text>
         </g>
 
-        <g id="node-client" data-node-id="client" data-node-label="@openharness/client" tabindex="0" role="button" aria-label="聚焦@openharness/client，snapshot + SSE reducer, 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态" aria-pressed="false" data-node-kind="backend" data-node-sublabel="snapshot + SSE reducer" data-node-tag="packages/client" data-node-context="应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态">
-          <title>@openharness/client · snapshot + SSE reducer · 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态 · packages/client</title>
+        <g id="node-client" data-node-id="client" data-node-label="@vykor/client" tabindex="0" role="button" aria-label="聚焦@vykor/client，snapshot + SSE reducer, 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态" aria-pressed="false" data-node-kind="backend" data-node-sublabel="snapshot + SSE reducer" data-node-tag="packages/client" data-node-context="应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态">
+          <title>@vykor/client · snapshot + SSE reducer · 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态 · packages/client</title>
           <rect x="250" y="270" width="164" height="76" rx="6" class="c-mask"/>
           <rect x="250" y="270" width="164" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 276) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="332" y="306" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">@openharness/client</text>
+          <text data-node-label="" data-detail-anchor="" x="332" y="306" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">@vykor/client</text>
         <text data-detail="context" x="332" y="322" class="t-muted" font-size="9" text-anchor="middle">snapshot + SSE reducer</text>
         <text data-detail="fine" x="332" y="338" class="t-backend" font-size="7" text-anchor="middle">packages/client</text>
         </g>
 
-        <g id="node-protocol" data-node-id="protocol" data-node-label="@openharness/protocol" tabindex="0" role="button" aria-label="聚焦@openharness/protocol，请求/响应/事件公共类型, 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态" aria-pressed="false" data-node-kind="security" data-node-sublabel="请求/响应/事件公共类型" data-node-tag="packages/protocol" data-node-context="应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态">
-          <title>@openharness/protocol · 请求/响应/事件公共类型 · 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态 · packages/protocol</title>
+        <g id="node-protocol" data-node-id="protocol" data-node-label="@vykor/protocol" tabindex="0" role="button" aria-label="聚焦@vykor/protocol，请求/响应/事件公共类型, 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态" aria-pressed="false" data-node-kind="security" data-node-sublabel="请求/响应/事件公共类型" data-node-tag="packages/protocol" data-node-context="应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态">
+          <title>@vykor/protocol · 请求/响应/事件公共类型 · 应用入口层：只负责交互，不维护第二套 Run/权限/Workflow 状态 · packages/protocol</title>
           <rect x="250" y="120" width="164" height="72" rx="6" class="c-mask"/>
           <rect x="250" y="120" width="164" height="72" rx="6" class="c-security" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(256 126) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="332" y="154" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">@openharness/protocol</text>
+          <text data-node-label="" data-detail-anchor="" x="332" y="154" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">@vykor/protocol</text>
         <text data-detail="context" x="332" y="170" class="t-muted" font-size="9" text-anchor="middle">请求/响应/事件公共类型</text>
         <text data-detail="fine" x="332" y="184" class="t-security" font-size="7" text-anchor="middle">packages/protocol</text>
         </g>
@@ -5146,14 +5146,14 @@
         <text data-detail="fine" x="518" y="544" class="t-messagebus" font-size="7" text-anchor="middle">packages/coordinator + jobs</text>
         </g>
 
-        <g id="node-runtime" data-node-id="runtime" data-node-label="@openharness/agent-runtime" tabindex="0" role="button" aria-label="聚焦@openharness/agent-runtime，Agent / child agent, Agent Runtime Kernel：负责一次正在执行的 Agent 循环" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Agent / child agent" data-node-tag="Runtime Kernel" data-node-context="Agent Runtime Kernel：负责一次正在执行的 Agent 循环">
-          <title>@openharness/agent-runtime · Agent / child agent · Agent Runtime Kernel：负责一次正在执行的 Agent 循环 · Runtime Kernel</title>
+        <g id="node-runtime" data-node-id="runtime" data-node-label="@vykor/agent-runtime" tabindex="0" role="button" aria-label="聚焦@vykor/agent-runtime，Agent / child agent, Agent Runtime Kernel：负责一次正在执行的 Agent 循环" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Agent / child agent" data-node-tag="Runtime Kernel" data-node-context="Agent Runtime Kernel：负责一次正在执行的 Agent 循环">
+          <title>@vykor/agent-runtime · Agent / child agent · Agent Runtime Kernel：负责一次正在执行的 Agent 循环 · Runtime Kernel</title>
           <rect x="900" y="270" width="192" height="76" rx="6" class="c-mask"/>
           <rect x="900" y="270" width="192" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(906 276) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="996" y="306" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">@openharness/agent-runtime</text>
+          <text data-node-label="" data-detail-anchor="" x="996" y="306" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">@vykor/agent-runtime</text>
         <text data-detail="context" x="996" y="322" class="t-muted" font-size="9" text-anchor="middle">Agent / child agent</text>
         <text data-detail="fine" x="996" y="338" class="t-backend" font-size="7" text-anchor="middle">Runtime Kernel</text>
         </g>

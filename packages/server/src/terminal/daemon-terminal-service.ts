@@ -1,10 +1,10 @@
 import { resolve } from "node:path";
 
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import type {
   ExecutionEnvironmentConsumer,
   ExecutionEnvironmentHandle,
-} from "@openharness/environment";
+} from "@vykor/environment";
 import type {
   AgentTerminalHost,
   TerminalCreateRequest,
@@ -18,12 +18,12 @@ import type {
   TerminalWaitRequest,
   TerminalWaitResult,
   TerminalWriteRequest,
-} from "@openharness/terminal";
+} from "@vykor/terminal";
 import {
   LocalTerminalProvider,
   type LocalTerminalProviderOptions,
-} from "@openharness/terminal-node";
-import type { ProjectRecord, SessionRecord } from "@openharness/protocol";
+} from "@vykor/terminal-node";
+import type { ProjectRecord, SessionRecord } from "@vykor/protocol";
 import { ApplicationError } from "../shared/application-error.js";
 
 export interface ListDaemonTerminalsOptions {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { deriveChildAgentOptions, deriveChildCapabilityView } from "./child-agent-options.js";
-import { ToolRegistry } from "@openharness/core";
+import { ToolRegistry } from "@vykor/core";
 import { createRunCapabilityView } from "./run-capability-view.js";
 
 const addedTool = {

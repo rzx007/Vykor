@@ -1,6 +1,6 @@
-import type { AgentJobHost } from "@openharness/jobs";
-import type { AgentTerminalHost } from "@openharness/terminal";
-import { createAgentTerminalBundle } from "@openharness/terminal-node";
+import type { AgentJobHost } from "@vykor/jobs";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import { createAgentTerminalBundle } from "@vykor/terminal-node";
 
 import type { ObservableJobProducer } from "./agent-options.js";
 import type { Cleanup } from "./cleanup-stack.js";

@@ -2,7 +2,7 @@
 
 > 状态：当前 Prompt 组装入口的审计索引。
 
-本文记录 OpenHarness 当前 system prompt 的运行时入口，确保 `SOUL.md`、`USER.md`、`settings.systemPrompt`、project instructions、memory、skills 和 permission mode 都通过同一套 prompt builder 语义。
+本文记录 Vykor 当前 system prompt 的运行时入口，确保 `SOUL.md`、`USER.md`、`settings.systemPrompt`、project instructions、memory、skills 和 permission mode 都通过同一套 prompt builder 语义。
 
 ## Canonical Builder
 

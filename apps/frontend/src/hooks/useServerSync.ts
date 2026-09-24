@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import {
-  OpenHarnessClient,
+  VykorClient,
   SessionSyncController,
   createPromptRequestId,
   createInitialClientState,
   readSessionRuntimeConfig,
   type CommandCatalogEntry,
   type ModelProviderInfo,
-  type OpenHarnessClientState,
+  type VykorClientState,
   type PresentationReadRequest,
   type SessionRecord,
-} from "@openharness/client";
+} from "@vykor/client";
 
 import type { FrontendConfig, McpServerSnapshot, TranscriptItem } from "../types";
 import {
@@ -57,7 +57,7 @@ const PRESENTATION_LOADING_TEXT = "Loading...";
 
 export function useServerSync(config: FrontendConfig, onError?: (message: string) => void): TuiSessionController {
   const daemon = config.daemon;
-  const [clientState, setClientState] = useState<OpenHarnessClientState>(() => createInitialClientState());
+  const [clientState, setClientState] = useState<VykorClientState>(() => createInitialClientState());
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
   const [status, setStatus] = useState<Record<string, unknown>>({
     permission_mode: daemon?.permissionMode ?? "default",
@@ -82,7 +82,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   const [jobDetailState, setJobDetailState] = useState<JobDetailRemoteState>({ status: "idle" });
   const [mcpServers, setMcpServers] = useState<McpServerSnapshot[]>([]);
 
-  const clientRef = useRef<OpenHarnessClient | null>(null);
+  const clientRef = useRef<VykorClient | null>(null);
   const activeSessionIdRef = useRef<string | undefined>(undefined);
   const commandCatalogRef = useRef<CommandCatalogEntry[]>([]);
   const defaultRuntimeRef = useRef<DefaultRuntimeSettings>({
@@ -95,7 +95,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   const listedSessionsRef = useRef<Record<string, SessionRecord>>({});
   const presentationCacheRef = useRef<Record<string, PresentationCacheEntry>>({});
   const displayRequestRef = useRef<TuiSessionController["displayRequest"]>(null);
-  const pendingClientStateRef = useRef<OpenHarnessClientState | null>(null);
+  const pendingClientStateRef = useRef<VykorClientState | null>(null);
   const pendingClientStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shownPermissionIdRef = useRef<string | undefined>(undefined);
   const auxiliaryGenerationRef = useRef(0);
@@ -277,7 +277,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   }, [reportAuxiliaryError]);
 
   const loadJobDetail = useCallback(async (
-    client: Pick<OpenHarnessClient, "jobs">,
+    client: Pick<VykorClient, "jobs">,
     sessionId: string,
     jobId: string,
   ): Promise<void> => {
@@ -399,7 +399,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   }, []);
 
   const commitClientState = useCallback(
-    (state: OpenHarnessClientState, coalesce: boolean) => {
+    (state: VykorClientState, coalesce: boolean) => {
       if (!coalesce) {
         clearPendingClientState();
         setClientState(state);
@@ -467,7 +467,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   useEffect(() => {
     if (!daemon?.url) {
       setReady(true);
-      reportError("Daemon URL is required for TUI. Launch with `ohs` or `ohs --tui` so the CLI can start or attach the daemon.");
+      reportError("Daemon URL is required for TUI. Launch with `vk` or `vk --tui` so the CLI can start or attach the daemon.");
       return;
     }
     let cancelled = false;

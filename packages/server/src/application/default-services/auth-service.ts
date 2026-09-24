@@ -1,5 +1,5 @@
-import { PROVIDERS, findByName } from "@openharness/api";
-import { CredentialStorage, describeCodexAuthState } from "@openharness/auth";
+import { PROVIDERS, findByName } from "@vykor/api";
+import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
 
 import type { AuthService } from "../settings-api.js";
 import { validateProviderCredential } from "./credential-validation.js";

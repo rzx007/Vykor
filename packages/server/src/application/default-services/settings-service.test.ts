@@ -11,13 +11,13 @@ let previousConfigDir: string | undefined;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "oh-settings-service-"));
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-  process.env.OPENHARNESS_CONFIG_DIR = join(root, "config");
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  process.env.VYKOR_CONFIG_DIR = join(root, "config");
 });
 
 afterEach(() => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
   rmSync(root, { recursive: true, force: true });
 });
 

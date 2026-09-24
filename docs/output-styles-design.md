@@ -1,13 +1,13 @@
 # 归档：Output Styles（输出样式）
 
-> 状态：历史设计记录。本文以旧 TUI host 的 state/OHJSON 接线为前提，不能作为 daemon TUI 的实现依据；当前客户端会话同步见 [client-sync-flow.md](./client-sync-flow.md)。
+> 状态：历史设计记录。本文以旧 TUI host 的 state/LegacyJSON 接线为前提，不能作为 daemon TUI 的实现依据；当前客户端会话同步见 [client-sync-flow.md](./client-sync-flow.md)。
 
 ## 语义(对照 Python 原版确认)
 
 输出样式 = **REPL 渲染模式**,由样式 **name** 驱动渲染分支,**不是** system prompt 注入,
 也不是文本后处理 `format` 函数。
 
-- Python `OutputRenderer`(`src/openharness/ui/output.py`)按 `style_name` 分支:
+- Python `OutputRenderer`(`src/vykor/ui/output.py`)按 `style_name` 分支:
   - `default`:富文本(markdown 重渲染、`⏺`/`⏵` 图标、spinner、panel、status line)
   - `minimal`:极简纯文本(`a>` 提示符、`> tool summary`、`    output`、无 markdown/spinner/panel)
   - `codex`:loader 列出,但**无独立渲染分支** → 渲染同 default(只 `minimal` 被特判)
@@ -35,8 +35,8 @@
 - `loadOutputStyles(): OutputStyleDefinition[]`:
   - 内置三个:`default`("Standard rich console output.")、`minimal`("Very terse plain-text output.")、
     `codex`("Codex-like compact transcript and tool output.")
-  - 用户:`~/.openharness-ts/output_styles/*.md`,stem=name、文件内容=content、source="user",按名排序
-- `getOutputStylesDir(): string`:`~/.openharness-ts/output_styles`(递归 mkdir)
+  - 用户:`~/.vykor/output_styles/*.md`,stem=name、文件内容=content、source="user",按名排序
+- `getOutputStylesDir(): string`:`~/.vykor/output_styles`(递归 mkdir)
 - 保留一个轻量 `OutputStyleLoader`?——不必,Python 用自由函数;TS 也用 `loadOutputStyles()` 自由函数。
   (若有消费方依赖旧 `OutputStyleLoader`/`format`,一并改;经检索仅骨架自身,无外部消费方。)
 
@@ -83,13 +83,13 @@
 - `codex` 独立渲染(渲染同 default,留 TODO,与 v0.1.9 一致)。
 - TUI render 分支、TUI 图形化样式选择器 UI。
 - system-prompt 注入(Python 不做)。
-- 项目级 `.openharness-ts/output_styles`(最小版只 user 级 `~/.openharness-ts/output_styles`)。
+- 项目级 `.vykor/output_styles`(最小版只 user 级 `~/.vykor/output_styles`)。
 
 ## 与 Python 的已知差异(刻意)
 
 - **`list` 输出**加 `*`/空格 active 标记(Python 是纯 `name [source]`)——便于 REPL 直观看当前项。
-- **config 目录**:`getOutputStylesDir()` 默认硬编码 `~/.openharness-ts/output_styles`,不读 `OPENHARNESS_CONFIG_DIR`
+- **config 目录**:`getOutputStylesDir()` 默认硬编码 `~/.vykor/output_styles`,不读 `VYKOR_CONFIG_DIR`
   ——与本仓 `settings.ts` 的 IO 一致(整个 TS app 都硬编码 homedir);若将来 settings 接入
-  `OPENHARNESS_CONFIG_DIR`,这里一并改以保持 parity。
+  `VYKOR_CONFIG_DIR`,这里一并改以保持 parity。
 - **TUI `/output-style set` 当前不持久化**:TUI host 的 `updateSettings` 是 no-op(对**所有**
   设置类命令的既有限制)。~~且 TUI 不 render-branch~~——E.3 收口后 TUI 已有 minimal 工具行分支（详见 tui-render-tail-design.md），热切换经 state_snapshot 即时生效。

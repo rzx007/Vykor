@@ -2,11 +2,11 @@
 
 ## 1. 背景与现状
 
-飞书 CLI 扫码接入（`ohs channels add feishu`）与 IM runtime 阶段二已完成。现在的情况是：
+飞书 CLI 扫码接入（`vk channels add feishu`）与 IM runtime 阶段二已完成。现在的情况是：
 
 - **daemon** 拥有 durable 侧：会话、Run、权限、对话记录，以及 `/channels/*` 路由下的 `ChannelApplicationService`（建会话映射、幂等准入、保存待发送回复）。
-- **`ohs channels serve`** 是另一个长驻进程，拥有传输运行时：`FeishuAdapter` + `MessageBus` + `ChannelManager` + `DurableChannelBridge`，通过 HTTP 把消息交给 daemon。
-- 渠道配置与密钥统一在默认 `~/.openharness-ts/channel-credentials.json`（受 `OPENHARNESS_CONFIG_DIR` 覆盖，v2）；`settings.json` 不再承载 `channels`。
+- **`vk channels serve`** 是另一个长驻进程，拥有传输运行时：`FeishuAdapter` + `MessageBus` + `ChannelManager` + `DurableChannelBridge`，通过 HTTP 把消息交给 daemon。
+- 渠道配置与密钥统一在默认 `~/.vykor/channel-credentials.json`（受 `VYKOR_CONFIG_DIR` 覆盖，v2）；`settings.json` 不再承载 `channels`。
 - Desktop 设置里已有“连接”导航项（slug `connections`），但内容是空白占位；Desktop 主进程没有任何渠道能力。
 - Desktop 在没有外部 daemon 时会在 Electron 主进程里启动**内置 daemon**（`apps/desktop/src/main/features/session/daemon-connection-service.ts`），外部 daemon 也可通过注册表接管。
 
@@ -27,7 +27,7 @@
 - 配置与接入（扫码状态机、凭据校验、写配置、白名单）也搬进 daemon：`channel-credentials.json` 只有 daemon 一个写入者。
 - Desktop 新增“连接”板块：扫码/手填 → 校验 → 写配置 → 显示真实连接状态 → 白名单增删即时生效 → 被拒提示 → 启停。
 - CLI `channels add/allow/status/serve` 改为委托 daemon，行为兼容，不再本地装配 adapter、不再本地写配置。
-- 桌面与 CLI 共用同一套核心（`@openharness/channels`、`@openharness/auth`），不重写。
+- 桌面与 CLI 共用同一套核心（`@vykor/channels`、`@vykor/auth`），不重写。
 - 启用（`enabled=true`）的渠道随 daemon 启动自动连接；失败只影响该渠道，不阻塞 daemon。
 
 ### 2.2 非目标
@@ -38,7 +38,7 @@
 - Desktop 编辑 `replyAtBotNames`（本阶段只读展示）。
 - `apps/mcp-feishu`（独立目录、不构建），维持现状。
 - 多机器人（仍为单飞书应用）。
-- 修改 `@openharness/protocol` 里的 durable 类型（只新增 runtime DTO）。
+- 修改 `@vykor/protocol` 里的 durable 类型（只新增 runtime DTO）。
 
 ## 3. 关键决策
 
@@ -49,9 +49,9 @@
 | 取代交接文档的哪条 | 交接文档写“Desktop 主进程直接读写 `channel-credentials.json`”，本设计**取代**为“daemon 读写，客户端走 API” | 与“daemon 全权”一致；避免 Desktop 写文件后 daemon 运行时不同步 |
 | Desktop 板块位置 | 复用设置导航现有“连接”（slug `connections`） | 已存在入口与占位，语义合适 |
 | 二维码 | 主进程生成 data URL（新增 `qrcode` 依赖），渲染进程显示 | Desktop 无 QR 依赖；主进程只传二维码图片与授权链接，不传密钥 |
-| 渠道会话 cwd | `~/.openharness-ts/channels/<connector>/<sanitize+hash(会话键)>/`，自动建目录 | CLI 原先用 `process.cwd()`，在 daemon 里没有意义；专用工作区不污染用户项目，且按会话隔离 |
+| 渠道会话 cwd | `~/.vykor/channels/<connector>/<sanitize+hash(会话键)>/`，自动建目录 | CLI 原先用 `process.cwd()`，在 daemon 里没有意义；专用工作区不污染用户项目，且按会话隔离 |
 | daemon 启动行为 | `enabled=true` 的渠道在 `ready()` 后**后台**自动连接；每渠道独立失败 | 重启 daemon 不掉线；单个渠道失败不影响 daemon ready 与其他渠道 |
-| `ohs channels serve` | 改为委托：确保 daemon → 启动运行时 → 跟随状态/拒绝 → Ctrl+C 有界停止本次连接 | 保证同一 appId 只有一条长连接 |
+| `vk channels serve` | 改为委托：确保 daemon → 启动运行时 → 跟随状态/拒绝 → Ctrl+C 有界停止本次连接 | 保证同一 appId 只有一条长连接 |
 | 拒绝提示 | `status()` 返回有界 `recentDenials`（带单调 `seq`），Desktop 轮询展示 | 不新增事件通道即可满足“被拒有提示”；SSE 留后续 |
 | ACL/策略变更 | 运行中**原地生效**，不重启连接 | `ChannelManager` 每条消息读取 `allowFrom`/`channelPolicies`；只有连接指纹变化才重启（见 §8.1） |
 
@@ -68,11 +68,11 @@
 - `ChannelRuntimeService`：持有每个 connector 的 `MessageBus + ChannelManager + DurableChannelBridge`，负责启停、重连监督、状态、拒绝上报、cwd 解析。
 - `ChannelOnboardingService`：持有 `ChannelConfigStore`，负责扫码注册、手填校验、写配置、白名单增删、启停持久化。
 - 两者挂在 `DaemonApplication` 上，通过 HTTP 路由 `/channels/runtime/*` 与 `/channels/feishu/*` 暴露；`DurableAgentApplication` 接口新增这两个只读字段。
-- Desktop 通过 `OpenHarnessClient.channels`（扩展后的 `ChannelResource`）访问；CLI 同理。
-- `@openharness/channels` 在 server 内**动态 import**：渠道未启用时 server 启动路径不加载 lark SDK。
+- Desktop 通过 `VykorClient.channels`（扩展后的 `ChannelResource`）访问；CLI 同理。
+- `@vykor/channels` 在 server 内**动态 import**：渠道未启用时 server 启动路径不加载 lark SDK。
 - Desktop 主进程把 `@larksuiteoapi/node-sdk` **整体外置**（`apps/desktop/package.json` dependencies + `electron.vite.config.ts` 的 `externalizeDeps.include`）：`out/main` 只保留 `import("@larksuiteoapi/node-sdk")`，SDK 及其依赖（protobufjs/ws/axios/…）由 SDK 自己的 `node_modules` 在运行时解析，随安装包放进 `app.asar/node_modules`。这样避免把 SDK 内联后出现 `protobufjs/minimal` 等子路径解析失败。
 
-依赖方向：`packages/server` 已依赖 `@openharness/auth`；新增依赖 `@openharness/channels`（后者只依赖 `@openharness/protocol` 与 lark SDK，无环）。Desktop 的主进程边界脚本只允许 `@openharness/client` 与 `@openharness/server`，因此 Desktop **不新增** workspace 依赖，只走 HTTP。
+依赖方向：`packages/server` 已依赖 `@vykor/auth`；新增依赖 `@vykor/channels`（后者只依赖 `@vykor/protocol` 与 lark SDK，无环）。Desktop 的主进程边界脚本只允许 `@vykor/client` 与 `@vykor/server`，因此 Desktop **不新增** workspace 依赖，只走 HTTP。
 
 ## 5. 消息与生命周期
 
@@ -120,7 +120,7 @@ daemon close()
 
 ### 6.1 配置（沿用现有文件，不改格式）
 
-`ChannelConfigStore`（`packages/auth`）继续读写默认 `~/.openharness-ts/channel-credentials.json`（`OPENHARNESS_CONFIG_DIR` 可覆盖）v2，字段不变：`enabled/appId/appSecret/domain/allowFrom/replyAtBotNames/sendProgress/sendToolHints`。daemon 是唯一写入者。
+`ChannelConfigStore`（`packages/auth`）继续读写默认 `~/.vykor/channel-credentials.json`（`VYKOR_CONFIG_DIR` 可覆盖）v2，字段不变：`enabled/appId/appSecret/domain/allowFrom/replyAtBotNames/sendProgress/sendToolHints`。daemon 是唯一写入者。
 
 `FeishuChannelConfig` **不新增字段**；`botName` 是运行时内存缓存，按 `(appId, domain)` 键控：配置变化或 verify 失败即清除，快照只在缓存键与当前配置一致时返回。
 
@@ -129,9 +129,9 @@ daemon close()
 `packages/core/src/config/paths.ts` 新增：
 
 ```ts
-/** 渠道会话专用工作区根目录；可用 OPENHARNESS_CHANNELS_DIR 覆盖（daemon 启动时读取）。 */
+/** 渠道会话专用工作区根目录；可用 VYKOR_CHANNELS_DIR 覆盖（daemon 启动时读取）。 */
 export function getChannelWorkspaceRoot(): string {
-  return process.env.OPENHARNESS_CHANNELS_DIR ?? join(getConfigDir(), "channels");
+  return process.env.VYKOR_CHANNELS_DIR ?? join(getConfigDir(), "channels");
 }
 ```
 
@@ -254,7 +254,7 @@ cancelFeishuRegistration(): Promise<FeishuRegistrationSnapshot>
 ```
 
 - 组合状态（配置 + 运行时）由调用方（Desktop main 的 `snapshot()`）自行合成，client 不做隐式组合。
-- `packages/client/src/index.ts` **必须**导出本设计新增的全部 DTO 类型（无条件），并同步 `scripts/client-public-api-contract.json`；Desktop 的 `shared/channel-types.ts` 从 `@openharness/client` 复用这些类型（边界脚本只允许 Desktop 依赖 client/server）。
+- `packages/client/src/index.ts` **必须**导出本设计新增的全部 DTO 类型（无条件），并同步 `scripts/client-public-api-contract.json`；Desktop 的 `shared/channel-types.ts` 从 `@vykor/client` 复用这些类型（边界脚本只允许 Desktop 依赖 client/server）。
 - 同步 `tests/client-public-api/consumer.ts`（代表性调用）与 `packages/client/src/__test__/public-api.test.ts`。
 
 ## 8. daemon 服务设计
@@ -342,7 +342,7 @@ export interface ChannelOnboardingServiceOptions {
 - `packages/server/src/application/channel/index.ts` 增加新服务导出（`application/index.ts` 是 barrel）。
 - `ready()` 完成 startup recovery 后 `void this.channelRuntime.startEnabled()`（后台、不阻塞、不 reject）。
 - `closeWork()`：`await this.channelRuntime.shutdown()` 放在 `schedules.shutdown()` 之后、`control.shutdown()` **之前**；随后才释放 owner / 关 store。
-- `packages/server/package.json` 新增 `@openharness/channels` 依赖（动态 import）。
+- `packages/server/package.json` 新增 `@vykor/channels` 依赖（动态 import）。
 
 ## 9. CLI 委托
 
@@ -357,13 +357,13 @@ export interface ChannelOnboardingServiceOptions {
 - `add feishu`：扫码 → `startFeishuRegistration` + 轮询（按 `attempt` 丢弃过期二维码）+ 终端二维码渲染；成功/警告/错误文案来自 daemon。手填 → `connectFeishu`。
 - `allow`：`addFeishuAllow`。
 - 保留终端交互与二维码渲染；删除本地写 store 与本地 verify 编排。
-- `@openharness/auth` 仍被 CLI 其他命令使用（`doctor.ts`、`commands/auth.ts`、`commands/mcp.ts`、`commands/provider.ts`、`commands/setup.ts`），**保留依赖**。
+- `@vykor/auth` 仍被 CLI 其他命令使用（`doctor.ts`、`commands/auth.ts`、`commands/mcp.ts`、`commands/provider.ts`、`commands/setup.ts`），**保留依赖**。
 
 ## 10. Desktop「连接」板块
 
 ### 10.1 主进程
 
-- `apps/desktop/package.json` 新增 `qrcode`（`@types/qrcode` 进 devDependencies）。Desktop 不新增 `@openharness/*` 依赖（边界脚本限制）。
+- `apps/desktop/package.json` 新增 `qrcode`（`@types/qrcode` 进 devDependencies）。Desktop 不新增 `@vykor/*` 依赖（边界脚本限制）。
 - `shared/channel-types.ts`：Desktop DTO（复用 protocol 类型；注册快照补 `qrDataUrl?: string`）。
 - `shared/ipc-channels.ts` 新增 `IpcChannels` 与 `IpcInvokeMap`：
 
@@ -376,7 +376,7 @@ connectionsRuntimeStart / connectionsRuntimeStop
 ```
 
 - `shared/desktop-api-contract.ts` 新增 `connections` 命名空间；`preload/desktop-api.ts` 同步。`preload/index.d.ts` 只挂 `DesktopAPI` 到 `Window`，**无需修改**。
-- `main/features/channels/channel-service.ts`：注入 `getClient: () => desktopSessionService.daemonClient()` 与 `generateQrDataUrl`（默认 `qrcode.toDataURL`）；DTO 类型从 `@openharness/client` 复用。
+- `main/features/channels/channel-service.ts`：注入 `getClient: () => desktopSessionService.daemonClient()` 与 `generateQrDataUrl`（默认 `qrcode.toDataURL`）；DTO 类型从 `@vykor/client` 复用。
   - `snapshot()` = `getFeishu()` + `runtimeStatus()` 合成；注册状态出现 `qrUrl` 时在**主进程**生成 data URL 再返回；QR `attempt` 变化时丢弃旧 data URL。
   - `runtimeStatus()` 返回 `{ runtime, newDenials }`：main 持有 per-connector `seq` 高水位与 `bootId`；首次成功调用只建基线（`newDenials=[]`）；`bootId` 变化重新基线；之后只返回 `seq` 大于高水位的 denial。main 是长驻进程，高水位跨渲染层挂载保持，页面重挂载不会重放旧拒绝。
   - 渲染层负责定时轮询（见 §10.2）；main 不订阅、不持有定时器，因此 IPC 列表不需要额外的订阅/取消通道。
@@ -403,7 +403,7 @@ connectionsRuntimeStart / connectionsRuntimeStop
 - 白名单空 = 全拒（fail-closed），UI/CLI 必须显式提示。
 - 缺字段/非法 domain/非法 id 直接拒绝，不猜测、不降级、不引入 fallback。
 - 旧 `settings.channels`、旧 v1 凭据文件行为不变（分别为 `SettingsFileError`、视为未配置）。
-- 不改 `@openharness/protocol` durable 类型；`DurableChannelBridge` 只做 `cwd`/`stop` 扩展，`ChannelManager` 只新增 `stopInbound`。
+- 不改 `@vykor/protocol` durable 类型；`DurableChannelBridge` 只做 `cwd`/`stop` 扩展，`ChannelManager` 只新增 `stopInbound`。
 - 渠道运行时不修改其他 Session/Run；启停只影响渠道连接。
 - 写路由要求 bearer token；无 token 实例对渠道写路由返回 503（见 §7.2）。
 - 信任模型：daemon 监听 loopback + bearer；denial 里的 sender/chatId 仅用于展示与加白名单，renderer 不持久化。
@@ -422,7 +422,7 @@ connectionsRuntimeStart / connectionsRuntimeStop
 | `packages/server` | 白名单：手填换 appId 清空、同 appId 保留；空 `name` 按 id 作为 key；同名覆盖；key 含 `/` 经 `encodeURIComponent` 可增删 |
 | `packages/server` | 路由：状态/启停/配置/注册的 200/400/404/409/503；connect 的 4xx/5xx 与日志不含 secret；无 token 实例写路由 503 |
 | `packages/client` | 新资源方法与路径/方法/返回映射；`client-public-api-contract.json` 更新 |
-| `apps/cli` | `serve` 委托（start + 跟随 + SIGINT 有界 stop + 二次强退）；`status` 在 daemon 不可用时的提示；`add/allow` 调对应 API；`@openharness/auth` 依赖保留且其他命令不受影响 |
+| `apps/cli` | `serve` 委托（start + 跟随 + SIGINT 有界 stop + 二次强退）；`status` 在 daemon 不可用时的提示；`add/allow` 调对应 API；`@vykor/auth` 依赖保留且其他命令不受影响 |
 | `apps/desktop` | `channel-service`：QR data URL 生成与 attempt 失效、secret 不外泄、snapshot 合成、`runtimeStatus` 基线/高水位/`bootId` 重基线/只返回增量；ipc 单测 |
 | `apps/desktop` | 渲染层轮询：串行（in-flight 跳过）、失败退避并保留上次快照、卸载停止；重试连接与移除接入的确认流程 |
 | `apps/desktop` | `connections-settings` 组件：状态渲染（含临时停止 vs 持久停用）、启停、白名单增删、`patch` 开关、denial 提示与“加入白名单”、扫码流程、错误态 |
@@ -435,22 +435,22 @@ connectionsRuntimeStart / connectionsRuntimeStop
 - 扫码成功后 `snapshot.allowFrom` 含扫码者 `open_id`（拿不到时显示 `warning` 且不宣称白名单已生效）。
 - 白名单增删**无需重启**立即生效（自动化用例 + 人工验证）。
 - `enabled=false` 持久化后，重启 daemon 该渠道不自动连接；`enabled=true` 重启后自动恢复。
-- `ohs channels add/allow/status/serve` 全部委托 daemon 且行为可用；同一 appId 不会出现两条长连接。
+- `vk channels add/allow/status/serve` 全部委托 daemon 且行为可用；同一 appId 不会出现两条长连接。
 - `channel-credentials.json` 仅由 daemon 写入；Desktop/CLI 不直接写。
 - 启停渠道不影响其他 Session（§12 回归用例通过）。
 - 命令全部通过：
 
 ```bash
-pnpm --filter @openharness/protocol test -- --run
-pnpm --filter @openharness/channels test -- --run
-pnpm --filter @openharness/auth test -- --run
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/client test -- --run
-pnpm --filter @openharness/server test -- --run
-pnpm --filter @openharness/tools test -- --run
+pnpm --filter @vykor/protocol test -- --run
+pnpm --filter @vykor/channels test -- --run
+pnpm --filter @vykor/auth test -- --run
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/client test -- --run
+pnpm --filter @vykor/server test -- --run
+pnpm --filter @vykor/tools test -- --run
 pnpm --filter @rzx/ohs test -- --run
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop typecheck
 pnpm exec turbo build --output-logs=full
 pnpm check-docs
 git diff --check
@@ -489,7 +489,7 @@ git diff --check
 | `packages/server/src/http/routes/channel-control.ts` + 测试 | 新建 |
 | `packages/server/src/http/server.ts` | 挂载新路由并传入 runtime/onboarding |
 | `packages/server/src/application/daemon-application.ts` | 装配、自动启动、停机顺序、接口暴露 |
-| `packages/server/package.json` | 新增 `@openharness/channels` 依赖 |
+| `packages/server/package.json` | 新增 `@vykor/channels` 依赖 |
 | `packages/client/src/resources/channel-resource.ts` + 测试 | 新增方法 |
 | `scripts/client-public-api-contract.json` | 新增 DTO 类型与资源方法（无条件同步） |
 | `tests/client-public-api/consumer.ts`、`packages/client/src/__test__/public-api.test.ts` | 同步 |

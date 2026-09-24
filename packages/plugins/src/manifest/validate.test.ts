@@ -7,13 +7,13 @@ import { validateNativePlugin } from "./validate.js";
 let root: string;
 
 async function writeManifest(value: unknown): Promise<void> {
-  const manifestDir = join(root, ".openharness-plugin");
+  const manifestDir = join(root, ".vykor-plugin");
   await mkdir(manifestDir, { recursive: true });
   await writeFile(join(manifestDir, "plugin.json"), JSON.stringify(value));
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "ohs-native-validate-"));
+  root = await mkdtemp(join(tmpdir(), "vk-native-validate-"));
 });
 
 afterEach(async () => {
@@ -25,7 +25,7 @@ describe("validateNativePlugin", () => {
     await mkdir(join(root, "skills"));
     await writeManifest({
       schemaVersion: 1,
-      id: "dev.openharness.valid",
+      id: "dev.vykor.valid",
       name: "valid-plugin",
       version: "1.0.0",
       components: { skills: ["./skills"] },
@@ -33,7 +33,7 @@ describe("validateNativePlugin", () => {
 
     const result = await validateNativePlugin(root);
     expect(result.status).toBe("valid");
-    expect(result.plugin?.manifest.id).toBe("dev.openharness.valid");
+    expect(result.plugin?.manifest.id).toBe("dev.vykor.valid");
     expect(result.diagnostics).toEqual([]);
   });
 
@@ -42,8 +42,8 @@ describe("validateNativePlugin", () => {
     ["broken JSON", "{", "native_manifest_invalid_json"],
   ])("returns a structured diagnostic for %s", async (_label, content, code) => {
     if (content !== undefined) {
-      await mkdir(join(root, ".openharness-plugin"));
-      await writeFile(join(root, ".openharness-plugin", "plugin.json"), content);
+      await mkdir(join(root, ".vykor-plugin"));
+      await writeFile(join(root, ".vykor-plugin", "plugin.json"), content);
     }
     const result = await validateNativePlugin(root);
     expect(result.status).toBe("invalid");
@@ -54,7 +54,7 @@ describe("validateNativePlugin", () => {
     await mkdir(join(root, "skills"));
     await writeManifest({
       schemaVersion: 1,
-      id: "dev.openharness.invalid",
+      id: "dev.vykor.invalid",
       name: "invalid-plugin",
       version: "1.0.0",
       components: { skills: ["./skills", "./skills"], agents: ["./missing-agents"] },
@@ -70,7 +70,7 @@ describe("validateNativePlugin", () => {
   it("reports a path-boundary violation as a diagnostic instead of throwing", async () => {
     await writeManifest({
       schemaVersion: 1,
-      id: "dev.openharness.escape",
+      id: "dev.vykor.escape",
       name: "escape-plugin",
       version: "1.0.0",
       components: { skills: ["./../outside"] },

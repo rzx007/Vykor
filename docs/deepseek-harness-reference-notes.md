@@ -26,7 +26,7 @@ DeepSeek Harness 最值得借鉴的是能力边界，而不是某段具体实现
 - Model-facing tool：定义模型能调用的工具 schema 和展示文本。
 - 策略与环境层：统一处理权限、工作目录、超时、网络、沙箱、环境变量和降级状态。
 
-OpenHarness-ts 当前已经有相当多实现，尤其是 `@openharness/sandbox`。后续不需要推倒重来，更适合在现有包内逐步补出这些边界。
+Vykor 当前已经有相当多实现，尤其是 `@vykor/sandbox`。后续不需要推倒重来，更适合在现有包内逐步补出这些边界。
 
 ## 落地进度
 
@@ -56,7 +56,7 @@ OpenHarness-ts 当前已经有相当多实现，尤其是 `@openharness/sandbox`
 - `packages/tools/src/shell/output.ts`：统一 UTF-8 / UTF-16LE 输出解码、换行归一化和输出截断。
 - `packages/tools/src/shell/bash.ts`：改为通过 `createBashTool(executor)` 注入 executor，只负责工具输入、方言检查和结果文本渲染；默认 `bashTool` 继续使用本地默认 executor。
 
-resolved spec 会明确记录 runner 状态：直接走宿主机、优先 sandbox 但允许降级、必须走 sandbox，或者已经有 active Docker sandbox。这个状态是执行前事实，不改变 `@openharness/sandbox` 当前已有的实际降级规则。
+resolved spec 会明确记录 runner 状态：直接走宿主机、优先 sandbox 但允许降级、必须走 sandbox，或者已经有 active Docker sandbox。这个状态是执行前事实，不改变 `@vykor/sandbox` 当前已有的实际降级规则。
 
 运行结果现在能在内部区分：命令返回非 0、runner 启动失败、执行超时和用户取消。Bash 对模型返回的文本暂时保持兼容；下一阶段接 sandbox policy 时，可以基于这些稳定字段给不同失败提供不同处理建议。
 
@@ -68,7 +68,7 @@ executor 只保留最多 `maxOutputChars + 1` 个字符，而不是先把无限�
 
 ### 2026-08-17：第三阶段 Sandbox policy service 已完成
 
-本次在 `@openharness/sandbox` 内新增每次调用解析的 `SandboxPolicy`。它不是全局可变配置，而是由调用入口携带的 `cwd + workspaceRoot + sessionId + settings/config` 生成的策略快照。
+本次在 `@vykor/sandbox` 内新增每次调用解析的 `SandboxPolicy`。它不是全局可变配置，而是由调用入口携带的 `cwd + workspaceRoot + sessionId + settings/config` 生成的策略快照。
 
 主要落地点：
 
@@ -93,11 +93,11 @@ executor 只保留最多 `maxOutputChars + 1` 个字符，而不是先把无限�
 
 独立协议与首次大改复盘已经拆出到 [Jobs 统一后台任务协议](./jobs-protocol.md) 和 [Jobs Protocol Review 2026-08-17](./jobs-protocol-review-2026-08-17.md)。本节只保留阶段摘要。
 
-本阶段先审计了现有实现，没有重做已经存在的 Terminal。`@openharness/terminal`、`@openharness/terminal-node`、daemon Terminal service、HTTP SSE、Desktop IPC 和 Agent Terminal 工具原本已经具备 PTY、sandbox process、session ownership、scrollback、实时输出与清理能力；child session 也已经通过 `SessionTaskBridgeManager` 进入持久 `SessionTaskRecord` 投影。
+本阶段先审计了现有实现，没有重做已经存在的 Terminal。`@vykor/terminal`、`@vykor/terminal-node`、daemon Terminal service、HTTP SSE、Desktop IPC 和 Agent Terminal 工具原本已经具备 PTY、sandbox process、session ownership、scrollback、实时输出与清理能力；child session 也已经通过 `SessionTaskBridgeManager` 进入持久 `SessionTaskRecord` 投影。
 
 本次补齐的是这些长期工作之间的共同控制面：
 
-- 新增 `@openharness/jobs`，定义 owner-scoped `JobSnapshot`，统一 `running | stopping | completed | killed | failed` 状态，以及 `list/read/wait/send/cancel` 契约。
+- 新增 `@vykor/jobs`，定义 owner-scoped `JobSnapshot`，统一 `running | stopping | completed | killed | failed` 状态，以及 `list/read/wait/send/cancel` 契约。
 - 新增 daemon `DaemonJobService` 和 `/jobs` HTTP API。它不复制运行状态，而是聚合 Terminal provider、`SessionTaskRecord + TaskManager` 与 `WorkflowRunStore`。
 - `ToolContext` 和 daemon Agent host 增加 `jobs` 能力，模型侧新增 `JobList`、`JobRead`、`JobWait`、`JobSend`、`JobCancel`。Terminal 工具注册面只保留 `TerminalOpen` 负责创建持久交互会话，后续观察与控制统一走 Job 工具。
 - Terminal 输出存储增加 sequence cursor 和每次读取的字符上限；`wait` 等待真实进程结算。取消先进入 `stopping`，进程资源释放后才进入 `killed`，正常退出按 exit code 投影为 `completed` 或 `failed`。
@@ -118,10 +118,10 @@ executor 只保留最多 `maxOutputChars + 1` 个字符，而不是先把无限�
 - `packages/tools/src/web/fetch.ts`：`WebFetch` 工具，直接执行 HTTP fetch，并做简单 HTML-to-text。
 - `packages/tools/src/shell/bash.ts`：`Bash` 工具，包含 shell dialect 检查、命令执行、超时、截断、取消和输出格式化。
 - `packages/sandbox/src/*`：sandbox runtime，已经支持 `srt` / `docker` backend、网络模式、可复用容器、路径校验、active session 和生命周期管理。
-- `packages/mcp/src/sandbox-stdio-transport.ts`：MCP stdio server 通过 `@openharness/sandbox` 的 `createProcess` 启动，让 MCP 也走相同 sandbox 规则。
+- `packages/mcp/src/sandbox-stdio-transport.ts`：MCP stdio server 通过 `@vykor/sandbox` 的 `createProcess` 启动，让 MCP 也走相同 sandbox 规则。
 - `packages/services`、`packages/server`、`packages/coordinator`、`packages/tools/src/agent`：已有 task/workflow/child-agent 等后台任务相关能力，但模型侧协议还可以更统一。
 
-整体看，OpenHarness-ts 已经具备“能跑”的 runtime 和工具能力，下一步最有价值的是把 provider、policy、tool rendering 和长期任务控制拆清楚。
+整体看，Vykor 已经具备“能跑”的 runtime 和工具能力，下一步最有价值的是把 provider、policy、tool rendering 和长期任务控制拆清楚。
 
 ## 值得借鉴的方向
 
@@ -129,7 +129,7 @@ executor 只保留最多 `maxOutputChars + 1` 个字符，而不是先把无限�
 
 DeepSeek Harness 的包更强调“能力族”边界。例如 `web` 不是一个孤立工具，而是由 web service、provider、tool 和环境配置组成。
 
-后续可以在 OpenHarness-ts 里形成类似分层，但不必马上拆成很多 workspace package：
+后续可以在 Vykor 里形成类似分层，但不必马上拆成很多 workspace package：
 
 - `packages/tools/src/web` 先抽出 `WebRuntime`、`WebSearchProvider`、`WebFetchProvider`。
 - `packages/tools/src/shell` 先抽出 `ShellExecutor`、`ShellExecRequest`、`ShellExecSpec`、`ShellRunResult`。
@@ -147,7 +147,7 @@ DeepSeek Harness 的 web 能力把 search/fetch 和 provider 解耦。可借鉴�
 - fetch 的 HTTP 状态和响应内容要分开表达，非 2xx 不一定等同于工具本身失败。
 - provider 错误需要有类型，例如配置缺失、网络失败、响应过大、解析失败、策略拒绝。
 
-OpenHarness-ts 当前 `WebSearch` 写死 DuckDuckGo HTML endpoint，且解析逻辑在工具里。`WebFetch` 也直接在工具里处理 HTTP、HTML 清洗、截断和错误。后续可以先保留外部工具 schema，只把内部实现改成：
+Vykor 当前 `WebSearch` 写死 DuckDuckGo HTML endpoint，且解析逻辑在工具里。`WebFetch` 也直接在工具里处理 HTTP、HTML 清洗、截断和错误。后续可以先保留外部工具 schema，只把内部实现改成：
 
 ```ts
 interface WebSearchProvider {
@@ -187,7 +187,7 @@ DeepSeek Harness 把 shell 执行分成：
 - Resolved spec：补齐 cwd、env、timeout、stdout cap、sandbox policy、runner mode 后的执行说明。
 - Result：命令退出码、stdout/stderr、截断状态、超时状态、runner 状态。
 
-OpenHarness-ts 当前 `Bash` 工具已经有不错的 Windows shell dialect 检查，也能处理超时、取消、输出截断和 sandbox 启动错误。建议保留这些能力，但把执行部分抽为 executor：
+Vykor 当前 `Bash` 工具已经有不错的 Windows shell dialect 检查，也能处理超时、取消、输出截断和 sandbox 启动错误。建议保留这些能力，但把执行部分抽为 executor：
 
 ```ts
 interface ShellExecutor {
@@ -201,9 +201,9 @@ interface ShellExecutor {
 
 ### 5. Sandbox policy 每次调用携带
 
-DeepSeek Harness 的 sandbox 更强调“每次调用带 policy”，provider 不应该隐式持有全局策略。这个方向适合 OpenHarness-ts。
+DeepSeek Harness 的 sandbox 更强调“每次调用带 policy”，provider 不应该隐式持有全局策略。这个方向适合 Vykor。
 
-当前 `@openharness/sandbox` 已经有 `ResolvedSandboxConfig`、`SandboxSession`、`startSandboxRuntime`、`createProcess` 等能力。后续可以补一层：
+当前 `@vykor/sandbox` 已经有 `ResolvedSandboxConfig`、`SandboxSession`、`startSandboxRuntime`、`createProcess` 等能力。后续可以补一层：
 
 ```ts
 interface SandboxPolicy {
@@ -237,7 +237,7 @@ interface SandboxPolicyService {
 
 DeepSeek Harness 单独把 terminal 做成持久会话能力，而不是把它塞进一次性 shell 命令。
 
-这点适合 OpenHarness-ts：
+这点适合 Vykor：
 
 - `Bash` 继续表示“一次性命令”。
 - `Terminal` 表示“持久交互会话”，有 owner/session scope、scrollback、active send、readiness、cleanup。
@@ -247,7 +247,7 @@ DeepSeek Harness 单独把 terminal 做成持久会话能力，而不是把它�
 
 ### 8. Jobs 协议统一后台任务
 
-DeepSeek Harness 的 jobs 包把后台任务抽成通用控制协议。OpenHarness-ts 已经有 task/workflow/child-agent/terminal 等多种长期状态，后续可以统一模型侧体验：
+DeepSeek Harness 的 jobs 包把后台任务抽成通用控制协议。Vykor 已经有 task/workflow/child-agent/terminal 等多种长期状态，后续可以统一模型侧体验：
 
 - `job_read`：读取最近输出或状态。
 - `job_wait`：等待完成或下一次状态变化。
@@ -271,20 +271,20 @@ DeepSeek Harness 的 FS 能力强调写前必须观察当前文件状态。可�
 
 ### 1. 不照搬 Cordis/ctx 插件体系
 
-DeepSeek Harness 大量使用 `ctx.*` service 和 plugin composition。OpenHarness-ts 已经有自己的 `ToolDefinition`、runtime builder、server/services/sandbox 分层。
+DeepSeek Harness 大量使用 `ctx.*` service 和 plugin composition。Vykor 已经有自己的 `ToolDefinition`、runtime builder、server/services/sandbox 分层。
 
 建议只借鉴边界和契约，不迁移框架。
 
 ### 2. 不急着拆成大量 workspace package
 
-DeepSeek Harness 把 provider 和 tool 拆得很细，这适合稳定平台 API 和插件生态。OpenHarness-ts 当前可以先在现有包内拆模块：
+DeepSeek Harness 把 provider 和 tool 拆得很细，这适合稳定平台 API 和插件生态。Vykor 当前可以先在现有包内拆模块：
 
 - `packages/tools/src/web/runtime.ts`
 - `packages/tools/src/web/providers/http-fetch.ts`
 - `packages/tools/src/shell/executor.ts`
 - `packages/sandbox/src/policy.ts`
 
-等接口稳定后，再考虑拆出 `@openharness/web`、`@openharness/shell` 等独立包。
+等接口稳定后，再考虑拆出 `@vykor/web`、`@vykor/shell` 等独立包。
 
 ### 3. 不把 terminal 做成 Bash 的后台模式
 
@@ -391,8 +391,8 @@ Web provider runtime 第一阶段可以只有一个默认 provider。先把内�
 3. 把工具内 HTML 解析、fetch、错误映射移入 provider/runtime。
 4. 补 provider 单测。
 
-这个改动面小，能验证“能力契约 + provider + tool rendering”的方向是否适合 OpenHarness-ts。验证顺了，再把同样模式推广到 shell 和 sandbox policy。
+这个改动面小，能验证“能力契约 + provider + tool rendering”的方向是否适合 Vykor。验证顺了，再把同样模式推广到 shell 和 sandbox policy。
 
 ## 一句话结论
 
-DeepSeek Harness 的核心启发是：把能力做成可组合服务，而不是把所有逻辑堆进模型工具函数。OpenHarness-ts 已经有强 runtime 基础，后续最该补的是 provider-neutral runtime、每次调用携带的 policy、结构化失败类型，以及长期任务的统一控制协议。
+DeepSeek Harness 的核心启发是：把能力做成可组合服务，而不是把所有逻辑堆进模型工具函数。Vykor 已经有强 runtime 基础，后续最该补的是 provider-neutral runtime、每次调用携带的 policy、结构化失败类型，以及长期任务的统一控制协议。

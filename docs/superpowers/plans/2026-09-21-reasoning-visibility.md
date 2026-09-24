@@ -76,7 +76,7 @@ describe("reasoning contracts", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/core exec vitest run src/types/reasoning-contracts.test.ts`
+Run: `pnpm --filter @vykor/core exec vitest run src/types/reasoning-contracts.test.ts`
 Expected: FAIL —— `reasoning_delta` 不在 `StreamEvent` 联合里（类型错误），或 `reasoning` 字段不存在。
 
 - [ ] **Step 3: 实现类型**
@@ -141,7 +141,7 @@ export type {
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/core exec vitest run src/types/reasoning-contracts.test.ts && pnpm --filter @openharness/core check-types`
+Run: `pnpm --filter @vykor/core exec vitest run src/types/reasoning-contracts.test.ts && pnpm --filter @vykor/core check-types`
 Expected: PASS，类型无错误。
 
 - [ ] **Step 5: 提交**
@@ -216,7 +216,7 @@ describe("OpenAICompatibleClient reasoning deltas", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/api exec vitest run src/providers/openai.test.ts -t "reasoning deltas"`
+Run: `pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts -t "reasoning deltas"`
 Expected: FAIL —— 收到的 reasoning 文本是空串（事件不存在）。
 
 - [ ] **Step 3: 实现**
@@ -246,7 +246,7 @@ Expected: FAIL —— 收到的 reasoning 文本是空串（事件不存在）�
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `pnpm --filter @openharness/api exec vitest run src/providers/openai.test.ts && pnpm --filter @openharness/api check-types`
+Run: `pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts && pnpm --filter @vykor/api check-types`
 Expected: PASS（含原有用例）。
 
 - [ ] **Step 5: 提交**
@@ -329,7 +329,7 @@ describe("extractThinkBlocks", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/api exec vitest run src/providers/think-blocks.test.ts`
+Run: `pnpm --filter @vykor/api exec vitest run src/providers/think-blocks.test.ts`
 Expected: FAIL —— 模块不存在。
 
 - [ ] **Step 3: 实现 think-blocks 模块**
@@ -398,7 +398,7 @@ export function extractThinkBlocks(
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `pnpm --filter @openharness/api exec vitest run src/providers/think-blocks.test.ts`
+Run: `pnpm --filter @vykor/api exec vitest run src/providers/think-blocks.test.ts`
 Expected: PASS（7 个用例）。
 
 - [ ] **Step 5: 接线到 openai.ts**
@@ -463,7 +463,7 @@ EOF 分支改为：
 
 - [ ] **Step 6: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/api exec vitest run src/providers/think-blocks.test.ts src/providers/openai.test.ts && pnpm --filter @openharness/api check-types`
+Run: `pnpm --filter @vykor/api exec vitest run src/providers/think-blocks.test.ts src/providers/openai.test.ts && pnpm --filter @vykor/api check-types`
 Expected: PASS。
 
 - [ ] **Step 7: 提交**
@@ -530,7 +530,7 @@ git commit -m "feat(api): <think> 块抽取为 reasoning 事件（含流结束�
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/core exec vitest run src/engine/integration.test.ts -t "reasoning"`
+Run: `pnpm --filter @vykor/core exec vitest run src/engine/integration.test.ts -t "reasoning"`
 Expected: FAIL —— `assistant.reasoning` 为 `undefined`。
 
 - [ ] **Step 3: 实现**
@@ -573,7 +573,7 @@ Expected: FAIL —— `assistant.reasoning` 为 `undefined`。
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/core exec vitest run src/engine/integration.test.ts && pnpm --filter @openharness/core check-types`
+Run: `pnpm --filter @vykor/core exec vitest run src/engine/integration.test.ts && pnpm --filter @vykor/core check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -630,7 +630,7 @@ git commit -m "feat(core): 引擎累积思考内容并写入助手消息"
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/api exec vitest run src/providers/openai.test.ts -t "replays reasoning"`
+Run: `pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts -t "replays reasoning"`
 Expected: FAIL —— `reasoning_content` 为 `undefined`（当前实现只认实例内 Map）。
 
 - [ ] **Step 3: 实现**
@@ -663,7 +663,7 @@ Expected: FAIL —— `reasoning_content` 为 `undefined`（当前实现只认�
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/api exec vitest run src/providers/openai.test.ts && pnpm --filter @openharness/api check-types`
+Run: `pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts && pnpm --filter @vykor/api check-types`
 Expected: PASS；`grep -n "reasoningHistory" packages/api/src/providers/openai.ts` 无输出。
 
 - [ ] **Step 5: 提交**
@@ -723,7 +723,7 @@ describe("streamEventToAgentEvent", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/agent-runtime exec vitest run src/stream-event-mapping.test.ts`
+Run: `pnpm --filter @vykor/agent-runtime exec vitest run src/stream-event-mapping.test.ts`
 Expected: FAIL —— `streamEventToAgentEvent` 未导出。
 
 - [ ] **Step 3: 实现**
@@ -731,7 +731,7 @@ Expected: FAIL —— `streamEventToAgentEvent` 未导出。
 在 `packages/agent-runtime/src/framework-agent-run.ts` 的 import 旁加上类型导入（若尚未导入）：
 
 ```ts
-import type { AgentEventInput } from "@openharness/core";
+import type { AgentEventInput } from "@vykor/core";
 ```
 
 在文件顶部（class 之前）新增导出函数：
@@ -779,7 +779,7 @@ export function streamEventToAgentEvent(event: StreamEvent): AgentEventInput | u
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/agent-runtime exec vitest run src/stream-event-mapping.test.ts src/framework-agent-run-input.test.ts && pnpm --filter @openharness/agent-runtime check-types`
+Run: `pnpm --filter @vykor/agent-runtime exec vitest run src/stream-event-mapping.test.ts src/framework-agent-run-input.test.ts && pnpm --filter @vykor/agent-runtime check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -858,7 +858,7 @@ git commit -m "feat(agent-runtime): reasoning_delta 映射为 output.reasoning.d
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/session/__test__/transcript-projection.test.ts -t "reasoning"`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/session/__test__/transcript-projection.test.ts -t "reasoning"`
 Expected: FAIL —— 没有任何 `type: "reasoning"` 的 part。
 
 - [ ] **Step 3: 实现投影**
@@ -980,7 +980,7 @@ const REASONING_TRUNCATION_NOTICE = "\n\n…（思考内容过长，已截断）
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/session/__test__/transcript-projection.test.ts && pnpm --filter @openharness/server check-types`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/session/__test__/transcript-projection.test.ts && pnpm --filter @vykor/server check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -1095,7 +1095,7 @@ git commit -m "feat(server): reasoning 事件投影为 reasoning part 与增量"
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/agent/__test__/agent-transcript.test.ts -t "reasoning"`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/agent/__test__/agent-transcript.test.ts -t "reasoning"`
 Expected: FAIL —— `assistant.content` 为 `"想法A想法B答案"` 且 `reasoning` 为 `undefined`。
 
 - [ ] **Step 3: 实现**
@@ -1185,7 +1185,7 @@ function reasoningReplayFromParts(parts: SessionMessagePartRecord[]): string {
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/server exec vitest run src/application/agent/__test__/agent-transcript.test.ts && pnpm --filter @openharness/server check-types`
+Run: `pnpm --filter @vykor/server exec vitest run src/application/agent/__test__/agent-transcript.test.ts && pnpm --filter @vykor/server check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -1239,7 +1239,7 @@ git commit -m "fix(server): 历史重建与压缩重写保留思考内容且不�
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/state/__test__/reducer.test.ts -t "reasoning"`
+Run: `pnpm --filter @vykor/client exec vitest run src/state/__test__/reducer.test.ts -t "reasoning"`
 Expected: FAIL —— part 不存在（`field: "reasoning"` 被直接丢弃）。
 
 - [ ] **Step 3: 实现**
@@ -1263,7 +1263,7 @@ Expected: FAIL —— part 不存在（`field: "reasoning"` 被直接丢弃）�
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/state/__test__/reducer.test.ts && pnpm --filter @openharness/client check-types && pnpm --filter @openharness/protocol check-types`
+Run: `pnpm --filter @vykor/client exec vitest run src/state/__test__/reducer.test.ts && pnpm --filter @vykor/client check-types && pnpm --filter @vykor/protocol check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -1320,7 +1320,7 @@ git commit -m "feat(client): 支持 reasoning part 增量与占位 part"
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/core exec vitest run src/config/settings.test.ts -t "showReasoning"` 与 `pnpm --filter @openharness/server exec vitest run src/application/default-services/settings-service.test.ts -t "showReasoning"`
+Run: `pnpm --filter @vykor/core exec vitest run src/config/settings.test.ts -t "showReasoning"` 与 `pnpm --filter @vykor/server exec vitest run src/application/default-services/settings-service.test.ts -t "showReasoning"`
 Expected: 第一个 FAIL（`showReasoning` 不在顶层白名单会抛错）；第二个 FAIL（存成字符串 `"off"`，真值）。
 
 - [ ] **Step 3: 实现**
@@ -1354,7 +1354,7 @@ Expected: 第一个 FAIL（`showReasoning` 不在顶层白名单会抛错）；�
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/core exec vitest run src/config/settings.test.ts && pnpm --filter @openharness/server exec vitest run src/application/default-services/settings-service.test.ts && pnpm --filter @openharness/core check-types && pnpm --filter @openharness/server check-types`
+Run: `pnpm --filter @vykor/core exec vitest run src/config/settings.test.ts && pnpm --filter @vykor/server exec vitest run src/application/default-services/settings-service.test.ts && pnpm --filter @vykor/core check-types && pnpm --filter @vykor/server check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -1414,7 +1414,7 @@ git commit -m "feat(settings): 新增 showReasoning 展示开关"
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/commands/__test__/session-commands.test.ts -t "reasoning"`
+Run: `pnpm --filter @vykor/client exec vitest run src/commands/__test__/session-commands.test.ts -t "reasoning"`
 Expected: FAIL —— 命令未实现（返回 unhandled 或输出 usage）。
 
 - [ ] **Step 3: 实现**
@@ -1450,7 +1450,7 @@ Expected: FAIL —— 命令未实现（返回 unhandled 或输出 usage）。
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/client exec vitest run src/commands/__test__/session-commands.test.ts && pnpm --filter @openharness/client check-types && pnpm --filter @openharness/server check-types`
+Run: `pnpm --filter @vykor/client exec vitest run src/commands/__test__/session-commands.test.ts && pnpm --filter @vykor/client check-types && pnpm --filter @vykor/server check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -1509,7 +1509,7 @@ describe("DesktopSettingsService.updateReasoningVisibility", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/settings-service.test.ts -t "showReasoning"`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/settings-service.test.ts -t "showReasoning"`
 Expected: FAIL —— 方法不存在 / 快照类型缺字段。
 
 - [ ] **Step 3: 实现**
@@ -1672,7 +1672,7 @@ function ReasoningVisibilityControl(): React.JSX.Element {
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/settings-service.test.ts && pnpm --filter @openharness/desktop check-types`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/settings-service.test.ts && pnpm --filter @vykor/desktop check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -1721,7 +1721,7 @@ describe("truncateReasoning", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/reasoning-text.test.ts`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/reasoning-text.test.ts`
 Expected: FAIL —— 模块不存在。
 
 - [ ] **Step 3: 实现**
@@ -1797,7 +1797,7 @@ export function useShowReasoning(): boolean {
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript/__test__/transcript.test.ts src/renderer/src/components/desktop/conversation-page/message/reasoning-text.test.ts && pnpm --filter @openharness/desktop check-types`
+Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript/__test__/transcript.test.ts src/renderer/src/components/desktop/conversation-page/message/reasoning-text.test.ts && pnpm --filter @vykor/desktop check-types`
 Expected: PASS（现有 reasoning 显示/隐藏用例仍通过）。
 
 - [ ] **Step 5: 提交**
@@ -1856,7 +1856,7 @@ test("drops reasoning items when showReasoning is false", () => {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `pnpm --filter @openharness/frontend exec bun test src/hooks/transcript.test.ts`
+Run: `pnpm --filter @vykor/frontend exec bun test src/hooks/transcript.test.ts`
 Expected: FAIL —— reasoning part 被合并成 `role: "assistant"`（且 `bucketToTranscript` 不接受第二个参数）。
 
 - [ ] **Step 3: 实现**
@@ -1943,7 +1943,7 @@ bootstrap 读取设置处（`client.system.getSettings()` 之后）加：
 
 - [ ] **Step 4: 跑测试与类型检查**
 
-Run: `pnpm --filter @openharness/frontend exec bun test src/hooks/transcript.test.ts && pnpm --filter @openharness/frontend check-types`
+Run: `pnpm --filter @vykor/frontend exec bun test src/hooks/transcript.test.ts && pnpm --filter @vykor/frontend check-types`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
@@ -1967,7 +1967,7 @@ Expected: 全部包通过。
 
 - [ ] **Step 2: 相关包测试**
 
-Run: `pnpm --filter @openharness/api test && pnpm --filter @openharness/core test && pnpm --filter @openharness/client test && pnpm --filter @openharness/server test && pnpm --filter @openharness/agent-runtime exec vitest run src/stream-event-mapping.test.ts src/framework-agent-run-input.test.ts src/default-runtime-provider.test.ts`
+Run: `pnpm --filter @vykor/api test && pnpm --filter @vykor/core test && pnpm --filter @vykor/client test && pnpm --filter @vykor/server test && pnpm --filter @vykor/agent-runtime exec vitest run src/stream-event-mapping.test.ts src/framework-agent-run-input.test.ts src/default-runtime-provider.test.ts`
 Expected: 全部通过（agent-runtime 全量测试很慢，只跑受影响文件）。
 
 - [ ] **Step 3: 文档与架构检查**

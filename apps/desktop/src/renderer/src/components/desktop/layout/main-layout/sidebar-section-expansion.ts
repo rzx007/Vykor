@@ -4,7 +4,7 @@ export interface SidebarSectionExpansion {
   recent: boolean
 }
 
-export const SIDEBAR_SECTIONS_STORAGE_KEY = "openharness.desktop.sidebar-section-expansion"
+export const SIDEBAR_SECTIONS_STORAGE_KEY = "vykor.desktop.sidebar-section-expansion"
 
 export const DEFAULT_SIDEBAR_SECTION_EXPANSION: SidebarSectionExpansion = {
   projects: true,

@@ -3,7 +3,7 @@
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 > 设计与契约以 `docs/superpowers/specs/2026-09-20-desktop-im-sessions-design.md` 为准。
 
-**目标：** 在 Desktop 侧边栏新增「IM 会话」分区（按平台分组、空时不渲染），渠道会话从「项目/最近」移出；标题=第一条消息；渠道工作区改到 `<outsideProjectWorkspaceRoot 或 homedir/Documents/OpenHarness>/channels`；提供手动刷新入口。
+**目标：** 在 Desktop 侧边栏新增「IM 会话」分区（按平台分组、空时不渲染），渠道会话从「项目/最近」移出；标题=第一条消息；渠道工作区改到 `<outsideProjectWorkspaceRoot 或 homedir/Documents/Vykor>/channels`；提供手动刷新入口。
 
 **架构：** daemon 侧只改两件事——工作区根（纯函数 `resolveChannelWorkspaceRoot` + `DaemonApplication` 注入）和建会话时的标题/metadata。Desktop 侧：`bootstrap()` 按"渠道会话 cwd"隐藏对应项目；渲染层新增 `isChannelSession` / `selectImSessionGroups` 与「IM 会话」分区，并从「项目/最近」排除渠道会话。
 
@@ -13,7 +13,7 @@
 
 - 不迁移旧会话/旧工作区；不自动删除遗留项目记录（用户手动）。
 - 不做事件驱动刷新；只提供手动刷新入口（按钮 + 展开分区）。
-- 不改 `@openharness/protocol` durable 类型。
+- 不改 `@vykor/protocol` durable 类型。
 - 不改渠道运行时连接/收发逻辑。
 - 渠道会话识别：`metadata.externalConversation` 存在或 `metadata.source === "channel"`，且 `metadata.fork` 为空。
 - 标题只在**新建**会话时设置；空正文回退 `飞书 · <chatId>`。
@@ -52,19 +52,19 @@
 it("resolves the channel workspace root from env, outside root, then homedir", () => {
   expect(resolveChannelWorkspaceRoot({ envDir: resolve("/tmp/env"), outsideProjectWorkspaceRoot: resolve("/tmp/out"), homedir: resolve("/tmp/home") })).toBe(resolve("/tmp/env"));
   expect(resolveChannelWorkspaceRoot({ outsideProjectWorkspaceRoot: resolve("/tmp/out"), homedir: resolve("/tmp/home") })).toBe(join(resolve("/tmp/out"), "channels"));
-  expect(resolveChannelWorkspaceRoot({ homedir: resolve("/tmp/home") })).toBe(join(resolve("/tmp/home"), "Documents", "OpenHarness", "channels"));
+  expect(resolveChannelWorkspaceRoot({ homedir: resolve("/tmp/home") })).toBe(join(resolve("/tmp/home"), "Documents", "Vykor", "channels"));
 });
-it("getChannelWorkspaceRoot defaults under Documents and honors OPENHARNESS_CHANNELS_DIR", () => {
-  // env 覆盖 + 默认值（默认值用 homedir，测试里只断言以 Documents/OpenHarness/channels 结尾）
+it("getChannelWorkspaceRoot defaults under Documents and honors VYKOR_CHANNELS_DIR", () => {
+  // env 覆盖 + 默认值（默认值用 homedir，测试里只断言以 Documents/Vykor/channels 结尾）
 });
 ```
 
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/core test -- --run src/config/paths.test.ts`
-- [ ] **步骤 3：实现**：新增纯函数；`getChannelWorkspaceRoot()` 改为 `resolveChannelWorkspaceRoot({ envDir: process.env.OPENHARNESS_CHANNELS_DIR })`；`index.ts` 导出。
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/core test -- --run src/config/paths.test.ts`
+- [ ] **步骤 3：实现**：新增纯函数；`getChannelWorkspaceRoot()` 改为 `resolveChannelWorkspaceRoot({ envDir: process.env.VYKOR_CHANNELS_DIR })`；`index.ts` 导出。
 - [ ] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/core test -- --run
+pnpm --filter @vykor/core test -- --run
 git add packages/core/src/config/paths.ts packages/core/src/config/paths.test.ts packages/core/src/index.ts
 git commit -m "feat(core): resolve channel workspace under the outside-project root"
 ```
@@ -81,19 +81,19 @@ git commit -m "feat(core): resolve channel workspace under the outside-project r
 
 ```ts
 workspaceRoot: resolveChannelWorkspaceRoot({
-  envDir: process.env.OPENHARNESS_CHANNELS_DIR,
+  envDir: process.env.VYKOR_CHANNELS_DIR,
   outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
   homedir: homedir(),
 }),
 ```
 
-（`homedir` 从 `node:os` 引入；`resolveChannelWorkspaceRoot` 从 `@openharness/core` 引入。）
+（`homedir` 从 `node:os` 引入；`resolveChannelWorkspaceRoot` 从 `@vykor/core` 引入。）
 
 - [ ] **步骤 2：类型检查 + Commit**
 
 ```bash
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/server test -- --run src/application/__test__/daemon-channel-assembly.test.ts
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/server test -- --run src/application/__test__/daemon-channel-assembly.test.ts
 git add packages/server/src/application/daemon-application.ts
 git commit -m "feat(server): place channel workspaces under the outside-project root"
 ```
@@ -116,7 +116,7 @@ git commit -m "feat(server): place channel workspaces under the outside-project 
   - 纯空白/纯标点 → 回退。
   - 新建会话 metadata 含 `desktop.workspaceMode === "outside_project"`。
   - 已存在会话（`findConversation` 命中且未归档）不改标题。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/server test -- --run src/application/channel/__test__/channel-application-service.test.ts`
 - [ ] **步骤 3：实现**
 
 ```ts
@@ -143,8 +143,8 @@ metadata: {
 - [ ] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/server test -- --run
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- --run
+pnpm --filter @vykor/server check-types
 git add packages/server/src/application/channel
 git commit -m "feat(server): title channel sessions from the first message"
 ```
@@ -156,12 +156,12 @@ git commit -m "feat(server): title channel sessions from the first message"
 **文件：** `apps/desktop/src/main/features/session/session-service.ts`（测试：`session-service.test.ts` 或新增 `session-service.channel-project.test.ts`）
 
 - [ ] **步骤 1：编写失败的测试**：构造 sessions（一个渠道会话 `metadata.externalConversation` + cwd 在文档外）与 projectRecords（其 path = 该 cwd），断言 `bootstrap()` 返回的 `projects` 不含它；同时文档根下的项目仍被隐藏；普通项目保留。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/desktop exec vitest run src/main/features/session/session-service.channel-project.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/desktop exec vitest run src/main/features/session/session-service.channel-project.test.ts`
 - [ ] **步骤 3：实现**：`bootstrap()` 里先算 `channelCwds = new Set(sessions.filter(isChannelMetadata).map(normalize(cwd)))`，项目过滤为 `!isOutsideProjectWorkspacePath(path) && !channelCwds.has(normalize(path))`。渠道判定用 `metadata.externalConversation != null || metadata.source === "channel"`（不排除 fork 也无妨，但保持一致可排除）。
 - [ ] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/session/session-service.channel-project.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/session/session-service.channel-project.test.ts
 git add apps/desktop/src/main/features/session/session-service.ts apps/desktop/src/main/features/session/session-service.channel-project.test.ts
 git commit -m "feat(desktop): hide channel projects by session ownership"
 ```
@@ -178,7 +178,7 @@ git commit -m "feat(desktop): hide channel projects by session ownership"
   - `isChannelSession`：有 `externalConversation` → true；只有 `source:"channel"` → true；两者都无 → false；带 `fork` → false。
   - `resolveSessionWorkspace`：渠道会话（含无 `desktop.workspaceMode` 的旧会话）→ `workspaceMode:"outside_project"`、`selectedProject:null`。
   - `projectFromSession`：渠道/项目外会话展示名优先 `session.title`（非空），否则 `basename(cwd)`。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/stores/desktop-session/helpers.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/stores/desktop-session/helpers.test.ts`
 - [ ] **步骤 3：实现**（`isChannelSession` 见 spec §6.1；`resolveSessionWorkspace` 开头加 `isChannelSession` 判定；`projectFromSession` 名字回退顺序调整）
 - [ ] **步骤 4：通过 + Commit**
 
@@ -197,7 +197,7 @@ git commit -m "feat(desktop): treat channel sessions as outside-project"
 - 测试：`selectors.test.ts`
 
 - [ ] **步骤 1：编写失败的测试**：分组、标签（feishu→飞书、缺失 connector→其他平台）、置顶优先、`updatedAt` 倒序、组间排序与并列 tie-break、仅未归档（归档渠道会话不入选）。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/stores/desktop-session/selectors.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/stores/desktop-session/selectors.test.ts`
 - [ ] **步骤 3：实现**
 
 ```ts
@@ -228,14 +228,14 @@ git commit -m "feat(desktop): group channel sessions by platform"
   - 「项目」下会话列表不含渠道会话；「最近」不含渠道会话。
   - 「刷新」按钮调用 `refreshBootstrap`；展开分区（`im` false→true）触发刷新。
   - 组内 >5 条有「展开显示」。
-- [ ] **步骤 2：运行确认失败**：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/layout/main-layout/sidebar.test.tsx src/renderer/src/components/desktop/layout/main-layout/sidebar-section-expansion.test.ts`
+- [ ] **步骤 2：运行确认失败**：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/layout/main-layout/sidebar.test.tsx src/renderer/src/components/desktop/layout/main-layout/sidebar-section-expansion.test.ts`
 - [ ] **步骤 3：实现**
   - `SidebarSectionExpansion` 加 `im: boolean`（默认 true）+ parse 兼容。
   - `sidebar.tsx`：`imGroups = selectImSessionGroups(state)`；非空时渲染分区（含刷新按钮），空则整段不渲染；`recentSessions` 与项目会话过滤排除 `isChannelSession`；`toggleSection("im")` 展开时调 `refreshBootstrap()`。
 - [ ] **步骤 4：通过 + Commit**
 
 ```bash
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop typecheck
 git add apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar.tsx apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar.test.tsx apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar-section-expansion.ts apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar-section-expansion.test.ts
 git commit -m "feat(desktop): add the IM sessions sidebar section"
 ```
@@ -246,7 +246,7 @@ git commit -m "feat(desktop): add the IM sessions sidebar section"
 
 **文件：** `docs/channels-flow.md`（顶层当前文档，需保留 `> 状态：当前…`，源码路径必须存在）
 
-- [ ] **步骤 1：更新**：工作区路径改为 `<outsideProjectWorkspaceRoot 或 <文档>/OpenHarness>/channels/...`；补「IM 会话」分区与"渠道会话不进项目/最近"说明；说明 `getChannelWorkspaceRoot` 默认变更。
+- [ ] **步骤 1：更新**：工作区路径改为 `<outsideProjectWorkspaceRoot 或 <文档>/Vykor>/channels/...`；补「IM 会话」分区与"渠道会话不进项目/最近"说明；说明 `getChannelWorkspaceRoot` 默认变更。
 - [ ] **步骤 2：校验 + Commit**
 
 ```bash
@@ -263,15 +263,15 @@ git commit -m "docs: document the IM sessions section and channel workspace root
 - [ ] **步骤 1：相关包全量测试**
 
 ```bash
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/server test -- --run
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/server test -- --run
+pnpm --filter @vykor/desktop test
 ```
 
 - [ ] **步骤 2：类型与构建**
 
 ```bash
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop typecheck
 pnpm exec turbo build --output-logs=errors-only
 pnpm check-docs
 git diff --check
@@ -281,7 +281,7 @@ git diff --check
   1. 发一条飞书消息 → 点「IM 会话」的「刷新」→ 出现「IM 会话 → 飞书」，标题=第一条消息；
   2. 该会话不在「项目」「最近」；
   3. 无渠道会话时整栏不显示；
-  4. 工作区落在 `<文档>/OpenHarness/channels/feishu/...`，对应项目不显示；
+  4. 工作区落在 `<文档>/Vykor/channels/feishu/...`，对应项目不显示；
   5. 旧渠道会话也在「IM 会话」，打开按项目外处理。
 
 ---

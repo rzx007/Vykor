@@ -39,7 +39,7 @@ it.each([
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop test -- appearance-colors.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- appearance-colors.test.ts`
 
 预期：FAIL，因为当前比例生成较深的 `#CDD2D5` 与 `#292D30`。
 
@@ -51,7 +51,7 @@ const sidebarSelectedStrength = theme === "light" ? 0.1 : 0.2
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop test -- appearance-colors.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- appearance-colors.test.ts`
 
 预期：PASS。
 
@@ -72,7 +72,7 @@ expect(buildBrowserScrollbarCss("dark")).toContain("rgb(245 247 249 / 10%)")
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop test -- browser-webview-style.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- browser-webview-style.test.ts`
 
 预期：FAIL，因为样式生成函数尚不存在。
 
@@ -91,7 +91,7 @@ export function buildBrowserScrollbarCss(theme: "light" | "dark"): string {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop test -- browser-webview-style.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- browser-webview-style.test.ts`
 
 预期：PASS。
 
@@ -111,6 +111,6 @@ export function buildBrowserScrollbarCss(theme: "light" | "dark"): string {
 
 - [ ] **步骤 2：运行桌面端完整验证**
 
-运行：`pnpm --filter @openharness/desktop test && pnpm --filter @openharness/desktop typecheck && pnpm --filter @openharness/desktop build`
+运行：`pnpm --filter @vykor/desktop test && pnpm --filter @vykor/desktop typecheck && pnpm --filter @vykor/desktop build`
 
 预期：所有测试、类型检查与构建均通过。

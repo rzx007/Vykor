@@ -1,5 +1,5 @@
-import type { ToolContext, ToolDefinition, ToolResult } from "@openharness/core";
-import type { JobKind, JobStatus } from "@openharness/jobs";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
+import type { JobKind, JobStatus } from "@vykor/jobs";
 
 const DEFAULT_JOB_LIST_LIMIT = 100;
 const MAX_JOB_WAIT_IDS = 32;

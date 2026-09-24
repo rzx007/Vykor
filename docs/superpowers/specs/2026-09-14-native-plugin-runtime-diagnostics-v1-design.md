@@ -54,7 +54,7 @@ Runtime 诊断 v1 要让插件页能回答 4 个问题：
 - `PluginInfo.diagnostics` 已经能返回安装校验和组件加载诊断；
 - `toolRuntime` 已经展示 Native Tool Host 的运行状态；
 - `Plugin Service` 会读取安装记录，调用 `verifyInstalledNativePlugin` 和 `loadNativePlugin`；
-- Agent Runtime 会在新 Runtime 创建时通过 `discoverOpenHarnessExtensions` 加载插件；
+- Agent Runtime 会在新 Runtime 创建时通过 `discoverVykorExtensions` 加载插件；
 - Native Tool 激活发生在 `configureDiscoveredExtensions`，它能产生 Tool Host 级别诊断。
 
 缺口是：这些诊断没有收敛成用户可读的「运行状态」。插件页只能看到粗粒度 activation 和 diagnostics，不能稳定告诉用户「下一步做什么」。

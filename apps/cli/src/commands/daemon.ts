@@ -1,13 +1,13 @@
 import { statSync } from "node:fs";
 import { Command } from "commander";
-import type { DaemonRegistry } from "@openharness/server";
+import type { DaemonRegistry } from "@vykor/server";
 
 import {
   daemonPidAlive,
   probeDaemonRegistry,
   terminateDaemonProcess,
 } from "../daemon-lifecycle.js";
-import { stopDaemonProcess } from "@openharness/server/daemon-host";
+import { stopDaemonProcess } from "@vykor/server/daemon-host";
 import {
   loadDaemonAutoStart,
   reconcileDaemonAutoStart,
@@ -55,13 +55,13 @@ async function runServe(options: ServeOptions): Promise<void> {
     createBearerToken,
     createDaemonRegistryEntry,
     readDaemonRegistry,
-    startOpenHarnessDaemon,
+    startVykorDaemon,
     writeDaemonRegistry,
-  } = await import("@openharness/server");
+  } = await import("@vykor/server");
 
   assertSafeDaemonBinding(options);
   const token = options.token ?? createBearerToken();
-  const { server, listen } = await startOpenHarnessDaemon({
+  const { server, listen } = await startVykorDaemon({
     host: options.host,
     port: options.port,
     token,
@@ -106,7 +106,7 @@ async function runServe(options: ServeOptions): Promise<void> {
 export function createServeCommand(): Command {
   return new Command("serve")
     .description(
-      "Start the OpenHarness daemon/server runtime in the foreground",
+      "Start the Vykor daemon/server runtime in the foreground",
     )
     .option("--host <host>", "Host to bind", "127.0.0.1")
     .option(
@@ -129,7 +129,7 @@ export function createServeCommand(): Command {
 
 export function createDaemonCommand(): Command {
   const cmd = new Command("daemon").description(
-    "Manage the OpenHarness daemon/server runtime",
+    "Manage the Vykor daemon/server runtime",
   );
 
   cmd
@@ -151,7 +151,7 @@ export function createDaemonCommand(): Command {
     .action(async (options: ServeOptions) => {
       assertSafeDaemonBinding(options);
       const { clearDaemonRegistry, readDaemonRegistry } =
-        await import("@openharness/server");
+        await import("@vykor/server");
       const entry = process.argv[1];
       if (!entry) {
         console.error("Cannot locate CLI entrypoint.");
@@ -252,7 +252,7 @@ export function createDaemonCommand(): Command {
       const entry = process.argv[1];
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
       const { clearDaemonRegistry, readDaemonRegistry } =
-        await import("@openharness/server");
+        await import("@vykor/server");
       const args = [
         "serve",
         "--register",
@@ -296,7 +296,7 @@ export function createDaemonCommand(): Command {
       const entry = process.argv[1];
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
       const { clearDaemonRegistry, readDaemonRegistry } =
-        await import("@openharness/server");
+        await import("@vykor/server");
       const registry = readDaemonRegistry();
       await createCliDaemonAutoStartController(entry).disable();
       if (registry && daemonPidAlive(registry.pid)) {
@@ -320,7 +320,7 @@ export function createDaemonCommand(): Command {
       const entry = process.argv[1];
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
       const { clearDaemonRegistry, readDaemonRegistry } =
-        await import("@openharness/server");
+        await import("@vykor/server");
       const registry = readDaemonRegistry();
       const probeOptions = {
         expectedVersion: VERSION,
@@ -345,7 +345,7 @@ export function createDaemonCommand(): Command {
     .command("status")
     .description("Show daemon status")
     .action(async () => {
-      const { readDaemonRegistry } = await import("@openharness/server");
+      const { readDaemonRegistry } = await import("@vykor/server");
       console.log(
         `Automatic startup: ${(await loadDaemonAutoStart()) ? "enabled" : "disabled"}`,
       );
@@ -375,7 +375,7 @@ export function createDaemonCommand(): Command {
     .description("Stop the daemon")
     .action(async () => {
       const { clearDaemonRegistry, readDaemonRegistry } =
-        await import("@openharness/server");
+        await import("@vykor/server");
       const entry = process.argv[1];
       const service = entry ? createDaemonSystemService(entry) : undefined;
       const registry = readDaemonRegistry();
@@ -425,6 +425,6 @@ async function waitForReadyDaemon(
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(
-    "The OpenHarness daemon did not become ready within 10 seconds",
+    "The Vykor daemon did not become ready within 10 seconds",
   );
 }

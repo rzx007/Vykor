@@ -39,7 +39,7 @@ describe("notifyForSessionViewChange", () => {
     })
 
     expect(notify).toHaveBeenCalledWith({
-      title: "OpenHarness",
+      title: "Vykor",
       body: "test 已完成。",
     })
   })
@@ -53,7 +53,7 @@ describe("notifyForSessionViewChange", () => {
     })
 
     expect(notify).toHaveBeenCalledWith({
-      title: "OpenHarness",
+      title: "Vykor",
       body: "test 运行失败。",
     })
   })
@@ -65,7 +65,7 @@ describe("notifyForSessionViewChange", () => {
     })
 
     expect(notify).toHaveBeenCalledWith({
-      title: "OpenHarness 需要处理",
+      title: "Vykor 需要处理",
       body: "test 正在等待 Bash 授权。",
     })
   })
@@ -115,7 +115,7 @@ describe("notifyForSessionViewChange", () => {
     })
 
     expect(notify).toHaveBeenCalledWith({
-      title: "OpenHarness",
+      title: "Vykor",
       body: "test 已完成。",
       showWhenFocused: true,
     })

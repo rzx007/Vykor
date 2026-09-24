@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/services",
+  "name": "@vykor/services",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -32,12 +32,12 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/environment": "workspace:*",
+    "@vykor/environment": "workspace:*",
     "@arcships/light-ocr": "catalog:",
-    "@openharness/core": "workspace:*",
-    "@openharness/memory": "workspace:*",
-    "@openharness/protocol": "workspace:*",
-    "@openharness/sandbox": "workspace:*",
+    "@vykor/core": "workspace:*",
+    "@vykor/memory": "workspace:*",
+    "@vykor/protocol": "workspace:*",
+    "@vykor/sandbox": "workspace:*",
     "better-sqlite3": "^13.0.2",
     "drizzle-orm": "^0.45.2",
     "sharp": "0.34.4"

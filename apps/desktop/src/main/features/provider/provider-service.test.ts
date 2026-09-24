@@ -68,7 +68,7 @@ describe("buildDesktopProviderSnapshot", () => {
       connected: true,
       active: true,
       credentialSource: "credentials",
-      credentialLabel: "OpenHarness 密钥",
+      credentialLabel: "Vykor 密钥",
       currentModel: "gpt-5.4",
     })
     expect(snapshot.providers.find((item) => item.name === "anthropic")).toMatchObject({

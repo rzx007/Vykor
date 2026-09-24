@@ -1,5 +1,5 @@
-import type { ToolDefinition } from "@openharness/core";
-import type { MemoryManager } from "@openharness/memory";
+import type { ToolDefinition } from "@vykor/core";
+import type { MemoryManager } from "@vykor/memory";
 
 export interface RememberToolOptions {
   appendUserProfile(content: string): Promise<string>;

@@ -4,7 +4,7 @@
 
 ## 目标与范围
 
-开发者可以从公开文档和参考代码出发，编写一个 OpenHarness Native Plugin，完成校验、本地开发链接、正式安装和实际工具调用，并知道错误从哪里查看、何时需要重载。
+开发者可以从公开文档和参考代码出发，编写一个 Vykor Native Plugin，完成校验、本地开发链接、正式安装和实际工具调用，并知道错误从哪里查看、何时需要重载。
 
 本阶段落实 [插件系统交接](../../plugin-system-handoff.md) 的 Native 运行格式与安装边界。Converter 到此停止扩展，不是本阶段的开发对象。
 
@@ -20,13 +20,13 @@
 | 调用上下文 | `native-tools/protocol.ts` 与 `host-entry.mjs` | 提供 cwd、sessionId、deadline、signal、plugin、permissions |
 | 独立进程与调用保护 | `native-tools/tool-host.ts`、`activate.ts`、`guard.ts` | 复用参数检查、超时、取消、审计、名称冲突和清理 |
 | 用户安装快照 | `packages/plugins/src/installation/` | 复用 link 与不可变安装，不增加样例专用安装器 |
-| 开发重载 | `packages/client/src/commands/session-commands.ts` | 当前会话命令是 `/reload-plugins`，不宣传尚不存在的 `ohs plugin reload` |
+| 开发重载 | `packages/client/src/commands/session-commands.ts` | 当前会话命令是 `/reload-plugins`，不宣传尚不存在的 `vk plugin reload` |
 
 当前不存在完整的插件配置注入、密钥读取和持久数据访问 API。`permissions` 是授权声明及运行闸门的一部分，不是自动获得文件或网络操作能力的 API，也不是操作系统级沙箱。Tool Host 不继承 daemon 的任意环境变量。以上限制必须在开发指南中直接说明。
 
 ## 方案选择
 
-采用“公开现有开发接口的类型定义 + 一个真实参考插件 + 自动验收”。类型入口放在 `@openharness/plugins/sdk`，首版仅用于 TypeScript 或 JSDoc 的开发期检查，插件运行代码无须导入 OpenHarness。
+采用“公开现有开发接口的类型定义 + 一个真实参考插件 + 自动验收”。类型入口放在 `@vykor/plugins/sdk`，首版仅用于 TypeScript 或 JSDoc 的开发期检查，插件运行代码无须导入 Vykor。
 
 参考插件的 `.mjs` 必须使用公开子路径的 JSDoc 类型并纳入 `checkJs`。类型检查必须覆盖实际参考代码，不能只在 SDK 包内创建另一份正确样例。类型解析通过仓库测试配置建立，示例运行时保持零依赖。Turbo 对相关测试和类型检查显式包含 `examples/plugins/text-inspector/**`，避免修改包外样例后错误复用旧缓存。
 
@@ -53,7 +53,7 @@ Runtime 的可复用描述类型使用公共定义的 Pick/引用，保留 IPC �
 目录位置为 `examples/plugins/text-inspector/`：
 
 ```text
-.openharness-plugin/plugin.json
+.vykor-plugin/plugin.json
 skills/check-text/SKILL.md
 skills/check-text/references/rules.md
 tools/index.mjs
@@ -88,7 +88,7 @@ Tool 接收 `{ text: string }`，拒绝其他字段；最多 100,000 个 UTF-16 
 - 状态与调试：区分校验、安装、组件加载和激活；管理页整体 activation 当前不等价于精确运行状态。
 - 配置、密钥和数据：说明当前 API 缺口以及普通卸载保留数据的约定；不指导作者写入安装快照或猜测未公开目录。
 
-指南使用已存在的命令：`ohs plugin validate`、`link`、`install-local`、`list --verbose`、`details`、`enable`、`disable`、`uninstall`，开发修改后通过会话 `/reload-plugins` 创建新的运行状态。
+指南使用已存在的命令：`vk plugin validate`、`link`、`install-local`、`list --verbose`、`details`、`enable`、`disable`、`uninstall`，开发修改后通过会话 `/reload-plugins` 创建新的运行状态。
 
 ## 自动验收
 
@@ -106,7 +106,7 @@ Tool 接收 `{ text: string }`，拒绝其他字段；最多 100,000 个 UTF-16 
 
 ### 本轮验收边界
 
-实际实现使用真实 PluginService、安装记录、发现/校验函数、ToolRegistry 和 Tool Host；路由控制测试适配器通过真实 DaemonOperationGate 持有并执行运行实例 cleanup，使用 PID 检查进程退出。slash 使用真实 OpenHarnessClient，通过注入 fetch 转入真实 Hono 路由。没有启动完整 AgentPool、模型会话或 TCP 监听，不将这些测试表述为完整桌面端端到端验收。
+实际实现使用真实 PluginService、安装记录、发现/校验函数、ToolRegistry 和 Tool Host；路由控制测试适配器通过真实 DaemonOperationGate 持有并执行运行实例 cleanup，使用 PID 检查进程退出。slash 使用真实 VykorClient，通过注入 fetch 转入真实 Hono 路由。没有启动完整 AgentPool、模型会话或 TCP 监听，不将这些测试表述为完整桌面端端到端验收。
 
 SDK 和实际样例类型检查，以及 client、agent-runtime、server 相关类型检查通过。缓存输入验证同时包含样例隐藏 manifest、客户端重载代码和共享测试 helper；临时修改样例使三个相关任务摘要变化后已恢复文件。
 

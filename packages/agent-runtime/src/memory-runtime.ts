@@ -1,12 +1,12 @@
-import type { Message, StreamingMessageClient } from "@openharness/core";
-import { getProjectMemoryDir } from "@openharness/core";
+import type { Message, StreamingMessageClient } from "@vykor/core";
+import { getProjectMemoryDir } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
   isMemoryWriteToolCall,
   MemoryManager,
   parseMemoryExtractionRecords,
   selectWritableMemoryExtractionRecords,
-} from "@openharness/memory";
+} from "@vykor/memory";
 
 import type { FrameworkAgentRunToolActivity } from "./framework-agent-run.js";
 
@@ -35,6 +35,7 @@ export async function createAgentMemoryRuntime(
 ): Promise<AgentMemoryRuntime> {
   const directory = getProjectMemoryDir(cwd);
   const manager = new MemoryManager(1000, directory);
+  await manager.getAll();
 
   return {
     manager,
@@ -96,7 +97,7 @@ export async function extractMemories(options: {
     model: options.model,
     messages: [{ type: "user", content: prompt }],
     system: [
-      "You maintain OpenHarness durable memory.",
+      "You maintain Vykor durable memory.",
       "Save only stable, future-useful facts that are not derivable from current files, git history, or documentation.",
       "Do not save secrets. If nothing is worth saving, return {\"memories\": []}.",
     ].join("\n"),

@@ -71,7 +71,7 @@ it("copies and pastes structured references through the real composer clipboard 
     editor.update(() => $getRoot().select(0, $getRoot().getChildrenSize()), { discrete: true });
     editor.dispatchCommand(COPY_COMMAND, event as ClipboardEvent);
   });
-  expect(data.get("application/x-openharness-composer")).toBeTruthy();
+  expect(data.get("application/x-vykor-composer")).toBeTruthy();
   expect(data.get("text/plain")).toContain("$review");
   await act(async () => {
     editor.update(() => $getRoot().select(0, $getRoot().getChildrenSize()), { discrete: true });
@@ -79,7 +79,7 @@ it("copies and pastes structured references through the real composer clipboard 
   });
   expect(editor.getEditorState().read(composerDocumentFromLexical)).toEqual({ version: 1, items });
 
-  data.delete("application/x-openharness-composer");
+  data.delete("application/x-vykor-composer");
   data.set("text/plain", "$review plain");
   await act(async () => {
     editor.update(() => $getRoot().select(0, $getRoot().getChildrenSize()), { discrete: true });
@@ -87,7 +87,7 @@ it("copies and pastes structured references through the real composer clipboard 
   });
   expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([{ type: "text", text: "$review plain" }]);
 
-  data.set("application/x-openharness-composer", JSON.stringify({ version: 1, items: [{ type: "skill", name: "review", path: "D:/foreign/SKILL.md" }] }));
+  data.set("application/x-vykor-composer", JSON.stringify({ version: 1, items: [{ type: "skill", name: "review", path: "D:/foreign/SKILL.md" }] }));
   data.set("text/plain", "$review");
   await act(async () => {
     editor.update(() => $getRoot().select(0, $getRoot().getChildrenSize()), { discrete: true });
@@ -106,7 +106,7 @@ it.each(["body\n", "\nbody", "\n\n"])("keeps empty paragraphs when copying %j", 
     editor.update(() => $getRoot().select(0, $getRoot().getChildrenSize()), { discrete: true });
     editor.dispatchCommand(COPY_COMMAND, event as ClipboardEvent);
   });
-  expect(JSON.parse(data.get("application/x-openharness-composer")!).items).toEqual([{ type: "text", text }]);
+  expect(JSON.parse(data.get("application/x-vykor-composer")!).items).toEqual([{ type: "text", text }]);
 });
 async function render(
   value: ComposerDocument,

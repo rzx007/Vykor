@@ -62,7 +62,7 @@ describe("ScheduledTaskExecutor", () => {
   });
 
   it("allocates a standalone workspace without a project and executes through Session admission", async () => {
-    const root = mkdtempSync(join(tmpdir(), "ohs-scheduled-executor-"));
+    const root = mkdtempSync(join(tmpdir(), "vk-scheduled-executor-"));
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));
     const createSession = vi.fn((input) => ({ id: "s1", status: "idle", ...input }));
     const admitPrompt = vi.fn(async () => ({ run: { id: "r1" } }));
@@ -86,7 +86,7 @@ describe("ScheduledTaskExecutor", () => {
   });
 
   it("forwards a non-enum reasoning effort into the standalone runtime", async () => {
-    const root = mkdtempSync(join(tmpdir(), "ohs-scheduled-effort-"));
+    const root = mkdtempSync(join(tmpdir(), "vk-scheduled-effort-"));
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));
     const createSession = vi.fn((input) => ({ id: "s1", status: "idle", ...input }));
     const executor = new ScheduledTaskExecutor({
@@ -107,7 +107,7 @@ describe("ScheduledTaskExecutor", () => {
   });
 
   it("cleans an allocated standalone workspace when worktree mode has no project", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-scheduled-cleanup-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-scheduled-cleanup-"));
     const workspace = join(directory, "allocated");
     cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
     const executor = new ScheduledTaskExecutor({

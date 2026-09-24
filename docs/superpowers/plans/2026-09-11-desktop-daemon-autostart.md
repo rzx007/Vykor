@@ -4,9 +4,9 @@
 
 **目标：** 在 Desktop 设置中安全地启停现有 daemon 系统常驻能力，并只为真正首次安装的新用户显示一次侧边栏引导。
 
-**架构：** 把 CLI 中与调用入口无关的系统服务管理器下沉到 `@openharness/server`，CLI 和 Desktop 分别提供自己的 daemon 启动命令。Desktop 主进程维护安装身份、引导状态和真实系统服务快照，通过固定 IPC 暴露给设置页和侧边栏；渲染层只负责交互状态，不执行命令。
+**架构：** 把 CLI 中与调用入口无关的系统服务管理器下沉到 `@vykor/server`，CLI 和 Desktop 分别提供自己的 daemon 启动命令。Desktop 主进程维护安装身份、引导状态和真实系统服务快照，通过固定 IPC 暴露给设置页和侧边栏；渲染层只负责交互状态，不执行命令。
 
-**技术栈：** Electron 39、React 19、TypeScript、Vitest、`@openharness/server`、`@openharness/core`、shadcn/ui、Tailwind CSS。
+**技术栈：** Electron 39、React 19、TypeScript、Vitest、`@vykor/server`、`@vykor/core`、shadcn/ui、Tailwind CSS。
 
 ---
 
@@ -31,7 +31,7 @@
 - 修改 `apps/desktop/src/main/features/settings/desktop-preferences.ts` 及测试：保存安装身份和引导枚举。
 - 修改 `apps/desktop/src/shared/settings-types.ts`：定义统一快照和操作输入。
 - 修改 `apps/desktop/src/shared/ipc-channels.ts`、`desktop-api-contract.ts`、`apps/desktop/src/preload/desktop-api.ts` 及 preload 测试：贯通类型安全接口。
-- 修改 `apps/desktop/package.json`、`pnpm-lock.yaml`：声明 Desktop 对 `@openharness/core` 的直接依赖。
+- 修改 `apps/desktop/package.json`、`pnpm-lock.yaml`：声明 Desktop 对 `@vykor/core` 的直接依赖。
 
 ### Desktop 渲染界面
 
@@ -62,7 +62,7 @@
 
 ```ts
 const service = new DaemonSystemService({
-  invocation: { command: "OpenHarness", args: ["--daemon-service"], cwd: "D:/app" },
+  invocation: { command: "Vykor", args: ["--daemon-service"], cwd: "D:/app" },
   platform: "win32",
   homeDir: "D:/home",
   logsDir: "D:/logs",
@@ -73,7 +73,7 @@ service.install()
 expect(runCommand).toHaveBeenCalledWith(
   "powershell.exe",
   expect.arrayContaining(["-NonInteractive"]),
-  expect.objectContaining({ OHS_WORKING_DIRECTORY: "D:/app" })
+  expect.objectContaining({ VK_WORKING_DIRECTORY: "D:/app" })
 )
 ```
 
@@ -84,7 +84,7 @@ expect(runCommand).toHaveBeenCalledWith(
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test -- system-service
+pnpm --filter @vykor/server test -- system-service
 pnpm --filter @rzx/ohs test -- daemon-system-service
 ```
 
@@ -111,16 +111,16 @@ export class DaemonSystemService {
 }
 ```
 
-CLI 文件从 `@openharness/server` 导入共享类，只负责调用 `resolveDaemonInvocation()` 并构造实例。不要改变计划任务名、LaunchAgent label、systemd unit 名或现有命令行为。
+CLI 文件从 `@vykor/server` 导入共享类，只负责调用 `resolveDaemonInvocation()` 并构造实例。不要改变计划任务名、LaunchAgent label、systemd unit 名或现有命令行为。
 
 - [ ] **步骤 4：运行共享与 CLI 回归测试**
 
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test -- system-service
+pnpm --filter @vykor/server test -- system-service
 pnpm --filter @rzx/ohs test -- daemon-system-service daemon-auto-start ensure-daemon
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server check-types
 pnpm --filter @rzx/ohs check-types
 ```
 
@@ -147,19 +147,19 @@ git commit -m "refactor(server): share daemon system service manager"
 将进程判断写成无 Electron UI 依赖的纯函数，并注入 registry/health/start 依赖：
 
 ```ts
-expect(resolveDesktopDaemonMode(["OpenHarness", "--daemon-service"])).toBe("service")
-expect(resolveDesktopDaemonMode(["OpenHarness", "--daemon-watchdog"])).toBe("watchdog")
-expect(resolveDesktopDaemonMode(["OpenHarness"])).toBeNull()
+expect(resolveDesktopDaemonMode(["Vykor", "--daemon-service"])).toBe("service")
+expect(resolveDesktopDaemonMode(["Vykor", "--daemon-watchdog"])).toBe("watchdog")
+expect(resolveDesktopDaemonMode(["Vykor"])).toBeNull()
 ```
 
-测试 `service` 模式在 registry 健康时等待现有进程结束，registry 失效后调用 `startOpenHarnessDaemon()` 并保持进程存活；测试 `watchdog` 模式在健康时直接成功退出，在不健康且 `daemon.autoStart` 为真时派生隐藏的 `--daemon-service`，为假时不启动。
+测试 `service` 模式在 registry 健康时等待现有进程结束，registry 失效后调用 `startVykorDaemon()` 并保持进程存活；测试 `watchdog` 模式在健康时直接成功退出，在不健康且 `daemon.autoStart` 为真时派生隐藏的 `--daemon-service`，为假时不启动。
 
 - [ ] **步骤 2：运行测试确认入口不存在**
 
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- daemon-entry
+pnpm --filter @vykor/desktop test -- daemon-entry
 ```
 
 预期：FAIL，提示无法导入 `daemon-entry`。
@@ -186,17 +186,17 @@ if (daemonMode) {
 }
 ```
 
-`service` 复用 `startOpenHarnessDaemon()`、registry 和信号关闭流程。Windows `watchdog` 只做一次健康检查并按需派生隐藏 service 进程，随后退出，以匹配现有每分钟计划任务语义。macOS/Linux 的系统服务直接运行 `--daemon-service`。
+`service` 复用 `startVykorDaemon()`、registry 和信号关闭流程。Windows `watchdog` 只做一次健康检查并按需派生隐藏 service 进程，随后退出，以匹配现有每分钟计划任务语义。macOS/Linux 的系统服务直接运行 `--daemon-service`。
 
-Desktop 增加 `@openharness/core: workspace:*` 直接依赖，用于读写 `daemon.autoStart`，不要依赖 `apps/cli`。
+Desktop 增加 `@vykor/core: workspace:*` 直接依赖，用于读写 `daemon.autoStart`，不要依赖 `apps/cli`。
 
 - [ ] **步骤 4：验证入口测试、类型和普通 UI 启动分支**
 
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- daemon-entry
-pnpm --filter @openharness/desktop typecheck:node
+pnpm --filter @vykor/desktop test -- daemon-entry
+pnpm --filter @vykor/desktop typecheck:node
 ```
 
 预期：全部通过；普通 argv 仍进入现有窗口初始化，daemon argv 不创建窗口、托盘、宠物或 updater。
@@ -243,7 +243,7 @@ export interface DesktopDaemonAutoStartSnapshot {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- desktop-preferences daemon-autostart-service
+pnpm --filter @vykor/desktop test -- desktop-preferences daemon-autostart-service
 ```
 
 预期：FAIL，缺少新枚举、迁移函数和 service。
@@ -271,8 +271,8 @@ Desktop invocation 固定为：Windows `process.execPath --daemon-watchdog`，ma
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- desktop-preferences daemon-autostart-service
-pnpm --filter @openharness/desktop typecheck:node
+pnpm --filter @vykor/desktop test -- desktop-preferences daemon-autostart-service
+pnpm --filter @vykor/desktop typecheck:node
 ```
 
 预期：全部通过，旧偏好字段不会在 patch 时丢失。
@@ -314,7 +314,7 @@ daemonAutoStart: {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- desktop-api daemon-autostart/ipc
+pnpm --filter @vykor/desktop test -- desktop-api daemon-autostart/ipc
 ```
 
 预期：FAIL，`daemonAutoStart` 和对应 channels 不存在。
@@ -328,8 +328,8 @@ pnpm --filter @openharness/desktop test -- desktop-api daemon-autostart/ipc
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- desktop-api daemon-autostart
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test -- desktop-api daemon-autostart
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：全部通过，渲染层不能传入 executable、args、cwd 或 service 名称。
@@ -363,7 +363,7 @@ expect(snapshot).toHaveBeenCalledTimes(2)
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- daemon-autostart-control
+pnpm --filter @vykor/desktop test -- daemon-autostart-control
 ```
 
 预期：FAIL，无法导入控件。
@@ -387,8 +387,8 @@ pnpm --filter @openharness/desktop test -- daemon-autostart-control
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- daemon-autostart-control settings
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop test -- daemon-autostart-control settings
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：全部通过。
@@ -428,7 +428,7 @@ it.each([
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- daemon-autostart-card main-layout-project-operation-error
+pnpm --filter @vykor/desktop test -- daemon-autostart-card main-layout-project-operation-error
 ```
 
 预期：FAIL，新组件不存在；旧测试仍能找到静态「开始使用」。
@@ -441,7 +441,7 @@ pnpm --filter @openharness/desktop test -- daemon-autostart-card main-layout-pro
 <section aria-label="保持后台运行" className="rounded-md bg-background p-3 shadow-sm ring-1 ring-black/5">
   <h2 className="text-ui-small font-medium">保持后台运行</h2>
   <p className="mt-1 text-xs leading-5 text-sidebar-muted">
-    关闭 OpenHarness 后，定时任务和后台工作仍可继续。
+    关闭 Vykor 后，定时任务和后台工作仍可继续。
   </p>
   {/* 开启 / 暂不开启，失败时显示重试 */}
 </section>
@@ -454,8 +454,8 @@ pnpm --filter @openharness/desktop test -- daemon-autostart-card main-layout-pro
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- daemon-autostart-card main-layout sidebar
-pnpm --filter @openharness/desktop typecheck:web
+pnpm --filter @vykor/desktop test -- daemon-autostart-card main-layout sidebar
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 预期：全部通过；按钮有明确可访问名称，错误使用 `role="alert"`，加载不抢焦点。
@@ -485,7 +485,7 @@ git commit -m "feat(desktop): add one-time daemon onboarding"
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop test -- daemon-entry daemon-autostart-service
+pnpm --filter @vykor/desktop test -- daemon-entry daemon-autostart-service
 ```
 
 预期：如果任务 2 的等待/接管逻辑遗漏竞态，本步骤先失败；修复后通过，任一时刻只有一个 registry owner。
@@ -501,11 +501,11 @@ pnpm --filter @openharness/desktop test -- daemon-entry daemon-autostart-service
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/server test
 pnpm --filter @rzx/ohs test
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/desktop build
-pnpm --filter @openharness/desktop verify:update-packaging
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/desktop build
+pnpm --filter @vykor/desktop verify:update-packaging
 pnpm check-types
 ```
 

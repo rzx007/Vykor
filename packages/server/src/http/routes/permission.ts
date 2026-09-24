@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { parseReplyPermissionRequest } from "@openharness/protocol";
+import { parseReplyPermissionRequest } from "@vykor/protocol";
 
 import type { StorePermissionBroker } from "../../permissions/index.js";
 import type { RequestTraceRegistry } from "../control/index.js";

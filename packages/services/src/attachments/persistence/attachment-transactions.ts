@@ -1,9 +1,9 @@
-import { parseAttachmentAssetRecord } from "@openharness/protocol";
+import { parseAttachmentAssetRecord } from "@vykor/protocol";
 import type {
   AttachmentAssetRecord,
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { AttachmentError } from "../attachment-errors.js";
 import type { StorageContext } from "../../database/storage-context.js";
 import type {

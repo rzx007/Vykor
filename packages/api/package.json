@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/api",
+  "name": "@vykor/api",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
-    "@openharness/core": "workspace:*",
+    "@vykor/core": "workspace:*",
     "openai": "catalog:",
     "sharp": "0.34.4"
   },

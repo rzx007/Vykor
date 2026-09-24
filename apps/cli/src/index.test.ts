@@ -35,7 +35,7 @@ describe("CLI plugin options", () => {
   });
 
   it("rejects the removed --bare option", async () => {
-    process.argv = ["node", "ohs", "--bare"];
+    process.argv = ["node", "vk", "--bare"];
     vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
       throw new Error(`exit:${code ?? 0}`);
     }) as never);
@@ -46,7 +46,7 @@ describe("CLI plugin options", () => {
   });
 
   it("keeps --no-plugins as the current switch", async () => {
-    process.argv = ["node", "ohs", "--no-plugins"];
+    process.argv = ["node", "vk", "--no-plugins"];
 
     await import("./index.js");
     await vi.waitFor(() => expect(mocks.mainAction).toHaveBeenCalledOnce());

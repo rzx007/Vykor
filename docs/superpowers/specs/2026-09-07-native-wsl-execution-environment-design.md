@@ -4,7 +4,7 @@
 
 ## 目标与边界
 
-OpenHarness Desktop 不再使用 Docker 承载 Agent 工作负载。Agent、文件工具、后台 Shell 和集成终端统一运行在当前配置选择的环境中：默认使用宿主系统；Windows 用户可以改选 WSL。
+Vykor Desktop 不再使用 Docker 承载 Agent 工作负载。Agent、文件工具、后台 Shell 和集成终端统一运行在当前配置选择的环境中：默认使用宿主系统；Windows 用户可以改选 WSL。
 
 运行环境与权限控制分开：
 
@@ -13,7 +13,7 @@ OpenHarness Desktop 不再使用 Docker 承载 Agent 工作负载。Agent、文�
 - SRT 是独立的本机隔离能力，本期保留；
 - WSL 本身不称为安全沙箱。
 
-本期只清理 Docker runtime，不删除 SRT，不为了改名拆分 `@openharness/sandbox`。
+本期只清理 Docker runtime，不删除 SRT，不为了改名拆分 `@vykor/sandbox`。
 
 ## 配置和生效时机
 
@@ -54,8 +54,8 @@ Native/WSL 都是轻量适配器，不拥有容器实例。因此删除 Docker �
 首期只支持宿主 Windows 盘符下的项目：
 
 ```text
-D:\code\ohs <-> /mnt/d/code/ohs
-C:\Users\name\.openharness-ts\skills <-> /mnt/c/Users/name/.openharness-ts/skills
+D:\code\vk <-> /mnt/d/code/vk
+C:\Users\name\.vykor\skills <-> /mnt/c/Users/name/.vykor/skills
 ```
 
 转换统一由 WSL path resolver 负责。首期明确拒绝 `\\wsl.localhost\...` 和 `\\wsl$\...` 项目根目录，避免宿主 Git/worktree 对 Linux 文件系统的行为未定义。以后若支持 WSL Linux 文件系统项目，必须同时把 Git/worktree 操作迁入 WSL。
@@ -98,7 +98,7 @@ Skill 发现和 `SKILL.md` 读取继续由宿主控制面完成。呈现给 WSL 
 
 WSL 主路径跑通后删除 Docker 设置、预检、环境变量、backend、Dockerfile、镜像、挂载、容器生命周期、复用、label、config hash、孤儿回收、manager/lease/identity/owner alias、Docker PTY、Docker file operations、sandbox session、Docker CLI 命令以及专用测试和文档。
 
-保留 `@openharness/environment` 通用契约；保留 `@openharness/sandbox` 中的 SRT、policy、path-validator、host process helper；保留 permission/approval；保留 Dockerfile 文件预览等与 Agent Runtime 无关的普通产品能力。
+保留 `@vykor/environment` 通用契约；保留 `@vykor/sandbox` 中的 SRT、policy、path-validator、host process helper；保留 permission/approval；保留 Dockerfile 文件预览等与 Agent Runtime 无关的普通产品能力。
 
 最终使用依赖审计区分同名概念，不能用一次全局替换删除所有 `docker` 或 `sandbox` 字样。
 

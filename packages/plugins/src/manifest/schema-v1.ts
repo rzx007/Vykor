@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { OpenHarnessPluginManifestV1 } from "../types.js";
+import type { VykorPluginManifestV1 } from "../types.js";
 
 const declaredPathSchema = z
   .string()
@@ -38,7 +38,7 @@ const componentsSchema = z
 
 const permissionListSchema = z.array(z.string().min(1));
 
-export const OpenHarnessPluginManifestV1Schema: z.ZodType<OpenHarnessPluginManifestV1> = z
+export const VykorPluginManifestV1Schema: z.ZodType<VykorPluginManifestV1> = z
   .object({
     $schema: z.string().url().optional(),
     schemaVersion: z.literal(1),

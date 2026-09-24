@@ -18,7 +18,7 @@ export function buildConsolidationPrompt(
 
   return `# Dream: Memory Consolidation
 
-You are performing a dream — a reflective pass over OpenHarness/ohmo memory files. Synthesize recent signal into durable, well-organized memories so future sessions can orient quickly.
+You are performing a dream — a reflective pass over Vykor/ohmo memory files. Synthesize recent signal into durable, well-organized memories so future sessions can orient quickly.
 
 Current date: ${today}
 Memory directory: \`${memoryRoot}\`

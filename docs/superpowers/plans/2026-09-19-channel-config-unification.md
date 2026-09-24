@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 把渠道的全部配置（含密钥）收敛到 `~/.openharness-ts/channel-credentials.json`，从 `settings.json` 硬切移除 `channels`，并让 `sendProgress/sendToolHints` 按渠道生效。
+**目标：** 把渠道的全部配置（含密钥）收敛到 `~/.vykor/channel-credentials.json`，从 `settings.json` 硬切移除 `channels`，并让 `sendProgress/sendToolHints` 按渠道生效。
 
 **架构：** `packages/auth` 新增 `ChannelConfigStore`（v2 文件结构，复用原子写/锁/0600）。CLI、`FeishuPush` 全部改读它；`ChannelManager` 新增按渠道策略；最后从 `packages/core` 删除 `settings.channels`。
 
@@ -14,7 +14,7 @@
 - 密钥只在该文件；错误与日志不回显 `appSecret`；POSIX `0600`，Windows 依赖用户目录 ACL（已知限制）。
 - 旧 v1 凭据文件视为“未配置渠道”（当空，不报错）。
 - `settings.json`（含项目级）出现 `channels` → `SettingsFileError`（有意不兼容）。
-- `ohs channels add/allow` 不读写 `settings.json`。
+- `vk channels add/allow` 不读写 `settings.json`。
 - 不引入兼容 fallback；除上述 v1 当空外不做迁移。
 - 只改本计划列出的文件；不触碰 `packages/mcp`、`packages/services`、`packages/server`、`packages/protocol`。
 
@@ -72,7 +72,7 @@ import { describe, expect, it } from "vitest";
 import { ChannelConfigStore } from "../channel-config-store.js";
 
 function tempPath() {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-channel-config-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-channel-config-"));
   return join(directory, "channel-credentials.json");
 }
 
@@ -150,7 +150,7 @@ describe("ChannelConfigStore", () => {
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/auth test -- --run src/__test__/channel-config-store.test.ts`
+运行：`pnpm --filter @vykor/auth test -- --run src/__test__/channel-config-store.test.ts`
 预期：FAIL，模块不存在。
 
 - [ ] **步骤 3：实现**
@@ -162,7 +162,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { getChannelCredentialsFilePath } from "@openharness/core";
+import { getChannelCredentialsFilePath } from "@vykor/core";
 
 export type FeishuDomain = "feishu" | "lark";
 
@@ -399,7 +399,7 @@ export type { FeishuChannelConfig, ChannelConfigFile, FeishuDomain } from "./cha
 
 - [ ] **步骤 4：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/auth test -- --run src/__test__/channel-config-store.test.ts` 与 `pnpm --filter @openharness/auth check-types`
+运行：`pnpm --filter @vykor/auth test -- --run src/__test__/channel-config-store.test.ts` 与 `pnpm --filter @vykor/auth check-types`
 预期：PASS / 退出码 0。
 
 - [ ] **步骤 5：Commit**
@@ -428,11 +428,11 @@ git commit -m "feat(auth): add v2 channel config store"
 
 - [ ] **步骤 1：改写测试（先红）**
 
-`apps/cli/src/commands/channels.test.ts`：把 `vi.mock("@openharness/core", …)` 里的 `loadSettings` 去掉（或保留空对象，不再使用），把 `vi.mock("@openharness/auth", …)` 换成 `ChannelConfigStore`：
+`apps/cli/src/commands/channels.test.ts`：把 `vi.mock("@vykor/core", …)` 里的 `loadSettings` 去掉（或保留空对象，不再使用），把 `vi.mock("@vykor/auth", …)` 换成 `ChannelConfigStore`：
 
 ```ts
 const configured = vi.hoisted(() => ({ feishu: undefined as unknown }));
-vi.mock("@openharness/auth", () => ({
+vi.mock("@vykor/auth", () => ({
   ChannelConfigStore: class {
     async getFeishu() {
       return configured.feishu;
@@ -465,7 +465,7 @@ vi.mock("@openharness/auth", () => ({
 
 `apps/cli/src/commands/channels.ts`：
 
-- 顶部 import 改为 `import { ChannelConfigStore } from "@openharness/auth";`（删 `Settings`/`ChannelsConfig` 里只用于 channels 的部分；`Settings` 仍用于 `settings.model`）。
+- 顶部 import 改为 `import { ChannelConfigStore } from "@vykor/auth";`（删 `Settings`/`ChannelsConfig` 里只用于 channels 的部分；`Settings` 仍用于 `settings.model`）。
 - `AssembledChannels` 增加 `policies`。
 - `assembleChannelAdapters` 签名改为 `(store: ChannelConfigStore = new ChannelConfigStore())`，
   读 `const feishu = await store.getFeishu()`；enabled 时组装 adapter（配置已含 `appSecret/domain`）、
@@ -521,7 +521,7 @@ git commit -m "feat(cli): read channel config from the unified store"
 
 - [ ] **步骤 2：运行确认失败**
 
-运行：`pnpm --filter @openharness/tools test -- --run src/channels/__test__/feishu-push.test.ts`
+运行：`pnpm --filter @vykor/tools test -- --run src/channels/__test__/feishu-push.test.ts`
 预期：FAIL。
 
 - [ ] **步骤 3：实现**
@@ -529,9 +529,9 @@ git commit -m "feat(cli): read channel config from the unified store"
 `packages/tools/src/channels/feishu-push.ts`：
 
 - 删除 `loadSettings`/`Settings`/`_settingsCache`/`getCachedSettings` 与 `ChannelCredentialStore` 导入。
-- 新增 `import { ChannelConfigStore } from "@openharness/auth";`。
+- 新增 `import { ChannelConfigStore } from "@vykor/auth";`。
 - `execute` 内：`const feishu = await new ChannelConfigStore().getFeishu();`
-  - `!feishu?.appId` → `Error: 渠道未配置，请先运行 ohs channels add feishu`；
+  - `!feishu?.appId` → `Error: 渠道未配置，请先运行 vk channels add feishu`；
   - `chatId = feishu.allowFrom[target]`（同现有逻辑）；
   - `base = feishuApiBase(feishu.domain)`；
   - `token = await getTenantToken(feishu.appId, feishu.appSecret, abortScope.signal, base)`。
@@ -540,7 +540,7 @@ git commit -m "feat(cli): read channel config from the unified store"
 
 - [ ] **步骤 4：运行确认通过**
 
-运行：`pnpm --filter @openharness/tools test -- --run src/channels/__test__/feishu-push.test.ts` 与 `pnpm --filter @openharness/tools check-types`
+运行：`pnpm --filter @vykor/tools test -- --run src/channels/__test__/feishu-push.test.ts` 与 `pnpm --filter @vykor/tools check-types`
 预期：PASS / 退出码 0。
 
 - [ ] **步骤 5：Commit**
@@ -588,7 +588,7 @@ it("按渠道应用 sendProgress/sendToolHints 策略", async () => {
 
 - [ ] **步骤 2：运行确认失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/manager.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/manager.test.ts`
 预期：FAIL。
 
 - [ ] **步骤 3：实现**
@@ -612,7 +612,7 @@ it("按渠道应用 sendProgress/sendToolHints 策略", async () => {
 
 - [ ] **步骤 4：运行确认通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run` 与 `pnpm --filter @openharness/channels check-types`
+运行：`pnpm --filter @vykor/channels test -- --run` 与 `pnpm --filter @vykor/channels check-types`
 预期：PASS / 退出码 0。
 
 - [ ] **步骤 5：Commit**
@@ -654,7 +654,7 @@ it("rejects the removed channels field", async () => {
 
 - [ ] **步骤 2：运行确认失败**
 
-运行：`pnpm --filter @openharness/core test -- --run src/config/settings.test.ts`
+运行：`pnpm --filter @vykor/core test -- --run src/config/settings.test.ts`
 预期：新增用例 FAIL（当前仍接受 `channels`）。
 
 - [ ] **步骤 3：实现**
@@ -668,12 +668,12 @@ it("rejects the removed channels field", async () => {
 
 运行：
 ```bash
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/core check-types
-pnpm --filter @openharness/auth test -- --run
-pnpm --filter @openharness/auth check-types
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/core check-types
+pnpm --filter @vykor/auth test -- --run
+pnpm --filter @vykor/auth check-types
 pnpm --filter @rzx/ohs check-types
-pnpm --filter @openharness/tools check-types
+pnpm --filter @vykor/tools check-types
 ```
 预期：全部通过（此时已无 `settings.channels` 消费者）。
 
@@ -722,20 +722,20 @@ git commit -m "docs: document the unified channel config file"
 - [ ] **步骤 1：相关包全量测试**
 
 ```bash
-pnpm --filter @openharness/auth test -- --run
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/channels test -- --run
-pnpm --filter @openharness/tools test -- --run
+pnpm --filter @vykor/auth test -- --run
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/channels test -- --run
+pnpm --filter @vykor/tools test -- --run
 pnpm --filter @rzx/ohs test -- --run
 ```
 
 - [ ] **步骤 2：类型检查**
 
 ```bash
-pnpm --filter @openharness/auth check-types
-pnpm --filter @openharness/core check-types
-pnpm --filter @openharness/channels check-types
-pnpm --filter @openharness/tools check-types
+pnpm --filter @vykor/auth check-types
+pnpm --filter @vykor/core check-types
+pnpm --filter @vykor/channels check-types
+pnpm --filter @vykor/tools check-types
 pnpm --filter @rzx/ohs check-types
 ```
 
@@ -762,10 +762,10 @@ git status --short
 - [ ] **步骤 6：手工验收（人工执行一次）**
 
 1. 删除本机 `settings.json` 里的 `channels` 段；
-2. `ohs channels add feishu`（扫码或手填）→ 写入 `channel-credentials.json`（v2）；
-3. `ohs channels status` 显示已配置；
-4. `ohs channels serve` 收发一条消息；
-5. `ohs channels allow ou_xxx` 生效。
+2. `vk channels add feishu`（扫码或手填）→ 写入 `channel-credentials.json`（v2）；
+3. `vk channels status` 显示已配置；
+4. `vk channels serve` 收发一条消息；
+5. `vk channels allow ou_xxx` 生效。
 
 ---
 

@@ -1,5 +1,5 @@
-import type { McpOAuthCredentialStore as McpOAuthCredentialStoreContract } from "@openharness/mcp";
-import { McpOAuthCredentialStore as FileMcpOAuthCredentialStore } from "@openharness/auth";
+import type { McpOAuthCredentialStore as McpOAuthCredentialStoreContract } from "@vykor/mcp";
+import { McpOAuthCredentialStore as FileMcpOAuthCredentialStore } from "@vykor/auth";
 import {
   assertValidMcpServerConfig,
   createUnavailableMcpRuntimeCoordinator,
@@ -15,8 +15,8 @@ import {
   type McpRuntimeStatus,
   type McpServerConfig,
   type Settings,
-} from "@openharness/core";
-import { summarizeMcpEndpoint } from "@openharness/mcp";
+} from "@vykor/core";
+import { summarizeMcpEndpoint } from "@vykor/mcp";
 
 import { McpOAuthApplicationService, type McpOAuthSnapshot } from "./mcp-oauth-application-service.js";
 
@@ -76,7 +76,7 @@ export interface McpConfigApplicationServiceDeps {
 }
 
 /**
- * Manage the global `settings.mcpServers` map shared with `ohs mcp`.
+ * Manage the global `settings.mcpServers` map shared with `vk mcp`.
  *
  * All writes go through the cross-process settings lock and only touch the
  * target entry, so concurrent CLI / Desktop / OAuth writes cannot clobber each

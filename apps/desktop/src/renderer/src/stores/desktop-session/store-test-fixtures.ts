@@ -42,7 +42,7 @@ export const refreshedBootstrap: DesktopBootstrapData = {
     uploadModes: [],
     limits: null,
   },
-  outsideProjectWorkspaceRoot: "C:\\Users\\tester\\Documents\\OpenHarness",
+  outsideProjectWorkspaceRoot: "C:\\Users\\tester\\Documents\\Vykor",
 }
 
 const initialState = useDesktopSessionStore.getState()

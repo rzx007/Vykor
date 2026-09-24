@@ -13,7 +13,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
   it.each(["beforeFlush", "afterMutationSql", "beforeCommit"] as const)(
     "rolls back in-memory state, SQLite data, dirty parts, and suppresses deferred commit callbacks when %s throws",
     (hookName) => {
-      const dir = mkdtempSync(join(tmpdir(), "ohs-tx-coord-hook-"));
+      const dir = mkdtempSync(join(tmpdir(), "vk-tx-coord-hook-"));
       const dbPath = join(dir, "store.db");
       let store = new SessionStore({ path: dbPath });
 
@@ -100,7 +100,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
   );
 
   it("handles nested atomic calls and only commits on the outermost transaction", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-tx-nested-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-tx-nested-"));
     const dbPath = join(dir, "store.db");
     const store = new SessionStore({ path: dbPath });
 
@@ -139,7 +139,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
   });
 
   it("keeps committed memory and SQLite state when an after-commit callback throws", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-tx-callback-error-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-tx-callback-error-"));
     const dbPath = join(dir, "store.db");
     let store = new SessionStore({ path: dbPath });
 
@@ -170,7 +170,7 @@ describe("TransactionCoordinator rollback & hook contracts", () => {
   });
 
   it("allows an outer transaction to continue after a caught nested validation error", () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-tx-nested-caught-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-tx-nested-caught-"));
     const dbPath = join(dir, "store.db");
     let store = new SessionStore({ path: dbPath });
 

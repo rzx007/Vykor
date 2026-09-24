@@ -12,7 +12,7 @@ for (const name of readdirSync(packagesDir)) {
   try {
     const raw = readFileSync(resolve(pkgDir, "package.json"), "utf-8");
     const pkg = JSON.parse(raw) as { name?: string };
-    if (pkg.name?.startsWith("@openharness/")) {
+    if (pkg.name?.startsWith("@vykor/")) {
       aliases[pkg.name] = resolve(pkgDir, "src", "index.ts");
     }
   } catch {

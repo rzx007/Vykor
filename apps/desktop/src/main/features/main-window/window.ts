@@ -44,7 +44,7 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
       height: 760,
       minWidth: 960,
       minHeight: 640,
-      title: "OpenHarness",
+      title: "Vykor",
       autoHideMenuBar: true,
       ...mainWindowChromeOptions(platform),
       ...mainWindowMaterialOptions({
@@ -185,7 +185,7 @@ function attachWebviewPolicy(win: BrowserWindow): void {
     webPreferences.allowRunningInsecureContent = false
     webPreferences.sandbox = true
     ;(webPreferences as WebPreferences & { javascript?: boolean }).javascript = true
-    params.partition = "persist:openharness-browser"
+    params.partition = "persist:vykor-browser"
   })
 }
 

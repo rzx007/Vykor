@@ -1,5 +1,5 @@
-import type { GoalWait } from "@openharness/protocol";
-import type { SessionStore } from "@openharness/services";
+import type { GoalWait } from "@vykor/protocol";
+import type { SessionStore } from "@vykor/services";
 import type { LiveChildAgentDirectory } from "../agent/live-child-agent-directory.js";
 
 export type GoalWaitCheck =

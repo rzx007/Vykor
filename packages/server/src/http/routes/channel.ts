@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import {
   parseDurableChannelMessageInput,
   parseRecordChannelDeliveryInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { ChannelApplicationService } from "../../application/channel/channel-application-service.js";
 import {

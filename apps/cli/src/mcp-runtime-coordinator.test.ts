@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { IncompatibleProtocolError, OpenHarnessApiError } from "@openharness/client";
-import type { McpRuntimeSyncResult, McpServerIdentity } from "@openharness/core";
+import { IncompatibleProtocolError, VykorApiError } from "@vykor/client";
+import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/core";
 import { createCliMcpRuntimeCoordinator } from "./mcp-runtime-coordinator.js";
 
 const identity: McpServerIdentity = {
@@ -64,9 +64,9 @@ describe("createCliMcpRuntimeCoordinator", () => {
   });
 
   it("reports daemon authentication errors instead of pretending the daemon is offline", async () => {
-    const { coordinator } = fixture({ syncError: new OpenHarnessApiError("Unauthorized", 401, { error: "Unauthorized" }) });
+    const { coordinator } = fixture({ syncError: new VykorApiError("Unauthorized", 401, { error: "Unauthorized" }) });
 
-    await expect(coordinator.synchronize(identity)).rejects.toBeInstanceOf(OpenHarnessApiError);
+    await expect(coordinator.synchronize(identity)).rejects.toBeInstanceOf(VykorApiError);
   });
 
   it("reports protocol incompatibility instead of pretending the daemon is offline", async () => {
@@ -76,8 +76,8 @@ describe("createCliMcpRuntimeCoordinator", () => {
   });
 
   it("reports a daemon 5xx as a sync failure", async () => {
-    const { coordinator } = fixture({ syncError: new OpenHarnessApiError("Internal Server Error", 500, { error: "boom" }) });
+    const { coordinator } = fixture({ syncError: new VykorApiError("Internal Server Error", 500, { error: "boom" }) });
 
-    await expect(coordinator.synchronize(identity)).rejects.toBeInstanceOf(OpenHarnessApiError);
+    await expect(coordinator.synchronize(identity)).rejects.toBeInstanceOf(VykorApiError);
   });
 });

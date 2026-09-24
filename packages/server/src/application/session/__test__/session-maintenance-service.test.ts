@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { SessionStore } from "@openharness/services";
+import { SessionStore } from "@vykor/services";
 
 import { SessionMaintenanceService } from "../session-maintenance-service.js";
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";

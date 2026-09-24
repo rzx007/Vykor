@@ -1,7 +1,7 @@
 /**
  * 客户端公开类型。
  *
- * 会话/事件/权限等记录类型来自 `@openharness/protocol`；本文件补充
+ * 会话/事件/权限等记录类型来自 `@vykor/protocol`；本文件补充
  * HTTP 请求参数、响应体，以及 reducer 使用的本地聚合状态结构。
  */
 
@@ -36,7 +36,7 @@ import type {
   CreateSessionGoalInput,
   UpdateSessionGoalInput,
   GoalActionInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export type {
   SessionGoal,
@@ -152,8 +152,8 @@ export interface ScheduledTaskStatusSummary {
   unread: number;
 }
 
-/** `OpenHarnessClient` 构造参数。 */
-export interface OpenHarnessClientOptions {
+/** `VykorClient` 构造参数。 */
+export interface VykorClientOptions {
   /** daemon HTTP 根地址，例如 `http://127.0.0.1:8787`。 */
   baseUrl: string;
   /** Bearer token；与 daemon registry 中的 token 对应。 */
@@ -162,7 +162,7 @@ export interface OpenHarnessClientOptions {
   fetch?: typeof fetch;
 }
 
-export interface OpenHarnessServerHealth {
+export interface VykorServerHealth {
   ok: true;
   version?: string;
   startedAt: number;
@@ -644,7 +644,7 @@ export interface SessionBucket {
  * 客户端权威状态：由 snapshot/live（或全局 replay/live）经 reducer 收敛。
  * 多端 attach 同一 daemon 时，应得到一致的状态形状。
  */
-export interface OpenHarnessClientState {
+export interface VykorClientState {
   sessions: Record<string, SessionRecord>;
   /** 按 `updatedAt` 降序的 session id 列表。 */
   sessionOrder: string[];
@@ -676,7 +676,7 @@ export interface EventSyncOptions {
 /** `syncEvents` 产出的单次状态更新。 */
 export interface SyncEventUpdate {
   event?: SessionEventRecord;
-  state: OpenHarnessClientState;
+  state: VykorClientState;
   /** Session attach starts from an atomic snapshot, then consumes SSE deltas. */
   source: "snapshot" | "replay" | "live" | "reconnecting";
 }

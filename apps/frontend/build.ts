@@ -4,7 +4,7 @@ const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 const externals = [
   ...Object.keys(pkg.dependencies || {}),
   ...Object.keys(pkg.peerDependencies || {}),
-].filter((d) => !d.startsWith("@openharness/"));
+].filter((d) => !d.startsWith("@vykor/"));
 
 const result = await Bun.build({
   entrypoints: ["src/index.tsx"],

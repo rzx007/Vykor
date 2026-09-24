@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/sandbox",
+  "name": "@vykor/sandbox",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -20,8 +20,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/core": "workspace:*",
-    "@openharness/environment": "workspace:*"
+    "@vykor/core": "workspace:*",
+    "@vykor/environment": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

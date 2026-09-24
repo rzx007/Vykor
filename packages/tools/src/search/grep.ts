@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 import { fileOperationsFor } from "../file/operations.js";
 import { resolveToolPathInContext } from "../file/environment-path.js";
 import { sandboxPathError } from "../file/sandbox-guard.js";

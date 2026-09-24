@@ -1,4 +1,4 @@
-import type { StreamingMessageClient } from "@openharness/core";
+import type { StreamingMessageClient } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
   isMemoryWriteToolCall,
@@ -6,7 +6,7 @@ import {
   parseMemoryExtractionRecords,
   selectWritableMemoryExtractionRecords,
   type MemoryExtractionRecord,
-} from "@openharness/memory";
+} from "@vykor/memory";
 
 import type { CheckpointMessageLike } from "./session-memory.js";
 
@@ -14,7 +14,7 @@ import type { CheckpointMessageLike } from "./session-memory.js";
  * 持久记忆提取。
  *
  * 回合结束后让 LLM 从最近对话提出「值得长期保存的事实」（JSON，≤3 条），
- * 写进 @openharness/memory 的 MemoryManager（签名去重由 manager 兜底）。
+ * 写进 @vykor/memory 的 MemoryManager（签名去重由 manager 兜底）。
  * 若本回合主对话已经亲手写过 memory 目录则跳过（避免重复）。
  *
  * 与 Python 差异：team scope 记录直接跳过（TS memory 无团队隔离/密钥扫描，
@@ -49,7 +49,7 @@ export function hasMemoryWritesSince(
   return false;
 }
 
-export const EXTRACTION_SYSTEM_PROMPT = `You maintain OpenHarness durable memory.
+export const EXTRACTION_SYSTEM_PROMPT = `You maintain Vykor durable memory.
 Save only stable, future-useful facts that are not derivable from current files,
 git history, or documentation. Prefer updating existing memories conceptually
 over duplicating them. Do not save secrets. If nothing is worth saving, return

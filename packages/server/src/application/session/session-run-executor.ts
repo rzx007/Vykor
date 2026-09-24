@@ -1,8 +1,8 @@
-import type { SessionRecord } from "@openharness/protocol";
-import type { ProviderInputCapabilities } from "@openharness/api";
-import { PluginPreparationError } from "@openharness/agent-runtime";
-import type { ContentBlock, ModelInputCapabilities } from "@openharness/core";
-import type { GoalOperations, SessionStore } from "@openharness/services";
+import type { SessionRecord } from "@vykor/protocol";
+import type { ProviderInputCapabilities } from "@vykor/api";
+import { PluginPreparationError } from "@vykor/agent-runtime";
+import type { ContentBlock, ModelInputCapabilities } from "@vykor/core";
+import type { GoalOperations, SessionStore } from "@vykor/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import { RunInterruptedError, type SessionRunWorkContext } from "../../runtime/run-coordinator.js";

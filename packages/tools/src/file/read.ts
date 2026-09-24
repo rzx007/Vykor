@@ -1,5 +1,5 @@
 import { extname, posix, win32 } from "node:path";
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { fileOperationsFor, type FileOperations } from "./operations.js";

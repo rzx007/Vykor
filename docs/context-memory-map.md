@@ -2,7 +2,7 @@
 
 > 状态：当前 Context、Prompt 与长期记忆的总索引。
 
-这份文档把 OpenHarness 里会影响 agent 上下文、长期记忆或运行行为的几条线放在一张图里。重点回答三个问题：
+这份文档把 Vykor 里会影响 agent 上下文、长期记忆或运行行为的几条线放在一张图里。重点回答三个问题：
 
 - 什么时候写入
 - 从哪里注入到模型上下文
@@ -12,22 +12,22 @@
 
 | 来源 | 存放位置 | 什么时候写入 | 哪里注入/读取 | 作用 |
 | --- | --- | --- | --- | --- |
-| `SOUL.md` | `$OPENHARNESS_CONFIG_DIR/SOUL.md`，默认 `~/.openharness-ts/SOUL.md` | `/profile init` 创建模板；之后用户手动编辑 | `buildPromptLayers()` 的 stable identity slot | 定义 agent 默认身份、语气、长期行为风格 |
-| `USER.md` | `$OPENHARNESS_CONFIG_DIR/USER.md`，默认 `~/.openharness-ts/USER.md` | `/profile init` 创建模板；用户手动编辑；pending 更新审批后合并 | `buildPromptLayers()` 的 volatile `# User Profile` | 记录用户长期偏好，例如语言、回复风格、工作流习惯 |
-| `user_profile_pending/*.json` | `$OPENHARNESS_CONFIG_DIR/user_profile_pending/` | `queueUserProfileUpdate()` 生成候选更新 | 不直接注入；`approvePendingUserProfileUpdate()` 后才合并进 `USER.md` | 防止自动抽取直接改用户档案，保留人工审批边界 |
-| local rules | `$OPENHARNESS_CONFIG_DIR/local_rules/facts.json` 和 `rules.md` | daemon root Run 成功收尾后从 durable transcript 正则抽取；`/remember` 也会触发 | `buildPromptLayers()` 读取 `rules.md`，作为 volatile local environment rules 注入 | 记录环境事实，例如 SSH 主机、IP、路径、conda 环境、API endpoint |
+| `SOUL.md` | `$VYKOR_CONFIG_DIR/SOUL.md`，默认 `~/.vykor/SOUL.md` | `/profile init` 创建模板；之后用户手动编辑 | `buildPromptLayers()` 的 stable identity slot | 定义 agent 默认身份、语气、长期行为风格 |
+| `USER.md` | `$VYKOR_CONFIG_DIR/USER.md`，默认 `~/.vykor/USER.md` | `/profile init` 创建模板；用户手动编辑；pending 更新审批后合并 | `buildPromptLayers()` 的 volatile `# User Profile` | 记录用户长期偏好，例如语言、回复风格、工作流习惯 |
+| `user_profile_pending/*.json` | `$VYKOR_CONFIG_DIR/user_profile_pending/` | `queueUserProfileUpdate()` 生成候选更新 | 不直接注入；`approvePendingUserProfileUpdate()` 后才合并进 `USER.md` | 防止自动抽取直接改用户档案，保留人工审批边界 |
+| local rules | `$VYKOR_CONFIG_DIR/local_rules/facts.json` 和 `rules.md` | daemon root Run 成功收尾后从 durable transcript 正则抽取；`/remember` 也会触发 | `buildPromptLayers()` 读取 `rules.md`，作为 volatile local environment rules 注入 | 记录环境事实，例如 SSH 主机、IP、路径、conda 环境、API endpoint |
 | Project Instructions | 当前 cwd 向上查找 `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/*.md` | 用户或项目维护者手动写入 | `loadClaudeMdPrompt()` 组装成 `# Project Instructions`，进入 context 层 | 当前项目的构建、测试、协作和代码规范 |
-| `settings.systemPrompt` | `$OPENHARNESS_CONFIG_DIR/settings.json`，也可由 CLI/session runtime 传入 | `/config`、CLI 参数或前端 runtime metadata 更新 | `buildPromptLayers()` 的 `# Custom Instructions` | 当前用户配置的额外系统指令，不替换基础 identity/invariant guidance |
+| `settings.systemPrompt` | `$VYKOR_CONFIG_DIR/settings.json`，也可由 CLI/session runtime 传入 | `/config`、CLI 参数或前端 runtime metadata 更新 | `buildPromptLayers()` 的 `# Custom Instructions` | 当前用户配置的额外系统指令，不替换基础 identity/invariant guidance |
 | Environment facts | 运行时动态生成，不单独落盘 | 每次构建 system prompt 时计算 | `formatEnvironmentSection()` 进入 stable 层 | 告诉模型当前 OS、cwd、home、git branch、真实 shell launcher 和命令规则 |
 | Permission/Fast/Reasoning | settings 或 session runtime metadata | `/plan`、权限模式切换、settings 更新、创建 session 时写入 metadata | `buildPromptLayers()` stable 层 | 让模型知道当前权限模式、是否 fast mode、reasoning effort/passes |
 | Available Skills | skills/plugin discovery 结果 | 启动或刷新 runtime 时发现 | `buildPromptLayers()` stable 层 | 告诉模型当前可用 skill 及其描述 |
-| Project Memory | `$OPENHARNESS_CONFIG_DIR/data/memory/<project>-<hash>/` | `/memory add`、`/remember`、自动 memory extraction 写入 | 运行时由 `QueryEngine` 按当前用户输入检索，作为临时 `system-reminder` 注入；`/context` preview 也会展示 `# Project Memory` | 记录项目级长期语义事实，例如决策、约定、偏好、不可从代码推导的信息 |
-| Session Memory checkpoint | `$OPENHARNESS_CONFIG_DIR/data/session-memory/<project>-<hash>/<sessionId>.md` | root Run 成功收尾后，`SessionPostRunMaintenance` 从 durable transcript 调用 `updateSessionMemoryFile()` | compact/autocompact 时通过 `sessionMemoryToCompactText()` 注入摘要 prompt | 防止 `/compact` 后丢失当前目标、下一步和近期工作 |
-| Session runtime history | `$OPENHARNESS_CONFIG_DIR/data/session-runtime/sessions.db` | daemon session 收到输入、消息、part、run、permission、task 事件时写入 | `/sessions`、`/resume`、daemon restart recovery 读取；不是普通 system prompt 记忆 | 会话恢复和重放历史，不等同长期记忆 |
-| Output styles | `~/.openharness-ts/output_styles/*.md` | 用户手动添加 | 输出样式服务读取，不作为事实记忆注入 | 改变回答呈现风格 |
-| Credentials | `$OPENHARNESS_CONFIG_DIR/credentials.json` | `/auth login`、provider API key 保存 | provider/auth resolution 读取；不得注入 prompt | 保存供应商凭据 |
+| Project Memory | `$VYKOR_CONFIG_DIR/data/memory/<project>-<hash>/` | `/memory add`、`/remember`、自动 memory extraction 写入 | 运行时由 `QueryEngine` 按当前用户输入检索，作为临时 `system-reminder` 注入；`/context` preview 也会展示 `# Project Memory` | 记录项目级长期语义事实，例如决策、约定、偏好、不可从代码推导的信息 |
+| Session Memory checkpoint | `$VYKOR_CONFIG_DIR/data/session-memory/<project>-<hash>/<sessionId>.md` | root Run 成功收尾后，`SessionPostRunMaintenance` 从 durable transcript 调用 `updateSessionMemoryFile()` | compact/autocompact 时通过 `sessionMemoryToCompactText()` 注入摘要 prompt | 保留显式 Goal（若有）和近期工作 |
+| Session runtime history | `$VYKOR_CONFIG_DIR/data/session-runtime/sessions.db` | daemon session 收到输入、消息、part、run、permission、task 事件时写入 | `/sessions`、`/resume`、daemon restart recovery 读取；不是普通 system prompt 记忆 | 会话恢复和重放历史，不等同长期记忆 |
+| Output styles | `~/.vykor/output_styles/*.md` | 用户手动添加 | 输出样式服务读取，不作为事实记忆注入 | 改变回答呈现风格 |
+| Credentials | `$VYKOR_CONFIG_DIR/credentials.json` | `/auth login`、provider API key 保存 | provider/auth resolution 读取；不得注入 prompt | 保存供应商凭据 |
 
-`OPENHARNESS_CONFIG_DIR` 未设置时默认为 `~/.openharness-ts`。`data/*` 都在这个目录下面。
+`VYKOR_CONFIG_DIR` 未设置时默认为 `~/.vykor`。`data/*` 都在这个目录下面。
 
 ## Prompt 注入顺序
 
@@ -149,7 +149,7 @@ CLAUDE.md
 - 发现：`discoverClaudeMdFiles()`
 - 组装：`loadClaudeMdPrompt()`
 
-注意：当前 OpenHarness prompt builder 读的是这些 Claude 风格项目文件。仓库根目录里的 `AGENTS.md` 是当前 Codex 协作环境的外部指令，不属于 OpenHarness 自己的 prompt builder 读取链路。
+注意：当前 Vykor prompt builder 读的是这些 Claude 风格项目文件。仓库根目录里的 `AGENTS.md` 是当前 Codex 协作环境的外部指令，不属于 Vykor 自己的 prompt builder 读取链路。
 
 ### Project Memory
 
@@ -182,11 +182,10 @@ Session Memory checkpoint 是“本次会话的连续性文件”，不是长期
 
 写入内容：
 
-- 当前目标
-- 下一步
-- verified state
-- active artifacts
-- 最近消息摘要
+- 绑定到本轮运行的显式 Goal（若有）
+- 最近消息摘要，超出预算时优先保留最新消息
+
+构建函数支持调用方提供 `next_step`、`verified_state` 和 `active_artifacts`；当前 daemon 收尾链路未提供这些字段。
 
 写入时机：
 
@@ -245,7 +244,7 @@ Session runtime history 存 daemon 会话的完整运行状态，包括 sessions
 1. `/context status`：先看每条上下文/记忆线的加载状态、写入时机和注入位置。
 2. `/context` 或 context preview：看最终 prompt 分层和内容预览。
 3. `/profile status`：看 `SOUL.md` / `USER.md` 是否 loaded、blocked、truncated。
-4. `~/.openharness-ts/local_rules/rules.md`：看是否有自动抽取的环境事实。
+4. `~/.vykor/local_rules/rules.md`：看是否有自动抽取的环境事实。
 5. `/memory list` / `/memory show <id>`：看项目长期记忆。
 6. 当前 repo 的 `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/*.md`。
 7. `settings.json`：看 `systemPrompt`、memory 开关、权限模式。

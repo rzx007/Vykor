@@ -14,15 +14,15 @@ import {
   COORDINATOR_SYSTEM_PROMPT,
 } from "../index.js";
 
-// getAllAgentDefinitions 现在会读 ~/.openharness-ts/agents：把配置目录指到临时
+// getAllAgentDefinitions 现在会读 ~/.vykor/agents：把配置目录指到临时
 // 目录，避免开发机上的真实用户 agent 影响断言（环境隔离）。
 let cfgDir: string;
 beforeAll(() => {
-  cfgDir = mkdtempSync(joinPath(tmpdir(), "ohs-coord-cfg-"));
-  process.env.OPENHARNESS_CONFIG_DIR = cfgDir;
+  cfgDir = mkdtempSync(joinPath(tmpdir(), "vk-coord-cfg-"));
+  process.env.VYKOR_CONFIG_DIR = cfgDir;
 });
 afterAll(() => {
-  delete process.env.OPENHARNESS_CONFIG_DIR;
+  delete process.env.VYKOR_CONFIG_DIR;
   rmSync(cfgDir, { recursive: true, force: true });
 });
 
@@ -88,10 +88,10 @@ describe("TeamRegistry", () => {
 
 describe("isCoordinatorMode", () => {
   const ENV_KEYS = [
-    "OPENHARNESS_COORDINATOR_MODE",
+    "VYKOR_COORDINATOR_MODE",
     "CLAUDE_CODE_COORDINATOR_MODE",
     "COORDINATOR_MODE",
-    "OPENHARNESS_COORDINATOR",
+    "VYKOR_COORDINATOR",
     "CLAUDE_CODE_COORDINATOR",
   ];
   let saved: Record<string, string | undefined>;
@@ -118,24 +118,24 @@ describe("isCoordinatorMode", () => {
     expect(isCoordinatorMode()).toBe(false);
   });
 
-  it("returns true for OPENHARNESS_COORDINATOR_MODE truthy values", () => {
+  it("returns true for VYKOR_COORDINATOR_MODE truthy values", () => {
     for (const value of ["1", "true", "yes", "TRUE", "Yes"]) {
-      process.env.OPENHARNESS_COORDINATOR_MODE = value;
+      process.env.VYKOR_COORDINATOR_MODE = value;
       expect(isCoordinatorMode()).toBe(true);
-      delete process.env.OPENHARNESS_COORDINATOR_MODE;
+      delete process.env.VYKOR_COORDINATOR_MODE;
     }
   });
 
-  it("returns false for OPENHARNESS_COORDINATOR_MODE falsy values", () => {
+  it("returns false for VYKOR_COORDINATOR_MODE falsy values", () => {
     for (const value of ["0", "false", "no", "", "off"]) {
-      process.env.OPENHARNESS_COORDINATOR_MODE = value;
+      process.env.VYKOR_COORDINATOR_MODE = value;
       expect(isCoordinatorMode()).toBe(false);
-      delete process.env.OPENHARNESS_COORDINATOR_MODE;
+      delete process.env.VYKOR_COORDINATOR_MODE;
     }
   });
 
   it("ignores legacy coordinator env names", () => {
-    for (const key of ["CLAUDE_CODE_COORDINATOR_MODE", "COORDINATOR_MODE", "OPENHARNESS_COORDINATOR", "CLAUDE_CODE_COORDINATOR"]) {
+    for (const key of ["CLAUDE_CODE_COORDINATOR_MODE", "COORDINATOR_MODE", "VYKOR_COORDINATOR", "CLAUDE_CODE_COORDINATOR"]) {
       process.env[key] = "1";
       expect(isCoordinatorMode()).toBe(false);
       delete process.env[key];
@@ -244,7 +244,7 @@ describe("AgentDefinitions", () => {
 });
 
 // These anchor strings come verbatim from the Python original
-// (openharness/coordinator/agent_definitions.py). They guard against the
+// (vykor/coordinator/agent_definitions.py). They guard against the
 // prompts being silently truncated again in the future.
 describe("built-in agent prompt anchors (Python v0.1.9 alignment)", () => {
   const anchorsByAgent: Record<string, string[]> = {

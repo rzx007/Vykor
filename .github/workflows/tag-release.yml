@@ -118,24 +118,24 @@ jobs:
         run: node scripts/prepare-tag-release.mjs ${{ needs.validate.outputs.tag }}
       - name: Build and verify Desktop
         run: |
-          pnpm --filter @openharness/desktop verify:update-packaging
-          pnpm --filter @openharness/desktop^... build
-          pnpm --filter @openharness/desktop build
+          pnpm --filter @vykor/desktop verify:update-packaging
+          pnpm --filter @vykor/desktop^... build
+          pnpm --filter @vykor/desktop build
       - name: Package Windows
         if: matrix.target == 'win'
-        run: pnpm --filter @openharness/desktop exec -- electron-builder --win --publish never
+        run: pnpm --filter @vykor/desktop exec -- electron-builder --win --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - name: Package Linux
         if: matrix.target == 'linux'
-        run: pnpm --filter @openharness/desktop exec -- electron-builder --linux --publish never
+        run: pnpm --filter @vykor/desktop exec -- electron-builder --linux --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify updater artifacts
-        run: pnpm --filter @openharness/desktop verify:update-packaging:artifact
+        run: pnpm --filter @vykor/desktop verify:update-packaging:artifact
       - name: Record migrations from the packaged Desktop app
-        run: pnpm --filter @openharness/desktop exec node scripts/verify-migration-artifact.mjs --write-inventory ${{ matrix.target }}
+        run: pnpm --filter @vykor/desktop exec node scripts/verify-migration-artifact.mjs --write-inventory ${{ matrix.target }}
       - name: Upload Desktop artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -180,7 +180,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify Windows and Linux packaged migration inventories
         run: >-
-          pnpm --filter @openharness/desktop exec node scripts/verify-migration-artifact.mjs
+          pnpm --filter @vykor/desktop exec node scripts/verify-migration-artifact.mjs
           --verify-inventories
           ${{ github.workspace }}/release-assets/clean-slate-migrations-win.json
           ${{ github.workspace }}/release-assets/clean-slate-migrations-linux.json
@@ -189,8 +189,8 @@ jobs:
       - name: Build CLI and Desktop migration inventories together
         run: |
           pnpm --filter @rzx/ohs... build
-          pnpm --filter @openharness/desktop^... build
-          pnpm --filter @openharness/desktop build
+          pnpm --filter @vykor/desktop^... build
+          pnpm --filter @vykor/desktop build
       - name: Require clean-slate bundle inventories before tagging
         run: pnpm check:clean-slate:artifacts
 
@@ -296,9 +296,9 @@ jobs:
           node scripts/release-assets.mjs normalize-notes release-notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" release-assets/* --clobber
-            gh release edit "$TAG" --latest --title "OpenHarness ${VERSION}" --notes-file release-notes.md
+            gh release edit "$TAG" --latest --title "Vykor ${VERSION}" --notes-file release-notes.md
           else
-            gh release create "$TAG" release-assets/* --verify-tag --latest --title "OpenHarness ${VERSION}" --notes-file release-notes.md
+            gh release create "$TAG" release-assets/* --verify-tag --latest --title "Vykor ${VERSION}" --notes-file release-notes.md
           fi
 
   finalize:
@@ -344,7 +344,7 @@ jobs:
           username: ${{ secrets.SMTP_USER }}
           password: ${{ secrets.SMTP_PASS }}
           secure: true
-          from: OpenHarness Release <${{ secrets.SMTP_USER }}>
+          from: Vykor Release <${{ secrets.SMTP_USER }}>
           to: ${{ secrets.NOTIFY_TO }}
           subject: "[Release] ${{ github.repository }} ${{ needs.finalize.result }} v${{ inputs.version }} (#${{ github.run_number }})"
           body: |

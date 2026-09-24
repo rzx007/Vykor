@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { routeChangedFileClick, toProjectRelativePath } from "./workspace-open-path"
 
-const project = "E:/code/openharness-ts"
+const project = "E:/code/vykor"
 
 describe("toProjectRelativePath", () => {
   it("keeps project-relative paths including a leading slash", () => {
@@ -13,8 +13,8 @@ describe("toProjectRelativePath", () => {
   })
 
   it("strips a Windows project prefix", () => {
-    expect(toProjectRelativePath("E:\\code\\openharness-ts\\src\\foo.ts", project)).toBe("src/foo.ts")
-    expect(toProjectRelativePath("\\\\?\\E:\\code\\openharness-ts\\src\\foo.ts", project)).toBe(
+    expect(toProjectRelativePath("E:\\code\\vykor\\src\\foo.ts", project)).toBe("src/foo.ts")
+    expect(toProjectRelativePath("\\\\?\\E:\\code\\vykor\\src\\foo.ts", project)).toBe(
       "src/foo.ts"
     )
   })
@@ -22,7 +22,7 @@ describe("toProjectRelativePath", () => {
   it("returns null for Windows paths outside the project", () => {
     expect(
       toProjectRelativePath(
-        "C:\\Users\\ruanz\\.openharness-ts\\skills\\show-me\\SKILL.md",
+        "C:\\Users\\ruanz\\.vykor\\skills\\show-me\\SKILL.md",
         project
       )
     ).toBeNull()
@@ -30,21 +30,21 @@ describe("toProjectRelativePath", () => {
 
   it("does not treat a POSIX home path as a project-relative path", () => {
     expect(
-      toProjectRelativePath("/Users/ruanz/.openharness-ts/skills/show-me/SKILL.md", project)
-    ).toBe("Users/ruanz/.openharness-ts/skills/show-me/SKILL.md")
+      toProjectRelativePath("/Users/ruanz/.vykor/skills/show-me/SKILL.md", project)
+    ).toBe("Users/ruanz/.vykor/skills/show-me/SKILL.md")
   })
 })
 
 describe("routeChangedFileClick", () => {
   it("opens review for /src/foo.ts when git is available", () => {
-    expect(routeChangedFileClick("/src/foo.ts", "E:/code/openharness-ts", true)).toBe("review")
+    expect(routeChangedFileClick("/src/foo.ts", "E:/code/vykor", true)).toBe("review")
   })
 
   it("opens preview for an extra-root Windows skill path", () => {
     expect(
       routeChangedFileClick(
-        "C:\\Users\\ruanz\\.openharness-ts\\skills\\show-me\\SKILL.md",
-        "E:/code/openharness-ts",
+        "C:\\Users\\ruanz\\.vykor\\skills\\show-me\\SKILL.md",
+        "E:/code/vykor",
         true
       )
     ).toBe("preview")

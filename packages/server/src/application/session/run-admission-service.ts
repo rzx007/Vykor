@@ -7,12 +7,12 @@ import {
   type SessionInputRecord,
   type SessionRunRecord,
   type SessionUserInputItem,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   AttachmentError,
   normalizePromptAttachments,
   promptAttachmentFingerprint,
-} from "@openharness/services";
+} from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../support.js";
 import { RunInterruptedError } from "../../runtime/run-coordinator.js";
 

@@ -3,7 +3,7 @@ import type {
   McpOAuthAuthStatus,
   McpOAuthCredentialRecord,
   McpServerConfig,
-} from "@openharness/core";
+} from "@vykor/core";
 import { uniqueScopes } from "./security.js";
 
 export function oauthScopesChanged(configured: readonly string[] | undefined, granted: readonly string[]): boolean {

@@ -2,11 +2,11 @@
 
 > **面向 AI 代理的工作者：** 批量迁移全部基础 Resource 后再统一测试。可按 Resource 提交以便回滚，但不逐提交跑全量。
 
-**目标：** 将低耦合基础 endpoint 从 OpenHarnessClient 迁入具体 Resource。
+**目标：** 将低耦合基础 endpoint 从 VykorClient 迁入具体 Resource。
 
 **架构：** 每个 Resource 只接 HttpTransport，拥有路径、query、body 和 decoder。共同变化且方法很少的能力合并，禁止 BaseResource。
 
-**技术栈：** TypeScript、HttpTransport、@openharness/protocol。
+**技术栈：** TypeScript、HttpTransport、@vykor/protocol。
 
 ---
 
@@ -29,7 +29,7 @@
 - [ ] Memory/Profile/Dream 若依赖完全相同放 SystemResource，不为单方法建类。
 - [ ] Plugin archive/git 的 preview/install 不合并成万能 install。
 - [ ] Git commit 的 patch/message/body 和错误保持。
-- [ ] OpenHarnessClient 构造并公开 system/providers/auth/projects/plugins/development。
+- [ ] VykorClient 构造并公开 system/providers/auth/projects/plugins/development。
 - [ ] 旧平铺方法一行转发，删除 path/body/decode。
 - [ ] 更新 resources/index.ts 和顶层类型导出，不删除旧 export。
 - [ ] 快检 Client 类型。
@@ -42,4 +42,4 @@
 
 ## 审核重点
 
-无 BaseResource；无 endpoint 丢失；Resource 不导入 OpenHarnessClient；旧方法仅转发；公开类型不破坏。
+无 BaseResource；无 endpoint 丢失；Resource 不导入 VykorClient；旧方法仅转发；公开类型不破坏。

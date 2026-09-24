@@ -29,14 +29,14 @@
 把 `CURRENT_PROTOCOL_VERSION` 从 3 提升为 4；新增：
 
 ```ts
-export const PROTOCOL_VERSION_HEADER = "x-openharness-protocol-version";
+export const PROTOCOL_VERSION_HEADER = "x-vykor-protocol-version";
 ```
 
 测试 `checkProtocolCompatibility` 对 3、5 返回 incompatible，对 4 返回 compatible。
 
 - [ ] **步骤 2：实现并验证 protocol 包**
 
-运行：`pnpm --filter @openharness/protocol test && pnpm --filter @openharness/protocol check-types`
+运行：`pnpm --filter @vykor/protocol test && pnpm --filter @vykor/protocol check-types`
 
 预期：PASS。
 
@@ -63,7 +63,7 @@ isHandshakeExempt(pathname: string): boolean;
 
 - [ ] **步骤 4：验证 Client**
 
-运行：`pnpm --filter @openharness/client exec vitest run src/transport/__test__/http-client.test.ts src/transport/__test__/sse-transport.test.ts`
+运行：`pnpm --filter @vykor/client exec vitest run src/transport/__test__/http-client.test.ts src/transport/__test__/sse-transport.test.ts`
 
 预期：PASS。
 
@@ -96,8 +96,8 @@ middleware 在 auth/route handler 之前运行。错误响应使用统一 JSON�
 运行：
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/http/protocol-middleware.test.ts src/http/routes/protocol-validation.test.ts src/http/__test__/http.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server exec vitest run src/http/protocol-middleware.test.ts src/http/routes/protocol-validation.test.ts src/http/__test__/http.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：PASS。
@@ -110,7 +110,7 @@ pnpm --filter @openharness/server check-types
 
 - [ ] **步骤 2：生成当前单一 migration**
 
-运行：`pnpm --filter @openharness/services db:generate`
+运行：`pnpm --filter @vykor/services db:generate`
 
 把生成 SQL 命名为 `0000_current_schema.sql`，确认包含当前所有表、索引、外键和 `application_storage_format` 当前 generation。重建 `_journal.json` 为单条 `idx: 0` 记录。
 
@@ -131,12 +131,12 @@ pnpm --filter @openharness/server check-types
 运行：
 
 ```powershell
-pnpm --filter @openharness/services db:check
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/cli build
-pnpm --filter @openharness/desktop build
+pnpm --filter @vykor/services db:check
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/cli build
+pnpm --filter @vykor/desktop build
 pnpm check-types
 ```
 
@@ -161,9 +161,9 @@ pnpm check-types
 运行：
 
 ```powershell
-pnpm --filter @openharness/core exec vitest run src/config/settings.test.ts
-pnpm --filter @openharness/protocol exec vitest run src/runtime-config.test.ts
-pnpm --filter @openharness/server exec vitest run src/http/routes/__test__/routes.test.ts src/http/routes/protocol-validation.test.ts
+pnpm --filter @vykor/core exec vitest run src/config/settings.test.ts
+pnpm --filter @vykor/protocol exec vitest run src/runtime-config.test.ts
+pnpm --filter @vykor/server exec vitest run src/http/routes/__test__/routes.test.ts src/http/routes/protocol-validation.test.ts
 ```
 
 预期：全部 PASS；旧路由均为 404，旧配置均在副作用前失败。
@@ -171,11 +171,11 @@ pnpm --filter @openharness/server exec vitest run src/http/routes/__test__/route
 - [ ] **步骤 5：执行 8D 完整验证并提交**
 
 ```powershell
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/services test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/services test
 pnpm check-types
 git diff --check
 git add packages/core packages/protocol packages/client packages/server packages/services apps/cli apps/desktop scripts/forbidden-compatibility-surfaces.json

@@ -4,9 +4,9 @@
 
 Channels 把飞书等聊天平台接到正在运行的 daemon。**渠道长连接、渠道配置与接入都由 daemon 拥有**；CLI 与 Desktop 只是客户端：
 
-- `ohs channels add feishu`（扫码优先、可手填）与 Desktop 的「设置 → 连接」都调用 daemon 的 `/channels/feishu/*` 接口；
-- `ohs channels serve` 只负责「让 daemon 启动渠道并跟随状态」，不再自己持有长连接；
-- `ohs channels status` 读取 daemon 的渠道配置与运行时状态。
+- `vk channels add feishu`（扫码优先、可手填）与 Desktop 的「设置 → 连接」都调用 daemon 的 `/channels/feishu/*` 接口；
+- `vk channels serve` 只负责「让 daemon 启动渠道并跟随状态」，不再自己持有长连接；
+- `vk channels status` 读取 daemon 的渠道配置与运行时状态。
 
 daemon 内部由两个服务承担：`ChannelRuntimeService`（长连接生命周期、ACL 拒绝上报、每会话工作目录）与 `ChannelOnboardingService`（唯一写 `channel-credentials.json` 的入口）。消息进入 Agent 的唯一正式桥接仍是 `DurableChannelBridge`，只是现在直接在 daemon 内调用 `ChannelApplicationService`，不再走 HTTP。
 
@@ -26,13 +26,13 @@ daemon 内部由两个服务承担：`ChannelRuntimeService`（长连接生命�
 ## 接入（扫码优先，手填兜底）
 
 ```bash
-ohs channels add feishu
+vk channels add feishu
 ```
 
 - 默认走**扫码创建应用**：终端显示二维码与授权链接，用飞书 App 扫码确认后，daemon 拿到新应用的 `appId`/`appSecret`。
 - 也可选择**手填** `App ID` / `App Secret`，并选地区（国内 `feishu` / 国际 `lark`）；手填会**当场校验**（换 tenant access token），校验失败不写任何配置。
-- 扫码路径默认把**扫码者本人**加入白名单；其他人或群用 `ohs channels allow <ou_...|oc_...>` 添加。
-- 渠道配置与密钥统一写入默认 `~/.openharness-ts/channel-credentials.json`（受 `OPENHARNESS_CONFIG_DIR` 覆盖，v2，POSIX `0600`）；`settings.json` 不再承载 `channels`。
+- 扫码路径默认把**扫码者本人**加入白名单；其他人或群用 `vk channels allow <ou_...|oc_...>` 添加。
+- 渠道配置与密钥统一写入默认 `~/.vykor/channel-credentials.json`（受 `VYKOR_CONFIG_DIR` 覆盖，v2，POSIX `0600`）；`settings.json` 不再承载 `channels`。
 - Desktop 的「设置 → 连接」提供同样的扫码/手填、状态、白名单与启停能力。
 
 ## 一条消息实际怎么走
@@ -67,7 +67,7 @@ daemon close()
 ```
 
 - `enabled=true` 的渠道随 daemon 启动自动连接；`enabled=false` 持久化后重启也不连接。
-- `ohs channels serve` 的 Ctrl+C 是**运行期临时停止**（不改配置）；重启 daemon 后 enabled 渠道会自动恢复。
+- `vk channels serve` 的 Ctrl+C 是**运行期临时停止**（不改配置）；重启 daemon 后 enabled 渠道会自动恢复。
 - 同一 appId 只会有一条长连接：CLI 不再本地装配 adapter，长连接由 daemon 单点持有。
 
 ## 渠道会话的工作目录
@@ -75,10 +75,10 @@ daemon close()
 渠道消息没有“当前项目”，所以每个外部会话使用专用工作目录：
 
 ```text
-<OPENHARNESS_CHANNELS_DIR 或 <文档>/OpenHarness/channels>/<connector>/<sanitize(chatId)>-<hash(会话键)>/
+<VYKOR_CHANNELS_DIR 或 <文档>/Vykor/channels>/<connector>/<sanitize(chatId)>-<hash(会话键)>/
 ```
 
-会话键与 Session 分类键一致（`connector + accountId + chatId + threadId`），hash 后缀避免不同会话落到同一目录；目录按需创建。默认放在 Desktop 的"项目外工作区"根（`<文档>/OpenHarness`）下，因此渠道会话被当作项目外会话：不进「项目」，对应自动创建的项目行也会被隐藏。旧的 `~/.openharness-ts/channels` 目录不迁移。
+会话键与 Session 分类键一致（`connector + accountId + chatId + threadId`），hash 后缀避免不同会话落到同一目录；目录按需创建。默认放在 Desktop 的"项目外工作区"根（`<文档>/Vykor`）下，因此渠道会话被当作项目外会话：不进「项目」，对应自动创建的项目行也会被隐藏。旧的 `~/.vykor/channels` 目录不迁移。
 
 ## Desktop 的「IM 会话」分区
 
@@ -99,7 +99,7 @@ Desktop 侧边栏把渠道会话单独放在「IM 会话」分区（按平台分
         "个人": "ou_xxx",
         "工作群": "oc_xxx"
       },
-      "replyAtBotNames": ["OpenHarness"],
+      "replyAtBotNames": ["Vykor"],
       "sendProgress": true,
       "sendToolHints": true
     }
@@ -107,13 +107,13 @@ Desktop 侧边栏把渠道会话单独放在「IM 会话」分区（按平台分
 }
 ```
 
-`settings.json` 不再有 `channels` 字段，出现即报错（`SettingsFileError`）。`channel-credentials.json` 权限为 POSIX `0600`（Windows 依赖用户目录 ACL）。旧的 v1 凭据文件（只有 `appSecret`）会被当作“未配置渠道”，需要用 `ohs channels add feishu` 重新写入 v2。上面示例里的 `sendProgress` / `sendToolHints` 省略时默认按 `true` 处理。
+`settings.json` 不再有 `channels` 字段，出现即报错（`SettingsFileError`）。`channel-credentials.json` 权限为 POSIX `0600`（Windows 依赖用户目录 ACL）。旧的 v1 凭据文件（只有 `appSecret`）会被当作“未配置渠道”，需要用 `vk channels add feishu` 重新写入 v2。上面示例里的 `sendProgress` / `sendToolHints` 省略时默认按 `true` 处理。
 
 `allowFrom` 为空时默认全部拒绝。白名单检查仍在 `ChannelManager`：**发送者或会话（群）任一命中即放行**，所以 `ou_...` 放行某个人、`oc_...` 放行某个群。未通过的消息不会进入 daemon，daemon 会记录最近拒绝并在 Desktop「连接」页提示，可用「加入白名单」直接放行。
 
 ## 入站图片 / 文件（附件）
 
-飞书发来的图片或文件会被**下载到本机**并存入 OpenHarness 附件库，再作为附件进入 Agent 会话：
+飞书发来的图片或文件会被**下载到本机**并存入 Vykor 附件库，再作为附件进入 Agent 会话：
 
 - 下载走飞书的 `im.messageResource.get`（`message_id` + `file_key` + `type`），因为用户发来的资源只能用这个接口；`im.image.get`/`im.file.get` 只能下载机器人自己上传的资源。
 - 图片以 `intent: "vision"` 交给 Agent（走视觉模型看图）；文件以 `intent: "tool_resource"` 交给 Agent（交给工具读取）。
@@ -191,7 +191,7 @@ daemon 收到关闭信号后：先停止渠道入站，最多等待在途消息�
 ## 状态检查
 
 ```bash
-ohs channels status
+vk channels status
 ```
 
 输出包括：
@@ -207,10 +207,10 @@ Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增�
 
 | 命令 | 作用 |
 |---|---|
-| `ohs channels add feishu` | 扫码/手填接入（委托 daemon），校验并写入凭据与配置 |
-| `ohs channels allow <id> [--name <备注>]` | 把个人（`ou_`）或群（`oc_`）加入白名单，即时生效 |
-| `ohs channels status` | 查看配置、白名单、运行时状态与最近回复 |
-| `ohs channels serve` | 让 daemon 启动渠道并跟随状态，Ctrl+C 临时停止 |
+| `vk channels add feishu` | 扫码/手填接入（委托 daemon），校验并写入凭据与配置 |
+| `vk channels allow <id> [--name <备注>]` | 把个人（`ou_`）或群（`oc_`）加入白名单，即时生效 |
+| `vk channels status` | 查看配置、白名单、运行时状态与最近回复 |
+| `vk channels serve` | 让 daemon 启动渠道并跟随状态，Ctrl+C 临时停止 |
 
 ## 代码位置
 

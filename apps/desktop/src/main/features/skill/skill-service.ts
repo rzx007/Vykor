@@ -1,4 +1,4 @@
-import type { OpenHarnessClient } from "@openharness/client"
+import type { VykorClient } from "@vykor/client"
 import type {
   DesktopSkillRemoveInput,
   DesktopSkillSnapshot,
@@ -8,7 +8,7 @@ import { app } from "electron"
 import { isOutsideProjectWorkspacePath } from "../session/outside-project-workspace"
 import { desktopSessionService } from "../session/session-service"
 
-type SkillClient = Pick<OpenHarnessClient, "development">
+type SkillClient = Pick<VykorClient, "development">
 
 export interface DesktopSkillServiceOptions {
   documentsPath?: string

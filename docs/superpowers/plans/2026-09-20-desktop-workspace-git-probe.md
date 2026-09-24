@@ -118,7 +118,7 @@ describe("gitService.isRepository", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/git/git-service.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/git/git-service.test.ts`
 预期：FAIL，报错 `gitService.isRepository is not a function`。
 
 - [ ] **步骤 3：新增共享类型**
@@ -206,12 +206,12 @@ export interface DesktopGitIsRepositoryResult {
 
 - [ ] **步骤 8：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/git/git-service.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/git/git-service.test.ts`
 预期：PASS，5 个用例全绿。
 
 - [ ] **步骤 9：类型检查**
 
-运行：`pnpm --filter @openharness/desktop run typecheck`
+运行：`pnpm --filter @vykor/desktop run typecheck`
 预期：通过。
 
 - [ ] **步骤 10：Commit**
@@ -310,7 +310,7 @@ describe("probeWorkspaceGit", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/lib/workspace-git-probe.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/lib/workspace-git-probe.test.ts`
 预期：FAIL，报错无法解析模块 `./workspace-git-probe`。
 
 - [ ] **步骤 3：导出 `normalizedRootPath`**
@@ -383,12 +383,12 @@ export function resetWorkspaceGitProbeCacheForTests(): void {
 
 - [ ] **步骤 5：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/lib/workspace-git-probe.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/lib/workspace-git-probe.test.ts`
 预期：PASS，5 个用例全绿。
 
 - [ ] **步骤 6：回归 `git-changes-query`**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/lib/git-changes-query.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/lib/git-changes-query.test.ts`
 预期：PASS（确认导出改动没破坏原行为）。
 
 - [ ] **步骤 7：Commit**
@@ -497,7 +497,7 @@ describe("useActiveWorkspaceIsGit", () => {
 
 - [ ] **步骤 3：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/hooks/use-active-workspace-is-git.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/hooks/use-active-workspace-is-git.test.ts`
 预期：FAIL，报错无法解析模块 `./use-active-workspace-is-git`。
 
 - [ ] **步骤 4：实现 hook**
@@ -550,7 +550,7 @@ export function useActiveWorkspaceIsGit(): boolean | null {
 
 - [ ] **步骤 5：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/hooks/use-active-workspace-is-git.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/hooks/use-active-workspace-is-git.test.ts`
 预期：PASS。
 
 - [ ] **步骤 6：Commit**
@@ -588,7 +588,7 @@ it("loads changes for an outside-project session instead of showing the empty st
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx`
 预期：FAIL，新用例命中空态。
 
 - [ ] **步骤 3：把 `review-tool` 的路径来源改成工作区项目**
@@ -648,7 +648,7 @@ it("loads changes for an outside-project session instead of showing the empty st
 
 - [ ] **步骤 5：运行相关测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/review-tool.git-changes.test.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.git-changes.test.tsx`
 预期：PASS。
 
 - [ ] **步骤 6：Commit**
@@ -678,7 +678,7 @@ git commit -m "fix(desktop): source review paths from the active workspace proje
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run <上一步对应的测试文件路径>`
+运行：`pnpm --filter @vykor/desktop exec vitest run <上一步对应的测试文件路径>`
 预期：FAIL——当前审阅入口只由 `state.selectedProjectGit` 决定，项目外会话恒为 `false`。
 
 - [ ] **步骤 3：在 `utility-panel` 换用 hook**
@@ -756,7 +756,7 @@ git commit -m "fix(desktop): source review paths from the active workspace proje
 
 - [ ] **步骤 6：运行相关测试验证通过**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/layout`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/layout`
 预期：PASS。
 
 - [ ] **步骤 7：Commit**
@@ -785,17 +785,17 @@ git commit -m "feat(desktop): gate the review tool on the active workspace git p
 
 - [ ] **步骤 2：跑桌面端类型检查**
 
-运行：`pnpm --filter @openharness/desktop run typecheck`
+运行：`pnpm --filter @vykor/desktop run typecheck`
 预期：通过。
 
 - [ ] **步骤 3：跑桌面端测试**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run`
+运行：`pnpm --filter @vykor/desktop exec vitest run`
 预期：全绿。若出现与本次无关的既有失败，逐个确认是否由本次改动引入。
 
 - [ ] **步骤 4：跑改动文件的 lint**
 
-运行：`pnpm --filter @openharness/desktop exec eslint --no-cache src/main/features/git/git-service.ts src/main/features/git/ipc.ts src/preload/desktop-api.ts src/shared/git-types.ts src/shared/ipc-channels.ts src/shared/desktop-api-contract.ts src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/workspace-git-probe.ts src/renderer/src/lib/workspace-git-probe.test.ts src/renderer/src/hooks/use-active-workspace-is-git.ts src/renderer/src/hooks/use-active-workspace-is-git.test.ts src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx`
+运行：`pnpm --filter @vykor/desktop exec eslint --no-cache src/main/features/git/git-service.ts src/main/features/git/ipc.ts src/preload/desktop-api.ts src/shared/git-types.ts src/shared/ipc-channels.ts src/shared/desktop-api-contract.ts src/renderer/src/lib/git-changes-query.ts src/renderer/src/lib/workspace-git-probe.ts src/renderer/src/lib/workspace-git-probe.test.ts src/renderer/src/hooks/use-active-workspace-is-git.ts src/renderer/src/hooks/use-active-workspace-is-git.test.ts src/renderer/src/components/desktop/tools/review-tool.tsx src/renderer/src/components/desktop/conversation-page/message/assistant-message.tsx src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx src/renderer/src/components/desktop/layout/main-layout/main-layout.tsx`
 预期：0 error。行尾风格（CRLF）警告可用 `--fix` 处理。
 
 - [ ] **步骤 5：手动验证真实场景**
@@ -803,7 +803,7 @@ git commit -m "feat(desktop): gate the review tool on the active workspace git p
 用桌面端 dev 打开那个项目外会话（cwd 是 git 仓库）：
 
 ```bash
-pnpm --filter @openharness/desktop dev
+pnpm --filter @vykor/desktop dev
 ```
 
 确认：右侧出现「审阅」入口；打开后默认范围是「上一轮」；能切到「未提交」；消息里「已编辑 N 个文件」卡片显示 `+/−`。再打开一个 cwd 不是 git 仓库的项目外会话，确认审阅入口不出现。

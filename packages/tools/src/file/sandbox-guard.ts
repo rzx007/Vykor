@@ -1,11 +1,11 @@
-import { loadSettings, type Settings } from "@openharness/core";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+import { loadSettings, type Settings } from "@vykor/core";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import {
   resolveSandboxPolicy,
   validateSandboxPath,
   type SandboxOperation,
   type SandboxPathValidationResult,
-} from "@openharness/sandbox";
+} from "@vykor/sandbox";
 
 export async function sandboxPathDecision(
   filePath: string,

@@ -11,7 +11,7 @@ import { SessionDatabase } from "./session-database.js";
 
 describe("loadSessionReadModel", () => {
   it("rehydrates the canonical session graph and event cursor", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-read-model-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-read-model-"));
     const path = join(directory, "sessions.db");
     try {
       const store = new SessionStore({ path });

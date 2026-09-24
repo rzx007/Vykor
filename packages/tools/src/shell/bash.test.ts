@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { diagnoseShellDialectMismatch } from "./shell.js";
-import type { HostShellLauncher } from "@openharness/sandbox";
+import type { HostShellLauncher } from "@vykor/sandbox";
 
 describe("diagnoseShellDialectMismatch", () => {
   const powershell: HostShellLauncher = { kind: "powershell", bin: "powershell.exe" };

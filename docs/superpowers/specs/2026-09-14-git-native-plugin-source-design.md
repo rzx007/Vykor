@@ -45,7 +45,7 @@
 
 ## 技术边界
 
-`@openharness/plugin-sources` 增加 `resolveGitPluginSource()`：
+`@vykor/plugin-sources` 增加 `resolveGitPluginSource()`：
 
 ```text
 validate url/ref

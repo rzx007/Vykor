@@ -1,4 +1,4 @@
-import type { PluginInfo } from "@openharness/client"
+import type { PluginInfo } from "@vykor/client"
 
 export type DesktopPluginInfo = PluginInfo
 

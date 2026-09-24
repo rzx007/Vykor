@@ -109,7 +109,7 @@ it("emits overflow_after_model_switch tip", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/core test -- src/context-budget/assemble.test.ts`
+运行：`pnpm --filter @vykor/core test -- src/context-budget/assemble.test.ts`
 
 预期：FAIL（模块不存在）。
 
@@ -126,7 +126,7 @@ it("emits overflow_after_model_switch tip", () => {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/core test -- src/context-budget/assemble.test.ts`
+运行：`pnpm --filter @vykor/core test -- src/context-budget/assemble.test.ts`
 
 预期：PASS。
 
@@ -196,7 +196,7 @@ it("counts image blocks with 3072 mediaTokens", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/core test -- src/context-budget/messages-to-segments.test.ts`
+运行：`pnpm --filter @vykor/core test -- src/context-budget/messages-to-segments.test.ts`
 
 预期：FAIL。
 
@@ -208,7 +208,7 @@ it("counts image blocks with 3072 mediaTokens", () => {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/core test -- src/context-budget/messages-to-segments.test.ts`
+运行：`pnpm --filter @vykor/core test -- src/context-budget/messages-to-segments.test.ts`
 
 预期：PASS（必要时更新 compact 测试允许新字段）。
 
@@ -250,7 +250,7 @@ it("does not put full memory preview into segments by default", async () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/prompts test -- src/ledger-segments.test.ts`
+运行：`pnpm --filter @vykor/prompts test -- src/ledger-segments.test.ts`
 
 预期：FAIL。
 
@@ -264,7 +264,7 @@ it("does not put full memory preview into segments by default", async () => {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/prompts test -- src/ledger-segments.test.ts src/index.test.ts`
+运行：`pnpm --filter @vykor/prompts test -- src/ledger-segments.test.ts src/index.test.ts`
 
 预期：PASS。
 
@@ -297,7 +297,7 @@ it("marks builtin schemas as tools and mcp schemas as mcp", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/core test -- src/context-budget/tool-segments.test.ts`
+运行：`pnpm --filter @vykor/core test -- src/context-budget/tool-segments.test.ts`
 
 预期：FAIL。
 
@@ -348,7 +348,7 @@ it("returns cached snapshot for sessionId when cache warm", async () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/server test --`（定位到新增/相关测试文件）
+运行：`pnpm --filter @vykor/server test --`（定位到新增/相关测试文件）
 
 预期：FAIL（`usage` 未定义）。
 
@@ -466,7 +466,7 @@ it("renders percent over 100 when percentFull > 1", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/desktop test -- context-usage`
+运行：`pnpm --filter @vykor/desktop test -- context-usage`
 
 预期：FAIL。
 
@@ -489,11 +489,11 @@ git commit -m "feat(desktop): Context 占用环与分桶托盘"
 - [ ] **步骤 1：跑规格相关测试包**
 
 ```bash
-pnpm --filter @openharness/core test -- src/context-budget
-pnpm --filter @openharness/prompts test -- src/ledger-segments.test.ts
-pnpm --filter @openharness/server test -- context
-pnpm --filter @openharness/client test -- session-commands
-pnpm --filter @openharness/desktop test -- context-usage
+pnpm --filter @vykor/core test -- src/context-budget
+pnpm --filter @vykor/prompts test -- src/ledger-segments.test.ts
+pnpm --filter @vykor/server test -- context
+pnpm --filter @vykor/client test -- session-commands
+pnpm --filter @vykor/desktop test -- context-usage
 ```
 
 - [ ] **步骤 2：对照规格验收标准 1–7，修复缺口**

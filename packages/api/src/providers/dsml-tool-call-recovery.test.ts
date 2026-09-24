@@ -126,12 +126,12 @@ describe("createDsmlRecoveryScanner", () => {
   });
 
   it("recovers the doubled-pipe calls wrapper emitted by DeepSeek", () => {
-    const leaked = String.raw`< | | DSML | | calls> < | | DSML | | invoke name="Shell"> < | | DSML | | parameter name="command" string="true">Get-Content "$env:USERPROFILE\.openharness-ts\settings.json"</ | | DSML | | parameter> </ | | DSML | | calls>`;
+    const leaked = String.raw`< | | DSML | | calls> < | | DSML | | invoke name="Shell"> < | | DSML | | parameter name="command" string="true">Get-Content "$env:USERPROFILE\.vykor\settings.json"</ | | DSML | | parameter> </ | | DSML | | calls>`;
     const outcome = scan([...leaked], ["Shell"]);
 
     expect(outcome.calls).toHaveLength(1);
     expect(outcome.calls[0]!.input).toEqual({
-      command: String.raw`Get-Content "$env:USERPROFILE\.openharness-ts\settings.json"`,
+      command: String.raw`Get-Content "$env:USERPROFILE\.vykor\settings.json"`,
     });
     expect(outcome.visible).toBe("");
   });

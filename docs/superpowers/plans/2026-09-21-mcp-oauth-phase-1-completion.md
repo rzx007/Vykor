@@ -4,7 +4,7 @@
 
 **目标：** 补齐 MCP OAuth 的状态查询、登录/退出后活动 Runtime 同步，以及 CLI 与 Desktop 的统一认证状态展示，让 Streamable HTTP OAuth 形成可验证的完整闭环。
 
-**架构：** `packages/core` 定义无秘密 DTO 与 Runtime 协调契约，`packages/mcp` 负责认证快照、endpoint identity 和 staged 连接，`packages/server` 维护活动 Runtime registry 并提供受 daemon Bearer/协议版本保护的状态与同步接口。CLI 和 Desktop 都通过同一应用服务完成 OAuth 提交，并通过 `@openharness/client` 通知 daemon；Runtime 只根据凭据仓库最终状态重连或断开。
+**架构：** `packages/core` 定义无秘密 DTO 与 Runtime 协调契约，`packages/mcp` 负责认证快照、endpoint identity 和 staged 连接，`packages/server` 维护活动 Runtime registry 并提供受 daemon Bearer/协议版本保护的状态与同步接口。CLI 和 Desktop 都通过同一应用服务完成 OAuth 提交，并通过 `@vykor/client` 通知 daemon；Runtime 只根据凭据仓库最终状态重连或断开。
 
 **技术栈：** TypeScript、Vitest、Commander、Hono、Electron/React、Model Context Protocol TypeScript SDK、pnpm/Turborepo
 
@@ -22,7 +22,7 @@
 - `packages/server/src/http/routes/mcp.test.ts`：验证请求参数、响应形状以及请求不携带 endpoint/Token。
 - `packages/client/src/resources/mcp-resource.ts`：封装 daemon MCP Runtime 状态与同步 HTTP 调用。
 - `packages/client/src/resources/__test__/mcp-resource.test.ts`：验证 URL、请求体和错误传播。
-- `apps/cli/src/mcp-runtime-coordinator.ts`：从 daemon registry 创建 `@openharness/client` 调用；daemon 缺席时返回 `unavailable`。
+- `apps/cli/src/mcp-runtime-coordinator.ts`：从 daemon registry 创建 `@vykor/client` 调用；daemon 缺席时返回 `unavailable`。
 - `apps/cli/src/mcp-runtime-coordinator.test.ts`：覆盖 daemon 在线、离线、认证失败和协议不兼容。
 
 ### 修改文件
@@ -36,7 +36,7 @@
 - `packages/server/src/application/mcp-oauth-application-service.ts`、对应测试：编排 settings 与 credential 的提交、Runtime 同步及稳定错误阶段。
 - `packages/server/src/application/daemon-application.ts`、`packages/server/src/daemon/daemon-agent.ts`、对应测试：把 Runtime registry 注入每个 Session agent。
 - `packages/server/src/http/server.ts`、`packages/server/src/index.ts`、HTTP 测试：挂载 MCP 控制面路由并导出契约。
-- `packages/client/src/resources/index.ts`、`packages/client/src/transport/open-harness-client.ts`、`packages/client/src/index.ts`、公共 API 测试：公开 `McpResource`。
+- `packages/client/src/resources/index.ts`、`packages/client/src/transport/vykor-client.ts`、`packages/client/src/index.ts`、公共 API 测试：公开 `McpResource`。
 - `apps/cli/src/commands/mcp.ts`、对应测试：增加 `status`，统一 `get/status` 输出，并在 login/logout 后同步 Runtime。
 - `apps/desktop/src/shared/mcp-types.ts`、主进程 MCP service/测试、renderer MCP settings/测试：展示认证方式、凭据状态和 Runtime 状态，保留授权成功但同步失败的状态。
 
@@ -81,7 +81,7 @@ expect(createMcpServerIdentity("linear", {
 
 - [ ] **步骤 2：运行测试并确认新 API 尚不存在**
 
-运行：`pnpm --filter @openharness/mcp exec vitest run src/oauth/snapshot.test.ts src/oauth/status.test.ts`
+运行：`pnpm --filter @vykor/mcp exec vitest run src/oauth/snapshot.test.ts src/oauth/status.test.ts`
 
 预期：FAIL，提示 `buildMcpAuthServerSnapshot` 或 `createMcpServerIdentity` 未导出。
 
@@ -124,11 +124,11 @@ export interface McpAuthServerSnapshot {
 
 - [ ] **步骤 5：运行 MCP 测试与类型检查**
 
-运行：`pnpm --filter @openharness/mcp exec vitest run src/oauth/snapshot.test.ts src/oauth/status.test.ts`
+运行：`pnpm --filter @vykor/mcp exec vitest run src/oauth/snapshot.test.ts src/oauth/status.test.ts`
 
 预期：PASS。
 
-运行：`pnpm --filter @openharness/core check-types && pnpm --filter @openharness/mcp check-types`
+运行：`pnpm --filter @vykor/core check-types && pnpm --filter @vykor/mcp check-types`
 
 预期：两个命令均成功。
 
@@ -163,7 +163,7 @@ expect(registry.get("mcp__linear__new")).toBe(newDefinition);
 
 - [ ] **步骤 2：运行测试确认接口缺失**
 
-运行：`pnpm --filter @openharness/core exec vitest run src/engine/index.test.ts`
+运行：`pnpm --filter @vykor/core exec vitest run src/engine/index.test.ts`
 
 预期：FAIL，提示 `replaceBySource` 不存在。
 
@@ -179,9 +179,9 @@ replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void;
 
 - [ ] **步骤 4：运行 Registry 与 Run 捕获测试**
 
-运行：`pnpm --filter @openharness/core exec vitest run src/engine/index.test.ts`
+运行：`pnpm --filter @vykor/core exec vitest run src/engine/index.test.ts`
 
-运行：`pnpm --filter @openharness/agent-runtime exec vitest run src/run-capability-mcp.test.ts`
+运行：`pnpm --filter @vykor/agent-runtime exec vitest run src/run-capability-mcp.test.ts`
 
 预期：全部 PASS。
 
@@ -217,7 +217,7 @@ await activation.closePrevious();
 
 - [ ] **步骤 2：运行测试确认 staged API 不存在**
 
-运行：`pnpm --filter @openharness/mcp exec vitest run src/index.test.ts`
+运行：`pnpm --filter @vykor/mcp exec vitest run src/index.test.ts`
 
 预期：FAIL，提示 prepared/activation 方法不存在。
 
@@ -235,9 +235,9 @@ await activation.closePrevious();
 
 - [ ] **步骤 6：运行 MCP 与 agent-runtime 测试**
 
-运行：`pnpm --filter @openharness/mcp exec vitest run src/index.test.ts`
+运行：`pnpm --filter @vykor/mcp exec vitest run src/index.test.ts`
 
-运行：`pnpm --filter @openharness/agent-runtime exec vitest run src/mcp-auth.test.ts src/run-capability-mcp.test.ts`
+运行：`pnpm --filter @vykor/agent-runtime exec vitest run src/mcp-auth.test.ts src/run-capability-mcp.test.ts`
 
 预期：全部 PASS。
 
@@ -276,7 +276,7 @@ expect(handle.maxConcurrentSynchronize).toBe(1);
 
 - [ ] **步骤 2：运行测试确认 coordinator 不存在**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/application/mcp-runtime-connection-coordinator.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/application/mcp-runtime-connection-coordinator.test.ts`
 
 预期：FAIL，模块尚不存在。
 
@@ -310,9 +310,9 @@ export interface McpRuntimeConnectionCoordinator {
 
 - [ ] **步骤 6：运行跨包定向测试**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/application/mcp-runtime-connection-coordinator.test.ts src/daemon/__test__/daemon-agent.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/application/mcp-runtime-connection-coordinator.test.ts src/daemon/__test__/daemon-agent.test.ts`
 
-运行：`pnpm --filter @openharness/agent-runtime exec vitest run src/runtime-integrations.test.ts src/run-capability-mcp.test.ts`
+运行：`pnpm --filter @vykor/agent-runtime exec vitest run src/runtime-integrations.test.ts src/run-capability-mcp.test.ts`
 
 预期：全部 PASS。
 
@@ -351,9 +351,9 @@ expect(coordinator.synchronize).not.toHaveBeenCalled();
 
 - [ ] **步骤 3：运行应用服务与登录测试**
 
-运行：`pnpm --filter @openharness/mcp exec vitest run src/oauth/login.test.ts`
+运行：`pnpm --filter @vykor/mcp exec vitest run src/oauth/login.test.ts`
 
-运行：`pnpm --filter @openharness/server exec vitest run src/application/mcp-oauth-application-service.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/application/mcp-oauth-application-service.test.ts`
 
 预期：FAIL，当前登录会提前写共享 store，应用服务也没有 coordinator。
 
@@ -384,11 +384,11 @@ logout 先尽力把旧凭据 scopes 回填到 settings，回填失败记录警�
 
 - [ ] **步骤 8：运行认证定向测试**
 
-运行：`pnpm --filter @openharness/mcp exec vitest run src/oauth/login.test.ts src/oauth/runtime-auth.test.ts src/oauth/verify-connection.test.ts`
+运行：`pnpm --filter @vykor/mcp exec vitest run src/oauth/login.test.ts src/oauth/runtime-auth.test.ts src/oauth/verify-connection.test.ts`
 
-运行：`pnpm --filter @openharness/auth exec vitest run src/mcp-oauth-credential-store.test.ts`
+运行：`pnpm --filter @vykor/auth exec vitest run src/mcp-oauth-credential-store.test.ts`
 
-运行：`pnpm --filter @openharness/server exec vitest run src/application/mcp-oauth-application-service.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/application/mcp-oauth-application-service.test.ts`
 
 预期：全部 PASS。
 
@@ -427,7 +427,7 @@ body: { "fingerprint": "<43-char-base64url>" }
 
 - [ ] **步骤 2：运行路由测试确认 404**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/http/routes/mcp.test.ts src/http/__test__/http.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/http/routes/mcp.test.ts src/http/__test__/http.test.ts`
 
 预期：FAIL，路由尚未挂载。
 
@@ -439,7 +439,7 @@ body: { "fingerprint": "<43-char-base64url>" }
 
 断言 `McpResource.runtimeStatus(name, fingerprint)` 发 GET，`synchronize()` 发 POST JSON；两者通过现有 `HttpTransport` 自动携带协议版本与 Bearer Token。
 
-- [ ] **步骤 5：实现 `McpResource` 并接入 `OpenHarnessClient`**
+- [ ] **步骤 5：实现 `McpResource` 并接入 `VykorClient`**
 
 公开：
 
@@ -454,9 +454,9 @@ class McpResource {
 
 - [ ] **步骤 6：运行 Server、Client 与公共 API 检查**
 
-运行：`pnpm --filter @openharness/server exec vitest run src/http/routes/mcp.test.ts src/http/__test__/http.test.ts`
+运行：`pnpm --filter @vykor/server exec vitest run src/http/routes/mcp.test.ts src/http/__test__/http.test.ts`
 
-运行：`pnpm --filter @openharness/client exec vitest run src/resources/__test__/mcp-resource.test.ts src/__test__/public-api.test.ts`
+运行：`pnpm --filter @vykor/client exec vitest run src/resources/__test__/mcp-resource.test.ts src/__test__/public-api.test.ts`
 
 运行：`pnpm check:client-api`
 
@@ -503,7 +503,7 @@ expect(JSON.parse(output)).toEqual({
 
 - [ ] **步骤 3：实现 daemon coordinator adapter**
 
-复用 CLI 现有 daemon registry 与 `OpenHarnessClient` 构造路径。registry 文件不存在、进程不可达或连接被拒绝时返回：
+复用 CLI 现有 daemon registry 与 `VykorClient` 构造路径。registry 文件不存在、进程不可达或连接被拒绝时返回：
 
 ```ts
 { status: "unavailable", affectedRuntimes: 0, failures: [] }
@@ -527,7 +527,7 @@ CLI 默认依赖使用 `McpOAuthApplicationService` 或等价共享入口完成�
 
 运行：`pnpm --filter @rzx/ohs build`
 
-预期：全部成功；构建产物能解析 `ohs mcp status linear --json`。
+预期：全部成功；构建产物能解析 `vk mcp status linear --json`。
 
 - [ ] **步骤 7：提交 CLI 闭环**
 
@@ -552,7 +552,7 @@ git commit -m "feat(cli): complete MCP OAuth runtime workflow"
 
 - [ ] **步骤 2：运行 Desktop 定向测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/mcp/mcp-service.test.ts src/renderer/src/components/desktop/settings-page/mcp-settings.test.tsx`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/mcp/mcp-service.test.ts src/renderer/src/components/desktop/settings-page/mcp-settings.test.tsx`
 
 预期：FAIL，shared DTO 与页面尚无三类状态。
 
@@ -566,29 +566,29 @@ git commit -m "feat(cli): complete MCP OAuth runtime workflow"
 
 - [ ] **步骤 5：运行 Desktop 测试与类型检查**
 
-运行：`pnpm --filter @openharness/desktop exec vitest run src/main/features/mcp/mcp-service.test.ts src/renderer/src/components/desktop/settings-page/mcp-settings.test.tsx`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/main/features/mcp/mcp-service.test.ts src/renderer/src/components/desktop/settings-page/mcp-settings.test.tsx`
 
-运行：`pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop typecheck`
 
 预期：全部 PASS。
 
 - [ ] **步骤 6：运行第一阶段全量相关验证**
 
-运行：`pnpm --filter @openharness/core test`
+运行：`pnpm --filter @vykor/core test`
 
-运行：`pnpm --filter @openharness/mcp test`
+运行：`pnpm --filter @vykor/mcp test`
 
-运行：`pnpm --filter @openharness/auth test`
+运行：`pnpm --filter @vykor/auth test`
 
-运行：`pnpm --filter @openharness/agent-runtime test`
+运行：`pnpm --filter @vykor/agent-runtime test`
 
-运行：`pnpm --filter @openharness/server test`
+运行：`pnpm --filter @vykor/server test`
 
-运行：`pnpm --filter @openharness/client test`
+运行：`pnpm --filter @vykor/client test`
 
 运行：`pnpm --filter @rzx/ohs test`
 
-运行：`pnpm --filter @openharness/desktop test`
+运行：`pnpm --filter @vykor/desktop test`
 
 运行：`pnpm check-types`
 
@@ -601,11 +601,11 @@ git commit -m "feat(cli): complete MCP OAuth runtime workflow"
 使用测试 MCP 服务或 Linear 测试账号依次运行：
 
 ```powershell
-ohs mcp status linear --json
-ohs mcp login linear --scopes read
-ohs mcp status linear
-ohs mcp logout linear
-ohs mcp status linear --json
+vk mcp status linear --json
+vk mcp login linear --scopes read
+vk mcp status linear
+vk mcp logout linear
+vk mcp status linear --json
 ```
 
 预期：登录前 `oauth/not-logged-in`；登录后 `oauth/valid` 且 daemon 有匹配 Runtime 时为 `connected`；退出后回到 `oauth/not-logged-in`，活动 Runtime 不再暴露该服务工具。Node 的 `punycode` deprecation warning 不属于本阶段验收失败。
@@ -619,7 +619,7 @@ git commit -m "feat(desktop): show MCP auth and runtime states"
 
 ## 完成标准
 
-- `ohs mcp get` 与 `ohs mcp status` 返回同一稳定快照。
+- `vk mcp get` 与 `vk mcp status` 返回同一稳定快照。
 - CLI 与 Desktop 都能独立展示 `authMode`、`authStatus`、`runtimeStatus`。
 - OAuth 候选 Token 在真实 MCP 验证前不会进入共享凭据文件。
 - login/logout 后所有匹配的活动 Runtime 收敛到凭据仓库最终状态。

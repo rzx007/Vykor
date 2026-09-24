@@ -10,9 +10,9 @@
 
 | 产物 | 用户怎么拿到 |
 |------|----------------|
-| Windows `OpenHarness-X.Y.Z-setup.exe` | GitHub Release Latest，支持应用内更新 |
-| Linux `OpenHarness-X.Y.Z.AppImage` | GitHub Release Latest，支持应用内更新 |
-| Linux `OpenHarness-X.Y.Z.deb` | GitHub Release Latest，手动安装，不走应用内更新 |
+| Windows `Vykor-X.Y.Z-setup.exe` | GitHub Release Latest，支持应用内更新 |
+| Linux `Vykor-X.Y.Z.AppImage` | GitHub Release Latest，支持应用内更新 |
+| Linux `Vykor-X.Y.Z.deb` | GitHub Release Latest，手动安装，不走应用内更新 |
 | `@rzx/ohs@X.Y.Z` | `npm install -g @rzx/ohs` |
 
 macOS 安装包本轮不发布。Windows 当前不签名，首次安装可能被 SmartScreen 拦截。
@@ -23,18 +23,18 @@ macOS 安装包本轮不发布。Windows 当前不签名，首次安装可能被
 - GitHub Release 和 npm 必须是同一个 `X.Y.Z`。
 - Desktop 现在是 `1.0.0`。低于 `1.0.0` 的版本不会被已安装客户端识别为更新，所以统一发版的第一枪是 **`v1.0.1`**。
 - CI 只在 runner 上改根目录 `package.json`、`apps/desktop/package.json` 和 `apps/cli/package.json`，不回写 Git。仓库里的这三个版本可以暂时落后于即将发布的 tag。本机若要打安装包并对齐版本号，可临时运行 `node scripts/prepare-tag-release.mjs v1.0.1`，不要提交。
-- `@rzx/ohs` 由这条 tag 流水线发布。Changesets 继续只管可发布的 `@openharness/*` 包，不再包含 CLI。
+- `@rzx/ohs` 由这条 tag 流水线发布。Changesets 继续只管可发布的 `@vykor/*` 包，不再包含 CLI。
 
 ## 发版前检查
 
 1. `main` 上的 CI 已经通过。
-2. npm 包 `@rzx/ohs` 已配置 Trusted Publisher：GitHub 用户 `rzx007`、仓库 `openharness-ts`、工作流文件名 `tag-release.yml`（允许 `npm publish`）。不再依赖仓库 Secret `NPM_TOKEN`。
+2. npm 包 `@rzx/ohs` 已配置 Trusted Publisher：GitHub 用户 `rzx007`、仓库 `vykor`、工作流文件名 `tag-release.yml`（允许 `npm publish`）。不再依赖仓库 Secret `NPM_TOKEN`。
 3. 工作流权限能写 `contents`（创建 Release）和 `id-token`（npm Trusted Publishing / provenance）。
 4. 本地确认 tag 格式和打包配置：
 
 ```bash
 pnpm test:scripts
-pnpm --filter @openharness/desktop verify:update-packaging
+pnpm --filter @vykor/desktop verify:update-packaging
 ```
 
 ## 正式发版

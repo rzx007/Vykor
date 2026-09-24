@@ -22,12 +22,12 @@ Slash 的三层分流和未知命令处理见 [Slash Command Flow](./slash-comma
 ```mermaid
 sequenceDiagram
   participant UI as Desktop或TUI
-  participant Client as OpenHarnessClient
+  participant Client as VykorClient
   participant App as SessionInteractionService
   participant Store as SessionStore
   participant Exec as SessionRunExecutor
   participant Catalog as SkillRegistry
-  participant Agent as OpenHarnessAgent
+  participant Agent as VykorAgent
   participant Tool as Skill工具
   participant Projection as DaemonAgentEventProjector
 

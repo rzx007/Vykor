@@ -1,5 +1,5 @@
-import type { AttachmentAssetRecord } from "@openharness/protocol";
-import { AttachmentError, decodeAttachmentFilename } from "@openharness/services";
+import type { AttachmentAssetRecord } from "@vykor/protocol";
+import { AttachmentError, decodeAttachmentFilename } from "@vykor/services";
 import { Hono } from "hono";
 
 import type { AttachmentService } from "../../application/attachments/attachment-service.js";
@@ -26,9 +26,9 @@ export function createAttachmentRoutes(
   return new Hono()
     .post("/", async (c) => {
       try {
-        const encodedName = c.req.header("x-openharness-filename");
+        const encodedName = c.req.header("x-vykor-filename");
         if (!encodedName) {
-          return errorResponse(400, "x-openharness-filename is required");
+          return errorResponse(400, "x-vykor-filename is required");
         }
         const displayName = decodeAttachmentFilename(encodedName);
         const contentLength = parseContentLength(c.req.header("content-length"));

@@ -4,7 +4,7 @@
 
 **目标：** Desktop 插件页支持从 Git URL 安装 Native Plugin。
 
-**架构：** `@openharness/plugin-sources` 负责 clone、固定 commit、清理临时目录；Server Plugin Service 负责预览、权限确认和安装；Desktop 只在“添加”菜单下打开 Git 安装弹窗，并给出简单反馈。
+**架构：** `@vykor/plugin-sources` 负责 clone、固定 commit、清理临时目录；Server Plugin Service 负责预览、权限确认和安装；Desktop 只在“添加”菜单下打开 Git 安装弹窗，并给出简单反馈。
 
 **技术栈：** TypeScript、系统 `git` CLI、现有 Plugin Service、现有 Desktop IPC。
 

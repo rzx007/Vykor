@@ -1,15 +1,15 @@
-# OpenHarness 架构总览
+# Vykor 架构总览
 
 > 状态：当前实现的权威鸟瞰。最后核对：2026-09-17。
 
 ## 一句话说明
 
-OpenHarness 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、Bot 和 Workflow 是不同入口，共用领域 Client、Daemon Application、Session Runtime 存储和 Agent Runtime，不各自维护一套 Run 或会话真相。
+Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、Bot 和 Workflow 是不同入口，共用领域 Client、Daemon Application、Session Runtime 存储和 Agent Runtime，不各自维护一套 Run 或会话真相。
 
 ```text
 CLI / TUI / Web / Desktop / Bot / Workflow
                     |
-      @openharness/client 领域 Resources
+      @vykor/client 领域 Resources
                     |
           HTTP routes + SSE transport
                     |
@@ -29,7 +29,7 @@ CLI / TUI / Web / Desktop / Bot / Workflow
 
 产品入口负责人和机器交互：收集输入、显示消息、管理页面和调用平台能力。它不直接读取 SQLite，也不自行决定 Run 怎样排队或恢复。
 
-业务调用通过 `OpenHarnessClient` 的领域 Resource，例如：
+业务调用通过 `VykorClient` 的领域 Resource，例如：
 
 ```ts
 await client.sessions.create(input);
@@ -84,7 +84,7 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 4. SessionOperationRunner 串行该 session，等待 ready 并取得 shared lease
 5. RunAdmissionService 在一个 Transaction 中保存 Input 和 pending Run
 6. Session lane 把 Run 交给 SessionRunExecutor
-7. AgentPool 取得或创建该 session 的 OpenHarnessAgent
+7. AgentPool 取得或创建该 session 的 VykorAgent
 8. Agent Runtime 执行模型和 Tool，持续发出 AgentEvent
 9. DaemonAgentEventProjector 将事件写入 Repository/Transaction
 10. 已提交事件经 SSE 返回，Client reducer 合并到 snapshot
@@ -107,24 +107,24 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 
 | 包或目录 | 当前定位 |
 | --- | --- |
-| `@openharness/protocol` | 跨进程请求、响应、事件、公共 DTO、错误码和协议版本 |
-| `@openharness/services` | SQLite Repository/Transaction、Memory 和 Node 本地持久服务 |
-| `@openharness/agent-runtime` | 可独立嵌入的 Agent Kernel、Run/Child handle 和事件/effect 契约 |
-| `@openharness/server` | Daemon Application、HTTP routes、运行编排、投影、恢复和运维 |
-| `@openharness/client` | 协议握手、HTTP/SSE transport、领域 Resources、reducer 和同步控制器 |
-| `@openharness/coordinator` / `@openharness/jobs` | Workflow 调度以及统一 Job 观察与控制 |
+| `@vykor/protocol` | 跨进程请求、响应、事件、公共 DTO、错误码和协议版本 |
+| `@vykor/services` | SQLite Repository/Transaction、Memory 和 Node 本地持久服务 |
+| `@vykor/agent-runtime` | 可独立嵌入的 Agent Kernel、Run/Child handle 和事件/effect 契约 |
+| `@vykor/server` | Daemon Application、HTTP routes、运行编排、投影、恢复和运维 |
+| `@vykor/client` | 协议握手、HTTP/SSE transport、领域 Resources、reducer 和同步控制器 |
+| `@vykor/coordinator` / `@vykor/jobs` | Workflow 调度以及统一 Job 观察与控制 |
 | `apps/*` | CLI、TUI、Desktop、Website 等产品入口 |
 
 依赖方向不是一条简单直线，而是两条能力在 Server 汇合：
 
 ```text
-@openharness/protocol
+@vykor/protocol
       ^
-@openharness/services       @openharness/agent-runtime
+@vykor/services       @vykor/agent-runtime
       ^                           ^
-      +------ @openharness/server-+
+      +------ @vykor/server-+
                       ^
-              @openharness/client
+              @vykor/client
                       ^
                     apps
 ```
@@ -152,11 +152,11 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 
 ## 继续阅读
 
-- 想看当前分层图：[可交互架构图](./openharness-current-architecture.html)
+- 想看当前分层图：[可交互架构图](./vykor-current-architecture.html)
 - 想追踪 daemon 请求：[Daemon Application Architecture](./daemon-application-architecture.md)
 - 想理解 SQLite 与 Repository：[Session Runtime 存储架构](./session-runtime-storage-architecture.md)
 - 想理解多端同步：[Client Sync Flow](./client-sync-flow.md)
 - 想接一个产品入口：[Product Surface Integration](./product-surface-integration.md)
-- 想嵌入 Runtime：[OpenHarness Agent SDK](./agent-sdk.md)
+- 想嵌入 Runtime：[Vykor Agent SDK](./agent-sdk.md)
 - 想排障、备份或恢复：[Operations and Recovery](./operations-and-recovery.md)
 - 想看本次重构结论：[架构重构收口与当前边界](./architecture-migration-status.md)

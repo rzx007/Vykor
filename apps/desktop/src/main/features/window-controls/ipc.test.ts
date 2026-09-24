@@ -11,7 +11,7 @@ const electron = vi.hoisted(() => ({
 vi.mock("electron", () => ({
   app: {
     on: electron.on,
-    getName: vi.fn(() => "OpenHarness"),
+    getName: vi.fn(() => "Vykor"),
     getVersion: vi.fn(() => "1.0.0"),
     isPackaged: false,
   },

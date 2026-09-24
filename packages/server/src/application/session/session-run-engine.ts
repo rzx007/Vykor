@@ -1,4 +1,4 @@
-import type { SessionRunRecord } from "@openharness/protocol";
+import type { SessionRunRecord } from "@vykor/protocol";
 
 import { SessionRunCoordinator } from "../../runtime/run-coordinator.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";

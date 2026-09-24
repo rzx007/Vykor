@@ -1,6 +1,6 @@
-import type { ProviderInputCapabilities } from "@openharness/api";
-import type { ContentBlock, ModelInputCapabilities } from "@openharness/core";
-import type { SessionInputAttachmentRecord } from "@openharness/protocol";
+import type { ProviderInputCapabilities } from "@vykor/api";
+import type { ContentBlock, ModelInputCapabilities } from "@vykor/core";
+import type { SessionInputAttachmentRecord } from "@vykor/protocol";
 
 export type AttachmentRoutingErrorCode =
   | "attachment_model_capability_unknown"

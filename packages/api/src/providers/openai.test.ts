@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { Message } from "@openharness/core";
+import type { Message } from "@vykor/core";
 import {
   OpenAICompatibleClient,
   tokenLimitParamForModel,
@@ -120,7 +120,7 @@ class TestableClient extends OpenAICompatibleClient {
 }
 
 describe("convertMessages reasoning_content gating", () => {
-  const ENV = "OPENHARNESS_REQUIRE_EMPTY_REASONING_CONTENT";
+  const ENV = "VYKOR_REQUIRE_EMPTY_REASONING_CONTENT";
   let client: TestableClient;
 
   beforeEach(() => {
@@ -427,7 +427,7 @@ describe("OpenAICompatibleClient reasoning effort", () => {
 });
 
 describe("OpenAICompatibleClient DSML tool-call recovery", () => {
-  const ENV = "OPENHARNESS_DISABLE_DSML_RECOVERY";
+  const ENV = "VYKOR_DISABLE_DSML_RECOVERY";
   const READ_TOOL = {
     name: "Read",
     description: "read a file",
@@ -533,7 +533,7 @@ describe("OpenAICompatibleClient DSML tool-call recovery", () => {
     expect(events.some((event) => event.type === "tool_use_start")).toBe(false);
   });
 
-  it("can be disabled with OPENHARNESS_DISABLE_DSML_RECOVERY", async () => {
+  it("can be disabled with VYKOR_DISABLE_DSML_RECOVERY", async () => {
     process.env[ENV] = "1";
     const leaked =
       '<｜DSML｜invoke name="Read"><｜DSML｜parameter name="file_path" string="true">a.json</｜DSML｜parameter></｜DSML｜invoke>';

@@ -1,9 +1,9 @@
-import { getInstalledPluginStorePath, getPluginCacheDir } from "@openharness/core";
+import { getInstalledPluginStorePath, getPluginCacheDir } from "@vykor/core";
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { validateNativePlugin } from "../manifest/validate.js";
 import type { PluginDiagnostic, } from "../diagnostics.js";
-import type { OpenHarnessPluginManifestV1 } from "../types.js";
+import type { VykorPluginManifestV1 } from "../types.js";
 import { computePluginBehaviorDigest, materializePluginCache } from "./cache.js";
 import {
   installedPluginKey,
@@ -11,7 +11,7 @@ import {
   type InstalledPluginRecord,
 } from "./store.js";
 
-export function requestedPluginPermissions(manifest: OpenHarnessPluginManifestV1): string[] {
+export function requestedPluginPermissions(manifest: VykorPluginManifestV1): string[] {
   const result = new Set<string>();
   for (const [category, permissions] of Object.entries(manifest.permissions ?? {})) {
     for (const permission of permissions ?? []) result.add(`${category}:${permission}`);

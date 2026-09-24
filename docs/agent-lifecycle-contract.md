@@ -1,6 +1,6 @@
 # Agent Lifecycle Contract
 
-> 状态：framework 与 daemon 生命周期的权威契约。API 用法见 [OpenHarness Agent SDK](./agent-sdk.md)，内部结构见 [Agent Runtime Framework Architecture](./agent-runtime-framework-architecture.md)，daemon 请求链见 [Daemon Application Architecture](./daemon-application-architecture.md)。
+> 状态：framework 与 daemon 生命周期的权威契约。API 用法见 [Vykor Agent SDK](./agent-sdk.md)，内部结构见 [Agent Runtime Framework Architecture](./agent-runtime-framework-architecture.md)，daemon 请求链见 [Daemon Application Architecture](./daemon-application-architecture.md)。
 
 ## 目的
 
@@ -17,12 +17,12 @@ surface   = interaction state and rendering
 
 | 资源 | 唯一所有者 | 释放边界 |
 |---|---|---|
-| root run、maintenance、child live handle | `OpenHarnessAgent` | `agent.close()` |
+| root run、maintenance、child live handle | `VykorAgent` | `agent.close()` |
 | child worktree/environment lease | 创建该 child 的 `AgentChildManager` | child suspend/close，失败也必须尝试 |
 | per-session agent generation | `AgentPool` | archive、配置失效或 daemon shutdown |
 | durable run/task/transcript | `SessionStore` + daemon services | terminal projection 或 recovery |
 | session run lane | `SessionRunCoordinator` | run terminal、interrupt 或 drain |
-| HTTP listener、SSE clients | `OpenHarnessHttpServer` | `server.close()` |
+| HTTP listener、SSE clients | `VykorHttpServer` | `server.close()` |
 
 live handle 不进入 durable store；durable ID 和状态不反向塞进 framework 私有对象。daemon 可以持有 framework handle，但不能成为 handle 生命周期的第二所有者。
 

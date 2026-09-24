@@ -10,12 +10,12 @@ import {
   type McpServerConfig,
   type McpStdioServerConfig,
   type Settings,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   McpOAuthApplicationError,
   McpOAuthApplicationService,
-} from "@openharness/server";
-import { summarizeMcpEndpoint } from "@openharness/mcp";
+} from "@vykor/server";
+import { summarizeMcpEndpoint } from "@vykor/mcp";
 import { createCliMcpRuntimeCoordinator } from "../mcp-runtime-coordinator.js";
 
 export interface McpCommandDeps {
@@ -291,7 +291,7 @@ function reportRuntimeSyncFailure(
     ? `OAuth authorization was saved for ${name}, but ${count} active runtime failed to reconnect.`
     : `OAuth credentials were removed for ${name}, but ${count} active runtime failed to disconnect.`;
   deps.stdout(message);
-  deps.stdout(`Run \`ohs mcp status ${name}\` for the current state.`);
+  deps.stdout(`Run \`vk mcp status ${name}\` for the current state.`);
 }
 
 function collectScope(value: string, previous: string[]): string[] {

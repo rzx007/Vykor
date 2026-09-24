@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 新增 `ohs channels add feishu`，支持“扫码创建应用（默认）/ 手填 App ID+Secret”，拿到凭据后当场校验、存独立凭据文件、默认只放扫码者、并支持 `ohs channels allow` 与群/用户白名单。
+**目标：** 新增 `vk channels add feishu`，支持“扫码创建应用（默认）/ 手填 App ID+Secret”，拿到凭据后当场校验、存独立凭据文件、默认只放扫码者、并支持 `vk channels allow` 与群/用户白名单。
 
 **架构：** 在 `packages/channels` 里做一个可复用的“飞书接入核心”（注册状态机 + 凭据校验），在 `packages/auth` 做独立凭据存储，在 `packages/core` 调整配置结构与路径，CLI 只做交互编排。密钥不再进 `settings.json`；白名单 ACL 扩展为“发送者或会话任一命中”。
 
@@ -53,7 +53,7 @@
 | `apps/cli/src/commands/channels.test.ts` | 组装测试更新 | 修改 |
 | `apps/cli/package.json` | `qrcode-terminal` 依赖 | 修改 |
 | `packages/tools/src/channels/feishu-push.ts` | 改读凭据文件 | 修改 |
-| `packages/tools/package.json` | 加 `@openharness/auth` | 修改 |
+| `packages/tools/package.json` | 加 `@vykor/auth` | 修改 |
 
 ---
 
@@ -133,7 +133,7 @@ describe("FeishuAdapter.connect domain", () => {
 
 - [ ] **步骤 3：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu-connect.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu-connect.test.ts`
 预期：FAIL，`domain` 未传给 SDK。
 
 - [ ] **步骤 4：最小实现**
@@ -158,8 +158,8 @@ describe("FeishuAdapter.connect domain", () => {
 
 - [ ] **步骤 5：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu-connect.test.ts`
-预期：PASS。再跑 `pnpm --filter @openharness/channels test -- --run` 与 `pnpm --filter @openharness/channels check-types` 确认升级没破坏其它测试。
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu-connect.test.ts`
+预期：PASS。再跑 `pnpm --filter @vykor/channels test -- --run` 与 `pnpm --filter @vykor/channels check-types` 确认升级没破坏其它测试。
 
 - [ ] **步骤 6：Commit**
 
@@ -266,7 +266,7 @@ describe("FeishuRegistration", () => {
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu-registration.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu-registration.test.ts`
 预期：FAIL，模块不存在。
 
 - [ ] **步骤 3：实现**
@@ -395,12 +395,12 @@ export class FeishuRegistration {
     this.#snapshot = { state: "starting", attempt: run.id, domain };
 
     const registerOptions: Record<string, unknown> = {
-      source: options.source ?? "openharness",
+      source: options.source ?? "vykor",
       domain: domain === "lark" ? "accounts.larksuite.com" : "accounts.feishu.cn",
       createOnly: true,
       appPreset: {
-        name: options.appName ?? "{user} 的 OpenHarness 机器人",
-        desc: options.appDesc ?? "把飞书接入 OpenHarness。",
+        name: options.appName ?? "{user} 的 Vykor 机器人",
+        desc: options.appDesc ?? "把飞书接入 Vykor。",
       },
       addons: {
         preset: true,
@@ -565,7 +565,7 @@ export class FeishuRegistration {
 
 - [ ] **步骤 4：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu-registration.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu-registration.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -661,7 +661,7 @@ describe("verifyFeishuCredentials", () => {
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu-verify.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu-verify.test.ts`
 预期：FAIL，模块不存在。
 
 - [ ] **步骤 3：实现**
@@ -766,7 +766,7 @@ export async function verifyFeishuCredentials(
 
 - [ ] **步骤 4：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu-verify.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu-verify.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：导出并 Commit**
@@ -833,7 +833,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ChannelCredentialStore } from "../channel-credential-store.js";
 
 function tempStore() {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-channel-cred-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-channel-cred-"));
   return { path: join(directory, "channel-credentials.json"), directory };
 }
 
@@ -878,7 +878,7 @@ describe("ChannelCredentialStore", () => {
 
 - [ ] **步骤 3：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/auth test -- --run src/__test__/channel-credential-store.test.ts`
+运行：`pnpm --filter @vykor/auth test -- --run src/__test__/channel-credential-store.test.ts`
 预期：FAIL，模块不存在。
 
 - [ ] **步骤 4：实现（照 mcp 存储移植）**
@@ -918,8 +918,8 @@ export { ChannelCredentialStore, ChannelCredentialStoreError } from "./channel-c
 
 - [ ] **步骤 5：运行测试确认通过**
 
-运行：`pnpm --filter @openharness/auth test -- --run src/__test__/channel-credential-store.test.ts` 与
-`pnpm --filter @openharness/core check-types`。
+运行：`pnpm --filter @vykor/auth test -- --run src/__test__/channel-credential-store.test.ts` 与
+`pnpm --filter @vykor/core check-types`。
 预期：PASS / 退出码 0。
 
 - [ ] **步骤 6：Commit**
@@ -999,7 +999,7 @@ export interface FeishuChannelSettings {
 
 ```ts
 const secrets = vi.hoisted(() => new Map<string, string>());
-vi.mock("@openharness/auth", () => ({
+vi.mock("@vykor/auth", () => ({
   ChannelCredentialStore: class {
     async get(appId: string) { return secrets.get(appId); }
     async set() {}
@@ -1018,7 +1018,7 @@ vi.mock("@openharness/auth", () => ({
 
 - [ ] **步骤 3：运行确认失败**
 
-运行：`pnpm --filter @openharness/core test -- --run src/config/settings.test.ts` 与
+运行：`pnpm --filter @vykor/core test -- --run src/config/settings.test.ts` 与
 `pnpm --filter @rzx/ohs test -- --run src/commands/channels.test.ts`
 预期：FAIL（类型/断言未满足）。
 
@@ -1029,7 +1029,7 @@ vi.mock("@openharness/auth", () => ({
 - `assembleChannelAdapters` 改为 async 读取凭据：
 
 ```ts
-import { ChannelCredentialStore } from "@openharness/auth";
+import { ChannelCredentialStore } from "@vykor/auth";
 
 export async function assembleChannelAdapters(
   channels: ChannelsConfig | undefined,
@@ -1039,9 +1039,9 @@ export async function assembleChannelAdapters(
   if (feishu?.enabled) {
     const appSecret = await credentials.get(feishu.appId);
     if (!feishu.appId || !appSecret) {
-      warnings.push("feishu 已启用但缺凭据，请先运行 ohs channels add feishu。");
+      warnings.push("feishu 已启用但缺凭据，请先运行 vk channels add feishu。");
     } else {
-      const { FeishuAdapter } = await import("@openharness/channels");
+      const { FeishuAdapter } = await import("@vykor/channels");
       adapters.push(new FeishuAdapter({
         appId: feishu.appId,
         appSecret,
@@ -1054,23 +1054,23 @@ export async function assembleChannelAdapters(
   }
 ```
 
-- `ChannelsConfig` 类型仍从 `@openharness/core` 导入；`pnpm --filter @rzx/ohs check-types` 会指出遗漏。
+- `ChannelsConfig` 类型仍从 `@vykor/core` 导入；`pnpm --filter @rzx/ohs check-types` 会指出遗漏。
 
 `packages/tools/src/channels/feishu-push.ts`：
 
 - 把 `if (!feishu?.appId || !feishu?.appSecret)` 改成 `if (!feishu?.appId)` 并统计“未配置 appId”错误文案；
 - 发请求前 `const appSecret = await new ChannelCredentialStore().get(feishu.appId);` 为空则返回
-  “Error: channels.feishu 缺少凭据，请先运行 ohs channels add feishu”；
+  “Error: channels.feishu 缺少凭据，请先运行 vk channels add feishu”；
 - `getTenantToken(feishu.appId, appSecret, ...)`。
-- `packages/tools/package.json` dependencies 增加 `"@openharness/auth": "workspace:*",`。
+- `packages/tools/package.json` dependencies 增加 `"@vykor/auth": "workspace:*",`。
 
 - [ ] **步骤 5：运行确认通过**
 
 运行：
 ```
-pnpm --filter @openharness/core test -- --run src/config/settings.test.ts
+pnpm --filter @vykor/core test -- --run src/config/settings.test.ts
 pnpm --filter @rzx/ohs test -- --run src/commands/channels.test.ts
-pnpm --filter @openharness/tools check-types
+pnpm --filter @vykor/tools check-types
 pnpm --filter @rzx/ohs check-types
 ```
 预期：全部通过。
@@ -1147,7 +1147,7 @@ git commit -m "feat(core): move feishu secret out of settings to credential stor
 
 - [ ] **步骤 2：运行确认失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/bus/queue.test.ts src/__test__/manager.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/bus/queue.test.ts src/__test__/manager.test.ts`
 预期：FAIL。
 
 - [ ] **步骤 3：实现**
@@ -1204,7 +1204,7 @@ export function isAllowed(
 
 - [ ] **步骤 4：运行确认通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run` 与 `pnpm --filter @openharness/channels check-types`
+运行：`pnpm --filter @vykor/channels test -- --run` 与 `pnpm --filter @vykor/channels check-types`
 预期：全部通过（含现有 acl/manager 用例已按新签名更新）。
 
 - [ ] **步骤 5：Commit**
@@ -1384,7 +1384,7 @@ describe("runChannelsAddFeishu", () => {
 ```ts
     onDenied: ({ sender }) => {
       console.warn(
-        `[channels] 如需放行 ${sender}：ohs channels allow ${sender}（改完重启 channels serve）`,
+        `[channels] 如需放行 ${sender}：vk channels allow ${sender}（改完重启 channels serve）`,
       );
     },
 ```
@@ -1414,10 +1414,10 @@ git commit -m "feat(cli): add feishu scan onboarding and allow command"
 - [ ] **步骤 1：相关包全量测试**
 
 ```bash
-pnpm --filter @openharness/channels test -- --run
-pnpm --filter @openharness/auth test -- --run
-pnpm --filter @openharness/core test -- --run
-pnpm --filter @openharness/tools test -- --run
+pnpm --filter @vykor/channels test -- --run
+pnpm --filter @vykor/auth test -- --run
+pnpm --filter @vykor/core test -- --run
+pnpm --filter @vykor/tools test -- --run
 pnpm --filter @rzx/ohs test -- --run
 ```
 
@@ -1426,10 +1426,10 @@ pnpm --filter @rzx/ohs test -- --run
 - [ ] **步骤 2：类型检查**
 
 ```bash
-pnpm --filter @openharness/channels check-types
-pnpm --filter @openharness/auth check-types
-pnpm --filter @openharness/core check-types
-pnpm --filter @openharness/tools check-types
+pnpm --filter @vykor/channels check-types
+pnpm --filter @vykor/auth check-types
+pnpm --filter @vykor/core check-types
+pnpm --filter @vykor/tools check-types
 pnpm --filter @rzx/ohs check-types
 ```
 
@@ -1462,17 +1462,17 @@ git status --short
 
 - [ ] **步骤 6：手工验收（人工执行一次，记录结果）**
 
-`ohs channels add feishu` → 扫码/手填 → 校验通过 → 凭据文件与 settings 正确写入 →
-`ohs channels serve` 能收发一条私聊消息 → `ohs channels allow ou_xxx` 写入白名单。
+`vk channels add feishu` → 扫码/手填 → 校验通过 → 凭据文件与 settings 正确写入 →
+`vk channels serve` 能收发一条私聊消息 → `vk channels allow ou_xxx` 写入白名单。
 
 ---
 
 ## 阶段完成标准
 
-- `ohs channels add feishu` 支持扫码（默认）与手填，两者都当场校验。
+- `vk channels add feishu` 支持扫码（默认）与手填，两者都当场校验。
 - 密钥只落 `channel-credentials.json`；`settings.json` 不再承载 `appSecret`，但旧键不会导致加载失败。
-- `ohs channels serve` 从凭据文件读 secret、透传 domain。
-- `ohs channels allow` 支持 `ou_`/`oc_`，ACL 按发送者或会话放行；被拒时有 `ohs channels allow` 提示。
+- `vk channels serve` 从凭据文件读 secret、透传 domain。
+- `vk channels allow` 支持 `ou_`/`oc_`，ACL 按发送者或会话放行；被拒时有 `vk channels allow` 提示。
 - `FeishuPush` 改为读凭据文件。
 - 相关包测试、类型检查、全仓构建、`git diff --check` 全绿。
 - 无任何兼容性 fallback。

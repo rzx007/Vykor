@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/prompts",
+  "name": "@vykor/prompts",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,10 +17,10 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/environment": "workspace:*",
-    "@openharness/core": "workspace:*",
-    "@openharness/personalization": "workspace:*",
-    "@openharness/sandbox": "workspace:*"
+    "@vykor/environment": "workspace:*",
+    "@vykor/core": "workspace:*",
+    "@vykor/personalization": "workspace:*",
+    "@vykor/sandbox": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

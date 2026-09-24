@@ -58,7 +58,7 @@
 
 - [ ] **步骤 3：验证当前实现至少一个场景失败**
 
-运行：pnpm --filter @openharness/services test -- src/database/transaction-coordinator.test.ts
+运行：pnpm --filter @vykor/services test -- src/database/transaction-coordinator.test.ts
 
 预期：FAIL，TransactionCoordinator 尚不存在或 Store 私有 coordinator 无法满足独立测试。
 
@@ -95,8 +95,8 @@ StorageContext 仍暴露 atomic 和 assertWritable，业务代码无需知道 co
 
 - [ ] **步骤 5：运行验证**
 
-运行：pnpm --filter @openharness/services test -- src/database src/session-runtime
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/database src/session-runtime
+运行：pnpm --filter @vykor/services check-types
 
 - [ ] **步骤 6：提交**
 
@@ -120,7 +120,7 @@ StorageContext 仍暴露 atomic 和 assertWritable，业务代码无需知道 co
 
 - [ ] **步骤 3：验证红灯**
 
-运行：pnpm --filter @openharness/services test -- src/conversations/conversation-transactions.test.ts
+运行：pnpm --filter @vykor/services test -- src/conversations/conversation-transactions.test.ts
 
 - [ ] **步骤 4：实现 admitPrompt**
 
@@ -128,8 +128,8 @@ StorageContext 仍暴露 atomic 和 assertWritable，业务代码无需知道 co
 
 - [ ] **步骤 5：Store 转发并验证**
 
-运行：pnpm --filter @openharness/services test -- src/conversations src/attachments src/session-runtime
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/conversations src/attachments src/session-runtime
+运行：pnpm --filter @vykor/services check-types
 
 - [ ] **步骤 6：提交**
 
@@ -156,7 +156,7 @@ StorageContext 仍暴露 atomic 和 assertWritable，业务代码无需知道 co
 
 - [ ] **步骤 4：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/conversations src/runs src/session-runtime
+运行：pnpm --filter @vykor/services test -- src/conversations src/runs src/session-runtime
 运行：git add packages/services/src/conversations packages/services/src/session-runtime/store.ts
 运行：git commit -m "refactor(services): move run admission transactions"
 
@@ -206,7 +206,7 @@ id map 必须局部存在于一次事务；不要把映射放入 Repository 状�
 
 - [ ] **步骤 4：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/conversations/conversation-transactions.test.ts src/session-runtime
+运行：pnpm --filter @vykor/services test -- src/conversations/conversation-transactions.test.ts src/session-runtime
 运行：git add packages/services/src/conversations packages/services/src/session-runtime/store.ts
 运行：git commit -m "refactor(services): move session fork transaction"
 
@@ -235,7 +235,7 @@ id map 必须局部存在于一次事务；不要把映射放入 Repository 状�
 
 - [ ] **步骤 5：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/conversations src/permissions src/attachments src/session-runtime
+运行：pnpm --filter @vykor/services test -- src/conversations src/permissions src/attachments src/session-runtime
 运行：git add packages/services/src packages/services/src/session-runtime/store.ts
 运行：git commit -m "refactor(services): move session tree deletion transaction"
 
@@ -292,10 +292,10 @@ Run interrupted、Attempt cancelled、running Part interrupted/failed 必须一�
 - [ ] **步骤 4：最终验证**
 
 运行：
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server test -- src/application/session src/permissions src/http
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server test -- src/application/session src/permissions src/http
+pnpm --filter @vykor/server check-types
 node --test scripts/architecture-boundaries.test.mjs
 pnpm check:architecture
 node scripts/check-docs.mjs

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadSettings, updateSettings, type Settings } from "@openharness/core";
+import { loadSettings, updateSettings, type Settings } from "@vykor/core";
 
 import { McpConfigApplicationService } from "./mcp-config-application-service.js";
 
@@ -17,13 +17,13 @@ describe("MCP global config cross-visibility", () => {
 
   beforeEach(() => {
     configDir = mkdtempSync(join(tmpdir(), "oh-mcp-cross-"));
-    previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = configDir;
+    previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-    else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+    if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+    else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
     rmSync(configDir, { recursive: true, force: true });
   });
 

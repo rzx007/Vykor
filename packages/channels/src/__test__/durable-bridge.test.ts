@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   ChannelDeliveryRecord,
   DurableChannelMessageResult,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import { MessageBus } from "../bus/queue.js";
 import { DurableChannelBridge, type DurableChannelPort } from "../core/durable-bridge.js";

@@ -1,8 +1,8 @@
-# @openharness/auth
+# @vykor/auth
 
-Authentication helpers for OpenHarness.
+Authentication helpers for Vykor.
 
-This package separates OpenHarness-managed API keys from external auth sources
+This package separates Vykor-managed API keys from external auth sources
 such as a local Codex CLI subscription login.
 
 ## Credential Storage
@@ -10,13 +10,13 @@ such as a local Codex CLI subscription login.
 `CredentialStorage` stores provider API keys in:
 
 ```text
-$OPENHARNESS_CONFIG_DIR/credentials.json
+$VYKOR_CONFIG_DIR/credentials.json
 ```
 
-When `OPENHARNESS_CONFIG_DIR` is not set, the default path is:
+When `VYKOR_CONFIG_DIR` is not set, the default path is:
 
 ```text
-~/.openharness-ts/credentials.json
+~/.vykor/credentials.json
 ```
 
 Example shape:
@@ -31,7 +31,7 @@ Example shape:
 
 ## Codex Subscription
 
-Codex subscription auth is external. OpenHarness reads the local Codex CLI auth
+Codex subscription auth is external. Vykor reads the local Codex CLI auth
 file and does not copy that token into `credentials.json`.
 
 Default source:
@@ -49,7 +49,7 @@ $CODEX_HOME/auth.json
 ## Usage
 
 ```ts
-import { CredentialStorage, describeCodexAuthState } from "@openharness/auth";
+import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
 
 const storage = new CredentialStorage();
 await storage.storeApiKey("deepseek", "sk-xxx");
@@ -72,8 +72,8 @@ model    chooses the model name
 Main CLI shape:
 
 ```bash
-ohs auth login deepseek sk-xxx
-ohs auth login codex
+vk auth login deepseek sk-xxx
+vk auth login codex
 ```
 
 See `docs/auth-provider-model.md` for the complete runtime flow.
@@ -81,5 +81,5 @@ See `docs/auth-provider-model.md` for the complete runtime flow.
 ## Tests
 
 ```bash
-pnpm --filter @openharness/auth test
+pnpm --filter @vykor/auth test
 ```

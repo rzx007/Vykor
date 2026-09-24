@@ -6,7 +6,7 @@ import { join } from "node:path";
 import {
   AttachmentBlobStore,
   SessionStore,
-} from "@openharness/services";
+} from "@vykor/services";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { AttachmentService } from "../../attachment-service.js";

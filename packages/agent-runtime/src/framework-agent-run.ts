@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import type { AgentEffects, AgentEventContext, AgentEventInput, AgentExecutionContext, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope, AgentSteerInput, ContentBlock, StreamEvent } from "@openharness/core";
-import { AgentRunNotAcceptingInputError, type AgentSession, type RuntimeBundle } from "@openharness/core";
+import type { AgentEffects, AgentEventContext, AgentEventInput, AgentExecutionContext, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope, AgentSteerInput, ContentBlock, StreamEvent } from "@vykor/core";
+import { AgentRunNotAcceptingInputError, type AgentSession, type RuntimeBundle } from "@vykor/core";
 
 import type { AgentChildManager } from "./child-agent.js";
 import { abortError, serializeError } from "./agent-errors.js";

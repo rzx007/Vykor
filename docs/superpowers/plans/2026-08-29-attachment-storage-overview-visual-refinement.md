@@ -32,7 +32,7 @@
   运行：
 
   ```powershell
-  pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/attachment-storage-format.test.ts
+  pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/attachment-storage-format.test.ts
   ```
 
   预期：测试因 `storageComposition` 尚未导出而失败。
@@ -62,9 +62,9 @@
   运行：
 
   ```powershell
-  pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/attachment-storage-format.test.ts src/renderer/src/components/desktop/settings-page/attachment-storage-settings.test.ts
-  pnpm --filter @openharness/desktop test
-  pnpm --filter @openharness/desktop typecheck
+  pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/attachment-storage-format.test.ts src/renderer/src/components/desktop/settings-page/attachment-storage-settings.test.ts
+  pnpm --filter @vykor/desktop test
+  pnpm --filter @vykor/desktop typecheck
   pnpm check-docs
   git diff --check
   ```

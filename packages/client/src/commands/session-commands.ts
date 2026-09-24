@@ -9,9 +9,9 @@ import type {
   SystemResource,
 } from "../resources/index.js";
 import type { ProtocolClient } from "../protocol/index.js";
-import type { CommandCatalogEntry, OpenHarnessClientState } from "../types/index.js";
-import type { JobReadResult, JobSnapshot } from "@openharness/protocol";
-import { patchSessionRuntimeMetadata } from "@openharness/protocol";
+import type { CommandCatalogEntry, VykorClientState } from "../types/index.js";
+import type { JobReadResult, JobSnapshot } from "@vykor/protocol";
+import { patchSessionRuntimeMetadata } from "@vykor/protocol";
 import { formatPluginReload } from "./plugin-presentation.js";
 
 export type SlashLine = { name: string; args: string };
@@ -62,7 +62,7 @@ export type SessionCommandHost = {
   permissionMode?: string;
   statusSessionId?: string;
   commandCatalog: CommandCatalogEntry[];
-  clientState: OpenHarnessClientState;
+  clientState: VykorClientState;
   busy: boolean;
   /** Present a system/notice message to the user */
   emit(text: string): void;
@@ -119,7 +119,7 @@ export function mergeCommandDetails(
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function hasActiveRun(state: OpenHarnessClientState, sessionId?: string): boolean {
+export function hasActiveRun(state: VykorClientState, sessionId?: string): boolean {
   if (!sessionId) return false;
   const bucket = state.buckets[sessionId];
   if (!bucket) return false;
@@ -322,7 +322,7 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/version") {
     await readPresentation("version", "Version", async () => {
       const health = await client.protocol.health();
-      return `OpenHarness${health.version ? ` v${health.version}` : ""}`;
+      return `Vykor${health.version ? ` v${health.version}` : ""}`;
     });
     return "handled";
   }
@@ -721,7 +721,7 @@ export async function dispatchSessionCommand(
       .filter(Boolean)
       .join(" ") || "(not provided by this host)";
     const lines = [
-      "OpenHarness Environment Diagnostic",
+      "Vykor Environment Diagnostic",
       "═".repeat(40),
       "",
       `CWD:            ${cwd}`,

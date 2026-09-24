@@ -6,9 +6,9 @@ import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRunRecord,
-} from "@openharness/protocol";
-import { sessionUserInputText } from "@openharness/protocol";
-import { AttachmentError } from "@openharness/services";
+} from "@vykor/protocol";
+import { sessionUserInputText } from "@vykor/protocol";
+import { AttachmentError } from "@vykor/services";
 import { normalizeTraceId } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 import { isPublicTextPart } from "../../session/transcript-text.js";

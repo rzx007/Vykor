@@ -35,7 +35,7 @@
 - [ ] **步骤 2：运行红灯**
 
 ```powershell
-pnpm --filter @openharness/services test -- goal-repository
+pnpm --filter @vykor/services test -- goal-repository
 ```
 
 预期：缺少 GoalRepository。
@@ -47,8 +47,8 @@ Repository 方法不自行调用 `assertWritable()` 或跨域 event；写方法�
 - [ ] **步骤 4：验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test -- goal-repository session-goals
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- goal-repository session-goals
+pnpm --filter @vykor/services check-types
 git diff --check
 git add packages/services/src/goals
 git commit --no-verify -m "refactor(services): add goal repository"
@@ -75,7 +75,7 @@ git commit --no-verify -m "refactor(services): add goal repository"
 - [ ] **步骤 3：运行红灯**
 
 ```powershell
-pnpm --filter @openharness/services test -- goal-transactions
+pnpm --filter @vykor/services test -- goal-transactions
 ```
 
 预期：缺少 GoalTransactions 或原子回滚行为不满足。
@@ -96,8 +96,8 @@ create/update/start/finish/startup pause 在同一 atomic 中追加 durable even
 - [ ] **步骤 5：验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test -- goal-transactions goal-repository session-goals store
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- goal-transactions goal-repository session-goals store
+pnpm --filter @vykor/services check-types
 git add packages/services/src/goals
 git commit --no-verify -m "refactor(services): add goal transaction boundary"
 ```
@@ -116,7 +116,7 @@ git commit --no-verify -m "refactor(services): add goal transaction boundary"
 - [ ] **步骤 2：运行兼容基线**
 
 ```powershell
-pnpm --filter @openharness/services test -- session-goals store
+pnpm --filter @vykor/services test -- session-goals store
 ```
 
 - [ ] **步骤 3：构造并转发**
@@ -126,8 +126,8 @@ Store 增加 `readonly goals: GoalTransactions`。注入 `assertSession/assertMu
 - [ ] **步骤 4：验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
 git diff -- packages/services/src/session-runtime/schema.ts packages/services/src/session-runtime/migrations
 git add packages/services/src/session-runtime packages/services/src/goals
 git commit --no-verify -m "refactor(services): delegate goals from session store"
@@ -151,7 +151,7 @@ git commit --no-verify -m "refactor(services): delegate goals from session store
 - [ ] **步骤 2：运行红灯**
 
 ```powershell
-pnpm --filter @openharness/server test -- goal
+pnpm --filter @vykor/server test -- goal
 ```
 
 - [ ] **步骤 3：迁移调用点**
@@ -165,10 +165,10 @@ pnpm --filter @openharness/server test -- goal
 - [ ] **步骤 5：最终验证、审查和提交**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server test -- goal
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server test -- goal
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
 pnpm check:architecture
 node scripts/check-docs.mjs
 git diff --check

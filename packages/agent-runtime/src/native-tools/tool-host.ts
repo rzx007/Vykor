@@ -1,7 +1,7 @@
 import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import type { ToolResult } from "@openharness/core";
-import type { LoadedNativePlugin } from "@openharness/plugins";
+import type { ToolResult } from "@vykor/core";
+import type { LoadedNativePlugin } from "@vykor/plugins";
 import type {
   NativeToolCallContext,
   NativeToolHostLog,
@@ -295,7 +295,7 @@ export function buildNativeToolHostEnvironment(
 ): NodeJS.ProcessEnv {
   return {
     ...inheritedEnv,
-    OPENHARNESS_NATIVE_TOOL_HOST: "1",
+    VYKOR_NATIVE_TOOL_HOST: "1",
     ...(electronVersion ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
   };
 }

@@ -11,7 +11,7 @@ import { ProjectRepository } from "./project-repository.js";
 
 describe("ProjectRepository queries", () => {
   it("lists projects in current order and reads one project", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-repository-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-repository-"));
     const firstPath = join(directory, "first");
     const secondPath = join(directory, "second");
     const store = new SessionStore({ path: join(directory, "sessions.db") });
@@ -36,7 +36,7 @@ describe("ProjectRepository queries", () => {
   });
 
   it("normalizes equivalent resolved paths to the same lookup key", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-path-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-path-"));
     try {
       const path = join(directory, "Repo");
       const expected = process.platform === "win32" ? path.toLowerCase() : path;
@@ -69,7 +69,7 @@ describe("ProjectRepository mutations", () => {
 
   describe.each(["before owner check", "after owner check"])("takeover %s", (timing) => {
     it.each(writes)("rejects %s without changing project or session state", (_name, write) => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-project-owner-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-project-owner-"));
       const path = join(directory, "sessions.db");
       const first = new SessionStore({ path });
       const second = new SessionStore({ path });
@@ -107,7 +107,7 @@ describe("ProjectRepository mutations", () => {
   });
 
   it("inspects and updates project presentation fields", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-mutations-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-mutations-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
       const storage = (store as any).storage;
@@ -136,7 +136,7 @@ describe("ProjectRepository mutations", () => {
   });
 
   it("rolls back SQLite, read model, and mutations when rebind fails mid-loop", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-rebind-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-rebind-"));
     const oldPath = join(directory, "old");
     const nextPath = join(directory, "next");
     const databasePath = join(directory, "sessions.db");
@@ -191,7 +191,7 @@ describe("ProjectRepository mutations", () => {
   });
 
   it("rebinds successfully, preserves history, and rejects another active project", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-rebind-success-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-rebind-success-"));
     const originalPath = join(directory, "original");
     const nextPath = join(directory, "next");
     const conflictPath = join(directory, "conflict");
@@ -242,7 +242,7 @@ describe("ProjectRepository mutations", () => {
   });
 
   it("participates in an outer store transaction and returns isolated records", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-outer-transaction-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-outer-transaction-"));
     const originalPath = join(directory, "original");
     const nextPath = join(directory, "next");
     const store = new SessionStore({ path: join(directory, "sessions.db") });

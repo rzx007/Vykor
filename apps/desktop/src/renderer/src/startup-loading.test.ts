@@ -12,8 +12,8 @@ describe("startup loading document", () => {
     const root = document.querySelector("#root")
 
     expect(loading?.getAttribute("role")).toBe("status")
-    expect(loading?.getAttribute("aria-label")).toBe("正在启动 OpenHarness")
-    expect(loading?.textContent).toContain("OpenHarness")
+    expect(loading?.getAttribute("aria-label")).toBe("正在启动 Vykor")
+    expect(loading?.textContent).toContain("Vykor")
     expect(loading?.querySelectorAll('[data-startup-dot="true"]')).toHaveLength(3)
     expect(root?.contains(loading ?? null)).toBe(false)
     expect(loading?.previousElementSibling).toBe(root)

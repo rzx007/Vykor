@@ -26,9 +26,9 @@ import { McpManager } from "./mcp-manager"
 
 type ExtensionTab = "plugins" | "skills" | "mcp"
 const sections = {
-  plugins: { title: "插件", description: "将你常用的工具，带入 OpenHarness" },
-  skills: { title: "技能", description: "用任务专用技能扩展 OpenHarness" },
-  mcp: { title: "MCP", description: "连接工具与数据，扩展 OpenHarness" },
+  plugins: { title: "插件", description: "将你常用的工具，带入 Vykor" },
+  skills: { title: "技能", description: "用任务专用技能扩展 Vykor" },
+  mcp: { title: "MCP", description: "连接工具与数据，扩展 Vykor" },
 } as const
 const initialCounts = { plugins: 0, skills: 0, mcp: 0 }
 

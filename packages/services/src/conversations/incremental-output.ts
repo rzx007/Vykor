@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import type { AppendEventInput, AppendMessagePartDeltaInput, SessionEventRecord } from "@openharness/protocol";
+import type { AppendEventInput, AppendMessagePartDeltaInput, SessionEventRecord } from "@vykor/protocol";
 import type { StorageContext } from "../database/storage-context.js";
 import { assertMessage, assertSession, clone, now } from "../session-runtime/store-state.js";
 

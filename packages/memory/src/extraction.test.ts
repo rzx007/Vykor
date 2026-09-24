@@ -87,7 +87,7 @@ describe("buildMemoryExtractionPrompt", () => {
 
 describe("isMemoryWriteToolCall", () => {
   const cwd = resolve(join("workspace", "project"));
-  const memoryDir = join(cwd, ".openharness-ts", "memory");
+  const memoryDir = join(cwd, ".vykor", "memory");
 
   it("detects Write/Edit calls inside the memory directory for both supported path keys", () => {
     expect(
@@ -100,7 +100,7 @@ describe("isMemoryWriteToolCall", () => {
     expect(
       isMemoryWriteToolCall(
         "Edit",
-        { path: join(".openharness-ts", "memory", "facts.md") },
+        { path: join(".vykor", "memory", "facts.md") },
         memoryDir,
         cwd,
       ),

@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ToolRegistry, type IToolRegistry, type ToolDefinition } from "@openharness/core";
-import { loadNativePlugin, validateNativePlugin } from "@openharness/plugins";
+import { ToolRegistry, type IToolRegistry, type ToolDefinition } from "@vykor/core";
+import { loadNativePlugin, validateNativePlugin } from "@vykor/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { activateNativePluginTools } from "./activate.js";
 import { buildNativeToolHostEnvironment } from "./tool-host.js";
@@ -23,12 +23,12 @@ class TestRegistry implements IToolRegistry {
   has(name: string): boolean { return this.tools.has(name); }
 }
 
-function writePlugin(moduleSource: string, id = "dev.openharness.runtime-tool") {
-  const root = mkdtempSync(join(tmpdir(), "openharness-native-tool-"));
+function writePlugin(moduleSource: string, id = "dev.vykor.runtime-tool") {
+  const root = mkdtempSync(join(tmpdir(), "vykor-native-tool-"));
   roots.push(root);
-  mkdirSync(join(root, ".openharness-plugin"), { recursive: true });
+  mkdirSync(join(root, ".vykor-plugin"), { recursive: true });
   mkdirSync(join(root, "tools"), { recursive: true });
-  writeFileSync(join(root, ".openharness-plugin", "plugin.json"), JSON.stringify({
+  writeFileSync(join(root, ".vykor-plugin", "plugin.json"), JSON.stringify({
     schemaVersion: 1,
     id,
     name: id.split(".").at(-1),
@@ -68,12 +68,12 @@ describe("NativeToolHost", () => {
   it("runs forked tool hosts in Node mode when the parent runtime is Electron", () => {
     expect(buildNativeToolHostEnvironment({ PATH: "D:/bin" }, "39.2.6")).toEqual({
       PATH: "D:/bin",
-      OPENHARNESS_NATIVE_TOOL_HOST: "1",
+      VYKOR_NATIVE_TOOL_HOST: "1",
       ELECTRON_RUN_AS_NODE: "1",
     });
     expect(buildNativeToolHostEnvironment({ PATH: "D:/bin" })).toEqual({
       PATH: "D:/bin",
-      OPENHARNESS_NATIVE_TOOL_HOST: "1",
+      VYKOR_NATIVE_TOOL_HOST: "1",
     });
   });
 
@@ -94,7 +94,7 @@ describe("NativeToolHost", () => {
           }
         }];
       }
-    `, "dev.openharness.sdk-context"));
+    `, "dev.vykor.sdk-context"));
     const registry = new TestRegistry();
     const cleanups: Array<() => Promise<void> | void> = [];
     const logs: string[] = [];
@@ -110,7 +110,7 @@ describe("NativeToolHost", () => {
       expect(first?.type).toBe("text");
       if (first?.type !== "text") throw new Error("Expected a text result");
       const context = JSON.parse(first.text);
-      const identity = { id: "dev.openharness.sdk-context", name: "sdk-context", version: "1.0.0", root: plugin.root };
+      const identity = { id: "dev.vykor.sdk-context", name: "sdk-context", version: "1.0.0", root: plugin.root };
       expect(context).toMatchObject({
         registrationPlugin: identity, registrationPermissions: {}, plugin: identity, permissions: {},
         cwd: tmpdir(), sessionId: "sdk-session", hasSignal: true, hasSettings: false, hasTerminal: false,
@@ -136,7 +136,7 @@ describe("NativeToolHost", () => {
           }
         }];
       }
-    `, "dev.openharness.caller-cancel"));
+    `, "dev.vykor.caller-cancel"));
     const registry = new TestRegistry();
     const cleanups: Array<() => Promise<void> | void> = [];
     let ready = false;
@@ -167,7 +167,7 @@ describe("NativeToolHost", () => {
           invoke() { calls++; return { content: [{ type: "text", text: String(calls) }] }; }
         }];
       }
-    `, "dev.openharness.pre-cancelled"));
+    `, "dev.vykor.pre-cancelled"));
     const registry = new TestRegistry();
     const cleanups: Array<() => Promise<void> | void> = [];
     await activateNativePluginTools(plugin, { cwd: plugin.root, toolRegistry: registry, addCleanup: cleanup => cleanups.push(cleanup) });
@@ -211,7 +211,7 @@ describe("NativeToolHost", () => {
     expect(activation.toolNames).toEqual(["PluginEcho", "PluginFailure"]);
     await expect(registry.get("PluginFailure")!.execute({}, { cwd: plugin.root })).rejects.toMatchObject({ code: "tool_call_failed" });
     await expect(registry.get("PluginEcho")!.execute({ value: "ok" }, { cwd: plugin.root })).resolves.toEqual({
-      content: [{ type: "text", text: "dev.openharness.runtime-tool:ok" }],
+      content: [{ type: "text", text: "dev.vykor.runtime-tool:ok" }],
     });
 
     await cleanups[0]!();
@@ -220,7 +220,7 @@ describe("NativeToolHost", () => {
   });
 
   it("returns a structured registration error when registerTools is missing", async () => {
-    const plugin = await loadPlugin(writePlugin(`export const value = 1;`, "dev.openharness.missing-register"));
+    const plugin = await loadPlugin(writePlugin(`export const value = 1;`, "dev.vykor.missing-register"));
     const activation = await activateNativePluginTools(plugin, {
       cwd: plugin.root,
       toolRegistry: new TestRegistry(),
@@ -244,7 +244,7 @@ describe("NativeToolHost", () => {
           }
         }];
       }
-    `, "dev.openharness.slow-tool"));
+    `, "dev.vykor.slow-tool"));
     const registry = new TestRegistry();
     const cleanups: Array<() => Promise<void> | void> = [];
     const activation = await activateNativePluginTools(plugin, {
@@ -271,7 +271,7 @@ describe("NativeToolHost", () => {
           async invoke() { throw new Error("invoke should not run"); }
         }];
       }
-    `, "dev.openharness.strict-tool"));
+    `, "dev.vykor.strict-tool"));
     const registry = new TestRegistry();
     const audits: unknown[] = [];
     const activation = await activateNativePluginTools(plugin, {
@@ -285,7 +285,7 @@ describe("NativeToolHost", () => {
     await expect(registry.get("PluginStrict")!.execute({ value: "x" }, { cwd: plugin.root }))
       .rejects.toMatchObject({ code: "tool_input_invalid" });
     expect(audits).toMatchObject([{
-      pluginId: "dev.openharness.strict-tool",
+      pluginId: "dev.vykor.strict-tool",
       toolName: "PluginStrict",
       status: "failed",
       errorCode: "tool_input_invalid",
@@ -307,7 +307,7 @@ describe("NativeToolHost", () => {
           }
         }];
       }
-    `, "dev.openharness.concurrent-tool"));
+    `, "dev.vykor.concurrent-tool"));
     const registry = new TestRegistry();
     const activation = await activateNativePluginTools(plugin, {
       cwd: plugin.root,
@@ -333,7 +333,7 @@ describe("NativeToolHost", () => {
           async invoke() { return { content: [] }; }
         }];
       }
-    `, "dev.openharness.noisy-tool"));
+    `, "dev.vykor.noisy-tool"));
     const registry = new TestRegistry();
     const logs: string[] = [];
     const activation = await activateNativePluginTools(plugin, {
@@ -361,7 +361,7 @@ describe("NativeToolHost", () => {
           }
         }];
       }
-    `, "dev.openharness.blocked-tool"));
+    `, "dev.vykor.blocked-tool"));
     const registry = new TestRegistry();
     const activation = await activateNativePluginTools(plugin, {
       cwd: plugin.root,
@@ -387,7 +387,7 @@ describe("NativeToolHost", () => {
           async invoke() { process.exit(17); }
         }];
       }
-    `, "dev.openharness.crash-tool"));
+    `, "dev.vykor.crash-tool"));
     const registry = new TestRegistry();
     const activation = await activateNativePluginTools(plugin, {
       cwd: plugin.root,

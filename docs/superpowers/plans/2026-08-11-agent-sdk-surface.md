@@ -1,10 +1,10 @@
 # Agent SDK Public Surface
 
-> 状态：已完成。权威使用文档见 [OpenHarness Agent SDK](../../agent-sdk.md)。
+> 状态：已完成。权威使用文档见 [Vykor Agent SDK](../../agent-sdk.md)。
 
 ## 目标
 
-把 `OpenHarnessAgent` 收口为 standalone、daemon、channels 共用的唯一 programmatic 入口；framework 保持 OpenHarness opinionated defaults，不扩张为通用 runtime framework。
+把 `VykorAgent` 收口为 standalone、daemon、channels 共用的唯一 programmatic 入口；framework 保持 Vykor opinionated defaults，不扩张为通用 runtime framework。
 
 ## 完成项
 
@@ -12,7 +12,7 @@
 - [x] `requestPermission` 作为显式 effect callback。
 - [x] `onEvent` 作为 ordered reliable host sink。
 - [x] `agent.subscribe()` 作为多 observer、错误隔离的 observation API。
-- [x] daemon `AgentPool` 只创建/缓存 `OpenHarnessAgent`，不绑定 QueryEngine/runtime factory。
+- [x] daemon `AgentPool` 只创建/缓存 `VykorAgent`，不绑定 QueryEngine/runtime factory。
 - [x] channels 改用 agent run handle，并在 shutdown 时 interrupt active run。
 - [x] provider URL 与 credential resolution 回归所属 package。
 - [x] 增加无 daemon 的完整 SDK 回合测试。

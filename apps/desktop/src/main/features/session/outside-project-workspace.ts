@@ -1,7 +1,7 @@
 import { mkdir, rmdir } from "node:fs/promises"
 import { isAbsolute, join, relative, resolve, sep } from "node:path"
 
-const workspaceDirectoryName = "OpenHarness"
+const workspaceDirectoryName = "Vykor"
 const maximumWorkspaceAttempts = 100_000
 
 type JoinPath = (...paths: string[]) => string
@@ -37,7 +37,7 @@ export function buildOutsideProjectDayRoot(
   return joinPath(buildOutsideProjectRoot(documentsPath, joinPath), `${year}-${month}-${day}`)
 }
 
-/** 判断已有会话/项目是否位于 OpenHarness 管理的项目外工作区中。 */
+/** 判断已有会话/项目是否位于 Vykor 管理的项目外工作区中。 */
 export function isOutsideProjectWorkspacePath(
   workspacePath: string,
   documentsPath: string,
@@ -63,7 +63,7 @@ export function normalizeWorkspacePath(value: string): string {
 
 /**
  * 项目是否应从「项目」列表隐藏：位于项目外工作区根下，或它就是某个渠道会话的 cwd。
- * 后者不依赖路径/env，覆盖 `OPENHARNESS_CHANNELS_DIR` 指到文档目录外的情况。
+ * 后者不依赖路径/env，覆盖 `VYKOR_CHANNELS_DIR` 指到文档目录外的情况。
  */
 export function isChannelProjectHidden(
   projectPath: string,

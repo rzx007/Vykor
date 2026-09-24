@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 本计划执行最终整合、一次性测试和集中修复。不要提前删除公共兼容方法。
 
-**目标：** 将 OpenHarnessClient 收缩为 Transport/Resource 组合根和兼容转发，迁移窄内部调用方，检查 Server Route 边界并完成阶段 5。
+**目标：** 将 VykorClient 收缩为 Transport/Resource 组合根和兼容转发，迁移窄内部调用方，检查 Server Route 边界并完成阶段 5。
 
 **架构：** 一个 Client 实例只构造一组 Transport/Resource。旧平铺 API 全部保留；Server Route 只修明确存在的业务越界。
 
@@ -12,7 +12,7 @@
 
 ## 批量生产收尾
 
-- [ ] OpenHarnessClient 仅保存 transport、protocol 和 Resource readonly 属性。
+- [ ] VykorClient 仅保存 transport、protocol 和 Resource readonly 属性。
 - [ ] 检查所有旧 public 方法存在、签名兼容、只转发。
 - [ ] 删除 http-client.ts 中 endpoint path、业务 decoder、SSE parser 和重复 helper。
 - [ ] 顶层 index 同时导出旧 API 和新 Resource，不改变 package exports 路径。
@@ -20,7 +20,7 @@
 - [ ] Desktop/Frontend/CLI 只迁能直接降低完整 Client 依赖的内部位置，不改状态/IPC/UI。
 - [ ] 审计 server/http/routes：只修明确的 queue/status/permission 等业务规则越界，调用阶段4服务。
 - [ ] 不为纯适配 Route 做目录搬家。
-- [ ] 新增架构规则：Resource 不导入 OpenHarnessClient/Server；Transport 不导入 Resource；http-client endpoint 字符串只减不增；新内部模块不接完整 Client。
+- [ ] 新增架构规则：Resource 不导入 VykorClient/Server；Transport 不导入 Resource；http-client endpoint 字符串只减不增；新内部模块不接完整 Client。
 - [ ] 更新 architecture baseline，只能下降。
 - [ ] 更新 architecture-migration-status：阶段0–5完成，阶段6未开始。
 - [ ] 记录 http-client.ts 前后行数、Resource 数、flat calls、未迁外部兼容调用。
@@ -29,10 +29,10 @@
 
 按顺序运行一次：
 
-- pnpm --filter @openharness/client test
-- pnpm --filter @openharness/server test -- src/http
+- pnpm --filter @vykor/client test
+- pnpm --filter @vykor/server test -- src/http
 - pnpm --filter @rzx/ohs test
-- pnpm --filter @openharness/desktop test
+- pnpm --filter @vykor/desktop test
 - pnpm check-types
 - node --test scripts/architecture-boundaries.test.mjs
 - pnpm check:architecture
@@ -53,7 +53,7 @@
 - Transport 无业务 endpoint。
 - ProtocolClient 唯一协商。
 - Resource 可独立构造测试。
-- OpenHarnessClient 只组合/转发。
+- VykorClient 只组合/转发。
 - 外部协议和公开方法兼容。
 - httpClientFlatCalls 降低且未调高 baseline。
 - 阶段 6 未提前实施。

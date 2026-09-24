@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolResult } from "@openharness/core";
+import type { ToolDefinition, ToolResult } from "@vykor/core";
 
 import type {
   AttachmentAuthorizationSessionResolver,

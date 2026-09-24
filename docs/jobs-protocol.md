@@ -110,7 +110,7 @@ daemon Workflow 和 Session/Run 使用同一份 SQLite。独立 CLI 的 `FileWor
 
 ### 后台 shell 创建链路
 
-人工用户输入 `/background <command>` 后，共享 slash command 层调用 `OpenHarnessClient.createBackgroundShell()`；模型调用 `BackgroundShellCreate` 时，QueryEngine 通过宿主注入的 `AgentBackgroundShellHost` 进入同一个应用服务。工具层不直接查找或持有 `DetachedProcessSupervisor`。完整链路是：
+人工用户输入 `/background <command>` 后，共享 slash command 层调用 `VykorClient.createBackgroundShell()`；模型调用 `BackgroundShellCreate` 时，QueryEngine 通过宿主注入的 `AgentBackgroundShellHost` 进入同一个应用服务。工具层不直接查找或持有 `DetachedProcessSupervisor`。完整链路是：
 
 ```text
 POST /background-shells 或 BackgroundShellCreate
@@ -419,7 +419,7 @@ HTTP `/jobs` 由 daemon Bearer token 保护。HTTP 里的 `sessionId` 用于选�
 7. 取消后怎样阻止迟到回调重新写成 running/completed？
 8. 终态保留多久，何时清理？
 
-实现上应新增 adapter/projection 分支，不应把 producer 的私有句柄放进 `@openharness/jobs`。
+实现上应新增 adapter/projection 分支，不应把 producer 的私有句柄放进 `@vykor/jobs`。
 
 ## 当前代码入口
 

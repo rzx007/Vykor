@@ -12,7 +12,7 @@ import type { PermissionCheckOptions } from "../src/index.js";
 async function withTempCwd(
   fn: (cwd: string) => Promise<void> | void,
 ): Promise<void> {
-  const cwd = mkdtempSync(join(tmpdir(), "ohs-permissions-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vk-permissions-"));
   try {
     await fn(cwd);
   } finally {
@@ -349,7 +349,7 @@ describe("local read-only cwd auto-approval", () => {
           .action,
       ).toBe("ask");
       expect(
-        (await checker.checkTool("WebSearch", { query: "openharness" })).action,
+        (await checker.checkTool("WebSearch", { query: "vykor" })).action,
       ).toBe("ask");
     });
   });

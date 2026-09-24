@@ -1,4 +1,4 @@
-import type { SandboxConfig } from "@openharness/core";
+import type { SandboxConfig } from "@vykor/core";
 import type { ResolvedSandboxConfig } from "./types.js";
 
 export function normalizeSandboxConfig(config?: SandboxConfig): ResolvedSandboxConfig {

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { PROJECT_CONFIG_DIR_NAME } from "@openharness/core";
+import { PROJECT_CONFIG_DIR_NAME } from "@vykor/core";
 
 import type { ProjectInitService } from "../settings-api.js";
 
@@ -16,7 +16,7 @@ export function createDefaultProjectInitService(): ProjectInitService {
         },
         {
           path: join(cwd, PROJECT_CONFIG_DIR_NAME, "README.md"),
-          content: "# OpenHarness Config\n\nThis directory contains OpenHarness project configuration.\n",
+          content: "# Vykor Config\n\nThis directory contains Vykor project configuration.\n",
           label: `${PROJECT_CONFIG_DIR_NAME}/README.md`,
         },
         {
@@ -31,7 +31,7 @@ export function createDefaultProjectInitService(): ProjectInitService {
         join(cwd, PROJECT_CONFIG_DIR_NAME, "plugins"),
         join(cwd, PROJECT_CONFIG_DIR_NAME, "skills"),
       ];
-      const lines: string[] = ["Initializing OpenHarness project...", ""];
+      const lines: string[] = ["Initializing Vykor project...", ""];
       for (const dir of dirs) {
         await mkdir(dir, { recursive: true });
       }

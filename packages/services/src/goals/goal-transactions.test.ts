@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { SessionStore } from "../session-runtime/store.js";
 
 function withStore(test: (store: SessionStore) => void): void {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-goal-transactions-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-goal-transactions-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   try {
     store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
@@ -103,7 +103,7 @@ describe("GoalTransactions", () => {
   });
 
   it("rolls back an inner goal creation when the outer transaction fails", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-outer-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-outer-"));
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {
@@ -162,7 +162,7 @@ describe("GoalTransactions", () => {
   });
 
   it("fences every goal write family after owner takeover", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-owner-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-owner-"));
     const path = join(directory, "sessions.db");
     const first = new SessionStore({ path });
     const second = new SessionStore({ path });

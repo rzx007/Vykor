@@ -2,15 +2,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SessionStore } from "@openharness/services";
+import { SessionStore } from "@vykor/services";
 import { SessionGoalService } from "../session-goal-service.js";
 import { SessionPluginCapabilityService } from "../session-plugin-capability-service.js";
 import { assembleSessionRunServices } from "../session-run-assembly.js";
 import { SessionRunExecutor } from "../session-run-executor.js";
-import { createRunCapabilityView } from "@openharness/agent-runtime";
-import { ToolRegistry, type RunCapabilityView } from "@openharness/core";
+import { createRunCapabilityView } from "@vykor/agent-runtime";
+import { ToolRegistry, type RunCapabilityView } from "@vykor/core";
 
-const pluginId = "dev.openharness.quality";
+const pluginId = "dev.vykor.quality";
 const pluginSkill = {
   name: "review",
   path: "/plugins/quality/skills/review/SKILL.md",
@@ -28,7 +28,7 @@ function harness(
   },
   createView?: (pluginId?: string) => RunCapabilityView,
 ) {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-goal-lifecycle-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-goal-lifecycle-"));
   const store = new SessionStore({ path: join(directory, "store.db") });
   store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m", metadata: { runtime: { model: "m" } } });
   cleanup.push(() => {
@@ -86,7 +86,7 @@ function harness(
     waitVerifier,
     pluginCapabilities: new SessionPluginCapabilityService({
       resolveInventory: async () => ({
-        plugins: new Map((pluginsAvailable ? [pluginId, "dev.openharness.research"] : []).map((id) => [id, {
+        plugins: new Map((pluginsAvailable ? [pluginId, "dev.vykor.research"] : []).map((id) => [id, {
           pluginId: id,
           displayName: "Quality",
           description: "",
@@ -190,14 +190,14 @@ describe("SessionGoalService durable lifecycle", () => {
     await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
     const input = {
       requestId: "recover-stopping", expectedRevision: store.goals.getGoal(original.id)!.revision, objective: "research",
-      items: [{ type: "capability" as const, kind: "plugin" as const, pluginId: "dev.openharness.research", displayName: "Research" }],
+      items: [{ type: "capability" as const, kind: "plugin" as const, pluginId: "dev.vykor.research", displayName: "Research" }],
     };
     vi.spyOn(control, "waitForRuns").mockRejectedValueOnce(new Error("stop failed"));
     await expect(service.update("s1", original.id, input)).rejects.toThrow("stop failed");
     disablePlugins();
-    await expect(service.update("s1", original.id, input)).resolves.toMatchObject({ pluginId: "dev.openharness.research" });
+    await expect(service.update("s1", original.id, input)).resolves.toMatchObject({ pluginId: "dev.vykor.research" });
     await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
-    expect(store.runs.findRunByInput(input.requestId)?.metadata.pluginId).toBe("dev.openharness.research");
+    expect(store.runs.findRunByInput(input.requestId)?.metadata.pluginId).toBe("dev.vykor.research");
     expect(store.runs.listRuns("s1")).toHaveLength(2);
   });
 
@@ -223,7 +223,7 @@ describe("SessionGoalService durable lifecycle", () => {
       items: [{
         type: "capability",
         kind: "plugin",
-        pluginId: "dev.openharness.quality",
+        pluginId: "dev.vykor.quality",
         displayName: "Quality",
       }],
     });
@@ -281,8 +281,8 @@ describe("SessionGoalService durable lifecycle", () => {
       items: [{
         type: "capability",
         kind: "plugin_agent",
-        pluginId: "dev.openharness.quality",
-        agentId: "dev.openharness.quality:reviewer",
+        pluginId: "dev.vykor.quality",
+        agentId: "dev.vykor.quality:reviewer",
         displayName: "Reviewer",
       }],
     })).rejects.toThrow("session_plugin_capability_unavailable");
@@ -347,17 +347,17 @@ describe("SessionGoalService durable lifecycle", () => {
     const switched = await service.update("s1", created.id, {
       requestId: "switch-plugin", expectedRevision: store.goals.getGoal(created.id)!.revision,
       objective: "research instead",
-      items: [{ type: "capability", kind: "plugin", pluginId: "dev.openharness.research", displayName: "Research" }],
+      items: [{ type: "capability", kind: "plugin", pluginId: "dev.vykor.research", displayName: "Research" }],
     });
     await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
-    expect(switched).toMatchObject({ pluginId: "dev.openharness.research" });
-    expect(store.runs.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
+    expect(switched).toMatchObject({ pluginId: "dev.vykor.research" });
+    expect(store.runs.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.vykor.research");
     await service.action("s1", created.id, {
       requestId: "cancel-plugin", expectedRevision: store.goals.getGoal(created.id)!.revision, action: "cancel",
     });
     expect(store.goals.getGoal(created.id)?.status).toBe("cancelled");
     expect(store.conversations.getInput("resume-plugin")?.metadata.pluginId).toBe(pluginId);
-    expect(store.runs.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.openharness.research");
+    expect(store.runs.findRunByInput("switch-plugin")?.metadata.pluginId).toBe("dev.vykor.research");
   });
 
   it("keeps a pause request pending until cleanup finishes and shares concurrent retries", async () => {

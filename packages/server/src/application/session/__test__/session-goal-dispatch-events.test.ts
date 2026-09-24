@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { SessionStore } from "@openharness/services";
+import { SessionStore } from "@vykor/services";
 
 import { DaemonOperationGate } from "../../control/daemon-operation-gate.js";
 import { ApplicationEventService } from "../../events/application-event-service.js";
@@ -13,7 +13,7 @@ import { SessionOperationRunner } from "../session-operation-runner.js";
 
 describe("SessionGoalService dispatch event boundary", () => {
   it("publishes committed Goal events when dispatch fails", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-dispatch-events-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-dispatch-events-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       store.sessions.create({

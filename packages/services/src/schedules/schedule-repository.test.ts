@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
-import type { ScheduledRunRecord } from "@openharness/protocol";
+import type { ScheduledRunRecord } from "@vykor/protocol";
 
 import { ApplicationOwnerConflictError, SessionStore } from "../session-runtime/store.js";
 import type { StorageContext } from "../database/storage-context.js";
@@ -13,7 +13,7 @@ import { ScheduleRepository } from "./schedule-repository.js";
 function withRepository(
   test: (repository: ScheduleRepository, store: SessionStore) => void,
 ): void {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-schedule-repository-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-schedule-repository-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   try {
     test(new ScheduleRepository((store as any).storage), store);
@@ -83,7 +83,7 @@ describe("ScheduleRepository", () => {
 
   describe.each(["before owner check", "after owner check"])("takeover %s", (timing) => {
     it.each(writes)("rejects %s without changing tasks or runs", (_name, write) => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-schedule-owner-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-schedule-owner-"));
       const path = join(directory, "sessions.db");
       const first = new SessionStore({ path });
       const second = new SessionStore({ path });
@@ -117,7 +117,7 @@ describe("ScheduleRepository", () => {
   });
 
   it("reloads persisted task JSON and run state from disk", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-schedule-reload-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-schedule-reload-"));
     const path = join(directory, "sessions.db");
     try {
       const first = new SessionStore({ path });

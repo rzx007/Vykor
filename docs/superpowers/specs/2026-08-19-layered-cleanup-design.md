@@ -22,9 +22,9 @@
 
 ## Runtime
 
-- 把 memory extraction 的无状态规则移动到 `@openharness/memory`，runtime 与 services 仅保留消息/模型/存储适配；两条路径共享 fixture。
+- 把 memory extraction 的无状态规则移动到 `@vykor/memory`，runtime 与 services 仅保留消息/模型/存储适配；两条路径共享 fixture。
 - 让 extension discovery 纯读取；plugin agent activation 显式发生在创建 runtime 的 composition root，并避免 command/context 读取覆盖进程全局状态。若 coordinator 目前只能使用全局 registry，先改成按 runtime/cwd 可注入的定义集合，不用锁掩盖所有权问题。
-- `agent-runtime` 的 child environment 是 worktree canonical。对 `@openharness/swarm` 采用可逆兼容策略：仓库内无消费者时移除重复实现或改为薄兼容转发；不能确认外部兼容时不删除整个发布包。
+- `agent-runtime` 的 child environment 是 worktree canonical。对 `@vykor/swarm` 采用可逆兼容策略：仓库内无消费者时移除重复实现或改为薄兼容转发；不能确认外部兼容时不删除整个发布包。
 - 将 `agent.ts` 拆成 facade、单轮 run 状态机、composition 和内部错误工具，保持现有 cleanup 顺序和公开导出不变。
 
 ## 验证与约束

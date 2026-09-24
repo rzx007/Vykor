@@ -51,7 +51,7 @@
 **交付物：** 临时失败保留凭据，旧失败不会损坏新登录，401 最多恢复一次。
 
 - [ ] 在现有 `makeCredential()`、`memoryStore()` fixture 上增加 timeout/429/503/取消/invalid_grant 表驱动测试；fake fetch 返回真实 Response。网络与 5xx 后断言记录的 Token、revision 和 diagnostic 完全未变。注入 SDK `InvalidGrantError` 与只在 message 含相同文字的普通 Error，只有前者进入失效分支。
-- [ ] 运行 `pnpm --filter @openharness/mcp exec vitest run src/oauth/runtime-auth.test.ts`，确认现有“一律 markReauthentication”造成预期失败。
+- [ ] 运行 `pnpm --filter @vykor/mcp exec vitest run src/oauth/runtime-auth.test.ts`，确认现有“一律 markReauthentication”造成预期失败。
 - [ ] 给 `McpOAuthCredentialStore.runExclusive` 的 operation 增加上下文，并同步修改 file store、login 的内存 store 和测试替身：
 
 ```ts
@@ -63,7 +63,7 @@ interface CredentialMutationContext {
 
   store 保证实际写入 revision 等于 nextRevision；`next === current` 的不变结果不写文件、不递增。内部刷新返回实际使用的 Token 与写入 revision 的快照；公共 getAccessToken 可仍返回字符串。失效写入先比较该快照，CAS 未命中直接保留 current。
 - [ ] 在 HTTP 失败边界保留安全状态码和 SDK errorCode，按设计错误表转换为 `McpOAuthError`。调用取消原样结束；临时错误 `retryable=true`，不新增 retry loop。存储写失败不落入 invalid_grant 分支。
-- [ ] 跑 `pnpm --filter @openharness/mcp exec vitest run src/oauth/runtime-auth.test.ts src/oauth/login.test.ts` 与 `pnpm --filter @openharness/auth exec vitest run src/mcp-oauth-credential-store.test.ts`。用两个真实文件 store 实例验证 CAS miss 文件内容不变；诊断不能复活被删除项。通过后提交 `fix(mcp): classify refresh failures without invalidating fresh credentials`，仅暂存本任务文件。
+- [ ] 跑 `pnpm --filter @vykor/mcp exec vitest run src/oauth/runtime-auth.test.ts src/oauth/login.test.ts` 与 `pnpm --filter @vykor/auth exec vitest run src/mcp-oauth-credential-store.test.ts`。用两个真实文件 store 实例验证 CAS miss 文件内容不变；诊断不能复活被删除项。通过后提交 `fix(mcp): classify refresh failures without invalidating fresh credentials`，仅暂存本任务文件。
 
 ## 任务 2：resource 发现来源、配置和凭据绑定
 
@@ -88,10 +88,10 @@ interface ResourceBindingInput {
 function validateResourceBinding(input: ResourceBindingInput): URL;
 ```
 
-- [ ] 运行 `pnpm --filter @openharness/mcp exec vitest run src/oauth/resource-binding.test.ts src/oauth/protocol.test.ts`，确认当前 origin-only 校验不能拒绝同域不同资源。
+- [ ] 运行 `pnpm --filter @vykor/mcp exec vitest run src/oauth/resource-binding.test.ts src/oauth/protocol.test.ts`，确认当前 origin-only 校验不能拒绝同域不同资源。
 - [ ] 为 `oauth.resourceUrl?: string` 和 `binding.resourceUrl?: string` 增加类型、settings 白名单及校验。由 discovery 代码在发请求前确定 expectedResource，返回值携带已验证 resourceUrl；禁止收到 metadata 后反向生成 expectedResource。SDK 不暴露最终发现来源时，在本模块显式执行已有候选 URL 顺序，不复制整个 SDK 授权流程。
 - [ ] 将 authorization、code exchange 和 refresh 的 `resource` 参数都改为验证后的值；旧记录缺字段按原 serverUrl 解释。现有注入项 `getConfiguredScopes` 收敛为 `getConfiguredOAuth(name, config): Promise<McpOAuthSettings | undefined>`，由 Session 组装入口提供最新非秘密 OAuth 设置；统一更新全部调用者和测试，不同时保留两套读取逻辑。McpOAuthSettings 为 core 现有类型，本任务加 resourceUrl，任务 6 加 callbackUrl。策略仍留在 mcp。URL 或 audience 不匹配必须在发 Token 前报重新授权；为带 Token fetch 设置禁止跨 origin 跳转的处理。
-- [ ] 跑 `pnpm --filter @openharness/mcp test`、`pnpm --filter @openharness/core exec vitest run src/config/settings.test.ts` 和 `pnpm --filter @openharness/agent-runtime exec vitest run src/runtime-integrations.test.ts`；记录捕获的三种 OAuth resource 参数一致性，通过后提交 `feat(mcp): validate discovered resource bindings`。
+- [ ] 跑 `pnpm --filter @vykor/mcp test`、`pnpm --filter @vykor/core exec vitest run src/config/settings.test.ts` 和 `pnpm --filter @vykor/agent-runtime exec vitest run src/runtime-integrations.test.ts`；记录捕获的三种 OAuth resource 参数一致性，通过后提交 `feat(mcp): validate discovered resource bindings`。
 
 ## 任务 3：Keyring 主密钥与加密 envelope
 
@@ -102,7 +102,7 @@ function validateResourceBinding(input: ResourceBindingInput): URL;
 **交付物：** 与 OAuth 无关的窄秘密存储适配器及加密编码。
 
 - [ ] 在新测试中定义内存 Keyring fake，只替代 OS 交互；加解密使用真实 Node crypto。测试 nonce 不重复、篡改密文/tag/AAD 拒绝、不同 name/configDir 不能互解，以及锁定与缺失必须返回不同结果。
-- [ ] 执行 `pnpm --filter @openharness/auth exec vitest run src/mcp-oauth-keyring.test.ts src/mcp-oauth-envelope.test.ts`，确认新实现缺失的红灯。
+- [ ] 执行 `pnpm --filter @vykor/auth exec vitest run src/mcp-oauth-keyring.test.ts src/mcp-oauth-envelope.test.ts`，确认新实现缺失的红灯。
 - [ ] 定义且只实现两个平台方法，使用字节密钥而非 OAuth Record：
 
 ```ts
@@ -165,7 +165,7 @@ credentialError?: { code: "credential-storage-unavailable" };
 
 - [ ] 应用服务逐项捕获已知 storage error，未知配置/协议错误不统一吞成未登录。保留旧 snapshot 字段。更新 Desktop 的状态标签和按钮条件，锁定时提供存储故障提示及退出动作，不自动打开授权浏览器。
 - [ ] 把原生 package 加入三个安装产物的正确生产/可选依赖及 external/unpack 配置。验证脚本使用产物目录的 `createRequire` 实际解析原生模块；file 模式在缺少模块时也能执行状态命令。不要把工作区依赖可读当成安装包合格。
-- [ ] 跑定向测试、`pnpm --filter @rzx/ohs build`、`pnpm --filter @openharness/agent-runtime test:pack`、`pnpm --filter @openharness/desktop build:unpack`。在 Windows/macOS/Linux 各自验收 Keyring 持久性；缺少平台结果时可交付代码，但批次 B 的跨平台发布验收保持未完成。通过可用平台检查后提交 `feat(mcp): expose credential storage status and package keyring runtime`。
+- [ ] 跑定向测试、`pnpm --filter @rzx/ohs build`、`pnpm --filter @vykor/agent-runtime test:pack`、`pnpm --filter @vykor/desktop build:unpack`。在 Windows/macOS/Linux 各自验收 Keyring 持久性；缺少平台结果时可交付代码，但批次 B 的跨平台发布验收保持未完成。通过可用平台检查后提交 `feat(mcp): expose credential storage status and package keyring runtime`。
 
 ## 任务 6：完整 callback URL 与抗无关请求干扰
 
@@ -185,7 +185,7 @@ await deps.onAuthorizationUrl?.(authorizationUrl.toString());
 // URL 通知不等于打开浏览器；daemon 只接收通知。
 ```
 
-- [ ] 跑 `pnpm --filter @openharness/mcp exec vitest run src/oauth/callback.test.ts src/oauth/login.test.ts` 和 settings 测试。检查 abort/timeout 关闭监听器与 timer，通过后提交 `feat(mcp): support validated custom and manual callbacks`。
+- [ ] 跑 `pnpm --filter @vykor/mcp exec vitest run src/oauth/callback.test.ts src/oauth/login.test.ts` 和 settings 测试。检查 abort/timeout 关闭监听器与 timer，通过后提交 `feat(mcp): support validated custom and manual callbacks`。
 
 ## 任务 7：应用服务的可取消提交与跨进程 logout
 
@@ -219,7 +219,7 @@ interface McpOAuthCommitOutcome {
 **交付物：** daemon 持有临时授权状态，不持久化授权 URL、PKCE 或操作事件。
 
 - [ ] 注入 fake clock 与受控 application login promise，测试 requestId 幂等、输入冲突、同名 busy、20 pending/100 total、终态十分钟保留、超时、取消、重启实例、订阅后/前完成均不漏终态。创建服务就生成一个随机 oauthInstanceId。
-- [ ] 跑 `pnpm --filter @openharness/server exec vitest run src/application/mcp-oauth-operation-service.test.ts`，确认新服务尚不存在。
+- [ ] 跑 `pnpm --filter @vykor/server exec vitest run src/application/mcp-oauth-operation-service.test.ts`，确认新服务尚不存在。
 - [ ] 服务只保留一个 Map 和每操作的订阅集合。内部记录持有 AbortController、授权 URL 与手动输入 deferred；公开 snapshot 由单一安全 mapper 构造：
 
 ```ts
@@ -261,7 +261,7 @@ interface McpOAuthLoginInput {
 
   authenticated GET 操作可返回 authorizationUrl；SSE DTO 不含它。所有 OAuth 响应 no-store，callbackUrl 只接受 POST body。
 - [ ] 挂载路由时复用全局协议/Bearer/origin 中间件。client 资源增加 authStatus/startLogin/getLogin/watchLogin/submitCallback/cancelLogin/logout 方法，SSE 复用现有 transport，并支持 AbortSignal。保持原 runtimeStatus/synchronize 方法。pending 的 updated 事件只暴露 authorizationReady，客户端收到 true 后 GET 私有操作详情取 URL；completed 后调用 authStatus 读取最新服务状态。
-- [ ] 跑 `pnpm --filter @openharness/protocol exec vitest run src/mcp-oauth.test.ts src/capabilities.test.ts`、`pnpm --filter @openharness/server exec vitest run src/http/routes/mcp.test.ts`、`pnpm --filter @openharness/client exec vitest run src/resources/__test__/mcp-resource.test.ts src/transport/__test__/protocol-handshake.test.ts` 与 `pnpm check:client-api`。通过后提交 `feat(client): expose MCP OAuth operations and completion events`。
+- [ ] 跑 `pnpm --filter @vykor/protocol exec vitest run src/mcp-oauth.test.ts src/capabilities.test.ts`、`pnpm --filter @vykor/server exec vitest run src/http/routes/mcp.test.ts`、`pnpm --filter @vykor/client exec vitest run src/resources/__test__/mcp-resource.test.ts src/transport/__test__/protocol-handshake.test.ts` 与 `pnpm check:client-api`。通过后提交 `feat(client): expose MCP OAuth operations and completion events`。
 
 ## 任务 10：CLI 与 Desktop 用户流程
 
@@ -275,7 +275,7 @@ interface McpOAuthLoginInput {
 - [ ] 在当前 CLI/Desktop 运行定向测试，确认尚未使用 operation resource。
 - [ ] CLI 仅在明确离线且尚未发出可能被受理请求时走本地 service；否则固定 instanceId/requestId/loginId 查询。手动模式通过 typed client 提交 callback。取消信号释放本地 readline/SSE，并尽力取消未提交操作。
 - [ ] Desktop 在开始前完成连接/接管，main 管理 operation 与 URL 校验/openExternal；renderer 获取安全 operation 状态和取消按钮。窗口退出时释放 UI 订阅，内置 daemon 停止交给任务 8 cleanup。旧 daemon 能力不支持时显示升级提示。scope 请求错误仍只有手动重新授权提示，不自动重放 MCP 工具调用。
-- [ ] 跑 `pnpm --filter @rzx/ohs exec vitest run src/commands/mcp.test.ts src/mcp-runtime-coordinator.test.ts`、Desktop MCP service/settings/preload 的定向测试及 `pnpm --filter @openharness/desktop typecheck`。通过后提交 `feat(desktop): use shared MCP OAuth login operations`。
+- [ ] 跑 `pnpm --filter @rzx/ohs exec vitest run src/commands/mcp.test.ts src/mcp-runtime-coordinator.test.ts`、Desktop MCP service/settings/preload 的定向测试及 `pnpm --filter @vykor/desktop typecheck`。通过后提交 `feat(desktop): use shared MCP OAuth login operations`。
 
 ## 任务 11：阶段验收与交接
 
@@ -284,7 +284,7 @@ interface McpOAuthLoginInput {
 **交付物：** 可复核的发布前验收记录，不以单测冒充真实 Keyring/Linear 结果。
 
 - [ ] 依次跑完整 `mcp`、`auth`、`agent-runtime` 测试；Server、Client、CLI、Desktop 跑本阶段全部变更文件及相关集成测试。已有无关失败记录实际触发条件，保持失败记录可见。
-- [ ] 跑 `pnpm check-types`、`pnpm --filter @openharness/desktop typecheck`、`pnpm check:client-api`、`node scripts/architecture-boundaries.mjs`、`node scripts/check-docs.mjs`；不修改架构基线来容纳新的层间依赖。
+- [ ] 跑 `pnpm check-types`、`pnpm --filter @vykor/desktop typecheck`、`pnpm check:client-api`、`node scripts/architecture-boundaries.mjs`、`node scripts/check-docs.mjs`；不修改架构基线来容纳新的层间依赖。
 - [ ] 在实际安装产物进行 OS Keyring 验收：本机及支持平台重启后仍能读；同用户 CLI/Desktop/daemon 互读；无 Keyring 显示 file；锁定已有 Keyring 不降级；logout 无法解密时仍删除目标记录。只使用测试记录。
 - [ ] 真实 Linear 验收：本地 CLI、daemon CLI、Desktop 显式登录各一次；活跃 Session 重连和 logout；固定 loopback callback；手动 URL 模式；人为配置不同 resource 被拒绝。临时刷新错误与 invalid_grant 用本地受控 OAuth server 注入，不破坏真实账号 Token。
 - [ ] 报告各任务提交 SHA、命令/退出码、未验证平台、存储格式兼容限制、已知风险；仅在证据齐全的批次标完成。提交文档 `docs(mcp): record phase three acceptance evidence`。不自动发布、部署或创建 PR。

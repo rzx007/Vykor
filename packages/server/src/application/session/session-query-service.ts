@@ -5,7 +5,7 @@ import type {
   SessionMessageRecord,
   SessionRecord,
   SessionStateSnapshot,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface ListSessionsQuery {
   cwd?: string;

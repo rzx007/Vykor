@@ -5,16 +5,16 @@
     "rootDir": "../..",
     "baseUrl": ".",
     "paths": {
-      "@openharness/coordinator": [
+      "@vykor/coordinator": [
         "../coordinator/src/index.ts"
       ],
-      "@openharness/core": [
+      "@vykor/core": [
         "../core/src/index.ts"
       ],
-      "@openharness/memory": [
+      "@vykor/memory": [
         "../memory/src/index.ts"
       ],
-      "@openharness/services": [
+      "@vykor/services": [
         "../services/src/index.ts"
       ]
     }

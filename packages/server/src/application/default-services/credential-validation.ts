@@ -1,15 +1,15 @@
 import {
-  OPENHARNESS_USER_AGENT,
+  VYKOR_USER_AGENT,
   expandRequestHeaderTemplates,
   findByName,
   resolveProviderScopedBaseUrl,
   type BackendType,
-} from "@openharness/api";
+} from "@vykor/api";
 
-const VALIDATION_USER_AGENT = "openharness-ts/credential-validation";
+const VALIDATION_USER_AGENT = "vykor/credential-validation";
 const VALIDATION_HEADER_CONTEXT = {
-  sessionId: "openharness-credential-validation",
-  userAgent: OPENHARNESS_USER_AGENT,
+  sessionId: "vykor-credential-validation",
+  userAgent: VYKOR_USER_AGENT,
 };
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";

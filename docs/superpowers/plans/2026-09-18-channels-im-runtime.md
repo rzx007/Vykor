@@ -63,7 +63,7 @@ describe("channel message contract", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/index.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/index.test.ts`
 预期：FAIL，报错为 `ChannelMessage` 缺少 `conversationId` / `chatId` / `replyTo` 等字段，或者 `ChannelAdapterCapabilities` 未定义。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -124,7 +124,7 @@ export interface ChannelAdapter {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/index.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/index.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -197,7 +197,7 @@ describe("ChannelManager strict contract", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/manager.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/manager.test.ts`
 预期：FAIL，表示 `handleInbound` 仍未要求明确 `chatId`，或仍依赖 `msg.replyTo` / `msg.sender` 猜测会话目标。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -234,7 +234,7 @@ private handleInbound(channelName: string, msg: ChannelMessage): void {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/__test__/manager.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/__test__/manager.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -306,7 +306,7 @@ describe("FeishuAdapter strict contract", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts`
 预期：FAIL，说明当前 `FeishuAdapter` 尚未提供 `capabilities` 和 conversation 结构化映射。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -388,7 +388,7 @@ export class FeishuAdapter implements ChannelAdapter {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/channels test -- --run src/impl/__test__/feishu.test.ts`
+运行：`pnpm --filter @vykor/channels test -- --run src/impl/__test__/feishu.test.ts`
 预期：PASS
 
 - [ ] **步骤 5：Commit**
@@ -408,7 +408,7 @@ git commit -m "feat(feishu): implement strict runtime mapping and capabilities"
 
 - [ ] **步骤 1：执行 full package check**
 
-运行：`pnpm --filter @openharness/channels test -- --run`
+运行：`pnpm --filter @vykor/channels test -- --run`
 预期：5 个测试文件全部通过，测试总数以 Vitest 实际输出为准，退出码 0。
 
 - [ ] **步骤 2：检查误差与兼容残留**

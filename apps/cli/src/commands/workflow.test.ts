@@ -6,7 +6,7 @@ import {
   createWorkflowPlan,
   createWorkflowRunSnapshot,
   type WorkflowTaskRunResult,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import {
   createWorkflowCommand,
   createWorkflowListPayload,

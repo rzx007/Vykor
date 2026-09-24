@@ -4,13 +4,13 @@
 
 ## 文档目的
 
-本文定义 OpenHarness 对话附件能力的完整目标态、系统边界、数据模型、运行流程和分阶段交付路线。后续不再以“先做一个临时 MVP”为前提，而是沿着同一套目标架构逐阶段实现。每个阶段都必须形成可运行、可测试、可继续演进的闭环，不能通过临时协议或只适用于本机的路径拼接换取短期进度。
+本文定义 Vykor 对话附件能力的完整目标态、系统边界、数据模型、运行流程和分阶段交付路线。后续不再以“先做一个临时 MVP”为前提，而是沿着同一套目标架构逐阶段实现。每个阶段都必须形成可运行、可测试、可继续演进的闭环，不能通过临时协议或只适用于本机的路径拼接换取短期进度。
 
 本文是总路线规格，不替代各阶段的实现计划。开始某个阶段前，应基于本文为该阶段编写独立的 implementation plan，列出准确文件、测试、迁移和提交步骤。阶段验收通过后再进入下一阶段。
 
 ## 背景与现状
 
-OpenHarness 已有部分多模态基础，但桌面输入、持久化协议和 Agent 运行链路仍以纯文本为中心：
+Vykor 已有部分多模态基础，但桌面输入、持久化协议和 Agent 运行链路仍以纯文本为中心：
 
 - Core 的用户消息支持 `string | ContentBlock[]`，并已有文件路径型 `ImageBlock`。
 - OpenAI 与 Codex Provider 已能把本地图片编码成模型图片输入。
@@ -348,7 +348,7 @@ interface AttachmentUploadRecord {
    └─ <upload-id>.part
 ```
 
-实际根目录由 Session Runtime 的数据目录解析器决定，不能在业务代码里散落 `~/.openharness-ts` 字符串。
+实际根目录由 Session Runtime 的数据目录解析器决定，不能在业务代码里散落 `~/.vykor` 字符串。
 
 ### 导入原子性
 
@@ -380,12 +380,12 @@ POST /attachments
 Authorization: Bearer <token>
 Content-Type: image/png
 Content-Length: 12345
-X-OpenHarness-Filename: screenshot.png
+X-Vykor-Filename: screenshot.png
 
 <raw file bytes>
 ```
 
-`X-OpenHarness-Filename` 使用 `encodeURIComponent` 编码，服务端解码后执行 Unicode 规范化、控制字符清理和长度限制。返回 `AttachmentAssetRecord` 的公共投影，不返回 `storageKey` 和真实磁盘路径。`Content-Length` 是可选的提前拒绝信息，浏览器 Client 不手工设置这个受限 header；无论它是否存在，实际流式计数始终是最终判定，不能信任该 header。
+`X-Vykor-Filename` 使用 `encodeURIComponent` 编码，服务端解码后执行 Unicode 规范化、控制字符清理和长度限制。返回 `AttachmentAssetRecord` 的公共投影，不返回 `storageKey` 和真实磁盘路径。`Content-Length` 是可选的提前拒绝信息，浏览器 Client 不手工设置这个受限 header；无论它是否存在，实际流式计数始终是最终判定，不能信任该 header。
 
 大文件使用可恢复上传：
 
@@ -706,7 +706,7 @@ interface ImageToTextOutput {
 - 保留 `light-ocr` 返回的 reading order、line confidence、quadrilateral box、page 和 timing 元数据；给模型的文本是有大小上限的渲染结果，结构化行数据保存在 representation metadata 中。
 - PDF 使用明确的页数、DPI、单页尺寸和总像素上限；不得直接沿用库默认值而不写入产品配置和诊断信息。
 - 安装包包含 OCR 模型和原生运行时，发布流程必须覆盖 Windows/macOS/Linux 目标架构、Electron 打包签名、包体积和 NOTICE/Apache-2.0 归属检查。
-- `package_load_failed`、`invalid_image`、`resource_limit_exceeded`、`inference_failed` 等稳定错误码映射为 OpenHarness 附件错误，不把 OCR 初始化失败伪装成“图片无文字”。
+- `package_load_failed`、`invalid_image`、`resource_limit_exceeded`、`inference_failed` 等稳定错误码映射为 Vykor 附件错误，不把 OCR 初始化失败伪装成“图片无文字”。
 - 没有检测到文字是成功结果，返回空 `text` 和 `no_text_detected` 状态；主 Agent 必须说明当前模型只能提取文字，不能可靠理解照片、图表含义或其他非文字视觉语义。
 
 ### 缓存与一致性
@@ -796,7 +796,7 @@ interface AgentAttachmentResource {
 建议运行时可见路径：
 
 ```text
-/mnt/openharness/attachments/<input-id>/<safe-filename>
+/mnt/vykor/attachments/<input-id>/<safe-filename>
 ```
 
 Windows host runtime 使用等价的受控绝对路径，但对 Agent 提示和工具结果优先展示统一逻辑路径。Docker sandbox 使用 read-only bind mount。文件工具的 sandbox guard 显式接收 attachment resource roots，不把整个 daemon 数据目录加入 allowlist。
@@ -1124,7 +1124,7 @@ daemon 启动时：
 - protocol 中的 asset、reference、representation、limits 类型；
 - SQLite schema、migration 和 SessionStore CRUD；
 - Attachment Blob Store；
-- 单文件原始字节流上传、元数据、内容下载、逻辑删除接口；上传使用 `Content-Type`、可选 `Content-Length` 和 `X-OpenHarness-Filename` 元数据，避免标准 `Request.formData()` 把大文件整体缓冲进 daemon 内存；
+- 单文件原始字节流上传、元数据、内容下载、逻辑删除接口；上传使用 `Content-Type`、可选 `Content-Length` 和 `X-Vykor-Filename` 元数据，避免标准 `Request.formData()` 把大文件整体缓冲进 daemon 内存；
 - MIME 检测、大小限制、哈希、原子导入；
 - Client SDK 上传与读取方法；
 - capabilities endpoint 暴露限制；

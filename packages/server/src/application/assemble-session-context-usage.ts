@@ -9,12 +9,12 @@ import {
   type Settings,
   type ToolRegistrationSource,
   type ToolSchemaInput,
-} from "@openharness/core";
-import { buildPromptLedgerSegments } from "@openharness/prompts";
+} from "@vykor/core";
+import { buildPromptLedgerSegments } from "@vykor/prompts";
 import {
   readSessionRuntimeConfig,
   type SessionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type { ContextUsageCache } from "./context-usage-cache.js";
 import type { ModelInfo, ModelProviderInfo } from "./settings-api.js";

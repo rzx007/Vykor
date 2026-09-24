@@ -96,7 +96,7 @@ it("treats system and blank terminal shell ids as missing", () => {
 - [ ] **步骤 2：运行测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/settings-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/settings-service.test.ts
 ```
 
 预期：FAIL，snapshot 还没有 `defaultTerminalShellId`。
@@ -186,7 +186,7 @@ it("keeps terminal shell when patching notification mode", async () => {
 - [ ] **步骤 5：运行偏好测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/desktop-preferences.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/desktop-preferences.test.ts
 ```
 
 预期：FAIL，还没有 `defaultTerminalShellId`。
@@ -214,7 +214,7 @@ writeFileSync(getDesktopPreferencesPath(), JSON.stringify(persisted, null, 2), "
 - [ ] **步骤 7：运行测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/settings/settings-service.test.ts src/main/features/settings/desktop-preferences.test.ts src/renderer/src/stores/desktop-session/notification-observer.test.ts src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/settings/settings-service.test.ts src/main/features/settings/desktop-preferences.test.ts src/renderer/src/stores/desktop-session/notification-observer.test.ts src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
 ```
 
 预期：PASS。
@@ -256,7 +256,7 @@ git commit -m "feat(desktop): persist default terminal shell id in desktop prefe
 - [ ] **步骤 3：类型检查**
 
 ```bash
-pnpm --filter @openharness/desktop run typecheck
+pnpm --filter @vykor/desktop run typecheck
 ```
 
 预期：PASS。
@@ -366,7 +366,7 @@ Windows PATH 查找按目录拼接 `pwsh.exe`。`joinPath` 由测试注入，避
 - [ ] **步骤 2：运行测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/terminal/detect-shells.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/terminal/detect-shells.test.ts
 ```
 
 预期：FAIL，模块不存在。
@@ -417,8 +417,8 @@ export function resolvePreferredTerminalShell(
 - [ ] **步骤 5：运行测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/terminal/detect-shells.test.ts
-pnpm --filter @openharness/desktop run typecheck
+pnpm --filter @vykor/desktop exec vitest run src/main/features/terminal/detect-shells.test.ts
+pnpm --filter @vykor/desktop run typecheck
 ```
 
 预期：PASS。
@@ -473,7 +473,7 @@ it("omits shell when no preferred command is available", () => {
 - [ ] **步骤 2：运行测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/terminal/apply-preferred-shell.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/terminal/apply-preferred-shell.test.ts
 ```
 
 预期：FAIL，模块不存在。
@@ -507,7 +507,7 @@ return await withDaemonRetry((client) => client.createTerminal(next))
 - [ ] **步骤 4：运行测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/main/features/terminal/apply-preferred-shell.test.ts src/main/features/terminal/detect-shells.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/terminal/apply-preferred-shell.test.ts src/main/features/terminal/detect-shells.test.ts
 ```
 
 预期：PASS。
@@ -554,7 +554,7 @@ it("falls back to system when the saved id is gone or empty", () => {
 - [ ] **步骤 2：运行测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/resolve-selected-terminal-shell.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/resolve-selected-terminal-shell.test.ts
 ```
 
 预期：FAIL，函数不存在。
@@ -596,7 +596,7 @@ terminal: { listShells }
 - [ ] **步骤 5：运行控件测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/default-terminal-shell-control.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/default-terminal-shell-control.test.ts
 ```
 
 预期：FAIL，控件不存在。
@@ -633,7 +633,7 @@ const update = (nextId: string): void => {
 - [ ] **步骤 7：运行测试验证通过**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/settings-page/resolve-selected-terminal-shell.test.ts src/renderer/src/components/desktop/settings-page/default-terminal-shell-control.test.ts src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/settings-page/resolve-selected-terminal-shell.test.ts src/renderer/src/components/desktop/settings-page/default-terminal-shell-control.test.ts src/renderer/src/components/desktop/settings-page/default-opener-control.test.ts
 ```
 
 预期：PASS。
@@ -687,7 +687,7 @@ it("never forwards a project default shell", () => {
 - [ ] **步骤 2：运行测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/terminal/user-terminal-create-input.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/terminal/user-terminal-create-input.test.ts
 ```
 
 预期：FAIL，函数不存在。
@@ -753,7 +753,7 @@ it("does not offer a per-project default shell action", () => {
 - [ ] **步骤 5：运行菜单测试验证失败**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/layout/main-layout/project-menu-items.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/layout/main-layout/project-menu-items.test.ts
 ```
 
 预期：FAIL，模块不存在。
@@ -784,8 +784,8 @@ export function projectMenuItems(pinned: boolean): Array<{ id: string; label: st
 - [ ] **步骤 7：运行相关测试并做完成前验证**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/tools/terminal/user-terminal-create-input.test.ts src/renderer/src/components/desktop/layout/main-layout/project-menu-items.test.ts src/main/features/settings src/main/features/terminal src/renderer/src/components/desktop/settings-page
-pnpm --filter @openharness/desktop run typecheck
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/tools/terminal/user-terminal-create-input.test.ts src/renderer/src/components/desktop/layout/main-layout/project-menu-items.test.ts src/main/features/settings src/main/features/terminal src/renderer/src/components/desktop/settings-page
+pnpm --filter @vykor/desktop run typecheck
 ```
 
 预期：全部 PASS。

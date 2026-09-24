@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpOAuthCredentialRecord, McpRuntimeStatus, Settings } from "@openharness/core";
-import { buildMcpAuthServerSnapshot } from "@openharness/mcp";
-import { McpOAuthApplicationError } from "@openharness/server";
+import type { McpOAuthCredentialRecord, McpRuntimeStatus, Settings } from "@vykor/core";
+import { buildMcpAuthServerSnapshot } from "@vykor/mcp";
+import { McpOAuthApplicationError } from "@vykor/server";
 import { createMcpCommand, type McpCommandDeps } from "./mcp.js";
 
 function credential(): McpOAuthCredentialRecord {
@@ -64,7 +64,7 @@ function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
     readLine: vi.fn(async () => ""),
     stdout: line => output.push(line),
   };
-  const run = (...args: string[]) => createMcpCommand(deps).parseAsync(["node", "ohs", ...args]);
+  const run = (...args: string[]) => createMcpCommand(deps).parseAsync(["node", "vk", ...args]);
   return { deps, run, login, logout, output, credentials, snapshot, reconcile, getSettings: () => settings };
 }
 
@@ -200,7 +200,7 @@ describe("mcp command", () => {
 
     await expect(test.run("login", "linear")).rejects.toMatchObject({ code: "oauth-saved-runtime-sync-failed" });
     expect(test.output.join("\n")).toContain("authorization was saved for linear");
-    expect(test.output.join("\n")).toContain("ohs mcp status linear");
+    expect(test.output.join("\n")).toContain("vk mcp status linear");
     expect(test.credentials.get("linear")).toBeDefined();
   });
 

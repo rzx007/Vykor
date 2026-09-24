@@ -1,12 +1,12 @@
 /**
- * HttpTransport: OpenHarness HTTP 传输内核。
+ * HttpTransport: Vykor HTTP 传输内核。
  *
  * 负责：
  * - Base URL 规范化
  * - Bearer Token 鉴权头
  * - fetch 注入与执行
  * - URL query 拼接
- * - 请求体序列化与错误转换 (OpenHarnessApiError)
+ * - 请求体序列化与错误转换 (VykorApiError)
  * - 基础响应解析与流式透传
  *
  * 约束：不感知任何业务 Resource 领域逻辑。
@@ -19,7 +19,7 @@ import {
   checkProtocolCompatibility,
   parseServerCapabilities,
   type ServerCapabilities,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { IncompatibleProtocolError } from "../protocol/protocol-client.js";
 
 export interface HttpTransportOptions {
@@ -44,14 +44,14 @@ export interface RawRequestOptions extends RequestInit {
 }
 
 /** HTTP API 非 2xx 时抛出；携带 status 与原始响应体。 */
-export class OpenHarnessApiError extends Error {
+export class VykorApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
     readonly body: unknown,
   ) {
     super(message);
-    this.name = "OpenHarnessApiError";
+    this.name = "VykorApiError";
   }
 }
 
@@ -171,8 +171,8 @@ export async function throwResponseError(response: Response): Promise<never> {
           "message" in body &&
           typeof body.message === "string"
         ? body.message
-        : `OpenHarness API request failed with ${response.status}`;
-  throw new OpenHarnessApiError(message, response.status, body);
+        : `Vykor API request failed with ${response.status}`;
+  throw new VykorApiError(message, response.status, body);
 }
 
 export class HttpTransport {

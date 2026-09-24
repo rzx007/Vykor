@@ -9,23 +9,23 @@ import {
   loadNativePlugin,
   validateNativePlugin,
   verifyInstalledNativePlugin,
-} from "@openharness/plugins";
+} from "@vykor/plugins";
 import { ClaudeCodePluginConverter } from "./claude-code/converter.js";
 import { CodexPluginConverter } from "./codex/converter.js";
 
 const source = fileURLToPath(new URL("../fixtures/claude-code/mixed-plugin", import.meta.url));
 const cleanup: string[] = [];
-const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
 afterEach(async () => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
   await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
 describe("Native Plugin acceptance", () => {
   it("installs a converted Codex plugin only with approved permissions and loads it after the source is removed", async () => {
-    const root = await mkdtemp(join(tmpdir(), "ohs-codex-acceptance-")); cleanup.push(root);
-    process.env.OPENHARNESS_CONFIG_DIR = join(root, "config");
+    const root = await mkdtemp(join(tmpdir(), "vk-codex-acceptance-")); cleanup.push(root);
+    process.env.VYKOR_CONFIG_DIR = join(root, "config");
     const converter = new CodexPluginConverter();
     const inspection = await converter.inspect(fileURLToPath(new URL("../fixtures/codex/mixed-plugin", import.meta.url)));
     const plan = await converter.plan(inspection);
@@ -52,8 +52,8 @@ describe("Native Plugin acceptance", () => {
   });
 
   it("converts, validates, installs, discovers and loads a Claude source without executing it", async () => {
-    const root = await mkdtemp(join(tmpdir(), "ohs-plugin-acceptance-")); cleanup.push(root);
-    process.env.OPENHARNESS_CONFIG_DIR = join(root, "config");
+    const root = await mkdtemp(join(tmpdir(), "vk-plugin-acceptance-")); cleanup.push(root);
+    process.env.VYKOR_CONFIG_DIR = join(root, "config");
     const converter = new ClaudeCodePluginConverter();
     const inspection = await converter.inspect(source);
     const plan = await converter.plan(inspection);
@@ -75,8 +75,8 @@ describe("Native Plugin acceptance", () => {
       `2.0.0-${installed.record.behaviorDigest}`,
     ));
     expect((await readdir(installed.record.cachePath)).sort()).toEqual([
-      ".openharness-conversion",
-      ".openharness-plugin",
+      ".vykor-conversion",
+      ".vykor-plugin",
       "agents",
       "hooks.json",
       "mcp.json",

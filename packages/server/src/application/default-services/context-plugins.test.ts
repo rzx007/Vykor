@@ -1,10 +1,10 @@
 import { expect, it, vi } from "vitest";
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import { createDefaultContextService } from "./context-service.js";
 import { createServiceRoutes } from "../../http/routes/service.js";
 
-vi.mock("@openharness/agent-runtime", () => ({
-  discoverOpenHarnessExtensions: async () => ({
+vi.mock("@vykor/agent-runtime", () => ({
+  discoverVykorExtensions: async () => ({
     pluginCapabilityInventory: {
       plugins: new Map([["dev.quality", {
         pluginId: "dev.quality", displayName: "Quality", description: "Review code",

@@ -4,9 +4,9 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import {
-  OpenHarnessHttpServer,
+  VykorHttpServer,
   type CreateDaemonAgent,
-} from "@openharness/server";
+} from "@vykor/server";
 import type {
   AgentEvent,
   AgentEventContext,
@@ -15,11 +15,11 @@ import type {
   AgentPermissionDecision,
   AgentPermissionRequest,
   AgentRunHandle,
-} from "@openharness/core";
+} from "@vykor/core";
 import type {
   AgentCapabilitySnapshot,
-  OpenHarnessAgent,
-} from "@openharness/agent-runtime";
+  VykorAgent,
+} from "@vykor/agent-runtime";
 
 import { runPrintSession } from "./print-session.js";
 
@@ -37,11 +37,11 @@ function captureWrite(stream: NodeJS.WriteStream): {
 
 async function withPrintServer(
   createAgent: CreateDaemonAgent,
-  run: (input: { server: OpenHarnessHttpServer; url: string; token: string }) => Promise<void>,
+  run: (input: { server: VykorHttpServer; url: string; token: string }) => Promise<void>,
 ): Promise<void> {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-print-integration-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-print-integration-"));
   const token = "print-integration-token";
-  const server = new OpenHarnessHttpServer({
+  const server = new VykorHttpServer({
     token,
     storePath: join(dir, "sessions.db"),
     createAgent,
@@ -77,7 +77,7 @@ function testAgent(
       await agentOptions.onEvent?.(event);
       for (const listener of listeners) await listener(event);
     };
-    const agent: OpenHarnessAgent = {
+    const agent: VykorAgent = {
       id: session.id,
       state: "idle",
       subscribe(listener) {

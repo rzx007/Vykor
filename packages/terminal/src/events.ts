@@ -1,6 +1,6 @@
-import type { TerminalEvent } from "@openharness/protocol";
+import type { TerminalEvent } from "@vykor/protocol";
 
-export type { TerminalEvent } from "@openharness/protocol";
+export type { TerminalEvent } from "@vykor/protocol";
 
 export type TerminalEventListener = (event: TerminalEvent) => void
 

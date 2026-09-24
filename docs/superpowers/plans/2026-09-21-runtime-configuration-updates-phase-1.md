@@ -84,7 +84,7 @@ it("merges concurrent patches and cannot roll back a newer selection", async () 
 });
 ```
 
-- [ ] 运行 `pnpm --filter @openharness/agent-runtime exec vitest run src/request-configuration.test.ts`，确认新增测试因尚未提供目标行为失败。
+- [ ] 运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/request-configuration.test.ts`，确认新增测试因尚未提供目标行为失败。
 - [ ] 使用每个 store 自己的 Promise 链串行更新；在队列内读取旧值、合并、await validate、比较实际差异、写入副本并递增 revision。队列错误不能阻塞下一次更新。`restoreIfCurrent` 也进入同一队列并重新校验 previous，条件不满足直接返回 undefined。
 
 ```ts
@@ -98,7 +98,7 @@ function serial<T>(work: () => Promise<T>): Promise<T> {
 ```
 
 - [ ] protocol 测试：缺失 runtimeRevision 返回 0；非法负数、非整数明确报错；相同字段值不进入 changed keys；空 effort 保持可清空语义。版本放 metadata.runtimeRevision，原 `readRuntimeMetadata` 仍拒绝未知 runtime 字段。
-- [ ] 执行以上 store 测试及 `pnpm --filter @openharness/protocol exec vitest run src/runtime-config.test.ts`；结果通过后检查类型导出，不顺带修改其他 metadata 契约。
+- [ ] 执行以上 store 测试及 `pnpm --filter @vykor/protocol exec vitest run src/runtime-config.test.ts`；结果通过后检查类型导出，不顺带修改其他 metadata 契约。
 
 ## Task 2：模型请求边界捕获完整配置
 
@@ -180,7 +180,7 @@ it("changes the next request without replaying a tool", async () => {
 });
 ```
 
-- [ ] 执行 `pnpm --filter @openharness/core exec vitest run src/engine/request-configuration.test.ts`，确认失败指向请求仍然使用旧配置。
+- [ ] 执行 `pnpm --filter @vykor/core exec vitest run src/engine/request-configuration.test.ts`，确认失败指向请求仍然使用旧配置。
 - [ ] 将配置读取放到每次请求迭代的自动压缩前；同一迭代捕获 `const request = await ...`，压缩客户端、阈值、prompt 与 `request.client.streamMessage` 使用该快照。循环外的 memory 检索不重复执行；将已有 memory、contribution、trajectory guidance 合并到当前配置生成的基础 prompt 上。
 - [ ] 首次 `prepareUserContent` 也用第一次捕获的 client，不能先用旧 client 处理附件再切换；捕获的首次快照直接用于首轮，不做两次独立读取。摘要请求结束期间收到更新留给下一迭代。
 - [ ] 通过 `execution.emit` 在请求开始前发送 `domain.event`，name 为 `request.configuration`，payload 只含 revision/model/provider/effort。事件失败遵循现有有序输出失败策略，不创建另一条绕过存储的旁路。
@@ -202,10 +202,10 @@ it("changes the next request without replaying a tool", async () => {
 **Interfaces:**
 
 ```ts
-// OpenHarnessAgent 新增；完成意味着配置已经通过校验并被接受。
+// VykorAgent 新增；完成意味着配置已经通过校验并被接受。
 updateConfiguration(patch: AgentRequestConfigurationPatch): Promise<AgentRequestConfigurationSnapshot>;
 
-// OpenHarnessAgentOptions 的宿主扩展：默认创建内存 store。
+// VykorAgentOptions 的宿主扩展：默认创建内存 store。
 requestConfigurationStore?: AgentRequestConfigurationReader;
 
 // 将 provider/目录校验注入 SDK 内存 store 与 daemon store。
@@ -240,7 +240,7 @@ const cases = [
 - [ ] 将子 Agent 派生输入改为读取父 Agent 已应用配置；`getAppliedRequestConfiguration(): AgentRequestConfigurationSnapshot` 作为运行时内部 getter。父 Agent 更新未应用时创建的子任务沿用旧值；应用后新建子任务用新值；已有 child 不被遍历改写。子任务显式覆盖后重新校验 effort。
 - [ ] 新增宿主按 child sessionId 提供读取器的工厂选项 `requestConfigurationStoreForSession?: (sessionId: string) => AgentRequestConfigurationReader | undefined`；child 创建时取得自己的读取器，不继承父读取器。child.created 事件携带父 Agent 已应用的选择；server 据此创建子会话，再供读取器使用。事件失败终止 child 创建。
 - [ ] 注册表/模型/强度变更不涉及 terminal、sandbox 或 executionEnvironment 资源重建。只在核心 API 与默认 runtime 所需位置接线，公开类型经 index/kernel-entry 一致导出。
-- [ ] 执行 `pnpm --filter @openharness/agent-runtime exec vitest run src/request-configuration.test.ts src/request-configuration-resolver.test.ts src/agent.test.ts src/child-agent-options.test.ts src/child-agent.test.ts src/kernel.test.ts src/public-surface.test.ts`。
+- [ ] 执行 `pnpm --filter @vykor/agent-runtime exec vitest run src/request-configuration.test.ts src/request-configuration-resolver.test.ts src/agent.test.ts src/child-agent-options.test.ts src/child-agent.test.ts src/kernel.test.ts src/public-surface.test.ts`。
 
 ## Task 4：daemon 会话存储与运行中修改接口
 
@@ -357,11 +357,11 @@ expect(store.getState().selectedModel).toBe(modelC.id);
 - [ ] 执行受影响包类型检查：
 
 ```powershell
-pnpm --filter @openharness/core --filter @openharness/protocol --filter @openharness/agent-runtime --filter @openharness/api --filter @openharness/server --filter @openharness/client --filter @openharness/frontend check-types
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/core --filter @vykor/protocol --filter @vykor/agent-runtime --filter @vykor/api --filter @vykor/server --filter @vykor/client --filter @vykor/frontend check-types
+pnpm --filter @vykor/desktop typecheck
 ```
 
-- [ ] 公共 SDK/客户端接口变化执行 `pnpm check:client-api`；agent-runtime 导出/build 变化执行 `pnpm --filter @openharness/agent-runtime test:pack`。将真实失败与环境限制分别记录，不宣称未运行的检查已通过。
+- [ ] 公共 SDK/客户端接口变化执行 `pnpm check:client-api`；agent-runtime 导出/build 变化执行 `pnpm --filter @vykor/agent-runtime test:pack`。将真实失败与环境限制分别记录，不宣称未运行的检查已通过。
 - [ ] 执行 `pnpm check-docs`，检查新增文档链接和生命周期测试映射。
 - [ ] 人工验收：长任务工具执行期间切模型/强度；快速连续选择；模型无效或配置失败；关闭重开会话；有活跃子任务时修改父会话。确认没有新增生效状态提示，没有环境切换行为变化。
 - [ ] `git diff --check`，核对修改文件全部属于本阶段；按用户当前分支/提交约定组织提交，不为本计划强制新建任务或自动发布。

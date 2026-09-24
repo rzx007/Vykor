@@ -1,11 +1,11 @@
-import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@openharness/core";
-import type { AgentChildResult, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope } from "@openharness/core";
+import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@vykor/core";
+import type { AgentChildResult, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { AgentChildManager, AgentChildRegistry } from "./child-agent.js";
 import { AgentEventBus } from "./event-source.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
-import { ToolRegistry } from "@openharness/core";
+import { ToolRegistry } from "@vykor/core";
 
 describe("AgentChildManager", () => {
   it("uses the parent's applied selection for a newly created child", async () => {

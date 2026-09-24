@@ -9,7 +9,7 @@ import {
   requestedPluginPermissions,
   validateNativePlugin,
 } from "../packages/plugins/src/index.ts";
-import { discoverOpenHarnessExtensions } from "../packages/agent-runtime/src/extensions.ts";
+import { discoverVykorExtensions } from "../packages/agent-runtime/src/extensions.ts";
 
 function parseArgs(argv) {
   const inputs = [];
@@ -37,8 +37,8 @@ function countPlanItems(items) {
 }
 
 const { cwd, inputs } = parseArgs(process.argv.slice(2));
-const runRoot = await mkdtemp(join(tmpdir(), "ohs-claude-real-regression-"));
-process.env.OPENHARNESS_CONFIG_DIR = join(runRoot, "config");
+const runRoot = await mkdtemp(join(tmpdir(), "vk-claude-real-regression-"));
+process.env.VYKOR_CONFIG_DIR = join(runRoot, "config");
 const outputRoot = join(runRoot, "converted");
 const cacheDir = join(runRoot, "cache");
 const storePath = join(runRoot, "config", "plugins", "installed.json");
@@ -73,7 +73,7 @@ try {
         storePath,
       });
       if (installed.status !== "installed") throw new Error(installed.diagnostics.map((item) => item.message).join("; "));
-      const discovery = await discoverOpenHarnessExtensions(cwd, { model: "regression-model", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" } }, { pluginsEnabled: true });
+      const discovery = await discoverVykorExtensions(cwd, { model: "regression-model", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" } }, { pluginsEnabled: true });
       record.status = "passed";
       record.identity = inspection.identity;
       record.detection = detected.detection;
@@ -105,5 +105,5 @@ try {
   console.log(JSON.stringify({ runRoot, cwd, results }, null, 2));
   if (failed.length) process.exitCode = 1;
 } finally {
-  if (!process.env.OPENHARNESS_KEEP_REAL_PLUGIN_REGRESSION) await rm(runRoot, { recursive: true, force: true });
+  if (!process.env.VYKOR_KEEP_REAL_PLUGIN_REGRESSION) await rm(runRoot, { recursive: true, force: true });
 }

@@ -40,7 +40,7 @@ metadata: {
 运行：
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/visual-tools/__test__/daemon-image-generation-tool.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/visual-tools/__test__/daemon-image-generation-tool.test.ts
 ```
 
 预期：创建 Tool 时缺少新的附件服务参数契约，且结果仍返回本机路径。
@@ -84,7 +84,7 @@ createDaemonImageGenerationTool({ attachments: this.attachments })
 - [ ] **步骤 2：运行测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/session/__test__/transcript-projection.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/session/__test__/transcript-projection.test.ts
 ```
 
 预期：现有投影只保存 Tool 部件，没有助手附件部件。
@@ -113,7 +113,7 @@ pnpm --filter @openharness/server exec vitest run src/application/session/__test
 - [ ] **步骤 2：运行测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/services exec vitest run src/session-runtime/__test__/store.test.ts src/attachment/__test__/attachment-integrity-service.test.ts
+pnpm --filter @vykor/services exec vitest run src/session-runtime/__test__/store.test.ts src/attachment/__test__/attachment-integrity-service.test.ts
 ```
 
 预期：现有引用统计只查询 `session_input_attachment`，生成资产被错误视为未引用。
@@ -141,7 +141,7 @@ pnpm --filter @openharness/services exec vitest run src/session-runtime/__test__
 - [ ] **步骤 2：运行测试验证失败**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
 ```
 
 预期：现有内容模型忽略 `attachment` 部件。
@@ -153,8 +153,8 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/d
 - [ ] **步骤 4：运行桌面定向测试与类型检查**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
-pnpm --filter @openharness/desktop check-types
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/message-render-model.test.ts
+pnpm --filter @vykor/desktop check-types
 ```
 
 预期：测试与类型检查通过。
@@ -165,12 +165,12 @@ pnpm --filter @openharness/desktop check-types
 
 - 检查全部本次修改文件。
 
-- [ ] 运行 `pnpm --filter @openharness/server test`。
-- [ ] 运行 `pnpm --filter @openharness/services test`。
-- [ ] 运行 `pnpm --filter @openharness/desktop test`。
-- [ ] 运行 `pnpm --filter @openharness/server check-types`。
-- [ ] 运行 `pnpm --filter @openharness/services check-types`。
-- [ ] 运行 `pnpm --filter @openharness/desktop check-types`。
+- [ ] 运行 `pnpm --filter @vykor/server test`。
+- [ ] 运行 `pnpm --filter @vykor/services test`。
+- [ ] 运行 `pnpm --filter @vykor/desktop test`。
+- [ ] 运行 `pnpm --filter @vykor/server check-types`。
+- [ ] 运行 `pnpm --filter @vykor/services check-types`。
+- [ ] 运行 `pnpm --filter @vykor/desktop check-types`。
 - [ ] 运行 `git diff --check`。
-- [ ] 搜索确认生产代码不再写 `~/.openharness-ts/images`，不再直接下载 provider URL，也不返回本机生成图片路径。
+- [ ] 搜索确认生产代码不再写 `~/.vykor/images`，不再直接下载 provider URL，也不返回本机生成图片路径。
 - [ ] 检查 `git status` 和目标文件 diff，确认没有覆盖用户已有的无关修改。

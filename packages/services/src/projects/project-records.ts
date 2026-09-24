@@ -1,6 +1,6 @@
 import { basename, resolve } from "node:path";
 
-import type { ProjectRecord } from "@openharness/protocol";
+import type { ProjectRecord } from "@vykor/protocol";
 
 export function projectFromRow(
   row: Record<string, unknown>,

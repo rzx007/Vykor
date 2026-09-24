@@ -1,9 +1,9 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 import {
   getAgentDefinition,
   getAllAgentDefinitions,
   type AgentDefinition,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 
 const scopedAgentDefinitions = new WeakMap<ToolDefinition, AgentDefinition[]>();
 
@@ -36,7 +36,7 @@ export const agentTool: ToolDefinition = {
     required: ["description", "prompt"],
   },
   async execute(input, context) {
-    const { getTeamRegistry } = await import("@openharness/coordinator");
+    const { getTeamRegistry } = await import("@vykor/coordinator");
 
     if (input.mode !== undefined) {
       return {

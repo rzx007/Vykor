@@ -7,12 +7,12 @@ import type {
   TerminalSignal,
   TerminalSource,
   TerminalWriteRequest,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   decodeTerminalEvent,
   decodeTerminalReadResult,
   decodeTerminalSessionInfo,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import { responseArray, responseField } from "../transport/http-transport.js";
 import type { SseTransport } from "../transport/sse-transport.js";

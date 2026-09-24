@@ -3,7 +3,7 @@ import type {
   ScheduledRunRecord,
   ScheduledTaskRecord,
   UpdateScheduledTaskInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type { ScheduledTaskStatusSummary } from "../types/index.js";
 

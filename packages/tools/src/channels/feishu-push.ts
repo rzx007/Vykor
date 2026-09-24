@@ -1,6 +1,6 @@
-import type { ToolDefinition } from "@openharness/core";
-import { ChannelConfigStore } from "@openharness/auth";
-import type { FeishuDomain } from "@openharness/auth";
+import type { ToolDefinition } from "@vykor/core";
+import { ChannelConfigStore } from "@vykor/auth";
+import type { FeishuDomain } from "@vykor/auth";
 import { createToolAbortScope } from "../abort.js";
 
 /** 飞书/Lark 开放平台 API 基址；lark 地区走 open.larksuite.com。 */
@@ -87,7 +87,7 @@ export const feishuPushTool: ToolDefinition = {
       if (!feishu?.appId || feishu.enabled === false) {
         return {
           content: [
-            { type: "text" as const, text: "Error: 渠道未配置，请先运行 ohs channels add feishu" },
+            { type: "text" as const, text: "Error: 渠道未配置，请先运行 vk channels add feishu" },
           ],
           isError: true,
         };

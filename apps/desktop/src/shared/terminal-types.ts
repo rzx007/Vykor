@@ -6,7 +6,7 @@ import type {
   TerminalResizeRequest,
   TerminalSessionInfo,
   TerminalWriteRequest,
-} from "@openharness/client"
+} from "@vykor/client"
 
 export type DesktopDetectedTerminalShell = { id: string; label: string }
 

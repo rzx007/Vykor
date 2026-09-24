@@ -40,7 +40,7 @@ Server 是安装规则的唯一入口。Desktop main 不解压、不校验 manif
 
 ## Local Archive Source Resolver
 
-新增 `@openharness/plugin-sources` 包，首版只实现本地 ZIP。使用 `yauzl` 的 lazy entry/size validation 和流式解压，不执行 archive 内任何代码。
+新增 `@vykor/plugin-sources` 包，首版只实现本地 ZIP。使用 `yauzl` 的 lazy entry/size validation 和流式解压，不执行 archive 内任何代码。
 
 固定限制：
 
@@ -62,7 +62,7 @@ Server 是安装规则的唯一入口。Desktop main 不解压、不校验 manif
 - 流式写入带 `wx` 的目标文件，累计实际字节必须等于 central directory 声明并保持在限制内；
 - 解析 CRC 错误、截断数据和格式错误统一失败并清理临时目录。
 
-插件 manifest 只能位于 ZIP 根目录的 `.openharness-plugin/plugin.json`，或唯一的一层顶级目录 `<name>/.openharness-plugin/plugin.json`。必须恰好一个候选；使用顶级目录包装时，ZIP 中所有有效文件都必须位于该目录下。这样不会猜测深层目录，也不会把插件外文件静默丢弃。
+插件 manifest 只能位于 ZIP 根目录的 `.vykor-plugin/plugin.json`，或唯一的一层顶级目录 `<name>/.vykor-plugin/plugin.json`。必须恰好一个候选；使用顶级目录包装时，ZIP 中所有有效文件都必须位于该目录下。这样不会猜测深层目录，也不会把插件外文件静默丢弃。
 
 Resolver 返回 `{ archiveDigest, candidateRoot, cleanup }`。调用者必须在 finally 中 cleanup。任何失败不返回 candidate，不留下已安装记录。
 

@@ -1,11 +1,11 @@
-import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@openharness/core";
+import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/core";
 import type {
   AttachmentIntent,
   ReplaceTranscriptMessageInput,
   ReplaceTranscriptPartInput,
   SessionMessagePartRecord,
   SessionMessageRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { publicTextFromParts } from "../../session/transcript-text.js";
 
 type UserMessageContent = Extract<Message, { type: "user" }>["content"];

@@ -5,14 +5,14 @@ import type {
   AgentChildDirectory,
   AgentChildHandle,
   AgentChildResult,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   cancelPersistentWorkflow,
   createWorkflowNotification,
   createWorkflowResultFromSnapshot,
   type WorkflowRunRepository,
   type WorkflowRunSnapshot,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import {
   filterJobSnapshots,
   isTerminalJobStatus,
@@ -26,12 +26,12 @@ import {
   type JobStatus,
   type JobWaitRequest,
   type JobWaitResult,
-} from "@openharness/jobs";
+} from "@vykor/jobs";
 import {
   getDetachedProcessSupervisor,
   type DetachedProcessExecution,
   type DetachedProcessSupervisor,
-} from "@openharness/services/executions";
+} from "@vykor/services/executions";
 
 const DEFAULT_OUTPUT_LIMIT = 12_000;
 const POLL_INTERVAL_MS = 50;

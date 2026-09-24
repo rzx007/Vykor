@@ -5,39 +5,39 @@ import { fileURLToPath } from "node:url"
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourceRoot = join(desktopRoot, "src")
 const allowedImports = new Set([
-  "@openharness/client",
-  "@openharness/server",
-  "@openharness/server/daemon-host",
+  "@vykor/client",
+  "@vykor/server",
+  "@vykor/server/daemon-host",
 ])
-const allowedPackageDependencies = new Set(["@openharness/client", "@openharness/server"])
+const allowedPackageDependencies = new Set(["@vykor/client", "@vykor/server"])
 const importPattern =
-  /(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)["'](@openharness\/[^"']+)["']/g
+  /(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)["'](@vykor\/[^"']+)["']/g
 
 export function validateDesktopWorkspaceImport(file, specifier) {
   if (!allowedImports.has(specifier)) {
     return `Desktop workspace import is not allowed: ${specifier} (${file})`
   }
   const normalized = file.replaceAll("\\", "/")
-  if (specifier.startsWith("@openharness/server") && !normalized.startsWith("src/main/")) {
+  if (specifier.startsWith("@vykor/server") && !normalized.startsWith("src/main/")) {
     return `Desktop server import is only allowed in main: ${specifier} (${file})`
   }
   return null
 }
 
 const failures = []
-if (!validateDesktopWorkspaceImport("src/main/demo.ts", "@openharness/core")) {
-  failures.push("Boundary verifier must reject @openharness/core")
+if (!validateDesktopWorkspaceImport("src/main/demo.ts", "@vykor/core")) {
+  failures.push("Boundary verifier must reject @vykor/core")
 }
-if (validateDesktopWorkspaceImport("src/main/demo.ts", "@openharness/server/daemon-host")) {
+if (validateDesktopWorkspaceImport("src/main/demo.ts", "@vykor/server/daemon-host")) {
   failures.push("Boundary verifier must allow daemon-host in main")
 }
-if (!validateDesktopWorkspaceImport("src/renderer/demo.ts", "@openharness/server")) {
+if (!validateDesktopWorkspaceImport("src/renderer/demo.ts", "@vykor/server")) {
   failures.push("Boundary verifier must reject server in renderer")
 }
-if (!validateDesktopWorkspaceImport("src/shared/demo.ts", "@openharness/server/daemon-host")) {
+if (!validateDesktopWorkspaceImport("src/shared/demo.ts", "@vykor/server/daemon-host")) {
   failures.push("Boundary verifier must reject daemon-host outside main")
 }
-if (!validateDesktopWorkspaceImport("src/main/demo.ts", "@openharness/server/internal")) {
+if (!validateDesktopWorkspaceImport("src/main/demo.ts", "@vykor/server/internal")) {
   failures.push("Boundary verifier must reject unknown server subpaths")
 }
 const packageJson = JSON.parse(await readFile(join(desktopRoot, "package.json"), "utf8"))
@@ -48,7 +48,7 @@ for (const section of [
   "peerDependencies",
 ]) {
   for (const name of Object.keys(packageJson[section] ?? {})) {
-    if (name.startsWith("@openharness/") && !allowedPackageDependencies.has(name)) {
+    if (name.startsWith("@vykor/") && !allowedPackageDependencies.has(name)) {
       failures.push(`Desktop package dependency is not allowed: ${name} (${section})`)
     }
   }

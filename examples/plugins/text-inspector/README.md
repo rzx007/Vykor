@@ -2,7 +2,7 @@
 
 这个样例演示 Skill 和 Plugin Agent 如何将用户文本交给 Node Tool，并按返回行号解释问题。插件 ID 为 `example.text-inspector`，版本为 `1.0.0`，不申请权限。宿主在独立 Node 子进程中加载 `tools/index.mjs` 的 `registerTools` 导出。
 
-入口由 `.openharness-plugin/plugin.json` 显式声明：`skills/check-text/SKILL.md` 提供调用指引，`agents/reviewer.md` 提供插件 Agent `example.text-inspector:reviewer`，`references/rules.md` 解释检查规则，`tools/index.mjs` 提供全局工具名 `TextInspectorCheck`。
+入口由 `.vykor-plugin/plugin.json` 显式声明：`skills/check-text/SKILL.md` 提供调用指引，`agents/reviewer.md` 提供插件 Agent `example.text-inspector:reviewer`，`references/rules.md` 解释检查规则，`tools/index.mjs` 提供全局工具名 `TextInspectorCheck`。
 
 输入示例：
 
@@ -26,7 +26,7 @@
 
 工具只处理传入文本，无文件读写或额外进程调用，也不返回原始文本片段，因此声明 `safeToRetry: true`。同步检查受输入长度限制；它不承诺在同步循环期间及时收到取消消息。
 
-真实 `.mjs` 通过 JSDoc 引用 `@openharness/plugins/sdk` 的 `NativeToolRegister` 类型，无运行期 SDK 依赖，也无需安装样例依赖。在仓库根目录运行：
+真实 `.mjs` 通过 JSDoc 引用 `@vykor/plugins/sdk` 的 `NativeToolRegister` 类型，无运行期 SDK 依赖，也无需安装样例依赖。在仓库根目录运行：
 
 ```sh
 node node_modules/typescript/bin/tsc -p packages/plugins/tsconfig.sdk-examples.json
@@ -60,7 +60,7 @@ tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 
 常见失败：
 
-- 找不到 manifest：确认插件包内有且只有一个 `.openharness-plugin/plugin.json`。
+- 找不到 manifest：确认插件包内有且只有一个 `.vykor-plugin/plugin.json`。
 - 导入成功但当前对话不能用：开新对话，或在没有运行中任务时执行 `/reload-plugins`。
-- Tool Host 启动失败：检查 `tools/index.mjs` 是否能被 Node 正常 import，不要普通 import `@openharness/plugins/sdk`。
+- Tool Host 启动失败：检查 `tools/index.mjs` 是否能被 Node 正常 import，不要普通 import `@vykor/plugins/sdk`。
 - 工具输入无效：只传 `{ "text": "..." }`，不要传字符串或额外字段。

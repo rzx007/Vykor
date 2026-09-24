@@ -1,4 +1,4 @@
-import type { JobSnapshot } from "@openharness/jobs";
+import type { JobSnapshot } from "@vykor/jobs";
 import { describe, expect, it, vi } from "vitest";
 
 import { createJobRoutes } from "./job.js";

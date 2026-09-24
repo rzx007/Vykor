@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OPENHARNESS_USER_AGENT } from "@openharness/api";
+import { VYKOR_USER_AGENT } from "@vykor/api";
 
 import { validateProviderCredential } from "./credential-validation.js";
 
@@ -30,8 +30,8 @@ describe("validateProviderCredential header templates", () => {
       "https://gateway.example/v1/models",
       expect.objectContaining({
         headers: expect.objectContaining({
-          "User-Agent": OPENHARNESS_USER_AGENT,
-          "X-Session": "openharness-credential-validation",
+          "User-Agent": VYKOR_USER_AGENT,
+          "X-Session": "vykor-credential-validation",
         }),
       }),
     );

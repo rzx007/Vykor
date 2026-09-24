@@ -35,8 +35,8 @@ describe("isKnownOutputStyle", () => {
 });
 
 describe("getOutputStylesDir", () => {
-  it("points at ~/.openharness-ts/output_styles", () => {
-    expect(getOutputStylesDir()).toBe(join(homedir(), ".openharness-ts", "output_styles"));
+  it("points at ~/.vykor/output_styles", () => {
+    expect(getOutputStylesDir()).toBe(join(homedir(), ".vykor", "output_styles"));
   });
 });
 

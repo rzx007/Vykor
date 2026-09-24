@@ -3,7 +3,7 @@ import {
   saveDaemonAutoStartPreference,
   shouldStartManagedDaemon,
   type DaemonAutoStartAction,
-} from "@openharness/server/daemon-host";
+} from "@vykor/server/daemon-host";
 
 import {
   createDaemonSystemService,
@@ -11,7 +11,7 @@ import {
   type DaemonSystemServiceState,
 } from "./daemon-system-service.js";
 
-export type { DaemonAutoStartAction } from "@openharness/server/daemon-host";
+export type { DaemonAutoStartAction } from "@vykor/server/daemon-host";
 
 export interface DaemonAutoStartReconciliation {
   service: DaemonSystemService;

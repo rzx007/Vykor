@@ -46,7 +46,7 @@
 
 - [ ] **步骤 3：跑迁移前测试**
 
-运行：pnpm --filter @openharness/services test -- src/session-runtime
+运行：pnpm --filter @vykor/services test -- src/session-runtime
 
 预期：PASS；新增断言在旧实现上成立。
 
@@ -67,7 +67,7 @@
 
 - [ ] **步骤 2：确认红灯**
 
-运行：pnpm --filter @openharness/services test -- src/sessions/session-repository.test.ts
+运行：pnpm --filter @vykor/services test -- src/sessions/session-repository.test.ts
 
 预期：FAIL，create/update/archive/beginArchive 尚不存在。
 
@@ -81,8 +81,8 @@
 
 - [ ] **步骤 5：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/sessions/session-repository.test.ts
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/sessions/session-repository.test.ts
+运行：pnpm --filter @vykor/services check-types
 运行：git add packages/services/src/sessions
 运行：git commit -m "refactor(services): move session entity writes"
 
@@ -98,7 +98,7 @@
 
 - [ ] **步骤 2：确认红灯**
 
-运行：pnpm --filter @openharness/services test -- src/conversations/conversation-repository.test.ts
+运行：pnpm --filter @vykor/services test -- src/conversations/conversation-repository.test.ts
 
 - [ ] **步骤 3：迁移 event 内核**
 
@@ -110,8 +110,8 @@
 
 - [ ] **步骤 5：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/conversations src/database/event-sequence.test.ts src/session-runtime
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/conversations src/database/event-sequence.test.ts src/session-runtime
+运行：pnpm --filter @vykor/services check-types
 运行：git add packages/services/src/conversations
 运行：git commit -m "refactor(services): move conversation entity writes"
 
@@ -127,7 +127,7 @@
 
 - [ ] **步骤 2：确认红灯**
 
-运行：pnpm --filter @openharness/services test -- src/runs/run-repository.test.ts
+运行：pnpm --filter @vykor/services test -- src/runs/run-repository.test.ts
 
 - [ ] **步骤 3：移动最小实现**
 
@@ -135,8 +135,8 @@
 
 - [ ] **步骤 4：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/runs/run-repository.test.ts src/database/event-sequence.test.ts
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test -- src/runs/run-repository.test.ts src/database/event-sequence.test.ts
+运行：pnpm --filter @vykor/services check-types
 运行：git add packages/services/src/runs
 运行：git commit -m "refactor(services): move run entity writes"
 
@@ -164,8 +164,8 @@ create/update 成功后 notify；reserve created=false 不通知；transition tr
 
 - [ ] **步骤 5：验证并提交**
 
-运行：pnpm --filter @openharness/services test -- src/runs src/session-runtime
-运行：pnpm --filter @openharness/server test -- src/jobs/daemon-job-service.test.ts
+运行：pnpm --filter @vykor/services test -- src/runs src/session-runtime
+运行：pnpm --filter @vykor/server test -- src/jobs/daemon-job-service.test.ts
 运行：git add packages/services/src/runs packages/services/src/session-runtime
 运行：git commit -m "refactor(services): move session task entity writes"
 
@@ -186,8 +186,8 @@ create/update 成功后 notify；reserve created=false 不通知；transition tr
 
 - [ ] **步骤 3：运行 Services 全包**
 
-运行：pnpm --filter @openharness/services test
-运行：pnpm --filter @openharness/services check-types
+运行：pnpm --filter @vykor/services test
+运行：pnpm --filter @vykor/services check-types
 
 - [ ] **步骤 4：提交**
 
@@ -216,9 +216,9 @@ create/update 成功后 notify；reserve created=false 不通知；transition tr
 - [ ] **步骤 4：最终验证**
 
 运行：
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
 node --test scripts/architecture-boundaries.test.mjs
 pnpm check:architecture
 node scripts/check-docs.mjs

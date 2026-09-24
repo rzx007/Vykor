@@ -2,7 +2,7 @@
  * SystemResource: 系统配置、命令、上下文、记忆、Dream 与环境设定资源。
  */
 
-import type { PluginCatalogEntry } from "@openharness/protocol";
+import type { PluginCatalogEntry } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type {
   CommandCatalogEntry,

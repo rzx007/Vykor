@@ -6,7 +6,7 @@
 
 - 每个外部会话（私聊 / 群 / 群内话题）按 `connector + accountId + chatId + threadId` 建一个 Session；
 - `SessionRepository.create` 会解析项目：有显式 `projectId` 用之，否则 `projects.inspect(cwd)`，**找不到就新建一条项目记录**；都拿不到才抛错（`packages/services/src/sessions/session-repository.ts`）。所以每个会话都有 `projectId`，项目名 = `basename(cwd)`；
-- 渠道会话的 `cwd` 是 `~/.openharness-ts/channels/feishu/<sanitize(chatId)>-<hash>`；
+- 渠道会话的 `cwd` 是 `~/.vykor/channels/feishu/<sanitize(chatId)>-<hash>`；
 - Desktop 侧边栏的「项目」区因此出现一串 `oc_...-hash` 项目，和用户自己的代码项目混在一起；
 - 会话标题是 `feishu · <chatId>`，对用户不可读；
 - 新建的渠道会话不会自动出现在侧边栏，需要手动刷新。
@@ -20,7 +20,7 @@
 - 侧边栏新增「IM 会话」分区：按平台（`feishu` 等）分组，组内列出该平台的会话。
 - 渠道会话**不出现在「项目」和「最近」**；「IM 会话」**没有内容时整栏（含标题）不渲染**。
 - 渠道会话标题 = 第一条消息（可读）；首条为图片/文件等无正文时回退 **`飞书 · <chatId>`**（本地化前缀，与分组标签一致）。
-- 渠道工作区改到 `<outsideProjectWorkspaceRoot 或 <文档>/OpenHarness>/channels/<connector>/<sanitize(chatId)>-<hash>`；复用 Desktop 的"项目外工作区"语义（打开按项目外处理）。
+- 渠道工作区改到 `<outsideProjectWorkspaceRoot 或 <文档>/Vykor>/channels/<connector>/<sanitize(chatId)>-<hash>`；复用 Desktop 的"项目外工作区"语义（打开按项目外处理）。
 - 旧渠道会话（改动前创建）也进「IM 会话」分区，且打开时同样按项目外处理。
 - 提供一个**手动刷新入口**，让新建渠道会话在刷新后可见（事件驱动的自动刷新本阶段不做）。
 
@@ -30,7 +30,7 @@
 - **不做事件驱动的"立即刷新"**（后续单独设计）；本阶段用手动刷新兜底。
 - **不自动清理遗留项目记录**（用户手动删除）；但 Desktop 会按会话归属隐藏这些项目行（见 §6.4）。
 - 不新增平台（仍只有飞书）。
-- 不改 `@openharness/protocol` durable 类型。
+- 不改 `@vykor/protocol` durable 类型。
 - 不改渠道运行时的连接/收发逻辑。
 
 ## 3. 关键决策
@@ -51,12 +51,12 @@
 
 ## 4. 现状机制（复用的部分）
 
-- 「项目外工作区」判定：`apps/desktop/src/main/features/session/outside-project-workspace.ts` 的 `isOutsideProjectWorkspacePath(path, documentsPath)` = 路径在 `<文档>/OpenHarness` 下；`buildOutsideProjectRoot(documents)` = `<文档>/OpenHarness`。
-- Desktop `bootstrap()` 用它过滤项目（`session-service.ts`）：`projectRecords.filter((p) => !isOutsideProjectWorkspacePath(p.path, app.getPath("documents")))`，并返回 `outsideProjectWorkspaceRoot = <文档>/OpenHarness`。
+- 「项目外工作区」判定：`apps/desktop/src/main/features/session/outside-project-workspace.ts` 的 `isOutsideProjectWorkspacePath(path, documentsPath)` = 路径在 `<文档>/Vykor` 下；`buildOutsideProjectRoot(documents)` = `<文档>/Vykor`。
+- Desktop `bootstrap()` 用它过滤项目（`session-service.ts`）：`projectRecords.filter((p) => !isOutsideProjectWorkspacePath(p.path, app.getPath("documents")))`，并返回 `outsideProjectWorkspaceRoot = <文档>/Vykor`。
 - 会话 `workspaceMode` 由 `toDesktopSessionRecord` 计算：`metadata.desktop.workspaceMode === "outside_project"` 或 cwd 在项目外根下 → `outside_project`。
 - 侧边栏「最近」= `workspaceMode === "outside_project"` 的会话（`sidebar.tsx` 的 `recentSessions`）。
 - 定时任务 standalone 会话就是这个模式（cwd 在项目外根下 + `metadata.desktop.workspaceMode`）。
-- Desktop 内置 daemon 传入精确的 `outsideProjectWorkspaceRoot`（`daemon-connection-service.ts`、`daemon-entry.ts`）；CLI `ohs daemon` 目前**不传**，当前回退 `getChannelWorkspaceRoot()` = `~/.openharness-ts/channels`。
+- Desktop 内置 daemon 传入精确的 `outsideProjectWorkspaceRoot`（`daemon-connection-service.ts`、`daemon-entry.ts`）；CLI `vk daemon` 目前**不传**，当前回退 `getChannelWorkspaceRoot()` = `~/.vykor/channels`。
 - 会话 metadata 会随 `SessionRecord.metadata` 透传到 Desktop（`DesktopSessionRecord.metadata`）；渠道会话由 `resolveConversation` 写 `source: "channel"` + `externalConversation`（旧会话也有）。
 - 打开会话的工作区解析：`resolveSessionWorkspace` 对 `outside_project` 返回 `selectedProject: null`；`selectActiveWorkspaceProject` 用 `projectFromSession` 合成工作区。
 
@@ -75,14 +75,14 @@ export function resolveChannelWorkspaceRoot(input: {
   if (input.envDir) return input.envDir;
   const base =
     input.outsideProjectWorkspaceRoot ??
-    join(input.homedir ?? homedir(), "Documents", "OpenHarness");
+    join(input.homedir ?? homedir(), "Documents", "Vykor");
   return join(base, "channels");
 }
 ```
 
-- `getChannelWorkspaceRoot()` 改为调用它（`envDir = process.env.OPENHARNESS_CHANNELS_DIR`），默认值因此从 `<配置目录>/channels` 变为 `<homedir>/Documents/OpenHarness/channels`（**语义变更**，见 §10）。
+- `getChannelWorkspaceRoot()` 改为调用它（`envDir = process.env.VYKOR_CHANNELS_DIR`），默认值因此从 `<配置目录>/channels` 变为 `<homedir>/Documents/Vykor/channels`（**语义变更**，见 §10）。
 - `DaemonApplication` 构造 `ChannelRuntimeService` 时传：
-  `workspaceRoot = resolveChannelWorkspaceRoot({ envDir: process.env.OPENHARNESS_CHANNELS_DIR, outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot, homedir: homedir() })`。
+  `workspaceRoot = resolveChannelWorkspaceRoot({ envDir: process.env.VYKOR_CHANNELS_DIR, outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot, homedir: homedir() })`。
 - `scheduled-task-executor` 的 standalone 目录也改为复用同一个 base（可选，保持一处逻辑）。
 
 每个会话目录名不变：`sanitize(chatId)-sha1(connector|accountId|chatId|threadId)[:12]`。
@@ -156,14 +156,14 @@ export function selectImSessionGroups(state: DesktopSessionState): DesktopImSess
 - 置顶：对渠道会话仍可用，且在 IM 组内排序生效（§6.1）。
 - 归档：归档后离开 IM 分区进入「已归档」；该外部会话的下一条消息会按 `resolveConversation` 新建会话（既有行为）。
 - 删除：删除会话后外部会话映射仍在，下一条消息重建会话（既有行为）。
-- 从 IM 会话回到「新对话」时 `workspaceMode` 仍是 `outside_project`，会在 `<文档>/OpenHarness/<日期>/xN` 建会话——与定时 standalone 一致，**接受**。
+- 从 IM 会话回到「新对话」时 `workspaceMode` 仍是 `outside_project`，会在 `<文档>/Vykor/<日期>/xN` 建会话——与定时 standalone 一致，**接受**。
 
 ### 6.4 项目隐藏
 
 `bootstrap()` 里项目过滤改为两条并集：
 
-1. 现有：路径在 `<文档>/OpenHarness` 下（覆盖新工作区）；
-2. 新增：项目 `normalizedPath` 命中任一**渠道会话的 `cwd`**（用会话 metadata 判定，覆盖 `OPENHARNESS_CHANNELS_DIR` 指到文档目录外、以及旧 `~/.openharness-ts/channels` 项目）。
+1. 现有：路径在 `<文档>/Vykor` 下（覆盖新工作区）；
+2. 新增：项目 `normalizedPath` 命中任一**渠道会话的 `cwd`**（用会话 metadata 判定，覆盖 `VYKOR_CHANNELS_DIR` 指到文档目录外、以及旧 `~/.vykor/channels` 项目）。
 
 第 2 条与路径/env 无关，保证 §9 验收 4 在 env 覆盖时也成立。遗留项目记录不删，只是不显示。
 
@@ -186,7 +186,7 @@ export function selectImSessionGroups(state: DesktopSessionState): DesktopImSess
 | `packages/core` | `resolveChannelWorkspaceRoot`：envDir 优先 / outsideProjectWorkspaceRoot / homedir 回退；`getChannelWorkspaceRoot` 默认值 |
 | `packages/server` | `channel-application-service`：标题=第一条消息；纯空白/纯标点/超长无标点/emoji 截断；空正文回退 `飞书 · chatId`；metadata 含 `desktop.workspaceMode`；已存在会话不改标题 |
 | `packages/server` | `channel-connector-labels`：映射与回退 |
-| `apps/desktop` main | `bootstrap()` 项目过滤：documents 根下隐藏；`OPENHARNESS_CHANNELS_DIR` 指向文档外时，渠道会话 cwd 对应项目仍隐藏 |
+| `apps/desktop` main | `bootstrap()` 项目过滤：documents 根下隐藏；`VYKOR_CHANNELS_DIR` 指向文档外时，渠道会话 cwd 对应项目仍隐藏 |
 | `apps/desktop` renderer | `isChannelSession`：externalConversation 存在 / 仅 source=channel / **fork 排除** / 两者都无 |
 | `apps/desktop` renderer | `selectImSessionGroups`：分组、标签（含缺失 connector）、置顶优先、稳定排序、仅未归档 |
 | `apps/desktop` renderer | `sidebar`：有 IM 时渲染分区与分组；无 IM 时**整栏不渲染**；「项目」「最近」不含渠道会话；「刷新」按钮调 `refreshBootstrap`；展开分区触发刷新；组内 >5 条有展开 |
@@ -199,7 +199,7 @@ export function selectImSessionGroups(state: DesktopSessionState): DesktopImSess
 1. **新建**一条飞书消息产生会话后，点「IM 会话」的「刷新」（或展开该分区），侧边栏出现「IM 会话 → 飞书」，组内会话标题为第一条消息。
 2. 无渠道会话时，侧边栏**不出现**「IM 会话」栏。
 3. 渠道会话（含旧会话）不出现在「项目」下的会话列表，也不出现在「最近」。
-4. 前提：未设置 `OPENHARNESS_CHANNELS_DIR`（或设置值也由 §6.4 第 2 条覆盖）时，渠道工作区落在 `<文档>/OpenHarness/channels/feishu/...`，且对应项目行不出现在「项目」。旧渠道项目行默认也被隐藏（记录仍在，用户可手动删）。
+4. 前提：未设置 `VYKOR_CHANNELS_DIR`（或设置值也由 §6.4 第 2 条覆盖）时，渠道工作区落在 `<文档>/Vykor/channels/feishu/...`，且对应项目行不出现在「项目」。旧渠道项目行默认也被隐藏（记录仍在，用户可手动删）。
 5. 旧渠道会话出现在「IM 会话」分区，打开时按"项目外"处理（不选中真实项目）。
 6. 相关包测试、类型检查、全仓构建、`check-docs`、`git diff --check` 全绿。
 7. （已知限制）没有事件推送；新建会话需点「刷新」或展开分区后才出现。
@@ -208,8 +208,8 @@ export function selectImSessionGroups(state: DesktopSessionState): DesktopImSess
 
 | 风险 | 缓解 |
 |---|---|
-| `getChannelWorkspaceRoot` 默认从配置目录改为文档目录，属**语义变更**；设了 `OPENHARNESS_CONFIG_DIR` 的用户渠道工作区会"搬家" | 不迁移旧数据；spec/文档明确；`OPENHARNESS_CHANNELS_DIR` 仍可显式覆盖 |
-| `OPENHARNESS_CHANNELS_DIR` 指到文档目录外时项目不再靠路径隐藏 | §6.4 第 2 条按会话 cwd 隐藏，不依赖路径 |
+| `getChannelWorkspaceRoot` 默认从配置目录改为文档目录，属**语义变更**；设了 `VYKOR_CONFIG_DIR` 的用户渠道工作区会"搬家" | 不迁移旧数据；spec/文档明确；`VYKOR_CHANNELS_DIR` 仍可显式覆盖 |
+| `VYKOR_CHANNELS_DIR` 指到文档目录外时项目不再靠路径隐藏 | §6.4 第 2 条按会话 cwd 隐藏，不依赖路径 |
 | fork 会话误判为渠道会话 | `isChannelSession` 排除 `metadata.fork` |
 | 旧渠道会话打开时选中遗留项目 | §6.3 统一按 outside_project 处理 |
 | 右侧工具显示 `oc_...-hash` 目录名 | §6.3 `projectFromSession` 用 `session.title` |

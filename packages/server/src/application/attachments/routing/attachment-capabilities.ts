@@ -1,17 +1,17 @@
 import type {
   ModelsDevModel,
   ProviderInputCapabilities,
-} from "@openharness/api";
+} from "@vykor/api";
 import {
   findByName,
   providerInputCapabilities,
-} from "@openharness/api";
+} from "@vykor/api";
 import type {
   Settings,
   InputSupport,
   ModelInputCapabilities,
-} from "@openharness/core";
-import type { SessionRuntimeConfig } from "@openharness/protocol";
+} from "@vykor/core";
+import type { SessionRuntimeConfig } from "@vykor/protocol";
 import type { ModelProviderInfo } from "../../settings-api.js";
 
 export function modelInputCapabilities(

@@ -111,7 +111,7 @@ export const BUILTIN_SESSION_COMMANDS: readonly CommandCatalogEntry[] = [
   },
   {
     name: "/version",
-    description: "Show OpenHarness version",
+    description: "Show Vykor version",
     kind: "session",
     source: "builtin",
   },
@@ -246,7 +246,7 @@ export const BUILTIN_SESSION_COMMANDS: readonly CommandCatalogEntry[] = [
   },
   {
     name: "/init",
-    description: "Initialize OpenHarness project files",
+    description: "Initialize Vykor project files",
     kind: "session",
     source: "builtin",
   },

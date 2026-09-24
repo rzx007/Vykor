@@ -4,7 +4,7 @@
 
 ## 边界
 
-`@openharness/client` 负责四件事：
+`@vykor/client` 负责四件事：
 
 1. 在首个业务请求前确认 Client 与 daemon 使用同一个协议版本；
 2. 通过领域 Resource 发起 typed HTTP 请求；
@@ -15,10 +15,10 @@ Client 不运行 Agent、不读 SQLite、不决定 prompt 是 steer 还是 queue
 
 ## 公开入口
 
-`OpenHarnessClient` 只组装 `protocol` 和领域 Resource：
+`VykorClient` 只组装 `protocol` 和领域 Resource：
 
 ```ts
-const client = new OpenHarnessClient({ baseUrl, token });
+const client = new VykorClient({ baseUrl, token });
 
 const session = await client.sessions.create(input);
 await client.sessions.admitPrompt(session.id, { content: "hello" });
@@ -26,7 +26,7 @@ await client.permissions.reply(requestId, { decision: "allow" });
 const jobs = await client.jobs.list();
 ```
 
-当前资源包括 system、providers、auth、projects、plugins、development、sessions、attachments、permissions、schedules、jobs、terminals、channels 和 events。底层 transport 类仍可作为 SDK 构件导入，但 `OpenHarnessClient` 实例不暴露 transport 属性；产品代码不应绕过 Resource 直接拼业务 endpoint。
+当前资源包括 system、providers、auth、projects、plugins、development、sessions、attachments、permissions、schedules、jobs、terminals、channels 和 events。底层 transport 类仍可作为 SDK 构件导入，但 `VykorClient` 实例不暴露 transport 属性；产品代码不应绕过 Resource 直接拼业务 endpoint。
 
 ## 首个请求前的协议握手
 
@@ -38,7 +38,7 @@ Resource method
   -> GET /capabilities
   -> checkProtocolCompatibility({ version: 4 })
   -> 成功后缓存握手结果
-  -> 业务请求携带 x-openharness-protocol-version: 4
+  -> 业务请求携带 x-vykor-protocol-version: 4
 ```
 
 版本必须完全相等。缺少版本、版本不是 4 或响应格式错误都会在业务请求前失败；Client 不尝试 min/max 范围协商，也不降级到旧协议。
@@ -84,7 +84,7 @@ Reducer 以 durable `seq` 去重。text delta 是 transient event：它会立即
 
 ## 状态放在哪里
 
-顶层 `OpenHarnessClientState` 保存：
+顶层 `VykorClientState` 保存：
 
 - session 列表和按 session 分桶的 Input、Message、Part、Run、Attempt、Task、Permission；
 - `eventsBySeq` 和 `lastSeq`，用于 durable replay 去重；
@@ -137,7 +137,7 @@ Resource response
 ## 失败语义
 
 - 协议不兼容：`IncompatibleProtocolError`，不发送业务请求；
-- HTTP 已知错误：转换为 `OpenHarnessApiError`，保留状态码和结构化 payload；
+- HTTP 已知错误：转换为 `VykorApiError`，保留状态码和结构化 payload；
 - 网络/SSE 暂时失败：Controller 进入 reconnecting 并从 `lastSeq` 继续；
 - event schema 不支持：进入 error，要求升级 Client；
 - generation 已过期或 signal aborted：丢弃迟到结果，不更新当前界面；

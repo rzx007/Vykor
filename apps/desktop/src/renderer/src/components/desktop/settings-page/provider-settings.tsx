@@ -422,7 +422,7 @@ export function ProviderSettings(): React.JSX.Element {
           <AlertDialogHeader>
             <AlertDialogTitle>断开 {disconnectTarget?.displayName}？</AlertDialogTitle>
             <AlertDialogDescription>
-              这会删除 OpenHarness 保存的该供应商凭证，不会影响供应商网站上的账户或订阅。
+              这会删除 Vykor 保存的该供应商凭证，不会影响供应商网站上的账户或订阅。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -446,7 +446,7 @@ export function ProviderSettings(): React.JSX.Element {
           <AlertDialogHeader>
             <AlertDialogTitle>删除 {customRemoveTarget?.displayName}？</AlertDialogTitle>
             <AlertDialogDescription>
-              这会移除自定义连接、模型和 OpenHarness 保存的对应凭证。该操作不会影响远端服务。
+              这会移除自定义连接、模型和 Vykor 保存的对应凭证。该操作不会影响远端服务。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -727,7 +727,7 @@ function ProviderRow({
                 ? provider.baseUrl
                 : provider.source === "catalog"
                   ? "models.dev 目录供应商"
-                  : "OpenHarness 内置供应商")}
+                  : "Vykor 内置供应商")}
           </p>
         </div>
       </div>

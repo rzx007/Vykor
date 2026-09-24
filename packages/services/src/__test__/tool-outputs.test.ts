@@ -10,9 +10,9 @@ import {
 } from "../tool-outputs.js";
 
 const ENV_KEYS = [
-  "OPENHARNESS_TOOL_OUTPUT_INLINE_CHARS",
-  "OPENHARNESS_TOOL_OUTPUT_PREVIEW_CHARS",
-  "OPENHARNESS_MICROCOMPACT_TOOL_RESULT_CHARS",
+  "VYKOR_TOOL_OUTPUT_INLINE_CHARS",
+  "VYKOR_TOOL_OUTPUT_PREVIEW_CHARS",
+  "VYKOR_MICROCOMPACT_TOOL_RESULT_CHARS",
 ] as const;
 
 afterEach(() => {
@@ -27,18 +27,18 @@ describe("budget envs", () => {
   });
 
   it("honors env overrides and clamps to the minimum", () => {
-    process.env.OPENHARNESS_TOOL_OUTPUT_INLINE_CHARS = "20000";
+    process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = "20000";
     expect(toolOutputInlineChars()).toBe(20000);
-    process.env.OPENHARNESS_TOOL_OUTPUT_INLINE_CHARS = "10"; // < minimum 256
+    process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = "10"; // < minimum 256
     expect(toolOutputInlineChars()).toBe(256);
-    process.env.OPENHARNESS_TOOL_OUTPUT_PREVIEW_CHARS = "5"; // < minimum 128
+    process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS = "5"; // < minimum 128
     expect(toolOutputPreviewChars()).toBe(128);
   });
 
   it("falls back to defaults on invalid env values", () => {
-    process.env.OPENHARNESS_MICROCOMPACT_TOOL_RESULT_CHARS = "not-a-number";
+    process.env.VYKOR_MICROCOMPACT_TOOL_RESULT_CHARS = "not-a-number";
     expect(microcompactToolResultChars()).toBe(DEFAULT_MICROCOMPACT_TOOL_RESULT_CHARS);
-    process.env.OPENHARNESS_MICROCOMPACT_TOOL_RESULT_CHARS = "";
+    process.env.VYKOR_MICROCOMPACT_TOOL_RESULT_CHARS = "";
     expect(microcompactToolResultChars()).toBe(DEFAULT_MICROCOMPACT_TOOL_RESULT_CHARS);
   });
 });

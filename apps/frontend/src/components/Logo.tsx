@@ -2,10 +2,9 @@ import { useTerminalDimensions } from "@opentui/react";
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../theme/ThemeContext";
 
-// 实测（bun probe）："openharness" block 字体共 102 列 ×6 行；slick 约 77 列。
-// 对齐 opencode 的实心 block 观感，宽度不足时逐级降级。
-const BLOCK_MIN_WIDTH = 104;
-const SLICK_MIN_WIDTH = 78;
+// 宽度不足时逐级降级，给标志两侧留出终端边距。
+const BLOCK_MIN_WIDTH = 60;
+const SLICK_MIN_WIDTH = 45;
 
 export function Logo() {
   const { theme } = useTheme();
@@ -15,8 +14,8 @@ export function Logo() {
     // Narrow fallback: single-line bold text with span dual-color
     return (
       <text attributes={TextAttributes.BOLD}>
-        <span fg={theme.colors.muted}>open</span>
-        <span fg={theme.colors.foreground}>harness</span>
+        <span fg={theme.colors.muted}>Vy</span>
+        <span fg={theme.colors.foreground}>kor</span>
       </text>
     );
   }
@@ -25,8 +24,8 @@ export function Logo() {
   // Two side-by-side ascii-font elements for dual-color effect
   return (
     <box flexDirection="row">
-      <ascii-font text="open" font={font} color={theme.colors.muted} />
-      <ascii-font text="harness" font={font} color={theme.colors.foreground} />
+      <ascii-font text="Vy" font={font} color={theme.colors.muted} />
+      <ascii-font text="kor" font={font} color={theme.colors.foreground} />
     </box>
   );
 }

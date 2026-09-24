@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpTransport } from "../http-transport.js";
-import { OpenHarnessClient } from "../http-client.js";
+import { VykorClient } from "../http-client.js";
 
 const capabilities = (version = 4) => Response.json({
   serverVersion: "test",
@@ -20,7 +20,7 @@ describe("mandatory protocol handshake", () => {
       if (path.endsWith("/stream")) return new Response("");
       return Response.json({ sessions: [] });
     });
-    const client = new OpenHarnessClient({ baseUrl: "http://daemon", fetch: fetchImpl });
+    const client = new VykorClient({ baseUrl: "http://daemon", fetch: fetchImpl });
     const requests = [
       client.sessions.list(),
       client.events.stream()[Symbol.asyncIterator]().next(),
@@ -32,13 +32,13 @@ describe("mandatory protocol handshake", () => {
     await client.sessions.list();
     expect(calls.filter((call) => call.path === "/capabilities")).toHaveLength(1);
     for (const call of calls.slice(1)) {
-      expect(call.headers.get("x-openharness-protocol-version")).toBe("4");
+      expect(call.headers.get("x-vykor-protocol-version")).toBe("4");
     }
   });
 
   it.each([3, 5])("does not send HTTP or SSE business requests to protocol %s", async (version) => {
     const fetchImpl = vi.fn(async () => capabilities(version));
-    const client = new OpenHarnessClient({ baseUrl: "http://daemon", fetch: fetchImpl });
+    const client = new VykorClient({ baseUrl: "http://daemon", fetch: fetchImpl });
     const results = await Promise.allSettled([
       client.sessions.list(),
       client.events.stream()[Symbol.asyncIterator]().next(),
@@ -57,10 +57,10 @@ describe("mandatory protocol handshake", () => {
     await expect(transport.requestResponse("/attachments/a")).rejects.toThrow(/protocol/);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     await transport.requestResponse("/attachments/a", {
-      headers: { "X-OpenHarness-Protocol-Version": "3" },
+      headers: { "X-Vykor-Protocol-Version": "3" },
     });
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(new Headers(fetchImpl.mock.calls[2]![1].headers).get("x-openharness-protocol-version")).toBe("4");
+    expect(new Headers(fetchImpl.mock.calls[2]![1].headers).get("x-vykor-protocol-version")).toBe("4");
   });
 
   it("exempts health and capabilities, including query strings, without marking the connection verified", async () => {

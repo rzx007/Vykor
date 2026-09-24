@@ -1,6 +1,6 @@
-# @openharness/terminal-node
+# @vykor/terminal-node
 
-Node-backed terminal runtime for OpenHarness.
+Node-backed terminal runtime for Vykor.
 
 This package owns local PTY process management and keeps `node-pty` out of UI surfaces.
 

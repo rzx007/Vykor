@@ -22,7 +22,7 @@ for (const name of ["electron-updater", "electron-log"]) {
 }
 
 for (const name of Object.keys(packageJson.dependencies ?? {})) {
-  if (name.startsWith("@openharness/")) {
+  if (name.startsWith("@vykor/")) {
     failures.push(
       `${name} must not be a Desktop production dependency (bundle workspace packages; see docs/packaging.md)`,
     )
@@ -39,8 +39,8 @@ for (const marker of [
   if (!builder.includes(marker)) failures.push(`electron-builder.yml is missing ${marker}`)
 }
 const linuxSection = builder.slice(builder.indexOf("\nlinux:"))
-if (!linuxSection.includes("executableName: OpenHarness")) {
-  failures.push("electron-builder.yml must set linux.executableName to OpenHarness")
+if (!linuxSection.includes("executableName: Vykor")) {
+  failures.push("electron-builder.yml must set linux.executableName to Vykor")
 }
 if (builder.includes("- snap")) failures.push("electron-builder.yml should not publish snap")
 if (builder.includes("example.com")) {

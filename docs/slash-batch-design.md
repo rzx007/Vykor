@@ -18,7 +18,7 @@
 
 ## 顺带修复
 
-- `getUserPluginsDir()` 尊重 `OPENHARNESS_CONFIG_DIR`（与 core/paths 同约定，
+- `getUserPluginsDir()` 尊重 `VYKOR_CONFIG_DIR`（与 core/paths 同约定，
   测试隔离需要）。
 - core `HookExecutor` 接口补可选 `getAll()` / `unregister()`（hooks 包实现
   本就有，接口面跟上，供 reload 清理用）。
@@ -36,4 +36,4 @@
 
 `apps/cli/src/commands/slash-batch.test.ts`：helpers + daemon profile/context 服务冒烟（旧 REPL registry 已拆除）
 四命令输出形状 + `/plugin enable` 持久化断言；discovery.test 钉住
-`OPENHARNESS_CONFIG_DIR` 重定向。
+`VYKOR_CONFIG_DIR` 重定向。

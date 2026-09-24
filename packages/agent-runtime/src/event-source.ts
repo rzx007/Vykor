@@ -7,7 +7,7 @@ import type {
   AgentEventListener,
   AgentEventSource,
   AgentEventSubscription,
-} from "@openharness/core";
+} from "@vykor/core";
 
 export class AgentEventDeliveryError extends Error {
   constructor(readonly cause: unknown) {

@@ -1,18 +1,18 @@
 import { join, resolve } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { OpenHarnessClient, type PluginInfo } from "@openharness/client";
+import { VykorClient, type PluginInfo } from "@vykor/client";
 import {
   requestedPluginPermissions,
   validateNativePlugin,
-} from "@openharness/plugins";
-import { createBuiltinConverterRegistry, type ConversionPlan } from "@openharness/plugin-converters";
+} from "@vykor/plugins";
+import { createBuiltinConverterRegistry, type ConversionPlan } from "@vykor/plugin-converters";
 import { Command } from "commander";
 import { ensureLocalDaemon } from "../ensure-daemon.js";
 
-async function client(): Promise<OpenHarnessClient> {
+async function client(): Promise<VykorClient> {
   const daemon = await ensureLocalDaemon();
-  return new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+  return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
 }
 const collect = (value: string, previous: string[]) => [...previous, value];
 
@@ -186,7 +186,7 @@ export function createPluginCommand(): Command {
   cmd.command("install").argument("<source>").requiredOption("--from <converter>", "source converter: claude-code or codex")
     .option("--cwd <path>").option("--approve <item>", "approve conversion item or permission", collect, [])
     .action(async (source, options) => {
-      const temporaryRoot = await mkdtemp(join(tmpdir(), "ohs-plugin-import-"));
+      const temporaryRoot = await mkdtemp(join(tmpdir(), "vk-plugin-import-"));
       const output = join(temporaryRoot, "native");
       try {
         const { converter } = await createBuiltinConverterRegistry().detect(resolve(source), options.from);

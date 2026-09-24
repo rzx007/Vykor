@@ -1,4 +1,4 @@
-# OpenHarness Desktop
+# Vykor Desktop
 
 ## Daemon 常驻
 
@@ -6,9 +6,9 @@
 
 真正首次安装且尚未开启常驻时，侧边栏底部会显示一次「保持后台运行」引导。开启成功或选择「暂不开启」后该区域永久消失；升级安装不会补发引导。安装身份和引导状态保存在 Desktop 的 `desktop-preferences.json`，与 `daemon.autoStart` 分开管理。
 
-Desktop 的 OpenHarness workspace 边界只有两个：所有 HTTP/SSE 操作和协议类型走 `@openharness/client`；内嵌 daemon、registry 和系统启动项等本机能力走 `@openharness/server/daemon-host`。WSL 可用性由 daemon 宿主校验，Desktop 不直接依赖 core、sandbox、terminal 或 terminal-node。
+Desktop 的 Vykor workspace 边界只有两个：所有 HTTP/SSE 操作和协议类型走 `@vykor/client`；内嵌 daemon、registry 和系统启动项等本机能力走 `@vykor/server/daemon-host`。WSL 可用性由 daemon 宿主校验，Desktop 不直接依赖 core、sandbox、terminal 或 terminal-node。
 
-Electron + React desktop shell for OpenHarness.
+Electron + React desktop shell for Vykor.
 
 ## Structure
 
@@ -23,7 +23,7 @@ Electron + React desktop shell for OpenHarness.
 
 ```bash
 pnpm install
-pnpm --filter @openharness/desktop dev
+pnpm --filter @vykor/desktop dev
 ```
 
 ## C++ 原生模块
@@ -53,11 +53,11 @@ node-gyp failed to rebuild ...\node-pty
 
 ## 安装包
 
-日常验证用 `pnpm --filter @openharness/desktop build:unpack`（不解 NSIS）。为什么 production 依赖必须很瘦、以及 `pnpm build:win` 卡在搜索 node modules 时看什么，见 [docs/packaging.md](./docs/packaging.md)。
+日常验证用 `pnpm --filter @vykor/desktop build:unpack`（不解 NSIS）。为什么 production 依赖必须很瘦、以及 `pnpm build:win` 卡在搜索 node modules 时看什么，见 [docs/packaging.md](./docs/packaging.md)。
 
 ## Checks
 
 ```bash
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 ```

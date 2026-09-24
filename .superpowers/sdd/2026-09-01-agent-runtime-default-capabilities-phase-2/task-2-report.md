@@ -5,7 +5,7 @@
 - agent-runtime 继续按默认规则创建现有 `AgentMemoryRuntime`，capability snapshot 为 `available/default`，并注册受管 `Remember` 工具。
 - `settings.memory.enabled === false` 与 `capabilityOverrides.memory === false` 统一解析为 disabled；两者得到相同 capabilities snapshot，不注册 `Remember`、不设置 memory retriever，`agent.remember()` 返回 `memory is disabled`。
 - 自动提取会识别同一 run 中已经发出的受管 `Remember` 调用，不会在主动记忆后再次请求模型提取。
-- 现有受管语义保持不变：user scope 继续经过 `appendUserProfileUpdate`，project scope 继续经过现有 `MemoryManager`；模型看到的 `Remember` 工具定义不包含 `USER.md`、`.openharness`、cwd 或真实记忆目录。
+- 现有受管语义保持不变：user scope 继续经过 `appendUserProfileUpdate`，project scope 继续经过现有 `MemoryManager`；模型看到的 `Remember` 工具定义不包含 `USER.md`、`.vykor`、cwd 或真实记忆目录。
 
 ## 修改文件
 
@@ -27,9 +27,9 @@
 ## 验证结果
 
 ```powershell
-pnpm --filter @openharness/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
-pnpm --filter @openharness/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime exec vitest run src/memory-runtime.test.ts src/remember-tool.test.ts src/sdk.test.ts
+pnpm --filter @vykor/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 git diff --check
 ```
 

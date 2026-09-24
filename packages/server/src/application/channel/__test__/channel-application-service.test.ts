@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DurableChannelMessageInput, ExternalConversationRecord, ChannelDeliveryRecord } from "@openharness/protocol";
+import type { DurableChannelMessageInput, ExternalConversationRecord, ChannelDeliveryRecord } from "@vykor/protocol";
 import { ChannelApplicationService } from "../channel-application-service.js";
 import { ApplicationError } from "../../../shared/application-error.js";
 

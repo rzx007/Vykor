@@ -16,13 +16,13 @@ let cfgDir: string;
 let projDir: string;
 
 beforeEach(() => {
-  cfgDir = mkdtempSync(join(tmpdir(), "ohs-sm-cfg-"));
-  projDir = mkdtempSync(join(tmpdir(), "ohs-sm-proj-"));
-  process.env.OPENHARNESS_CONFIG_DIR = cfgDir;
+  cfgDir = mkdtempSync(join(tmpdir(), "vk-sm-cfg-"));
+  projDir = mkdtempSync(join(tmpdir(), "vk-sm-proj-"));
+  process.env.VYKOR_CONFIG_DIR = cfgDir;
 });
 
 afterEach(() => {
-  delete process.env.OPENHARNESS_CONFIG_DIR;
+  delete process.env.VYKOR_CONFIG_DIR;
   rmSync(cfgDir, { recursive: true, force: true });
   rmSync(projDir, { recursive: true, force: true });
 });
@@ -84,6 +84,19 @@ describe("buildSessionMemoryDocument", () => {
     );
     expect(huge.length).toBeLessThanOrEqual(MAX_SESSION_MEMORY_CHARS + 100);
     expect(huge).toContain("truncated to stay within budget");
+  });
+
+  it("keeps the latest conversation when the checkpoint exceeds its budget", () => {
+    const doc = buildSessionMemoryDocument(
+      Array.from({ length: 80 }, (_, i) => ({
+        role: "user",
+        content: `message-${i} ${"x".repeat(210)}`,
+      })),
+    );
+
+    expect(doc).toContain("message-79");
+    expect(doc).not.toContain("message-0");
+    expect(doc.length).toBeLessThanOrEqual(MAX_SESSION_MEMORY_CHARS + 100);
   });
 });
 

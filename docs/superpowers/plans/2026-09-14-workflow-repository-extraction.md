@@ -21,7 +21,7 @@
 
 - [ ] 先写失败测试：run/attempt 保存与替换、owner/status 过滤、磁盘重载、event 顺序、claim 首次/重复/接管/结束、失效 owner 拒绝写入。
 - [ ] 用 trigger 在第二个 attempt INSERT 时失败，断言旧 snapshot 与旧 attempts 完整保留。
-- [ ] 运行 `pnpm --filter @openharness/services test -- workflow-repository`，确认缺少模块而失败。
+- [ ] 运行 `pnpm --filter @vykor/services test -- workflow-repository`，确认缺少模块而失败。
 - [ ] 实现 Records、七方法 Repository，并给 StorageContext 增加 `assertWritable()`；Store 绑定到现有 owner fence。
 - [ ] 运行 Repository 测试和 Services 类型检查。
 - [ ] 提交：`refactor(services): add workflow repository`。

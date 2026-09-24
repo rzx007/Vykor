@@ -1,17 +1,17 @@
 export {
   AgentChildBudgetExceededError,
   AgentRunNotAcceptingInputError,
-} from "@openharness/core";
+} from "@vykor/core";
 export {
   AgentOperationConflictError,
   type AgentCompactResult,
   type AgentInspection,
-  type OpenHarnessAgent,
-  type OpenHarnessAgentState,
-  type OpenHarnessAgentSubmitOptions,
+  type VykorAgent,
+  type VykorAgentState,
+  type VykorAgentSubmitOptions,
 } from "./agent.js";
 export type {
-  OpenHarnessAgentConfiguration,
+  VykorAgentConfiguration,
 } from "./agent-options.js";
 export type {
   AgentCapabilitySnapshot,

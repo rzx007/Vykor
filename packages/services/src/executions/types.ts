@@ -1,6 +1,6 @@
-import type { AgentChildResult, Settings } from "@openharness/core";
-import type { EnvironmentProcessExecutor } from "@openharness/environment";
-import type { SandboxPolicy } from "@openharness/sandbox";
+import type { AgentChildResult, Settings } from "@vykor/core";
+import type { EnvironmentProcessExecutor } from "@vykor/environment";
+import type { SandboxPolicy } from "@vykor/sandbox";
 
 export type ExecutionBackend = "detached_process" | "child_agent";
 export type ExecutionType = "shell" | "agent" | "dream";

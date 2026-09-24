@@ -17,7 +17,7 @@ import {
   AttachmentIntegrityService,
   DEFAULT_RETENTION_POLICY,
   SessionStore,
-} from "@openharness/services";
+} from "@vykor/services";
 
 export interface BackupSourceDirectories {
   artifacts?: string;

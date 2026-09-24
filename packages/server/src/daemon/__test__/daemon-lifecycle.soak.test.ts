@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { OpenHarnessAgent } from "@openharness/agent-runtime";
+import type { VykorAgent } from "@vykor/agent-runtime";
 import type {
   AgentEvent,
   AgentEventContext,
@@ -12,14 +12,14 @@ import type {
   AgentRunHandle,
   AgentRunResult,
   Message,
-} from "@openharness/core";
+} from "@vykor/core";
 
 import type { CreateDaemonAgent } from "../daemon-agent.js";
-import { OpenHarnessHttpServer } from "../../http/server.js";
+import { VykorHttpServer } from "../../http/server.js";
 
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
-  headers.set("x-openharness-protocol-version", "4");
+  headers.set("x-vykor-protocol-version", "4");
   return globalThis.fetch(input, { ...init, headers });
 };
 
@@ -42,7 +42,7 @@ function createSoakAgent(metrics: SoakMetrics): CreateDaemonAgent {
     metrics.generations.set(context.session.id, generation);
     let history: Message[] = [];
     let sequence = 0;
-    let state: OpenHarnessAgent["state"] = "idle";
+    let state: VykorAgent["state"] = "idle";
     let closePromise: Promise<void> | undefined;
 
     const emit = async (input: AgentEventInput, eventContext: AgentEventContext): Promise<void> => {
@@ -56,7 +56,7 @@ function createSoakAgent(metrics: SoakMetrics): CreateDaemonAgent {
       await context.options.onEvent?.(event);
     };
 
-    const agent: OpenHarnessAgent = {
+    const agent: VykorAgent = {
       id: context.session.id,
       get state() { return state; },
       children: { get: () => undefined, getBySessionId: () => undefined, list: () => [] },
@@ -201,7 +201,7 @@ function expectExactTranscript(state: SessionState, expectedPrompts: string[]): 
 
 describe("daemon lifecycle soak", () => {
   it("keeps multi-session transcripts exact across queued runs and two daemon restarts", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-daemon-lifecycle-soak-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-daemon-lifecycle-soak-"));
     const storePath = join(dir, "sessions.db");
     const sessionIds = Array.from({ length: 4 }, (_, index) => `soak-session-${index + 1}`);
     const prompts = new Map(sessionIds.map((sessionId) => [sessionId, [] as string[]]));
@@ -211,11 +211,11 @@ describe("daemon lifecycle soak", () => {
       closedAgents: 0,
     };
     const roundsByGeneration = [6, 4, 2];
-    let server: OpenHarnessHttpServer | undefined;
+    let server: VykorHttpServer | undefined;
 
     try {
       for (let generation = 0; generation < roundsByGeneration.length; generation += 1) {
-        server = new OpenHarnessHttpServer({
+        server = new VykorHttpServer({
           storePath,
           createAgent: createSoakAgent(metrics),
           logger: () => {},

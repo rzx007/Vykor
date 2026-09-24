@@ -4,9 +4,9 @@ import type {
   McpServerConfig,
   Settings,
   IToolRegistry,
-} from "@openharness/core";
-import { updateSettings } from "@openharness/core";
-import { McpClientManager, resolveTransportKind } from "@openharness/mcp";
+} from "@vykor/core";
+import { updateSettings } from "@vykor/core";
+import { McpClientManager, resolveTransportKind } from "@vykor/mcp";
 
 export interface CreateMcpAuthHostOptions {
   settings: Settings;

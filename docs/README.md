@@ -1,4 +1,4 @@
-# OpenHarness 文档目录
+# Vykor 文档目录
 
 > 状态：当前文档总入口。
 
@@ -40,8 +40,8 @@
 
 ## 第 0 层：系统鸟瞰
 
-1. [OpenHarness 架构总览](./architecture-overview.md)：先看 CLI/TUI/Web/Desktop/IDE/Bot/Workflow 怎样共用一套 Application 和 Runtime。
-2. [可交互架构图](./openharness-current-architecture.html)：用组件图查看 Client、Application、Storage 和 Runtime 的主依赖方向。
+1. [Vykor 架构总览](./architecture-overview.md)：先看 CLI/TUI/Web/Desktop/IDE/Bot/Workflow 怎样共用一套 Application 和 Runtime。
+2. [可交互架构图](./vykor-current-architecture.html)：用组件图查看 Client、Application、Storage 和 Runtime 的主依赖方向。
 3. [架构重构收口与当前边界](./architecture-migration-status.md)：确认 Stage 0–8 的最终结果、已删除兼容面和长期门禁。
 4. [产品入口接入边界](./product-surface-integration.md)：再看每种产品自己负责什么、哪些状态必须共用。
 5. [Framework 与 Durable Application 的能力边界](./agent-framework-capability-boundary.md)：继续下钻 Runtime、daemon 和产品界面的所有权。
@@ -63,7 +63,7 @@
 | 一个数据目录只有一个活动 Application Owner | [Operations and Recovery：Application Owner](./operations-and-recovery.md#application-owner) |
 | 客户端与服务端必须使用完全相同的协议版本 | [Protocol Contract](./protocol-contract.md) |
 | 清理、备份和恢复不能留下半完成状态 | [Operations and Recovery](./operations-and-recovery.md) |
-| 开发数据重置必须先解析最终路径并逐项授权 | [OpenHarness 开发数据重置手册](./development-data-reset.md) |
+| 开发数据重置必须先解析最终路径并逐项授权 | [Vykor 开发数据重置手册](./development-data-reset.md) |
 
 三条一级保证的入口：
 
@@ -78,7 +78,7 @@
 ### Agent Runtime Kernel
 
 - [Agent Runtime 框架架构](./agent-runtime-framework-architecture.md)：Kernel 对象、创建流程、Run、事件、Handle 和状态机。
-- [OpenHarness Agent SDK](./agent-sdk.md)：程序中怎样直接创建和使用 Agent。
+- [Vykor Agent SDK](./agent-sdk.md)：程序中怎样直接创建和使用 Agent。
 - [Agent Child Session Flow](./agent-child-session-flow.md)：child 创建、等待、follow-up、预算、关闭和 durable 投影。
 - [CompactService](./compact-service-design.md)：上下文压缩、checkpoint、Tool 配对和失败策略。
 - [Prompt Layering](./prompt-layering-design.md)：系统提示词怎样分层组装。
@@ -120,8 +120,8 @@
 - [Native / WSL 运行环境与 SRT](./sandbox-runtime-design.md)：运行位置与本机 SRT 权限边界。
 - [LSP Client 设计](./lsp-client-design.md)：把当前正则/ripgrep 近似实现替换成真实语言服务器连接，说明协议库选型、Runtime 生命周期、环境路径、权限和分阶段验收。
 - [MCP HTTP Transport](./mcp-http-transport-design.md)：MCP HTTP/SSE 与鉴权。
-- [OpenHarness 原生插件与外部转换器设计](./superpowers/specs/2026-08-25-native-plugin-and-converters-design.md)：Native Plugin 唯一运行时契约，以及 Claude Code、Codex 等外部格式的独立转换设计。
-- [OpenHarness 插件系统最终形态交接](./plugin-system-handoff.md)：面向后续开发者说明最终用户形态、Native Plugin 契约、转换与安装边界、当前完成度和建议实施顺序。
+- [Vykor 原生插件与外部转换器设计](./superpowers/specs/2026-08-25-native-plugin-and-converters-design.md)：Native Plugin 唯一运行时契约，以及 Claude Code、Codex 等外部格式的独立转换设计。
+- [Vykor 插件系统最终形态交接](./plugin-system-handoff.md)：面向后续开发者说明最终用户形态、Native Plugin 契约、转换与安装边界、当前完成度和建议实施顺序。
 - [原生插件开发第一阶段设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)：公开开发类型、五类组件指南、文本检查参考插件及真实调用和生命周期验收。
 - [Desktop 本地 Native Plugin 包导入](./superpowers/specs/2026-09-09-desktop-native-plugin-zip-import-design.md)与[实施计划](./superpowers/plans/2026-09-09-desktop-native-plugin-zip-import.md)：插件页面当前可选择一个本地 Native `.zip`、`.tar`、`.tar.gz` 或 `.tgz`，后台校验后直接安装或进行一次权限确认；Git URL 安装已完成实现与真实仓库验收，npm、归档 URL 和 Marketplace 仍未进入 Desktop。
 - [Native Plugin 重新安装核心设计](./superpowers/specs/2026-09-10-native-plugin-reinstall-core-design.md)与[实施计划](./superpowers/plans/2026-09-10-native-plugin-reinstall-core.md)：重新导入同一插件 ID 的 Native 插件包完成手动更新或修复，只在新增权限时重新确认，并保留旧记录到新快照成功切换。
@@ -165,7 +165,7 @@
 
 ## 第 4 层：开发和运维入口
 
-- 直接嵌入 Agent：[OpenHarness Agent SDK](./agent-sdk.md)
+- 直接嵌入 Agent：[Vykor Agent SDK](./agent-sdk.md)
 - 使用 Workflow 文件 CLI：[Workflow CLI](./workflow-cli.md)
 - 使用 slash command：[Slash Commands](./slash-commands.md)
 - 远程连接 daemon：[Remote Attach](./remote-attach.md)
@@ -221,5 +221,5 @@
 - 一条跨模块硬规则只指定一份权威文档，其他地方链接过去，不复制整段契约。
 - 每份当前文档开头必须标明“当前实现”或“权威契约”；计划和历史资料也必须明确状态。
 - 修改公开入口、持久化格式、协议版本、状态机或所有权边界时，必须同步更新本目录和对应权威文档。
-- 修改 Client Resource、Server Application Service、Repository/Transaction 或 Runtime 所有权时，同时核对架构总览、对应专题文档、根 README 和 `openharness-current-architecture.architecture.json` 图源。
+- 修改 Client Resource、Server Application Service、Repository/Transaction 或 Runtime 所有权时，同时核对架构总览、对应专题文档、根 README 和 `vykor-current-architecture.architecture.json` 图源。
 - 不增加兼容代码来维持过时文档。

@@ -149,7 +149,7 @@ describe("desktop session selectors", () => {
       id: "outside-session",
       projectId: "managed-workspace-project",
       workspaceMode: "outside_project" as const,
-      cwd: "C:\\Users\\tester\\Documents\\OpenHarness\\2026-09-01\\x1",
+      cwd: "C:\\Users\\tester\\Documents\\Vykor\\2026-09-01\\x1",
       title: "项目外会话",
       model: "test-model",
       status: "idle" as const,
@@ -167,7 +167,7 @@ describe("desktop session selectors", () => {
     expect(workspace).toEqual({
       id: "managed-workspace-project",
       name: "x1",
-      path: "C:\\Users\\tester\\Documents\\OpenHarness\\2026-09-01\\x1",
+      path: "C:\\Users\\tester\\Documents\\Vykor\\2026-09-01\\x1",
       lastOpenedAt: 2,
       available: true,
     })
@@ -178,18 +178,18 @@ describe("desktop session selectors", () => {
     const state = stateWith({
       workspaceMode: "outside_project",
       selectedProject: null,
-      outsideProjectWorkspaceRoot: "C:\\Users\\tester\\Documents\\OpenHarness",
+      outsideProjectWorkspaceRoot: "C:\\Users\\tester\\Documents\\Vykor",
     })
 
     expect(selectActiveWorkspaceProject(state)).toEqual({
       id: "outside-project-draft",
-      name: "OpenHarness",
-      path: "C:\\Users\\tester\\Documents\\OpenHarness",
+      name: "Vykor",
+      path: "C:\\Users\\tester\\Documents\\Vykor",
       lastOpenedAt: 0,
       available: true,
     })
     expect(selectActiveWorkspaceProject(state)).toBe(selectActiveWorkspaceProject(state))
-    expect(selectCommandCatalogCwd(state)).toBe("C:\\Users\\tester\\Documents\\OpenHarness")
+    expect(selectCommandCatalogCwd(state)).toBe("C:\\Users\\tester\\Documents\\Vykor")
   })
 
   it("uses session cwd for slash commands when a conversation is open", () => {

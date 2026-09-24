@@ -154,7 +154,7 @@ SessionDatabase.open
 
 - `packages/services/src/session-runtime/schema.ts:597-600` 删除该表定义。
 - **不改 `0000`**（已应用的基线不动）；
-  `pnpm --filter @openharness/services db:generate` 生成 `0001_*.sql`（`DROP TABLE application_storage_format`）
+  `pnpm --filter @vykor/services db:generate` 生成 `0001_*.sql`（`DROP TABLE application_storage_format`）
   + `meta/0001_snapshot.json` + 更新 `_journal.json`。
 - 运行时无任何代码读该表（已全仓确认）。
 - 新库：`0000` 建表后由 `0001` 删除；旧库：接管到 `0000` 后由 `0001` 删除。
@@ -225,7 +225,7 @@ SessionDatabase.open
 - 现网库（本机）：启动后 `channel_delivery.platform_meta_json` 存在、
   `cron_job` / `cron_run` 与 `application_storage_format` 被删、`__drizzle_migrations` 含 baseline 行；
   飞书发消息得到回复。
-- 门禁：`pnpm --filter @openharness/services test`、`check-types`、`test:bundled-baseline`、
+- 门禁：`pnpm --filter @vykor/services test`、`check-types`、`test:bundled-baseline`、
   `pnpm check:clean-slate`、`pnpm test:clean-slate` 全绿。
 
 ## 10. 测试计划

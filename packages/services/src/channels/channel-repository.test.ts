@@ -9,7 +9,7 @@ import { decodePlatformMeta, encodePlatformMeta } from "./channel-records.js";
 
 describe("ChannelRepository", () => {
   it("upserts conversations and keeps delivery retries idempotent", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-channel-repository-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-channel-repository-"));
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {
@@ -72,7 +72,7 @@ describe("ChannelRepository", () => {
   });
 
   it("rejects writes after the application owner changes", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-channel-owner-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-channel-owner-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
       store.sessions.create({ id: "session-1", cwd: directory, model: "m" });
@@ -86,7 +86,7 @@ describe("ChannelRepository", () => {
   });
 
   it("classifies external conversations by connector, account, chat, and thread", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-channel-classify-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-channel-classify-"));
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {
@@ -146,7 +146,7 @@ describe("ChannelRepository", () => {
   });
 
   it("round-trips platformMeta and omits absent or corrupt values", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-channel-meta-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-channel-meta-"));
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {

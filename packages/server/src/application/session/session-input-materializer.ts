@@ -1,9 +1,9 @@
-import type { ContentBlock, RunCapabilityView } from "@openharness/core";
+import type { ContentBlock, RunCapabilityView } from "@vykor/core";
 import {
   normalizeSessionUserInputItems,
   sessionUserInputText,
   type SessionUserInputItem,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface SessionInputCatalogSkill {
   name: string;

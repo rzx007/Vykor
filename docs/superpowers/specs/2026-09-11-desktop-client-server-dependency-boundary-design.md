@@ -2,12 +2,12 @@
 
 ## 目标
 
-将 `apps/desktop` 对 OpenHarness workspace 包的直接依赖长期收敛为：
+将 `apps/desktop` 对 Vykor workspace 包的直接依赖长期收敛为：
 
 ```json
 {
-  "@openharness/client": "workspace:*",
-  "@openharness/server": "workspace:*"
+  "@vykor/client": "workspace:*",
+  "@vykor/server": "workspace:*"
 }
 ```
 
@@ -15,7 +15,7 @@
 
 ## 边界定义
 
-### `@openharness/client`
+### `@vykor/client`
 
 负责所有通过 daemon HTTP/SSE 完成的操作，以及 Desktop 使用的客户端协议类型，包括：
 
@@ -24,7 +24,7 @@
 - daemon 对外公开的能力探测；
 - renderer/shared 层需要引用的数据类型。
 
-### `@openharness/server`
+### `@vykor/server`
 
 负责 Electron 主进程需要的本机 daemon 宿主能力，包括：
 
@@ -34,7 +34,7 @@
 - 系统服务安装、启动、查询和卸载；
 - `daemon.autoStart` 的期望状态、协调、失败恢复与最终复核。
 
-本机宿主能力通过 `@openharness/server/daemon-host` 子路径公开，不继续向 server 根入口堆叠。该子路径只供 CLI 和 Desktop 主进程使用，不是 HTTP API，也不能被 renderer 或 preload 导入。
+本机宿主能力通过 `@vykor/server/daemon-host` 子路径公开，不继续向 server 根入口堆叠。该子路径只供 CLI 和 Desktop 主进程使用，不是 HTTP API，也不能被 renderer 或 preload 导入。
 
 ## 目标依赖方向
 
@@ -43,10 +43,10 @@ Desktop Renderer / Preload
         │ IPC
         ▼
 Desktop Main
-   ├── @openharness/client
+   ├── @vykor/client
    │      HTTP、SSE、Terminal、Settings、协议类型
    │
-   └── @openharness/server/daemon-host
+   └── @vykor/server/daemon-host
           registry、内嵌 daemon、系统服务、autostart reconcile
                     │
                     ├── core
@@ -67,13 +67,13 @@ desktop -> client + server
 
 ## `terminal` 与 `terminal-node` 收敛
 
-Desktop 当前对 `@openharness/terminal` 只有类型导入，实际终端操作均通过 `OpenHarnessClient`。由于 client 已公开相同终端协议类型，Desktop 的 `terminal-types.ts` 和 `terminal-service.ts` 改为从 `@openharness/client` 导入。
+Desktop 当前对 `@vykor/terminal` 只有类型导入，实际终端操作均通过 `VykorClient`。由于 client 已公开相同终端协议类型，Desktop 的 `terminal-types.ts` 和 `terminal-service.ts` 改为从 `@vykor/client` 导入。
 
-完成后删除 Desktop 对 `@openharness/terminal` 的直接声明。
+完成后删除 Desktop 对 `@vykor/terminal` 的直接声明。
 
-Desktop 源码没有导入 `@openharness/terminal-node`。它是 server 的运行时依赖，因此删除 Desktop 对它的直接声明。
+Desktop 源码没有导入 `@vykor/terminal-node`。它是 server 的运行时依赖，因此删除 Desktop 对它的直接声明。
 
-`electron.vite.config.ts` 中 `externalizeDeps.exclude` 的 `terminal` 和 `terminal-node` 暂时保留。这里控制 server 传递实现是否打进主进程 bundle，与 Desktop 是否拥有直接源码依赖不是同一件事。删除 package 声明后必须通过真实构建和产物扫描确认不存在未打包的 `@openharness/*` 裸导入。
+`electron.vite.config.ts` 中 `externalizeDeps.exclude` 的 `terminal` 和 `terminal-node` 暂时保留。这里控制 server 传递实现是否打进主进程 bundle，与 Desktop 是否拥有直接源码依赖不是同一件事。删除 package 声明后必须通过真实构建和产物扫描确认不存在未打包的 `@vykor/*` 裸导入。
 
 ## `sandbox` 收敛
 
@@ -92,7 +92,7 @@ Desktop
 
 通用 settings service 接受注入的 `validateAgentEnvironment` 能力；默认 daemon composition 注入 sandbox 的真实实现。不要在通用 settings service 中硬编码 Desktop UI 逻辑。
 
-Desktop 删除 `preflightWsl`、`process.platform` 拒绝逻辑和 `@openharness/sandbox` 依赖。界面继续展示 server 返回的错误。
+Desktop 删除 `preflightWsl`、`process.platform` 拒绝逻辑和 `@vykor/sandbox` 依赖。界面继续展示 server 返回的错误。
 
 当前 Desktop 只连接本机 registry 或启动本机内嵌 daemon，所以现有本机预检没有产生跨主机错误。迁移的价值是职责归属正确，并为未来远程 daemon 做准备。
 
@@ -169,7 +169,7 @@ CLI 的 `daemon install/uninstall`、`ensureDaemon` 协调也迁到同一 contro
 
 ### 第三阶段：统一 daemon-host
 
-1. 增加 `@openharness/server/daemon-host` package export。
+1. 增加 `@vykor/server/daemon-host` package export。
 2. 把配置读写、系统服务 reconcile 和 watchdog 判断封装进去。
 3. CLI 与 Desktop 迁到统一 controller。
 4. Desktop 保留 Electron invocation 和 onboarding 状态。
@@ -184,14 +184,14 @@ CLI 的 `daemon install/uninstall`、`ensureDaemon` 协调也迁到同一 contro
 
 ## 验证标准
 
-- Desktop `package.json` 只声明 client 和 server 两个 `@openharness/*` workspace 包。
+- Desktop `package.json` 只声明 client 和 server 两个 `@vykor/*` workspace 包。
 - Desktop 源码不再导入 core、sandbox、terminal 或 terminal-node。
 - renderer 和 preload 不导入 server 或 `server/daemon-host`。
 - CLI 与 Desktop 使用同一个 autostart controller，配置与系统服务操作顺序一致。
 - WSL 设置只在 daemon 宿主预检成功后保存。
 - Desktop 完整测试、CLI daemon 测试、server 测试和全仓类型检查通过。
 - Desktop 主进程、preload、renderer 构建通过。
-- 构建产物不存在 `@openharness/*` 裸导入。
+- 构建产物不存在 `@vykor/*` 裸导入。
 - Windows、macOS 和 Linux 的用户级系统服务行为不回归。
 
 ## 本次明确不处理

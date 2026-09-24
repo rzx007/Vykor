@@ -6,7 +6,7 @@
 
 ## 背景
 
-OpenHarness 已经具备 Streamable HTTP OAuth 的主要协议能力：OAuth metadata discovery、PKCE、`127.0.0.1` callback、Dynamic Client Registration（DCR）、独立凭据文件、提前刷新、并发刷新锁、401 单次恢复、手动 callback URL 模式，以及 Desktop 授权入口。
+Vykor 已经具备 Streamable HTTP OAuth 的主要协议能力：OAuth metadata discovery、PKCE、`127.0.0.1` callback、Dynamic Client Registration（DCR）、独立凭据文件、提前刷新、并发刷新锁、401 单次恢复、手动 callback URL 模式，以及 Desktop 授权入口。
 
 当前缺口不在 OAuth 协议本身，而在宿主集成：
 
@@ -24,8 +24,8 @@ OpenHarness 已经具备 Streamable HTTP OAuth 的主要协议能力：OAuth met
 新增以下命令：
 
 ```bash
-ohs mcp status <name>
-ohs mcp status <name> --json
+vk mcp status <name>
+vk mcp status <name> --json
 ```
 
 `status` 与现有 `get` 使用同一个查询实现和同一个输出 DTO。`get` 继续保留，不发出弃用警告，避免破坏现有脚本。
@@ -87,7 +87,7 @@ Desktop 的 MCP 设置页继续使用“浏览器授权”“重新授权”“�
 
 ### 包含
 
-- `ohs mcp status <name> [--json]`。
+- `vk mcp status <name> [--json]`。
 - 独立的认证方式和凭据状态字段。
 - CLI、Server 应用层和 Desktop 共用的无秘密快照 DTO。
 - 登录完成后的 Runtime 重连通知。
@@ -294,11 +294,11 @@ POST /mcp/:name/synchronize
 
 `synchronize` 请求体只携带 endpoint fingerprint，不携带完整 endpoint、Token 或操作意图。daemon 对各 Runtime 自身的规范化 endpoint 计算相同摘要后匹配，并从自己的 settings 和 OAuth credential store 读取最终状态。两个响应都只返回 `McpRuntimeSyncResult`。
 
-这两个路由继承现有 daemon 网络模型：调用方必须携带 daemon registry 中的 Bearer Token 和协议版本 Header；daemon 可能按用户配置绑定非 loopback 地址，因此规格不承诺请求一定来自本机 peer。CLI 和 Desktop 必须通过 `@openharness/client` 新增的资源方法调用，不能手写裸 `fetch` 或自行解析 registry Token。
+这两个路由继承现有 daemon 网络模型：调用方必须携带 daemon registry 中的 Bearer Token 和协议版本 Header；daemon 可能按用户配置绑定非 loopback 地址，因此规格不承诺请求一定来自本机 peer。CLI 和 Desktop 必须通过 `@vykor/client` 新增的资源方法调用，不能手写裸 `fetch` 或自行解析 registry Token。
 
 CLI 的默认 coordinator 行为：
 
-1. 尝试通过现有 daemon registry 和 `@openharness/client` 调用控制面。
+1. 尝试通过现有 daemon registry 和 `@vykor/client` 调用控制面。
 2. daemon 可用时等待同步结果。
 3. daemon 未运行时返回 `unavailable`，不启动 daemon，也不把登录判为失败。
 4. daemon 返回认证或协议错误时，将其作为 Runtime 同步失败报告，但不删除已经保存的 OAuth 凭据。
@@ -352,12 +352,12 @@ CLI 对后两类错误使用非零退出码，并保留可操作提示：
 
 ```text
 OAuth authorization was saved for linear, but 1 active runtime failed to reconnect.
-Run `ohs mcp status linear` for the current state.
+Run `vk mcp status linear` for the current state.
 ```
 
 Desktop 保留最新快照并显示错误，不把成功保存的授权错误地回退为“未登录”。
 
-公开 HTTP MCP 使用 `authMode: "none"` 和 `authStatus: "not-configured"`，设置页显示“无需认证”且不提供 OAuth 按钮。需要首次 OAuth 授权的服务应在配置中显式声明 `oauth`；CLI 可在添加时使用可重复的 `--scope` 参数，例如 `ohs mcp add linear --url https://mcp.linear.app/mcp --scope read`。若对已经可匿名 initialize 的服务手工执行 login，返回 `oauth-not-required`，不能统一包装成 discovery 失败。
+公开 HTTP MCP 使用 `authMode: "none"` 和 `authStatus: "not-configured"`，设置页显示“无需认证”且不提供 OAuth 按钮。需要首次 OAuth 授权的服务应在配置中显式声明 `oauth`；CLI 可在添加时使用可重复的 `--scope` 参数，例如 `vk mcp add linear --url https://mcp.linear.app/mcp --scope read`。若对已经可匿名 initialize 的服务手工执行 login，返回 `oauth-not-required`，不能统一包装成 discovery 失败。
 
 ## 兼容性
 
@@ -435,7 +435,7 @@ Desktop 保留最新快照并显示错误，不把成功保存的授权错误地
 - daemon 未运行时登录仍成功，并显示 Runtime 状态不可用。
 - 凭据保存后重连失败时使用非零退出码，且不删除凭据。
 - logout 删除凭据后，即使 Runtime 断开失败也不会恢复凭据。
-- status 通过 `@openharness/client` 的只读资源方法获取 daemon Runtime 状态。
+- status 通过 `@vykor/client` 的只读资源方法获取 daemon Runtime 状态。
 
 ### Desktop
 
@@ -451,8 +451,8 @@ Desktop 保留最新快照并显示错误，不把成功保存的授权错误地
 ### CLI 登录
 
 ```bash
-ohs mcp login linear --scopes read
-ohs mcp status linear --json
+vk mcp login linear --scopes read
+vk mcp status linear --json
 ```
 
 满足以下条件：
@@ -466,8 +466,8 @@ ohs mcp status linear --json
 ### CLI 退出
 
 ```bash
-ohs mcp logout linear
-ohs mcp status linear --json
+vk mcp logout linear
+vk mcp status linear --json
 ```
 
 满足以下条件：

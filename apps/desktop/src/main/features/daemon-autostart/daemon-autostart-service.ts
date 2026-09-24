@@ -4,7 +4,7 @@ import {
   createDaemonAutoStartController,
   DaemonSystemService,
   type DaemonAutoStartController,
-} from "@openharness/server/daemon-host"
+} from "@vykor/server/daemon-host"
 import { app } from "electron"
 
 import type { DesktopDaemonAutoStartSnapshot } from "../../../shared/settings-types"

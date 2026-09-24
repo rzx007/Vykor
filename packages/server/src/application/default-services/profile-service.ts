@@ -1,4 +1,4 @@
-import { initializePersonalPromptFiles, inspectPersonalPromptFiles, type PersonalPromptFileDiagnostic } from "@openharness/prompts";
+import { initializePersonalPromptFiles, inspectPersonalPromptFiles, type PersonalPromptFileDiagnostic } from "@vykor/prompts";
 
 import type { ProfileService } from "../settings-api.js";
 

@@ -1,13 +1,13 @@
 import type { WebContents } from "electron"
 import {
   syncEvents,
-  type OpenHarnessClientState,
+  type VykorClientState,
   type SessionAttachmentMessagePartRecord,
   type SessionMessagePartRecord,
   type SessionRecord,
   type SessionTransformationMessagePartRecord,
   type SyncEventUpdate,
-} from "@openharness/client"
+} from "@vykor/client"
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type {
@@ -183,7 +183,7 @@ function requireString(value: unknown, label: string): string {
 }
 
 export function toDesktopSessionView(
-  state: OpenHarnessClientState,
+  state: VykorClientState,
   sessionId: string,
   source: "snapshot" | "replay" | "live" | "reconnecting"
 ): DesktopSessionView {

@@ -5,8 +5,8 @@ import type {
   McpRuntimeRegistry,
   McpServerConfig,
   McpServerIdentity,
-} from "@openharness/core";
-import { McpOAuthRuntime, type McpClientManager } from "@openharness/mcp";
+} from "@vykor/core";
+import { McpOAuthRuntime, type McpClientManager } from "@vykor/mcp";
 
 import {
   createMcpRuntimeHandle,

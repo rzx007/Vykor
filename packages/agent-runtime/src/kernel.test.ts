@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 
 import {
   createAgentKernel,

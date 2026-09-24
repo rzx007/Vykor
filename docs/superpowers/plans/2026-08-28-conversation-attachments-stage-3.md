@@ -6,7 +6,7 @@
 
 **架构：** Renderer 只保存按 Composer scope 隔离的安全草稿状态，Electron Main 持有真实路径、source token、上传流和取消控制，daemon 继续作为资产与消息引用的唯一真实来源。发送时从 ready 草稿生成不可变 ordered refs 快照，optimistic transcript 与权威 Snapshot/SSE 通过 input ID 收敛。
 
-**技术栈：** TypeScript、Electron 39、React 19、Lexical、Zustand、Tailwind CSS、OpenHarness Client、Vitest、pnpm/Turbo。
+**技术栈：** TypeScript、Electron 39、React 19、Lexical、Zustand、Tailwind CSS、Vykor Client、Vitest、pnpm/Turbo。
 
 ---
 
@@ -96,7 +96,7 @@ expect(await service.bootstrap()).toMatchObject({
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- src/main/features/session/session-service.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/main/features/session/session-service.test.ts`
 
 预期：FAIL，bootstrap 尚无 `attachments`，Desktop part 仍不接受 `attachment`。
 
@@ -134,7 +134,7 @@ export interface DesktopPromptAttachmentInput {
 ```ts
 resolveDesktopAttachmentSupport(capabilities, {
   isPackaged: app.isPackaged,
-  forceEnable: process.env.OPENHARNESS_DESKTOP_ATTACHMENTS === "1",
+  forceEnable: process.env.VYKOR_DESKTOP_ATTACHMENTS === "1",
 });
 ```
 
@@ -142,9 +142,9 @@ resolveDesktopAttachmentSupport(capabilities, {
 
 - [ ] **步骤 5：运行 Desktop 测试与类型检查**
 
-运行：`pnpm --filter @openharness/desktop test -- src/main/features/session/session-service.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/main/features/session/session-service.test.ts`
 
-运行：`pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop typecheck`
 
 预期：全部 PASS。
 
@@ -186,7 +186,7 @@ await expect(service.startUpload(11, {
 
 - [ ] **步骤 2：运行服务测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- src/main/features/attachment/attachment-service.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/main/features/attachment/attachment-service.test.ts`
 
 预期：FAIL，附件服务不存在。
 
@@ -234,9 +234,9 @@ progress 节流到约 100ms；success/failure 不节流。服务内部使用并�
 
 - [ ] **步骤 7：运行服务测试与 node 类型检查**
 
-运行：`pnpm --filter @openharness/desktop test -- src/main/features/attachment/attachment-service.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/main/features/attachment/attachment-service.test.ts`
 
-运行：`pnpm --filter @openharness/desktop typecheck:node`
+运行：`pnpm --filter @vykor/desktop typecheck:node`
 
 预期：全部 PASS。
 
@@ -266,7 +266,7 @@ git commit -m "feat(desktop): add streamed attachment service"
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- src/main/features/attachment/attachment-service.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/main/features/attachment/attachment-service.test.ts`
 
 预期：FAIL，尚无 IPC contribution 和 owner 路由。
 
@@ -298,7 +298,7 @@ stageDroppedFiles: (files: readonly File[]) =>
 
 预期：公开 candidate/draft/upload event 中没有真实路径字段；只允许 `saveAs` 结果中不返回目标路径。
 
-运行：`pnpm --filter @openharness/desktop test -- src/main/features/attachment/attachment-service.test.ts && pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop test -- src/main/features/attachment/attachment-service.test.ts && pnpm --filter @vykor/desktop typecheck`
 
 预期：全部 PASS。
 
@@ -344,7 +344,7 @@ expect(selectDraftText(retried, "session:b")).toBe("");
 
 - [ ] **步骤 2：运行纯状态测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/stores/desktop-session/composer-draft-state.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/stores/desktop-session/composer-draft-state.test.ts`
 
 预期：FAIL，状态模块不存在。
 
@@ -378,9 +378,9 @@ stub `window.desktop.attachments`，验证 `pickFiles/pickImages/addDropped/addC
 
 - [ ] **步骤 6：运行 store 测试和 web 类型检查**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/stores/desktop-session/composer-draft-state.test.ts src/renderer/src/stores/desktop-session/store.integration.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/stores/desktop-session/composer-draft-state.test.ts src/renderer/src/stores/desktop-session/store.integration.test.ts`
 
-运行：`pnpm --filter @openharness/desktop typecheck:web`
+运行：`pnpm --filter @vykor/desktop typecheck:web`
 
 预期：全部 PASS。
 
@@ -409,7 +409,7 @@ git commit -m "feat(desktop): isolate attachment drafts by composer"
 
 - [ ] **步骤 2：运行组件测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/conversation-page/composer-attachments.test.tsx`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/conversation-page/composer-attachments.test.tsx`
 
 预期：FAIL，卡片组件不存在，PlusMenu 没有附件 handler/disabled 状态。
 
@@ -442,9 +442,9 @@ Composer `onDragOver/onDrop` 只接收 `DataTransfer.files`，目录交给 Main 
 
 - [ ] **步骤 6：运行交互、可访问性和现有 Composer 测试**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/conversation-page/composer-attachments.test.tsx src/renderer/src/components/desktop/conversation-page/composer-skill-commands.test.ts src/renderer/src/components/desktop/conversation-page/conversation-page-draft.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/conversation-page/composer-attachments.test.tsx src/renderer/src/components/desktop/conversation-page/composer-skill-commands.test.ts src/renderer/src/components/desktop/conversation-page/conversation-page-draft.test.ts`
 
-运行：`pnpm --filter @openharness/desktop typecheck:web`
+运行：`pnpm --filter @vykor/desktop typecheck:web`
 
 预期：全部 PASS。
 
@@ -532,7 +532,7 @@ const canSubmit =
 
 - [ ] **步骤 7：运行已有会话测试**
 
-运行：`pnpm --filter @openharness/desktop test -- src/main/features/session/session-service.test.ts src/renderer/src/stores/desktop-session/prompt-actions.test.ts src/renderer/src/components/desktop/conversation-page/optimistic-transcript.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/main/features/session/session-service.test.ts src/renderer/src/stores/desktop-session/prompt-actions.test.ts src/renderer/src/components/desktop/conversation-page/optimistic-transcript.test.ts`
 
 预期：全部 PASS。
 
@@ -562,7 +562,7 @@ git commit -m "feat(desktop): send attachments from existing sessions"
 
 - [ ] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/stores/desktop-session/session-actions.test.ts src/renderer/src/components/desktop/conversation-page/conversation-page-draft.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/stores/desktop-session/session-actions.test.ts src/renderer/src/components/desktop/conversation-page/conversation-page-draft.test.ts`
 
 预期：FAIL，`startSession` 仍要求非空文字且没有附件 scope。
 
@@ -587,7 +587,7 @@ session create 成功后，在一次 Zustand `set` 中把 `new-conversation` 的
 
 - [ ] **步骤 6：运行新会话和 store 集成测试**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/stores/desktop-session/session-actions.test.ts src/renderer/src/stores/desktop-session/store.integration.test.ts src/renderer/src/components/desktop/conversation-page/conversation-page-draft.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/stores/desktop-session/session-actions.test.ts src/renderer/src/stores/desktop-session/store.integration.test.ts src/renderer/src/components/desktop/conversation-page/conversation-page-draft.test.ts`
 
 预期：全部 PASS。
 
@@ -620,7 +620,7 @@ git commit -m "feat(desktop): send first-message attachments"
 
 - [ ] **步骤 2：运行消息附件测试确认失败**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/conversation-page/message-attachment.test.tsx src/renderer/src/components/desktop/conversation-page/transcript.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/conversation-page/message-attachment.test.tsx src/renderer/src/components/desktop/conversation-page/transcript.test.ts`
 
 预期：FAIL，历史消息仍只显示 text。
 
@@ -642,9 +642,9 @@ Renderer 从当前 `sessionView.inputs` 按 `sourceMessage.inputId` 取 attachme
 
 - [ ] **步骤 7：运行消息、编辑和类型测试**
 
-运行：`pnpm --filter @openharness/desktop test -- src/renderer/src/components/desktop/conversation-page/message-attachment.test.tsx src/renderer/src/components/desktop/conversation-page/transcript.test.ts src/renderer/src/stores/desktop-session/prompt-actions.test.ts src/main/features/session/session-service.test.ts`
+运行：`pnpm --filter @vykor/desktop test -- src/renderer/src/components/desktop/conversation-page/message-attachment.test.tsx src/renderer/src/components/desktop/conversation-page/transcript.test.ts src/renderer/src/stores/desktop-session/prompt-actions.test.ts src/main/features/session/session-service.test.ts`
 
-运行：`pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop typecheck`
 
 预期：全部 PASS。
 
@@ -697,11 +697,11 @@ picker path、drop path 和 clipboard bytes 分别上传相同 PNG，断言三�
 
 - [ ] **步骤 7：运行 Desktop 完整验证**
 
-运行：`pnpm --filter @openharness/desktop test`
+运行：`pnpm --filter @vykor/desktop test`
 
-运行：`pnpm --filter @openharness/desktop lint`
+运行：`pnpm --filter @vykor/desktop lint`
 
-运行：`pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop typecheck`
 
 预期：全部 PASS，无跳过或新增未解释快照。
 
@@ -731,11 +731,11 @@ git commit -m "test(desktop): verify attachment user flow"
 
 - [ ] **步骤 3：运行最终验证**
 
-运行：`pnpm --filter @openharness/desktop test`
+运行：`pnpm --filter @vykor/desktop test`
 
-运行：`pnpm --filter @openharness/desktop lint`
+运行：`pnpm --filter @vykor/desktop lint`
 
-运行：`pnpm --filter @openharness/desktop typecheck`
+运行：`pnpm --filter @vykor/desktop typecheck`
 
 运行：`pnpm check-types`
 

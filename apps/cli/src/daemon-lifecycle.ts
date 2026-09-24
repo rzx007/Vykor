@@ -1,8 +1,8 @@
 import {
   daemonPidAlive,
   terminateDaemonProcess,
-} from "@openharness/server/daemon-host";
-import type { DaemonRegistry } from "@openharness/server";
+} from "@vykor/server/daemon-host";
+import type { DaemonRegistry } from "@vykor/server";
 
 export { daemonPidAlive, terminateDaemonProcess };
 

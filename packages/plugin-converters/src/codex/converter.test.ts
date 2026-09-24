@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadNativePlugin, requestedPluginPermissions, validateNativePlugin } from "@openharness/plugins";
+import { loadNativePlugin, requestedPluginPermissions, validateNativePlugin } from "@vykor/plugins";
 import { createBuiltinConverterRegistry, type ConversionPlan } from "../index.js";
 
 const fixture = fileURLToPath(new URL("../../fixtures/codex/mixed-plugin/", import.meta.url));
@@ -11,7 +11,7 @@ const temporary: string[] = [];
 const portableSchema = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json";
 afterEach(async () => { await Promise.all(temporary.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 async function setup() {
-  const root = await mkdtemp(join(tmpdir(), "ohs-codex-test-")); temporary.push(root);
+  const root = await mkdtemp(join(tmpdir(), "vk-codex-test-")); temporary.push(root);
   const source = join(root, "source"); await cp(fixture, source, { recursive: true });
   return { root, source, output: join(root, "native") };
 }
@@ -60,7 +60,7 @@ describe("Codex conversion", () => {
     expect(await readFile(join(output, "skills/review/references/checklist.md"), "utf8")).toContain("permissions");
     await expect(access(join(output, ".codex-plugin"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(access(join(output, ".app.json"))).rejects.toMatchObject({ code: "ENOENT" });
-    expect(JSON.parse(await readFile(join(output, ".openharness-conversion/report.json"), "utf8"))).toEqual(report);
+    expect(JSON.parse(await readFile(join(output, ".vykor-conversion/report.json"), "utf8"))).toEqual(report);
   });
 
   it("uses portable identity and fixed components, replacing the entire legacy overlay with an inline extension", async () => {

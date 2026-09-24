@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { JobSnapshot } from "@openharness/protocol";
+import type { JobSnapshot } from "@vykor/protocol";
 
 import { createInitialClientState } from "../../state/reducer.js";
 import {
@@ -179,7 +179,7 @@ describe("dispatchSessionCommand", () => {
     expect(text).toContain("invalid");
     expect(text).toContain("plugin_installation_permissions_mismatch");
     expect(text).toContain("Actual permissions differ");
-    expect(text).toContain("ohs plugin link");
+    expect(text).toContain("vk plugin link");
     expect(text).toContain("--approve");
     expect(text).toContain("next use");
     expect(text).not.toContain("Reloaded plugins:");
@@ -211,7 +211,7 @@ describe("dispatchSessionCommand", () => {
     const outcome = await dispatchSessionCommand({ name: "/version", args: "" }, h);
     expect(outcome).toBe("handled");
     expect(client.protocol.health).toHaveBeenCalledOnce();
-    expect(emitted[0]).toBe("OpenHarness v1.2.3");
+    expect(emitted[0]).toBe("Vykor v1.2.3");
   });
 
   it("presents read-only command output when a presentation surface is available", async () => {

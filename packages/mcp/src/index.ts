@@ -2,9 +2,9 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { McpRemoteServerConfig, McpServerConfig, Settings, ToolDefinition } from "@openharness/core";
-import type { EnvironmentProcessExecutor } from "@openharness/environment";
-import type { SandboxPolicy } from "@openharness/sandbox";
+import type { McpRemoteServerConfig, McpServerConfig, Settings, ToolDefinition } from "@vykor/core";
+import type { EnvironmentProcessExecutor } from "@vykor/environment";
+import type { SandboxPolicy } from "@vykor/sandbox";
 import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
 import type { McpOAuthRuntime } from "./oauth/runtime-auth.js";
 
@@ -195,7 +195,7 @@ export class McpClientManager {
 
     const transport = this.createTransport(name, kind, config);
     const client = new Client(
-      { name: "openharness", version: "0.1.0" },
+      { name: "vykor", version: "0.1.0" },
       { capabilities: {} }
     );
     let closed = false;

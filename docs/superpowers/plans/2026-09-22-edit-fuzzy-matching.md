@@ -30,8 +30,8 @@
 - 不新增依赖；Levenshtein 内联实现。
 - 不修改 `packages/tools/src/file/operations.ts`、`write.ts`、`read.ts`。
 - 不修改 `packages/tools/src/file/__test__/edit.test.ts` 中现有 2 条用例的断言。
-- 测试命令：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`（端到端为 `... src/file/__test__/edit.test.ts`）。
-- 类型检查：`pnpm --filter @openharness/tools run check-types`。
+- 测试命令：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`（端到端为 `... src/file/__test__/edit.test.ts`）。
+- 类型检查：`pnpm --filter @vykor/tools run check-types`。
 
 ---
 
@@ -116,7 +116,7 @@ describe("EditMatchError", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：FAIL，报错无法解析模块 `../edit-replacers.js`。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -181,7 +181,7 @@ export function isDisproportionateMatch(search: string, oldString: string): bool
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：PASS，全部用例通过。
 
 - [ ] **步骤 5：Commit**
@@ -318,7 +318,7 @@ describe("MultiOccurrenceReplacer", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：FAIL，报错 `SimpleReplacer is not exported` / 无法解析导出。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -509,7 +509,7 @@ export const MultiOccurrenceReplacer: Replacer = function* (content, find) {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -610,7 +610,7 @@ describe("ContextAwareReplacer", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：FAIL，报错 `BlockAnchorReplacer is not exported`。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -731,7 +731,7 @@ export const ContextAwareReplacer: Replacer = function* (content, find) {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：PASS。
 
 - [ ] **步骤 5：Commit**
@@ -909,7 +909,7 @@ describe("replace", () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：FAIL，报错 `replace is not a function`。
 
 - [ ] **步骤 3：编写最少实现代码**
@@ -997,7 +997,7 @@ export function replace(
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit-replacers.test.ts`
 预期：PASS，全部用例通过。
 
 - [ ] **步骤 5：Commit**
@@ -1298,7 +1298,7 @@ it("keeps sandbox denial ahead of the identical-string check", async () => {
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit.test.ts`
 预期：FAIL。至少缩进、空白、CRLF、BOM、转义、`identical` 与模糊歧义用例失败；既有精确路径、未命中、纯空白保护和 sandbox 优先级用例可继续通过。
 
 - [ ] **步骤 3：改写 `edit.ts` 的匹配与写回部分**
@@ -1391,15 +1391,15 @@ import {
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`pnpm --filter @openharness/tools exec vitest run src/file/__test__/edit.test.ts`
+运行：`pnpm --filter @vykor/tools exec vitest run src/file/__test__/edit.test.ts`
 预期：PASS，现有 2 条 + 新增 13 条全部通过。
 
 - [ ] **步骤 5：跑整个 tools 包测试与类型检查**
 
-运行：`pnpm --filter @openharness/tools exec vitest run`
+运行：`pnpm --filter @vykor/tools exec vitest run`
 预期：全绿。
 
-运行：`pnpm --filter @openharness/tools run check-types`
+运行：`pnpm --filter @vykor/tools run check-types`
 预期：通过。
 
 - [ ] **步骤 6：Commit**

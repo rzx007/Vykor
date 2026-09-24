@@ -1,18 +1,18 @@
 import {
   createDefaultNodeAgent,
-  type OpenHarnessAgent,
-  type OpenHarnessAgentOptions,
+  type VykorAgent,
+  type VykorAgentOptions,
   type AgentEffectOverrides,
   type ObservableJobProducer,
-} from "@openharness/agent-runtime";
+} from "@vykor/agent-runtime";
 import { join } from "node:path";
 import {
   getCoordinatorSystemPrompt,
   getCoordinatorTools,
   getCoordinatorUserContext,
-} from "@openharness/coordinator";
-import type { WorkflowRunRepository } from "@openharness/coordinator";
-import { PROJECT_CONFIG_DIR_NAME } from "@openharness/core";
+} from "@vykor/coordinator";
+import type { WorkflowRunRepository } from "@vykor/coordinator";
+import { PROJECT_CONFIG_DIR_NAME } from "@vykor/core";
 import type {
   AgentScheduleEffects,
   AgentBackgroundShellHost,
@@ -22,18 +22,18 @@ import type {
   McpRuntimeRegistry,
   Settings,
   ToolDefinition,
-} from "@openharness/core";
-import type { AgentTerminalHost } from "@openharness/terminal";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+} from "@vykor/core";
+import type { AgentTerminalHost } from "@vykor/terminal";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import {
   readSessionRuntimeConfig,
   readSessionRuntimeRevision,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import { buildAgentTranscript } from "../application/agent/agent-transcript.js";
 
@@ -41,7 +41,7 @@ export interface CreateDaemonAgentContext {
   session: SessionRecord;
   history: SessionMessageRecord[];
   parts: SessionMessagePartRecord[];
-  options: OpenHarnessAgentOptions;
+  options: VykorAgentOptions;
 }
 
 /**
@@ -50,7 +50,7 @@ export interface CreateDaemonAgentContext {
  */
 export type CreateDaemonAgent = (
   context: CreateDaemonAgentContext,
-) => Promise<OpenHarnessAgent>;
+) => Promise<VykorAgent>;
 
 export interface LoadDaemonAgentContext {
   session: SessionRecord;
@@ -64,7 +64,7 @@ export interface LoadDaemonAgentContext {
  */
 export type LoadDaemonAgent = (
   context: LoadDaemonAgentContext,
-) => Promise<OpenHarnessAgent>;
+) => Promise<VykorAgent>;
 
 export interface ResolveDaemonToolsContext {
   session: SessionRecord;
@@ -116,7 +116,7 @@ export interface DaemonAgentLoaderOptions {
    * 要等 Agent 造好才能建（投影要用 agent.id），但 onEvent 在造 Agent 时就得先挂上。
    */
   createEventSink?(
-    agent: OpenHarnessAgent,
+    agent: VykorAgent,
     session: SessionRecord,
   ): AgentEventListener;
 }
@@ -195,7 +195,7 @@ export function createDaemonAgentLoader(
       chosenEffort && declaredEfforts?.includes(chosenEffort)
         ? chosenEffort
         : undefined;
-    const agentOptions: OpenHarnessAgentOptions = {
+    const agentOptions: VykorAgentOptions = {
       ...(settings ? { settings } : {}),
       cwd: session.cwd,
       sessionId: session.id,
@@ -254,7 +254,7 @@ export function createDaemonAgentLoader(
           }
         : {}),
     };
-    let agent: OpenHarnessAgent;
+    let agent: VykorAgent;
     try {
       agent = options.createAgent
         ? await options.createAgent({
@@ -415,7 +415,7 @@ async function resolveSettingsForSession(
 function agentConfigurationFromSession(
   session: SessionRecord,
   settings: Settings | undefined,
-): Partial<OpenHarnessAgentOptions> {
+): Partial<VykorAgentOptions> {
   const runtime = readSessionRuntimeConfig(session, {
     provider: settings?.provider,
     baseUrl: defaultBaseUrlForSession(session, settings),
@@ -425,7 +425,7 @@ function agentConfigurationFromSession(
     sessionMode: "direct",
     pluginsEnabled: settings?.plugins?.enabled ?? true,
   });
-  const configuration: Partial<OpenHarnessAgentOptions> = {
+  const configuration: Partial<VykorAgentOptions> = {
     model: runtime.model,
     provider: runtime.provider,
     baseUrl: runtime.baseUrl,

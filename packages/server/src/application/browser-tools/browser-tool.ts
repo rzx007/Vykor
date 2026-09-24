@@ -1,4 +1,4 @@
-import type { ContentBlock, ToolDefinition, ToolResult } from "@openharness/core";
+import type { ContentBlock, ToolDefinition, ToolResult } from "@vykor/core";
 import type { BrowserAction, BrowserHost } from "./browser-host.js";
 
 export type BrowserScreenshotStore = (input: {

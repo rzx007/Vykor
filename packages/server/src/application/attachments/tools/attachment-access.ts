@@ -1,8 +1,8 @@
-import type { SessionInputAttachmentRecord, SessionRecord } from "@openharness/protocol";
+import type { SessionInputAttachmentRecord, SessionRecord } from "@vykor/protocol";
 import {
   classifyAttachmentCandidate,
   type LocalOcrResult,
-} from "@openharness/services";
+} from "@vykor/services";
 
 import type { AttachmentService } from "../attachment-service.js";
 

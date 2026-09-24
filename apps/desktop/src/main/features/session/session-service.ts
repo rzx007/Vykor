@@ -10,7 +10,7 @@ import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } 
 import { homedir } from "node:os"
 import { join } from "node:path"
 
-import type { OpenHarnessClient } from "@openharness/client"
+import type { VykorClient } from "@vykor/client"
 import type {
   CheckoutDesktopProjectBranchInput,
   CloseDesktopAuxSessionInput,
@@ -102,7 +102,7 @@ export class DesktopSessionService {
 
   async bootstrap(): Promise<DesktopBootstrapData> {
     workspaceService.configureAllowedRoots({
-      configDir: process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts"),
+      configDir: process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor"),
       documentsPath: app.getPath("documents"),
     })
     const client = await this.getClient()
@@ -130,7 +130,7 @@ export class DesktopSessionService {
     const defaultPermissionMode = readSettingsPermissionMode(settings)
 
     if (!defaultModel) {
-      throw new Error("没有找到可用模型，请先在 OpenHarness 设置中配置模型。")
+      throw new Error("没有找到可用模型，请先在 Vykor 设置中配置模型。")
     }
 
     const documentsPath = app.getPath("documents")
@@ -158,7 +158,7 @@ export class DesktopSessionService {
       defaultPermissionMode,
       attachments: resolveDesktopAttachmentSupport(capabilities, {
         isPackaged: app.isPackaged,
-        forceDisable: process.env.OPENHARNESS_DESKTOP_ATTACHMENTS === "0",
+        forceDisable: process.env.VYKOR_DESKTOP_ATTACHMENTS === "0",
       }),
       outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
     }
@@ -437,29 +437,29 @@ export class DesktopSessionService {
     await browserAgentService.dispose()
   }
 
-  daemonClient(): Promise<OpenHarnessClient> {
+  daemonClient(): Promise<VykorClient> {
     return this.connection.getClient()
   }
 
-  async refreshDaemonClient(): Promise<OpenHarnessClient> {
+  async refreshDaemonClient(): Promise<VykorClient> {
     this.subscriptions.clearAll()
     const client = await this.connection.refreshClient()
     await this.activitySubscriptions.replaceClient(client)
     return client
   }
 
-  get clientPromise(): Promise<OpenHarnessClient> | null {
-    return (this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null })
+  get clientPromise(): Promise<VykorClient> | null {
+    return (this.connection as unknown as { clientPromise: Promise<VykorClient> | null })
       .clientPromise
   }
 
-  set clientPromise(promise: Promise<OpenHarnessClient> | null) {
+  set clientPromise(promise: Promise<VykorClient> | null) {
     ;(
-      this.connection as unknown as { clientPromise: Promise<OpenHarnessClient> | null }
+      this.connection as unknown as { clientPromise: Promise<VykorClient> | null }
     ).clientPromise = promise
   }
 
-  private getClient(): Promise<OpenHarnessClient> {
+  private getClient(): Promise<VykorClient> {
     return this.connection.getClient()
   }
 }

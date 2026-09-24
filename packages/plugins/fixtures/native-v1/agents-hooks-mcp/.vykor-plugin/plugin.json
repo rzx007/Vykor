@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "dev.openharness.full",
+  "id": "dev.vykor.full",
   "name": "full-plugin",
   "version": "1.0.0",
   "components": {

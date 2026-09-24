@@ -3,7 +3,7 @@ import type {
   DurableChannelMessageInput,
   DurableChannelMessageResult,
   RecordChannelDeliveryInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import { MessageBus, type InboundMessage } from "../bus/queue.js";
 

@@ -46,8 +46,8 @@ function startDesktopApplication(): void {
   }
 
   app.whenReady().then(() => {
-    electronApp.setAppUserModelId(is.dev ? "dev.openharness.desktop" : "app.openharness.desktop")
-    app.setName("OpenHarness")
+    electronApp.setAppUserModelId(is.dev ? "dev.vykor.desktop" : "app.vykor.desktop")
+    app.setName("Vykor")
     Menu.setApplicationMenu(null)
 
     app.on("browser-window-created", (_, window) => {

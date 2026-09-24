@@ -15,11 +15,11 @@ import {
   createWorkflowPlan,
   createWorkflowRunSnapshot,
   type WorkflowSpec,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import {
   ApplicationOwnerConflictError,
   SessionStore,
-} from "@openharness/services";
+} from "@vykor/services";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -453,7 +453,7 @@ function workflowSnapshot(
 }
 
 function temporaryDirectory(): string {
-  const directory = mkdtempSync(join(tmpdir(), "openharness-durability-"));
+  const directory = mkdtempSync(join(tmpdir(), "vykor-durability-"));
   temporaryDirectories.push(directory);
   return directory;
 }

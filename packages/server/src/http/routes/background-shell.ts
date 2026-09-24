@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Hono } from "hono";
 
-import type { JobReadResult } from "@openharness/protocol";
+import type { JobReadResult } from "@vykor/protocol";
 
 import type { BackgroundShellService } from "../../application/session/background-shell-service.js";
 import {

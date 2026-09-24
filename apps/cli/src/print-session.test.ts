@@ -8,15 +8,15 @@ vi.mock("./ensure-daemon.js", () => ({
   })),
 }));
 
-vi.mock("@openharness/client", async () => {
-  const actual = await vi.importActual<typeof import("@openharness/client")>("@openharness/client");
+vi.mock("@vykor/client", async () => {
+  const actual = await vi.importActual<typeof import("@vykor/client")>("@vykor/client");
   return {
     ...actual,
-    OpenHarnessClient: vi.fn(),
+    VykorClient: vi.fn(),
   };
 });
 
-import { OpenHarnessClient } from "@openharness/client";
+import { VykorClient } from "@vykor/client";
 import { ensureLocalDaemon } from "./ensure-daemon.js";
 import { buildPrintSessionMetadata, runPrintSession } from "./print-session.js";
 
@@ -60,12 +60,12 @@ describe("runPrintSession", () => {
   let exitSpy: MockInstance<(code?: string | number | null) => never>;
 
   beforeEach(() => {
-    delete process.env.OPENHARNESS_COORDINATOR_MODE;
+    delete process.env.VYKOR_COORDINATOR_MODE;
     exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
   });
 
   afterEach(() => {
-    delete process.env.OPENHARNESS_COORDINATOR_MODE;
+    delete process.env.VYKOR_COORDINATOR_MODE;
     exitSpy.mockRestore();
     vi.clearAllMocks();
   });
@@ -109,7 +109,7 @@ describe("runPrintSession", () => {
       updatedAt: 3,
     };
 
-    const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
+    const Client = VykorClient as unknown as ReturnType<typeof vi.fn>;
     Client.mockImplementation(() => printClient({
       create: vi.fn(async () => session),
       admitPrompt: vi.fn(async () => ({
@@ -271,7 +271,7 @@ describe("runPrintSession", () => {
       attempts: [],
       permissions: [],
     };
-    const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
+    const Client = VykorClient as unknown as ReturnType<typeof vi.fn>;
     Client.mockImplementation(() => printClient({
       create: vi.fn(async () => session),
       admitPrompt: vi.fn(async () => ({
@@ -368,7 +368,7 @@ describe("runPrintSession", () => {
       attempts: [],
       permissions: [],
     };
-    const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
+    const Client = VykorClient as unknown as ReturnType<typeof vi.fn>;
     Client.mockImplementation(() => printClient({
       create: vi.fn(async () => session),
       admitPrompt: vi.fn(async () => ({
@@ -414,7 +414,7 @@ describe("runPrintSession", () => {
       createdAt: 1,
       updatedAt: 1,
     }));
-    const Client = OpenHarnessClient as unknown as ReturnType<typeof vi.fn>;
+    const Client = VykorClient as unknown as ReturnType<typeof vi.fn>;
     Client.mockImplementation(() => printClient({
       create: createSession,
       admitPrompt: vi.fn(async () => ({

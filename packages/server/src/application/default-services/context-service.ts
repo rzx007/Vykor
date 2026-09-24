@@ -7,7 +7,7 @@ import {
   getCredentialsFilePath,
   getConfigDir,
   type ContextUsageSnapshot,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   buildPromptLayers,
   buildPromptLedgerSegments,
@@ -17,10 +17,10 @@ import {
   renderPromptLayers,
   type PersonalPromptFileDiagnostic,
   type PromptLayers,
-} from "@openharness/prompts";
-import { getLocalRulesDir, loadFacts, loadLocalRules } from "@openharness/personalization";
-import { loadOutputStyles } from "@openharness/output-styles";
-import { discoverOpenHarnessExtensions } from "@openharness/agent-runtime";
+} from "@vykor/prompts";
+import { getLocalRulesDir, loadFacts, loadLocalRules } from "@vykor/personalization";
+import { loadOutputStyles } from "@vykor/output-styles";
+import { discoverVykorExtensions } from "@vykor/agent-runtime";
 
 import type { ContextService, ModelProviderInfo } from "../settings-api.js";
 import {
@@ -60,7 +60,7 @@ export function createDefaultContextService(
   return {
     async plugins({ cwd }) {
       const settings = await readCurrentSettings(ref);
-      const { pluginCapabilityInventory } = await discoverOpenHarnessExtensions(cwd, settings);
+      const { pluginCapabilityInventory } = await discoverVykorExtensions(cwd, settings);
       return { plugins: [...pluginCapabilityInventory.plugins.values()].map((plugin) => ({
         pluginId: plugin.pluginId,
         displayName: plugin.displayName,
@@ -82,7 +82,7 @@ export function createDefaultContextService(
         settings.memory?.enabled !== false
           ? manager.buildMemoryPrompt(settings.memory?.maxFiles ?? 10)
           : undefined;
-      const { skillRegistry } = await discoverOpenHarnessExtensions(cwd, settings);
+      const { skillRegistry } = await discoverVykorExtensions(cwd, settings);
       const layers = await buildPromptLayers({
         customPrompt: settings.systemPrompt,
         cwd,
@@ -104,7 +104,7 @@ export function createDefaultContextService(
       const projectInstructionFiles = await discoverClaudeMdFiles(cwd);
       const { manager, directory: memoryDirectory } = await openMemoryManager(cwd);
       const memoryEntries = await manager.getAll();
-      const { skillRegistry } = await discoverOpenHarnessExtensions(cwd, settings);
+      const { skillRegistry } = await discoverVykorExtensions(cwd, settings);
       const localRules = loadLocalRules();
       const facts = loadFacts();
       const credentialsPath = getCredentialsFilePath();
@@ -251,7 +251,7 @@ export function createDefaultContextService(
       }
 
       const settings = await readCurrentSettings(ref);
-      const { skillRegistry } = await discoverOpenHarnessExtensions(cwd, settings);
+      const { skillRegistry } = await discoverVykorExtensions(cwd, settings);
       const limits = options.resolveModelLimits
         ? await options.resolveModelLimits({
             model: settings.model,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ToolRegistry, type McpServerConfig, type Settings, type ToolDefinition } from "@openharness/core";
-import type { McpClientManager, PreparedMcpConnection } from "@openharness/mcp";
+import { ToolRegistry, type McpServerConfig, type Settings, type ToolDefinition } from "@vykor/core";
+import type { McpClientManager, PreparedMcpConnection } from "@vykor/mcp";
 
 import { applyMcpAuthConfig, createMcpAuthHost, defaultMcpEnvKey } from "./mcp-auth.js";
 

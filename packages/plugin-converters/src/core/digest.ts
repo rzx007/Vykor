@@ -20,7 +20,7 @@ async function files(root: string, dir = root): Promise<string[]> {
 export async function digestSource(root: string): Promise<string> {
   if ((await lstat(root)).isSymbolicLink()) throw new Error("Source root link is not allowed");
   const hash = createHash("sha256");
-  hash.update("openharness-source-v2\n");
+  hash.update("vykor-source-v2\n");
   for (const file of await files(root)) {
     const content = await readFile(file);
     // Hash an unambiguous record: arbitrary binary bytes cannot impersonate file boundaries.

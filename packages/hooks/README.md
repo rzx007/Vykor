@@ -1,4 +1,4 @@
-# @openharness/hooks
+# @vykor/hooks
 
 Hook execution system for before/after LLM queries.
 
@@ -18,7 +18,7 @@ Hook execution system for before/after LLM queries.
 ## 使用
 
 ```ts
-import { HookRegistry, executeHook } from "@openharness/hooks";
+import { HookRegistry, executeHook } from "@vykor/hooks";
 
 const registry = new HookRegistry();
 registry.register({
@@ -31,5 +31,5 @@ registry.register({
 ## 测试
 
 ```bash
-pnpm --filter @openharness/hooks test
+pnpm --filter @vykor/hooks test
 ```

@@ -1,14 +1,34 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import type {
   Message,
   StreamEvent,
   StreamingMessageClient,
-} from "@openharness/core";
-import { MemoryManager } from "@openharness/memory";
+} from "@vykor/core";
+import { MemoryManager } from "@vykor/memory";
+import { getProjectMemoryDir } from "@vykor/core";
 import { describe, expect, it } from "vitest";
 
-import { extractMemories } from "./memory-runtime.js";
+import { createAgentMemoryRuntime, extractMemories } from "./memory-runtime.js";
+
+it("retrieves persisted project memory on the first turn", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "vk-memory-first-turn-"));
+  const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  process.env.VYKOR_CONFIG_DIR = cwd;
+  try {
+    const writer = new MemoryManager(1000, getProjectMemoryDir(cwd));
+    await writer.add("The deployment region is ap-southeast-1");
+
+    const memory = await createAgentMemoryRuntime(cwd, 5);
+    expect(await memory.retrieve("deployment region")).toContain("ap-southeast-1");
+  } finally {
+    if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+    else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
 
 const messages: Message[] = [
   { type: "user", content: "remember these durable facts" },
@@ -64,7 +84,7 @@ describe("extractMemories", () => {
 
   it("skips model streaming when an assistant already wrote inside the memory directory", async () => {
     const cwd = resolve("project");
-    const memoryDir = join(cwd, ".openharness-ts", "memory");
+    const memoryDir = join(cwd, ".vykor", "memory");
     const wroteMemory: Message[] = [
       messages[0]!,
       {
@@ -75,7 +95,7 @@ describe("extractMemories", () => {
             type: "tool_use",
             id: "write-memory",
             name: "Write",
-            input: { file_path: join(".openharness-ts", "memory", "manual.md") },
+            input: { file_path: join(".vykor", "memory", "manual.md") },
           },
         ],
       },
@@ -107,7 +127,7 @@ describe("extractMemories", () => {
 
   it("does not let a successful Remember from a previous run suppress extraction", async () => {
     const cwd = resolve("project");
-    const memoryDir = join(cwd, ".openharness-ts", "memory");
+    const memoryDir = join(cwd, ".vykor", "memory");
     const remembered: Message[] = [
       { type: "user", content: "remember this project fact" },
       {
@@ -153,7 +173,7 @@ describe("extractMemories", () => {
 
   it("does not treat a failed Remember or an unrelated successful result as a memory write", async () => {
     const cwd = resolve("project");
-    const memoryDir = join(cwd, ".openharness-ts", "memory");
+    const memoryDir = join(cwd, ".vykor", "memory");
     const failedRemember: Message[] = [
       { type: "user", content: "remember this project fact" },
       {
@@ -209,7 +229,7 @@ describe("extractMemories", () => {
 
   it("skips extraction only after the current run has a matching successful Remember result", async () => {
     const cwd = resolve("project");
-    const memoryDir = join(cwd, ".openharness-ts", "memory");
+    const memoryDir = join(cwd, ".vykor", "memory");
     const successfulRemember: Message[] = [
       { type: "user", content: "remember this project fact" },
       {

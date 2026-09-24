@@ -12,11 +12,11 @@ describe("web tools", () => {
   it("keeps the WebSearch result rendering stable", async () => {
     const tool = createWebSearchTool(runtime({
       async search(request) {
-        expect(request).toEqual({ query: "openharness", maxResults: 3 });
+        expect(request).toEqual({ query: "vykor", maxResults: 3 });
         return {
           provider: "test-search",
           sources: [{
-            title: "OpenHarness",
+            title: "Vykor",
             url: "https://example.com",
             snippet: "A result",
           }],
@@ -24,14 +24,14 @@ describe("web tools", () => {
       },
     }));
 
-    const result = await tool.execute({ query: "openharness", maxResults: 3 }, { cwd: process.cwd() });
+    const result = await tool.execute({ query: "vykor", maxResults: 3 }, { cwd: process.cwd() });
 
     expect(result.isError).not.toBe(true);
     expect(result.content[0]).toMatchObject({
       type: "text",
       text: [
-        "Search results for: openharness",
-        "1. OpenHarness",
+        "Search results for: vykor",
+        "1. Vykor",
         "   URL: https://example.com",
         "   A result",
       ].join("\n"),

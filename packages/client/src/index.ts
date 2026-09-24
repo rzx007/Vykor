@@ -1,5 +1,5 @@
 /**
- * @openharness/client 公共导出。
+ * @vykor/client 公共导出。
  *
  * 面向 TUI / Web / Desktop：typed HTTP API、SSE 解析、事件 reducer、replay+live 同步。
  * 客户端只做展示与控制，不拥有 agent runtime。
@@ -8,9 +8,9 @@
 export {
   createPromptRequestId,
   normalizeDaemonBaseUrl,
-  OpenHarnessApiError,
+  VykorApiError,
   IncompatibleProtocolError,
-  OpenHarnessClient,
+  VykorClient,
   streamServerSentEvents,
   HttpTransport,
   SseTransport,
@@ -35,7 +35,7 @@ export {
   EventResource,
   McpResource,
 } from "./resources/index.js";
-export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@openharness/protocol";
+export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
 export type {
   PluginCatalogEntry,
   AgentEnvironmentCapabilities,
@@ -43,12 +43,12 @@ export type {
   ClientProtocolSupport,
   ProtocolCompatibility,
   ServerCapabilities,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 export {
   checkProtocolCompatibility,
   CURRENT_PROTOCOL_VERSION,
   supportsFeature,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 export {
   applyEvent,
   applyEvents,
@@ -84,11 +84,11 @@ export {
   patchSessionRuntimeMetadata,
   readRuntimeMetadata,
   readSessionRuntimeConfig,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 export type {
   SessionRuntimeConfig,
   SessionRuntimeConfigPatch,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 export type {
   PresentationReadRequest,
   SessionCommandHost,
@@ -138,9 +138,9 @@ export type {
   MemoryListResponse,
   ModelInfo,
   ModelProviderInfo,
-  OpenHarnessClientOptions,
-  OpenHarnessClientState,
-  OpenHarnessServerHealth,
+  VykorClientOptions,
+  VykorClientState,
+  VykorServerHealth,
   OutputStyleInfo,
   PermissionRequestRecord,
   PermissionStatus,
@@ -228,4 +228,4 @@ export type {
   FeishuRegistrationStartInput,
   FeishuRegistrationState,
   RecordChannelDeliveryInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";

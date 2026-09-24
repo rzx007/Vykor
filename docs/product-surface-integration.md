@@ -15,7 +15,7 @@
 
 | 产品 | 推荐入口 | 自己负责 | 不能自己再做一套 |
 |---|---|---|---|
-| CLI 单次执行 | `OpenHarnessClient` + daemon Session API | 参数、终端输出、退出码 | 临时 JSON Session、独立 Run 状态机 |
+| CLI 单次执行 | `VykorClient` + daemon Session API | 参数、终端输出、退出码 | 临时 JSON Session、独立 Run 状态机 |
 | TUI | client snapshot + SSE + command API | 键盘、布局、选择、权限弹框 | 后台 Task/Workflow 真相、第二个 Agent |
 | Web | browser-safe client + HTTP/SSE | Web 路由、渲染、断线提示 | Node polyfill、直接访问文件和数据库 |
 | Desktop | renderer 使用 client；main 提供本机能力 | 窗口、PTY、系统集成 | renderer 直连 SQLite、第二份 Run 状态 |
@@ -26,7 +26,7 @@
 
 ## 共享 client 的标准流程
 
-TUI、Web、Desktop 和 IDE 应复用 `@openharness/client`：
+TUI、Web、Desktop 和 IDE 应复用 `@vykor/client`：
 
 1. 调 `/capabilities`，协议版本必须完全匹配。
 2. 获取 Session snapshot。
@@ -57,7 +57,7 @@ PTY、窗口、系统通知等本机能力由 Desktop main 或 IDE extension hos
 
 ## Bot
 
-Bot 是“在聊天平台里使用 OpenHarness 的产品入口”。它不是另一种 Agent。
+Bot 是“在聊天平台里使用 Vykor 的产品入口”。它不是另一种 Agent。
 
 平台的一条消息先经过 ACL，再用稳定 message ID 进入 daemon。daemon 保存 Chat 到 Session 的映射、Input、Run 和待发送回复。Agent 已完成与平台已收到回复是两个状态；发送失败只重发保存好的回复。
 
@@ -92,5 +92,5 @@ Workflow 负责“任务怎样拆、依赖怎样排、失败怎样重试”，Ap
 - 系统全景：[Architecture Overview](./architecture-overview.md)
 - 多端同步：[Client Sync Flow](./client-sync-flow.md)
 - 协议：[Protocol Contract](./protocol-contract.md)
-- Runtime 嵌入：[OpenHarness Agent SDK](./agent-sdk.md)
+- Runtime 嵌入：[Vykor Agent SDK](./agent-sdk.md)
 - 状态所有权：[Agent Framework Capability Boundary](./agent-framework-capability-boundary.md)

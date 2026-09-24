@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { OpenHarnessPluginManifestV1Schema } from "./schema-v1.js";
+import { VykorPluginManifestV1Schema } from "./schema-v1.js";
 
 const validManifest = {
   schemaVersion: 1,
-  id: "dev.openharness.example",
+  id: "dev.vykor.example",
   name: "example-plugin",
   version: "1.0.0",
   components: { skills: ["./skills"] },
 };
 
-describe("OpenHarnessPluginManifestV1Schema", () => {
+describe("VykorPluginManifestV1Schema", () => {
   it("accepts a minimal Native Plugin v1 manifest", () => {
-    expect(OpenHarnessPluginManifestV1Schema.parse(validManifest)).toEqual(validManifest);
+    expect(VykorPluginManifestV1Schema.parse(validManifest)).toEqual(validManifest);
   });
 
   it.each([
@@ -24,12 +24,12 @@ describe("OpenHarnessPluginManifestV1Schema", () => {
     [{ ...validManifest, executable: "./index.js" }, "unknown top-level field"],
     [{ ...validManifest, compatibility: { environmentAliases: ["CLAUDE_PLUGIN_ROOT"] } }, "compatibility"],
   ])("rejects invalid input: %s (%s)", (input) => {
-    expect(OpenHarnessPluginManifestV1Schema.safeParse(input).success).toBe(false);
+    expect(VykorPluginManifestV1Schema.safeParse(input).success).toBe(false);
   });
 
   it("keeps descriptive extensions inside metadata", () => {
     const input = { ...validManifest, metadata: { homepage: "https://example.test", xVendor: 1 } };
-    expect(OpenHarnessPluginManifestV1Schema.parse(input).metadata).toEqual(input.metadata);
+    expect(VykorPluginManifestV1Schema.parse(input).metadata).toEqual(input.metadata);
   });
 
   it("recognizes string and configured Native Tool declarations", () => {
@@ -42,6 +42,6 @@ describe("OpenHarnessPluginManifestV1Schema", () => {
         ],
       },
     };
-    expect(OpenHarnessPluginManifestV1Schema.safeParse(input).success).toBe(true);
+    expect(VykorPluginManifestV1Schema.safeParse(input).success).toBe(true);
   });
 });

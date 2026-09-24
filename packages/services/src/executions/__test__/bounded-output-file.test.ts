@@ -30,7 +30,7 @@ describe("bounded execution output files", () => {
 });
 
 function temporaryFile(): string {
-  const directory = mkdtempSync(join(tmpdir(), "openharness-output-"));
+  const directory = mkdtempSync(join(tmpdir(), "vykor-output-"));
   temporaryDirectories.push(directory);
   return join(directory, "task.log");
 }

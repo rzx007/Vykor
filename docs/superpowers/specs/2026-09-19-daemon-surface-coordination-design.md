@@ -10,7 +10,7 @@
 
 - 桌面终端固定请求环境终端（`apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-runtime-model.ts:9` → `runtime: "environment"`）。
 - daemon 仅在 `executionSurface === "desktop_managed"` 时创建环境获取器（`packages/server/src/application/daemon-application.ts:295-299`）；否则创建终端返回 503（`packages/server/src/terminal/daemon-terminal-service.ts:183-186`）。
-- CLI 的 `serve` 不传该参数（`apps/cli/src/commands/daemon.ts:62-69`），因此 `ohs`、`ohs daemon start`、`ohs channels serve` 启动的 daemon 不支持环境终端。
+- CLI 的 `serve` 不传该参数（`apps/cli/src/commands/daemon.ts:62-69`），因此 `vk`、`vk daemon start`、`vk channels serve` 启动的 daemon 不支持环境终端。
 - 桌面连接逻辑只校验 `/health` 与 `/projects.list`，不区分启动模式就复用（`apps/desktop/src/main/features/session/daemon-connection-service.ts:93-99`）。
 - registry 无启动模式字段（`packages/server/src/daemon/paths.ts:7-14`），桌面无法判断当前 daemon 是否可用。
 - 另外，桌面服务模式 daemon 未传 `outsideProjectWorkspaceRoot`（`apps/desktop/src/main/features/daemon-autostart/daemon-entry.ts:40-46`），项目外定时任务会落到兜底目录（`packages/server/src/application/schedule/scheduled-task-executor.ts:104-110`），与桌面 UI 识别的文档目录不一致。
@@ -19,7 +19,7 @@
 
 - **桌面托管 daemon**：`registry.executionSurface === "desktop_managed"` 的本地 daemon，支持环境终端。
 - **CLI daemon**：`executionSurface === "cli_advanced"` 或该字段缺失的本地 daemon，支持本机终端但不支持环境终端。
-- **registry**：`~/.openharness-ts/data/daemon/registry.json`。
+- **registry**：`~/.vykor/data/daemon/registry.json`。
 
 ## 设计决策
 
@@ -36,12 +36,12 @@ executionSurface?: "desktop_managed" | "cli_advanced";
 ```
 
 - 桌面内置 daemon（`daemon-connection-service.ts`）与桌面服务 daemon（`daemon-entry.ts`）写入 `"desktop_managed"`。
-- CLI `serve`（`apps/cli/src/commands/daemon.ts` 的 `runServe()`）写入 `"cli_advanced"`。只改 registry 载荷，不给 `startOpenHarnessDaemon` 传该参数，CLI daemon 的运行语义保持不变。
+- CLI `serve`（`apps/cli/src/commands/daemon.ts` 的 `runServe()`）写入 `"cli_advanced"`。只改 registry 载荷，不给 `startVykorDaemon` 传该参数，CLI daemon 的运行语义保持不变。
 - 旧 registry 缺此字段时，桌面视为 CLI daemon。
 
 ### 2. CLI 入口行为（保持复用）
 
-`ohs`、`ohs daemon start`、`ohs channels serve` 继续沿用现有 `ensureLocalDaemon` / `daemon start` 逻辑：有 ready daemon 就复用，不因启动模式不同而重启。本设计不改变 CLI 行为。
+`vk`、`vk daemon start`、`vk channels serve` 继续沿用现有 `ensureLocalDaemon` / `daemon start` 逻辑：有 ready daemon 就复用，不因启动模式不同而重启。本设计不改变 CLI 行为。
 
 ### 3. 桌面连接决策
 
@@ -165,13 +165,13 @@ Desktop 启动
 - `registeredDaemonHealthy()` 在 `cli_advanced` registry 下返回 false。
 - 桌面服务接管时若存在存活 CLI daemon → 先终止（复用 §4）再启动，不因 owner lease 冲突失败。
 - 共享 `daemonPidAlive` 在 `EPERM` 时返回 true；`probeDaemonRegistry` 对该情形继续请求 `/health`。
-- 服务模式写入 registry 含 `executionSurface`；`startOpenHarnessDaemon` 收到 `outsideProjectWorkspaceRoot`。
+- 服务模式写入 registry 含 `executionSurface`；`startVykorDaemon` 收到 `outsideProjectWorkspaceRoot`。
 
 人工验收：
 
-- 先用 `ohs daemon start` 启动 daemon，再打开桌面 App：终端可用，daemon 变为 desktop_managed。
+- 先用 `vk daemon start` 启动 daemon，再打开桌面 App：终端可用，daemon 变为 desktop_managed。
 - 开启「后台持续运行」后重复上述场景：服务被替换为桌面入口，终端可用。
-- 桌面 daemon 存活时执行 `ohs`：直接复用，不重启。
+- 桌面 daemon 存活时执行 `vk`：直接复用，不重启。
 
 ## 不在范围内
 

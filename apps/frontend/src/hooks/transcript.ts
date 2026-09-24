@@ -3,7 +3,7 @@ import {
   type SessionBucket,
   type SessionMessagePartRecord,
   type SessionMessageRecord,
-} from "@openharness/client";
+} from "@vykor/client";
 
 import type { TranscriptItem } from "../types";
 

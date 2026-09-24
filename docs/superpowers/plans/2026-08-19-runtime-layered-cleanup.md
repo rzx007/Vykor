@@ -6,7 +6,7 @@
 
 **Architecture:** Stateless memory rules live in the memory leaf package; runtime/services adapt inputs. Extension discovery returns data without activation side effects. Child worktrees remain owned by agent-runtime. The agent facade delegates run state and composition to internal modules while preserving exports and cleanup order.
 
-**Tech Stack:** TypeScript, Vitest, Git worktrees, OpenHarness workspace packages
+**Tech Stack:** TypeScript, Vitest, Git worktrees, Vykor workspace packages
 
 **Spec:** `docs/superpowers/specs/2026-08-19-layered-cleanup-design.md`
 
@@ -35,7 +35,7 @@
 - Runtime/services retain model streaming and `MemoryManager.add()` adaptation.
 
 - [ ] Add cross-path failing fixtures for malformed JSON, defaults, team filtering, cap and prior memory writes.
-- [ ] Implement pure extraction helpers in `@openharness/memory`.
+- [ ] Implement pure extraction helpers in `@vykor/memory`.
 - [ ] Replace both duplicated algorithms with adapters.
 - [ ] Run memory, services and agent-runtime tests/typechecks.
 
@@ -50,7 +50,7 @@
 - Test: coordinator/server focused tests
 
 **Interfaces:**
-- `discoverOpenHarnessExtensions(cwd, settings)` has no registry mutation.
+- `discoverVykorExtensions(cwd, settings)` has no registry mutation.
 - Activation is explicit and scoped to the agent/runtime that consumes definitions.
 
 - [ ] Add a failing two-cwd test proving read-only discovery currently overwrites definitions.

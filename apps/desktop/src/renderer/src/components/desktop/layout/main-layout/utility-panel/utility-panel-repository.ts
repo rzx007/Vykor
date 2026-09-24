@@ -8,8 +8,8 @@ import {
   type UtilityPanelViewStates,
 } from "./utility-panel-state"
 
-const persistedViewStatesKey = "openharness.desktop.utility-panel-states"
-const persistedFileTabsKey = "openharness.desktop.file-tabs"
+const persistedViewStatesKey = "vykor.desktop.utility-panel-states"
+const persistedFileTabsKey = "vykor.desktop.file-tabs"
 const runtimeStates = new Map<string, UtilityPanelRuntimeState>()
 
 function readStorage(key: string): string | null {

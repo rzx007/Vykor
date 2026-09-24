@@ -75,7 +75,7 @@ export class ProjectRepository {
 
 ### `index.ts`
 
-只导出 `ProjectRepository` 及项目域内部确实需要的类型。阶段 2A 不从 `@openharness/services` 根入口公开 Repository。
+只导出 `ProjectRepository` 及项目域内部确实需要的类型。阶段 2A 不从 `@vykor/services` 根入口公开 Repository。
 
 ## StorageContext 调整
 
@@ -218,7 +218,7 @@ Repository 测试通过 `SessionStore` 创建真实 `StorageContext` 和事务�
 
 - `SessionStore` 不再包含 Project SQL、路径规范化或 row conversion。
 - `ProjectRepository` 是 Project 持久化规则的唯一所有者。
-- `SessionStore` 原 Project API 和 `@openharness/services` 根导出不变。
+- `SessionStore` 原 Project API 和 `@vykor/services` 根导出不变。
 - `createSession()` 不复制 project 识别规则。
 - Project/location 创建与 rebind 原子提交；失败注入证明 SQLite、read model 和 mutation buffer 一起回滚。
 - schema 和 migration 无变化。

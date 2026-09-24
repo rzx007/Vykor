@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFile, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import { requestedPluginPermissions, validateNativePlugin, type OpenHarnessPluginManifestV1 } from "@openharness/plugins";
+import { requestedPluginPermissions, validateNativePlugin, type VykorPluginManifestV1 } from "@vykor/plugins";
 import type { ConversionItem, ConversionPlan, ConversionReport, PluginConverter, SourceInspection } from "../core/converter.js";
 import { digestSource, digestValue } from "../core/digest.js";
 import { mapCodexMcp } from "./mcp.js";
@@ -13,7 +13,7 @@ interface Prepared {
   source: CodexSource;
   plan: ConversionPlan;
   servers: Record<string, unknown>;
-  permissions: NonNullable<OpenHarnessPluginManifestV1["permissions"]>;
+  permissions: NonNullable<VykorPluginManifestV1["permissions"]>;
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -80,7 +80,7 @@ async function checkOutput(sourceRoot: string, output: string): Promise<void> {
 function isSourceMetadata(path: string, source: CodexSource): boolean {
   const lower = path.toLowerCase();
   const top = lower.split("/")[0]!;
-  if ([".git", ".codex-plugin", ".claude-plugin", ".openharness-plugin", ".openharness-conversion"].includes(top)) return true;
+  if ([".git", ".codex-plugin", ".claude-plugin", ".vykor-plugin", ".vykor-conversion"].includes(top)) return true;
   return source.metadataPaths.some(item => item.toLowerCase() === lower);
 }
 
@@ -105,12 +105,12 @@ export class CodexPluginConverter implements PluginConverter {
     if (digestValue(prepared.plan) !== digestValue(input.plan)) throw new Error("Conversion plan does not match the current source and converter; plan again");
     const missing = [...new Set(prepared.plan.items.flatMap(item => item.requiredApprovals ?? []))].filter(item => !input.approvals?.includes(item));
     if (missing.length) throw new Error(`Explicit conversion approval required: ${missing.join(", ")}`);
-    const components: OpenHarnessPluginManifestV1["components"] = {};
+    const components: VykorPluginManifestV1["components"] = {};
     const skillFiles = prepared.plan.items.filter(item => item.sourceKind === "skills" && item.fidelity === "exact");
     if (skillFiles.length) components.skills = skillFiles.map(item => `./${item.sourcePath!}`);
     if (Object.keys(prepared.servers).length) components.mcpServers = ["./mcp/servers.json"];
     if (!Object.keys(components).length) throw new Error("Codex source contains no convertible components; see unsupported plan items");
-    const manifest: OpenHarnessPluginManifestV1 = {
+    const manifest: VykorPluginManifestV1 = {
       schemaVersion: 1, ...input.inspection.identity,
       ...(prepared.source.description === undefined ? {} : { description: prepared.source.description }),
       ...(prepared.source.displayName === undefined ? {} : { displayName: prepared.source.displayName }),
@@ -138,10 +138,10 @@ export class CodexPluginConverter implements PluginConverter {
         await writeFile(target, JSON.stringify(value, null, 2));
       };
       if (components.mcpServers) await writeJson("mcp/servers.json", { servers: prepared.servers });
-      await writeJson(".openharness-plugin/plugin.json", manifest);
-      await writeJson(".openharness-conversion/plan.json", input.plan);
-      await writeJson(".openharness-conversion/report.json", report);
-      await writeJson(".openharness-conversion/provenance.json", { sourceFormat: this.sourceFormat, sourceDigest: input.plan.sourceDigest, converterId: this.id, converterVersion: this.version, mappingVersion: MAPPING_VERSION });
+      await writeJson(".vykor-plugin/plugin.json", manifest);
+      await writeJson(".vykor-conversion/plan.json", input.plan);
+      await writeJson(".vykor-conversion/report.json", report);
+      await writeJson(".vykor-conversion/provenance.json", { sourceFormat: this.sourceFormat, sourceDigest: input.plan.sourceDigest, converterId: this.id, converterVersion: this.version, mappingVersion: MAPPING_VERSION });
       await readCodexSource(input.inspection.root);
       if (await digestSource(input.inspection.root) !== input.plan.sourceDigest) throw new Error("Source changed during conversion; inspect and plan again");
       for (const path of copied) {

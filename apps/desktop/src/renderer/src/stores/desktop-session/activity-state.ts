@@ -119,7 +119,7 @@ function sessionNotice(activity: DesktopSessionActivity): ActivityNotification {
     sessionId: activity.session.id,
     status,
 
-    title: status === "needs_input" ? "OpenHarness 需要处理" : "OpenHarness",
+    title: status === "needs_input" ? "Vykor 需要处理" : "Vykor",
 
     body: `${activity.session.title.trim() || "当前任务"} ${suffix}`,
   }
@@ -235,7 +235,7 @@ export function applyActivityUpdate(
         taskId: activity.taskId,
         status: activity.executionState,
 
-        title: "OpenHarness 定时任务",
+        title: "Vykor 定时任务",
 
         body: `定时任务${activity.executionState === "completed" ? "已完成" : "需要处理"}。`,
       })

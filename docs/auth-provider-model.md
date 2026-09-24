@@ -2,11 +2,11 @@
 
 > 状态：当前认证、Provider 路由和模型选择说明。
 
-本文说明 OpenHarness 如何区分认证、provider 路由、模型选择与本地配置存储。
+本文说明 Vykor 如何区分认证、provider 路由、模型选择与本地配置存储。
 
 ## 心智模型
 
-`auth` 回答：OpenHarness 如何拿到凭证？
+`auth` 回答：Vykor 如何拿到凭证？
 
 `provider` 回答：请求应路由到哪家模型厂商？
 
@@ -19,9 +19,9 @@
 CLI：
 
 ```bash
-ohs auth login deepseek sk-xxx
-ohs provider use deepseek
-ohs config set model deepseek-chat
+vk auth login deepseek sk-xxx
+vk provider use deepseek
+vk config set model deepseek-chat
 ```
 
 REPL/TUI：
@@ -32,21 +32,21 @@ REPL/TUI：
 /models
 ```
 
-`ohs provider add deepseek -k sk-xxx --use --model deepseek-chat` 是快捷方式：一条命令写入 API key，并可选择同时激活 provider + model。
+`vk provider add deepseek -k sk-xxx --use --model deepseek-chat` 是快捷方式：一条命令写入 API key，并可选择同时激活 provider + model。
 
-`ohs provider use <name>` 默认只切换 provider；要同时切换模型，请加
-`-m/--model`，例如 `ohs provider use deepseek -m deepseek-chat`。
+`vk provider use <name>` 默认只切换 provider；要同时切换模型，请加
+`-m/--model`，例如 `vk provider use deepseek -m deepseek-chat`。
 
 ## Codex 订阅流程
 
-OpenHarness 不负责 Codex 订阅登录本身，而是读取本地 Codex CLI 的登录状态。
+Vykor 不负责 Codex 订阅登录本身，而是读取本地 Codex CLI 的登录状态。
 
 CLI：
 
 ```bash
-ohs auth login codex
-ohs provider use codex
-ohs config set model gpt-5.4
+vk auth login codex
+vk provider use codex
+vk config set model gpt-5.4
 ```
 
 REPL/TUI：
@@ -61,16 +61,16 @@ REPL/TUI：
 
 ## 存储
 
-默认情况下，OpenHarness 将自身配置存放在：
+默认情况下，Vykor 将自身配置存放在：
 
 ```text
-~/.openharness-ts
+~/.vykor
 ```
 
 可通过以下环境变量重定向：
 
 ```text
-OPENHARNESS_CONFIG_DIR
+VYKOR_CONFIG_DIR
 ```
 
 主要文件如下：
@@ -78,7 +78,7 @@ OPENHARNESS_CONFIG_DIR
 | 文件 | 用途 |
 |---|---|
 | `settings.json` | 非机密运行时设置，如 `provider`、`model`、`baseUrl`、`apiFormat`、`customProviders`（含请求头模板原文）、权限、插件与 UI 偏好 |
-| `credentials.json` | OpenHarness 管理的凭证，按 provider 分组（API Key 等机密） |
+| `credentials.json` | Vykor 管理的凭证，按 provider 分组（API Key 等机密） |
 | daemon SQLite | TUI/Web/Desktop/Bot 共用的 Session、Run、消息和权限记录 |
 | `plugins`、`skills`、`data/*` | 用户安装的插件、技能、日志、任务、cron 状态及其他本地数据 |
 
@@ -128,7 +128,7 @@ OPENHARNESS_CONFIG_DIR
 | 变量 | 含义 |
 |---|---|
 | `{{sessionId}}` | 当前会话 ID。同一会话内稳定；不同会话不同。凭证校验时使用固定占位会话 ID。 |
-| `{{userAgent}}` | 客户端标识，当前为 `openharness-ts/1.0`。 |
+| `{{userAgent}}` | 客户端标识，当前为 `vykor/1.0`。 |
 
 适用范围：
 
@@ -143,7 +143,7 @@ OPENHARNESS_CONFIG_DIR
 
 ## Codex 凭证来源
 
-Codex 订阅凭证是外部的。OpenHarness 读取：
+Codex 订阅凭证是外部的。Vykor 读取：
 
 ```text
 ~/.codex/auth.json
@@ -155,7 +155,7 @@ Codex 订阅凭证是外部的。OpenHarness 读取：
 %CODEX_HOME%/auth.json
 ```
 
-OpenHarness 不会把 Codex token 复制进 `credentials.json`；`auth logout codex` 也不会删除 Codex CLI 的 `auth.json`。
+Vykor 不会把 Codex token 复制进 `credentials.json`；`auth logout codex` 也不会删除 Codex CLI 的 `auth.json`。
 
 ## 运行时解析
 

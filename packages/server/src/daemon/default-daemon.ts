@@ -1,5 +1,5 @@
-import { ChannelConfigStore } from "@openharness/auth";
-import { loadSettings } from "@openharness/core";
+import { ChannelConfigStore } from "@vykor/auth";
+import { loadSettings } from "@vykor/core";
 
 import {
   createDefaultApplicationServices,
@@ -7,12 +7,12 @@ import {
 } from "../application/default-application-services.js";
 import { createDefaultCommandCatalog } from "../commands/default-command-catalog.js";
 import {
-  startOpenHarnessServer,
-  type OpenHarnessServerOptions,
+  startVykorServer,
+  type VykorServerOptions,
 } from "../http/server.js";
 
-export type OpenHarnessDaemonOptions = Pick<
-  OpenHarnessServerOptions,
+export type VykorDaemonOptions = Pick<
+  VykorServerOptions,
   | "allowedOrigins"
   | "channelConfigStore"
   | "host"
@@ -28,8 +28,8 @@ export type OpenHarnessDaemonOptions = Pick<
 >;
 
 /** Starts the opinionated daemon application with all standard resource services installed. */
-export async function startOpenHarnessDaemon(
-  options: OpenHarnessDaemonOptions = {},
+export async function startVykorDaemon(
+  options: VykorDaemonOptions = {},
 ) {
   const settingsRef: DaemonSettingsRef = {
     current: await loadSettings({}),
@@ -38,7 +38,7 @@ export async function startOpenHarnessDaemon(
     },
   };
   const startupAgentEnvironment = settingsRef.current.agentEnvironment;
-  return await startOpenHarnessServer({
+  return await startVykorServer({
     ...options,
     channelConfigStore: options.channelConfigStore ?? new ChannelConfigStore(),
     settings: settingsRef.current,

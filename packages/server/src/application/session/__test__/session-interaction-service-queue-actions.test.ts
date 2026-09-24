@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { AttachmentError } from "@openharness/services";
+import { AttachmentError } from "@vykor/services";
 
 import {
   SessionApplicationError,
@@ -9,7 +9,7 @@ import { RunControlService } from "../run-control-service.js";
 
 describe("SessionInteractionService queued prompt actions", () => {
   it("rejects promotion for an admitted plugin capability Input", async () => {
-    const context = queueContext({ inputMetadata: { pluginId: "dev.openharness.quality" } });
+    const context = queueContext({ inputMetadata: { pluginId: "dev.vykor.quality" } });
     const service = new SessionInteractionService(context as any);
 
     await expect(

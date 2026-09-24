@@ -1,4 +1,4 @@
-# OpenHarness Daemon Session Runtime 实现计划
+# Vykor Daemon Session Runtime 实现计划
 
 > **面向代理式工作者：** 必需子技能：使用 superpowers:executing-plans，或等效的清单驱动实现循环。工作完成时更新复选框。
 
@@ -15,7 +15,7 @@
 | 创建 | `packages/session` 或 `packages/services/src/session-runtime` | 持久化 session store、事件日志、run coordinator |
 | 创建 | `packages/server` | HTTP API、SSE 流、本地 daemon 认证 |
 | 修改 | `apps/cli/src/index.ts` | 增加 `serve` / daemon / attach 命令 |
-| 修改 | `apps/cli/src/commands/main.ts` | 移除主线 `BackendHost` 路径；`ohs --tui` 经 daemon 路由 |
+| 修改 | `apps/cli/src/commands/main.ts` | 移除主线 `BackendHost` 路径；`vk --tui` 经 daemon 路由 |
 | 修改 | `packages/core/src/engine/query-engine.ts` | 接受显式 cwd/location、runtime 事件 hook、取消能力 |
 | 修改 | `packages/core/src/types/runtime.ts` | 增加 session 感知的 runtime 与 permission broker 类型 |
 | 修改 | `packages/sandbox` | 用按 session/location 作用域的注册表替换全局活跃 session |
@@ -27,8 +27,8 @@
 ## Task 0：遗留路径退场
 
 - [x] 将迁移前状态留在 Git 历史，不在当前代码维护兼容分支。
-- [x] 在 `docs/tui-flow.md` 中说明：OHJSON BackendHost 已退出当前主线。
-- [x] 从当前主线移除 `runBackendHost` 与旧 OHJSON host 协议。
+- [x] 在 `docs/tui-flow.md` 中说明：LegacyJSON BackendHost 已退出当前主线。
+- [x] 从当前主线移除 `runBackendHost` 与旧 LegacyJSON host 协议。
 
 退出标准：
 
@@ -76,9 +76,9 @@
   - `POST /sessions/:sessionId/prompts`
   - `GET /events`
   - `GET /events/stream`
-- [x] 增加 `ohs serve --register`。
+- [x] 增加 `vk serve --register`。
 - [x] 增加包含 version/url/pid/token 路径的 daemon 注册文件。
-- [x] 增加 `ohs daemon start/status/stop`。
+- [x] 增加 `vk daemon start/status/stop`。
 - [x] 增加聚焦的 API 测试。
 
 退出标准：
@@ -163,7 +163,7 @@
 - [x] 按活跃 session ID 渲染 messages/status/permissions。
 - [x] 通过 server API 发送 prompt。
 - [x] 通过 server API 回复权限。
-- [x] 删除 OHJSON 路径与相关命令。
+- [x] 删除 LegacyJSON 路径与相关命令。
 - [x] 增加 TUI reducer/组件测试。
 
 退出标准：
@@ -197,7 +197,7 @@
 - [x] 将 `SessionStore` 直接收口为唯一的 message shell + message parts + part delta 模型，不保留旧 store 读取分支。
 - [x] 废弃主路径 `session.message.appended` 与 `runtime.*` 客户端协议。
 - [x] server runtime adapter 将 QueryEngine 的 `text_delta`、`tool_use_start`、`tool_use_end` 翻译为持久化 `session.message.part.*` 事件。
-- [x] `@openharness/client` reducer 支持 message/part/delta，并成为 TUI/Web/Desktop 的唯一 UI 状态来源。
+- [x] `@vykor/client` reducer 支持 message/part/delta，并成为 TUI/Web/Desktop 的唯一 UI 状态来源。
 - [x] TUI 移除扫描 raw runtime events 的临时 transcript 逻辑。
 - [x] 在 canonical event 模型稳定后，再审计发送消息时 Windows 终端闪窗的具体子进程来源。
 
@@ -217,7 +217,7 @@
   - runtime/prompt 模板命令：user-invocable skills、项目/插件 command template。
   - REPL-only 或需要重新设计的命令：直接依赖本地 renderer、stdin/stdout 或一次性 CLI 环境的命令。
 - [x] 增加 server command catalog API，按 `cwd/location` 返回可跨客户端共享的命令元数据。
-- [x] 在 `@openharness/client` 增加 `listCommands` / `invokeCommand` / `updateSession`（**不是**通用 `runCommand`）。
+- [x] 在 `@vykor/client` 增加 `listCommands` / `invokeCommand` / `updateSession`（**不是**通用 `runCommand`）。
 - [x] TUI 将本地 UI 命令与 server command catalog 合并，用于 slash autocomplete 与 command palette。
 - [x] 提交 slash 命令时先命中本地命令；再命中 server/session/template；未知 `/...` 失败关闭，不入队普通 prompt。
 - [x] 对 skill/template 命令采用 opencode 风格：`POST /sessions/:id/commands` 展开后走正常 admit/run。
@@ -228,10 +228,10 @@
 - [x] 第五批：`/usage` `/cost`（GET `/sessions/:id/usage`）、`/export`（POST `/sessions/:id/export`）、`/output-style`（GET `/output-styles` + PATCH `/settings`）。
 - [x] 第六批：`/tasks run`（POST `/tasks`）、`/init`（POST `/project/init`）、`/plugin`（GET `/plugins` + enable/disable）、`/hooks`（GET `/hooks`）、`/subagents`（GET `/agent-personas`）、`/diff` `/branch`（GET `/git/diff` `/git/branch`）。
 - [x] 第七批：`/rewind`（POST `/sessions/:id/rewind` + store.replaceTranscript + closeRuntime）、`/commit`（GET `/git/status` + POST `/git/commit`）、`/reload-plugins`（POST `/plugins/reload` + closeRuntimesForCwd）。
-- [x] 债务收口：拆空 legacy REPL registry（`slash-helpers.ts` + 兼容 re-export）；slash 呈现层进 `@openharness/client` `dispatchSessionCommand`（TUI 薄适配）；文档化 print/worker 刻意进程内、`/commit` 与 plugin reload 风险；流程见 `docs/slash-commands-flow.md`。
+- [x] 债务收口：拆空 legacy REPL registry（`slash-helpers.ts` + 兼容 re-export）；slash 呈现层进 `@vykor/client` `dispatchSessionCommand`（TUI 薄适配）；文档化 print/worker 刻意进程内、`/commit` 与 plugin reload 风险；流程见 `docs/slash-commands-flow.md`。
 - [x] 用户 print/headless 迁入 Session API（ensure daemon + client admitPrompt）；内部 `--task-worker` / swarm 暂缓（第二阶段 child session）。
 - [x] task/subagent → daemon 内 child session（取代 daemon 主路径的 `--task-worker` 子进程旁路；旧 CLI 仅兼容保留）。
-- [x] 退场进程内 REPL 产品入口：默认 `ohs` → TUI/daemon；删除 `runRepl`；`--continue/--resume` 不再用于交互入口。
+- [x] 退场进程内 REPL 产品入口：默认 `vk` → TUI/daemon；删除 `runRepl`；`--continue/--resume` 不再用于交互入口。
 - [x] 增加回归测试覆盖 `/new`、`/sessions`、`/model`、`/config`、`/provider`、`/mcp`、`/tasks`、`/memory`、`/auth`、`/compact`、`/dream`、`/profile`、skill/template 命令，以及未知 slash 不误触发。
 
 退出标准：
@@ -263,7 +263,7 @@
 - [x] 文档化远程 attach 的认证模型：本地 registry 仅限本机；远程客户端必须显式提供 URL + bearer token。
 - [x] 增加 deny-by-default 的 CORS/origin 策略；仅精确 allowlist origin 可跨域，预检不需要 bearer token。
 - [x] 公网/非 loopback bind 强制要求显式 `--token`；TUI 用 `--daemon-url` + `--daemon-token` 进行远程 attach，不读取或改写本地 registry。
-- [x] 增加 `@openharness/client` 的 Web/Desktop SDK 示例与部署边界文档（[remote-attach.md](../../remote-attach.md)）。
+- [x] 增加 `@vykor/client` 的 Web/Desktop SDK 示例与部署边界文档（[remote-attach.md](../../remote-attach.md)）。
 
 退出标准：
 
@@ -290,7 +290,7 @@
 ## Task 14：Task / child 生命周期持久化
 
 - [x] 在 `SessionStore` 中增加 daemon-owned `SessionTaskRecord`，持久化 task、parent session、child session 和当前 child run 的关联。
-- [x] 增加 `session.task.created` / `session.task.updated` 事件，并把 task 放入 session attach snapshot；`@openharness/client` reducer 与其它 canonical 状态一并收敛。
+- [x] 增加 `session.task.created` / `session.task.updated` 事件，并把 task 放入 session attach snapshot；`@vykor/client` reducer 与其它 canonical 状态一并收敛。
 - [x] 将 server 的 `SessionTaskBridge` 注入 `CliSessionRuntime -> bootstrap -> ChildSessionBackend`；TaskManager 继续只承担本进程执行与 stdin/callback，不能再单独充当事实来源。
 - [x] session-scoped `/tasks` 读取 daemon 持久 task 投影；HTTP 创建的 session task 与 child task 使用全局唯一 id，避免不同 session 的 `task_1` 碰撞。
 - [x] daemon 重启时将遗留 `pending`/`running` task 收口为 `interrupted`，保留 child session/run 的历史与 Task 13 的显式 prompt 重放入口，不自动复活 callback、子进程或 child runtime。
@@ -314,4 +314,4 @@
 - [x] 中断的 prompt run 只有在显式恢复后才会重放；相同恢复请求 id 不会重复派生 run。
 - [x] child task 的 task/session/run 链路可从 attach snapshot + SSE 重放；daemon 重启后遗留 task 会明确转为 `interrupted`。
 - [x] TUI 主路径不再派生 per-session backend。
-- [x] 当前主线不存在 BackendHost/OHJSON、版本化 store 目录或旧 store 读取分支。
+- [x] 当前主线不存在 BackendHost/LegacyJSON、版本化 store 目录或旧 store 读取分支。

@@ -3,10 +3,10 @@ import {
   patchSessionRuntimeMetadata,
   type CommandCatalogEntry,
   type JobResource,
-  type OpenHarnessClient,
-  type OpenHarnessClientState,
+  type VykorClient,
+  type VykorClientState,
   type SessionRecord,
-} from "@openharness/client";
+} from "@vykor/client";
 
 import type { FrontendConfig } from "../../types";
 import {
@@ -43,7 +43,7 @@ export const JOBS_AUXILIARY_SLASH_COMMANDS = new Set([
 ]);
 
 type ActionClient = Pick<
-  OpenHarnessClient,
+  VykorClient,
   | "protocol" | "system" | "providers" | "auth" | "projects"
   | "plugins" | "development" | "sessions" | "jobs" | "permissions"
 >;
@@ -51,8 +51,8 @@ type ActionClient = Pick<
 export interface ActionDispatcherContext {
   clientRef: { current: ActionClient | null };
   activeSessionIdRef: { current: string | undefined };
-  clientState: OpenHarnessClientState;
-  setClientState: React.Dispatch<React.SetStateAction<OpenHarnessClientState>>;
+  clientState: VykorClientState;
+  setClientState: React.Dispatch<React.SetStateAction<VykorClientState>>;
   daemon: FrontendConfig["daemon"];
   defaultRuntimeRef: { current: { model: string; provider?: string; baseUrl?: string; apiFormat?: "anthropic" | "openai" } };
   nextSessionModeRef: { current: "coordinator" | "direct" };
@@ -76,9 +76,9 @@ export interface ActionDispatcherContext {
   returnToHome: (title?: string) => void;
   refreshJobs: () => Promise<void>;
   refreshSettings?: () => void | Promise<void>;
-  loadJobDetail: (client: Pick<OpenHarnessClient, "jobs">, sessionId: string, jobId: string) => Promise<void>;
+  loadJobDetail: (client: Pick<VykorClient, "jobs">, sessionId: string, jobId: string) => Promise<void>;
   createAndSwitchSession: (title?: string) => Promise<SessionRecord | undefined>;
-  cacheFirstRead: (request: import("@openharness/client").PresentationReadRequest) => void;
+  cacheFirstRead: (request: import("@vykor/client").PresentationReadRequest) => void;
   jobStateRef: { current: JobRemoteState };
   setJobState: React.Dispatch<React.SetStateAction<JobRemoteState>>;
   jobDetailStateRef: { current: JobDetailRemoteState };

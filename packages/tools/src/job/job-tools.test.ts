@@ -1,4 +1,4 @@
-import type { AgentJobHost, JobSnapshot } from "@openharness/jobs";
+import type { AgentJobHost, JobSnapshot } from "@vykor/jobs";
 import { describe, expect, it, vi } from "vitest";
 
 import { jobCancelTool, jobListTool, jobReadTool, jobWaitTool } from "./job-tools.js";

@@ -9,7 +9,7 @@
 ## 必查文件与目标能力
 
 - `apps/frontend/src/hooks/useServerSync.ts`：`protocol/system/sessions/providers/jobs`。
-- `apps/frontend/src/hooks/sync-submodules/actions.ts`：按实际动作选择 `sessions/projects/permissions/...`；包括 `OpenHarnessClient["cancelJob"]` 等类型索引引用。
+- `apps/frontend/src/hooks/sync-submodules/actions.ts`：按实际动作选择 `sessions/projects/permissions/...`；包括 `VykorClient["cancelJob"]` 等类型索引引用。
 - `apps/frontend/src/hooks/sessionSlashCommands.ts`：按命令选择 `sessions/system/providers/plugins/development/jobs`。
 - 7A AST 报告发现的其他 Frontend 生产文件。
 

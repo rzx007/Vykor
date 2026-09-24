@@ -3,7 +3,7 @@ import type {
   GoalStatus,
   GoalWait,
   SessionGoal,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 export interface CreateSessionGoalStoreInput {
   id?: string;

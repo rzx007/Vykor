@@ -1,7 +1,7 @@
 import type { PluginDiagnostic } from "./diagnostics.js";
-import type { HookDefinition, McpServerConfig } from "@openharness/core";
-import type { AgentDefinition } from "@openharness/coordinator";
-import type { SkillDefinition } from "@openharness/skills";
+import type { HookDefinition, McpServerConfig } from "@vykor/core";
+import type { AgentDefinition } from "@vykor/coordinator";
+import type { SkillDefinition } from "@vykor/skills";
 
 export const NATIVE_PLUGIN_COMPONENT_KINDS = [
   "skills", "agents", "hooks", "mcpServers", "lspServers", "tools", "workflows",
@@ -23,10 +23,10 @@ export interface NativeToolMetadata {
   entryPath: string;
   runtime: "node" | "wasm";
   requestedPermissions: string[];
-  effectivePermissions: OpenHarnessPluginPermissions;
+  effectivePermissions: VykorPluginPermissions;
 }
 
-export interface OpenHarnessPluginComponents {
+export interface VykorPluginComponents {
   skills?: string[];
   agents?: string[];
   hooks?: string[];
@@ -43,19 +43,19 @@ export interface OpenHarnessPluginComponents {
   binaries?: string[];
 }
 
-export interface OpenHarnessPluginPermissions {
+export interface VykorPluginPermissions {
   filesystem?: string[];
   network?: string[];
   process?: string[];
   secrets?: string[];
 }
 
-export interface OpenHarnessPluginRuntime {
+export interface VykorPluginRuntime {
   engine: "node" | "wasm";
   isolation: "worker" | "process";
 }
 
-export interface OpenHarnessPluginManifestV1 {
+export interface VykorPluginManifestV1 {
   $schema?: string;
   schemaVersion: 1;
   id: string;
@@ -69,15 +69,15 @@ export interface OpenHarnessPluginManifestV1 {
   license?: string;
   keywords?: string[];
   metadata?: Record<string, unknown>;
-  components: OpenHarnessPluginComponents;
-  permissions?: OpenHarnessPluginPermissions;
-  runtime?: OpenHarnessPluginRuntime;
+  components: VykorPluginComponents;
+  permissions?: VykorPluginPermissions;
+  runtime?: VykorPluginRuntime;
 }
 
 export interface ValidatedNativePlugin {
   root: string;
   manifestPath: string;
-  manifest: OpenHarnessPluginManifestV1;
+  manifest: VykorPluginManifestV1;
 }
 
 export interface NativePluginValidationResult {
@@ -102,7 +102,7 @@ export interface NativePluginComponents {
 }
 
 export interface LoadedNativePlugin {
-  manifest: OpenHarnessPluginManifestV1;
+  manifest: VykorPluginManifestV1;
   root: string;
   status: "loaded" | "degraded";
   components: NativePluginComponents;

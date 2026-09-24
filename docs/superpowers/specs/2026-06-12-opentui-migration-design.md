@@ -1,6 +1,6 @@
 # 归档 Spec：TUI 前端迁移 ink → opentui（对齐 opencode 交互）
 
-> 历史记录，禁止作为当前实现说明。本文描述的是 2026-06 的三进程 BackendHost/OHJSON 架构；该架构已退场。当前 TUI 启动与跨端协议见 [../../tui-flow.md](../../tui-flow.md) 和 [../../client-sync-flow.md](../../client-sync-flow.md)。
+> 历史记录，禁止作为当前实现说明。本文描述的是 2026-06 的三进程 BackendHost/LegacyJSON 架构；该架构已退场。当前 TUI 启动与跨端协议见 [../../tui-flow.md](../../tui-flow.md) 和 [../../client-sync-flow.md](../../client-sync-flow.md)。
 
 日期：2026-06-12
 状态：已归档
@@ -8,7 +8,7 @@
 ## 背景与目标
 
 `apps/frontend` 当前是 ink + React 18 的独立进程 TUI（约 2500 行），通过
-`useBackendSession` 用 OHJSON/stdio 协议与后端（进程 A，Node）通信。
+`useBackendSession` 用 LegacyJSON/stdio 协议与后端（进程 A，Node）通信。
 
 目标：把渲染引擎从 ink 换成 [opentui](https://github.com/anomalyco/opentui)，
 并**全面对齐 opencode**（参考 rzx007-fork/opencode dev 分支 `packages/tui`）的
@@ -55,7 +55,7 @@ scrollbox 消息流、底部状态栏、toast。
 - `apps/cli/src/commands/main.ts`（约 L674）：`spawn(process.execPath, ...)`
   改为 `spawn("bun", [frontendDistPath], ...)`；启动前检测 bun 不存在则输出
   友好错误（含安装指引）并退出。
-- 后端进程、OHJSON/stdio 协议、`--backend-only` 模式完全不动。
+- 后端进程、LegacyJSON/stdio 协议、`--backend-only` 模式完全不动。
 
 **风险门**：实施第一步先做 opentui hello-world 在 Windows（开发机）上的冒烟
 验证（原生 Zig 库预编译产物可用性）；不通过则停下重新评估，不继续后续步骤。
@@ -127,6 +127,6 @@ src/
   dialog 栈开关、命令面板过滤。
 - `useBackendSession` 及协议层测试不动。
 - 删除 ink-testing-library 与 markdownParser 测试。
-- 手工验收路径：`ohs` 启动 → Home → 提交消息 → 流式 markdown 渲染 →
+- 手工验收路径：`vk` 启动 → Home → 提交消息 → 流式 markdown 渲染 →
   权限弹窗 y/a/n → ctrl+p 执行 `/theme` → tab 切模式 → ctrl+c 退出。
 - 提交前单独跑 `pnpm check-types`（build/test 不含类型检查）。

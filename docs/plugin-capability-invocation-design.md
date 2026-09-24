@@ -15,7 +15,7 @@
   → 执行当前 Run
 ```
 
-本设计接受以下产品语义：暖 Runtime 不会因为插件文件变化自动刷新。插件更新在插件管理触发 Runtime 失效、显式重载、应用重启或新会话创建 Runtime 后生效。OpenHarness 保证权限不扩大、运行期间不漂移和调用可追踪，不保证复现历史插件代码和工具 schema。
+本设计接受以下产品语义：暖 Runtime 不会因为插件文件变化自动刷新。插件更新在插件管理触发 Runtime 失效、显式重载、应用重启或新会话创建 Runtime 后生效。Vykor 保证权限不扩大、运行期间不漂移和调用可追踪，不保证复现历史插件代码和工具 schema。
 
 ## 2. 调研结论
 
@@ -35,9 +35,9 @@ WorkBuddy 将插件拆成 Skill、MCP、Hook、Agent 和 Rule。Skill 提供说�
 - [WorkBuddy 连接器](https://open.workbuddy.cn/docs/connector)
 - [WorkBuddy 专家](https://www.workbuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Expert-Center)
 
-## 3. 当前 OpenHarness 行为
+## 3. 当前 Vykor 行为
 
-`discoverOpenHarnessExtensions()` 当前会发现：
+`discoverVykorExtensions()` 当前会发现：
 
 - `skillRegistry`：Skill 目录与元数据；
 - `agentDefinitions`：插件 Agent 定义；
@@ -187,7 +187,7 @@ Child 作为 idle Job 保留后，每次续发都重新检查发起方当前 Run
 
 ### 7.5 Hook 和 Rule
 
-Hook 当前随插件 Runtime 注册，由生命周期事件触发，不由 `@插件` 开关控制。Rule 是 WorkBuddy 的竞品概念，当前不是 OpenHarness Native Plugin 组件。二者不在第一版 `@插件` 范围。
+Hook 当前随插件 Runtime 注册，由生命周期事件触发，不由 `@插件` 开关控制。Rule 是 WorkBuddy 的竞品概念，当前不是 Vykor Native Plugin 组件。二者不在第一版 `@插件` 范围。
 
 ## 8. Prompt 与工具边界
 

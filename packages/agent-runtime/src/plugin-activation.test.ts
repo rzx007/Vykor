@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { HookDefinition } from "@openharness/core";
-import type { LoadedNativePlugin } from "@openharness/plugins";
+import type { HookDefinition } from "@vykor/core";
+import type { LoadedNativePlugin } from "@vykor/plugins";
 
 import { activateDiscoveredPlugins } from "./plugin-activation.js";
 
@@ -31,7 +31,7 @@ describe("plugin activation boundary", () => {
       { id: "hook:second", event: "before_tool_call", type: "command", command: "second", enabled: true },
     ];
     const plugin = {
-      manifest: { id: "dev.openharness.hooks", name: "hooks", version: "1.0.0", schemaVersion: 1, components: { hooks: ["./hooks.json"] } },
+      manifest: { id: "dev.vykor.hooks", name: "hooks", version: "1.0.0", schemaVersion: 1, components: { hooks: ["./hooks.json"] } },
       root: "C:/plugin",
       status: "loaded",
       components: { hooks: { status: "loaded", value: hooks, diagnostics: [] } },

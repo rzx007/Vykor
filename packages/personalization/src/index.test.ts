@@ -14,19 +14,19 @@ import {
   updateRulesFromSession,
 } from "./index.js";
 
-// 经 OPENHARNESS_CONFIG_DIR 指向临时目录（仓库既有约定）：完全不碰真实
-// ~/.openharness-ts，崩溃也不会伤用户数据。
+// 经 VYKOR_CONFIG_DIR 指向临时目录（仓库既有约定）：完全不碰真实
+// ~/.vykor，崩溃也不会伤用户数据。
 let cfgDir: string;
 let dir: string;
 
 beforeEach(() => {
-  cfgDir = mkdtempSync(join(tmpdir(), "ohs-pers-"));
-  process.env.OPENHARNESS_CONFIG_DIR = cfgDir;
+  cfgDir = mkdtempSync(join(tmpdir(), "vk-pers-"));
+  process.env.VYKOR_CONFIG_DIR = cfgDir;
   dir = join(cfgDir, "local_rules");
 });
 
 afterEach(() => {
-  delete process.env.OPENHARNESS_CONFIG_DIR;
+  delete process.env.VYKOR_CONFIG_DIR;
   rmSync(cfgDir, { recursive: true, force: true });
 });
 

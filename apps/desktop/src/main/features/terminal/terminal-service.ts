@@ -1,13 +1,13 @@
 import type { WebContents } from "electron"
 import type {
-  OpenHarnessClient,
+  VykorClient,
   TerminalCreateRequest,
   TerminalReadRequest,
   TerminalReadResult,
   TerminalResizeRequest,
   TerminalSessionInfo,
   TerminalWriteRequest,
-} from "@openharness/client"
+} from "@vykor/client"
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import { getDesktopPreferences } from "../settings/desktop-preferences"
@@ -16,7 +16,7 @@ import { listDetectedTerminalShells, resolvePreferredTerminalShell } from "./det
 import { desktopSessionService } from "../session/session-service"
 import { desktopSettingsService } from "../settings/settings-service"
 
-type TerminalClient = Pick<OpenHarnessClient, "terminals">
+type TerminalClient = Pick<VykorClient, "terminals">
 
 interface TerminalSubscription {
   controller: AbortController

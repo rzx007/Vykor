@@ -4,11 +4,11 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { ChannelConfigStore, type FeishuChannelConfig } from "@openharness/auth";
+import { ChannelConfigStore, type FeishuChannelConfig } from "@vykor/auth";
 import type {
   FeishuRegistrationCredentials,
   FeishuRegistrationStatus,
-} from "@openharness/channels";
+} from "@vykor/channels";
 
 import {
   ChannelOnboardingService,
@@ -16,7 +16,7 @@ import {
 } from "../channel-onboarding-service.js";
 
 function makeStore() {
-  const path = join(mkdtempSync(join(tmpdir(), "ohs-onboarding-")), "channel-credentials.json");
+  const path = join(mkdtempSync(join(tmpdir(), "vk-onboarding-")), "channel-credentials.json");
   return new ChannelConfigStore(path);
 }
 

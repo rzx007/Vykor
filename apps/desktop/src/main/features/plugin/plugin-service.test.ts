@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import type { PluginInfo } from "@openharness/client"
+import type { PluginInfo } from "@vykor/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const daemon = vi.hoisted(() => {

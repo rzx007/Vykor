@@ -135,7 +135,7 @@ git mv packages/services/src/attachment/__test__/attachment-application-service.
 在新实现中执行以下准确变更：
 
 ```ts
-// 从 @openharness/services 获取基础能力，而不是深度导入 Services 源文件。
+// 从 @vykor/services 获取基础能力，而不是深度导入 Services 源文件。
 import {
   AttachmentBlobStore,
   AttachmentError,
@@ -145,7 +145,7 @@ import {
   type AttachmentBlobRange,
   type AttachmentTextEncoding,
   type AttachmentTransactions,
-} from "@openharness/services";
+} from "@vykor/services";
 
 export interface AttachmentServiceOptions { /* 保留原字段和窄 store Pick */ }
 export class AttachmentService { /* 保留原方法与执行顺序 */ }
@@ -178,7 +178,7 @@ this.attachments = options.attachments ?? new AttachmentService({
 
 - [ ] **步骤 3：更新测试导入和构造器名称**
 
-新测试从 `../attachment-service.js` 导入 `AttachmentService`；仍从 `@openharness/services` 导入 `AttachmentBlobStore` 和 `SessionStore`。Server 其他测试只替换类名和导入位置，不修改断言。
+新测试从 `../attachment-service.js` 导入 `AttachmentService`；仍从 `@vykor/services` 导入 `AttachmentBlobStore` 和 `SessionStore`。Server 其他测试只替换类名和导入位置，不修改断言。
 
 - [ ] **步骤 4：删除 Services 的应用服务导出并做静态检查**
 
@@ -557,9 +557,9 @@ export function checkAttachmentLayout(path, source) {
 - [ ] **步骤 3：运行全部定向测试**
 
 ```powershell
-pnpm --filter @openharness/services exec vitest run src/attachments
-pnpm --filter @openharness/server exec vitest run src/application/attachments src/application/visual-tools src/http/routes/attachment.test.ts src/application/__test__/durable-agent-application.test.ts
-pnpm --filter @openharness/desktop exec vitest run src/main/features/attachment
+pnpm --filter @vykor/services exec vitest run src/attachments
+pnpm --filter @vykor/server exec vitest run src/application/attachments src/application/visual-tools src/http/routes/attachment.test.ts src/application/__test__/durable-agent-application.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/attachment
 node --test scripts/architecture-boundaries.test.mjs
 ```
 
@@ -568,9 +568,9 @@ node --test scripts/architecture-boundaries.test.mjs
 - [ ] **步骤 4：运行类型检查与仓库门禁**
 
 ```powershell
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/desktop typecheck:node
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/desktop typecheck:node
 node scripts/architecture-boundaries.mjs
 node scripts/check-docs.mjs
 git diff --check

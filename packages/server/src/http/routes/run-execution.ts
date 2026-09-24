@@ -3,7 +3,7 @@ import {
   parseAdmitPromptRequest,
   parsePromptAttachments,
   parsePromptItems,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import {
   applicationErrorResponse,

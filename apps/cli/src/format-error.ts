@@ -1,5 +1,5 @@
-import { AuthenticationFailure, RateLimitFailure, RequestFailure } from "@openharness/api";
-import type { Settings } from "@openharness/core";
+import { AuthenticationFailure, RateLimitFailure, RequestFailure } from "@vykor/api";
+import type { Settings } from "@vykor/core";
 
 export function formatApiError(err: Error, settings: Settings): string {
   if (err instanceof AuthenticationFailure) {

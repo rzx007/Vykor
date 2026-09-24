@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import * as readline from "node:readline";
-import { CODEX_DEFAULT_MODEL, type ProviderSpec } from "@openharness/api";
-import type { Settings } from "@openharness/core";
+import { CODEX_DEFAULT_MODEL, type ProviderSpec } from "@vykor/api";
+import type { Settings } from "@vykor/core";
 import { applyProviderConfig } from "./provider";
 
 export interface SetupChoice {
@@ -69,9 +69,9 @@ export function createSetupCommand(): Command {
     .description("Interactive first-time setup wizard")
     .action(async () => {
       const chalk = (await import("chalk")).default;
-      const { PROVIDERS } = await import("@openharness/api");
-      const { CredentialStorage, describeCodexAuthState } = await import("@openharness/auth");
-      const { loadSettings, updateSettings } = await import("@openharness/core");
+      const { PROVIDERS } = await import("@vykor/api");
+      const { CredentialStorage, describeCodexAuthState } = await import("@vykor/auth");
+      const { loadSettings, updateSettings } = await import("@vykor/core");
 
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const ask = (q: string): Promise<string> =>
@@ -172,8 +172,8 @@ export function createSetupCommand(): Command {
 
         console.log(chalk.green(`\nDone. Active provider set to ${spec.displayName} (${spec.name}).`));
         console.log(chalk.gray("Verify with:"));
-        console.log(chalk.gray("  ohs doctor"));
-        console.log(chalk.gray('  ohs "hello"'));
+        console.log(chalk.gray("  vk doctor"));
+        console.log(chalk.gray('  vk "hello"'));
       } finally {
         rl.close();
       }

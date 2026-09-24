@@ -1,28 +1,28 @@
-import type { AgentRequestConfigurationReader, RunCapabilityView, Settings, StreamingMessageClient } from "@openharness/core";
+import type { AgentRequestConfigurationReader, RunCapabilityView, Settings, StreamingMessageClient } from "@vykor/core";
 import {
   QueryEngine,
   RuntimeBuilder,
   RuntimeBundle,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   assertNoRemovedLifecycleToolNames,
   normalizeToolNames,
   resolveAllowedToolNames,
-} from "@openharness/core";
-import { CredentialStorage } from "@openharness/auth";
+} from "@vykor/core";
+import { CredentialStorage } from "@vykor/auth";
 import {
   PermissionChecker,
   LOCAL_READ_ONLY_TOOLS,
   READ_ONLY_TOOLS,
-} from "@openharness/permissions";
-import { HookExecutor } from "@openharness/hooks";
-import { createDefaultToolRegistry } from "@openharness/tools";
-import { buildRuntimeSystemPrompt } from "@openharness/prompts";
-import type { SandboxRuntimeReporter } from "@openharness/sandbox";
-import type { SkillRegistry } from "@openharness/skills";
-import type { AgentDefinition } from "@openharness/coordinator";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
-import type { OpenHarnessAgentConfiguration } from "./agent-options.js";
+} from "@vykor/permissions";
+import { HookExecutor } from "@vykor/hooks";
+import { createDefaultToolRegistry } from "@vykor/tools";
+import { buildRuntimeSystemPrompt } from "@vykor/prompts";
+import type { SandboxRuntimeReporter } from "@vykor/sandbox";
+import type { SkillRegistry } from "@vykor/skills";
+import type { AgentDefinition } from "@vykor/coordinator";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
+import type { VykorAgentConfiguration } from "./agent-options.js";
 import type { ResolvedAgentCapabilities } from "./capability-resolution.js";
 import {
   resolveApiClient,
@@ -46,10 +46,10 @@ export {
 };
 export { getInternalToolRegistry };
 
-interface OpenHarnessRuntimeOptions {
+interface VykorRuntimeOptions {
   settings: Settings;
   cwd?: string;
-  configuration: OpenHarnessAgentConfiguration;
+  configuration: VykorAgentConfiguration;
   skillRegistry?: SkillRegistry;
   agentDefinitions?: AgentDefinition[];
   credentialStorage?: CredentialStorage;
@@ -107,8 +107,8 @@ export function resolveEffectiveAllowedTools(options: {
   return intersectToolLimits(hostCeiling, roleAllowed);
 }
 
-export async function createOpenHarnessRuntime(
-  options: OpenHarnessRuntimeOptions,
+export async function createVykorRuntime(
+  options: VykorRuntimeOptions,
 ): Promise<RuntimeBundle> {
   const { settings } = options;
   const hostCwd = options.cwd ?? process.cwd();
@@ -376,7 +376,7 @@ export async function createOpenHarnessRuntime(
 
 function validateLifecycleToolConfiguration(
   settings: Settings,
-  configuration: OpenHarnessAgentConfiguration,
+  configuration: VykorAgentConfiguration,
 ): void {
   const configuredLists: Array<[string, readonly string[] | undefined]> = [
     ["settings.permission.allowedTools", settings.permission.allowedTools],

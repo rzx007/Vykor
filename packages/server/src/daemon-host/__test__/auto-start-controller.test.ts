@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 
 import { createDaemonAutoStartController } from "../auto-start-controller.js";
 
@@ -28,7 +28,7 @@ function fixture(initial = false) {
     state = "running";
   });
   const controller = createDaemonAutoStartController({
-    invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
+    invocation: { command: "vk", args: ["serve"], cwd: "D:/app" },
     loadSettings: async () => current,
     updateSettings: async (change) => {
       current = change(current);
@@ -67,7 +67,7 @@ describe("daemon auto-start controller", () => {
   it("rejects an unknown final service state instead of reporting enabled", async () => {
     let current = settings(false);
     const controller = createDaemonAutoStartController({
-      invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
+      invocation: { command: "vk", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => current,
       updateSettings: async (change) => {
         current = change(current);
@@ -102,7 +102,7 @@ describe("daemon auto-start controller", () => {
   it("restores configuration even when service compensation also fails", async () => {
     let current = settings(false);
     const controller = createDaemonAutoStartController({
-      invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
+      invocation: { command: "vk", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => current,
       updateSettings: async (change) => {
         current = change(current);
@@ -128,7 +128,7 @@ describe("daemon auto-start controller", () => {
   it("restores the previous enabled preference when final disable verification fails", async () => {
     let current = settings(true);
     const controller = createDaemonAutoStartController({
-      invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
+      invocation: { command: "vk", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => current,
       updateSettings: async (change) => {
         current = change(current);
@@ -154,7 +154,7 @@ describe("daemon auto-start controller", () => {
       throw new Error("synchronous status must not run");
     });
     const controller = createDaemonAutoStartController({
-      invocation: { command: "ohs", args: ["serve"], cwd: "D:/app" },
+      invocation: { command: "vk", args: ["serve"], cwd: "D:/app" },
       loadSettings: async () => settings(false),
       updateSettings: vi.fn(async (change) => change(settings(false))),
       createService: () => ({

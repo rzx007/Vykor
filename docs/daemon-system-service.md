@@ -4,11 +4,11 @@
 
 ## 一句话结论
 
-`~/.openharness-ts/settings.json` 中的 `daemon.autoStart` 决定主 daemon 是否交给操作系统常驻。开启后，OpenHarness 会在当前用户登录时启动主 daemon；daemon 意外退出时，Windows 计划任务、macOS LaunchAgent 或 Linux systemd user service 会重新启动它。
+`~/.vykor/settings.json` 中的 `daemon.autoStart` 决定主 daemon 是否交给操作系统常驻。开启后，Vykor 会在当前用户登录时启动主 daemon；daemon 意外退出时，Windows 计划任务、macOS LaunchAgent 或 Linux systemd user service 会重新启动它。
 
 TUI、Web、Desktop、Scheduled Tasks 和 Agent 仍然连接同一个主 daemon。
 
-Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和系统服务。CLI 与 Desktop 都通过 `@openharness/server/daemon-host` 的 controller 协调配置期望、系统服务真实状态、失败恢复和最终复核。打包后的 Desktop 自身提供无界面的 `--daemon-service` 入口；Windows 计划任务通过 `--daemon-watchdog` 做单次健康检查，macOS 和 Linux 的用户服务直接托管 `--daemon-service`。这些入口不会创建窗口、托盘、桌面宠物或更新器。
+Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和系统服务。CLI 与 Desktop 都通过 `@vykor/server/daemon-host` 的 controller 协调配置期望、系统服务真实状态、失败恢复和最终复核。打包后的 Desktop 自身提供无界面的 `--daemon-service` 入口；Windows 计划任务通过 `--daemon-watchdog` 做单次健康检查，macOS 和 Linux 的用户服务直接托管 `--daemon-service`。这些入口不会创建窗口、托盘、桌面宠物或更新器。
 
 ## 配置
 
@@ -23,25 +23,25 @@ Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和�
 - `true`：登录后自动启动，异常退出后自动恢复。
 - `false`：不注册系统启动项。TUI、print 或 Desktop 需要本地 daemon 时仍会按需启动，但操作系统不会在登录或崩溃后恢复它；无人打开应用时，已安排任务也不会执行。
 - 默认值是 `false`。
-- 这是机器级设置，只读取用户目录的 `settings.json`；项目目录里的 `.openharness-ts/settings.json` 不能覆盖它。
+- 这是机器级设置，只读取用户目录的 `settings.json`；项目目录里的 `.vykor/settings.json` 不能覆盖它。
 
 也可以使用命令修改：
 
 ```bash
-ohs config set daemon.autoStart true
-ohs config set daemon.autoStart false
+vk config set daemon.autoStart true
+vk config set daemon.autoStart false
 ```
 
-`ohs config set` 会立即同步系统启动项。直接编辑 JSON 或在 TUI 中使用 `/config` 后，会在下一次由 CLI 启动或连接本地 daemon 时同步；已经安装的 Windows watchdog 也会先读取这个开关，关闭时不会重新拉起 daemon。
+`vk config set` 会立即同步系统启动项。直接编辑 JSON 或在 TUI 中使用 `/config` 后，会在下一次由 CLI 启动或连接本地 daemon 时同步；已经安装的 Windows watchdog 也会先读取这个开关，关闭时不会重新拉起 daemon。
 
 ## 常用命令
 
 ```bash
-ohs daemon install
-ohs daemon status
-ohs daemon stop
-ohs daemon start
-ohs daemon uninstall
+vk daemon install
+vk daemon status
+vk daemon stop
+vk daemon start
+vk daemon uninstall
 ```
 
 - `install`：把 `daemon.autoStart` 写成 `true`，安装用户级启动配置，并立即启动 daemon。
@@ -54,9 +54,9 @@ ohs daemon uninstall
 
 | 系统    | 使用的系统能力       | 配置位置                                                |
 | ------- | -------------------- | ------------------------------------------------------- |
-| Windows | 当前用户的计划任务   | 任务名 `OpenHarness Daemon`；登录时和每分钟检查一次     |
-| macOS   | LaunchAgent          | `~/Library/LaunchAgents/dev.openharness.daemon.plist`   |
-| Linux   | systemd user service | `~/.config/systemd/user/dev.openharness.daemon.service` |
+| Windows | 当前用户的计划任务   | 任务名 `Vykor Daemon`；登录时和每分钟检查一次     |
+| macOS   | LaunchAgent          | `~/Library/LaunchAgents/dev.vykor.daemon.plist`   |
+| Linux   | systemd user service | `~/.config/systemd/user/dev.vykor.daemon.service` |
 
 这些配置都在用户范围内运行，不要求 daemon 以管理员或 root 身份执行。机器重启后，需要当前用户登录，daemon 才会启动。这和桌面版开发工具的常见做法一致，也避免在无人登录时带着用户凭证运行 Agent。
 
@@ -66,13 +66,13 @@ ohs daemon uninstall
 flowchart TD
     Setting["daemon.autoStart = true"] --> Build["根据当前 CLI 位置生成启动命令"]
     Build --> OS["写入 Windows / macOS / Linux 用户启动配置"]
-    OS --> Start["操作系统启动 ohs serve --register"]
+    OS --> Start["操作系统启动 vk serve --register"]
     Start --> Registry["daemon 写入 registry.json"]
     Registry --> Health["CLI 请求 /health"]
     Health --> Ready["TUI / Web / Desktop 可以连接"]
 ```
 
-macOS 和 Linux 会把普通输出追加到 `~/.openharness-ts/data/logs/daemon.log`。Windows 的每次计划任务只做一次健康检查：daemon 正常就立即退出，不正常才启动 daemon。Windows 通过系统自带的无窗口脚本宿主运行检查，因此每分钟执行时不会弹出终端窗口。服务端自己的结构化日志仍使用原来的日志目录。
+macOS 和 Linux 会把普通输出追加到 `~/.vykor/data/logs/daemon.log`。Windows 的每次计划任务只做一次健康检查：daemon 正常就立即退出，不正常才启动 daemon。Windows 通过系统自带的无窗口脚本宿主运行检查，因此每分钟执行时不会弹出终端窗口。服务端自己的结构化日志仍使用原来的日志目录。
 
 ## TUI 自动连接时怎么处理
 
@@ -93,7 +93,7 @@ ensureLocalDaemon
 daemon 写入的 `registry.json` 会记录它是被谁、以什么模式启动的：
 
 - `executionSurface: "desktop_managed"`：Desktop 内置 daemon 和 Desktop 系统服务 daemon。支持沙箱执行环境与「环境终端」。
-- `executionSurface: "cli_advanced"`：CLI 的 `ohs serve`（以及 `ohs`、`ohs daemon start`、`ohs channels serve` 按需拉起的 daemon）。只支持本机终端。
+- `executionSurface: "cli_advanced"`：CLI 的 `vk serve`（以及 `vk`、`vk daemon start`、`vk channels serve` 按需拉起的 daemon）。只支持本机终端。
 
 连接规则：
 
@@ -109,9 +109,9 @@ Desktop 服务/watchdog 的健康检查同样要求 registry 是 `desktop_manage
 ## 崩溃和正常停止
 
 - daemon 崩溃：macOS 和 Linux 会在几秒内重启；Windows 会在下一次每分钟健康检查时启动。
-- `ohs daemon stop`：通过系统管理器停止，不会立即被当作崩溃拉起。
-- `ohs daemon start`：重新交给系统管理器启动。
-- `ohs daemon uninstall`：停止并删除启动配置。
+- `vk daemon stop`：通过系统管理器停止，不会立即被当作崩溃拉起。
+- `vk daemon start`：重新交给系统管理器启动。
+- `vk daemon uninstall`：停止并删除启动配置。
 - daemon 重启后：SessionStore 会把上次未结束的 run、task、permission 和 Scheduled Task 运行记录收口为已中断，再恢复可继续的持久化状态。
 
 ## 代码索引

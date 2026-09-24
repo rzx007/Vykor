@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { sessionEventSchemaVersion } from "@openharness/protocol";
+import { sessionEventSchemaVersion } from "@vykor/protocol";
 import {
   normalizeDaemonBaseUrl,
   IncompatibleProtocolError,
-  OpenHarnessClient,
+  VykorClient,
   streamServerSentEvents,
 } from "../http-client.js";
 import { syncEvents } from "../../state/sync.js";
@@ -22,9 +22,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 // Resource endpoint fixtures share the real transport handshake.
-function businessClient(options: ConstructorParameters<typeof OpenHarnessClient>[0]): OpenHarnessClient {
+function businessClient(options: ConstructorParameters<typeof VykorClient>[0]): VykorClient {
   const endpointFetch = options.fetch!;
-  return new OpenHarnessClient({
+  return new VykorClient({
     ...options,
     fetch: (input, init) => new URL(String(input)).pathname === "/capabilities"
       ? Promise.resolve(jsonResponse({ serverVersion: "test", protocol: { version: 4 }, features: {} }))
@@ -43,7 +43,7 @@ function event(seq: number, type = "daemon.test"): SessionEventRecord {
   };
 }
 
-describe("OpenHarnessClient", () => {
+describe("VykorClient", () => {
   it("uses typed plugin archive endpoints and preserves structured failures", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const client = businessClient({
@@ -92,7 +92,7 @@ describe("OpenHarnessClient", () => {
         approvedPermissions: ["process:spawn"],
       }),
     ).rejects.toMatchObject({
-      name: "OpenHarnessApiError",
+      name: "VykorApiError",
       status: 409,
       body: {
         code: "plugin_archive_changed",
@@ -251,7 +251,7 @@ describe("OpenHarnessClient", () => {
     const uploadHeaders = new Headers(calls[0]!.init.headers);
     expect(uploadHeaders.get("authorization")).toBe("Bearer tok");
     expect(uploadHeaders.get("content-type")).toBe("image/png");
-    expect(uploadHeaders.get("x-openharness-filename")).toBe(
+    expect(uploadHeaders.get("x-vykor-filename")).toBe(
       encodeURIComponent("截图.png"),
     );
     expect(uploadHeaders.has("content-length")).toBe(false);
@@ -333,7 +333,7 @@ describe("OpenHarnessClient", () => {
     expect(ranges).toEqual(["bytes=4-", "bytes=-3"]);
   });
 
-  it("keeps attachment HTTP errors as OpenHarnessApiError", async () => {
+  it("keeps attachment HTTP errors as VykorApiError", async () => {
     const client = businessClient({
       baseUrl: "http://daemon.test",
       fetch: (async () =>
@@ -349,7 +349,7 @@ describe("OpenHarnessClient", () => {
         body: new Blob([Uint8Array.of(1)]),
       }),
     ).rejects.toMatchObject({
-      name: "OpenHarnessApiError",
+      name: "VykorApiError",
       status: 413,
       body: { error: "attachment_too_large: limit exceeded" },
     });
@@ -619,7 +619,7 @@ describe("OpenHarnessClient", () => {
         features: { jobs: 1 },
       }),
     );
-    const client = new OpenHarnessClient({
+    const client = new VykorClient({
       baseUrl: "http://127.0.0.1:3456",
       token: "secret",
       fetch: fetchImpl as typeof fetch,
@@ -637,7 +637,7 @@ describe("OpenHarnessClient", () => {
   });
 
   it("parses daemon-host execution environment capabilities", async () => {
-    const client = new OpenHarnessClient({
+    const client = new VykorClient({
       baseUrl: "http://127.0.0.1:3456",
       fetch: vi.fn(async () =>
         jsonResponse({
@@ -655,7 +655,7 @@ describe("OpenHarnessClient", () => {
   });
 
   it("rejects the previous protocol by default instead of silently hiding plugin inputs", async () => {
-    const client = new OpenHarnessClient({
+    const client = new VykorClient({
       baseUrl: "http://127.0.0.1:3456",
       fetch: (async () => jsonResponse({ serverVersion: "old", protocol: { version: 3 }, features: {} })) as typeof fetch,
     });
@@ -1023,7 +1023,7 @@ describe("OpenHarnessClient", () => {
         list: async () => [event(1, "session.created"), event(2, "session.message.created")],
         stream: () => stream(),
       },
-    } as unknown as OpenHarnessClient;
+    } as unknown as VykorClient;
 
     const updates: Array<{ seq: number; source: string; lastSeq: number }> = [];
     for await (const update of syncEvents(client, {
@@ -1069,7 +1069,7 @@ describe("OpenHarnessClient", () => {
         })();
         },
       },
-    } as unknown as OpenHarnessClient;
+    } as unknown as VykorClient;
 
     const liveSeqs: number[] = [];
     for await (const update of syncEvents(client, {
@@ -1100,7 +1100,7 @@ describe("OpenHarnessClient", () => {
         })();
         },
       },
-    } as unknown as OpenHarnessClient;
+    } as unknown as VykorClient;
 
     const liveSeqs: number[] = [];
     for await (const update of syncEvents(client, {
@@ -1164,7 +1164,7 @@ describe("OpenHarnessClient", () => {
           })();
         },
       },
-    } as unknown as OpenHarnessClient;
+    } as unknown as VykorClient;
 
     const sources: string[] = [];
     let lastSeq = 0;
@@ -1287,7 +1287,7 @@ describe("OpenHarnessClient", () => {
         })();
         },
       },
-    } as unknown as OpenHarnessClient;
+    } as unknown as VykorClient;
 
     const run = (async () => {
       for await (const update of syncEvents(client, {

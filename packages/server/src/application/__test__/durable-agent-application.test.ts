@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createDefaultNodeAgent,
-  type OpenHarnessAgent,
-} from "@openharness/agent-runtime";
+  type VykorAgent,
+} from "@vykor/agent-runtime";
 import type {
   AgentBackgroundShellHost,
   AgentEvent,
@@ -19,9 +19,9 @@ import type {
   Message,
   StreamingMessageClient,
   ToolDefinition,
-} from "@openharness/core";
-import type { AgentJobHost } from "@openharness/jobs";
-import { AttachmentBlobStore, LightOcrEngine, SessionStore } from "@openharness/services";
+} from "@vykor/core";
+import type { AgentJobHost } from "@vykor/jobs";
+import { AttachmentBlobStore, LightOcrEngine, SessionStore } from "@vykor/services";
 
 import type { CreateDaemonAgent } from "../../daemon/daemon-agent.js";
 import { AttachmentService } from "../attachments/attachment-service.js";
@@ -31,7 +31,7 @@ import { DaemonApplication } from "../daemon-application.js";
 const createEchoAgent: CreateDaemonAgent = async (context) => {
   let history: Message[] = [];
   let sequence = 0;
-  let state: OpenHarnessAgent["state"] = "idle";
+  let state: VykorAgent["state"] = "idle";
 
   const emit = async (
     input: AgentEventInput,
@@ -46,7 +46,7 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
     } as AgentEvent);
   };
 
-  const agent: OpenHarnessAgent = {
+  const agent: VykorAgent = {
     id: context.session.id,
     get state() {
       return state;
@@ -141,7 +141,7 @@ const createEchoAgent: CreateDaemonAgent = async (context) => {
 
 describe("DaemonApplication", () => {
   it("rejects ready on attachment recovery failure and still releases ownership on close", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "openharness-ready-recovery-"));
+    const directory = mkdtempSync(join(tmpdir(), "vykor-ready-recovery-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     const attachments = new AttachmentService({
       store: store.attachments,
@@ -160,11 +160,11 @@ describe("DaemonApplication", () => {
     rmSync(directory, { recursive: true, force: true });
   });
   it("lets a real child Agent read its root attachment without authorizing another session", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "openharness-child-attachment-"));
+    const dir = mkdtempSync(join(tmpdir(), "vykor-child-attachment-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     let attachmentReadTool: ToolDefinition | undefined;
     const events: AgentEvent[] = [];
-    const agents = new Map<string, OpenHarnessAgent>();
+    const agents = new Map<string, VykorAgent>();
     let assetId = "";
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
@@ -377,9 +377,9 @@ describe("DaemonApplication", () => {
   });
 
   it("把附件目录和成功 Run 写入的 session checkpoint 一起提供给 compact", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "openharness-session-memory-"));
-    const previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = join(dir, "config");
+    const dir = mkdtempSync(join(tmpdir(), "vykor-session-memory-"));
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = join(dir, "config");
     const store = new SessionStore({ path: join(dir, "store.db") });
     let compactContextProvider: CompactContextProvider | undefined;
     const application = new DaemonApplication({
@@ -442,14 +442,14 @@ describe("DaemonApplication", () => {
     } finally {
       await application.close().catch(() => {});
       store.close();
-      if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-      else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it("让模型工具创建的后台 shell 立即进入统一 Jobs，并可被取消", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "openharness-background-shell-"));
+    const dir = mkdtempSync(join(tmpdir(), "vykor-background-shell-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     let backgroundShellHost: AgentBackgroundShellHost | undefined;
     let backgroundShellJobs: AgentJobHost | undefined;
@@ -526,7 +526,7 @@ describe("DaemonApplication", () => {
   });
 
   it("uses attachment transactions for daemon imports and cached OCR", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "openharness-attachment-boundary-"));
+    const dir = mkdtempSync(join(tmpdir(), "vykor-attachment-boundary-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const recognize = vi.spyOn(LightOcrEngine.prototype, "recognize").mockResolvedValue({
       lines: [{ text: "invoice 123", confidence: 1, box: [] }],
@@ -577,7 +577,7 @@ describe("DaemonApplication", () => {
   });
 
   it("不经过 HTTP 也能完成创建会话、提交输入、运行和读取结果", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "openharness-application-"));
+    const dir = mkdtempSync(join(tmpdir(), "vykor-application-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const application = new DaemonApplication({
       store,
@@ -621,7 +621,7 @@ describe("DaemonApplication", () => {
   });
 
   it("让不同外部聊天使用不同 Session，并对重复平台消息复用同一个 Run", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "openharness-channel-application-"));
+    const dir = mkdtempSync(join(tmpdir(), "vykor-channel-application-"));
     const path = join(dir, "store.db");
     let store = new SessionStore({ path });
     let application = new DaemonApplication({
@@ -707,7 +707,7 @@ describe("DaemonApplication", () => {
   });
 
   it("重投递带附件的渠道消息时不重复导入、不触发 prompt_id_conflict", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "openharness-channel-attachment-redelivery-"));
+    const dir = mkdtempSync(join(tmpdir(), "vykor-channel-attachment-redelivery-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     const application = new DaemonApplication({
       store,

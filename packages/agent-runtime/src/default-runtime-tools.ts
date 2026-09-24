@@ -1,8 +1,8 @@
-import type { IToolRegistry, ToolDefinition } from "@openharness/core";
-import { resolveToolExecution, ToolRegistrationError } from "@openharness/core";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+import type { IToolRegistry, ToolDefinition } from "@vykor/core";
+import { resolveToolExecution, ToolRegistrationError } from "@vykor/core";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
-import type { OpenHarnessAgentConfiguration } from "./agent-options.js";
+import type { VykorAgentConfiguration } from "./agent-options.js";
 import { GOAL_ASSESSMENT_TOOL_NAME } from "./goal-assessment-tool.js";
 
 export type ToolLimit =
@@ -10,7 +10,7 @@ export type ToolLimit =
 
 export function applyConfiguredTools(
   registry: IToolRegistry,
-  configuration: OpenHarnessAgentConfiguration,
+  configuration: VykorAgentConfiguration,
 ): Set<string> {
   const additions = configuration.tools ?? [];
   const overrides = configuration.toolOverrides ?? [];

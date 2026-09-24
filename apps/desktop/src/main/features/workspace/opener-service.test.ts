@@ -17,11 +17,11 @@ describe("resolveWorkspaceOpenTarget", () => {
   it("rejects openWith when rootPath is missing", async () => {
     await expect(
       resolveWorkspaceOpenTarget("C:\\Windows\\notepad.exe", undefined, {
-        projectRoot: "E:\\code\\openharness-ts",
-        configDir: "C:\\Users\\ruanz\\.openharness-ts",
-        skillsDir: "C:\\Users\\ruanz\\.openharness-ts\\skills",
-        userProfilePath: "C:\\Users\\ruanz\\.openharness-ts\\USER.md",
-        outsideProjectRoot: "C:\\Users\\ruanz\\Documents\\OpenHarness",
+        projectRoot: "E:\\code\\vykor",
+        configDir: "C:\\Users\\ruanz\\.vykor",
+        skillsDir: "C:\\Users\\ruanz\\.vykor\\skills",
+        userProfilePath: "C:\\Users\\ruanz\\.vykor\\USER.md",
+        outsideProjectRoot: "C:\\Users\\ruanz\\Documents\\Vykor",
       })
     ).rejects.toThrow("项目路径不能为空。")
   })
@@ -46,7 +46,7 @@ describe("resolveWorkspaceOpenTarget", () => {
 })
 
 async function createTemporaryDirectory(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), "openharness-opener-"))
+  const path = await mkdtemp(join(tmpdir(), "vykor-opener-"))
   temporaryDirectories.push(path)
   return path
 }

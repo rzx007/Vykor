@@ -17,22 +17,22 @@ import {
 
 test("services cannot depend on server", () => {
   assert.deepEqual(
-    checkPackageDependency("@openharness/services", "@openharness/server"),
-    ["@openharness/services must not depend on @openharness/server"],
+    checkPackageDependency("@vykor/services", "@vykor/server"),
+    ["@vykor/services must not depend on @vykor/server"],
   );
 });
 test("sessions, conversations, and runs cannot import server", () => {
   assert.deepEqual(
-    checkImportBoundary("packages/services/src/sessions/session-repository.ts", "@openharness/server"),
-    ["packages/services/src/sessions/session-repository.ts must not depend on @openharness/server"],
+    checkImportBoundary("packages/services/src/sessions/session-repository.ts", "@vykor/server"),
+    ["packages/services/src/sessions/session-repository.ts must not depend on @vykor/server"],
   );
   assert.deepEqual(
-    checkImportBoundary("packages/services/src/conversations/conversation-repository.ts", "@openharness/server"),
-    ["packages/services/src/conversations/conversation-repository.ts must not depend on @openharness/server"],
+    checkImportBoundary("packages/services/src/conversations/conversation-repository.ts", "@vykor/server"),
+    ["packages/services/src/conversations/conversation-repository.ts must not depend on @vykor/server"],
   );
   assert.deepEqual(
-    checkImportBoundary("packages/services/src/runs/run-repository.ts", "@openharness/server"),
-    ["packages/services/src/runs/run-repository.ts must not depend on @openharness/server"],
+    checkImportBoundary("packages/services/src/runs/run-repository.ts", "@vykor/server"),
+    ["packages/services/src/runs/run-repository.ts must not depend on @vykor/server"],
   );
 });
 
@@ -114,7 +114,7 @@ test("server routes cannot import SessionStore or repositories", () => {
     ["packages/server/src/http/routes/sessions.ts must not depend on SessionStore"],
   );
   assert.deepEqual(
-    checkImportBoundary("packages/server/src/http/routes/sessions.ts", "@openharness/services/sessions"),
+    checkImportBoundary("packages/server/src/http/routes/sessions.ts", "@vykor/services/sessions"),
     ["packages/server/src/http/routes/sessions.ts must not depend on session repository"],
   );
   assert.deepEqual(
@@ -196,14 +196,14 @@ test("maintenance services cannot hold a full SessionStore", () => {
   );
 });
 
-test("client resources cannot import OpenHarnessClient or Server", () => {
+test("client resources cannot import VykorClient or Server", () => {
   assert.deepEqual(
     checkImportBoundary("packages/client/src/resources/session-resource.ts", "../transport/http-client.js"),
-    ["packages/client/src/resources/session-resource.ts must not depend on OpenHarnessClient or Server"],
+    ["packages/client/src/resources/session-resource.ts must not depend on VykorClient or Server"],
   );
   assert.deepEqual(
-    checkImportBoundary("packages/client/src/resources/session-resource.ts", "@openharness/server"),
-    ["packages/client/src/resources/session-resource.ts must not depend on OpenHarnessClient or Server"],
+    checkImportBoundary("packages/client/src/resources/session-resource.ts", "@vykor/server"),
+    ["packages/client/src/resources/session-resource.ts must not depend on VykorClient or Server"],
   );
 });
 
@@ -220,11 +220,11 @@ test("frontend cannot import electron or desktop", () => {
     ["apps/frontend/src/hooks/useServerSync.ts must not depend on Electron"],
   );
   assert.deepEqual(
-    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@openharness/desktop"),
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@vykor/desktop"),
     ["apps/frontend/src/hooks/useServerSync.ts must not depend on Desktop"],
   );
   assert.deepEqual(
-    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@openharness/client"),
+    checkImportBoundary("apps/frontend/src/hooks/useServerSync.ts", "@vykor/client"),
     [],
   );
   assert.deepEqual(
@@ -276,7 +276,7 @@ test("retired attachment layouts are rejected", () => {
 });
 
 test("attachment layout scan covers package root barrels", (t) => {
-  const fixtureRoot = mkdtempSync(join(tmpdir(), "openharness-attachment-boundary-"));
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "vykor-attachment-boundary-"));
   t.after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
 
   const servicesSource = join(fixtureRoot, "packages", "services", "src");

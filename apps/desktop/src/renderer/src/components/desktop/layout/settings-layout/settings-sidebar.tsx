@@ -76,7 +76,7 @@ export function SettingsSidebar({
           OH
         </span>
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium">OpenHarness</p>
+          <p className="truncate text-xs font-medium">Vykor</p>
           <p className="text-ui-caption truncate text-sidebar-muted">本地工作区</p>
         </div>
       </div>

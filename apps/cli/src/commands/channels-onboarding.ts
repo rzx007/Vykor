@@ -3,10 +3,10 @@ import { createInterface } from "node:readline/promises";
 import type {
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@openharness/client";
+} from "@vykor/client";
 
 /**
- * `ohs channels add feishu` / `ohs channels allow` 的向导逻辑。
+ * `vk channels add feishu` / `vk channels allow` 的向导逻辑。
  *
  * 配置与接入都由 daemon 负责（唯一写入者），这里只做终端交互与编排：
  * 通过注入的 client 调 daemon 的 `/channels/feishu/*` 接口。
@@ -124,12 +124,12 @@ function messageOf(error: unknown): string {
 }
 
 function missingConfigLog(): string {
-  return "尚未配置飞书通道，请先运行 ohs channels add feishu。";
+  return "尚未配置飞书通道，请先运行 vk channels add feishu。";
 }
 
 function tailLog(): string[] {
   return [
-    "运行 ohs channels serve 开始接收和发送消息。",
+    "运行 vk channels serve 开始接收和发送消息。",
     "请在飞书开放平台把事件订阅方式设为「使用长连接接收事件」。",
   ];
 }
@@ -164,8 +164,8 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
     createClient: async () => {
       const { ensureLocalDaemon } = await import("../ensure-daemon.js");
       const daemon = await ensureLocalDaemon();
-      const { OpenHarnessClient } = await import("@openharness/client");
-      return new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+      const { VykorClient } = await import("@vykor/client");
+      return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
     },
     renderQr: async (url) => {
       if (!process.stdout.isTTY) return;
@@ -184,8 +184,8 @@ export function createDefaultAllowDeps(): ChannelsAllowDeps {
     createClient: async () => {
       const { ensureLocalDaemon } = await import("../ensure-daemon.js");
       const daemon = await ensureLocalDaemon();
-      const { OpenHarnessClient } = await import("@openharness/client");
-      return new OpenHarnessClient({ baseUrl: daemon.url, token: daemon.token });
+      const { VykorClient } = await import("@vykor/client");
+      return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
     },
     log: (message) => console.log(message),
   };
@@ -246,7 +246,7 @@ async function runScan(
       }
 
       if (current.state === "idle" && sawActive) {
-        deps.log("注册状态已丢失（daemon 可能重启），请重新运行 ohs channels add feishu。");
+        deps.log("注册状态已丢失（daemon 可能重启），请重新运行 vk channels add feishu。");
         return undefined;
       }
 
@@ -273,7 +273,7 @@ async function runScan(
 
       if (Date.now() > deadline) {
         await client.channels.cancelFeishuRegistration();
-        deps.log("等待扫码超时，已取消。请重新运行 ohs channels add feishu。");
+        deps.log("等待扫码超时，已取消。请重新运行 vk channels add feishu。");
         return undefined;
       }
       await sleep(current.pollIntervalMs ?? 1000);

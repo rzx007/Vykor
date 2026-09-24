@@ -2,9 +2,9 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 给 OHS 增加可单点关闭的 Markdown 表达规范，并收紧桌面对话正文排版，使普通回答和技能回答更接近 Codex 的阅读体验。
+**目标：** 给 VK 增加可单点关闭的 Markdown 表达规范，并收紧桌面对话正文排版，使普通回答和技能回答更接近 Codex 的阅读体验。
 
-**架构：** `@openharness/prompts` 提供一个纯函数生成稳定的 Markdown 表达规范，由系统提示词装配器在唯一入口注入；关闭选项只影响这一段。桌面端保留 Streamdown 解析，只在助手对话区域增加宽度和 Markdown 元素覆盖，不修改第三方技能或输出内容。
+**架构：** `@vykor/prompts` 提供一个纯函数生成稳定的 Markdown 表达规范，由系统提示词装配器在唯一入口注入；关闭选项只影响这一段。桌面端保留 Streamdown 解析，只在助手对话区域增加宽度和 Markdown 元素覆盖，不修改第三方技能或输出内容。
 
 **技术栈：** TypeScript、Vitest、React、Streamdown、Tailwind CSS 4、CSS
 
@@ -68,7 +68,7 @@ expect(presentation[0]).toMatchObject({ layer: "stable", bucket: "system" });
 运行：
 
 ```powershell
-pnpm --filter @openharness/prompts test -- src/index.test.ts src/ledger-segments.test.ts
+pnpm --filter @vykor/prompts test -- src/index.test.ts src/ledger-segments.test.ts
 ```
 
 预期：FAIL；默认提示词没有 `# Markdown Presentation`，并且 TypeScript 尚不接受 `includeMarkdownPresentation`。
@@ -111,7 +111,7 @@ if (options.includeMarkdownPresentation !== false) {
 运行：
 
 ```powershell
-pnpm --filter @openharness/prompts test -- src/index.test.ts src/ledger-segments.test.ts
+pnpm --filter @vykor/prompts test -- src/index.test.ts src/ledger-segments.test.ts
 ```
 
 预期：相关测试全部 PASS。
@@ -153,7 +153,7 @@ expect(stylesheet).toMatch(
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/markdown-table-styles.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/markdown-table-styles.test.ts
 ```
 
 预期：FAIL；正文仍是 `max-w-190`，且不存在助手消息专用覆盖。
@@ -205,7 +205,7 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/markdown-tab
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/markdown-table-styles.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/markdown-table-styles.test.ts
 ```
 
 预期：测试文件全部 PASS。
@@ -226,8 +226,8 @@ git commit -m "fix(desktop): tighten assistant markdown layout"
 - [ ] **步骤 1：运行定向测试**
 
 ```powershell
-pnpm --filter @openharness/prompts test -- src/index.test.ts src/ledger-segments.test.ts
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/markdown-table-styles.test.ts
+pnpm --filter @vykor/prompts test -- src/index.test.ts src/ledger-segments.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/markdown-table-styles.test.ts
 ```
 
 预期：全部 PASS，无未处理异常。
@@ -235,8 +235,8 @@ pnpm --filter @openharness/desktop exec vitest run src/renderer/src/markdown-tab
 - [ ] **步骤 2：运行格式检查**
 
 ```powershell
-pnpm --filter @openharness/prompts exec prettier --check src/index.ts src/prompt-segments-assembly.ts src/index.test.ts src/ledger-segments.test.ts
-pnpm --filter @openharness/desktop exec prettier --check src/renderer/src/components/desktop/conversation-page/conversation-page.tsx src/renderer/src/assets/main.css src/renderer/src/markdown-table-styles.test.ts
+pnpm --filter @vykor/prompts exec prettier --check src/index.ts src/prompt-segments-assembly.ts src/index.test.ts src/ledger-segments.test.ts
+pnpm --filter @vykor/desktop exec prettier --check src/renderer/src/components/desktop/conversation-page/conversation-page.tsx src/renderer/src/assets/main.css src/renderer/src/markdown-table-styles.test.ts
 git diff --check
 ```
 
@@ -257,4 +257,4 @@ git diff --stat HEAD~2..HEAD
 git status --short
 ```
 
-预期：只有计划列出的 OHS 提示词、桌面对话样式和测试文件发生变化；第三方技能目录无变化；工作区干净。
+预期：只有计划列出的 VK 提示词、桌面对话样式和测试文件发生变化；第三方技能目录无变化；工作区干净。

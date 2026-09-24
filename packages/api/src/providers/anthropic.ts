@@ -6,7 +6,7 @@ import type {
   Message,
   ToolDefinition,
   ContentBlock,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   assertNativeImageMediaType,
   type NativeImageMediaType,

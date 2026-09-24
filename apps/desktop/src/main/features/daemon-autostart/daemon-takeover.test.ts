@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 
 const host = vi.hoisted(() => ({
   readDaemonRegistry: vi.fn(),
@@ -8,7 +8,7 @@ const host = vi.hoisted(() => ({
 }))
 
 vi.mock("electron", () => ({ app: { isPackaged: true } }))
-vi.mock("@openharness/server/daemon-host", () => host)
+vi.mock("@vykor/server/daemon-host", () => host)
 vi.mock("./daemon-autostart-service", () => ({
   createDesktopDaemonSystemService: () => ({ uninstall: vi.fn(), install: vi.fn() }),
 }))

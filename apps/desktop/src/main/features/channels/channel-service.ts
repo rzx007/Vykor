@@ -3,7 +3,7 @@ import type {
   ChannelRuntimeStatus,
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@openharness/client"
+} from "@vykor/client"
 
 import type {
   DesktopConnectionsSnapshot,

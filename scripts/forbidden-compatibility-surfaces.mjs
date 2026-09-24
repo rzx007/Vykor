@@ -112,7 +112,7 @@ function unwrapExpression(node) {
 }
 
 function hasClientType(node, sourceFile) {
-  return Boolean(node?.type && /(?:^|\W)OpenHarnessClient(?:$|\W)/.test(node.type.getText(sourceFile)));
+  return Boolean(node?.type && /(?:^|\W)VykorClient(?:$|\W)/.test(node.type.getText(sourceFile)));
 }
 
 function propertyName(node) {
@@ -135,7 +135,7 @@ function scanClientAst(source, rel, surfaces) {
     if (!expression) return false;
     if (ts.isIdentifier(expression)) return clientIdentifiers.has(expression.text);
     if (ts.isNewExpression(expression)) {
-      return /(?:^|\.)OpenHarnessClient$/.test(expression.expression.getText(sourceFile));
+      return /(?:^|\.)VykorClient$/.test(expression.expression.getText(sourceFile));
     }
     return ts.isPropertyAccessExpression(expression) && expression.name.text === "client";
   }
@@ -203,7 +203,7 @@ function scanClientAst(source, rel, surfaces) {
       report(node.propertyName ?? node.name, propertyName(node.propertyName ?? node.name));
     } else if (
       (ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)) &&
-      node.name?.text === "OpenHarnessClient"
+      node.name?.text === "VykorClient"
     ) {
       for (const member of node.members) report(member.name ?? member, propertyName(member.name));
     }

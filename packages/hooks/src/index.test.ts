@@ -8,7 +8,7 @@ import type {
   StreamEvent,
   StreamMessageParams,
   StreamingMessageClient,
-} from "@openharness/core";
+} from "@vykor/core";
 
 /**
  * POSIX-only: shellQuote produces POSIX single-quote escaping, which is only
@@ -22,14 +22,14 @@ let previousConfigDir: string | undefined;
 let isolatedConfigDir: string;
 
 beforeAll(() => {
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
   isolatedConfigDir = mkdtempSync(join(tmpdir(), "oh-hooks-config-"));
-  process.env.OPENHARNESS_CONFIG_DIR = isolatedConfigDir;
+  process.env.VYKOR_CONFIG_DIR = isolatedConfigDir;
 });
 
 afterAll(() => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
   rmSync(isolatedConfigDir, { recursive: true, force: true });
 });
 
@@ -565,15 +565,15 @@ describe("HookExecutor — $ARGUMENTS injection + shell escaping", () => {
     }
   );
 
-  it("injects OPENHARNESS_HOOK_EVENT and OPENHARNESS_HOOK_PAYLOAD env vars", async () => {
+  it("injects VYKOR_HOOK_EVENT and VYKOR_HOOK_PAYLOAD env vars", async () => {
     const executor = new HookExecutor();
     const controller = new AbortController();
     // A non-zero exit gated on the env var, combined with blockOnFailure, proves
     // env injection reached the shell (only blocks if the var matched).
     const result = await executor.executeCommand(
       process.platform === "win32"
-        ? 'if "%OPENHARNESS_HOOK_EVENT%"=="pre_tool_use" (exit 1)'
-        : 'test "$OPENHARNESS_HOOK_EVENT" = "pre_tool_use" && exit 1',
+        ? 'if "%VYKOR_HOOK_EVENT%"=="pre_tool_use" (exit 1)'
+        : 'test "$VYKOR_HOOK_EVENT" = "pre_tool_use" && exit 1',
       controller.signal,
       "pre_tool_use",
       {},

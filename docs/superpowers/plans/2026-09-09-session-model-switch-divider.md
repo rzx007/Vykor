@@ -74,7 +74,7 @@ expect(transcript.messages).toEqual([
 - [ ] **步骤 3：运行测试并确认红灯**
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-application-service.test.ts src/application/agent/__test__/agent-transcript.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-application-service.test.ts src/application/agent/__test__/agent-transcript.test.ts
 ```
 
 预期：Session 更新没有调用 presentation 写入；Agent transcript 仍包含提示文本。
@@ -145,7 +145,7 @@ const session = this.context.store.transaction(() => {
 - [ ] **步骤 6：运行服务端测试并确认绿灯**
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-application-service.test.ts src/application/agent/__test__/agent-transcript.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-application-service.test.ts src/application/agent/__test__/agent-transcript.test.ts
 ```
 
 预期：相关测试全部 PASS。
@@ -189,7 +189,7 @@ expect(
 - [ ] **步骤 2：运行 Store 测试**
 
 ```powershell
-pnpm --filter @openharness/services exec vitest run src/session-runtime/__test__/store.test.ts
+pnpm --filter @vykor/services exec vitest run src/session-runtime/__test__/store.test.ts
 ```
 
 预期：PASS；现有 Store 复制逻辑已经支持 metadata 与 part，不需要修改生产 Store。
@@ -226,7 +226,7 @@ expect(html).toContain('aria-label="模型已切换 GLM-5.3 到 GLM-5.3-Flash"')
 - [ ] **步骤 2：运行测试并确认红灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript.test.ts
 ```
 
 预期：presentation 消息仍按普通小号文本显示，没有 separator 角色。
@@ -263,7 +263,7 @@ if (modelSwitch) return <ModelSwitchDivider presentation={modelSwitch} />;
 - [ ] **步骤 5：运行 Desktop 测试并确认绿灯**
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/transcript.test.ts
 ```
 
 预期：相关测试全部 PASS。
@@ -284,9 +284,9 @@ git commit -m "feat(desktop): show model switches in session history"
 - [ ] **步骤 1：运行相关包测试**
 
 ```powershell
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/desktop test
 ```
 
 预期：全部 PASS；若仓库既有平台测试失败，单独记录且不得把它算作本功能通过证据。

@@ -14,14 +14,14 @@
 import type {
   ClientProtocolSupport,
   ServerCapabilities,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   checkProtocolCompatibility,
   CURRENT_PROTOCOL_VERSION,
   parseServerCapabilities,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
-import type { OpenHarnessServerHealth } from "../types/index.js";
+import type { VykorServerHealth } from "../types/index.js";
 
 export class IncompatibleProtocolError extends Error {
   constructor(
@@ -46,8 +46,8 @@ export class ProtocolClient {
   constructor(private readonly transport: HttpTransport) {}
 
   /** `GET /health` */
-  async health(options: HealthOptions = {}): Promise<OpenHarnessServerHealth> {
-    return this.transport.request<OpenHarnessServerHealth>("/health", {
+  async health(options: HealthOptions = {}): Promise<VykorServerHealth> {
+    return this.transport.request<VykorServerHealth>("/health", {
       auth: false,
       signal: options.signal,
     });

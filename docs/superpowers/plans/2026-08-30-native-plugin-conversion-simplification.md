@@ -2,11 +2,11 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** Claude Code 插件经过转换后成为普通 OpenHarness Native Plugin；安装、运行和管理不再依赖 Claude 源目录结构，非链接安装只保留一个当前缓存。
+**目标：** Claude Code 插件经过转换后成为普通 Vykor Native Plugin；安装、运行和管理不再依赖 Claude 源目录结构，非链接安装只保留一个当前缓存。
 
 **架构：** Converter 读取 Claude Code 源目录，将已支持的组件和它们需要的资源写入标准 Native Plugin 目录，并在 manifest metadata 与转换报告中留下来源信息。Installer 只接收通过 Native 校验的目录，统一复制到 `cache/<plugin-id>/current/`，从 manifest metadata 生成 installed record；Runtime 只读取 Native manifest 声明的组件。
 
-**技术栈：** TypeScript、Node.js `fs/promises`、Vitest、OpenHarness Native Plugin validator/loader。
+**技术栈：** TypeScript、Node.js `fs/promises`、Vitest、Vykor Native Plugin validator/loader。
 
 ---
 
@@ -30,8 +30,8 @@
 
 ```ts
 expect(await readdir(output)).toEqual([
-  ".openharness-conversion",
-  ".openharness-plugin",
+  ".vykor-conversion",
+  ".vykor-plugin",
   "agents",
   "hooks.json",
   "mcp.json",
@@ -94,7 +94,7 @@ expect(result.record.origin).toBe("converted");
 expect(result.record.sourceFormat).toBe("claude-code");
 ```
 
-测试目录不创建 `.openharness-conversion/`。这个测试要抓住的破坏是：Installer 仍必须读取转换报告才能识别来源。
+测试目录不创建 `.vykor-conversion/`。这个测试要抓住的破坏是：Installer 仍必须读取转换报告才能识别来源。
 
 - [x] **步骤 2：确认红灯**
 
@@ -108,7 +108,7 @@ expect(result.record.sourceFormat).toBe("claude-code");
 
 - [x] **步骤 3：最少实现并确认绿灯**
 
-Installer 从经过校验的 manifest metadata 读取通用来源字段；显式安装参数仍优先。删除对 `.openharness-conversion/provenance.json` 的安装依赖，再运行测试预期 PASS。
+Installer 从经过校验的 manifest metadata 读取通用来源字段；显式安装参数仍优先。删除对 `.vykor-conversion/provenance.json` 的安装依赖，再运行测试预期 PASS。
 
 ### 任务 3：收口为单一当前缓存
 
@@ -138,7 +138,7 @@ Installer 从经过校验的 manifest metadata 读取通用来源字段；显式
 
 - [x] **步骤 2：修正规范**
 
-明确 Converter 的终点是 Native Plugin 目录；`.openharness-conversion/` 只用于审计，Installer 和 Runtime 不依赖它；版本只记录在 manifest/installed store，不保留历史缓存目录。
+明确 Converter 的终点是 Native Plugin 目录；`.vykor-conversion/` 只用于审计，Installer 和 Runtime 不依赖它；版本只记录在 manifest/installed store，不保留历史缓存目录。
 
 - [x] **步骤 3：完整验证**
 

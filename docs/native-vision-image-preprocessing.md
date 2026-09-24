@@ -189,8 +189,8 @@ HTTP 413 仍可能来自整次请求的总大小、网关自定义限制或大�
 最小回归范围：
 
 ```powershell
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/api test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/api test
 pnpm --filter @rzx/ohs test
 pnpm check-types
 pnpm check-docs

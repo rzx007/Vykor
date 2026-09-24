@@ -7,9 +7,9 @@ import {
   RequestHeaderTemplateError,
   type DirectApiKeyCatalogProvider,
   type ModelsDevCatalog,
-} from "@openharness/api";
-import { CredentialStorage } from "@openharness/auth";
-import type { CustomProviderSettings, Settings } from "@openharness/core";
+} from "@vykor/api";
+import { CredentialStorage } from "@vykor/auth";
+import type { CustomProviderSettings, Settings } from "@vykor/core";
 
 import { ApplicationError } from "../../shared/application-error.js";
 import type {

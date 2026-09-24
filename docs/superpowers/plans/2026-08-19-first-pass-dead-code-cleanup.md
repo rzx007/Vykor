@@ -31,7 +31,7 @@
 
 - [ ] **Step 1: Establish the runtime behavior baseline**
 
-Run: `pnpm --filter @openharness/agent-runtime test`
+Run: `pnpm --filter @vykor/agent-runtime test`
 
 Expected: all runtime tests pass before editing.
 
@@ -51,7 +51,7 @@ function serializeError(error: unknown): AgentSerializedError {
 
 - [ ] **Step 4: Verify runtime behavior**
 
-Run: `pnpm --filter @openharness/agent-runtime test`
+Run: `pnpm --filter @vykor/agent-runtime test`
 
 Expected: all runtime tests pass.
 
@@ -70,9 +70,9 @@ Expected: all runtime tests pass.
 
 - [ ] **Step 1: Establish the frontend baseline**
 
-Run: `pnpm --filter @openharness/frontend check-types`
+Run: `pnpm --filter @vykor/frontend check-types`
 
-Run: `pnpm --filter @openharness/frontend test`
+Run: `pnpm --filter @vykor/frontend test`
 
 Expected: typecheck and all frontend tests pass.
 
@@ -106,9 +106,9 @@ return sum + Math.pow(2, -(now - ts) / HALF_LIFE_MS)
 
 - [ ] **Step 6: Verify TUI**
 
-Run: `pnpm --filter @openharness/frontend check-types`
+Run: `pnpm --filter @vykor/frontend check-types`
 
-Run: `pnpm --filter @openharness/frontend test`
+Run: `pnpm --filter @vykor/frontend test`
 
 Expected: typecheck and all frontend tests pass.
 
@@ -130,11 +130,11 @@ Expected: typecheck and all frontend tests pass.
 
 - [ ] **Step 1: Establish the Desktop baseline**
 
-Run: `pnpm --filter @openharness/desktop typecheck`
+Run: `pnpm --filter @vykor/desktop typecheck`
 
-Run: `pnpm --filter @openharness/desktop test`
+Run: `pnpm --filter @vykor/desktop test`
 
-Run: `pnpm --filter @openharness/desktop exec eslint . --no-cache`
+Run: `pnpm --filter @vykor/desktop exec eslint . --no-cache`
 
 Expected: all three commands exit successfully before editing.
 
@@ -154,11 +154,11 @@ Remove `ContextMenuSeparator`, `IpcResult`, the `did-finish-load` sender block, 
 
 - [ ] **Step 5: Verify Desktop**
 
-Run: `pnpm --filter @openharness/desktop typecheck`
+Run: `pnpm --filter @vykor/desktop typecheck`
 
-Run: `pnpm --filter @openharness/desktop test`
+Run: `pnpm --filter @vykor/desktop test`
 
-Run: `pnpm --filter @openharness/desktop exec eslint . --no-cache`
+Run: `pnpm --filter @vykor/desktop exec eslint . --no-cache`
 
 Expected: all three commands exit successfully.
 
@@ -187,16 +187,16 @@ Expected: the cleanup diff matches this plan, while the user's pre-existing Desk
 
 - [ ] **Step 3: Run final scoped verification**
 
-Run: `pnpm --filter @openharness/agent-runtime test`
+Run: `pnpm --filter @vykor/agent-runtime test`
 
-Run: `pnpm --filter @openharness/frontend check-types`
+Run: `pnpm --filter @vykor/frontend check-types`
 
-Run: `pnpm --filter @openharness/frontend test`
+Run: `pnpm --filter @vykor/frontend test`
 
-Run: `pnpm --filter @openharness/desktop typecheck`
+Run: `pnpm --filter @vykor/desktop typecheck`
 
-Run: `pnpm --filter @openharness/desktop test`
+Run: `pnpm --filter @vykor/desktop test`
 
-Run: `pnpm --filter @openharness/desktop exec eslint . --no-cache`
+Run: `pnpm --filter @vykor/desktop exec eslint . --no-cache`
 
 Expected: every command exits successfully; report any pre-existing unrelated blocker separately rather than expanding scope.

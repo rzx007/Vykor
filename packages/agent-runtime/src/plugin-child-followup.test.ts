@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import type { RuntimeBundle, Settings, StreamingMessageClient, ToolDefinition } from "@openharness/core";
-import { CompositeAgentJobHost } from "@openharness/jobs";
-import { getDetachedProcessSupervisor, resetExecutionRuntimes } from "@openharness/services/executions";
+import type { RuntimeBundle, Settings, StreamingMessageClient, ToolDefinition } from "@vykor/core";
+import { CompositeAgentJobHost } from "@vykor/jobs";
+import { getDetachedProcessSupervisor, resetExecutionRuntimes } from "@vykor/services/executions";
 import { LocalAgentJobHost } from "../../tools/src/job/local-job-host.js";
 import { jobSendTool } from "../../tools/src/job/job-tools.js";
 import { createAgentKernel, createBasicAgentKernelRuntime } from "./kernel.js";
@@ -13,7 +13,7 @@ import { unavailableCapability } from "./capability-resolution.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 
 it("checks the current Run's plugin through real JobSend, composite host and an idle Child", async () => {
-  const cwd = mkdtempSync(join(tmpdir(), "ohs-plugin-child-followup-"));
+  const cwd = mkdtempSync(join(tmpdir(), "vk-plugin-child-followup-"));
   const sessionId = "root-followup";
   const pluginCalls: string[] = [];
   let childId = "";

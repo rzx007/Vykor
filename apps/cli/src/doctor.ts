@@ -1,7 +1,7 @@
-import type { Settings } from "@openharness/core";
-import { CredentialStorage, describeCodexAuthState } from "@openharness/auth";
-import { findByName, detectProvider } from "@openharness/api";
-import { resolveApiKey } from "@openharness/auth";
+import type { Settings } from "@vykor/core";
+import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
+import { findByName, detectProvider } from "@vykor/api";
+import { resolveApiKey } from "@vykor/auth";
 
 export interface ApiKeyCheck {
   ok: boolean;

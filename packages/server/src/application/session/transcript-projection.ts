@@ -1,11 +1,11 @@
-import type { ReasoningSource, StreamEvent } from "@openharness/core";
-import type { AssistantMessagePhase } from "@openharness/core";
-import type { SessionStore } from "@openharness/services";
+import type { ReasoningSource, StreamEvent } from "@vykor/core";
+import type { AssistantMessagePhase } from "@vykor/core";
+import type { SessionStore } from "@vykor/services";
 import type {
   SessionEventRecord,
   SessionInputRecord,
   SessionMessagePartStatus,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { AttachmentRoutingDecision } from "../attachments/routing/attachment-routing-types.js";
 
 const REASONING_PART_CHAR_LIMIT = 1_000_000;

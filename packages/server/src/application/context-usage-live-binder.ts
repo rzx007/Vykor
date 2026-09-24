@@ -1,4 +1,4 @@
-import type { ContextUsageSnapshot } from "@openharness/core";
+import type { ContextUsageSnapshot } from "@vykor/core";
 
 import type { AssembleLiveContextUsageInput } from "./assemble-session-context-usage.js";
 

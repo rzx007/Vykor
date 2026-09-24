@@ -1,4 +1,4 @@
-import type { EnvironmentPtyTarget } from "@openharness/environment";
+import type { EnvironmentPtyTarget } from "@vykor/environment";
 
 export function createHostTerminalTarget(input: {
   cwd: string;

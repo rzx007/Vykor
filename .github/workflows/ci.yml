@@ -45,7 +45,7 @@ jobs:
           username: ${{ secrets.SMTP_USER }}
           password: ${{ secrets.SMTP_PASS }}
           secure: true
-          from: OpenHarness CI <${{ secrets.SMTP_USER }}>
+          from: Vykor CI <${{ secrets.SMTP_USER }}>
           to: ${{ secrets.NOTIFY_TO }}
           subject: "[CI] ${{ github.repository }} ${{ job.status }} (#${{ github.run_number }})"
           body: |

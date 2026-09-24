@@ -18,7 +18,7 @@ describe("desktop preferences", () => {
   const temporaryRoots: string[] = []
 
   beforeEach(async () => {
-    userDataPath = await mkdtemp(join(tmpdir(), "openharness-desktop-preferences-"))
+    userDataPath = await mkdtemp(join(tmpdir(), "vykor-desktop-preferences-"))
     temporaryRoots.push(userDataPath)
   })
 

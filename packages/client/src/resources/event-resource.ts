@@ -1,5 +1,5 @@
-import type { SessionEventRecord } from "@openharness/protocol";
-import { decodeSessionEventRecord } from "@openharness/protocol";
+import type { SessionEventRecord } from "@vykor/protocol";
+import { decodeSessionEventRecord } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import { responseArray } from "../transport/http-transport.js";
 import type { SseTransport } from "../transport/sse-transport.js";

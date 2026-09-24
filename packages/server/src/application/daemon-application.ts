@@ -2,20 +2,20 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { resolveChannelWorkspaceRoot } from "@openharness/core";
-import type { AgentBackgroundShellHost, Settings } from "@openharness/core";
-import type { ChannelConfigStore } from "@openharness/auth";
-import { createModelCatalogService } from "@openharness/api";
-import { fileReadTool } from "@openharness/tools";
+import { resolveChannelWorkspaceRoot } from "@vykor/core";
+import type { AgentBackgroundShellHost, Settings } from "@vykor/core";
+import type { ChannelConfigStore } from "@vykor/auth";
+import { createModelCatalogService } from "@vykor/api";
+import { fileReadTool } from "@vykor/tools";
 import {
   type ObservableJobProducer,
-} from "@openharness/agent-runtime";
-import type { AgentTerminalHost } from "@openharness/terminal";
+} from "@vykor/agent-runtime";
+import type { AgentTerminalHost } from "@vykor/terminal";
 import {
   readSessionRuntimeConfig,
   type AttachmentLimits,
   type SessionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   AttachmentBlobStore,
   AttachmentIntegrityService,
@@ -32,7 +32,7 @@ import {
   updateSessionMemoryFile,
   type SessionStore,
   type ApplicationOwnerLease,
-} from "@openharness/services";
+} from "@vykor/services";
 
 import { AttachmentService } from "./attachments/attachment-service.js";
 import {
@@ -591,14 +591,17 @@ export class DaemonApplication implements DurableAgentApplication {
 
       // 一次 prompt 跑完才做：写记忆、个性化、auto-dream。失败的半截对话不写进去。
       const postRunMaintenance = new SessionPostRunMaintenance({
-        data: { conversations: store.conversations, runs: store.runs, sessions: store.sessions },
+        data: { conversations: store.conversations, runs: store.runs, sessions: store.sessions, goals: store.goals },
         getSettings: async (cwd) =>
           options.getSettingsForCwd
             ? await options.getSettingsForCwd(cwd)
             : (options.getSettings?.() ?? options.settings),
         log: options.log,
-        sessionMemoryWriter: (cwd, messages, sessionId) =>
-          updateSessionMemoryFile(cwd, messages, { sessionId }),
+        sessionMemoryWriter: (cwd, messages, sessionId, goal) =>
+          updateSessionMemoryFile(cwd, messages, {
+            sessionId,
+            ...(goal ? { toolMetadata: { task_focus_state: { goal } } } : {}),
+          }),
         lastConsolidatedAt: readLastConsolidatedAt,
         autoDream: executeAutoDream,
       });
@@ -869,7 +872,7 @@ export class DaemonApplication implements DurableAgentApplication {
           config: { getFeishu: () => channelConfig.getFeishu() },
           getSettings: () => options.getSettings?.() ?? options.settings,
           workspaceRoot: resolveChannelWorkspaceRoot({
-            envDir: process.env.OPENHARNESS_CHANNELS_DIR,
+            envDir: process.env.VYKOR_CHANNELS_DIR,
             outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
             homedir: homedir(),
           }),

@@ -1,8 +1,8 @@
 import {
-  OpenHarnessClient,
+  VykorClient,
   readSessionRuntimeConfig,
   type SessionRecord,
-} from "@openharness/client";
+} from "@vykor/client";
 
 import type { FrontendConfig } from "../../types";
 
@@ -35,9 +35,9 @@ export function shouldAutoActivateSession(
     && (pluginsEnabled == null || (runtime.pluginsEnabled ?? true) === pluginsEnabled);
 }
 
-export function createDaemonClient(daemon: FrontendConfig["daemon"]): OpenHarnessClient | null {
+export function createDaemonClient(daemon: FrontendConfig["daemon"]): VykorClient | null {
   if (!daemon?.url) return null;
-  return new OpenHarnessClient({
+  return new VykorClient({
     baseUrl: daemon.url,
     token: daemon.token ?? undefined,
   });

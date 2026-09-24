@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { JobSnapshot } from "@openharness/client";
+import type { JobSnapshot } from "@vykor/client";
 import {
   beginJobList,
   mergeJobSnapshot,

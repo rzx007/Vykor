@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import type { JobKind, JobStatus } from "@openharness/protocol";
+import type { JobKind, JobStatus } from "@vykor/protocol";
 
 import type { DaemonJobService } from "../../jobs/index.js";
 import { errorResponse, jsonResponse, readJson } from "../support.js";

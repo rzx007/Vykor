@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { type McpServerConfig, type RuntimeBundle } from "@openharness/core";
-import { loadNativePlugin, validateNativePlugin, type LoadedNativePlugin } from "@openharness/plugins";
-import { SkillRegistry } from "@openharness/skills";
-import { createOpenHarnessRuntime } from "./default-runtime.js";
+import { type McpServerConfig, type RuntimeBundle } from "@vykor/core";
+import { loadNativePlugin, validateNativePlugin, type LoadedNativePlugin } from "@vykor/plugins";
+import { SkillRegistry } from "@vykor/skills";
+import { createVykorRuntime } from "./default-runtime.js";
 import { installRuntimeIntegrations } from "./runtime-integrations.js";
 import { createPluginCapabilityInventory } from "./plugin-capability-inventory.js";
 import { deriveChildCapabilityView } from "./child-agent-options.js";
@@ -20,8 +20,8 @@ afterEach(async () => {
 async function plugin(id: string, source?: string, servers?: Record<string, McpServerConfig>) {
   const root = mkdtempSync(join(tmpdir(), "plugin-readiness-"));
   roots.push(root);
-  mkdirSync(join(root, ".openharness-plugin"));
-  writeFileSync(join(root, ".openharness-plugin/plugin.json"), JSON.stringify({
+  mkdirSync(join(root, ".vykor-plugin"));
+  writeFileSync(join(root, ".vykor-plugin/plugin.json"), JSON.stringify({
     schemaVersion: 1, id, name: id.split(".").at(-1), version: "1.0.0",
     components: { ...(source ? { tools: ["./tool.mjs"] } : {}), ...(servers ? { mcpServers: ["./mcp.json"] } : {}) },
   }));
@@ -34,7 +34,7 @@ async function plugin(id: string, source?: string, servers?: Record<string, McpS
 
 async function install(plugins: LoadedNativePlugin[], hostServers: Record<string, McpServerConfig> = {}) {
   const skillRegistry = new SkillRegistry();
-  const runtime = await createOpenHarnessRuntime({
+  const runtime = await createVykorRuntime({
     cwd: roots[0]!, skillRegistry,
     settings: { model: "test", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" }, sandbox: { enabled: false }, mcpServers: hostServers },
     configuration: { client: { async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" }; } } },

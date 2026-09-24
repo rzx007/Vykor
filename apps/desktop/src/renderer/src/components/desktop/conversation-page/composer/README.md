@@ -158,9 +158,9 @@ Composer 触发的系统操作通过 metadata presentation 展示，不作为普
 运行相关测试：
 
 ```powershell
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/desktop test
 ```
 
 类型检查：

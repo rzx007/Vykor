@@ -1,4 +1,4 @@
-import type { OpenHarnessClient } from "@openharness/client"
+import type { VykorClient } from "@vykor/client"
 import type {
   CreateDesktopScheduledTaskInput,
   DesktopScheduledRun,
@@ -10,7 +10,7 @@ import type {
 
 import { desktopSessionService } from "../session/session-service"
 
-type ScheduleClient = Pick<OpenHarnessClient, "schedules">
+type ScheduleClient = Pick<VykorClient, "schedules">
 
 class DesktopScheduleService {
   status(): Promise<DesktopScheduledStatus> {

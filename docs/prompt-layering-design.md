@@ -8,7 +8,7 @@
 
 ## 背景
 
-OpenHarness 当前的 system prompt 是线性拼接：
+Vykor 当前的 system prompt 是线性拼接：
 
 ```text
 Base System Prompt
@@ -18,7 +18,7 @@ Session Mode / Reasoning Settings
 Available Skills
 Delegation Guidance
 Project Instructions: CLAUDE.md / .claude/CLAUDE.md / .claude/rules/*.md
-Local Environment Rules: ~/.openharness-ts/local_rules/rules.md
+Local Environment Rules: ~/.vykor/local_rules/rules.md
 Project Memory
 ```
 
@@ -54,7 +54,7 @@ Delegation Guidance
 
 - `SOUL.md` 只负责“Agent 是谁、默认语气、长期行为风格”。
 - `SOUL.md` 存在时替换默认 identity 文案，但不应替换安全、工具、权限等 invariant guidance。
-- `SOUL.md` 只从 OpenHarness home/config 目录加载，不从当前 repo 加载，避免不同项目意外改变 Agent 身份。
+- `SOUL.md` 只从 Vykor home/config 目录加载，不从当前 repo 加载，避免不同项目意外改变 Agent 身份。
 - Skills/permission/environment 虽可能随配置改变，但对单个会话而言应是稳定前缀的一部分。
 
 ### context：当前工作上下文层
@@ -73,7 +73,7 @@ Project Instructions:
 
 说明：
 
-- OpenHarness 目前已支持从 cwd 向上遍历加载 `CLAUDE.md`、`.claude/CLAUDE.md` 和 `.claude/rules/*.md`。
+- Vykor 目前已支持从 cwd 向上遍历加载 `CLAUDE.md`、`.claude/CLAUDE.md` 和 `.claude/rules/*.md`。
 - 这层用于 repo 规则、构建/测试约定、项目协作指令。
 - 项目规则优先级应高于用户长期偏好：如果 repo 要求某种格式、测试命令或安全边界，应服从 repo。
 
@@ -85,7 +85,7 @@ Project Instructions:
 
 ```text
 USER.md
-Local Environment Rules: ~/.openharness-ts/local_rules/rules.md
+Local Environment Rules: ~/.vykor/local_rules/rules.md
 Project Memory
 Per-turn Relevant Memory (transient system-reminder)
 ```
@@ -107,10 +107,10 @@ Per-turn Relevant Memory (transient system-reminder)
 新增用户档案文件：
 
 ```text
-$OPENHARNESS_CONFIG_DIR/USER.md
+$VYKOR_CONFIG_DIR/USER.md
 ```
 
-默认目录仍遵循现有配置目录规则；未设置 `OPENHARNESS_CONFIG_DIR` 时使用 OpenHarness 默认 config home。
+默认目录仍遵循现有配置目录规则；未设置 `VYKOR_CONFIG_DIR` 时使用 Vykor 默认 config home。
 
 职责：
 
@@ -131,12 +131,12 @@ $OPENHARNESS_CONFIG_DIR/USER.md
 新增 Agent 身份文件：
 
 ```text
-$OPENHARNESS_CONFIG_DIR/SOUL.md
+$VYKOR_CONFIG_DIR/SOUL.md
 ```
 
 职责：
 
-- 定义 OpenHarness 的默认身份、语气、长期行为风格。
+- 定义 Vykor 的默认身份、语气、长期行为风格。
 - 适合“这个 Agent 应该像谁、怎样回应、避免什么表达习惯”。
 - 不适合写项目构建命令、工具 allowlist、仓库规范、密钥或临时任务。
 
@@ -214,7 +214,7 @@ volatile
   User Profile
     USER.md
   Local Environment Rules
-    ~/.openharness-ts/local_rules/rules.md
+    ~/.vykor/local_rules/rules.md
   Project Memory
   Per-turn Relevant Memory
     transient system-reminder, not persisted in history
@@ -266,7 +266,7 @@ compact-only
 首版建议：
 
 ```text
-$OPENHARNESS_CONFIG_DIR/
+$VYKOR_CONFIG_DIR/
   SOUL.md
   USER.md
   local_rules/

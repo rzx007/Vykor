@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/mcp",
+  "name": "@vykor/mcp",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,10 +17,10 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@openharness/environment": "workspace:*",
+    "@vykor/environment": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
-    "@openharness/core": "workspace:*",
-    "@openharness/sandbox": "workspace:*"
+    "@vykor/core": "workspace:*",
+    "@vykor/sandbox": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

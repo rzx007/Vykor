@@ -1,4 +1,4 @@
-# 编写 OpenHarness 原生插件
+# 编写 Vykor 原生插件
 
 > 状态：当前开发指南。
 
@@ -9,13 +9,13 @@
 从仓库根目录执行：
 
 ```sh
-ohs plugin validate ./examples/plugins/text-inspector
-ohs plugin link ./examples/plugins/text-inspector
-ohs plugin list --verbose
-ohs plugin details example.text-inspector
+vk plugin validate ./examples/plugins/text-inspector
+vk plugin link ./examples/plugins/text-inspector
+vk plugin list --verbose
+vk plugin details example.text-inspector
 ```
 
-进入使用本地执行环境的 OpenHarness 会话，通过 `/text-inspector:check-text` 提供需要检查的文本，或明确要求模型使用 `TextInspectorCheck`。例如提供第一行 `hello` 后带两个空格、第二行以制表符开头的文本；工具应报告第 1 行 `trailing-whitespace` 和第 2 行 `tab-indentation`。自然语言调用需要正常配置模型；仓库自动验收直接调用注册后的工具，不需要模型服务。
+进入使用本地执行环境的 Vykor 会话，通过 `/text-inspector:check-text` 提供需要检查的文本，或明确要求模型使用 `TextInspectorCheck`。例如提供第一行 `hello` 后带两个空格、第二行以制表符开头的文本；工具应报告第 1 行 `trailing-whitespace` 和第 2 行 `tab-indentation`。自然语言调用需要正常配置模型；仓库自动验收直接调用注册后的工具，不需要模型服务。
 
 如果只是想在 Desktop 里走一遍真实安装，可以先把样例打成插件包。Desktop 当前支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`：
 
@@ -27,7 +27,7 @@ tar -czf .\.plugin-dist\text-inspector.tar.gz -C .\examples\plugins text-inspect
 tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 ```
 
-然后打开 Desktop 的插件页，选择其中任意一个插件包导入。包内可以带一层 `text-inspector/` 包装目录，只要里面有唯一的 `.openharness-plugin/plugin.json` 即可。导入成功只表示插件已经写入安装记录；它会从下一次对话开始生效。
+然后打开 Desktop 的插件页，选择其中任意一个插件包导入。包内可以带一层 `text-inspector/` 包装目录，只要里面有唯一的 `.vykor-plugin/plugin.json` 即可。导入成功只表示插件已经写入安装记录；它会从下一次对话开始生效。
 
 修改链接目录里的工具实现后，在没有运行中任务的会话执行：
 
@@ -40,10 +40,10 @@ tar -czf .\.plugin-dist\text-inspector.tgz -C .\examples\plugins text-inspector
 正式安装将源目录复制到用户级不可变快照，后续源目录修改不会改变正在运行的版本：
 
 ```sh
-ohs plugin install-local ./examples/plugins/text-inspector
-ohs plugin disable example.text-inspector
-ohs plugin enable example.text-inspector
-ohs plugin uninstall example.text-inspector
+vk plugin install-local ./examples/plugins/text-inspector
+vk plugin disable example.text-inspector
+vk plugin enable example.text-inspector
+vk plugin uninstall example.text-inspector
 ```
 
 同一个 ID 只有一条用户安装记录。`install-local` 会替代该 ID 之前的 link 记录；再次执行 `link` 则切回开发链接。安装、启停、卸载会使所有相关用户 Runtime 失效；有活动任务时管理操作可能返回冲突，需要等待任务结束。普通卸载移除安装记录、阻止后续加载，保留插件数据；旧快照不会立即全部删除。
@@ -62,7 +62,7 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
 本地插件包导入的作者侧检查很短：
 
 1. 插件包里必须只有一个 Native manifest，可以在根目录，也可以在唯一一层包装目录里；
-2. manifest 路径必须是 `.openharness-plugin/plugin.json`；
+2. manifest 路径必须是 `.vykor-plugin/plugin.json`；
 3. 不要把两个插件目录一起压进同一个包；
 4. 不要压入符号链接、超大文件或需要安装依赖后才存在的文件；
 5. 导入同一个插件 ID 的新包就是手动更新或修复，不需要另一套 repair 流程。
@@ -71,7 +71,7 @@ Desktop 插件页右上角“添加”菜单目前支持两个入口：
 
 ## 包结构与 manifest
 
-唯一原生入口是 `.openharness-plugin/plugin.json`：
+唯一原生入口是 `.vykor-plugin/plugin.json`：
 
 ```json
 {
@@ -94,10 +94,10 @@ manifest 描述插件包，不保存启用状态、批准记录、用户配置�
 
 ## Node Tool 的公开接口
 
-开发期类型入口是 `@openharness/plugins/sdk`。使用 TypeScript 的 `import type` 或 JavaScript 的 JSDoc 类型引用；这个子路径没有运行期 API，不要在 `.mjs` 中普通 import 它。
+开发期类型入口是 `@vykor/plugins/sdk`。使用 TypeScript 的 `import type` 或 JavaScript 的 JSDoc 类型引用；这个子路径没有运行期 API，不要在 `.mjs` 中普通 import 它。
 
 ```js
-/** @type {import('@openharness/plugins/sdk').NativeToolRegister} */
+/** @type {import('@vykor/plugins/sdk').NativeToolRegister} */
 export const registerTools = (registration) => [{
   name: "ExampleEcho",
   description: "Return the supplied text",
@@ -223,7 +223,7 @@ Call TextInspectorCheck with the text supplied by the user, then explain the fin
 
 当前事件有 session_start、session_end、pre_compact、post_compact、pre_tool_use、post_tool_use、user_prompt_submit、notification、stop、subagent_stop；识别的类型为 command、http、prompt、agent，后两者的执行还取决于宿主配置。
 
-命令使用 Hook Executor 的工作目录执行，通常是项目 cwd，不自动切到插件目录。命令环境可获得 `OPENHARNESS_HOOK_EVENT` 和 `OPENHARNESS_HOOK_PAYLOAD`；当前没有统一注入的插件根目录别名。不要直接假定 `node ./scripts/check.mjs` 指向插件内文件。命令实际使用的程序、目录和权限必须按宿主运行环境准备。
+命令使用 Hook Executor 的工作目录执行，通常是项目 cwd，不自动切到插件目录。命令环境可获得 `VYKOR_HOOK_EVENT` 和 `VYKOR_HOOK_PAYLOAD`；当前没有统一注入的插件根目录别名。不要直接假定 `node ./scripts/check.mjs` 指向插件内文件。命令实际使用的程序、目录和权限必须按宿主运行环境准备。
 
 ### MCP
 
@@ -243,7 +243,7 @@ MCP 名称不会自动加插件前缀，请使用独特名称，避免与其他�
 
 ## 诊断与验证
 
-`validate` 检查 manifest 和声明路径，不承诺所有组件都能激活。安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `ohs plugin details` 返回的 Runtime 诊断为准。
+`validate` 检查 manifest 和声明路径，不承诺所有组件都能激活。安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `vk plugin details` 返回的 Runtime 诊断为准。
 
 `PluginInfo.runtimeStatus` 是面向展示的主状态，目前包含 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`。列表页只需要看这一个字段；`diagnostics` 和 `toolRuntime` 保留在详情里，用于作者排查具体原因。`list --verbose`、`details` 和 `/reload-plugins` 用于查看安装校验、组件诊断和 Tool Host 状态。
 
@@ -252,21 +252,21 @@ MCP 名称不会自动加插件前缀，请使用独特名称，避免与其他�
 常见排查顺序：
 
 ```text
-导入失败       → 检查 ZIP 里是否有唯一的 .openharness-plugin/plugin.json
+导入失败       → 检查 ZIP 里是否有唯一的 .vykor-plugin/plugin.json
 等待生效       → 开新对话，或在没有运行中任务时执行 /reload-plugins
 缺少权限       → 重新导入或 install-local，并批准这次 manifest 请求的权限
 组件部分不可用 → 看详情里的 diagnostics，确认是不是当前版本暂不支持
 Tool 启动失败  → 检查 entry 路径、Node 语法、运行期普通 import 和本机依赖
 ```
 
-如果 `validate` 通过但插件页显示失败，说明静态结构没问题，但安装快照、权限或 Runtime 激活阶段出了问题；以插件页详情和 `ohs plugin details <id>` 的 `runtimeStatus` 为准。
+如果 `validate` 通过但插件页显示失败，说明静态结构没问题，但安装快照、权限或 Runtime 激活阶段出了问题；以插件页详情和 `vk plugin details <id>` 的 `runtimeStatus` 为准。
 
 仓库验证入口：
 
 ```sh
-pnpm --filter @openharness/plugins check-types
-pnpm --filter @openharness/agent-runtime exec vitest run src/native-tools/text-inspector.test.ts src/native-tools/tool-host.test.ts src/native-tools/native-plugin-authoring.test.ts
-pnpm --filter @openharness/server exec vitest run src/http/routes/plugin-lifecycle.test.ts
+pnpm --filter @vykor/plugins check-types
+pnpm --filter @vykor/agent-runtime exec vitest run src/native-tools/text-inspector.test.ts src/native-tools/tool-host.test.ts src/native-tools/native-plugin-authoring.test.ts
+pnpm --filter @vykor/server exec vitest run src/http/routes/plugin-lifecycle.test.ts
 ```
 
 测试使用临时用户安装记录和真实 Tool Host，不写入开发者日常插件安装状态。样例目录参与相关测试和类型检查的 Turbo 缓存输入，修改样例后会重新验证。

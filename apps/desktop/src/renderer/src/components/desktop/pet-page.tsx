@@ -28,7 +28,7 @@ export function PetWindow(): React.JSX.Element {
     <main
       data-pet-window
       className="grid h-screen w-screen place-items-center bg-transparent"
-      aria-label="OpenHarness 桌面宠物"
+      aria-label="Vykor 桌面宠物"
     >
       <button
         type="button"

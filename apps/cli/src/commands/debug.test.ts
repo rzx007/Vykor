@@ -19,7 +19,7 @@ describe("debug protocol handshake", () => {
           return Response.json({ serverVersion: "test", protocol: { version: 4 }, features: {} });
         }
         expect(new URL(String(url)).searchParams.get("includeContent")).toBe("true");
-        return headers.get("x-openharness-protocol-version") === "4"
+        return headers.get("x-vykor-protocol-version") === "4"
           ? Response.json({ diagnosticOk: true })
           : Response.json({ error: "protocol_version_mismatch" }, { status: 426 });
       });
@@ -28,7 +28,7 @@ describe("debug protocol handshake", () => {
       expect(calls.map((call) => call.path)).toEqual(["/capabilities", path]);
       expect(calls[0]!.headers.has("authorization")).toBe(false);
       expect(calls[1]!.headers.get("authorization")).toBe("Bearer secret");
-      expect(calls[1]!.headers.get("x-openharness-protocol-version")).toBe("4");
+      expect(calls[1]!.headers.get("x-vykor-protocol-version")).toBe("4");
     },
   );
 

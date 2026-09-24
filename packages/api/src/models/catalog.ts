@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { getConfigDir } from "@openharness/core";
+import { getConfigDir } from "@vykor/core";
 
 import bundledCatalog from "./api.json";
 import {
@@ -68,11 +68,11 @@ function modelsCachePath(): string {
 }
 
 function modelsUrl(): string {
-  return process.env.OPENHARNESS_MODELS_URL?.trim() || DEFAULT_MODELS_URL;
+  return process.env.VYKOR_MODELS_URL?.trim() || DEFAULT_MODELS_URL;
 }
 
 function configuredCatalogPath(): string | undefined {
-  return process.env.OPENHARNESS_MODELS_PATH?.trim() || undefined;
+  return process.env.VYKOR_MODELS_PATH?.trim() || undefined;
 }
 
 async function readJsonFile(
@@ -111,14 +111,14 @@ export class ModelCatalogService {
     }
 
     const cached = await readJsonFile(modelsCachePath());
-    if (process.env.OPENHARNESS_DISABLE_MODELS_FETCH) {
+    if (process.env.VYKOR_DISABLE_MODELS_FETCH) {
       this.loaded = withSpecialProviders(BUNDLED_FALLBACK_CATALOG);
       return this.loaded;
     }
 
     try {
       const response = await fetch(modelsUrl(), {
-        headers: { "User-Agent": "openharness-ts/models-catalog" },
+        headers: { "User-Agent": "vykor/models-catalog" },
         signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok)

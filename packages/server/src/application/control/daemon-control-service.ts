@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { SessionStore } from "@openharness/services";
+import type { SessionStore } from "@vykor/services";
 
 import type { HookInfo } from "../settings-api.js";
 import type { RunControlService } from "../session/run-control-service.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { DaemonOperationGate, DaemonOperationLease } from "./daemon-operation-gate.js";
-import { countByStatus, type OpenHarnessRuntimeSnapshot } from "../support.js";
+import { countByStatus, type VykorRuntimeSnapshot } from "../support.js";
 import { buildRuntimeMetricsSnapshot } from "../../shared/runtime-metrics.js";
 import { inspectDurableRun, listProjectionDiagnostics } from "./run-inspector.js";
 
@@ -48,7 +48,7 @@ export class DaemonControlService {
     return this.context.agentPool.configured;
   }
 
-  runtimeSnapshot(): OpenHarnessRuntimeSnapshot {
+  runtimeSnapshot(): VykorRuntimeSnapshot {
     const sessions = this.context.store.sessions.list({ includeArchived: true });
     const runs = sessions.flatMap((session) => this.context.store.runs.listRuns(session.id));
     const tasks = sessions.flatMap((session) => this.context.store.listSessionTasks(session.id));

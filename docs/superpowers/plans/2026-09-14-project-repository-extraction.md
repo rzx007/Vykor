@@ -48,7 +48,7 @@ expect(repository.list({ includeArchived: true })).toHaveLength(2)
 - [ ] **步骤 2：运行测试确认失败**
 
 ```powershell
-pnpm --filter @openharness/services test -- project-repository
+pnpm --filter @vykor/services test -- project-repository
 ```
 
 预期：FAIL，缺少 projects 模块。
@@ -60,8 +60,8 @@ pnpm --filter @openharness/services test -- project-repository
 - [ ] **步骤 4：验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test -- project-repository store
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- project-repository store
+pnpm --filter @vykor/services check-types
 git diff --check
 git add packages/services/src/projects packages/services/src/database/storage-context.ts
 git commit --no-verify -m "refactor(services): add project repository queries"
@@ -99,7 +99,7 @@ expect(internals.storage.mutations.sessions.size).toBe(0)
 - [ ] **步骤 3：运行测试确认缺少写方法或回滚失败**
 
 ```powershell
-pnpm --filter @openharness/services test -- project-repository
+pnpm --filter @vykor/services test -- project-repository
 ```
 
 预期：FAIL，写方法不存在；若先机械移动现实现，故障注入测试因 read model 未回滚而失败。
@@ -117,8 +117,8 @@ Store 组合 Context 时绑定 `atomic: (work) => this.transaction(work)`。Repo
 - [ ] **步骤 5：验证嵌套事务和完整 Store**
 
 ```powershell
-pnpm --filter @openharness/services test -- project-repository store
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- project-repository store
+pnpm --filter @vykor/services check-types
 git diff --check
 ```
 
@@ -144,7 +144,7 @@ git commit --no-verify -m "refactor(services): move project mutations into repos
 - [ ] **步骤 2：运行测试确认基线通过**
 
 ```powershell
-pnpm --filter @openharness/services test -- store
+pnpm --filter @vykor/services test -- store
 ```
 
 该步骤是特征测试，预期在删除旧实现前通过。
@@ -156,8 +156,8 @@ Store 增加 `readonly projects: ProjectRepository`，在完整 `StorageContext`
 - [ ] **步骤 4：验证旧 API 与 schema 不变**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
 git diff -- packages/services/src/session-runtime/schema.ts packages/services/src/session-runtime/migrations
 ```
 
@@ -186,7 +186,7 @@ git commit --no-verify -m "refactor(services): delegate projects from session st
 - [ ] **步骤 2：运行测试确认旧构造边界不符**
 
 ```powershell
-pnpm --filter @openharness/server test -- project-application-service
+pnpm --filter @vykor/server test -- project-application-service
 ```
 
 预期：FAIL，Service 仍要求完整 `SessionStore` 或缺少测试入口。
@@ -215,10 +215,10 @@ pnpm check:architecture
 - [ ] **步骤 5：最终验证并提交**
 
 ```powershell
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server test -- project
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server test -- project
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/server check-types
 pnpm check:architecture
 node scripts/check-docs.mjs
 git diff --check

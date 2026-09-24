@@ -12,7 +12,7 @@ import {
 } from "./clean-slate-smoke.mjs";
 
 function fixturePaths() {
-  const tempRoot = mkdtempSync(join(tmpdir(), "openharness-clean-slate-test-"));
+  const tempRoot = mkdtempSync(join(tmpdir(), "vykor-clean-slate-test-"));
   return {
     tempRoot,
     configDir: join(tempRoot, "config"),
@@ -113,7 +113,7 @@ test("CLI probe uses the built CLI for config and daemon resource reads", async 
     assert.ok(calls[1].args.includes("http://127.0.0.1:4567"));
     assert.ok(calls[1].args.includes("run-1"));
     assert.equal(calls[0].options.cwd, paths.projectDir);
-    assert.equal(calls[0].options.env.OPENHARNESS_CONFIG_DIR, paths.configDir);
+    assert.equal(calls[0].options.env.VYKOR_CONFIG_DIR, paths.configDir);
     assert.equal(calls[0].options.env.HOME, join(paths.tempRoot, "home"));
     assert.equal(calls[0].options.env.USERPROFILE, join(paths.tempRoot, "home"));
   } finally {

@@ -1,4 +1,4 @@
-import type { PermissionRequestRecord } from "@openharness/protocol";
+import type { PermissionRequestRecord } from "@vykor/protocol";
 import type { HttpTransport } from "../transport/http-transport.js";
 import type {
   ListPermissionsOptions,

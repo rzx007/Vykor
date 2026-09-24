@@ -201,8 +201,8 @@ class WorkspaceService {
   private rootsFor(projectRoot: string): WorkspaceAllowedRoots {
     const configDir =
       this.allowedRoots?.configDir ??
-      process.env.OPENHARNESS_CONFIG_DIR ??
-      join(homedir(), ".openharness-ts")
+      process.env.VYKOR_CONFIG_DIR ??
+      join(homedir(), ".vykor")
     const documentsPath = this.allowedRoots?.documentsPath ?? ""
     return {
       projectRoot,

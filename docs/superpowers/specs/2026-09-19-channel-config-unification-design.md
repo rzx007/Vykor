@@ -4,9 +4,9 @@
 
 目前渠道配置被拆在两处：
 
-- `~/.openharness-ts/settings.json` 的 `channels` 段：`sendProgress`、`sendToolHints`、
+- `~/.vykor/settings.json` 的 `channels` 段：`sendProgress`、`sendToolHints`、
   `channels.feishu.{enabled, appId, domain, allowFrom, replyAtBotNames}`。
-- `~/.openharness-ts/channel-credentials.json`：只有 `feishu` 的 `appSecret`（按 appId 存）。
+- `~/.vykor/channel-credentials.json`：只有 `feishu` 的 `appSecret`（按 appId 存）。
 
 同一件事（一个飞书机器人能不能用、给谁用、怎么表现）被拆到两个文件，读要同时抽两处、
 写要保证两处一致，CLI/工具/未来的桌面都得各拼一次。本设计把**整份渠道配置收敛到
@@ -30,7 +30,7 @@
 - `settings.json` 不再承载 `channels`。
 - `sendProgress`/`sendToolHints` **按渠道**配置并生效。
 - 复用现有凭据存储的原子写、文件锁、POSIX 0600。
-- `ohs channels add/allow` 不再依赖 `settings.json`（这样旧 settings 残留 `channels` 也不会挡住接入）。
+- `vk channels add/allow` 不再依赖 `settings.json`（这样旧 settings 残留 `channels` 也不会挡住接入）。
 
 ### 2.2 非目标
 
@@ -44,7 +44,7 @@
 
 | 决策 | 结论 |
 |---|---|
-| 文件 | 继续用 `~/.openharness-ts/channel-credentials.json`，升级为完整渠道配置文件 |
+| 文件 | 继续用 `~/.vykor/channel-credentials.json`，升级为完整渠道配置文件 |
 | 旧 `settings.channels` | **硬切**：`settings.json` 不再接受 `channels`，出现即 `SettingsFileError` |
 | 旧 `channel-credentials.json`（v1） | 视为“未配置渠道”（当空，不报错），见 §4.2 |
 | 存储实现 | `packages/auth` 的 `ChannelCredentialStore` **重命名/升级**为 `ChannelConfigStore` |
@@ -66,7 +66,7 @@
       "appSecret": "...",
       "domain": "feishu",
       "allowFrom": { "个人": "ou_...", "工作群": "oc_..." },
-      "replyAtBotNames": ["OpenHarness"],
+      "replyAtBotNames": ["Vykor"],
       "sendProgress": true,
       "sendToolHints": true
     }
@@ -96,7 +96,7 @@
 现有文件形状是 `{ "version": 1, "credentials": { "<appId>": { "appSecret": "..." } } }`。
 
 - **v1 → 视为“未配置渠道”**：`read()` 遇到 `version: 1` 返回空配置（`getFeishu()` 得到
-  `undefined`），不抛错。用户重新 `ohs channels add feishu` 后即写成 v2。
+  `undefined`），不抛错。用户重新 `vk channels add feishu` 后即写成 v2。
   （v1 里没有 enabled/allowFrom 等，硬要迁移也补不回来；“当空”比报错更可用。）
 - 文件不存在（ENOENT）→ 空配置。
 - 其它版本 / 结构非法 → 抛 `ChannelConfigStoreError("invalid-channel-config-store")`。
@@ -145,7 +145,7 @@ export interface ChannelConfigFile {
 
 - `Settings` 删除 `channels` 字段；删除 `ChannelsConfig`、`FeishuChannelSettings` 类型与导出。
 - 字段白名单删除 `channels` 整段（含原 `sendProgress/sendToolHints/feishu` 与旧键容忍）。
-- 结果：`settings.json` 或**项目级** `.openharness-ts/settings.json` 里一旦出现 `channels`，
+- 结果：`settings.json` 或**项目级** `.vykor/settings.json` 里一旦出现 `channels`，
   `loadSettings()` 抛 `SettingsFileError`，错误信息含字段名 `settings.channels`，可据此手动删除。
 - 这是**有意的不兼容**。
 
@@ -176,7 +176,7 @@ export interface ChannelConfigFile {
 | `apps/cli/src/commands/channels-onboarding.ts` | 依赖接口改为 store 语义（`getFeishu/setFeishu/updateFeishu`）；删除 `loadSettings/saveSettings` 依赖与跨文件回滚 |
 | `apps/cli/src/commands/channels.test.ts` / `channels-onboarding.test.ts` | 改为注入 `ChannelConfigStore`；删跨文件回滚用例 |
 | `packages/tools/src/channels/feishu-push.ts` | 删 `loadSettings`/`_settingsCache`；改从 `getFeishu()` 取 `appId/appSecret/domain/allowFrom`；更新工具描述与错误文案 |
-| `packages/tools/package.json` | 保持 `@openharness/auth` 依赖（已有） |
+| `packages/tools/package.json` | 保持 `@vykor/auth` 依赖（已有） |
 
 ## 9. 测试计划
 
@@ -194,10 +194,10 @@ export interface ChannelConfigFile {
 
 ## 10. 验收标准
 
-- `pnpm --filter @openharness/auth test -- --run`
-- `pnpm --filter @openharness/core test -- --run`
-- `pnpm --filter @openharness/channels test -- --run`
-- `pnpm --filter @openharness/tools test -- --run`
+- `pnpm --filter @vykor/auth test -- --run`
+- `pnpm --filter @vykor/core test -- --run`
+- `pnpm --filter @vykor/channels test -- --run`
+- `pnpm --filter @vykor/tools test -- --run`
 - `pnpm --filter @rzx/ohs test -- --run`
 - 相关包 `check-types` 退出码 0。
 - `pnpm exec turbo build --output-logs=full` 全绿。
@@ -205,15 +205,15 @@ export interface ChannelConfigFile {
 
 ## 11. 破坏性与用户操作
 
-- 升级后，只要 `settings.json`（或项目级 `.openharness-ts/settings.json`）里残留 `channels`，
-  `loadSettings()` 就抛 `SettingsFileError`，`ohs` 各命令、daemon、TUI 都无法启动。
+- 升级后，只要 `settings.json`（或项目级 `.vykor/settings.json`）里残留 `channels`，
+  `loadSettings()` 就抛 `SettingsFileError`，`vk` 各命令、daemon、TUI 都无法启动。
 - **恢复顺序（必须按此）**：
   1. 先手动删除 `settings.json` 里的 `channels` 段（错误信息会指出 `settings.channels`）；
-  2. 再运行 `ohs channels add feishu` 写入新文件。
+  2. 再运行 `vk channels add feishu` 写入新文件。
 - 注意：扫码路径是 `createOnly`，会**新建一个飞书应用**；想复用旧应用请用**手填**路径填旧
   `appId/appSecret`。旧的 `channel-credentials.json`（v1）会被当作“未配置”，重新 `add` 即写成 v2。
-- `ohs channels add/allow` 不再读 settings，所以第 2 步即使 settings 还没删干净也不会被挡住；
-  但 `ohs channels serve` 依赖 `settings.model`，仍要求 settings 可正常加载。
+- `vk channels add/allow` 不再读 settings，所以第 2 步即使 settings 还没删干净也不会被挡住；
+  但 `vk channels serve` 依赖 `settings.model`，仍要求 settings 可正常加载。
 
 ## 12. 风险
 

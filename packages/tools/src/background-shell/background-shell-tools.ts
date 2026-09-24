@@ -1,5 +1,5 @@
-import type { ToolDefinition } from "@openharness/core";
-import type { ShellDescriptor } from "@openharness/environment";
+import type { ToolDefinition } from "@vykor/core";
+import type { ShellDescriptor } from "@vykor/environment";
 import { createShellDescription } from "../shell/index.js";
 
 export function createBackgroundShellTool(shell?: ShellDescriptor): ToolDefinition {

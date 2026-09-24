@@ -6,7 +6,7 @@
 
 ## 背景
 
-OpenHarness 当前支持 stdio、Streamable HTTP 和 SSE MCP 连接，也能通过静态 Bearer、自定义 Header 或 stdio 环境变量配置鉴权。现有 `McpAuth` 会把静态凭据写入 settings 并重连，但不包含浏览器授权、PKCE、动态客户端注册、OAuth Token 独立存储、自动刷新或重新授权状态。
+Vykor 当前支持 stdio、Streamable HTTP 和 SSE MCP 连接，也能通过静态 Bearer、自定义 Header 或 stdio 环境变量配置鉴权。现有 `McpAuth` 会把静态凭据写入 settings 并重连，但不包含浏览器授权、PKCE、动态客户端注册、OAuth Token 独立存储、自动刷新或重新授权状态。
 
 本阶段补齐 CLI 可用闭环。Desktop 暂不增加授权界面，但后续可以复用本阶段形成的 OAuth 服务和状态模型。
 
@@ -15,28 +15,28 @@ OpenHarness 当前支持 stdio、Streamable HTTP 和 SSE MCP 连接，也能通�
 命令名称和主要参数对齐当前 Codex CLI 的兼容子集：
 
 ```bash
-ohs mcp add linear --url https://mcp.linear.app/mcp
-ohs mcp login linear --scopes read
-ohs mcp login linear --scopes read --no-browser
-ohs mcp get linear
-ohs mcp get linear --json
-ohs mcp list
-ohs mcp list --json
-ohs mcp logout linear
-ohs mcp remove linear
+vk mcp add linear --url https://mcp.linear.app/mcp
+vk mcp login linear --scopes read
+vk mcp login linear --scopes read --no-browser
+vk mcp get linear
+vk mcp get linear --json
+vk mcp list
+vk mcp list --json
+vk mcp logout linear
+vk mcp remove linear
 ```
 
 `add` 同时支持两种互斥形式：
 
 ```bash
 # Streamable HTTP
-ohs mcp add <name> --url <url>
+vk mcp add <name> --url <url>
 
 # stdio
-ohs mcp add <name> -- <command> [args...]
+vk mcp add <name> -- <command> [args...]
 ```
 
-本阶段实现 Codex 命令面的兼容子集，不实现 Codex 的全局 `-c/--config`、feature flags、CIMD 或企业托管登录。OpenHarness 可以继续使用自己的 settings 文件结构。
+本阶段实现 Codex 命令面的兼容子集，不实现 Codex 的全局 `-c/--config`、feature flags、CIMD 或企业托管登录。Vykor 可以继续使用自己的 settings 文件结构。
 
 兼容矩阵：
 
@@ -84,7 +84,7 @@ ohs mcp add <name> -- <command> [args...]
 ## 架构
 
 ```text
-ohs mcp login <name>
+vk mcp login <name>
         │
         ▼
 McpOAuthService
@@ -92,7 +92,7 @@ McpOAuthService
         │
         ▼
 McpOAuthCredentialStore
-  $OPENHARNESS_CONFIG_DIR/mcp-oauth.json
+  $VYKOR_CONFIG_DIR/mcp-oauth.json
         │
         ▼
 McpClientManager
@@ -133,10 +133,10 @@ export interface McpRemoteServerConfig {
 OAuth 凭据保存到：
 
 ```text
-$OPENHARNESS_CONFIG_DIR/mcp-oauth.json
+$VYKOR_CONFIG_DIR/mcp-oauth.json
 ```
 
-未设置 `OPENHARNESS_CONFIG_DIR` 时沿用 OpenHarness 当前默认配置目录。文件使用版本化结构：
+未设置 `VYKOR_CONFIG_DIR` 时沿用 Vykor 当前默认配置目录。文件使用版本化结构：
 
 ```json
 {
@@ -251,9 +251,9 @@ OAuth access token 在距离过期不足 30 秒时刷新。同一进程内按 se
 
 ## 登出和删除
 
-`ohs mcp logout <name>` 删除该 server 的本地 OAuth 凭据。若已保存的 metadata 提供撤销端点，先使用与 token endpoint 相同的 client authentication 尽力撤销 refresh token，再尽力撤销 access token；无论远端撤销是否成功，本地秘密都必须删除。独立 CLI 不承诺断开已运行 session，只提示凭据变更从下一次连接起生效。
+`vk mcp logout <name>` 删除该 server 的本地 OAuth 凭据。若已保存的 metadata 提供撤销端点，先使用与 token endpoint 相同的 client authentication 尽力撤销 refresh token，再尽力撤销 access token；无论远端撤销是否成功，本地秘密都必须删除。独立 CLI 不承诺断开已运行 session，只提示凭据变更从下一次连接起生效。
 
-`ohs mcp remove <name>` 保持 Codex 的配置删除语义。为了避免留下秘密，它同时删除该 server 的本地 OAuth 凭据；如果存在凭据，输出应说明配置和本地授权均已移除。`remove` 不隐式承诺远端撤销成功，也不影响已经运行的 session。
+`vk mcp remove <name>` 保持 Codex 的配置删除语义。为了避免留下秘密，它同时删除该 server 的本地 OAuth 凭据；如果存在凭据，输出应说明配置和本地授权均已移除。`remove` 不隐式承诺远端撤销成功，也不影响已经运行的 session。
 
 ## 测试策略
 
@@ -286,11 +286,11 @@ OAuth access token 在距离过期不足 30 秒时刷新。同一进程内按 se
 验收服务使用 Linear Streamable HTTP MCP，账号放在测试 workspace。首轮只申请 `read` scope：
 
 ```bash
-ohs mcp add linear --url https://mcp.linear.app/mcp
-ohs mcp get linear
-ohs mcp login linear --scopes read
-ohs mcp get linear
-ohs mcp list
+vk mcp add linear --url https://mcp.linear.app/mcp
+vk mcp get linear
+vk mcp login linear --scopes read
+vk mcp get linear
+vk mcp list
 ```
 
 验收标准：
@@ -300,7 +300,7 @@ ohs mcp list
 3. 登录后状态为 `valid`，并能完成 MCP `tools/list` 和至少一次只读工具调用。
 4. 重启 CLI/daemon 后不重新登录即可连接。
 5. 使用本地测试手段让 access token 进入刷新窗口后，下一次连接自动刷新。
-6. `ohs mcp logout linear` 后状态回到 `not-logged-in`。
+6. `vk mcp logout linear` 后状态回到 `not-logged-in`。
 7. `mcp-oauth.json` 之外的 settings、命令输出和日志均不包含 OAuth secret。
 8. 如果登录时 Linear 要求超出 `read` 的 scope，CLI 拒绝继续并要求用户显式确认新的 `--scopes`，不会自动扩权。
 

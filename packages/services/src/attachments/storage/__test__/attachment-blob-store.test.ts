@@ -29,7 +29,7 @@ function createStore(now = () => Date.now()): {
   root: string;
   store: AttachmentBlobStore;
 } {
-  const root = mkdtempSync(join(tmpdir(), "ohs-attachment-blobs-"));
+  const root = mkdtempSync(join(tmpdir(), "vk-attachment-blobs-"));
   roots.push(root);
   return { root, store: new AttachmentBlobStore({ root, now }) };
 }

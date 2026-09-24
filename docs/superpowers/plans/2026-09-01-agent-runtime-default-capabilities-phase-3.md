@@ -4,9 +4,9 @@
 
 **目标：** 使用现有 `LocalTerminalProvider` 补全 standalone Terminal，并把 Terminal 会话完整投影到统一 Jobs 控制面，同时建立 runtime-owned 资源的可靠清理机制。
 
-**架构：** `@openharness/terminal-node` 提供一个由同一 `LocalTerminalProvider` 支撑的 `{ terminal, jobs, cleanup }` bundle；agent-runtime 将 bundle 的 Terminal 接到工具，将 Job source 接到阶段一的 `CompositeAgentJobHost`。默认工厂通过清理栈登记资源，Host overrides 始终作为借用对象，不由 Agent 释放。
+**架构：** `@vykor/terminal-node` 提供一个由同一 `LocalTerminalProvider` 支撑的 `{ terminal, jobs, cleanup }` bundle；agent-runtime 将 bundle 的 Terminal 接到工具，将 Job source 接到阶段一的 `CompositeAgentJobHost`。默认工厂通过清理栈登记资源，Host overrides 始终作为借用对象，不由 Agent 释放。
 
-**技术栈：** TypeScript、Vitest、`node-pty`、现有 `@openharness/terminal-node`、`@openharness/jobs`、`@openharness/agent-runtime`、pnpm workspace。
+**技术栈：** TypeScript、Vitest、`node-pty`、现有 `@vykor/terminal-node`、`@vykor/jobs`、`@vykor/agent-runtime`、pnpm workspace。
 
 ---
 
@@ -21,8 +21,8 @@ rg -n "hostCapabilities|AgentHostCapabilities|CompactAttachments|setAttachmentsP
 预期：无匹配。并运行：
 
 ```bash
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/server test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/server test
 ```
 
 预期：全部 PASS。
@@ -40,9 +40,9 @@ pnpm --filter @openharness/server test
 
 ### 修改
 
-- `packages/terminal-node/package.json`：增加 `@openharness/jobs` workspace 依赖。
+- `packages/terminal-node/package.json`：增加 `@vykor/jobs` workspace 依赖。
 - `packages/terminal-node/src/index.ts`：导出 Agent Terminal bundle factory。
-- `packages/agent-runtime/package.json`：在 `dependencies` 增加 `"@openharness/terminal-node": "workspace:*"`，保证默认 Node Agent 安装后实际带有 Terminal 实现。
+- `packages/agent-runtime/package.json`：在 `dependencies` 增加 `"@vykor/terminal-node": "workspace:*"`，保证默认 Node Agent 安装后实际带有 Terminal 实现。
 - `packages/agent-runtime/src/agent-composition.ts`：未覆盖 Terminal 时创建默认 bundle，登记 cleanup 并接入 Jobs。
 - `packages/agent-runtime/src/agent.ts`：Agent close 调用装配 cleanup，保持现有关闭顺序和幂等语义。
 - `packages/agent-runtime/src/default-agent.ts`：Node-only 默认工厂入口。
@@ -99,7 +99,7 @@ expect(await bundle.jobs.list({ sessionId: "session-1" }))
 - [ ] **步骤 3：运行新测试确认失败**
 
 ```bash
-pnpm --filter @openharness/terminal-node exec vitest run src/agent-terminal-host.test.ts
+pnpm --filter @vykor/terminal-node exec vitest run src/agent-terminal-host.test.ts
 ```
 
 预期：FAIL，缺少 `createAgentTerminalBundle`。
@@ -143,8 +143,8 @@ cleanup 必须可重复调用，第二次不重复释放；首次失败后再次
 - [ ] **步骤 7：运行 terminal-node 全包测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/terminal-node test
-pnpm --filter @openharness/terminal-node check-types
+pnpm --filter @vykor/terminal-node test
+pnpm --filter @vykor/terminal-node check-types
 ```
 
 预期：全部 PASS。
@@ -186,7 +186,7 @@ it("runs unique cleanups once in reverse order", async () => {
 - [ ] **步骤 3：运行测试确认失败**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/cleanup-stack.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/cleanup-stack.test.ts
 ```
 
 预期：FAIL，缺少 `CleanupStack`。
@@ -209,8 +209,8 @@ export class CleanupStack {
 - [ ] **步骤 5：运行测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/cleanup-stack.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime exec vitest run src/cleanup-stack.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。
@@ -255,14 +255,14 @@ it("borrows a host terminal without registering cleanup", async () => {
 - [ ] **步骤 2：运行测试确认失败**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/default-node-terminal.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/default-node-terminal.test.ts
 ```
 
 预期：FAIL，缺少 resolver/factory。
 
 - [ ] **步骤 3：增加 terminal-node 依赖并建立 Node-only factory**
 
-`default-node-terminal.ts` 是唯一直接导入 `@openharness/terminal-node` 的 agent-runtime 文件。Kernel entry 和跨平台核心文件不得导入它。
+`default-node-terminal.ts` 是唯一直接导入 `@vykor/terminal-node` 的 agent-runtime 文件。Kernel entry 和跨平台核心文件不得导入它。
 
 ```ts
 export async function createDefaultNodeTerminal(input: {
@@ -285,7 +285,7 @@ export async function createDefaultNodeTerminal(input: {
 
 - [ ] **步骤 5：把 cleanup stack 接到 Agent close**
 
-`AgentComposition` 返回 `cleanup: CleanupStack` 或一个 `closeOwnedCapabilities()` 函数。`DefaultOpenHarnessAgent.close()` 在中断 run、等待 maintenance、关闭 children 后执行 capability cleanup，再关闭 runtime/event bus。保持每一步失败不阻止下一步。
+`AgentComposition` 返回 `cleanup: CleanupStack` 或一个 `closeOwnedCapabilities()` 函数。`DefaultVykorAgent.close()` 在中断 run、等待 maintenance、关闭 children 后执行 capability cleanup，再关闭 runtime/event bus。保持每一步失败不阻止下一步。
 
 - [ ] **步骤 6：写无 Host 默认能力集成测试**
 
@@ -308,8 +308,8 @@ expect(agent.getCapabilities()).toMatchObject({
 - [ ] **步骤 7：运行 agent-runtime 定向测试**
 
 ```bash
-pnpm --filter @openharness/agent-runtime exec vitest run src/default-node-terminal.test.ts src/sdk.test.ts src/agent.test.ts
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/agent-runtime exec vitest run src/default-node-terminal.test.ts src/sdk.test.ts src/agent.test.ts
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。
@@ -365,10 +365,10 @@ await jobs.send({
 - [ ] **步骤 5：运行 Terminal、Agent 和 daemon 定向测试**
 
 ```bash
-pnpm --filter @openharness/terminal-node test
-pnpm --filter @openharness/tools exec vitest run src/terminal/__test__/terminal-tools.test.ts src/job/job-tools.test.ts
-pnpm --filter @openharness/agent-runtime exec vitest run src/sdk.test.ts src/agent.test.ts
-pnpm --filter @openharness/server exec vitest run src/daemon/__test__/daemon-agent.test.ts src/jobs/daemon-job-service.test.ts
+pnpm --filter @vykor/terminal-node test
+pnpm --filter @vykor/tools exec vitest run src/terminal/__test__/terminal-tools.test.ts src/job/job-tools.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/sdk.test.ts src/agent.test.ts
+pnpm --filter @vykor/server exec vitest run src/daemon/__test__/daemon-agent.test.ts src/jobs/daemon-job-service.test.ts
 ```
 
 预期：全部 PASS，测试进程正常退出，没有悬挂 PTY。
@@ -387,7 +387,7 @@ pnpm check-docs
 
 ```bash
 rg -n "hostCapabilities|AgentHostCapabilities|CompactAttachments|setAttachmentsProvider|AgentMemoryStore|FeatureRegistry" packages apps -g "*.ts"
-rg -n "@openharness/terminal-node" packages/agent-runtime/src -g "*.ts"
+rg -n "@vykor/terminal-node" packages/agent-runtime/src -g "*.ts"
 git diff --check
 ```
 

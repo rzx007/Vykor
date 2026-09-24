@@ -1,13 +1,13 @@
 /**
  * daemon HTTP/SSE 客户端。
  *
- * `OpenHarnessClient` 只组装当前领域 Resource；底层 transport 不作为实例 API 暴露。
+ * `VykorClient` 只组装当前领域 Resource；底层 transport 不作为实例 API 暴露。
  */
 
-import type { OpenHarnessClientOptions } from "../types/index.js";
+import type { VykorClientOptions } from "../types/index.js";
 import {
   HttpTransport,
-  OpenHarnessApiError,
+  VykorApiError,
   normalizeDaemonBaseUrl,
 } from "./http-transport.js";
 import {
@@ -39,7 +39,7 @@ import {
 
 export {
   HttpTransport,
-  OpenHarnessApiError,
+  VykorApiError,
   normalizeDaemonBaseUrl,
   SseTransport,
   streamServerSentEvents,
@@ -64,7 +64,7 @@ export {
 };
 
 /** 面向 daemon 的 typed fetch 客户端。 */
-export class OpenHarnessClient {
+export class VykorClient {
   readonly protocol: ProtocolClient;
   readonly system: SystemResource;
   readonly providers: ProviderResource;
@@ -82,7 +82,7 @@ export class OpenHarnessClient {
   readonly events: EventResource;
   readonly mcp: McpResource;
 
-  constructor(options: OpenHarnessClientOptions) {
+  constructor(options: VykorClientOptions) {
     const transport = new HttpTransport(options);
     const sse = new SseTransport(transport);
     this.protocol = new ProtocolClient(transport);

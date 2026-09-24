@@ -1,4 +1,4 @@
-import type { TerminalReadResult } from "@openharness/terminal"
+import type { TerminalReadResult } from "@vykor/terminal"
 
 const defaultMaxCharacters = 200_000
 

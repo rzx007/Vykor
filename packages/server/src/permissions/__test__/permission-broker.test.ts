@@ -4,14 +4,14 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { SessionStore } from "@openharness/services";
+import { SessionStore } from "@vykor/services";
 
 import { StorePermissionBroker } from "../permission-broker.js";
 
 function withBroker(
   test: (ctx: { broker: StorePermissionBroker; store: SessionStore; changes: number[] }) => Promise<void>,
 ): Promise<void> {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-permission-broker-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-permission-broker-"));
   const store = new SessionStore({ path: join(dir, "store.db") });
   const changes: number[] = [];
   const broker = new StorePermissionBroker({
@@ -31,7 +31,7 @@ function withBroker(
 
 describe("StorePermissionBroker", () => {
   it("works with the permission repository and narrow session and event queries", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "ohs-permission-broker-narrow-"));
+    const dir = mkdtempSync(join(tmpdir(), "vk-permission-broker-narrow-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
     try {
       store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });

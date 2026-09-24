@@ -108,7 +108,7 @@ const savedCustomProvider: DesktopProviderInfo = {
   active: false,
   local: false,
   credentialSource: "credentials",
-  credentialLabel: "OpenHarness 密钥",
+  credentialLabel: "Vykor 密钥",
   models: [{ id: "team-model", label: "Team Model", imageInputSupport: "unknown" }],
   custom: true,
   baseUrl: "https://gateway.example/v1",

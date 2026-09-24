@@ -32,13 +32,13 @@ describe("Public API Contract Verification", () => {
     expect(Object.keys(clientModule).sort()).toEqual(expected);
   });
 
-  it("exposes only current Resources directly on OpenHarnessClient", () => {
-    const client = new clientModule.OpenHarnessClient({
+  it("exposes only current Resources directly on VykorClient", () => {
+    const client = new clientModule.VykorClient({
       baseUrl: "http://127.0.0.1:4000",
       fetch: async () => new Response(),
     });
     expect(Object.keys(client).sort()).toEqual(resourceNames);
-    expect(Object.getOwnPropertyNames(clientModule.OpenHarnessClient.prototype)).toEqual(["constructor"]);
+    expect(Object.getOwnPropertyNames(clientModule.VykorClient.prototype)).toEqual(["constructor"]);
   });
 
   it("uses TypeChecker to verify module exports match contract", () => {

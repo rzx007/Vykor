@@ -26,7 +26,7 @@
 ## 任务 1：全局 replay 基线
 
 - [ ] 在 `packages/client/src/state/__test__/sync.test.ts` 写测试：replay 两条事件后收到一次无 event 的 snapshot，再收到 live；sessionId 路径原样。
-- [ ] 运行 `pnpm --filter @openharness/client exec vitest run src/state/__test__/sync.test.ts`，确认新测试因缺少 marker 失败。
+- [ ] 运行 `pnpm --filter @vykor/client exec vitest run src/state/__test__/sync.test.ts`，确认新测试因缺少 marker 失败。
 - [ ] 在 `sync.ts` 的全局 replay 循环后 yield `{ state, source: "snapshot" }`，不改变 live 重连。
 - [ ] 重跑目标测试，确认通过。
 
@@ -66,7 +66,7 @@
 
 ## 任务 6：核对与独立审查
 
-- [ ] 运行受影响包的测试、`pnpm --filter @openharness/desktop typecheck`、`pnpm check-docs` 和边界检查；完整读取退出码与失败数。
+- [ ] 运行受影响包的测试、`pnpm --filter @vykor/desktop typecheck`、`pnpm check-docs` 和边界检查；完整读取退出码与失败数。
 - [ ] 对照规格逐条核对首次 replay、cursor、gap、StrictMode、Scheduled 持久已读和通知一次。
 - [ ] 请求独立代码审查，修复重要问题后重新运行相关检查。
 - [ ] 用 `git diff` 核对只包含本任务文件；不暂存、不提交用户已有无关改动。

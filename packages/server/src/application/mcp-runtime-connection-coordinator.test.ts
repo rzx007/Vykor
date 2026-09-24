@@ -3,7 +3,7 @@ import type {
   ActiveMcpRuntimeHandle,
   McpRuntimeStatus,
   McpServerIdentity,
-} from "@openharness/core";
+} from "@vykor/core";
 import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
 
 function identity(name: string, fingerprint: string): McpServerIdentity {

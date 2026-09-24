@@ -12,7 +12,7 @@ export function createAuthCommand(): Command {
     .option("-p, --provider <provider>", "Provider name")
     .action(async (target?: string, credential?: string, opts?: { apiKey?: string; provider?: string }) => {
       const chalk = (await import("chalk")).default;
-      const { CredentialStorage } = await import("@openharness/auth");
+      const { CredentialStorage } = await import("@vykor/auth");
 
       const normalizedTarget = normalizeAuthTarget(opts?.provider ?? target);
       if (normalizedTarget === "codex") {
@@ -22,9 +22,9 @@ export function createAuthCommand(): Command {
 
       const apiKey = opts?.apiKey ?? credential;
       if (!apiKey) {
-        console.error(chalk.red("Usage: ohs auth login <provider> <api-key>"));
-        console.log(chalk.gray("Example: ohs auth login deepseek sk-..."));
-        console.log(chalk.gray("Codex subscription: ohs auth login codex"));
+        console.error(chalk.red("Usage: vk auth login <provider> <api-key>"));
+        console.log(chalk.gray("Example: vk auth login deepseek sk-..."));
+        console.log(chalk.gray("Codex subscription: vk auth login codex"));
         process.exitCode = 1;
         return;
       }
@@ -33,7 +33,7 @@ export function createAuthCommand(): Command {
       const storage = new CredentialStorage();
       await storage.storeApiKey(provider, apiKey);
       console.log(chalk.green(`Stored API key for ${provider} (${maskKey(apiKey)})`));
-      console.log(chalk.gray(`Use 'ohs provider use ${provider}' to make it active.`));
+      console.log(chalk.gray(`Use 'vk provider use ${provider}' to make it active.`));
     });
 
   cmd
@@ -41,8 +41,8 @@ export function createAuthCommand(): Command {
     .description("Show authentication status")
     .action(async () => {
       const chalk = (await import("chalk")).default;
-      const { CredentialStorage, describeCodexAuthState } = await import("@openharness/auth");
-      const { PROVIDERS } = await import("@openharness/api");
+      const { CredentialStorage, describeCodexAuthState } = await import("@vykor/auth");
+      const { PROVIDERS } = await import("@vykor/api");
       const storage = new CredentialStorage();
       const stored = new Set(await storage.listStoredProviders());
       const codexState = await describeCodexAuthState();
@@ -73,8 +73,8 @@ export function createAuthCommand(): Command {
 
       if (!anyConfigured) {
         console.log(chalk.yellow("\nNo authentication configured."));
-        console.log(chalk.gray("  API key: ohs auth login <provider> <api-key>"));
-        console.log(chalk.gray("  Codex:   ohs auth login codex"));
+        console.log(chalk.gray("  API key: vk auth login <provider> <api-key>"));
+        console.log(chalk.gray("  Codex:   vk auth login codex"));
       }
     });
 
@@ -84,10 +84,10 @@ export function createAuthCommand(): Command {
     .argument("[provider]", "Provider name")
     .action(async (provider?: string) => {
       const chalk = (await import("chalk")).default;
-      const { CredentialStorage } = await import("@openharness/auth");
+      const { CredentialStorage } = await import("@vykor/auth");
       if (!provider) {
-        console.error(chalk.red("Usage: ohs auth logout <provider>"));
-        console.log(chalk.gray("For Codex, this only clears OpenHarness state; Codex CLI login remains managed by Codex."));
+        console.error(chalk.red("Usage: vk auth logout <provider>"));
+        console.log(chalk.gray("For Codex, this only clears Vykor state; Codex CLI login remains managed by Codex."));
         process.exitCode = 1;
         return;
       }
@@ -103,13 +103,13 @@ export function createAuthCommand(): Command {
 }
 
 async function reportCodexLogin(chalk: typeof import("chalk").default): Promise<void> {
-  const { describeCodexAuthState } = await import("@openharness/auth");
+  const { describeCodexAuthState } = await import("@vykor/auth");
   const state = await describeCodexAuthState();
   if (state.configured) {
     console.log(chalk.green("Codex Subscription: ready"));
     console.log(chalk.gray(`  source: ${state.source}`));
     if (state.profileLabel) console.log(chalk.gray(`  account: ${state.profileLabel}`));
-    console.log(chalk.gray("Use 'ohs provider use codex' to make it active."));
+    console.log(chalk.gray("Use 'vk provider use codex' to make it active."));
     return;
   }
 

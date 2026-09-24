@@ -4,7 +4,7 @@
 
 Task 12 定义两种彼此隔离的连接模式。
 
-- **本机发现：** `ohs` 与 `ohs --tui` 使用 `~/.openharness-ts/daemon/` 下的私有 daemon registry。该文件含 bearer token，不能复制到其它机器。
+- **本机发现：** `vk` 与 `vk --tui` 使用 `~/.vykor/daemon/` 下的私有 daemon registry。该文件含 bearer token，不能复制到其它机器。
 - **远程连接：** Web、Desktop 或另一台机器通过安全渠道获得明确的 daemon URL 与 bearer token；它们绝不读取本机 registry。
 
 ## 启动可供浏览器连接的 daemon
@@ -12,8 +12,8 @@ Task 12 定义两种彼此隔离的连接模式。
 默认 daemon 绑定 `127.0.0.1`。绑定到非 loopback 地址时必须显式提供 token。浏览器 origin 默认拒绝，必须逐条精确列出。
 
 ```bash
-ohs serve --host 0.0.0.0 --port 8787 \
-  --token "$OPENHARNESS_DAEMON_TOKEN" \
+vk serve --host 0.0.0.0 --port 8787 \
+  --token "$VYKOR_DAEMON_TOKEN" \
   --allow-origin https://desk.example \
   --allow-origin http://localhost:5173
 ```
@@ -23,31 +23,31 @@ ohs serve --host 0.0.0.0 --port 8787 \
 ## 连接 TUI
 
 ```bash
-ohs --tui \
+vk --tui \
   --daemon-url https://daemon.example \
-  --daemon-token "$OPENHARNESS_DAEMON_TOKEN"
+  --daemon-token "$VYKOR_DAEMON_TOKEN"
 ```
 
 无界面 print 入口使用同一份连接描述，不会因为带了 prompt 就改为启动本机 daemon：
 
 ```bash
-ohs -p "summarize the current session" \
+vk -p "summarize the current session" \
   --daemon-url https://daemon.example \
-  --daemon-token "$OPENHARNESS_DAEMON_TOKEN"
+  --daemon-token "$VYKOR_DAEMON_TOKEN"
 ```
 
 `--daemon-url` 不会启动或替换本机 daemon，只会把明确的连接描述传入正常的 TUI 或 print 客户端路径。
 
 ## Web/Desktop SDK
 
-`@openharness/client` 对普通 HTTP 与 SSE 都使用 `fetch`，因此 bearer token 通过 `Authorization` header 发送，不会出现在事件流 URL 中。
+`@vykor/client` 对普通 HTTP 与 SSE 都使用 `fetch`，因此 bearer token 通过 `Authorization` header 发送，不会出现在事件流 URL 中。
 
 ```ts
-import { OpenHarnessClient, syncEvents } from "@openharness/client";
+import { VykorClient, syncEvents } from "@vykor/client";
 
-const client = new OpenHarnessClient({
+const client = new VykorClient({
   baseUrl: "https://daemon.example",
-  token: process.env.OPENHARNESS_DAEMON_TOKEN,
+  token: process.env.VYKOR_DAEMON_TOKEN,
 });
 
 await client.protocol.health();

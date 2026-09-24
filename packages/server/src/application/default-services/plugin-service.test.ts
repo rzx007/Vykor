@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getInstalledPluginStorePath, getPluginCacheDir } from "@openharness/core";
-import { readInstalledPluginStore, updateInstalledPluginStore } from "@openharness/plugins";
+import { getInstalledPluginStorePath, getPluginCacheDir } from "@vykor/core";
+import { readInstalledPluginStore, updateInstalledPluginStore } from "@vykor/plugins";
 import { createDefaultPluginService, PluginArchiveFailure } from "./plugin-service.js";
 
 const { nativeToolRuntimeSnapshot } = vi.hoisted(() => ({
@@ -16,7 +16,7 @@ const { nativeToolRuntimeSnapshot } = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("@openharness/agent-runtime", () => ({
+vi.mock("@vykor/agent-runtime", () => ({
   getNativeToolRuntimeSnapshot: nativeToolRuntimeSnapshot,
 }));
 
@@ -28,7 +28,7 @@ let previousTempEnv: { TEMP?: string; TMP?: string; TMPDIR?: string };
 beforeEach(async () => {
   // 解析器把临时目录建在全局共享的 os.tmpdir() 下；把本用例收窄到独立作用域，
   // 避免并行运行的其它包留下的 oh-plugin-zip-* 目录污染 residue 断言。
-  scopedTmpdir = await mkdtemp(join(tmpdir(), "ohs-plugin-service-tmp-"));
+  scopedTmpdir = await mkdtemp(join(tmpdir(), "vk-plugin-service-tmp-"));
   previousTempEnv = {
     TEMP: process.env.TEMP,
     TMP: process.env.TMP,
@@ -37,9 +37,9 @@ beforeEach(async () => {
   process.env.TEMP = scopedTmpdir;
   process.env.TMP = scopedTmpdir;
   process.env.TMPDIR = scopedTmpdir;
-  root = await mkdtemp(join(tmpdir(), "ohs-plugin-service-"));
-  previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-  process.env.OPENHARNESS_CONFIG_DIR = join(root, "config");
+  root = await mkdtemp(join(tmpdir(), "vk-plugin-service-"));
+  previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  process.env.VYKOR_CONFIG_DIR = join(root, "config");
   nativeToolRuntimeSnapshot.mockReturnValue({
     state: "inactive",
     hostCount: 0,
@@ -49,8 +49,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-  else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+  if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+  else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
   if (previousTempEnv.TEMP === undefined) delete process.env.TEMP;
   else process.env.TEMP = previousTempEnv.TEMP;
   if (previousTempEnv.TMP === undefined) delete process.env.TMP;
@@ -121,9 +121,9 @@ async function writeArchive(name: string, files: Record<string, string>): Promis
 
 async function writeNativeArchive(name = "plugin.zip", overrides: Record<string, string> = {}): Promise<string> {
   return await writeArchive(name, {
-    ".openharness-plugin/plugin.json": JSON.stringify({
+    ".vykor-plugin/plugin.json": JSON.stringify({
       schemaVersion: 1,
-      id: "dev.openharness.archive",
+      id: "dev.vykor.archive",
       name: "archive",
       version: "1.0.0",
       components: { tools: ["./tools/not-executed.js"] },
@@ -167,9 +167,9 @@ async function writeTarArchive(
 
 async function writeNativeTarArchive(name: string, gzip = false): Promise<string> {
   return await writeTarArchive(name, {
-    ".openharness-plugin/plugin.json": JSON.stringify({
+    ".vykor-plugin/plugin.json": JSON.stringify({
       schemaVersion: 1,
-      id: "dev.openharness.archive",
+      id: "dev.vykor.archive",
       name: "archive",
       version: "1.0.0",
       components: { tools: ["./tools/not-executed.js"] },
@@ -181,7 +181,7 @@ async function writeNativeTarArchive(name: string, gzip = false): Promise<string
 function permissionManifest(version: string, includeNetwork = false): string {
   return JSON.stringify({
     schemaVersion: 1,
-    id: "dev.openharness.archive",
+    id: "dev.vykor.archive",
     name: "archive",
     version,
     permissions: {
@@ -216,9 +216,9 @@ async function installPreviewedArchive(archive: string): Promise<void> {
 describe("default plugin service user scope", () => {
   it("marks an unverifiable copied user installation invalid without loading its contributions", async () => {
     const pluginDir = join(root, "cache", "dev.example.unverifiable");
-    await mkdir(join(pluginDir, ".openharness-plugin"), { recursive: true });
+    await mkdir(join(pluginDir, ".vykor-plugin"), { recursive: true });
     await mkdir(join(pluginDir, "skills", "unverifiable"), { recursive: true });
-    await writeFile(join(pluginDir, ".openharness-plugin", "plugin.json"), JSON.stringify({
+    await writeFile(join(pluginDir, ".vykor-plugin", "plugin.json"), JSON.stringify({
       schemaVersion: 1,
       id: "dev.example.unverifiable",
       name: "unverifiable",
@@ -301,9 +301,9 @@ describe("default plugin service user scope", () => {
 
   it("marks unsupported component warnings as degraded", async () => {
     await installPreviewedArchive(await writeNativeArchive("warning-list.zip", {
-      ".openharness-plugin/plugin.json": JSON.stringify({
+      ".vykor-plugin/plugin.json": JSON.stringify({
         schemaVersion: 1,
-        id: "dev.openharness.archive",
+        id: "dev.vykor.archive",
         name: "archive",
         version: "1.0.0",
         components: { workflows: ["./workflows/workflow.yml"] },
@@ -366,7 +366,7 @@ describe("default plugin service archive imports", () => {
     const archive = await writeNativeArchive();
 
     await expect((service() as any).previewArchive({ cwd: "C:/workspace", archivePath: archive })).resolves.toMatchObject({
-      identity: { id: "dev.openharness.archive", name: "archive", version: "1.0.0" },
+      identity: { id: "dev.vykor.archive", name: "archive", version: "1.0.0" },
       requestedPermissions: [],
       approvalRequired: false,
       inventory: { tools: 1 },
@@ -383,7 +383,7 @@ describe("default plugin service archive imports", () => {
     const preview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
 
     expect(preview).toMatchObject({
-      identity: { id: "dev.openharness.archive", name: "archive", version: "1.0.0" },
+      identity: { id: "dev.vykor.archive", name: "archive", version: "1.0.0" },
       requestedPermissions: [],
       approvalRequired: false,
       inventory: { tools: 1 },
@@ -393,7 +393,7 @@ describe("default plugin service archive imports", () => {
       archivePath: archive,
       expectedArchiveDigest: preview.archiveDigest,
       approvedPermissions: [],
-    })).resolves.toMatchObject({ message: "Installed plugin 'dev.openharness.archive'." });
+    })).resolves.toMatchObject({ message: "Installed plugin 'dev.vykor.archive'." });
   });
 
   it("installs the immutable ZIP snapshot only when preview digest and approvals still match", async () => {
@@ -406,19 +406,19 @@ describe("default plugin service archive imports", () => {
       archivePath: archive,
       expectedArchiveDigest: preview.archiveDigest,
       approvedPermissions: [],
-    })).resolves.toMatchObject({ message: "Installed plugin 'dev.openharness.archive'." });
+    })).resolves.toMatchObject({ message: "Installed plugin 'dev.vykor.archive'." });
     const record = Object.values((await readInstalledPluginStore(getInstalledPluginStorePath())).plugins)[0];
-    expect(record).toMatchObject({ id: "dev.openharness.archive", scope: "user" });
+    expect(record).toMatchObject({ id: "dev.vykor.archive", scope: "user" });
     expect(record).not.toHaveProperty("linkedSourcePath");
-    expect(record?.cachePath).toContain("dev.openharness.archive");
+    expect(record?.cachePath).toContain("dev.vykor.archive");
     await writeNativeArchive("plugin.zip", { "tools/not-executed.js": "export default 'changed archive';" });
     await expect(readFile(join(record!.cachePath, "tools", "not-executed.js"), "utf8")).resolves.toContain("must not run");
   });
 
   it("rejects missing and unknown permission approvals before store mutation", async () => {
     const archive = await writeNativeArchive("permissions.zip", {
-      ".openharness-plugin/plugin.json": JSON.stringify({
-        schemaVersion: 1, id: "dev.openharness.archive", name: "archive", version: "1.0.0",
+      ".vykor-plugin/plugin.json": JSON.stringify({
+        schemaVersion: 1, id: "dev.vykor.archive", name: "archive", version: "1.0.0",
         permissions: { process: ["spawn"] },
         components: { tools: [{ entry: "./tools/not-executed.js", permissions: ["process.spawn"] }] },
       }),
@@ -437,7 +437,7 @@ describe("default plugin service archive imports", () => {
 
   it("reuses previous approval when reinstalling with the same permissions", async () => {
     const archive = await writeNativeArchive("same-permissions.zip", {
-      ".openharness-plugin/plugin.json": permissionManifest("1.0.0"),
+      ".vykor-plugin/plugin.json": permissionManifest("1.0.0"),
     });
     const plugins = service() as any;
     const firstPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
@@ -456,12 +456,12 @@ describe("default plugin service archive imports", () => {
       archivePath: archive,
       expectedArchiveDigest: secondPreview.archiveDigest,
       approvedPermissions: [],
-    })).resolves.toMatchObject({ message: "Installed plugin 'dev.openharness.archive'." });
+    })).resolves.toMatchObject({ message: "Installed plugin 'dev.vykor.archive'." });
   });
 
   it("reuses previous approval when reinstalling with fewer permissions", async () => {
     const archive = await writeNativeArchive("fewer-permissions.zip", {
-      ".openharness-plugin/plugin.json": permissionManifest("1.0.0", true),
+      ".vykor-plugin/plugin.json": permissionManifest("1.0.0", true),
     });
     const plugins = service() as any;
     const firstPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
@@ -473,7 +473,7 @@ describe("default plugin service archive imports", () => {
     });
 
     await writeNativeArchive("fewer-permissions.zip", {
-      ".openharness-plugin/plugin.json": permissionManifest("1.1.0"),
+      ".vykor-plugin/plugin.json": permissionManifest("1.1.0"),
     });
     const secondPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
     expect(secondPreview.approvalRequired).toBe(false);
@@ -491,7 +491,7 @@ describe("default plugin service archive imports", () => {
 
   it("requires approval when a reinstall adds a permission", async () => {
     const archive = await writeNativeArchive("added-permission.zip", {
-      ".openharness-plugin/plugin.json": permissionManifest("1.0.0"),
+      ".vykor-plugin/plugin.json": permissionManifest("1.0.0"),
     });
     const plugins = service() as any;
     const firstPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
@@ -503,7 +503,7 @@ describe("default plugin service archive imports", () => {
     });
 
     await writeNativeArchive("added-permission.zip", {
-      ".openharness-plugin/plugin.json": permissionManifest("1.1.0", true),
+      ".vykor-plugin/plugin.json": permissionManifest("1.1.0", true),
     });
     const secondPreview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
     expect(secondPreview.approvalRequired).toBe(true);
@@ -560,8 +560,8 @@ describe("default plugin service archive imports", () => {
   it("refuses an archive that conflicts with a managed plugin ID", async () => {
     const archive = await writeNativeArchive("managed.zip");
     await updateInstalledPluginStore(getInstalledPluginStorePath(), (store) => {
-      store.plugins["managed::dev.openharness.archive"] = {
-        id: "dev.openharness.archive", scope: "managed", enabled: true, currentVersion: "1.0.0",
+      store.plugins["managed::dev.vykor.archive"] = {
+        id: "dev.vykor.archive", scope: "managed", enabled: true, currentVersion: "1.0.0",
         cachePath: join(root, "managed-cache"), origin: "native", requestedPermissions: [], approvedPermissions: [],
         installedAt: "now", updatedAt: "now",
       };
@@ -576,8 +576,8 @@ describe("default plugin service archive imports", () => {
   it("returns validation diagnostics and cleans extracted candidates after a failed preview", async () => {
     const before = await resolverRoots();
     const archive = await writeNativeArchive("invalid.zip", {
-      ".openharness-plugin/plugin.json": JSON.stringify({
-        schemaVersion: 1, id: "dev.openharness.archive", name: "archive", version: "1.0.0",
+      ".vykor-plugin/plugin.json": JSON.stringify({
+        schemaVersion: 1, id: "dev.vykor.archive", name: "archive", version: "1.0.0",
         components: { skills: ["./missing"] },
       }),
     });
@@ -597,8 +597,8 @@ describe("default plugin service archive imports", () => {
 
   it("keeps warning-level unsupported diagnostics visible while allowing installation", async () => {
     const archive = await writeNativeArchive("warning.zip", {
-      ".openharness-plugin/plugin.json": JSON.stringify({
-        schemaVersion: 1, id: "dev.openharness.archive", name: "archive", version: "1.0.0",
+      ".vykor-plugin/plugin.json": JSON.stringify({
+        schemaVersion: 1, id: "dev.vykor.archive", name: "archive", version: "1.0.0",
         components: { workflows: ["./workflows/workflow.yml"] },
       }),
       "workflows/workflow.yml": "name: unsupported-but-safe\n",
@@ -610,7 +610,7 @@ describe("default plugin service archive imports", () => {
     ]));
 
     await expect(plugins.installArchive({ cwd: "C:/workspace", archivePath: archive, expectedArchiveDigest: preview.archiveDigest, approvedPermissions: [] }))
-      .resolves.toMatchObject({ message: "Installed plugin 'dev.openharness.archive'." });
+      .resolves.toMatchObject({ message: "Installed plugin 'dev.vykor.archive'." });
   });
 
   it("returns an installer failure and cleans the extracted candidate", async () => {
@@ -619,7 +619,7 @@ describe("default plugin service archive imports", () => {
     const plugins = service() as any;
     const preview = await plugins.previewArchive({ cwd: "C:/workspace", archivePath: archive });
     await mkdir(getPluginCacheDir(), { recursive: true });
-    await writeFile(join(getPluginCacheDir(), "dev.openharness.archive"), "blocks cache directory creation");
+    await writeFile(join(getPluginCacheDir(), "dev.vykor.archive"), "blocks cache directory creation");
 
     await expect(plugins.installArchive({ cwd: "C:/workspace", archivePath: archive, expectedArchiveDigest: preview.archiveDigest, approvedPermissions: [] }))
       .rejects.toMatchObject({ body: { code: "plugin_archive_install_failed" } });

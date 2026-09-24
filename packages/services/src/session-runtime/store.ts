@@ -10,7 +10,7 @@ import {
   normalizeSessionUserInputItems,
   parseAttachmentLimits,
   sessionUserInputText,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 
 import type {
   AdmitPromptInput,
@@ -55,7 +55,7 @@ import type {
   SessionInputAttachmentRecord,
   SessionUserInputItem,
   SessionGoal,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   AttachmentRepository,
   AttachmentTransactions,

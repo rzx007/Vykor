@@ -1,4 +1,4 @@
-# @openharness/coordinator
+# @vykor/coordinator
 
 多 Agent 协调：内置 / 用户 / 插件 Agent 定义、Coordinator mode prompt，以及**硬调度器**（`WorkflowSpec` / `runWorkflow` / 持久化 store）。
 
@@ -23,15 +23,15 @@
 | `workflow/snapshot.ts` | run id、snapshot、summary、snapshot/result 转换 |
 | `workflow/notification.ts` | `<workflow-notification>` formatter/parser |
 | `workflow/reconciliation.ts` | changed-file / write-scope overlap 检测、summary、follow-up spec |
-| `workflow/store.ts` | `.openharness-ts/workflows` 快照 + events；resume/cancel/list |
+| `workflow/store.ts` | `.vykor/workflows` 快照 + events；resume/cancel/list |
 | `coordinator-mode.ts` | `getCoordinatorTools` / prompt / user context |
 | `agent-loader.ts` / `agent-definitions.ts` | frontmatter 加载与 builtin 合并 |
 | `index.ts` | 导出 + `COORDINATOR_SYSTEM_PROMPT` |
 
-真实 worker 执行在 `@openharness/tools` 的 `createAgentWorkflowRunner` / `Workflow` 工具，本包不依赖 swarm。
+真实 worker 执行在 `@vykor/tools` 的 `createAgentWorkflowRunner` / `Workflow` 工具，本包不依赖 swarm。
 
 ## 测试
 
 ```bash
-pnpm --filter @openharness/coordinator test
+pnpm --filter @vykor/coordinator test
 ```

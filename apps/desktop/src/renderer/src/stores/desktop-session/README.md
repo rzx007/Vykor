@@ -164,7 +164,7 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 11. operation、submission 与 queued action 用稳定 ID 对账。
 12. 成功 operation 会清理；失败状态有明确可见 owner，不能无界积累。
 13. renderer 永远不保存附件真实路径；上传错误也不能包含路径、授权值、source token 或堆栈。
-14. production 构建在 daemon 声明附件能力时默认开放；`OPENHARNESS_DESKTOP_ATTACHMENTS=0` 关闭时 picker、drop、paste 和附件发送入口都不能绕过，但纯文字发送保持原流程。
+14. production 构建在 daemon 声明附件能力时默认开放；`VYKOR_DESKTOP_ATTACHMENTS=0` 关闭时 picker、drop、paste 和附件发送入口都不能绕过，但纯文字发送保持原流程。
 
 ## 测试归属
 

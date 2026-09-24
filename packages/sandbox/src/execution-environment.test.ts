@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { createWorkspaceBinding } from "@openharness/environment";
+import { createWorkspaceBinding } from "@vykor/environment";
 import { createExecutionEnvironment } from "./execution-environment.js";
 import { resolveShellDescriptor } from "./shell.js";
 

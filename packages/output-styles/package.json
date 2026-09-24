@@ -1,5 +1,5 @@
 {
-  "name": "@openharness/output-styles",
+  "name": "@vykor/output-styles",
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",

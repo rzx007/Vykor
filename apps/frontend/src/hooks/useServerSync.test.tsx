@@ -10,7 +10,7 @@ import { testRender } from "@opentui/react/test-utils";
 
 import { useServerSync } from "./useServerSync";
 import type { TuiSessionController } from "./sessionController";
-import type { SessionEventRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@openharness/client";
+import type { SessionEventRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/client";
 
 const originalFetch = globalThis.fetch;
 
@@ -153,7 +153,7 @@ function resolveTsxLoader(repoRoot: string): string {
 }
 
 async function startDaemonFixture(options: DaemonFixtureOptions = {}): Promise<DaemonFixture> {
-  const dir = mkdtempSync(join(tmpdir(), "ohs-tui-sync-"));
+  const dir = mkdtempSync(join(tmpdir(), "vk-tui-sync-"));
   const token = "tui-sync-token";
   const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
   const serverModuleUrl = pathToFileURL(join(repoRoot, "packages/server/src/http/server.ts")).href;
@@ -166,7 +166,7 @@ async function startDaemonFixture(options: DaemonFixtureOptions = {}): Promise<D
     writeFileSync(
       scriptPath,
       options.scriptSource ?? `
-const { OpenHarnessHttpServer } = await import(${JSON.stringify(serverModuleUrl)});
+const { VykorHttpServer } = await import(${JSON.stringify(serverModuleUrl)});
 const capabilities = Object.fromEntries([
   "terminal",
   "backgroundShell",
@@ -179,7 +179,7 @@ const capabilities = Object.fromEntries([
   "schedules",
 ].map((name) => [name, { status: "disabled" }]));
 
-const server = new OpenHarnessHttpServer({
+const server = new VykorHttpServer({
   token: ${JSON.stringify(token)},
   storePath: ${JSON.stringify(join(dir, "sessions.db"))},
   logger: () => {},
@@ -1409,7 +1409,7 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
   expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("已写入"))).toBe(true);
   expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("Dream started as Job dream_1"))).toBe(true);
   expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("PROFILE STATUS"))).toBe(false);
-  expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("OpenHarness Environment Diagnostic"))).toBe(false);
+  expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("Vykor Environment Diagnostic"))).toBe(false);
   expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("Effort set to: high"))).toBe(true);
   expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("Token usage:"))).toBe(false);
   expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("Cost estimate:"))).toBe(false);

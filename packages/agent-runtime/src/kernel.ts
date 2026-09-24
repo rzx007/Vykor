@@ -4,20 +4,20 @@ import type {
   ToolDefinition,
   RuntimeBundle,
   Settings,
-} from "@openharness/core";
+} from "@vykor/core";
 import {
   createAgentSession,
   QueryEngine,
   RuntimeBuilder,
   ToolRegistry,
-} from "@openharness/core";
+} from "@vykor/core";
 
 import {
   createAssembledAgent,
-  type OpenHarnessAgent,
-  type OpenHarnessAgentOptions,
+  type VykorAgent,
+  type VykorAgentOptions,
 } from "./agent.js";
-import type { OpenHarnessAgentConfiguration } from "./agent-options.js";
+import type { VykorAgentConfiguration } from "./agent-options.js";
 import type {
   ResolvedAgentCapabilities,
   ResolvedCapability,
@@ -34,7 +34,7 @@ export interface AgentKernelRuntimeContext {
   cwd: string;
   sessionId?: string;
   settings: Settings;
-  configuration: OpenHarnessAgentConfiguration;
+  configuration: VykorAgentConfiguration;
   /** 已解析能力原样传给 child，runtime factory 不能凭空扩大权限。 */
   capabilities: ResolvedAgentCapabilities;
   identity?: AgentIdentity;
@@ -111,13 +111,13 @@ export interface AgentKernelOptions {
   settings: Settings;
   cwd: string;
   sessionId?: string;
-  configuration?: OpenHarnessAgentConfiguration;
+  configuration?: VykorAgentConfiguration;
   capabilities: ResolvedAgentCapabilities;
   effects: AgentEffects;
   createRuntime(
     context: AgentKernelRuntimeContext,
   ): Promise<AgentKernelRuntime>;
-  onEvent?: OpenHarnessAgentOptions["onEvent"];
+  onEvent?: VykorAgentOptions["onEvent"];
   childIdleTtlMs?: number;
 }
 
@@ -136,7 +136,7 @@ interface KernelTreeContext {
  */
 export async function createAgentKernel(
   options: AgentKernelOptions,
-): Promise<OpenHarnessAgent> {
+): Promise<VykorAgent> {
   const eventBus = new AgentEventBus(options.onEvent);
   return await createAgentKernelInternal(options, {
     eventBus,
@@ -148,7 +148,7 @@ export async function createAgentKernel(
 async function createAgentKernelInternal(
   options: AgentKernelOptions,
   tree: KernelTreeContext,
-): Promise<OpenHarnessAgent> {
+): Promise<VykorAgent> {
   const configuration = options.configuration ?? {};
   const prepared = await options.createRuntime({
     cwd: options.cwd,

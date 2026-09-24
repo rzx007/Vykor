@@ -5,7 +5,7 @@ import type {
   StreamEvent,
   ToolDefinition,
   ContentBlock,
-} from "@openharness/core";
+} from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import { AuthenticationFailure, RateLimitFailure, requestFailure } from "../errors/index";
 import { abortableDelay } from "./retry";
@@ -32,12 +32,12 @@ const MAX_COMPLETION_TOKEN_MODEL_PREFIXES = ["gpt-5", "o1", "o3", "o4"];
 // Env var opt-in for emitting an empty `reasoning_content` on tool-use
 // assistant turns (Kimi-on-Anthropic style). Strict-OpenAI providers reject
 // the field outright, so the default is off.
-const EMPTY_REASONING_ENV = "OPENHARNESS_REQUIRE_EMPTY_REASONING_CONTENT";
+const EMPTY_REASONING_ENV = "VYKOR_REQUIRE_EMPTY_REASONING_CONTENT";
 
 // DSML tool-call recovery is on by default because DeepSeek V4 intermittently
 // leaks tool calls into the content channel at long context. Set this to a
 // truthy value to fall back to forwarding the raw markup as text.
-const DSML_RECOVERY_DISABLE_ENV = "OPENHARNESS_DISABLE_DSML_RECOVERY";
+const DSML_RECOVERY_DISABLE_ENV = "VYKOR_DISABLE_DSML_RECOVERY";
 
 interface ReasoningMessage {
   content?: string | null;

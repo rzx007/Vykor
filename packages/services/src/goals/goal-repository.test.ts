@@ -10,7 +10,7 @@ import { GoalRepository } from "./goal-repository.js";
 function withRepository(
   test: (repository: GoalRepository, store: SessionStore) => void,
 ): void {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-goal-repository-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-goal-repository-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   try {
     store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" });
@@ -24,7 +24,7 @@ function withRepository(
 
 describe("GoalRepository", () => {
   it("reloads requests, assessments, and continuations from disk", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-related-reload-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-related-reload-"));
     const path = join(directory, "sessions.db");
     try {
       const first = new SessionStore({ path });
@@ -114,7 +114,7 @@ describe("GoalRepository", () => {
   });
 
   it("reloads goal rows, isolates returned values, and rejects malformed JSON", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-goal-reload-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-reload-"));
     const path = join(directory, "sessions.db");
     try {
       const first = new SessionStore({ path });

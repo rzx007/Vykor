@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@openharness/core";
+import type { ToolDefinition } from "@vykor/core";
 
 export const todoWriteTool: ToolDefinition = {
   name: "TodoWrite",

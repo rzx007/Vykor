@@ -12,7 +12,7 @@ import {
 const tempDirectories: string[] = [];
 
 async function tempFile(name: string): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "openharness-vision-"));
+  const directory = await mkdtemp(join(tmpdir(), "vykor-vision-"));
   tempDirectories.push(directory);
   return join(directory, name);
 }

@@ -15,9 +15,9 @@ export function expectedDesktopArtifacts(version) {
     throw new Error(`expected a stable X.Y.Z version, received ${String(version)}`);
   }
   return [
-    `OpenHarness-${version}-setup.exe`,
-    `OpenHarness-${version}.AppImage`,
-    `OpenHarness-${version}.deb`,
+    `Vykor-${version}-setup.exe`,
+    `Vykor-${version}.AppImage`,
+    `Vykor-${version}.deb`,
     "latest.yml",
     "latest-linux.yml",
   ];

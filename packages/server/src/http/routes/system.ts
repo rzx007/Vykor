@@ -9,7 +9,7 @@ import {
   errorResponse,
   jsonResponse,
   readJson,
-  type OpenHarnessServerHealth,
+  type VykorServerHealth,
 } from "../support.js";
 import type {
   ModelService,
@@ -23,7 +23,7 @@ import {
   CURRENT_PROTOCOL_VERSION,
   type AttachmentLimits,
   type ServerCapabilities,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { settingsPatchRuntimeImpact } from "../../application/default-services/settings-service.js";
 
 export interface SystemRoutesContext {
@@ -93,7 +93,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         sessionCount: snapshot.sessions.total,
         activeRunCount: snapshot.coordinator.activeRunCount,
         queuedRunCount: snapshot.coordinator.queuedRunCount,
-      } satisfies OpenHarnessServerHealth);
+      } satisfies VykorServerHealth);
     })
     .get("/debug/runtime", () =>
       jsonResponse(context.control.runtimeSnapshot()),

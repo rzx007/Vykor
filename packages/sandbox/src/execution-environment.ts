@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import { homedir, platform, tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import type {
   EnvironmentFileSystem,
   EnvironmentPathResolver,
@@ -10,11 +10,11 @@ import type {
   EnvironmentTerminalFactory,
   ExecutionEnvironmentHandle,
   WorkspaceBinding,
-} from "@openharness/environment";
+} from "@vykor/environment";
 import type { ResolvedExecutionEnvironmentConfig } from "./execution-config.js";
 import { signalProcessTree } from "./process-control.js";
 import { createProcess, createShellProcess, resolveHostShellLauncher, resolveShellDescriptor } from "./shell.js";
-import type { ShellDescriptor } from "@openharness/environment";
+import type { ShellDescriptor } from "@vykor/environment";
 import { createWslPathResolver, preflightWsl, spawnWslProcess } from "./wsl-environment.js";
 
 export interface CreateExecutionEnvironmentInput {

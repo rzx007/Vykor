@@ -91,7 +91,7 @@ async function get(
 ): Promise<{ redirect?: string; mediaType: string; bytes: Uint8Array }> {
   return await new Promise((resolve, reject) => {
     const request = (url.protocol === "https:" ? httpsRequest : httpRequest)(url, {
-      headers: { accept: "image/*", "user-agent": "OpenHarness-ImageToText/1" },
+      headers: { accept: "image/*", "user-agent": "Vykor-ImageToText/1" },
       lookup: (_hostname, _options, callback) => callback(
         null,
         target.address,

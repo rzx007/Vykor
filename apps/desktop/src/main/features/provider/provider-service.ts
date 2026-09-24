@@ -1,9 +1,9 @@
 import type {
   AuthStatus,
   ModelProviderInfo,
-  OpenHarnessClient,
+  VykorClient,
   ProviderInfo,
-} from "@openharness/client"
+} from "@vykor/client"
 
 import type {
   ActivateDesktopProviderInput,
@@ -20,7 +20,7 @@ import type {
 import { desktopSessionService } from "../session/session-service"
 import { resolveDesktopRuntimeSnapshot } from "../session/runtime-selection"
 
-type ProviderClient = Pick<OpenHarnessClient, "providers" | "auth" | "system">
+type ProviderClient = Pick<VykorClient, "providers" | "auth" | "system">
 
 export class DesktopProviderService {
   snapshot(): Promise<DesktopProviderSnapshot> {
@@ -254,7 +254,7 @@ function credentialLabel(
   auth: AuthStatus,
   envByProvider: Map<string, string>
 ): string | undefined {
-  if (source === "credentials") return "OpenHarness 密钥"
+  if (source === "credentials") return "Vykor 密钥"
   if (source === "environment") return envByProvider.get(providerName)
   if (source === "subscription") return auth.codex.profileLabel ?? "Codex CLI"
   if (source === "local") return "本地服务"

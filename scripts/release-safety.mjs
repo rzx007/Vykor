@@ -58,7 +58,7 @@ export function renderStableReleaseNotes({ version, commit, artifacts }) {
   const names = [...artifacts];
   if (names.length === 0) throw new Error("release notes require at least one artifact");
   return [
-    `# OpenHarness ${stableVersion}`,
+    `# Vykor ${stableVersion}`,
     "",
     `Commit: \`${releaseCommit}\``,
     "",

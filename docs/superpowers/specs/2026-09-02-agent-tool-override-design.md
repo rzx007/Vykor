@@ -4,7 +4,7 @@
 
 - 状态：待审核
 - 日期：2026-09-02
-- 范围：`@openharness/core`、`@openharness/tools`、`@openharness/agent-runtime`
+- 范围：`@vykor/core`、`@vykor/tools`、`@vykor/agent-runtime`
 - 前置设计：`2026-09-01-agent-runtime-default-capabilities-design.md`
 
 ## 2. 背景
@@ -80,10 +80,10 @@ register(tool: ToolDefinition): void {
 
 ## 6. 公共配置 API
 
-在 `OpenHarnessAgentOptions` 增加两个字段：
+在 `VykorAgentOptions` 增加两个字段：
 
 ```ts
-export interface OpenHarnessAgentOptions extends OpenHarnessAgentConfiguration {
+export interface VykorAgentOptions extends VykorAgentConfiguration {
   // 现有字段省略。
 
   /** 新增 Tool；名称与任何已有 Tool 冲突时创建失败。 */
@@ -329,7 +329,7 @@ Tool 覆盖能力实现前后，默认 Agent 都应该正确说明已有的附�
 
 ```ts
 description:
-  "Read a local file, directory, or OpenHarness attachment resource. " +
+  "Read a local file, directory, or Vykor attachment resource. " +
   "Use Read, not ReadMcpResource, for attachment:// resources."
 
 file_path: {

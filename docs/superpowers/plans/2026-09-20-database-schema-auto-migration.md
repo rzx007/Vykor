@@ -18,7 +18,7 @@
 - 接管只处理可加性变更；缺整表、缺 PK 列、列/索引定义冲突 → 抛 `LegacyAdoptionError`，不静默。
 - 接管时 `PRAGMA foreign_keys = OFF` 必须在事务外；收尾恢复原值。
 - `application_storage_format` 由新增的 `0001` 删除；**接管不删它**（它在基线快照内）。
-- 所有命令在仓库根 `D:\code\personal-project\OpenHarness-ts` 运行；包内命令用 `pnpm --filter @openharness/services`。
+- 所有命令在仓库根 `D:\code\personal-project\Vykor` 运行；包内命令用 `pnpm --filter @vykor/services`。
 - 每个任务结束必须提交；提交信息用仓库既有风格（`feat(services):` / `fix(services):` / `chore(services):`）。
 
 ---
@@ -511,7 +511,7 @@ describe("adoptLegacyDatabase", () => {
 
 - [ ] **Step 4: 运行测试**
 
-Run: `pnpm --filter @openharness/services exec vitest run src/database/legacy-adoption.test.ts`
+Run: `pnpm --filter @vykor/services exec vitest run src/database/legacy-adoption.test.ts`
 Expected: PASS（10 个用例）。
 
 > 后续 E2E / 复核修复在原 6 个用例之外补了 4 个：`accepts a partial index whose predicate differs only by the table qualifier`、
@@ -621,7 +621,7 @@ it("adopts a pre-baseline database on open and then applies incremental migratio
 
 - [ ] **Step 3: 运行**
 
-Run: `pnpm --filter @openharness/services exec vitest run src/database/session-database.test.ts`
+Run: `pnpm --filter @vykor/services exec vitest run src/database/session-database.test.ts`
 Expected: 新用例 PASS；现有单基线断言此阶段仍通过（尚未加 `0001`）。
 
 - [ ] **Step 4: 提交**
@@ -658,7 +658,7 @@ export const applicationStorageFormat = sqliteTable("application_storage_format"
 
 - [ ] **Step 2: 生成迁移**
 
-Run: `pnpm --filter @openharness/services db:generate`
+Run: `pnpm --filter @vykor/services db:generate`
 Expected: 生成 `migrations/0001_<随机>.sql`、`meta/0001_snapshot.json`，`_journal.json` 新增第 2 条。
 
 **先核对生成的 SQL 只含 `DROP TABLE \`application_storage_format\`;`**（`read` 打开该文件确认没有其它语句；若出现额外语句说明存在 schema 漂移，停下排查）。
@@ -667,7 +667,7 @@ Expected: 生成 `migrations/0001_<随机>.sql`、`meta/0001_snapshot.json`，`_
 
 把 `0001_<随机>.sql` 重命名为 `0001_drop_application_storage_format.sql`，并把 `_journal.json` 第 2 条的 `tag` 改成 `0001_drop_application_storage_format`（其余字段保持 drizzle 生成值）。
 
-Run: `pnpm --filter @openharness/services db:check`
+Run: `pnpm --filter @vykor/services db:check`
 Expected: PASS。
 
 - [ ] **Step 4: 更新 `store.test.ts`**
@@ -739,7 +739,7 @@ import { it } from "vitest";
 import { SessionDatabase } from "./session-database.js";
 
 it("dump inventory", () => {
-  const directory = mkdtempSync(join(tmpdir(), "ohs-dump-"));
+  const directory = mkdtempSync(join(tmpdir(), "vk-dump-"));
   const database = SessionDatabase.open({ path: join(directory, "sessions.db") });
   const schema = database.connection
     .prepare(
@@ -770,7 +770,7 @@ it("dump inventory", () => {
 });
 ```
 
-Run: `pnpm --filter @openharness/services exec vitest run src/database/__dump-inventory.test.ts`
+Run: `pnpm --filter @vykor/services exec vitest run src/database/__dump-inventory.test.ts`
 然后**删除**该临时文件。Expected: 夹具被重写，且不再含 `application_storage_format`（表数 31）。
 
 - [ ] **Step 7: 更新 `check-bundled-baseline.ts`**
@@ -809,8 +809,8 @@ Run: `pnpm --filter @openharness/services exec vitest run src/database/__dump-in
 
 - [ ] **Step 8: 运行 services 全量测试与基线检查**
 
-Run: `pnpm --filter @openharness/services test`
-Run: `pnpm --filter @openharness/services test:bundled-baseline`
+Run: `pnpm --filter @vykor/services test`
+Run: `pnpm --filter @vykor/services test:bundled-baseline`
 Expected: 全绿。
 
 - [ ] **Step 9: 提交**
@@ -1161,9 +1161,9 @@ git commit -m "docs: describe schema auto-migration and legacy adoption"
 
 Run:
 ```bash
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/services test:bundled-baseline
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/services test:bundled-baseline
 pnpm check:clean-slate
 pnpm test:clean-slate
 pnpm check-docs
@@ -1177,7 +1177,7 @@ Expected: 全绿。
 3. 只读核对（把路径换成你的 `%USERPROFILE%`）：
 
 ```powershell
-node -e "const {DatabaseSync}=require('node:sqlite'); const p=process.env.USERPROFILE+'/.openharness-ts/data/session-runtime/sessions.db'; const db=new DatabaseSync(p,{readOnly:true}); console.log('tables:', db.prepare(\"select count(*) n from sqlite_master where type='table' and name not like 'sqlite_%'\").get()); console.log('has_platform_meta:', db.prepare(\"select count(*) n from pragma_table_info('channel_delivery') where name='platform_meta_json'\").get()); console.log('legacy_tables:', db.prepare(\"select name from sqlite_master where name in ('cron_job','cron_run','application_storage_format')\").all()); console.log('migrations:', db.prepare('select hash, created_at from __drizzle_migrations order by created_at').all().length); db.close();"
+node -e "const {DatabaseSync}=require('node:sqlite'); const p=process.env.USERPROFILE+'/.vykor/data/session-runtime/sessions.db'; const db=new DatabaseSync(p,{readOnly:true}); console.log('tables:', db.prepare(\"select count(*) n from sqlite_master where type='table' and name not like 'sqlite_%'\").get()); console.log('has_platform_meta:', db.prepare(\"select count(*) n from pragma_table_info('channel_delivery') where name='platform_meta_json'\").get()); console.log('legacy_tables:', db.prepare(\"select name from sqlite_master where name in ('cron_job','cron_run','application_storage_format')\").all()); console.log('migrations:', db.prepare('select hash, created_at from __drizzle_migrations order by created_at').all().length); db.close();"
 ```
 
 Expected：`legacy_tables` 为空；`has_platform_meta.n == 1`；`migrations == 2`。

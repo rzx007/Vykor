@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ProjectRecord } from "@openharness/protocol";
-import { SessionStore } from "@openharness/services";
+import type { ProjectRecord } from "@vykor/protocol";
+import { SessionStore } from "@vykor/services";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -35,7 +35,7 @@ function createOperations(): ProjectOperations & Record<string, ReturnType<typeo
 
 describe("ProjectApplicationService", () => {
   it("delegates every project operation through the narrow capability", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-service-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-service-"));
     const operations = createOperations();
     const service = new ProjectApplicationService(operations);
     try {
@@ -60,7 +60,7 @@ describe("ProjectApplicationService", () => {
   });
 
   it("is composed with store.projects instead of the legacy Store methods", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-composition-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-composition-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     const project = store.projects.inspect(directory);
     const application = new DaemonApplication({
@@ -87,7 +87,7 @@ describe("ProjectApplicationService", () => {
   });
 
   it("rejects files before calling inspect or rebind", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-project-service-file-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-project-service-file-"));
     const file = join(directory, "not-a-directory.txt");
     writeFileSync(file, "file");
     const operations = createOperations();

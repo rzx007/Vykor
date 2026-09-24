@@ -1,4 +1,4 @@
-import type { SessionRecord } from "@openharness/protocol";
+import type { SessionRecord } from "@vykor/protocol";
 
 import {
   DaemonOperationUnavailableError,

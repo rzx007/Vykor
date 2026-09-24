@@ -3,12 +3,12 @@
  * Not a slash-command executor — TUI/daemon use catalog + resource APIs.
  */
 
-import { isKnownOutputStyle, type OutputStyleDefinition } from "@openharness/output-styles";
+import { isKnownOutputStyle, type OutputStyleDefinition } from "@vykor/output-styles";
 import {
   renderPromptLayers,
   type PersonalPromptFileDiagnostic,
   type PromptLayers,
-} from "@openharness/prompts";
+} from "@vykor/prompts";
 
 export { coerceConfigValue } from "../config-coerce.js";
 

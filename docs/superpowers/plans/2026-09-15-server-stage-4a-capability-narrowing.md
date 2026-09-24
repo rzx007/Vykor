@@ -52,7 +52,7 @@ Event 测 afterSeq/cursor/abort；Retention 测 policy/时间戳；Channel 测�
 
 - [ ] **步骤 3：运行基线**
 
-运行：pnpm --filter @openharness/server test -- src/application/events src/application/retention src/application/channel src/application/default-services src/jobs src/daemon src/terminal
+运行：pnpm --filter @vykor/server test -- src/application/events src/application/retention src/application/channel src/application/default-services src/jobs src/daemon src/terminal
 
 预期：新增契约测试全绿。
 
@@ -91,8 +91,8 @@ Event 测 afterSeq/cursor/abort；Retention 测 policy/时间戳；Channel 测�
 
 - [ ] **步骤 5：验证并提交**
 
-运行：pnpm --filter @openharness/server test -- src/application/events src/application/retention src/application/channel src/application/__test__/project-application-service.test.ts
-运行：pnpm --filter @openharness/server check-types
+运行：pnpm --filter @vykor/server test -- src/application/events src/application/retention src/application/channel src/application/__test__/project-application-service.test.ts
+运行：pnpm --filter @vykor/server check-types
 提交：git commit -m "refactor(server): narrow simple application capabilities"
 
 ### 任务 3：收窄 Terminal、Job、Schedule、Background Shell
@@ -145,7 +145,7 @@ Attachment asset 查询走 store.attachments；Session reference 查询走 conve
 
 - [ ] **步骤 4：验证**
 
-运行：pnpm --filter @openharness/server test -- src/application/attachment-resource src/application/attachment-tools src/application/agent src/application/default-services
+运行：pnpm --filter @vykor/server test -- src/application/attachment-resource src/application/attachment-tools src/application/agent src/application/default-services
 
 - [ ] **步骤 5：提交**
 
@@ -180,9 +180,9 @@ Attachment asset 查询走 store.attachments；Session reference 查询走 conve
 - [ ] **步骤 5：最终验证**
 
 运行：
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/services test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/services test
 node --test scripts/architecture-boundaries.test.mjs
 pnpm check:architecture
 node scripts/check-docs.mjs

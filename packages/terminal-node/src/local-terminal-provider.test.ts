@@ -1,4 +1,4 @@
-import type { TerminalSessionInfo } from "@openharness/terminal";
+import type { TerminalSessionInfo } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 import { LocalTerminalProvider } from "./local-terminal-provider";

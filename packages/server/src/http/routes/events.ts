@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import type { SessionEventRecord } from "@openharness/protocol";
+import type { SessionEventRecord } from "@vykor/protocol";
 
 import type { ApplicationEventService } from "../../application/events/application-event-service.js";
 import {

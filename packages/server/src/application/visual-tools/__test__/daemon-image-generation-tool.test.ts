@@ -233,7 +233,7 @@ describe("daemon ImageGeneration tool", () => {
       bytes: PNG_BYTES,
     }]);
     expect(result.content[0]?.text).toContain("att-generated-1");
-    expect(result.content[0]?.text).not.toMatch(/[A-Z]:[\\/]|\.openharness-ts[\\/]images/i);
+    expect(result.content[0]?.text).not.toMatch(/[A-Z]:[\\/]|\.vykor[\\/]images/i);
     expect(result.metadata).toEqual({
       generatedImages: [{
         assetId: "att-generated-1",

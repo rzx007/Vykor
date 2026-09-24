@@ -1,4 +1,4 @@
-import type { ToolContext, ToolDefinition, ToolResult } from "@openharness/core";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
 
 export const lspTool: ToolDefinition = {
   name: "Lsp",
@@ -17,7 +17,7 @@ export const lspTool: ToolDefinition = {
   },
   async execute(input, context) {
     if (context.environment) return executeEnvironmentLsp(input, context);
-    const { LspClient } = await import("@openharness/services");
+    const { LspClient } = await import("@vykor/services");
     const operation = input.operation as string;
     const client = new LspClient({
       command: "",

@@ -74,7 +74,7 @@ Coordinator / Workflow：再跑 A5、A6
 请完成一次可回滚的工具闭环，标记为 ACCEPTANCE-日期-02。
 
 步骤必须按顺序执行：
-1. 在 .openharness-ts/scratchpad/ 下创建 acceptance-smoke.txt，只写一行 ACCEPTANCE-日期-02。
+1. 在 .vykor/scratchpad/ 下创建 acceptance-smoke.txt，只写一行 ACCEPTANCE-日期-02。
 2. 重新读取这个文件并确认内容完全一致。
 3. 使用本机 shell 计算文件字节数，并报告实际数字。
 4. 删除刚创建的 acceptance-smoke.txt。
@@ -199,7 +199,7 @@ Coordinator / Workflow：再跑 A5、A6
 直接发送：
 
 ```text
-请在 .openharness-ts/scratchpad/ 下创建 permission-denied.txt，内容为 ACCEPTANCE-日期-07。除此之外不要做任何操作。
+请在 .vykor/scratchpad/ 下创建 permission-denied.txt，内容为 ACCEPTANCE-日期-07。除此之外不要做任何操作。
 ```
 
 权限界面出现后选择“拒绝”，再发送：

@@ -108,7 +108,7 @@ describe("AppearanceProvider", () => {
   }
 
   it("ignores the removed theme storage key", async () => {
-    localStorage.setItem("openharness-desktop-theme", "dark")
+    localStorage.setItem("vykor-desktop-theme", "dark")
 
     await renderProvider()
 

@@ -10,8 +10,8 @@ import {
   type WorkflowRunner,
   type WorkflowSpec,
   type WorkflowTaskRunResult,
-} from "@openharness/coordinator";
-import type { AgentExecutionContext } from "@openharness/core";
+} from "@vykor/coordinator";
+import type { AgentExecutionContext } from "@vykor/core";
 import {
   createWorkflowTool as createWorkflowToolDefinition,
   type WorkflowToolOptions,

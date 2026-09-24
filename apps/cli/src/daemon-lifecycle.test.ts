@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { DaemonRegistry } from "@openharness/server";
+import type { DaemonRegistry } from "@vykor/server";
 
 import { probeDaemonRegistry } from "./daemon-lifecycle.js";
 
@@ -58,7 +58,7 @@ describe("probeDaemonRegistry", () => {
     expect(status).toBe("stale");
   });
 
-  it("does not treat an unrelated reused pid as a stale OpenHarness daemon", async () => {
+  it("does not treat an unrelated reused pid as a stale Vykor daemon", async () => {
     const status = await probeDaemonRegistry(registry(), {
       pidAlive: () => true,
       fetch: async () => response({ error: "Unauthorized" }, 401),

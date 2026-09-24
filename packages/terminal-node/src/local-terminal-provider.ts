@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 
-import type { EnvironmentPtyTarget } from "@openharness/environment";
+import type { EnvironmentPtyTarget } from "@vykor/environment";
 import type {
   TerminalCreateRequest,
   TerminalProvider,
@@ -13,11 +13,11 @@ import type {
   TerminalWaitRequest,
   TerminalWaitResult,
   TerminalWriteRequest,
-} from "@openharness/terminal";
+} from "@vykor/terminal";
 import {
   TerminalEventBus,
   type TerminalEventListener,
-} from "@openharness/terminal";
+} from "@vykor/terminal";
 import type { IPty } from "node-pty";
 
 import { OutputBuffer } from "./output-buffer";

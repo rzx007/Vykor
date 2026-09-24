@@ -1,5 +1,5 @@
-import type { RuntimeBundle } from "@openharness/core";
-import { getSandboxAvailability, type SandboxRuntimeReporter } from "@openharness/sandbox";
+import type { RuntimeBundle } from "@vykor/core";
+import { getSandboxAvailability, type SandboxRuntimeReporter } from "@vykor/sandbox";
 
 export async function attachSandboxRuntime(
   bundle: RuntimeBundle,

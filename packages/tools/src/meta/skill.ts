@@ -1,5 +1,5 @@
-import type { ToolDefinition } from "@openharness/core";
-import { SkillRegistry, type SkillDefinition } from "@openharness/skills";
+import type { ToolDefinition } from "@vykor/core";
+import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
 import { posix, win32 } from "node:path";
 
 type SkillRegistryInstance = InstanceType<typeof SkillRegistry>;
@@ -102,8 +102,8 @@ async function resolveSkillRegistry(
   const sharedRegistry = context.skillRegistry as SkillRegistryInstance | undefined;
   if (sharedRegistry && !options.refreshFilesystem) return sharedRegistry;
 
-  const { createSkillRegistrySnapshot, findProjectSkillDirs, standardUserSkillDirs } = await import("@openharness/skills");
-  const { getSkillsDir } = await import("@openharness/core");
+  const { createSkillRegistrySnapshot, findProjectSkillDirs, standardUserSkillDirs } = await import("@vykor/skills");
+  const { getSkillsDir } = await import("@vykor/core");
   const baseline = sharedRegistry?.getAll().filter((skill) =>
     skill.source === "plugin" || !skill.path
   ) ?? [];

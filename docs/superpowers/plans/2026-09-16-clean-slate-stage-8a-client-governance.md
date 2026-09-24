@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 原子删除 `OpenHarnessClient` 的 118 个顶层转发方法和 A/B/C 兼容发行系统，同时建立只防止旧入口复活的负向清单。
+**目标：** 原子删除 `VykorClient` 的 118 个顶层转发方法和 A/B/C 兼容发行系统，同时建立只防止旧入口复活的负向清单。
 
 **架构：** 当前领域 Resource 是唯一 Client 入口。旧方法名称从 removal ledger 提取到无发行语义的 forbidden-surface 清单；公共 API contract 只描述当前导出，架构检查对旧名执行绝对零容忍。
 
@@ -105,7 +105,7 @@ git commit -m "test: freeze removed compatibility surfaces"
 
 - [ ] **步骤 1：把当前 Resource 正向表面写入测试**
 
-在 `packages/client/src/__test__/public-api.test.ts` 断言 `OpenHarnessClient` 实例只直接暴露：
+在 `packages/client/src/__test__/public-api.test.ts` 断言 `VykorClient` 实例只直接暴露：
 
 ```ts
 [
@@ -154,8 +154,8 @@ rg -n '@deprecated Use client\.' packages/client/src/transport/http-client.ts
 运行：
 
 ```powershell
-pnpm --filter @openharness/client check-types
-pnpm --filter @openharness/client test
+pnpm --filter @vykor/client check-types
+pnpm --filter @vykor/client test
 pnpm exec tsc -p tests/client-public-api/tsconfig.json
 node scripts/forbidden-compatibility-surfaces.mjs
 ```
@@ -198,7 +198,7 @@ export function renderStableReleaseNotes({ version, commit, artifacts }) {}
 
 ```json
 {
-  "check:client-api": "tsc -p tests/client-public-api/tsconfig.json && node --test scripts/forbidden-compatibility-surfaces.test.mjs scripts/architecture-boundaries.test.mjs && pnpm --filter @openharness/client exec vitest run src/__test__/public-api.test.ts",
+  "check:client-api": "tsc -p tests/client-public-api/tsconfig.json && node --test scripts/forbidden-compatibility-surfaces.test.mjs scripts/architecture-boundaries.test.mjs && pnpm --filter @vykor/client exec vitest run src/__test__/public-api.test.ts",
   "check:architecture": "pnpm check:client-api && node scripts/architecture-boundaries.mjs",
   "test:scripts": "node --test scripts/prepare-tag-release.test.mjs scripts/npm-release.test.mjs scripts/release-safety.test.mjs scripts/forbidden-compatibility-surfaces.test.mjs"
 }

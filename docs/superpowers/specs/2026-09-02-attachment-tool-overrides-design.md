@@ -4,7 +4,7 @@
 
 - 状态：已实现
 - 日期：2026-09-02
-- 范围：`@openharness/core`、`@openharness/tools`、`@openharness/agent-runtime`、`@openharness/server`
+- 范围：`@vykor/core`、`@vykor/tools`、`@vykor/agent-runtime`、`@vykor/server`
 - 前置设计：`2026-09-02-agent-tool-override-design.md`
 - 兼容策略：不兼容旧的附件 Capability 注入接口
 
@@ -46,14 +46,14 @@ Daemon
 2. Agent Runtime 不保留旧接口，也不同时支持 Capability 和 Tool override 两条注入路径。
 3. 默认 `Read` 独立可用；默认 Registry 不提供图生文或文生图 Tool。
 4. daemon 覆盖的是完整 `ToolDefinition`，执行仍经过 QueryEngine 的权限、Hook、超时、取消、审计和结果规范化。
-5. `@openharness/tools` 不定义或导出视觉 Tool；`ImageToText` 和 `ImageGeneration` 的完整定义属于 daemon/server。
+5. `@vykor/tools` 不定义或导出视觉 Tool；`ImageToText` 和 `ImageGeneration` 的完整定义属于 daemon/server。
 6. 附件目录不再隐式挂载给 Agent shell。
 7. compact 只接受通用补充章节；附件 Catalog 的类型、构建、限额和文案全部由 server 负责。
 
 ## 4. 目标
 
 1. `DefaultNodeAgent` 在没有 daemon 服务时仍拥有可用的本地 `Read`，但不暴露图生文或文生图 Tool。
-2. `@openharness/core`、`@openharness/tools` 和 `@openharness/agent-runtime` 不再导出或传递附件专属 Host。
+2. `@vykor/core`、`@vykor/tools` 和 `@vykor/agent-runtime` 不再导出或传递附件专属 Host。
 3. daemon 继续支持现有客户端附件上传和消息协议。
 4. 文本附件继续通过 `Read({ file_path: "attachment://..." })` 读取。
 5. 当前模型不能直接看图时，图片附件继续通过 `ImageToText({ attachment_id: "..." })` 做本地 OCR。
@@ -90,7 +90,7 @@ Read({
 
 独立 Agent 收到 `attachment://...` 时，按无效或不存在的本地路径返回稳定错误。只有 daemon 覆盖后的 `Read` 才承诺支持该协议。
 
-### 6.2 视觉 Tool 不属于默认 Agent 或 `@openharness/tools`
+### 6.2 视觉 Tool 不属于默认 Agent 或 `@vykor/tools`
 
 daemon 的完整 `ImageToText` 定义支持三种输入：
 
@@ -111,7 +111,7 @@ ImageToText({
 - URL 只作为模型图片输入，不经过附件存储；
 - 使用 Tool 调用的 `abortSignal` 和 60 秒内部超时；
 - 不调用 `AgentImageToTextHost`；
-- 不进入默认 Registry，也不从 `@openharness/tools` 导出。
+- 不进入默认 Registry，也不从 `@vykor/tools` 导出。
 
 `ImageGeneration` 同样由 daemon/server 完整定义。loader 不读取图片生成专用 Settings 字段，也不根据某个 URL 字段决定它是否存在；工具可以使用 HTTP、本地程序、固定路径或其他 daemon 自己选择的实现。错误响应不得返回 API key，Provider 响应正文需要安全截断。
 
@@ -133,7 +133,7 @@ createDaemonAgentLoader({
 });
 ```
 
-`Read` 的 `defaultTool` 是从 `@openharness/tools` 明确导入的内置定义。daemon 的 `ImageToText` 没有 `defaultTool`：附件、本地路径和 URL 三条分支都在 server 实现。固定工具和动态工具从同一个 `tools(context)` 返回；loader 只提供当前 session 和最终 Settings，不解释工具名称或注册条件。
+`Read` 的 `defaultTool` 是从 `@vykor/tools` 明确导入的内置定义。daemon 的 `ImageToText` 没有 `defaultTool`：附件、本地路径和 URL 三条分支都在 server 实现。固定工具和动态工具从同一个 `tools(context)` 返回；loader 只提供当前 session 和最终 Settings，不解释工具名称或注册条件。
 
 `trustedToolOverrides` 是第一方 Agent 创建者的显式信任声明：指定的覆盖 Tool 保留被替换内置 Tool 的权限分类。名称必须同时存在于 `toolOverrides`，而且被替换目标必须是 builtin；否则 Agent 创建失败。Extension、Plugin 和 MCP 不能设置或继承这项声明。daemon 只信任自己构造的 `Read` 覆盖，不信任第三方 Tool。
 
@@ -208,7 +208,7 @@ file_path 以 attachment:// 开头
   -> defaultTool.execute(input, context)
 ```
 
-附件 URI 的解析和合法性校验从 `@openharness/tools` 迁到 server 附件模块。`offset`、`limit` 和现有最大返回量继续沿用当前行为。
+附件 URI 的解析和合法性校验从 `@vykor/tools` 迁到 server 附件模块。`offset`、`limit` 和现有最大返回量继续沿用当前行为。
 
 ### 7.2 附件版 `ImageToText`
 
@@ -243,7 +243,7 @@ file_path 以 attachment:// 开头
 
 ## 8. 类型与所有权调整
 
-从 `@openharness/core` 删除：
+从 `@vykor/core` 删除：
 
 - `AgentAttachmentResourceHost`
 - `AgentAttachmentTextSlice`
@@ -255,7 +255,7 @@ file_path 以 attachment:// 开头
 - Runtime 接口中的 `setAttachments()`
 - Runtime 接口中的 `setImageToText()`
 
-从 `@openharness/agent-runtime` 删除：
+从 `@vykor/agent-runtime` 删除：
 
 - `AgentCapabilityOverrides.attachments`
 - `AgentCapabilityOverrides.imageToText`
@@ -395,7 +395,7 @@ server 将现有 `buildCompactAttachmentCatalog()` 调整为构建一个有界�
 普通覆盖 Tool 继续遵循前置设计：不能只因为名称仍叫 `Read` 就继承内置实现的隐式信任。本次增加一个只供创建 Agent 的第一方调用者使用的明确例外：
 
 ```ts
-interface OpenHarnessAgentConfiguration {
+interface VykorAgentConfiguration {
   toolOverrides?: ToolDefinition[];
   /** 覆盖实现保留原 builtin 的权限分类；只能引用本次 toolOverrides 中的 builtin 目标。 */
   trustedToolOverrides?: string[];
@@ -428,7 +428,7 @@ daemon 创建并控制附件版 `Read`，因此同时传入 `trustedToolOverride
 
 ## 13. 测试范围
 
-### 13.1 `@openharness/tools`
+### 13.1 `@vykor/tools`
 
 - `Read` 读取普通文件、目录和分页内容。
 - `Read` 的描述和 Schema 不再宣称支持 `attachment://`。
@@ -436,7 +436,7 @@ daemon 创建并控制附件版 `Read`，因此同时传入 `trustedToolOverride
 - 默认 Registry 不包含 `ImageToText` 或 `ImageGeneration`。
 - 包入口不导出 `ImageToText` 或 `ImageGeneration`，源码目录中也不保留两者的 Tool 定义。
 
-### 13.2 `@openharness/core` 与 `@openharness/agent-runtime`
+### 13.2 `@vykor/core` 与 `@vykor/agent-runtime`
 
 - `ToolContext` 不再携带附件或 OCR Host。
 - QueryEngine 不再保存或设置附件能力。
@@ -452,11 +452,11 @@ daemon 创建并控制附件版 `Read`，因此同时传入 `trustedToolOverride
 - 可信 `Read` 的 `attachment://` 分支通过 Tool 权限后仍执行 session 资源授权。
 - 现有 `toolOverrides` 仍受 allow/deny、权限、Hook、超时和取消控制。
 
-### 13.3 `@openharness/server`
+### 13.3 `@vykor/server`
 
 - 附件版 `Read` 对普通路径委托默认 Tool。
 - 附件版 `Read` 严格解析 URI、传递分页参数并校验 session。
-- daemon 版 `ImageToText` 在 server 内直接处理普通路径、URL 和授权附件，不委托 `@openharness/tools`。
+- daemon 版 `ImageToText` 在 server 内直接处理普通路径、URL 和授权附件，不委托 `@vykor/tools`。
 - daemon 版 `ImageToText` 对 `attachment_id` 调用本地 OCR。
 - `attachment_id` 与其他来源或 prompt 同时出现时拒绝。
 - 两个附件 Tool 都验证普通 Root session 可以访问自己的附件。
@@ -483,7 +483,7 @@ daemon 创建并控制附件版 `Read`，因此同时传入 `trustedToolOverride
 ## 14. 实施分段
 
 1. 用失败测试锁定默认 `Read`、默认 Registry 无视觉 Tool 和无附件 Capability 的目标契约。
-2. 恢复纯本地 `Read`，并从 `@openharness/tools` 完整移除 `ImageToText` / `ImageGeneration` 定义和导出。
+2. 恢复纯本地 `Read`，并从 `@vykor/tools` 完整移除 `ImageToText` / `ImageGeneration` 定义和导出。
 3. 增加并测试第一方 `trustedToolOverrides`，保持默认拒绝继承、daemon `Read` 显式信任和原有 cwd 权限边界。
 4. 删除 core、QueryEngine、Agent Runtime 中的附件/OCR Capability 接口和 `attachmentResourceRoot`。
 5. 在 server 中实现共享的 Child → Root 授权会话解析器、附件 `Read` 覆盖和完整视觉 Tool，并迁移 daemon 装配。
@@ -495,7 +495,7 @@ daemon 创建并控制附件版 `Read`，因此同时传入 `trustedToolOverride
 ## 15. 验收标准
 
 1. `createDefaultNodeAgent({ cwd })` 不依赖附件 Host，始终提供通用 `Read`，且默认不提供 `ImageToText` / `ImageGeneration`。
-2. core、tools、agent-runtime 的公共类型中不存在附件或本地 OCR Host，`@openharness/tools` 也不定义或导出视觉 Tool。
+2. core、tools、agent-runtime 的公共类型中不存在附件或本地 OCR Host，`@vykor/tools` 也不定义或导出视觉 Tool。
 3. Agent 配置和 inspect 中不存在 `attachments`、`imageToText`、`attachmentResourceRoot`。
 4. daemon 中的文本附件仍可通过 `Read(attachment://...)` 分页读取。
 5. daemon 中的图片附件仍可通过 `ImageToText(attachment_id)` 做现有本地 OCR。

@@ -1,11 +1,11 @@
-import type { IHookExecutor, IToolRegistry, Settings, ToolDefinition } from "@openharness/core";
-import { SkillRegistry } from "@openharness/skills";
+import type { IHookExecutor, IToolRegistry, Settings, ToolDefinition } from "@vykor/core";
+import { SkillRegistry } from "@vykor/skills";
 import { GOAL_ASSESSMENT_TOOL_NAME } from "./goal-assessment-tool.js";
-import { type OpenHarnessExtensionDiscovery, discoverOpenHarnessExtensions } from "./plugin-discovery.js";
+import { type VykorExtensionDiscovery, discoverVykorExtensions } from "./plugin-discovery.js";
 import { activateDiscoveredPlugins } from "./plugin-activation.js";
 import type { NativeToolActivationResult } from "./native-tools/activate.js";
-export type { OpenHarnessExtensionDiscovery } from "./plugin-discovery.js";
-export { discoverOpenHarnessExtensions } from "./plugin-discovery.js";
+export type { VykorExtensionDiscovery } from "./plugin-discovery.js";
+export { discoverVykorExtensions } from "./plugin-discovery.js";
 
 export interface ExtensionToolRegistry {
   register(tool: ToolDefinition): void;
@@ -14,17 +14,17 @@ export interface ExtensionToolRegistry {
   has(name: string): boolean;
 }
 
-export interface OpenHarnessExtensionContext {
+export interface VykorExtensionContext {
   cwd: string;
   settings: Settings;
   skillRegistry: SkillRegistry;
   toolRegistry: ExtensionToolRegistry;
   hookExecutor: IHookExecutor;
 }
-export interface OpenHarnessAgentExtension { setup(context: OpenHarnessExtensionContext): Promise<void> | void; }
+export interface VykorAgentExtension { setup(context: VykorExtensionContext): Promise<void> | void; }
 
 export async function configureDiscoveredExtensions(
-  discovery: OpenHarnessExtensionDiscovery,
+  discovery: VykorExtensionDiscovery,
   context: {
     cwd: string;
     environmentKind?: "local" | "wsl";

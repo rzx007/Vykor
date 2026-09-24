@@ -6,12 +6,12 @@ import type {
   SessionMessageRole,
   SessionRecord,
   UpsertMessagePartInput,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import {
   changedSessionRuntimeKeys,
   readSessionRuntimeConfig,
   readSessionRuntimeRevision,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import { isRecord, runtimeSessionMetadataChanged } from "../support.js";
 import { SessionApplicationError } from "./session-application-error.js";
 

@@ -1,4 +1,4 @@
-# OpenHarness 开发数据重置手册
+# Vykor 开发数据重置手册
 
 > 状态：权威重置手册。本文只定义人工预检和授权流程，不执行删除。
 
@@ -6,24 +6,24 @@
 
 ## 1. 先确定精确叶子
 
-不要把 `OPENHARNESS_CONFIG_DIR` 指向的整个目录直接列为删除目标。把实际使用的路径填进清单，并且每行只写一个 OpenHarness 独占叶子：
+不要把 `VYKOR_CONFIG_DIR` 指向的整个目录直接列为删除目标。把实际使用的路径填进清单，并且每行只写一个 Vykor 独占叶子：
 
 | 类别 | 精确叶子（按实际路径填写） | 建议允许根 | 可恢复性 |
 |---|---|---|---|
-| override config | `<OPENHARNESS_CONFIG_DIR>\settings.json` | `OPENHARNESS_CONFIG_DIR` | 删除后不可恢复；配置会回到默认值 |
-| override credentials | `<OPENHARNESS_CONFIG_DIR>\credentials.json` | `OPENHARNESS_CONFIG_DIR` | 删除后不可恢复；需要重新登录 |
-| channel config & secret | `<OPENHARNESS_CONFIG_DIR>\channel-credentials.json` | `OPENHARNESS_CONFIG_DIR` | 含渠道配置与密钥；删除后不可恢复，需要重新 `ohs channels add feishu` |
-| override profile | `<OPENHARNESS_CONFIG_DIR>\USER.md` | `OPENHARNESS_CONFIG_DIR` | 删除后不可恢复 |
-| override runtime data | `<OPENHARNESS_CONFIG_DIR>\data` | `OPENHARNESS_CONFIG_DIR` | Session、Run、日志和任务不可恢复 |
-| override plugins | `<OPENHARNESS_CONFIG_DIR>\plugins` | `OPENHARNESS_CONFIG_DIR` | 安装状态与 cache 不可恢复 |
-| override skills | `<OPENHARNESS_CONFIG_DIR>\skills` | `OPENHARNESS_CONFIG_DIR` | 用户 Skill 不可恢复 |
-| override model cache | `<OPENHARNESS_CONFIG_DIR>\cache\models-dev.json` | `OPENHARNESS_CONFIG_DIR` | 可重新生成 |
-| default config | `<HOME>\.openharness-ts` 下与上面相同的精确叶子 | `<HOME>\.openharness-ts` | 同上；不要把 HOME 列为目标 |
-| project | `<PROJECT>\.openharness-ts` | 已确认的 `<PROJECT>` | 项目设置、memory 和局部数据不可恢复 |
+| override config | `<VYKOR_CONFIG_DIR>\settings.json` | `VYKOR_CONFIG_DIR` | 删除后不可恢复；配置会回到默认值 |
+| override credentials | `<VYKOR_CONFIG_DIR>\credentials.json` | `VYKOR_CONFIG_DIR` | 删除后不可恢复；需要重新登录 |
+| channel config & secret | `<VYKOR_CONFIG_DIR>\channel-credentials.json` | `VYKOR_CONFIG_DIR` | 含渠道配置与密钥；删除后不可恢复，需要重新 `vk channels add feishu` |
+| override profile | `<VYKOR_CONFIG_DIR>\USER.md` | `VYKOR_CONFIG_DIR` | 删除后不可恢复 |
+| override runtime data | `<VYKOR_CONFIG_DIR>\data` | `VYKOR_CONFIG_DIR` | Session、Run、日志和任务不可恢复 |
+| override plugins | `<VYKOR_CONFIG_DIR>\plugins` | `VYKOR_CONFIG_DIR` | 安装状态与 cache 不可恢复 |
+| override skills | `<VYKOR_CONFIG_DIR>\skills` | `VYKOR_CONFIG_DIR` | 用户 Skill 不可恢复 |
+| override model cache | `<VYKOR_CONFIG_DIR>\cache\models-dev.json` | `VYKOR_CONFIG_DIR` | 可重新生成 |
+| default config | `<HOME>\.vykor` 下与上面相同的精确叶子 | `<HOME>\.vykor` | 同上；不要把 HOME 列为目标 |
+| project | `<PROJECT>\.vykor` | 已确认的 `<PROJECT>` | 项目设置、memory 和局部数据不可恢复 |
 | Desktop preferences | `<Desktop userData>\desktop-preferences.json` | 精确的 Desktop userData | 删除后回到默认值 |
 | Desktop pet | `<Desktop userData>\desktop-pet.json` | 精确的 Desktop userData | 删除后回到默认值 |
 | Desktop local storage | `<Desktop userData>\Local Storage\leveldb` | 精确的 Desktop userData | Desktop 局部状态不可恢复 |
-| Desktop cache | `<Electron app cache>\<OpenHarness leaf>` | 精确的 Electron app cache | 可重新生成 |
+| Desktop cache | `<Electron app cache>\<Vykor leaf>` | 精确的 Electron app cache | 可重新生成 |
 
 如果 override 目录与默认目录相同，只保留一组。Desktop `userData` 和 cache 必须从当前 Electron 应用实际输出取得，不得猜产品目录名。任何希望保留的文件都要在授权前另行复制；本流程不自动备份或迁移。
 
@@ -32,8 +32,8 @@
 在普通 PowerShell 中建立清单。下面只读取路径，不删除文件：
 
 ```powershell
-$WorkspaceRoot = 'D:\code\personal-project\OpenHarness-ts'
-$ConfigRoot = if ($env:OPENHARNESS_CONFIG_DIR) { $env:OPENHARNESS_CONFIG_DIR } else { Join-Path $HOME '.openharness-ts' }
+$WorkspaceRoot = 'D:\code\personal-project\Vykor'
+$ConfigRoot = if ($env:VYKOR_CONFIG_DIR) { $env:VYKOR_CONFIG_DIR } else { Join-Path $HOME '.vykor' }
 $ProjectRoot = '<填写项目根的精确绝对路径>'
 $DesktopUserDataRoot = '<填写 Electron 实际 userData 绝对路径>'
 $DesktopCacheRoot = '<填写 Electron 实际 cache 绝对路径>'
@@ -54,11 +54,11 @@ $Candidates = @(
   @{ Name = 'plugins'; InputPath = (Join-Path $ConfigRoot 'plugins'); AllowedRoot = $ConfigRoot; Recoverable = $false },
   @{ Name = 'skills'; InputPath = (Join-Path $ConfigRoot 'skills'); AllowedRoot = $ConfigRoot; Recoverable = $false },
   @{ Name = 'model-cache'; InputPath = (Join-Path $ConfigRoot 'cache\models-dev.json'); AllowedRoot = $ConfigRoot; Recoverable = $true },
-  @{ Name = 'project-state'; InputPath = (Join-Path $ProjectRoot '.openharness-ts'); AllowedRoot = $ProjectRoot; Recoverable = $false },
+  @{ Name = 'project-state'; InputPath = (Join-Path $ProjectRoot '.vykor'); AllowedRoot = $ProjectRoot; Recoverable = $false },
   @{ Name = 'desktop-preferences'; InputPath = (Join-Path $DesktopUserDataRoot 'desktop-preferences.json'); AllowedRoot = $DesktopUserDataRoot; Recoverable = $false },
   @{ Name = 'desktop-pet'; InputPath = (Join-Path $DesktopUserDataRoot 'desktop-pet.json'); AllowedRoot = $DesktopUserDataRoot; Recoverable = $false },
   @{ Name = 'desktop-local-storage'; InputPath = (Join-Path $DesktopUserDataRoot 'Local Storage\leveldb'); AllowedRoot = $DesktopUserDataRoot; Recoverable = $false },
-  @{ Name = 'desktop-cache'; InputPath = '<填写 cache 内 OpenHarness 独占叶子的精确路径>'; AllowedRoot = $DesktopCacheRoot; Recoverable = $true }
+  @{ Name = 'desktop-cache'; InputPath = '<填写 cache 内 Vykor 独占叶子的精确路径>'; AllowedRoot = $DesktopCacheRoot; Recoverable = $true }
 )
 
 function Get-CanonicalPath([string]$Path) {
@@ -128,7 +128,7 @@ $Inventory | ConvertTo-Json -Depth 4
 
 ## 3. 停进程并二次验证
 
-手工退出 Desktop、CLI、daemon，以及由它们启动的后台进程。确认没有 OpenHarness 进程仍持有数据库或目录后，原样再次运行第 2 节脚本，并比较两次 `$Inventory | ConvertTo-Json` 输出。
+手工退出 Desktop、CLI、daemon，以及由它们启动的后台进程。确认没有 Vykor 进程仍持有数据库或目录后，原样再次运行第 2 节脚本，并比较两次 `$Inventory | ConvertTo-Json` 输出。
 
 只有路径集合、CanonicalPath、FinalPath 和 AllowedRoot 全部未变化才继续。任何变化都视为检查与操作之间的路径竞态，需要重新开始预检。
 
@@ -141,7 +141,7 @@ $Inventory | ConvertTo-Json -Depth 4
 [ ] runtime-data — C:\精确路径\data — 最终目标 C:\精确路径\data — 不可恢复
 ```
 
-未勾选的项不得操作。“重置 OpenHarness”这种整体表述不代替逐项授权。
+未勾选的项不得操作。“重置 Vykor”这种整体表述不代替逐项授权。
 
 获得授权后，只能手工把某一行已经复核的精确最终路径填入 `-LiteralPath`。文件示例：
 

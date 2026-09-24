@@ -8,7 +8,7 @@ const cleanup: string[] = [];
 afterEach(async () => { await Promise.all(cleanup.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 
 it("distinguishes binary content from file boundaries", async () => {
-  const root = await mkdtemp(join(tmpdir(), "ohs-source-digest-")); cleanup.push(root);
+  const root = await mkdtemp(join(tmpdir(), "vk-source-digest-")); cleanup.push(root);
   await mkdir(join(root, "assets"));
   await writeFile(join(root, "assets/a"), "x\0assets/b\0y");
   const before = await digestSource(root);
@@ -18,7 +18,7 @@ it("distinguishes binary content from file boundaries", async () => {
 });
 
 it("refuses a linked source root before hashing its contents", async () => {
-  const root = await mkdtemp(join(tmpdir(), "ohs-source-link-")); cleanup.push(root);
+  const root = await mkdtemp(join(tmpdir(), "vk-source-link-")); cleanup.push(root);
   await mkdir(join(root, "source")); await writeFile(join(root, "source/file"), "content");
   await symlink(join(root, "source"), join(root, "link"), process.platform === "win32" ? "junction" : "dir");
   await expect(digestSource(join(root, "link"))).rejects.toThrow(/link/i);

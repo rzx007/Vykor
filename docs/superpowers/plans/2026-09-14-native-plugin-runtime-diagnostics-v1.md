@@ -6,7 +6,7 @@
 
 **架构：** 不新建持久化状态。`Plugin Service` 继续读取安装记录、安装校验、组件加载诊断和 Native Tool Host 状态，然后计算 `runtimeStatus`。Desktop 只展示这个派生状态，底层 diagnostics 仍保留给详情。
 
-**技术栈：** TypeScript、Vitest、React、现有 `@openharness/plugins`、`@openharness/agent-runtime`、Server Plugin Service 和 Desktop 插件页。
+**技术栈：** TypeScript、Vitest、React、现有 `@vykor/plugins`、`@vykor/agent-runtime`、Server Plugin Service 和 Desktop 插件页。
 
 ---
 
@@ -86,15 +86,15 @@ runtimeStatus: PluginRuntimeStatus;
 运行：
 
 ```powershell
-pnpm --filter @openharness/client run check-types
-pnpm --filter @openharness/server run check-types
+pnpm --filter @vykor/client run check-types
+pnpm --filter @vykor/server run check-types
 ```
 
 如果本机 `pnpm` 卡住，使用已知 fallback pnpm：
 
 ```powershell
-C:\Users\ruanz\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd --filter @openharness/client run check-types
-C:\Users\ruanz\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd --filter @openharness/server run check-types
+C:\Users\ruanz\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd --filter @vykor/client run check-types
+C:\Users\ruanz\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd --filter @vykor/server run check-types
 ```
 
 ## 任务 2：在 Plugin Service 计算展示状态
@@ -179,7 +179,7 @@ runtimeStatus: runtimeStatusForPlugin({
 运行：
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/default-services/plugin-service.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-service.test.ts
 ```
 
 ## 任务 3：更新 Desktop 插件页展示
@@ -242,7 +242,7 @@ const actionHints = {
 运行：
 
 ```powershell
-pnpm --filter @openharness/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
 ```
 
 ## 任务 4：文档收尾
@@ -259,7 +259,7 @@ pnpm --filter @openharness/desktop exec vitest run src/main/features/plugin/plug
 在排障章节说明：
 
 ```text
-安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `ohs plugin details` 返回的 Runtime 诊断为准。
+安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `vk plugin details` 返回的 Runtime 诊断为准。
 ```
 
 - [ ] **步骤 2：更新当前实现文档**
@@ -302,11 +302,11 @@ pnpm check-docs
 至少运行：
 
 ```powershell
-pnpm --filter @openharness/server exec vitest run src/application/default-services/plugin-service.test.ts
-pnpm --filter @openharness/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
-pnpm --filter @openharness/client run check-types
-pnpm --filter @openharness/server run check-types
-pnpm --filter @openharness/desktop run typecheck
+pnpm --filter @vykor/server exec vitest run src/application/default-services/plugin-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin/plugin-service.test.ts src/renderer/src/components/desktop/plugin-page/plugin-manager.test.tsx
+pnpm --filter @vykor/client run check-types
+pnpm --filter @vykor/server run check-types
+pnpm --filter @vykor/desktop run typecheck
 git diff --check
 ```
 

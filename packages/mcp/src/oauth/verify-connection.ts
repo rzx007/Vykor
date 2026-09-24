@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { McpRemoteServerConfig } from "@openharness/core";
+import type { McpRemoteServerConfig } from "@vykor/core";
 import type { McpOAuthRuntime } from "./runtime-auth.js";
 
 export async function verifyMcpOAuthConnection(input: {
@@ -12,7 +12,7 @@ export async function verifyMcpOAuthConnection(input: {
     requestInit: { headers: input.config.headers },
     fetch: input.runtime.createFetch(input.serverName, input.config),
   });
-  const client = new Client({ name: "openharness-oauth-verify", version: "1.0.0" }, { capabilities: {} });
+  const client = new Client({ name: "vykor-oauth-verify", version: "1.0.0" }, { capabilities: {} });
   try {
     await client.connect(transport);
     await client.listTools();

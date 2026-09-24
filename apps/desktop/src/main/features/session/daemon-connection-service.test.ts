@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 
 const clientState = vi.hoisted(() => ({ fail: false, hang: false }))
 
@@ -9,7 +9,7 @@ const daemonHost = vi.hoisted(() => ({
   clearDaemonRegistry: vi.fn(),
   createBearerToken: vi.fn(() => "token"),
   createDaemonRegistryEntry: vi.fn((input: unknown) => input),
-  startOpenHarnessDaemon: vi.fn(),
+  startVykorDaemon: vi.fn(),
   shouldStartManagedDaemon: vi.fn(async () => false),
 }))
 
@@ -18,7 +18,7 @@ vi.mock("electron", () => ({
   BrowserWindow: { getAllWindows: () => [] },
 }))
 
-vi.mock("@openharness/server/daemon-host", () => daemonHost)
+vi.mock("@vykor/server/daemon-host", () => daemonHost)
 
 vi.mock("../daemon-autostart/daemon-surface", () => ({
   isDesktopManagedRegistry: (r: { executionSurface?: string }) =>
@@ -29,8 +29,8 @@ vi.mock("../daemon-autostart/daemon-takeover", () => ({
   reconcileDesktopManagedService: vi.fn(async () => undefined),
 }))
 
-vi.mock("@openharness/client", () => ({
-  OpenHarnessClient: class {
+vi.mock("@vykor/client", () => ({
+  VykorClient: class {
     protocol = {
       health: async () => {
         if (clientState.hang) return await new Promise(() => {})
@@ -81,19 +81,19 @@ describe("DaemonConnectionService ownership safety", () => {
 
     await expect(service.getClient()).rejects.toThrow(/pid 4242.*unreachable/i)
     expect(daemonHost.clearDaemonRegistry).not.toHaveBeenCalled()
-    expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
   })
 
   it("reclaims the registry and starts an embedded daemon when the registered daemon process is dead", async () => {
     daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    daemonHost.startOpenHarnessDaemon.mockResolvedValue(embedded)
+    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
     clientState.fail = true
 
     const service = new DaemonConnectionService({ pidAlive: () => false })
 
     await expect(service.getClient()).resolves.toBeDefined()
     expect(daemonHost.clearDaemonRegistry).toHaveBeenCalledTimes(1)
-    expect(daemonHost.startOpenHarnessDaemon).toHaveBeenCalledTimes(1)
+    expect(daemonHost.startVykorDaemon).toHaveBeenCalledTimes(1)
     expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledTimes(1)
   })
 
@@ -103,17 +103,17 @@ describe("DaemonConnectionService ownership safety", () => {
     const service = new DaemonConnectionService({ pidAlive: () => true })
 
     await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
   })
 
   it("starts an embedded daemon when no registry exists", async () => {
     daemonHost.readDaemonRegistry.mockReturnValue(undefined)
-    daemonHost.startOpenHarnessDaemon.mockResolvedValue(embedded)
+    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
 
     const service = new DaemonConnectionService()
 
     await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.startOpenHarnessDaemon).toHaveBeenCalledTimes(1)
+    expect(daemonHost.startVykorDaemon).toHaveBeenCalledTimes(1)
   })
 
   it("allows a later retry after a transient connect failure instead of caching the rejection", async () => {
@@ -122,7 +122,7 @@ describe("DaemonConnectionService ownership safety", () => {
 
     const service = new DaemonConnectionService({ pidAlive: () => true })
     await expect(service.getClient()).rejects.toThrow()
-    expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
 
     clientState.fail = false
     await expect(service.getClient()).resolves.toBeDefined()
@@ -135,12 +135,12 @@ describe("DaemonConnectionService ownership safety", () => {
     const service = new DaemonConnectionService({ pidAlive: () => true, verifyTimeoutMs: 20 })
 
     await expect(service.getClient()).rejects.toThrow(/timed out/i)
-    expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
   })
 
   it("restarts an ephemeral CLI daemon when autoStart is off", async () => {
     daemonHost.readDaemonRegistry.mockReturnValue(registry({ executionSurface: "cli_advanced" }))
-    daemonHost.startOpenHarnessDaemon.mockResolvedValue(embedded)
+    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
     const stop = vi.fn(async () => undefined)
 
     const service = new DaemonConnectionService({
@@ -151,7 +151,7 @@ describe("DaemonConnectionService ownership safety", () => {
 
     await expect(service.getClient()).resolves.toBeDefined()
     expect(stop).toHaveBeenCalledOnce()
-    expect(daemonHost.startOpenHarnessDaemon).toHaveBeenCalledOnce()
+    expect(daemonHost.startVykorDaemon).toHaveBeenCalledOnce()
     expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledWith(
       expect.objectContaining({ executionSurface: "desktop_managed" })
     )
@@ -171,6 +171,6 @@ describe("DaemonConnectionService ownership safety", () => {
 
     await expect(service.getClient()).resolves.toBeDefined()
     expect(reconcile).toHaveBeenCalledOnce()
-    expect(daemonHost.startOpenHarnessDaemon).not.toHaveBeenCalled()
+    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
   })
 })

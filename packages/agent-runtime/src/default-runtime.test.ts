@@ -3,15 +3,15 @@ import { tmpdir } from "node:os";
 import { describe, it, expect, vi } from "vitest";
 
 import {
-  createOpenHarnessRuntime,
+  createVykorRuntime,
   resolveAutoApproveTools,
   resolveCustomProviderRuntime,
   resolveEffectiveAllowedTools,
   resolveRuntimeModel,
 } from "./default-runtime.js";
-import { LOCAL_READ_ONLY_TOOLS, READ_ONLY_TOOLS } from "@openharness/permissions";
-import type { Settings, ToolDefinition } from "@openharness/core";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+import { LOCAL_READ_ONLY_TOOLS, READ_ONLY_TOOLS } from "@vykor/permissions";
+import type { Settings, ToolDefinition } from "@vykor/core";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { createAgentWorkspaceBinding } from "./agent-composition.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
 
@@ -24,7 +24,7 @@ it("rebuilds the next request prompt from changed file-backed settings", async (
       fastMode: false, settingsPrompt: "old instructions",
     },
   };
-  const runtime = await createOpenHarnessRuntime({
+  const runtime = await createVykorRuntime({
     settings: {
       ...BASE_SETTINGS,
       systemPrompt: "old instructions",
@@ -67,7 +67,7 @@ it("rebuilds the prompt when a warm session explicitly clears its override", asy
   const prompts: string[] = [];
   let sessionPrompt = "old session instructions";
   let settingsPrompt = "old settings instructions";
-  const runtime = await createOpenHarnessRuntime({
+  const runtime = await createVykorRuntime({
     settings: { ...BASE_SETTINGS, systemPrompt: settingsPrompt, sandbox: { enabled: false } },
     configuration: {
       systemPrompt: sessionPrompt,
@@ -98,7 +98,7 @@ it("rebuilds the prompt when a warm session explicitly clears its override", asy
 
 it("keeps an explicit Agent fastMode over its initial settings default", async () => {
   let prompt = "";
-  const runtime = await createOpenHarnessRuntime({
+  const runtime = await createVykorRuntime({
     settings: { ...BASE_SETTINGS, fastMode: false, sandbox: { enabled: false } },
     configuration: {
       fastMode: true,
@@ -120,7 +120,7 @@ it("keeps an explicit Agent fastMode over its initial settings default", async (
 
 it.each([undefined, "Custom root instructions"])("lists only the current View Agent names and descriptions with custom prompt=%s", async (systemPrompt) => {
   const prompts: string[] = [];
-  const runtime = await createOpenHarnessRuntime({
+  const runtime = await createVykorRuntime({
     settings: { ...BASE_SETTINGS, sandbox: { enabled: false } },
     configuration: { systemPrompt, client: { async *streamMessage(input) {
       prompts.push(String(input.system));
@@ -316,18 +316,18 @@ describe("resolveEffectiveAllowedTools", () => {
   });
 });
 
-describe("createOpenHarnessRuntime tool visibility", () => {
+describe("createVykorRuntime tool visibility", () => {
   it("uses a projectless managed cwd as the WSL workspace root", () => {
-    expect(createAgentWorkspaceBinding("D:\\Documents\\OpenHarness\\2026-09-07\\x1", "wsl"))
+    expect(createAgentWorkspaceBinding("D:\\Documents\\Vykor\\2026-09-07\\x1", "wsl"))
       .toEqual({
         kind: "wsl",
-        hostRoot: "D:\\Documents\\OpenHarness\\2026-09-07\\x1",
-        executionRoot: "/mnt/d/Documents/OpenHarness/2026-09-07/x1",
+        hostRoot: "D:\\Documents\\Vykor\\2026-09-07\\x1",
+        executionRoot: "/mnt/d/Documents/Vykor/2026-09-07/x1",
       });
   });
 
   it("keeps environment tools including TerminalOpen in WSL", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       executionEnvironment: wslEnvironment(),
       capabilities: {
@@ -351,7 +351,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("hides undeclared local-only tools from WSL agents", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       executionEnvironment: wslEnvironment(),
       configuration: {
@@ -369,7 +369,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("hides brokered web tools when WSL networking is disabled", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       executionEnvironment: wslEnvironment("none"),
       configuration: {
@@ -388,7 +388,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
 
   it("registers agent tools before applying visibility filters", async () => {
     const custom = testTool("BusinessSearch");
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client: {
@@ -413,7 +413,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("does not trust a caller tool that borrows a disabled builtin name", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client: {
@@ -445,7 +445,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
 
   it("replaces a built-in only through toolOverrides and records provenance", async () => {
     const replacement = testTool("Read");
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client: {
@@ -476,7 +476,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
       },
     };
 
-    await expect(createOpenHarnessRuntime({
+    await expect(createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client,
@@ -484,7 +484,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
       },
     })).rejects.toThrow(/trustedToolOverrides.*Read.*toolOverrides/i);
 
-    await expect(createOpenHarnessRuntime({
+    await expect(createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client,
@@ -500,15 +500,15 @@ describe("createOpenHarnessRuntime tool visibility", () => {
         yield { type: "complete" as const, stopReason: "end_turn" as const };
       },
     };
-    const cwd = resolve(tmpdir(), "ohs-trust-test-repo");
+    const cwd = resolve(tmpdir(), "vk-trust-test-repo");
     const outsidePath = resolve(tmpdir(), "secret.txt");
     const readOverride = testTool("Read");
-    const untrusted = await createOpenHarnessRuntime({
+    const untrusted = await createVykorRuntime({
       settings: BASE_SETTINGS,
       cwd,
       configuration: { client, toolOverrides: [readOverride] },
     });
-    const trusted = await createOpenHarnessRuntime({
+    const trusted = await createVykorRuntime({
       settings: BASE_SETTINGS,
       cwd,
       configuration: {
@@ -544,15 +544,15 @@ describe("createOpenHarnessRuntime tool visibility", () => {
       },
     };
 
-    await expect(createOpenHarnessRuntime({
+    await expect(createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: { client, tools: [testTool("Read")] },
     })).rejects.toThrow(/already registered/i);
-    await expect(createOpenHarnessRuntime({
+    await expect(createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: { client, toolOverrides: [testTool("Raed")] },
     })).rejects.toThrow(/override target.*not registered/i);
-    await expect(createOpenHarnessRuntime({
+    await expect(createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client,
@@ -563,7 +563,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("rejects removed lifecycle names with the Jobs replacement", async () => {
-    await expect(createOpenHarnessRuntime({
+    await expect(createVykorRuntime({
       settings: {
         ...BASE_SETTINGS,
         permission: { mode: "default", deniedTools: ["task_wait"] },
@@ -581,7 +581,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("applies allowedTools and deniedTools to tools registered after runtime creation", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: {
         ...BASE_SETTINGS,
         permission: { mode: "default", allowedTools: ["Shell"] },
@@ -627,7 +627,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("keeps roleAllowedTools under the host tool ceiling", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client: {
@@ -651,7 +651,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("exposes zero tools when the host ceiling and role tools do not overlap", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client: {
@@ -674,7 +674,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("treats '*' as all tools while deniedTools still wins", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client: {
@@ -709,7 +709,7 @@ describe("createOpenHarnessRuntime tool visibility", () => {
   });
 
   it("uses the current exact tool names when filtering", async () => {
-    const runtime = await createOpenHarnessRuntime({
+    const runtime = await createVykorRuntime({
       settings: BASE_SETTINGS,
       configuration: {
         client: {

@@ -1,16 +1,16 @@
-import type { OpenHarnessAgent } from "@openharness/agent-runtime";
-import type { AgentChildInput, AgentInputReceipt } from "@openharness/core";
+import type { VykorAgent } from "@vykor/agent-runtime";
+import type { AgentChildInput, AgentInputReceipt } from "@vykor/core";
 
 interface LiveChildEntry {
   childId: string;
-  rootAgent: OpenHarnessAgent;
+  rootAgent: VykorAgent;
 }
 
 /** Routes daemon commands through the framework-owned child directory. */
 export class LiveChildAgentDirectory {
   private readonly entries = new Map<string, LiveChildEntry>();
 
-  register(sessionId: string, childId: string, rootAgent: OpenHarnessAgent): void {
+  register(sessionId: string, childId: string, rootAgent: VykorAgent): void {
     const current = this.entries.get(sessionId);
     if (current && (current.childId !== childId || current.rootAgent !== rootAgent)) {
       throw new Error(`Child agent is already live for session: ${sessionId}`);

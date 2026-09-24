@@ -110,9 +110,9 @@
 
 最终验证结果：
 
-- `@openharness/terminal-node`：4/4 tests passed。
-- `@openharness/coordinator`：99/99 tests passed。
-- `@openharness/server`：188/188 tests passed。
+- `@vykor/terminal-node`：4/4 tests passed。
+- `@vykor/coordinator`：99/99 tests passed。
+- `@vykor/server`：188/188 tests passed。
 - 全仓 TypeScript：33/33 Turbo tasks passed，覆盖 34 个 package。
 - `git diff --check` passed。
 

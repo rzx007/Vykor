@@ -64,7 +64,7 @@ export function readPluginConfigs(storage: Pick<Storage, "getItem">, key: string
 }
 
 export const pluginConfigKey = (projectPath: string): string =>
-  `openharness:plugin-configs:v1:${projectPath}`
+  `vykor:plugin-configs:v1:${projectPath}`
 
 export function savePluginConfigs(
   storage: Pick<Storage, "getItem" | "setItem">,

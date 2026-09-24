@@ -126,7 +126,7 @@ describe("MCP manager against the desktop API", () => {
 
   it("shows globally configured servers and never reads the old localStorage demo data", async () => {
     localStorage.setItem(
-      'openharness:mcp:local:v1:"D:/project"',
+      'vykor:mcp:local:v1:"D:/project"',
       JSON.stringify({
         version: 1,
         document: {

@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 
 const runtimePaths = vi.hoisted(() => ({ configDir: "" }));
 
-vi.mock("@openharness/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@openharness/core")>();
+vi.mock("@vykor/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vykor/core")>();
   return {
     ...actual,
     getConfigDir: () => runtimePaths.configDir,

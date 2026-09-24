@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { SessionGoal } from "@openharness/protocol";
+import type { SessionGoal } from "@vykor/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
 import {

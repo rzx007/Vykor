@@ -12,14 +12,14 @@ describe("daemon settings", () => {
   let previousConfigDir: string | undefined;
 
   beforeEach(() => {
-    configDir = mkdtempSync(join(tmpdir(), "openharness-settings-"));
-    previousConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = configDir;
+    configDir = mkdtempSync(join(tmpdir(), "vykor-settings-"));
+    previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
   });
 
   afterEach(() => {
-    if (previousConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-    else process.env.OPENHARNESS_CONFIG_DIR = previousConfigDir;
+    if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+    else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
     rmSync(configDir, { recursive: true, force: true });
   });
 
@@ -57,7 +57,7 @@ describe("daemon settings", () => {
 
   it("merges the plugin master switch with project and CLI precedence", async () => {
     const projectRoot = join(configDir, "plugin-project");
-    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    const projectConfigDir = join(projectRoot, ".vykor");
     mkdirSync(projectConfigDir, { recursive: true });
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
       plugins: { enabled: true },
@@ -86,7 +86,7 @@ describe("daemon settings", () => {
 
   it("does not let project settings change machine-wide automatic startup", async () => {
     const projectRoot = join(configDir, "project");
-    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    const projectConfigDir = join(projectRoot, ".vykor");
     mkdirSync(projectConfigDir, { recursive: true });
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
       daemon: { autoStart: false },
@@ -143,7 +143,7 @@ describe("daemon settings", () => {
 
   it("atomically replaces project settings without leaving temporary files", async () => {
     const projectRoot = join(configDir, "atomic-project");
-    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    const projectConfigDir = join(projectRoot, ".vykor");
     mkdirSync(projectConfigDir, { recursive: true });
     writeFileSync(
       join(projectConfigDir, "settings.json"),
@@ -160,7 +160,7 @@ describe("daemon settings", () => {
 
   it("keeps custom providers user-scoped when project settings are included", async () => {
     const projectRoot = join(configDir, "provider-project");
-    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    const projectConfigDir = join(projectRoot, ".vykor");
     mkdirSync(projectConfigDir, { recursive: true });
     const globalProvider = {
       id: "global-provider",
@@ -208,7 +208,7 @@ describe("daemon settings", () => {
 
   it("loads the local terminal shell preference", async () => {
     const projectRoot = join(configDir, "terminal-project");
-    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    const projectConfigDir = join(projectRoot, ".vykor");
     mkdirSync(projectConfigDir, { recursive: true });
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
       terminal: { localShell: "powershell.exe" },
@@ -233,7 +233,7 @@ describe("daemon settings", () => {
 
   it("rejects the removed channels field in project settings", async () => {
     const projectRoot = join(configDir, "channels-project");
-    const projectConfigDir = join(projectRoot, ".openharness-ts");
+    const projectConfigDir = join(projectRoot, ".vykor");
     mkdirSync(projectConfigDir, { recursive: true });
     writeFileSync(join(projectConfigDir, "settings.json"), JSON.stringify({
       channels: { feishu: { enabled: true, appId: "x", allowFrom: {} } },

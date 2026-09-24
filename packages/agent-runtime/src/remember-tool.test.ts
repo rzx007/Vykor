@@ -1,5 +1,5 @@
-import type { ToolContext } from "@openharness/core";
-import { MemoryManager } from "@openharness/memory";
+import type { ToolContext } from "@vykor/core";
+import { MemoryManager } from "@vykor/memory";
 import { describe, expect, it } from "vitest";
 
 import { createRememberTool } from "./remember-tool.js";

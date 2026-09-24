@@ -1,16 +1,16 @@
-import { getProjectMemoryDir, type Settings } from "@openharness/core";
-import type { OpenHarnessAgent } from "@openharness/agent-runtime";
-import { updateRulesFromSession, type SessionMessageLike } from "@openharness/personalization";
-import type { SessionStore } from "@openharness/services";
+import { getProjectMemoryDir, type Settings } from "@vykor/core";
+import type { VykorAgent } from "@vykor/agent-runtime";
+import { updateRulesFromSession, type SessionMessageLike } from "@vykor/personalization";
+import type { SessionStore } from "@vykor/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import { isPublicTextPart } from "../../session/transcript-text.js";
 
 export interface SessionPostRunMaintenanceContext {
-  data: Pick<SessionStore, "conversations" | "runs" | "sessions">;
+  data: Pick<SessionStore, "conversations" | "runs" | "sessions" | "goals">;
   getSettings(cwd: string): Promise<Settings | undefined>;
   personalizationUpdater?: (messages: SessionMessageLike[]) => number;
-  sessionMemoryWriter?: (cwd: string, messages: SessionMessageLike[], sessionId: string) => void;
+  sessionMemoryWriter?: (cwd: string, messages: SessionMessageLike[], sessionId: string, goal?: string) => void;
   lastConsolidatedAt?: (memoryDir: string) => number;
   autoDream?: (input: {
     cwd: string;
@@ -27,7 +27,7 @@ export interface SessionPostRunMaintenanceContext {
 export class SessionPostRunMaintenance {
   constructor(private readonly context: SessionPostRunMaintenanceContext) {}
 
-  async run(sessionId: string, runId: string, agent: OpenHarnessAgent): Promise<void> {
+  async run(sessionId: string, runId: string, agent: VykorAgent): Promise<void> {
     try {
       await this.runMaintenance(sessionId, runId, agent);
     } catch (error) {
@@ -44,7 +44,7 @@ export class SessionPostRunMaintenance {
   private async runMaintenance(
     sessionId: string,
     runId: string,
-    agent: OpenHarnessAgent,
+    agent: VykorAgent,
   ): Promise<void> {
     const session = this.context.data.sessions.get(sessionId);
     const run = this.context.data.runs.getRun(runId);
@@ -62,7 +62,12 @@ export class SessionPostRunMaintenance {
 
     if (settings.memory?.sessionMemoryEnabled !== false) {
       await this.bestEffort("session.memory.checkpoint_failed", sessionId, runId, async () => {
-        this.context.sessionMemoryWriter?.(session.cwd, messages, sessionId);
+        const goalId = run.metadata?.goalId;
+        const goal = typeof goalId === "string"
+          ? this.context.data.goals.getGoal(goalId)?.objective
+          : undefined;
+        if (goal) this.context.sessionMemoryWriter?.(session.cwd, messages, sessionId, goal);
+        else this.context.sessionMemoryWriter?.(session.cwd, messages, sessionId);
       });
     }
 

@@ -6,7 +6,7 @@
 
 **架构：** 渲染进程只用一份不依赖 `node:path` 的函数决定走 Review 还是预览。主进程 `classifyWorkspacePath` 做两轮分类（绝对路径按允许根匹配，否则回退项目相对路径）；`readFile` 在落盘前再 `realpath`。标签身份等读取成功后再写。允许根由 `WorkspaceService.configureAllowedRoots` 注入，分类函数不读 `app` / `process.cwd()`。
 
-**技术栈：** Electron 主进程 / 渲染进程、TypeScript、Vitest、Node `path.win32` / `path.posix`、`fs.promises.realpath`。不新增路径库，不把 `@openharness/core` 加进 desktop production 依赖。
+**技术栈：** Electron 主进程 / 渲染进程、TypeScript、Vitest、Node `path.win32` / `path.posix`、`fs.promises.realpath`。不新增路径库，不把 `@vykor/core` 加进 desktop production 依赖。
 
 **规格：** `docs/superpowers/specs/2026-09-06-outside-cwd-file-preview-design.md`
 
@@ -81,7 +81,7 @@ import { describe, expect, it } from "vitest"
 
 import { toProjectRelativePath } from "./workspace-open-path"
 
-const project = "E:/code/openharness-ts"
+const project = "E:/code/vykor"
 
 describe("toProjectRelativePath", () => {
   it("keeps project-relative paths including a leading slash", () => {
@@ -92,8 +92,8 @@ describe("toProjectRelativePath", () => {
   })
 
   it("strips a Windows project prefix", () => {
-    expect(toProjectRelativePath("E:\\code\\openharness-ts\\src\\foo.ts", project)).toBe("src/foo.ts")
-    expect(toProjectRelativePath("\\\\?\\E:\\code\\openharness-ts\\src\\foo.ts", project)).toBe(
+    expect(toProjectRelativePath("E:\\code\\vykor\\src\\foo.ts", project)).toBe("src/foo.ts")
+    expect(toProjectRelativePath("\\\\?\\E:\\code\\vykor\\src\\foo.ts", project)).toBe(
       "src/foo.ts"
     )
   })
@@ -101,7 +101,7 @@ describe("toProjectRelativePath", () => {
   it("returns null for Windows paths outside the project", () => {
     expect(
       toProjectRelativePath(
-        "C:\\Users\\ruanz\\.openharness-ts\\skills\\show-me\\SKILL.md",
+        "C:\\Users\\ruanz\\.vykor\\skills\\show-me\\SKILL.md",
         project
       )
     ).toBeNull()
@@ -109,8 +109,8 @@ describe("toProjectRelativePath", () => {
 
   it("does not treat a POSIX home path as a project-relative path", () => {
     expect(
-      toProjectRelativePath("/Users/ruanz/.openharness-ts/skills/show-me/SKILL.md", project)
-    ).toBe("Users/ruanz/.openharness-ts/skills/show-me/SKILL.md")
+      toProjectRelativePath("/Users/ruanz/.vykor/skills/show-me/SKILL.md", project)
+    ).toBe("Users/ruanz/.vykor/skills/show-me/SKILL.md")
   })
 })
 ```
@@ -120,7 +120,7 @@ describe("toProjectRelativePath", () => {
 - [ ] **步骤 2：运行测试确认失败**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/shared/workspace-open-path.test.ts
+pnpm --filter @vykor/desktop test -- src/shared/workspace-open-path.test.ts
 ```
 
 预期：FAIL，模块不存在。
@@ -137,7 +137,7 @@ pnpm --filter @openharness/desktop test -- src/shared/workspace-open-path.test.t
 - [ ] **步骤 4：运行测试确认通过**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/shared/workspace-open-path.test.ts
+pnpm --filter @vykor/desktop test -- src/shared/workspace-open-path.test.ts
 ```
 
 预期：PASS。
@@ -169,33 +169,33 @@ import { describe, expect, it } from "vitest"
 import { classifyWorkspacePath } from "./workspace-path"
 
 const windowsRoots = {
-  projectRoot: "E:\\code\\openharness-ts",
-  configDir: "C:\\Users\\ruanz\\.openharness-ts",
-  skillsDir: "C:\\Users\\ruanz\\.openharness-ts\\skills",
-  userProfilePath: "C:\\Users\\ruanz\\.openharness-ts\\USER.md",
-  outsideProjectRoot: "C:\\Users\\ruanz\\Documents\\OpenHarness",
+  projectRoot: "E:\\code\\vykor",
+  configDir: "C:\\Users\\ruanz\\.vykor",
+  skillsDir: "C:\\Users\\ruanz\\.vykor\\skills",
+  userProfilePath: "C:\\Users\\ruanz\\.vykor\\USER.md",
+  outsideProjectRoot: "C:\\Users\\ruanz\\Documents\\Vykor",
 }
 
 const posixRoots = {
   projectRoot: "/repo",
-  configDir: "/Users/ruanz/.openharness-ts",
-  skillsDir: "/Users/ruanz/.openharness-ts/skills",
-  userProfilePath: "/Users/ruanz/.openharness-ts/USER.md",
-  outsideProjectRoot: "/Users/ruanz/Documents/OpenHarness",
+  configDir: "/Users/ruanz/.vykor",
+  skillsDir: "/Users/ruanz/.vykor/skills",
+  userProfilePath: "/Users/ruanz/.vykor/USER.md",
+  outsideProjectRoot: "/Users/ruanz/Documents/Vykor",
 }
 
 describe("classifyWorkspacePath", () => {
   it("classifies project-relative and in-project Windows absolute paths", () => {
     expect(classifyWorkspacePath("src/a.ts", windowsRoots, { win32, posix })?.kind).toBe("project")
     expect(
-      classifyWorkspacePath("E:\\code\\openharness-ts\\src\\a.ts", windowsRoots, { win32, posix })
+      classifyWorkspacePath("E:\\code\\vykor\\src\\a.ts", windowsRoots, { win32, posix })
         ?.relativePath
     ).toBe("src/a.ts")
   })
 
   it("classifies personal skills and USER.md as extra-root", () => {
     const skill = classifyWorkspacePath(
-      "C:\\Users\\ruanz\\.openharness-ts\\skills\\show-me\\SKILL.md",
+      "C:\\Users\\ruanz\\.vykor\\skills\\show-me\\SKILL.md",
       windowsRoots,
       { win32, posix }
     )
@@ -205,14 +205,14 @@ describe("classifyWorkspacePath", () => {
       rootLabel: "个人配置",
     })
     expect(
-      classifyWorkspacePath("C:\\Users\\ruanz\\.openharness-ts\\USER.md", windowsRoots, {
+      classifyWorkspacePath("C:\\Users\\ruanz\\.vykor\\USER.md", windowsRoots, {
         win32,
         posix,
       })?.kind
     ).toBe("extra-root")
     expect(
       classifyWorkspacePath(
-        "C:\\Users\\ruanz\\.openharness-ts\\credentials.json",
+        "C:\\Users\\ruanz\\.vykor\\credentials.json",
         windowsRoots,
         { win32, posix }
       )
@@ -221,13 +221,13 @@ describe("classifyWorkspacePath", () => {
 
   it("maps POSIX skill paths using each root drive, not the process drive", () => {
     const result = classifyWorkspacePath(
-      "/Users/ruanz/.openharness-ts/skills/show-me/SKILL.md",
+      "/Users/ruanz/.vykor/skills/show-me/SKILL.md",
       windowsRoots,
       { win32, posix }
     )
     expect(result?.kind).toBe("extra-root")
     expect(result?.tabPath.replace(/\\/g, "/")).toContain(
-      "C:/Users/ruanz/.openharness-ts/skills/show-me/SKILL.md"
+      "C:/Users/ruanz/.vykor/skills/show-me/SKILL.md"
     )
   })
 
@@ -251,18 +251,18 @@ describe("classifyWorkspacePath", () => {
   it("prefers the current project when it sits inside an extra root", () => {
     const sessionRoots = {
       ...windowsRoots,
-      projectRoot: "C:\\Users\\ruanz\\Documents\\OpenHarness\\2026-09-06\\x1",
+      projectRoot: "C:\\Users\\ruanz\\Documents\\Vykor\\2026-09-06\\x1",
     }
     expect(
       classifyWorkspacePath(
-        "C:\\Users\\ruanz\\Documents\\OpenHarness\\2026-09-06\\x1\\src\\a.ts",
+        "C:\\Users\\ruanz\\Documents\\Vykor\\2026-09-06\\x1\\src\\a.ts",
         sessionRoots,
         { win32, posix }
       )
     ).toMatchObject({ kind: "project", relativePath: "src/a.ts", rootLabel: expect.anything() })
     expect(
       classifyWorkspacePath(
-        "C:\\Users\\ruanz\\Documents\\OpenHarness\\2026-09-06\\x2\\note.md",
+        "C:\\Users\\ruanz\\Documents\\Vykor\\2026-09-06\\x2\\note.md",
         sessionRoots,
         { win32, posix }
       )?.kind
@@ -282,7 +282,7 @@ describe("classifyWorkspacePath", () => {
 - [ ] **步骤 2：运行测试确认失败**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace-path.test.ts
+pnpm --filter @vykor/desktop test -- src/main/features/workspace/workspace-path.test.ts
 ```
 
 预期：FAIL，模块不存在。
@@ -304,7 +304,7 @@ pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace
 - [ ] **步骤 4：运行测试确认通过**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace-path.test.ts
+pnpm --filter @vykor/desktop test -- src/main/features/workspace/workspace-path.test.ts
 ```
 
 预期：PASS。
@@ -404,7 +404,7 @@ Windows 上若 `symlink` 需要权限，测试捕获后 `return` 跳过，不能
 - [ ] **步骤 2：运行测试确认失败**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace-service.test.ts
+pnpm --filter @vykor/desktop test -- src/main/features/workspace/workspace-service.test.ts
 ```
 
 预期：FAIL，`configureAllowedRoots` 不存在，或 `readFile` 仍抛「必须位于当前项目目录内」。
@@ -419,7 +419,7 @@ configureAllowedRoots(input: { configDir: string; documentsPath: string }): void
 
 内部保存 `configDir` / `documentsPath`。`readFile` / `revealPath` / `copyPath`：
 
-1. 用保存的值加上 `input.rootPath` 组装 `WorkspaceAllowedRoots`（`skillsDir = join(configDir, "skills")`，`userProfilePath = join(configDir, "USER.md")`，`outsideProjectRoot = buildOutsideProjectRoot(documentsPath)`）。未 configure 时：`configDir = process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts")`，`documentsPath` 为空字符串则 `outsideProjectRoot` 为空、不参与匹配。
+1. 用保存的值加上 `input.rootPath` 组装 `WorkspaceAllowedRoots`（`skillsDir = join(configDir, "skills")`，`userProfilePath = join(configDir, "USER.md")`，`outsideProjectRoot = buildOutsideProjectRoot(documentsPath)`）。未 configure 时：`configDir = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor")`，`documentsPath` 为空字符串则 `outsideProjectRoot` 为空、不参与匹配。
 2. `classifyWorkspacePath`；`null` 则抛现有「文件必须位于当前项目目录内。」
 3. 拼出绝对路径后 `realpath`。失败（文件不存在）抛现有预览错误。成功后再 `isPathInside` 一次；逃出则拒绝。
 4. 继续现有 `stat` / 大小 / 二进制 / 解码。返回的 `path` 用 `tabPath`，并带上 `scope` / `relativePath` / `rootLabel`。
@@ -428,7 +428,7 @@ configureAllowedRoots(input: { configDir: string; documentsPath: string }): void
 
 ```ts
 workspaceService.configureAllowedRoots({
-  configDir: process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts"),
+  configDir: process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor"),
   documentsPath: app.getPath("documents"),
 })
 ```
@@ -436,7 +436,7 @@ workspaceService.configureAllowedRoots({
 - [ ] **步骤 4：运行测试确认通过**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts
+pnpm --filter @vykor/desktop test -- src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts
 ```
 
 预期：PASS。
@@ -477,7 +477,7 @@ it("allows a skill path when rootPath is the current project", async () => {
 - [ ] **步骤 2：运行确认失败**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/main/features/workspace/opener-service.test.ts
+pnpm --filter @vykor/desktop test -- src/main/features/workspace/opener-service.test.ts
 ```
 
 - [ ] **步骤 3：删掉 `opener-service.ts` 里的 `resolveInsideRoot`，改为调用 `resolveWorkspaceOpenTarget`。`rootPath` 缺失直接抛「项目路径不能为空。」**
@@ -520,14 +520,14 @@ export function routeChangedFileClick(
 
 ```ts
 it("opens review for /src/foo.ts when git is available", () => {
-  expect(routeChangedFileClick("/src/foo.ts", "E:/code/openharness-ts", true)).toBe("review")
+  expect(routeChangedFileClick("/src/foo.ts", "E:/code/vykor", true)).toBe("review")
 })
 
 it("opens preview for an extra-root Windows skill path", () => {
   expect(
     routeChangedFileClick(
-      "C:\\Users\\ruanz\\.openharness-ts\\skills\\show-me\\SKILL.md",
-      "E:/code/openharness-ts",
+      "C:\\Users\\ruanz\\.vykor\\skills\\show-me\\SKILL.md",
+      "E:/code/vykor",
       true
     )
   ).toBe("preview")
@@ -541,7 +541,7 @@ it("opens preview for an extra-root Windows skill path", () => {
 - [ ] **步骤 4：运行**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/shared/workspace-open-path.test.ts
+pnpm --filter @vykor/desktop test -- src/shared/workspace-open-path.test.ts
 ```
 
 - [ ] **步骤 5：Commit**
@@ -614,8 +614,8 @@ expect(canOpenHtmlInBrowser(undefined)).toBe(true)
 - [ ] **步骤 4：运行相关测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/desktop test -- src/shared/workspace-open-path.test.ts src/main/features/workspace/workspace-path.test.ts src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/desktop test -- src/shared/workspace-open-path.test.ts src/main/features/workspace/workspace-path.test.ts src/main/features/workspace/workspace-service.test.ts src/renderer/src/components/desktop/tools/file-viewer-model.test.ts src/renderer/src/components/desktop/tools/file-viewer.test.ts
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：PASS。
@@ -632,7 +632,7 @@ git commit -m "feat(desktop): open extra-root files in the files panel"
 
 | 规格条目 | 任务 |
 |---|---|
-| 允许根：项目 / skills / USER.md / OpenHarness | 2、3 |
+| 允许根：项目 / skills / USER.md / Vykor | 2、3 |
 | 项目优先、会话 x1 vs x2 | 2 |
 | Windows POSIX 路径按根盘符映射 | 2 |
 | `/src/foo.ts` 仍进 Review | 1、5 |

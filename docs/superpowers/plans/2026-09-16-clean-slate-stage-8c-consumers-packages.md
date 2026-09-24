@@ -2,9 +2,9 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 删除 CLI、Desktop、Frontend、Environment、Tools、Skills、Plugins 和 Agent Runtime 中明确服务旧 OpenHarness 入口的分支。
+**目标：** 删除 CLI、Desktop、Frontend、Environment、Tools、Skills、Plugins 和 Agent Runtime 中明确服务旧 Vykor 入口的分支。
 
-**架构：** 所有消费者调用当前 Client Resource。执行环境必须提供完整 `shellDescriptor`；技能只扫描 `.agents/skills` 与 `.openharness-ts/skills`；Native Plugin 只接受当前 manifest 和 `user`/`managed` 安装 scope。
+**架构：** 所有消费者调用当前 Client Resource。执行环境必须提供完整 `shellDescriptor`；技能只扫描 `.agents/skills` 与 `.vykor/skills`；Native Plugin 只接受当前 manifest 和 `user`/`managed` 安装 scope。
 
 **技术栈：** TypeScript、React、Electron、Commander、Zod、Vitest、Bun test
 
@@ -18,7 +18,7 @@
 - 修改：`packages/skills/src/index.ts`、`bundled.ts`、README 和测试。
 - 修改：`packages/plugins/src/types.ts`、manifest schema、installation、activation、diagnostics 和测试。
 - 删除：`packages/plugins/src/compatibility.ts` 及对应测试/export。
-- 修改：`packages/plugin-converters`，仅删除旧 OpenHarness native schema 分支，保留 Codex/Claude 显式导入。
+- 修改：`packages/plugin-converters`，仅删除旧 Vykor native schema 分支，保留 Codex/Claude 显式导入。
 - 修改：`packages/agent-runtime` 的 plugin scope/environment 消费者。
 
 ### 任务 1：收口 CLI、Desktop 和 Frontend
@@ -47,12 +47,12 @@ rg -n '兼容入口|compatibility|deprecated' apps/desktop apps/frontend apps/cl
 运行：
 
 ```powershell
-pnpm --filter @openharness/cli check-types
-pnpm --filter @openharness/cli test
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop test
-pnpm --filter @openharness/frontend check-types
-pnpm --filter @openharness/frontend test
+pnpm --filter @vykor/cli check-types
+pnpm --filter @vykor/cli test
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop test
+pnpm --filter @vykor/frontend check-types
+pnpm --filter @vykor/frontend test
 ```
 
 预期：全部 PASS。
@@ -85,10 +85,10 @@ const request: TerminalCreateRequest = {
 运行：
 
 ```powershell
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/server exec vitest run src/http/routes/terminal.test.ts
-pnpm --filter @openharness/desktop typecheck
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/server exec vitest run src/http/routes/terminal.test.ts
+pnpm --filter @vykor/desktop typecheck
 ```
 
 预期：全部 PASS。
@@ -107,7 +107,7 @@ export interface ExecutionEnvironmentInfo {
 }
 ```
 
-运行 `pnpm --filter @openharness/environment check-types` 和 `pnpm --filter @openharness/tools check-types`，记录所有缺失构造点。
+运行 `pnpm --filter @vykor/environment check-types` 和 `pnpm --filter @vykor/tools check-types`，记录所有缺失构造点。
 
 - [ ] **步骤 2：补齐当前环境实现和测试 fixture**
 
@@ -122,10 +122,10 @@ Native 与 WSL environment 在创建 info 时显式提供 kind、executable、ar
 运行：
 
 ```powershell
-pnpm --filter @openharness/environment test
-pnpm --filter @openharness/tools test
-pnpm --filter @openharness/environment check-types
-pnpm --filter @openharness/tools check-types
+pnpm --filter @vykor/environment test
+pnpm --filter @vykor/tools test
+pnpm --filter @vykor/environment check-types
+pnpm --filter @vykor/tools check-types
 ```
 
 预期：PASS。
@@ -134,15 +134,15 @@ pnpm --filter @openharness/tools check-types
 
 - [ ] **步骤 1：改写目录发现测试**
 
-fixture 同时创建 `.agents/skills/review`、`.openharness-ts/skills/local`、`.claude/skills/old`；断言前两者加载、最后一个完全忽略。
+fixture 同时创建 `.agents/skills/review`、`.vykor/skills/local`、`.claude/skills/old`；断言前两者加载、最后一个完全忽略。
 
 - [ ] **步骤 2：删除扫描分支与说明**
 
-`collectProjectSkillDirectories()` 每层只返回 `.agents/skills` 和 `.openharness-ts/skills`。更新 bundled create-skill 指令和 `packages/skills/README.md`，不再把 `.claude/skills` 描述为可读布局。
+`collectProjectSkillDirectories()` 每层只返回 `.agents/skills` 和 `.vykor/skills`。更新 bundled create-skill 指令和 `packages/skills/README.md`，不再把 `.claude/skills` 描述为可读布局。
 
 - [ ] **步骤 3：验证 Skills**
 
-运行：`pnpm --filter @openharness/skills test && pnpm --filter @openharness/skills check-types`
+运行：`pnpm --filter @vykor/skills test && pnpm --filter @vykor/skills check-types`
 
 预期：PASS；`.claude/skills` 只在负向测试和 forbidden 清单出现。
 
@@ -162,7 +162,7 @@ export type NativePluginInstallScope = "user" | "managed";
 
 - [ ] **步骤 3：检查 converters 边界**
 
-保留 `packages/plugin-converters/src/codex/**` 与 `claude-code/**` 的显式外部导入。只删除生成旧 `compatibility` 字段、旧 scope 或旧 Native manifest 字段的 mapping；转换结果必须通过当前 `OpenHarnessPluginManifestV1Schema`。
+保留 `packages/plugin-converters/src/codex/**` 与 `claude-code/**` 的显式外部导入。只删除生成旧 `compatibility` 字段、旧 scope 或旧 Native manifest 字段的 mapping；转换结果必须通过当前 `VykorPluginManifestV1Schema`。
 
 - [ ] **步骤 4：迁移 Agent Runtime 消费者**
 
@@ -173,12 +173,12 @@ Runtime 只按 `user`/`managed` 和当前 manifest 组装能力；删除旧 scop
 运行：
 
 ```powershell
-pnpm --filter @openharness/plugins test
-pnpm --filter @openharness/plugins check-types
-pnpm --filter @openharness/plugin-converters test
-pnpm --filter @openharness/plugin-converters check-types
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/plugins check-types
+pnpm --filter @vykor/plugin-converters test
+pnpm --filter @vykor/plugin-converters check-types
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。

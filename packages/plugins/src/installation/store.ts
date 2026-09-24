@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { getInstalledPluginStorePath } from "@openharness/core";
+import { getInstalledPluginStorePath } from "@vykor/core";
 
 export type NativePluginInstallScope = "user" | "managed";
 export interface InstalledPluginRecord {

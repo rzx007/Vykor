@@ -1,4 +1,4 @@
-export const TRACE_ID_HEADER = "x-openharness-trace-id";
+export const TRACE_ID_HEADER = "x-vykor-trace-id";
 
 export type ObservabilityLevel = "debug" | "info" | "warn" | "error";
 

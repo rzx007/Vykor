@@ -1,16 +1,16 @@
 import { app, BrowserWindow } from "electron"
-import { OpenHarnessClient } from "@openharness/client"
-import { type BrowserHost, type OpenHarnessHttpServer } from "@openharness/server"
+import { VykorClient } from "@vykor/client"
+import { type BrowserHost, type VykorHttpServer } from "@vykor/server"
 import {
   clearDaemonRegistry,
   createBearerToken,
   createDaemonRegistryEntry,
   readDaemonRegistry,
   shouldStartManagedDaemon,
-  startOpenHarnessDaemon,
+  startVykorDaemon,
   writeDaemonRegistry,
   type DaemonRegistry,
-} from "@openharness/server/daemon-host"
+} from "@vykor/server/daemon-host"
 
 import { isDesktopManagedRegistry } from "../daemon-autostart/daemon-surface"
 import {
@@ -45,8 +45,8 @@ export interface DaemonConnectionServiceOptions {
 }
 
 export class DaemonConnectionService {
-  private clientPromise: Promise<OpenHarnessClient> | null = null
-  private embeddedServer: OpenHarnessHttpServer | null = null
+  private clientPromise: Promise<VykorClient> | null = null
+  private embeddedServer: VykorHttpServer | null = null
   private embeddedUrl: string | null = null
   private daemonStatus: DesktopDaemonStatus = createDaemonStatus("idle", "等待连接 daemon")
   private readonly pidAlive: (pid: number) => boolean
@@ -69,7 +69,7 @@ export class DaemonConnectionService {
     return this.daemonStatus
   }
 
-  getClient(): Promise<OpenHarnessClient> {
+  getClient(): Promise<VykorClient> {
     if (!this.clientPromise) {
       // Do not cache a rejection: a transient failure (e.g. a cold-start
       // handshake timeout) must be retryable without restarting the app.
@@ -81,7 +81,7 @@ export class DaemonConnectionService {
     return this.clientPromise
   }
 
-  refreshClient(): Promise<OpenHarnessClient> {
+  refreshClient(): Promise<VykorClient> {
     this.clientPromise = null
     return this.getClient()
   }
@@ -103,7 +103,7 @@ export class DaemonConnectionService {
     await server.close()
   }
 
-  private async connect(): Promise<OpenHarnessClient> {
+  private async connect(): Promise<VykorClient> {
     let registry: DaemonRegistry | undefined
     try {
       this.setDaemonStatus("discovering", "正在查找 daemon")
@@ -113,11 +113,11 @@ export class DaemonConnectionService {
       registry = undefined
     }
 
-    let verified: OpenHarnessClient | undefined
+    let verified: VykorClient | undefined
     if (registry) {
       try {
         this.setDaemonStatus("connecting", "正在连接已运行的 daemon", { url: registry.url })
-        const client = new OpenHarnessClient({ baseUrl: registry.url, token: registry.token })
+        const client = new VykorClient({ baseUrl: registry.url, token: registry.token })
         await this.verifyDaemon(client)
         verified = client
       } catch (error) {
@@ -152,7 +152,7 @@ export class DaemonConnectionService {
     return await this.startEmbeddedDaemon()
   }
 
-  private async takeOverNonDesktopDaemon(registry: DaemonRegistry): Promise<OpenHarnessClient> {
+  private async takeOverNonDesktopDaemon(registry: DaemonRegistry): Promise<VykorClient> {
     try {
       if (await this.shouldAutoStart()) {
         this.setDaemonStatus("starting", "正在将 daemon 切换为桌面托管服务", { url: registry.url })
@@ -162,7 +162,7 @@ export class DaemonConnectionService {
           throw new Error("Desktop-managed daemon was not registered after service reconciliation")
         }
         this.setDaemonStatus("ready", "daemon 已连接", { url: next.url })
-        return new OpenHarnessClient({ baseUrl: next.url, token: next.token })
+        return new VykorClient({ baseUrl: next.url, token: next.token })
       }
       this.setDaemonStatus("starting", "正在重启为桌面托管 daemon", { url: registry.url })
       await this.stopNonDesktopDaemon(registry)
@@ -176,11 +176,11 @@ export class DaemonConnectionService {
     }
   }
 
-  private async startEmbeddedDaemon(): Promise<OpenHarnessClient> {
+  private async startEmbeddedDaemon(): Promise<VykorClient> {
     try {
       this.setDaemonStatus("starting", "正在启动内置 daemon")
       const token = createBearerToken()
-      const { server, listen } = await startOpenHarnessDaemon({
+      const { server, listen } = await startVykorDaemon({
         host: "127.0.0.1",
         port: 0,
         token,
@@ -202,14 +202,14 @@ export class DaemonConnectionService {
         })
       )
       this.setDaemonStatus("ready", "内置 daemon 已启动", { url: listen.url })
-      return new OpenHarnessClient({ baseUrl: listen.url, token })
+      return new VykorClient({ baseUrl: listen.url, token })
     } catch (error) {
       this.setDaemonStatus("error", "daemon 启动失败", { detail: errorMessage(error) })
       throw error
     }
   }
 
-  private async verifyDaemon(client: OpenHarnessClient): Promise<void> {
+  private async verifyDaemon(client: VykorClient): Promise<void> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.verifyTimeoutMs)
     const timedOut = new Promise<never>((_resolve, reject) => {

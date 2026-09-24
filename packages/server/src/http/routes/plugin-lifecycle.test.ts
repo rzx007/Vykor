@@ -1,11 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { getInstalledPluginStorePath } from "@openharness/core";
-import { getNativeToolRuntimeSnapshot } from "@openharness/agent-runtime";
+import { getInstalledPluginStorePath } from "@vykor/core";
+import { getNativeToolRuntimeSnapshot } from "@vykor/agent-runtime";
 import {
   discoverInstalledNativePlugins, readInstalledPluginStore, verifyInstalledNativePlugin,
-} from "@openharness/plugins";
+} from "@vykor/plugins";
 import { describe, expect, it } from "vitest";
-import { OpenHarnessClient } from "../../../../client/src/transport/http-client.js";
+import { VykorClient } from "../../../../client/src/transport/http-client.js";
 import { dispatchSessionCommand } from "../../../../client/src/commands/session-commands.js";
 import { createInitialClientState } from "../../../../client/src/state/reducer.js";
 import type { ReloadPluginsResponse } from "../../../../client/src/types/index.js";
@@ -51,7 +51,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
   }));
   const requests: Array<{ path: string; method: string }> = [];
   const reloadResponses: ReloadPluginsResponse[] = [];
-  const client = new OpenHarnessClient({
+  const client = new VykorClient({
     baseUrl: "http://plugin-lifecycle.test",
     async fetch(input, init) {
       const request = new Request(input, init);
@@ -149,7 +149,7 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       expect(output).toContain("[enabled/invalid/reload-required]");
       expect(output).toContain("plugin_installation_permissions_mismatch");
       expect(output).toContain("network:example.test");
-      expect(output).toContain("ohs plugin link <source>");
+      expect(output).toContain("vk plugin link <source>");
       expect(output).toContain("--approve <permission>");
       expect(output).toContain("reload on next use");
       expect(output).not.toMatch(/successfully (?:activated|reloaded)|\[enabled\/installed\/active\]/i);

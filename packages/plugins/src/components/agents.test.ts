@@ -10,6 +10,6 @@ describe("loadNativeAgents", () => {
     const validation = await validateNativePlugin(fixture);
     const result = await loadNativeAgents(validation.plugin!);
     expect(result.status).toBe("loaded");
-    expect(result.value?.map((agent) => agent.name)).toEqual(["dev.openharness.full:reviewer"]);
+    expect(result.value?.map((agent) => agent.name)).toEqual(["dev.vykor.full:reviewer"]);
   });
 });

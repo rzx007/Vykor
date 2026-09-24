@@ -1,4 +1,4 @@
-import { runtimeMetadataChanged } from "@openharness/protocol";
+import { runtimeMetadataChanged } from "@vykor/protocol";
 
 import type { RuntimeMetricsSnapshot } from "../shared/runtime-metrics.js";
 
@@ -8,7 +8,7 @@ export const DAEMON_RESTART_TASK_REASON = "Daemon restarted before the task comp
 export const DAEMON_RESTART_PERMISSION_REASON = "Daemon restarted before the permission was resolved";
 export const DAEMON_RESTART_WORKFLOW_REASON = "Daemon restarted before the workflow completed";
 
-export interface OpenHarnessRuntimeSnapshot {
+export interface VykorRuntimeSnapshot {
   startedAt: number;
   uptimeMs: number;
   sessions: { total: number; byStatus: Record<string, number> };

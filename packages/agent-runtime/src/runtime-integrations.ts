@@ -7,21 +7,21 @@ import type {
   RuntimeBundle,
   Settings,
   ToolDefinition,
-} from "@openharness/core";
-import { loadProjectSettings, loadSettings } from "@openharness/core";
+} from "@vykor/core";
+import { loadProjectSettings, loadSettings } from "@vykor/core";
 import {
   createMcpServerIdentity,
   McpClientManager,
   McpOAuthRuntime,
-} from "@openharness/mcp";
-import { McpOAuthCredentialStore } from "@openharness/auth";
-import { getAllAgentDefinitions } from "@openharness/coordinator";
-import { appendUserProfileUpdate } from "@openharness/prompts";
-import type { ExecutionEnvironmentHandle } from "@openharness/environment";
+} from "@vykor/mcp";
+import { McpOAuthCredentialStore } from "@vykor/auth";
+import { getAllAgentDefinitions } from "@vykor/coordinator";
+import { appendUserProfileUpdate } from "@vykor/prompts";
+import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 import type {
-  OpenHarnessAgentExtension,
-  OpenHarnessExtensionDiscovery,
+  VykorAgentExtension,
+  VykorExtensionDiscovery,
 } from "./extensions.js";
 import { createExtensionToolRegistry } from "./extensions.js";
 import { activateDiscoveredPlugins } from "./plugin-activation.js";
@@ -36,8 +36,8 @@ export interface InstallRuntimeIntegrationsOptions {
   sessionId: string;
   settings: Settings;
   runtime: RuntimeBundle;
-  discovery: OpenHarnessExtensionDiscovery;
-  extensions?: OpenHarnessAgentExtension[];
+  discovery: VykorExtensionDiscovery;
+  extensions?: VykorAgentExtension[];
   mcpServers?: Record<string, McpServerConfig>;
   memory?: AgentMemoryRuntime;
   executionEnvironment?: ExecutionEnvironmentHandle;

@@ -2,11 +2,11 @@ import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, posix, relative } from "node:path";
-import type { Settings, ToolContext } from "@openharness/core";
+import type { Settings, ToolContext } from "@vykor/core";
 import type {
   EnvironmentFileSystem,
   ExecutionEnvironmentHandle,
-} from "@openharness/environment";
+} from "@vykor/environment";
 
 export interface FileEntry {
   name: string;
@@ -105,7 +105,7 @@ export class WslFileOperations implements FileOperations {
     const result = await this.run([
       "/bin/sh", "-c",
       'if [ -f "$1" ]; then printf file; elif [ -d "$1" ]; then printf directory; else exit 2; fi',
-      "ohs-stat", path,
+      "vk-stat", path,
     ]);
     if (result.exitCode !== 0) throw new Error(result.output || `Path not found: ${path}`);
     return { isFile: result.output === "file", isDirectory: result.output === "directory" };
@@ -138,7 +138,7 @@ export class WslFileOperations implements FileOperations {
 
   async writeBytes(path: string, content: Uint8Array): Promise<void> {
     const result = await this.run([
-      "/bin/sh", "-c", 'mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', "ohs-write", path,
+      "/bin/sh", "-c", 'mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', "vk-write", path,
     ], content, true);
     if (result.exitCode !== 0) throw new Error(result.output || `Cannot write file: ${path}`);
   }

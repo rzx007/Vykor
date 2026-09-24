@@ -1,12 +1,12 @@
-import type { Settings } from "@openharness/core";
+import type { Settings } from "@vykor/core";
 import type {
   CommandCatalogEntry,
   CommandCatalogProvider,
   ListCommandsInput,
 } from "./commands.js";
 import { normalizeCommandName } from "./commands.js";
-import { discoverOpenHarnessExtensions } from "@openharness/agent-runtime";
-import type { SkillDefinition } from "@openharness/skills";
+import { discoverVykorExtensions } from "@vykor/agent-runtime";
+import type { SkillDefinition } from "@vykor/skills";
 
 function skillToCatalogEntry(skill: SkillDefinition): CommandCatalogEntry {
   const name = normalizeCommandName(skill.commandName ?? skill.name);
@@ -23,7 +23,7 @@ function skillToCatalogEntry(skill: SkillDefinition): CommandCatalogEntry {
 }
 
 async function loadSkillRegistry(cwd: string, settings: Settings) {
-  return (await discoverOpenHarnessExtensions(cwd, settings)).skillRegistry;
+  return (await discoverVykorExtensions(cwd, settings)).skillRegistry;
 }
 
 /**

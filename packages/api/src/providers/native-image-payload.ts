@@ -1,4 +1,4 @@
-import type { ContentBlock } from "@openharness/core";
+import type { ContentBlock } from "@vykor/core";
 
 import {
   type PreparedVisionImage,

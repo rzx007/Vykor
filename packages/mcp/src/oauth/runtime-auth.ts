@@ -2,7 +2,7 @@ import type {
   McpOAuthCredentialRecord,
   McpRemoteServerConfig,
   McpServerConfig,
-} from "@openharness/core";
+} from "@vykor/core";
 import { refreshAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
 import { McpOAuthError } from "./errors.js";
 import type { McpOAuthCredentialStore } from "./login.js";
@@ -68,7 +68,7 @@ export class McpOAuthRuntime {
       throw new McpOAuthError("oauth-binding-changed", "OAuth credential is bound to another MCP endpoint");
     }
     if (oauthScopesChanged(await this.configuredScopes(name, config), credential.tokens.scope)) {
-      throw new McpOAuthError("oauth-reauthentication-required", `MCP OAuth scopes changed; run ohs mcp login ${name} --scopes with the configured scopes`);
+      throw new McpOAuthError("oauth-reauthentication-required", `MCP OAuth scopes changed; run vk mcp login ${name} --scopes with the configured scopes`);
     }
     if (!credential.tokens.expiresAt || credential.tokens.expiresAt - this.clock() > 30_000) {
       return credential.tokens.accessToken || undefined;

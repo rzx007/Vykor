@@ -1,4 +1,4 @@
-import type { SessionEventRecord } from "@openharness/protocol";
+import type { SessionEventRecord } from "@vykor/protocol";
 
 export interface SessionEventCursor {
   latestEventSeq(): number;

@@ -1,10 +1,10 @@
-# OpenHarness TS Sandbox Runtime Implementation Plan
+# Vykor TS Sandbox Runtime Implementation Plan
 
 > 状态：历史计划。Docker Agent Runtime 已移除；当前方案见 [Native / WSL 智能体运行环境设计](../specs/2026-09-07-native-wsl-execution-environment-design.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or an equivalent checklist-driven implementation loop. Update checkboxes as work completes.
 
-**Goal:** Port the Python OpenHarness sandbox execution model into TS: a configurable sandbox layer for shell execution, Docker network modes, and host file-tool boundary checks.
+**Goal:** Port the Python Vykor sandbox execution model into TS: a configurable sandbox layer for shell execution, Docker network modes, and host file-tool boundary checks.
 
 **Architecture:** Build the feature in layers. First expand settings and pure sandbox helpers. Then add process/session adapters. Then route `Bash` through a shared shell helper. Finally protect host-side file tools and wire runtime lifecycle.
 
@@ -27,7 +27,7 @@
 | Create | `packages/sandbox/src/docker-backend.ts` | Docker argv/session helpers |
 | Create | `packages/sandbox/src/session.ts` | Active sandbox session registry |
 | Create | `packages/sandbox/src/shell.ts` | Shared shell command spawning |
-| Modify | `packages/tools/package.json` | Add `@openharness/sandbox` dependency |
+| Modify | `packages/tools/package.json` | Add `@vykor/sandbox` dependency |
 | Modify | `packages/tools/src/shell/bash.ts` | Route through shared sandbox-aware shell helper |
 | Modify | `packages/tools/src/file/{read,write,edit,glob,grep}.ts` | Apply sandbox path validation when active |
 | Modify | `apps/cli/src/runtime.ts` | Pass runtime settings into tool execution context |
@@ -63,11 +63,11 @@ Exit criteria:
   - `network.mode: "none"`
   - filesystem read/write allow defaults to `"."`
 - [x] Add env overrides:
-  - `OPENHARNESS_SANDBOX_ENABLED`
-  - `OPENHARNESS_SANDBOX_BACKEND`
-  - `OPENHARNESS_SANDBOX_FAIL_IF_UNAVAILABLE`
-  - `OPENHARNESS_SANDBOX_NETWORK_MODE`
-  - `OPENHARNESS_SANDBOX_DOCKER_IMAGE`
+  - `VYKOR_SANDBOX_ENABLED`
+  - `VYKOR_SANDBOX_BACKEND`
+  - `VYKOR_SANDBOX_FAIL_IF_UNAVAILABLE`
+  - `VYKOR_SANDBOX_NETWORK_MODE`
+  - `VYKOR_SANDBOX_DOCKER_IMAGE`
 - [x] Add core settings tests for defaults and env overrides.
 
 ---
@@ -146,7 +146,7 @@ Exit criteria:
 
 **Purpose:** Centralize command execution so `Bash`, hooks, tasks, and future shell users do not duplicate sandbox logic.
 
-- [x] Add `createShellProcess(command, options)` in `@openharness/sandbox`.
+- [x] Add `createShellProcess(command, options)` in `@vykor/sandbox`.
 - [x] Resolve shell argv consistently with current `Bash` behavior.
 - [x] Route Docker active sessions through `docker exec`.
 - [x] Route srt through command wrapping.
@@ -176,7 +176,7 @@ Exit criteria:
 
 **Purpose:** Move `Bash` onto the sandbox-aware helper without changing user-visible output.
 
-- [x] Add `@openharness/sandbox` dependency to `@openharness/tools`.
+- [x] Add `@vykor/sandbox` dependency to `@vykor/tools`.
 - [x] Replace direct `spawn(shell, ["-c", command])` with `createShellProcess`.
 - [x] Preserve output merging, timeout, truncation, UTF-16LE decoding, and kill-tree behavior.
 - [x] Return clear tool error for `SandboxUnavailableError`.
@@ -212,7 +212,7 @@ Exit criteria:
 
 ### 2026-08-12 MCP stdio Docker E2E
 
-- [x] Add `@openharness/mcp` Docker E2E for sandbox stdio startup.
+- [x] Add `@vykor/mcp` Docker E2E for sandbox stdio startup.
 - [x] Verify JSON-RPC stdio roundtrip from a server running inside Docker.
 - [x] Verify Docker cwd path mapping and mounted file visibility.
 
@@ -239,16 +239,16 @@ Exit criteria:
 
 - [x] Update `docs/sandbox-runtime-design.md` if implementation differs.
 - [x] Update `docs/sandbox-runtime-flow.md` and `packages/sandbox/README.md` for MCP stdio and Docker file operations.
-- [x] Add `@openharness/tools` and `@openharness/mcp` Docker E2E scripts.
+- [x] Add `@vykor/tools` and `@vykor/mcp` Docker E2E scripts.
 - [ ] Update README or `docs/permission-flow.md` with sandbox/permission relationship.
 - [x] Run focused tests:
-  - `pnpm --filter @openharness/core test`
-  - `pnpm --filter @openharness/sandbox test`
-  - `pnpm --filter @openharness/tools test`
+  - `pnpm --filter @vykor/core test`
+  - `pnpm --filter @vykor/sandbox test`
+  - `pnpm --filter @vykor/tools test`
 - [x] Run focused type checks:
-  - `pnpm --filter @openharness/core check-types`
-  - `pnpm --filter @openharness/sandbox check-types`
-  - `pnpm --filter @openharness/tools check-types`
+  - `pnpm --filter @vykor/core check-types`
+  - `pnpm --filter @vykor/sandbox check-types`
+  - `pnpm --filter @vykor/tools check-types`
 
 ---
 

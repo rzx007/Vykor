@@ -11,7 +11,7 @@ import {
 } from "../paths.js";
 
 function tempPath(): string {
-  return join(mkdtempSync(join(tmpdir(), "ohs-registry-")), "registry.json");
+  return join(mkdtempSync(join(tmpdir(), "vk-registry-")), "registry.json");
 }
 
 describe("daemon registry execution surface", () => {

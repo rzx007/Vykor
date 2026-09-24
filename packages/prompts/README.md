@@ -1,4 +1,4 @@
-# @openharness/prompts
+# @vykor/prompts
 
 Prompt 模板管理系统。
 
@@ -9,5 +9,5 @@ Prompt 模板管理系统。
 ## 测试
 
 ```bash
-pnpm --filter @openharness/prompts test
+pnpm --filter @vykor/prompts test
 ```

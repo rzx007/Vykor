@@ -6,7 +6,7 @@ Fix Round 1 用最新 `user` 消息推导当前 run 起点，但同一个 `submi
 
 ## 修复结果
 
-- `DefaultOpenHarnessAgent.submitMessage()` 创建 run 时记录当下 history 长度并清除旧 completed-run 快照。
+- `DefaultVykorAgent.submitMessage()` 创建 run 时记录当下 history 长度并清除旧 completed-run 快照。
 - `FrameworkAgentRun` 的内部 `onSettled` 回调只在 `execute()` 成功完成时携带 `AgentRunResult`；失败、中断或事件投影异常时传 `undefined`。
 - Agent 在 settled 成功时立即复制 `result.history.slice(runHistoryStart)`，保存为独立的 completed-run 消息快照，不长期保存会被后续历史替换破坏的裸索引。
 - `AgentMemoryRuntime.remember()` 新增可选内部 `completedRunMessages` 参数：
@@ -34,9 +34,9 @@ Fix Round 1 用最新 `user` 消息推导当前 run 起点，但同一个 `submi
 ## 验证结果
 
 ```powershell
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/agent-runtime check-types
-pnpm --filter @openharness/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/agent-runtime check-types
+pnpm --filter @vykor/tools exec vitest run src/file/__test__/managed-persistence-path.test.ts
 git diff --check
 ```
 
@@ -47,7 +47,7 @@ git diff --check
 
 ## 边界说明
 
-- `FrameworkAgentRun` 只有 `DefaultOpenHarnessAgent` 一个构造调用方；内部回调签名没有扩展公共 SDK。
+- `FrameworkAgentRun` 只有 `DefaultVykorAgent` 一个构造调用方；内部回调签名没有扩展公共 SDK。
 - 新 run 开始即清除旧快照；失败/取消 run 不会保存伪 completed-run 快照。
 - 没有改变 Memory Markdown schema、目录、public `agent.remember()` API 或 capability override。
 - 用户 staged 文件 `apps/desktop/src/main/features/session/session-service.test.ts` 未修改、未取消暂存，也不会进入 Round 2 commit。

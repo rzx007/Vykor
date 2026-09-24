@@ -2,8 +2,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import { CommandRegistry } from "@openharness/commands";
-import { SkillRegistry, type SkillDefinition } from "@openharness/skills";
+import { CommandRegistry } from "@vykor/commands";
+import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
 import {
   buildSlashCommandList,
   buildSlashCommandDetails,
@@ -199,9 +199,9 @@ describe("buildSlashCommandList with skills", () => {
 describe("buildUserContentWithAttachments", () => {
   it("builds multimodal user content from image attachments", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-attachment-"));
-    const previousCacheDir = process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR;
+    const previousCacheDir = process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
     try {
-      process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR = join(dir, "cache");
+      process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = join(dir, "cache");
       const imagePath = join(dir, "shot.png");
       await writeFile(imagePath, Buffer.from([1, 2, 3, 4]));
 
@@ -220,9 +220,9 @@ describe("buildUserContentWithAttachments", () => {
       expect(await readFile(blocks[1].source.path)).toEqual(Buffer.from([1, 2, 3, 4]));
     } finally {
       if (previousCacheDir === undefined) {
-        delete process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR;
+        delete process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
       } else {
-        process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR = previousCacheDir;
+        process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = previousCacheDir;
       }
       await rm(dir, { recursive: true, force: true });
     }
@@ -244,11 +244,11 @@ describe("buildUserContentWithAttachments", () => {
 
   it("accepts source images above 5 MB so the provider can prepare them", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-attachment-"));
-    const previousCacheDir = process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR;
-    const previousLimit = process.env.OPENHARNESS_MAX_IMAGE_BYTES;
+    const previousCacheDir = process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
+    const previousLimit = process.env.VYKOR_MAX_IMAGE_BYTES;
     try {
-      process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR = join(dir, "cache");
-      delete process.env.OPENHARNESS_MAX_IMAGE_BYTES;
+      process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = join(dir, "cache");
+      delete process.env.VYKOR_MAX_IMAGE_BYTES;
       const imagePath = join(dir, "large.png");
       await writeFile(imagePath, Buffer.alloc(5_000_001));
 
@@ -263,19 +263,19 @@ describe("buildUserContentWithAttachments", () => {
       });
       expect(content[1].source.prepared).toBeUndefined();
     } finally {
-      if (previousCacheDir === undefined) delete process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR;
-      else process.env.OPENHARNESS_IMAGE_ATTACHMENT_CACHE_DIR = previousCacheDir;
-      if (previousLimit === undefined) delete process.env.OPENHARNESS_MAX_IMAGE_BYTES;
-      else process.env.OPENHARNESS_MAX_IMAGE_BYTES = previousLimit;
+      if (previousCacheDir === undefined) delete process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
+      else process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = previousCacheDir;
+      if (previousLimit === undefined) delete process.env.VYKOR_MAX_IMAGE_BYTES;
+      else process.env.VYKOR_MAX_IMAGE_BYTES = previousLimit;
       await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });
 
   it("rejects source images above the 20 MiB preparation guard", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-attachment-"));
-    const previousLimit = process.env.OPENHARNESS_MAX_IMAGE_BYTES;
+    const previousLimit = process.env.VYKOR_MAX_IMAGE_BYTES;
     try {
-      delete process.env.OPENHARNESS_MAX_IMAGE_BYTES;
+      delete process.env.VYKOR_MAX_IMAGE_BYTES;
       const imagePath = join(dir, "too-large.png");
       await writeFile(imagePath, Buffer.alloc(20 * 1024 * 1024 + 1));
 
@@ -283,8 +283,8 @@ describe("buildUserContentWithAttachments", () => {
         { type: "image", path: imagePath },
       ])).rejects.toThrow(`max ${20 * 1024 * 1024} bytes`);
     } finally {
-      if (previousLimit === undefined) delete process.env.OPENHARNESS_MAX_IMAGE_BYTES;
-      else process.env.OPENHARNESS_MAX_IMAGE_BYTES = previousLimit;
+      if (previousLimit === undefined) delete process.env.VYKOR_MAX_IMAGE_BYTES;
+      else process.env.VYKOR_MAX_IMAGE_BYTES = previousLimit;
       await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });

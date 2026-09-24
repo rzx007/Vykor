@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { McpOAuthCredentialRecord } from "@openharness/core";
+import type { McpOAuthCredentialRecord } from "@vykor/core";
 import type { OAuthCallbackController } from "./callback.js";
 import { loginMcpOAuth, type McpOAuthCredentialStore } from "./login.js";
 

@@ -13,7 +13,7 @@ describe("DaemonSystemService asynchronous status", () => {
       stderr: "",
     }));
     const service = new DaemonSystemService({
-      invocation: { command: "ohs.exe", args: ["--daemon-watchdog"], cwd: "D:/app" },
+      invocation: { command: "vk.exe", args: ["--daemon-watchdog"], cwd: "D:/app" },
       platform: "win32",
       runCommand,
       runCommandAsync,

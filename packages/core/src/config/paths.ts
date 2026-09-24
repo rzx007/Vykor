@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
-/** Project-level config directory name, matching the user-level `~/.openharness-ts`. */
-export const PROJECT_CONFIG_DIR_NAME = ".openharness-ts";
+/** Project-level config directory name, matching the user-level `~/.vykor`. */
+export const PROJECT_CONFIG_DIR_NAME = ".vykor";
 
 export interface ResolvedPaths {
   configDir: string;
@@ -25,7 +25,7 @@ let _cached: ResolvedPaths | undefined;
 
 export function resolvePaths(projectRoot?: string): ResolvedPaths {
   const configDir =
-    process.env.OPENHARNESS_CONFIG_DIR ?? join(homedir(), ".openharness-ts");
+    process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
   if (_cached && !projectRoot && _cached.configDir === configDir) return _cached;
 
   const dataDir = join(configDir, "data");
@@ -135,8 +135,8 @@ export function getChannelCredentialsFilePath(): string {
 }
 
 /**
- * 渠道会话工作区根目录。默认落在"项目外工作区"根（`<文档>/OpenHarness`）下的 `channels`，
- * 以便 Desktop 把它当作项目外工作区隐藏；可用 OPENHARNESS_CHANNELS_DIR 显式覆盖。
+ * 渠道会话工作区根目录。默认落在"项目外工作区"根（`<文档>/Vykor`）下的 `channels`，
+ * 以便 Desktop 把它当作项目外工作区隐藏；可用 VYKOR_CHANNELS_DIR 显式覆盖。
  */
 export function resolveChannelWorkspaceRoot(input: {
   envDir?: string | undefined;
@@ -146,12 +146,12 @@ export function resolveChannelWorkspaceRoot(input: {
   if (input.envDir) return input.envDir;
   const base =
     input.outsideProjectWorkspaceRoot ??
-    join(input.homedir ?? homedir(), "Documents", "OpenHarness");
+    join(input.homedir ?? homedir(), "Documents", "Vykor");
   return join(base, "channels");
 }
 
 export function getChannelWorkspaceRoot(): string {
   return resolveChannelWorkspaceRoot({
-    envDir: process.env.OPENHARNESS_CHANNELS_DIR,
+    envDir: process.env.VYKOR_CHANNELS_DIR,
   });
 }

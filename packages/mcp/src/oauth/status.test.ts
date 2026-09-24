@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { McpOAuthCredentialRecord } from "@openharness/core";
+import type { McpOAuthCredentialRecord } from "@vykor/core";
 import { resolveMcpAuthMode, resolveMcpOAuthStatus } from "./status.js";
 
 const now = 10_000;

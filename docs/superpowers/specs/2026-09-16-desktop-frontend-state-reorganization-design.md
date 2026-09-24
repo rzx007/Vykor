@@ -157,7 +157,7 @@ Hook 对外返回结构保持。每个子模块接受窄 Resource capability。R
 - Renderer 不导入 Desktop main 实现。
 - Desktop main 不导入 renderer store。
 - Platform adapter 不复制 applyEvent/applySessionSnapshot。
-- 新 feature 不接完整 OpenHarnessClient，使用 Resource capability。
+- 新 feature 不接完整 VykorClient，使用 Resource capability。
 - useServerSync 与 SessionService 大文件行数记录趋势，不以硬阈值驱动无关拆分。
 - 旧兼容入口调用只减不增。
 

@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { AttachmentBlobStore, SessionStore } from "@openharness/services";
+import { AttachmentBlobStore, SessionStore } from "@vykor/services";
 
 import { AttachmentService } from "../attachment-service.js";
 
@@ -46,7 +46,7 @@ function createHarness(options: {
   store: SessionStore;
   service: AttachmentService;
 } {
-  const root = mkdtempSync(join(tmpdir(), "ohs-attachment-service-"));
+  const root = mkdtempSync(join(tmpdir(), "vk-attachment-service-"));
   roots.push(root);
   const store = new SessionStore({ path: join(root, "store.db") });
   const ids = [...(options.ids ?? ["att_test"])];

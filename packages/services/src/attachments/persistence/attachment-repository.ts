@@ -3,7 +3,7 @@ import type {
   AttachmentAssetRecord,
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { StorageContext } from "../../database/storage-context.js";
 import {
   attachmentAssetFromRow,

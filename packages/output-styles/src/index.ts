@@ -21,9 +21,9 @@ const BUILTIN_STYLES: OutputStyleDefinition[] = [
   { name: "codex", content: "Codex-like compact transcript and tool output.", source: "builtin" },
 ];
 
-/** 用户自定义样式目录:`~/.openharness-ts/output_styles`(递归创建)。 */
+/** 用户自定义样式目录:`~/.vykor/output_styles`(递归创建)。 */
 export function getOutputStylesDir(): string {
-  const dir = join(homedir(), ".openharness-ts", "output_styles");
+  const dir = join(homedir(), ".vykor", "output_styles");
   try {
     mkdirSync(dir, { recursive: true });
   } catch {
@@ -35,7 +35,7 @@ export function getOutputStylesDir(): string {
 /**
  * 加载内置 + 用户输出样式。
  *
- * 用户样式来自 `~/.openharness-ts/output_styles/*.md`:文件名(去扩展名)为 name、
+ * 用户样式来自 `~/.vykor/output_styles/*.md`:文件名(去扩展名)为 name、
  * 文件内容为 content、source="user",按 name 排序后追加在内置之后。
  * 与内置同名的用户样式按追加顺序排在其后(消费方取列表,渲染按 name 匹配,不冲突)。
  */

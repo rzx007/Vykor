@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { DaemonRegistry } from "@openharness/server/daemon-host"
+import type { DaemonRegistry } from "@vykor/server/daemon-host"
 
 vi.mock("electron", () => ({
   app: {
@@ -13,9 +13,9 @@ import { registeredDaemonHealthy, resolveDesktopDaemonMode } from "./daemon-entr
 
 describe("desktop daemon entry", () => {
   it("recognizes only fixed headless flags", () => {
-    expect(resolveDesktopDaemonMode(["OpenHarness", "--daemon-service"])).toBe("service")
-    expect(resolveDesktopDaemonMode(["OpenHarness", "--daemon-watchdog"])).toBe("watchdog")
-    expect(resolveDesktopDaemonMode(["OpenHarness"])).toBeNull()
+    expect(resolveDesktopDaemonMode(["Vykor", "--daemon-service"])).toBe("service")
+    expect(resolveDesktopDaemonMode(["Vykor", "--daemon-watchdog"])).toBe("watchdog")
+    expect(resolveDesktopDaemonMode(["Vykor"])).toBeNull()
   })
 
   it("treats a cli_advanced registry as not adoptable", async () => {

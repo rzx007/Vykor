@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   IncompatibleProtocolError,
-  OpenHarnessApiError,
+  VykorApiError,
   type McpRuntimeSyncResult,
-} from "@openharness/client"
+} from "@vykor/client"
 import { createDesktopMcpRuntimeCoordinator } from "./mcp-runtime-coordinator"
 
 const identity = {
@@ -60,9 +60,9 @@ describe("createDesktopMcpRuntimeCoordinator", () => {
 
   it("reports daemon authentication errors instead of pretending the daemon is offline", async () => {
     const { coordinator } = fixture({
-      syncError: new OpenHarnessApiError("Unauthorized", 401, { error: "Unauthorized" }),
+      syncError: new VykorApiError("Unauthorized", 401, { error: "Unauthorized" }),
     })
-    await expect(coordinator.synchronize(identity)).rejects.toBeInstanceOf(OpenHarnessApiError)
+    await expect(coordinator.synchronize(identity)).rejects.toBeInstanceOf(VykorApiError)
   })
 
   it("reports protocol incompatibility instead of pretending the daemon is offline", async () => {

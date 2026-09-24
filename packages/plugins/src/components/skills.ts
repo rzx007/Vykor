@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { SkillLoader, SkillRegistry, type SkillDefinition } from "@openharness/skills";
+import { SkillLoader, SkillRegistry, type SkillDefinition } from "@vykor/skills";
 import { resolveNativePluginPath } from "../paths.js";
 import type { PluginComponentResult, ValidatedNativePlugin } from "../types.js";
 

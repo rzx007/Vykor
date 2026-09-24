@@ -9,7 +9,7 @@ import { WorkflowRepository } from "./workflow-repository.js";
 
 describe("WorkflowRepository", () => {
   it("saves and reloads a run with its task attempts", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-workflow-repository-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-repository-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
       const repository = new WorkflowRepository((store as any).storage);
@@ -43,7 +43,7 @@ describe("WorkflowRepository", () => {
   });
 
   it("rolls back the run and old attempts when replacement fails", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-workflow-rollback-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-rollback-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
       const repository = new WorkflowRepository((store as any).storage);
@@ -79,7 +79,7 @@ describe("WorkflowRepository", () => {
   });
 
   it("orders events and enforces claim ownership", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-workflow-claim-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-claim-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
       const repository = new WorkflowRepository((store as any).storage);
@@ -100,7 +100,7 @@ describe("WorkflowRepository", () => {
   });
 
   it("reloads replacements and rejects writes after the application owner changes", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-workflow-owner-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-owner-"));
     const path = join(directory, "sessions.db");
     const store = new SessionStore({ path });
     try {

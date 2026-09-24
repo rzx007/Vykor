@@ -19,7 +19,7 @@ describe("DuckDuckGoSearchProvider", () => {
     }));
     const provider = new DuckDuckGoSearchProvider({ fetchFn });
 
-    const result = await provider.search({ query: "open harness", maxResults: 5 });
+    const result = await provider.search({ query: "example docs", maxResults: 5 });
 
     expect(result).toEqual({
       provider: "duckduckgo-html",
@@ -30,7 +30,7 @@ describe("DuckDuckGoSearchProvider", () => {
       }],
     });
     expect(fetchFn).toHaveBeenCalledWith(
-      expect.stringContaining("q=open+harness"),
+      expect.stringContaining("q=example+docs"),
       expect.objectContaining({ redirect: "follow" }),
     );
   });

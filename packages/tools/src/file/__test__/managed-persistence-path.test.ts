@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getConfigDir, getProjectMemoryDir } from "@openharness/core";
+import { getConfigDir, getProjectMemoryDir } from "@vykor/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { managedPersistencePathKind } from "../managed-persistence-path.js";
@@ -14,13 +14,13 @@ describe("managedPersistencePathKind", () => {
   beforeEach(async () => {
     configDir = await mkdtemp(join(tmpdir(), "oh-managed-config-"));
     cwd = await mkdtemp(join(tmpdir(), "oh-managed-project-"));
-    oldConfigDir = process.env.OPENHARNESS_CONFIG_DIR;
-    process.env.OPENHARNESS_CONFIG_DIR = configDir;
+    oldConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
-    if (oldConfigDir === undefined) delete process.env.OPENHARNESS_CONFIG_DIR;
-    else process.env.OPENHARNESS_CONFIG_DIR = oldConfigDir;
+    if (oldConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+    else process.env.VYKOR_CONFIG_DIR = oldConfigDir;
     await rm(configDir, { recursive: true, force: true });
     await rm(cwd, { recursive: true, force: true });
   });

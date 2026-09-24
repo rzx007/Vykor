@@ -1,7 +1,7 @@
-import type { AgentRunHandle } from "@openharness/core";
-import type { AgentCapabilitySnapshot } from "@openharness/agent-runtime";
-import { createRunCapabilityView } from "@openharness/agent-runtime";
-import { ToolRegistry } from "@openharness/core";
+import type { AgentRunHandle } from "@vykor/core";
+import type { AgentCapabilitySnapshot } from "@vykor/agent-runtime";
+import { createRunCapabilityView } from "@vykor/agent-runtime";
+import { ToolRegistry } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
 import {

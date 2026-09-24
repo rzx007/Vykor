@@ -1,4 +1,4 @@
-export const APPEARANCE_STORAGE_KEY = "openharness-desktop-appearance-v1"
+export const APPEARANCE_STORAGE_KEY = "vykor-desktop-appearance-v1"
 
 export const UI_FONT_SIZE_RANGE = { min: 12, max: 18 } as const
 export const CODE_FONT_SIZE_RANGE = { min: 11, max: 18 } as const

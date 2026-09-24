@@ -167,15 +167,15 @@ type AgentRunContribution = {
 - [ ] 最后集中运行下列相关测试与类型检查；每项失败只修相关问题，改动后仅重跑受影响范围。
 
 ```powershell
-pnpm --filter @openharness/protocol exec vitest run src/session-goals.test.ts
-pnpm --filter @openharness/core exec vitest run src/engine/goal-context.test.ts
-pnpm --filter @openharness/agent-runtime exec vitest run src/goal-assessment-tool.test.ts src/framework-agent-run-input.test.ts src/agent.test.ts
-pnpm --filter @openharness/services exec vitest run src/session-runtime/__test__/session-goals.test.ts
-pnpm --filter @openharness/server exec vitest run src/application/session/__test__/session-goal-service.test.ts src/application/session/__test__/goal-wait-verifier.test.ts src/application/agent/__test__/daemon-agent-event-projector.test.ts src/application/control/__test__/daemon-operation-gate.test.ts src/application/session/__test__/session-maintenance-service.test.ts
-pnpm --filter @openharness/desktop exec vitest run src/renderer/src/stores/desktop-session/goal-actions.test.ts src/renderer/src/components/desktop/conversation-page/composer/__test__/goal-banner.test.tsx
-pnpm --filter @openharness/protocol --filter @openharness/core --filter @openharness/agent-runtime --filter @openharness/services --filter @openharness/server check-types
-pnpm --filter @openharness/agent-runtime test:pack
-pnpm --filter @openharness/desktop build
+pnpm --filter @vykor/protocol exec vitest run src/session-goals.test.ts
+pnpm --filter @vykor/core exec vitest run src/engine/goal-context.test.ts
+pnpm --filter @vykor/agent-runtime exec vitest run src/goal-assessment-tool.test.ts src/framework-agent-run-input.test.ts src/agent.test.ts
+pnpm --filter @vykor/services exec vitest run src/session-runtime/__test__/session-goals.test.ts
+pnpm --filter @vykor/server exec vitest run src/application/session/__test__/session-goal-service.test.ts src/application/session/__test__/goal-wait-verifier.test.ts src/application/agent/__test__/daemon-agent-event-projector.test.ts src/application/control/__test__/daemon-operation-gate.test.ts src/application/session/__test__/session-maintenance-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/stores/desktop-session/goal-actions.test.ts src/renderer/src/components/desktop/conversation-page/composer/__test__/goal-banner.test.tsx
+pnpm --filter @vykor/protocol --filter @vykor/core --filter @vykor/agent-runtime --filter @vykor/services --filter @vykor/server check-types
+pnpm --filter @vykor/agent-runtime test:pack
+pnpm --filter @vykor/desktop build
 node scripts/check-docs.mjs
 ```
 

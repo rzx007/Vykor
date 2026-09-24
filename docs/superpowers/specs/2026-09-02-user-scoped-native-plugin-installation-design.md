@@ -35,7 +35,7 @@ Any mismatch fails closed with a warning. Link installations skip only the conte
 
 Copied installations use `cacheRoot/pluginId/<safeVersion>-<digest>`. Candidate copying and validation remain atomic, and reinstalling an ID creates another immutable snapshot before switching the user record to it. The final snapshot entry must be a real directory, not a symbolic link or directory junction, and its resolved path must remain under the resolved plugin cache directory. If an existing snapshot has the wrong digest, cannot be read, or contains a nested link that prevents digest calculation, reinstall atomically moves its root entry to quarantine, rebuilds the expected snapshot from the validated source, and removes the quarantine without traversing or deleting a link target. A failed candidate or failed store update leaves every previously referenced valid snapshot intact. A Runtime that already verified the old path continues reading the same bytes even if a new version is installed concurrently.
 
-The record-verification function lives in `@openharness/plugins` and is shared by Agent Runtime discovery, plugin management listing, and CLI dry-run discovery. A rejected record is never passed to component loading; management surfaces it as invalid with the same diagnostic the runtime uses.
+The record-verification function lives in `@vykor/plugins` and is shared by Agent Runtime discovery, plugin management listing, and CLI dry-run discovery. A rejected record is never passed to component loading; management surfaces it as invalid with the same diagnostic the runtime uses.
 
 ## Tests
 

@@ -1,8 +1,8 @@
-# @openharness/plugins
+# @vykor/plugins
 
-OpenHarness Native Plugin 的校验、组件加载、安装状态、版本 cache 与激活基础设施。
+Vykor Native Plugin 的校验、组件加载、安装状态、版本 cache 与激活基础设施。
 
-Runtime 只接受插件根目录中的 `.openharness-plugin/plugin.json`。Claude Code、Codex 等外部格式不在本包解析，必须先由 `@openharness/plugin-converters` 转为 Native Plugin。
+Runtime 只接受插件根目录中的 `.vykor-plugin/plugin.json`。Claude Code、Codex 等外部格式不在本包解析，必须先由 `@vykor/plugin-converters` 转为 Native Plugin。
 
 当前 manifest 是严格的 Native v1 schema，只接受当前字段。安装 scope 只有 `user` 与 `managed`：用户可以管理 `user` 插件；`managed` 插件不可由普通安装、覆盖或卸载流程修改。旧记录和旧 manifest 字段不会被读取或转换。
 
@@ -19,18 +19,18 @@ Agent Runtime 会在进入插件代码前做调用控制：按 `inputSchema` 校
 持久关闭所有已安装插件贡献：
 
 ```bash
-ohs config set plugins.enabled false
+vk config set plugins.enabled false
 ```
 
 重新开启：
 
 ```bash
-ohs config set plugins.enabled true
+vk config set plugins.enabled true
 ```
 
-只关闭本次新建 Session 的插件贡献，可以使用 `ohs --no-plugins`。总开关只跳过 installed Native Plugin，不影响内置 Skill、普通用户/项目 Skill、Settings Hooks 或 Settings MCP。单插件仍使用 `ohs plugin enable/disable <id>` 管理。
+只关闭本次新建 Session 的插件贡献，可以使用 `vk --no-plugins`。总开关只跳过 installed Native Plugin，不影响内置 Skill、普通用户/项目 Skill、Settings Hooks 或 Settings MCP。单插件仍使用 `vk plugin enable/disable <id>` 管理。
 
 ```bash
-pnpm --filter @openharness/plugins test
-pnpm --filter @openharness/plugins check-types
+pnpm --filter @vykor/plugins test
+pnpm --filter @vykor/plugins check-types
 ```

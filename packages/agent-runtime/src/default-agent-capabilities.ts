@@ -1,14 +1,14 @@
-import type { Settings } from "@openharness/core";
-import { FileWorkflowRunRepository } from "@openharness/coordinator";
-import { CompositeAgentJobHost, type AgentJobHost } from "@openharness/jobs";
-import { LocalAgentJobHost } from "@openharness/tools";
-import type { AgentTerminalHost } from "@openharness/terminal";
+import type { Settings } from "@vykor/core";
+import { FileWorkflowRunRepository } from "@vykor/coordinator";
+import { CompositeAgentJobHost, type AgentJobHost } from "@vykor/jobs";
+import { LocalAgentJobHost } from "@vykor/tools";
+import type { AgentTerminalHost } from "@vykor/terminal";
 
 import type {
   AgentCapabilityOverrides,
   AgentEffectOverrides,
   ObservableJobProducer,
-  OpenHarnessAgentConfiguration,
+  VykorAgentConfiguration,
 } from "./agent-options.js";
 import {
   assertJobConfiguration,
@@ -35,8 +35,8 @@ import {
 
 export interface ResolveDefaultAgentCapabilitiesOptions {
   settings: Settings;
-  configuration: OpenHarnessAgentConfiguration;
-  configurationForChild?: () => OpenHarnessAgentConfiguration;
+  configuration: VykorAgentConfiguration;
+  configurationForChild?: () => VykorAgentConfiguration;
   capabilityOverrides?: AgentCapabilityOverrides;
   effects?: AgentEffectOverrides;
   cwd: string;

@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import process from "node:process";
 
-import { getProjectConfigDir } from "@openharness/core";
+import { getProjectConfigDir } from "@vykor/core";
 
 import { ChildAgentExecutionRegistry } from "./child-agent-execution-registry.js";
 import { DetachedProcessSupervisor } from "./detached-process-supervisor.js";

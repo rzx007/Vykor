@@ -9,7 +9,7 @@ import { ConversationRepository } from "./conversation-repository.js";
 
 describe("ConversationRepository read operations", () => {
   it("reads inputs and input attachments with position ordering", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-conv-repo-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-conv-repo-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new ConversationRepository((store as any).storage);
@@ -84,7 +84,7 @@ describe("ConversationRepository read operations", () => {
   });
 
   it("lists messages and parts with messageId, afterSeq, limit, and clone protection", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-conv-repo-msg-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-conv-repo-msg-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new ConversationRepository((store as any).storage);
@@ -123,7 +123,7 @@ describe("ConversationRepository read operations", () => {
   });
 
   it("lists events with afterSeq, sessionId filter, limit, and checks latestEventSeq", () => {
-    const directory = mkdtempSync(join(tmpdir(), "ohs-conv-repo-events-"));
+    const directory = mkdtempSync(join(tmpdir(), "vk-conv-repo-events-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
     try {
       const repository = new ConversationRepository((store as any).storage);
@@ -153,7 +153,7 @@ describe("ConversationRepository read operations", () => {
 
   describe("ConversationRepository write operations", () => {
     it("creates messages with seq ordering, duplicate checks, session timestamps, and event emission", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-conv-repo-msg-write-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-conv-repo-msg-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new ConversationRepository({
@@ -210,7 +210,7 @@ describe("ConversationRepository read operations", () => {
     });
 
     it("upserts message parts with alignment checks, field merging, typed fields, and events", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-conv-repo-part-write-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-conv-repo-part-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new ConversationRepository({
@@ -282,7 +282,7 @@ describe("ConversationRepository read operations", () => {
     });
 
     it("appends events with registry validation, seq monotonicity, and optional session", () => {
-      const directory = mkdtempSync(join(tmpdir(), "ohs-conv-repo-event-write-"));
+      const directory = mkdtempSync(join(tmpdir(), "vk-conv-repo-event-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {
         const repository = new ConversationRepository({

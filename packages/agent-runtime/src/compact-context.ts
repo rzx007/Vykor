@@ -1,7 +1,7 @@
 import type {
   CompactContext,
   CompactContextProvider,
-} from "@openharness/core";
+} from "@vykor/core";
 
 type CompactContextSource<K extends keyof CompactContext> = () =>
   | CompactContext[K]

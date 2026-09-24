@@ -5,7 +5,7 @@
 
 ## 1. 背景
 
-OpenHarness 当前有多种名字包含 `task` 的结构，但它们表达的不是同一种东西：
+Vykor 当前有多种名字包含 `task` 的结构，但它们表达的不是同一种东西：
 
 - `TodoWrite` 表达 Agent 的工作清单；
 - `ScheduledTask` 表达未来触发一次 Agent 运行的时间安排；
@@ -143,7 +143,7 @@ flowchart TB
   JobService --> Scheduler
 
   subgraph ClientUI["客户端与 TUI"]
-    Client["OpenHarnessClient"]
+    Client["VykorClient"]
     Controller["TUI jobState / jobs"]
     JobsPanel["Jobs Panel"]
     WorkflowDetail["Workflow Detail / Steps"]
@@ -194,7 +194,7 @@ Jobs 不增加万能创建接口。创建仍由最了解参数的 producer 完�
 
 ### 8.1 JobSnapshot
 
-沿用 `@openharness/jobs` 的通用字段，并补充可选的父子关系：
+沿用 `@vykor/jobs` 的通用字段，并补充可选的父子关系：
 
 ```ts
 interface JobSnapshot {
@@ -401,7 +401,7 @@ POST /jobs/:jobId/input
 POST /jobs/:jobId/cancel
 ```
 
-OpenHarnessClient 保留：
+VykorClient 保留：
 
 ```ts
 listJobs()
@@ -464,10 +464,10 @@ POST /tasks
 TaskSnapshot
 ListTasksOptions
 CreateTaskInput
-OpenHarnessClient.listTasks()
-OpenHarnessClient.getTask()
-OpenHarnessClient.stopTask()
-OpenHarnessClient.createTask()
+VykorClient.listTasks()
+VykorClient.getTask()
+VykorClient.stopTask()
+VykorClient.createTask()
 TuiSessionController.tasks
 ```
 

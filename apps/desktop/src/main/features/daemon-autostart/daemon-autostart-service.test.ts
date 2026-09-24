@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { DaemonAutoStartSnapshot } from "@openharness/server/daemon-host"
+import type { DaemonAutoStartSnapshot } from "@vykor/server/daemon-host"
 
 vi.mock("electron", () => ({
   app: { isPackaged: true, getAppPath: () => "D:/app", getPath: () => "D:/data" },

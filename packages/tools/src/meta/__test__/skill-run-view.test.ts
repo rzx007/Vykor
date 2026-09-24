@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { SkillRegistry, type SkillDefinition } from "@openharness/skills";
-import type { RunCapabilityView } from "@openharness/core";
+import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
+import type { RunCapabilityView } from "@vykor/core";
 import { skillTool, listSkillsTool } from "../skill.js";
 
 const definition: SkillDefinition = { name: "private", source: "plugin", path: "/plugin/private/SKILL.md",

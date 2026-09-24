@@ -1,18 +1,18 @@
-import type { AgentDefinition } from "@openharness/coordinator";
-import type { McpServerConfig, Settings } from "@openharness/core";
-import { getSkillsDir } from "@openharness/core";
+import type { AgentDefinition } from "@vykor/coordinator";
+import type { McpServerConfig, Settings } from "@vykor/core";
+import { getSkillsDir } from "@vykor/core";
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,
   verifyInstalledNativePlugin,
   type LoadedNativePlugin,
-} from "@openharness/plugins";
+} from "@vykor/plugins";
 import {
   createSkillRegistrySnapshot,
   SkillRegistry,
   findProjectSkillDirs,
   standardUserSkillDirs,
-} from "@openharness/skills";
+} from "@vykor/skills";
 import {
   createPluginCapabilityInventory,
   selectPluginInstallationWinners,
@@ -20,7 +20,7 @@ import {
   type PluginCapabilityInventory,
 } from "./plugin-capability-inventory.js";
 
-export interface OpenHarnessExtensionDiscovery {
+export interface VykorExtensionDiscovery {
   skillRegistry: SkillRegistry;
   plugins: LoadedNativePlugin[];
   agentDefinitions: AgentDefinition[];
@@ -29,11 +29,11 @@ export interface OpenHarnessExtensionDiscovery {
   pluginCapabilityInventory: PluginCapabilityInventory;
 }
 
-export async function discoverOpenHarnessExtensions(
+export async function discoverVykorExtensions(
   cwd: string,
   settings: Settings,
   options: { pluginsEnabled?: boolean } = {},
-): Promise<OpenHarnessExtensionDiscovery> {
+): Promise<VykorExtensionDiscovery> {
   let plugins: LoadedNativePlugin[] = [];
   const warnings: string[] = [];
   const installedPlugins = (settings.plugins?.enabled ?? true) && (options.pluginsEnabled ?? true)

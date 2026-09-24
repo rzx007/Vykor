@@ -8,7 +8,7 @@
 
 **技术栈：** TypeScript、Node.js 22/24 Web Streams、Node `crypto`/`fs`、SQLite/Drizzle、Hono、Vitest、pnpm workspace。
 
-**执行状态：已完成（2026-08-28）。** 阶段 1 已落地到分支 `codex/conversation-attachments-stage-1`。最终验收覆盖 protocol 31、services 162、server 317、client 62，共 572 个测试；四包类型检查均为 exit 0，全仓库类型任务 57/57 通过，Drizzle migration 检查通过。公开能力为 `features.attachments: 1`，数据库 migration 为 `0013_attachments`，上传模式为 `POST /attachments` 原始请求体 + `X-OpenHarness-Filename`，capabilities 中公布 `uploadModes: ["single"]` 和实际 limits。
+**执行状态：已完成（2026-08-28）。** 阶段 1 已落地到分支 `codex/conversation-attachments-stage-1`。最终验收覆盖 protocol 31、services 162、server 317、client 62，共 572 个测试；四包类型检查均为 exit 0，全仓库类型任务 57/57 通过，Drizzle migration 检查通过。公开能力为 `features.attachments: 1`，数据库 migration 为 `0013_attachments`，上传模式为 `POST /attachments` 原始请求体 + `X-Vykor-Filename`，capabilities 中公布 `uploadModes: ["single"]` 和实际 limits。
 
 ---
 
@@ -22,7 +22,7 @@
 POST /attachments
 Authorization: Bearer <token>
 Content-Type: image/png
-X-OpenHarness-Filename: screenshot.png
+X-Vykor-Filename: screenshot.png
 
 <raw file bytes>
 ```
@@ -125,7 +125,7 @@ it("parses a ready attachment asset without storage details", () => {
 
 - [x] **步骤 2：运行测试并确认失败原因准确**
 
-运行：`pnpm --filter @openharness/protocol test -- attachment.test.ts capabilities.test.ts`
+运行：`pnpm --filter @vykor/protocol test -- attachment.test.ts capabilities.test.ts`
 
 预期：FAIL，原因是 `attachment.ts`、解析函数和 `ServerCapabilities.attachments` 尚不存在，而不是已有测试失败。
 
@@ -182,8 +182,8 @@ attachments?: {
 运行：
 
 ```powershell
-pnpm --filter @openharness/protocol test -- attachment.test.ts capabilities.test.ts
-pnpm --filter @openharness/protocol check-types
+pnpm --filter @vykor/protocol test -- attachment.test.ts capabilities.test.ts
+pnpm --filter @vykor/protocol check-types
 ```
 
 预期：全部 PASS。
@@ -228,7 +228,7 @@ expect(store.findReadyAttachmentByHash("b".repeat(64))?.id).toBe("att_1");
 
 - [x] **步骤 2：运行 Store 测试确认失败**
 
-运行：`pnpm --filter @openharness/services test -- session-runtime/__test__/store.test.ts`
+运行：`pnpm --filter @vykor/services test -- session-runtime/__test__/store.test.ts`
 
 预期：FAIL，缺少附件表和 Store 方法。
 
@@ -278,9 +278,9 @@ softDeleteAttachment(id: string, deletedAt?: number): AttachmentAssetRecord;
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- session-runtime/__test__/store.test.ts
-pnpm --filter @openharness/services db:check
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- session-runtime/__test__/store.test.ts
+pnpm --filter @vykor/services db:check
+pnpm --filter @vykor/services check-types
 ```
 
 预期：全部 PASS，旧库 fixture 能迁移到 0013。
@@ -314,7 +314,7 @@ expect(decodeAttachmentFilename("%E6%88%AA%E5%9B%BE.png")).toBe("截图.png");
 
 - [x] **步骤 2：运行单测确认失败**
 
-运行：`pnpm --filter @openharness/services test -- attachment-media-type.test.ts`
+运行：`pnpm --filter @vykor/services test -- attachment-media-type.test.ts`
 
 预期：FAIL，三个模块尚不存在。
 
@@ -329,8 +329,8 @@ MIME 检测只读取最多 4,100 bytes，按签名优先级返回。WebP 必须�
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- attachment-media-type.test.ts
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- attachment-media-type.test.ts
+pnpm --filter @vykor/services check-types
 ```
 
 预期：全部 PASS。
@@ -365,7 +365,7 @@ expect(first.sizeBytes).toBe(11);
 
 - [x] **步骤 2：运行测试确认失败**
 
-运行：`pnpm --filter @openharness/services test -- attachment-blob-store.test.ts`
+运行：`pnpm --filter @vykor/services test -- attachment-blob-store.test.ts`
 
 预期：FAIL，`AttachmentBlobStore` 不存在。
 
@@ -403,8 +403,8 @@ recoverStaging(options: {
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- attachment-blob-store.test.ts
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- attachment-blob-store.test.ts
+pnpm --filter @vykor/services check-types
 ```
 
 预期：全部 PASS，并且测试结束后临时目录中没有 `.part`。
@@ -440,7 +440,7 @@ expect(attachments.getContent(asset.id).sha256).toBe(asset.sha256);
 
 - [x] **步骤 2：运行服务测试确认失败**
 
-运行：`pnpm --filter @openharness/services test -- attachment-application-service.test.ts`
+运行：`pnpm --filter @vykor/services test -- attachment-application-service.test.ts`
 
 预期：FAIL，应用服务尚不存在。
 
@@ -467,9 +467,9 @@ interface AttachmentApplicationServiceOptions {
 运行：
 
 ```powershell
-pnpm --filter @openharness/services test -- attachment-application-service.test.ts
-pnpm --filter @openharness/services test -- attachment-blob-store.test.ts
-pnpm --filter @openharness/services check-types
+pnpm --filter @vykor/services test -- attachment-application-service.test.ts
+pnpm --filter @vykor/services test -- attachment-blob-store.test.ts
+pnpm --filter @vykor/services check-types
 ```
 
 预期：全部 PASS。
@@ -497,7 +497,7 @@ const response = await app.request("/", {
   method: "POST",
   headers: {
     "content-type": "image/png",
-    "x-openharness-filename": encodeURIComponent("截图.png"),
+    "x-vykor-filename": encodeURIComponent("截图.png"),
   },
   body: Uint8Array.from([1, 2, 3]),
 });
@@ -506,7 +506,7 @@ expect(response.status).toBe(201);
 
 - [x] **步骤 2：运行 route 测试确认失败**
 
-运行：`pnpm --filter @openharness/server test -- routes/attachment.test.ts`
+运行：`pnpm --filter @vykor/server test -- routes/attachment.test.ts`
 
 预期：FAIL，route factory 尚不存在。
 
@@ -539,8 +539,8 @@ ready asset 的 ETag 为 `"sha256-<hash>"`。无 Range 返回 200；单个闭区
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test -- routes/attachment.test.ts
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test -- routes/attachment.test.ts
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部 PASS。
@@ -567,7 +567,7 @@ git commit -m "feat(server): expose attachment upload and download routes"
 
 - [x] **步骤 2：运行 HTTP 集成测试确认失败**
 
-运行：`pnpm --filter @openharness/server test -- http/__test__/http.test.ts`
+运行：`pnpm --filter @vykor/server test -- http/__test__/http.test.ts`
 
 预期：新增用例 FAIL，现有 HTTP 用例保持通过。
 
@@ -598,15 +598,15 @@ features: { ...existingFeatures, attachments: 1 },
 attachments: { limits, uploadModes: ["single"] },
 ```
 
-`CORS_HEADERS` 增加 `x-openharness-filename, range, if-none-match`；`Access-Control-Expose-Headers` 增加 `content-range, content-disposition, etag, accept-ranges`，同时保留 trace header。
+`CORS_HEADERS` 增加 `x-vykor-filename, range, if-none-match`；`Access-Control-Expose-Headers` 增加 `content-range, content-disposition, etag, accept-ranges`，同时保留 trace header。
 
 - [x] **步骤 5：运行服务器全套验证**
 
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/server check-types
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/server check-types
 ```
 
 预期：全部 PASS；测试日志不出现附件正文或临时绝对路径。
@@ -628,7 +628,7 @@ git commit -m "feat(server): wire durable attachment service"
 
 - [x] **步骤 1：编写 SDK 请求失败测试**
 
-注入 fake fetch，覆盖：上传使用原始 body、Bearer、Content-Type 和编码文件名；不手工设置浏览器禁止设置的 Content-Length；GET metadata 解析公共类型；download 透传 Range 并返回 Response；DELETE；413 仍转换为 `OpenHarnessApiError`。
+注入 fake fetch，覆盖：上传使用原始 body、Bearer、Content-Type 和编码文件名；不手工设置浏览器禁止设置的 Content-Length；GET metadata 解析公共类型；download 透传 Range 并返回 Response；DELETE；413 仍转换为 `VykorApiError`。
 
 ```ts
 await client.uploadAttachment({
@@ -636,13 +636,13 @@ await client.uploadAttachment({
   mediaType: "image/png",
   body: new Blob([Uint8Array.from([1, 2, 3])]),
 });
-expect(request.headers.get("x-openharness-filename")).toBe(encodeURIComponent("截图.png"));
+expect(request.headers.get("x-vykor-filename")).toBe(encodeURIComponent("截图.png"));
 expect(request.headers.has("content-length")).toBe(false);
 ```
 
 - [x] **步骤 2：运行 Client 测试确认失败**
 
-运行：`pnpm --filter @openharness/client test -- http-client.test.ts`
+运行：`pnpm --filter @vykor/client test -- http-client.test.ts`
 
 预期：FAIL，附件 SDK 方法不存在。
 
@@ -678,8 +678,8 @@ deleteAttachment(id: string, options?: { signal?: AbortSignal }): Promise<Attach
 运行：
 
 ```powershell
-pnpm --filter @openharness/client test -- http-client.test.ts
-pnpm --filter @openharness/client check-types
+pnpm --filter @vykor/client test -- http-client.test.ts
+pnpm --filter @vykor/client check-types
 ```
 
 预期：全部 PASS。
@@ -700,10 +700,10 @@ git commit -m "feat(client): add attachment transfer APIs"
 - [x] **步骤 1：运行相关 package 的完整测试**
 
 ```powershell
-pnpm --filter @openharness/protocol test
-pnpm --filter @openharness/services test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/client test
+pnpm --filter @vykor/protocol test
+pnpm --filter @vykor/services test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/client test
 ```
 
 预期：全部 PASS，不能只记录新增测试结果。
@@ -711,11 +711,11 @@ pnpm --filter @openharness/client test
 - [x] **步骤 2：运行所有相关类型和数据库检查**
 
 ```powershell
-pnpm --filter @openharness/protocol check-types
-pnpm --filter @openharness/services check-types
-pnpm --filter @openharness/services db:check
-pnpm --filter @openharness/server check-types
-pnpm --filter @openharness/client check-types
+pnpm --filter @vykor/protocol check-types
+pnpm --filter @vykor/services check-types
+pnpm --filter @vykor/services db:check
+pnpm --filter @vykor/server check-types
+pnpm --filter @vykor/client check-types
 ```
 
 预期：全部 exit 0。

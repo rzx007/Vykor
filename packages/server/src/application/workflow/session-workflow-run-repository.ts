@@ -8,11 +8,11 @@ import {
   type WorkflowRunRepository,
   type WorkflowRunSnapshot,
   type WorkflowRunSummary,
-} from "@openharness/coordinator";
+} from "@vykor/coordinator";
 import type {
   StoredWorkflowRunInput,
   StoredWorkflowRunRecord,
-} from "@openharness/services/workflows";
+} from "@vykor/services/workflows";
 
 export interface WorkflowStorage {
   saveRun(input: StoredWorkflowRunInput): void;

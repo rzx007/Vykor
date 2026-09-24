@@ -4,9 +4,9 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { Settings } from "@openharness/core";
-import type { FeishuChannelConfig } from "@openharness/auth";
-import type { InboundMessage } from "@openharness/channels";
+import type { Settings } from "@vykor/core";
+import type { FeishuChannelConfig } from "@vykor/auth";
+import type { InboundMessage } from "@vykor/channels";
 
 import {
   ChannelRuntimeError,
@@ -81,7 +81,7 @@ function makeService(overrides: Partial<ChannelRuntimeServiceOptions> = {}) {
     application: application(),
     config: { getFeishu: async () => config.current },
     getSettings: () => ({ model: "model-1" }) as Settings,
-    workspaceRoot: mkdtempSync(join(tmpdir(), "ohs-channel-ws-")),
+    workspaceRoot: mkdtempSync(join(tmpdir(), "vk-channel-ws-")),
     createRuntime: async (input) => {
       const { handle, calls } = fakeHandle();
       created.push({ handle, calls, input });
@@ -346,7 +346,7 @@ describe("ChannelRuntimeService", () => {
   });
 
   it("records a lastError when the workspace cannot be created", async () => {
-    const root = join(mkdtempSync(join(tmpdir(), "ohs-channel-bad-")), "file");
+    const root = join(mkdtempSync(join(tmpdir(), "vk-channel-bad-")), "file");
     writeFileSync(root, "not a directory");
     const { service, created } = makeService({ workspaceRoot: root });
     await service.start("feishu");

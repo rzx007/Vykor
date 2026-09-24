@@ -1,6 +1,6 @@
 import type { createReadStream } from "node:fs"
 
-import type { AttachmentResource } from "@openharness/client"
+import type { AttachmentResource } from "@vykor/client"
 
 export interface AttachmentClient {
   attachments: Pick<

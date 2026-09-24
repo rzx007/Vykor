@@ -1,4 +1,4 @@
-import type { ServerCapabilities } from "@openharness/client"
+import type { ServerCapabilities } from "@vykor/client"
 
 type DesktopAttachmentLimits = NonNullable<ServerCapabilities["attachments"]>["limits"]
 

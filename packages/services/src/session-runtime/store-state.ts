@@ -10,7 +10,7 @@ import type {
   SessionRunRecord,
   SessionRunAttemptRecord,
   SessionExecutionRecord,
-} from "@openharness/protocol";
+} from "@vykor/protocol";
 import type { TransactionCoordinatorHooks } from "../database/index.js";
 import type { DurableEventRegistry } from "./event-registry.js";
 

@@ -18,11 +18,11 @@ const cliExternals = [...new Set([
   // `ws`（经飞书 SDK）按需 require 的可选原生加速模块；缺失时 ws 自己回退。
   "bufferutil",
   "utf-8-validate",
-])].filter((d) => !d.startsWith("@openharness/"));
+])].filter((d) => !d.startsWith("@vykor/"));
 const frontendExternals = [...new Set([
   ...Object.keys(frontendPkg.dependencies || {}),
   ...Object.keys(frontendPkg.peerDependencies || {}),
-])].filter((d) => !d.startsWith("@openharness/"));
+])].filter((d) => !d.startsWith("@vykor/"));
 
 const cliResult = await Bun.build({
   entrypoints: ["src/index.ts"],

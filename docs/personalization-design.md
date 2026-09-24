@@ -10,7 +10,7 @@
 
 每个 root Run 成功收尾后，用 10 个正则从当前 durable transcript 抽「环境事实」（SSH 主机、服务器 IP、数据
 路径、conda 环境、Python 版本、API 端点、环境变量、git 远端、Ray 集群、cron
-表达式），去重合并持久化到 `~/.openharness-ts/local_rules/`：
+表达式），去重合并持久化到 `~/.vykor/local_rules/`：
 
 ```
 local_rules/
@@ -38,7 +38,7 @@ local_rules/
   追加 `# Local Environment Rules\n\n<rules.md 内容>`（非空才注入）。
 - **Run 收尾触发**：`SessionPostRunMaintenance` 只在 durable Run 已经是 `completed` 后读取 Store transcript，再调用 `updateRulesFromSession(messages)`。失败只记告警，不回退 Run 终态。
 - **手动触发**：`/remember` 成功后也会扫描当前 transcript。
-- **边界**：framework 的 `OpenHarnessAgent.close()` 只管理 live 执行资源，不写 personalization；这项持久化由拥有 transcript 的 daemon Application 负责。
+- **边界**：framework 的 `VykorAgent.close()` 只管理 live 执行资源，不写 personalization；这项持久化由拥有 transcript 的 daemon Application 负责。
 
 ## 与 Python 差异
 
@@ -50,7 +50,7 @@ local_rules/
 | git_remote 正则 | 懒惰 `\S+?` 后仅跟可选组 → 恒捕获 1 字符,被长度过滤丢弃(死代码) | 追加 `(?=\s\|$)` 锚,真正捕获 `owner/repo` | 修 Python 的失效模式 |
 | prompt 注入包装 | 外层再包一层 `# Local Environment Rules` 标题(与 rules.md 自带标题重复) | 直接注入 rules.md 原文 | 避免双标题 |
 | 信号路径 | 单一关停钩子 | 只处理已经 durable completed 的 Run；进程中断的 Run 不假装完成抽取 | 与 durable 终态一致 |
-| 配置目录 | 默认 ~/.openharness-ts | 尊重 OPENHARNESS_CONFIG_DIR(仓库既有约定) | 测试隔离/Electron 预留 |
+| 配置目录 | 默认 ~/.vykor | 尊重 VYKOR_CONFIG_DIR(仓库既有约定) | 测试隔离/Electron 预留 |
 
 ## 测试
 

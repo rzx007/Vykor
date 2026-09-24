@@ -13,7 +13,7 @@ export function formatPluginReload(result: ReloadPluginsResponse): string {
       if (plugin.installation !== "installed" || plugin.permissions.missing.length || plugin.diagnostics.some(item => item.code.includes("permission"))) {
         lines.push(plugin.scope === "managed"
           ? "  Ask your administrator to repair this managed plugin."
-          : "  Review the source and permissions, then run ohs plugin install-local <source> or ohs plugin link <source>, supplying --approve <permission> for each requested permission.");
+          : "  Review the source and permissions, then run vk plugin install-local <source> or vk plugin link <source>, supplying --approve <permission> for each requested permission.");
       }
     }
   }

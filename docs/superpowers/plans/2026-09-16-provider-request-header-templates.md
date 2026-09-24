@@ -9,7 +9,7 @@
 `Settings.customProviders[].headers` 配置静态或动态请求头，并在造客户端时统一
 展开 `{{sessionId}}`、`{{userAgent}}`，替换当前 OpenCode Go 专用适配。
 
-**架构：** `@openharness/api` 提供无供应商知识的请求头规范化与模板展开器；
+**架构：** `@vykor/api` 提供无供应商知识的请求头规范化与模板展开器；
 Provider Service 负责保存模板，agent runtime 负责用稳定会话上下文展开，daemon
 继续只向下传 `sessionId`。Desktop 的自定义供应商表单和目录供应商连接/请求头
 界面保持独立，仅复用请求头行编辑组件。
@@ -119,7 +119,7 @@ Base UI/shadcn 组件、pnpm workspace。
 
 ```ts
 import {
-  OPENHARNESS_USER_AGENT,
+  VYKOR_USER_AGENT,
   RequestHeaderTemplateError,
   expandRequestHeaderTemplates,
   normalizeRequestHeaderTemplates,
@@ -134,9 +134,9 @@ it("expands every supported placeholder without mutating input", () => {
 
   expect(expandRequestHeaderTemplates(input, {
     sessionId: "session-1",
-    userAgent: OPENHARNESS_USER_AGENT,
+    userAgent: VYKOR_USER_AGENT,
   })).toEqual({
-    "User-Agent": "openharness-ts/1.0",
+    "User-Agent": "vykor/1.0",
     "x-session": "prefix-session-1-session-1",
     "X-Tenant": "desktop",
   });
@@ -159,13 +159,13 @@ it("requires a session only when the template references it", () => {
   expect(() =>
     expandRequestHeaderTemplates(
       { "X-Session": "{{sessionId}}" },
-      { userAgent: OPENHARNESS_USER_AGENT },
+      { userAgent: VYKOR_USER_AGENT },
     ),
   ).toThrow("sessionId");
   expect(
     expandRequestHeaderTemplates(
       { "X-Static": "value" },
-      { userAgent: OPENHARNESS_USER_AGENT },
+      { userAgent: VYKOR_USER_AGENT },
     ),
   ).toEqual({ "X-Static": "value" });
 });
@@ -176,7 +176,7 @@ it("requires a session only when the template references it", () => {
 运行：
 
 ```bash
-pnpm --filter @openharness/api test src/providers/request-header-templates.test.ts
+pnpm --filter @vykor/api test src/providers/request-header-templates.test.ts
 ```
 
 预期：FAIL，提示无法解析 `./request-header-templates.js`。
@@ -186,7 +186,7 @@ pnpm --filter @openharness/api test src/providers/request-header-templates.test.
 实现并导出：
 
 ```ts
-export const OPENHARNESS_USER_AGENT = "openharness-ts/1.0";
+export const VYKOR_USER_AGENT = "vykor/1.0";
 const SUPPORTED_VARIABLES = new Set(["sessionId", "userAgent"]);
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const TEMPLATE = /\{\{([^{}]+)\}\}/g;
@@ -218,8 +218,8 @@ export class RequestHeaderTemplateError extends Error {
 运行：
 
 ```bash
-pnpm --filter @openharness/api test src/providers/request-header-templates.test.ts
-pnpm --filter @openharness/api check-types
+pnpm --filter @vykor/api test src/providers/request-header-templates.test.ts
+pnpm --filter @vykor/api check-types
 ```
 
 预期：全部 PASS。
@@ -247,7 +247,7 @@ git commit -m "feat(api): add provider request header templates"
 ```ts
 it("keeps custom providers user-scoped when project settings are included", async () => {
   const projectRoot = join(configDir, "provider-project");
-  const projectConfigDir = join(projectRoot, ".openharness-ts");
+  const projectConfigDir = join(projectRoot, ".vykor");
   mkdirSync(projectConfigDir, { recursive: true });
   const globalProvider = {
     id: "global-provider",
@@ -279,7 +279,7 @@ it("keeps custom providers user-scoped when project settings are included", asyn
 运行：
 
 ```bash
-pnpm --filter @openharness/core test src/config/settings.test.ts
+pnpm --filter @vykor/core test src/config/settings.test.ts
 ```
 
 预期：FAIL，得到 `project-provider`。
@@ -298,8 +298,8 @@ merged.customProviders = fileSettings?.customProviders;
 - [ ] **步骤 4：运行 core 测试与类型检查**
 
 ```bash
-pnpm --filter @openharness/core test src/config/settings.test.ts
-pnpm --filter @openharness/core check-types
+pnpm --filter @vykor/core test src/config/settings.test.ts
+pnpm --filter @vykor/core check-types
 ```
 
 预期：全部 PASS。
@@ -355,7 +355,7 @@ it.each([
   );
 
   expect(readDefaultHeaders(client)).toEqual({
-    "User-Agent": OPENHARNESS_USER_AGENT,
+    "User-Agent": VYKOR_USER_AGENT,
     "X-Session": "session-42",
   });
 });
@@ -374,7 +374,7 @@ it.each([
 - [ ] **步骤 2：运行 runtime 测试，确认仍依赖 Go 专用逻辑而失败**
 
 ```bash
-pnpm --filter @openharness/agent-runtime test src/default-runtime-provider.test.ts
+pnpm --filter @vykor/agent-runtime test src/default-runtime-provider.test.ts
 ```
 
 预期：FAIL，自定义/任意目录条目未展开。
@@ -387,12 +387,12 @@ pnpm --filter @openharness/agent-runtime test src/default-runtime-provider.test.
 const requestHeaders = customProvider?.headers
   ? expandRequestHeaderTemplates(customProvider.headers, {
       sessionId,
-      userAgent: OPENHARNESS_USER_AGENT,
+      userAgent: VYKOR_USER_AGENT,
     })
   : undefined;
 ```
 
-保持 `createOpenHarnessRuntime` 把 `options.sessionId` 传给
+保持 `createVykorRuntime` 把 `options.sessionId` 传给
 `resolveApiClient`。不要在 runtime 中生成随机 ID，也不要按 provider 名称或 URL
 判断。
 
@@ -404,11 +404,11 @@ const requestHeaders = customProvider?.headers
 - [ ] **步骤 5：运行 API/runtime/daemon 回归测试与类型检查**
 
 ```bash
-pnpm --filter @openharness/api test
-pnpm --filter @openharness/agent-runtime test `
+pnpm --filter @vykor/api test
+pnpm --filter @vykor/agent-runtime test `
   src/default-runtime-provider.test.ts src/default-runtime.test.ts
-pnpm --filter @openharness/server test src/daemon/__test__/daemon-agent.test.ts
-pnpm --filter @openharness/api --filter @openharness/agent-runtime check-types
+pnpm --filter @vykor/server test src/daemon/__test__/daemon-agent.test.ts
+pnpm --filter @vykor/api --filter @vykor/agent-runtime check-types
 ```
 
 预期：全部 PASS。
@@ -494,8 +494,8 @@ expect(fetchMock).toHaveBeenCalledWith(
   "https://gateway.example/v1/models",
   expect.objectContaining({
     headers: expect.objectContaining({
-      "User-Agent": OPENHARNESS_USER_AGENT,
-      "X-Session": "openharness-credential-validation",
+      "User-Agent": VYKOR_USER_AGENT,
+      "X-Session": "vykor-credential-validation",
     }),
   }),
 );
@@ -504,7 +504,7 @@ expect(fetchMock).toHaveBeenCalledWith(
 - [ ] **步骤 3：运行服务测试，确认契约和行为缺失**
 
 ```bash
-pnpm --filter @openharness/server test `
+pnpm --filter @vykor/server test `
   src/application/default-services/credential-validation.test.ts `
   src/application/__test__/default-application-services.test.ts
 ```
@@ -542,8 +542,8 @@ HTTP 调用传入数组、非字符串值或非法模板时不会变成 500。
 
 ```ts
 const VALIDATION_HEADER_CONTEXT = {
-  sessionId: "openharness-credential-validation",
-  userAgent: OPENHARNESS_USER_AGENT,
+  sessionId: "vykor-credential-validation",
+  userAgent: VYKOR_USER_AGENT,
 };
 ```
 
@@ -570,7 +570,7 @@ CredentialStorage 孤立 API Key 时，不生成一条伪造的已配置目录�
 运行：
 
 ```powershell
-pnpm --filter @openharness/server test src/http/__test__/http.test.ts
+pnpm --filter @vykor/server test src/http/__test__/http.test.ts
 ```
 
 预期：FAIL，现有路由仍传字符串 API Key 且没有 PATCH。
@@ -592,12 +592,12 @@ pnpm --filter @openharness/server test src/http/__test__/http.test.ts
 - [ ] **步骤 10：运行服务、HTTP、API 测试和类型检查**
 
 ```bash
-pnpm --filter @openharness/server test `
+pnpm --filter @vykor/server test `
   src/application/default-services/credential-validation.test.ts `
   src/application/__test__/default-application-services.test.ts `
   src/http/__test__/http.test.ts
-pnpm --filter @openharness/api test
-pnpm --filter @openharness/api --filter @openharness/server check-types
+pnpm --filter @vykor/api test
+pnpm --filter @vykor/api --filter @vykor/server check-types
 ```
 
 预期：全部 PASS。
@@ -657,7 +657,7 @@ await client.updateCatalogProviderHeaders("remote", {
 - [ ] **步骤 2：运行 client 定向测试，确认接口不存在**
 
 ```bash
-pnpm --filter @openharness/client test src/transport/__test__/http-client.test.ts
+pnpm --filter @vykor/client test src/transport/__test__/http-client.test.ts
 ```
 
 预期：FAIL，缺少对象输入和 PATCH 方法。
@@ -704,9 +704,9 @@ breaking change 中删除，不在本功能中强迫现有 SDK 调用方迁移�
 - [ ] **步骤 4：运行 transport、Server 契约回归和类型检查**
 
 ```bash
-pnpm --filter @openharness/client test src/transport/__test__/http-client.test.ts
-pnpm --filter @openharness/server test src/http/__test__/http.test.ts
-pnpm --filter @openharness/client --filter @openharness/server check-types
+pnpm --filter @vykor/client test src/transport/__test__/http-client.test.ts
+pnpm --filter @vykor/server test src/http/__test__/http.test.ts
+pnpm --filter @vykor/client --filter @vykor/server check-types
 ```
 
 预期：全部 PASS。
@@ -764,7 +764,7 @@ it("requires both catalog snapshot and credential to report connected", () => {
 });
 ```
 
-再 mock `OpenHarnessClient`，断言：
+再 mock `VykorClient`，断言：
 
 - catalog connect 转发模板；
 - 内置 connect 继续只调用 `authLogin`，忽略 headers；
@@ -775,7 +775,7 @@ it("requires both catalog snapshot and credential to report connected", () => {
 - [ ] **步骤 2：运行 Desktop main 测试，确认状态和方法缺失**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run `
+pnpm --filter @vykor/desktop exec vitest run `
   src/main/features/provider/provider-service.test.ts
 ```
 
@@ -834,9 +834,9 @@ customByProvider.get(provider.name)?.source === "models.dev"
 - [ ] **步骤 5：运行 Desktop main、IPC 类型和边界检查**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run `
+pnpm --filter @vykor/desktop exec vitest run `
   src/main/features/provider/provider-service.test.ts
-pnpm --filter @openharness/desktop typecheck:node
+pnpm --filter @vykor/desktop typecheck:node
 pnpm --dir apps/desktop exec node scripts/verify-workspace-boundaries.mjs
 ```
 
@@ -933,7 +933,7 @@ it("returns an explicit empty object when every row is removed", () => {
 - [ ] **步骤 4：运行 Renderer 测试，确认组件和纯函数不存在**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run `
+pnpm --filter @vykor/desktop exec vitest run `
   src/renderer/src/components/desktop/settings-page/request-header-form.test.ts `
   src/renderer/src/components/desktop/settings-page/provider-connection-dialog.test.tsx `
   src/renderer/src/components/desktop/settings-page/catalog-provider-headers-dialog.test.tsx `
@@ -1008,14 +1008,14 @@ export function headersFromRows(
 - [ ] **步骤 8：运行 Renderer 测试、Web 类型检查和 lint**
 
 ```bash
-pnpm --filter @openharness/desktop exec vitest run `
+pnpm --filter @vykor/desktop exec vitest run `
   src/renderer/src/components/desktop/settings-page/request-header-form.test.ts `
   src/renderer/src/components/desktop/settings-page/provider-connection-dialog.test.tsx `
   src/renderer/src/components/desktop/settings-page/catalog-provider-headers-dialog.test.tsx `
   src/renderer/src/components/desktop/settings-page/custom-provider-form.test.ts `
   src/renderer/src/components/desktop/settings-page/custom-provider-dialog.test.ts
-pnpm --filter @openharness/desktop typecheck:web
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/desktop typecheck:web
+pnpm --filter @vykor/desktop lint
 ```
 
 预期：全部 PASS，且没有 accessibility 或 hooks 警告。
@@ -1076,12 +1076,12 @@ rg "isOpenCodeGoTarget|buildOpenCodeGoHeaders|OPENCODE_GO_" `
 - [ ] **步骤 3：运行相关包完整测试**
 
 ```bash
-pnpm --filter @openharness/api test
-pnpm --filter @openharness/core test
-pnpm --filter @openharness/agent-runtime test
-pnpm --filter @openharness/client test
-pnpm --filter @openharness/server test
-pnpm --filter @openharness/desktop test
+pnpm --filter @vykor/api test
+pnpm --filter @vykor/core test
+pnpm --filter @vykor/agent-runtime test
+pnpm --filter @vykor/client test
+pnpm --filter @vykor/server test
+pnpm --filter @vykor/desktop test
 ```
 
 预期：所有 test files 通过，0 failures。
@@ -1089,13 +1089,13 @@ pnpm --filter @openharness/desktop test
 - [ ] **步骤 4：运行类型、lint、架构和文档验证**
 
 ```bash
-pnpm --filter @openharness/api `
-  --filter @openharness/core `
-  --filter @openharness/agent-runtime `
-  --filter @openharness/client `
-  --filter @openharness/server check-types
-pnpm --filter @openharness/desktop typecheck
-pnpm --filter @openharness/desktop lint
+pnpm --filter @vykor/api `
+  --filter @vykor/core `
+  --filter @vykor/agent-runtime `
+  --filter @vykor/client `
+  --filter @vykor/server check-types
+pnpm --filter @vykor/desktop typecheck
+pnpm --filter @vykor/desktop lint
 pnpm check:architecture
 pnpm check-docs
 git diff --check

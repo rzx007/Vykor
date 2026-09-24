@@ -1,5 +1,5 @@
-import { getInstalledPluginStorePath } from "@openharness/core";
-import { getNativeToolRuntimeSnapshot } from "@openharness/agent-runtime";
+import { getInstalledPluginStorePath } from "@vykor/core";
+import { getNativeToolRuntimeSnapshot } from "@vykor/agent-runtime";
 import {
   installLocalNativePlugin,
   loadNativePlugin,
@@ -10,13 +10,13 @@ import {
   verifyInstalledNativePlugin,
   type InstalledPluginRecord,
   type InstalledPluginStoreV1,
-} from "@openharness/plugins";
+} from "@vykor/plugins";
 import {
   resolveGitPluginSource,
   resolveLocalPluginArchive,
   type ResolvedGitPluginSource,
   type ResolvedLocalPluginArchive,
-} from "@openharness/plugin-sources";
+} from "@vykor/plugin-sources";
 import type { PluginArchiveError, PluginArchivePreview, PluginGitPreview, PluginInfo, PluginService } from "../settings-api.js";
 import type { DaemonSettingsRef } from "./shared.js";
 

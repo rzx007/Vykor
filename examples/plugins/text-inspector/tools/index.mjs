@@ -1,4 +1,4 @@
-/** @type {import('@openharness/plugins/sdk').NativeToolRegister} */
+/** @type {import('@vykor/plugins/sdk').NativeToolRegister} */
 export const registerTools = () => [{
   name: "TextInspectorCheck",
   description: "检查传入文本的行首制表符和行尾空白，返回行号与问题代码。",

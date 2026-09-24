@@ -127,7 +127,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@openharness/client"
+} from "@vykor/client"
 import type { DesktopUpdateState } from "./update-types"
 import type {
   DesktopMcpAddInput,
@@ -141,7 +141,7 @@ import type {
   DesktopMcpSnapshot,
   DesktopMcpUpdateInput,
 } from "./mcp-types"
-import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@openharness/client"
+import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@vykor/client"
 import type {
   DesktopConnectionsSnapshot,
   DesktopFeishuAllowInput,

@@ -25,10 +25,10 @@ export interface DesktopWindowMaterialState {
 
 export const DEFAULT_WINDOW_MATERIAL_PREFERENCE: DesktopWindowMaterialPreference = "glass"
 
-export const WINDOW_MATERIAL_ARGUMENT_PREFIX = "--openharness-window-material="
-export const WINDOW_MATERIAL_ACTIVE_ARGUMENT_PREFIX = "--openharness-window-material-active="
-export const WINDOW_MATERIAL_REASON_ARGUMENT_PREFIX = "--openharness-window-material-reason="
-export const WINDOW_MATERIAL_SHELL_ARGUMENT_PREFIX = "--openharness-window-material-shell="
+export const WINDOW_MATERIAL_ARGUMENT_PREFIX = "--vykor-window-material="
+export const WINDOW_MATERIAL_ACTIVE_ARGUMENT_PREFIX = "--vykor-window-material-active="
+export const WINDOW_MATERIAL_REASON_ARGUMENT_PREFIX = "--vykor-window-material-reason="
+export const WINDOW_MATERIAL_SHELL_ARGUMENT_PREFIX = "--vykor-window-material-shell="
 export const NO_WINDOW_MATERIAL_REASON = "none"
 
 const PREFERENCES = new Set<DesktopWindowMaterialPreference>(["glass", "opaque"])

@@ -142,7 +142,7 @@ describe("utility panel state", () => {
     }
     const persisted = new Map<string, string>([
       [
-        "openharness.desktop.file-tabs",
+        "vykor.desktop.file-tabs",
         JSON.stringify({ [draftScope]: { activePath: "README.md", paths: ["README.md"] } }),
       ],
     ])
@@ -156,7 +156,7 @@ describe("utility panel state", () => {
 
     expect(readUtilityPanelRuntimeState(draftScope)).toBeUndefined()
     expect(readUtilityPanelRuntimeState(sessionScope)).toBe(state)
-    expect(JSON.parse(persisted.get("openharness.desktop.file-tabs") ?? "{}")).toEqual({
+    expect(JSON.parse(persisted.get("vykor.desktop.file-tabs") ?? "{}")).toEqual({
       [sessionScope]: { activePath: "README.md", paths: ["README.md"] },
     })
   })

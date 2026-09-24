@@ -6,7 +6,7 @@
 
 2026-09-09 核对了 [OpenAI 官方包格式说明](https://developers.openai.com/plugins/build/plugins)，并只读检查本机已安装的 Figma 2.0.21、Plugin Management 0.1.0 manifest。真实插件都使用 `.codex-plugin/plugin.json`，声明 `skills`、`apps` 和展示信息。测试使用独立编写的最小样本，不复制商业插件正文或用户凭据。
 
-官方现在还支持带 `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` 的根级 manifest。这是外部输入，不能改变 Native Runtime 只读取 `.openharness-plugin/plugin.json` 的约束。
+官方现在还支持带 `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` 的根级 manifest。这是外部输入，不能改变 Native Runtime 只读取 `.vykor-plugin/plugin.json` 的约束。
 
 ## 范围
 
@@ -25,7 +25,7 @@
 
 转换器不联网、不 import 源代码、不运行脚本或 MCP、不安装依赖，也不写安装状态。拒绝符号链接、目录联接、越界路径、输出嵌入源目录、已有输出和过期或被篡改的计划。失败清理本次临时目录。
 
-共享来源摘要使用 `openharness-source-v2` 编码：排序后的每个文件写入 JSON 编码的路径、长度和内容 SHA-256，再计算总摘要。旧的「路径、零字节、原始内容」拼接允许二进制资源伪造文件边界，已经移除。旧转换计划需要重新生成；安装快照的 behavior digest 使用另一套现有实现，不受本次来源摘要变更影响。
+共享来源摘要使用 `vykor-source-v2` 编码：排序后的每个文件写入 JSON 编码的路径、长度和内容 SHA-256，再计算总摘要。旧的「路径、零字节、原始内容」拼接允许二进制资源伪造文件边界，已经移除。旧转换计划需要重新生成；安装快照的 behavior digest 使用另一套现有实现，不受本次来源摘要变更影响。
 
 网络与进程权限写入 Native manifest 供 Installer 再次要求批准；转换批准和安装权限批准分别处理。源插件声明的 Apps 权限不能自动变成 Native 权限。
 

@@ -2,7 +2,7 @@
 
 > 状态：当前 Runtime 上下文压缩说明；主实现以 `packages/core/src/engine/compact-service.ts` 为准。
 
-`CompactService` 是 OpenHarness 的上下文压缩服务。唯一实现位于
+`CompactService` 是 Vykor 的上下文压缩服务。唯一实现位于
 `packages/core/src/engine/compact-service.ts`，由 `QueryEngine` 在每轮模型调用前自动触发，也可通过
 `/compact` 手动触发。
 

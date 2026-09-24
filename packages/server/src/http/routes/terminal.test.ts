@@ -2,7 +2,7 @@ import type {
   TerminalCreateRequest,
   TerminalEventListener,
   TerminalSessionInfo,
-} from "@openharness/terminal";
+} from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DaemonTerminalService } from "../../terminal/index.js";

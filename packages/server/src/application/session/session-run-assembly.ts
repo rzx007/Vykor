@@ -1,5 +1,5 @@
-import type { AttachmentLimits, SessionUserInputItem } from "@openharness/protocol";
-import type { GoalOperations, SessionStore } from "@openharness/services";
+import type { AttachmentLimits, SessionUserInputItem } from "@vykor/protocol";
+import type { GoalOperations, SessionStore } from "@vykor/services";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 import { RunAdmissionService } from "./run-admission-service.js";

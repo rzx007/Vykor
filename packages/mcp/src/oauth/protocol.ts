@@ -1,4 +1,4 @@
-import type { McpOAuthCredentialRecord } from "@openharness/core";
+import type { McpOAuthCredentialRecord } from "@vykor/core";
 import {
   discoverOAuthServerInfo,
   extractWWWAuthenticateParams,
@@ -41,7 +41,7 @@ export async function discoverOAuth(
   const challenge = await timedFetch(fetchImpl, target, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "openharness", version: "1.0.0" } } }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "vykor", version: "1.0.0" } } }),
     signal: options.signal,
   }).catch(() => undefined);
   const challengedMetadata = challenge
