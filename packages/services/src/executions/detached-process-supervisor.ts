@@ -560,11 +560,13 @@ export class DetachedProcessSupervisor {
     // `exit` can fire before stdout/stderr have drained. `close` fires only
     // after the process has ended and its stdio streams are closed, so readers
     // cannot observe a terminal task before its final output is persisted.
+    let spawnFailed = false;
     const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
-      void this.handleExit(taskId, generation, code, signal);
+      void this.handleExit(taskId, generation, spawnFailed ? undefined : code, signal);
     };
     child.on("close", onClose);
     child.on("error", (err) => {
+      spawnFailed = true;
       append(`[spawn error] ${(err as Error).message}\n`);
     });
 
@@ -574,7 +576,7 @@ export class DetachedProcessSupervisor {
   private async handleExit(
     taskId: string,
     generation: number,
-    code: number | null,
+    code: number | null | undefined,
     _signal: NodeJS.Signals | null,
   ): Promise<void> {
     // Stale watcher (task was restarted or explicitly stopped).
@@ -590,6 +592,7 @@ export class DetachedProcessSupervisor {
     // Agent tasks are resurrected lazily, only when something tries to write to
     // a dead agent's stdin (see `doWrite` -> `restartAgentProcess`).
     task.exitCode = exitCode;
+    task.processExitCode = code;
     if (task.status !== "stopped") {
       task.status = exitCode === 0 ? "completed" : "failed";
     }
@@ -633,6 +636,7 @@ export class DetachedProcessSupervisor {
     task.startedAt = Date.now();
     task.finishedAt = undefined;
     task.exitCode = undefined;
+    task.processExitCode = undefined;
     if (task.outputFile) {
       try {
         appendBoundedOutput(task.outputFile, RESTART_NOTICE);

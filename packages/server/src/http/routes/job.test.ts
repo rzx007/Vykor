@@ -17,7 +17,7 @@ const snapshot: JobSnapshot = {
 
 describe("Job routes", () => {
   it("requires and forwards the owner session when listing", async () => {
-    const list = vi.fn(async () => [snapshot]);
+    const list = vi.fn(async () => [{ ...snapshot, status: "failed" as const, exitCode: 7 }]);
     const app = createJobRoutes({ list } as any);
 
     const response = await app.request(
@@ -33,7 +33,7 @@ describe("Job routes", () => {
       startedAfter: 10,
       limit: 5,
     });
-    await expect(response.json()).resolves.toMatchObject({ jobs: [{ id: "terminal-1" }] });
+    await expect(response.json()).resolves.toMatchObject({ jobs: [{ id: "terminal-1", exitCode: 7 }] });
   });
 
   it("rejects unsupported list filters", async () => {

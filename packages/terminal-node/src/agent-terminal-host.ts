@@ -203,6 +203,7 @@ function snapshot(
     startedAt,
     updatedAt,
     ...(isTerminalJobStatus(status) ? { finishedAt: providerFinishedAt ?? updatedAt } : {}),
+    ...(terminal.exitCode !== undefined ? { exitCode: terminal.exitCode } : {}),
   };
 }
 

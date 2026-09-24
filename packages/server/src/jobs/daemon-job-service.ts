@@ -386,6 +386,7 @@ function terminalSnapshot(terminal: TerminalSessionInfo): JobSnapshot {
     updatedAt: Date.parse(updated),
     ...(terminal.exitedAt ? { finishedAt: Date.parse(terminal.exitedAt) } : {}),
     ...(terminal.exitCode !== undefined ? { detail: `exit code: ${terminal.exitCode ?? "signal"}` } : {}),
+    ...(terminal.exitCode !== undefined ? { exitCode: terminal.exitCode } : {}),
     metadata: { runtime: terminal.runtime, shell: terminal.shell, source: terminal.source },
   };
 }
@@ -408,6 +409,11 @@ function taskSnapshot(task: SessionExecutionRecord): JobSnapshot {
     updatedAt: task.updatedAt,
     ...(task.finishedAt ? { finishedAt: task.finishedAt } : {}),
     ...(task.error ? { detail: task.error } : {}),
+    ...(task.status !== "pending" && task.status !== "running" &&
+      task.metadata.executionBackend === "detached_process" &&
+      (task.metadata.processExitCode === null ||
+        (typeof task.metadata.processExitCode === "number" && Number.isInteger(task.metadata.processExitCode)))
+      ? { exitCode: task.metadata.processExitCode as number | null } : {}),
     metadata: { ...task.metadata, ...(task.childSessionId ? { childSessionId: task.childSessionId } : {}) },
   };
 }

@@ -119,6 +119,20 @@ describe("SessionExecutionProjector", () => {
     expect(context.events.publishSince).toHaveBeenCalledWith(4);
   });
 
+  it("merges a real process exit result into durable metadata", () => {
+    const context = createContext();
+    const manager = createTaskManager({ readOutput: vi.fn(() => "all passed") });
+    const projector = new SessionExecutionProjector(context);
+    projector.syncPersistentExecution({
+      id: "process-1", type: "shell", status: "failed", description: "tests",
+      cwd: "/repo", metadata: {}, processExitCode: 7,
+    }, manager, "durable-1");
+    expect(context.store.updateSessionTask).toHaveBeenCalledWith("durable-1", {
+      status: "failed", output: "all passed", error: "all passed",
+      metadata: { processExitCode: 7 },
+    });
+  });
+
   it("unregisters a process listener after the task reaches a terminal state", () => {
     const context = createContext();
     context.store.getSessionTask.mockReturnValue({

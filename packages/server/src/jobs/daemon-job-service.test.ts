@@ -1,8 +1,13 @@
 import type { SessionExecutionRecord } from "@vykor/protocol";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SessionStore } from "@vykor/services";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 import { DaemonJobService } from "./daemon-job-service.js";
+import { SessionExecutionProjector } from "../application/session/session-execution-projector.js";
 
 const terminal: TerminalSessionInfo = {
   id: "terminal-1",
@@ -36,6 +41,62 @@ const task: SessionExecutionRecord = {
 };
 
 describe("DaemonJobService", () => {
+  it("reads a projected exit code after the store reopens", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-job-exit-"));
+    const path = join(dir, "store.db");
+    const store = new SessionStore({ path });
+    let reopened: SessionStore | undefined;
+    try {
+      store.sessions.create({ id: "session-1", cwd: "/repo", model: "test" });
+      store.createSessionTask({
+        id: "task-1", sessionId: "session-1", type: "shell", description: "tests", cwd: "/repo",
+        metadata: { executionBackend: "detached_process", owner: "kept" },
+      });
+      new SessionExecutionProjector({
+        store, getChildAgentExecutionRegistry: () => { throw new Error("unused"); },
+        events: { checkpoint: () => 0, publishSince: () => undefined },
+        traceIdForRun: () => "", log: () => undefined,
+      }).syncPersistentExecution({
+        id: "task-1", type: "shell", status: "failed", description: "tests", cwd: "/repo",
+        metadata: {}, processExitCode: 7,
+      }, { readOutput: () => "all passed", registerExecutionListener: () => () => undefined });
+      store.close();
+      reopened = new SessionStore({ path });
+      const service = new DaemonJobService(
+        {
+          getSession: (id: string) => reopened!.sessions.get(id),
+          listSessionTasks: (id: string) => reopened!.listSessionTasks(id),
+          getSessionTask: (id: string) => reopened!.getSessionTask(id),
+        } as any, { list: async () => [] } as any,
+        () => ({}) as any, () => ({}) as any,
+        { list: () => [], load: () => undefined } as any,
+      );
+      const [job] = await service.list({ sessionId: "session-1", includeFinished: true });
+      expect(job).toMatchObject({ status: "failed", exitCode: 7, metadata: { owner: "kept" } });
+    } finally {
+      reopened?.close();
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reads only a persisted detached-process exit result", async () => {
+    const base = { ...task, type: "shell", status: "failed" as const };
+    const jobs = [
+      { ...base, id: "actual", metadata: { executionBackend: "detached_process", processExitCode: 7 } },
+      { ...base, id: "legacy", metadata: { executionBackend: "detached_process" } },
+      { ...base, id: "running", status: "running" as const, output: "全部通过", metadata: { executionBackend: "detached_process", processExitCode: 0 } },
+      { ...base, id: "child", metadata: { executionBackend: "child_agent", processExitCode: 7 } },
+    ];
+    const { service } = createService(jobs);
+    const snapshots = await service.list({ sessionId: "session-1", includeFinished: true });
+    expect(snapshots.find((job) => job.id === "actual")?.exitCode).toBe(7);
+    expect(snapshots.find((job) => job.id === "legacy")?.exitCode).toBeUndefined();
+    expect(snapshots.find((job) => job.id === "running")).toMatchObject({ status: "running" });
+    expect(snapshots.find((job) => job.id === "running")?.exitCode).toBeUndefined();
+    expect(snapshots.find((job) => job.id === "child")?.exitCode).toBeUndefined();
+  });
+
   it("gives terminal and detached-process Agent producers non-overlapping Job views", async () => {
     const shellTask: SessionExecutionRecord = {
       ...task,
@@ -215,7 +276,7 @@ describe("DaemonJobService", () => {
       timeoutMs: 500,
       after: 5,
     }));
-    expect(result).toMatchObject({ timedOut: false, text: "done", snapshot: { status: "completed" } });
+    expect(result).toMatchObject({ timedOut: false, text: "done", snapshot: { status: "completed", exitCode: 0 } });
   });
 
   it("does not let an Agent address another session through its host", async () => {

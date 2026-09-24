@@ -233,4 +233,19 @@ describe("protocol serialization", () => {
       sequence: 1,
     });
   });
+
+  it("preserves actual Job exit results and rejects invalid codes", () => {
+    const legacy = {
+      id: "job-1", kind: "shell", label: "tests", ownerSession: "s1",
+      status: "failed", capabilities: { read: true, wait: true, send: false, cancel: false },
+      cwd: "/repo", startedAt: 1, updatedAt: 2,
+    };
+    expect(decodeJobSnapshot(legacy).exitCode).toBeUndefined();
+    for (const exitCode of [0, 7, null]) {
+      expect(decodeJobSnapshot({ ...legacy, exitCode }).exitCode).toBe(exitCode);
+    }
+    for (const exitCode of ["7", NaN, Infinity, 1.5]) {
+      expect(() => decodeJobSnapshot({ ...legacy, exitCode })).toThrow();
+    }
+  });
 });

@@ -49,7 +49,8 @@ describe("LocalAgentJobHost adapter", () => {
     expect(retry).toEqual(first);
     await expect(host.list({ sessionId: "session-1", kinds: ["shell"] }))
       .resolves.toHaveLength(1);
-    await host.wait({ sessionId: "session-1", jobId: first.jobId, timeoutMs: 2_000 });
+    await expect(host.wait({ sessionId: "session-1", jobId: first.jobId, timeoutMs: 2_000 }))
+      .resolves.toMatchObject({ snapshot: { status: "completed", exitCode: 0 } });
   });
 
   it("prunes expired settled creation requests", async () => {

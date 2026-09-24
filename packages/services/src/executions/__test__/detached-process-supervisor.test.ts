@@ -193,6 +193,7 @@ describe("DetachedProcessSupervisor real execution", () => {
       exitCode: 1,
       metadata: { status_note: failure },
     });
+    expect(task?.processExitCode).toBeUndefined();
     expect(mgr.readOutput(task!.id)).toContain("[spawn error]");
   });
 
@@ -267,7 +268,39 @@ describe("DetachedProcessSupervisor real execution", () => {
     });
     await waitFor(() => mgr.getExecution(task.id)!.status === "failed");
     expect(mgr.getExecution(task.id)!.exitCode).toBe(3);
+    expect(mgr.getExecution(task.id)!.processExitCode).toBe(3);
     expect(mgr.readOutput(task.id)).toContain("boom");
+  });
+
+  it("keeps a signal exit distinct from the compatible synthetic code", async () => {
+    const mgr = makeManager();
+    const task = await mgr.startShellExecution({
+      command: "signal",
+      description: "signal exit",
+      cwd: process.cwd(),
+      processExecutor: {
+        execShell: async () => ({ ...environmentProcess(""), wait: async () => ({ exitCode: null, signal: "SIGTERM" as const }) }),
+        execProcess: async () => environmentProcess(""),
+      },
+    });
+    await waitFor(() => mgr.getExecution(task.id)?.status === "failed");
+    expect(mgr.getExecution(task.id)).toMatchObject({ exitCode: 1, processExitCode: null });
+  });
+
+  it("leaves raw exit unknown when a process adapter fails to wait", async () => {
+    const mgr = makeManager();
+    const task = await mgr.startShellExecution({
+      command: "fail",
+      description: "adapter failure",
+      cwd: process.cwd(),
+      processExecutor: {
+        execShell: async () => ({ ...environmentProcess(""), wait: async () => { throw new Error("wait failed"); } }),
+        execProcess: async () => environmentProcess(""),
+      },
+    });
+    await waitFor(() => mgr.getExecution(task.id)?.status === "failed");
+    expect(mgr.getExecution(task.id)?.exitCode).toBe(1);
+    expect(mgr.getExecution(task.id)?.processExitCode).toBeUndefined();
   });
 
   it("runs an argv (direct-exec) task without a shell", async () => {

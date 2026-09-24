@@ -335,6 +335,7 @@ export class LocalAgentJobHost implements AgentJobHost, AgentBackgroundShellHost
       updatedAt,
       ...(task.finishedAt ? { finishedAt: task.finishedAt } : {}),
       ...(task.exitCode !== undefined ? { detail: `exit code: ${task.exitCode}` } : {}),
+      ...(task.processExitCode !== undefined ? { exitCode: task.processExitCode } : {}),
       metadata: { ...task.metadata },
     };
   }

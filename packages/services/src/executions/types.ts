@@ -26,6 +26,7 @@ export interface ExecutionSnapshot {
 
 export interface DetachedProcessExecution extends ExecutionSnapshot {
   backend: "detached_process";
+  processExitCode?: number | null;
   command?: string;
   argv?: string[];
   env?: Record<string, string>;

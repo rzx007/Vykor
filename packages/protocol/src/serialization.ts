@@ -403,6 +403,11 @@ export function decodeJobSnapshot(value: unknown): JobSnapshot {
   numberField(job, "startedAt", "job");
   numberField(job, "updatedAt", "job");
   optionalNumber(job, "finishedAt", "job");
+  const exitCode = job.exitCode;
+  if (exitCode !== undefined && exitCode !== null &&
+    (typeof exitCode !== "number" || !Number.isInteger(exitCode))) {
+    throw new ProtocolDataError("job.exitCode must be an integer or null", "job.exitCode");
+  }
   optionalString(job, "detail", "job");
   optionalRecord(job, "metadata", "job");
   return job as unknown as JobSnapshot;

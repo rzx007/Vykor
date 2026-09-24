@@ -26,6 +26,7 @@ export interface JobSnapshot {
   startedAt: number;
   updatedAt: number;
   finishedAt?: number;
+  exitCode?: number | null;
   detail?: string;
   metadata?: Record<string, unknown>;
 }

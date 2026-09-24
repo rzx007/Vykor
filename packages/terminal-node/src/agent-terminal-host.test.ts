@@ -189,6 +189,7 @@ describe("createAgentTerminalBundle", () => {
     await expect(bundle.jobs.cancel({ sessionId: "session-1", jobId: opened.id }))
       .resolves.toMatchObject({
         status,
+        exitCode,
         capabilities: { read: true, wait: true, send: false, cancel: false },
         finishedAt: Date.parse(EXITED_AT),
       });
@@ -208,6 +209,7 @@ describe("createAgentTerminalBundle", () => {
       expect.objectContaining({
         id: opened.id,
         status,
+        exitCode,
         capabilities: { read: true, wait: true, send: false, cancel: false },
         updatedAt: Date.parse(EXITED_AT),
         finishedAt: Date.parse(EXITED_AT),

@@ -26,6 +26,7 @@ export interface ExecutionInfo {
   description: string;
   cwd: string;
   metadata: Record<string, unknown>;
+  processExitCode?: number | null;
 }
 
 type DurableTaskStatus = "pending" | "running" | "completed" | "failed" | "stopped" | "interrupted";
@@ -67,6 +68,7 @@ interface SessionTaskStore {
     runId?: string;
     output?: string;
     error?: string;
+    metadata?: Record<string, unknown>;
   }): { sessionId: string };
 }
 
@@ -222,6 +224,9 @@ export class SessionExecutionProjector {
       status,
       ...(output !== undefined ? { output } : {}),
       ...(status === "failed" ? { error: output ?? "Task failed" } : {}),
+      ...(task.processExitCode === null ||
+        (typeof task.processExitCode === "number" && Number.isInteger(task.processExitCode))
+        ? { metadata: { processExitCode: task.processExitCode } } : {}),
     });
     this.context.events.publishSince(before);
     if (isTerminalTaskStatus(status)) this.untrackProcessExecution(runtime, task.id);
