@@ -26,8 +26,12 @@ describe("attachment Read tool", () => {
       { cwd: "/mnt/c/work", sessionId: "child", environment: { info: { kind: "wsl" } } } as any,
     );
     expect((result.content[0] as { text: string }).text).toBe("2: two\n3: three\nhas_more: true");
+    expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining("attachment://att-1/notes.txt") });
+    expect(result.compactSummary).not.toContain("two");
     expect(readText).toHaveBeenCalledWith(expect.objectContaining({
       authorizationSessionId: "root", assetId: "att-1", offset: 2, limit: 2,
     }));
+    const denied = await tool.execute({ file_path: "attachment://att-1/notes.txt" }, { cwd: "/work", sessionId: "other" });
+    expect(denied).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
   });
 });

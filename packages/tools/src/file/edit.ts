@@ -49,6 +49,8 @@ export const fileEditTool: ToolDefinition = {
       return {
         content: [{ type: "text", text: "old_string must not be empty." }],
         isError: true,
+        failureKind: "invalid_input",
+        executionState: "not_started",
       };
     }
 
@@ -58,6 +60,8 @@ export const fileEditTool: ToolDefinition = {
       return {
         content: [{ type: "text", text: "Error: this is a managed persistence path. Use the Remember tool instead." }],
         isError: true,
+        failureKind: "policy",
+        executionState: "not_started",
       };
     }
 
@@ -65,6 +69,8 @@ export const fileEditTool: ToolDefinition = {
       return {
         content: [{ type: "text", text: `Error: editing system directory files is not allowed: ${filePath}` }],
         isError: true,
+        failureKind: "policy",
+        executionState: "not_started",
       };
     }
 
@@ -74,6 +80,8 @@ export const fileEditTool: ToolDefinition = {
         return {
           content: [{ type: "text", text: readSandboxError }],
           isError: true,
+          failureKind: "policy",
+          executionState: "not_started",
         };
       }
       const writeSandboxError = await sandboxPathError(filePath, cwd, "write", context.settings, context.environment);
@@ -81,6 +89,8 @@ export const fileEditTool: ToolDefinition = {
         return {
           content: [{ type: "text", text: writeSandboxError }],
           isError: true,
+          failureKind: "policy",
+          executionState: "not_started",
         };
       }
 
@@ -88,6 +98,8 @@ export const fileEditTool: ToolDefinition = {
         return {
           content: [{ type: "text", text: editMatchMessage("identical") }],
           isError: true,
+          failureKind: "invalid_input",
+          executionState: "not_started",
         };
       }
 
@@ -103,6 +115,8 @@ export const fileEditTool: ToolDefinition = {
         return {
           content: [{ type: "text", text: "old_string must not be empty." }],
           isError: true,
+          failureKind: "invalid_input",
+          executionState: "not_started",
         };
       }
 
@@ -119,6 +133,9 @@ export const fileEditTool: ToolDefinition = {
               },
             ],
             isError: true,
+            failureKind: "invalid_input",
+            executionState: "not_started",
+            recoveryHint: `匹配位于第 ${lines.join(", ")} 行；请缩小匹配范围或明确 replace_all。`,
           };
         }
         updated = replaceAll
@@ -135,6 +152,8 @@ export const fileEditTool: ToolDefinition = {
             return {
               content: [{ type: "text", text: editMatchMessage(error.kind) }],
               isError: true,
+              failureKind: "invalid_input",
+              executionState: "not_started",
             };
           }
           throw error;
@@ -145,11 +164,16 @@ export const fileEditTool: ToolDefinition = {
 
       return {
         content: [{ type: "text", text: `Successfully edited ${filePath}` }],
+        executionState: "completed",
+        compactSummary: `Edit completed: ${filePath}`,
       };
     } catch (error) {
       return {
         content: [{ type: "text", text: `Error editing file: ${error}` }],
         isError: true,
+        failureKind: "unknown_outcome",
+        executionState: "unknown",
+        recoveryHint: "编辑可能已部分生效；先检查目标文件实际状态。",
       };
     }
   },

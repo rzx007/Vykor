@@ -73,11 +73,15 @@ export function createShellTool(
                 note: "Shell was converted to a background job because the command looks long-running. Use JobWait for bounded progress or JobRead for output snapshots.",
               }),
             }],
+            executionState: "completed",
+            compactSummary: `Shell background job created: jobId=${created.jobId}`,
           };
         } catch (error) {
           return {
             content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
             isError: true,
+            failureKind: "unknown_outcome",
+            executionState: "unknown",
           };
         }
       }
@@ -99,6 +103,8 @@ export function createShellTool(
         return {
           content: [{ type: "text", text: formatShellDialectMismatch(dialectMismatch) }],
           isError: true,
+          failureKind: "invalid_input",
+          executionState: "not_started",
         };
       }
 
@@ -107,6 +113,8 @@ export function createShellTool(
         return {
           content: [{ type: "text", text: formatInterruptedOutput(result.output, spec.maxOutputChars) }],
           isError: true,
+          failureKind: "interrupted",
+          executionState: "unknown",
         };
       }
       if (result.status === "timed_out") {
@@ -116,11 +124,17 @@ export function createShellTool(
             text: formatTimeoutOutput(result.output, spec.timeoutMs, spec.maxOutputChars),
           }],
           isError: true,
+          failureKind: "timeout",
+          executionState: "unknown",
         };
       }
       return {
         content: [{ type: "text", text: formatOutput(result.output, spec.maxOutputChars) }],
         isError: result.status === "failed",
+        executionState: result.failureKind === "policy" ? "not_started" : result.status === "failed" && result.failureKind !== "command" ? "unknown" : "completed",
+        ...(result.status === "failed" ? { failureKind: result.failureKind === "policy" ? "policy" as const : result.failureKind === "command" && result.exitCode !== null ? "command" as const : "unknown_outcome" as const } : {}),
+        ...(result.status === "failed" && result.failureKind === "command" && result.exitCode !== null ? { recoveryHint: `命令退出码 ${result.exitCode}；检查输出后诊断原因。` } : {}),
+        ...(result.status === "completed" ? { compactSummary: `Shell completed: exitCode=${result.exitCode}` } : {}),
       };
     },
   };
@@ -132,7 +146,7 @@ async function executeInEnvironment(
   context: Parameters<ToolDefinition["execute"]>[1],
 ) {
   if (!command) {
-    return { content: [{ type: "text" as const, text: "command is required" }], isError: true };
+    return { content: [{ type: "text" as const, text: "command is required" }], isError: true, failureKind: "invalid_input" as const, executionState: "not_started" as const };
   }
   const environment = context.environment!;
   const descriptor = environment.info.shellDescriptor;
@@ -145,7 +159,8 @@ async function executeInEnvironment(
         text: formatShellDialectMismatch({ shell, problems }),
       }],
       isError: true,
-      failureKind: "command" as const,
+      failureKind: "invalid_input" as const,
+      executionState: "not_started" as const,
       metadata: shellResultMetadata(descriptor, null, "failed"),
     };
   }
@@ -182,6 +197,8 @@ async function executeInEnvironment(
         return {
           content: [{ type: "text" as const, text: formatTimeoutOutput(output, timeoutMs, 12_000) }],
           isError: true,
+          failureKind: "timeout" as const,
+          executionState: "unknown" as const,
           metadata: shellResultMetadata(descriptor, result.exitCode, "timed_out"),
         };
       }
@@ -189,12 +206,16 @@ async function executeInEnvironment(
         return {
           content: [{ type: "text" as const, text: formatInterruptedOutput(output, 12_000) }],
           isError: true,
+          failureKind: "interrupted" as const,
+          executionState: "unknown" as const,
           metadata: shellResultMetadata(descriptor, result.exitCode, "interrupted"),
         };
       }
       return {
         content: [{ type: "text" as const, text: formatted }],
         isError: result.exitCode !== 0,
+        executionState: "completed" as const,
+        ...(result.exitCode !== 0 ? { failureKind: "command" as const, recoveryHint: `命令退出码 ${result.exitCode}；检查输出后诊断原因。` } : { compactSummary: `Shell completed: exitCode=${result.exitCode}` }),
         metadata: shellResultMetadata(
           descriptor,
           result.exitCode,
@@ -209,6 +230,8 @@ async function executeInEnvironment(
     return {
       content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
       isError: true,
+      failureKind: "unknown_outcome" as const,
+      executionState: "unknown" as const,
       metadata: shellResultMetadata(descriptor, null, "failed"),
     };
   } finally {

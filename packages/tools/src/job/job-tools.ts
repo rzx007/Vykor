@@ -204,13 +204,28 @@ function resolveHost(context: ToolContext): { jobs: NonNullable<ToolContext["job
 }
 
 function result(action: string, value: object): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify({ kind: "job", action, ...value }) }] };
+  const job = value as { jobId?: string; cursor?: number; snapshot?: { id?: string; status?: string; exitCode?: number | null }; results?: Array<{ jobId: string; cursor?: number; snapshot?: { id?: string; status?: string; exitCode?: number | null } }> };
+  const all = job.results ?? (job.snapshot?.id ? [job] : []);
+  const observed = all.filter((item) => item.snapshot?.id).slice(-8);
+  const facts = observed.map((item) => [
+    `jobId=${item.snapshot!.id!.slice(0, 40).replace(/[^A-Za-z0-9._:-]/g, "?")}`,
+    item.snapshot?.status ? `status=${item.snapshot.status}` : undefined,
+    item.cursor !== undefined ? `cursor=${item.cursor}` : undefined,
+    item.snapshot?.exitCode !== undefined ? `exitCode=${item.snapshot.exitCode}` : undefined,
+  ].filter(Boolean).join("; ")).join(" | ");
+  return {
+    content: [{ type: "text", text: JSON.stringify({ kind: "job", action, ...value }) }],
+    executionState: "completed",
+    compactSummary: `Job${action} completed${all.length > observed.length ? `: ${all.length - observed.length} earlier jobs omitted; latest ${observed.length}: ` : facts ? ": " : ""}${facts}`,
+  };
 }
 
 function failed(error: unknown): ToolResult {
   return {
     content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
     isError: true,
+    failureKind: "unknown_outcome",
+    executionState: "unknown",
   };
 }
 

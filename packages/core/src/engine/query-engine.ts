@@ -970,7 +970,9 @@ export class QueryEngine implements IQueryEngine {
               toolName: toolUse.name,
               toolAttemptId,
               metadata: externalToolMetadata(result.metadata),
-              compactSummary: toolRegistry.inspect(toolUse.name)?.source.kind === "builtin"
+              compactSummary: (toolRegistry.inspect(toolUse.name)?.source.kind === "builtin"
+                || (toolRegistry.inspect(toolUse.name)?.source.kind === "agent"
+                  && this.options.trustedToolOverrides?.has(toolUse.name)))
                 ? toolFeedbackFields(result).compactSummary : undefined,
             } as ToolExecutionResult,
           };

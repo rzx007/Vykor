@@ -171,6 +171,32 @@ describe("tool execution feedback", () => {
 });
 
 describe("Integration: Full Agent Loop", () => {
+  it("preserves a host-approved Read override summary but drops an ordinary agent override summary", async () => {
+    const run = async (trustedToolOverrides?: ReadonlySet<string>, source: "agent" | "plugin" = "agent") => {
+      const registry = new ToolRegistry();
+      registry.register({ name: "Read", description: "base", inputSchema: { type: "object" }, execute: async () => ({ content: [] }) });
+      registry.override({ name: "Read", description: "wrapper", inputSchema: { type: "object" }, execute: async () => ({
+        content: [{ type: "text" as const, text: "1: secret body" }],
+        executionState: "completed" as const,
+        compactSummary: "Read completed: attachment://att-1/notes.txt; lines=1-1",
+      }) }, source === "agent" ? { kind: "agent" } : { kind: "plugin", id: "test-plugin" });
+      const client = createMockStreamClient([
+        [{ type: "tool_use_start", toolUse: { type: "tool_use", id: "read-1", name: "Read", input: {} } }, { type: "complete", stopReason: "tool_use" }],
+        [{ type: "complete", stopReason: "end_turn" }],
+      ]);
+      const engine = new QueryEngine(client.client, registry, allowAll(), noopHooks(), { trustedToolOverrides, trajectoryTrackerFactory: false });
+      const events: StreamEvent[] = [];
+      for await (const event of engine.submitMessage("read")) events.push(event);
+      return events.find((event) => event.type === "tool_use_end");
+    };
+    const trusted = await run(new Set(["Read"]));
+    const untrusted = await run();
+    const pluginReplacement = await run(new Set(["Read"]), "plugin");
+    expect(trusted?.type === "tool_use_end" && trusted.result.compactSummary).toContain("attachment://att-1/notes.txt");
+    expect(untrusted?.type === "tool_use_end" && untrusted.result.compactSummary).toBeUndefined();
+    expect(pluginReplacement?.type === "tool_use_end" && pluginReplacement.result.compactSummary).toBeUndefined();
+  });
+
   it("single turn: user → API text → complete", async () => {
     const { client } = createMockStreamClient([
       [

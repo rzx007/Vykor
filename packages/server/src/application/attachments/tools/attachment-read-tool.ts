@@ -23,9 +23,9 @@ export function createAttachmentReadTool(options: {
       if (!isAttachmentUri(path)) return await options.defaultTool.execute(input, context);
       try {
         const parsed = parseAttachmentUri(path);
-        if (!context.sessionId) throw new Error("attachment_resource_access_denied");
+        if (!context.sessionId) return deniedResult();
         const authorizationSessionId = options.authorizationSessions.resolve(context.sessionId);
-        if (!authorizationSessionId) throw new Error("attachment_resource_access_denied");
+        if (!authorizationSessionId) return deniedResult();
         const slice = await options.attachmentReader.readText({
           authorizationSessionId,
           assetId: parsed.assetId,
@@ -36,7 +36,11 @@ export function createAttachmentReadTool(options: {
         const numbered = slice.content.split("\n")
           .map((line, index) => `${slice.startLine + index}: ${line}`)
           .join("\n");
-        return { content: [{ type: "text", text: `${numbered}${numbered ? "\n" : ""}has_more: ${slice.hasMore}` }] };
+        return {
+          content: [{ type: "text", text: `${numbered}${numbered ? "\n" : ""}has_more: ${slice.hasMore}` }],
+          executionState: "completed",
+          compactSummary: `Read completed: ${path}; lines=${slice.startLine}-${slice.endLine}; hasMore=${slice.hasMore}`,
+        };
       } catch (error) {
         return errorResult(error);
       }
@@ -50,5 +54,13 @@ function numberInput(value: unknown, fallback: number): number {
 
 function errorResult(error: unknown): ToolResult {
   const text = error instanceof Error ? error.message : "attachment_resource_unavailable";
-  return { content: [{ type: "text", text }], isError: true, failureKind: "command" };
+  return { content: [{ type: "text", text }], isError: true, failureKind: "command", executionState: "unknown" };
+}
+
+function deniedResult(): ToolResult {
+  return {
+    content: [{ type: "text", text: "attachment_resource_access_denied" }],
+    isError: true, failureKind: "policy", executionState: "not_started",
+    recoveryHint: "附件访问范围受限；不能换工具绕过。",
+  };
 }

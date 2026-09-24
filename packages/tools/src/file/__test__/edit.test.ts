@@ -26,6 +26,8 @@ describe("fileEditTool", () => {
       );
 
       expect(result.isError).toBe(true);
+      expect(result).toMatchObject({ executionState: "not_started", failureKind: "invalid_input" });
+      expect(result.recoveryHint).toContain("1, 3, 4");
       expect((result.content[0] as { type: "text"; text: string }).text)
         .toBe("Found 3 matches at lines 1, 3, 4. Make old_string more specific or use replace_all to replace all.");
     } finally {

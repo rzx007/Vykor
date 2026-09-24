@@ -1,7 +1,7 @@
 import type { ToolDefinition } from "@vykor/core";
 import { createToolAbortScope } from "../abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
-import { formatWebError } from "./tool-errors.js";
+import { formatWebError, webErrorFacts } from "./tool-errors.js";
 import type { WebFetchFormat, WebRuntimeLike } from "./types.js";
 
 export function createWebFetchTool(runtime: WebRuntimeLike = defaultWebRuntime): ToolDefinition {
@@ -44,6 +44,11 @@ export function createWebFetchTool(runtime: WebRuntimeLike = defaultWebRuntime):
               text: `web_fetch failed [http_status]: HTTP ${result.status}${statusText}`,
             }],
             isError: true,
+            failureKind: "provider",
+            executionState: "completed",
+            recoveryHint: result.status === 429 || result.status === 503
+              ? "网页服务暂时不可用；稍后检查访问条件再决定是否重试。"
+              : "检查网页地址及访问条件；HTTP 状态本身不能区分认证和策略限制。",
           };
         }
 
@@ -53,11 +58,12 @@ export function createWebFetchTool(runtime: WebRuntimeLike = defaultWebRuntime):
           `Content-Type: ${result.contentType || "(unknown)"}`,
           "",
         ].join("\n");
-        return { content: [{ type: "text", text: `${header}\n${result.body}` }] };
+        return { content: [{ type: "text", text: `${header}\n${result.body}` }], executionState: "completed", compactSummary: `WebFetch completed: HTTP ${result.status}` };
       } catch (error) {
         return {
           content: [{ type: "text", text: formatWebError("web_fetch", error) }],
           isError: true,
+          ...webErrorFacts(error),
         };
       } finally {
         abortScope.dispose();

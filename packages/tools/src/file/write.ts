@@ -40,6 +40,8 @@ export const fileWriteTool: ToolDefinition = {
       return {
         content: [{ type: "text", text: "Error: this is a managed persistence path. Use the Remember tool instead." }],
         isError: true,
+        failureKind: "policy",
+        executionState: "not_started",
       };
     }
 
@@ -47,6 +49,8 @@ export const fileWriteTool: ToolDefinition = {
       return {
         content: [{ type: "text", text: `Error: writing to system directory is not allowed: ${filePath}` }],
         isError: true,
+        failureKind: "policy",
+        executionState: "not_started",
       };
     }
 
@@ -56,17 +60,25 @@ export const fileWriteTool: ToolDefinition = {
         return {
           content: [{ type: "text", text: sandboxError }],
           isError: true,
+          failureKind: "policy",
+          executionState: "not_started",
+          recoveryHint: "此路径被写入策略限制；不能换工具绕过。",
         };
       }
 
       await fileOperationsFor(context).writeText(filePath, content);
       return {
         content: [{ type: "text", text: `Successfully wrote to ${filePath}` }],
+        executionState: "completed",
+        compactSummary: `Write completed: ${filePath}`,
       };
     } catch (error) {
       return {
         content: [{ type: "text", text: `Error writing file: ${error}` }],
         isError: true,
+        failureKind: "unknown_outcome",
+        executionState: "unknown",
+        recoveryHint: "写入可能已部分生效；先检查目标文件实际状态。",
       };
     }
   },

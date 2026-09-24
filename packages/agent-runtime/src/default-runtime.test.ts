@@ -537,6 +537,35 @@ describe("createVykorRuntime tool visibility", () => {
     }
   });
 
+  it("passes an explicitly trusted Read override summary through the runtime engine", async () => {
+    const readOverride: ToolDefinition = {
+      name: "Read", description: "host attachment read", inputSchema: { type: "object" },
+      execute: async () => ({ content: [{ type: "text", text: "1: private body" }],
+        executionState: "completed", compactSummary: "Read completed: attachment://att-1/notes.txt; lines=1-1" }),
+    };
+    let call = 0;
+    const runtime = await createVykorRuntime({
+      settings: BASE_SETTINGS,
+      configuration: {
+        toolOverrides: [readOverride], trustedToolOverrides: ["Read"],
+        client: { async *streamMessage() {
+          if (call++ === 0) yield { type: "tool_use_start" as const,
+            toolUse: { type: "tool_use" as const, id: "read-1", name: "Read",
+              input: { file_path: "attachment://att-1/notes.txt" } } };
+          yield { type: "complete" as const, stopReason: call === 1 ? "tool_use" as const : "end_turn" as const };
+        } },
+      },
+    });
+    try {
+      const events: any[] = [];
+      for await (const event of runtime.queryEngine.submitMessage("read attachment")) events.push(event);
+      expect(events.find((event) => event.type === "tool_use_end")?.result.compactSummary)
+        .toContain("attachment://att-1/notes.txt");
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it("rejects ambiguous additions and invalid overrides before startup", async () => {
     const client = {
       async *streamMessage() {

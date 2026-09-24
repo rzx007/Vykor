@@ -57,6 +57,8 @@ describe("BackgroundShellCreate", () => {
       label: "print output",
       jobId: "task-durable",
     });
+    expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining("task-durable") });
+    expect(result.compactSummary).not.toContain("process.stdout");
     expect(create).toHaveBeenCalledWith({
       requestId: "tool:call-1",
       cwd: "/repo",
@@ -82,6 +84,8 @@ describe("BackgroundShellCreate", () => {
 
     expect(result).toMatchObject({
       isError: true,
+      executionState: "not_started",
+      failureKind: "configuration",
       content: [{ text: "Background shell request identity is not configured." }],
     });
     expect(create).not.toHaveBeenCalled();

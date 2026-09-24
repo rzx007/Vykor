@@ -22,6 +22,8 @@ return {
           text: "BackgroundShellCreate only creates detached shell processes. Use Agent to create a child agent.",
         }],
         isError: true,
+        failureKind: "invalid_input",
+        executionState: "not_started",
       };
     }
     const description = readRequiredString(input.description, "description");
@@ -29,9 +31,9 @@ return {
     const command = readRequiredString(input.command, "command");
     if ("error" in command) return failed(command.error);
 
-    if (!context.sessionId) return failed("Background shell jobs require a durable session.");
-    if (!context.backgroundShell) return failed("Background shell host is not configured.");
-    if (!context.toolCallId) return failed("Background shell request identity is not configured.");
+    if (!context.sessionId) return { ...failed("Background shell jobs require a durable session."), failureKind: "configuration" as const };
+    if (!context.backgroundShell) return { ...failed("Background shell host is not configured."), failureKind: "configuration" as const };
+    if (!context.toolCallId) return { ...failed("Background shell request identity is not configured."), failureKind: "configuration" as const };
 
     try {
       const created = await context.backgroundShell.create({
@@ -54,9 +56,11 @@ return {
             label: created.label,
           }),
         }],
+        executionState: "completed",
+        compactSummary: `BackgroundShellCreate completed: jobId=${created.jobId}`,
       };
     } catch (error) {
-      return failed(error instanceof Error ? error.message : String(error));
+      return { ...failed(error instanceof Error ? error.message : String(error)), failureKind: "unknown_outcome" as const, executionState: "unknown" as const };
     }
   },
 };
@@ -71,5 +75,5 @@ function readRequiredString(value: unknown, name: string): { value: string } | {
 }
 
 function failed(message: string) {
-  return { content: [{ type: "text" as const, text: message }], isError: true };
+  return { content: [{ type: "text" as const, text: message }], isError: true, failureKind: "invalid_input" as const, executionState: "not_started" as const };
 }

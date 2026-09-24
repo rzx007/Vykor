@@ -51,6 +51,8 @@ describe("fileReadTool", () => {
         "2: two\n\n(Showing lines 2-2 of 3. Use offset=3 to continue.)",
       );
       expect(result.isError).toBeFalsy();
+      expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining(file) });
+      expect(result.compactSummary).not.toContain("two");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -507,6 +509,7 @@ describe("fileReadTool", () => {
       const result = await fileReadTool.execute!({ file_path: join(dir, "zzz.ts") }, { cwd: dir });
 
       expect(result.isError).toBe(true);
+      expect(result).toMatchObject({ failureKind: "invalid_input", executionState: "not_started" });
       expect((result.content[0] as { text: string }).text).toBe(`File not found: ${join(dir, "zzz.ts")}`);
     } finally {
       await rm(dir, { recursive: true, force: true });

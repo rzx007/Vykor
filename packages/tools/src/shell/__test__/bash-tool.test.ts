@@ -12,6 +12,15 @@ import type {
 const posixShell: HostShellLauncher = { kind: "posix-sh" };
 
 describe("createBashTool", () => {
+  it("uses the actual exit code for a failed command without copying its command into the summary", async () => {
+    const tool = createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: 7, output: "diagnostic" })));
+    const feedback = await tool.execute({ command: "echo SECRET_VALUE" }, { cwd: process.cwd() });
+    expect(feedback).toMatchObject({ isError: true, failureKind: "command", executionState: "completed" });
+    expect(feedback.recoveryHint).toContain("7");
+    expect(feedback.content[0]).toMatchObject({ text: "diagnostic" });
+    expect(feedback.compactSummary ?? "").not.toContain("SECRET_VALUE");
+  });
+
   it("executes through the active environment instead of the legacy shell runner", async () => {
     const legacy = fakeExecutor(result({ output: "host" }));
     legacy.resolve = vi.fn(legacy.resolve);
@@ -58,6 +67,8 @@ describe("createBashTool", () => {
     expect(toolResult).toEqual({
       content: [{ type: "text", text: "/workspace" }],
       isError: false,
+      executionState: "completed",
+      compactSummary: "Shell completed: exitCode=0",
       metadata: {
         shellFamily: "posix",
         shellDialect: "posix-sh",
@@ -217,6 +228,8 @@ describe("createBashTool", () => {
     expect(toolResult).toEqual({
       content: [{ type: "text", text: "hello" }],
       isError: false,
+      executionState: "completed",
+      compactSummary: "Shell completed: exitCode=0",
     });
   });
 
@@ -273,6 +286,8 @@ describe("createBashTool", () => {
     expect(toolResult).toEqual({
       content: [{ type: "text", text: "done" }],
       isError: false,
+      executionState: "completed",
+      compactSummary: "Shell completed: exitCode=0",
     });
   });
 
@@ -294,6 +309,8 @@ describe("createBashTool", () => {
     expect(toolResult).toEqual({
       content: [{ type: "text", text: "SRT sandbox is unavailable" }],
       isError: true,
+      failureKind: "unknown_outcome",
+      executionState: "unknown",
     });
   });
 

@@ -22,6 +22,8 @@ describe("job tools", () => {
     const result = await jobWaitTool.execute({ jobIds: ["terminal-1"], timeoutSeconds }, context({ wait }));
     expect(wait).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 60_000 }));
     expect(result.isError).not.toBe(true);
+    expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining("terminal-1") });
+    expect(result.compactSummary).toContain("cursor=4");
     expect(payload(result)).toMatchObject({ results: [{ snapshot: { status: "running" }, timedOut: true }] });
   });
 
@@ -122,13 +124,25 @@ describe("job tools", () => {
 
   it("forwards read cursors and output limits", async () => {
     const read = vi.fn(async () => ({ text: "next", cursor: 4, truncated: false, snapshot }));
-    await jobReadTool.execute({ jobId: "terminal-1", after: 3, maxChars: 40 }, context({ read }));
+    const result = await jobReadTool.execute({ jobId: "terminal-1", after: 3, maxChars: 40 }, context({ read }));
+    expect(result.compactSummary).toContain("jobId=terminal-1; status=running; cursor=4");
+    expect(result.compactSummary).not.toContain("next");
     expect(read).toHaveBeenCalledWith({
       sessionId: "session-1",
       jobId: "terminal-1",
       after: 3,
       maxChars: 40,
     });
+  });
+
+  it("bounds multi-job summaries and marks omitted earlier jobs", async () => {
+    const wait = vi.fn(async (input) => ({ text: "private output", cursor: 1, truncated: false,
+      snapshot: { ...snapshot, id: input.jobId, exitCode: null }, timedOut: true }));
+    const jobIds = Array.from({ length: 10 }, (_, index) => `job-${index}`);
+    const result = await jobWaitTool.execute({ jobIds }, context({ wait }));
+    expect(result.compactSummary).toContain("2 earlier jobs omitted");
+    expect(result.compactSummary).toContain("jobId=job-9; status=running; cursor=1; exitCode=null");
+    expect(result.compactSummary).not.toContain("private output");
   });
 
   it("waits without turning timeout into cancellation", async () => {

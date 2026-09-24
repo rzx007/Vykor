@@ -9,6 +9,22 @@ import {
 } from "../types.js";
 
 describe("web tools", () => {
+  it("records an empty search as completed without copying the query into its summary", async () => {
+    const result = await createWebSearchTool(runtime({ async search() { return { provider: "test", sources: [] }; } }))
+      .execute({ query: "secret-query" }, { cwd: process.cwd() });
+    expect(result).toMatchObject({ executionState: "completed", compactSummary: expect.stringContaining("0 results") });
+    expect(result.compactSummary).not.toContain("secret-query");
+  });
+
+  it("keeps ambiguous HTTP 403 as provider failure and gives a condition check", async () => {
+    const result = await createWebFetchTool(runtime({ async fetch() { return {
+      provider: "test", url: "https://example.com", status: 403, statusText: "Forbidden", ok: false,
+      contentType: "text/plain", body: "", truncated: false,
+    }; } })).execute({ url: "https://example.com" }, { cwd: process.cwd() });
+    expect(result).toMatchObject({ isError: true, failureKind: "provider", executionState: "completed" });
+    expect(result.recoveryHint).toMatch(/access|访问/i);
+  });
+
   it("treats an empty search as a normal result so the query can be refined", async () => {
     const tool = createWebSearchTool(runtime({
       async search() { return { provider: "test-search", sources: [] }; },

@@ -1,7 +1,7 @@
 import type { ToolDefinition } from "@vykor/core";
 import { createToolAbortScope } from "../abort.js";
 import { defaultWebRuntime } from "./default-runtime.js";
-import { formatWebError } from "./tool-errors.js";
+import { formatWebError, webErrorFacts } from "./tool-errors.js";
 import type { WebRuntimeLike } from "./types.js";
 
 export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime): ToolDefinition {
@@ -41,6 +41,8 @@ export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime)
               type: "text",
               text: `No search results found for: ${query}\nTry a broader query, alternate terms, or another relevant source.`,
             }],
+            executionState: "completed",
+            compactSummary: "WebSearch completed: 0 results",
           };
         }
 
@@ -51,11 +53,12 @@ export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime)
           lines.push(`   URL: ${source.url}`);
           if (source.snippet) lines.push(`   ${source.snippet}`);
         }
-        return { content: [{ type: "text", text: lines.join("\n") }] };
+        return { content: [{ type: "text", text: lines.join("\n") }], executionState: "completed", compactSummary: `WebSearch completed: ${result.sources.length} results` };
       } catch (error) {
         return {
           content: [{ type: "text", text: formatWebError("web_search", error) }],
           isError: true,
+          ...webErrorFacts(error),
         };
       } finally {
         abortScope.dispose();
