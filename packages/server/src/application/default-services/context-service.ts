@@ -1,5 +1,4 @@
 import { access } from "node:fs/promises";
-import { join } from "node:path";
 
 import {
   assembleContextUsageSnapshot,
@@ -19,7 +18,7 @@ import {
   type PersonalPromptFileDiagnostic,
   type PromptLayers,
 } from "@vykor/prompts";
-import { getLocalRulesDir, hasFactSource, loadFacts } from "@vykor/personalization";
+import { getLocalRulesDir, loadFacts } from "@vykor/personalization";
 import { loadOutputStyles } from "@vykor/output-styles";
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
 
@@ -106,17 +105,13 @@ export function createDefaultContextService(
       const { manager, directory: memoryDirectory } = await openMemoryManager(cwd);
       const memoryEntries = await manager.getAll();
       const { skillRegistry } = await discoverVykorExtensions(cwd, settings);
-      let sourcedFacts = 0;
-      let unverifiedFacts = 0;
+      let factCount = 0;
       let factsUnreadable = false;
       try {
-        const facts = loadFacts(cwd);
-        sourcedFacts = facts.facts.filter(hasFactSource).length;
-        unverifiedFacts = facts.facts.length - sourcedFacts;
+        factCount = loadFacts(cwd).facts.length;
       } catch {
         factsUnreadable = true;
       }
-      const legacyRulesExist = await pathExists(join(getConfigDir(), "local_rules", "rules.md"));
       const credentialsPath = getCredentialsFilePath();
       const credentialsConfigured = await pathExists(credentialsPath);
       const outputStyles = loadOutputStyles();
@@ -145,7 +140,7 @@ export function createDefaultContextService(
         },
         {
           source: "local_rules",
-          status: `${factsUnreadable ? "unreadable" : `${sourcedFacts} sourced, ${unverifiedFacts} unverified`}${legacyRulesExist ? "; legacy global rules preserved" : ""}`,
+          status: factsUnreadable ? "unreadable" : `${factCount} sourced`,
           written: "/remember success best-effort",
           injected: "system prompt volatile local rules",
           purpose: "machine environment facts",

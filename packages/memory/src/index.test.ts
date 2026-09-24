@@ -482,7 +482,7 @@ describe("MemoryManager Markdown store", () => {
     expect((await new MemoryManager(1000, dir).get(entry.id))?.description).toBe("Use SQLite for session state");
   });
 
-  it("loads an older auto-extracted file with an empty description", async () => {
+  it("rejects a Markdown memory whose required description is empty", async () => {
     dir = await mkdtemp(join(tmpdir(), "vk-memory-old-description-"));
     await writeFile(join(dir, "mem-old.md"), renderMemoryFile({
       schema_version: 1,
@@ -498,10 +498,23 @@ describe("MemoryManager Markdown store", () => {
       use_count: 0,
     }, "Use SQLite for session state"), "utf-8");
 
-    expect((await new MemoryManager(1000, dir).get("mem-old"))?.description).toBe("Use SQLite for session state");
+    await expect(new MemoryManager(1000, dir).get("mem-old"))
+      .rejects.toThrow("Memory record is missing required field: description");
   });
 
-  it("keeps an older credential-like file inspectable but out of recall and the index", async () => {
+  it("rejects a Markdown memory with an empty body", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vk-memory-empty-body-"));
+    await writeFile(join(dir, "mem-empty.md"), renderMemoryFile({
+      schema_version: 1, id: "mem-empty", name: "Empty note", description: "Empty note",
+      type: "project", scope: "project", importance: 0, signature: "empty-signature",
+      created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", use_count: 0,
+    }, ""), "utf-8");
+
+    await expect(new MemoryManager(1000, dir).get("mem-empty"))
+      .rejects.toThrow("Memory content must not be empty");
+  });
+
+  it("keeps a manually edited credential-like file inspectable but out of recall and the index", async () => {
     dir = await mkdtemp(join(tmpdir(), "vk-memory-old-credential-"));
     await writeFile(join(dir, "mem-secret.md"), renderMemoryFile({
       schema_version: 1,
@@ -511,7 +524,7 @@ describe("MemoryManager Markdown store", () => {
       type: "project",
       scope: "project",
       importance: 0,
-      signature: "legacy-secret-signature",
+      signature: "direct-secret-signature",
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
       use_count: 0,

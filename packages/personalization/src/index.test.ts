@@ -90,6 +90,28 @@ describe("factsToRulesMarkdown", () => {
 });
 
 describe("rules persistence", () => {
+  it("rejects project facts without a durable source on both read and write", () => {
+    const unsourced = { key: "ip_address:10.9.9.9", type: "ip_address", label: "Server IP", value: "10.9.9.9", confidence: 0.7 };
+    expect(() => saveFacts({ facts: [unsourced] }, projectDir)).toThrow("Project facts require valid records");
+
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "facts.json"), JSON.stringify({ facts: [unsourced] }), "utf-8");
+    expect(() => loadFacts(projectDir)).toThrow("Project facts file is unreadable");
+    expect(loadLocalRules(projectDir)).toBe("");
+  });
+
+  it("rejects sourced project facts with missing values", () => {
+    const invalid = {
+      key: "ip_address:missing", type: "ip_address", label: "Server IP", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    };
+    expect(() => saveFacts({ facts: [invalid as never] }, projectDir)).toThrow("Project facts require valid records");
+
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "facts.json"), JSON.stringify({ facts: [invalid] }), "utf-8");
+    expect(() => loadFacts(projectDir)).toThrow("Project facts file is unreadable");
+  });
+
   it("does not overwrite an unreadable facts file during a later extraction", () => {
     mkdirSync(dir, { recursive: true });
     const path = join(dir, "facts.json");
@@ -110,9 +132,8 @@ describe("rules persistence", () => {
     expect(loadLocalRules(projectDir)).toBe("");
   });
 
-  it("loads only facts with a durable source, regardless of cached rules text", () => {
+  it("renders stored facts instead of cached rules text", () => {
     saveFacts({ facts: [
-      { key: "ip_address:10.9.9.9", type: "ip_address", label: "Server IP", value: "10.9.9.9", confidence: 0.7 },
       { key: "ip_address:10.1.2.3", type: "ip_address", label: "Server IP", value: "10.1.2.3", confidence: 0.7,
         sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
     ] }, projectDir);
@@ -123,11 +144,15 @@ describe("rules persistence", () => {
   });
 
   it("does not treat blank source identifiers as provenance", () => {
-    saveFacts({ facts: [{
+    const invalid = {
       key: "ip_address:10.8.8.8", type: "ip_address", label: "Server IP", value: "10.8.8.8", confidence: 0.7,
       sourceSessionId: " ", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
-    }] }, projectDir);
+    };
+    expect(() => saveFacts({ facts: [invalid] }, projectDir)).toThrow("Project facts require valid records");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "facts.json"), JSON.stringify({ facts: [invalid] }), "utf-8");
 
+    expect(() => loadFacts(projectDir)).toThrow("Project facts file is unreadable");
     expect(loadLocalRules(projectDir)).toBe("");
   });
 
@@ -142,14 +167,15 @@ describe("rules persistence", () => {
     expect(loadFacts(projectDir).facts).toHaveLength(1);
   });
 
-  it("persists rules.md and facts.json without trusting an unsourced cache", () => {
+  it("persists rules.md and facts.json without trusting a stale cache", () => {
     expect(loadLocalRules(projectDir)).toBe("");
     saveLocalRules("# Rules\n- x", projectDir);
     expect(readFileSync(join(dir, "rules.md"), "utf-8")).toBe("# Rules\n- x\n");
     expect(loadLocalRules(projectDir)).toBe("");
 
     expect(loadFacts(projectDir)).toEqual({ facts: [], last_updated: null });
-    saveFacts({ facts: [{ key: "k", type: "t", label: "l", value: "v", confidence: 0.7 }] }, projectDir);
+    saveFacts({ facts: [{ key: "k", type: "t", label: "l", value: "v", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" }] }, projectDir);
     const loaded = loadFacts(projectDir);
     expect(loaded.facts).toHaveLength(1);
     expect(typeof loaded.last_updated).toBe("string");
@@ -197,12 +223,9 @@ describe("updateRulesFromSession", () => {
     expect(loadFacts(projectDir).facts).toEqual(first);
   });
 
-  it("keeps environment facts within their project and ignores old global rules", () => {
+  it("keeps environment facts within their project", () => {
     const projectA = join(cfgDir, "project-a");
     const projectB = join(cfgDir, "project-b");
-    const legacyDir = join(cfgDir, "local_rules");
-    mkdirSync(legacyDir, { recursive: true });
-    writeFileSync(join(legacyDir, "rules.md"), "# Old global fact\n- 10.9.9.9\n");
 
     expect(loadLocalRules(projectA)).toBe("");
     expect(updateRulesFromSession([{ id: "u-project-a", createdAt: 1, role: "user", content: "ssh ops@10.1.2.3" }], projectA, "s-project-a")).toBe(2);

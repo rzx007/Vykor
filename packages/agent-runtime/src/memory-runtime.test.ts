@@ -111,13 +111,13 @@ describe("extractMemories", () => {
     });
   });
 
-  it("omits legacy credential-like entries from the model's existing-memory manifest", async () => {
+  it("omits a manually edited credential-like entry from the model's existing-memory manifest", async () => {
     const memoryDir = await mkdtemp(join(tmpdir(), "vk-memory-manifest-"));
     try {
-      await writeFile(join(memoryDir, "mem-legacy.md"), renderMemoryFile({
-        schema_version: 1, id: "mem-legacy", name: "api_key=example-secret-value",
+      await writeFile(join(memoryDir, "mem-direct.md"), renderMemoryFile({
+        schema_version: 1, id: "mem-direct", name: "api_key=example-secret-value",
         description: "api_key=example-secret-value", type: "project", scope: "project",
-        importance: 0, signature: "legacy-signature", created_at: "2026-01-01T00:00:00Z",
+        importance: 0, signature: "direct-signature", created_at: "2026-01-01T00:00:00Z",
         updated_at: "2026-01-01T00:00:00Z", use_count: 0,
       }, "Old credential note"), "utf-8");
       let prompt = "";

@@ -19,7 +19,7 @@ local_rules/
     └── rules.md     # 由 facts 重新生成的分组 Markdown（自动生成，勿手改）
 ```
 
-同项目下次会话启动时，只从 `facts.json` 中有来源且未命中凭据值检查的条目生成 system prompt 内容（CLAUDE.md 段之后）。`rules.md` 供人查看；旧全局文件即使存在也不自动注入或迁移。`facts.json` 先写临时文件再替换；旧文件不可读时停止合并并在 `/context status` 报告，不以空集合覆盖旧数据。
+同项目下次会话启动时，从格式有效且未命中凭据值检查的 `facts.json` 条目生成 system prompt 内容（CLAUDE.md 段之后）。`rules.md` 供人查看。`facts.json` 先写临时文件再替换；文件缺来源或不可读时停止合并并在 `/context status` 报告，不以空集合覆盖旧数据。
 
 ## 模块（对齐 Python）
 
@@ -60,6 +60,6 @@ local_rules/
 - rules：load/save 往返、mergeFacts 置信度胜出与新 key 追加、目录懒建。
 - session-hook：端到端（消息 → facts.json + rules.md 落盘 → 返回新增数）、
   空会话返回 0。
-- prompts 注入：有来源的 facts 存在时进 prompt；只有旧缓存或无来源事实时不注入。
+- prompts 注入：有效 facts 存在时进 prompt；只有缓存或事实文件缺来源时不注入。
 
 每轮 `pnpm check-types` + `pnpm test` 全绿。

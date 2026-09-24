@@ -117,7 +117,7 @@ local_rules/
     rules.md
 ```
 
-`facts.json` 是结构化事实，`rules.md` 是供人查看的自动生成缓存。提示词只读取 `facts.json` 中有会话、消息和观察时间且未命中凭据值检查的条目；旧的无来源项目事实仍在文件中，不能仅凭旧缓存文本进入提示词。旧全局文件若存在，也不自动读取或迁移。
+`facts.json` 是结构化事实，`rules.md` 是供人查看的自动生成缓存。项目事实文件要求每条记录都有会话、消息和观察时间；提示词只读取未命中凭据检查的有效记录。缺来源或损坏的文件不会作为空事实覆盖旧文件，`/context status` 会显示不可读。
 
 入口：
 
@@ -246,7 +246,7 @@ Session runtime history 存 daemon 会话的完整运行状态，包括 sessions
 1. `/context status`：先看每条上下文/记忆线的加载状态、写入时机和注入位置。
 2. `/context` 或 context preview：看最终 prompt 分层和内容预览。
 3. `/profile status`：看 `SOUL.md` / `USER.md` 是否 loaded、blocked、truncated。
-4. `~/.vykor/local_rules/projects/<项目>-<hash>/facts.json`：看当前项目的事实及来源；`/context status` 区分 sourced 与 unverified。
+4. `~/.vykor/local_rules/projects/<项目>-<hash>/facts.json`：看当前项目的事实及来源；`/context status` 显示数量或不可读状态。
 5. `/memory list` / `/memory show <id>`：看项目长期记忆。
 6. 当前 repo 的 `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/*.md`。
 7. `settings.json`：看 `systemPrompt`、memory 开关、权限模式。

@@ -778,13 +778,14 @@ export class MemoryManager {
     metadata: Record<string, unknown>,
     body: string,
   ): MemoryEntry {
+    if (!body.trim()) throw new Error("Memory content must not be empty");
     if (metadata.schema_version !== SCHEMA_VERSION) {
       throw new Error(
         `Unsupported memory schema version ${String(metadata.schema_version)}; expected ${SCHEMA_VERSION}`,
       );
     }
     for (const field of ["id", "name", "description", "type", "scope", "importance", "signature", "created_at", "updated_at", "use_count"] as const) {
-      if (metadata[field] === undefined || (metadata[field] === "" && field !== "description")) {
+      if (metadata[field] === undefined || metadata[field] === "") {
         throw new Error(`Memory record is missing required field: ${field}`);
       }
     }
@@ -820,9 +821,7 @@ export class MemoryManager {
       updatedAt,
       metadata: Object.keys(extra).length ? extra : undefined,
       name: metadata.name ? String(metadata.name) : undefined,
-      description: metadata.description
-        ? String(metadata.description)
-        : firstContentLine(body) || body.trim().slice(0, 200),
+      description: String(metadata.description),
       type,
       scope,
       importance,

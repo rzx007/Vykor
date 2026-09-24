@@ -88,9 +88,8 @@ describe("default daemon application services", () => {
     expect(status.report).toContain("Credentials");
   });
 
-  it("reports sourced and unverified project facts separately", async () => {
+  it("reports the number of sourced project facts", async () => {
     saveFacts({ facts: [
-      { key: "ip_address:10.9.9.9", type: "ip_address", label: "Server IP", value: "10.9.9.9", confidence: 0.7 },
       { key: "ip_address:10.1.2.3", type: "ip_address", label: "Server IP", value: "10.1.2.3", confidence: 0.7,
         sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
     ] }, temporaryDirectory);
@@ -99,8 +98,8 @@ describe("default daemon application services", () => {
     });
 
     const status = await context.status({ cwd: temporaryDirectory });
-    expect(status.report).toContain("1 sourced, 1 unverified");
-    expect(status.report).not.toContain("10.9.9.9");
+    expect(status.report).toContain("1 sourced");
+    expect(status.report).not.toContain("10.1.2.3");
   });
 
   it("reports unreadable project facts without exposing or overwriting them", async () => {
@@ -114,18 +113,6 @@ describe("default daemon application services", () => {
     const status = await context.status({ cwd: temporaryDirectory });
     expect(status.report).toContain("unreadable");
     expect(status.report).not.toContain("{incomplete-json");
-  });
-
-  it("reports preserved legacy global rules without injecting them", async () => {
-    const legacyDir = join(process.env.VYKOR_CONFIG_DIR!, "local_rules");
-    mkdirSync(legacyDir, { recursive: true });
-    writeFileSync(join(legacyDir, "rules.md"), "# Local Environment Rules\n- legacy.example.invalid\n");
-    const context = createDefaultContextService({
-      current: { model: "m", apiFormat: "anthropic", maxTurns: 50, permission: { mode: "default" } } as never,
-    });
-
-    expect((await context.status({ cwd: temporaryDirectory })).report).toContain("legacy global rules preserved");
-    expect((await context.preview({ cwd: temporaryDirectory })).report).not.toContain("legacy.example.invalid");
   });
 
   it("keeps persona inspection limited to built-in and user definitions", async () => {

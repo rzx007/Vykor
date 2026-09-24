@@ -896,7 +896,7 @@ describe("prompt layers with SOUL.md and USER.md", () => {
 
 describe("local rules injection (C.5)", () => {
   it("injects rules.md into the runtime prompt and skips when absent", async () => {
-    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } =
+    const { mkdtempSync, rmSync } =
       await import("node:fs");
     const { join } = await import("node:path");
     const { tmpdir } = await import("node:os");
@@ -908,33 +908,14 @@ describe("local rules injection (C.5)", () => {
       const without = await buildRuntimeSystemPrompt({ cwd: cfgDir });
       expect(without).not.toContain("# Local Environment Rules");
 
-      mkdirSync(join(cfgDir, "local_rules"), { recursive: true });
-      writeFileSync(
-        join(cfgDir, "local_rules", "rules.md"),
-        [
-          "# Local Environment Rules",
-          "",
-          "## SSH Hosts",
-          "",
-          "- `ops@10.0.0.9`",
-          "",
-        ].join("\n"),
-      );
-      const oldGlobal = await buildRuntimeSystemPrompt({ cwd: cfgDir });
-      expect(oldGlobal).not.toContain("ops@10.0.0.9");
-
       saveLocalRules("# Local Environment Rules\n\n## SSH Hosts\n\n- `ops@10.0.0.9`", cfgDir);
-      saveFacts({ facts: [{
-        key: "ssh_host:ops@10.0.0.9", type: "ssh_host", label: "SSH connection", value: "ops@10.0.0.9", confidence: 0.7,
-      }] }, cfgDir);
-      const unverified = await buildRuntimeSystemPrompt({ cwd: cfgDir });
-      expect(unverified).not.toContain("ops@10.0.0.9");
+      const cachedOnly = await buildRuntimeSystemPrompt({ cwd: cfgDir });
+      expect(cachedOnly).not.toContain("ops@10.0.0.9");
 
-      saveFacts({ facts: [
-        { key: "ssh_host:ops@10.0.0.9", type: "ssh_host", label: "SSH connection", value: "ops@10.0.0.9", confidence: 0.7 },
-        { key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
-          sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
-      ] }, cfgDir);
+      saveFacts({ facts: [{
+        key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+      }] }, cfgDir);
       const withRules = await buildRuntimeSystemPrompt({ cwd: cfgDir });
       expect(withRules).toContain("# Local Environment Rules");
       expect(withRules).toContain("ops@10.1.2.3");

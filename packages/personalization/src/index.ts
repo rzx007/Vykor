@@ -36,6 +36,14 @@ export function hasFactSource(fact: ExtractedFact): boolean {
   return Number.isFinite(observedMs) && new Date(observedMs).toISOString() === fact.observedAt;
 }
 
+function isPersistedFact(value: unknown): value is ExtractedFact {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const fact = value as ExtractedFact;
+  return [fact.key, fact.type, fact.label, fact.value].every(
+    (field) => typeof field === "string" && field.trim().length > 0,
+  ) && typeof fact.confidence === "number" && Number.isFinite(fact.confidence) && hasFactSource(fact);
+}
+
 /** 宽松的消息形状：兼容引擎 Message 联合（SystemMessage 无 role，块按 unknown 收）。 */
 export interface SessionMessageLike {
   id?: string;
@@ -148,8 +156,7 @@ const factsFile = (cwd: string): string => join(getLocalRulesDir(cwd), "facts.js
 
 export function loadLocalRules(cwd: string): string {
   try {
-    const sourced = loadFacts(cwd).facts.filter((fact) =>
-      hasFactSource(fact) && !detectCredentialValue(fact.value));
+    const sourced = loadFacts(cwd).facts.filter((fact) => !detectCredentialValue(fact.value));
     return sourced.length ? factsToRulesMarkdown(sourced).trim() : "";
   } catch {
     return "";
@@ -168,7 +175,8 @@ export function loadFacts(cwd: string): FactsFile {
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
     if (!parsed || typeof parsed !== "object" ||
-        !Array.isArray((parsed as { facts?: unknown }).facts)) {
+        !Array.isArray((parsed as { facts?: unknown }).facts) ||
+        (parsed as FactsFile).facts.some((fact) => !isPersistedFact(fact))) {
       throw new Error("Invalid facts shape");
     }
     const factsFileContent = parsed as FactsFile;
@@ -179,6 +187,9 @@ export function loadFacts(cwd: string): FactsFile {
 }
 
 export function saveFacts(facts: FactsFile, cwd: string): void {
+  if (facts.facts.some((fact) => !isPersistedFact(fact))) {
+    throw new Error("Project facts require valid records");
+  }
   mkdirSync(getLocalRulesDir(cwd), { recursive: true });
   const payload: FactsFile = { ...facts, last_updated: new Date().toISOString() };
   const path = factsFile(cwd);
