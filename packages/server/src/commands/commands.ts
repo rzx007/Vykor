@@ -123,6 +123,13 @@ export const BUILTIN_SESSION_COMMANDS: readonly CommandCatalogEntry[] = [
     argumentHint: "[list|show ID|add CONTENT|remove ID]",
   },
   {
+    name: "/facts",
+    description: "List or replace project environment facts",
+    kind: "session",
+    source: "builtin",
+    argumentHint: "[list|replace OLD_KEY => NEW_VALUE]",
+  },
+  {
     name: "/auth",
     description: "Manage API credentials (status | login | logout)",
     kind: "session",

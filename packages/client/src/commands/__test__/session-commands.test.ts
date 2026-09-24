@@ -47,6 +47,8 @@ function fakeClient(overrides: Record<string, unknown> = {}): SessionCommandClie
       getMemory: method("getMemory"),
       addMemory: method("addMemory"),
       removeMemory: method("removeMemory"),
+      listFacts: method("listFacts", vi.fn(async () => ({ facts: [] }))),
+      replaceFact: method("replaceFact"),
       getContextPreview: method("getContextPreview"),
       getContextStatus: method("getContextStatus"),
       getContextUsage: method("getContextUsage"),
@@ -411,6 +413,46 @@ describe("dispatchSessionCommand", () => {
 
     expect(emitted.at(-1)).toContain("Source:   user_message");
     expect(emitted.at(-1)).toContain("Session:  session-123");
+  });
+
+  it("lists project facts with their keys, dates, state, and source", async () => {
+    const client = fakeClient({ listFacts: vi.fn(async () => ({ facts: [{
+      key: "ssh_host:ops@10.1.2.3", value: "ops@10.1.2.3", observedAt: "2026-09-24T00:00:00.000Z",
+      sourceSessionId: "s1", sourceMessageId: "u1", status: "superseded",
+      replacement: { byKey: "ssh_host:ops@10.1.2.4", operationId: "op-1", at: "2026-09-24T01:00:00.000Z" },
+    }] })) });
+    const { host: h, emitted } = host({ client });
+
+    await dispatchSessionCommand({ name: "/facts", args: "list" }, h);
+    expect(emitted.at(-1)).toContain("ssh_host:ops@10.1.2.3");
+    expect(emitted.at(-1)).toContain("2026-09-24");
+    expect(emitted.at(-1)).toContain("superseded");
+    expect(emitted.at(-1)).toContain("s1/u1");
+    expect(emitted.at(-1)).toContain("op-1");
+  });
+
+  it("replaces an exact project fact and reports other keys that still hold the old address", async () => {
+    const replaceFactRequest = vi.fn(async () => ({
+      oldKey: "ssh_host:ops@10.1.2.3", newKey: "ssh_host:ops@10.1.2.4", operationId: "op-1",
+      relatedActiveKeys: ["ip_address:10.1.2.3"],
+    }));
+    const { host: h, emitted } = host({ client: fakeClient({ replaceFact: replaceFactRequest }) });
+    Object.assign(h, { sessionId: "s1" });
+
+    await dispatchSessionCommand({ name: "/facts", args: "replace ssh_host:ops@10.1.2.3 => ops@10.1.2.4" }, h);
+    expect(replaceFactRequest).toHaveBeenCalledWith({
+      cwd: "/tmp/project", oldKey: "ssh_host:ops@10.1.2.3", newValue: "ops@10.1.2.4", sessionId: "s1",
+    });
+    expect(emitted.at(-1)).toContain("ip_address:10.1.2.3");
+    expect(emitted.at(-1)).toContain("op-1");
+  });
+
+  it("rejects malformed /facts replace syntax without writing", async () => {
+    const replaceFactRequest = vi.fn();
+    const { host: h, emitted } = host({ client: fakeClient({ replaceFact: replaceFactRequest }) });
+    await dispatchSessionCommand({ name: "/facts", args: "replace ssh_host:ops@10.1.2.3" }, h);
+    expect(emitted.at(-1)).toContain("Usage: /facts replace");
+    expect(replaceFactRequest).not.toHaveBeenCalled();
   });
 
   it("counts Jobs in session stats without background-task terminology", async () => {

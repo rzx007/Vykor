@@ -34,6 +34,7 @@ export interface SessionCommandClient {
     SystemResource,
     | "getSettings" | "patchSettings" | "getSessionMcp"
     | "listMemory" | "getMemory" | "addMemory" | "removeMemory"
+    | "listFacts" | "replaceFact"
     | "getContextPreview" | "getContextStatus" | "getContextUsage"
     | "startDream" | "getProfileStatus" | "initProfile" | "listOutputStyles"
   >;
@@ -170,6 +171,10 @@ function shouldPresentSlashOutput(slash: SlashLine): boolean {
     case "/memory": {
       const sub = firstArg(slash.args);
       return !sub || sub === "list" || sub === "show";
+    }
+    case "/facts": {
+      const sub = firstArg(slash.args);
+      return !sub || sub === "list";
     }
     case "/auth": {
       const sub = firstArg(slash.args);
@@ -510,6 +515,47 @@ export async function dispatchSessionCommand(
       return "handled";
     }
     emit("Usage: /memory [list | show ID | add CONTENT | remove ID]");
+    return "handled";
+  }
+
+  if (slash?.name === "/facts") {
+    const args = slash.args.trim();
+    const sub = firstArg(args);
+    if (!sub || sub === "list") {
+      await readPresentation(`facts:${cwd}:list`, "Environment facts", async () => {
+        const { facts } = await client.system.listFacts({ cwd });
+        if (!facts.length) return "No project environment facts found.";
+        return ["Project environment facts:", "", ...facts.map((fact) => {
+          const status = fact.status === "superseded"
+            ? `superseded by ${fact.replacement?.byKey ?? "(unknown)"} (operation ${fact.replacement?.operationId ?? "unknown"})`
+            : "active";
+          const source = fact.manualSource
+            ? `manual replacement ${fact.manualSource.operationId}`
+            : `${fact.sourceSessionId ?? "?"}/${fact.sourceMessageId ?? "?"}`;
+          return `  ${fact.key} [${status}] observed ${fact.observedAt?.slice(0, 10) ?? "unknown"}; source ${source}`;
+        })].join("\n");
+      });
+      return "handled";
+    }
+    if (sub === "replace") {
+      const body = args.slice("replace".length).trim();
+      const separator = body.indexOf("=>");
+      const oldKey = separator < 0 ? "" : body.slice(0, separator).trim();
+      const newValue = separator < 0 ? "" : body.slice(separator + 2).trim();
+      if (!oldKey || !newValue) {
+        emit("Usage: /facts replace <old-key> => <new-value>");
+        return "handled";
+      }
+      const result = await client.system.replaceFact({ cwd, oldKey, newValue, ...(sessionId ? { sessionId } : {}) });
+      emit([
+        `Environment fact replaced: ${result.oldKey} -> ${result.newKey} (operation ${result.operationId}).`,
+        ...(result.relatedActiveKeys.length
+          ? [`Other active facts still mention the old address: ${result.relatedActiveKeys.join(", ")}`] : []),
+        ...(result.cacheWarning ? [`Warning: ${result.cacheWarning}`] : []),
+      ].join("\n"));
+      return "handled";
+    }
+    emit("Usage: /facts [list | replace <old-key> => <new-value>]");
     return "handled";
   }
 

@@ -36,4 +36,10 @@ describe("command catalog helpers", () => {
     const context = BUILTIN_SESSION_COMMANDS.find((entry) => entry.name === "/context");
     expect(context?.argumentHint).toBe("[preview|status|usage]");
   });
+
+  it("advertises /facts separately from semantic /memory", () => {
+    const facts = BUILTIN_SESSION_COMMANDS.find((entry) => entry.name === "/facts");
+    expect(facts?.argumentHint).toBe("[list|replace OLD_KEY => NEW_VALUE]");
+    expect(facts?.description).toContain("environment facts");
+  });
 });

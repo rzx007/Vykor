@@ -14,6 +14,28 @@ import type {
   StartDreamResponse,
 } from "../types/index.js";
 
+export interface ProjectFactRecord {
+  key: string;
+  type: string;
+  label: string;
+  value: string;
+  confidence: number;
+  observedAt?: string;
+  sourceSessionId?: string;
+  sourceMessageId?: string;
+  status?: "superseded";
+  replacement?: { byKey: string; operationId: string; at: string };
+  manualSource?: { kind: "manual_replace"; operationId: string; oldKey: string; at: string; sessionId?: string };
+}
+
+export interface FactReplacementResult {
+  oldKey: string;
+  newKey: string;
+  operationId: string;
+  relatedActiveKeys: string[];
+  cacheWarning?: string;
+}
+
 export class SystemResource {
   constructor(private readonly transport: HttpTransport) {}
 
@@ -78,6 +100,25 @@ export class SystemResource {
       this.transport.path("/memory", query),
       { signal },
     );
+  }
+
+  /** `GET /facts?cwd=` — current project environment facts. */
+  async listFacts(options: { cwd: string; signal?: AbortSignal }): Promise<{ facts: ProjectFactRecord[] }> {
+    const { signal, ...query } = options;
+    return await this.transport.request<{ facts: ProjectFactRecord[] }>(
+      this.transport.path("/facts", query), { signal },
+    );
+  }
+
+  /** `POST /facts/replace` — replace exactly one selected environment fact. */
+  async replaceFact(
+    input: { cwd: string; oldKey: string; newValue: string; sessionId?: string },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<FactReplacementResult> {
+    const response = await this.transport.request<{ result: FactReplacementResult }>(
+      "/facts/replace", { method: "POST", body: input, signal: options.signal },
+    );
+    return response.result;
   }
 
   /** `GET /memory/:id?cwd=` */
