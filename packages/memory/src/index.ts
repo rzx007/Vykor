@@ -368,7 +368,7 @@ export class MemoryManager {
     // Signature dedup: if identical content already exists, return it instead
     // of writing a duplicate file.
     for (const existing of this.entries.values()) {
-      if (existing.signature === signature) {
+      if (existing.signature === signature && existing.metadata?.disabled !== true) {
         return existing;
       }
     }
@@ -473,11 +473,12 @@ export class MemoryManager {
   async markMemoryUsed(ids: string | string[]): Promise<void> {
     await this.ensureLoaded();
     const list = Array.isArray(ids) ? ids : [ids];
+    const activeIds = new Set(this.activeEntries().map((entry) => entry.id));
     const now = Date.now();
     const touched: MemoryEntry[] = [];
     for (const id of list) {
       const entry = this.entries.get(id);
-      if (!entry) continue;
+      if (!entry || !activeIds.has(id)) continue;
       entry.useCount = (entry.useCount ?? 0) + 1;
       entry.lastUsedAt = now;
       touched.push(entry);
@@ -501,7 +502,7 @@ export class MemoryManager {
     await this.ensureLoaded();
     const now = Date.now();
     const candidates: MemoryEntry[] = [];
-    for (const entry of this.entries.values()) {
+    for (const entry of this.activeEntries()) {
       if ((entry.importance ?? 0) > maxImportance) continue;
       if ((entry.useCount ?? 0) > 0) continue;
       const base = entry.updatedAt ?? entry.createdAt;
@@ -523,7 +524,7 @@ export class MemoryManager {
     const queryTerms = tokenize(query);
     const results: MemorySearchResult[] = [];
 
-    for (const entry of this.entries.values()) {
+    for (const entry of this.activeEntries()) {
       if (tags?.length && !tags.some((t) => entry.tags?.includes(t))) {
         continue;
       }
@@ -542,6 +543,14 @@ export class MemoryManager {
   async getAll(): Promise<readonly MemoryEntry[]> {
     await this.ensureLoaded();
     return [...this.entries.values()];
+  }
+
+  async reload(): Promise<void> {
+    if (!this.storageDir) return;
+    await this.writeQueue;
+    this.entries.clear();
+    this.loaded = false;
+    await this.ensureLoaded();
   }
 
   async clear(): Promise<void> {
@@ -607,16 +616,27 @@ export class MemoryManager {
     if (query) {
       // Relevance-ordered selection when a query is supplied.
       const terms = tokenize(query);
-      return [...this.entries.values()]
+      return this.activeEntries()
         .map((e) => ({ e, s: this.computeScore(e, terms) }))
         .filter((x) => x.s > 0)
         .sort((a, b) => b.s - a.s || b.e.updatedAt - a.e.updatedAt)
         .slice(0, maxEntries)
         .map((x) => x.e);
     }
-    return [...this.entries.values()]
+    return this.activeEntries()
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, maxEntries);
+  }
+
+  private activeEntries(): MemoryEntry[] {
+    const enabled = [...this.entries.values()].filter((entry) => entry.metadata?.disabled !== true);
+    const superseded = new Set<string>();
+    for (const entry of enabled) {
+      const raw = entry.metadata?.supersedes;
+      const ids = typeof raw === "string" ? [raw] : Array.isArray(raw) ? raw : [];
+      for (const id of ids) if (typeof id === "string") superseded.add(id);
+    }
+    return enabled.filter((entry) => !superseded.has(entry.id));
   }
 
   // ── scoring ──────────────────────────────────────────────
@@ -838,7 +858,7 @@ export class MemoryManager {
   /** Maintain the MEMORY.md index (one pointer line per memory, truncated). */
   private async writeIndex(): Promise<void> {
     if (!this.storageDir) return;
-    const entries = [...this.entries.values()].sort(
+    const entries = this.activeEntries().sort(
       (a, b) => b.updatedAt - a.updatedAt,
     );
     const lines: string[] = ["# Memory", ""];

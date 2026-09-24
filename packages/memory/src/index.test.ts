@@ -431,6 +431,36 @@ describe("MemoryManager Markdown store", () => {
     expect(results.length).toBe(1);
   });
 
+  it("keeps disabled memories inspectable but out of search, prompts, and the index", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vk-memory-disabled-"));
+    const manager = new MemoryManager(1000, dir);
+    const retired = await manager.add("The old deployment region is west");
+    await manager.update(retired.id, { metadata: { disabled: true } });
+
+    expect(await manager.get(retired.id)).toBeDefined();
+    expect(await manager.search({ query: "deployment region" })).toEqual([]);
+    expect(manager.selectRelevantForPrompt(10, "deployment region").ids).toEqual([]);
+    expect((await readFile(join(dir, "MEMORY.md"), "utf-8"))).not.toContain(retired.id);
+
+    const renewed = await manager.add("The old deployment region is west");
+    expect(renewed.id).not.toBe(retired.id);
+    expect(manager.selectRelevantForPrompt(10, "deployment region").ids).toEqual([renewed.id]);
+  });
+
+  it("uses an explicit supersedes link to suppress an older conflicting memory", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vk-memory-supersedes-"));
+    const manager = new MemoryManager(1000, dir);
+    const old = await manager.add("The deployment region is west");
+    const current = await manager.add("The deployment region is east", [], { supersedes: old.id });
+
+    expect((await manager.search({ query: "deployment region" })).map((result) => result.entry.id)).toEqual([current.id]);
+    expect(manager.selectRelevantForPrompt(10, "deployment region").ids).toEqual([current.id]);
+    const reloaded = new MemoryManager(1000, dir);
+    await reloaded.getAll();
+    expect(reloaded.selectRelevantForPrompt(10, "deployment region").ids).toEqual([current.id]);
+    expect((await readFile(join(dir, "MEMORY.md"), "utf-8"))).not.toContain(old.id);
+  });
+
   it("keeps descriptions valid after adding or updating with an empty value", async () => {
     dir = await mkdtemp(join(tmpdir(), "vk-memory-description-"));
     const manager = new MemoryManager(1000, dir);

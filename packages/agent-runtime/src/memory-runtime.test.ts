@@ -20,10 +20,12 @@ it("retrieves persisted project memory on the first turn", async () => {
   process.env.VYKOR_CONFIG_DIR = cwd;
   try {
     const writer = new MemoryManager(1000, getProjectMemoryDir(cwd));
-    await writer.add("The deployment region is ap-southeast-1");
+    const entry = await writer.add("The deployment region is ap-southeast-1");
 
     const memory = await createAgentMemoryRuntime(cwd, 5, "session-123");
     expect(await memory.retrieve("deployment region")).toContain("ap-southeast-1");
+    await writer.update(entry.id, { metadata: { disabled: true } });
+    expect(await memory.retrieve("deployment region")).toBeNull();
   } finally {
     if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
     else process.env.VYKOR_CONFIG_DIR = previousConfigDir;

@@ -45,6 +45,7 @@ export async function createAgentMemoryRuntime(
     manager,
     directory,
     async retrieve(userInput) {
+      await manager.reload();
       const selected = manager.selectRelevantForPrompt(maxFiles, userInput);
       if (selected.ids.length > 0) await manager.markMemoryUsed(selected.ids);
       return selected.text || null;
@@ -93,6 +94,7 @@ export async function extractMemories(options: {
     };
   }
 
+  await options.manager.reload();
   const manifest = (await options.manager.getAll())
     .slice(0, 80)
     .map((entry) => `- ${entry.name ?? entry.id}: ${(entry.description ?? "").slice(0, 80)}`)
