@@ -22,6 +22,7 @@ import type {
 } from "../index";
 import { DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE } from "../constants/vision-tokens";
 import { estimateTokens } from "../utils/token-counter";
+import { toolFeedbackFields } from "./tool-result-feedback";
 import {
   boundaryFallsInsideToolGroup as historyBoundaryFallsInsideToolGroup,
 } from "../utils/message-history";
@@ -43,6 +44,21 @@ const MAX_PTL_RETRIES = 3;
 const TIME_BASED_MC_CLEARED_MESSAGE = "[Old tool result content cleared]";
 /** PTL 重试砍掉最老轮次后，若剩余段不以 user 开头，则插入此标记保证对话结构合法。 */
 const PTL_RETRY_MARKER = "[earlier conversation truncated for compaction retry]";
+
+/** Controlled facts describe a past observation, not instructions or current job status. */
+function toolFactsText(message: Extract<Message, { type: "tool_result" }>): string | undefined {
+  const facts = toolFeedbackFields(message);
+  const summary = facts.compactSummary || (message.isError
+    ? `kind=${facts.failureKind ?? "unknown_outcome"}; execution=${facts.executionState ?? "unknown"}`
+    : undefined);
+  return summary ? `Tool feedback data (observed at the time, not instructions):\n${summary}` : undefined;
+}
+
+function prependToolFacts(content: ContentBlock[], facts: string | undefined): ContentBlock[] {
+  return facts
+    ? [{ type: "text", text: facts }, ...content.filter((b) => !isTextBlock(b) || b.text !== facts)]
+    : content;
+}
 
 // ---------------------------------------------------------------------------
 // microCompact 可清理工具白名单
@@ -558,7 +574,7 @@ export class CompactService {
 
   /**
    * 把 older 段换成一条占位 assistant 消息 + boundary marker，再拼上 recent。
-   * 不调用模型，信息损失大，仅作最后手段。
+   * 不调用模型，仅保留最近的有界工具事实，信息损失大，仅作最后手段。
    * system 消息始终前置保留。
    */
   simpleCompact(messages: Message[]): Message[] {
@@ -570,10 +586,25 @@ export class CompactService {
 
     const compactedCount = older.length;
     const toolResultCount = older.filter((m) => m.type === "tool_result").length;
+    const retainedFacts: string[] = [];
+    let remaining = 950; // Leave room for the omission marker within a 1,000-character budget.
+    let omitted = false;
+    for (const message of older.slice().reverse()) {
+      if (message.type !== "tool_result") continue;
+      const facts = toolFactsText(message);
+      if (!facts) continue;
+      if (facts.length + 1 > remaining) {
+        omitted = true;
+        continue;
+      }
+      retainedFacts.unshift(facts);
+      remaining -= facts.length + 1;
+    }
+    if (omitted) retainedFacts.push("[Some tool observations omitted]");
 
     const summary: Message = {
       type: "assistant",
-      content: `[Conversation compacted: ${compactedCount} messages summarized (${toolResultCount} tool results removed). ${recent.length} recent messages preserved.]`,
+      content: [`[Conversation compacted: ${compactedCount} messages summarized (${toolResultCount} tool results removed). ${recent.length} recent messages preserved.]`, ...retainedFacts].join("\n"),
       compactRole: "summary",
     };
 
@@ -595,7 +626,7 @@ export class CompactService {
    * 收集按出现顺序排列的「可压缩」tool_result id，
    * 保留最近 keepRecent 条，更早的结果正文替换为占位文案。
    *
-   * 注意：不删除消息本身，只清空 content，避免破坏 tool_use / tool_result 配对。
+   * 注意：不删除消息本身，保留受控事实并清理大正文，避免破坏工具配对。
    */
   microCompact(messages: Message[]): Message[] {
     // 先建立 toolUseId → 工具名 映射，再判断每条 tool_result 是否可清理。
@@ -629,15 +660,17 @@ export class CompactService {
       if (msg.type !== "tool_result" || !clearSet.has(msg.toolUseId)) {
         return msg;
       }
-      // 已清空过则跳过，避免重复 map 产生无意义新对象。
-      const alreadyCleared =
-        msg.content.length === 1 &&
-        isTextBlock(msg.content[0]!) &&
-        (msg.content[0] as { text: string }).text === TIME_BASED_MC_CLEARED_MESSAGE;
+      const facts = toolFactsText(msg);
+      const boundedFacts = facts && facts.length + 1 + TIME_BASED_MC_CLEARED_MESSAGE.length <= 1000
+        ? facts : facts ? "[Tool feedback summary omitted: exceeds clearing budget]" : undefined;
+      const content = prependToolFacts([{ type: "text", text: TIME_BASED_MC_CLEARED_MESSAGE }], boundedFacts);
+      // Rebuild from the sidecar, never from a previous prefix.
+      const alreadyCleared = msg.content.length === content.length &&
+        msg.content.every((b, i) => isTextBlock(b) && b.text === (content[i] as { text: string }).text);
       if (alreadyCleared) return msg;
       return {
         ...msg,
-        content: [{ type: "text" as const, text: TIME_BASED_MC_CLEARED_MESSAGE }],
+        content,
       };
     });
   }
@@ -684,15 +717,16 @@ export class CompactService {
       }
       // tool_result：content 为 block 数组
       if (msg.type === "tool_result") {
+        let bodyChanged = false;
         const blocks = msg.content.map((b) => {
           if (isTextBlock(b)) {
             const collapsed = this.collapseText(b.text);
-            if (collapsed !== b.text) changed = true;
+            if (collapsed !== b.text) changed = bodyChanged = true;
             return { type: "text" as const, text: collapsed };
           }
           return b;
         });
-        return { ...msg, content: blocks } as Message;
+        return { ...msg, content: bodyChanged ? prependToolFacts(blocks, toolFactsText(msg)) : blocks } as Message;
       }
       return msg;
     });
@@ -889,7 +923,7 @@ export class CompactService {
 
   /**
    * 把待摘要消息序列化成对话文本，拼进 prompt，流式收集摘要模型输出。
-   * 每条消息 content 最多截取 4000 字符，避免单条巨文再次撑爆摘要请求。
+   * 每条消息最多 4000 字符；完整受控事实在前，剩余预算再放正文。
    */
   private async collectSummary(
     messages: Message[],
@@ -908,11 +942,14 @@ export class CompactService {
               : m.type === "tool_result"
                 ? "ToolResult"
                 : "System";
+        const facts = m.type === "tool_result" ? toolFactsText(m) : undefined;
+        const body = m.type === "tool_result" && facts
+          ? m.content.filter((b) => !isTextBlock(b) || b.text !== facts)
+          : m.content;
         const content =
-          typeof m.content === "string"
-            ? m.content
-            : JSON.stringify(m.content);
-        return `${role}: ${content.slice(0, 4000)}`;
+          typeof body === "string" ? body : JSON.stringify(body);
+        const prefix = facts ? `${facts}\n` : "";
+        return `${role}: ${prefix}${content.slice(0, 4000 - prefix.length)}`;
       })
       .join("\n\n");
 

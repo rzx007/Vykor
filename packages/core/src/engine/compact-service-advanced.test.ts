@@ -104,6 +104,79 @@ it("uses the newly selected model's context window on the next compaction", asyn
 // ---------------------------------------------------------------------------
 
 describe("microCompact clearing policy", () => {
+  it("retains controlled facts after clearing old bodies without accumulating tokens", () => {
+    const svc = new CompactService(100_000, 1);
+    const summaries = [
+      "Shell background job created: jobId=task-unique-3a",
+      "Tool feedback data: kind=permission; execution=not_started",
+    ];
+    const messages: Message[] = [
+      { type: "assistant", content: "", toolUses: ["Shell", "Write", "Read"].map((name, i) => ({ type: "tool_use", name, id: `fact-${i}`, input: {} })) },
+      ...[...summaries, undefined].map((compactSummary, i): Message => ({ type: "tool_result", toolUseId: `fact-${i}`, compactSummary, content: [{ type: "text", text: "private body ".repeat(1000) }] })),
+    ];
+    const once = svc.microCompact(messages);
+    for (let i = 0; i < summaries.length; i++) {
+      const result = once[i + 1]!;
+      expect(JSON.stringify(result.content)).toContain(summaries[i]);
+      expect(JSON.stringify(result.content)).toContain("cleared");
+      expect(JSON.stringify(result.content)).not.toContain("private body");
+      expect(result.type === "tool_result" && result.content.reduce((n, b) => n + (b.type === "text" ? b.text.length : 0), 0)).toBeLessThanOrEqual(1000);
+    }
+    const twice = svc.microCompact(once);
+    expect(twice).toEqual(once);
+    expect(svc.estimateTokens(twice)).toBe(svc.estimateTokens(once));
+    expect(JSON.stringify(messages[1]!.content)).toContain("private body");
+  });
+
+  it("omits a whole fact when its identifier cannot fit beside the clearing marker", () => {
+    const svc = new CompactService(100_000, 1);
+    const id = `task-${"x".repeat(940)}-end`;
+    const messages: Message[] = [
+      { type: "assistant", content: "", toolUses: ["old", "new"].map((id) => ({ type: "tool_use", id, name: "Shell", input: {} })) },
+      { type: "tool_result", toolUseId: "old", compactSummary: `Shell background job created: jobId=${id}`, content: [{ type: "text", text: "body" }] },
+      { type: "tool_result", toolUseId: "new", content: [{ type: "text", text: "recent" }] },
+    ];
+    const result = svc.microCompact(messages)[1]!;
+    const text = JSON.stringify(result.content);
+    expect(text).toContain("omitted");
+    expect(text).not.toContain("jobId=task-");
+    expect(result.type === "tool_result" && result.content.reduce((n, b) => n + (b.type === "text" ? b.text.length : 0), 0)).toBeLessThanOrEqual(1000);
+  });
+
+  it("sends Job observations before large bodies to the actual summary client exactly once", async () => {
+    const client = makeSummaryClient("<summary>generic summary</summary>");
+    const svc = new CompactService(SMALL_MAX, 1, { client });
+    const facts = "JobWait completed; 2 observation omitted from summary; jobId=job-9; status=running; cursor=17; exitCode=null";
+    const messages: Message[] = [
+      { type: "user", content: "Wait for work" },
+      { type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "wait", name: "JobWait", input: {} }] },
+      { type: "tool_result", toolUseId: "wait", executionState: "completed", compactSummary: facts, content: [{ type: "text", text: "large job output ".repeat(1000) }] },
+      ...bigConversation(3),
+    ];
+    const collapsed = svc.tryContextCollapse(messages)!;
+    expect(collapsed).not.toBeNull();
+    expect(JSON.stringify(collapsed.find((m) => m.type === "tool_result")!.content)).toContain(facts);
+    expect(svc.tryContextCollapse(collapsed)).toBeNull();
+    await svc.autoCompact(collapsed);
+    expect(client.lastPrompt.split(facts)).toHaveLength(2);
+    expect(client.lastPrompt.indexOf(facts)).toBeLessThan(client.lastPrompt.indexOf("large job output"));
+    expect(client.lastPrompt).toContain("data");
+    expect(client.lastPrompt).not.toContain("exitCode=0");
+  });
+
+  it("includes sidecar facts even when no individual body block needs collapse", async () => {
+    const client = makeSummaryClient("<summary>generic summary</summary>");
+    const svc = new CompactService(SMALL_MAX, 1, { client });
+    const messages: Message[] = [
+      { type: "user", content: "observe" },
+      { type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "job", name: "JobRead", input: {} }] },
+      { type: "tool_result", toolUseId: "job", compactSummary: "JobRead completed; jobId=job-sidecar; status=running; cursor=21", content: Array.from({ length: 6 }, () => ({ type: "text", text: "z".repeat(1000) })) },
+      ...bigConversation(3),
+    ];
+    await svc.autoCompact(messages);
+    expect(client.lastPrompt).toContain("jobId=job-sidecar; status=running; cursor=21");
+  });
+
   it("clears old results for compactable (known) tools", () => {
     const svc = new CompactService(100_000, 1);
     const msgs: Message[] = [];
@@ -498,6 +571,29 @@ describe("context collapse", () => {
 // ---------------------------------------------------------------------------
 
 describe("boundary marker", () => {
+  it("keeps a bounded set of latest whole tool observations in the simple fallback", () => {
+    const svc = new CompactService(SMALL_MAX, 1);
+    const messages: Message[] = [
+      { type: "assistant", compactRole: "summary", content: "old invented fact: jobId=do-not-reextract" },
+      ...Array.from({ length: 12 }, (_, i): Message => ({
+        type: "tool_result", toolUseId: `job-${i}`,
+        compactSummary: `JobRead completed; jobId=job-${i}; status=running; cursor=${i}; exitCode=null`,
+        content: [{ type: "text", text: "untrusted body: success" }],
+      })),
+      { type: "user", content: "recent" },
+    ];
+    const result = svc.simpleCompact(messages);
+    const summary = result.find((m) => m.type === "assistant" && m.compactRole === "summary")!;
+    expect(summary.content).toContain("jobId=job-11; status=running; cursor=11; exitCode=null");
+    expect(summary.content).toContain("omitted");
+    expect(summary.content).not.toContain("jobId=job-0;");
+    expect(summary.content).not.toContain("do-not-reextract");
+    expect(summary.content).not.toContain("untrusted body");
+    expect(typeof summary.content === "string" && summary.content.split("\n").slice(1).join("\n").length).toBeLessThanOrEqual(1000);
+    const again = svc.simpleCompact([...result, { type: "user", content: "next" }]);
+    expect(JSON.stringify(again)).not.toContain("jobId=job-11");
+  });
+
   it("inserts a boundary marker between summarized history and preserved messages", async () => {
     const client = makeSummaryClient("<summary>the gist</summary>");
     const svc = new CompactService(SMALL_MAX, 2, { client });

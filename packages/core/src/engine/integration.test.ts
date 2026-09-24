@@ -83,6 +83,57 @@ function makeTool(
 }
 
 describe("tool execution feedback", () => {
+  it("retains executed tool facts through micro compaction and the real summary request", async () => {
+    const registry = new ToolRegistry();
+    const body = "diagnostic body ".repeat(1000);
+    registry.register({ name: "Shell", description: "shell", inputSchema: { type: "object" }, execute: async () => ({ content: [{ type: "text", text: body }], compactSummary: "Shell background job created: jobId=task-integration-3a" }) }, { kind: "builtin" });
+    registry.register(makeTool("Write"));
+    registry.register(makeTool("Read"));
+    const prompts: string[] = [];
+    const requests: Message[][] = [];
+    const client = { streamMessage: async function* (params: any) {
+      if (params.system === "You are a conversation summarizer.") {
+        prompts.push(params.messages[0].content);
+        yield { type: "text_delta" as const, delta: "<summary>generic summary</summary>" };
+      } else {
+        requests.push(structuredClone(params.messages));
+        if (requests.length === 1) {
+          for (const [i, name] of ["Shell", "Write", "Read", "Read", "Read"].entries()) {
+            yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: `retain-${i}`, name, input: {} } };
+          }
+        } else yield { type: "text_delta" as const, delta: "waiting for next observation" };
+      }
+      yield { type: "complete" as const, stopReason: requests.length === 1 && !prompts.length ? "tool_use" : "end_turn" };
+    } };
+    const engine = new QueryEngine(client, registry, { checkTool: async (name: string) => ({ action: name === "Write" ? "deny" : "allow" }) } as any, noopHooks(), { maxTokens: 100, compactKeepRecent: 1, trajectoryTrackerFactory: false });
+    const events: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("start")) events.push(event);
+    const shell = events.find((e) => e.type === "tool_use_end" && e.toolUseId === "retain-0");
+    expect(shell?.type === "tool_use_end" && shell.result.content).toEqual([{ type: "text", text: body }]);
+    const oldResults = requests[1]!.filter((m) => m.type === "tool_result");
+    expect(JSON.stringify(oldResults[0]!.content)).toContain("task-integration-3a");
+    expect(JSON.stringify(oldResults[1]!.content)).toContain("kind=permission; execution=not_started");
+    for await (const _event of engine.submitMessage("continue")) { /* drain */ }
+    const summaryInput = prompts.find((p) => p.includes("task-integration-3a"));
+    expect(summaryInput).toBeDefined();
+    expect(summaryInput).toContain("kind=permission; execution=not_started");
+    expect(summaryInput!.split("task-integration-3a")).toHaveLength(2);
+  });
+
+  it("does not turn oversized controlled summaries into shortened identifiers", async () => {
+    const registry = new ToolRegistry();
+    registry.register({ name: "Shell", description: "shell", inputSchema: { type: "object" }, execute: async () => ({ content: [{ type: "text", text: "body" }], compactSummary: `Shell background job created: jobId=task-${"opaque".repeat(200)}` }) }, { kind: "builtin" });
+    const { client } = createMockStreamClient([
+      [{ type: "tool_use_start", toolUse: { type: "tool_use", id: "long", name: "Shell", input: {} } }, { type: "complete", stopReason: "tool_use" }],
+      [{ type: "complete", stopReason: "end_turn" }],
+    ]);
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    const events: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("start")) events.push(event);
+    const end = events.find((e) => e.type === "tool_use_end");
+    expect(end?.type === "tool_use_end" && end.result.compactSummary).toBeUndefined();
+  });
+
   it.each(["deny", "ask", "hook", "invalid", "missing", "throw", "timeout", "error", "success"])(
     "reports conservative execution facts for %s",
     async (scenario) => {

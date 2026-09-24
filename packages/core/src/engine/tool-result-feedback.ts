@@ -12,7 +12,8 @@ export function toolFeedbackFields(result: Partial<ToolResult>): Pick<ToolResult
     ...(FAILURE_KINDS.includes(result.failureKind!) ? { failureKind: result.failureKind } : {}),
     ...(["not_started", "completed", "unknown"].includes(result.executionState!) ? { executionState: result.executionState } : {}),
     ...(typeof result.recoveryHint === "string" ? { recoveryHint: result.recoveryHint.slice(0, 340) } : {}),
-    ...(typeof result.compactSummary === "string" ? { compactSummary: result.compactSummary.slice(0, 1000) } : {}),
+    // Identifiers are opaque: omit an oversized fact rather than inventing a shorter ID/path.
+    ...(typeof result.compactSummary === "string" && result.compactSummary.length <= 1000 ? { compactSummary: result.compactSummary } : {}),
   };
 }
 

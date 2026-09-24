@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CompactService } from "@vykor/core";
 
 import { agentMessagesToTranscript, buildAgentTranscript } from "../agent-transcript.js";
 
@@ -24,6 +25,18 @@ describe("agent transcript codec", () => {
     expect(result[0]).toMatchObject({ content, executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started" });
     expect(result[1]).toMatchObject({ content: [{ type: "text", text: "legacy" }] });
     expect(result[1]).not.toHaveProperty("executionState");
+    const service = new CompactService(100_000, 1);
+    const reloaded = buildAgentTranscript(messages, parts).messages;
+    reloaded.push(
+      { type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "recent", name: "Read", input: {} }] },
+      { type: "tool_result", toolUseId: "recent", content: [{ type: "text", text: "recent" }] },
+    );
+    const compacted = service.microCompact(reloaded);
+    const denied = compacted.find((m) => m.type === "tool_result" && m.toolUseId === "a")!;
+    expect(JSON.stringify(denied.content)).toContain("permission; not_started");
+    expect(JSON.stringify(denied.content)).not.toContain("body");
+    expect(service.estimateTokens(service.microCompact(compacted))).toBe(service.estimateTokens(compacted));
+    expect(JSON.stringify(parts)).toContain("body".repeat(1000));
   });
   it("filters valid presentation messages but preserves ordinary system messages", () => {
     const transcript = buildAgentTranscript(
