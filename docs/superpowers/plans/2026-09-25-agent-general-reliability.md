@@ -1,7 +1,7 @@
 # 智能体通用可靠性与工具发现实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：阶段 A 与工具目录测量已实现并通过分项审核；正在进行整体交付审核。日期：2026-09-25。
+> 状态：阶段 A 与工具目录测量已交付，通过分项审核、整体审核及修订复审；阶段 B/C 尚未启动。日期：2026-09-25。
 > 用户已授权开始执行，并明确要求直接使用当前工作区、不创建 worktree。阶段 B 的真实模型评测和阶段 C 的推广仍须满足文中门槛。
 
 **Goal:** 让智能体根据准确的执行事实、任务约束和完成证据选择下一步，减少误停、无效重试、重复验证和上下文遗忘，并在工具较多时保持选择准确。
@@ -533,7 +533,7 @@ pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts src/provid
 | 4：提示词调整 | 未启动 | 没有获批 live 预算和可定位的真实行为对照证据；保留现有生产指导 |
 | 5：目录测量 | 已实现、修订后通过审核 | `fe4b0e53`、`190f4839`；实际请求统计与两工具任务证据；阶段 C 暂不准入 |
 | 6：按需加载 | 未启动 | 尚无真实已授权目录及至少三个受影响任务的证据 |
-| 7：交付验证 | 进行中 | 公共客户端检查已通过，整体审核待完成 |
+| 7：交付验证 | 已完成 | 公共客户端、六包类型和文档检查通过；整体审核四项评测问题在 `c3e35b41` 修复并复审通过 |
 
 ### 实施中的边界决定
 
@@ -552,6 +552,10 @@ pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts src/provid
 - `pnpm check:client-api`：退出码 0，约 8.02 秒；含类型夹具、31 项结构/兼容检查和 4 项公共接口测试。
 - 正常提交钩子执行类型检查，未绕过；部分任务使用 Turbo 缓存，已有空构建产物警告不等于测试失败。
 - 任务 7：控制器直接运行 core / protocol / tools / agent-runtime / server / client 六包类型检查，全部退出码 0，约 20 秒；本轮评测另使用专用 TypeScript 配置检查，不依赖提交 hook 对顶层测试目录的覆盖。
+- 最终修订：评测全目录 67 项通过（13.13 秒），专用类型检查退出码 0（6.02 秒）；随后补强因果反例断言，定向 9 项通过（8.70 秒）。提交后 36 个样本通过套件断言（10.06 秒），实际内容状态为 30 passed、6 pending_review、0 failed，全部保存 evidence。它们不是 36 项内容质量均通过。
+- 最终工件位于系统临时目录，文件名为 `vykor-agent-baseline-453b7f69-e3af-4bc4-9b60-014058e5dc28.json`，revision=`c3e35b41`，fixture=`agent-behavior-v3`。整体审核者读回确认三次 J3 的事件顺序，并确认四项 Important 全部关闭；没有重复运行已覆盖测试。
 - 这些是不同提交上的分项证据，存在重叠，不相加冒称独立测试总数。未重新运行全仓 `pnpm test`，也未使用真实模型 API。
+
+整体审核保留两项非阻塞测试完善建议：增加重启后清空原始退出码的专门断言、增加同一 HTTP 响应到客户端的组合测试。相关实现及现有分层契约测试已经通过；本次不为这两项扩大执行范围。阶段 B/C 尚未满足门槛，忽略目录中的执行记录继续保留以便后续接续，不作为产品代码提交。
 
 阶段 A 可独立保留；需要回退时按所属提交审查后回退，不清除用户工作区、不改写历史数据。阶段 B/C 尚未启用，因此没有需要回退的新默认提示词或加载模式。
