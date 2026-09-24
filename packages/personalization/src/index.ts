@@ -132,7 +132,10 @@ export function factsToRulesMarkdown(facts: ExtractedFact[]): string {
       factType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     lines.push(`## ${title}`, "");
     for (const item of items) {
-      lines.push(`- \`${item.value}\``);
+      const freshness = item.observedAt
+        ? ` (last observed ${item.observedAt.slice(0, 10)}; verify current state)`
+        : "";
+      lines.push(`- \`${item.value}\`${freshness}`);
     }
     lines.push("");
   }

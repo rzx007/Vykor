@@ -73,6 +73,16 @@ describe("extractFactsFromText", () => {
 });
 
 describe("factsToRulesMarkdown", () => {
+  it("shows the observation date and asks for verification before use", () => {
+    const md = factsToRulesMarkdown([{
+      key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection",
+      value: "ops@10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2025-09-24T00:00:00.000Z",
+    }]);
+
+    expect(md).toContain("`ops@10.1.2.3` (last observed 2025-09-24; verify current state)");
+  });
+
   it("groups facts by type with section titles", () => {
     const md = factsToRulesMarkdown([
       { key: "ssh_host:a@b", type: "ssh_host", label: "SSH connection", value: "a@b.example", confidence: 0.7 },
