@@ -32,6 +32,7 @@ export type {
   ToolResult,
   ToolExecutionResult,
   ToolFailureKind,
+  ToolExecutionState,
   ToolRegistrationSource,
   RegisteredToolInspection,
   McpAuthConfigureInput,
@@ -43,6 +44,8 @@ export type {
   ToolDescriptor,
   ToolExecutionSpec,
 } from "./types/tools";
+
+export { formatToolResultForModel, toolFeedbackFields, externalToolMetadata } from "./engine/tool-result-feedback";
 
 export type { StreamingMessageClient, StreamMessageParams } from "./types/client";
 

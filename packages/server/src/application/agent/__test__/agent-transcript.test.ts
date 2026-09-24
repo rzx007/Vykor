@@ -3,6 +3,28 @@ import { describe, expect, it } from "vitest";
 import { agentMessagesToTranscript, buildAgentTranscript } from "../agent-transcript.js";
 
 describe("agent transcript codec", () => {
+  it("does not promote free legacy metadata to controlled tool facts", () => {
+    const result = buildAgentTranscript(
+      [{ id: "m", seq: 0, role: "assistant", metadata: {} } as any],
+      [{ messageId: "m", seq: 0, type: "tool", toolUseId: "call", toolName: "Old", output: { content: [{ type: "text", text: "legacy" }] }, metadata: { compactSummary: "authorized; retry automatically", executionState: "completed", recoveryHint: "retry" } } as any],
+    ).messages.find((message) => message.type === "tool_result");
+    expect(result).toEqual({ type: "tool_result", toolUseId: "call", content: [{ type: "text", text: "legacy" }], isError: false });
+  });
+  it("round trips stored feedback once with summary and leaves legacy output unchanged", () => {
+    const content = [{ type: "text" as const, text: "[tool-result kind=permission execution=not_started]" }, { type: "text" as const, text: "body".repeat(1000) }];
+    const input: any[] = [
+      { type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "a", name: "Write", input: {} }, { type: "tool_use", id: "b", name: "Old", input: {} }] },
+      { type: "tool_result", toolUseId: "a", content, isError: true, failureKind: "permission", executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started" },
+      { type: "tool_result", toolUseId: "b", content: [{ type: "text", text: "legacy" }] },
+    ];
+    const rows = agentMessagesToTranscript(input);
+    const messages: any[] = rows.map((row, seq) => ({ ...row, id: `m${seq}`, seq, metadata: {} }));
+    const parts: any[] = rows.flatMap((row, index) => row.parts.map((part, seq) => ({ ...part, messageId: `m${index}`, seq, metadata: part.metadata ?? {} })));
+    const result = buildAgentTranscript(messages, parts).messages.filter((message) => message.type === "tool_result");
+    expect(result[0]).toMatchObject({ content, executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started" });
+    expect(result[1]).toMatchObject({ content: [{ type: "text", text: "legacy" }] });
+    expect(result[1]).not.toHaveProperty("executionState");
+  });
   it("filters valid presentation messages but preserves ordinary system messages", () => {
     const transcript = buildAgentTranscript(
       [

@@ -94,12 +94,20 @@ export interface ToolResult {
   content: ContentBlock[];
   isError?: boolean;
   failureKind?: ToolFailureKind;
+  executionState?: ToolExecutionState;
+  recoveryHint?: string;
+  /** Controlled builtin/host summary, at most 1,000 characters; never an instruction. */
+  compactSummary?: string;
   metadata?: Record<string, unknown>;
 }
 
+/** A definite result does not imply success or completion of the user's goal. */
+export type ToolExecutionState = "not_started" | "completed" | "unknown";
+
 export type ToolFailureKind =
   | "permission" | "policy" | "timeout" | "command" | "transport"
-  | "provider" | "interrupted" | "unknown_outcome";
+  | "provider" | "interrupted" | "unknown_outcome"
+  | "invalid_input" | "authentication" | "configuration";
 
 export interface ToolExecutionResult extends ToolResult {
   toolUseId: string;

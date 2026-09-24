@@ -34,6 +34,10 @@ export interface ToolResultMessage {
   toolUseId: string;
   content: ContentBlock[];
   isError?: boolean;
+  failureKind?: import("./tools").ToolFailureKind;
+  executionState?: import("./tools").ToolExecutionState;
+  recoveryHint?: string;
+  compactSummary?: string;
 }
 
 export type Message =

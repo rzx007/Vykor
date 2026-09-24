@@ -1,4 +1,5 @@
 import type { ReasoningSource, StreamEvent } from "@vykor/core";
+import { externalToolMetadata, toolFeedbackFields } from "@vykor/core";
 import type { AssistantMessagePhase } from "@vykor/core";
 import type { SessionStore } from "@vykor/services";
 import type {
@@ -237,6 +238,7 @@ export class SessionTranscriptProjection {
         const active = state.toolParts.get(event.toolUseId);
         const messageId = active?.messageId ?? this.ensureAssistantMessage(state);
         const attachmentOcr = recordValue(event.result.metadata?.attachmentOcr);
+        const feedback = toolFeedbackFields(event.result);
         this.store.conversations.upsertMessagePart({
           id: active?.partId ?? event.toolUseId,
           sessionId: state.sessionId,
@@ -258,11 +260,12 @@ export class SessionTranscriptProjection {
             ? { processor: attachmentOcr.processor }
             : {}),
           metadata: {
-            ...event.result.metadata,
+            ...externalToolMetadata(event.result.metadata),
             toolCallId: event.toolUseId,
             toolAttemptId: event.result.toolAttemptId ?? `tool_attempt_${event.toolUseId}_1`,
             outcome: event.result.isError ? "failed" : "completed",
-            ...(event.result.failureKind ? { failureKind: event.result.failureKind } : {}),
+            ...feedback,
+            ...(Object.keys(feedback).length ? { toolFeedbackVersion: 1 } : {}),
           },
         });
         if (!event.result.isError) {

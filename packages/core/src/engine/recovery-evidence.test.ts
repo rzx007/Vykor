@@ -139,7 +139,7 @@ describe("Tool failure evidence unlocks retries", () => {
     const toolEnds = events.filter((e) => e.type === "tool_use_end") as any[];
     expect(toolEnds).toHaveLength(2);
     expect(toolEnds[1].result.isError).toBe(true);
-    expect(toolEnds[1].result.content[0].text).toContain("already failed with the same input");
+    expect(toolEnds[1].result.content[2].text).toContain("already failed with the same input");
   });
 
   it("does not execute a permission-denied call again", async () => {
@@ -172,7 +172,7 @@ describe("Tool failure evidence unlocks retries", () => {
     expect(executions).toBe(0);
     const toolEnds = events.filter((e) => e.type === "tool_use_end") as any[];
     expect(toolEnds[0].result.failureKind).toBe("permission");
-    expect(toolEnds[1].result.content[0].text).toContain("already failed with the same input");
+    expect(toolEnds[1].result.content[2].text).toContain("already failed with the same input");
   });
 
   it("finishes the remaining work instead of forcing a blocker report", async () => {

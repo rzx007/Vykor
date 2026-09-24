@@ -30,6 +30,7 @@ import { CostTracker } from "./cost-tracker";
 import { sanitizeMessageHistory } from "../utils/message-history";
 import { normalizeToolInput, validateToolInput } from "./tool-input-schema";
 import { ToolFailureMemory } from "./tool-failure-memory";
+import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,
@@ -287,7 +288,9 @@ export class QueryEngine implements IQueryEngine {
       options.signal,
       initialRequestConfiguration.client,
     );
-    this.messages = sanitizeMessageHistory(this.messages);
+    this.messages = sanitizeMessageHistory(this.messages).map((message) => message.type === "tool_result"
+      ? { ...message, content: applyToolOutputBudget(message.content) }
+      : message);
     this.messages.push({ type: "user", content: preparedContent });
 
     // per-turn 相关记忆检索：按本轮用户输入选相关记忆，作为瞬态上下文。
@@ -479,7 +482,8 @@ export class QueryEngine implements IQueryEngine {
           internalTools,
         );
         for (let i = 0; i < results.length; i++) {
-          const result = results[i]!;
+          const rawResult = results[i]!;
+          const result = { ...rawResult, content: formatToolResultForModel(rawResult) };
           const toolUse = toolUses[i]!;
           const tool = runToolRegistry.get(toolUse.name);
           const recoveryGuard = result.metadata?.recoveryGuard;
@@ -501,6 +505,7 @@ export class QueryEngine implements IQueryEngine {
             toolUseId: result.toolUseId,
             content: applyToolOutputBudget(result.content),
             isError: result.isError,
+            ...toolFeedbackFields(result),
           });
           yield { type: "tool_use_end", toolUseId: result.toolUseId, result };
         }
@@ -749,6 +754,7 @@ export class QueryEngine implements IQueryEngine {
           ],
           isError: true,
           failureKind: "policy",
+          executionState: "not_started",
           metadata: { recoveryGuard: "repeated_failed_call" },
         };
         continue;
@@ -761,7 +767,8 @@ export class QueryEngine implements IQueryEngine {
           toolName: toolUse.name,
           content: [{ type: "text" as const, text: `Unknown tool: ${toolUse.name}` }],
           isError: true,
-          failureKind: "policy",
+          failureKind: "invalid_input",
+          executionState: "not_started",
         };
         continue;
       }
@@ -783,7 +790,8 @@ export class QueryEngine implements IQueryEngine {
             },
           ],
           isError: true,
-          failureKind: "policy",
+          failureKind: "invalid_input",
+          executionState: "not_started",
         };
         continue;
       }
@@ -831,6 +839,7 @@ export class QueryEngine implements IQueryEngine {
           ],
           isError: true,
           failureKind: "permission",
+          executionState: "not_started",
         };
         continue;
       }
@@ -868,6 +877,7 @@ export class QueryEngine implements IQueryEngine {
             ],
             isError: true,
             failureKind: "permission",
+            executionState: "not_started",
           };
           continue;
         }
@@ -896,6 +906,7 @@ export class QueryEngine implements IQueryEngine {
           ],
           isError: true,
           failureKind: "policy",
+          executionState: "not_started",
         };
         continue;
       }
@@ -952,11 +963,15 @@ export class QueryEngine implements IQueryEngine {
           return {
             idx,
             result: {
+              content: result.content,
+              isError: result.isError,
+              ...toolFeedbackFields(result),
               toolUseId: toolUse.id,
               toolName: toolUse.name,
               toolAttemptId,
-              ...(result.isError && !result.failureKind ? { failureKind: "command" as const } : {}),
-              ...result,
+              metadata: externalToolMetadata(result.metadata),
+              compactSummary: toolRegistry.inspect(toolUse.name)?.source.kind === "builtin"
+                ? toolFeedbackFields(result).compactSummary : undefined,
             } as ToolExecutionResult,
           };
         } catch (error) {
@@ -964,7 +979,7 @@ export class QueryEngine implements IQueryEngine {
             throw signal.reason;
           }
           const failureKind =
-            error instanceof ToolTimeoutError ? ("timeout" as const) : ("command" as const);
+            error instanceof ToolTimeoutError ? ("timeout" as const) : ("unknown_outcome" as const);
           return {
             idx,
             result: {
@@ -974,6 +989,7 @@ export class QueryEngine implements IQueryEngine {
               content: [{ type: "text" as const, text: String(error) }],
               isError: true,
               failureKind,
+              executionState: "unknown",
             } as ToolExecutionResult,
           };
         }
@@ -1007,7 +1023,16 @@ export class QueryEngine implements IQueryEngine {
       }
     }
 
-    return results;
+    return results.map((result) => {
+      result.executionState ??= result.isError ? "unknown" : "completed";
+      if (result.isError) {
+        result.failureKind ??= "unknown_outcome";
+        result.recoveryHint ??= defaultRecoveryHint(result);
+        // Error summaries use host-normalized enums only, never external instructions.
+        result.compactSummary = `Tool feedback data: kind=${result.failureKind}; execution=${result.executionState}`;
+      }
+      return result;
+    });
   }
 
   private async executeToolWithTimeout(

@@ -33,6 +33,9 @@ export interface ToolUseEndEvent {
     content: ContentBlock[];
     isError?: boolean;
     failureKind?: import("./tools").ToolFailureKind;
+    executionState?: import("./tools").ToolExecutionState;
+    recoveryHint?: string;
+    compactSummary?: string;
     toolAttemptId?: string;
     metadata?: Record<string, unknown>;
   };

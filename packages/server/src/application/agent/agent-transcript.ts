@@ -1,4 +1,5 @@
 import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/core";
+import { toolFeedbackFields } from "@vykor/core";
 import type {
   AttachmentIntent,
   ReplaceTranscriptMessageInput,
@@ -92,6 +93,8 @@ export function buildAgentTranscript(
         toolUseId: part.toolUseId!,
         content: contentBlocksFromOutput(part.output),
         isError: part.isError === true,
+        // Earlier versions spread arbitrary tool metadata here; do not promote it to facts.
+        ...(part.metadata.toolFeedbackVersion === 1 ? toolFeedbackFields(part.metadata) : {}),
       });
     }
   }
@@ -201,7 +204,9 @@ export function agentMessagesToTranscript(messages: Message[]): ReplaceTranscrip
         (candidate) => candidate.type === "tool" && candidate.toolUseId === message.toolUseId,
       );
       if (!part) continue;
-      part.output = { content: message.content };
+      const facts = toolFeedbackFields(message);
+      part.output = { content: message.content, ...facts };
+      if (Object.keys(facts).length) part.metadata = { ...part.metadata, ...facts, toolFeedbackVersion: 1 };
       part.isError = message.isError === true;
       attached = true;
       break;
@@ -214,7 +219,10 @@ export function agentMessagesToTranscript(messages: Message[]): ReplaceTranscrip
           status: "completed",
           toolUseId: message.toolUseId,
           toolName: "unknown",
-          output: { content: message.content },
+          output: { content: message.content, ...toolFeedbackFields(message) },
+          ...(Object.keys(toolFeedbackFields(message)).length
+            ? { metadata: { ...toolFeedbackFields(message), toolFeedbackVersion: 1 } }
+            : {}),
           isError: message.isError === true,
         }],
       });

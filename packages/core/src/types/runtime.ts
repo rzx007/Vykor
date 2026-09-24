@@ -325,6 +325,10 @@ export type AgentEventInput =
           content: ContentBlock[];
           isError?: boolean;
           failureKind?: import("./tools").ToolFailureKind;
+          executionState?: import("./tools").ToolExecutionState;
+          recoveryHint?: string;
+          compactSummary?: string;
+          metadata?: Record<string, unknown>;
           toolAttemptId?: string;
         };
       };
