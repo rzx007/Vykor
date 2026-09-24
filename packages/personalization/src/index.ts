@@ -147,7 +147,7 @@ export function factsToRulesMarkdown(facts: ExtractedFact[]): string {
   const lines = [
     "# Local Environment Rules",
     "",
-    "*Auto-generated from session history. Do not edit manually.*",
+    "*Generated from sourced project environment facts. Do not edit manually.*",
     "",
   ];
   for (const [factType, items] of grouped) {
@@ -233,13 +233,16 @@ export function saveFacts(facts: FactsFile, cwd: string): void {
 /** 按 key 去重合并：同 key 置信度高者胜（平手取新值）。 */
 export function mergeFacts(existing: FactsFile, newFacts: ExtractedFact[]): FactsFile {
   const byKey = new Map<string, ExtractedFact>();
+  const linkedTargets = new Set(existing.facts
+    .filter((fact) => fact.status === "superseded" && fact.replacement)
+    .map((fact) => fact.replacement!.byKey));
   for (const fact of existing.facts ?? []) {
     byKey.set(fact.key, fact);
   }
   for (const fact of newFacts) {
     if (!fact.key) continue;
     const old = byKey.get(fact.key);
-    if (old?.status === "superseded") continue;
+    if (old?.status === "superseded" || old?.manualSource || linkedTargets.has(fact.key)) continue;
     if (!old || (fact.confidence ?? 0) >= (old.confidence ?? 0)) {
       byKey.set(fact.key, fact);
     }
@@ -288,10 +291,13 @@ export function replaceFact(
   const newKey = `${old.type}:${newValue}`;
   if (old.status === "superseded") {
     if (old.replacement?.byKey !== newKey) throw new FactMutationError("CONFLICT", "Project fact was already replaced");
-    return {
+    const result: ReplaceFactResult = {
       oldKey, newKey, operationId: old.replacement.operationId,
       relatedActiveKeys: relatedActiveKeys(existing.facts, old),
     };
+    try { saveLocalRules(factsToRulesMarkdown(existing.facts), cwd); }
+    catch { result.cacheWarning = "rules.md cache could not be updated"; }
+    return result;
   }
   const makeContext = FACT_VALUE_CONTEXT[old.type];
   if (!newValue || newValue !== newValue.trim() || /[\r\n]/.test(newValue) ||
@@ -302,8 +308,9 @@ export function replaceFact(
         .some((fact) => fact.type === old.type && fact.value === newValue)) {
     throw new FactMutationError("INVALID_VALUE", "Invalid replacement fact value");
   }
-  if (newKey === oldKey || existing.facts.some((fact) => fact.key === newKey)) {
-    throw new FactMutationError("CONFLICT", "Replacement fact already exists");
+  const target = existing.facts.find((fact) => fact.key === newKey);
+  if (newKey === oldKey || target?.status === "superseded") {
+    throw new FactMutationError("CONFLICT", "Replacement target is not an active different fact");
   }
   if (options.sessionId !== undefined && (!options.sessionId.trim())) {
     throw new FactMutationError("INVALID_VALUE", "Invalid session ID");
@@ -319,7 +326,7 @@ export function replaceFact(
   const facts = existing.facts.map((fact) => fact.key === oldKey
     ? { ...fact, status: "superseded" as const, replacement }
     : fact);
-  facts.push(newFact);
+  if (!target) facts.push(newFact);
   saveFacts({ facts }, cwd);
   const result: ReplaceFactResult = {
     oldKey, newKey, operationId, relatedActiveKeys: relatedActiveKeys(facts, old),

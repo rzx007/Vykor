@@ -15,7 +15,7 @@
 | `SOUL.md` | `$VYKOR_CONFIG_DIR/SOUL.md`，默认 `~/.vykor/SOUL.md` | `/profile init` 创建模板；之后用户手动编辑 | `buildPromptLayers()` 的 stable identity slot | 定义 agent 默认身份、语气、长期行为风格 |
 | `USER.md` | `$VYKOR_CONFIG_DIR/USER.md`，默认 `~/.vykor/USER.md` | `/profile init` 创建模板；用户手动编辑；pending 更新审批后合并 | `buildPromptLayers()` 的 volatile `# User Profile` | 记录用户长期偏好，例如语言、回复风格、工作流习惯 |
 | `user_profile_pending/*.json` | `$VYKOR_CONFIG_DIR/user_profile_pending/` | `queueUserProfileUpdate()` 生成候选更新 | 不直接注入；`approvePendingUserProfileUpdate()` 后才合并进 `USER.md` | 防止自动抽取直接改用户档案，保留人工审批边界 |
-| local rules | `$VYKOR_CONFIG_DIR/local_rules/projects/<project>-<hash>/facts.json` 和 `rules.md` | daemon root Run 成功收尾后从用户消息正则抽取；`/remember` 也会触发 | `buildPromptLayers()` 按 cwd 从本项目 `facts.json` 中有来源的条目生成 volatile local environment rules | 记录本项目环境事实，例如 SSH 主机、IP、路径、conda 环境、API endpoint |
+| local rules | `$VYKOR_CONFIG_DIR/local_rules/projects/<project>-<hash>/facts.json` 和 `rules.md` | daemon root Run 成功收尾后从用户消息正则抽取；`/remember` 也会触发；`/facts replace` 可显式替换 | `buildPromptLayers()` 按 cwd 从本项目 `facts.json` 中有来源且未被取代的条目生成 volatile local environment rules | 记录本项目环境事实，例如 SSH 主机、IP、路径、conda 环境、API endpoint |
 | Project Instructions | 当前 cwd 向上查找 `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/*.md` | 用户或项目维护者手动写入 | `loadClaudeMdPrompt()` 组装成 `# Project Instructions`，进入 context 层 | 当前项目的构建、测试、协作和代码规范 |
 | `settings.systemPrompt` | `$VYKOR_CONFIG_DIR/settings.json`，也可由 CLI/session runtime 传入 | `/config`、CLI 参数或前端 runtime metadata 更新 | `buildPromptLayers()` 的 `# Custom Instructions` | 当前用户配置的额外系统指令，不替换基础 identity/invariant guidance |
 | Environment facts | 运行时动态生成，不单独落盘 | 每次构建 system prompt 时计算 | `formatEnvironmentSection()` 进入 stable 层 | 告诉模型当前 OS、cwd、home、git branch、真实 shell launcher 和命令规则 |
@@ -117,7 +117,9 @@ local_rules/
     rules.md
 ```
 
-`facts.json` 是结构化事实，`rules.md` 是供人查看的自动生成缓存。项目事实文件要求每条记录都有会话、消息和观察时间；提示词只读取未命中凭据检查的有效记录，并显示观察日期和使用前核验提示。观察日期不代表最近核验时间，也不会触发自动过期。缺来源或损坏的文件不会作为空事实覆盖旧文件，`/context status` 会显示不可读。
+`facts.json` 是结构化事实，`rules.md` 是供人查看的自动生成缓存。自动抽取记录要求有会话、消息和消息时间；手动替换记录保存操作 ID 和时间，不伪造消息 ID。提示词只读取未被取代、未命中凭据检查的有效记录，并显示记录日期和使用前核验提示。日期不代表工具核验时间，也不会触发自动过期。缺来源或损坏的文件不会作为空事实覆盖旧文件，`/context status` 会显示不可读。
+
+`/facts list` 可查看当前项目的准确键、状态和来源；`/facts replace <旧键> => <新值>` 只替换明确选中的键。新键已存在且有效时保留其原来源，不新增重复记录；目标键已失效则拒绝。旧键作为已取代记录留下，历史重扫不会恢复它；如果旧地址也在另一条有效记录中，结果只提示那个键，不连带修改。`/context status` 的 sourced 数量只计实际可注入的记录。
 
 入口：
 
@@ -246,7 +248,7 @@ Session runtime history 存 daemon 会话的完整运行状态，包括 sessions
 1. `/context status`：先看每条上下文/记忆线的加载状态、写入时机和注入位置。
 2. `/context` 或 context preview：看最终 prompt 分层和内容预览。
 3. `/profile status`：看 `SOUL.md` / `USER.md` 是否 loaded、blocked、truncated。
-4. `~/.vykor/local_rules/projects/<项目>-<hash>/facts.json`：看当前项目的事实及来源；`/context status` 显示数量或不可读状态。
+4. `/facts list`：看当前项目的事实、来源与取代状态；`/context status` 显示有效数量或不可读状态。文件位于 `~/.vykor/local_rules/projects/<项目>-<hash>/facts.json`。
 5. `/memory list` / `/memory show <id>`：看项目长期记忆。
 6. 当前 repo 的 `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/*.md`。
 7. `settings.json`：看 `systemPrompt`、memory 开关、权限模式。

@@ -530,7 +530,9 @@ export async function dispatchSessionCommand(
             ? `superseded by ${fact.replacement?.byKey ?? "(unknown)"} (operation ${fact.replacement?.operationId ?? "unknown"})`
             : "active";
           const source = fact.manualSource
-            ? `manual replacement ${fact.manualSource.operationId}`
+            ? `manual replacement ${fact.manualSource.operationId} of ${fact.manualSource.oldKey}` +
+              ` at ${fact.manualSource.at}` +
+              (fact.manualSource.sessionId ? ` in session ${fact.manualSource.sessionId}` : "")
             : `${fact.sourceSessionId ?? "?"}/${fact.sourceMessageId ?? "?"}`;
           return `  ${fact.key} [${status}] observed ${fact.observedAt?.slice(0, 10) ?? "unknown"}; source ${source}`;
         })].join("\n");

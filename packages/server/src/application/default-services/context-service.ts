@@ -19,6 +19,7 @@ import {
   type PromptLayers,
 } from "@vykor/prompts";
 import { getLocalRulesDir, loadFacts } from "@vykor/personalization";
+import { detectCredentialValue } from "@vykor/memory";
 import { loadOutputStyles } from "@vykor/output-styles";
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
 
@@ -108,7 +109,8 @@ export function createDefaultContextService(
       let factCount = 0;
       let factsUnreadable = false;
       try {
-        factCount = loadFacts(cwd).facts.length;
+        factCount = loadFacts(cwd).facts.filter((fact) =>
+          fact.status !== "superseded" && !detectCredentialValue(fact.value)).length;
       } catch {
         factsUnreadable = true;
       }
@@ -141,7 +143,7 @@ export function createDefaultContextService(
         {
           source: "local_rules",
           status: factsUnreadable ? "unreadable" : `${factCount} sourced`,
-          written: "/remember success best-effort",
+          written: "session extraction, /facts replace",
           injected: "system prompt volatile local rules",
           purpose: "machine environment facts",
         },

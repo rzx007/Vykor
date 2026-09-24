@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hono } from "hono";
-import { getLocalRulesDir, loadLocalRules, saveFacts } from "@vykor/personalization";
+import { getLocalRulesDir, loadFacts, loadLocalRules, saveFacts } from "@vykor/personalization";
 import { createFactsRoutes } from "./facts.js";
 
 let configDir: string;
@@ -26,6 +26,8 @@ function app(locked = false) {
   const acquireCwdMutation = vi.fn(() => locked ? null : { release });
   const server = new Hono().route("/facts", createFactsRoutes({
     control: { acquireCwdMutation, closeRuntimesForCwd } as never,
+    sessions: { get: (id: string) => id === "s1" ? { cwd: projectDir }
+      : id === "other-project" ? { cwd: join(configDir, "other-project") } : null } as never,
   }));
   return { server, release, closeRuntimesForCwd, acquireCwdMutation };
 }
@@ -86,7 +88,7 @@ describe("facts routes", () => {
     expect(closeRuntimesForCwd).not.toHaveBeenCalled();
   });
 
-  it("maps invalid values and conflicting targets without mutating the file", async () => {
+  it("maps invalid values without mutating the file", async () => {
     saveFacts({ facts: [
       { key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
         sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z" },
@@ -96,7 +98,7 @@ describe("facts routes", () => {
     const path = join(getLocalRulesDir(projectDir), "facts.json");
     const before = readFileSync(path, "utf-8");
     const { server, release, closeRuntimesForCwd } = app();
-    for (const [newValue, status] of [["bad", 400], ["ops@10.1.2.4", 409]] as const) {
+    for (const [newValue, status] of [["bad", 400]] as const) {
       const response = await server.request("/facts/replace", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ cwd: projectDir, oldKey: "ssh_host:ops@10.1.2.3", newValue }),
@@ -104,7 +106,44 @@ describe("facts routes", () => {
       expect(response.status).toBe(status);
       expect(readFileSync(path, "utf-8")).toBe(before);
     }
-    expect(release).toHaveBeenCalledTimes(2);
+    expect(release).toHaveBeenCalledOnce();
+    expect(closeRuntimesForCwd).not.toHaveBeenCalled();
+  });
+
+  it("links an existing active target while retaining its user-message source", async () => {
+    saveFacts({ facts: [
+      { key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u-old", observedAt: "2026-09-23T00:00:00.000Z" },
+      { key: "ssh_host:ops@10.1.2.4", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.4", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u-new", observedAt: "2026-09-24T00:00:00.000Z" },
+    ] }, projectDir);
+    const { server, closeRuntimesForCwd } = app();
+    const response = await server.request("/facts/replace", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cwd: projectDir, oldKey: "ssh_host:ops@10.1.2.3", newValue: "ops@10.1.2.4", sessionId: "s1" }),
+    });
+    expect(response.status).toBe(200);
+    const facts = loadFacts(projectDir).facts;
+    expect(facts).toHaveLength(2);
+    expect(facts.find((fact) => fact.key === "ssh_host:ops@10.1.2.4"))
+      .toMatchObject({ sourceSessionId: "s1", sourceMessageId: "u-new" });
+    expect(closeRuntimesForCwd).toHaveBeenCalledWith(projectDir);
+  });
+
+  it("rejects a session ID belonging to another project before writing", async () => {
+    saveFacts({ facts: [{
+      key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, projectDir);
+    const path = join(getLocalRulesDir(projectDir), "facts.json");
+    const before = readFileSync(path, "utf-8");
+    const { server, closeRuntimesForCwd } = app();
+    const response = await server.request("/facts/replace", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cwd: projectDir, oldKey: "ssh_host:ops@10.1.2.3", newValue: "ops@10.1.2.4", sessionId: "other-project" }),
+    });
+    expect(response.status).toBe(400);
+    expect(readFileSync(path, "utf-8")).toBe(before);
     expect(closeRuntimesForCwd).not.toHaveBeenCalled();
   });
 

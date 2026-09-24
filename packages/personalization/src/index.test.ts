@@ -267,6 +267,48 @@ describe("updateRulesFromSession", () => {
 });
 
 describe("replaceFact", () => {
+  it("links a selected old key to an already active new fact without replacing its source", () => {
+    saveFacts({ facts: [
+      { key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u-old", observedAt: "2026-09-23T00:00:00.000Z" },
+      { key: "ssh_host:ops@10.1.2.4", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.4", confidence: 0.7,
+        sourceSessionId: "s2", sourceMessageId: "u-new", observedAt: "2026-09-24T00:00:00.000Z" },
+    ] }, projectDir);
+
+    const result = replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4", { sessionId: "s2" });
+    const facts = loadFacts(projectDir).facts;
+    expect(facts).toHaveLength(2);
+    expect(facts.find((fact) => fact.key === result.oldKey)?.replacement)
+      .toMatchObject({ byKey: result.newKey, operationId: result.operationId });
+    expect(facts.find((fact) => fact.key === result.newKey))
+      .toMatchObject({ sourceSessionId: "s2", sourceMessageId: "u-new", observedAt: "2026-09-24T00:00:00.000Z" });
+    expect(facts.find((fact) => fact.key === result.newKey)?.manualSource).toBeUndefined();
+    expect(loadLocalRules(projectDir)).toContain("ops@10.1.2.4");
+    expect(loadLocalRules(projectDir)).not.toContain("ops@10.1.2.3");
+    updateRulesFromSession([
+      { id: "u-old", createdAt: Date.parse("2026-09-23T00:00:00.000Z"), role: "user", content: "ssh ops@10.1.2.3" },
+      { id: "u-other", createdAt: Date.parse("2026-09-24T01:00:00.000Z"), role: "user", content: "ssh ops@10.1.2.4" },
+    ], projectDir, "s3");
+    expect(loadFacts(projectDir).facts.find((fact) => fact.key === result.newKey))
+      .toMatchObject({ sourceSessionId: "s2", sourceMessageId: "u-new" });
+    expect(replaceFact(projectDir, result.oldKey, "ops@10.1.2.4").operationId).toBe(result.operationId);
+  });
+
+  it("refuses to link to a target that has itself been superseded", () => {
+    saveFacts({ facts: [
+      { key: "ip_address:10.1.2.3", type: "ip_address", label: "Server IP", value: "10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-23T00:00:00.000Z" },
+      { key: "ip_address:10.1.2.4", type: "ip_address", label: "Server IP", value: "10.1.2.4", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u2", observedAt: "2026-09-24T00:00:00.000Z" },
+    ] }, projectDir);
+    replaceFact(projectDir, "ip_address:10.1.2.4", "10.1.2.5");
+    const path = join(dir, "facts.json");
+    const before = readFileSync(path, "utf-8");
+    expect(() => replaceFact(projectDir, "ip_address:10.1.2.3", "10.1.2.4"))
+      .toThrowError(expect.objectContaining({ code: "CONFLICT" }));
+    expect(readFileSync(path, "utf-8")).toBe(before);
+  });
+
   it("supersedes only the selected fact and survives rescanning old messages", () => {
     const oldMessages = [{
       id: "u1", createdAt: Date.parse("2026-09-24T00:00:00.000Z"), role: "user",
@@ -342,7 +384,6 @@ describe("replaceFact", () => {
       ["ssh_host:missing", "ops@10.1.2.5", "NOT_FOUND"],
       ["ssh_host:ops@10.1.2.3", "not-an-ssh-host", "INVALID_VALUE"],
       ["ssh_host:ops@10.1.2.3", "ops@sk-examplelongtoken123", "INVALID_VALUE"],
-      ["ssh_host:ops@10.1.2.3", "ops@10.1.2.4", "CONFLICT"],
     ]) {
       expect(() => replaceFact(projectDir, oldKey!, value!)).toThrowError(expect.objectContaining({ code }));
       expect(readFileSync(path, "utf-8")).toBe(before);
@@ -390,5 +431,35 @@ describe("replaceFact", () => {
     expect(result.cacheWarning).toBeTruthy();
     expect(loadLocalRules(projectDir)).toContain("ops@10.1.2.4");
     expect(loadLocalRules(projectDir)).not.toContain("ops@10.1.2.3");
+  });
+
+  it("rebuilds a failed rules cache when the same replacement is retried", () => {
+    saveFacts({ facts: [{
+      key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, projectDir);
+    const cachePath = join(dir, "rules.md");
+    mkdirSync(cachePath);
+    const first = replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4");
+    expect(first.cacheWarning).toBeTruthy();
+    rmSync(cachePath, { recursive: true });
+
+    const retried = replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4");
+    expect(retried.operationId).toBe(first.operationId);
+    expect(retried.cacheWarning).toBeUndefined();
+    expect(readFileSync(cachePath, "utf-8")).toContain("ops@10.1.2.4");
+  });
+
+  it("keeps a manual replacement's source when old messages mention the new value", () => {
+    const messages = [
+      { id: "u1", createdAt: 1, role: "user", content: "ssh ops@10.1.2.3" },
+      { id: "u2", createdAt: 2, role: "user", content: "ssh ops@10.1.2.4" },
+    ];
+    updateRulesFromSession([messages[0]!], projectDir, "s1");
+    const result = replaceFact(projectDir, "ssh_host:ops@10.1.2.3", "ops@10.1.2.4", { sessionId: "s1" });
+    updateRulesFromSession(messages, projectDir, "s1");
+
+    expect(loadFacts(projectDir).facts.find((fact) => fact.key === result.newKey)?.manualSource?.operationId)
+      .toBe(result.operationId);
   });
 });

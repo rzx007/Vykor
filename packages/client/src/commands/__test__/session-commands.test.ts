@@ -431,6 +431,19 @@ describe("dispatchSessionCommand", () => {
     expect(emitted.at(-1)).toContain("op-1");
   });
 
+  it("shows a manual fact's operation time and originating session", async () => {
+    const client = fakeClient({ listFacts: vi.fn(async () => ({ facts: [{
+      key: "ssh_host:ops@10.1.2.4", value: "ops@10.1.2.4", observedAt: "2026-09-24T01:00:00.000Z",
+      manualSource: { kind: "manual_replace", operationId: "op-1", oldKey: "ssh_host:ops@10.1.2.3",
+        at: "2026-09-24T01:00:00.000Z", sessionId: "s1" },
+    }] })) });
+    const { host: h, emitted } = host({ client });
+    await dispatchSessionCommand({ name: "/facts", args: "list" }, h);
+    expect(emitted.at(-1)).toContain("op-1");
+    expect(emitted.at(-1)).toContain("s1");
+    expect(emitted.at(-1)).toContain("2026-09-24T01:00:00.000Z");
+  });
+
   it("replaces an exact project fact and reports other keys that still hold the old address", async () => {
     const replaceFactRequest = vi.fn(async () => ({
       oldKey: "ssh_host:ops@10.1.2.3", newKey: "ssh_host:ops@10.1.2.4", operationId: "op-1",

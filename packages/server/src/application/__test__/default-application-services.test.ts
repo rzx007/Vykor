@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerPluginAgents } from "@vykor/coordinator";
-import { getLocalRulesDir, saveFacts } from "@vykor/personalization";
+import { getLocalRulesDir, replaceFact, saveFacts } from "@vykor/personalization";
 
 vi.mock("@vykor/services", () => ({
   startDreamNow: vi.fn(),
@@ -100,6 +100,36 @@ describe("default daemon application services", () => {
     const status = await context.status({ cwd: temporaryDirectory });
     expect(status.report).toContain("1 sourced");
     expect(status.report).not.toContain("10.1.2.3");
+  });
+
+  it("does not count superseded facts as current in context status", async () => {
+    saveFacts({ facts: [{
+      key: "ip_address:10.1.2.3", type: "ip_address", label: "Server IP", value: "10.1.2.3", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, temporaryDirectory);
+    replaceFact(temporaryDirectory, "ip_address:10.1.2.3", "10.1.2.4");
+    const context = createDefaultContextService({
+      current: { model: "m", apiFormat: "anthropic", maxTurns: 50, permission: { mode: "default" } } as never,
+    });
+
+    const status = await context.status({ cwd: temporaryDirectory });
+    expect(status.report).toContain("1 sourced");
+    expect(status.report).not.toContain("2 sourced");
+  });
+
+  it("does not count a filtered credential-like fact as current", async () => {
+    saveFacts({ facts: [{
+      key: "ssh_host:ops@sk-examplelongtoken123", type: "ssh_host", label: "SSH connection",
+      value: "ops@sk-examplelongtoken123", confidence: 0.7,
+      sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+    }] }, temporaryDirectory);
+    const context = createDefaultContextService({
+      current: { model: "m", apiFormat: "anthropic", maxTurns: 50, permission: { mode: "default" } } as never,
+    });
+
+    const status = await context.status({ cwd: temporaryDirectory });
+    expect(status.report).toContain("0 sourced");
+    expect(status.report).not.toContain("sk-examplelongtoken123");
   });
 
   it("reports unreadable project facts without exposing or overwriting them", async () => {

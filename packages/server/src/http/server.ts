@@ -357,7 +357,7 @@ export class VykorHttpServer {
     );
     this.app.route(
       "/facts",
-      createFactsRoutes({ control: this.application.control }),
+      createFactsRoutes({ control: this.application.control, sessions: this.store.sessions }),
     );
     this.app.route(
       "/auth",

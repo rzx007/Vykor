@@ -42,6 +42,7 @@ import {
   SessionStore,
 } from "@vykor/services";
 import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/protocol";
+import { saveFacts } from "@vykor/personalization";
 import type {
   CreateDaemonAgent,
   CreateDaemonAgentContext,
@@ -2841,6 +2842,34 @@ describe("VykorHttpServer", () => {
         },
       },
     );
+  });
+
+  it("serves project facts through the authenticated daemon endpoint", async () => {
+    const configDir = mkdtempSync(join(tmpdir(), "vk-http-facts-"));
+    const previous = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
+    const cwd = join(configDir, "project");
+    try {
+      saveFacts({ facts: [{
+        key: "ssh_host:ops@10.1.2.3", type: "ssh_host", label: "SSH connection", value: "ops@10.1.2.3", confidence: 0.7,
+        sourceSessionId: "s1", sourceMessageId: "u1", observedAt: "2026-09-24T00:00:00.000Z",
+      }] }, cwd);
+      await withServer(async ({ baseUrl, token }) => {
+        const listed = await fetch(`${baseUrl}/facts?cwd=${encodeURIComponent(cwd)}`, { headers: auth(token) });
+        expect(listed.status).toBe(200);
+        expect((await listed.json() as { facts: Array<{ key: string }> }).facts[0]?.key).toBe("ssh_host:ops@10.1.2.3");
+        const replaced = await fetch(`${baseUrl}/facts/replace`, {
+          method: "POST", headers: { ...auth(token), "content-type": "application/json" },
+          body: JSON.stringify({ cwd, oldKey: "ssh_host:ops@10.1.2.3", newValue: "ops@10.1.2.4" }),
+        });
+        expect(replaced.status).toBe(200);
+        expect((await replaced.json() as { result: { newKey: string } }).result.newKey).toBe("ssh_host:ops@10.1.2.4");
+      });
+    } finally {
+      if (previous === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previous;
+      rmSync(configDir, { recursive: true, force: true });
+    }
   });
 
   it("manages auth status/login/logout via resource APIs", async () => {
