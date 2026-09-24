@@ -525,7 +525,7 @@ pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts src/provid
 
 | 任务 | 实际状态 | 提交 / 边界 |
 | --- | --- | --- |
-| 0：跨任务基线 | 已实现、分项审核通过 | `7d99d909`、`a7c331db`；scripted 36 次为 30 passed、6 pending_review、0 failed，不代表模型能力达标 |
+| 0：跨任务基线 | 已实现、分项审核通过 | `7d99d909`、`a7c331db`；历史记录为 30 passed、6 pending_review、0 failed；原始 JSON 已不可用，不代表模型能力达标 |
 | 1：Job 退出事实 | 已实现、分项审核通过 | `f6d11dfb`；真实码、信号 null 与缺省分开，旧记录不回填 |
 | 2：模型可见反馈 | 已实现、分项审核通过 | `7ba77722`；完整事件与模型预算版分开，重载不重复追加前缀 |
 | 3：常用工具 | 已实现、两轮修订后通过审核 | `0938f414`、`4b7e3a31`、`ad43a3ad`；修正未知 Shell 结果、完整 Job ID 和真实 Agent 的可信 Read 接线 |
@@ -537,6 +537,7 @@ pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts src/provid
 
 ### 实施中的边界决定
 
+- 最终审核修复仅涉及评测：J3 按实际事件检查 A、摘要、压缩完成、B 的顺序；保存公开工具证据和部分输出；每次运行使用带 UUID 的独立报告；未知 usage 以缺失请求数和已知小计表示。旧固定路径已被覆盖为 `b77b93d2`，不是 `a7c331db` 原始工件；历史计数未重建成原始 JSON。`VYKOR_EVAL_OUT` 现在指定文件名前缀，实际唯一文件路径由测试控制台输出。
 - 受控持久字段使用 `toolFeedbackVersion=1` 标识格式。外部工具同名 metadata 被过滤；旧记录保留原文，但不把没有标记的自由 metadata 当成可信摘要。这个标记不授予权限。
 - 可信 Read 覆盖绑定到宿主批准的实现身份，并通过本轮冻结副本传递；普通 agent / 插件替换、相同函数的新定义或批准后更换函数都不能继承信任。回归通过真实 `createDefaultNodeAgent/runMessage` 入口验证。
 - 摘要超预算时省略完整项并说明，不截断不透明任务 ID。备用压缩只保留本次被清理部分中最近的有界事实，不永久累计旧摘要。模型是否忠实转述、极端上下文重试删去旧段后的信息完整性仍不是本阶段承诺。
@@ -550,6 +551,7 @@ pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts src/provid
 - 任务 5：行为目录 54 项通过（约 11.56 秒）；审核补充反例后，目录定向 8 项通过（约 7.52 秒）、专用类型检查退出码 0（约 5.54 秒）。其余未变更的行为测试没有重复运行。
 - `pnpm check:client-api`：退出码 0，约 8.02 秒；含类型夹具、31 项结构/兼容检查和 4 项公共接口测试。
 - 正常提交钩子执行类型检查，未绕过；部分任务使用 Turbo 缓存，已有空构建产物警告不等于测试失败。
+- 任务 7：控制器直接运行 core / protocol / tools / agent-runtime / server / client 六包类型检查，全部退出码 0，约 20 秒；本轮评测另使用专用 TypeScript 配置检查，不依赖提交 hook 对顶层测试目录的覆盖。
 - 这些是不同提交上的分项证据，存在重叠，不相加冒称独立测试总数。未重新运行全仓 `pnpm test`，也未使用真实模型 API。
 
 阶段 A 可独立保留；需要回退时按所属提交审查后回退，不清除用户工作区、不改写历史数据。阶段 B/C 尚未启用，因此没有需要回退的新默认提示词或加载模式。

@@ -1,11 +1,9 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { isAbsolute, relative, resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { behaviorCases } from "./cases.js";
-import { behaviorSystemPrompt, runBehaviorCase, type BehaviorResult } from "./run.js";
+import { behaviorSystemPrompt, reserveBehaviorReport, runBehaviorCase, type BehaviorResult } from "./run.js";
 
 const mode = process.env.VYKOR_EVAL_MODE ?? "scripted";
 if (mode !== "scripted" && mode !== "live") throw new Error(`Unknown evaluation mode: ${mode}`);
@@ -18,11 +16,10 @@ if (mode === "live") {
   }
   throw new Error("Live execution is pending explicit approved funding and a verified provider adapter; no external request was sent");
 }
-const out = resolve(process.env.VYKOR_EVAL_OUT ?? resolve(tmpdir(), "vykor-agent-baseline.json"));
-const rel = relative(resolve(tmpdir()), out);
-if (!isAbsolute(out) || rel.startsWith("..") || isAbsolute(rel)) throw new Error("VYKOR_EVAL_OUT must be under the system temporary directory");
+const report = reserveBehaviorReport(process.env.VYKOR_EVAL_OUT);
+console.info(`Behavior evaluation report: ${report.path}`);
 const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-const fixtureVersion = "agent-behavior-v2";
+const fixtureVersion = "agent-behavior-v3";
 const records: BehaviorResult[] = [];
 
 const caseMetadata = behaviorCases.map(({ id, prompt, manualChecks, setup }) => {
@@ -40,13 +37,13 @@ const caseMetadata = behaviorCases.map(({ id, prompt, manualChecks, setup }) => 
 });
 
 function save(): void {
-  writeFileSync(out, JSON.stringify({
-    mode, revision, fixtureVersion,
+  report.save({
+    runId: report.runId, mode, revision, fixtureVersion,
     model: "scripted", parameters: { maxTurns: 20, maxRequests: 25, timeoutMs: 120_000 },
     permission: { sandbox: false, mcpServers: {}, pluginsEnabled: false, hostTools: "case fixture only" },
     cases: caseMetadata,
     results: records,
-  }, null, 2));
+  });
 }
 
 describe("cross-task behavior baseline (scripted)", () => {

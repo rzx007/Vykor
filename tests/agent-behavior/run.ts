@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import type { AgentEvent, AgentRunResult, Settings, StreamingMessageClient, StreamMessageParams } from "@vykor/core";
 import { createDefaultNodeAgent, type VykorAgent } from "@vykor/agent-runtime";
 import { buildWorkStyleSection, getDefaultIdentity, getInvariantGuidance } from "@vykor/prompts";
@@ -12,10 +13,36 @@ export interface BehaviorResult {
   reason: string; toolCalls: number; elapsedMs: number;
   requestCount: number;
   actualInputTokens?: number; actualOutputTokens?: number;
+  usageCoverage?: { knownInputTokens: number; knownOutputTokens: number; missingInputRequests: number; missingOutputRequests: number };
   estimatedToolTokens: number; questions: number; permissionsBypassed: number;
   toolCatalogRequests?: ToolCatalogRequest[];
   toolSelectionErrors?: number;
   prematureStop?: boolean; redundantVerification?: boolean;
+  evidence?: {
+    finalText?: string;
+    outputText: string;
+    events: ReviewEvent[];
+    requests: readonly { summary: boolean; toolNames: string[]; eventIndex: number }[];
+  };
+}
+
+type ReviewEvent = { eventIndex: number } & (
+  | { type: "tool.started"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool.completed"; id: string; content: Extract<AgentEvent, { type: "tool.completed" }>["data"]["result"]["content"]; isError?: boolean }
+  | { type: "output.text.delta"; text: string }
+  | { type: "context_compaction"; phase: string }
+);
+
+// Every invocation reserves its own file, even when the caller repeats an explicit basename.
+export function reserveBehaviorReport(requested = join(tmpdir(), "vykor-agent-baseline.json")) {
+  const target = resolve(requested);
+  const rel = relative(resolve(tmpdir()), target);
+  if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("VYKOR_EVAL_OUT must be under the system temporary directory");
+  const extension = extname(target);
+  const runId = randomUUID();
+  const path = `${target.slice(0, target.length - extension.length)}-${runId}${extension || ".json"}`;
+  writeFileSync(path, "{}", { flag: "wx" });
+  return { path, runId, save: (report: unknown) => writeFileSync(path, JSON.stringify(report, null, 2)) };
 }
 
 export interface ToolCatalogRequest {
@@ -24,6 +51,7 @@ export interface ToolCatalogRequest {
   estimatedToolTokens: number;
   estimateMethod: "heuristic_v1";
   actualInputTokens?: number;
+  actualOutputTokens?: number;
   /** Estimated definition tokens divided by reported input tokens; not an exact token or cost attribution. */
   estimatedToolTokenShareOfActualInput?: number;
 }
@@ -73,12 +101,11 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
   let requests = 0;
   let budgetExceeded = false;
   let timedOut = false;
-  let inputTokens: number | undefined;
-  let outputTokens: number | undefined;
   let estimatedToolTokens = 0;
   const toolCatalogRequests: ToolCatalogRequest[] = [];
   let questions = 0;
-  const requestsSeen: Array<{ summary: boolean; toolNames: string[] }> = [];
+  const requestsSeen: Array<{ summary: boolean; toolNames: string[]; eventIndex: number }> = [];
+  const evidence: NonNullable<BehaviorResult["evidence"]> = { outputText: "", events: [], requests: requestsSeen };
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort(new Error("sample deadline reached"));
@@ -95,7 +122,7 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
       requests++;
       if (options.sharedBudget) options.sharedBudget.remainingRequests--;
       const toolNames = params.tools?.map((tool) => tool.name) ?? [];
-      requestsSeen.push({ summary: params.maxTokens === 20_000 && !params.tools, toolNames });
+      requestsSeen.push({ summary: params.maxTokens === 20_000 && !params.tools, toolNames, eventIndex: events.length });
       const serializedLength = params.tools?.length ? JSON.stringify(params.tools).length : 0;
       const requestCatalog: ToolCatalogRequest = {
         definitionCount: params.tools?.length ?? 0,
@@ -107,9 +134,8 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
       estimatedToolTokens += requestCatalog.estimatedToolTokens;
       for await (const event of options.client.streamMessage({ ...params, abortSignal: controller.signal })) {
         if (event.type === "usage") {
-          inputTokens = (inputTokens ?? 0) + event.usage.inputTokens;
-          outputTokens = (outputTokens ?? 0) + event.usage.outputTokens;
           requestCatalog.actualInputTokens = (requestCatalog.actualInputTokens ?? 0) + event.usage.inputTokens;
+          requestCatalog.actualOutputTokens = (requestCatalog.actualOutputTokens ?? 0) + event.usage.outputTokens;
           if (requestCatalog.actualInputTokens > 0) {
             requestCatalog.estimatedToolTokenShareOfActualInput = requestCatalog.estimatedToolTokens / requestCatalog.actualInputTokens;
           }
@@ -141,12 +167,31 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
         jobs: false, terminal: false, backgroundShell: false, childEnvironment: false,
         workflowRepository: false, schedules: false, memory: false,
       },
-      onEvent: (event) => { events.push(event); },
+      onEvent: (event) => {
+        const eventIndex = events.length;
+        events.push(event);
+        // Isolated scripted fixtures only: retain reviewable public evidence, not reasoning,
+        // event contexts, provider configuration or arbitrary metadata. Live scrubbing is not implemented.
+        if (event.type === "tool.started") {
+          const { id, name, input } = event.data.toolUse;
+          evidence.events.push({ eventIndex, type: event.type, id, name, input: structuredClone(input) });
+        } else if (event.type === "tool.completed") {
+          evidence.events.push({ eventIndex, type: event.type, id: event.data.toolUseId,
+            content: structuredClone(event.data.result.content.filter((part) => part.type === "text" || part.type === "image")),
+            isError: event.data.result.isError });
+        } else if (event.type === "output.text.delta") {
+          evidence.outputText += event.data.delta;
+          evidence.events.push({ eventIndex, type: event.type, text: event.data.delta });
+        } else if (event.type === "domain.event" && event.data.name === "context_compaction") {
+          evidence.events.push({ eventIndex, type: "context_compaction", phase: String(event.data.payload?.phase) });
+        }
+      },
       resolveModelContextWindow: async () => 50_000,
     });
     runResult = fixture.run
       ? await fixture.run(agent, controller.signal)
       : await agent.runMessage(scenario.prompt, { signal: controller.signal });
+    evidence.finalText = runResult.output;
     const history = agent.getHistory();
     const verdict = fixture.verify({
       history, events, runResult, finalText: runResult.output, requests: requestsSeen,
@@ -179,14 +224,21 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
     else process.env.VYKOR_CONFIG_DIR = previousConfig;
     rmSync(cwd, { recursive: true, force: true });
   }
+  const usageCoverage = {
+    knownInputTokens: toolCatalogRequests.reduce((sum, request) => sum + (request.actualInputTokens ?? 0), 0),
+    knownOutputTokens: toolCatalogRequests.reduce((sum, request) => sum + (request.actualOutputTokens ?? 0), 0),
+    missingInputRequests: toolCatalogRequests.filter((request) => request.actualInputTokens === undefined).length,
+    missingOutputRequests: toolCatalogRequests.filter((request) => request.actualOutputTokens === undefined).length,
+  };
   return {
     caseId: scenario.id, revision: options.revision, model: options.model, repeat: options.repeat,
     status, reason,
     requestCount: requests,
     toolCalls: events.filter((event) => event.type === "tool.started").length,
     elapsedMs: Date.now() - started,
-    ...(inputTokens === undefined ? {} : { actualInputTokens: inputTokens }),
-    ...(outputTokens === undefined ? {} : { actualOutputTokens: outputTokens }),
+    ...(requests > 0 && usageCoverage.missingInputRequests === 0 ? { actualInputTokens: usageCoverage.knownInputTokens } : {}),
+    ...(requests > 0 && usageCoverage.missingOutputRequests === 0 ? { actualOutputTokens: usageCoverage.knownOutputTokens } : {}),
+    usageCoverage, evidence,
     estimatedToolTokens, toolCatalogRequests,
     ...(options.relevantToolNames === undefined ? {} : {
       toolSelectionErrors: events.filter((event) => event.type === "tool.started" &&

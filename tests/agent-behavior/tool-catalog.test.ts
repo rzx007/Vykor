@@ -32,6 +32,27 @@ function scenario(size: number): BehaviorCase {
 }
 
 describe("tool catalog measurement", () => {
+  it.each([false, true])("does not present partial usage as a complete total (abnormal=%s)", async (abnormal) => {
+    let request = 0;
+    const client: StreamingMessageClient = { async *streamMessage() {
+      if (request++ === 0) {
+        yield { type: "usage", usage: { inputTokens: 0, outputTokens: 7 } };
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "source-0", name: "InspectSource_000", input: {} } };
+        yield { type: "complete", stopReason: "tool_use" };
+      } else {
+        if (abnormal) throw new Error("connection lost before usage");
+        yield { type: "complete", stopReason: "end_turn" };
+      }
+    } };
+    const result = await runBehaviorCase(scenario(8), { ...options, client });
+    expect(result.requestCount).toBe(2);
+    expect(result).not.toHaveProperty("actualInputTokens");
+    expect(result).not.toHaveProperty("actualOutputTokens");
+    expect(result.usageCoverage).toEqual({ knownInputTokens: 0, knownOutputTokens: 7, missingInputRequests: 1, missingOutputRequests: 1 });
+    expect(result.toolCatalogRequests![0]).toMatchObject({ actualInputTokens: 0, actualOutputTokens: 7 });
+    expect(result.toolCatalogRequests![1]).not.toHaveProperty("actualInputTokens");
+  });
+
   it.each([0, 1])("does not pass when only %i required sources are inspected", async (calls) => {
     let request = 0;
     const client: StreamingMessageClient = { async *streamMessage() {
@@ -78,11 +99,13 @@ describe("tool catalog measurement", () => {
       estimatedToolTokens: Math.ceil(serializedLength / 4),
       estimateMethod: "heuristic_v1",
       actualInputTokens: 10_000,
+      actualOutputTokens: 25,
       estimatedToolTokenShareOfActualInput: Math.ceil(serializedLength / 4) / 10_000,
     };
     expect(result.toolCatalogRequests).toEqual([requestCatalog, requestCatalog]);
     expect(result.estimatedToolTokens).toBe(2 * Math.ceil(serializedLength / 4));
     expect(result.actualInputTokens).toBe(20_000);
+    expect(result.actualOutputTokens).toBe(50);
     if (size === 40) {
       request = 0;
       const repeated = await runBehaviorCase(scenario(size), { ...options, client, repeat: 2 });
@@ -121,6 +144,13 @@ describe("tool catalog measurement", () => {
     });
 
     expect(result.status).toBe("passed");
+    const evidence = JSON.parse(JSON.stringify(result.evidence)) as NonNullable<typeof result.evidence>;
+    const a = evidence.events.find((event) => event.type === "tool.started" && event.name === "CompleteA")!;
+    const b = evidence.events.find((event) => event.type === "tool.started" && event.name === "CompleteB")!;
+    const compact = evidence.events.find((event) => event.type === "context_compaction" && ["compact_end", "llm_compact_end"].includes(event.phase))!;
+    expect(a.eventIndex).toBeLessThan(compact.eventIndex);
+    expect(compact.eventIndex).toBeLessThan(b.eventIndex);
+    expect(evidence.finalText).toContain("A and B are complete");
     const counts = result.toolCatalogRequests!.map((request) => request.definitionCount);
     const summaryIndex = counts.indexOf(0);
     expect(summaryIndex).toBeGreaterThan(0);

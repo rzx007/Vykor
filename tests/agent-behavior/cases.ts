@@ -7,7 +7,7 @@ export interface BehaviorObservation {
   runResult?: AgentRunResult;
   finalText: string;
   compacted: boolean;
-  requests: readonly { summary: boolean; toolNames: string[] }[];
+  requests: readonly { summary: boolean; toolNames: string[]; eventIndex: number }[];
 }
 
 export interface BehaviorCase {
@@ -25,7 +25,7 @@ export interface BehaviorCase {
   };
 }
 
-type Step = { name: string; input?: Record<string, unknown> };
+type Step = { name: string; input?: Record<string, unknown> } | { text: string };
 
 function scripted(steps: Step[], finalText: string): StreamingMessageClient {
   let index = 0;
@@ -36,12 +36,12 @@ function scripted(steps: Step[], finalText: string): StreamingMessageClient {
       return;
     }
     const step = steps[index++];
-    if (step) {
+    if (step && "name" in step) {
       yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: `step-${index}`, name: step.name, input: step.input ?? {} } };
       yield { type: "complete" as const, stopReason: "tool_use" };
       return;
     }
-    yield { type: "text_delta" as const, delta: finalText };
+    yield { type: "text_delta" as const, delta: step && "text" in step ? step.text : finalText };
     yield { type: "complete" as const, stopReason: "end_turn" };
   } };
 }
@@ -150,7 +150,7 @@ export const behaviorCases: BehaviorCase[] = [
   },
   {
     id: "J3", domain: "jobs", prompt: "Complete A, then continue with B after context compaction.",
-    scripted: () => scripted([{ name: "CompleteA" }, { name: "CompleteB" }], "A and B are complete; job-17 preserved."),
+    scripted: () => scripted([{ name: "CompleteA" }, { text: "A complete; B remains; job-17 retained." }, { name: "CompleteB" }], "A and B are complete; job-17 preserved."),
     setup() { let a = 0; let b = 0; return {
       tools: [tool("CompleteA", async () => { a++; return text("A completed; job-17"); }), tool("CompleteB", async () => { b++; return text("B completed; job-17"); })],
       run: async (agent, signal) => {
@@ -167,7 +167,19 @@ export const behaviorCases: BehaviorCase[] = [
       verify: (o) => {
         const summaryIndex = o.requests.findIndex((request) => request.summary);
         const continued = summaryIndex >= 0 && o.requests.slice(summaryIndex + 1).some((request) => !request.summary);
-        return { passed: a === 1 && b === 1 && o.compacted && continued && o.history.some((message) => message.type === "assistant" && message.compactRole === "summary"), reason: `A=${a}; B=${b}; compacted=${o.compacted}; summary and continue=${continued}` };
+        const completedAt = (name: string) => {
+          const start = o.events.find((event) => event.type === "tool.started" && event.data.toolUse.name === name);
+          return start?.type === "tool.started" ? o.events.findIndex((event) => event.type === "tool.completed" &&
+            event.data.toolUseId === start.data.toolUse.id && !event.data.result.isError) : -1;
+        };
+        const aEnd = completedAt("CompleteA");
+        const bStart = o.events.findIndex((event) => event.type === "tool.started" && event.data.toolUse.name === "CompleteB");
+        const bEnd = completedAt("CompleteB");
+        const summaryStart = o.requests[summaryIndex]?.eventIndex ?? -1;
+        const compactEnd = o.events.findIndex((event, index) => index >= summaryStart && event.type === "domain.event" &&
+          event.data.name === "context_compaction" && ["compact_end", "llm_compact_end"].includes(String(event.data.payload?.phase)));
+        const ordered = aEnd >= 0 && aEnd < summaryStart && summaryStart <= compactEnd && compactEnd < bStart && bStart < bEnd;
+        return { passed: a === 1 && b === 1 && ordered && o.compacted && continued && o.history.some((message) => message.type === "assistant" && message.compactRole === "summary"), reason: `A=${a}; B=${b}; compacted=${o.compacted}; summary and continue=${continued}; A end=${aEnd}, summary=${summaryStart}, compact end=${compactEnd}, B start=${bStart}, B end=${bEnd}; ordered=${ordered}` };
       },
     }; },
   },

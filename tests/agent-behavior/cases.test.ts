@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "@vykor/core";
 import type { BehaviorObservation } from "./cases.js";
 import { behaviorCases } from "./cases.js";
+import { runBehaviorCase } from "./run.js";
+import type { StreamingMessageClient } from "@vykor/core";
 
 function fixture(id: string) {
   return behaviorCases.find((item) => item.id === id)!.setup();
@@ -19,6 +21,29 @@ function observation(finalText = "", toolNames: string[] = []): BehaviorObservat
 }
 
 describe("case verifiers reject incomplete evidence", () => {
+  it.each([true, false])("J3 rejects B before compaction or absent after compaction (early B=%s)", async (earlyB) => {
+    const item = behaviorCases.find((entry) => entry.id === "J3")!;
+    let request = 0;
+    const client: StreamingMessageClient = { async *streamMessage(params) {
+      if (params.maxTokens === 20_000 && !params.tools) {
+        yield { type: "text_delta", delta: "A completed; continue B; keep job-17." };
+      } else {
+        const name = request++ === 0 ? "CompleteA" : earlyB && request === 2 ? "CompleteB" : undefined;
+        if (name) {
+          yield { type: "tool_use_start", toolUse: { type: "tool_use", id: name, name, input: {} } };
+          yield { type: "complete", stopReason: "tool_use" };
+          return;
+        }
+        yield { type: "text_delta", delta: "done" };
+      }
+      yield { type: "complete", stopReason: "end_turn" };
+    } };
+    const result = await runBehaviorCase(item, { client, model: "scripted", revision: "negative", repeat: 1, maxRequests: 25, timeoutMs: 120_000 });
+    expect(result.reason).toContain(`A=1; B=${earlyB ? 1 : 0}; compacted=true`);
+    expect(result.reason).toContain("ordered=false");
+    expect(result.status).toBe("failed");
+  });
+
   it("F1 rejects three moves when the required file c is missing", async () => {
     const sample = fixture("F1");
     for (const id of ["a", "b", "unrelated"]) await execute(sample, "MoveFile", { id });
