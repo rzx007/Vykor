@@ -125,7 +125,7 @@ export function TitleBar({
   }
 
   const openDocumentation = (): void => {
-    window.open("https://github.com/rzx007/openharness-ts#readme", "_blank", "noopener")
+    window.open("https://github.com/rzx007/Vykor#readme", "_blank", "noopener")
   }
 
   return (

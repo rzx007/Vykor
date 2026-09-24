@@ -118,8 +118,8 @@ vk config set daemon.autoStart true
 
 ## 文档与源码
 
-- 源码仓库：[https://github.com/rzx007/openharness-ts](https://github.com/rzx007/openharness-ts)
-- 项目文档：[https://github.com/rzx007/openharness-ts/tree/main/docs](https://github.com/rzx007/openharness-ts/tree/main/docs)
-- 问题反馈：[https://github.com/rzx007/openharness-ts/issues](https://github.com/rzx007/openharness-ts/issues)
+- 源码仓库：[https://github.com/rzx007/Vykor](https://github.com/rzx007/Vykor)
+- 项目文档：[https://github.com/rzx007/Vykor/tree/main/docs](https://github.com/rzx007/Vykor/tree/main/docs)
+- 问题反馈：[https://github.com/rzx007/Vykor/issues](https://github.com/rzx007/Vykor/issues)
 
 本地从源码开发请看仓库根目录 `README.md`。

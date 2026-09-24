@@ -9,7 +9,7 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 > **易漂移数字以代码和测试为准**：基础工具数看 `packages/tools` 的 `createDefaultToolRegistry()`；Provider 看 `packages/api` 的 `PROVIDERS`；默认 model/maxTurns 看 `packages/core` 的 `DEFAULT_SETTINGS`。当前架构和硬规则统一从 [docs/README.md](docs/README.md) 索引。
 
 - ✅ **多模型支持** — Provider catalog 自动检测（`packages/api` `PROVIDERS`；Anthropic 原生 + OpenAI 兼容 + Codex 订阅），含 `<think>` 块过滤、图片/vision 传递、gpt-5/o 系列 token 字段适配。🟡 暂缺 Copilot 订阅；CLI/`settings.effort` 已有，模型原生 reasoning tokens 仍简化
-- ✅ **工具能力** — 基础 registry 提供文件 / Bash / Web / Grep / MCP / `BackgroundShellCreate` / Agent / 媒体与元工具；runtime host 按能力注入 `Workflow`、`JobList/Read/Wait/Send/Cancel`、`TerminalOpen` 和 5 个 `Schedule*` 工具。bash/grep/glob 健壮性已对齐 v0.1.8（超时保留输出、进程组杀除、gitignore/超长行处理）
+- ✅ **工具能力** — 基础 registry 提供文件 / Bash / Web / Grep / MCP / `BackgroundShellCreate` / Agent / 媒体与元工具；runtime host 按能力注入 `Workflow`、`JobList/Read/Wait/Send/Cancel`、`TerminalOpen` 和 5 个 `Schedule`* 工具。bash/grep/glob 健壮性已对齐 v0.1.8（超时保留输出、进程组杀除、gitignore/超长行处理）
 - ✅ **多 Agent 编排** — 内置 7 agent + 用户/插件自定义 agent（`~/.vykor/agents/*.md`），以及统一 Jobs 控制、`Workflow` DAG、sequential/parallel/pipeline、retry、预算、timeline、reconcile/cancel、Workflow 工具/CLI 的 reconciliation follow-up spec 生成和 `vk workflow` 管理命令。daemon/TUI/print 主路径使用 daemon 内 child session；task、child session 与 child run 的关联通过 daemon 事件持久化，跨客户端可重放。
 - ✅ **MCP 协议** — stdio + HTTP(streamable)/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权，以及 Streamable HTTP 的 OAuth 2.1 登录、独立凭据存储、刷新、状态查询和失败隔离
 - ✅ **权限系统** — default / plan / full_auto + 工具黑白名单、路径规则、命令拒绝；swarm worker 只读自动放行 + 写操作转 leader 集中裁决；TUI 下 Edit/Write 改文件前显示 unified diff 预览，可本次/整个会话批准
@@ -22,8 +22,6 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 - ✅ **Terminal** — daemon 统一持有终端 runtime，Desktop 右侧 Panel 与 Agent 终端跟随同一个 Native/WSL 会话环境；支持多终端、输出快照恢复、REST/SSE 传输和对话卡片挂接。模型用 `TerminalOpen` 创建持久终端，后续统一通过 `JobList/Read/Wait/Send/Cancel` 观察和控制。
 - ✅ **记忆体系** — 四层：工具输出预算 / 每轮 checkpoint / 持久记忆（`/remember` LLM 提取 + personalization 环境事实抽取自动注入 prompt）/ `/dream` 梦境整合（备份+锁+回滚）。详见 [docs/memory-system.md](docs/memory-system.md)
 - ✅ **Native / WSL 运行环境** — Desktop 在本机运行，Windows 可选择 WSL；Bash、文件工具、后台任务、MCP stdio 和终端共享同一环境。可选 SRT 作为独立的本机权限边界。
-- 🔴 **尚未复刻** — `ohmo`（个人助理 + 多渠道网关）
-- ⛔ **不在复刻范围** — `autopilot`（仓库级自动驾驶 + dashboard）
 
 ## 快速开始
 
@@ -36,7 +34,7 @@ Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、D
 ### 安装
 
 ```bash
-git clone https://github.com/rzx007/openharness-ts.git vykor
+git clone https://github.com/rzx007/Vykor.git vykor
 cd vykor
 pnpm install
 ```
@@ -255,13 +253,15 @@ TUI 内斜杠命令走 daemon command catalog + client-local UI + template expan
 
 一次模型交互会被服务端保存为按顺序排列的 canonical message parts：
 
-| Part                       | 含义                        |
-| -------------------------- | --------------------------- |
-| user text                  | 用户提交的文本              |
-| assistant text / reasoning | 可持续追加的模型输出        |
-| tool call                  | 工具名和输入参数            |
-| tool result                | 工具输出或错误              |
+
+| Part                       | 含义               |
+| -------------------------- | ---------------- |
+| user text                  | 用户提交的文本          |
+| assistant text / reasoning | 可持续追加的模型输出       |
+| tool call                  | 工具名和输入参数         |
+| tool result                | 工具输出或错误          |
 | error / log                | 本次 run 的可展示错误或日志 |
+
 
 每个 part 都带稳定 ID、顺序和 `pending/running/completed/failed` 状态。客户端 attach 单个 session 时先读取原子 snapshot，再从 snapshot cursor 订阅 SSE 增量，因此切换客户端、重启 TUI 或中途进入会话都能恢复同一份文本和工具状态。
 
@@ -444,73 +444,86 @@ Vykor/
 
 ### 核心引擎（Core）
 
-| 模块             | 说明                                                                                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `QueryEngine`    | Agent 循环核心：提交消息 → 流式调用 API → 解析工具调用 → 权限检查 → 执行工具 → 循环直到完成                                                                        |
+
+| 模块               | 说明                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `QueryEngine`    | Agent 循环核心：提交消息 → 流式调用 API → 解析工具调用 → 权限检查 → 执行工具 → 循环直到完成                                                                            |
 | `CompactService` | 上下文管理：token 估算 + 自动摘要（LLM 生成 `<analysis>/<summary>`），连续失败 3 次自动退回。详见 [docs/compact-service-design.md](docs/compact-service-design.md) |
-| `CostTracker`    | 费用追踪：记录 input/output/cache token 用量和估算成本                                                                                                             |
-| `ToolRegistry`   | 工具注册中心：按名称查找、批量注册、可过滤                                                                                                                         |
-| `RuntimeBuilder` | 运行时组装：Builder 模式将 API Client、工具、权限、Hook 组装为 `RuntimeBundle`                                                                                     |
-| `Settings`       | 配置管理：默认值 < 配置文件 < 环境变量 < CLI 参数，四层优先级                                                                                                      |
+| `CostTracker`    | 费用追踪：记录 input/output/cache token 用量和估算成本                                                                                              |
+| `ToolRegistry`   | 工具注册中心：按名称查找、批量注册、可过滤                                                                                                                 |
+| `RuntimeBuilder` | 运行时组装：Builder 模式将 API Client、工具、权限、Hook 组装为 `RuntimeBundle`                                                                           |
+| `Settings`       | 配置管理：默认值 < 配置文件 < 环境变量 < CLI 参数，四层优先级                                                                                                 |
+
 
 ### API 层
 
-| 模块                     | 说明                                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| `AnthropicClient`        | Anthropic 原生 SDK 客户端，流式聚合 `input_json_delta`，429/5xx 指数退避重试                 |
-| `OpenAICompatibleClient` | OpenAI 兼容客户端，支持 reasoning_content（o1/o3 系列），Kimi workaround                     |
+
+| 模块                       | 说明                                                           |
+| ------------------------ | ------------------------------------------------------------ |
+| `AnthropicClient`        | Anthropic 原生 SDK 客户端，流式聚合 `input_json_delta`，429/5xx 指数退避重试  |
+| `OpenAICompatibleClient` | OpenAI 兼容客户端，支持 reasoning_content（o1/o3 系列），Kimi workaround  |
 | `Provider Registry`      | 以 `PROVIDERS` 为事实源，按 apiKey 前缀 → baseURL 关键字 → model 关键字自动检测 |
-| `detectProvider()`       | 从 `(model, apiKey, baseURL)` 三元组自动推断 Provider 和 BackendType                         |
+| `detectProvider()`       | 从 `(model, apiKey, baseURL)` 三元组自动推断 Provider 和 BackendType  |
+
 
 ### 工具层（基础 registry；host 按能力注入 Jobs / Terminal / Scheduled Tasks）
 
-| 分类           | 工具                                                                                                                                          |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **文件操作**   | `Bash`（命令执行）、`Read`（文件读取）、`Write`（文件写入）、`Edit`（精确字符串替换）、`Glob`（文件模式匹配）、`NotebookEdit`（Jupyter 编辑） |
-| **搜索**       | `Grep`（ripgrep 优先 + JS fallback）、`Lsp`（LSP 集成）                                                                                       |
-| **Web**        | `WebFetch`（URL 抓取 + HTML→Text）、`WebSearch`（DuckDuckGo HTML 搜索）                                                                       |
-| **后台工作**   | `BackgroundShellCreate`（创建后台 shell）、`JobList/Read/Wait/Send/Cancel`（统一控制 Terminal、shell、Agent、Workflow）                       |
-| **Agent/团队** | `Agent`（创建 daemon child session 并返回 `jobId`）、`Workflow`（硬调度 DAG）、`TeamCreate/Delete`（团队管理）                                |
-| **调度**       | `ScheduleCreate/Update/Delete/List/RunNow`（创建和管理运行 Agent 的已安排任务；仅 daemon/host 注入 schedules capability 后注册）              |
-| **MCP**        | `McpToolCall/ListMcpResources/ReadMcpResource/McpAuth`（4 个 MCP 工具；`McpAuth` 负责静态 Bearer/Header/env，OAuth 由 `vk mcp login` 管理）             |
-| **媒体/通道**  | `ImageToText`（视觉 fallback）、`ImageGeneration`（DALL-E 兼容）、`FeishuPush`                                                                |
-| **元工具**     | `TodoWrite、Config、Sleep、Skill、ToolSearch、AskUser、Brief、EnterPlanMode、ExitPlanMode、EnterWorktree、ExitWorktree`                       |
+
+| 分类           | 工具                                                                                                                            |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **文件操作**     | `Bash`（命令执行）、`Read`（文件读取）、`Write`（文件写入）、`Edit`（精确字符串替换）、`Glob`（文件模式匹配）、`NotebookEdit`（Jupyter 编辑）                             |
+| **搜索**       | `Grep`（ripgrep 优先 + JS fallback）、`Lsp`（LSP 集成）                                                                                |
+| **Web**      | `WebFetch`（URL 抓取 + HTML→Text）、`WebSearch`（DuckDuckGo HTML 搜索）                                                                |
+| **后台工作**     | `BackgroundShellCreate`（创建后台 shell）、`JobList/Read/Wait/Send/Cancel`（统一控制 Terminal、shell、Agent、Workflow）                       |
+| **Agent/团队** | `Agent`（创建 daemon child session 并返回 `jobId`）、`Workflow`（硬调度 DAG）、`TeamCreate/Delete`（团队管理）                                    |
+| **调度**       | `ScheduleCreate/Update/Delete/List/RunNow`（创建和管理运行 Agent 的已安排任务；仅 daemon/host 注入 schedules capability 后注册）                    |
+| **MCP**      | `McpToolCall/ListMcpResources/ReadMcpResource/McpAuth`（4 个 MCP 工具；`McpAuth` 负责静态 Bearer/Header/env，OAuth 由 `vk mcp login` 管理） |
+| **媒体/通道**    | `ImageToText`（视觉 fallback）、`ImageGeneration`（DALL-E 兼容）、`FeishuPush`                                                          |
+| **元工具**      | `TodoWrite、Config、Sleep、Skill、ToolSearch、AskUser、Brief、EnterPlanMode、ExitPlanMode、EnterWorktree、ExitWorktree`                 |
+
 
 ### 服务层
 
-| 模块                       | 说明                                                                                                                                                                                                                                         |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CompactService`           | LLM 驱动的对话摘要：当 token 接近阈值时自动触发，结构化 `<analysis>/<summary>` 输出。详见 [docs/compact-service-design.md](docs/compact-service-design.md)                                                                                   |
-| standalone session files   | 独立嵌入场景的严格版本项目快照和 transcript 导出；不参与 daemon/TUI 权威状态。daemon 数据格式见 [docs/durable-execution-data-model.md](docs/durable-execution-data-model.md)                                   |
-| Repository / Transaction  | 各业务域拥有持久记录；跨域写入共享同一个事务、read model 和事件序号。`SessionStore` 只负责数据库生命周期、组合、owner lease、恢复与少量运行协调。详见 [Session Runtime 存储架构](docs/session-runtime-storage-architecture.md) |
-| `ScheduledTaskService`     | 已安排任务：一次性时间 / RRULE 计算、Agent 执行、重叠与错过策略、运行历史和未读结果                                                                                                                                                          |
-| `DetachedProcessSupervisor` | shell/dream/显式 Agent 子进程的进程内句柄与停止能力；跨端可恢复状态由 `RunRepository` 的 Session Task 记录持久化                                                                                                                        |
-| `MemoryManager`            | 四层记忆体系的持久层：frontmatter + 加权搜索 + MEMORY.md 索引；配套 `/remember`（LLM 提取持久记忆）、`/dream`（梦境整合）、会话 checkpoint 与环境事实抽取。详见 [docs/memory-system.md](docs/memory-system.md)                               |
-| `LspClient`                | LSP 客户端：与 Language Server Protocol 通信                                                                                                                                                                                                 |
+
+| 模块                          | 说明                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CompactService`            | LLM 驱动的对话摘要：当 token 接近阈值时自动触发，结构化 `<analysis>/<summary>` 输出。详见 [docs/compact-service-design.md](docs/compact-service-design.md)                                    |
+| standalone session files    | 独立嵌入场景的严格版本项目快照和 transcript 导出；不参与 daemon/TUI 权威状态。daemon 数据格式见 [docs/durable-execution-data-model.md](docs/durable-execution-data-model.md)                       |
+| Repository / Transaction    | 各业务域拥有持久记录；跨域写入共享同一个事务、read model 和事件序号。`SessionStore` 只负责数据库生命周期、组合、owner lease、恢复与少量运行协调。详见 [Session Runtime 存储架构](docs/session-runtime-storage-architecture.md) |
+| `ScheduledTaskService`      | 已安排任务：一次性时间 / RRULE 计算、Agent 执行、重叠与错过策略、运行历史和未读结果                                                                                                                  |
+| `DetachedProcessSupervisor` | shell/dream/显式 Agent 子进程的进程内句柄与停止能力；跨端可恢复状态由 `RunRepository` 的 Session Task 记录持久化                                                                                  |
+| `MemoryManager`             | 四层记忆体系的持久层：frontmatter + 加权搜索 + MEMORY.md 索引；配套 `/remember`（LLM 提取持久记忆）、`/dream`（梦境整合）、会话 checkpoint 与环境事实抽取。详见 [docs/memory-system.md](docs/memory-system.md)     |
+| `LspClient`                 | LSP 客户端：与 Language Server Protocol 通信                                                                                                                              |
+
 
 ### 扩展层
 
-| 模块                    | 说明                                                                                                                                                                                                                                                                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Coordinator`           | 多 Agent 编排：内置/用户/插件 Agent 定义 + coordinator prompt；硬调度器（`Workflow` / DAG / 持久化恢复 / timeline / budget / reconcile / cancel）。详见 [docs/coordinator-hard-scheduler-flow.md](docs/coordinator-hard-scheduler-flow.md)                                                                               |
-| `McpClientManager`      | MCP 协议客户端：stdio + HTTP/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权及 Streamable HTTP OAuth Token 注入、刷新和单次 401 恢复，动态获取工具和资源                                                                                                                                                |
-| `ChannelAdapter`        | 通信通道：`StdioAdapter`（标准输入输出）、`HttpAdapter`（HTTP Webhook）、`FeishuAdapter`（飞书机器人）                                                                                                                                                                                                                   |
-| `HookExecutor`          | Hook 系统：10 类事件（`session_start/end`、`pre/post_tool_use`、`pre/post_compact`、`user_prompt_submit`、`notification`、`stop`、`subagent_stop`），支持 command/http/prompt/agent 四种类型、priority、matcher、`$ARGUMENTS`                                                                                            |
-| `Swarm`                 | 多 Agent 团队：framework 创建并执行 child agent，daemon 投影 parent task、child session 与 child run。详见 [docs/agent-child-session-flow.md](docs/agent-child-session-flow.md)                                                                                                                                          |
-| `PluginLoader`          | Native Plugin v1 校验、安装状态、版本 cache 和 Skills/Agents/Hooks/MCP 激活；外部 Claude Code 插件由独立 Converter 导入，Runtime 不解析来源格式，Tool 隔离完成前不执行。详见 [docs/plugins-contributions-design.md](docs/plugins-contributions-design.md)             |
-| `SkillRegistry`         | Skill 管理：Markdown + frontmatter 解析（user-invocable/disable-model-invocation/model/argument-hint）；内置 bundled skills（commit/review/test/plan/debug/create-skill）；用户技能 `~/.vykor/skills`，项目技能 `.vykor/skills`；三源加载 bundled<user<project；daemon catalog 将 user-invocable skill 暴露为 template 斜杠（`POST /sessions/:id/commands` 展开后 admit）；model 可见性过滤 |
-| `PermissionChecker`     | 权限系统：`default / plan / full_auto` 三种模式 + 工具黑白名单 + 路径规则 + 命令拒绝                                                                                                                                                                                                                                     |
-| `DaemonApplication`     | daemon composition root：组装 recovery、应用服务、`SessionOperationRunner`、Agent loader/pool、permission、task 与 projection，本身不实现各领域业务动作                                                                                                    |
-| `VykorHttpServer` | daemon HTTP/SSE transport：Hono 路由、bearer token、CORS、listener、SSE client lifecycle；通过单个 `DaemonApplication` 调用应用能力                                                                                                                                                                                      |
-| `VykorClient`     | 跨端客户端 SDK：typed API、SSE 解析、session snapshot+live 合并、按 session bucket 的 event reducer。详见 [docs/client-sync-flow.md](docs/client-sync-flow.md)                                                                                                                                                           |
+
+| 模块                  | 说明                                                                                                                                                                                                                                                                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Coordinator`       | 多 Agent 编排：内置/用户/插件 Agent 定义 + coordinator prompt；硬调度器（`Workflow` / DAG / 持久化恢复 / timeline / budget / reconcile / cancel）。详见 [docs/coordinator-hard-scheduler-flow.md](docs/coordinator-hard-scheduler-flow.md)                                                                                                                                |
+| `McpClientManager`  | MCP 协议客户端：stdio + HTTP/SSE 传输连接外部 MCP Server，支持 headers/env 静态鉴权及 Streamable HTTP OAuth Token 注入、刷新和单次 401 恢复，动态获取工具和资源                                                                                                                                                                                                                        |
+| `ChannelAdapter`    | 通信通道：`StdioAdapter`（标准输入输出）、`HttpAdapter`（HTTP Webhook）、`FeishuAdapter`（飞书机器人）                                                                                                                                                                                                                                                                 |
+| `HookExecutor`      | Hook 系统：10 类事件（`session_start/end`、`pre/post_tool_use`、`pre/post_compact`、`user_prompt_submit`、`notification`、`stop`、`subagent_stop`），支持 command/http/prompt/agent 四种类型、priority、matcher、`$ARGUMENTS`                                                                                                                                          |
+| `Swarm`             | 多 Agent 团队：framework 创建并执行 child agent，daemon 投影 parent task、child session 与 child run。详见 [docs/agent-child-session-flow.md](docs/agent-child-session-flow.md)                                                                                                                                                                                 |
+| `PluginLoader`      | Native Plugin v1 校验、安装状态、版本 cache 和 Skills/Agents/Hooks/MCP 激活；外部 Claude Code 插件由独立 Converter 导入，Runtime 不解析来源格式，Tool 隔离完成前不执行。详见 [docs/plugins-contributions-design.md](docs/plugins-contributions-design.md)                                                                                                                                 |
+| `SkillRegistry`     | Skill 管理：Markdown + frontmatter 解析（user-invocable/disable-model-invocation/model/argument-hint）；内置 bundled skills（commit/review/test/plan/debug/create-skill）；用户技能 `~/.vykor/skills`，项目技能 `.vykor/skills`；三源加载 bundled<user<project；daemon catalog 将 user-invocable skill 暴露为 template 斜杠（`POST /sessions/:id/commands` 展开后 admit）；model 可见性过滤 |
+| `PermissionChecker` | 权限系统：`default / plan / full_auto` 三种模式 + 工具黑白名单 + 路径规则 + 命令拒绝                                                                                                                                                                                                                                                                                  |
+| `DaemonApplication` | daemon composition root：组装 recovery、应用服务、`SessionOperationRunner`、Agent loader/pool、permission、task 与 projection，本身不实现各领域业务动作                                                                                                                                                                                                                  |
+| `VykorHttpServer`   | daemon HTTP/SSE transport：Hono 路由、bearer token、CORS、listener、SSE client lifecycle；通过单个 `DaemonApplication` 调用应用能力                                                                                                                                                                                                                              |
+| `VykorClient`       | 跨端客户端 SDK：typed API、SSE 解析、session snapshot+live 合并、按 session bucket 的 event reducer。详见 [docs/client-sync-flow.md](docs/client-sync-flow.md)                                                                                                                                                                                                   |
+
 
 ### UI 层
 
-| 模块                | 说明                                                                                                                                                                         |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CLI`               | Commander.js 命令行：主命令 + auth/mcp/plugin/channels/workflow/sandbox/daemon/serve/config 子命令；已安排任务通过 Agent 对话创建并由 Desktop 管理                           |
-| `TUI Frontend`      | 默认交互面：opentui + React 19（Bun）。`vk` / `vk --tui` 经 `useServerSync` attach daemon，消费 `@vykor/client` reducer。流程见 [docs/tui-flow.md](docs/tui-flow.md) |
-| `Print`             | 用户 headless：ensure daemon → `client.sessions.admitPrompt()` + SSE 渲染 stdout                                                                                              |
+
+| 模块             | 说明                                                                                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLI`          | Commander.js 命令行：主命令 + auth/mcp/plugin/channels/workflow/sandbox/daemon/serve/config 子命令；已安排任务通过 Agent 对话创建并由 Desktop 管理                            |
+| `TUI Frontend` | 默认交互面：opentui + React 19（Bun）。`vk` / `vk --tui` 经 `useServerSync` attach daemon，消费 `@vykor/client` reducer。流程见 [docs/tui-flow.md](docs/tui-flow.md) |
+| `Print`        | 用户 headless：ensure daemon → `client.sessions.admitPrompt()` + SSE 渲染 stdout                                                                         |
+
+
 ---
 
 ## 运行流程
@@ -676,19 +689,21 @@ vk --tui  (或其它 client attach)
 
 ## 技术栈
 
-| 层              | 技术                                                        |
-| --------------- | ----------------------------------------------------------- |
-| 语言            | TypeScript 5.7+（ESM）                                      |
-| 构建            | Turborepo（任务编排）+ Bun（CLI 打包，`apps/cli/build.ts`） |
-| 测试            | Vitest                                                      |
-| 包管理          | pnpm 10（monorepo）                                         |
-| CLI             | Commander.js                                                |
-| API             | @anthropic-ai/sdk, openai                                   |
-| MCP             | @modelcontextprotocol/sdk                                   |
-| 飞书            | @larksuiteoapi/node-sdk                                     |
-| TUI             | opentui + React 19（Bun 运行时）                            |
-| Schema          | Zod                                                         |
-| Scheduled Tasks | 一次性时间与 RRULE 解析，由 daemon 触发 Agent 运行          |
+
+| 层               | 技术                                               |
+| --------------- | ------------------------------------------------ |
+| 语言              | TypeScript 5.7+（ESM）                             |
+| 构建              | Turborepo（任务编排）+ Bun（CLI 打包，`apps/cli/build.ts`） |
+| 测试              | Vitest                                           |
+| 包管理             | pnpm 10（monorepo）                                |
+| CLI             | Commander.js                                     |
+| API             | @anthropic-ai/sdk, openai                        |
+| MCP             | @modelcontextprotocol/sdk                        |
+| 飞书              | @larksuiteoapi/node-sdk                          |
+| TUI             | opentui + React 19（Bun 运行时）                      |
+| Schema          | Zod                                              |
+| Scheduled Tasks | 一次性时间与 RRULE 解析，由 daemon 触发 Agent 运行             |
+
 
 ## 配置
 
@@ -793,23 +808,25 @@ setx ANTHROPIC_API_KEY "sk-ant-..."
 
 ### 环境变量
 
-| 变量                     | 说明                                                                        |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`      | Anthropic API Key                                                           |
-| `OPENAI_API_KEY`         | OpenAI API Key                                                              |
-| `OPENROUTER_API_KEY`     | OpenRouter API Key                                                          |
-| `DEEPSEEK_API_KEY`       | DeepSeek API Key                                                            |
-| `GEMINI_API_KEY`         | Gemini API Key                                                              |
-| `DASHSCOPE_API_KEY`      | DashScope/Qwen API Key                                                      |
-| `MOONSHOT_API_KEY`       | Moonshot/Kimi API Key                                                       |
-| `MINIMAX_API_KEY`        | MiniMax API Key                                                             |
-| `ZHIPUAI_API_KEY`        | 智谱 AI（GLM）API Key                                                       |
-| `VYKOR_CONFIG_DIR` | 自定义 settings/credentials/plugins/data 等目录（默认 `~/.vykor`） |
-| `VYKOR_MODEL`      | 默认模型名称                                                                |
-| `VYKOR_BASE_URL`   | 通用 API Base URL 覆盖（**所有 provider**）                                 |
-| `VYKOR_API_FORMAT` | API 格式（anthropic / openai）                                              |
-| `VYKOR_MAX_TOKENS` | 最大输出 token 数                                                           |
-| `VYKOR_MAX_TURNS`  | 最大 agent 轮次                                                             |
+
+| 变量                   | 说明                                                       |
+| -------------------- | -------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`  | Anthropic API Key                                        |
+| `OPENAI_API_KEY`     | OpenAI API Key                                           |
+| `OPENROUTER_API_KEY` | OpenRouter API Key                                       |
+| `DEEPSEEK_API_KEY`   | DeepSeek API Key                                         |
+| `GEMINI_API_KEY`     | Gemini API Key                                           |
+| `DASHSCOPE_API_KEY`  | DashScope/Qwen API Key                                   |
+| `MOONSHOT_API_KEY`   | Moonshot/Kimi API Key                                    |
+| `MINIMAX_API_KEY`    | MiniMax API Key                                          |
+| `ZHIPUAI_API_KEY`    | 智谱 AI（GLM）API Key                                        |
+| `VYKOR_CONFIG_DIR`   | 自定义 settings/credentials/plugins/data 等目录（默认 `~/.vykor`） |
+| `VYKOR_MODEL`        | 默认模型名称                                                   |
+| `VYKOR_BASE_URL`     | 通用 API Base URL 覆盖（**所有 provider**）                      |
+| `VYKOR_API_FORMAT`   | API 格式（anthropic / openai）                               |
+| `VYKOR_MAX_TOKENS`   | 最大输出 token 数                                             |
+| `VYKOR_MAX_TURNS`    | 最大 agent 轮次                                              |
+
 
 > ⚠️ `ANTHROPIC_BASE_URL` 仅 Anthropic provider 生效（由 Anthropic SDK 自行读取），**不会**影响 deepseek/openrouter 等其它 provider——要全局覆盖 baseURL 请用 `VYKOR_BASE_URL`。
 
@@ -893,16 +910,18 @@ vk --model glm-4-plus \
 
 **常见模型示例：**
 
-| 模型          | 说明                         |
-| ------------- | ---------------------------- |
-| `glm-4-plus`  | GLM-4 增强版，综合能力最强   |
-| `glm-4`       | GLM-4 标准版                 |
-| `glm-4-flash` | GLM-4 快速版，低延迟低成本   |
-| `glm-4-long`  | GLM-4 长上下文版（128K）     |
-| `glm-4-air`   | GLM-4 轻量版                 |
-| `glm-4-airx`  | GLM-4 轻量增强版             |
+
+| 模型            | 说明                |
+| ------------- | ----------------- |
+| `glm-4-plus`  | GLM-4 增强版，综合能力最强  |
+| `glm-4`       | GLM-4 标准版         |
+| `glm-4-flash` | GLM-4 快速版，低延迟低成本  |
+| `glm-4-long`  | GLM-4 长上下文版（128K） |
+| `glm-4-air`   | GLM-4 轻量版         |
+| `glm-4-airx`  | GLM-4 轻量增强版       |
 | `glm-4v`      | GLM-4 视觉版（支持图片输入） |
-| `glm-3-turbo` | GLM-3 快速版                 |
+| `glm-3-turbo` | GLM-3 快速版         |
+
 
 ---
 
@@ -910,11 +929,13 @@ vk --model glm-4-plus \
 
 框架支持三级自动检测，无需手动指定 provider：
 
-| 检测级别        | 规则                    | 示例                                         |
-| --------------- | ----------------------- | -------------------------------------------- |
-| API Key 前缀    | 匹配 `sk-` 后的特征字符 | Anthropic: `sk-ant-`                         |
-| Base URL 关键字 | 匹配域名关键词          | DeepSeek: `deepseek.com`，GLM: `bigmodel.cn` |
-| 模型名称关键字  | 匹配模型名前缀/关键词   | DeepSeek: `deepseek-`_，GLM: `glm-`_         |
+
+| 检测级别         | 规则              | 示例                                          |
+| ------------ | --------------- | ------------------------------------------- |
+| API Key 前缀   | 匹配 `sk-` 后的特征字符 | Anthropic: `sk-ant-`                        |
+| Base URL 关键字 | 匹配域名关键词         | DeepSeek: `deepseek.com`，GLM: `bigmodel.cn` |
+| 模型名称关键字      | 匹配模型名前缀/关键词     | DeepSeek: `deepseek-`*，GLM: `glm-`*         |
+
 
 因此在设置好对应环境变量后，通常只需指定 `--model` 即可：
 

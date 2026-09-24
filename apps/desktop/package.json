@@ -5,7 +5,7 @@
   "description": "Vykor desktop application",
   "main": "./out/main/index.js",
   "author": "Vykor",
-  "homepage": "https://github.com/rzx007/openharness-ts",
+  "homepage": "https://github.com/rzx007/Vykor",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

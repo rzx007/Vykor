@@ -22,12 +22,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rzx007/openharness-ts.git",
+    "url": "git+https://github.com/rzx007/Vykor.git",
     "directory": "apps/cli"
   },
-  "homepage": "https://github.com/rzx007/openharness-ts/tree/main/apps/cli",
+  "homepage": "https://github.com/rzx007/Vykor/tree/main/apps/cli",
   "bugs": {
-    "url": "https://github.com/rzx007/openharness-ts/issues"
+    "url": "https://github.com/rzx007/Vykor/issues"
   },
   "license": "MIT",
   "publishConfig": {

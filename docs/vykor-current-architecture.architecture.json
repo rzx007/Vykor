@@ -7,7 +7,7 @@
     "output": "docs/vykor-current-architecture.html",
     "quality_profile": "showcase",
     "repository": {
-      "url": "https://github.com/rzx007/openharness-ts.git",
+      "url": "https://github.com/rzx007/Vykor.git",
       "revision": "85d51b0eb2f2dff1a4a30bad44799271f7c8fd27"
     },
     "viewBox": [1320, 680],
