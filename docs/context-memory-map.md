@@ -98,7 +98,7 @@ volatile
 
 ### local rules
 
-local rules 是自动生成的环境事实，不是用户偏好。它用正则从会话文本抽取稳定的机器信息，例如：
+local rules 保存项目环境事实，不是用户偏好。自动写入用正则从用户消息抽取机器信息；用户也可以明确选择旧键进行手动替换。例如：
 
 - `ssh user@host`
 - IP 地址
@@ -125,6 +125,7 @@ local_rules/
 
 - 抽取：`extractFactsFromText()`
 - 会话更新：`updateRulesFromSession()`
+- 显式替换：`replaceFact()`（由 daemon 的 `/facts` 接口调用）
 - prompt 读取：`loadLocalRules()`
 
 当前接线：`SessionPostRunMaintenance` 在 root Run 已经 durable completed 后更新 local rules；`SessionMaintenanceService.remember()` 成功后也会更新。失败只记录告警，不改变 Run 或 `/remember` 的结果。
@@ -231,7 +232,7 @@ Session runtime history 存 daemon 会话的完整运行状态，包括 sessions
 | --- | --- | --- | --- | --- |
 | `SOUL.md` | 是 | 否 | 否 | 否 |
 | `USER.md` | 是 | 否 | 否 | 否 |
-| local rules 有来源事实 | 是 | 否 | 否 | 否 |
+| local rules 有效且未命中凭据检查的事实 | 是 | 否 | 否 | 否 |
 | Project Instructions | 是 | 否 | 否 | 否 |
 | `settings.systemPrompt` | 是 | 否 | 否 | 否 |
 | Environment/Permission/Skills | 是 | 否 | 否 | 否 |

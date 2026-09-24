@@ -132,7 +132,7 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 
 ---
 
-### 层 3a · personalization 环境事实（跨会话，自动）
+### 层 3a · personalization 环境事实（跨会话，自动抽取 / 手动替换）
 
 **解决什么问题**：你提到的服务器 IP、conda 环境、数据路径这类机械事实，每次都要重新说。
 
@@ -149,7 +149,7 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 ```
 ~/.vykor/local_rules/
   projects/<项目名>-<cwd 的 sha1 前12>/
-    facts.json   ← 结构化事实（按 type:value 去重，附来源会话、消息 ID 和原消息时间）
+    facts.json   ← 结构化事实（按 type:value 去重，保存消息或手动操作来源及取代状态）
     rules.md     ← 供人查看的自动生成缓存
 ```
 
@@ -157,7 +157,7 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 
 使用 `/facts list` 查看本项目的事实键、状态、时间和来源。确认某个旧值已变更后，用 `/facts replace <旧键> => <新值>` 精确替换，例如 `/facts replace ssh_host:ops@10.1.2.3 => ops@10.1.2.4`。如果新值已有有效记录，系统只关联它，不重复写入或改掉其原有来源。旧记录保留“已被取代”状态供查看，不再注入提示词，重新扫描旧会话也不会让它复活。如果同一地址还出现在其他有效键中，命令会列出这些键，由你分别判断；不会因为地址相似就自动改动另一台服务器。
 
-助手回复和工具输出不会成为环境事实的自动来源。`/context status` 报告有来源的事实数量或文件不可读；有来源不表示事实已重新核验。
+助手回复和工具输出不会成为环境事实的自动来源。`/context status` 报告可注入的有效事实数量或文件不可读；有来源不表示事实已重新核验。
 
 写入前会过滤明显的凭据形状（例如 Bearer token、私钥正文和密钥赋值）；读取环境事实时也会排除已在文件中的此类值。这项检查不保证识别全部敏感信息；直接编辑记忆文件不经过写入检查。
 
@@ -291,6 +291,7 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 | session_memory 每轮写入            | ✅ daemon 所有产品入口 | root Run 成功后执行，受 `memory.enabled` 与 `memory.sessionMemoryEnabled` 控制 |
 | session_memory compact 读回      | ✅                    | compact 时经 `setCompactContextProvider` 注入摘要 prompt         |
 | personalization 抽取             | ✅                    | 10 个正则，root Run 成功后自动；`/remember` 也触发 |
+| 环境事实查看与显式替换             | ✅                    | `/facts list` 查看来源和状态；`/facts replace` 精确取代旧键，不自动猜测服务身份 |
 | `/remember` 手动提取               | ✅                    | LLM 提取，签名去重                                                |
 | `/remember` 按轮自动               | ✅                    | 默认开启；每轮结束 best-effort 提取，可用 `memory.autoExtractEnabled=false` 关闭 |
 | `/dream` 手动整合                  | ✅                    | 备份 + 锁 + 回滚                                                |
