@@ -26,6 +26,7 @@ import {
 } from "./index.js";
 import type { EnvironmentInfo } from "./index.js";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
+import { saveLocalRules } from "@vykor/personalization";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -543,12 +544,7 @@ describe("prompt layers with SOUL.md and USER.md", () => {
         "User prefers concise Chinese replies.",
         "utf-8",
       );
-      mkdirSync(join(cfgDir, "local_rules"), { recursive: true });
-      writeFileSync(
-        join(cfgDir, "local_rules", "rules.md"),
-        "# Local Environment Rules\n\n- `ops@10.0.0.9`\n",
-        "utf-8",
-      );
+      saveLocalRules("# Local Environment Rules\n\n- `ops@10.0.0.9`\n", cwdDir);
 
       const profile = await loadUserProfile();
       expect(profile).toContain("# User Profile");
@@ -896,6 +892,10 @@ describe("local rules injection (C.5)", () => {
           "",
         ].join("\n"),
       );
+      const oldGlobal = await buildRuntimeSystemPrompt({ cwd: cfgDir });
+      expect(oldGlobal).not.toContain("ops@10.0.0.9");
+
+      saveLocalRules("# Local Environment Rules\n\n## SSH Hosts\n\n- `ops@10.0.0.9`", cfgDir);
       const withRules = await buildRuntimeSystemPrompt({ cwd: cfgDir });
       expect(withRules).toContain("# Local Environment Rules");
       expect(withRules).toContain("ops@10.0.0.9");

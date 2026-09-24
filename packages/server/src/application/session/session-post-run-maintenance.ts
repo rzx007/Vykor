@@ -9,7 +9,7 @@ import { isPublicTextPart } from "../../session/transcript-text.js";
 export interface SessionPostRunMaintenanceContext {
   data: Pick<SessionStore, "conversations" | "runs" | "sessions" | "goals">;
   getSettings(cwd: string): Promise<Settings | undefined>;
-  personalizationUpdater?: (messages: SessionMessageLike[]) => number;
+  personalizationUpdater?: (messages: SessionMessageLike[], cwd: string) => number;
   sessionMemoryWriter?: (cwd: string, messages: SessionMessageLike[], sessionId: string, goal?: string) => void;
   lastConsolidatedAt?: (memoryDir: string) => number;
   autoDream?: (input: {
@@ -54,7 +54,7 @@ export class SessionPostRunMaintenance {
 
     await this.bestEffort("session.personalization.extract_failed", sessionId, runId, async () => {
       const update = this.context.personalizationUpdater ?? updateRulesFromSession;
-      update(messages);
+      update(messages, session.cwd);
     });
 
     const settings = await this.context.getSettings(session.cwd);

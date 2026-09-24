@@ -12,7 +12,6 @@ import { randomUUID } from "node:crypto";
 import { getConfigDir, resolveGitRepository } from "@vykor/core";
 import type { WorkStyle } from "@vykor/core";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
-import { loadLocalRules } from "@vykor/personalization";
 import {
   describeHostShellLauncher,
   resolveHostShellLauncher,

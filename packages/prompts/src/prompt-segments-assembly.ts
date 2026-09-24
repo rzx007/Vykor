@@ -149,7 +149,7 @@ export async function buildTaggedPromptSegments(
   const userProfile = await loadUserProfile();
   if (userProfile) pushSegment(segments, "volatile", "rules", userProfile);
 
-  const localRules = loadLocalRules();
+  const localRules = loadLocalRules(promptCwd);
   if (localRules) pushSegment(segments, "volatile", "rules", localRules);
 
   return segments;

@@ -144,15 +144,16 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 - Python 版本、API 端点、环境变量
 - git 远端、Ray 集群地址、cron 表达式
 
-**写哪里**（全局，跨项目共享）：
+**写哪里**（按项目隔离）：
 
 ```
 ~/.vykor/local_rules/
-  facts.json     ← 结构化事实（按 type:value 去重）
-  rules.md       ← 人类可读的摘要，下次启动注入 system prompt
+  projects/<项目名>-<cwd 的 sha1 前12>/
+    facts.json   ← 结构化事实（按 type:value 去重）
+    rules.md     ← 人类可读的摘要，同项目下次启动时注入 system prompt
 ```
 
-**效果**：下次启动时，`rules.md` 自动出现在 system prompt 里，不用你再说"测试服在 10.0.0.7"。
+**效果**：下次在同一项目启动时，`rules.md` 自动出现在 system prompt 里，不用你再说"测试服在 10.0.0.7"。旧全局 `local_rules/rules.md` 和 `facts.json` 保留在原位，但不再自动注入或迁入项目；它们缺少可靠的项目来源。
 
 这条触发不依赖 TUI、print、Web、Desktop 或 Bot 是否正常退出；不同产品入口只要使用同一个 daemon，就共用同一套收尾规则。失败只记告警，不会把已经完成的 Run 改成失败。
 
@@ -231,14 +232,14 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 | 时机             | 产生什么                                    | 写哪里                                                           |
 | -------------- | --------------------------------------- | ------------------------------------------------------------- |
 | 本轮结束           | session_memory checkpoint（goal + 消息摘要）  | `~/.vykor/data/session-memory/<project>-<hash>/<id>.md` |
-| root Run 成功收尾 | personalization 抽出 `10.0.0.7`、`prod-ml` | `~/.vykor/local_rules/facts.json` + `rules.md`          |
+| root Run 成功收尾 | personalization 抽出 `10.0.0.7`、`prod-ml` | `~/.vykor/local_rules/projects/<项目>-<hash>/facts.json` + `rules.md` |
 | 你敲 `/remember` | LLM 提取"移除 /clear 的决策"                   | `~/.vykor/data/memory/<project>-<hash>/xxx.md`          |
 | 你敲 `/dream`    | 整理 memory 目录，合并重复                       | 原地修改 + 备份                                                     |
 
 
 **下次启动时**：
 
-- `rules.md` 里的 `10.0.0.7` / `prod-ml` 自动注入 system prompt ✅
+- 同项目 `rules.md` 里的 `10.0.0.7` / `prod-ml` 自动注入 system prompt ✅
 - memory 里的"移除 /clear"在相关对话时自动检索注入 ✅
 
 ---
@@ -252,7 +253,7 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 | **方法**   | 正则（10 个模式）                        | LLM 语义理解                                       |
 | **抓什么**  | 机械事实：IP、路径、环境名、端点                 | 语义事实：决策、偏好、约束                                  |
 | **成本**   | 零（无 LLM 调用）                       | 有成本（一次 LLM 调用）                                 |
-| **存放位置** | `~/.vykor/local_rules/`（全局） | `~/.vykor/data/memory/<项目>-<hash>/`（项目级） |
+| **存放位置** | `~/.vykor/local_rules/projects/<项目>-<hash>/`（项目级） | `~/.vykor/data/memory/<项目>-<hash>/`（项目级） |
 
 
 ---

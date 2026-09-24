@@ -87,6 +87,18 @@ describe("default daemon application services", () => {
     expect(status.report).toContain("Credentials");
   });
 
+  it("reports preserved legacy global rules without injecting them", async () => {
+    const legacyDir = join(process.env.VYKOR_CONFIG_DIR!, "local_rules");
+    mkdirSync(legacyDir, { recursive: true });
+    writeFileSync(join(legacyDir, "rules.md"), "# Local Environment Rules\n- legacy.example.invalid\n");
+    const context = createDefaultContextService({
+      current: { model: "m", apiFormat: "anthropic", maxTurns: 50, permission: { mode: "default" } } as never,
+    });
+
+    expect((await context.status({ cwd: temporaryDirectory })).report).toContain("legacy global rules preserved");
+    expect((await context.preview({ cwd: temporaryDirectory })).report).not.toContain("legacy.example.invalid");
+  });
+
   it("keeps persona inspection limited to built-in and user definitions", async () => {
     registerPluginAgents([
       {

@@ -35,7 +35,7 @@ export interface SessionMaintenanceServiceContext {
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
   operationGate: Pick<DaemonOperationGate, "enter" | "tryEnterBarrier">;
   events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
-  personalizationUpdater?: (messages: SessionMessageLike[]) => number;
+  personalizationUpdater?: (messages: SessionMessageLike[], cwd: string) => number;
   contextUsageCache?: Pick<ContextUsageCache, "invalidate">;
   refreshContextUsage?: (sessionId: string, agent: SessionContextUsageAgent) => Promise<void>;
 }
@@ -239,7 +239,7 @@ export class SessionMaintenanceService {
     try {
       const agent = await this.context.agentPool.acquireSession(sessionId);
       const result = await agent.remember();
-      this.updateLocalEnvironmentRules(sessionId);
+      this.updateLocalEnvironmentRules(sessionId, session.cwd);
       await this.context.agentPool.closeForCwd(session.cwd);
       return result;
     } finally {
@@ -301,14 +301,14 @@ export class SessionMaintenanceService {
     }
   }
 
-  private updateLocalEnvironmentRules(sessionId: string): void {
+  private updateLocalEnvironmentRules(sessionId: string, cwd: string): void {
     try {
       const messages = transcriptToPersonalizationMessages(
         this.context.data.conversations.listMessages(sessionId),
         this.context.data.conversations.listMessageParts(sessionId),
       );
       const updater = this.context.personalizationUpdater ?? updateRulesFromSession;
-      updater(messages);
+      updater(messages, cwd);
     } catch {
       // Local personalization is best-effort and must not block the remember flow.
     }

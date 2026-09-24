@@ -1,12 +1,13 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 /**
  * Personalization：从会话历史抽取环境事实（移植自 Python personalization/）。
  *
  * 10 个正则识别 SSH/IP/数据路径/conda/Python 版本/API 端点/env 变量/git 远端/
- * Ray 集群/cron；按 key 去重合并后持久化到 `~/.vykor/local_rules/`
+ * Ray 集群/cron；按项目和 key 去重合并后持久化到 `~/.vykor/local_rules/projects/`
  * （facts.json + 重新生成的 rules.md）。rules.md 由 prompts 包注入 system prompt。
  */
 
@@ -120,17 +121,19 @@ export function factsToRulesMarkdown(facts: ExtractedFact[]): string {
 // 持久化
 // ---------------------------------------------------------------------------
 
-export function getLocalRulesDir(): string {
+export function getLocalRulesDir(cwd: string): string {
   // 与 core/paths、auth 同约定：VYKOR_CONFIG_DIR 可重定向（测试隔离/Electron 预留）。
   const base = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
-  return join(base, "local_rules");
+  const project = resolve(cwd);
+  const digest = createHash("sha1").update(project).digest("hex").slice(0, 12);
+  return join(base, "local_rules", "projects", `${basename(project)}-${digest}`);
 }
 
-const rulesFile = (): string => join(getLocalRulesDir(), "rules.md");
-const factsFile = (): string => join(getLocalRulesDir(), "facts.json");
+const rulesFile = (cwd: string): string => join(getLocalRulesDir(cwd), "rules.md");
+const factsFile = (cwd: string): string => join(getLocalRulesDir(cwd), "facts.json");
 
-export function loadLocalRules(): string {
-  const path = rulesFile();
+export function loadLocalRules(cwd: string): string {
+  const path = rulesFile(cwd);
   if (!existsSync(path)) return "";
   try {
     return readFileSync(path, "utf-8").trim();
@@ -139,14 +142,14 @@ export function loadLocalRules(): string {
   }
 }
 
-export function saveLocalRules(content: string): string {
-  mkdirSync(getLocalRulesDir(), { recursive: true });
-  writeFileSync(rulesFile(), content.trim() + "\n", "utf-8");
-  return rulesFile();
+export function saveLocalRules(content: string, cwd: string): string {
+  mkdirSync(getLocalRulesDir(cwd), { recursive: true });
+  writeFileSync(rulesFile(cwd), content.trim() + "\n", "utf-8");
+  return rulesFile(cwd);
 }
 
-export function loadFacts(): FactsFile {
-  const path = factsFile();
+export function loadFacts(cwd: string): FactsFile {
+  const path = factsFile(cwd);
   if (!existsSync(path)) return { facts: [], last_updated: null };
   try {
     const parsed = JSON.parse(readFileSync(path, "utf-8")) as FactsFile;
@@ -156,10 +159,10 @@ export function loadFacts(): FactsFile {
   }
 }
 
-export function saveFacts(facts: FactsFile): void {
-  mkdirSync(getLocalRulesDir(), { recursive: true });
+export function saveFacts(facts: FactsFile, cwd: string): void {
+  mkdirSync(getLocalRulesDir(cwd), { recursive: true });
   const payload: FactsFile = { ...facts, last_updated: new Date().toISOString() };
-  writeFileSync(factsFile(), JSON.stringify(payload, null, 2) + "\n", "utf-8");
+  writeFileSync(factsFile(cwd), JSON.stringify(payload, null, 2) + "\n", "utf-8");
 }
 
 /** 按 key 去重合并：同 key 置信度高者胜（平手取新值）。 */
@@ -186,7 +189,7 @@ export function mergeFacts(existing: FactsFile, newFacts: ExtractedFact[]): Fact
  * 会话结束时调用：抽取 → 合并 → 双写 facts.json + rules.md。
  * 返回新增事实数。调用方应 try/catch（best-effort，绝不阻塞退出）。
  */
-export function updateRulesFromSession(messages: SessionMessageLike[]): number {
+export function updateRulesFromSession(messages: SessionMessageLike[], cwd: string): number {
   const allText: string[] = [];
   for (const msg of messages) {
     if (typeof msg.content === "string") {
@@ -205,12 +208,12 @@ export function updateRulesFromSession(messages: SessionMessageLike[]): number {
   const newFacts = extractFactsFromText(allText.join("\n"));
   if (newFacts.length === 0) return 0;
 
-  const existing = loadFacts();
+  const existing = loadFacts(cwd);
   const merged = mergeFacts(existing, newFacts);
-  saveFacts(merged);
+  saveFacts(merged, cwd);
 
   const rulesMd = factsToRulesMarkdown(merged.facts);
-  if (rulesMd) saveLocalRules(rulesMd);
+  if (rulesMd) saveLocalRules(rulesMd, cwd);
 
   return Math.max(merged.facts.length - (existing.facts?.length ?? 0), 0);
 }

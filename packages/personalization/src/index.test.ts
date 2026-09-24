@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -18,11 +18,13 @@ import {
 // ~/.vykor，崩溃也不会伤用户数据。
 let cfgDir: string;
 let dir: string;
+let projectDir: string;
 
 beforeEach(() => {
   cfgDir = mkdtempSync(join(tmpdir(), "vk-pers-"));
   process.env.VYKOR_CONFIG_DIR = cfgDir;
-  dir = join(cfgDir, "local_rules");
+  projectDir = join(cfgDir, "project");
+  dir = getLocalRulesDir(projectDir);
 });
 
 afterEach(() => {
@@ -89,16 +91,16 @@ describe("factsToRulesMarkdown", () => {
 
 describe("rules persistence", () => {
   it("round-trips rules.md and facts.json with last_updated stamp", () => {
-    expect(loadLocalRules()).toBe("");
-    saveLocalRules("# Rules\n- x");
-    expect(loadLocalRules()).toBe("# Rules\n- x");
+    expect(loadLocalRules(projectDir)).toBe("");
+    saveLocalRules("# Rules\n- x", projectDir);
+    expect(loadLocalRules(projectDir)).toBe("# Rules\n- x");
 
-    expect(loadFacts()).toEqual({ facts: [], last_updated: null });
-    saveFacts({ facts: [{ key: "k", type: "t", label: "l", value: "v", confidence: 0.7 }] });
-    const loaded = loadFacts();
+    expect(loadFacts(projectDir)).toEqual({ facts: [], last_updated: null });
+    saveFacts({ facts: [{ key: "k", type: "t", label: "l", value: "v", confidence: 0.7 }] }, projectDir);
+    const loaded = loadFacts(projectDir);
     expect(loaded.facts).toHaveLength(1);
     expect(typeof loaded.last_updated).toBe("string");
-    expect(getLocalRulesDir()).toBe(dir);
+    expect(getLocalRulesDir(projectDir)).toBe(dir);
   });
 
   it("mergeFacts dedupes by key, higher confidence wins", () => {
@@ -118,22 +120,37 @@ describe("rules persistence", () => {
 });
 
 describe("updateRulesFromSession", () => {
+  it("keeps environment facts within their project and ignores old global rules", () => {
+    const projectA = join(cfgDir, "project-a");
+    const projectB = join(cfgDir, "project-b");
+    const legacyDir = join(cfgDir, "local_rules");
+    mkdirSync(legacyDir, { recursive: true });
+    writeFileSync(join(legacyDir, "rules.md"), "# Old global fact\n- 10.9.9.9\n");
+
+    expect(loadLocalRules(projectA)).toBe("");
+    expect(updateRulesFromSession([{ role: "user", content: "ssh ops@10.1.2.3" }], projectA)).toBe(2);
+    expect(loadLocalRules(projectA)).toContain("10.1.2.3");
+    expect(loadLocalRules(projectB)).toBe("");
+    expect(loadFacts(projectB).facts).toEqual([]);
+    expect(getLocalRulesDir(projectA)).not.toBe(getLocalRulesDir(projectB));
+  });
+
   it("extracts from messages, persists both files, returns new fact count", () => {
     const count = updateRulesFromSession([
       { role: "user", content: "deploy via ssh ops@172.16.0.2 please" },
       { role: "assistant", content: [{ text: "ok, conda activate prod-env first" }] },
-    ]);
+    ], projectDir);
     expect(count).toBeGreaterThanOrEqual(2);
-    expect(loadLocalRules()).toContain("ops@172.16.0.2");
-    expect(loadFacts().facts.length).toBe(count);
+    expect(loadLocalRules(projectDir)).toContain("ops@172.16.0.2");
+    expect(loadFacts(projectDir).facts.length).toBe(count);
 
     // 再跑一遍同样内容：无新增。
-    const again = updateRulesFromSession([{ role: "user", content: "ssh ops@172.16.0.2" }]);
+    const again = updateRulesFromSession([{ role: "user", content: "ssh ops@172.16.0.2" }], projectDir);
     expect(again).toBe(0);
   });
 
   it("returns 0 for empty or fact-free sessions", () => {
-    expect(updateRulesFromSession([])).toBe(0);
-    expect(updateRulesFromSession([{ role: "user", content: "hello there" }])).toBe(0);
+    expect(updateRulesFromSession([], projectDir)).toBe(0);
+    expect(updateRulesFromSession([{ role: "user", content: "hello there" }], projectDir)).toBe(0);
   });
 });

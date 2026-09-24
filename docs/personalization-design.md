@@ -10,16 +10,16 @@
 
 每个 root Run 成功收尾后，用 10 个正则从当前 durable transcript 抽「环境事实」（SSH 主机、服务器 IP、数据
 路径、conda 环境、Python 版本、API 端点、环境变量、git 远端、Ray 集群、cron
-表达式），去重合并持久化到 `~/.vykor/local_rules/`：
+表达式），按项目去重合并持久化到 `~/.vykor/local_rules/projects/<项目>-<hash>/`：
 
 ```
 local_rules/
-├── facts.json   # {facts: [{key,type,label,value,confidence}], last_updated}
-└── rules.md     # 由 facts 重新生成的分组 Markdown（自动生成，勿手改）
+└── projects/<项目>-<hash>/
+    ├── facts.json   # {facts: [{key,type,label,value,confidence}], last_updated}
+    └── rules.md     # 由 facts 重新生成的分组 Markdown（自动生成，勿手改）
 ```
 
-下次会话启动时 `rules.md` 注入 system prompt（CLAUDE.md 段之后），模型自动
-带着「这台机器的事实」工作。
+同项目下次会话启动时 `rules.md` 注入 system prompt（CLAUDE.md 段之后）。旧全局文件留在原位，不自动注入或迁移，因为它没有可靠的项目来源。
 
 ## 模块（对齐 Python）
 
@@ -28,7 +28,7 @@ local_rules/
   `factsToRulesMarkdown`（按类型分组的固定标题表）。
 - `rules.ts`：`loadLocalRules`/`saveLocalRules`/`loadFacts`/`saveFacts`
   （写入带 last_updated ISO 时间戳）/`mergeFacts`（按 key 去重，置信度高者胜）。
-- `session-hook.ts`：`updateRulesFromSession(messages)`——抽取 → 合并 →
+- `session-hook.ts`：`updateRulesFromSession(messages, cwd)`——抽取 → 按项目合并 →
   双写 facts.json + rules.md，返回新增数。消息形状取 TS 的
   `{role, content: string | {text?}[]}` 宽松结构。
 

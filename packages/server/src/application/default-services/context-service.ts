@@ -1,4 +1,5 @@
 import { access } from "node:fs/promises";
+import { join } from "node:path";
 
 import {
   assembleContextUsageSnapshot,
@@ -105,8 +106,9 @@ export function createDefaultContextService(
       const { manager, directory: memoryDirectory } = await openMemoryManager(cwd);
       const memoryEntries = await manager.getAll();
       const { skillRegistry } = await discoverVykorExtensions(cwd, settings);
-      const localRules = loadLocalRules();
-      const facts = loadFacts();
+      const localRules = loadLocalRules(cwd);
+      const facts = loadFacts(cwd);
+      const legacyRulesExist = await pathExists(join(getConfigDir(), "local_rules", "rules.md"));
       const credentialsPath = getCredentialsFilePath();
       const credentialsConfigured = await pathExists(credentialsPath);
       const outputStyles = loadOutputStyles();
@@ -135,7 +137,7 @@ export function createDefaultContextService(
         },
         {
           source: "local_rules",
-          status: localRules ? `${facts.facts.length} fact(s)` : "missing",
+          status: `${localRules ? `${facts.facts.length} fact(s)` : "missing"}${legacyRulesExist ? "; legacy global rules preserved" : ""}`,
           written: "/remember success best-effort",
           injected: "system prompt volatile local rules",
           purpose: "machine environment facts",
@@ -217,7 +219,7 @@ export function createDefaultContextService(
           "Context status:",
           `cwd: ${cwd}`,
           `config: ${getConfigDir()}`,
-          `local_rules: ${getLocalRulesDir()}`,
+          `local_rules: ${getLocalRulesDir(cwd)}`,
           `project_memory: ${memoryDirectory}`,
           "",
           formatContextStatusTable(rows),

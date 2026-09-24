@@ -76,7 +76,7 @@ describe("SessionPostRunMaintenance", () => {
 
     expect(personalizationUpdater).toHaveBeenCalledWith([
       { role: "user", content: "ssh ops@10.0.0.9" },
-    ]);
+    ], "/repo");
     expect(sessionMemoryWriter).toHaveBeenCalledWith("/repo", [
       { role: "user", content: "ssh ops@10.0.0.9" },
     ], "s1");
