@@ -13,7 +13,19 @@ export interface BehaviorResult {
   requestCount: number;
   actualInputTokens?: number; actualOutputTokens?: number;
   estimatedToolTokens: number; questions: number; permissionsBypassed: number;
+  toolCatalogRequests?: ToolCatalogRequest[];
+  toolSelectionErrors?: number;
   prematureStop?: boolean; redundantVerification?: boolean;
+}
+
+export interface ToolCatalogRequest {
+  definitionCount: number;
+  serializedLength: number;
+  estimatedToolTokens: number;
+  estimateMethod: "heuristic_v1";
+  actualInputTokens?: number;
+  /** Estimated definition tokens divided by reported input tokens; not an exact token or cost attribution. */
+  estimatedToolTokenShareOfActualInput?: number;
 }
 
 export interface BehaviorRunOptions {
@@ -22,6 +34,7 @@ export interface BehaviorRunOptions {
   maxRequests: number; timeoutMs: number;
   sharedBudget?: { remainingRequests: number };
   signal?: AbortSignal;
+  relevantToolNames?: readonly string[];
 }
 
 export const behaviorSystemPrompt = [
@@ -63,6 +76,7 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
   let estimatedToolTokens = 0;
+  const toolCatalogRequests: ToolCatalogRequest[] = [];
   let questions = 0;
   const requestsSeen: Array<{ summary: boolean; toolNames: string[] }> = [];
   const timer = setTimeout(() => {
@@ -82,11 +96,23 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
       if (options.sharedBudget) options.sharedBudget.remainingRequests--;
       const toolNames = params.tools?.map((tool) => tool.name) ?? [];
       requestsSeen.push({ summary: params.maxTokens === 20_000 && !params.tools, toolNames });
-      estimatedToolTokens += Math.ceil(JSON.stringify(params.tools ?? []).length / 4);
+      const serializedLength = params.tools?.length ? JSON.stringify(params.tools).length : 0;
+      const requestCatalog: ToolCatalogRequest = {
+        definitionCount: params.tools?.length ?? 0,
+        serializedLength,
+        estimatedToolTokens: Math.ceil(serializedLength / 4),
+        estimateMethod: "heuristic_v1",
+      };
+      toolCatalogRequests.push(requestCatalog);
+      estimatedToolTokens += requestCatalog.estimatedToolTokens;
       for await (const event of options.client.streamMessage({ ...params, abortSignal: controller.signal })) {
         if (event.type === "usage") {
           inputTokens = (inputTokens ?? 0) + event.usage.inputTokens;
           outputTokens = (outputTokens ?? 0) + event.usage.outputTokens;
+          requestCatalog.actualInputTokens = (requestCatalog.actualInputTokens ?? 0) + event.usage.inputTokens;
+          if (requestCatalog.actualInputTokens > 0) {
+            requestCatalog.estimatedToolTokenShareOfActualInput = requestCatalog.estimatedToolTokens / requestCatalog.actualInputTokens;
+          }
         }
         yield event;
       }
@@ -161,6 +187,11 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
     elapsedMs: Date.now() - started,
     ...(inputTokens === undefined ? {} : { actualInputTokens: inputTokens }),
     ...(outputTokens === undefined ? {} : { actualOutputTokens: outputTokens }),
-    estimatedToolTokens, questions, permissionsBypassed,
+    estimatedToolTokens, toolCatalogRequests,
+    ...(options.relevantToolNames === undefined ? {} : {
+      toolSelectionErrors: events.filter((event) => event.type === "tool.started" &&
+        !options.relevantToolNames!.includes(event.data.toolUse.name)).length,
+    }),
+    questions, permissionsBypassed,
   };
 }
