@@ -109,6 +109,7 @@
 
 - [Context And Memory Map](./context-memory-map.md)：进入模型上下文的信息总图。
 - [记忆归属与写入规则（提案）](./memory-policy.md)：下一阶段记忆优化的目标规则和验收用例。
+- [记忆写入质量实施计划](./superpowers/plans/2026-09-24-memory-write-quality.md)：按来源、凭据检查、旧事实读取三步实施。
 - [原生视觉图片预处理](./native-vision-image-preprocessing.md)：图片入历史前的预检、2000px/5 MiB 限制、进程内缓存和 Provider 出口。
 - [Memory System](./memory-system.md)：Memory 的读取、写入和检索。
 - [Memory Quartet](./services-memory-quartet-design.md)：四类 memory service 的职责。
