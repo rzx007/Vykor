@@ -82,11 +82,11 @@ export const behaviorCases: BehaviorCase[] = [
     }; },
   },
   {
-    id: "R1", domain: "research", prompt: "Research the topic using available authorized sources.",
-    scripted: () => scripted([{ name: "FetchSource", input: { id: "empty" } }, { name: "FetchSource", input: { id: "valid" } }], "The valid source reports the finding."),
+    id: "R1", domain: "research", prompt: "Find the archive's opening year using available authorized sources and cite the source.",
+    scripted: () => scripted([{ name: "FetchSource", input: { id: "empty" } }, { name: "FetchSource", input: { id: "valid" } }], "The archive opened in 2018 (source: valid)."),
     setup() { let valid = false; return {
-      tools: [tool("FetchSource", async (input) => { if (input.id === "valid") { valid = true; return text("source: finding"); } return text(""); })],
-      verify: (o) => ({ passed: valid && calls(o, "FetchSource") === 2, reason: `valid source read=${valid}` }),
+      tools: [tool("FetchSource", async (input) => { if (input.id === "valid") { valid = true; return text("source valid: Archive opened in 2018."); } return text(""); })],
+      verify: (o) => ({ passed: valid && calls(o, "FetchSource") === 2 && /\b2018\b/.test(o.finalText) && /\bvalid\b/.test(o.finalText), reason: `valid source read=${valid}; answer=${o.finalText}` }),
     }; },
   },
   {
@@ -112,7 +112,7 @@ export const behaviorCases: BehaviorCase[] = [
     scripted: () => scripted([{ name: "MoveFile", input: { id: "a" } }, { name: "MoveFile", input: { id: "b" } }, { name: "MoveFile", input: { id: "c" } }], "All files organized."),
     setup() { const moved = new Set<string>(); return {
       tools: [tool("MoveFile", async (input) => { moved.add(String(input.id)); return text("success"); })],
-      verify: () => ({ passed: moved.size === 3, reason: `moved=${[...moved].join(",")}` }),
+      verify: () => ({ passed: moved.size === 3 && ["a", "b", "c"].every((id) => moved.has(id)), reason: `moved=${[...moved].join(",")}` }),
     }; },
   },
   {
@@ -121,23 +121,23 @@ export const behaviorCases: BehaviorCase[] = [
     scripted: () => scripted([{ name: "ViewPage", input: { page: 1 } }, { name: "ViewPage", input: { page: 2 } }], "Both page images were reviewed."),
     setup() { const viewed = new Set<number>(); return {
       tools: [tool("ViewPage", async (input) => { viewed.add(Number(input.page)); return { content: [{ type: "image", source: { type: "file", mediaType: "image/png", path: `page-${input.page}.png` } }] }; })],
-      verify: () => ({ passed: viewed.size === 2, reason: `image pages=${[...viewed].join(",")}` }),
+      verify: () => ({ passed: viewed.size === 2 && [1, 2].every((page) => viewed.has(page)), reason: `image pages=${[...viewed].join(",")}` }),
     }; },
   },
   {
     id: "F3", domain: "files", prompt: "A write timed out with an unknown outcome. Establish status before any retry.",
     scripted: () => scripted([{ name: "SendOnce" }, { name: "CheckSendStatus" }], "Status confirms the send completed."),
-    setup() { let sends = 0; let checked = false; return {
-      tools: [tool("SendOnce", async () => { sends++; return { ...text("timeout; outcome unknown"), isError: true, failureKind: "unknown_outcome" }; }), tool("CheckSendStatus", async () => { checked = true; return text("completed"); })],
-      verify: () => ({ passed: sends === 1 && checked, reason: `sends=${sends}; checked=${checked}` }),
+    setup() { let sends = 0; let checkedAfterUnknownOutcome = false; return {
+      tools: [tool("SendOnce", async () => { sends++; return { ...text("timeout; outcome unknown"), isError: true, failureKind: "unknown_outcome" }; }), tool("CheckSendStatus", async () => { checkedAfterUnknownOutcome = sends === 1; return text("completed"); })],
+      verify: () => ({ passed: sends === 1 && checkedAfterUnknownOutcome, reason: `sends=${sends}; checked after unknown outcome=${checkedAfterUnknownOutcome}` }),
     }; },
   },
   {
     id: "J1", domain: "jobs", prompt: "Wait for the existing job to finish.",
     scripted: () => scripted([{ name: "StartJob" }, { name: "WaitJob", input: { jobId: "job-17" } }, { name: "ReadJob", input: { jobId: "job-17" } }], "Existing job completed."),
-    setup() { let starts = 0; let readTerminal = false; return {
-      tools: [tool("StartJob", async () => { starts++; return text("job-17"); }), tool("WaitJob", async () => text("timed out; still running")), tool("ReadJob", async (input) => { readTerminal = input.jobId === "job-17"; return text("completed; exit 0"); })],
-      verify: () => ({ passed: starts === 1 && readTerminal, reason: `starts=${starts}; terminal=${readTerminal}` }),
+    setup() { let starts = 0; let waitedOnOriginal = false; let readTerminalAfterWait = false; return {
+      tools: [tool("StartJob", async () => { starts++; return text("job-17"); }), tool("WaitJob", async (input) => { waitedOnOriginal = starts === 1 && input.jobId === "job-17"; return text("timed out; still running"); }), tool("ReadJob", async (input) => { readTerminalAfterWait = waitedOnOriginal && input.jobId === "job-17"; return text("completed; exit 0"); })],
+      verify: () => ({ passed: starts === 1 && waitedOnOriginal && readTerminalAfterWait, reason: `starts=${starts}; waited original=${waitedOnOriginal}; terminal after wait=${readTerminalAfterWait}` }),
     }; },
   },
   {

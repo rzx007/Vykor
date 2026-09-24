@@ -22,15 +22,29 @@ const out = resolve(process.env.VYKOR_EVAL_OUT ?? resolve(tmpdir(), "vykor-agent
 const rel = relative(resolve(tmpdir()), out);
 if (!isAbsolute(out) || rel.startsWith("..") || isAbsolute(rel)) throw new Error("VYKOR_EVAL_OUT must be under the system temporary directory");
 const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-const fixtureVersion = "agent-behavior-v1";
+const fixtureVersion = "agent-behavior-v2";
 const records: BehaviorResult[] = [];
+
+const caseMetadata = behaviorCases.map(({ id, prompt, manualChecks, setup }) => {
+  const fixture = setup();
+  const tools = [...fixture.tools, ...(fixture.toolOverrides ?? [])];
+  const schemas = tools.map(({ name, description, inputSchema, safeToRetry, execution }) => ({
+    name, description, inputSchema, safeToRetry, execution,
+  }));
+  return {
+    id, promptSha256: createHash("sha256").update(`${behaviorSystemPrompt}\n\n${prompt}`).digest("hex"),
+    allowedTools: tools.map((tool) => tool.name), deniedTools: fixture.deniedTools ?? [],
+    toolSchemaSha256: createHash("sha256").update(JSON.stringify(schemas)).digest("hex"),
+    manualChecks,
+  };
+});
 
 function save(): void {
   writeFileSync(out, JSON.stringify({
     mode, revision, fixtureVersion,
     model: "scripted", parameters: { maxTurns: 20, maxRequests: 25, timeoutMs: 120_000 },
     permission: { sandbox: false, mcpServers: {}, pluginsEnabled: false, hostTools: "case fixture only" },
-    cases: behaviorCases.map(({ id, prompt, manualChecks }) => ({ id, promptSha256: createHash("sha256").update(`${behaviorSystemPrompt}\n\n${prompt}`).digest("hex"), manualChecks })),
+    cases: caseMetadata,
     results: records,
   }, null, 2));
 }
