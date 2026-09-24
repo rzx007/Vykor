@@ -154,6 +154,7 @@ export async function resolveDefaultAgentCapabilities(
     async () => createAgentMemoryRuntime(
       options.cwd,
       options.settings.memory?.maxFiles ?? 10,
+      options.sessionId,
     ),
   );
   const capabilities: ResolvedAgentCapabilities = {

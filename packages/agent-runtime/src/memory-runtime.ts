@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { Message, StreamingMessageClient } from "@vykor/core";
 import { getProjectMemoryDir } from "@vykor/core";
 import {
@@ -26,12 +28,14 @@ export interface AgentMemoryRuntime {
     apiClient: StreamingMessageClient,
     model: string,
     completedRunToolActivity?: FrameworkAgentRunToolActivity,
+    automatic?: boolean,
   ): Promise<AgentRememberResult>;
 }
 
 export async function createAgentMemoryRuntime(
   cwd: string,
   maxFiles: number,
+  sessionId: string,
 ): Promise<AgentMemoryRuntime> {
   const directory = getProjectMemoryDir(cwd);
   const manager = new MemoryManager(1000, directory);
@@ -45,7 +49,7 @@ export async function createAgentMemoryRuntime(
       if (selected.ids.length > 0) await manager.markMemoryUsed(selected.ids);
       return selected.text || null;
     },
-    async remember(messages, apiClient, model, completedRunToolActivity) {
+    async remember(messages, apiClient, model, completedRunToolActivity, automatic) {
       return await extractMemories({
         apiClient,
         model,
@@ -53,7 +57,9 @@ export async function createAgentMemoryRuntime(
         manager,
         memoryDir: directory,
         cwd,
+        sessionId,
         completedRunToolActivity,
+        automatic,
       });
     },
   };
@@ -66,6 +72,8 @@ export async function extractMemories(options: {
   manager: MemoryManager;
   memoryDir: string;
   cwd: string;
+  sessionId: string;
+  automatic?: boolean;
   completedRunToolActivity?: FrameworkAgentRunToolActivity;
 }): Promise<AgentRememberResult> {
   if (options.messages.length < 2) {
@@ -111,10 +119,22 @@ export async function extractMemories(options: {
   const records = selectWritableMemoryExtractionRecords(
     parseMemoryExtractionRecords(finalText),
   );
+  const userTexts = options.messages.slice(-12)
+    .filter((message) => message.type === "user")
+    .map((message) => typeof message.content === "string"
+      ? message.content
+      : summarizeContent(message.content));
   const writtenIds: string[] = [];
   const titles: string[] = [];
   for (const record of records) {
-    const entry = await options.manager.add(record.body, record.tags, undefined, {
+    const quote = record.evidence?.trim();
+    const sourceText = quote && userTexts.find((text) => text.includes(quote));
+    if (options.automatic && (record.scope !== "project" || !sourceText)) continue;
+    const entry = await options.manager.add(record.body, record.tags, {
+      source_type: options.automatic ? "user_message" : "manual_remember",
+      source_session_id: options.sessionId,
+      ...(sourceText ? { source_message_sha256: createHash("sha256").update(sourceText).digest("hex") } : {}),
+    }, {
       name: record.title,
       description: record.description,
       type: record.memoryType,

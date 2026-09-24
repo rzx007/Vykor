@@ -382,8 +382,8 @@ export class MemoryManager {
       createdAt: now,
       updatedAt: now,
       metadata,
-      name: options?.name ?? firstContentLine(content) ?? id,
-      description: options?.description ?? firstContentLine(content) ?? "",
+      name: options?.name?.trim() || firstContentLine(content) || content.trim().slice(0, 200),
+      description: options?.description?.trim() || firstContentLine(content) || content.trim().slice(0, 200),
       type,
       scope: options?.scope ?? DEFAULT_MEMORY_SCOPE,
       importance: options?.importance ?? 0,
@@ -431,8 +431,8 @@ export class MemoryManager {
     if (updates.content !== undefined) entry.content = updates.content;
     if (updates.tags !== undefined) entry.tags = updates.tags;
     if (updates.metadata !== undefined) entry.metadata = updates.metadata;
-    if (updates.name !== undefined) entry.name = updates.name;
-    if (updates.description !== undefined) entry.description = updates.description;
+    if (updates.name !== undefined) entry.name = updates.name.trim() || firstContentLine(entry.content) || entry.content.trim().slice(0, 200);
+    if (updates.description !== undefined) entry.description = updates.description.trim() || firstContentLine(entry.content) || entry.content.trim().slice(0, 200);
     if (updates.type !== undefined) entry.type = updates.type;
     if (updates.scope !== undefined) entry.scope = updates.scope;
     if (updates.importance !== undefined) entry.importance = updates.importance;
@@ -736,7 +736,7 @@ export class MemoryManager {
       );
     }
     for (const field of ["id", "name", "description", "type", "scope", "importance", "signature", "created_at", "updated_at", "use_count"] as const) {
-      if (metadata[field] === undefined || metadata[field] === "") {
+      if (metadata[field] === undefined || (metadata[field] === "" && field !== "description")) {
         throw new Error(`Memory record is missing required field: ${field}`);
       }
     }
@@ -772,7 +772,9 @@ export class MemoryManager {
       updatedAt,
       metadata: Object.keys(extra).length ? extra : undefined,
       name: metadata.name ? String(metadata.name) : undefined,
-      description: metadata.description ? String(metadata.description) : undefined,
+      description: metadata.description
+        ? String(metadata.description)
+        : firstContentLine(body) || body.trim().slice(0, 200),
       type,
       scope,
       importance,

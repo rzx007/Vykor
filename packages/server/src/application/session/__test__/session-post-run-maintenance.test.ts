@@ -80,7 +80,7 @@ describe("SessionPostRunMaintenance", () => {
     expect(sessionMemoryWriter).toHaveBeenCalledWith("/repo", [
       { role: "user", content: "ssh ops@10.0.0.9" },
     ], "s1");
-    expect(remember).toHaveBeenCalledOnce();
+    expect(remember).toHaveBeenCalledWith({ automatic: true });
   });
 
   it("does nothing for a non-completed run", async () => {

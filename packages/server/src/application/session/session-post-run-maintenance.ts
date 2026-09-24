@@ -73,7 +73,7 @@ export class SessionPostRunMaintenance {
 
     if (settings.memory?.autoExtractEnabled !== false) {
       await this.bestEffort("session.memory.auto_extract_failed", sessionId, runId, async () => {
-        await agent.remember();
+        await agent.remember({ automatic: true });
       });
     }
 

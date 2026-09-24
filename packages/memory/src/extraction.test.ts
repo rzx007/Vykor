@@ -19,6 +19,7 @@ describe("parseMemoryExtractionRecords", () => {
       {
         title: "Deploy notes",
         body: "Use pnpm",
+        evidence: "",
         description: "",
         memoryType: "project",
         scope: "project",

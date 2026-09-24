@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -21,7 +22,7 @@ it("retrieves persisted project memory on the first turn", async () => {
     const writer = new MemoryManager(1000, getProjectMemoryDir(cwd));
     await writer.add("The deployment region is ap-southeast-1");
 
-    const memory = await createAgentMemoryRuntime(cwd, 5);
+    const memory = await createAgentMemoryRuntime(cwd, 5, "session-123");
     expect(await memory.retrieve("deployment region")).toContain("ap-southeast-1");
   } finally {
     if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
@@ -47,12 +48,44 @@ function fakeClient(responseText: string, onStream?: () => void): StreamingMessa
 }
 
 describe("extractMemories", () => {
-  it("uses the canonical defaults, team filter, and three-record cap", async () => {
+  it("writes only project memories backed by a user quote and keeps their source", async () => {
+    const memoryDir = await mkdtemp(join(tmpdir(), "vk-memory-source-"));
+    try {
+      const result = await extractMemories({
+        apiClient: fakeClient(JSON.stringify({ memories: [
+          { title: "Decision", body: "Use SQLite for session state", scope: "project", evidence: "Use SQLite for session state" },
+          { title: "Guess", body: "Production runs on Mars", scope: "project", evidence: "Production runs on Mars" },
+          { title: "Private", body: "Private preference", scope: "private", evidence: "Use SQLite for session state" },
+        ] })),
+        model: "test-model",
+        messages: [
+          { type: "user", content: "Use SQLite for session state" },
+          { type: "assistant", content: "Production runs on Mars" },
+        ],
+        manager: new MemoryManager(100, memoryDir),
+        memoryDir,
+        cwd: resolve("project"),
+        sessionId: "session-123",
+        automatic: true,
+      });
+
+      expect(result.titles).toEqual(["Decision"]);
+      expect((await new MemoryManager(100, memoryDir).getAll()).map((entry) => entry.metadata)).toEqual([{
+        source_type: "user_message",
+        source_session_id: "session-123",
+        source_message_sha256: createHash("sha256").update("Use SQLite for session state").digest("hex"),
+      }]);
+    } finally {
+      await rm(memoryDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps manual remember support for private records", async () => {
     const response =
       "model preface\n" +
       JSON.stringify({
         memories: [
-          { title: "Default", body: "default record", type: "unknown", scope: "unknown" },
+          { title: "Default", body: "default record", type: "unknown", scope: "unknown", evidence: "remember these durable facts" },
           { title: "Team", body: "shared record", scope: "team" },
           { title: "Private", body: "private record", type: "reference", scope: "private" },
           { title: "Fourth", body: "must be capped" },
@@ -68,6 +101,7 @@ describe("extractMemories", () => {
       manager,
       memoryDir: resolve("memory"),
       cwd: resolve("project"),
+      sessionId: "session-123",
     });
 
     expect(result).toMatchObject({
@@ -80,6 +114,7 @@ describe("extractMemories", () => {
       ["Default", "project", "project"],
       ["Private", "reference", "private"],
     ]);
+    expect(entries.every((entry) => entry.metadata?.source_type === "manual_remember")).toBe(true);
   });
 
   it("skips model streaming when an assistant already wrote inside the memory directory", async () => {
@@ -114,6 +149,7 @@ describe("extractMemories", () => {
       manager: new MemoryManager(100),
       memoryDir,
       cwd,
+      sessionId: "session-123",
     });
 
     expect(result).toEqual({
@@ -160,6 +196,7 @@ describe("extractMemories", () => {
       manager: new MemoryManager(100),
       memoryDir,
       cwd,
+      sessionId: "session-123",
     });
 
     expect(result).toEqual({
@@ -216,6 +253,7 @@ describe("extractMemories", () => {
       manager: new MemoryManager(100),
       memoryDir,
       cwd,
+      sessionId: "session-123",
     });
 
     expect(result).toEqual({
@@ -260,6 +298,7 @@ describe("extractMemories", () => {
       manager: new MemoryManager(100),
       memoryDir,
       cwd,
+      sessionId: "session-123",
     });
 
     expect(result).toEqual({

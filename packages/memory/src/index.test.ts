@@ -431,6 +431,35 @@ describe("MemoryManager Markdown store", () => {
     expect(results.length).toBe(1);
   });
 
+  it("keeps descriptions valid after adding or updating with an empty value", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vk-memory-description-"));
+    const manager = new MemoryManager(1000, dir);
+    const entry = await manager.add("Use SQLite for session state", [], undefined, { description: "" });
+    expect((await new MemoryManager(1000, dir).get(entry.id))?.description).toBe("Use SQLite for session state");
+
+    await manager.update(entry.id, { description: "" });
+    expect((await new MemoryManager(1000, dir).get(entry.id))?.description).toBe("Use SQLite for session state");
+  });
+
+  it("loads an older auto-extracted file with an empty description", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vk-memory-old-description-"));
+    await writeFile(join(dir, "mem-old.md"), renderMemoryFile({
+      schema_version: 1,
+      id: "mem-old",
+      name: "Old decision",
+      description: "",
+      type: "project",
+      scope: "project",
+      importance: 0,
+      signature: "old-signature",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      use_count: 0,
+    }, "Use SQLite for session state"), "utf-8");
+
+    expect((await new MemoryManager(1000, dir).get("mem-old"))?.description).toBe("Use SQLite for session state");
+  });
+
   it("deduplicates identical content by signature", async () => {
     dir = await mkdtemp(join(tmpdir(), "ohmem-"));
     const mgr = new MemoryManager(1000, dir);

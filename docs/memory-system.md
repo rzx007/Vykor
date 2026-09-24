@@ -170,11 +170,11 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 2. 写进 `memory/` 目录（Markdown + YAML frontmatter 格式，带签名去重）
 3. 下次会话启动，相关记忆按轮检索注入 prompt
 
-每个持久记忆文件只接受当前格式：frontmatter 必须包含 `schema_version: 1`、id、name、description、type、scope、importance、signature、created_at、updated_at 和 use_count，文件名必须与 id 一致。缺字段、类型错误、版本不同或空内容都会直接失败；系统不会读取旧 JSON、补默认字段或猜测旧名字。
+每个持久记忆文件只接受当前格式：frontmatter 必须包含 `schema_version: 1`、id、name、description、type、scope、importance、signature、created_at、updated_at 和 use_count，文件名必须与 id 一致。缺字段、类型错误、版本不同或空正文都会直接失败；旧版自动提取曾写出的空 `description` 会在读取时用正文补全。系统不会读取旧 JSON 或猜测旧名字。
 
 **内置护栏**：提取 prompt 里写死：不存密钥/令牌、只存稳定且不可推导的事实。
 
-> 状态：`/remember` 手动触发和 Run 成功后的自动触发都已接入。自动触发默认开启，受 `memory.autoExtractEnabled` 控制；一次最多写 3 条，team scope 暂不写入。
+> 状态：`/remember` 手动触发和 Run 成功后的自动触发都已接入。自动触发默认开启，受 `memory.autoExtractEnabled` 控制；一次最多写 3 条。自动提取只写项目作用域，并要求候选附带能在近期用户消息中找到的原话；`private` 和 `team` 暂不自动写入。
 
 #### 按轮自动提取的精确流程
 
@@ -192,10 +192,10 @@ Vykor 的"记忆"不是单一模块，而是**四层互补体系**。每层解�
 - 历史消息少于 2 条。
 - 本轮已经手动写过 memory 目录，避免重复提取。
 - 模型没有提出值得保存的长期记忆。
-- 提出的记录全部被拒绝，例如 team scope 暂不写入。
+- 提出的记录全部被拒绝，例如作用域不是 `project`、缺少用户原话，或所引原话不在近期用户消息中。
 - 提取过程报错会写结构化告警，不阻断当前对话，也不回退 Run 终态。
 
-提取时只把最近 12 条消息摘要给模型，一次最多写入 3 条。写入后由 `MemoryManager` 做签名去重。下一轮会按当前用户输入检索相关记忆，并以临时 `system-reminder` 注入，不写进消息历史。
+提取时只把最近 12 条消息摘要给模型，一次最多写入 3 条。通过校验的记录会保存来源会话 ID 和用户消息的 SHA-256 指纹，不重复保存所引原话，再由 `MemoryManager` 做签名去重。原话核对只能确认引用确实出现在用户消息中，不能独立证明模型对其解释正确。下一轮会按当前用户输入检索相关记忆，并以临时 `system-reminder` 注入，不写进消息历史。
 
 注意：代码默认开启不等于本机一定开启；用户 `settings.json` 里的显式配置会覆盖默认值。例如已有配置写了 `memory.autoExtractEnabled=false` 时，需要用 `/config set memory.autoExtractEnabled true` 重新打开。
 

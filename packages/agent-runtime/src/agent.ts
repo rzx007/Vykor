@@ -158,7 +158,7 @@ export interface VykorAgent {
     provider: CompactContextProvider | undefined,
   ): void;
   compact(): Promise<AgentCompactResult>;
-  remember(): Promise<AgentRememberResult>;
+  remember(options?: { automatic?: boolean }): Promise<AgentRememberResult>;
   getUsage(): UsageSnapshot;
   getCapabilities(): AgentCapabilitySnapshot;
   inspect(): AgentInspection;
@@ -326,7 +326,7 @@ class DefaultVykorAgent implements VykorAgent {
     });
   }
 
-  remember(): Promise<AgentRememberResult> {
+  remember(options?: { automatic?: boolean }): Promise<AgentRememberResult> {
     return this.runMaintenance("remember", async () => {
       if (!this.memory) {
         return {
@@ -341,6 +341,7 @@ class DefaultVykorAgent implements VykorAgent {
         this.runtime.apiClient,
         this.model,
         this.completedRunToolActivity,
+        options?.automatic,
       );
     });
   }

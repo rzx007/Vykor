@@ -14,6 +14,7 @@ export const MAX_MEMORY_EXTRACTION_RECORDS = 3;
 export interface MemoryExtractionRecord {
   title: string;
   body: string;
+  evidence?: string;
   memoryType: MemoryType;
   scope: MemoryScope;
   description: string;
@@ -43,7 +44,8 @@ export function buildMemoryExtractionPrompt(
     "Recent conversation:",
     transcriptLines.join("\n"),
     "",
-    'JSON schema: {"memories":[{"title":"...","type":"user|feedback|project|reference","scope":"private|project|team","description":"...","body":"...","tags":["..."]}]}',
+    'For each memory, include evidence copied exactly from a recent user message. Do not use assistant or tool text as evidence.',
+    'JSON schema: {"memories":[{"title":"...","type":"user|feedback|project|reference","scope":"private|project|team","description":"...","body":"...","evidence":"exact user quote","tags":["..."]}]}',
   ].join("\n");
 }
 
@@ -82,6 +84,7 @@ export function parseMemoryExtractionRecords(
         {
           title,
           body,
+          evidence: String(row.evidence ?? "").trim(),
           description: String(row.description ?? "").trim(),
           memoryType: parseMemoryType(row.type) ?? DEFAULT_MEMORY_TYPE,
           scope: parseMemoryScope(row.scope) ?? DEFAULT_MEMORY_SCOPE,
