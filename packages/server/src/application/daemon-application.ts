@@ -475,7 +475,6 @@ export class DaemonApplication implements DurableAgentApplication {
           })),
         workflowRepository: this.workflows,
         tools: async () => {
-          const catalog = await this.modelCatalog.load()
           return [
             imageToTextTool,
             imageGenerationTool,
@@ -491,7 +490,7 @@ export class DaemonApplication implements DurableAgentApplication {
                 }),
               })
               return (await this.attachments.resolveReadyContentPath(asset.id)).path
-            }, catalog),
+            }, () => this.modelCatalog.load()),
           ]
         },
         toolOverrides: [

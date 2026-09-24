@@ -644,7 +644,7 @@ describe("Integration: Full Agent Loop", () => {
       inputSchema: { type: "object", properties: { query: { type: "string" } } },
       execute: async () => {
         searchExecutions++;
-        return { content: [{ type: "text" as const, text: "no new evidence" }] };
+        return { content: [{ type: "text" as const, text: "search provider unavailable" }], isError: true };
       },
     });
 
@@ -684,7 +684,7 @@ describe("Integration: Full Agent Loop", () => {
       },
     };
 
-    const engine = new QueryEngine(client as any, registry, allowAll(), noopHooks(), { maxTurns: 4 });
+    const engine = new QueryEngine(client as any, registry, allowAll(), noopHooks(), { maxTurns: 10 });
     const events: StreamEvent[] = [];
     for await (const event of engine.submitMessage("generate a scene")) events.push(event);
 
@@ -698,7 +698,7 @@ describe("Integration: Full Agent Loop", () => {
     )).toBe(true);
   });
 
-  it("blocks a tool after three failed calls even when the input changes", async () => {
+  it("allows corrected input to succeed after three different failed calls", async () => {
     const registry = new ToolRegistry();
     let executions = 0;
     registry.register({
@@ -709,8 +709,8 @@ describe("Integration: Full Agent Loop", () => {
       execute: async () => {
         executions++;
         return {
-          content: [{ type: "text" as const, text: "provider unavailable" }],
-          isError: true,
+          content: [{ type: "text" as const, text: executions === 4 ? "Artifact created" : "invalid scene" }],
+          isError: executions !== 4,
           failureKind: "provider",
         };
       },
@@ -727,6 +727,11 @@ describe("Integration: Full Agent Loop", () => {
           yield { type: "complete", stopReason: "end_turn" };
           return;
         }
+        if (currentCall === 4) {
+          yield { type: "text_delta", delta: "Artifact created and verified." };
+          yield { type: "complete", stopReason: "end_turn" };
+          return;
+        }
         yield {
           type: "tool_use_start",
           toolUse: {
@@ -740,15 +745,62 @@ describe("Integration: Full Agent Loop", () => {
       },
     };
 
-    const engine = new QueryEngine(client as any, registry, allowAll(), noopHooks(), { maxTurns: 3 });
+    const engine = new QueryEngine(client as any, registry, allowAll(), noopHooks(), { maxTurns: 8 });
     for await (const _event of engine.submitMessage("generate a scene")) {
       // Consume the stream.
     }
 
-    expect(executions).toBe(3);
-    expect(requests).toHaveLength(4);
-    expect(requests.at(-1).tools).toBeUndefined();
-    expect(requests.at(-1).system).toContain("Stop using tools");
+    expect(executions).toBe(4);
+    expect(requests).toHaveLength(5);
+    expect(requests.at(-1).tools.map((tool: ToolDefinition) => tool.name)).toContain("Generate");
+    expect(engine.getHistory().at(-1)?.content).toBe("Artifact created and verified.");
+  });
+
+  it.each([false, true])("continues beyond recovery after a successful batch (success first: %s)", async (successFirst) => {
+    const registry = new ToolRegistry();
+    let unsafeExecutions = 0;
+    const completedSteps: number[] = [];
+    registry.register({
+      name: "Generate",
+      description: "Potentially mutating operation",
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => {
+        unsafeExecutions++;
+        return { content: [{ type: "text", text: "provider unavailable" }], isError: true };
+      },
+    });
+    registry.register({
+      name: "Work",
+      description: "Independent work",
+      inputSchema: { type: "object", properties: { step: { type: "number" } } },
+      execute: async (input) => {
+        completedSteps.push(input.step as number);
+        return { content: [{ type: "text", text: "Step completed" }] };
+      },
+    });
+    let request = 0;
+    const client = {
+      async *streamMessage(params: any) {
+        const current = request++;
+        if (!params.tools || current === 5) {
+          yield { type: "text_delta" as const, delta: !params.tools ? "Stopped early" : "Independent work completed" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+          return;
+        }
+        const generate = { type: "tool_use" as const, id: `g${current}`, name: "Generate", input: {} };
+        const work = { type: "tool_use" as const, id: `w${current}`, name: "Work", input: { step: current } };
+        const calls = current < 2 ? [generate]
+          : current === 2 ? (successFirst ? [work, generate] : [generate, work])
+          : [work];
+        for (const toolUse of calls) yield { type: "tool_use_start" as const, toolUse };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const engine = new QueryEngine(client as any, registry, allowAll(), noopHooks(), { maxTurns: 8 });
+    for await (const _ of engine.submitMessage("Complete the independent work if generation fails")) { /* consume */ }
+    expect(unsafeExecutions).toBe(1);
+    expect(completedSteps).toEqual([2, 3, 4]);
+    expect(engine.getHistory().at(-1)?.content).toBe("Independent work completed");
   });
 
   it("injects tool and run abort signals into tool context", async () => {

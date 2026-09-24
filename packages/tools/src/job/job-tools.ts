@@ -3,6 +3,7 @@ import type { JobKind, JobStatus } from "@vykor/jobs";
 
 const DEFAULT_JOB_LIST_LIMIT = 100;
 const MAX_JOB_WAIT_IDS = 32;
+const MAX_JOB_WAIT_MS = 60_000;
 const jobIdProperty = { type: "string", description: "Job id returned by a long-running tool or JobList" };
 
 export const jobListTool: ToolDefinition = {
@@ -84,7 +85,7 @@ export const jobReadTool: ToolDefinition = {
 
 export const jobWaitTool: ToolDefinition = {
   name: "JobWait",
-  description: "Wait for one or more jobs to finish without cancelling them, bounded by timeoutSeconds.",
+  description: "Wait briefly for existing jobs without cancelling or restarting them. Defaults to 30 seconds, capped at 60 seconds and the remaining tool deadline. On expiry, returns current snapshots with timedOut=true; this is not a job failure. Use JobRead to inspect output or wait again if still running.",
   inputSchema: {
     type: "object",
     properties: {
@@ -100,7 +101,7 @@ export const jobWaitTool: ToolDefinition = {
         additionalProperties: { type: "number" },
         description: "Per-job cursors returned by earlier JobRead or JobWait calls",
       },
-      timeoutSeconds: { type: "number", default: 30 },
+      timeoutSeconds: { type: "number", default: 30, description: "Requested wait in seconds. Values above 60 are shortened; a shorter execution deadline may reduce it further." },
       maxChars: { type: "number", default: 12000 },
     },
     required: ["jobIds"],
@@ -116,6 +117,12 @@ export const jobWaitTool: ToolDefinition = {
       }
       const jobIds = requiredStringArray(input.jobIds, "jobIds");
       const cursors = optionalCursorMap(input.after);
+      let timeoutMs = Math.min(timeoutSeconds * 1_000, MAX_JOB_WAIT_MS);
+      if (context.deadlineAt !== undefined) {
+        const remainingMs = Math.max(0, context.deadlineAt - Date.now());
+        // Reserve time for the host's final snapshot and returning the tool result.
+        timeoutMs = Math.min(timeoutMs, Math.max(1, remainingMs - Math.min(1_000, remainingMs * 0.2)));
+      }
       const results = await Promise.all(jobIds.map(async (jobId) => {
         try {
           return {
@@ -123,7 +130,7 @@ export const jobWaitTool: ToolDefinition = {
             ...await host.jobs.wait({
               sessionId: host.sessionId,
               jobId,
-              timeoutMs: timeoutSeconds * 1_000,
+              timeoutMs,
               ...(cursors?.[jobId] !== undefined ? { after: cursors[jobId] } : {}),
               maxChars: optionalNumber(input.maxChars),
               signal: context.abortSignal,
@@ -133,7 +140,7 @@ export const jobWaitTool: ToolDefinition = {
           return { jobId, error: error instanceof Error ? error.message : String(error) };
         }
       }));
-      return result("wait", { results });
+      return result("wait", { timeoutSeconds: timeoutMs / 1_000, results });
     } catch (error) {
       return failed(error);
     }

@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { ModelCatalogService } from "@vykor/api";
 
 import {
   createWorkflowPlan,
@@ -64,16 +65,23 @@ const fetch: typeof globalThis.fetch = (input, init) => {
   return globalThis.fetch(input, { ...init, headers });
 };
 let previousConfigDir: string | undefined;
+let previousModelsFetch: string | undefined;
 
 beforeAll(() => {
   previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  previousModelsFetch = process.env.VYKOR_DISABLE_MODELS_FETCH;
   process.env.VYKOR_CONFIG_DIR = serverTestConfigDir;
+  // HTTP lifecycle tests use the bundled catalog; remote catalog behavior has
+  // its own API tests and must not delay or destabilize local server fixtures.
+  process.env.VYKOR_DISABLE_MODELS_FETCH = "1";
 });
 
 afterAll(() => {
   if (previousConfigDir === undefined)
     delete process.env.VYKOR_CONFIG_DIR;
   else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+  if (previousModelsFetch === undefined) delete process.env.VYKOR_DISABLE_MODELS_FETCH;
+  else process.env.VYKOR_DISABLE_MODELS_FETCH = previousModelsFetch;
   rmSync(serverTestConfigDir, { recursive: true, force: true });
 });
 
@@ -564,6 +572,36 @@ async function waitForEvent(
 }
 
 describe("VykorHttpServer", () => {
+  it("runs text prompts without loading unused browser model metadata", async () => {
+    const load = vi.spyOn(ModelCatalogService.prototype, "load")
+      .mockRejectedValue(new Error("Model catalog is offline"));
+    try {
+      await withServer(async ({ baseUrl, token }) => {
+        await fetch(`${baseUrl}/sessions`, {
+          method: "POST",
+          headers: { ...auth(token), "content-type": "application/json" },
+          body: JSON.stringify({ id: "offline", cwd: process.cwd(), model: "m" }),
+        });
+        const response = await fetch(`${baseUrl}/sessions/offline/prompts`, {
+          method: "POST",
+          headers: { ...auth(token), "content-type": "application/json" },
+          body: JSON.stringify({ content: "hello" }),
+        });
+        expect(response.status).toBe(202);
+        await waitForEvent(baseUrl, token, (event) =>
+          event.type === "session.run.updated" &&
+          (event.payload?.run as { status?: string } | undefined)?.status === "completed");
+        expect(load).not.toHaveBeenCalled();
+      }, { runtimeFactory: {
+        async createRuntime() {
+          return { async runPrompt() {}, async close() {} };
+        },
+      } });
+    } finally {
+      load.mockRestore();
+    }
+  });
+
   it("can use an injected application without creating or closing its resources", async () => {
     const ready = vi.fn(async () => {});
     const close = vi.fn(async () => {});

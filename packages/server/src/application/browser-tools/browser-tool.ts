@@ -16,7 +16,7 @@ export type BrowserScreenshotStore = (input: {
 export function createBrowserTool(
   host: BrowserHost | undefined,
   storeScreenshot: BrowserScreenshotStore,
-  catalog: ModelsDevCatalog,
+  loadCatalog: () => Promise<ModelsDevCatalog>,
 ): ToolDefinition {
   return {
     name: "Browser",
@@ -51,7 +51,7 @@ export function createBrowserTool(
           action,
           sessionId: context.sessionId,
           cwd: context.cwd,
-          includeScreenshot: supportsNativeImageInput(context, catalog),
+          includeScreenshot: supportsNativeImageInput(context, await loadCatalog()),
           approve: async (question) => {
             if (context.requestPermission) {
               const decision = await context.requestPermission({

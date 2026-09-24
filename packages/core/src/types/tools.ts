@@ -57,6 +57,8 @@ export interface ToolContext {
   runAbortSignal?: AbortSignal;
   /** Lifetime of this tool invocation, including its execution timeout. */
   abortSignal?: AbortSignal;
+  /** Absolute execution deadline (Unix milliseconds); bounded waits should return before it. */
+  deadlineAt?: number;
   settings?: Settings;
   /** Selected model identity for the request that invoked this tool. */
   requestConfiguration?: {

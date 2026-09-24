@@ -37,8 +37,10 @@ export function createWebSearchTool(runtime: WebRuntimeLike = defaultWebRuntime)
         );
         if (result.sources.length === 0) {
           return {
-            content: [{ type: "text", text: "No search results found." }],
-            isError: true,
+            content: [{
+              type: "text",
+              text: `No search results found for: ${query}\nTry a broader query, alternate terms, or another relevant source.`,
+            }],
           };
         }
 

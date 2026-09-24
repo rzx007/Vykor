@@ -121,7 +121,7 @@ export async function buildTaggedPromptSegments(
     const lines = [
       "# Available Skills",
       "",
-      "The following skills are available via the `skill` tool.",
+      "The following skills are available via the `Skill` tool. Load those explicitly requested or materially useful for the current task; descriptions are discovery hints, not mandatory workflow gates.",
       "",
     ];
     for (const skill of options.skillsList) {

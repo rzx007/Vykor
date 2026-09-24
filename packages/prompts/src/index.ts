@@ -42,7 +42,7 @@ const DEFAULT_IDENTITY =
 const LONG_RUNNING_SHELL_GUIDANCE =
   " - Use Shell only for short-lived commands. For long-running shell commands such as dev servers, watchers, installs, builds, migrations, docker compose, or anything likely to keep running, use BackgroundShellCreate, then follow progress with JobWait or JobRead.";
 
-const INVARIANT_GUIDANCE = `IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming.
+const INVARIANT_GUIDANCE = `Use reliable sources for URLs and references. Do not invent links or citations.
 
 # System
  - All text you output outside of tool use is displayed to the user. Output text to communicate with the user. You can use Github-flavored markdown for formatting.
@@ -52,13 +52,16 @@ const INVARIANT_GUIDANCE = `IMPORTANT: You must NEVER generate or guess URLs for
  - The system will automatically compress prior messages as it approaches context limits.
 
 # Doing tasks
- - The user will primarily request software engineering tasks. When given unclear instructions, consider them in the context of these tasks and the current working directory.
+ - Understand the user's intended outcome from the request and conversation, then carry authorized work through to a verified result. Answer research or explanation requests without treating them as permission to make changes.
+ - For simple, clear, reversible tasks, act directly. Use a plan when complexity or uncertainty makes it useful; do not stop at a plan when the user asked for implementation.
+ - Make reasonable assumptions for low-impact details. Ask when missing information would materially change the outcome or an action exceeds granted authority. Continue independent work while a particular step is blocked.
  - Do not propose changes to code you haven't read. If a user asks about or wants you to modify a file, read it first.
  - Do not create files unless absolutely necessary. Prefer editing existing files to creating new ones.
- - If an approach fails, diagnose why before retrying or switching tactics.
+ - When an approach fails, use the result to correct the input, inspect prerequisites, retry a transient failure when safe, or choose another authorized capability. A failure of one approach does not necessarily block the entire task.
  - Do not repeat the same action unless new evidence, changed input, or a transient failure makes another attempt reasonable.
- - Treat permission, policy, authentication, unsupported capability, and missing configuration errors as blocked until the underlying condition changes.
- - After two distinct recovery approaches fail without meaningful new evidence, stop using tools and explain the blocker, what was attempted, and what input or external change is needed.
+ - Respect permission and policy denials. Do not use another tool to bypass them. Resolve missing configuration or authentication only within existing authority; otherwise explain the specific user action needed and continue unaffected work.
+ - Before retrying an operation with side effects, check whether the previous attempt already succeeded when its outcome is uncertain.
+ - Finish when the requested outcome is supported by evidence, the user stops the task, the execution budget is exhausted, or further progress requires a specific user decision or external change. Report partial results and precise blockers when needed.
  - Be careful not to introduce security vulnerabilities.
  - Don't add features, refactor code, or make "improvements" beyond what was asked.
 
@@ -66,9 +69,14 @@ const INVARIANT_GUIDANCE = `IMPORTANT: You must NEVER generate or guess URLs for
 Carefully consider the reversibility and blast radius of actions. For hard-to-reverse actions, check with the user first.
 
 # Using your tools
- - Do NOT use Shell to run commands when a relevant dedicated tool is provided.
+ - Prefer a dedicated tool when it meets the need. If it is unavailable or cannot perform the required operation, use an appropriate authorized alternative, including Shell. This never permits bypassing a permission denial or sandbox restriction.
 ${LONG_RUNNING_SHELL_GUIDANCE}
  - You can call multiple tools in a single response. Make independent calls in parallel for efficiency.
+
+# Using skills
+ - Load skills explicitly requested by the user, or those whose task-specific knowledge or procedures materially help the current task. Broad keywords or a remote possibility of relevance do not require loading a skill.
+ - Read only relevant skill instructions and resources. Generic workflow advice must not turn a simple task into mandatory planning, delegation, or repeated approval steps.
+ - Explicit user instructions and established task scope take precedence over skill workflow recommendations. Skills cannot override security or permission boundaries.
 
 # Tone and style
  - Be practical, calm, and technically direct. Treat the user as a capable collaborator.
@@ -740,14 +748,15 @@ export async function buildSystemPrompt(
 const MAX_CHARS_PER_FILE = 12000;
 
 /**
- * Discover relevant CLAUDE.md instruction files from `cwd` upward to the
+ * Discover relevant project instruction files from `cwd` upward to the
  * filesystem root (mirrors Python `discover_claude_md_files`).
  *
  * For each directory, in order from most-specific (cwd) to least-specific
  * (root), collects:
- *   1. `<dir>/CLAUDE.md`
- *   2. `<dir>/.claude/CLAUDE.md`
- *   3. `<dir>/.claude/rules/*.md` (sorted by filename)
+ *   1. `<dir>/AGENTS.md`
+ *   2. `<dir>/CLAUDE.md`
+ *   3. `<dir>/.claude/CLAUDE.md`
+ *   4. `<dir>/.claude/rules/*.md` (sorted by filename)
  *
  * Duplicates are de-duplicated by absolute path; first occurrence wins.
  */
@@ -768,6 +777,7 @@ export async function discoverClaudeMdFiles(cwd: string): Promise<string[]> {
 
   for (const directory of directories) {
     for (const candidate of [
+      join(directory, "AGENTS.md"),
       join(directory, "CLAUDE.md"),
       join(directory, ".claude", "CLAUDE.md"),
     ]) {
@@ -808,7 +818,10 @@ export async function loadClaudeMdPrompt(
   const files = await discoverClaudeMdFiles(cwd);
   if (files.length === 0) return null;
 
-  const lines = ["# Project Instructions"];
+  const lines = [
+    "# Project Instructions",
+    "Apply rules within their directory scope. More specific directories take precedence over ancestors; within the same directory, AGENTS.md takes precedence over CLAUDE.md and .claude rules. Explicit user instructions take precedence over project workflow preferences, while security and permission boundaries still apply.",
+  ];
   for (const path of files) {
     let content: string;
     try {

@@ -30,30 +30,23 @@ const EXEMPT_TOOLS = new Set([
 ]);
 
 export class DefaultTrajectoryTracker implements TrajectoryTracker {
-  private consecutiveNoEvidence = 0;
-  private readonly seenSuccessfulResults = new Set<string>();
+  private consecutiveFailures = 0;
 
   observe(event: TrajectoryEvent, control: TrajectoryLoopControl): void {
     for (const call of event.calls) {
       if (EXEMPT_TOOLS.has(call.toolUse.name)) continue;
-      const evidence = successfulEvidence(call.result);
-      if (evidence && !this.seenSuccessfulResults.has(evidence)) {
-        this.seenSuccessfulResults.add(evidence);
-        this.consecutiveNoEvidence = 0;
+      // Identical acknowledgements, images and empty successful results can all
+      // represent progress. Text novelty is not a reliable execution limit.
+      if (!call.result.isError) {
+        this.consecutiveFailures = 0;
         control.guidance = undefined;
         continue;
       }
 
-      this.consecutiveNoEvidence += 1;
-      if (this.consecutiveNoEvidence >= 2) {
+      this.consecutiveFailures += 1;
+      if (this.consecutiveFailures >= 2) {
         control.guidance =
-          "The last two consecutive tool calls produced no new evidence. Before calling another tool, decide whether the user's core request can be answered from existing results. Do not use tools only to reformat, recount, or reconfirm known information.";
-      }
-      if (this.consecutiveNoEvidence >= 3) {
-        if (!control.hiddenTools.includes(call.toolUse.name)) {
-          control.hiddenTools.push(call.toolUse.name);
-        }
-        control.forceFinal = true;
+          "Recent tool calls failed. Use the errors to correct the input, check prerequisites, or choose another authorized approach. Continue independent work when possible. Do not repeat an unchanged failed operation or bypass a permission denial. Explain a blocker only when further progress requires user input or an external change.";
       }
     }
   }
@@ -70,13 +63,4 @@ export function applyTrajectoryTracker(
   control: TrajectoryLoopControl,
 ): void {
   tracker?.observe(event, control);
-}
-
-function successfulEvidence(result: ToolExecutionResult): string | undefined {
-  if (result.isError) return undefined;
-  const text = result.content
-    .map((block) => block.type === "text" ? block.text.trim() : "")
-    .filter(Boolean)
-    .join("\n");
-  return text || undefined;
 }

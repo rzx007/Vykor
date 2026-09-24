@@ -40,7 +40,6 @@ const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
 const DEFAULT_TOOL_TIMEOUT_MS = 300_000;
 const RECOVERY_TOOL_TURNS = 2;
-const MAX_FAILED_CALLS_PER_TOOL = 3;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 
@@ -318,8 +317,6 @@ export class QueryEngine implements IQueryEngine {
         ? undefined
         : (this.options.trajectoryTrackerFactory?.() ?? new DefaultTrajectoryTracker());
     const trajectoryControl = createTrajectoryLoopControl();
-    const failedCallsByTool = new Map<string, number>();
-    const blockedTools = new Set<string>();
     let recoveryToolTurnsRemaining: number | null = null;
     let forceFinalResponse = false;
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
@@ -378,12 +375,8 @@ export class QueryEngine implements IQueryEngine {
       const visibleTools = runToolRegistry.getAll();
       const tools = forcedFinalTurn
         ? []
-        : visibleTools.filter(
-            (tool) =>
-              !blockedTools.has(tool.name) && !trajectoryControl.hiddenTools.includes(tool.name),
-          );
-      const finalizing = forcedFinalTurn || (blockedTools.size > 0 && tools.length === 0);
-      const recoverySystem = finalizing
+        : visibleTools.filter((tool) => !trajectoryControl.hiddenTools.includes(tool.name));
+      const recoverySystem = forcedFinalTurn
         ? appendSystemGuidance(turnSystemPrompt, RECOVERY_FINALIZATION_PROMPT)
         : turnSystemPrompt;
       const system = trajectoryControl.guidance
@@ -482,7 +475,6 @@ export class QueryEngine implements IQueryEngine {
             ...(requestConfiguration.apiFormat ? { apiFormat: requestConfiguration.apiFormat } : {}),
           },
           failedToolCalls,
-          blockedTools,
           runToolRegistry,
           internalTools,
         );
@@ -490,21 +482,18 @@ export class QueryEngine implements IQueryEngine {
           const result = results[i]!;
           const toolUse = toolUses[i]!;
           const tool = runToolRegistry.get(toolUse.name);
-          if (result.isError && (!tool || tool.safeToRetry !== true)) {
+          const recoveryGuard = result.metadata?.recoveryGuard;
+          // A rejected retry never ran, and its failure is already recorded. Re-recording it
+          // would refresh the record to the current evidence revision, which silently voids
+          // the "new evidence unlocks a retry" contract whenever the evidence arrives earlier
+          // in the same batch — leaving the recovered call blocked and burning the recovery
+          // budget until the engine forces a blocker report.
+          if (result.isError && !recoveryGuard && (!tool || tool.safeToRetry !== true)) {
             failedToolCalls.recordFailure(toolUse.name, toolUse.input);
           }
-          const recoveryGuard = result.metadata?.recoveryGuard;
           if (recoveryGuard) {
             recoveryToolTurnsRemaining ??= RECOVERY_TOOL_TURNS;
-          } else if (result.isError) {
-            const failures = (failedCallsByTool.get(toolUse.name) ?? 0) + 1;
-            failedCallsByTool.set(toolUse.name, failures);
-            if (failures >= MAX_FAILED_CALLS_PER_TOOL) {
-              blockedTools.add(toolUse.name);
-              recoveryToolTurnsRemaining ??= RECOVERY_TOOL_TURNS;
-            }
-          } else {
-            failedCallsByTool.delete(toolUse.name);
+          } else if (!result.isError) {
             failedToolCalls.noteEvidence();
           }
           this.messages.push({
@@ -515,6 +504,9 @@ export class QueryEngine implements IQueryEngine {
           });
           yield { type: "tool_use_end", toolUseId: result.toolUseId, result };
         }
+        // Evaluate the whole batch so a successful alternative cancels recovery
+        // regardless of whether it appears before or after a rejected retry.
+        if (results.some((result) => !result.isError)) recoveryToolTurnsRemaining = null;
         // Single removable integration point: commenting out this statement disables trajectory decisions.
         applyTrajectoryTracker(
           trajectoryTracker,
@@ -539,7 +531,7 @@ export class QueryEngine implements IQueryEngine {
           this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
         }
         if (turnCount >= this.maxTurns) {
-          if (!forcedFinalTurn && (recoveryToolTurnsRemaining !== null || blockedTools.size > 0)) {
+          if (!forcedFinalTurn && recoveryToolTurnsRemaining !== null) {
             options.execution?.closeSteering();
             forceFinalResponse = true;
             continue;
@@ -732,7 +724,6 @@ export class QueryEngine implements IQueryEngine {
     execution?: AgentExecutionContext,
     requestConfiguration?: ToolContext["requestConfiguration"],
     failedToolCalls?: ToolFailureMemory,
-    blockedTools?: ReadonlySet<string>,
     toolRegistry: IToolRegistry = this.visibleToolRegistry(),
     internalTools: ReadonlySet<string> = new Set(),
   ): Promise<ToolExecutionResult[]> {
@@ -745,23 +736,6 @@ export class QueryEngine implements IQueryEngine {
 
     for (let i = 0; i < toolUses.length; i++) {
       const toolUse = toolUses[i]!;
-
-      if (blockedTools?.has(toolUse.name)) {
-        results[i] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [
-            {
-              type: "text" as const,
-              text: "Tool is unavailable for the rest of this response after repeated failures. Choose another approach or explain the blocker.",
-            },
-          ],
-          isError: true,
-          failureKind: "policy",
-          metadata: { recoveryGuard: "tool_failure_limit" },
-        };
-        continue;
-      }
 
       if (failedToolCalls?.shouldReplayFailure(toolUse.name, toolUse.input)) {
         results[i] = {
@@ -1045,6 +1019,7 @@ export class QueryEngine implements IQueryEngine {
   ): Promise<Awaited<ReturnType<NonNullable<ReturnType<IToolRegistry["get"]>>["execute"]>>> {
     const controller = new AbortController();
     const timeoutError = new ToolTimeoutError(timeoutMs);
+    const deadlineAt = Date.now() + timeoutMs;
     let abortListener: (() => void) | undefined;
     const abortFromExternal = () => controller.abort(externalSignal?.reason);
     if (externalSignal?.aborted) {
@@ -1072,7 +1047,7 @@ export class QueryEngine implements IQueryEngine {
 
     try {
       return await Promise.race([
-        tool.execute(input, { ...context, abortSignal: controller.signal }),
+        tool.execute(input, { ...context, abortSignal: controller.signal, deadlineAt }),
         timeoutPromise,
       ]);
     } finally {

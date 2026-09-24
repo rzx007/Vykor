@@ -195,17 +195,6 @@ describe("background shell guidance", () => {
   });
 });
 
-describe("tool recovery guidance", () => {
-  it("requires changed evidence for retries and a bounded recovery", () => {
-    const prompt = getInvariantGuidance();
-    expect(prompt).toContain(
-      "new evidence, changed input, or a transient failure",
-    );
-    expect(prompt).toContain("After two distinct recovery approaches fail");
-    expect(prompt).toContain("stop using tools and explain the blocker");
-  });
-});
-
 describe("CLAUDE.md upward traversal", () => {
   let root: string;
   let parent: string;
@@ -286,6 +275,20 @@ describe("CLAUDE.md upward traversal", () => {
     expect(section).toContain("RULE_A");
     expect(section).toContain("RULE_B");
     expect(section).toContain("ROOT_RULES");
+  });
+
+  it("loads AGENTS.md alongside legacy rules without duplicating its content", async () => {
+    const project = await mkdtemp(join(tmpdir(), "oh-agents-"));
+    try {
+      await writeFile(join(project, "AGENTS.md"), "AGENT_PROJECT_PREFERENCE", "utf-8");
+      await writeFile(join(project, "CLAUDE.md"), "LEGACY_PROJECT_PREFERENCE", "utf-8");
+      const layers = await buildPromptLayers({ cwd: project, includeDelegation: false });
+      const prompt = renderPromptLayers(layers);
+      expect(prompt.split("AGENT_PROJECT_PREFERENCE")).toHaveLength(2);
+      expect(prompt).toContain("LEGACY_PROJECT_PREFERENCE");
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
   });
 
   it("returns null when no instruction files exist", async () => {

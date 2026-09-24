@@ -1,4 +1,5 @@
 import type { AgentJobHost, JobSnapshot } from "@vykor/jobs";
+import { QueryEngine, ToolRegistry, type StreamEvent } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { jobCancelTool, jobListTool, jobReadTool, jobWaitTool } from "./job-tools.js";
@@ -16,6 +17,61 @@ const snapshot: JobSnapshot = {
 };
 
 describe("job tools", () => {
+  it.each([300, 420])("bounds a requested %s second wait to a short interval", async (timeoutSeconds) => {
+    const wait = vi.fn(async () => ({ text: "", cursor: 4, truncated: false, snapshot, timedOut: true }));
+    const result = await jobWaitTool.execute({ jobIds: ["terminal-1"], timeoutSeconds }, context({ wait }));
+    expect(wait).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 60_000 }));
+    expect(result.isError).not.toBe(true);
+    expect(payload(result)).toMatchObject({ results: [{ snapshot: { status: "running" }, timedOut: true }] });
+  });
+
+  it("returns a running snapshot before the engine deadline without cancelling the job", async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn(async () => snapshot);
+      const wait = vi.fn(async (input) => {
+        await new Promise((resolve) => setTimeout(resolve, input.timeoutMs));
+        return { text: "still working", cursor: 4, truncated: false, snapshot, timedOut: true };
+      });
+      const registry = new ToolRegistry();
+      registry.register(jobWaitTool);
+      let request = 0;
+      const client = {
+        async *streamMessage() {
+          if (request++ === 0) {
+            yield { type: "tool_use_start" as const, toolUse: {
+              type: "tool_use" as const, id: "wait-1", name: "JobWait",
+              input: { jobIds: ["terminal-1"], timeoutSeconds: 420 },
+            } };
+            yield { type: "complete" as const, stopReason: "tool_use" };
+          } else {
+            yield { type: "text_delta" as const, delta: "The background job is still running." };
+            yield { type: "complete" as const, stopReason: "end_turn" };
+          }
+        },
+      };
+      const engine = new QueryEngine(client, registry,
+        { checkTool: async () => ({ action: "allow" as const }) },
+        { execute: async () => ({ blocked: false }) },
+        { sessionId: "session-1", toolTimeoutMs: 5_000 });
+      engine.setJobs(context({ wait, cancel }).jobs);
+      const events: StreamEvent[] = [];
+      const running = (async () => {
+        for await (const event of engine.submitMessage("Wait for the existing job")) events.push(event);
+      })();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await running;
+      const ended = events.find((event) => event.type === "tool_use_end");
+      expect(ended?.type).toBe("tool_use_end");
+      if (ended?.type !== "tool_use_end") throw new Error("Missing wait result");
+      expect(ended.result.isError).not.toBe(true);
+      expect(payload(ended.result)).toMatchObject({ results: [{ timedOut: true, snapshot: { status: "running" } }] });
+      expect(wait).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 4_000 }));
+      expect(cancel).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("lists only through the durable session owner", async () => {
     const list = vi.fn(async () => [snapshot]);
     const result = await jobListTool.execute({

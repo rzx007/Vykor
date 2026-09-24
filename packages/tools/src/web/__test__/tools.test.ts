@@ -9,6 +9,14 @@ import {
 } from "../types.js";
 
 describe("web tools", () => {
+  it("treats an empty search as a normal result so the query can be refined", async () => {
+    const tool = createWebSearchTool(runtime({
+      async search() { return { provider: "test-search", sources: [] }; },
+    }));
+    const result = await tool.execute({ query: "rare term" }, { cwd: process.cwd() });
+    expect(result.isError).not.toBe(true);
+    expect(result.content[0]).toMatchObject({ type: "text", text: expect.stringContaining("rare term") });
+  });
   it("keeps the WebSearch result rendering stable", async () => {
     const tool = createWebSearchTool(runtime({
       async search(request) {
