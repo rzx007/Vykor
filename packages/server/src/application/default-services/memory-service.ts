@@ -34,10 +34,20 @@ export async function openMemoryManager(cwd: string): Promise<{ manager: MemoryM
 }
 
 function toMemoryRecord(entry: MemoryEntry): MemoryEntryRecord {
+  const metadata = entry.metadata;
+  const sourceType = metadata?.source_type;
+  const source: MemoryEntryRecord["source"] = sourceType === "user_message" || sourceType === "manual_remember"
+    ? {
+        type: sourceType,
+        ...(typeof metadata?.source_session_id === "string" ? { sessionId: metadata.source_session_id } : {}),
+        ...(typeof metadata?.source_message_sha256 === "string" ? { messageSha256: metadata.source_message_sha256 } : {}),
+      }
+    : undefined;
   return {
     id: entry.id,
     content: entry.content,
     ...(entry.tags ? { tags: [...entry.tags] } : {}),
+    ...(source ? { source } : {}),
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   };

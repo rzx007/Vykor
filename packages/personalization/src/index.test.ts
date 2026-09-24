@@ -90,6 +90,26 @@ describe("factsToRulesMarkdown", () => {
 });
 
 describe("rules persistence", () => {
+  it("does not overwrite an unreadable facts file during a later extraction", () => {
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, "facts.json");
+    writeFileSync(path, "{incomplete-json", "utf-8");
+
+    expect(loadLocalRules(projectDir)).toBe("");
+    expect(() => updateRulesFromSession([
+      { id: "u-new", createdAt: 1, role: "user", content: "ssh ops@10.1.2.3" },
+    ], projectDir, "s1")).toThrow("Project facts file is unreadable");
+    expect(readFileSync(path, "utf-8")).toBe("{incomplete-json");
+  });
+
+  it("rejects a facts file whose facts property is not an array", () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "facts.json"), '{"facts":{}}', "utf-8");
+
+    expect(() => loadFacts(projectDir)).toThrow("Project facts file is unreadable");
+    expect(loadLocalRules(projectDir)).toBe("");
+  });
+
   it("loads only facts with a durable source, regardless of cached rules text", () => {
     saveFacts({ facts: [
       { key: "ip_address:10.9.9.9", type: "ip_address", label: "Server IP", value: "10.9.9.9", confidence: 0.7 },

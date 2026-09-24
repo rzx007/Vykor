@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { detectCredentialValue } from "@vykor/memory";
@@ -147,9 +147,13 @@ const rulesFile = (cwd: string): string => join(getLocalRulesDir(cwd), "rules.md
 const factsFile = (cwd: string): string => join(getLocalRulesDir(cwd), "facts.json");
 
 export function loadLocalRules(cwd: string): string {
-  const sourced = loadFacts(cwd).facts.filter((fact) =>
-    hasFactSource(fact) && !detectCredentialValue(fact.value));
-  return sourced.length ? factsToRulesMarkdown(sourced).trim() : "";
+  try {
+    const sourced = loadFacts(cwd).facts.filter((fact) =>
+      hasFactSource(fact) && !detectCredentialValue(fact.value));
+    return sourced.length ? factsToRulesMarkdown(sourced).trim() : "";
+  } catch {
+    return "";
+  }
 }
 
 export function saveLocalRules(content: string, cwd: string): string {
@@ -162,17 +166,30 @@ export function loadFacts(cwd: string): FactsFile {
   const path = factsFile(cwd);
   if (!existsSync(path)) return { facts: [], last_updated: null };
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf-8")) as FactsFile;
-    return { facts: parsed.facts ?? [], last_updated: parsed.last_updated ?? null };
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
+    if (!parsed || typeof parsed !== "object" ||
+        !Array.isArray((parsed as { facts?: unknown }).facts)) {
+      throw new Error("Invalid facts shape");
+    }
+    const factsFileContent = parsed as FactsFile;
+    return { facts: factsFileContent.facts, last_updated: factsFileContent.last_updated ?? null };
   } catch {
-    return { facts: [], last_updated: null };
+    throw new Error("Project facts file is unreadable");
   }
 }
 
 export function saveFacts(facts: FactsFile, cwd: string): void {
   mkdirSync(getLocalRulesDir(cwd), { recursive: true });
   const payload: FactsFile = { ...facts, last_updated: new Date().toISOString() };
-  writeFileSync(factsFile(cwd), JSON.stringify(payload, null, 2) + "\n", "utf-8");
+  const path = factsFile(cwd);
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, JSON.stringify(payload, null, 2) + "\n", "utf-8");
+    renameSync(temporaryPath, path);
+  } catch (error) {
+    try { unlinkSync(temporaryPath); } catch { /* The temporary file may not exist. */ }
+    throw error;
+  }
 }
 
 /** 按 key 去重合并：同 key 置信度高者胜（平手取新值）。 */

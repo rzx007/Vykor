@@ -908,6 +908,9 @@ importers:
       '@vykor/environment':
         specifier: workspace:*
         version: link:../environment
+      '@vykor/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@vykor/personalization':
         specifier: workspace:*
         version: link:../personalization

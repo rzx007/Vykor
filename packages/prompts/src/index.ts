@@ -10,6 +10,7 @@ import { join, resolve, dirname } from "node:path";
 import { platform, machine, homedir, hostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { getConfigDir, resolveGitRepository } from "@vykor/core";
+import { detectCredentialValue } from "@vykor/memory";
 import type { WorkStyle } from "@vykor/core";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
 import {
@@ -421,6 +422,15 @@ function truncateMarkdownContent(content: string, maxChars: number): string {
 }
 
 export function scanPersonalPromptFile(content: string): PromptFileScanIssue[] {
+  const credentialRisk = detectCredentialValue(content);
+  if (credentialRisk) {
+    return [{
+      severity: "block",
+      code: "credential_like_content",
+      message: `Credential-like content detected (${credentialRisk}).`,
+      match: "[redacted]",
+    }];
+  }
   const issues: PromptFileScanIssue[] = [];
   for (const rule of BLOCKING_PROMPT_FILE_PATTERNS) {
     const match = content.match(rule.pattern);

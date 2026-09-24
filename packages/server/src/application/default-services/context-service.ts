@@ -106,9 +106,16 @@ export function createDefaultContextService(
       const { manager, directory: memoryDirectory } = await openMemoryManager(cwd);
       const memoryEntries = await manager.getAll();
       const { skillRegistry } = await discoverVykorExtensions(cwd, settings);
-      const facts = loadFacts(cwd);
-      const sourcedFacts = facts.facts.filter(hasFactSource).length;
-      const unverifiedFacts = facts.facts.length - sourcedFacts;
+      let sourcedFacts = 0;
+      let unverifiedFacts = 0;
+      let factsUnreadable = false;
+      try {
+        const facts = loadFacts(cwd);
+        sourcedFacts = facts.facts.filter(hasFactSource).length;
+        unverifiedFacts = facts.facts.length - sourcedFacts;
+      } catch {
+        factsUnreadable = true;
+      }
       const legacyRulesExist = await pathExists(join(getConfigDir(), "local_rules", "rules.md"));
       const credentialsPath = getCredentialsFilePath();
       const credentialsConfigured = await pathExists(credentialsPath);
@@ -138,7 +145,7 @@ export function createDefaultContextService(
         },
         {
           source: "local_rules",
-          status: `${sourcedFacts} sourced, ${unverifiedFacts} unverified${legacyRulesExist ? "; legacy global rules preserved" : ""}`,
+          status: `${factsUnreadable ? "unreadable" : `${sourcedFacts} sourced, ${unverifiedFacts} unverified`}${legacyRulesExist ? "; legacy global rules preserved" : ""}`,
           written: "/remember success best-effort",
           injected: "system prompt volatile local rules",
           purpose: "machine environment facts",

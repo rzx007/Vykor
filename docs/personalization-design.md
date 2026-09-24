@@ -19,7 +19,7 @@ local_rules/
     └── rules.md     # 由 facts 重新生成的分组 Markdown（自动生成，勿手改）
 ```
 
-同项目下次会话启动时，只从 `facts.json` 中有来源的条目生成 system prompt 内容（CLAUDE.md 段之后）。`rules.md` 供人查看；旧全局文件即使存在也不自动注入或迁移。
+同项目下次会话启动时，只从 `facts.json` 中有来源且未命中凭据值检查的条目生成 system prompt 内容（CLAUDE.md 段之后）。`rules.md` 供人查看；旧全局文件即使存在也不自动注入或迁移。`facts.json` 先写临时文件再替换；旧文件不可读时停止合并并在 `/context status` 报告，不以空集合覆盖旧数据。
 
 ## 模块（对齐 Python）
 

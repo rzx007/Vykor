@@ -501,6 +501,30 @@ describe("MemoryManager Markdown store", () => {
     expect((await new MemoryManager(1000, dir).get("mem-old"))?.description).toBe("Use SQLite for session state");
   });
 
+  it("keeps an older credential-like file inspectable but out of recall and the index", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vk-memory-old-credential-"));
+    await writeFile(join(dir, "mem-secret.md"), renderMemoryFile({
+      schema_version: 1,
+      id: "mem-secret",
+      name: "Old note",
+      description: "Old note",
+      type: "project",
+      scope: "project",
+      importance: 0,
+      signature: "legacy-secret-signature",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      use_count: 0,
+    }, "api_key=example-secret-value"), "utf-8");
+    const manager = new MemoryManager(1000, dir);
+
+    expect(await manager.get("mem-secret")).toBeDefined();
+    expect(await manager.search({ query: "example-secret-value" })).toEqual([]);
+    expect(manager.selectRelevantForPrompt(10).text).not.toContain("example-secret-value");
+    await manager.add("Safe project decision");
+    expect((await readFile(join(dir, "MEMORY.md"), "utf-8"))).not.toContain("mem-secret");
+  });
+
   it("deduplicates identical content by signature", async () => {
     dir = await mkdtemp(join(tmpdir(), "ohmem-"));
     const mgr = new MemoryManager(1000, dir);
@@ -510,6 +534,29 @@ describe("MemoryManager Markdown store", () => {
     expect(mgr.count()).toBe(1);
     const mdFiles = (await readdir(dir)).filter((f) => f.endsWith(".md") && f !== "MEMORY.md");
     expect(mdFiles).toHaveLength(1);
+  });
+
+  it("adds verified provenance to an identical older memory without creating a duplicate", async () => {
+    dir = await mkdtemp(join(tmpdir(), "vk-memory-provenance-dedup-"));
+    const manager = new MemoryManager(1000, dir);
+    const old = await manager.add("Use SQLite for session state");
+    const repeated = await manager.add("Use SQLite for session state", [], {
+      source_type: "user_message", source_session_id: "s1", source_message_sha256: "verified-message-hash",
+    });
+
+    expect(repeated.id).toBe(old.id);
+    expect((await new MemoryManager(1000, dir).get(old.id))?.metadata).toMatchObject({
+      source_type: "user_message", source_session_id: "s1", source_message_sha256: "verified-message-hash",
+    });
+    expect((await manager.getAll())).toHaveLength(1);
+  });
+
+  it("does not deduplicate identical text across different scopes", async () => {
+    const manager = new MemoryManager();
+    const privateEntry = await manager.add("Same durable note", [], undefined, { scope: "private" });
+    const projectEntry = await manager.add("Same durable note", [], undefined, { scope: "project" });
+
+    expect(projectEntry.id).not.toBe(privateEntry.id);
   });
 
   it("maintains a MEMORY.md index with one pointer per entry", async () => {

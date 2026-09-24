@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerPluginAgents } from "@vykor/coordinator";
-import { saveFacts } from "@vykor/personalization";
+import { getLocalRulesDir, saveFacts } from "@vykor/personalization";
 
 vi.mock("@vykor/services", () => ({
   startDreamNow: vi.fn(),
@@ -101,6 +101,19 @@ describe("default daemon application services", () => {
     const status = await context.status({ cwd: temporaryDirectory });
     expect(status.report).toContain("1 sourced, 1 unverified");
     expect(status.report).not.toContain("10.9.9.9");
+  });
+
+  it("reports unreadable project facts without exposing or overwriting them", async () => {
+    const factDir = getLocalRulesDir(temporaryDirectory);
+    mkdirSync(factDir, { recursive: true });
+    writeFileSync(join(factDir, "facts.json"), "{incomplete-json", "utf-8");
+    const context = createDefaultContextService({
+      current: { model: "m", apiFormat: "anthropic", maxTurns: 50, permission: { mode: "default" } } as never,
+    });
+
+    const status = await context.status({ cwd: temporaryDirectory });
+    expect(status.report).toContain("unreadable");
+    expect(status.report).not.toContain("{incomplete-json");
   });
 
   it("reports preserved legacy global rules without injecting them", async () => {

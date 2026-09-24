@@ -88,7 +88,7 @@ volatile
 - 是否希望先给风险点
 - 常用工作流习惯
 
-它不应该由自动抽取静默改写。自动候选应先进 `user_profile_pending/*.json`，审批后再合并。
+它不应该由自动抽取静默改写。自动候选应先进 `user_profile_pending/*.json`，审批后再合并。个人提示文件在读入和受管写入时会检查明显的凭据值；命中时不注入提示词，诊断不回显原值。
 
 入口：
 
@@ -174,6 +174,7 @@ Project Memory 是项目级长期语义记忆，适合保存无法稳定从代�
 - 目录：`getProjectMemoryDir(cwd)`
 - 管理：`MemoryManager`
 - 运行时检索：`createAgentMemoryRuntime()` + `QueryEngine.setMemoryRetriever()`
+- 来源查看：`/memory show` 或记忆 API 的 `source` 字段（来源类型、会话 ID、消息指纹）
 - 手动命令：`/memory`、`/remember`
 - 自动抽取：`maybeExtractMemoriesAfterTurn()`
 

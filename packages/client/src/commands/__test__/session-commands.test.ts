@@ -398,6 +398,21 @@ describe("dispatchSessionCommand", () => {
       .resolves.toBe("unhandled");
   });
 
+  it("shows a memory's stored source in /memory show", async () => {
+    const client = fakeClient({
+      getMemory: vi.fn(async () => ({
+        id: "mem-1", content: "Use SQLite for session state", createdAt: 1, updatedAt: 2,
+        source: { type: "user_message", sessionId: "session-123", messageSha256: "verified-message-hash" },
+      })),
+    });
+    const { host: h, emitted } = host({ client });
+
+    await dispatchSessionCommand({ name: "/memory", args: "show mem-1" }, h);
+
+    expect(emitted.at(-1)).toContain("Source:   user_message");
+    expect(emitted.at(-1)).toContain("Session:  session-123");
+  });
+
   it("counts Jobs in session stats without background-task terminology", async () => {
     const listJobs = vi.fn(async () => [agentJob, job({ id: "shell-1", kind: "shell" })]);
     const client = fakeClient({

@@ -485,6 +485,9 @@ export async function dispatchSessionCommand(
           `Created:  ${new Date(entry.createdAt).toISOString()}`,
           `Updated:  ${new Date(entry.updatedAt).toISOString()}`,
           `Tags:     ${entry.tags?.join(", ") ?? "(none)"}`,
+          `Source:   ${entry.source?.type ?? "(unknown)"}`,
+          ...(entry.source?.sessionId ? [`Session:  ${entry.source.sessionId}`] : []),
+          ...(entry.source?.messageSha256 ? [`Message:  ${entry.source.messageSha256}`] : []),
           "",
           entry.content,
         ].join("\n");

@@ -96,12 +96,15 @@ export async function extractMemories(options: {
   }
 
   await options.manager.reload();
-  const manifest = (await options.manager.getAll())
+  const manifest = (await options.manager.getActive())
     .slice(0, 80)
     .map((entry) => `- ${entry.name ?? entry.id}: ${(entry.description ?? "").slice(0, 80)}`)
     .join("\n");
   const transcript = options.messages.slice(-12).map(summarizeMessage);
-  const prompt = buildMemoryExtractionPrompt(manifest, transcript);
+  const prompt = buildMemoryExtractionPrompt(manifest, transcript) +
+    (options.automatic
+      ? "\nFor automatic memory, copy body directly from the cited user evidence. Do not paraphrase or infer."
+      : "");
 
   let finalText = "";
   for await (const event of options.apiClient.streamMessage({
@@ -131,8 +134,13 @@ export async function extractMemories(options: {
   const titles: string[] = [];
   for (const record of records) {
     const quote = record.evidence?.trim();
-    const sourceText = quote && userTexts.find((text) => text.includes(quote));
-    if (options.automatic && (record.scope !== "project" || !sourceText)) continue;
+    const normalizedQuote = quote ? quote.replace(/\s+/g, " ") : "";
+    const sourceText = normalizedQuote && userTexts.find((text) =>
+      text.replace(/\s+/g, " ").includes(normalizedQuote));
+    if (options.automatic && (
+      record.scope !== "project" || !sourceText ||
+      !normalizedQuote.includes(record.body.replace(/\s+/g, " ").trim())
+    )) continue;
     if ([record.title, record.description, record.body, ...record.tags].some(
       (value) => detectCredentialValue(value),
     )) continue;

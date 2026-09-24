@@ -19,6 +19,7 @@
   "dependencies": {
     "@vykor/environment": "workspace:*",
     "@vykor/core": "workspace:*",
+    "@vykor/memory": "workspace:*",
     "@vykor/personalization": "workspace:*",
     "@vykor/sandbox": "workspace:*"
   },

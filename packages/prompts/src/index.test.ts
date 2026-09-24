@@ -820,6 +820,30 @@ describe("prompt layers with SOUL.md and USER.md", () => {
     }
   });
 
+  it("blocks credential-like USER.md content on write and read without echoing the value", async () => {
+    const cfgDir = await mkdtemp(join(tmpdir(), "vk-user-credential-"));
+    const oldConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = cfgDir;
+    const syntheticCredential = "api_key=example-secret-value";
+    try {
+      const issues = scanPersonalPromptFile(syntheticCredential);
+      expect(issues).toEqual([expect.objectContaining({
+        code: "credential_like_content",
+        severity: "block",
+        match: "[redacted]",
+      })]);
+      expect(JSON.stringify(issues)).not.toContain(syntheticCredential);
+      await expect(appendUserProfileUpdate(syntheticCredential)).rejects.toThrow("credential_like_content");
+
+      await writeFile(join(cfgDir, "USER.md"), syntheticCredential, "utf-8");
+      expect(await loadUserProfile()).toBeNull();
+    } finally {
+      if (oldConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = oldConfigDir;
+      await rm(cfgDir, { recursive: true, force: true });
+    }
+  });
+
   it("serializes concurrent USER.md updates without losing successful writes", async () => {
     const cfgDir = await mkdtemp(join(tmpdir(), "vk-user-append-concurrent-"));
     const oldConfigDir = process.env.VYKOR_CONFIG_DIR;

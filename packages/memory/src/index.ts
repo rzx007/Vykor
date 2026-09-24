@@ -369,12 +369,21 @@ export class MemoryManager {
     }
 
     const type = options?.type ?? DEFAULT_MEMORY_TYPE;
+    const scope = options?.scope ?? DEFAULT_MEMORY_SCOPE;
     const signature = computeMemorySignature(content, type, "knowledge");
 
     // Signature dedup: if identical content already exists, return it instead
     // of writing a duplicate file.
     for (const existing of this.entries.values()) {
-      if (existing.signature === signature && existing.metadata?.disabled !== true) {
+      if (existing.signature === signature && existing.scope === scope && existing.metadata?.disabled !== true) {
+        if (!existing.metadata?.source_type && typeof metadata?.source_type === "string") {
+          const sourceFields = Object.fromEntries(
+            ["source_type", "source_session_id", "source_message_sha256"]
+              .filter((key) => typeof metadata[key] === "string")
+              .map((key) => [key, metadata[key]]),
+          );
+          await this.update(existing.id, { metadata: { ...existing.metadata, ...sourceFields } });
+        }
         return existing;
       }
     }
@@ -391,7 +400,7 @@ export class MemoryManager {
       name: options?.name?.trim() || firstContentLine(content) || content.trim().slice(0, 200),
       description: options?.description?.trim() || firstContentLine(content) || content.trim().slice(0, 200),
       type,
-      scope: options?.scope ?? DEFAULT_MEMORY_SCOPE,
+      scope,
       importance: options?.importance ?? 0,
       signature,
       useCount: 0,
@@ -556,6 +565,11 @@ export class MemoryManager {
     return [...this.entries.values()];
   }
 
+  async getActive(): Promise<readonly MemoryEntry[]> {
+    await this.ensureLoaded();
+    return this.activeEntries();
+  }
+
   async reload(): Promise<void> {
     if (!this.storageDir) return;
     await this.writeQueue;
@@ -640,7 +654,10 @@ export class MemoryManager {
   }
 
   private activeEntries(): MemoryEntry[] {
-    const enabled = [...this.entries.values()].filter((entry) => entry.metadata?.disabled !== true);
+    const enabled = [...this.entries.values()].filter((entry) =>
+      entry.metadata?.disabled !== true && !containsCredentialLikeValue([
+        entry.content, entry.name, entry.description, ...(entry.tags ?? []),
+      ], entry.metadata));
     const superseded = new Set<string>();
     for (const entry of enabled) {
       const raw = entry.metadata?.supersedes;

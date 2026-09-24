@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -8,7 +8,7 @@ import type {
   StreamEvent,
   StreamingMessageClient,
 } from "@vykor/core";
-import { MemoryManager } from "@vykor/memory";
+import { MemoryManager, renderMemoryFile } from "@vykor/memory";
 import { getProjectMemoryDir } from "@vykor/core";
 import { describe, expect, it } from "vitest";
 
@@ -50,6 +50,96 @@ function fakeClient(responseText: string, onStream?: () => void): StreamingMessa
 }
 
 describe("extractMemories", () => {
+  it("rejects an automatic memory whose body is not in its quoted user statement", async () => {
+    const manager = new MemoryManager();
+    const result = await extractMemories({
+      apiClient: fakeClient(JSON.stringify({ memories: [{
+        title: "Unsupported claim", body: "Production runs on Mars", scope: "project", evidence: "yes",
+      }] })),
+      model: "test-model",
+      messages: [
+        { type: "user", content: "yes" },
+        { type: "assistant", content: "Production runs on Mars" },
+      ],
+      manager, memoryDir: resolve("memory"), cwd: resolve("project"),
+      sessionId: "session-unsupported-claim", automatic: true,
+    });
+
+    expect(result.writtenIds).toEqual([]);
+    expect(await manager.getAll()).toEqual([]);
+  });
+
+  it("accepts a direct user statement when the transcript folds line breaks", async () => {
+    const manager = new MemoryManager();
+    const result = await extractMemories({
+      apiClient: fakeClient(JSON.stringify({ memories: [{
+        title: "Storage", body: "Use SQLite for session state", scope: "project",
+        evidence: "Use SQLite for session state",
+      }] })),
+      model: "test-model",
+      messages: [
+        { type: "user", content: "Use SQLite\nfor session state" },
+        { type: "assistant", content: "noted" },
+      ],
+      manager, memoryDir: resolve("memory"), cwd: resolve("project"),
+      sessionId: "session-multiline", automatic: true,
+    });
+
+    expect(result.writtenIds).toHaveLength(1);
+  });
+
+  it("attaches the user source when automatic extraction matches an older unsourced memory", async () => {
+    const manager = new MemoryManager();
+    const old = await manager.add("Use SQLite for session state");
+    const result = await extractMemories({
+      apiClient: fakeClient(JSON.stringify({ memories: [{
+        title: "Storage", body: "Use SQLite for session state", scope: "project",
+        evidence: "Use SQLite for session state",
+      }] })),
+      model: "test-model",
+      messages: [
+        { type: "user", content: "Use SQLite for session state" },
+        { type: "assistant", content: "noted" },
+      ],
+      manager, memoryDir: resolve("memory"), cwd: resolve("project"),
+      sessionId: "session-new-source", automatic: true,
+    });
+
+    expect(result.writtenIds).toEqual([old.id]);
+    expect((await manager.get(old.id))?.metadata).toMatchObject({
+      source_type: "user_message", source_session_id: "session-new-source",
+    });
+  });
+
+  it("omits legacy credential-like entries from the model's existing-memory manifest", async () => {
+    const memoryDir = await mkdtemp(join(tmpdir(), "vk-memory-manifest-"));
+    try {
+      await writeFile(join(memoryDir, "mem-legacy.md"), renderMemoryFile({
+        schema_version: 1, id: "mem-legacy", name: "api_key=example-secret-value",
+        description: "api_key=example-secret-value", type: "project", scope: "project",
+        importance: 0, signature: "legacy-signature", created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z", use_count: 0,
+      }, "Old credential note"), "utf-8");
+      let prompt = "";
+      const client: StreamingMessageClient = {
+        async *streamMessage(request): AsyncIterable<StreamEvent> {
+          prompt = String(request.messages[0]?.content ?? "");
+          yield { type: "text_delta", delta: '{"memories":[]}' };
+          yield { type: "complete", stopReason: "end_turn" };
+        },
+      };
+
+      await extractMemories({
+        apiClient: client, model: "test-model", messages,
+        manager: new MemoryManager(100, memoryDir), memoryDir,
+        cwd: resolve("project"), sessionId: "session-123", automatic: true,
+      });
+      expect(prompt).not.toContain("example-secret-value");
+    } finally {
+      await rm(memoryDir, { recursive: true, force: true });
+    }
+  });
+
   it("skips a credential candidate while keeping a safe memory from the same response", async () => {
     const manager = new MemoryManager();
     const result = await extractMemories({

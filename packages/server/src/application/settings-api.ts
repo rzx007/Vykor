@@ -120,6 +120,11 @@ export interface MemoryEntryRecord {
   id: string;
   content: string;
   tags?: string[];
+  source?: {
+    type: "user_message" | "manual_remember";
+    sessionId?: string;
+    messageSha256?: string;
+  };
   createdAt: number;
   updatedAt: number;
 }
