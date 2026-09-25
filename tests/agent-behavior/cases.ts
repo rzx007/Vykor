@@ -78,7 +78,18 @@ export const behaviorCases: BehaviorCase[] = [
     scripted: () => scripted([{ name: "RunRelevantTest" }], "Relevant test exited 0; no edits needed."),
     setup() { let checks = 0; return {
       tools: [tool("RunRelevantTest", async () => { checks++; return text("exit 0; 1 test passed"); })],
-      verify: (o) => ({ passed: checks === 1 && o.finalText.includes("exited 0"), reason: `checks=${checks}; final=${o.finalText}` }),
+      verify: (o) => {
+        const started = o.events.find((event) => event.type === "tool.started" && event.data.toolUse.name === "RunRelevantTest");
+        const completed = o.events.find((event) => event.type === "tool.completed" &&
+          event.data.toolUseId === (started?.type === "tool.started" ? started.data.toolUse.id : undefined));
+        const toolPassed = completed?.type === "tool.completed" && !completed.data.result.isError &&
+          completed.data.result.content.some((part) => part.type === "text" &&
+            /\bexit\s+0\b/i.test(part.text) && /\btest\s+passed\b/i.test(part.text));
+        const answerPassed = /\bpassed\b|\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*0\b/i.test(o.finalText);
+        const answerFailed = /\b(?:fail(?:ed|ure|ing)?|non[- ]?zero)\b|\b(?:not|didn't)\s+(?:yet\s+)?pass(?:ed)?\b|\b0\s+tests?\s+passed\b|\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*(?:[1-9]\d*|-\d+)\b/i.test(o.finalText);
+        return { passed: checks === 1 && toolPassed && answerPassed && !answerFailed,
+          reason: `checks=${checks}; final=${o.finalText}` };
+      },
     }; },
   },
   {

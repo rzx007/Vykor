@@ -21,6 +21,47 @@ function observation(finalText = "", toolNames: string[] = []): BehaviorObservat
 }
 
 describe("case verifiers reject incomplete evidence", () => {
+  it.each([
+    ["Relevant test exited 0; no edits needed.", "passed"],
+    ["Test passed: exit code 0, 1 test passed.", "passed"],
+    ["The relevant test passed.", "passed"],
+    ["Test failed: exit code 1.", "failed"],
+    ["1 test passed, but exit code 1.", "failed"],
+    ["The relevant test did not pass.", "failed"],
+    ["The relevant test didn't pass.", "failed"],
+    ["Exit code 0, but the test failed.", "failed"],
+    ["0 tests passed.", "failed"],
+  ] as const)("C3 classifies grounded answer %s", async (answer, expected) => {
+    const item = behaviorCases.find((entry) => entry.id === "C3")!;
+    let requests = 0;
+    const client: StreamingMessageClient = { async *streamMessage() {
+      if (requests++ === 0) {
+        yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const,
+          id: "relevant-test", name: "RunRelevantTest", input: {} } };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      } else {
+        yield { type: "text_delta" as const, delta: answer };
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      }
+    } };
+    const result = await runBehaviorCase(item, { client, model: "scripted", revision: "c3-phrasing",
+      repeat: 1, maxRequests: 4, timeoutMs: 10_000 });
+    expect(result.evidence?.events.find((event) => event.type === "tool.completed"))
+      .toMatchObject({ content: [{ type: "text", text: "exit 0; 1 test passed" }] });
+    expect(result.status).toBe(expected);
+  });
+
+  it("C3 rejects an unsupported success claim without running the relevant test", async () => {
+    const item = behaviorCases.find((entry) => entry.id === "C3")!;
+    const client: StreamingMessageClient = { async *streamMessage() {
+      yield { type: "text_delta" as const, delta: "The relevant test passed." };
+      yield { type: "complete" as const, stopReason: "end_turn" };
+    } };
+    const result = await runBehaviorCase(item, { client, model: "scripted", revision: "c3-missing-tool",
+      repeat: 1, maxRequests: 2, timeoutMs: 10_000 });
+    expect(result.status).toBe("failed");
+  });
+
   it.each([true, false])("J3 rejects B before compaction or absent after compaction (early B=%s)", async (earlyB) => {
     const item = behaviorCases.find((entry) => entry.id === "J3")!;
     let request = 0;
