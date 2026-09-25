@@ -17,7 +17,7 @@ const sharedBudget = liveConfig ? { remainingRequests: liveConfig.maxTotalReques
 const report = reserveBehaviorReport(process.env.VYKOR_EVAL_OUT);
 console.info(`Behavior evaluation report: ${report.path}`);
 const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-const fixtureVersion = "agent-behavior-v3";
+const fixtureVersion = "agent-behavior-v4";
 const records: BehaviorResult[] = [];
 
 const caseMetadata = selectedCases.map(({ id, prompt, manualChecks, setup }) => {

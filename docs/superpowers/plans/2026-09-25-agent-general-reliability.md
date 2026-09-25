@@ -1,7 +1,7 @@
 # 智能体通用可靠性与工具发现实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：阶段 A 与工具目录测量已交付，通过分项审核、整体审核及修订复审；阶段 B/C 尚未启动。日期：2026-09-25。
+> 状态：阶段 A 与工具目录测量已交付并通过审核。阶段 B 已完成 OpenCode Go live 接线和 C3 单样本 smoke；完整矩阵与提示词候选对照尚未完成。阶段 C 未启动。日期：2026-09-25。
 > 用户已授权开始执行，并明确要求直接使用当前工作区、不创建 worktree。阶段 B 的真实模型评测和阶段 C 的推广仍须满足文中门槛。
 
 **Goal:** 让智能体根据准确的执行事实、任务约束和完成证据选择下一步，减少误停、无效重试、重复验证和上下文遗忘，并在工具较多时保持选择准确。
@@ -530,7 +530,7 @@ pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts src/provid
 | 2：模型可见反馈 | 已实现、分项审核通过 | `7ba77722`；完整事件与模型预算版分开，重载不重复追加前缀 |
 | 3：常用工具 | 已实现、两轮修订后通过审核 | `0938f414`、`4b7e3a31`、`ad43a3ad`；修正未知 Shell 结果、完整 Job ID 和真实 Agent 的可信 Read 接线 |
 | 3A：压缩保留事实 | 已实现、分项审核通过 | `b77b93d2`；验证真正发出的摘要输入，包含廉价清理和备用路径 |
-| 4：提示词调整 | 未启动 | 没有获批 live 预算和可定位的真实行为对照证据；保留现有生产指导 |
+| 4：提示词调整 | 12×3 live 阶段 A 矩阵完成；生产提示词未改 | 完整矩阵修正夹具后完成。raw 4 fail经证据复核为verifier false negative；有效结果30通过、6条人工评分通过，未观察到跨任务共同提示词失误 |
 | 5：目录测量 | 已实现、修订后通过审核 | `fe4b0e53`、`190f4839`；实际请求统计与两工具任务证据；阶段 C 暂不准入 |
 | 6：按需加载 | 未启动 | 尚无真实已授权目录及至少三个受影响任务的证据 |
 | 7：交付验证 | 已完成 | 公共客户端、六包类型和文档检查通过；整体审核四项评测问题在 `c3e35b41` 修复并复审通过 |
@@ -554,6 +554,11 @@ pnpm --filter @vykor/api exec vitest run src/providers/openai.test.ts src/provid
 - 任务 7：控制器直接运行 core / protocol / tools / agent-runtime / server / client 六包类型检查，全部退出码 0，约 20 秒；本轮评测另使用专用 TypeScript 配置检查，不依赖提交 hook 对顶层测试目录的覆盖。
 - 最终修订：评测全目录 67 项通过（13.13 秒），专用类型检查退出码 0（6.02 秒）；随后补强因果反例断言，定向 9 项通过（8.70 秒）。提交后 36 个样本通过套件断言（10.06 秒），实际内容状态为 30 passed、6 pending_review、0 failed，全部保存 evidence。它们不是 36 项内容质量均通过。
 - 最终工件位于系统临时目录，文件名为 `vykor-agent-baseline-453b7f69-e3af-4bc4-9b60-014058e5dc28.json`，revision=`c3e35b41`，fixture=`agent-behavior-v3`。整体审核者读回确认三次 J3 的事件顺序，并确认四项 Important 全部关闭；没有重复运行已覆盖测试。
+- OpenCode Go 的 C3 smoke 使用 `deepseek-v4.1-flash`，最终判分通过：1 个逻辑请求、0 工具调用、输入 1,936 token、输出 156 token；金额和 provider 账单未知。报告位于系统临时目录 `vykor-live-c3-smoke-d645c5ac-49a9-46b5-adfd-b37ec1c983b5.json`。
+- 首轮 12 题 live 探测曾运行到 12/36 后停止；轨迹确认工具 schema 缺失、代码诊断为空及资料目标不明，模型因输入不足猜参数或拒绝猜测。该版本工件 `vykor-live-stage-a-fef71ae9-3c04-4e5a-acd4-712d48d83693.json` 只作诊断，不作效果评分。
+- 修好 12 个 case 的描述、schema、初态、source 内容和图像路径后，按原计划完成 12 题×3。v4 raw 工件 `vykor-live-stage-a-fixtures-v4-7c4b8ec9-f5c9-429b-beb6-d06d48d83693.json` 共 36 条、90 次逻辑请求，provider 回报输入 232,769 / 输出 16,295 token，账单未知。raw status 为 26 passed、6 pending_review、4 failed。
+- 复核 4 条 raw failed 的轨迹发现皆为 verifier false negative：C1 两条已按输入诊断读文件、打补丁、定向复测 exit 0；C3 一条直接复述用户提供结果且未调用工具；J2 一条表达“仍在运行、退出状态尚不可得”。新增本地因果判分用例逐一验证后，等效结果为 30 passed、6 内容已人工复核通过、0 个确认的模型行为失败。raw JSON 未改写。R2 三条人工审查为对裸 yes/no 来源保持不确定；F2 三条图像解释人工核对后也符合图中布局与主题差异。
+- 工具目录小矩阵另有 54/54 scripted pass；C3/共享预算/fixture verifier定向测试及提交钩子均通过。整个过程未调用 Codex 订阅模型；provider收费金额未知。
 - 这些是不同提交上的分项证据，存在重叠，不相加冒称独立测试总数。未重新运行全仓 `pnpm test`，也未使用真实模型 API。
 
 整体审核保留两项非阻塞测试完善建议：增加重启后清空原始退出码的专门断言、增加同一 HTTP 响应到客户端的组合测试。相关实现及现有分层契约测试已经通过；本次不为这两项扩大执行范围。阶段 B/C 尚未满足门槛，忽略目录中的执行记录继续保留以便后续接续，不作为产品代码提交。

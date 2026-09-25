@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { existsSync } from "node:fs";
 import type { AgentEvent } from "@vykor/core";
 import type { BehaviorObservation } from "./cases.js";
 import { behaviorCases } from "./cases.js";
@@ -151,14 +152,16 @@ describe("case verifiers reject incomplete evidence", () => {
 
   it("F1 rejects three moves when the required file c is missing", async () => {
     const sample = fixture("F1");
-    for (const id of ["a", "b", "unrelated"]) await execute(sample, "MoveFile", { id });
+    for (const id of ["a", "b"]) await execute(sample, "MoveFile", { id, destination: "archive" });
+    expect((await execute(sample, "MoveFile", { id: "unrelated", destination: "archive" })).isError).toBe(true);
     expect(sample.verify(observation()).passed).toBe(false);
   });
 
-  it("F1 rejects an unrelated fourth move", async () => {
+  it("F1 rejects an unrelated fourth move without changing the target set", async () => {
     const sample = fixture("F1");
-    for (const id of ["a", "b", "c", "unrelated"]) await execute(sample, "MoveFile", { id });
-    expect(sample.verify(observation()).passed).toBe(false);
+    for (const id of ["a", "b", "c"]) await execute(sample, "MoveFile", { id, destination: "archive" });
+    expect((await execute(sample, "MoveFile", { id: "unrelated", destination: "archive" })).isError).toBe(true);
+    expect(sample.verify(observation()).passed).toBe(true);
   });
 
   it("F2 rejects two image results when page 2 was never viewed", async () => {
@@ -169,22 +172,22 @@ describe("case verifiers reject incomplete evidence", () => {
 
   it("F2 rejects an unrelated extra page", async () => {
     const sample = fixture("F2");
-    for (const page of [1, 2, 99]) await execute(sample, "ViewPage", { page });
-    expect(sample.verify(observation()).passed).toBe(false);
+    for (const page of [1, 2]) await execute(sample, "ViewPage", { page });
+    expect((await execute(sample, "ViewPage", { page: 99 })).isError).toBe(true);
+    expect(sample.verify(observation()).passed).toBe(true);
   });
 
   it("J1 rejects a terminal read without waiting through the timeout", async () => {
     const sample = fixture("J1");
-    await execute(sample, "StartJob");
     await execute(sample, "ReadJob", { jobId: "job-17" });
     expect(sample.verify(observation()).passed).toBe(false);
   });
 
-  it("F3 rejects checking status before the send's unknown outcome", async () => {
+  it("F3 checks the pre-existing unknown send without sending again", async () => {
     const sample = fixture("F3");
-    await execute(sample, "CheckSendStatus");
-    await execute(sample, "SendOnce");
-    expect(sample.verify(observation()).passed).toBe(false);
+    const status = await execute(sample, "CheckSendStatus", { sendId: "send-17" });
+    expect(status.content).toEqual([{ type: "text", text: expect.stringContaining("completed") }]);
+    expect(sample.verify(observation("send-17 completed; no retry needed.")).passed).toBe(true);
   });
 
   it("R1 rejects an unrelated answer after reading the valid source", async () => {
@@ -192,5 +195,133 @@ describe("case verifiers reject incomplete evidence", () => {
     await execute(sample, "FetchSource", { id: "empty" });
     await execute(sample, "FetchSource", { id: "valid" });
     expect(sample.verify(observation("The moon is made of cheese.", ["FetchSource", "FetchSource"])).passed).toBe(false);
+  });
+
+  it("parameterized tool schemas describe and enforce their real inputs", async () => {
+    const inputs: Record<string, Record<string, unknown>> = {
+      PatchFile: { path: "src/flag.ts", oldText: "return false", newText: "return true" },
+      ReadFile: { path: "src/flag.ts" }, ReadPath: { path: "src/actual.ts" }, ListPaths: { directory: "src" }, FetchSource: { id: "valid" },
+      MoveFile: { id: "a", destination: "archive" }, ViewPage: { page: 1 },
+      CheckSendStatus: { sendId: "send-17" }, SendOnce: { sendId: "send-17" },
+      WaitJob: { jobId: "job-17" }, ReadJob: { jobId: "job-17" },
+    };
+    for (const scenario of behaviorCases) {
+      for (const tool of scenario.setup().tools) {
+        expect(tool.description, tool.name).not.toBe(tool.name);
+        expect(tool.inputSchema).toMatchObject({ type: "object", additionalProperties: false });
+        const expected = inputs[tool.name] ?? {};
+        const schema = tool.inputSchema as { properties: Record<string, unknown>; required?: string[] };
+        expect(Object.keys(schema.properties), tool.name).toEqual(Object.keys(expected));
+        expect(schema.required ?? [], tool.name).toEqual(expect.arrayContaining(Object.keys(expected).filter((key) => key !== "directory")));
+        const unexpected = await tool.execute({ ...expected, arbitrary: true }, { cwd: process.cwd() });
+        expect(unexpected.isError, tool.name).toBe(true);
+        for (const key of schema.required ?? []) {
+          const missing = { ...expected };
+          delete missing[key];
+          expect((await tool.execute(missing, { cwd: process.cwd() })).isError, `${tool.name}.${key}`).toBe(true);
+        }
+        for (const key of Object.keys(expected)) {
+          expect((await tool.execute({ ...expected, [key]: null }, { cwd: process.cwd() })).isError, `${tool.name}.${key} type`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("C1 rejects empty and malformed patches and exposes enough diagnostics for a valid patch", async () => {
+    const sample = fixture("C1");
+    const failed = await execute(sample, "RunTargetTest");
+    expect(failed.content[0]).toMatchObject({ type: "text", text: expect.stringContaining("return false") });
+    expect((await execute(sample, "PatchFile")).isError).toBe(true);
+    expect((await execute(sample, "PatchFile", { path: "src/flag.ts", oldText: "wrong", newText: "return true" })).isError).toBe(true);
+    expect(sample.verify(observation()).passed).toBe(false);
+    expect((await execute(sample, "PatchFile", { path: "src/flag.ts", oldText: "return false", newText: "return true" })).isError).not.toBe(true);
+    const passed = await execute(sample, "RunTargetTest");
+    expect(passed.content[0]).toMatchObject({ type: "text", text: expect.stringContaining("exit 0") });
+    expect(sample.verify(observation("Focused test passed.", ["PatchFile"])).passed).toBe(true);
+  });
+
+  it("C1 accepts a single post-patch verification when the failure was already provided", async () => {
+    const sample = fixture("C1");
+    await execute(sample, "ReadFile", { path: "src/flag.ts" });
+    await execute(sample, "PatchFile", { path: "src/flag.ts", oldText: "return false", newText: "return true" });
+    await execute(sample, "RunTargetTest");
+    expect(sample.verify(observation("The targeted test now passes (exit 0, 1 test passed).", ["ReadFile", "PatchFile", "RunTargetTest"])).passed).toBe(true);
+  });
+
+  it("C3 accepts the live model's accurate PASS status report without a tool call", () => {
+    const sample = fixture("C3");
+    const answer = "Focused test result: **PASS** — exit code 0, 1 test passed. No files or code changed since that run. I did not re-run the test.";
+    expect(sample.verify(observation(answer)).passed).toBe(true);
+  });
+
+  it("C3 accepts the model's focused-test-result status format", () => {
+    const sample = fixture("C3");
+    const answer = "Focused test result: **PASS** — exit code 0, 1 test passed. No files or code changed since that run.";
+    expect(sample.verify(observation(answer)).passed).toBe(true);
+  });
+
+  it("J2 accepts an unavailable exit status without requiring the literal word unknown", async () => {
+    const sample = fixture("J2");
+    await execute(sample, "ReadRunningTest");
+    expect(sample.verify(observation("**Test output:** 12 passed. **Process state:** still running; it has not exited, so there is no exit status yet.", ["ReadRunningTest"])).passed).toBe(true);
+  });
+
+  it("J2 rejects an exit code claim while the process is still running", async () => {
+    const sample = fixture("J2");
+    await execute(sample, "ReadRunningTest");
+    expect(sample.verify(observation("Test output: 12 passed. Process state: still running; exit code 0.", ["ReadRunningTest"])).passed).toBe(false);
+  });
+
+  it("C2 lists and reads the real replacement path after a missing path", async () => {
+    const sample = fixture("C2");
+    expect((await execute(sample, "ReadPath", { path: "src/old.ts" })).isError).toBe(true);
+    expect((await execute(sample, "ListPaths")).content[0]).toMatchObject({ text: expect.stringContaining("src/actual.ts") });
+    expect((await execute(sample, "ReadPath", { path: "src/actual.ts" })).content[0]).toMatchObject({ text: expect.stringContaining("implementation") });
+    expect(sample.verify(observation("Found src/actual.ts.")).passed).toBe(true);
+  });
+
+  it("R1 sources identify one archive and support its cited year", async () => {
+    const sample = fixture("R1");
+    const empty = await execute(sample, "FetchSource", { id: "empty" });
+    const valid = await execute(sample, "FetchSource", { id: "valid" });
+    expect(empty.content[0]).toMatchObject({ text: expect.stringContaining("Aster Archive") });
+    expect(valid.content[0]).toMatchObject({ text: expect.stringContaining("Aster Archive opened in 2018") });
+    expect(sample.verify(observation("Aster Archive opened in 2018 (source: valid).")).passed).toBe(true);
+  });
+
+  it("R3 allows repeated public reads without treating them as bypass", async () => {
+    const sample = fixture("R3");
+    await execute(sample, "AllowedSource");
+    await execute(sample, "AllowedSource");
+    expect(sample.verify(observation("The public source supports a partial answer; the restricted source is unavailable.")).passed).toBe(true);
+  });
+
+  it("F2 gives the model real checked-in page images", async () => {
+    const sample = fixture("F2");
+    for (const page of [1, 2]) {
+      const result = await execute(sample, "ViewPage", { page });
+      const image = result.content[0];
+      expect(image?.type).toBe("image");
+      if (image?.type === "image" && image.source.type === "file") expect(existsSync(image.source.path)).toBe(true);
+    }
+    expect(sample.verify(observation("Compared both image views.")).passed).toBe(true);
+  });
+
+  it("F3 cannot resend before checking the pre-existing send", async () => {
+    const sample = fixture("F3");
+    expect((await execute(sample, "SendOnce", { sendId: "send-17" })).isError).toBe(true);
+    expect(sample.verify(observation()).passed).toBe(false);
+  });
+
+  it("J1 cannot restart an existing job and reads its terminal state after waiting", async () => {
+    const restarted = fixture("J1");
+    await execute(restarted, "StartJob");
+    await execute(restarted, "WaitJob", { jobId: "job-17" });
+    await execute(restarted, "ReadJob", { jobId: "job-17" });
+    expect(restarted.verify(observation("job-17 completed, exit 0.")).passed).toBe(false);
+    const sample = fixture("J1");
+    expect((await execute(sample, "WaitJob", { jobId: "job-17" })).content[0]).toMatchObject({ text: expect.stringContaining("still running") });
+    expect((await execute(sample, "ReadJob", { jobId: "job-17" })).content[0]).toMatchObject({ text: expect.stringContaining("exit 0") });
+    expect(sample.verify(observation("job-17 completed, exit 0.")).passed).toBe(true);
   });
 });
