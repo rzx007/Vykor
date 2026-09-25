@@ -38,6 +38,7 @@ function save(): void {
     runId: report.runId, mode, revision, fixtureVersion,
     model: liveConfig?.model ?? "scripted",
     ...(liveConfig && live ? { provider: live.report.provider, providerBilling: "unknown",
+      adapterRetryLimit: live.report.adapterRetryLimit,
       sdkRetryLimit: live.report.sdkRetryLimit,
       maxHttpRequestsPerCase: live.report.maxHttpRequestsPerCase,
       maxHttpRequestsTotal: live.report.maxHttpRequestsPerCase * selectedCases.length * liveConfig.repeats,

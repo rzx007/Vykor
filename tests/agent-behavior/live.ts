@@ -24,9 +24,12 @@ export function parseLiveConfig(raw: unknown, cases: readonly BehaviorCase[]): L
   for (const name of ["repeats", "maxRequests", "maxTurns", "maxResponseTokens", "timeoutMs"] as const) {
     if (!Number.isSafeInteger(data[name]) || (data[name] as number) < 1) throw new Error(`Live ${name} must be a positive safe integer`);
   }
-  if ((data.timeoutMs as number) > 2_147_483_647 ||
-      !Number.isSafeInteger((data.maxRequests as number) * 4 * (data.repeats as number) * data.caseIds.length)) {
-    throw new Error("Live deadline or total request upper bound is too large");
+  const caps = { maxRequests: 25, maxTurns: 20, maxResponseTokens: 8192, timeoutMs: 120_000 };
+  for (const name of Object.keys(caps) as Array<keyof typeof caps>) {
+    if ((data[name] as number) > caps[name]) throw new Error(`Live ${name} exceeds the absolute cap`);
+  }
+  if (!Number.isSafeInteger((data.maxRequests as number) * 12 * (data.repeats as number) * data.caseIds.length)) {
+    throw new Error("Live total HTTP request upper bound is too large");
   }
   return data as unknown as LiveConfig;
 }
@@ -36,7 +39,8 @@ export async function loadLiveClient(config: LiveConfig, deps: {
   storage?: { loadApiKey(provider: string): Promise<string | undefined> };
   resolve?: typeof resolveApiClient;
 } = {}): Promise<{ client: StreamingMessageClient; report: {
-  provider: string; model: string; sdkRetryLimit: number; maxHttpRequestsPerCase: number; providerBilling: "unknown";
+  provider: string; model: string; adapterRetryLimit: number; sdkRetryLimit: number;
+  maxHttpRequestsPerCase: number; providerBilling: "unknown";
 }; redactions: string[] }> {
   const settings = deps.settings ?? await loadSettings({});
   const provider = settings.customProviders?.find((item) => item.id === config.provider);
@@ -53,8 +57,9 @@ export async function loadLiveClient(config: LiveConfig, deps: {
   return {
     client,
     redactions: [apiKey, ...Object.values(provider.headers ?? {})].filter((value) => value.length > 0),
-    report: { provider: config.provider, model: config.model, sdkRetryLimit: 3,
-      maxHttpRequestsPerCase: config.maxRequests * 4, providerBilling: "unknown" },
+    // Four adapter attempts, each with the OpenAI SDK's default three HTTP attempts.
+    report: { provider: config.provider, model: config.model, adapterRetryLimit: 3, sdkRetryLimit: 2,
+      maxHttpRequestsPerCase: config.maxRequests * 4 * 3, providerBilling: "unknown" },
   };
 }
 

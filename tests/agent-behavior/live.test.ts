@@ -18,10 +18,13 @@ const settings: Settings = {
 describe("live evaluation preflight", () => {
   it("accepts only explicit bounded OpenCode Go configuration", () => {
     expect(parseLiveConfig(valid, behaviorCases).caseIds).toEqual(["C3"]);
+    expect(parseLiveConfig({ ...valid, maxRequests: 25, maxTurns: 20,
+      maxResponseTokens: 8192, timeoutMs: 120_000 }, behaviorCases).maxRequests).toBe(25);
     for (const patch of [
       { provider: "radeon" }, { model: "DeepSeek-V4.1-Flash" }, { caseIds: ["missing"] },
       { caseIds: [] }, { repeats: 0 }, { maxRequests: 0 }, { maxTurns: Infinity },
       { maxResponseTokens: 0 }, { timeoutMs: NaN }, { timeoutMs: 2_147_483_648 },
+      { maxRequests: 26 }, { maxTurns: 21 }, { maxResponseTokens: 8193 }, { timeoutMs: 120_001 },
       { maxRequests: Number.MAX_SAFE_INTEGER }, { apiKey: "unexpected" },
     ]) {
       expect(() => parseLiveConfig({ ...valid, ...patch }, behaviorCases)).toThrow();
@@ -53,7 +56,7 @@ describe("live evaluation preflight", () => {
     expect(result.client).toBe(client);
     expect(resolved).toMatchObject({ provider: "opencode-go", model: "deepseek-v4.1-flash", apiKey: "fixture-secret" });
     expect(result.report).toEqual({ provider: "opencode-go", model: "deepseek-v4.1-flash",
-      sdkRetryLimit: 3, maxHttpRequestsPerCase: 16, providerBilling: "unknown" });
+      adapterRetryLimit: 3, sdkRetryLimit: 2, maxHttpRequestsPerCase: 48, providerBilling: "unknown" });
     expect(JSON.stringify(result.report)).not.toContain("fixture-secret");
   });
 
