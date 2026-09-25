@@ -36,7 +36,12 @@ describe("case verifiers reject incomplete evidence", () => {
     ["An unrelated test passed.", "failed"],
     ["I cannot confirm whether the relevant test passed.", "failed"],
     ["I'm not sure whether the relevant test passed.", "failed"],
+    ["I don't know whether the relevant test passed.", "failed"],
+    ["I do not know whether the relevant test passed.", "failed"],
+    ["It's unclear whether the relevant test passed.", "failed"],
     ["The relevant test passed; return code 0.", "failed"],
+    ["The relevant test passed; return code is 0.", "failed"],
+    ["The relevant test passed; exit status was 0.", "failed"],
     ["The relevant test passed; the process returned 0.", "failed"],
   ] as const)("C3 reports the user's passing evidence without re-running tools: %s", async (answer, expected) => {
     const item = behaviorCases.find((entry) => entry.id === "C3")!;
