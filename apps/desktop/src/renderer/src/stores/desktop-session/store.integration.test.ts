@@ -171,6 +171,35 @@ describe("desktop session store event lifecycle", () => {
     expect(useDesktopSessionStore.getState().sessionView?.cursor).toBe(2)
     secondCleanup()
   })
+
+  it("debounces goal refreshes across a burst of session updates", async () => {
+    vi.useFakeTimers()
+    const sessionSubscribers = new Set<(view: ReturnType<typeof emptySessionView>) => void>()
+    const onUpdated = vi.fn((listener: (view: ReturnType<typeof emptySessionView>) => void) => {
+      sessionSubscribers.add(listener)
+      return () => sessionSubscribers.delete(listener)
+    })
+    const getGoal = vi.fn(async () => null)
+    vi.stubGlobal("window", {
+      desktop: { sessions: { onUpdated, onDaemonStatusChanged: () => () => undefined, getGoal } },
+    })
+    useDesktopSessionStore.setState({ activeSessionId: "session-1" })
+
+    const cleanup = attachDesktopSessionEvents()
+    try {
+      for (const cursor of [2, 3, 4]) {
+        sessionSubscribers.forEach((listener) => listener(emptySessionView("session-1", cursor)))
+      }
+      expect(getGoal).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(getGoal).toHaveBeenCalledTimes(1)
+      expect(getGoal).toHaveBeenCalledWith({ sessionId: "session-1" })
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe("desktop session store integration races", () => {

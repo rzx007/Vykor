@@ -11,6 +11,7 @@ import { createInitialState } from "./initial-state"
 import { createProjectActions } from "./project-actions"
 import { createProjectDetailsCoordinator } from "./project-details-coordinator"
 import { createSelectedProjectGitRefreshScheduler } from "./project-git-scheduler"
+import { createGoalRefreshScheduler } from "./goal-refresh-scheduler"
 import { createPromptActions } from "./prompt-actions"
 import { createQueuedPromptActions } from "./queued-prompt-actions"
 import { createSessionActions } from "./session-actions"
@@ -21,6 +22,10 @@ import type { DesktopSessionState } from "./types"
 const selectedProjectGitRefreshScheduler = createSelectedProjectGitRefreshScheduler(
   (options) => useDesktopSessionStore.getState().refreshSelectedProjectGit(options),
   750
+)
+const goalRefreshScheduler = createGoalRefreshScheduler(
+  (sessionId) => useDesktopSessionStore.getState().refreshGoal(sessionId),
+  1_000
 )
 let desktopSessionEventSubscriptionCount = 0
 let detachDesktopSessionUpdates: (() => void) | null = null
@@ -116,7 +121,7 @@ export function attachDesktopSessionEvents(): () => void {
     })
     detachDesktopSessionUpdates = window.desktop.sessions.onUpdated((view) => {
       useDesktopSessionStore.getState().applySessionUpdate(view)
-      void useDesktopSessionStore.getState().refreshGoal(view.session.id)
+      goalRefreshScheduler.schedule(view.session.id)
     })
     if (typeof window.desktop.activity?.onUpdated === "function") {
       const generation = ++activityAttachGeneration
@@ -161,5 +166,6 @@ export function attachDesktopSessionEvents(): () => void {
     detachDesktopAttachmentUploads = null
     detachDesktopActivity = null
     selectedProjectGitRefreshScheduler.reset()
+    goalRefreshScheduler.reset()
   }
 }
