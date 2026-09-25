@@ -80,6 +80,8 @@ export interface VykorAgentConfiguration {
   requestConfigurationStoreForSession?: (sessionId: string) => AgentRequestConfigurationReader | undefined;
   /** Host-owned model capacity lookup; absent for SDK callers without a catalog. */
   resolveModelContextWindow?: (input: { provider?: string; model: string }) => Promise<number | undefined>;
+  /** Host-owned output capacity lookup; absent for SDK callers without a catalog. */
+  resolveModelOutputLimit?: (input: { provider?: string; model: string }) => Promise<number | undefined>;
   /** Host-owned effort catalog; absent for callers with their own client. */
   resolveReasoningEfforts?: (input: { provider?: string; model: string }) => Promise<string[] | undefined>;
 }

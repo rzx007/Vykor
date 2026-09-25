@@ -1,5 +1,6 @@
 import type { AgentRequestConfigurationReader, RunCapabilityView, Settings, StreamingMessageClient } from "@vykor/core";
 import {
+  DEFAULT_OUTPUT_TOKEN_MAX,
   QueryEngine,
   RuntimeBuilder,
   RuntimeBundle,
@@ -310,11 +311,18 @@ export async function createVykorRuntime(
         provider: requestConfiguration.provider,
         model: requestConfiguration.model,
       });
+      const outputLimit = await configuration.resolveModelOutputLimit?.({
+        provider: requestConfiguration.provider,
+        model: requestConfiguration.model,
+      });
+      const outputCap = settings.outputTokenMax ?? DEFAULT_OUTPUT_TOKEN_MAX;
+      const maxOutputTokens = Math.min(outputLimit ?? outputCap, outputCap);
       return {
         revision: snapshot.revision,
         ...snapshot.configuration,
         client: resolvedClient!,
         systemPrompt: systemPromptForRequest,
+        maxOutputTokens,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(contextWindow ? { contextWindow } : {}),
       };
