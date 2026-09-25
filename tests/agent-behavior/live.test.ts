@@ -139,4 +139,33 @@ describe("live evaluation preflight", () => {
     expect(JSON.stringify(scrubLiveResult(result, secrets))).not.toMatch(/fixture-secret|header-secret/);
     expect(formatLiveFailure(result, secrets)).not.toMatch(/fixture-secret|header-secret/);
   });
+
+  it("scrubs a session ID echoed by a fake provider error", async () => {
+    const config = parseLiveConfig(valid, behaviorCases);
+    const item = behaviorCases.find((scenario) => scenario.id === "C3")!;
+    let sessionId = "";
+    const client: StreamingMessageClient = { async *streamMessage() {
+      throw new Error(`provider echoed expanded session header: ${sessionId}`);
+    } };
+    const live = await loadLiveClient(config, {
+      settings, storage: { loadApiKey: async () => "fixture-secret" },
+      resolve: async (_settings, _configuration, _storage, id) => {
+        sessionId = id ?? "";
+        return client;
+      },
+    });
+    expect(sessionId).toMatch(/^[0-9a-f-]{36}$/);
+    const result = await runBehaviorCase(item,
+      liveRunOptions(config, live.client, "fixture", 1, { remainingRequests: config.maxTotalRequests }));
+    const report = reserveBehaviorReport();
+    try {
+      report.save({ results: [scrubLiveResult(result, live.redactions)] });
+      expect(readFileSync(report.path, "utf8").includes(sessionId)).toBe(false);
+      let failure = "";
+      try { assertLiveSampleComplete(result, live.redactions); }
+      catch (error) { failure = String(error); }
+      expect(failure).toContain("Live sample incomplete");
+      expect(failure.includes(sessionId)).toBe(false);
+    } finally { rmSync(report.path); }
+  });
 });

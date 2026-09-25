@@ -60,15 +60,16 @@ export async function loadLiveClient(config: LiveConfig, deps: {
   const storage = deps.storage ?? new CredentialStorage();
   const apiKey = await storage.loadApiKey(config.provider);
   if (!apiKey) throw new Error("Configured live provider credential is missing");
+  const sessionId = randomUUID();
   const client = await (deps.resolve ?? resolveApiClient)(
     { ...settings, apiKey: undefined },
     { provider: config.provider, model: config.model, apiKey, apiFormat: "openai", baseUrl: provider.baseUrl },
     storage as CredentialStorage,
-    randomUUID(),
+    sessionId,
   );
   return {
     client,
-    redactions: [apiKey, ...Object.values(provider.headers ?? {})].filter((value) => value.length > 0),
+    redactions: [apiKey, sessionId, ...Object.values(provider.headers ?? {})].filter((value) => value.length > 0),
     // Four adapter attempts, each with the OpenAI SDK's default three HTTP attempts.
     report: { provider: config.provider, model: config.model, adapterRetryLimit: 3, sdkRetryLimit: 2,
       maxHttpRequestsPerCase: config.maxRequests * 4 * 3,
