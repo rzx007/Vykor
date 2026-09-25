@@ -21,11 +21,18 @@ import type {
 } from "../../../shared/session-types"
 import { isOutsideProjectWorkspacePath } from "./outside-project-workspace"
 import { pumpSubscription } from "./session-subscription-pump"
+import { createSessionUpdateCoalescer } from "./session-update-coalescer"
 import { reserveSubscriptionSnapshot, SessionSubscriptionRegistry } from "./session-subscriptions"
 import { app } from "electron"
 
 const primarySubscriptionSlot = "primary"
+const defaultSessionUpdateIntervalMs = 50
 type SessionSubscriptionClient = Parameters<typeof syncEvents>[0]
+
+export interface SessionSubscriptionServiceOptions {
+  /** Coalescing window (ms) for full session updates pushed to the renderer. */
+  sessionUpdateIntervalMs?: number
+}
 
 function auxiliarySubscriptionSlot(subscriptionId: string): string {
   return `aux:${subscriptionId}`
@@ -33,6 +40,11 @@ function auxiliarySubscriptionSlot(subscriptionId: string): string {
 
 export class SessionSubscriptionService {
   private readonly subscriptions = new SessionSubscriptionRegistry()
+  private readonly sessionUpdateIntervalMs: number
+
+  constructor(options: SessionSubscriptionServiceOptions = {}) {
+    this.sessionUpdateIntervalMs = options.sessionUpdateIntervalMs ?? defaultSessionUpdateIntervalMs
+  }
 
   hasPrimary(webContentsId: number, sessionId: string): boolean {
     const sub = this.subscriptions.get(webContentsId, primarySubscriptionSlot)
@@ -142,7 +154,9 @@ export class SessionSubscriptionService {
     auxiliarySubscriptionId?: string
   ): Promise<void> {
     const subscription = this.subscriptions.get(webContents.id, slot)
-    const send = (view: DesktopSessionView): void => {
+    const deliver = (view: DesktopSessionView): void => {
+      if (webContents.isDestroyed()) return
+      if (!subscription || !this.subscriptions.isCurrent(webContents.id, slot, subscription)) return
       if (auxiliarySubscriptionId) {
         const payload: DesktopAuxSessionUpdate = { subscriptionId: auxiliarySubscriptionId, view }
         webContents.send(IpcEvents.sessionAuxUpdated, payload)
@@ -150,30 +164,52 @@ export class SessionSubscriptionService {
       }
       webContents.send(IpcEvents.sessionUpdated, view)
     }
-
-    await pumpSubscription<SyncEventUpdate>({
-      initialIterator: iterator,
-      createIterator: () =>
-        syncEvents(client, { sessionId, signal: controller.signal })[Symbol.asyncIterator](),
-      isActive: () =>
-        !controller.signal.aborted &&
-        !webContents.isDestroyed() &&
-        Boolean(subscription) &&
-        this.subscriptions.isCurrent(webContents.id, slot, subscription!),
-      onUpdate: (update) => {
-        if (!update.state.buckets[sessionId]?.session) {
-          this.subscriptions.delete(webContents.id, slot)
+    const coalescer = createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>({
+      delayMs: this.sessionUpdateIntervalMs,
+      deliver: (state, source) => {
+        if (!state.buckets[sessionId]?.session) return
+        let view: DesktopSessionView
+        try {
+          view = toDesktopSessionView(state, sessionId, source)
+        } catch {
           return
         }
-        send(toDesktopSessionView(update.state, sessionId, update.source))
-      },
-      onReconnecting: (last) => send(toDesktopSessionView(last.state, sessionId, "reconnecting")),
-      onError: (error) => {
-        if (!controller.signal.aborted && !webContents.isDestroyed()) {
-          console.error(`[session] sync failed for ${sessionId}`, error)
-        }
+        deliver(view)
       },
     })
+
+    try {
+      await pumpSubscription<SyncEventUpdate>({
+        initialIterator: iterator,
+        createIterator: () =>
+          syncEvents(client, { sessionId, signal: controller.signal })[Symbol.asyncIterator](),
+        isActive: () =>
+          !controller.signal.aborted &&
+          !webContents.isDestroyed() &&
+          Boolean(subscription) &&
+          this.subscriptions.isCurrent(webContents.id, slot, subscription!),
+        onUpdate: (update) => {
+          if (!update.state.buckets[sessionId]?.session) {
+            this.subscriptions.delete(webContents.id, slot)
+            coalescer.dispose()
+            return
+          }
+          if (update.source === "reconnecting") {
+            coalescer.flushNow(update.state, "reconnecting")
+            return
+          }
+          coalescer.queue(update.state, update.source)
+        },
+        onReconnecting: (last) => coalescer.flushNow(last.state, "reconnecting"),
+        onError: (error) => {
+          if (!controller.signal.aborted && !webContents.isDestroyed()) {
+            console.error(`[session] sync failed for ${sessionId}`, error)
+          }
+        },
+      })
+    } finally {
+      coalescer.dispose()
+    }
   }
 }
 
