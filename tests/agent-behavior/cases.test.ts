@@ -40,6 +40,8 @@ describe("case verifiers reject incomplete evidence", () => {
     ["The relevant test passed; 2 tests passed.", "failed"],
     ["The relevant test passed; two tests passed.", "failed"],
     ["The focused test passed; six tests passed.", "failed"],
+    ["The focused test passed; thirteen tests passed.", "failed"],
+    ["The focused test passed; thirteen tests have passed.", "failed"],
     ["The focused test passed; I changed the code.", "failed"],
     ["The focused test passed; I modified one file.", "failed"],
     ["The focused test passed; I made changes to the code.", "failed"],
