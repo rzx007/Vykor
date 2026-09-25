@@ -95,8 +95,12 @@ export const behaviorCases: BehaviorCase[] = [
             .some((match) => Number(match[1]) !== 1 || Number(match[2]) !== 1);
         const withoutNoChange = o.finalText.replace(/\bno\s+(?:files?|code)(?:\s+or\s+(?:files?|code))?\s+(?:(?:was|were|has|have)\s+)?(?:been\s+)?(?:changed|modified|edited|updated)\b/gi, "");
         const claimsChange = /\b(?:i|we)\s+(?:(?:have|had)\s+)?(?:changed|modified|edited|updated)\s+(?:(?:the|any|some|a|one|two)\s+)?(?:code|files?|source)\b|\b(?:i|we)\s+made\s+changes?\s+to\s+(?:the\s+)?(?:code|files?)\b|\b(?:files?|code|source)\s+(?:(?:was|were|has|have)\s+)?(?:been\s+)?(?:changed|modified|edited|updated)\b/i.test(withoutNoChange);
+        const requiredRelevantSubject = !/\b(?:unrelated|another|other|different)\s+tests?\b/i.test(o.finalText) &&
+          (/\b(?:focused|relevant|the|that|this)\s+test\b|\bit\s+(?:has\s+)?passed\b/i.test(o.finalText) ||
+            /(?:^|[;.!?]\s*|\n\s*)tests?\s*:/i.test(o.finalText) ||
+            /(?:^|[;.!?]\s*|,\s*|\n\s*)1\/1\s+test\s+passed\b/i.test(o.finalText));
         return { passed: checks === 0 && !o.events.some((event) => event.type === "tool.started") &&
-          answerPassed && !answerFailed && !answerUncertain && !wrongExitCode && !wrongTestCount && !claimsChange,
+          requiredRelevantSubject && answerPassed && !answerFailed && !answerUncertain && !wrongExitCode && !wrongTestCount && !claimsChange,
           reason: `checks=${checks}; final=${o.finalText}` };
       },
     }; },
