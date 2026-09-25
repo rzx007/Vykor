@@ -4,6 +4,7 @@ import {
   QueryEngine,
   RuntimeBuilder,
   RuntimeBundle,
+  resolveOutputTokenCap,
 } from "@vykor/core";
 import {
   assertNoRemovedLifecycleToolNames,
@@ -316,7 +317,7 @@ export async function createVykorRuntime(
         model: requestConfiguration.model,
       });
       const outputCap = settings.outputTokenMax ?? DEFAULT_OUTPUT_TOKEN_MAX;
-      const maxOutputTokens = Math.min(outputLimit ?? outputCap, outputCap);
+      const maxOutputTokens = resolveOutputTokenCap(outputLimit, outputCap);
       return {
         revision: snapshot.revision,
         ...snapshot.configuration,

@@ -5,6 +5,14 @@ import { writeJsonFileAtomically } from "./atomic-json-write.js";
 
 export const DEFAULT_OUTPUT_TOKEN_MAX = 32_000;
 
+export const OUTPUT_TOKEN_CAP_RATIO = 0.5;
+
+export function resolveOutputTokenCap(catalogOutput: number | undefined, fallback: number): number {
+  if (catalogOutput === undefined) return fallback;
+  if (catalogOutput <= fallback) return catalogOutput;
+  return Math.max(fallback, Math.round(catalogOutput * OUTPUT_TOKEN_CAP_RATIO));
+}
+
 const DEFAULT_SETTINGS: Settings = {
   model: "minimax/minimax-m2.5:free",
   apiFormat: "openai",

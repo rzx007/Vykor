@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 默认输出上限常量名 `DEFAULT_OUTPUT_TOKEN_MAX`，值 `32_000`。
-- 有效上限 = `Math.min(catalogOutputLimit ?? cap, cap)`，`cap = settings.outputTokenMax ?? DEFAULT_OUTPUT_TOKEN_MAX`。
+- 有效上限由目录 output 推导：无目录 output → `cap`；目录 output ≤ `cap` → 用满目录值；否则 `max(cap, round(目录 output × OUTPUT_TOKEN_CAP_RATIO))`，`cap = settings.outputTokenMax ?? DEFAULT_OUTPUT_TOKEN_MAX`（默认 32000，比例 0.5）。
 - 新请求字段一律叫 `maxOutputTokens`；**不得**改动或复用 `QueryEngineOptions.maxTokens`（它是压缩上下文窗口，语义不同）。
 - 彻底删除 `settings.maxTokens` 与 `VYKOR_MAX_TOKENS`；settings 文件里遗留的 `maxTokens` 会被当作未知字段拒绝（`SettingsFileError`），存量用户需手动删除该字段。**不要**把它加进 forbidden 清单（那会触发全仓正则扫描误报）。
 - OpenAI `finish_reason === "length"` 归一化为 `"max_tokens"`；engine 同时接受 `"max_tokens"` 与 `"length"`。
@@ -788,7 +788,7 @@ import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
         model: requestConfiguration.model,
       });
       const outputCap = settings.outputTokenMax ?? DEFAULT_OUTPUT_TOKEN_MAX;
-      const maxOutputTokens = Math.min(outputLimit ?? outputCap, outputCap);
+      const maxOutputTokens = resolveOutputTokenCap(outputLimit, outputCap);
       return {
         revision: snapshot.revision,
         ...snapshot.configuration,

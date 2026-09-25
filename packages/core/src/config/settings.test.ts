@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { loadSettings, saveProjectSettings, saveSettings, withMcpServerOAuthScopes } from "./settings.js";
+import { loadSettings, resolveOutputTokenCap, saveProjectSettings, saveSettings, withMcpServerOAuthScopes } from "./settings.js";
 
 describe("daemon settings", () => {
   const forbidden = JSON.parse(readFileSync(new URL("../../../../scripts/forbidden-compatibility-surfaces.json", import.meta.url), "utf8"));
@@ -76,6 +76,14 @@ describe("daemon settings", () => {
       name: "SettingsFileError",
       field: "settings.maxTokens",
     });
+  });
+
+  it("derives the output token cap from the catalog size", () => {
+    expect(resolveOutputTokenCap(undefined, 32_000)).toBe(32_000);
+    expect(resolveOutputTokenCap(4_096, 32_000)).toBe(4_096);
+    expect(resolveOutputTokenCap(32_000, 32_000)).toBe(32_000);
+    expect(resolveOutputTokenCap(60_000, 32_000)).toBe(32_000);
+    expect(resolveOutputTokenCap(384_000, 32_000)).toBe(192_000);
   });
 
   it("merges the plugin master switch with project and CLI precedence", async () => {

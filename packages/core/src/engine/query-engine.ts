@@ -361,6 +361,9 @@ export class QueryEngine implements IQueryEngine {
       if (requestConfiguration.contextWindow !== undefined) {
         this.compactService.setContextWindow(requestConfiguration.contextWindow);
       }
+      if (requestConfiguration.maxOutputTokens !== undefined) {
+        this.compactService.setOutputReserve(requestConfiguration.maxOutputTokens);
+      }
       // 自动压缩消息历史以控制上下文长度
       try {
         this.compactService.setProgressCallback((event) =>

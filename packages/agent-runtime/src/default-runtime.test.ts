@@ -763,12 +763,35 @@ describe("createVykorRuntime tool visibility", () => {
   });
 });
 
-it("caps the request output tokens at the configured ceiling", async () => {
+it("derives the request output cap from the catalog output size", async () => {
   const requested: Array<number | undefined> = [];
   const runtime = await createVykorRuntime({
     settings: { ...BASE_SETTINGS, sandbox: { enabled: false } },
     configuration: {
       resolveModelOutputLimit: async () => 384_000,
+      client: {
+        async *streamMessage(input) {
+          requested.push(input.maxTokens);
+          yield { type: "complete" as const, stopReason: "end_turn" as const };
+        },
+      },
+    },
+    requestConfigurationStore: { read: async () => ({ revision: 0, configuration: { model: "model-a" } }) },
+  });
+  try {
+    for await (const _ of runtime.queryEngine.submitMessage("hi")) { /* consume */ }
+    expect(requested).toEqual([192_000]);
+  } finally {
+    await runtime.close();
+  }
+});
+
+it("falls back to the 32k cap when the catalog has no output limit", async () => {
+  const requested: Array<number | undefined> = [];
+  const runtime = await createVykorRuntime({
+    settings: { ...BASE_SETTINGS, sandbox: { enabled: false } },
+    configuration: {
+      resolveModelOutputLimit: async () => undefined,
       client: {
         async *streamMessage(input) {
           requested.push(input.maxTokens);

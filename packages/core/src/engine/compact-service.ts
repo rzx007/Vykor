@@ -303,6 +303,8 @@ function toolResultId(msg: Message): string | undefined {
 export class CompactService {
   /** 上下文 token 上限（默认 100_000）；自动压缩阈值由此推导。 */
   private maxTokens: number;
+  /** 阈值计算时预留的模型输出 token 数；至少为 MAX_OUTPUT_TOKENS_FOR_SUMMARY。 */
+  private outputReserve: number;
   /**
    * 压缩时保留的「最近」消息 / 可清理工具结果条数（默认 10）。
    * 用于 splitPreservingToolPairs 与 microCompact 的保留窗口。
@@ -334,6 +336,7 @@ export class CompactService {
     options: CompactServiceOptions = {},
   ) {
     this.maxTokens = maxTokens;
+    this.outputReserve = MAX_OUTPUT_TOKENS_FOR_SUMMARY;
     this.keepRecent = keepRecent;
 
     this.client = options.client;
@@ -354,6 +357,18 @@ export class CompactService {
       throw new RangeError("Context window must be a positive safe integer");
     }
     this.maxTokens = tokens;
+  }
+
+  /**
+   * 设置阈值预留的输出 token 数。传入当前模型的实际输出上限，使
+   * `input + output ≤ context`：答案上限越大，清理线越低。
+   * 下限保持 MAX_OUTPUT_TOKENS_FOR_SUMMARY，保证摘要调用自身有空间。
+   */
+  setOutputReserve(tokens: number): void {
+    if (!Number.isSafeInteger(tokens) || tokens <= 0) {
+      throw new RangeError("Output reserve must be a positive safe integer");
+    }
+    this.outputReserve = Math.max(tokens, MAX_OUTPUT_TOKENS_FOR_SUMMARY);
   }
 
   /** 注册 / 替换上下文提供者（由 QueryEngine 或 Host 接线后注入运行时上下文）。 */
@@ -488,7 +503,7 @@ export class CompactService {
   /**
    * 主入口：估算 token，若超过阈值则按阶梯压缩。
    *
-   * 阈值 = maxTokens - MAX_OUTPUT_TOKENS_FOR_SUMMARY - AUTOCOMPACT_BUFFER_TOKENS
+   * 阈值 = maxTokens - outputReserve - AUTOCOMPACT_BUFFER_TOKENS
    *
    * 流程：
    * 1. 未超阈值 → 原样返回
@@ -503,7 +518,7 @@ export class CompactService {
   ): Promise<Message[]> {
     const estimated = this.estimateTokens(messages);
     const threshold =
-      this.maxTokens - MAX_OUTPUT_TOKENS_FOR_SUMMARY - AUTOCOMPACT_BUFFER_TOKENS;
+      this.maxTokens - this.outputReserve - AUTOCOMPACT_BUFFER_TOKENS;
 
     // 空间还够，跳过压缩。
     if (estimated < threshold) return messages;
