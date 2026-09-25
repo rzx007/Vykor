@@ -6,6 +6,7 @@ import type {
   ToolDefinition,
   ContentBlock,
 } from "@vykor/core";
+import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import { AuthenticationFailure, RateLimitFailure, requestFailure } from "../errors/index";
 import { abortableDelay } from "./retry";
@@ -163,7 +164,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
     const createParams: OpenAI.ChatCompletionCreateParamsStreaming = {
       model: params.model,
       messages: messages as OpenAI.ChatCompletionMessageParam[],
-      ...tokenLimitParamForModel(params.model, params.maxTokens ?? 8192),
+      ...tokenLimitParamForModel(params.model, params.maxTokens ?? DEFAULT_OUTPUT_TOKEN_MAX),
       temperature: params.temperature,
       stream: true,
       stream_options: tools ? undefined : { include_usage: true },
@@ -359,9 +360,11 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       };
     }
 
+    const normalizedStopReason =
+      finishReason === "length" ? "max_tokens" : finishReason ?? "end_turn";
     yield {
       type: "complete",
-      stopReason: toolUseCount > 0 ? "tool_use" : finishReason ?? "end_turn",
+      stopReason: toolUseCount > 0 ? "tool_use" : normalizedStopReason,
     };
   }
 

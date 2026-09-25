@@ -597,3 +597,53 @@ describe("OpenAICompatibleClient reasoning deltas", () => {
     expect(text).toBe("完成。");
   });
 });
+
+describe("OpenAICompatibleClient stop reason normalization", () => {
+  function finishClient(finishReason: string | null) {
+    const create = vi.fn(async () => ({
+      async *[Symbol.asyncIterator]() {
+        yield { choices: [{ delta: { content: "hi" }, finish_reason: null }] };
+        yield { choices: [{ delta: {}, finish_reason: finishReason }] };
+      },
+    }));
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gw.example/v1" });
+    client.client = { chat: { completions: { create } } } as any;
+    return client;
+  }
+
+  async function completeReason(client: OpenAICompatibleClient): Promise<string> {
+    let reason = "";
+    for await (const event of client.streamMessage({
+      model: "deepseek-v4.1-flash",
+      messages: [{ type: "user", content: "hi" }],
+    })) {
+      if (event.type === "complete") reason = event.stopReason;
+    }
+    return reason;
+  }
+
+  it("maps the OpenAI length finish reason to max_tokens", async () => {
+    expect(await completeReason(finishClient("length"))).toBe("max_tokens");
+  });
+
+  it("keeps ordinary finish reasons unchanged", async () => {
+    expect(await completeReason(finishClient("stop"))).toBe("stop");
+    expect(await completeReason(finishClient(null))).toBe("end_turn");
+  });
+});
+
+describe("OpenAICompatibleClient output token cap", () => {
+  it("defaults max_tokens to the 32k cap when the caller omits it", async () => {
+    const create = vi.fn(async () => ({ async *[Symbol.asyncIterator]() {} }));
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gw.example/v1" });
+    client.client = { chat: { completions: { create } } } as any;
+    for await (const _ of client.streamMessage({
+      model: "deepseek-v4.1-flash",
+      messages: [{ type: "user", content: "hi" }],
+    })) {}
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 32_000 }),
+      expect.anything(),
+    );
+  });
+});

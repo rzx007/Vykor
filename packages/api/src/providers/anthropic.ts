@@ -7,6 +7,7 @@ import type {
   ToolDefinition,
   ContentBlock,
 } from "@vykor/core";
+import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
 import {
   assertNativeImageMediaType,
   type NativeImageMediaType,
@@ -58,7 +59,7 @@ export class AnthropicClient implements StreamingMessageClient {
           messages,
           system: params.system,
           tools: tools?.length ? tools : undefined,
-          max_tokens: params.maxTokens ?? 8192,
+          max_tokens: params.maxTokens ?? DEFAULT_OUTPUT_TOKEN_MAX,
           temperature: params.temperature,
         }, {
           signal: params.abortSignal,
