@@ -57,14 +57,18 @@ describe("live evaluation preflight", () => {
   it("passes only the selected provider credential to the existing resolver", async () => {
     const config = parseLiveConfig(valid, behaviorCases);
     let resolved: { provider?: string; model?: string; apiKey?: string } | undefined;
+    let sessionId: string | undefined;
     const client: StreamingMessageClient = { async *streamMessage() { throw new Error("must not request"); } };
     const result = await loadLiveClient(config, {
       settings: { ...settings, apiKey: "wrong-default-key" },
       storage: { loadApiKey: async (provider) => provider === "opencode-go" ? "fixture-secret" : undefined },
-      resolve: async (_settings, configuration) => { resolved = configuration; return client; },
+      resolve: async (_settings, configuration, _storage, id) => {
+        resolved = configuration; sessionId = id; return client;
+      },
     });
     expect(result.client).toBe(client);
     expect(resolved).toMatchObject({ provider: "opencode-go", model: "deepseek-v4.1-flash", apiKey: "fixture-secret" });
+    expect(sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(result.report).toEqual({ provider: "opencode-go", model: "deepseek-v4.1-flash",
       adapterRetryLimit: 3, sdkRetryLimit: 2, maxHttpRequestsPerCase: 48,
       maxLogicalRequestsTotal: 4, maxHttpRequestsTotal: 48, providerBilling: "unknown" });

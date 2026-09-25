@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { loadSettings, type Settings, type StreamingMessageClient } from "@vykor/core";
 import { CredentialStorage } from "@vykor/auth";
 import { resolveApiClient } from "../../packages/agent-runtime/src/default-runtime-provider.js";
@@ -63,6 +64,7 @@ export async function loadLiveClient(config: LiveConfig, deps: {
     { ...settings, apiKey: undefined },
     { provider: config.provider, model: config.model, apiKey, apiFormat: "openai", baseUrl: provider.baseUrl },
     storage as CredentialStorage,
+    randomUUID(),
   );
   return {
     client,
