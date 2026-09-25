@@ -81,6 +81,8 @@
 - [Vykor Agent SDK](./agent-sdk.md)：程序中怎样直接创建和使用 Agent。
 - [Agent Child Session Flow](./agent-child-session-flow.md)：child 创建、等待、follow-up、预算、关闭和 durable 投影。
 - [CompactService](./compact-service-design.md)：上下文压缩、checkpoint、Tool 配对和失败策略。
+- [模型请求自动重试：Codex 调研与改进建议](./model-network-retry-design.md)：网络错误、流中断、残缺输出处理和重试状态展示；尚未实现。
+- [模型网络自动重试执行计划](./superpowers/plans/2026-09-25-model-network-retry.md)：逐阶段文件清单、接口、测试命令、验收与发布边界。
 - [Prompt Layering](./prompt-layering-design.md)：系统提示词怎样分层组装。
 - [Personalization](./personalization-design.md)：用户个性化设置的边界。
 
