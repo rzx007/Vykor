@@ -65,7 +65,7 @@ export const fileEditTool: ToolDefinition = {
       };
     }
 
-    if (isSystemPath(filePath)) {
+    if (isSystemPath(rawPath) || isSystemPath(filePath)) {
       return {
         content: [{ type: "text", text: `Error: editing system directory files is not allowed: ${filePath}` }],
         isError: true,

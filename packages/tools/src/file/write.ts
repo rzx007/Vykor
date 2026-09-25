@@ -33,7 +33,8 @@ export const fileWriteTool: ToolDefinition = {
     const content = input.content as string;
     const cwd = (context as { cwd?: string } | undefined)?.cwd ?? process.cwd();
 
-    // Resolve to absolute path, then guard against system directories.
+    // Guard the raw input as well: a Windows-style system path stays recognizable
+    // even on platforms whose path resolver would treat it as relative.
     const filePath = await resolveToolPathInContext(rawPath, context, "write");
 
     if (managedPersistencePathKind(filePath, cwd)) {
@@ -45,7 +46,7 @@ export const fileWriteTool: ToolDefinition = {
       };
     }
 
-    if (isSystemPath(filePath)) {
+    if (isSystemPath(rawPath) || isSystemPath(filePath)) {
       return {
         content: [{ type: "text", text: `Error: writing to system directory is not allowed: ${filePath}` }],
         isError: true,
