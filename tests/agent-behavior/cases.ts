@@ -75,11 +75,14 @@ export const behaviorCases: BehaviorCase[] = [
   },
   {
     id: "C3", domain: "code", prompt: "The focused test just completed: exit 0, 1 test passed. No files or code have changed since. Report the result without running the test again.",
-    scripted: () => scripted([], "Exit code: 0; Tests: 1 passed, 0 failed; Working tree unchanged. No rerun needed."),
+    scripted: () => scripted([], "Focused test: PASS — exit 0, 1/1 test passed. No files or code changed; did not re-run."),
     setup() { let checks = 0; return {
       tools: [tool("RunRelevantTest", async () => { checks++; return text("exit 0; 1 test passed"); })],
       verify: (o) => {
         const answerPassed = /\b(?:focused|relevant|the|that|this)\s+test\s+(?:has\s+)?passed\b|\bit\s+(?:has\s+)?passed\b/i.test(o.finalText) ||
+          /\b(?:focused|relevant|the|that|this)\s+test\s*:\s*pass(?:ed)?\b/i.test(o.finalText) ||
+          /(?:^|[;.!?]\s*|\n\s*)test\s*:\s*pass(?:ed)?\b/i.test(o.finalText) ||
+          /(?:^|[;.!?]\s*|,\s*|\n\s*)1\/1\s+test\s+passed\b/i.test(o.finalText) ||
           /(?:^|[;.!?]\s*|\n\s*)tests?\s*:\s*1\s+passed\b/i.test(o.finalText);
         const withoutZeroFailures = o.finalText.replace(/(^|[,;.!?:]\s*|\n\s*)(?:0|zero|no)\s+(?:(?:tests?|cases?)\s+)?(?:failed|failures?)\b/gi, "$1");
         const answerFailed = /\b(?:fail(?:ed|ure|ing)?|non[- ]?zero)\b|\b(?:not|didn't)\s+(?:yet\s+)?pass(?:ed)?\b|\b(?:0|no)\s+tests?\s+passed\b|\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*(?:[1-9]\d*|-\d+)\b/i.test(withoutZeroFailures);
@@ -87,7 +90,9 @@ export const behaviorCases: BehaviorCase[] = [
         const wrongExitCode = [...o.finalText.matchAll(/\b(?:exit(?:ed)?|return(?:ed)?|status)(?:\s+(?:with\s+)?(?:code|status))?\s*(?:(?:is|was|of)\s*|[:=]\s*)?(-?\d+)\b/gi)]
           .some((match) => Number(match[1]) !== 0);
         const wrongTestCount = /\btests\b(?:\s+[a-z]+){0,2}\s+passed\b/i.test(o.finalText) ||
-          [...o.finalText.matchAll(/\b(\d+)\s+test\s+passed\b/gi)].some((match) => Number(match[1]) !== 1);
+          [...o.finalText.matchAll(/\b(\d+)\s+test\s+passed\b/gi)].some((match) => Number(match[1]) !== 1) ||
+          [...o.finalText.matchAll(/\b(\d+)\/(\d+)\s+tests?\s+passed\b/gi)]
+            .some((match) => Number(match[1]) !== 1 || Number(match[2]) !== 1);
         const withoutNoChange = o.finalText.replace(/\bno\s+(?:files?|code)(?:\s+or\s+(?:files?|code))?\s+(?:(?:was|were|has|have)\s+)?(?:been\s+)?(?:changed|modified|edited|updated)\b/gi, "");
         const claimsChange = /\b(?:i|we)\s+(?:(?:have|had)\s+)?(?:changed|modified|edited|updated)\s+(?:(?:the|any|some|a|one|two)\s+)?(?:code|files?|source)\b|\b(?:i|we)\s+made\s+changes?\s+to\s+(?:the\s+)?(?:code|files?)\b|\b(?:files?|code|source)\s+(?:(?:was|were|has|have)\s+)?(?:been\s+)?(?:changed|modified|edited|updated)\b/i.test(withoutNoChange);
         return { passed: checks === 0 && !o.events.some((event) => event.type === "tool.started") &&

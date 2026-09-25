@@ -28,8 +28,20 @@ describe("case verifiers reject incomplete evidence", () => {
     ["It passed. No further action needed.", "passed"],
     ["The focused test passed: exit code 0, 1 test passed. No code changed.", "passed"],
     ["Exit code: 0; Tests: 1 passed, 0 failed; Working tree unchanged. No rerun needed.", "passed"],
+    ["Focused test: PASS — exit 0, 1/1 test passed. No files or code changed; did not re-run.", "passed"],
+    ["Relevant test: PASS. No rerun needed.", "passed"],
+    ["Test: passed; exit code 0; 1/1 test passed.", "passed"],
+    ["1/1 test passed; no rerun needed.", "passed"],
     ["Tests: 1 passed, zero failures; working tree unchanged.", "passed"],
     ["Unrelated tests: 1 passed, 0 failed.", "failed"],
+    ["PASS.", "failed"],
+    ["Status: PASS.", "failed"],
+    ["Another test: PASS.", "failed"],
+    ["Unrelated test: PASS.", "failed"],
+    ["Focused test: FAILED.", "failed"],
+    ["Focused test: PASS; 0 tests passed.", "failed"],
+    ["Focused test: PASS; 2/1 test passed.", "failed"],
+    ["Focused test: PASS; 1/2 test passed.", "failed"],
     ["Tests: 1 passed, more than 0 failed.", "failed"],
     ["The focused test passed; no failures.", "passed"],
     ["The focused test passed; 0 tests failed.", "passed"],
@@ -84,8 +96,8 @@ describe("case verifiers reject incomplete evidence", () => {
     const result = await runBehaviorCase(item, { client: item.scripted!(), model: "scripted",
       revision: "c3-scripted", repeat: 1, maxRequests: 2, timeoutMs: 10_000 });
     expect(result).toMatchObject({ status: "passed", toolCalls: 0, requestCount: 1 });
-    expect(result.evidence?.finalText).toMatch(/exit code:\s*0/i);
-    expect(result.evidence?.finalText).toMatch(/tests:\s*1 passed,\s*0 failed/i);
+    expect(result.evidence?.finalText).toMatch(/focused test:\s*pass/i);
+    expect(result.evidence?.finalText).toMatch(/1\/1 test passed/i);
   });
 
   it("C3 rejects a redundant test run even if the result passes", async () => {
