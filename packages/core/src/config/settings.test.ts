@@ -55,6 +55,29 @@ describe("daemon settings", () => {
     expect(settings.showReasoning).toBe(false);
   });
 
+  it("defaults outputTokenMax to 32k and accepts an explicit value", async () => {
+    expect((await loadSettings()).outputTokenMax).toBe(32_000);
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ outputTokenMax: 16_000 }));
+    expect((await loadSettings()).outputTokenMax).toBe(16_000);
+  });
+
+  it("reads VYKOR_OUTPUT_TOKEN_MAX from the environment", async () => {
+    process.env.VYKOR_OUTPUT_TOKEN_MAX = "8000";
+    try {
+      expect((await loadSettings()).outputTokenMax).toBe(8_000);
+    } finally {
+      delete process.env.VYKOR_OUTPUT_TOKEN_MAX;
+    }
+  });
+
+  it("rejects a settings file that still carries the removed maxTokens field", async () => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ maxTokens: 16_384 }));
+    await expect(loadSettings()).rejects.toMatchObject({
+      name: "SettingsFileError",
+      field: "settings.maxTokens",
+    });
+  });
+
   it("merges the plugin master switch with project and CLI precedence", async () => {
     const projectRoot = join(configDir, "plugin-project");
     const projectConfigDir = join(projectRoot, ".vykor");

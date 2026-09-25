@@ -190,6 +190,7 @@ export {
 export { CostTracker } from "./engine/cost-tracker";
 
 export {
+  DEFAULT_OUTPUT_TOKEN_MAX,
   loadSettings,
   saveSettings,
   loadProjectSettings,

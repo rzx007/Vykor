@@ -130,7 +130,7 @@ export interface Settings {
   apiKey?: string;
   model: string;
   apiFormat: "anthropic" | "openai";
-  maxTokens?: number;
+  outputTokenMax?: number;
   baseUrl?: string;
   provider?: string;
   customProviders?: CustomProviderSettings[];

@@ -13,7 +13,7 @@ export function coerceConfigValue(key: string, value: string): unknown {
       return value;
 
     case "maxTurns":
-    case "maxTokens":
+    case "outputTokenMax":
     case "passes": {
       const n = parseInt(value, 10);
       return Number.isNaN(n) ? undefined : n;

@@ -824,7 +824,7 @@ setx ANTHROPIC_API_KEY "sk-ant-..."
 | `VYKOR_MODEL`        | 默认模型名称                                                   |
 | `VYKOR_BASE_URL`     | 通用 API Base URL 覆盖（**所有 provider**）                      |
 | `VYKOR_API_FORMAT`   | API 格式（anthropic / openai）                               |
-| `VYKOR_MAX_TOKENS`   | 最大输出 token 数                                             |
+| `VYKOR_OUTPUT_TOKEN_MAX` | 单轮输出 token 上限（默认 32000，取模型目录 output 与其较小值） |
 | `VYKOR_MAX_TURNS`    | 最大 agent 轮次                                              |
 
 

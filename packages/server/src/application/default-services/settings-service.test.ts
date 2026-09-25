@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createDefaultSettingsService } from "./settings-service.js";
+import { createDefaultSettingsService, settingsPatchRuntimeImpact } from "./settings-service.js";
 
 let root: string;
 let previousConfigDir: string | undefined;
@@ -37,5 +37,11 @@ describe("settings service config coercion", () => {
     const service = createSettingsService();
     const result = await service.patch({ path: "showReasoning", value: "off" });
     expect(result.settings.showReasoning).toBe(false);
+  });
+});
+
+describe("settings runtime impact", () => {
+  it("invalidates warm agents when outputTokenMax changes", () => {
+    expect(settingsPatchRuntimeImpact({ path: "outputTokenMax", value: 16_000 })).toBe("invalidate");
   });
 });

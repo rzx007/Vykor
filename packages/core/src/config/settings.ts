@@ -3,11 +3,13 @@ import type { Settings } from "../index";
 import { getConfigDir, getConfigFilePath, getProjectConfigDir, getProjectSettingsFilePath } from "./paths";
 import { writeJsonFileAtomically } from "./atomic-json-write.js";
 
+export const DEFAULT_OUTPUT_TOKEN_MAX = 32_000;
+
 const DEFAULT_SETTINGS: Settings = {
   model: "minimax/minimax-m2.5:free",
   apiFormat: "openai",
   provider: "openrouter",
-  maxTokens: 16384,
+  outputTokenMax: DEFAULT_OUTPUT_TOKEN_MAX,
   maxTurns: 50,
   permission: { mode: "default" },
   plugins: { enabled: true },
@@ -210,7 +212,10 @@ function loadFromEnv(): SettingsPatch {
   if (process.env.VYKOR_BASE_URL !== undefined) {
     result.baseUrl = process.env.VYKOR_BASE_URL;
   }
-  if (process.env.VYKOR_MAX_TOKENS !== undefined) result.maxTokens = parseInt(process.env.VYKOR_MAX_TOKENS, 10);
+  if (process.env.VYKOR_OUTPUT_TOKEN_MAX !== undefined) {
+    const parsed = parseInt(process.env.VYKOR_OUTPUT_TOKEN_MAX, 10);
+    if (Number.isSafeInteger(parsed) && parsed > 0) result.outputTokenMax = parsed;
+  }
   if (process.env.VYKOR_MAX_TURNS !== undefined) result.maxTurns = parseInt(process.env.VYKOR_MAX_TURNS, 10);
   const sandbox = buildSandboxEnvOverrides();
   if (sandbox !== undefined) result.sandbox = sandbox;
@@ -308,7 +313,7 @@ const TOP_LEVEL_SETTINGS_FIELDS = new Set([
   "apiKey",
   "model",
   "apiFormat",
-  "maxTokens",
+  "outputTokenMax",
   "baseUrl",
   "provider",
   "customProviders",

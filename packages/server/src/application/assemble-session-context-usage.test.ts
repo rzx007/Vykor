@@ -17,7 +17,6 @@ function settingsRef(overrides: Partial<Settings> = {}): DaemonSettingsRef {
       model: "test/model",
       apiFormat: "openai",
       provider: "openrouter",
-      maxTokens: 1024,
       maxTurns: 10,
       permission: { mode: "default" },
       plugins: { enabled: true },

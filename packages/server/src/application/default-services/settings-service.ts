@@ -35,6 +35,7 @@ const HARD_RUNTIME_RESTART_KEYS = new Set([
  */
 const SOFT_RUNTIME_INVALIDATE_KEYS = new Set([
   "maxTurns",
+  "outputTokenMax",
   "effort",
   "fastMode",
   "workStyle",
@@ -278,7 +279,7 @@ function coerceConfigValue(key: string, value: string): unknown {
   ) {
     return value;
   }
-  if (["maxTurns", "maxTokens", "passes"].includes(key)) {
+  if (["maxTurns", "outputTokenMax", "passes"].includes(key)) {
     const parsed = Number.parseInt(value, 10);
     return Number.isNaN(parsed) ? undefined : parsed;
   }

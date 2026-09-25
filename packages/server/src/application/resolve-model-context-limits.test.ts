@@ -15,7 +15,6 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     model: "fixture-model",
     apiFormat: "openai",
     provider: "openrouter",
-    maxTokens: 1024,
     maxTurns: 10,
     permission: { mode: "default" },
     plugins: { enabled: true },
