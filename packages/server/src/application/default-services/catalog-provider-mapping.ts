@@ -58,12 +58,11 @@ export function reasoningEffortsFromModel(
   return values && values.length > 0 ? values : undefined;
 }
 
-export function catalogModelReasoningEfforts(
+export function catalogModelEntry(
   catalog: ModelsDevCatalog,
-  providerName: string | undefined,
+  providerName: string,
   modelId: string,
-): string[] | undefined {
-  if (!providerName) return undefined;
+): ModelsDevModel | undefined {
   const provider = readCatalogProvider(catalog, providerName);
   if (!provider?.models) return undefined;
   const entry = Object.entries(provider.models).find(([key, model]) => {
@@ -71,5 +70,37 @@ export function catalogModelReasoningEfforts(
       typeof model.id === "string" && model.id.trim() ? model.id.trim() : key;
     return id === modelId;
   });
-  return entry ? reasoningEffortsFromModel(entry[1]) : undefined;
+  return entry?.[1];
+}
+
+function positiveLimit(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+export function catalogModelContextWindow(
+  catalog: ModelsDevCatalog,
+  providerName: string,
+  modelId: string,
+): number | undefined {
+  return positiveLimit(catalogModelEntry(catalog, providerName, modelId)?.limit?.context);
+}
+
+export function catalogModelOutputLimit(
+  catalog: ModelsDevCatalog,
+  providerName: string,
+  modelId: string,
+): number | undefined {
+  return positiveLimit(catalogModelEntry(catalog, providerName, modelId)?.limit?.output);
+}
+
+export function catalogModelReasoningEfforts(
+  catalog: ModelsDevCatalog,
+  providerName: string | undefined,
+  modelId: string,
+): string[] | undefined {
+  if (!providerName) return undefined;
+  const model = catalogModelEntry(catalog, providerName, modelId);
+  return model ? reasoningEffortsFromModel(model) : undefined;
 }

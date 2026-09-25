@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  catalogModelContextWindow,
+  catalogModelOutputLimit,
   catalogModelReasoningEfforts,
   readCatalogProvider,
   reasoningEffortsFromModel,
@@ -54,5 +56,30 @@ describe("reasoning effort derivation", () => {
     expect(catalogModelReasoningEfforts(catalog, "zhipu", "glm-4.6")).toEqual(["low", "high"]);
     expect(catalogModelReasoningEfforts(catalog, "zhipu", "missing")).toBeUndefined();
     expect(catalogModelReasoningEfforts(catalog, undefined, "glm-4.6")).toBeUndefined();
+  });
+});
+
+describe("catalog model limits", () => {
+  const catalog = {
+    opencode: {
+      models: {
+        "deepseek-v4.1-flash": {
+          id: "deepseek-v4.1-flash",
+          limit: { context: 1_000_000, output: 384_000 },
+        },
+        broken: { limit: { context: 0, output: -5 } },
+      },
+    },
+  } as never;
+
+  it("reads context and output limits by model id", () => {
+    expect(catalogModelContextWindow(catalog, "opencode", "deepseek-v4.1-flash")).toBe(1_000_000);
+    expect(catalogModelOutputLimit(catalog, "opencode", "deepseek-v4.1-flash")).toBe(384_000);
+  });
+
+  it("returns undefined for non-positive, non-integer, or missing limits", () => {
+    expect(catalogModelContextWindow(catalog, "opencode", "broken")).toBeUndefined();
+    expect(catalogModelOutputLimit(catalog, "opencode", "broken")).toBeUndefined();
+    expect(catalogModelOutputLimit(catalog, "opencode", "missing")).toBeUndefined();
   });
 });

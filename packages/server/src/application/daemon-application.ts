@@ -36,8 +36,9 @@ import {
 
 import { AttachmentService } from "./attachments/attachment-service.js";
 import {
+  catalogModelContextWindow,
+  catalogModelOutputLimit,
   catalogModelReasoningEfforts,
-  readCatalogProvider,
 } from "./default-services/catalog-provider-mapping.js";
 import { validateRequestSelection } from "./session/request-selection-validation.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
@@ -429,12 +430,11 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         resolveModelContextWindow: async ({ provider, model }) => {
           if (!provider) return undefined;
-          const catalogProvider = readCatalogProvider(await this.modelCatalog.load(), provider);
-          const entry = Object.entries(catalogProvider?.models ?? {}).find(([id, value]) =>
-            (value.id ?? id) === model)?.[1];
-          const capacity = entry?.limit?.context;
-          return typeof capacity === "number" && Number.isSafeInteger(capacity) && capacity > 0
-            ? capacity : undefined;
+          return catalogModelContextWindow(await this.modelCatalog.load(), provider, model);
+        },
+        resolveModelOutputLimit: async ({ provider, model }) => {
+          if (!provider) return undefined;
+          return catalogModelOutputLimit(await this.modelCatalog.load(), provider, model);
         },
         createAgent: options.createAgent,
         mcpRuntimeRegistry: this.mcpRuntimes,

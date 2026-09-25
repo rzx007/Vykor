@@ -89,6 +89,10 @@ export interface DaemonAgentLoaderOptions {
     provider?: string;
     model: string;
   }): Promise<number | undefined> | number | undefined;
+  resolveModelOutputLimit?(input: {
+    provider?: string;
+    model: string;
+  }): Promise<number | undefined> | number | undefined;
   settings?: Settings;
   getSettings?: () => Settings;
   getSettingsForCwd?: (cwd: string) => Promise<Settings> | Settings;
@@ -223,6 +227,10 @@ export function createDaemonAgentLoader(
       ...(options.resolveModelContextWindow
         ? { resolveModelContextWindow: async (input) =>
             await options.resolveModelContextWindow!(input) }
+        : {}),
+      ...(options.resolveModelOutputLimit
+        ? { resolveModelOutputLimit: async (input) =>
+            await options.resolveModelOutputLimit!(input) }
         : {}),
       reasoningEffort,
       capabilityOverrides: {
