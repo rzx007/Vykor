@@ -26,23 +26,28 @@ describe("case verifiers reject incomplete evidence", () => {
     ["The test has passed; no edits are needed.", "passed"],
     ["This test passed; no further action is needed.", "passed"],
     ["It passed. No further action needed.", "passed"],
+    ["The focused test passed: exit code 0, 1 test passed. No code changed.", "passed"],
+    ["The relevant test passed; return code is 0; one test passed.", "passed"],
     ["Test failed: exit code 1.", "failed"],
     ["The relevant test did not pass.", "failed"],
     ["The relevant test didn't pass.", "failed"],
     ["0 tests passed.", "failed"],
     ["No tests passed.", "failed"],
     ["The relevant test passed, but the test failed.", "failed"],
-    ["The relevant test passed with exit code 0.", "failed"],
+    ["The relevant test passed with exit code 0.", "passed"],
+    ["The relevant test passed; exit code 1.", "failed"],
+    ["The relevant test passed; 2 tests passed.", "failed"],
+    ["The relevant test passed; two tests passed.", "failed"],
     ["An unrelated test passed.", "failed"],
     ["I cannot confirm whether the relevant test passed.", "failed"],
     ["I'm not sure whether the relevant test passed.", "failed"],
     ["I don't know whether the relevant test passed.", "failed"],
     ["I do not know whether the relevant test passed.", "failed"],
     ["It's unclear whether the relevant test passed.", "failed"],
-    ["The relevant test passed; return code 0.", "failed"],
-    ["The relevant test passed; return code is 0.", "failed"],
-    ["The relevant test passed; exit status was 0.", "failed"],
-    ["The relevant test passed; the process returned 0.", "failed"],
+    ["The relevant test passed; return code 0.", "passed"],
+    ["The relevant test passed; return code is 0.", "passed"],
+    ["The relevant test passed; exit status was 0.", "passed"],
+    ["The relevant test passed; the process returned 0.", "passed"],
   ] as const)("C3 reports the user's passing evidence without re-running tools: %s", async (answer, expected) => {
     const item = behaviorCases.find((entry) => entry.id === "C3")!;
     const client: StreamingMessageClient = { async *streamMessage() {
@@ -60,6 +65,8 @@ describe("case verifiers reject incomplete evidence", () => {
     const result = await runBehaviorCase(item, { client: item.scripted!(), model: "scripted",
       revision: "c3-scripted", repeat: 1, maxRequests: 2, timeoutMs: 10_000 });
     expect(result).toMatchObject({ status: "passed", toolCalls: 0, requestCount: 1 });
+    expect(result.evidence?.finalText).toContain("exit code 0");
+    expect(result.evidence?.finalText).toContain("1 test passed");
   });
 
   it("C3 rejects a redundant test run even if the result passes", async () => {

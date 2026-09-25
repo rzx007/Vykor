@@ -74,17 +74,21 @@ export const behaviorCases: BehaviorCase[] = [
     }; },
   },
   {
-    id: "C3", domain: "code", prompt: "A relevant test has passed; report the result.",
-    scripted: () => scripted([], "The relevant test passed. No further action needed."),
+    id: "C3", domain: "code", prompt: "The focused test just completed: exit 0, 1 test passed. No files or code have changed since. Report the result without running the test again.",
+    scripted: () => scripted([], "The focused test passed (exit code 0; 1 test passed). No files changed; no rerun needed."),
     setup() { let checks = 0; return {
       tools: [tool("RunRelevantTest", async () => { checks++; return text("exit 0; 1 test passed"); })],
       verify: (o) => {
-        const answerPassed = /\b(?:relevant|the|that|this)\s+test\s+(?:has\s+)?passed\b|\bit\s+(?:has\s+)?passed\b/i.test(o.finalText);
+        const answerPassed = /\b(?:focused|relevant|the|that|this)\s+test\s+(?:has\s+)?passed\b|\bit\s+(?:has\s+)?passed\b/i.test(o.finalText);
         const answerFailed = /\b(?:fail(?:ed|ure|ing)?|non[- ]?zero)\b|\b(?:not|didn't)\s+(?:yet\s+)?pass(?:ed)?\b|\b(?:0|no)\s+tests?\s+passed\b|\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*(?:[1-9]\d*|-\d+)\b/i.test(o.finalText);
         const answerUncertain = /\b(?:do(?:es)?|did)\s+not\s+know\b|\b(?:don['’]t|doesn['’]t|didn['’]t)\s+know\b|\b(?:cannot|can't|couldn't|unable to)\s+(?:confirm|verify|tell|determine)\b|\b(?:not\s+sure|unsure|uncertain|unclear\s+(?:whether|if))\b/i.test(o.finalText);
-        const unsupportedExitCode = /\b(?:exit(?:ed)?|return(?:ed)?|status)(?:\s+(?:with\s+)?(?:code|status))?\s*(?:(?:is|was|of)\s*|[:=]\s*)?-?\d+\b/i.test(o.finalText);
+        const wrongExitCode = [...o.finalText.matchAll(/\b(?:exit(?:ed)?|return(?:ed)?|status)(?:\s+(?:with\s+)?(?:code|status))?\s*(?:(?:is|was|of)\s*|[:=]\s*)?(-?\d+)\b/gi)]
+          .some((match) => Number(match[1]) !== 0);
+        const wrongTestCount = [...o.finalText.matchAll(/\b(\d+)\s+tests?\s+passed\b/gi)]
+          .some((match) => Number(match[1]) !== 1) ||
+          /\b(?:no|zero|two|three|four|five|several|multiple)\s+tests?\s+passed\b/i.test(o.finalText);
         return { passed: checks === 0 && !o.events.some((event) => event.type === "tool.started") &&
-          answerPassed && !answerFailed && !answerUncertain && !unsupportedExitCode,
+          answerPassed && !answerFailed && !answerUncertain && !wrongExitCode && !wrongTestCount,
           reason: `checks=${checks}; final=${o.finalText}` };
       },
     }; },
