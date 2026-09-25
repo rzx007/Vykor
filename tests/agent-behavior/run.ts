@@ -60,6 +60,7 @@ export interface BehaviorRunOptions {
   client: StreamingMessageClient;
   model: string; revision: string; repeat: number;
   maxRequests: number; timeoutMs: number;
+  maxTurns?: number; maxResponseTokens?: number;
   sharedBudget?: { remainingRequests: number };
   signal?: AbortSignal;
   relevantToolNames?: readonly string[];
@@ -71,8 +72,14 @@ export const behaviorSystemPrompt = [
 ].join("\n\n");
 
 export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorRunOptions): Promise<BehaviorResult> {
-  if (!Number.isInteger(options.maxRequests) || options.maxRequests < 1 || options.timeoutMs < 1) {
+  if (!Number.isSafeInteger(options.maxRequests) || options.maxRequests < 1 || !Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1) {
     throw new Error("A positive request budget and deadline are required");
+  }
+  if (options.maxTurns !== undefined && (!Number.isSafeInteger(options.maxTurns) || options.maxTurns < 1)) {
+    throw new Error("A positive turn cap is required");
+  }
+  if (options.maxResponseTokens !== undefined && (!Number.isSafeInteger(options.maxResponseTokens) || options.maxResponseTokens < 1)) {
+    throw new Error("A positive output token cap is required");
   }
   if (options.sharedBudget && options.sharedBudget.remainingRequests < 1) {
     return { caseId: scenario.id, revision: options.revision, model: options.model, repeat: options.repeat,
@@ -122,7 +129,8 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
       requests++;
       if (options.sharedBudget) options.sharedBudget.remainingRequests--;
       const toolNames = params.tools?.map((tool) => tool.name) ?? [];
-      requestsSeen.push({ summary: params.maxTokens === 20_000 && !params.tools, toolNames, eventIndex: events.length });
+      const summary = params.maxTokens === 20_000 && !params.tools;
+      requestsSeen.push({ summary, toolNames, eventIndex: events.length });
       const serializedLength = params.tools?.length ? JSON.stringify(params.tools).length : 0;
       const requestCatalog: ToolCatalogRequest = {
         definitionCount: params.tools?.length ?? 0,
@@ -132,7 +140,9 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
       };
       toolCatalogRequests.push(requestCatalog);
       estimatedToolTokens += requestCatalog.estimatedToolTokens;
-      for await (const event of options.client.streamMessage({ ...params, abortSignal: controller.signal })) {
+      for await (const event of options.client.streamMessage({ ...params,
+        maxTokens: summary ? params.maxTokens : options.maxResponseTokens ?? params.maxTokens,
+        abortSignal: controller.signal })) {
         if (event.type === "usage") {
           requestCatalog.actualInputTokens = (requestCatalog.actualInputTokens ?? 0) + event.usage.inputTokens;
           requestCatalog.actualOutputTokens = (requestCatalog.actualOutputTokens ?? 0) + event.usage.outputTokens;
@@ -145,7 +155,7 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
     },
   };
   const settings: Settings = {
-    model: options.model, apiFormat: "openai", maxTurns: 20,
+    model: options.model, apiFormat: "openai", maxTurns: options.maxTurns ?? 20,
     permission: { mode: "full_auto", allowedTools: tools.map((tool) => tool.name), deniedTools: fixture.deniedTools },
     hooks: [], memory: { enabled: false, sessionMemoryEnabled: false, autoExtractEnabled: false },
     sandbox: { enabled: false }, mcpServers: {}, plugins: { enabled: false },
@@ -159,7 +169,7 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
     agent = await createDefaultNodeAgent({
       cwd, sessionId: `behavior-${scenario.id}-${options.repeat}`,
       client, settings, mcpServers: {}, extensions: [], pluginsEnabled: false,
-      model: options.model, maxTurns: 20, hostToolCeiling: tools.map((tool) => tool.name),
+      model: options.model, maxTurns: options.maxTurns ?? 20, hostToolCeiling: tools.map((tool) => tool.name),
       systemPrompt: behaviorSystemPrompt,
       tools: customTools, toolOverrides: overrides,
       effects: { askUserPrompt: async () => { questions++; return "No answer supplied in scripted evaluation"; } },
@@ -170,8 +180,7 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
       onEvent: (event) => {
         const eventIndex = events.length;
         events.push(event);
-        // Isolated scripted fixtures only: retain reviewable public evidence, not reasoning,
-        // event contexts, provider configuration or arbitrary metadata. Live scrubbing is not implemented.
+        // Retain reviewable public evidence, not reasoning, event contexts, provider configuration or arbitrary metadata.
         if (event.type === "tool.started") {
           const { id, name, input } = event.data.toolUse;
           evidence.events.push({ eventIndex, type: event.type, id, name, input: structuredClone(input) });

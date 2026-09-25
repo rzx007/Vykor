@@ -73,7 +73,7 @@ describe("behavior runner", () => {
       return { ...sample, verify: outcome === "verifier throws" ? () => { throw new Error("verifier failed"); } : sample.verify };
     } };
     const result = await runBehaviorCase(item, { ...options, client, signal: controller.signal,
-      maxRequests: outcome === "budget_cancelled" ? 2 : 5, timeoutMs: outcome === "timed_out" ? 100 : 10_000 });
+      maxRequests: outcome === "budget_cancelled" ? 2 : 5, timeoutMs: outcome === "timed_out" ? 1_000 : 10_000 });
     expect(result.evidence).toBeDefined();
     const directory = mkdtempSync(join(tmpdir(), "vykor-evidence-test-"));
     try {
@@ -160,5 +160,26 @@ describe("behavior runner", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.system).toContain(behaviorSystemPrompt);
     expect(sent[0]?.tools).toEqual(["Visible"]);
+  });
+
+  it("limits ordinary response tokens while preserving the compaction budget", async () => {
+    const sent: number[] = [];
+    const client: StreamingMessageClient = { async *streamMessage(params) {
+      sent.push(params.maxTokens ?? 0);
+      yield { type: "complete" as const, stopReason: "end_turn" };
+    } };
+    await runBehaviorCase(scenario(() => ({ passed: true, reason: "done" })), {
+      ...options, client, maxResponseTokens: 1024,
+    });
+    expect(sent).toEqual([1024]);
+  });
+
+  it("rejects invalid turn and output caps before requesting", async () => {
+    let calls = 0;
+    const client: StreamingMessageClient = { async *streamMessage() { calls++; yield { type: "complete" as const, stopReason: "end_turn" }; } };
+    const item = scenario(() => ({ passed: true, reason: "done" }));
+    await expect(runBehaviorCase(item, { ...options, client, maxTurns: 0 })).rejects.toThrow(/turn/i);
+    await expect(runBehaviorCase(item, { ...options, client, maxResponseTokens: 0 })).rejects.toThrow(/output|token/i);
+    expect(calls).toBe(0);
   });
 });
