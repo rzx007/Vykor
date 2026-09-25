@@ -22,18 +22,38 @@ function observation(finalText = "", toolNames: string[] = []): BehaviorObservat
 
 describe("case verifiers reject incomplete evidence", () => {
   it.each([
-    ["Relevant test exited 0; no edits needed.", "passed"],
-    ["Test passed: exit code 0, 1 test passed.", "passed"],
-    ["The relevant test passed.", "passed"],
+    ["The relevant test passed. No further action needed.", "passed"],
+    ["The test has passed; no edits are needed.", "passed"],
+    ["It passed. No further action needed.", "passed"],
     ["Test failed: exit code 1.", "failed"],
-    ["1 test passed, but exit code 1.", "failed"],
     ["The relevant test did not pass.", "failed"],
     ["The relevant test didn't pass.", "failed"],
-    ["Exit code 0, but the test failed.", "failed"],
     ["0 tests passed.", "failed"],
     ["No tests passed.", "failed"],
-    ["No tests passed, but the single test passed.", "failed"],
-  ] as const)("C3 classifies grounded answer %s", async (answer, expected) => {
+    ["The relevant test passed, but the test failed.", "failed"],
+    ["The relevant test passed with exit code 0.", "failed"],
+    ["An unrelated test passed.", "failed"],
+    ["I cannot confirm whether the relevant test passed.", "failed"],
+  ] as const)("C3 reports the user's passing evidence without re-running tools: %s", async (answer, expected) => {
+    const item = behaviorCases.find((entry) => entry.id === "C3")!;
+    const client: StreamingMessageClient = { async *streamMessage() {
+      yield { type: "text_delta" as const, delta: answer };
+      yield { type: "complete" as const, stopReason: "end_turn" };
+    } };
+    const result = await runBehaviorCase(item, { client, model: "scripted", revision: "c3-user-evidence",
+      repeat: 1, maxRequests: 2, timeoutMs: 10_000 });
+    expect(result.toolCalls).toBe(0);
+    expect(result.status).toBe(expected);
+  });
+
+  it("C3 scripted fixture finishes without re-running the passed test", async () => {
+    const item = behaviorCases.find((entry) => entry.id === "C3")!;
+    const result = await runBehaviorCase(item, { client: item.scripted!(), model: "scripted",
+      revision: "c3-scripted", repeat: 1, maxRequests: 2, timeoutMs: 10_000 });
+    expect(result).toMatchObject({ status: "passed", toolCalls: 0, requestCount: 1 });
+  });
+
+  it("C3 rejects a redundant test run even if the result passes", async () => {
     const item = behaviorCases.find((entry) => entry.id === "C3")!;
     let requests = 0;
     const client: StreamingMessageClient = { async *streamMessage() {
@@ -42,25 +62,13 @@ describe("case verifiers reject incomplete evidence", () => {
           id: "relevant-test", name: "RunRelevantTest", input: {} } };
         yield { type: "complete" as const, stopReason: "tool_use" };
       } else {
-        yield { type: "text_delta" as const, delta: answer };
+        yield { type: "text_delta" as const, delta: "Relevant test exited 0; no edits needed." };
         yield { type: "complete" as const, stopReason: "end_turn" };
       }
     } };
-    const result = await runBehaviorCase(item, { client, model: "scripted", revision: "c3-phrasing",
+    const result = await runBehaviorCase(item, { client, model: "scripted", revision: "c3-redundant-test",
       repeat: 1, maxRequests: 4, timeoutMs: 10_000 });
-    expect(result.evidence?.events.find((event) => event.type === "tool.completed"))
-      .toMatchObject({ content: [{ type: "text", text: "exit 0; 1 test passed" }] });
-    expect(result.status).toBe(expected);
-  });
-
-  it("C3 rejects an unsupported success claim without running the relevant test", async () => {
-    const item = behaviorCases.find((entry) => entry.id === "C3")!;
-    const client: StreamingMessageClient = { async *streamMessage() {
-      yield { type: "text_delta" as const, delta: "The relevant test passed." };
-      yield { type: "complete" as const, stopReason: "end_turn" };
-    } };
-    const result = await runBehaviorCase(item, { client, model: "scripted", revision: "c3-missing-tool",
-      repeat: 1, maxRequests: 2, timeoutMs: 10_000 });
+    expect(result.toolCalls).toBe(1);
     expect(result.status).toBe("failed");
   });
 

@@ -75,19 +75,16 @@ export const behaviorCases: BehaviorCase[] = [
   },
   {
     id: "C3", domain: "code", prompt: "A relevant test has passed; report the result.",
-    scripted: () => scripted([{ name: "RunRelevantTest" }], "Relevant test exited 0; no edits needed."),
+    scripted: () => scripted([], "The relevant test passed. No further action needed."),
     setup() { let checks = 0; return {
       tools: [tool("RunRelevantTest", async () => { checks++; return text("exit 0; 1 test passed"); })],
       verify: (o) => {
-        const started = o.events.find((event) => event.type === "tool.started" && event.data.toolUse.name === "RunRelevantTest");
-        const completed = o.events.find((event) => event.type === "tool.completed" &&
-          event.data.toolUseId === (started?.type === "tool.started" ? started.data.toolUse.id : undefined));
-        const toolPassed = completed?.type === "tool.completed" && !completed.data.result.isError &&
-          completed.data.result.content.some((part) => part.type === "text" &&
-            /\bexit\s+0\b/i.test(part.text) && /\btest\s+passed\b/i.test(part.text));
-        const answerPassed = /\bpassed\b|\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*0\b/i.test(o.finalText);
+        const answerPassed = /\b(?:relevant|the|that|this)\s+test\s+(?:has\s+)?passed\b|\bit\s+(?:has\s+)?passed\b/i.test(o.finalText);
         const answerFailed = /\b(?:fail(?:ed|ure|ing)?|non[- ]?zero)\b|\b(?:not|didn't)\s+(?:yet\s+)?pass(?:ed)?\b|\b(?:0|no)\s+tests?\s+passed\b|\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*(?:[1-9]\d*|-\d+)\b/i.test(o.finalText);
-        return { passed: checks === 1 && toolPassed && answerPassed && !answerFailed,
+        const answerUncertain = /\b(?:cannot|can't|couldn't|unable to)\s+(?:confirm|verify|tell|determine)\b/i.test(o.finalText);
+        const unsupportedExitCode = /\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*-?\d+\b/i.test(o.finalText);
+        return { passed: checks === 0 && !o.events.some((event) => event.type === "tool.started") &&
+          answerPassed && !answerFailed && !answerUncertain && !unsupportedExitCode,
           reason: `checks=${checks}; final=${o.finalText}` };
       },
     }; },
