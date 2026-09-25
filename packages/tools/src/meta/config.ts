@@ -28,7 +28,10 @@ export const configTool: ToolDefinition = {
           isError: true,
         };
       }
-      if (!(key in settings)) {
+      // 只接受 settings 自身已有的键。`key in settings` 会连 Object.prototype 上的
+      // 继承成员（constructor/toString 等）一起放行；把这类键写进 settings.json 后，
+      // 之后每次 loadSettings() 都会因未知顶层字段抛 SettingsFileError。
+      if (!Object.prototype.hasOwnProperty.call(settings, key)) {
         return { content: [{ type: "text", text: `Unknown config key: ${key}` }], isError: true };
       }
       await updateSettings((current) => ({ ...current, [key]: value }));

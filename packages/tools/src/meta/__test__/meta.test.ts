@@ -6,7 +6,7 @@ import { configTool } from "../config.js";
 import { toolSearchTool } from "../tool-search.js";
 import { askUserTool } from "../ask-user.js";
 import { hostPathDirectory, listSkillsTool, skillTool } from "../skill.js";
-import { ToolRegistry } from "@vykor/core";
+import { ToolRegistry, loadSettings } from "@vykor/core";
 import { SkillRegistry, type SkillDefinition } from "@vykor/skills";
 import { hostPathToWslPath } from "@vykor/sandbox";
 import * as fs from "node:fs/promises";
@@ -94,6 +94,58 @@ describe("configTool", () => {
     const result = await configTool.execute!({ action: "show" }, { cwd: process.cwd() });
     const text = (result.content[0] as any).text;
     expect(text).toContain("model");
+  });
+
+  it("sets a known config key", async () => {
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oh-config-set-"));
+    process.env.VYKOR_CONFIG_DIR = path.join(dir, "config");
+    try {
+      const result = await configTool.execute!(
+        { action: "set", key: "outputStyle", value: "test-style" },
+        { cwd: process.cwd() },
+      );
+
+      expect(result.isError).not.toBe(true);
+      expect((await loadSettings()).outputStyle).toBe("test-style");
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects keys inherited from Object.prototype without corrupting the settings file", async () => {
+    // `key in settings` also matches inherited members such as `constructor` or
+    // `toString`. Persisting one of those writes an unknown top-level field, and
+    // every later loadSettings() then fails with SettingsFileError.
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "oh-config-proto-"));
+    const configDir = path.join(dir, "config");
+    process.env.VYKOR_CONFIG_DIR = configDir;
+    try {
+      for (const key of ["constructor", "toString", "__proto__"]) {
+        const result = await configTool.execute!(
+          { action: "set", key, value: "x" },
+          { cwd: process.cwd() },
+        );
+
+        expect(result.isError).toBe(true);
+        expect((result.content[0] as any).text).toContain("Unknown config key");
+      }
+
+      const written = await fs
+        .readFile(path.join(configDir, "settings.json"), "utf-8")
+        .catch(() => "");
+      expect(written).not.toContain("constructor");
+      expect(written).not.toContain("toString");
+      expect(written).not.toContain("__proto__");
+      await expect(loadSettings()).resolves.toMatchObject({ model: expect.any(String) });
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
