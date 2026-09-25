@@ -24,6 +24,7 @@ describe("case verifiers reject incomplete evidence", () => {
   it.each([
     ["The relevant test passed. No further action needed.", "passed"],
     ["The test has passed; no edits are needed.", "passed"],
+    ["This test passed; no further action is needed.", "passed"],
     ["It passed. No further action needed.", "passed"],
     ["Test failed: exit code 1.", "failed"],
     ["The relevant test did not pass.", "failed"],
@@ -34,6 +35,9 @@ describe("case verifiers reject incomplete evidence", () => {
     ["The relevant test passed with exit code 0.", "failed"],
     ["An unrelated test passed.", "failed"],
     ["I cannot confirm whether the relevant test passed.", "failed"],
+    ["I'm not sure whether the relevant test passed.", "failed"],
+    ["The relevant test passed; return code 0.", "failed"],
+    ["The relevant test passed; the process returned 0.", "failed"],
   ] as const)("C3 reports the user's passing evidence without re-running tools: %s", async (answer, expected) => {
     const item = behaviorCases.find((entry) => entry.id === "C3")!;
     const client: StreamingMessageClient = { async *streamMessage() {
