@@ -79,8 +79,9 @@ export const behaviorCases: BehaviorCase[] = [
     setup() { let checks = 0; return {
       tools: [tool("RunRelevantTest", async () => { checks++; return text("exit 0; 1 test passed"); })],
       verify: (o) => {
-        const answerPassed = /\b(?:focused|relevant|the|that|this)\s+test\s+(?:has\s+)?passed\b|\bit\s+(?:has\s+)?passed\b|\btests?\s*:\s*1\s+passed\b/i.test(o.finalText);
-        const withoutZeroFailures = o.finalText.replace(/\b(?:0|zero|no)\s+(?:(?:tests?|cases?)\s+)?(?:failed|failures?)\b/gi, "");
+        const answerPassed = /\b(?:focused|relevant|the|that|this)\s+test\s+(?:has\s+)?passed\b|\bit\s+(?:has\s+)?passed\b/i.test(o.finalText) ||
+          /(?:^|[;.!?]\s*|\n\s*)tests?\s*:\s*1\s+passed\b/i.test(o.finalText);
+        const withoutZeroFailures = o.finalText.replace(/(^|[,;.!?:]\s*|\n\s*)(?:0|zero|no)\s+(?:(?:tests?|cases?)\s+)?(?:failed|failures?)\b/gi, "$1");
         const answerFailed = /\b(?:fail(?:ed|ure|ing)?|non[- ]?zero)\b|\b(?:not|didn't)\s+(?:yet\s+)?pass(?:ed)?\b|\b(?:0|no)\s+tests?\s+passed\b|\bexit(?:ed)?(?:\s+(?:code|status))?\s*[:=]?\s*(?:[1-9]\d*|-\d+)\b/i.test(withoutZeroFailures);
         const answerUncertain = /\b(?:do(?:es)?|did)\s+not\s+know\b|\b(?:don['’]t|doesn['’]t|didn['’]t)\s+know\b|\b(?:cannot|can't|couldn't|unable to)\s+(?:confirm|verify|tell|determine)\b|\b(?:not\s+sure|unsure|uncertain|unclear\s+(?:whether|if))\b/i.test(o.finalText);
         const wrongExitCode = [...o.finalText.matchAll(/\b(?:exit(?:ed)?|return(?:ed)?|status)(?:\s+(?:with\s+)?(?:code|status))?\s*(?:(?:is|was|of)\s*|[:=]\s*)?(-?\d+)\b/gi)]

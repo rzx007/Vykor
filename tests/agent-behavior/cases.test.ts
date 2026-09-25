@@ -29,6 +29,8 @@ describe("case verifiers reject incomplete evidence", () => {
     ["The focused test passed: exit code 0, 1 test passed. No code changed.", "passed"],
     ["Exit code: 0; Tests: 1 passed, 0 failed; Working tree unchanged. No rerun needed.", "passed"],
     ["Tests: 1 passed, zero failures; working tree unchanged.", "passed"],
+    ["Unrelated tests: 1 passed, 0 failed.", "failed"],
+    ["Tests: 1 passed, more than 0 failed.", "failed"],
     ["The focused test passed; no failures.", "passed"],
     ["The focused test passed; 0 tests failed.", "passed"],
     ["The relevant test passed; return code is 0; one test passed.", "passed"],
