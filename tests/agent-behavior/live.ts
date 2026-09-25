@@ -2,34 +2,43 @@ import { loadSettings, type Settings, type StreamingMessageClient } from "@vykor
 import { CredentialStorage } from "@vykor/auth";
 import { resolveApiClient } from "../../packages/agent-runtime/src/default-runtime-provider.js";
 import type { BehaviorCase } from "./cases.js";
+import type { BehaviorRunOptions } from "./run.js";
 
 export interface LiveConfig {
   provider: string; model: string; caseIds: string[]; repeats: number;
-  maxRequests: number; maxTurns: number; maxResponseTokens: number; timeoutMs: number;
+  maxRequests: number; maxTotalRequests: number; maxTurns: number; maxResponseTokens: number; timeoutMs: number;
+}
+
+export function liveRunOptions(config: LiveConfig, client: StreamingMessageClient, revision: string,
+  repeat: number, sharedBudget: { remainingRequests: number }): BehaviorRunOptions {
+  return { client, model: config.model, revision, repeat, sharedBudget,
+    maxRequests: config.maxRequests, maxTurns: config.maxTurns,
+    maxResponseTokens: config.maxResponseTokens, timeoutMs: config.timeoutMs };
 }
 
 export function parseLiveConfig(raw: unknown, cases: readonly BehaviorCase[]): LiveConfig {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Live config must be an object");
   const data = raw as Record<string, unknown>;
-  const keys = ["provider", "model", "caseIds", "repeats", "maxRequests", "maxTurns", "maxResponseTokens", "timeoutMs"];
+  const keys = ["provider", "model", "caseIds", "repeats", "maxRequests", "maxTotalRequests", "maxTurns", "maxResponseTokens", "timeoutMs"];
   if (Object.keys(data).some((key) => !keys.includes(key))) throw new Error("Unexpected live config field");
   if (data.provider !== "opencode-go" || data.model !== "deepseek-v4.1-flash") {
     throw new Error("Live evaluation requires opencode-go / deepseek-v4.1-flash");
   }
-  if (!Array.isArray(data.caseIds) || data.caseIds.length === 0 ||
+  if (!Array.isArray(data.caseIds) || data.caseIds.length === 0 || data.caseIds.length > 12 ||
       data.caseIds.some((id) => typeof id !== "string" || !cases.some((item) => item.id === id)) ||
       new Set(data.caseIds).size !== data.caseIds.length) {
     throw new Error("Live evaluation requires unique known case IDs");
   }
-  for (const name of ["repeats", "maxRequests", "maxTurns", "maxResponseTokens", "timeoutMs"] as const) {
+  for (const name of ["repeats", "maxRequests", "maxTotalRequests", "maxTurns", "maxResponseTokens", "timeoutMs"] as const) {
     if (!Number.isSafeInteger(data[name]) || (data[name] as number) < 1) throw new Error(`Live ${name} must be a positive safe integer`);
   }
-  const caps = { maxRequests: 25, maxTurns: 20, maxResponseTokens: 8192, timeoutMs: 120_000 };
+  const caps = { repeats: 3, maxRequests: 25, maxTotalRequests: 500,
+    maxTurns: 20, maxResponseTokens: 8192, timeoutMs: 120_000 };
   for (const name of Object.keys(caps) as Array<keyof typeof caps>) {
     if ((data[name] as number) > caps[name]) throw new Error(`Live ${name} exceeds the absolute cap`);
   }
-  if (!Number.isSafeInteger((data.maxRequests as number) * 12 * (data.repeats as number) * data.caseIds.length)) {
-    throw new Error("Live total HTTP request upper bound is too large");
+  if (!Number.isSafeInteger((data.maxRequests as number) * (data.repeats as number) * data.caseIds.length)) {
+    throw new Error("Live theoretical logical request count is too large");
   }
   return data as unknown as LiveConfig;
 }
@@ -40,7 +49,8 @@ export async function loadLiveClient(config: LiveConfig, deps: {
   resolve?: typeof resolveApiClient;
 } = {}): Promise<{ client: StreamingMessageClient; report: {
   provider: string; model: string; adapterRetryLimit: number; sdkRetryLimit: number;
-  maxHttpRequestsPerCase: number; providerBilling: "unknown";
+  maxHttpRequestsPerCase: number; maxLogicalRequestsTotal: number;
+  maxHttpRequestsTotal: number; providerBilling: "unknown";
 }; redactions: string[] }> {
   const settings = deps.settings ?? await loadSettings({});
   const provider = settings.customProviders?.find((item) => item.id === config.provider);
@@ -59,7 +69,10 @@ export async function loadLiveClient(config: LiveConfig, deps: {
     redactions: [apiKey, ...Object.values(provider.headers ?? {})].filter((value) => value.length > 0),
     // Four adapter attempts, each with the OpenAI SDK's default three HTTP attempts.
     report: { provider: config.provider, model: config.model, adapterRetryLimit: 3, sdkRetryLimit: 2,
-      maxHttpRequestsPerCase: config.maxRequests * 4 * 3, providerBilling: "unknown" },
+      maxHttpRequestsPerCase: config.maxRequests * 4 * 3,
+      maxLogicalRequestsTotal: config.maxTotalRequests,
+      maxHttpRequestsTotal: config.maxTotalRequests * 4 * 3,
+      providerBilling: "unknown" },
   };
 }
 

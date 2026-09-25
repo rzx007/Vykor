@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { behaviorCases } from "./cases.js";
-import { formatLiveFailure, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
+import { formatLiveFailure, liveRunOptions, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
 import { behaviorSystemPrompt, reserveBehaviorReport, runBehaviorCase, type BehaviorResult } from "./run.js";
 
 const mode = process.env.VYKOR_EVAL_MODE ?? "scripted";
@@ -13,6 +13,7 @@ if (mode === "live" && !liveConfigPath) throw new Error("Live evaluation require
 const liveConfig = liveConfigPath ? parseLiveConfig(JSON.parse(readFileSync(liveConfigPath, "utf8")), behaviorCases) : undefined;
 const live = liveConfig ? await loadLiveClient(liveConfig) : undefined;
 const selectedCases = liveConfig ? behaviorCases.filter((scenario) => liveConfig.caseIds.includes(scenario.id)) : behaviorCases;
+const sharedBudget = liveConfig ? { remainingRequests: liveConfig.maxTotalRequests } : undefined;
 const report = reserveBehaviorReport(process.env.VYKOR_EVAL_OUT);
 console.info(`Behavior evaluation report: ${report.path}`);
 const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
@@ -41,10 +42,12 @@ function save(): void {
       adapterRetryLimit: live.report.adapterRetryLimit,
       sdkRetryLimit: live.report.sdkRetryLimit,
       maxHttpRequestsPerCase: live.report.maxHttpRequestsPerCase,
-      maxHttpRequestsTotal: live.report.maxHttpRequestsPerCase * selectedCases.length * liveConfig.repeats,
+      maxLogicalRequestsTotal: live.report.maxLogicalRequestsTotal,
+      maxHttpRequestsTotal: live.report.maxHttpRequestsTotal,
       usage: "reported by provider when available; missing usage is unknown" } : {}),
     parameters: liveConfig ? { caseIds: liveConfig.caseIds, repeats: liveConfig.repeats,
       maxTurns: liveConfig.maxTurns, maxRequests: liveConfig.maxRequests,
+      maxTotalRequests: liveConfig.maxTotalRequests,
       maxResponseTokens: liveConfig.maxResponseTokens, timeoutMs: liveConfig.timeoutMs } :
       { maxTurns: 20, maxRequests: 25, timeoutMs: 120_000 },
     permission: { sandbox: false, mcpServers: {}, pluginsEnabled: false, hostTools: "case fixture only" },
@@ -57,15 +60,16 @@ describe(`cross-task behavior baseline (${mode})`, () => {
   for (const scenario of selectedCases) {
     for (let repeat = 1; repeat <= (liveConfig?.repeats ?? 3); repeat++) {
       it(`${scenario.id} repeat ${repeat}`, async () => {
-        const result = await runBehaviorCase(scenario, {
-          client: live?.client ?? scenario.scripted!(), model: liveConfig?.model ?? "scripted", revision, repeat,
-          maxRequests: liveConfig?.maxRequests ?? 25, timeoutMs: liveConfig?.timeoutMs ?? 120_000,
-          ...(liveConfig ? { maxTurns: liveConfig.maxTurns, maxResponseTokens: liveConfig.maxResponseTokens } : {}),
-        });
+        const options = liveConfig && live && sharedBudget
+          ? liveRunOptions(liveConfig, live.client, revision, repeat, sharedBudget)
+          : { client: scenario.scripted!(), model: "scripted", revision, repeat,
+            maxRequests: 25, timeoutMs: 120_000 };
+        const result = await runBehaviorCase(scenario, options);
         records.push(result);
         save();
         const failure = live ? formatLiveFailure(result, live.redactions) : `${result.status}: ${result.reason}`;
-        expect(["passed", "pending_review"], `${scenario.id}: ${failure}`).toContain(result.status);
+        expect(live ? ["passed", "pending_review", "not_run"] : ["passed", "pending_review"],
+          `${scenario.id}: ${failure}`).toContain(result.status);
       });
     }
   }

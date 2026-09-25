@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync, rmSync } from "node:fs";
 import type { Settings, StreamingMessageClient } from "@vykor/core";
 import { behaviorCases } from "./cases.js";
-import { formatLiveFailure, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
-import { runBehaviorCase } from "./run.js";
+import { formatLiveFailure, liveRunOptions, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
+import { reserveBehaviorReport, runBehaviorCase } from "./run.js";
 
 const valid = {
   provider: "opencode-go", model: "deepseek-v4.1-flash", caseIds: ["C3"], repeats: 1,
-  maxRequests: 4, maxTurns: 3, maxResponseTokens: 1024, timeoutMs: 90_000,
+  maxRequests: 4, maxTotalRequests: 4, maxTurns: 3, maxResponseTokens: 1024, timeoutMs: 90_000,
 };
 const settings: Settings = {
   provider: "radeon", model: "some-default", apiFormat: "openai", maxTurns: 50,
@@ -26,9 +27,18 @@ describe("live evaluation preflight", () => {
       { maxResponseTokens: 0 }, { timeoutMs: NaN }, { timeoutMs: 2_147_483_648 },
       { maxRequests: 26 }, { maxTurns: 21 }, { maxResponseTokens: 8193 }, { timeoutMs: 120_001 },
       { maxRequests: Number.MAX_SAFE_INTEGER }, { apiKey: "unexpected" },
+      { repeats: 100_000 }, { repeats: 4 }, { maxTotalRequests: 0 }, { maxTotalRequests: 501 },
+      { maxTotalRequests: undefined },
     ]) {
       expect(() => parseLiveConfig({ ...valid, ...patch }, behaviorCases)).toThrow();
     }
+  });
+
+  it("allows the 36-sample matrix to stop at a smaller shared budget", () => {
+    const allCases = behaviorCases.map((item) => item.id);
+    expect(allCases).toHaveLength(12);
+    expect(parseLiveConfig({ ...valid, caseIds: allCases, repeats: 3,
+      maxRequests: 25, maxTotalRequests: 500 }, behaviorCases).maxTotalRequests).toBe(500);
   });
 
   it("rejects missing provider, model or stored credential before client resolution", async () => {
@@ -56,7 +66,8 @@ describe("live evaluation preflight", () => {
     expect(result.client).toBe(client);
     expect(resolved).toMatchObject({ provider: "opencode-go", model: "deepseek-v4.1-flash", apiKey: "fixture-secret" });
     expect(result.report).toEqual({ provider: "opencode-go", model: "deepseek-v4.1-flash",
-      adapterRetryLimit: 3, sdkRetryLimit: 2, maxHttpRequestsPerCase: 48, providerBilling: "unknown" });
+      adapterRetryLimit: 3, sdkRetryLimit: 2, maxHttpRequestsPerCase: 48,
+      maxLogicalRequestsTotal: 4, maxHttpRequestsTotal: 48, providerBilling: "unknown" });
     expect(JSON.stringify(result.report)).not.toContain("fixture-secret");
   });
 
@@ -84,6 +95,30 @@ describe("live evaluation preflight", () => {
     const result = await runBehaviorCase(item, { ...config, client, revision: "fixture", repeat: 1 });
     expect(result).toMatchObject({ status: "budget_cancelled", requestCount: 1 });
     expect(calls).toBe(1);
+  });
+
+  it("records later samples as not_run after the shared budget is consumed", async () => {
+    const config = parseLiveConfig({ ...valid, repeats: 2, maxRequests: 2,
+      maxTotalRequests: 1 }, behaviorCases);
+    const item = behaviorCases.find((scenario) => scenario.id === "C3")!;
+    const sharedBudget = { remainingRequests: config.maxTotalRequests };
+    let calls = 0;
+    const client: StreamingMessageClient = { async *streamMessage() {
+      calls++;
+      yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const,
+        id: `fake-${calls}`, name: "RunRelevantTest", input: {} } };
+      yield { type: "complete" as const, stopReason: "tool_use" };
+    } };
+    const first = await runBehaviorCase(item, liveRunOptions(config, client, "fixture", 1, sharedBudget));
+    const second = await runBehaviorCase(item, liveRunOptions(config, client, "fixture", 2, sharedBudget));
+    const report = reserveBehaviorReport();
+    try {
+      report.save({ results: [first, second] });
+      const saved = JSON.parse(readFileSync(report.path, "utf8"));
+      expect(saved.results.map((result: { status: string; requestCount: number }) =>
+        [result.status, result.requestCount])).toEqual([["budget_cancelled", 1], ["not_run", 0]]);
+      expect(calls).toBe(1);
+    } finally { rmSync(report.path); }
   });
 
   it("scrubs a fake provider error before producing report and failure output", async () => {

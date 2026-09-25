@@ -162,7 +162,7 @@ describe("behavior runner", () => {
     expect(sent[0]?.tools).toEqual(["Visible"]);
   });
 
-  it("limits ordinary response tokens while preserving the compaction budget", async () => {
+  it("limits ordinary response tokens", async () => {
     const sent: number[] = [];
     const client: StreamingMessageClient = { async *streamMessage(params) {
       sent.push(params.maxTokens ?? 0);
@@ -172,6 +172,21 @@ describe("behavior runner", () => {
       ...options, client, maxResponseTokens: 1024,
     });
     expect(sent).toEqual([1024]);
+  });
+
+  it("keeps the existing 20,000-token compaction budget", async () => {
+    const item = behaviorCases.find((entry) => entry.id === "J3")!;
+    const source = item.scripted!();
+    const sent: number[] = [];
+    const client: StreamingMessageClient = { async *streamMessage(params) {
+      sent.push(params.maxTokens ?? 0);
+      yield* source.streamMessage(params);
+    } };
+    await runBehaviorCase(item, { ...options, client, maxRequests: 25,
+      maxResponseTokens: 1024 });
+    expect(sent).toContain(20_000);
+    expect(sent).toContain(1024);
+    expect(sent.every((cap) => cap === 1024 || cap === 20_000)).toBe(true);
   });
 
   it("rejects invalid turn and output caps before requesting", async () => {
