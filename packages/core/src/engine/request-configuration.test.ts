@@ -332,4 +332,30 @@ describe("QueryEngine request configuration", () => {
     expect(updatedRequests[0]!.messages.some((message) => message.type === "tool_result"))
       .toBe(true);
   });
+
+  it("forwards maxOutputTokens to the streaming request", async () => {
+    const requests: StreamMessageParams[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests.push(params);
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      },
+    };
+    const engine = new QueryEngine(
+      client,
+      new ToolRegistry(),
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      {
+        resolveRequestConfiguration: async () => ({
+          revision: 0,
+          model: "m",
+          client,
+          maxOutputTokens: 32_000,
+        }),
+      },
+    );
+    for await (const _ of engine.submitMessage("hi")) { /* consume */ }
+    expect(requests[0]).toMatchObject({ maxTokens: 32_000 });
+  });
 });

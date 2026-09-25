@@ -144,6 +144,10 @@ function toCompactClient(apiClient: StreamingMessageClient, model: string): Comp
   };
 }
 
+function isTruncatedStopReason(stopReason: string): boolean {
+  return stopReason === "max_tokens" || stopReason === "length";
+}
+
 export class MaxTurnsExceeded extends Error {
   constructor(public readonly maxTurns: number) {
     super(`Exceeded maximum agentic turns (${maxTurns})`);
@@ -410,6 +414,9 @@ export class QueryEngine implements IQueryEngine {
         messages: this.messages,
         system,
         tools: tools.length > 0 ? tools : undefined,
+        ...(requestConfiguration.maxOutputTokens !== undefined
+          ? { maxTokens: requestConfiguration.maxOutputTokens }
+          : {}),
         ...(requestConfiguration.reasoningEffort
           ? { reasoningEffort: requestConfiguration.reasoningEffort }
           : {}),
@@ -449,10 +456,9 @@ export class QueryEngine implements IQueryEngine {
         }
       }
 
-      // 输出 token 用尽时追加截断提示，避免静默截断
-      if (stopReason === "max_tokens" && toolUses.length === 0) {
+      if (isTruncatedStopReason(stopReason) && toolUses.length === 0) {
         const notice =
-          "\n\n⚠️ *输出已被截断（达到 max_tokens 上限）。可用 /compact 压缩上下文后继续。*";
+          "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
         assistantText += notice;
         yield { type: "text_delta", delta: notice };
       }

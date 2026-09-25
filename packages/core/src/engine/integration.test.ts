@@ -282,6 +282,29 @@ describe("Integration: Full Agent Loop", () => {
     expect(history[1]).toMatchObject({ phase: "final_answer" });
   });
 
+  it("appends a visible truncation notice when the provider hits the output limit", async () => {
+    const client = {
+      streamMessage: async function* () {
+        yield { type: "reasoning_delta" as const, delta: "long thinking", source: "reasoning_content" as const };
+        yield { type: "complete" as const, stopReason: "length" };
+      },
+    };
+    const engine = new QueryEngine(
+      client,
+      new ToolRegistry(),
+      allowAll(),
+      noopHooks(),
+      { trajectoryTrackerFactory: false },
+    );
+    const events: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("hi")) events.push(event);
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event: any) => event.delta)
+      .join("");
+    expect(text).toContain("已被截断");
+  });
+
   it("multi turn: user → API tool_use → execute → API text → complete", async () => {
     const registry = new ToolRegistry();
     registry.register(makeTool("Read", (input) => `contents of ${input.path}`));

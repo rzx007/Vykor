@@ -58,6 +58,7 @@ export type QueryRequestConfiguration = {
   client: StreamingMessageClient;
   systemPrompt?: string;
   contextWindow?: number;
+  maxOutputTokens?: number;
 };
 
 export interface AgentPermissionRequest {
