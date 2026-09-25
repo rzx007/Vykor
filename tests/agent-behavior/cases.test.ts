@@ -31,6 +31,8 @@ describe("case verifiers reject incomplete evidence", () => {
     ["The relevant test didn't pass.", "failed"],
     ["Exit code 0, but the test failed.", "failed"],
     ["0 tests passed.", "failed"],
+    ["No tests passed.", "failed"],
+    ["No tests passed, but the single test passed.", "failed"],
   ] as const)("C3 classifies grounded answer %s", async (answer, expected) => {
     const item = behaviorCases.find((entry) => entry.id === "C3")!;
     let requests = 0;
