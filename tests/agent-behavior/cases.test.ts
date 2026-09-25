@@ -27,6 +27,10 @@ describe("case verifiers reject incomplete evidence", () => {
     ["This test passed; no further action is needed.", "passed"],
     ["It passed. No further action needed.", "passed"],
     ["The focused test passed: exit code 0, 1 test passed. No code changed.", "passed"],
+    ["Exit code: 0; Tests: 1 passed, 0 failed; Working tree unchanged. No rerun needed.", "passed"],
+    ["Tests: 1 passed, zero failures; working tree unchanged.", "passed"],
+    ["The focused test passed; no failures.", "passed"],
+    ["The focused test passed; 0 tests failed.", "passed"],
     ["The relevant test passed; return code is 0; one test passed.", "passed"],
     ["The focused test passed; one test passed. No files were changed.", "passed"],
     ["Test failed: exit code 1.", "failed"],
@@ -37,6 +41,10 @@ describe("case verifiers reject incomplete evidence", () => {
     ["The relevant test passed, but the test failed.", "failed"],
     ["The relevant test passed with exit code 0.", "passed"],
     ["The relevant test passed; exit code 1.", "failed"],
+    ["Tests: 1 passed, 1 failed; exit code 0.", "failed"],
+    ["Tests: 1 passed, 0 failed; exit code 1.", "failed"],
+    ["Tests: 1 passed, 0 failed; the test failed.", "failed"],
+    ["The focused test passed; no failures, but 1 failed.", "failed"],
     ["The relevant test passed; 2 tests passed.", "failed"],
     ["The relevant test passed; two tests passed.", "failed"],
     ["The focused test passed; six tests passed.", "failed"],
@@ -74,8 +82,8 @@ describe("case verifiers reject incomplete evidence", () => {
     const result = await runBehaviorCase(item, { client: item.scripted!(), model: "scripted",
       revision: "c3-scripted", repeat: 1, maxRequests: 2, timeoutMs: 10_000 });
     expect(result).toMatchObject({ status: "passed", toolCalls: 0, requestCount: 1 });
-    expect(result.evidence?.finalText).toContain("exit code 0");
-    expect(result.evidence?.finalText).toContain("1 test passed");
+    expect(result.evidence?.finalText).toMatch(/exit code:\s*0/i);
+    expect(result.evidence?.finalText).toMatch(/tests:\s*1 passed,\s*0 failed/i);
   });
 
   it("C3 rejects a redundant test run even if the result passes", async () => {
