@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, rmSync } from "node:fs";
 import type { Settings, StreamingMessageClient } from "@vykor/core";
-import { behaviorCases } from "./cases.js";
-import { formatLiveFailure, liveRunOptions, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
+import { behaviorCases, type BehaviorCase } from "./cases.js";
+import { assertLiveSampleComplete, formatLiveFailure, liveRunOptions, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
 import { reserveBehaviorReport, runBehaviorCase } from "./run.js";
 
 const valid = {
@@ -100,14 +100,14 @@ describe("live evaluation preflight", () => {
   it("records later samples as not_run after the shared budget is consumed", async () => {
     const config = parseLiveConfig({ ...valid, repeats: 2, maxRequests: 2,
       maxTotalRequests: 1 }, behaviorCases);
-    const item = behaviorCases.find((scenario) => scenario.id === "C3")!;
+    const item: BehaviorCase = { id: "fixture", domain: "files", prompt: "Finish",
+      setup: () => ({ tools: [], verify: () => ({ passed: true, reason: "done" }) }) };
     const sharedBudget = { remainingRequests: config.maxTotalRequests };
     let calls = 0;
     const client: StreamingMessageClient = { async *streamMessage() {
       calls++;
-      yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const,
-        id: `fake-${calls}`, name: "RunRelevantTest", input: {} } };
-      yield { type: "complete" as const, stopReason: "tool_use" };
+      yield { type: "text_delta" as const, delta: "done" };
+      yield { type: "complete" as const, stopReason: "end_turn" };
     } };
     const first = await runBehaviorCase(item, liveRunOptions(config, client, "fixture", 1, sharedBudget));
     const second = await runBehaviorCase(item, liveRunOptions(config, client, "fixture", 2, sharedBudget));
@@ -116,8 +116,10 @@ describe("live evaluation preflight", () => {
       report.save({ results: [first, second] });
       const saved = JSON.parse(readFileSync(report.path, "utf8"));
       expect(saved.results.map((result: { status: string; requestCount: number }) =>
-        [result.status, result.requestCount])).toEqual([["budget_cancelled", 1], ["not_run", 0]]);
+        [result.status, result.requestCount])).toEqual([["passed", 1], ["not_run", 0]]);
       expect(calls).toBe(1);
+      expect(() => assertLiveSampleComplete(first, [])).not.toThrow();
+      expect(() => assertLiveSampleComplete(second, [])).toThrow(/not_run|incomplete/i);
     } finally { rmSync(report.path); }
   });
 

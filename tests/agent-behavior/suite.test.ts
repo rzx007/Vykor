@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { behaviorCases } from "./cases.js";
-import { formatLiveFailure, liveRunOptions, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
+import { assertLiveSampleComplete, liveRunOptions, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
 import { behaviorSystemPrompt, reserveBehaviorReport, runBehaviorCase, type BehaviorResult } from "./run.js";
 
 const mode = process.env.VYKOR_EVAL_MODE ?? "scripted";
@@ -67,9 +67,8 @@ describe(`cross-task behavior baseline (${mode})`, () => {
         const result = await runBehaviorCase(scenario, options);
         records.push(result);
         save();
-        const failure = live ? formatLiveFailure(result, live.redactions) : `${result.status}: ${result.reason}`;
-        expect(live ? ["passed", "pending_review", "not_run"] : ["passed", "pending_review"],
-          `${scenario.id}: ${failure}`).toContain(result.status);
+        if (live) assertLiveSampleComplete(result, live.redactions);
+        else expect(["passed", "pending_review"], `${scenario.id}: ${result.status}: ${result.reason}`).toContain(result.status);
       });
     }
   }

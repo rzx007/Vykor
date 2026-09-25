@@ -91,3 +91,9 @@ export function formatLiveFailure(result: { status: string; reason: string }, se
   const safe = scrubLiveResult(result, secrets);
   return `${safe.status}: ${safe.reason}`;
 }
+
+export function assertLiveSampleComplete(result: { status: string; reason: string }, secrets: string[]): void {
+  if (result.status !== "passed" && result.status !== "pending_review") {
+    throw new Error(`Live sample incomplete: ${formatLiveFailure(result, secrets)}`);
+  }
+}
