@@ -68,3 +68,8 @@ export function scrubLiveResult<T>(result: T, secrets: string[]): T {
   };
   return redact(result) as T;
 }
+
+export function formatLiveFailure(result: { status: string; reason: string }, secrets: string[]): string {
+  const safe = scrubLiveResult(result, secrets);
+  return `${safe.status}: ${safe.reason}`;
+}

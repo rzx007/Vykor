@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Settings, StreamingMessageClient } from "@vykor/core";
 import { behaviorCases } from "./cases.js";
-import { loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
+import { formatLiveFailure, loadLiveClient, parseLiveConfig, scrubLiveResult } from "./live.js";
 import { runBehaviorCase } from "./run.js";
 
 const valid = {
@@ -81,5 +81,18 @@ describe("live evaluation preflight", () => {
     const result = await runBehaviorCase(item, { ...config, client, revision: "fixture", repeat: 1 });
     expect(result).toMatchObject({ status: "budget_cancelled", requestCount: 1 });
     expect(calls).toBe(1);
+  });
+
+  it("scrubs a fake provider error before producing report and failure output", async () => {
+    const item = behaviorCases.find((scenario) => scenario.id === "C3")!;
+    const client: StreamingMessageClient = { async *streamMessage() {
+      throw new Error("provider failed with fixture-secret and header-secret");
+    } };
+    const result = await runBehaviorCase(item, { client, model: valid.model, revision: "fixture", repeat: 1,
+      maxRequests: 1, maxTurns: 1, maxResponseTokens: 1024, timeoutMs: 1_000 });
+    const secrets = ["fixture-secret", "header-secret"];
+    expect(result.status).toBe("failed");
+    expect(JSON.stringify(scrubLiveResult(result, secrets))).not.toMatch(/fixture-secret|header-secret/);
+    expect(formatLiveFailure(result, secrets)).not.toMatch(/fixture-secret|header-secret/);
   });
 });
