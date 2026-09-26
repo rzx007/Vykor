@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { HttpTransport } from "../http-transport.js";
 import { VykorClient } from "../http-client.js";
 
-const capabilities = (version = 4) => Response.json({
+const capabilities = (version = CURRENT_PROTOCOL_VERSION) => Response.json({
   serverVersion: "test",
   protocol: { version },
   features: { jobs: 2 },
@@ -32,11 +33,11 @@ describe("mandatory protocol handshake", () => {
     await client.sessions.list();
     expect(calls.filter((call) => call.path === "/capabilities")).toHaveLength(1);
     for (const call of calls.slice(1)) {
-      expect(call.headers.get("x-vykor-protocol-version")).toBe("4");
+      expect(call.headers.get("x-vykor-protocol-version")).toBe(String(CURRENT_PROTOCOL_VERSION));
     }
   });
 
-  it.each([3, 5])("does not send HTTP or SSE business requests to protocol %s", async (version) => {
+  it.each([3, CURRENT_PROTOCOL_VERSION + 1])("does not send HTTP or SSE business requests to protocol %s", async (version) => {
     const fetchImpl = vi.fn(async () => capabilities(version));
     const client = new VykorClient({ baseUrl: "http://daemon", fetch: fetchImpl });
     const results = await Promise.allSettled([
@@ -60,7 +61,7 @@ describe("mandatory protocol handshake", () => {
       headers: { "X-Vykor-Protocol-Version": "3" },
     });
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(new Headers(fetchImpl.mock.calls[2]![1].headers).get("x-vykor-protocol-version")).toBe("4");
+    expect(new Headers(fetchImpl.mock.calls[2]![1].headers).get("x-vykor-protocol-version")).toBe(String(CURRENT_PROTOCOL_VERSION));
   });
 
   it("exempts health and capabilities, including query strings, without marking the connection verified", async () => {

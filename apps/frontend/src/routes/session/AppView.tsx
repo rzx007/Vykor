@@ -6,11 +6,15 @@ import { Footer } from "./Footer";
 import { Prompt } from "../../components/prompt/Prompt";
 import type { McpServerSnapshot, TranscriptItem } from "../../types";
 import type { Command } from "../../keymap/commands";
+import type { SessionModelRetryState, SessionModelUsageSummary } from "@vykor/client";
 import { parseStatus } from "../../services/status";
 
 export type AppViewProps = {
   transcript: TranscriptItem[];
   assistantBuffer: string;
+  retry?: SessionModelRetryState;
+  usage?: SessionModelUsageSummary;
+  knownUsage?: { inputTokens: number; outputTokens: number };
   ready: boolean;
   busy: boolean;
   status: Record<string, unknown>;
@@ -36,6 +40,9 @@ export type AppViewProps = {
 export function AppView({
   transcript,
   assistantBuffer,
+  retry,
+  usage,
+  knownUsage,
   ready,
   busy,
   status,
@@ -99,7 +106,7 @@ export function AppView({
     <box flexDirection="row" width="100%" height="100%" backgroundColor={theme.colors.background}>
       {/* Left column: messages + panels + prompt + footer */}
       <box flexDirection="column" flexGrow={1} backgroundColor={theme.colors.background}>
-        <Session items={transcript} assistantBuffer={assistantBuffer} />
+        <Session items={transcript} assistantBuffer={assistantBuffer} retry={retry} usage={usage} inputTokens={knownUsage?.inputTokens} outputTokens={knownUsage?.outputTokens} />
         {prompt}
         <Footer status={status} mcpServers={mcpServers} version={version} />
       </box>

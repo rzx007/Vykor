@@ -11,6 +11,34 @@ describe("agent transcript codec", () => {
     ).messages.find((message) => message.type === "tool_result");
     expect(result).toEqual({ type: "tool_result", toolUseId: "call", content: [{ type: "text", text: "legacy" }], isError: false });
   });
+  it("excludes superseded and uncommitted generations from rebuilt history", () => {
+    const messages: any[] = [
+      { id: "m", seq: 0, role: "assistant", metadata: {} },
+    ];
+    const parts: any[] = [
+      {
+        messageId: "m", seq: 0, type: "text", status: "interrupted", text: "旧的残缺",
+        metadata: { modelGeneration: { generationId: "g1", attempt: 1, superseded: true } },
+      },
+      {
+        messageId: "m", seq: 1, type: "reasoning", status: "interrupted", text: "旧思考",
+        metadata: { source: "reasoning_content", modelGeneration: { generationId: "g1", attempt: 1, superseded: true } },
+      },
+      {
+        messageId: "m", seq: 2, type: "text", status: "completed", text: "新的完整",
+        metadata: { modelGeneration: { generationId: "g1", attempt: 2, committed: true } },
+      },
+      {
+        messageId: "m", seq: 3, type: "reasoning", status: "completed", text: "新思考",
+        metadata: { source: "reasoning_content", modelGeneration: { generationId: "g1", attempt: 2, committed: true } },
+      },
+    ];
+    const assistant = buildAgentTranscript(messages, parts).messages
+      .find((message) => message.type === "assistant");
+    expect(assistant?.type === "assistant" && assistant.content).toBe("新的完整");
+    expect(assistant?.type === "assistant" && assistant.reasoning).toBe("新思考");
+  });
+
   it("round trips stored feedback once with summary and leaves legacy output unchanged", () => {
     const content = [{ type: "text" as const, text: "[tool-result kind=permission execution=not_started]" }, { type: "text" as const, text: "body".repeat(1000) }];
     const input: any[] = [

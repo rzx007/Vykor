@@ -11,6 +11,10 @@ export interface StreamMessageParams {
   temperature?: number;
   reasoningEffort?: string;
   abortSignal?: AbortSignal;
+  /** 连接阶段（请求建立）的时间上限，毫秒。 */
+  requestTimeoutMs?: number;
+  /** 流连续没有收到协议事件/心跳的时间上限，毫秒。 */
+  streamIdleTimeoutMs?: number;
 }
 
 export interface StreamingMessageClient {

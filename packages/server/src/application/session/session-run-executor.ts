@@ -1,4 +1,5 @@
 import type { SessionRecord } from "@vykor/protocol";
+import { readSessionModelRetryState } from "@vykor/protocol";
 import type { ProviderInputCapabilities } from "@vykor/api";
 import { PluginPreparationError } from "@vykor/agent-runtime";
 import type { ContentBlock, ModelInputCapabilities } from "@vykor/core";
@@ -269,6 +270,12 @@ export class SessionRunExecutor {
           this.context.data.permissions
             .list({ sessionId })
             .some((request) => request.runId === runId && request.status === "pending"),
+        readModelRetryDeadline: () => {
+          const metadata = this.context.data.runs.getRun(runId)?.metadata ?? {};
+          const retry = readSessionModelRetryState(metadata);
+          if (!retry) return undefined;
+          return Math.min(retry.nextRetryAt, retry.recoveryDeadlineAt);
+        },
         hasRunningChildTask: () =>
           this.context.data.runs
             .listSessionTasks(sessionId)

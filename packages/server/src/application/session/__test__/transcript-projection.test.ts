@@ -87,6 +87,36 @@ describe("SessionTranscriptProjection", () => {
     expect(part.metadata).toMatchObject({ toolCallId: "call-1", toolAttemptId: "tool_attempt_call-1_1", outcome: "failed", executionState: "not_started", recoveryHint: "需要批准", compactSummary: "permission; not_started", custom: "keep" });
     for (const key of ["modelGeneration", "committed", "superseded"]) expect(part.metadata).not.toHaveProperty(key);
   });
+  it("supersedes the previous attempt's parts on a retry and commits the successful attempt", () => {
+    const store = createStore();
+    const projection = new SessionTranscriptProjection(store as any);
+    const state = projection.beginRun("s1", "i1", "r1", createInput());
+
+    projection.projectStreamEvent(state, { type: "generation_started", generationId: "g1", attempt: 1 });
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "残缺" });
+    const failedPartId = state.activeTextPartId!;
+
+    projection.projectStreamEvent(state, { type: "generation_started", generationId: "g1", attempt: 2 });
+    const superseded = store.upsertMessagePart.mock.calls.find(
+      (call) => call[0].id === failedPartId && call[0].metadata?.modelGeneration?.superseded,
+    );
+    expect(superseded?.[0].status).toBe("interrupted");
+
+    projection.projectStreamEvent(state, { type: "text_delta", delta: "完整" });
+    const successPartId = state.activeTextPartId!;
+    projection.projectStreamEvent(state, { type: "complete", stopReason: "end_turn" });
+
+    const committed = store.upsertMessagePart.mock.calls.find(
+      (call) => call[0].id === successPartId && call[0].metadata?.modelGeneration?.committed === true,
+    );
+    expect(committed).toBeDefined();
+    expect(committed![0].metadata.modelGeneration).toMatchObject({
+      generationId: "g1",
+      attempt: 2,
+      committed: true,
+    });
+  });
+
   it("records the actual request configuration on the assistant message", () => {
     const store = createStore();
     const projection = new SessionTranscriptProjection(store as any);

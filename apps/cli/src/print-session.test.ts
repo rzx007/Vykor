@@ -307,10 +307,15 @@ describe("runPrintSession", () => {
     stdoutSpy.mockRestore();
   });
 
-  it("does not synthesize json output from snapshot fallback", async () => {
+  it("prints effective JSON and keeps incomplete-usage notice off text stdout", async () => {
     const writes: string[] = [];
     const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
       writes.push(String(chunk));
+      return true;
+    }) as never);
+    const errors: string[] = [];
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(((chunk: unknown) => {
+      errors.push(String(chunk));
       return true;
     }) as never);
 
@@ -329,7 +334,7 @@ describe("runPrintSession", () => {
       sessionId: "s1",
       inputId: "i1",
       status: "completed",
-      metadata: {},
+      metadata: { modelUsage: { incomplete: true, unknownAttempts: 1, partialAttempts: 0 } },
       createdAt: 2,
       updatedAt: 4,
     };
@@ -352,10 +357,22 @@ describe("runPrintSession", () => {
       ],
       parts: [
         {
-          id: "p-assistant",
+          id: "p-old",
           sessionId: "s1",
           messageId: "m-assistant",
           seq: 1,
+          type: "text",
+          status: "completed",
+          text: "old json text",
+          metadata: { modelGeneration: { generationId: "g1", attempt: 1, superseded: true } },
+          createdAt: 3,
+          updatedAt: 4,
+        },
+        {
+          id: "p-assistant",
+          sessionId: "s1",
+          messageId: "m-assistant",
+          seq: 2,
           type: "text",
           status: "completed",
           text: "snapshot-only json text",
@@ -365,7 +382,7 @@ describe("runPrintSession", () => {
         },
       ],
       runs: [run],
-      attempts: [],
+      attempts: [{ id: "a1", runId: "r1", sequence: 1, status: "completed", inputTokens: 20, outputTokens: 10, createdAt: 3, updatedAt: 4 }],
       permissions: [],
     };
     const Client = VykorClient as unknown as ReturnType<typeof vi.fn>;
@@ -398,9 +415,19 @@ describe("runPrintSession", () => {
       { model: "m", cwd: "/tmp", outputFormat: "json" },
     );
 
-    expect(writes.join("")).toBe("");
+    expect(JSON.parse(writes.join(""))).toMatchObject({ sessionId: "s1", runId: "r1", status: "completed", text: "snapshot-only json text", usage: { inputTokens: 20, outputTokens: 10, incomplete: true, unknownAttempts: 1 } });
+    writes.length = 0;
+    await runPrintSession(
+      { model: "m", outputStyle: "default" } as never,
+      "hi",
+      { model: "m", cwd: "/tmp", outputFormat: "text" },
+    );
+    expect(writes.join("")).toBe("snapshot-only json text\n");
+    expect(errors.join("")).toContain("已知用量：20 输入 / 10 输出；部分请求用量未知");
+    expect(errors.join("").match(/部分请求用量未知/g)).toHaveLength(1);
     expect(exitSpy).not.toHaveBeenCalled();
     stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 
   it("writes permissionMode and maxTurns into createSession metadata", async () => {

@@ -9,7 +9,7 @@ import type {
   StreamingMessageClient,
 } from "@vykor/core";
 import { MemoryManager, renderMemoryFile } from "@vykor/memory";
-import { getProjectMemoryDir } from "@vykor/core";
+import { getProjectMemoryDir, ModelRequestFailure } from "@vykor/core";
 import { describe, expect, it } from "vitest";
 
 import { createAgentMemoryRuntime, extractMemories } from "./memory-runtime.js";
@@ -423,5 +423,47 @@ describe("extractMemories", () => {
       titles: [],
     });
     expect(streamCalls).toBe(0);
+  });
+
+  it("recovers from a transient 429 without appending the failed attempt and writes once", async () => {
+    const manager = new MemoryManager();
+    let calls = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage(): AsyncIterable<StreamEvent> {
+        calls++;
+        if (calls === 1) {
+          yield { type: "text_delta", delta: '{"memories":[{"body":"half' };
+          throw new ModelRequestFailure("rate limited", {
+            kind: "rate_limit",
+            phase: "request",
+            retryable: true,
+          });
+        }
+        yield {
+          type: "text_delta",
+          delta: JSON.stringify({ memories: [{
+            title: "Storage", body: "Use SQLite for session state", scope: "project",
+            evidence: "Use SQLite for session state",
+          }] }),
+        };
+        yield { type: "complete", stopReason: "end_turn" };
+      },
+    };
+
+    const result = await extractMemories({
+      apiClient: client,
+      model: "test-model",
+      messages: [
+        { type: "user", content: "Use SQLite for session state" },
+        { type: "assistant", content: "noted" },
+      ],
+      manager, memoryDir: resolve("memory"), cwd: resolve("project"),
+      sessionId: "session-429-retry", automatic: true,
+      retryPolicy: { baseDelayMs: 1, maxDelayMs: 1 },
+    });
+
+    expect(calls).toBe(2);
+    expect(result.writtenIds).toHaveLength(1);
+    expect(await manager.getAll()).toHaveLength(1);
   });
 });

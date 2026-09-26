@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { join } from "node:path";
 import { MemoryManager } from "@vykor/memory";
 import type { StreamEvent, StreamingMessageClient } from "@vykor/core";
+import { ModelRequestFailure } from "@vykor/core";
 import {
   hasMemoryWritesSince,
   buildExtractionPrompt,
@@ -177,5 +178,41 @@ describe("extractMemoriesFromTurn", () => {
     });
     expect(teamOnly.skipped).toBe(true);
     expect(teamOnly.reason).toBe("all records rejected");
+  });
+
+  it("recovers from a transient 503 and writes each parsed record once", async () => {
+    const manager = new MemoryManager(100);
+    let calls = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage(): AsyncIterable<StreamEvent> {
+        calls++;
+        if (calls === 1) {
+          yield { type: "text_delta", delta: '{"memories":[{"body":"half' };
+          throw new ModelRequestFailure("service unavailable", {
+            kind: "server",
+            phase: "request",
+            retryable: true,
+            statusCode: 503,
+          });
+        }
+        yield {
+          type: "text_delta",
+          delta: '{"memories":[{"title":"Staging IP","body":"Staging server is 10.0.0.7","type":"reference"}]}',
+        };
+        yield { type: "complete", stopReason: "end_turn" };
+      },
+    };
+
+    const result = await extractMemoriesFromTurn({
+      apiClient: client,
+      model: "test-model",
+      messages,
+      manager,
+      retryPolicy: { baseDelayMs: 1, maxDelayMs: 1 },
+    });
+
+    expect(calls).toBe(2);
+    expect(result.writtenIds).toHaveLength(1);
+    expect(await manager.getAll()).toHaveLength(1);
   });
 });

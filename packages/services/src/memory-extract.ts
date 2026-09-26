@@ -1,4 +1,5 @@
-import type { StreamingMessageClient } from "@vykor/core";
+import type { StreamingMessageClient, ModelAttemptFinishedEvent, ModelRetryPolicy } from "@vykor/core";
+import { streamBufferedModelWithRetry } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
   detectCredentialValue,
@@ -112,6 +113,10 @@ export interface ExtractMemoriesOptions {
   memoryDir?: string;
   cwd?: string;
   maxRecords?: number;
+  /** 辅助调用每次尝试的用量结算；无所属 Run 时由宿主记录，不伪造 Run。 */
+  onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void;
+  /** 辅助调用的独立重试策略（不共享主生成预算）。 */
+  retryPolicy?: Partial<ModelRetryPolicy>;
 }
 
 /** 端到端：构 prompt → 调模型 → 解析 → 写入。 */
@@ -128,13 +133,20 @@ export async function extractMemoriesFromTurn(options: ExtractMemoriesOptions): 
 
   const prompt = buildExtractionPrompt(options.existingManifest ?? "", messages, maxRecords);
   let finalText = "";
-  for await (const event of options.apiClient.streamMessage({
-    model: options.model,
-    messages: [{ type: "user", content: prompt }],
-    system: EXTRACTION_SYSTEM_PROMPT,
-    maxTokens: 2048,
-    tools: [],
-  })) {
+  for await (const event of streamBufferedModelWithRetry(
+    options.apiClient,
+    {
+      model: options.model,
+      messages: [{ type: "user", content: prompt }],
+      system: EXTRACTION_SYSTEM_PROMPT,
+      maxTokens: 2048,
+      tools: [],
+    },
+    {
+      ...(options.onAttemptFinished ? { onAttemptFinished: options.onAttemptFinished } : {}),
+      ...(options.retryPolicy ? { policy: options.retryPolicy } : {}),
+    },
+  )) {
     if (event.type === "text_delta") finalText += event.delta;
     if (event.type === "complete") break;
   }

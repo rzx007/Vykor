@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { SessionEventRecord, SessionStateSnapshot } from "@vykor/client"
 
 import { SessionSubscriptionService } from "./session-subscription-service"
+import { visibleTranscriptParts } from "../../../renderer/src/components/desktop/conversation-page/transcript/transcript-visibility"
+import type { DesktopSessionView } from "../../../shared/session-types"
 
 const session = {
   id: "s1",
@@ -77,6 +79,33 @@ afterEach(() => {
 })
 
 describe("SessionSubscriptionService coalescing", () => {
+  it("keeps retry supersession and usage completeness when intermediate frames are skipped", async () => {
+    vi.useFakeTimers()
+    const run = { id: "r", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 }
+    const part = { id: "p1", sessionId: "s1", messageId: "m", seq: 1, type: "text", status: "running", text: "obsolete", metadata: {}, createdAt: 1, updatedAt: 1 }
+    const event = (seq: number, type: string, payload: Record<string, unknown>): SessionEventRecord => ({
+      id: `e${seq}`, seq, type, schemaVersion: 1, sessionId: "s1", payload, createdAt: seq,
+    })
+    const client = clientWithStream(async function* () {
+      yield event(2, "session.message.created", { message: { id: "m", sessionId: "s1", seq: 1, role: "assistant", metadata: {}, createdAt: 1, updatedAt: 1 } })
+      yield event(3, "session.message.part.updated", { part })
+      yield event(4, "session.run.updated", { run: { ...run, metadata: { modelRetry: { generationId: "g", attempt: 1, retryNumber: 1, maxRetries: 5, reason: "network", nextRetryAt: 10, recoveryDeadlineAt: 1000 } } } })
+      yield event(5, "session.message.part.updated", { part: { ...part, status: "interrupted", metadata: { modelGeneration: { generationId: "g", attempt: 1, superseded: true } } } })
+      yield event(6, "session.message.part.updated", { part: { ...part, id: "p2", seq: 2, text: "answer", status: "completed", metadata: { modelGeneration: { generationId: "g", attempt: 2, committed: true } } } })
+      yield event(7, "session.run.updated", { run: { ...run, status: "completed", metadata: { modelRetry: null, modelUsage: { incomplete: true, unknownAttempts: 1, partialAttempts: 0 } } } })
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent).toHaveLength(1)
+      const view = sent[0]!.payload as DesktopSessionView
+      expect(visibleTranscriptParts(view.parts, true).map(p => p.text)).toEqual(["answer"])
+      expect(view.runs[0]?.metadata).toMatchObject({ modelRetry: null, modelUsage: { incomplete: true } })
+    } finally { service.clearAll() }
+  })
   it("collapses a live burst into one sessionUpdated with the latest cursor", async () => {
     vi.useFakeTimers()
     const client = clientWithStream(async function* () {

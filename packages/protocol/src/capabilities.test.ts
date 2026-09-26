@@ -10,7 +10,7 @@ import {
 describe("protocol capabilities", () => {
   const server = parseServerCapabilities({
     serverVersion: "0.4.0",
-    protocol: { version: 4 },
+    protocol: { version: CURRENT_PROTOCOL_VERSION },
     features: { jobs: 2, workflow: 2 },
   });
 
@@ -22,7 +22,7 @@ describe("protocol capabilities", () => {
 
   it("rejects older and newer protocol versions", () => {
     expect(checkProtocolCompatibility(server, { version: 3 })).toMatchObject({ compatible: false });
-    expect(checkProtocolCompatibility(server, { version: 5 })).toMatchObject({ compatible: false });
+    expect(checkProtocolCompatibility(server, { version: CURRENT_PROTOCOL_VERSION + 1 })).toMatchObject({ compatible: false });
   });
 
   it("rejects malformed feature versions", () => {

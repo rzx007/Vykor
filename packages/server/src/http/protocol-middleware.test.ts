@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { protocolMiddleware } from "./protocol-middleware.js";
 
 describe("protocol middleware", () => {
-  it.each([undefined, "3", "5", "bad", "4.0", "04", "4e0"])(
+  it.each([undefined, "3", "6", "bad", "4.0", "04", "4e0"])(
     "rejects %s before authentication, database writes or process startup",
     async (version) => {
       const auth = vi.fn();
@@ -19,8 +19,8 @@ describe("protocol middleware", () => {
       expect(response.status).toBe(426);
       expect(await response.json()).toEqual({
         error: "protocol_version_mismatch",
-        expected: 4,
-        received: version === undefined ? null : ["3", "5", "04"].includes(version) ? Number(version) : version,
+        expected: 5,
+        received: version === undefined ? null : ["3", "6", "04"].includes(version) ? Number(version) : version,
       });
       expect(auth).not.toHaveBeenCalled();
       expect(write).not.toHaveBeenCalled();
@@ -38,7 +38,7 @@ describe("protocol middleware", () => {
       expect((await app.request(path)).status).toBe(200);
     }
     expect((await app.request("/sessions", {
-      headers: { "x-vykor-protocol-version": "4" },
+      headers: { "x-vykor-protocol-version": "5" },
     })).status).toBe(200);
     expect(handler).toHaveBeenCalledTimes(3);
     expect((await app.request("/health/extra")).status).toBe(426);

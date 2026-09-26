@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { sessionEventSchemaVersion } from "@vykor/protocol";
+import { CURRENT_PROTOCOL_VERSION, sessionEventSchemaVersion } from "@vykor/protocol";
 import {
   normalizeDaemonBaseUrl,
   IncompatibleProtocolError,
@@ -27,7 +27,7 @@ function businessClient(options: ConstructorParameters<typeof VykorClient>[0]): 
   return new VykorClient({
     ...options,
     fetch: (input, init) => new URL(String(input)).pathname === "/capabilities"
-      ? Promise.resolve(jsonResponse({ serverVersion: "test", protocol: { version: 4 }, features: {} }))
+      ? Promise.resolve(jsonResponse({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: {} }))
       : endpointFetch(input, init),
   });
 }
@@ -642,7 +642,7 @@ describe("VykorClient", () => {
       fetch: vi.fn(async () =>
         jsonResponse({
           serverVersion: "0.4.0",
-          protocol: { version: 4 },
+          protocol: { version: CURRENT_PROTOCOL_VERSION },
           features: {},
           agentEnvironments: { native: true, wsl: true },
         }),

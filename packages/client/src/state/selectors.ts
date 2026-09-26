@@ -5,6 +5,13 @@
  * message/part view and map it to their own presentation models.
  */
 
+import {
+  isSupersededModelPart,
+  readSessionModelRetryState,
+  readSessionModelUsage,
+  type SessionModelRetryState,
+  type SessionModelUsageSummary,
+} from "@vykor/protocol";
 import type { SessionBucket, SessionMessagePartRecord, SessionMessageRecord } from "../types/index.js";
 
 export interface SessionMessageWithParts {
@@ -21,6 +28,23 @@ export function selectSessionMessagesWithParts(
       message,
       parts: [...(bucket.partsByMessageId[message.id] ?? [])].sort((a, b) => a.seq - b.seq),
     }));
+}
+
+/**
+ * Default display view: hides superseded parts and drops assistant messages that
+ * have no visible parts left. The raw state keeps the diagnostic records.
+ */
+export function selectVisibleSessionMessagesWithParts(
+  bucket: SessionBucket | undefined,
+): SessionMessageWithParts[] {
+  return selectSessionMessagesWithParts(bucket)
+    .map(({ message, parts }) => ({
+      message,
+      parts: parts.filter((part) => !isSupersededModelPart(part)),
+    }))
+    .filter(({ message, parts }) =>
+      parts.length > 0 || message.role !== "assistant",
+    );
 }
 
 export function selectSessionInputs(bucket: SessionBucket | undefined) {
@@ -43,6 +67,34 @@ export function selectSessionParts(bucket: SessionBucket | undefined) {
 export function selectSessionRuns(bucket: SessionBucket | undefined) {
   if (!bucket) return [];
   return Object.values(bucket.runs);
+}
+
+/** Current bounded-retry wait, if the latest active run is waiting. */
+export function selectSessionModelRetry(
+  bucket: SessionBucket | undefined,
+): SessionModelRetryState | undefined {
+  if (!bucket) return undefined;
+  const active = Object.values(bucket.runs)
+    .filter((run) => run.status === "running" || run.status === "pending")
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  for (const run of active) {
+    const state = readSessionModelRetryState(run.metadata);
+    if (state) return state;
+  }
+  return undefined;
+}
+
+/** Aggregated usage completeness for the most recently updated run. */
+export function selectSessionModelUsage(
+  bucket: SessionBucket | undefined,
+): SessionModelUsageSummary | undefined {
+  if (!bucket) return undefined;
+  const runs = Object.values(bucket.runs).sort((a, b) => b.updatedAt - a.updatedAt);
+  for (const run of runs) {
+    const usage = readSessionModelUsage(run.metadata);
+    if (usage) return usage;
+  }
+  return undefined;
 }
 
 export function selectSessionTasks(bucket: SessionBucket | undefined) {

@@ -8,11 +8,14 @@ import type {
 } from "@vykor/core";
 import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
-import { AuthenticationFailure, RateLimitFailure, requestFailure } from "../errors/index";
-import { abortableDelay } from "./retry";
+import {
+  protocolFailure,
+  streamIncompleteFailure,
+  toModelRequestFailure,
+} from "../errors/index";
+import { createRequestLifecycle } from "./retry";
 import {
   createDsmlRecoveryScanner,
-  type DsmlRecoveryScanner,
   type RecoveredToolCall,
 } from "./dsml-tool-call-recovery.js";
 import {
@@ -21,11 +24,6 @@ import {
   prepareUserContentWithVisionImages,
 } from "./native-image-payload.js";
 import { extractThinkBlocks } from "./think-blocks.js";
-
-const MAX_RETRIES = 3;
-const BASE_DELAY = 1000;
-const MAX_DELAY = 30_000;
-const RETRYABLE_CODES = new Set([429, 500, 502, 503]);
 
 // Model families that reject `max_tokens` and require `max_completion_tokens`.
 const MAX_COMPLETION_TOKEN_MODEL_PREFIXES = ["gpt-5", "o1", "o3", "o4"];
@@ -139,6 +137,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       apiKey: config.apiKey,
       baseURL: config.baseURL,
       defaultHeaders: config.headers,
+      maxRetries: 0,
     });
   }
 
@@ -180,41 +179,45 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
     const collectedToolCalls: Map<number, { id: string; name: string; arguments: string }> =
       new Map();
     let finishReason: string | null = null;
-    let usageData = { inputTokens: 0, outputTokens: 0 };
     // Buffer to strip inline <think>…</think> blocks across streaming chunks.
     let thinkBuf = "";
-    let recoveredToolCalls: RecoveredToolCall[] = [];
-    let recovery: DsmlRecoveryScanner | undefined;
+    const recoveredToolCalls: RecoveredToolCall[] = [];
     let emittedAnyText = false;
 
-    let lastError: Error | undefined;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      params.abortSignal?.throwIfAborted();
-      // Reset per-attempt accumulated state so a retry starts from a clean slate.
-      collectedToolCalls.clear();
-      finishReason = null;
-      thinkBuf = "";
-      recoveredToolCalls = [];
-      emittedAnyText = false;
-      const declaredTools = params.tools;
-      recovery =
-        declaredTools?.length && !envFlagEnabled(DSML_RECOVERY_DISABLE_ENV)
-          ? createDsmlRecoveryScanner({
-              declaredToolNames: new Set(declaredTools.map((tool) => tool.name)),
-            })
-          : undefined;
-      try {
-        const stream = await this._client.chat.completions.create(createParams, {
-          signal: params.abortSignal,
-        });
+    const declaredTools = params.tools;
+    const recovery =
+      declaredTools?.length && !envFlagEnabled(DSML_RECOVERY_DISABLE_ENV)
+        ? createDsmlRecoveryScanner({
+            declaredToolNames: new Set(declaredTools.map((tool) => tool.name)),
+          })
+        : undefined;
 
+    const lifecycle = createRequestLifecycle({
+      external: params.abortSignal,
+      requestTimeoutMs: params.requestTimeoutMs,
+      streamIdleTimeoutMs: params.streamIdleTimeoutMs,
+    });
+
+    try {
+      let stream: AsyncIterable<OpenAI.ChatCompletionChunk>;
+      try {
+        stream = await this._client.chat.completions.create(createParams, {
+          signal: lifecycle.signal,
+        });
+      } catch (error) {
+        throw this.failModelRequest(error, "request", lifecycle, params.abortSignal);
+      }
+
+      lifecycle.markStreamStarted();
+      try {
         for await (const chunk of stream) {
+          lifecycle.touch();
           if (!chunk.choices || chunk.choices.length === 0) {
             if (chunk.usage) {
-              usageData = {
+              yield { type: "usage", usage: {
                 inputTokens: chunk.usage.prompt_tokens ?? 0,
                 outputTokens: chunk.usage.completion_tokens ?? 0,
-              };
+              } };
             }
             continue;
           }
@@ -269,55 +272,51 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
           }
 
           if (chunk.usage) {
-            usageData = {
+            yield { type: "usage", usage: {
               inputTokens: chunk.usage.prompt_tokens ?? 0,
               outputTokens: chunk.usage.completion_tokens ?? 0,
-            };
+            } };
           }
         }
-
-        // Flush any remaining buffered content (e.g. a partial <think> prefix at EOF).
-        if (thinkBuf) {
-          const extracted = extractThinkBlocks(thinkBuf, { final: true });
-          if (extracted.reasoning) {
-            yield { type: "reasoning_delta", delta: extracted.reasoning, source: "think" };
-          }
-          if (extracted.visible) {
-            const scanned = recovery
-              ? recovery.push(extracted.visible)
-              : { visible: extracted.visible, toolCalls: [] as RecoveredToolCall[] };
-            if (scanned.visible) {
-              emittedAnyText = true;
-              yield { type: "text_delta", delta: scanned.visible };
-            }
-            recoveredToolCalls.push(...scanned.toolCalls);
-          }
-          thinkBuf = "";
-        }
-        if (recovery) {
-          const tail = recovery.flush();
-          if (tail.visible) {
-            emittedAnyText = true;
-            yield { type: "text_delta", delta: tail.visible };
-          }
-          recoveredToolCalls.push(...tail.toolCalls);
-        }
-        break;
       } catch (error) {
-        lastError = this.classifyError(error);
-        const status = (error as any)?.status ?? (error as any)?.statusCode;
-        params.abortSignal?.throwIfAborted();
-        if (attempt < MAX_RETRIES && status && RETRYABLE_CODES.has(status)) {
-          const retryAfter = this.getRetryAfter(error);
-          const jitter = Math.random() * 1000;
-          const delay = retryAfter > 0
-            ? Math.min(retryAfter * 1000, MAX_DELAY)
-            : Math.min(BASE_DELAY * 2 ** attempt + jitter, MAX_DELAY);
-          await abortableDelay(delay, params.abortSignal);
-          continue;
-        }
-        throw lastError;
+        throw this.failModelRequest(error, "stream", lifecycle, params.abortSignal);
       }
+    } finally {
+      lifecycle.dispose();
+    }
+
+    // 流正常结束但缺少 finish_reason，说明连接提前断流，不能当作成功。
+    if (!finishReason) {
+      throw streamIncompleteFailure(
+        "OpenAI 流在收到完成标记前结束（缺少 finish_reason）",
+      );
+    }
+
+    // Flush any remaining buffered content (e.g. a partial <think> prefix at EOF).
+    if (thinkBuf) {
+      const extracted = extractThinkBlocks(thinkBuf, { final: true });
+      if (extracted.reasoning) {
+        yield { type: "reasoning_delta", delta: extracted.reasoning, source: "think" };
+      }
+      if (extracted.visible) {
+        const scanned = recovery
+          ? recovery.push(extracted.visible)
+          : { visible: extracted.visible, toolCalls: [] as RecoveredToolCall[] };
+        if (scanned.visible) {
+          emittedAnyText = true;
+          yield { type: "text_delta", delta: scanned.visible };
+        }
+        recoveredToolCalls.push(...scanned.toolCalls);
+      }
+      thinkBuf = "";
+    }
+    if (recovery) {
+      const tail = recovery.flush();
+      if (tail.visible) {
+        emittedAnyText = true;
+        yield { type: "text_delta", delta: tail.visible };
+      }
+      recoveredToolCalls.push(...tail.toolCalls);
     }
 
     let nativeToolUseCount = 0;
@@ -325,10 +324,19 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       if (!tc.name) continue;
       nativeToolUseCount++;
       let input: Record<string, unknown>;
-      try {
-        input = JSON.parse(tc.arguments || "{}");
-      } catch {
+      if (!tc.arguments) {
         input = {};
+      } else {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(tc.arguments);
+        } catch {
+          throw protocolFailure(`OpenAI 工具调用参数不是合法 JSON（tool=${tc.name}）`);
+        }
+        input =
+          parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : {};
       }
       yield {
         type: "tool_use_start",
@@ -342,14 +350,6 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
         toolUse: { type: "tool_use", id: call.id, name: call.name, input: call.input },
       };
     }
-
-    yield {
-      type: "usage",
-      usage: {
-        inputTokens: usageData.inputTokens,
-        outputTokens: usageData.outputTokens,
-      },
-    };
 
     const toolUseCount = nativeToolUseCount + recoveredToolCalls.length;
     if (finishReason === "tool_calls" && toolUseCount === 0 && !emittedAnyText) {
@@ -368,29 +368,18 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
     };
   }
 
-  private getRetryAfter(error: any): number {
-    const header = error?.headers?.get?.("retry-after") ?? error?.headers?.["retry-after"];
-    if (header) {
-      const secs = Number(header);
-      if (!isNaN(secs)) return secs;
+  private failModelRequest(
+    error: unknown,
+    phase: "request" | "stream",
+    lifecycle: ReturnType<typeof createRequestLifecycle>,
+    external?: AbortSignal,
+  ): Error {
+    if (external?.aborted) {
+      return external.reason instanceof Error ? external.reason : new Error(String(external.reason));
     }
-    return 0;
-  }
-
-  private classifyError(error: any): Error {
-    const status = error?.status ?? error?.statusCode;
-    const message = error?.message ?? String(error);
-
-    if (status === 401 || status === 403) {
-      return new AuthenticationFailure(message);
-    }
-    if (status === 429) {
-      return new RateLimitFailure(message);
-    }
-    if (status) {
-      return requestFailure(message, status);
-    }
-    return error instanceof Error ? error : new Error(message);
+    const timeout = lifecycle.timeoutFailure();
+    if (timeout) return timeout;
+    return toModelRequestFailure(error, phase);
   }
 
   private async convertMessages(params: StreamMessageParams): Promise<OpenAI.ChatCompletionMessageParam[]> {

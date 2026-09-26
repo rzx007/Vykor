@@ -25,7 +25,7 @@ function jsonResponse(body: unknown): Response {
 function capabilitiesResponse(): Response {
   return jsonResponse({
     serverVersion: "test",
-    protocol: { version: 4 },
+    protocol: { version: 5 },
     features: {},
   });
 }

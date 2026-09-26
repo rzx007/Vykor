@@ -1,5 +1,5 @@
 import {
-  selectSessionMessagesWithParts,
+  selectVisibleSessionMessagesWithParts,
   type SessionBucket,
   type SessionMessagePartRecord,
   type SessionMessageRecord,
@@ -123,7 +123,7 @@ function projectBucketToItems(bucket: SessionBucket | undefined): TranscriptItem
     bucket.session?.updatedAt ?? 0,
   );
 
-  for (const { message, parts } of selectSessionMessagesWithParts(bucket)) {
+  for (const { message, parts } of selectVisibleSessionMessagesWithParts(bucket)) {
     if (message.role === "user" && message.inputId) projectedInputIds.add(message.inputId);
     items.push(...messageToTranscriptItems(
       message,

@@ -5,6 +5,7 @@ import {
 } from "@vykor/services";
 import {
   patchSessionRuntimeMetadata,
+  readSessionModelUsage,
   readSessionRuntimeConfig,
   parseSessionInputItems,
   parseGoalAssessment,
@@ -134,6 +135,15 @@ export class DaemonAgentEventProjector {
         return;
       case "output.turn.completed":
         this.projectStream(event, { type: "complete", stopReason: event.data.stopReason });
+        return;
+      case "output.generation.started":
+        this.projectGenerationStarted(event);
+        return;
+      case "model.retry.scheduled":
+        this.projectModelRetry(event);
+        return;
+      case "model.attempt.finished":
+        this.projectModelAttemptFinished(event);
         return;
       case "tool.started":
         this.projectStream(event, { type: "tool_use_start", toolUse: event.data.toolUse });
@@ -289,9 +299,8 @@ export class DaemonAgentEventProjector {
     const runId = event.context.runId;
     const transcript = runId ? this.transcripts.get(runId) : undefined;
     const transcriptSnapshot = transcript ? snapshotTranscript(transcript) : undefined;
-    const before = this.context.events.checkpoint();
     try {
-      this.context.store.transaction(() => {
+      this.projectAtomicEvent(() => {
         let input = this.context.store.conversations.getInput(inputId);
         if (!input) {
           input = this.context.store.conversationTransactions.admitPrompt({
@@ -360,7 +369,6 @@ export class DaemonAgentEventProjector {
       if (transcript && transcriptSnapshot) restoreTranscript(transcript, transcriptSnapshot);
       throw error;
     }
-    this.context.events.publishSince(before);
   }
 
   private async startRun(event: Extract<AgentEvent, { type: "run.started" }>): Promise<void> {
@@ -478,6 +486,107 @@ export class DaemonAgentEventProjector {
     if (applied.liveEvent) this.context.events.publish(applied.liveEvent);
   }
 
+  private projectGenerationStarted(event: Extract<AgentEvent, { type: "output.generation.started" }>): void {
+    const runId = required(event.context.runId, "runId", event.type);
+    const state = this.transcripts.get(runId);
+    const stateSnapshot = state ? snapshotTranscript(state) : undefined;
+    try {
+      this.projectAtomicEvent(() => {
+        if (state) {
+          this.context.transcriptProjection.beginGeneration(
+            state,
+            event.data.generationId,
+            event.data.attempt,
+          );
+        }
+        const run = this.context.store.runs.getRun(runId);
+        if (run && run.metadata.modelRetry !== undefined) {
+          this.context.store.runs.updateRun(runId, { metadata: { modelRetry: null } });
+        }
+      });
+    } catch (error) {
+      if (state && stateSnapshot) restoreTranscript(state, stateSnapshot);
+      throw error;
+    }
+  }
+
+  private projectAtomicEvent(work: () => void): void {
+    const before = this.context.events.checkpoint();
+    this.context.store.transaction(work);
+    this.context.events.publishSince(before);
+  }
+
+  private projectModelRetry(event: Extract<AgentEvent, { type: "model.retry.scheduled" }>): void {
+    const runId = required(event.context.runId, "runId", event.type);
+    this.projectAtomicEvent(() => {
+      const run = this.context.store.runs.getRun(runId);
+      if (!run || (run.status !== "pending" && run.status !== "running")) return;
+      this.context.store.runs.updateRun(runId, {
+        metadata: { modelRetry: { ...event.data } },
+      });
+    });
+  }
+
+  private projectModelAttemptFinished(
+    event: Extract<AgentEvent, { type: "model.attempt.finished" }>,
+  ): void {
+    const sessionId = event.context.sessionId;
+    const runId = required(event.context.runId, "runId", event.type);
+    this.projectAtomicEvent(() => {
+      const run = this.context.store.runs.getRun(runId);
+      if (!run || (run.status !== "pending" && run.status !== "running")) return;
+      const alreadyApplied = this.context.store.conversations
+        .listEvents({ sessionId })
+        .some((candidate) =>
+          candidate.type === "session.model.attempt.finished" &&
+          candidate.payload.runId === runId &&
+          isRecord(candidate.payload.attemptUsage) &&
+          candidate.payload.attemptUsage.generationId === event.data.generationId &&
+          candidate.payload.attemptUsage.attempt === event.data.attempt,
+        );
+      if (alreadyApplied) return;
+      this.context.store.conversations.appendEvent({
+        type: "session.model.attempt.finished",
+        sessionId,
+        payload: { runId, attemptUsage: { ...event.data } },
+      });
+      const previous = readSessionModelUsage(run.metadata) ?? {
+        incomplete: false,
+        unknownAttempts: 0,
+        partialAttempts: 0,
+      };
+      const known = event.data.usage;
+      const previousUsage = run.metadata.usage;
+      const tally = isRecord(previousUsage) ? previousUsage : {};
+      this.context.store.runs.updateRun(runId, {
+        metadata: {
+          ...(known || isRecord(previousUsage) ? { usage: {
+            inputTokens: (typeof tally.inputTokens === "number" ? tally.inputTokens : 0) + (known?.inputTokens ?? 0),
+            outputTokens: (typeof tally.outputTokens === "number" ? tally.outputTokens : 0) + (known?.outputTokens ?? 0),
+            cacheCreationTokens: (typeof tally.cacheCreationTokens === "number" ? tally.cacheCreationTokens : 0) + (known?.cacheCreationTokens ?? 0),
+            cacheReadTokens: (typeof tally.cacheReadTokens === "number" ? tally.cacheReadTokens : 0) + (known?.cacheReadTokens ?? 0),
+            usageIncomplete: previous.incomplete || event.data.usageStatus !== "complete",
+          } } : {}),
+          modelUsage: {
+            incomplete: previous.incomplete || event.data.usageStatus !== "complete",
+            unknownAttempts:
+              previous.unknownAttempts + (event.data.usageStatus === "unknown" ? 1 : 0),
+            partialAttempts:
+              previous.partialAttempts + (event.data.usageStatus === "partial" ? 1 : 0),
+          },
+        },
+      });
+      if (known) {
+        const attempt = this.context.store.runs.listRunAttempts(runId)
+          .filter((candidate) => candidate.status === "pending" || candidate.status === "running").at(-1);
+        if (attempt) this.context.store.runs.updateRunAttempt(attempt.id, {
+          inputTokens: (attempt.inputTokens ?? 0) + known.inputTokens,
+          outputTokens: (attempt.outputTokens ?? 0) + known.outputTokens,
+        });
+      }
+    });
+  }
+
   private async finishRun(
     event: Extract<AgentEvent, { type: "run.completed" | "run.failed" | "run.interrupted" }>,
   ): Promise<void> {
@@ -521,12 +630,18 @@ export class DaemonAgentEventProjector {
             interrupted ? "interrupted" : "failed",
           );
         }
+        const existingRun = this.context.store.runs.getRun(runId);
+        const metadataPatch: Record<string, unknown> = {};
+        if (event.type === "run.completed" && event.data.stopReason) {
+          metadataPatch.stopReason = event.data.stopReason;
+        }
+        if (existingRun && existingRun.metadata.modelRetry !== undefined) {
+          metadataPatch.modelRetry = null;
+        }
         this.context.store.runs.updateRun(runId, {
           status: interrupted ? "interrupted" : failed ? "failed" : "completed",
           ...(error ? { error } : {}),
-          ...(event.type === "run.completed" && event.data.stopReason
-            ? { metadata: { stopReason: event.data.stopReason } }
-            : {}),
+          ...(Object.keys(metadataPatch).length > 0 ? { metadata: metadataPatch } : {}),
         });
       });
     } catch (projectionError) {
@@ -658,16 +773,9 @@ export class DaemonAgentEventProjector {
   }
 
   private projectUsage(event: Extract<AgentEvent, { type: "usage.updated" }>): void {
-    this.projectStream(event, { type: "usage", usage: event.data.usage });
-    const runId = required(event.context.runId, "runId", event.type);
-    const attempt = this.context.store.runs.listRunAttempts(runId)
-      .filter((candidate) => candidate.status === "pending" || candidate.status === "running")
-      .at(-1);
-    if (!attempt) return;
-    this.context.store.runs.updateRunAttempt(attempt.id, {
-      inputTokens: (attempt.inputTokens ?? 0) + event.data.usage.inputTokens,
-      outputTokens: (attempt.outputTokens ?? 0) + event.data.usage.outputTokens,
-    });
+    // The matching model.attempt.finished event settles this usage atomically
+    // with its durable deduplication marker. Keep this event for live observers.
+    void event;
   }
 
   private hasDurableSettlementStore(): boolean {
@@ -846,7 +954,11 @@ function isRuntimeEffort(value: unknown): value is string {
 }
 
 function snapshotTranscript(state: ActiveTranscriptProjectionState): ActiveTranscriptProjectionState {
-  return { ...state, toolParts: new Map(state.toolParts) };
+  return {
+    ...state,
+    toolParts: new Map(state.toolParts),
+    generationParts: new Map(state.generationParts),
+  };
 }
 
 function restoreTranscript(
@@ -856,7 +968,10 @@ function restoreTranscript(
   for (const key of Object.keys(state) as Array<keyof ActiveTranscriptProjectionState>) {
     delete (state as Partial<ActiveTranscriptProjectionState>)[key];
   }
-  Object.assign(state, snapshot, { toolParts: new Map(snapshot.toolParts) });
+  Object.assign(state, snapshot, {
+    toolParts: new Map(snapshot.toolParts),
+    generationParts: new Map(snapshot.generationParts),
+  });
 }
 
 function required(value: string | undefined, name: string, eventType: string): string {

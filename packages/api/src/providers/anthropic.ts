@@ -13,17 +13,16 @@ import {
   type NativeImageMediaType,
   type ProviderConfig,
 } from "./registry";
-import { AuthenticationFailure, RateLimitFailure, requestFailure } from "../errors/index";
-import { abortableDelay } from "./retry";
+import {
+  protocolFailure,
+  streamIncompleteFailure,
+  toModelRequestFailure,
+} from "../errors/index";
+import { createRequestLifecycle } from "./retry";
 import {
   prepareNativeImagePayload,
   prepareUserContentWithVisionImages,
 } from "./native-image-payload.js";
-
-const MAX_RETRIES = 3;
-const BASE_DELAY = 1000;
-const MAX_DELAY = 30_000;
-const RETRYABLE_CODES = new Set([429, 500, 502, 503, 529]);
 
 export class AnthropicClient implements StreamingMessageClient {
   private client: Anthropic;
@@ -32,6 +31,7 @@ export class AnthropicClient implements StreamingMessageClient {
     this.client = new Anthropic({
       apiKey: config.apiKey,
       baseURL: config.baseURL,
+      maxRetries: 0,
     });
   }
 
@@ -50,11 +50,16 @@ export class AnthropicClient implements StreamingMessageClient {
     );
     const tools = params.tools?.map((t) => this.convertTool(t));
 
-    let lastError: Error | undefined;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      params.abortSignal?.throwIfAborted();
+    const lifecycle = createRequestLifecycle({
+      external: params.abortSignal,
+      requestTimeoutMs: params.requestTimeoutMs,
+      streamIdleTimeoutMs: params.streamIdleTimeoutMs,
+    });
+
+    try {
+      let stream: ReturnType<Anthropic["messages"]["stream"]>;
       try {
-        const stream = this.client.messages.stream({
+        stream = this.client.messages.stream({
           model: params.model,
           messages,
           system: params.system,
@@ -62,14 +67,37 @@ export class AnthropicClient implements StreamingMessageClient {
           max_tokens: params.maxTokens ?? DEFAULT_OUTPUT_TOKEN_MAX,
           temperature: params.temperature,
         }, {
-          signal: params.abortSignal,
+          signal: lifecycle.signal,
         });
+      } catch (error) {
+        throw this.failModelRequest(error, "request", lifecycle, params.abortSignal);
+      }
 
-        const toolInputBuffers: Map<number, { id: string; name: string; partialJson: string }> =
-          new Map();
+      const toolInputBuffers: Map<number, { id: string; name: string; partialJson: string }> =
+        new Map();
+      const completedToolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+      let sawMessageStop = false;
+      let usage: { inputTokens: number; outputTokens: number; cacheCreationTokens?: number; cacheReadTokens?: number } | undefined;
 
+      lifecycle.markStreamStarted();
+      try {
         for await (const event of stream) {
-          if (
+          lifecycle.touch();
+          if (event.type === "message_stop") {
+            sawMessageStop = true;
+          } else if (event.type === "message_start") {
+            const current = event.message.usage;
+            usage = {
+              inputTokens: current.input_tokens,
+              outputTokens: current.output_tokens,
+              cacheCreationTokens: current.cache_creation_input_tokens ?? undefined,
+              cacheReadTokens: current.cache_read_input_tokens ?? undefined,
+            };
+            yield { type: "usage", usage };
+          } else if (event.type === "message_delta" && usage) {
+            usage = { ...usage, outputTokens: event.usage.output_tokens };
+            yield { type: "usage", usage };
+          } else if (
             event.type === "content_block_delta" &&
             event.delta.type === "text_delta"
           ) {
@@ -94,80 +122,64 @@ export class AnthropicClient implements StreamingMessageClient {
           } else if (event.type === "content_block_stop") {
             const buf = toolInputBuffers.get(event.index);
             if (buf) {
-              let input: Record<string, unknown>;
-              try {
-                input = JSON.parse(buf.partialJson || "{}");
-              } catch {
-                input = {};
-              }
-              yield {
-                type: "tool_use_start",
-                toolUse: {
-                  type: "tool_use",
-                  id: buf.id,
-                  name: buf.name,
-                  input,
-                },
-              };
+              completedToolUses.push({
+                id: buf.id,
+                name: buf.name,
+                input: parseToolInput(buf),
+              });
               toolInputBuffers.delete(event.index);
             }
           }
         }
-
-        const final = await stream.finalMessage();
-        yield {
-          type: "usage",
-          usage: {
-            inputTokens: final.usage.input_tokens,
-            outputTokens: final.usage.output_tokens,
-            cacheCreationTokens: final.usage.cache_creation_input_tokens ?? undefined,
-            cacheReadTokens: final.usage.cache_read_input_tokens ?? undefined,
-          },
-        };
-        yield { type: "complete", stopReason: final.stop_reason ?? "end_turn" };
-        return;
       } catch (error) {
-        lastError = this.classifyError(error);
-        const status = (error as any)?.status ?? (error as any)?.statusCode;
-        params.abortSignal?.throwIfAborted();
-        if (attempt < MAX_RETRIES && status && RETRYABLE_CODES.has(status)) {
-          const retryAfter = this.getRetryAfter(error);
-          const jitter = Math.random() * 1000;
-          const delay = retryAfter > 0
-            ? Math.min(retryAfter * 1000, MAX_DELAY)
-            : Math.min(BASE_DELAY * 2 ** attempt + jitter, MAX_DELAY);
-          await abortableDelay(delay, params.abortSignal);
-          continue;
-        }
-        throw lastError;
+        throw this.failModelRequest(error, "stream", lifecycle, params.abortSignal);
       }
+
+      if (!sawMessageStop) {
+        throw streamIncompleteFailure("Anthropic 流在收到 message_stop 前结束");
+      }
+
+      let final: Awaited<ReturnType<typeof stream.finalMessage>>;
+      try {
+        final = await stream.finalMessage();
+      } catch (error) {
+        throw this.failModelRequest(error, "stream", lifecycle, params.abortSignal);
+      }
+
+      for (const toolUse of completedToolUses) {
+        yield {
+          type: "tool_use_start",
+          toolUse: { type: "tool_use", id: toolUse.id, name: toolUse.name, input: toolUse.input },
+        };
+      }
+
+      yield {
+        type: "usage",
+        usage: {
+          inputTokens: final.usage.input_tokens,
+          outputTokens: final.usage.output_tokens,
+          cacheCreationTokens: final.usage.cache_creation_input_tokens ?? undefined,
+          cacheReadTokens: final.usage.cache_read_input_tokens ?? undefined,
+        },
+      };
+      yield { type: "complete", stopReason: final.stop_reason ?? "end_turn" };
+    } finally {
+      lifecycle.dispose();
     }
-    throw lastError;
   }
 
-  private getRetryAfter(error: any): number {
-    const header = error?.headers?.get?.("retry-after") ?? error?.headers?.["retry-after"];
-    if (header) {
-      const secs = Number(header);
-      if (!isNaN(secs)) return secs;
+  private failModelRequest(
+    error: unknown,
+    phase: "request" | "stream",
+    lifecycle: ReturnType<typeof createRequestLifecycle>,
+    external?: AbortSignal,
+  ): Error {
+    if (external?.aborted) {
+      return external.reason instanceof Error ? external.reason : new Error(String(external.reason));
     }
-    return 0;
-  }
-
-  private classifyError(error: any): Error {
-    const status = error?.status ?? error?.statusCode;
-    const message = error?.message ?? String(error);
-
-    if (status === 401 || status === 403) {
-      return new AuthenticationFailure(message);
-    }
-    if (status === 429) {
-      return new RateLimitFailure(message);
-    }
-    if (status) {
-      return requestFailure(message, status);
-    }
-    return error instanceof Error ? error : new Error(message);
+    const timeout = lifecycle.timeoutFailure();
+    if (timeout) return timeout;
+    return toModelRequestFailure(error, phase);
   }
 
   private async convertMessages(
@@ -235,6 +247,19 @@ export class AnthropicClient implements StreamingMessageClient {
       input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
     };
   }
+}
+
+function parseToolInput(buf: { name: string; partialJson: string }): Record<string, unknown> {
+  if (!buf.partialJson) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(buf.partialJson);
+  } catch {
+    throw protocolFailure(`Anthropic 工具调用参数不是合法 JSON（tool=${buf.name}）`);
+  }
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
 }
 
 export async function convertUserContentToAnthropic(

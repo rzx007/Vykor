@@ -110,6 +110,36 @@ describe("RunStallWatchdog", () => {
     expect(stalls).toEqual(["stall"])
   })
 
+  it("skips the stall while a bounded model retry deadline is still in the future, then fires after it", () => {
+    let retryDeadline = 5_000
+    const { watchdog: instance, stalls, advance } = watchdog({
+      readModelRetryDeadline: () => retryDeadline,
+    })
+
+    advance(1_000)
+    instance.check()
+    expect(stalls).toEqual([])
+
+    advance(1_000)
+    instance.check()
+    expect(stalls).toEqual([])
+
+    retryDeadline = 2_000
+    advance(1_000)
+    instance.check()
+    expect(stalls).toEqual(["stall"])
+  })
+
+  it("ignores a malformed retry deadline", () => {
+    const { watchdog: instance, stalls, advance } = watchdog({
+      readModelRetryDeadline: () => Number.NaN,
+    })
+
+    advance(1_000)
+    instance.check()
+    expect(stalls).toEqual(["stall"])
+  })
+
   it("schedules and clears the interval", () => {
     const handle = { unref: vi.fn() } as unknown as ReturnType<typeof setInterval>
     const setIntervalSpy = vi.fn(() => handle)

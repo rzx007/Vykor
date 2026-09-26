@@ -83,6 +83,27 @@ test("Session renders streaming assistantBuffer", async () => {
   renderer.destroy();
 });
 
+test("Session shows retry countdown and incomplete known usage using terminal text", async () => {
+  const { renderer, renderOnce, captureCharFrame } = await testRender(
+    <ThemeProvider>
+      <Session
+        items={[{ role: "user", text: "question" }]}
+        assistantBuffer=""
+        retry={{ generationId: "g1", attempt: 1, retryNumber: 2, maxRetries: 5, reason: "network", nextRetryAt: Date.now() + 2_000, recoveryDeadlineAt: Date.now() + 30_000 }}
+        usage={{ incomplete: true, unknownAttempts: 1, partialAttempts: 0 }}
+        inputTokens={20}
+        outputTokens={10}
+      />
+    </ThemeProvider>,
+    { width: 100, height: 20 },
+  );
+  await renderOnce();
+  const frame = captureCharFrame();
+  expect(frame).toContain("连接中断，2 秒后重试（第 2/5 次）");
+  expect(frame).toContain("已知用量：20 输入 / 10 输出；部分请求用量未知");
+  renderer.destroy();
+});
+
 test("Session keeps tool output collapsed by default and expands on click", async () => {
   const items: TranscriptItem[] = [
     { role: "tool_result", text: "hello\nmore output" },

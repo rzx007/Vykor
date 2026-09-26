@@ -1,10 +1,10 @@
 # Protocol Contract
 
-> 状态：当前客户端与 daemon 协议的权威契约。最后核对：2026-08-23。
+> 状态：当前客户端与 daemon 协议的权威契约。最后核对：2026-09-26。
 
 ## 当前版本
 
-当前精确协议版本是 `2`。客户端先读取：
+当前精确协议版本是 `5`（模型网络重试引入输出失效标记与重试 metadata，故从 4 提升到 5）。客户端先读取：
 
 ```http
 GET /capabilities
@@ -15,7 +15,7 @@ GET /capabilities
 ```json
 {
   "serverVersion": "0.1.0",
-  "protocol": { "version": 2 },
+  "protocol": { "version": 5 },
   "features": {
     "steer": 1,
     "runAttempts": 1,

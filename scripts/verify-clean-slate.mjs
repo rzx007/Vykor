@@ -189,7 +189,7 @@ function requirePattern(results, category, root, file, pattern, message) {
 
 function checkProtocol(root) {
   const results = [];
-  requirePattern(results, "protocol", root, "packages/protocol/src/capabilities.ts", /CURRENT_PROTOCOL_VERSION\s*=\s*4\b/, "CURRENT_PROTOCOL_VERSION must be 4");
+  requirePattern(results, "protocol", root, "packages/protocol/src/capabilities.ts", /CURRENT_PROTOCOL_VERSION\s*=\s*5\b/, "CURRENT_PROTOCOL_VERSION must be 5");
   requirePattern(results, "protocol", root, "packages/protocol/src/capabilities.ts", /PROTOCOL_VERSION_HEADER\s*=\s*["']x-vykor-protocol-version["']/, "protocol header constant is missing or wrong");
   requirePattern(results, "protocol", root, "packages/client/src/transport/http-transport.ts", /requestUnknown\(["']\/capabilities["']/, "Client must perform the capabilities handshake");
   requirePattern(results, "protocol", root, "packages/client/src/transport/http-transport.ts", /headers\[PROTOCOL_VERSION_HEADER\]\s*=\s*String\(CURRENT_PROTOCOL_VERSION\)/, "Client business requests must carry the protocol header");

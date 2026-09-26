@@ -59,6 +59,12 @@ export class EventRenderer {
       case "error":
         this.renderError(event.error);
         break;
+      case "model_retry":
+        process.stderr.write("\n上一段输出中断，以下为重新生成\n");
+        process.stderr.write(`连接中断，${Math.max(0, Math.ceil((event.nextRetryAt - Date.now()) / 1000))} 秒后重试（第 ${event.retryNumber}/${event.maxRetries} 次）\n`);
+        this.buffer = "";
+        this.currentTool = null;
+        break;
     }
   }
 

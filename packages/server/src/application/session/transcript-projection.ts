@@ -19,6 +19,13 @@ type ActiveToolPart = {
   input: Record<string, unknown>;
 };
 
+type GenerationPartInfo = {
+  generationId: string;
+  attempt: number;
+  messageId: string;
+  type: "text" | "reasoning" | "tool";
+};
+
 export type ActiveTranscriptProjectionState = {
   sessionId: string;
   runId: string;
@@ -38,6 +45,11 @@ export type ActiveTranscriptProjectionState = {
   reasoningChars?: number;
   reasoningTruncated?: boolean;
   toolParts: Map<string, ActiveToolPart>;
+  /** Current model generation identity, set by the first generation_started. */
+  generationId?: string;
+  generationAttempt?: number;
+  /** Parts produced by the current attempt, so a retry can supersede them. */
+  generationParts: Map<string, GenerationPartInfo>;
 };
 
 export type AppliedTranscriptStreamEvent = {
@@ -82,6 +94,7 @@ export class SessionTranscriptProjection {
       inputId,
       assistantTurnCompleted: false,
       toolParts: new Map(),
+      generationParts: new Map(),
     };
   }
 
@@ -165,10 +178,11 @@ export class SessionTranscriptProjection {
             type: "reasoning",
             status: "running",
             text: "",
-            metadata: { source: event.source },
+            metadata: { source: event.source, ...this.generationMetadata(state) },
           });
           state.activeReasoningPartId = part.id;
           state.activeReasoningSource = event.source;
+          this.trackGenerationPart(state, part.id, "reasoning", messageId);
         }
         const delta = this.takeReasoningDelta(state, event.delta);
         if (!delta) return {};
@@ -192,10 +206,14 @@ export class SessionTranscriptProjection {
             type: "text",
             status: "running",
             text: "",
-            ...(event.phase ? { metadata: { phase: event.phase } } : {}),
+            metadata: {
+              ...(event.phase ? { phase: event.phase } : {}),
+              ...this.generationMetadata(state),
+            },
           });
           state.activeTextPartId = part.id;
           state.activeTextPhase = event.phase;
+          this.trackGenerationPart(state, part.id, "text", messageId);
         }
         return {
           liveEvent: this.store.incrementalOutput.appendMessagePartDelta({
@@ -224,6 +242,7 @@ export class SessionTranscriptProjection {
             toolCallId: event.toolUse.id,
             toolAttemptId: `tool_attempt_${event.toolUse.id}_1`,
             outcome: "pending",
+            ...this.generationMetadata(state),
           },
         });
         state.toolParts.set(event.toolUse.id, {
@@ -232,6 +251,7 @@ export class SessionTranscriptProjection {
           toolName: event.toolUse.name,
           input: event.toolUse.input,
         });
+        this.trackGenerationPart(state, part.id, "tool", messageId);
         return {};
       }
       case "tool_use_end": {
@@ -293,11 +313,22 @@ export class SessionTranscriptProjection {
         state.toolParts.delete(event.toolUseId);
         return { completedToolName: active?.toolName };
       }
+      case "generation_started": {
+        this.beginGeneration(state, event.generationId, event.attempt);
+        return {};
+      }
+      case "model_retry":
+      case "model_attempt_finished": {
+        // Retry status and per-attempt settlement are handled by the daemon
+        // projector through run metadata, not the transcript stream.
+        return {};
+      }
       case "usage": {
-        this.store.runs.updateRun(state.runId, { metadata: { usage: event.usage } });
+        // Durable attempt settlement owns usage aggregation and deduplication.
         return {};
       }
       case "complete": {
+        this.commitGenerationParts(state);
         this.completeOpenReasoningPart(state, "completed");
         this.completeOpenTextPart(
           state,
@@ -358,6 +389,97 @@ export class SessionTranscriptProjection {
     delete state.activeReasoningSource;
     delete state.reasoningChars;
     delete state.reasoningTruncated;
+  }
+
+  /**
+   * 开始一次模型生成（或同一生成的新尝试）。同一 generationId 的新 attempt 会把
+   * 上一尝试产生的所有 part 标为被替代，并重置活动引用；新 generationId 只重置。
+   */
+  beginGeneration(
+    state: ActiveTranscriptProjectionState,
+    generationId: string,
+    attempt: number,
+  ): void {
+    if (state.generationId === generationId) {
+      this.supersedeGenerationParts(state);
+    } else {
+      state.generationId = generationId;
+    }
+    state.generationAttempt = attempt;
+    state.generationParts = new Map();
+    delete state.activeTextPartId;
+    delete state.activeTextPhase;
+    delete state.activeReasoningPartId;
+    delete state.activeReasoningSource;
+    delete state.reasoningChars;
+    delete state.reasoningTruncated;
+    state.toolParts.clear();
+  }
+
+  private generationMetadata(state: ActiveTranscriptProjectionState): Record<string, unknown> {
+    if (!state.generationId || state.generationAttempt === undefined) return {};
+    return {
+      modelGeneration: {
+        generationId: state.generationId,
+        attempt: state.generationAttempt,
+        committed: false,
+      },
+    };
+  }
+
+  private trackGenerationPart(
+    state: ActiveTranscriptProjectionState,
+    partId: string,
+    type: "text" | "reasoning" | "tool",
+    messageId: string,
+  ): void {
+    if (!state.generationId || state.generationAttempt === undefined) return;
+    state.generationParts.set(partId, {
+      generationId: state.generationId,
+      attempt: state.generationAttempt,
+      messageId,
+      type,
+    });
+  }
+
+  private commitGenerationParts(state: ActiveTranscriptProjectionState): void {
+    for (const [partId, info] of state.generationParts) {
+      this.store.conversations.upsertMessagePart({
+        id: partId,
+        sessionId: state.sessionId,
+        messageId: info.messageId,
+        type: info.type,
+        metadata: {
+          modelGeneration: {
+            generationId: info.generationId,
+            attempt: info.attempt,
+            committed: true,
+          },
+        },
+      });
+    }
+  }
+
+  private supersedeGenerationParts(state: ActiveTranscriptProjectionState): void {
+    for (const [partId, info] of state.generationParts) {
+      this.store.conversations.upsertMessagePart({
+        id: partId,
+        sessionId: state.sessionId,
+        messageId: info.messageId,
+        type: info.type,
+        status: "interrupted",
+        metadata: {
+          modelGeneration: {
+            generationId: info.generationId,
+            attempt: info.attempt,
+            superseded: true,
+            committed: false,
+          },
+          ...(info.type === "tool" ? { outcome: "interrupted" } : {}),
+        },
+      });
+    }
+    state.generationParts.clear();
   }
 
   private takeReasoningDelta(

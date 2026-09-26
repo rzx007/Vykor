@@ -8,6 +8,12 @@ import type { Settings } from "./settings";
 import type { CompactContextProvider } from "../engine/compact-service";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
+import type {
+  GenerationIdentity,
+  ModelAttemptUsageStatus,
+  ModelRetryPolicy,
+  ModelRetryState,
+} from "../engine/model-retry";
 
 /** The user-selected values that are safe to change between model requests. */
 export type AgentRequestConfiguration = {
@@ -335,6 +341,16 @@ export type AgentEventInput =
       };
     }
   | { type: "usage.updated"; data: { usage: import("./usage").UsageSnapshot } }
+  | { type: "output.generation.started"; data: GenerationIdentity }
+  | { type: "model.retry.scheduled"; data: ModelRetryState }
+  | {
+      type: "model.attempt.finished";
+      data: GenerationIdentity & {
+        status: "completed" | "failed" | "interrupted";
+        usageStatus: ModelAttemptUsageStatus;
+        usage?: import("./usage").UsageSnapshot;
+      };
+    }
   | {
       type: "domain.event";
       data: { name: string; payload?: Record<string, unknown> };
@@ -583,6 +599,8 @@ export interface QueryEngineOptions {
   /** Optional per-run trajectory policy factory. False disables the default tracker. */
   trajectoryTrackerFactory?: false | (() => import("../engine/trajectory/tracker").TrajectoryTracker);
   compactProgressCallback?: import("../engine/compact-service").CompactProgressCallback;
+  /** 有界模型网络重试策略；`maxTotalRetries: 0` 可显式关闭自动重试。 */
+  modelRetry?: Partial<ModelRetryPolicy>;
 }
 
 export type RuntimeSandboxState = "off" | "active" | "degraded" | "unavailable";

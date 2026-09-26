@@ -47,7 +47,14 @@ export type {
 export {
   checkProtocolCompatibility,
   CURRENT_PROTOCOL_VERSION,
+  readSessionModelRetryState,
+  readSessionModelUsage,
+  isSupersededModelPart,
   supportsFeature,
+} from "@vykor/protocol";
+export type {
+  SessionModelRetryState,
+  SessionModelUsageSummary,
 } from "@vykor/protocol";
 export {
   applyEvent,
@@ -58,11 +65,14 @@ export {
   selectFirstPendingPermission,
   selectSessionInputs,
   selectSessionMessagesWithParts,
+  selectSessionModelRetry,
+  selectSessionModelUsage,
   selectSessionOrderedMessages,
   selectSessionParts,
   selectSessionPermissions,
   selectSessionRuns,
   selectSessionTasks,
+  selectVisibleSessionMessagesWithParts,
   SessionSyncController,
   syncEvents,
   UnsupportedSessionEventSchemaVersionError,

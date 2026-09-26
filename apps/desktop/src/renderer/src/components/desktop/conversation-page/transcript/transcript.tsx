@@ -1,4 +1,5 @@
 import { Fragment, useMemo } from "react"
+import { readSessionModelRetryState, readSessionModelUsage } from "@vykor/client"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import type { DesktopSessionInput } from "@shared/session-types"
 
@@ -6,6 +7,8 @@ import { messageTextContent } from "../message/message-content"
 import { AssistantMessage } from "../message/assistant-message"
 import { buildConversationEntries } from "../message/conversation-turn-model"
 import { ContextCompactionDivider } from "../message/context-compaction-divider"
+import { ModelRetryNotice } from "../message/model-retry-notice"
+import { ModelUsageNotice } from "../message/model-usage-notice"
 import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
 import { selectRunNotices } from "./run-notices"
@@ -65,6 +68,14 @@ export function ConversationTranscript({
       entry.type === "turn" && entry.turn.userMessage ? [entry.turn.userMessage] : []
     )[0]
   const noticeRuns = selectRunNotices(runs)
+  const modelRetry = useMemo(() => {
+    for (const run of runs) {
+      if (run.status !== "running" && run.status !== "pending") continue
+      const state = readSessionModelRetryState(run.metadata)
+      if (state) return state
+    }
+    return undefined
+  }, [runs])
 
   if (messages.length === 0 && !running && noticeRuns.length === 0) {
     return (
@@ -167,9 +178,19 @@ export function ConversationTranscript({
                 <RunErrorNotice error={run.error} />
               </MessageScrollerItem>
             ))}
+            {runs.filter((run) => entry.turn.runIds.includes(run.id) && readSessionModelUsage(run.metadata)?.incomplete).map((run) => (
+              <MessageScrollerItem key={`usage-${run.id}`} messageId={`usage-${run.id}`}>
+                <ModelUsageNotice metadata={run.metadata} />
+              </MessageScrollerItem>
+            ))}
           </Fragment>
         )
       })}
+      {modelRetry ? (
+        <MessageScrollerItem messageId="conversation-model-retry">
+          <ModelRetryNotice retry={modelRetry} />
+        </MessageScrollerItem>
+      ) : null}
       {running ? (
         <MessageScrollerItem messageId="conversation-running-status">
           <LoadingState label="正在处理" variant="Dots" />

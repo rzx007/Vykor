@@ -4,7 +4,7 @@
  * 幂等：同一 `seq` 只应用一次。多端用同一套事件流应收敛到相同状态。
  */
 
-import { sessionEventSchemaVersion } from "@vykor/protocol";
+import { isSupersededModelPart, sessionEventSchemaVersion } from "@vykor/protocol";
 
 import type {
   VykorClientState,
@@ -304,6 +304,8 @@ function appendPartDelta(state: VykorClientState, event: SessionEventRecord): Vy
   const nextParts = [...currentParts];
   if (index >= 0) {
     const current = nextParts[index]!;
+    // A late delta for a superseded attempt must never revive old output.
+    if (isSupersededModelPart(current)) return state;
     nextParts[index] = {
       ...current,
       text: `${current.text ?? ""}${delta}`,

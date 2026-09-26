@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Message, StreamEvent, ToolUseBlock, UsageSnapshot, ContentBlock } from "../index";
+import type { Message, StreamEvent, ToolUseBlock, UsageSnapshot, ContentBlock, ModelAttemptFinishedEvent } from "../index";
 import type {
   AgentExecutionContext,
   StreamingMessageClient,
@@ -27,6 +27,15 @@ import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
 import { CompactService, type CompactClient, type CompactContextProvider } from "./compact-service";
 import { CostTracker } from "./cost-tracker";
+import {
+  ModelRequestFailure,
+  nextModelRetryDelay,
+  normalizeModelRetryPolicy,
+  waitForModelRetry,
+  type ModelRetryPolicy,
+  type RetryCounters,
+} from "./model-retry";
+import { streamBufferedModelWithRetry } from "./buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
 import { normalizeToolInput, validateToolInput } from "./tool-input-schema";
 import { ToolFailureMemory } from "./tool-failure-memory";
@@ -129,17 +138,31 @@ function userContentToText(content: string | ContentBlock[]): string {
  * straight through so `CompactService` can aggregate `text_delta` events and
  * surface `error` events as PTL-detectable failures.
  */
-function toCompactClient(apiClient: StreamingMessageClient, model: string): CompactClient {
+function toCompactClient(
+  apiClient: StreamingMessageClient,
+  model: string,
+  options: {
+    policy?: Partial<ModelRetryPolicy>;
+    onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void | Promise<void>;
+  } = {},
+): CompactClient {
   return {
-    submitMessage(content: string, options?: { signal?: AbortSignal }): AsyncIterable<StreamEvent> {
-      return apiClient.streamMessage({
-        model,
-        messages: [{ type: "user", content }],
-        system: COMPACT_SUMMARIZER_SYSTEM_PROMPT,
-        maxTokens: MAX_COMPACT_OUTPUT_TOKENS,
-        tools: undefined,
-        abortSignal: options?.signal,
-      });
+    submitMessage(content: string, submitOptions?: { signal?: AbortSignal }): AsyncIterable<StreamEvent> {
+      return streamBufferedModelWithRetry(
+        apiClient,
+        {
+          model,
+          messages: [{ type: "user", content }],
+          system: COMPACT_SUMMARIZER_SYSTEM_PROMPT,
+          maxTokens: MAX_COMPACT_OUTPUT_TOKENS,
+          tools: undefined,
+          abortSignal: submitOptions?.signal,
+        },
+        {
+          ...(options.policy ? { policy: options.policy } : {}),
+          ...(options.onAttemptFinished ? { onAttemptFinished: options.onAttemptFinished } : {}),
+        },
+      );
     },
   };
 }
@@ -195,16 +218,16 @@ export class QueryEngine implements IQueryEngine {
       name, { identity: toolDefinitionIdentity(definition), execute: definition.execute },
     ]));
     this.model = options.model ?? "deepchat-chat";
+    this.costTracker = new CostTracker();
     this.compactService = new CompactService(
       options.maxTokens ?? 100_000,
       options.compactKeepRecent ?? 10,
       {
         hookExecutor: this.hookExecutor,
-        client: toCompactClient(this.apiClient, this.model),
+        client: this.createCompactClient(this.apiClient, this.model),
       },
     );
     this.compactService.setProgressCallback(options.compactProgressCallback);
-    this.costTracker = new CostTracker();
     this.systemPrompt = options.systemPrompt;
     this.maxTurns = options.maxTurns ?? 50;
     this.skillRegistry = options.skillRegistry;
@@ -356,7 +379,7 @@ export class QueryEngine implements IQueryEngine {
         ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
         : baseSystemPrompt;
       this.compactService.setClient(
-        toCompactClient(requestConfiguration.client, requestConfiguration.model),
+        this.createCompactClient(requestConfiguration.client, requestConfiguration.model, options.execution),
       );
       if (requestConfiguration.contextWindow !== undefined) {
         this.compactService.setContextWindow(requestConfiguration.contextWindow);
@@ -383,6 +406,12 @@ export class QueryEngine implements IQueryEngine {
       } catch (error) {
         if (options.signal?.aborted) throw options.signal.reason;
         // compact failure is non-fatal; continue with current messages
+      } finally {
+        // Manual compaction after this turn must keep the resolved client/model
+        // without retaining an emitter bound to this run.
+        this.compactService.setClient(
+          this.createCompactClient(requestConfiguration.client, requestConfiguration.model),
+        );
       }
       this.messages = sanitizeMessageHistory(this.messages);
 
@@ -412,71 +441,169 @@ export class QueryEngine implements IQueryEngine {
           },
         });
       }
-      const stream = requestConfiguration.client.streamMessage({
-        model: requestConfiguration.model,
-        messages: this.messages,
-        system,
-        tools: tools.length > 0 ? tools : undefined,
-        ...(requestConfiguration.maxOutputTokens !== undefined
-          ? { maxTokens: requestConfiguration.maxOutputTokens }
-          : {}),
-        ...(requestConfiguration.reasoningEffort
-          ? { reasoningEffort: requestConfiguration.reasoningEffort }
-          : {}),
-        abortSignal: options.signal,
-      });
-      forceFinalResponse = false;
+      const policy = normalizeModelRetryPolicy(this.options.modelRetry);
+      const generationId = randomUUID();
+      const retryCounters: RetryCounters = { request: 0, stream: 0, total: 0 };
+      let recoveryDeadlineAt: number | undefined;
+      let attempt = 1;
 
       let assistantText = "";
       let assistantReasoning = "";
       let assistantReasoningReplay = "";
-      const assistantReasoningSegments: Array<{ source: "reasoning_content" | "think"; text: string }> = [];
+      let assistantReasoningSegments: Array<{ source: "reasoning_content" | "think"; text: string }> = [];
       let assistantPhase: import("../types/messages").AssistantMessagePhase | undefined;
-      const toolUses: ToolUseBlock[] = [];
+      let toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
 
-      // 处理流式响应事件，累积文本和工具调用信息
-      for await (const event of stream) {
-        yield event;
+      // 只把「当前模型调用」包进重试。工具执行、权限请求、压缩和整个 Run
+      // 都在循环之外；每次重试冻结同一份请求参数与已确认输入。
+      while (true) {
+        yield { type: "generation_started", generationId, attempt };
 
-        if (event.type === "text_delta") {
-          assistantText += event.delta;
-          assistantPhase = event.phase ?? assistantPhase;
-        } else if (event.type === "reasoning_delta") {
-          assistantReasoning += event.delta;
-          const lastSegment = assistantReasoningSegments.at(-1);
-          if (lastSegment?.source === event.source) lastSegment.text += event.delta;
-          else assistantReasoningSegments.push({ source: event.source, text: event.delta });
-          if (event.source === "reasoning_content") {
-            assistantReasoningReplay += event.delta;
+        assistantText = "";
+        assistantReasoning = "";
+        assistantReasoningReplay = "";
+        assistantReasoningSegments = [];
+        assistantPhase = undefined;
+        toolUses = [];
+        stopReason = "end_turn";
+
+        const attemptSignal = this.createAttemptSignal(options.signal, recoveryDeadlineAt);
+        const attemptToolUses: ToolUseBlock[] = [];
+        let attemptUsage: UsageSnapshot | undefined;
+        let completionSeen = false;
+        let attemptFailed: ModelRequestFailure | undefined;
+
+        try {
+          const stream = requestConfiguration.client.streamMessage({
+            model: requestConfiguration.model,
+            messages: this.messages,
+            system,
+            tools: tools.length > 0 ? tools : undefined,
+            ...(requestConfiguration.maxOutputTokens !== undefined
+              ? { maxTokens: requestConfiguration.maxOutputTokens }
+              : {}),
+            ...(requestConfiguration.reasoningEffort
+              ? { reasoningEffort: requestConfiguration.reasoningEffort }
+              : {}),
+            abortSignal: attemptSignal.signal,
+            requestTimeoutMs: policy.requestTimeoutMs,
+            streamIdleTimeoutMs: policy.streamIdleTimeoutMs,
+          });
+
+          for await (const event of stream) {
+            if (event.type === "text_delta") {
+              assistantText += event.delta;
+              assistantPhase = event.phase ?? assistantPhase;
+              yield event;
+            } else if (event.type === "reasoning_delta") {
+              assistantReasoning += event.delta;
+              const lastSegment = assistantReasoningSegments.at(-1);
+              if (lastSegment?.source === event.source) lastSegment.text += event.delta;
+              else assistantReasoningSegments.push({ source: event.source, text: event.delta });
+              if (event.source === "reasoning_content") {
+                assistantReasoningReplay += event.delta;
+              }
+              yield event;
+            } else if (event.type === "tool_use_start") {
+              attemptToolUses.push(event.toolUse);
+            } else if (event.type === "usage") {
+              attemptUsage = event.usage;
+            } else if (event.type === "complete") {
+              stopReason = event.stopReason;
+              completionSeen = true;
+            } else if (event.type === "error") {
+              throw event.error;
+            } else {
+              yield event;
+            }
           }
-        } else if (event.type === "tool_use_start") {
-          toolUses.push(event.toolUse);
-        } else if (event.type === "usage") {
-          this.costTracker.addUsage(event.usage);
-        } else if (event.type === "complete") {
-          stopReason = event.stopReason;
+
+          if (!completionSeen) {
+            throw new ModelRequestFailure(
+              "模型流在完成前结束（缺少完成标记）",
+              { kind: "stream_incomplete", phase: "stream", retryable: true },
+            );
+          }
+        } catch (error) {
+          attemptFailed = this.describeModelFailure(error, options.signal, attemptSignal);
+        } finally {
+          attemptSignal.dispose();
         }
-      }
 
-      if (isTruncatedStopReason(stopReason) && toolUses.length === 0) {
-        const notice =
-          "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
-        assistantText += notice;
-        yield { type: "text_delta", delta: notice };
-      }
+        if (attemptFailed) {
+          this.settleModelAttempt(attemptUsage, true);
+          yield this.attemptFinishedEvent(
+            generationId, attempt, options.signal?.aborted ? "interrupted" : "failed", attemptUsage,
+          );
 
-      // 如果助手有文本、思考内容或工具调用，则将其添加到消息历史中
-      if (assistantText || toolUses.length > 0 || assistantReasoning) {
-        this.messages.push({
-          type: "assistant",
-          content: assistantText,
-          phase: assistantPhase ?? (toolUses.length > 0 ? "commentary" : "final_answer"),
-          toolUses: toolUses.length > 0 ? toolUses : undefined,
-          ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
-          ...(assistantReasoningReplay ? { reasoningReplay: assistantReasoningReplay } : {}),
-          ...(assistantReasoningSegments.length > 0 ? { reasoningSegments: assistantReasoningSegments } : {}),
-        });
+          if (options.signal?.aborted) throw options.signal.reason;
+          if (!attemptFailed.info.retryable) throw attemptFailed;
+
+          if (recoveryDeadlineAt === undefined) {
+            recoveryDeadlineAt = Date.now() + policy.recoveryBudgetMs;
+          }
+          const now = Date.now();
+          const delay = nextModelRetryDelay({
+            failure: attemptFailed.info,
+            counters: retryCounters,
+            policy,
+            now,
+            deadlineAt: recoveryDeadlineAt,
+            random: Math.random(),
+          });
+          if (delay === undefined) throw attemptFailed;
+
+          if (attemptFailed.info.phase === "request") retryCounters.request++;
+          else retryCounters.stream++;
+          retryCounters.total++;
+
+          yield {
+            type: "model_retry",
+            generationId,
+            attempt,
+            retryNumber: retryCounters.total,
+            maxRetries: policy.maxTotalRetries,
+            reason: attemptFailed.info.kind,
+            nextRetryAt: now + delay,
+            recoveryDeadlineAt,
+          };
+          await waitForModelRetry(delay, options.signal);
+          attempt++;
+          continue;
+        }
+
+        // 成功：补一次截断提示，然后发布缓冲的工具事件、结算用量并发出 complete。
+        if (isTruncatedStopReason(stopReason) && attemptToolUses.length === 0) {
+          const notice =
+            "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
+          assistantText += notice;
+          yield { type: "text_delta", delta: notice };
+        }
+
+        toolUses = attemptToolUses;
+        this.settleModelAttempt(attemptUsage, false);
+        for (const toolUse of toolUses) {
+          yield { type: "tool_use_start", toolUse };
+        }
+        yield this.attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
+
+        // 如果助手有文本、思考内容或工具调用，则将其添加到消息历史中
+        if (assistantText || toolUses.length > 0 || assistantReasoning) {
+          this.messages.push({
+            type: "assistant",
+            content: assistantText,
+            phase: assistantPhase ?? (toolUses.length > 0 ? "commentary" : "final_answer"),
+            toolUses: toolUses.length > 0 ? toolUses : undefined,
+            ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
+            ...(assistantReasoningReplay ? { reasoningReplay: assistantReasoningReplay } : {}),
+            ...(assistantReasoningSegments.length > 0 ? { reasoningSegments: assistantReasoningSegments } : {}),
+          });
+        }
+
+        yield { type: "complete", stopReason };
+        forceFinalResponse = false;
+        break;
       }
 
       if (toolUses.length > 0) {
@@ -657,6 +784,103 @@ export class QueryEngine implements IQueryEngine {
       : configuration;
   }
 
+  /**
+   * 为一次模型请求创建组合信号：外部取消优先保留原原因；进入恢复窗口后，
+   * 最早的截止时间会中止本次请求并标记预算耗尽。
+   */
+  private createAttemptSignal(external?: AbortSignal, deadlineAt?: number): {
+    signal: AbortSignal;
+    deadlineExceeded: () => boolean;
+    dispose: () => void;
+  } {
+    const controller = new AbortController();
+    let deadlineExceeded = false;
+    const onExternalAbort = () => controller.abort(external?.reason);
+    if (external) {
+      if (external.aborted) onExternalAbort();
+      else external.addEventListener("abort", onExternalAbort, { once: true });
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (deadlineAt !== undefined && !controller.signal.aborted) {
+      const remaining = deadlineAt - Date.now();
+      const abortForBudget = () => {
+        deadlineExceeded = true;
+        controller.abort(
+          new ModelRequestFailure(
+            "模型恢复时间预算已耗尽",
+            { kind: "timeout", phase: "stream", retryable: false },
+          ),
+        );
+      };
+      if (remaining <= 0) abortForBudget();
+      else timer = setTimeout(abortForBudget, remaining);
+    }
+    return {
+      signal: controller.signal,
+      deadlineExceeded: () => deadlineExceeded,
+      dispose: () => {
+        if (timer) clearTimeout(timer);
+        external?.removeEventListener("abort", onExternalAbort);
+      },
+    };
+  }
+
+  private describeModelFailure(
+    error: unknown,
+    external: AbortSignal | undefined,
+    attemptSignal: { deadlineExceeded: () => boolean },
+  ): ModelRequestFailure {
+    if (error instanceof ModelRequestFailure) return error;
+    if (external?.aborted) {
+      return new ModelRequestFailure(
+        "模型调用已取消",
+        { kind: "unknown", phase: "stream", retryable: false },
+        external.reason,
+      );
+    }
+    if (attemptSignal.deadlineExceeded()) {
+      return new ModelRequestFailure(
+        "模型恢复时间预算已耗尽",
+        { kind: "timeout", phase: "stream", retryable: false },
+        error,
+      );
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return new ModelRequestFailure(
+      message,
+      { kind: "unknown", phase: "stream", retryable: false },
+      error,
+    );
+  }
+
+  /**
+   * 每次实际请求恰好结算一次用量：已知快照累加一次，未知/不完整标记保留。
+   * 不把适配器每次请求的累计快照重复相加。
+   */
+  private settleModelAttempt(usage: UsageSnapshot | undefined, incomplete: boolean): void {
+    if (usage) this.costTracker.addUsage(usage);
+    if (incomplete || !usage) this.costTracker.markUsageIncomplete();
+  }
+
+  private attemptFinishedEvent(
+    generationId: string,
+    attempt: number,
+    status: "completed" | "failed" | "interrupted",
+    usage: UsageSnapshot | undefined,
+  ): ModelAttemptFinishedEvent {
+    const usageStatus = status === "completed"
+      ? (usage ? "complete" : "unknown")
+      : (usage ? "partial" : "unknown");
+    return {
+      type: "model_attempt_finished",
+      generationId,
+      attempt,
+      status,
+      usageStatus,
+      ...(usage ? { usage } : {}),
+    };
+  }
+
   getHistory(): Message[] {
     return [...this.messages];
   }
@@ -705,13 +929,35 @@ export class QueryEngine implements IQueryEngine {
 
   setApiClient(client: StreamingMessageClient): void {
     this.apiClient = client;
-    this.compactService.setClient(toCompactClient(this.apiClient, this.model));
+    this.compactService.setClient(this.createCompactClient(this.apiClient, this.model));
   }
 
   setModel(model: string): void {
     this.model = model;
     // Keep the summarizer client pointed at the current model.
-    this.compactService.setClient(toCompactClient(this.apiClient, this.model));
+    this.compactService.setClient(this.createCompactClient(this.apiClient, this.model));
+  }
+
+  /**
+   * 压缩摘要使用独立的辅助重试包装，按次结算用量到同一 CostTracker。
+   * 不能把主生成包进这里，避免双层重试或重复计费。
+   */
+  private createCompactClient(
+    client: StreamingMessageClient, model: string, execution?: AgentExecutionContext,
+  ): CompactClient {
+    return toCompactClient(client, model, {
+      policy: this.options.modelRetry,
+      onAttemptFinished: async (event) => {
+        if (event.usage) this.costTracker.addUsage(event.usage);
+        if (event.usageStatus !== "complete") this.costTracker.markUsageIncomplete();
+        await execution?.emit({ type: "model.attempt.finished", data: {
+          generationId: event.generationId, attempt: event.attempt,
+          status: event.status, usageStatus: event.usageStatus,
+          ...(event.usage ? { usage: event.usage } : {}),
+        } });
+        if (event.usage) await execution?.emit({ type: "usage.updated", data: { usage: event.usage } });
+      },
+    });
   }
 
   setMaxTurns(max: number): void {

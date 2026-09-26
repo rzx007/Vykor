@@ -178,3 +178,13 @@ test("hides only reasoning when assistant text and reasoning are interleaved", (
   expect(bucketToTranscript(value, { showReasoning: true }).map((item) => item.role))
     .toEqual(["reasoning", "assistant"]);
 });
+
+test("hides superseded attempt parts while retaining earlier completed tools", () => {
+  const priorTool = { ...part("m1", 1, ""), type: "tool" as const, toolName: "Read", input: { path: "a.ts" }, output: { content: [{ type: "text", text: "done" }] } };
+  const oldText = { ...part("m2", 1, "old text"), metadata: { modelGeneration: { generationId: "g1", attempt: 1, superseded: true } } };
+  const newText = { ...part("m3", 1, "new text"), metadata: { modelGeneration: { generationId: "g1", attempt: 2, committed: true } } };
+  const value = bucket([], [message("m1", 1, "assistant"), message("m2", 2, "assistant"), message("m3", 3, "assistant")], [priorTool, oldText, newText]);
+
+  const items = bucketToTranscript(value);
+  expect(items.map((item) => item.text)).toEqual(["Read", "done", "new text"]);
+});

@@ -50,4 +50,61 @@ describe("streamEventToAgentEvent", () => {
   it("leaves other events to the caller", () => {
     expect(streamEventToAgentEvent({ type: "complete", stopReason: "stop" })).toBeUndefined();
   });
+
+  it("maps generation starts, retries, and attempt settlements", () => {
+    expect(
+      streamEventToAgentEvent({
+        type: "generation_started",
+        generationId: "g1",
+        attempt: 2,
+      }),
+    ).toEqual({
+      type: "output.generation.started",
+      data: { generationId: "g1", attempt: 2 },
+    });
+
+    expect(
+      streamEventToAgentEvent({
+        type: "model_retry",
+        generationId: "g1",
+        attempt: 1,
+        retryNumber: 2,
+        maxRetries: 5,
+        reason: "network",
+        nextRetryAt: 2_000,
+        recoveryDeadlineAt: 180_000,
+      }),
+    ).toEqual({
+      type: "model.retry.scheduled",
+      data: {
+        generationId: "g1",
+        attempt: 1,
+        retryNumber: 2,
+        maxRetries: 5,
+        reason: "network",
+        nextRetryAt: 2_000,
+        recoveryDeadlineAt: 180_000,
+      },
+    });
+
+    expect(
+      streamEventToAgentEvent({
+        type: "model_attempt_finished",
+        generationId: "g1",
+        attempt: 2,
+        status: "completed",
+        usageStatus: "complete",
+        usage: { inputTokens: 5, outputTokens: 2 },
+      }),
+    ).toEqual({
+      type: "model.attempt.finished",
+      data: {
+        generationId: "g1",
+        attempt: 2,
+        status: "completed",
+        usageStatus: "complete",
+        usage: { inputTokens: 5, outputTokens: 2 },
+      },
+    });
+  });
 });

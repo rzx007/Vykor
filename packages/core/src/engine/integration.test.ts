@@ -1117,7 +1117,8 @@ describe("Integration: Full Agent Loop", () => {
       run,
       new Promise((_, reject) => setTimeout(() => reject(new Error("provider did not abort")), 50)),
     ])).rejects.toBe(interrupted);
-    expect(receivedSignal).toBe(controller.signal);
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(receivedSignal?.reason).toBe(interrupted);
   });
 
   it("keeps the external reason when external abort wins before timeout", async () => {
@@ -1516,7 +1517,8 @@ describe("Integration: AutoCompact in Agent Loop", () => {
       run,
       new Promise((_, reject) => setTimeout(() => reject(new Error("compaction did not abort")), 50)),
     ])).rejects.toBe(interrupted);
-    expect(compactSignal).toBe(controller.signal);
+    expect(compactSignal?.aborted).toBe(true);
+    expect(compactSignal?.reason).toBe(interrupted);
     expect(normalCalls).toBe(0);
   });
 

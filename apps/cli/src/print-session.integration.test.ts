@@ -249,4 +249,41 @@ describe("runPrintSession daemon integration", () => {
     stdout.spy.mockRestore();
     stderr.spy.mockRestore();
   });
+
+  it("stream-json identifies replaced attempts and finishes with effective text", async () => {
+    exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    const stdout = captureWrite(process.stdout);
+    const stderr = captureWrite(process.stderr);
+    const createAgent = testAgent(async (_content, run) => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      await run.emit({ type: "output.generation.started", data: { generationId: "g1", attempt: 1 } });
+      await run.emit({ type: "output.text.delta", data: { delta: "old answer" } });
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await run.emit({ type: "model.retry.scheduled", data: { generationId: "g1", attempt: 1, retryNumber: 2, maxRetries: 5, reason: "network", nextRetryAt: Date.now(), recoveryDeadlineAt: Date.now() + 30_000 } });
+      await run.emit({ type: "output.generation.started", data: { generationId: "g1", attempt: 2 } });
+      await run.emit({ type: "output.text.delta", data: { delta: "new answer" } });
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    let streamed = "";
+    let plain = "";
+    await withPrintServer(createAgent, async ({ url, token }) => {
+      await runPrintSession({ model: "m", outputStyle: "default" } as never, "retry", { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token, outputFormat: "stream-json" });
+      streamed = stdout.chunks.join("");
+      stdout.chunks.length = 0;
+      await runPrintSession({ model: "m", outputStyle: "default" } as never, "retry", { model: "m", cwd: process.cwd(), daemonUrl: url, daemonToken: token });
+      plain = stdout.chunks.join("");
+    });
+
+    const rows = streamed.trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(rows.some((row) => row.type === "session.model.generation.superseded" && (row.modelGeneration as { attempt?: number }).attempt === 1)).toBe(true);
+    expect(rows.some((row) => row.type === "session.message.part.delta" && (row.modelGeneration as { attempt?: number } | undefined)?.attempt === 2)).toBe(true);
+    expect(rows.at(-1)).toMatchObject({ type: "session.output.final", text: "new answer", status: "completed" });
+    expect(plain).toContain("old answer");
+    expect(plain).toContain("new answer");
+    expect(stderr.chunks.join("")).toContain("上一段输出中断，以下为重新生成");
+    expect(exitSpy).not.toHaveBeenCalled();
+    stdout.spy.mockRestore();
+    stderr.spy.mockRestore();
+  });
 });

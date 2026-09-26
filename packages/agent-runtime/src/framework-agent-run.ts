@@ -58,6 +58,38 @@ export function streamEventToAgentEvent(event: StreamEvent): AgentEventInput | u
       data: { delta: event.delta, source: event.source },
     };
   }
+  if (event.type === "generation_started") {
+    return {
+      type: "output.generation.started",
+      data: { generationId: event.generationId, attempt: event.attempt },
+    };
+  }
+  if (event.type === "model_retry") {
+    return {
+      type: "model.retry.scheduled",
+      data: {
+        generationId: event.generationId,
+        attempt: event.attempt,
+        retryNumber: event.retryNumber,
+        maxRetries: event.maxRetries,
+        reason: event.reason,
+        nextRetryAt: event.nextRetryAt,
+        recoveryDeadlineAt: event.recoveryDeadlineAt,
+      },
+    };
+  }
+  if (event.type === "model_attempt_finished") {
+    return {
+      type: "model.attempt.finished",
+      data: {
+        generationId: event.generationId,
+        attempt: event.attempt,
+        status: event.status,
+        usageStatus: event.usageStatus,
+        ...(event.usage ? { usage: event.usage } : {}),
+      },
+    };
+  }
   return undefined;
 }
 
@@ -138,6 +170,8 @@ export class FrameworkAgentRun implements AgentRunHandle {
   private async execute(): Promise<AgentRunResult> {
     let output = "";
     let stopReason: string | undefined;
+    let currentGenerationId: string | undefined;
+    let generationOutputStart = 0;
     const scope: AgentRunScope = {
       agentId: this.options.agentId,
       sessionId: this.sessionId,
@@ -180,9 +214,23 @@ export class FrameworkAgentRun implements AgentRunHandle {
         signal: this.controller.signal,
         execution,
       })) {
-        if (this.controller.signal.aborted) throw abortError(this.controller.signal);
-        if (event.type === "text_delta") output += event.delta;
-        if (event.type === "complete") stopReason = event.stopReason;
+        // A cancelled request still owes its per-attempt settlement to the run.
+        if (this.controller.signal.aborted && event.type !== "model_attempt_finished") {
+          throw abortError(this.controller.signal);
+        }
+        if (event.type === "generation_started") {
+          if (event.generationId !== currentGenerationId) {
+            currentGenerationId = event.generationId;
+            generationOutputStart = output.length;
+          } else {
+            // 同一生成的新尝试：丢弃上一次尝试已追加的残缺文字。
+            output = output.slice(0, generationOutputStart);
+          }
+        } else if (event.type === "text_delta") {
+          output += event.delta;
+        } else if (event.type === "complete") {
+          stopReason = event.stopReason;
+        }
         await this.projectStreamEvent(event);
       }
       if (this.controller.signal.aborted) throw abortError(this.controller.signal);
@@ -261,6 +309,11 @@ export class FrameworkAgentRun implements AgentRunHandle {
     const mapped = streamEventToAgentEvent(event);
     if (mapped) {
       await this.emit(mapped);
+      // Runtime derives a single usage.updated from the settlement event so the
+      // server never double-counts the same attempt's cost.
+      if (event.type === "model_attempt_finished" && event.usage) {
+        await this.emit({ type: "usage.updated", data: { usage: event.usage } });
+      }
       return;
     }
     if (event.type === "complete") {
@@ -287,8 +340,6 @@ export class FrameworkAgentRun implements AgentRunHandle {
         type: "tool.completed",
         data: { toolUseId: event.toolUseId, result: event.result },
       });
-    } else if (event.type === "usage") {
-      await this.emit({ type: "usage.updated", data: { usage: event.usage } });
     } else if (event.type === "error") {
       throw event.error;
     }

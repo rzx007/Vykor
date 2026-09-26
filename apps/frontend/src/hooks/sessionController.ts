@@ -3,7 +3,7 @@ import type {
   SelectOptionPayload,
   TranscriptItem,
 } from "../types";
-import type { JobSnapshot, ModelProviderInfo } from "@vykor/client";
+import type { JobSnapshot, ModelProviderInfo, SessionModelRetryState, SessionModelUsageSummary } from "@vykor/client";
 import type { JobDetailRemoteState, JobRemoteState } from "../jobs/job-remote-state";
 
 export type JobRequestAction =
@@ -27,6 +27,9 @@ export type TuiAction =
 export type TuiSessionController = {
   transcript: TranscriptItem[];
   assistantBuffer: string;
+  retry?: SessionModelRetryState;
+  usage?: SessionModelUsageSummary;
+  knownUsage?: { inputTokens: number; outputTokens: number };
   status: Record<string, unknown>;
   jobState: JobRemoteState;
   jobs: JobSnapshot[];

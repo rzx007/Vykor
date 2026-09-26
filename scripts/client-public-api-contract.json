@@ -865,6 +865,38 @@
     {
       "name": "mcp",
       "kind": "client-resource"
+    },
+    {
+      "name": "readSessionModelRetryState",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "readSessionModelUsage",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "isSupersededModelPart",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "selectSessionModelRetry",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "selectSessionModelUsage",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "selectVisibleSessionMessagesWithParts",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "SessionModelRetryState",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionModelUsageSummary",
+      "kind": "type-export"
     }
   ]
 }

@@ -50,6 +50,19 @@ describe("DurableEventRegistry", () => {
     )).toThrow("requires a sessionId");
   });
 
+  it("validates the model attempt settlement payload", () => {
+    expect(defaultDurableEventRegistry.prepareWrite(
+      "session.model.attempt.finished",
+      { runId: "r1", attemptUsage: { generationId: "g1", attempt: 1, status: "failed", usageStatus: "unknown" } },
+      "s1",
+    )).toMatchObject({ type: "session.model.attempt.finished", schemaVersion: 1 });
+    expect(() => defaultDurableEventRegistry.prepareWrite(
+      "session.model.attempt.finished",
+      { runId: "r1" },
+      "s1",
+    )).toThrow("attemptUsage must be an object");
+  });
+
   it("requires a non-empty list of session IDs in a global deletion event", () => {
     expect(() => defaultDurableEventRegistry.prepareWrite("session.deleted", { sessionIds: [] }))
       .toThrow("sessionIds must be a non-empty string array");

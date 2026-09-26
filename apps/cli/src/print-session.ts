@@ -5,6 +5,9 @@ import {
   hasActiveRun,
   normalizeDaemonBaseUrl,
   patchSessionRuntimeMetadata,
+  readSessionModelUsage,
+  readSessionModelRetryState,
+  selectVisibleSessionMessagesWithParts,
   syncEvents,
   type VykorClientState,
   type SessionEventRecord,
@@ -121,11 +124,33 @@ function renderSessionEvent(
   renderer: EventRenderer,
   outputFormat: string | undefined,
   partTextSeen: Map<string, string>,
+  state?: VykorClientState,
+  supersededParts?: Set<string>,
 ): void {
   if (!event) return;
 
-  if (outputFormat === "json" || outputFormat === "stream-json") {
-    process.stdout.write(`${JSON.stringify(event)}\n`);
+  if (outputFormat === "json") return;
+  if (outputFormat === "stream-json") {
+    const part = event.type === "session.message.part.updated"
+      ? event.payload.part as SessionMessagePartRecord | undefined
+      : event.type === "session.message.part.delta"
+        ? state?.buckets[event.sessionId ?? ""]?.partsByMessageId[String(event.payload.messageId)]?.find((row) => row.id === event.payload.partId)
+        : undefined;
+    const generation = part?.metadata.modelGeneration;
+    process.stdout.write(`${JSON.stringify(generation ? { ...event, modelGeneration: generation } : event)}\n`);
+    if (part && typeof generation === "object" && generation !== null && "superseded" in generation && generation.superseded === true && !supersededParts?.has(part.id)) {
+      supersededParts?.add(part.id);
+      process.stdout.write(`${JSON.stringify({ type: "session.model.generation.superseded", sessionId: event.sessionId, partId: part.id, modelGeneration: generation })}\n`);
+    }
+    return;
+  }
+
+  if (event.type === "session.run.updated") {
+    const run = event.payload.run;
+    if (run && typeof run === "object" && "metadata" in run && run.metadata && typeof run.metadata === "object") {
+      const retry = readSessionModelRetryState(run.metadata as Record<string, unknown>);
+      if (retry) void renderer.render({ type: "model_retry", ...retry });
+    }
     return;
   }
 
@@ -143,7 +168,7 @@ function renderSessionEvent(
 
   if (event.type === "session.message.part.updated") {
     const part = event.payload.part as SessionMessagePartRecord | undefined;
-    if (!part) return;
+    if (!part || part.metadata.modelGeneration && typeof part.metadata.modelGeneration === "object" && "superseded" in part.metadata.modelGeneration && part.metadata.modelGeneration.superseded === true) return;
     if (part.type === "text" && part.text) {
       const previous = partTextSeen.get(part.id) ?? "";
       if (part.text.startsWith(previous) && part.text.length > previous.length) {
@@ -192,9 +217,8 @@ function renderSessionSnapshot(
   if (outputFormat === "json" || outputFormat === "stream-json") return;
   const bucket = state.buckets[sessionId];
   if (!bucket) return;
-  for (const message of bucket.messages) {
+  for (const { message, parts } of selectVisibleSessionMessagesWithParts(bucket)) {
     if (message.role !== "assistant") continue;
-    const parts = bucket.partsByMessageId[message.id] ?? [];
     for (const part of parts) {
       if (part.type !== "text") continue;
       renderSessionEvent(
@@ -220,6 +244,30 @@ function mergeSessionSnapshot(
   snapshot: SessionStateSnapshot,
 ): VykorClientState {
   return applySessionSnapshot(state, snapshot);
+}
+
+function finalOutput(state: VykorClientState, sessionId: string, runId: string | undefined) {
+  const bucket = state.buckets[sessionId];
+  const run = runId ? bucket?.runs[runId] : undefined;
+  const text = selectVisibleSessionMessagesWithParts(bucket)
+    .filter(({ message }) => message.role === "assistant" && (!runId || message.runId === runId))
+    .flatMap(({ parts }) => parts.filter((part) => part.type === "text").map((part) => part.text ?? ""))
+    .join("");
+  const attempts = Object.values(bucket?.attempts ?? {}).filter((attempt) => attempt.runId === runId);
+  const usage = run ? readSessionModelUsage(run.metadata) : undefined;
+  return {
+    sessionId,
+    runId,
+    status: run?.status ?? "unknown",
+    text,
+    usage: {
+      inputTokens: attempts.reduce((sum, attempt) => sum + (attempt.inputTokens ?? 0), 0),
+      outputTokens: attempts.reduce((sum, attempt) => sum + (attempt.outputTokens ?? 0), 0),
+      incomplete: usage?.incomplete ?? false,
+      unknownAttempts: usage?.unknownAttempts ?? 0,
+      partialAttempts: usage?.partialAttempts ?? 0,
+    },
+  };
 }
 
 /**
@@ -262,12 +310,14 @@ export async function runPrintSession(
     outputStyle: settings.outputStyle,
   });
   const partTextSeen = new Map<string, string>();
+  const supersededParts = new Set<string>();
   const permissionSeen = new Set<string>();
   const approvePermissions = options.dangerouslySkipPermissions === true;
 
   let admitted = false;
   let runId: string | undefined;
   let exitCode = 0;
+  let finalState: VykorClientState | undefined;
 
   const syncLoop = (async () => {
     for await (const update of syncEvents(client, {
@@ -275,12 +325,14 @@ export async function runPrintSession(
       signal: controller.signal,
     })) {
       let observedState = update.state;
+      finalState = observedState;
 
       if (update.source === "snapshot" && !admitted) {
         admitted = true;
         const response = await client.sessions.admitPrompt(session.id, { id: createPromptRequestId(), items: [{ type: "text", text: prompt }] });
         runId = response.run?.id;
         observedState = mergeSessionSnapshot(update.state, await client.sessions.getState(session.id));
+        finalState = observedState;
         renderSessionSnapshot(observedState, session.id, renderer, options.outputFormat, partTextSeen);
       }
 
@@ -293,7 +345,7 @@ export async function runPrintSession(
       );
 
       if (update.source === "live") {
-        renderSessionEvent(update.event, renderer, options.outputFormat, partTextSeen);
+        renderSessionEvent(update.event, renderer, options.outputFormat, partTextSeen, observedState, supersededParts);
         renderSessionSnapshot(observedState, session.id, renderer, options.outputFormat, partTextSeen);
       }
 
@@ -301,6 +353,7 @@ export async function runPrintSession(
       const terminal = runTerminalStatus(observedState, session.id, runId);
       if (terminal === "active" || terminal === "unknown") continue;
       observedState = mergeSessionSnapshot(observedState, await client.sessions.getState(session.id));
+      finalState = observedState;
       renderSessionSnapshot(observedState, session.id, renderer, options.outputFormat, partTextSeen);
       if (terminal === "failed") exitCode = 1;
       controller.abort();
@@ -319,8 +372,14 @@ export async function runPrintSession(
     }
   }
 
+  const output = finalState ? finalOutput(finalState, session.id, runId) : undefined;
   if (!options.outputFormat || options.outputFormat === "text") {
     process.stdout.write("\n");
+    if (output?.usage.incomplete) {
+      process.stderr.write(`已知用量：${output.usage.inputTokens} 输入 / ${output.usage.outputTokens} 输出；部分请求用量未知\n`);
+    }
+  } else if (output && (options.outputFormat === "json" || options.outputFormat === "stream-json")) {
+    process.stdout.write(`${JSON.stringify(options.outputFormat === "json" ? output : { type: "session.output.final", ...output })}\n`);
   }
 
   if (exitCode !== 0) {

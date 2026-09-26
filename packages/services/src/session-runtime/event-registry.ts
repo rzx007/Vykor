@@ -202,6 +202,10 @@ export const DEFAULT_DURABLE_EVENT_DEFINITIONS: readonly DurableEventDefinition[
   }),
   sessionDefinition("session.run.error", stringsPayload("runId", "error")),
   sessionDefinition("session.run.interrupted", stringsPayload("runId", "error")),
+  sessionDefinition("session.model.attempt.finished", (payload) => {
+    requireString(payload, "runId");
+    requireRecord(payload, "attemptUsage");
+  }),
   sessionDefinition("session.run.interrupt_requested", (payload) => {
     if (payload.runId !== undefined && typeof payload.runId !== "string") throw new Error("runId must be a string");
     if (!Array.isArray(payload.queuedRunIds) || payload.queuedRunIds.some((id) => typeof id !== "string")) {

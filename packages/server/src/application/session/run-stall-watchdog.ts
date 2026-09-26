@@ -9,6 +9,8 @@ export interface RunStallWatchdogOptions {
   setInterval?(handler: () => void, ms: number): ReturnType<typeof setInterval>
   clearInterval?(handle: ReturnType<typeof setInterval>): void
   readActivity(): { runUpdatedAt: number; taskUpdatedAt: number }
+  /** 当前模型等待重试的截止时间；期间不应判定停滞。 */
+  readModelRetryDeadline?(): number | undefined
   hasPendingPermission(): boolean
   hasRunningChildTask(): boolean
   hasRunningTool(): boolean
@@ -47,6 +49,12 @@ export class RunStallWatchdog {
         return
       }
       if (now - this.lastActivityAt < this.options.staleMs) return
+      const retryDeadline = this.options.readModelRetryDeadline?.()
+      if (retryDeadline !== undefined && Number.isFinite(retryDeadline) && now < retryDeadline) {
+        // 有界的合法等待：只把等待期当作「不算停滞」，截止后恢复原检测。
+        this.lastActivityAt = now
+        return
+      }
       if (this.options.hasPendingPermission() || this.options.hasRunningChildTask() || this.options.hasRunningTool()) {
         this.lastActivityAt = now
         return

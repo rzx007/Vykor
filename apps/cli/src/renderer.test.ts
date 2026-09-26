@@ -68,6 +68,16 @@ describe("EventRenderer", () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("test error"));
   });
 
+  it("marks previously printed output as interrupted when a model retry is scheduled", async () => {
+    const { writeSpy, errorSpy } = spy();
+    const renderer = new EventRenderer();
+    await renderer.render({ type: "text_delta", delta: "partial" });
+    await renderer.render({ type: "model_retry", generationId: "g1", attempt: 1, retryNumber: 2, maxRetries: 5, reason: "network", nextRetryAt: Date.now() + 2_000, recoveryDeadlineAt: Date.now() + 30_000 });
+    expect(writeSpy.mock.calls.map((call: unknown[]) => String(call[0])).join("")).toBe("partial");
+    expect(errorSpy.mock.calls.map((call: unknown[]) => String(call[0])).join("")).toContain("上一段输出中断，以下为重新生成");
+    expect(renderer.getBuffer()).toBe("");
+  });
+
   it("renders usage in verbose mode", async () => {
     spy();
     const renderer = new EventRenderer({ verbose: true });

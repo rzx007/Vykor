@@ -1,6 +1,6 @@
 import { parseAttachmentLimits, type AttachmentLimits } from "./attachment.js";
 
-export const CURRENT_PROTOCOL_VERSION = 4;
+export const CURRENT_PROTOCOL_VERSION = 5;
 export const PROTOCOL_VERSION_HEADER = "x-vykor-protocol-version";
 
 export interface ProtocolVersion {

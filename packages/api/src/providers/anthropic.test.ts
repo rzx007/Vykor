@@ -6,70 +6,103 @@ import { describe, expect, it, vi } from "vitest";
 import { AnthropicClient } from "./anthropic.js";
 
 describe("AnthropicClient cancellation", () => {
-  it("passes abortSignal to the Anthropic request", async () => {
-    const controller = new AbortController();
-    const stream = vi.fn(() => ({
-      async *[Symbol.asyncIterator]() {},
-      finalMessage: async () => ({
-        usage: { input_tokens: 0, output_tokens: 0 },
-        stop_reason: "end_turn",
-      }),
-    }));
+  it("emits cumulative partial usage before a disconnect", async () => {
+    const client = new AnthropicClient({ apiKey: "test" } as any);
+    (client as any).client = { messages: { stream: () => ({
+      async *[Symbol.asyncIterator]() {
+        yield { type: "message_start", message: { usage: { input_tokens: 9, output_tokens: 0 } } };
+        yield { type: "message_delta", usage: { output_tokens: 3 } };
+        yield { type: "message_delta", usage: { output_tokens: 5 } };
+        throw new Error("disconnect");
+      },
+    }) } };
+    const usages: any[] = [];
+    await expect((async () => {
+      for await (const event of client.streamMessage({ model: "claude-test", messages: [{ type: "user", content: "hi" }] })) {
+        if (event.type === "usage") usages.push(event.usage);
+      }
+    })()).rejects.toThrow("disconnect");
+    expect(usages).toEqual([
+      { inputTokens: 9, outputTokens: 0 },
+      { inputTokens: 9, outputTokens: 3 },
+      { inputTokens: 9, outputTokens: 5 },
+    ]);
+  });
+  it("forwards external cancellation to the Anthropic request", async () => {
+    const external = new AbortController();
+    const interrupted = new Error("caller cancelled");
+    let received: AbortSignal | undefined;
+    const stream = vi.fn((_params: unknown, options?: { signal?: AbortSignal }) => {
+      received = options?.signal;
+      return {
+        async *[Symbol.asyncIterator]() {
+          await new Promise<void>((resolve) => {
+            received?.addEventListener("abort", () => resolve(), { once: true });
+          });
+          throw interrupted;
+        },
+        finalMessage: async () => ({
+          usage: { input_tokens: 0, output_tokens: 0 },
+          stop_reason: "end_turn",
+        }),
+      };
+    });
     const client = new AnthropicClient({ apiKey: "test", baseURL: undefined } as any);
     (client as any).client = { messages: { stream } };
 
-    for await (const _ of client.streamMessage({
-      model: "claude-test",
-      messages: [{ type: "user", content: "hello" }],
-      abortSignal: controller.signal,
-    })) {}
+    let rejection: unknown;
+    const run = (async () => {
+      for await (const _ of client.streamMessage({
+        model: "claude-test",
+        messages: [{ type: "user", content: "hello" }],
+        abortSignal: external.signal,
+      })) {}
+    })().catch((error) => {
+      rejection = error;
+    });
 
-    expect(stream).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({ signal: controller.signal }),
-    );
+    await vi.waitFor(() => expect(received).toBeDefined());
+    external.abort(interrupted);
+    await run;
+
+    expect(received?.aborted).toBe(true);
+    expect(received?.reason).toBe(interrupted);
+    expect(rejection).toBe(interrupted);
+    expect(stream).toHaveBeenCalledTimes(1);
   });
 
-  it("aborts retry backoff without starting another request", async () => {
-    vi.useFakeTimers();
-    let run: Promise<void> | undefined;
+  it("issues exactly one request and surfaces a retryable failure", async () => {
+    const retryable = Object.assign(new Error("rate limited"), {
+      status: 429,
+      headers: { get: () => "30" },
+    });
+    const stream = vi.fn(() => {
+      throw retryable;
+    });
+    const client = new AnthropicClient({ apiKey: "test", baseURL: undefined } as any);
+    (client as any).client = { messages: { stream } };
+
+    let caught: any;
     try {
-      const retryable = Object.assign(new Error("rate limited"), {
-        status: 429,
-        headers: { get: () => "30" },
-      });
-      const stream = vi.fn(() => {
-        throw retryable;
-      });
-      const client = new AnthropicClient({ apiKey: "test", baseURL: undefined } as any);
-      (client as any).client = { messages: { stream } };
-      const controller = new AbortController();
-      const interrupted = new Error("retry interrupted");
-      let rejection: unknown;
-
-      run = (async () => {
-        for await (const _ of client.streamMessage({
-          model: "claude-test",
-          messages: [{ type: "user", content: "hello" }],
-          abortSignal: controller.signal,
-        })) {}
-      })();
-      void run.catch((error) => {
-        rejection = error;
-      });
-      await vi.advanceTimersByTimeAsync(0);
-      expect(stream).toHaveBeenCalledTimes(1);
-
-      controller.abort(interrupted);
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(rejection).toBe(interrupted);
-      expect(stream).toHaveBeenCalledTimes(1);
-    } finally {
-      await vi.runAllTimersAsync();
-      await run?.catch(() => {});
-      vi.useRealTimers();
+      for await (const _ of client.streamMessage({
+        model: "claude-test",
+        messages: [{ type: "user", content: "hello" }],
+      })) {}
+    } catch (error) {
+      caught = error;
     }
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(caught).toMatchObject({
+      name: "ModelRequestFailure",
+      info: {
+        kind: "rate_limit",
+        phase: "request",
+        retryable: true,
+        statusCode: 429,
+        retryAfterMs: 30_000,
+      },
+    });
   });
 });
 
@@ -88,7 +121,9 @@ describe("AnthropicClient native image input", () => {
       await writeFile(png, pngBytes);
       await writeFile(webp, webpBytes);
       const stream = vi.fn(() => ({
-        async *[Symbol.asyncIterator]() {},
+        async *[Symbol.asyncIterator]() {
+          yield { type: "message_stop" };
+        },
         finalMessage: async () => ({
           usage: { input_tokens: 0, output_tokens: 0 },
           stop_reason: "end_turn",
@@ -179,7 +214,9 @@ describe("AnthropicClient native image input", () => {
       }).png().toBuffer();
       await writeFile(imagePath, image);
       const stream = vi.fn(() => ({
-        async *[Symbol.asyncIterator]() {},
+        async *[Symbol.asyncIterator]() {
+          yield { type: "message_stop" };
+        },
         finalMessage: async () => ({
           usage: { input_tokens: 0, output_tokens: 0 },
           stop_reason: "end_turn",

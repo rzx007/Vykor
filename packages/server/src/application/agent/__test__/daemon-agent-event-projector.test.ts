@@ -1168,6 +1168,142 @@ describe("DaemonAgentEventProjector", () => {
     await projector.apply(domainEvent);
     expect(appendEvent).toHaveBeenCalledOnce();
   });
+  it("persists a retry wait on run metadata and keeps the run running", async () => {
+    const run = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
+    const updateRun = vi.fn((_id: string, patch: any) => {
+      run.metadata = { ...run.metadata, ...(patch.metadata ?? {}) };
+      return run;
+    });
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({ getRun: () => run, updateRun }),
+      transcriptProjection: {} as any,
+      executionProjector: {} as any,
+      liveChildren: {} as any,
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+
+    await projector.apply(event("model.retry.scheduled", {
+      generationId: "g1",
+      attempt: 1,
+      retryNumber: 1,
+      maxRetries: 5,
+      reason: "network",
+      nextRetryAt: 2_000,
+      recoveryDeadlineAt: 180_000,
+    }, { sessionId: "s1", runId: "r1" }));
+
+    expect(run.status).toBe("running");
+    expect(run.metadata.modelRetry).toMatchObject({
+      generationId: "g1", attempt: 1, retryNumber: 1, reason: "network",
+    });
+  });
+
+  it("settles each model attempt once and tracks usage completeness", async () => {
+    const run = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
+    const events: any[] = [];
+    const updateRun = vi.fn((_id: string, patch: any) => {
+      run.metadata = { ...run.metadata, ...(patch.metadata ?? {}) };
+      return run;
+    });
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getRun: () => run,
+        updateRun,
+        appendEvent: (input: any) => {
+          const record = { ...input, seq: events.length + 1 };
+          events.push(record);
+          return record;
+        },
+        listEvents: () => events,
+      }),
+      transcriptProjection: {} as any,
+      executionProjector: {} as any,
+      liveChildren: {} as any,
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+
+    const finished = (usageStatus: string, attempt: number) => event("model.attempt.finished", {
+      generationId: "g1", attempt, status: "completed", usageStatus,
+    }, { sessionId: "s1", runId: "r1" });
+
+    await projector.apply(finished("unknown", 1));
+    await projector.apply(finished("complete", 2));
+    // Replaying the first settlement must not double count.
+    await projector.apply(finished("unknown", 1));
+
+    expect(events.filter((e) => e.type === "session.model.attempt.finished")).toHaveLength(2);
+    expect(run.metadata.modelUsage).toEqual({
+      incomplete: true,
+      unknownAttempts: 1,
+      partialAttempts: 0,
+    });
+  });
+
+  it("accumulates known usage once across partial and complete attempts", async () => {
+    const run: any = { id: "r1", sessionId: "s1", status: "running", metadata: { purpose: "keep" } };
+    const attempt: any = { id: "ra1", status: "running", inputTokens: 0, outputTokens: 0 };
+    const records: any[] = [];
+    const store = projectorStore({
+      getRun: () => run,
+      updateRun: (_id: string, patch: any) => { run.metadata = { ...run.metadata, ...patch.metadata }; return run; },
+      listRunAttempts: () => [attempt],
+      updateRunAttempt: (_id: string, patch: any) => Object.assign(attempt, patch),
+      appendEvent: (record: any) => { records.push(record); return record; },
+      listEvents: () => records,
+    });
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any, store, transcriptProjection: {} as any,
+      executionProjector: {} as any, liveChildren: {} as any,
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() }, log: vi.fn(),
+    });
+    const finish = (attemptNumber: number, usageStatus: string, inputTokens: number, outputTokens: number) =>
+      event("model.attempt.finished", {
+        generationId: "g1", attempt: attemptNumber, status: usageStatus === "partial" ? "failed" : "completed",
+        usageStatus, usage: { inputTokens, outputTokens },
+      }, { sessionId: "s1", runId: "r1" });
+    await projector.apply(finish(1, "partial", 4, 1));
+    await projector.apply(finish(2, "complete", 8, 3));
+    await projector.apply(finish(1, "partial", 4, 1));
+    expect(run.metadata).toMatchObject({
+      purpose: "keep", usage: { inputTokens: 12, outputTokens: 4 },
+      modelUsage: { incomplete: true, partialAttempts: 1, unknownAttempts: 0 },
+    });
+    expect(attempt).toMatchObject({ inputTokens: 12, outputTokens: 4 });
+  });
+
+  it("begins a new generation and clears stale retry metadata", async () => {
+    const run = { id: "r1", sessionId: "s1", status: "running", metadata: { modelRetry: { generationId: "g1" } } };
+    const beginGeneration = vi.fn();
+    const updateRun = vi.fn((_id: string, patch: any) => {
+      run.metadata = { ...run.metadata, ...(patch.metadata ?? {}) };
+      return run;
+    });
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({ getRun: () => run, updateRun }),
+      transcriptProjection: { beginGeneration } as any,
+      executionProjector: {} as any,
+      liveChildren: {} as any,
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+    const state = {
+      sessionId: "s1", runId: "r1", inputId: "i1", assistantTurnCompleted: false,
+      toolParts: new Map(), generationParts: new Map(),
+    };
+    (projector as any).transcripts.set("r1", state);
+
+    await projector.apply(event("output.generation.started", {
+      generationId: "g2", attempt: 1,
+    }, { sessionId: "s1", runId: "r1" }));
+
+    expect(beginGeneration).toHaveBeenCalledWith(state, "g2", 1);
+    expect(run.metadata.modelRetry).toBeNull();
+  });
 });
 
 let sequence = 0;

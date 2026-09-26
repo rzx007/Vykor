@@ -1,6 +1,11 @@
 import type { ContentBlock } from "./messages";
 import type { AssistantMessagePhase } from "./messages";
 import type { UsageSnapshot } from "./usage";
+import type {
+  GenerationIdentity,
+  ModelAttemptFinishedEvent,
+  ModelRetryState,
+} from "../engine/model-retry";
 
 export interface TextDeltaEvent {
   type: "text_delta";
@@ -56,6 +61,20 @@ export interface CompleteEvent {
   stopReason: string;
 }
 
+/**
+ * 每次实际请求前发出。重试开始时，它同时是「撤换上一次残缺输出」的明确边界：
+ * 文本等事件在有序流内归属最近的 generation_started。
+ */
+export type GenerationStartedEvent = GenerationIdentity & {
+  type: "generation_started";
+};
+
+/** 等待下一次重试前发出，携带次数、原因和截止时间。 */
+export type ModelRetryEvent = ModelRetryState & { type: "model_retry" };
+
+/** 每次实际请求恰好结算一次（含失败、取消和最后一次耗尽）。 */
+export type { ModelAttemptFinishedEvent };
+
 export type StreamEvent =
   | TextDeltaEvent
   | ReasoningDeltaEvent
@@ -63,4 +82,7 @@ export type StreamEvent =
   | ToolUseEndEvent
   | ErrorEvent
   | UsageEvent
-  | CompleteEvent;
+  | CompleteEvent
+  | GenerationStartedEvent
+  | ModelRetryEvent
+  | ModelAttemptFinishedEvent;

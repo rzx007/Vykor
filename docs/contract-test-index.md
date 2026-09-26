@@ -17,6 +17,16 @@
 
 ## Runtime Kernel
 
+### 模型网络重试（2026-09-26）
+
+| 硬规则 | 主要测试 |
+|---|---|
+| 仅重试当前模型调用，次数有界、等待可取消，工具不重复执行 | [model-retry.integration.test.ts](../packages/core/src/engine/model-retry.integration.test.ts)、[model-retry.test.ts](../packages/core/src/engine/model-retry.test.ts) |
+| 压缩与记忆独立缓冲重试，失败前缀不进入结果 | [buffered-model-retry.test.ts](../packages/core/src/engine/buffered-model-retry.test.ts)、[memory-runtime.test.ts](../packages/agent-runtime/src/memory-runtime.test.ts)、[memory-extract.test.ts](../packages/services/src/__test__/memory-extract.test.ts) |
+| 实时结果、SQLite 历史、客户端重放一致，投影失败不重发模型 | [model-retry-flow.test.ts](../packages/server/src/application/__test__/model-retry-flow.test.ts) |
+| Desktop 即使跳过中间快照也正确替换输出，倒计时独立更新 | [session-subscription-service.coalescing.test.ts](../apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts)、[model-retry-countdown.test.tsx](../apps/desktop/src/renderer/src/components/desktop/conversation-page/message/__test__/model-retry-countdown.test.tsx) |
+| CLI 最终 JSON 不拼接失效输出，流式 JSON 可识别替换 | [print-session.integration.test.ts](../apps/cli/src/print-session.integration.test.ts)、[renderer.test.ts](../apps/cli/src/renderer.test.ts) |
+
 | 硬规则 | 主要测试 |
 |---|---|
 | Kernel 可以独立创建 Agent，不依赖 daemon、HTTP 或 UI | [kernel.test.ts](../packages/agent-runtime/src/kernel.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/sdk.test.ts) |

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import type { Message, StreamingMessageClient } from "@vykor/core";
-import { getProjectMemoryDir } from "@vykor/core";
+import type { Message, StreamingMessageClient, ModelAttemptFinishedEvent, ModelRetryPolicy } from "@vykor/core";
+import { getProjectMemoryDir, streamBufferedModelWithRetry } from "@vykor/core";
 import {
   buildMemoryExtractionPrompt,
   detectCredentialValue,
@@ -77,6 +77,8 @@ export async function extractMemories(options: {
   sessionId: string;
   automatic?: boolean;
   completedRunToolActivity?: FrameworkAgentRunToolActivity;
+  onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void;
+  retryPolicy?: Partial<ModelRetryPolicy>;
 }): Promise<AgentRememberResult> {
   if (options.messages.length < 2) {
     return { skipped: true, reason: "not enough messages", writtenIds: [], titles: [] };
@@ -107,17 +109,24 @@ export async function extractMemories(options: {
       : "");
 
   let finalText = "";
-  for await (const event of options.apiClient.streamMessage({
-    model: options.model,
-    messages: [{ type: "user", content: prompt }],
-    system: [
-      "You maintain Vykor durable memory.",
-      "Save only stable, future-useful facts that are not derivable from current files, git history, or documentation.",
-      "Do not save secrets. If nothing is worth saving, return {\"memories\": []}.",
-    ].join("\n"),
-    maxTokens: 2048,
-    tools: [],
-  })) {
+  for await (const event of streamBufferedModelWithRetry(
+    options.apiClient,
+    {
+      model: options.model,
+      messages: [{ type: "user", content: prompt }],
+      system: [
+        "You maintain Vykor durable memory.",
+        "Save only stable, future-useful facts that are not derivable from current files, git history, or documentation.",
+        "Do not save secrets. If nothing is worth saving, return {\"memories\": []}.",
+      ].join("\n"),
+      maxTokens: 2048,
+      tools: [],
+    },
+    {
+      ...(options.onAttemptFinished ? { onAttemptFinished: options.onAttemptFinished } : {}),
+      ...(options.retryPolicy ? { policy: options.retryPolicy } : {}),
+    },
+  )) {
     if (event.type === "text_delta") finalText += event.delta;
     if (event.type === "complete") break;
   }

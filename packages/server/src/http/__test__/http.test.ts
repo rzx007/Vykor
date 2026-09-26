@@ -61,7 +61,7 @@ const serverTestConfigDir = mkdtempSync(join(tmpdir(), "oh-server-config-"));
 // HTTP fixtures represent current clients; version rejection has dedicated middleware tests.
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
-  headers.set("x-vykor-protocol-version", "4");
+  headers.set("x-vykor-protocol-version", "5");
   return globalThis.fetch(input, { ...init, headers });
 };
 let previousConfigDir: string | undefined;
@@ -662,7 +662,7 @@ describe("VykorHttpServer", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       serverVersion: "0.4.0",
-      protocol: { version: 4 },
+      protocol: { version: 5 },
       features: { jobs: 2, workflow: 2, pluginCapabilities: 1 },
     });
     await server.close();

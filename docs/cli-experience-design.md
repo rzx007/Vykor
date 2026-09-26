@@ -8,6 +8,15 @@
 > [auth-provider-model.md](auth-provider-model.md) for the current runtime
 > contract.
 
+## 2026-09-26：模型重试输出约定
+
+以下是本次网络重试改造的输出约定；其余章节仍是历史设计。
+
+- 普通 text 模式保留终端已经打印的内容，重试提示写 stderr，并明确标注上一段输出中断。终端历史字符不可撤回，不应将两次尝试的文字作为一个完整回答解析。
+- `--output-format json` 输出一个最终对象，包含 `sessionId`、`runId`、`status`、`text` 和 `usage`。text 从有效持久消息生成，usage 标注 `incomplete`、未知/部分已知尝试数。与原先逐行事件 JSON 不同，需要事件流的调用者使用 stream-json。
+- `--output-format stream-json` 保留逐行事件，为相关输出带上 `modelGeneration`；失效片段发出 `session.model.generation.superseded`，结束发出 `session.output.final`。消费者应处理替换事件或直接使用 final 的有效正文，不能把全部 delta 无条件拼接。
+- CLI/TUI 与服务端须同为协议版本 5。TUI 显示重试倒计时和用量不完整提示，停止操作复用原中断机制。
+
 ## 范围（本批）
 
 1. `oh provider`（list/use/add/edit/remove）—— 从 CLI 管 provider + key。

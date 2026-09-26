@@ -481,6 +481,31 @@ describe("session event reducer", () => {
     expect(state.buckets.s1?.partsByMessageId.m1?.[0]?.text).toBe("先想一下再动手");
   });
 
+  it("ignores late deltas targeting a superseded part", () => {
+    let state = createInitialClientState();
+    const part: SessionMessagePartRecord = {
+      id: "p1",
+      sessionId: "s1",
+      messageId: "m1",
+      seq: 1,
+      type: "text",
+      status: "interrupted",
+      text: "残缺",
+      metadata: { modelGeneration: { generationId: "g1", attempt: 1, superseded: true } },
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    state = applyEvent(state, event(1, "session.message.part.updated", { part }));
+    state = applyEvent(state, event(2, "session.message.part.delta", {
+      sessionId: "s1",
+      messageId: "m1",
+      partId: "p1",
+      field: "text",
+      delta: "迟到文字",
+    }));
+    expect(state.buckets.s1?.partsByMessageId.m1?.[0]?.text).toBe("残缺");
+  });
+
   it("updates permission state after reply and can hydrate from replayed history", () => {
     const pending: PermissionRequestRecord = {
       id: "p1",

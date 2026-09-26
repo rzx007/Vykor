@@ -416,6 +416,9 @@ function AppInner({ config }: { config: FrontendConfig }) {
       <AppView
         transcript={session.transcript}
         assistantBuffer={session.assistantBuffer}
+        retry={session.retry}
+        usage={session.usage}
+        knownUsage={session.knownUsage}
         ready={session.ready}
         busy={session.busy}
         status={session.status}

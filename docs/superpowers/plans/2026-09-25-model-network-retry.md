@@ -1,8 +1,8 @@
 # 模型网络自动重试执行计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：当前执行计划，尚未实施。日期：2026-09-25。
-> 本次仅编写计划。执行时可逐任务串行推进；采用子代理方式时，各任务仍须遵守下述依赖，不能同时修改共享接口。
+> 状态：当前执行计划及完成记录。2026-09-26：代码、自动验收及整体审核完成，人工窗口观察未执行。
+> 原始计划编制于 2026-09-25。下面的任务清单保留规格用途，实际完成情况以末尾收尾记录为准；未勾选项目不代表实现仍全部待办。
 
 **Goal:** 网络波动后自动、有限次、可取消地重试当前模型调用，界面显示进度，最终回答不重复，已经完成的工具不重复执行。
 
@@ -13,6 +13,8 @@
 **Spec:** [模型请求自动重试：Codex 调研与改进建议](../../model-network-retry-design.md)。实施前同时阅读本文和该文档。
 
 **审核修订：** 已补齐服务端历史重建过滤（任务 5A）、压缩/记忆提取独立重试（任务 3A）、尝试用量完整性（任务 1、3、4、5、7、8）。这些是待执行任务，不表示功能已实现。
+
+**2026-09-26 二次审核修订：** 对照 `4277205b..45891233` 新增功能，补齐输出上限冻结、截断提示提交顺序和 Desktop 合并快照验收。实现前重新核对 HEAD，后续改动以实际代码为准，但不能静默删减这些行为要求。
 
 ## 全局约束
 
@@ -162,10 +164,10 @@ export interface ModelAttemptFinishedEvent extends GenerationIdentity {
 
 - 每次实际请求恰好结算一次，用 `(generationId, attempt)` 去重；失败、取消和最后一次耗尽也必须结算。结算在下一次重试状态或最终运行结束前发送。
 - 适配器的 usage 表示本次请求累计快照；引擎保留最新有效快照，不能把同一次请求的累计值重复相加。usage 是否完整必须依据协议语义确定，不能只看是否非零。
-- 原始 usage 事件由引擎消费，不直接转发。引擎结算时向 CostTracker 累加一次已知 usage，并发出 model_attempt_finished。Runtime 从该事件派生一次现有 usage.updated（仅 usage 存在时），同时发布 model.attempt.finished 保存完整性。服务端只有 usage.updated 更新数字，不能在两条事件中重复计费。
+- 原始 usage 事件由引擎消费，不直接转发。引擎结算时向 CostTracker 累加一次已知 usage，并发出 model_attempt_finished。Runtime 从该事件派生一次现有 usage.updated（仅 usage 存在时），同时发布 model.attempt.finished。整体审核后的实现决定：服务端只通过 model.attempt.finished 在同一事务内去重、更新已知数字与完整性，usage.updated 保留给实时观察者，不再次写用量。这样避免“结算已写入、数字尚未写入”的分离提交窗口，也不会在两条事件中重复计费。
 - `UsageSnapshot` 增加可选 `usageIncomplete?: boolean`，表示数字仅是已知小计。`CostTracker` 增加 `markUsageIncomplete(): void`，在 partial/unknown 时设置标记；同一统计周期中后续成功不能清除它，只有原有 reset 能重置。旧记录没有该标记时不反推其历史用量完整。
 - protocol 定义结构一致的 `SessionModelAttemptUsage`，字段为 generationId、attempt、status、usageStatus 和可选 usage；不引入 protocol → core 依赖。任务 5 将每次结算保存为已注册的持久事件 `session.model.attempt.finished`，payload 为 `{ runId, attemptUsage }`。
-- `run.metadata.modelUsage` 保存 `{ incomplete: boolean, unknownAttempts: number, partialAttempts: number }`，供 snapshot/刷新恢复。通过已有事务将结算事件与 metadata 更新一起提交，同键重复事件不再次累加。已知数字仍走现有用量记录，不新增账单表。
+- `run.metadata.modelUsage` 保存 `{ incomplete: boolean, unknownAttempts: number, partialAttempts: number }`，供 snapshot/刷新恢复。通过已有事务将结算事件、完整性、run.metadata.usage 已知小计和现有 RunAttempt 数字一起提交，同键重复事件不再次累加。不新增账单表。
 - Desktop/TUI/CLI 遇到 incomplete 显示“已知用量：…；部分请求用量未知”，不显示为完整总消耗。成本估计同样标记不完整，不从成功请求推算失败请求费用。
 
 ### 存储、展示与失效尝试
@@ -343,11 +345,12 @@ const streamMessage = vi.fn(async function* (): AsyncIterable<StreamEvent> {
   用现有 QueryEngine 测试构造方式注入该客户端，断言调用 2 次、产生 `generation_started(1) → model_retry → generation_started(2)`，最终历史只有“完整回答”。使用 fake timers 推进等待，不真实睡眠。
 
 - [ ] 将重试循环包在一次 `streamMessage` 和消费范围外，不能包住 executeTools、权限请求、压缩和整个 Run。
-- [ ] 在第一次请求前冻结本次 model/client/system/tools/messages 参数；重试期间不重新解析模型设置或消费 steer 输入，下一次正常模型回合再应用更新。
+- [ ] 在第一次请求前冻结完整请求参数：model/client/system/tools/messages、reasoningEffort、已解析的 maxOutputTokens（传入 API 时为 maxTokens）以及其他实际请求选项。重试期间不重新解析模型设置、不再次压缩、不消费 steer 输入，下一次正常模型回合再应用更新。保留当前 CompactService.setOutputReserve 与请求输出上限一致的行为；辅助摘要自己的输出预算不替代主生成预算。
 - [ ] 每次尝试独立创建文本、思考、工具和完成标记；重试不调用整个 submitMessage，不追加第二条用户输入，不重复触发回合钩子。
 - [ ] 外部取消与恢复截止时间组合成每次请求信号。旧 iterator 必须停止消费并关闭，晚到事件丢弃；不要单用 Promise.race 留下仍写数据的请求。
 - [ ] 将错误 StreamEvent 视为本次调用失败，不能只转发后继续执行工具；未抛错但缺失 complete 同样判为 stream_incomplete。
-- [ ] `complete` 先缓存，确认本次流合法结束后仅发出一次。工具事件在确认成功后再向外提交；按照“每次尝试的用量完整性”一节结算，替换原来的直接 addUsage/转发路径，避免累计快照重复计费。
+- [ ] `complete` 先缓存，确认本次流合法结束后仅发出一次。长度受限的 length/max_tokens 不进入网络重试：保留可用正文，按既有规则在无工具调用时追加一次截断提示，然后才发最终 complete。禁止 complete 之后再追加属于同一次生成的提示文本；持久 committed 提交必须覆盖正文、思考与提示。工具事件在确认成功后再向外提交，完整有效调用仍按现有工具规则处理，截断参数不得执行。按照“每次尝试的用量完整性”一节结算，替换原来的直接 addUsage/转发路径，避免累计快照重复计费。
+- [ ] 扩展 integration.test.ts 和 request-configuration.test.ts：分别测试首次长度受限、一次网络失败后长度受限，断言实际请求数为 1/2、提示一次且位于最终 complete 前；所有重试的 maxTokens、reasoningEffort 和 messages 一致；重试中改配置不改变本次请求，下一正常回合采用新值。压缩预留用 compact-service-advanced.test.ts 做回归，不因新重试入口绕过 setOutputReserve。
 - [ ] 修改 `cost-tracker.ts` 并扩展/新增 `cost-tracker.test.ts`：未知失败后成功已知 100/20 时，数字为已知的 100/20 且 usageIncomplete=true；连续成功不清除标记；reset 后恢复初值；一次尝试收到 10/2、15/3 两份累计快照只计 15/3。
 - [ ] 重试耗尽时抛最后一次错误，并附安全的次数/预算结束原因；仅外层现有运行收尾逻辑发出最终失败，等待阶段不发 run.failed。
 - [ ] 补充测试：先成功调用工具再断线，工具计数保持 1；始终断网不超过 6 次请求；恢复期间持续收到部分文字不重置预算；等待及读取中取消；401 不重试；变更配置和 steer 不改变本次重试输入。
@@ -357,6 +360,7 @@ const streamMessage = vi.fn(async function* (): AsyncIterable<StreamEvent> {
 ```powershell
 pnpm --filter @vykor/core exec vitest run src/engine/model-retry.test.ts src/engine/model-retry.integration.test.ts src/engine/integration.test.ts
 pnpm --filter @vykor/core exec vitest run src/engine/cost-tracker.test.ts
+pnpm --filter @vykor/core exec vitest run src/engine/request-configuration.test.ts src/engine/compact-service-advanced.test.ts
 pnpm --filter @vykor/core check-types
 ```
 
@@ -422,6 +426,7 @@ expect(streamEventToAgentEvent({
 - [ ] 等待重试映射成 model.retry.scheduled，不能通过错误事件提前结束 Run；既有 toolActivity 仅包含确认成功的工具事件。
 - [ ] model_attempt_finished 映射为 model.attempt.finished，并仅在 usage 存在时派生一次 usage.updated。未知结算不制造零值 usage.updated；事件测试覆盖失败结算在 run.failed/interrupted 前到达以及重复累计快照只结算一次。
 - [ ] 测试两个模型回合：第一回合文字和工具保留，第二回合失败文字被替换。同时检查 run.completed.data.output、RunResult.output、历史三者一致。
+- [ ] 增加长度受限响应的跨层测试：截断提示先于 output.turn.completed；提示只出现一次，最终 RunResult.output、实时 transcript、重载后的历史均一致，不新建未 committed 的尾部提示 part。
 - [ ] 测试取消只产生一个 run.interrupted，耗尽只产生一个 run.failed，迟到成功不会覆盖终态；对无法处理生成替换的自定义流消费者更新 SDK 文档。
 - [ ] 执行：
 
@@ -536,6 +541,8 @@ pnpm check:client-api
 **TUI 修改：** `apps/frontend/src/routes/session/Session.tsx`、`parts.tsx`、`apps/frontend/src/hooks/transcript.ts`、`sessionController.ts`；在现有状态传递链路中接入 retry 状态，对应现有测试。`Session` 当前只接收 items/assistantBuffer，新增可选 retry 属性并同步更新其调用方。
 **CLI 修改：** `apps/cli/src/print-session.ts`、`renderer.ts`；`print-session.test.ts`、`print-session.integration.test.ts`、`renderer.test.ts`。
 
+**Desktop 合并链路验收：** `apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts`、`session-update-coalescer.test.ts`；必要时补充 `apps/desktop/src/renderer/src/stores/desktop-session/store.integration.test.ts`。生产接线复用 `session-subscription-service.ts` 和现有 coalescer，不新建逐事件 IPC。
+
 **输入：** protocol 的安全读取函数及客户端选出的可见 part。
 **输出：** 可见、可取消、不会误导用户的重试过程。
 
@@ -551,6 +558,8 @@ pnpm check:client-api
 - [ ] 新尝试开始时隐藏等待提示；若需要显示“重新连接”，从当前生成事件/状态推导，不能保留已过期等待字段。成功与终态均清理计时器。
 - [ ] Desktop 当前通过 parts 构造 transcript，必须确认路径实际调用 superseded 过滤；不能只改 client selector 就假定 Desktop 已接入。TUI 同样检查 `hooks/transcript.ts`，隐藏空消息壳，刷新后从 session bucket 恢复 retry 状态。
 - [ ] 渲染测试传入等待中的 Run、恢复后的 Run、终态 Run；验证倒计时、停止动作、失败尝试隐藏及先前成功工具仍可见。
+- [ ] 用 fake timers 在一个合并窗口内依次推送旧 part 失效、新尝试和成功状态，只交付最后一个 DesktopSessionView，断言被替代内容不可见、等待提示清除、用量不完整标记保留。测试组件不能依赖接收每个 generation_started/model_retry 中间事件。
+- [ ] 再覆盖合并窗口内重连、取消和切换订阅：沿用现有立即发送 reconnecting、清理 pending timer 的语义，迟到窗口不得覆盖新会话；保留最新约 50ms 固定窗口合并，不绕过它恢复逐 token 全量发送。无需保证瞬间完成的重试状态每一帧都可见，保证最终状态与可恢复信息正确。
 - [ ] 将既有用量展示接入 usageIncomplete/run.metadata.modelUsage，增加“已知用量：…；部分请求用量未知”文案及测试；CLI JSON 输出保留 incomplete 标记，不能只输出没有说明的成功请求 token 数。
 - [ ] CLI 普通终端输出不可撤回：允许保留已经打印的文字，但在重试开始时明确打印“上一段输出中断，以下为重新生成”，重试提示写 stderr。不得声称终端历史文本已被清除。
 - [ ] CLI 最终 JSON/text 汇总从有效持久消息构造，不能用已打印字符累计；流式机器输出必须带可识别的 generation/attempt 与替换事件，保证消费者能区分失效文本。更新输出格式说明和测试。
@@ -558,6 +567,7 @@ pnpm check:client-api
 
 ```powershell
 pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/conversation-page/message/__test__/model-retry-notice.test.tsx
+pnpm --filter @vykor/desktop exec vitest run src/main/features/session/session-subscription-service.coalescing.test.ts src/main/features/session/session-update-coalescer.test.ts src/renderer/src/stores/desktop-session/store.integration.test.ts
 pnpm --filter @vykor/cli exec vitest run src/print-session.test.ts src/print-session.integration.test.ts src/renderer.test.ts
 pnpm --dir apps/frontend exec bun test src/hooks/transcript.test.ts src/routes/session/Session.test.tsx
 pnpm --filter @vykor/frontend check-types
@@ -596,6 +606,9 @@ pnpm --filter @vykor/desktop typecheck
 | Retry-After 长于卡住检测阈值 | 截止时间内不误杀，到期后恢复检测 | 保留取消能力 |
 | 未知用量失败后已知用量成功 | 每次尝试只结算一次 | 成功已知小计保留，incomplete=true，unknownAttempts=1 |
 | 同一尝试多份累计 usage、结算事件重放 | 不重复累加 | 最新快照只计一次，重开 store 后完整性不变 |
+| 首次或重试后 length/max_tokens | 分别 1/2 次请求，不为长度上限再重试 | 正文、提示、complete 顺序正确，提示 committed 且重载一致 |
+| 重试中改变输出上限或 effort | 当前生成请求参数不变 | 下一正常回合应用新值，压缩预留仍正确 |
+| Desktop 一窗口内失效、重试、完成 | 只发送最新完整快照仍正确 | 无旧文字、残留等待提示或用量完整性丢失 |
 
 - [ ] 定向运行端到端和运行状态测试：
 
@@ -632,5 +645,35 @@ git diff --check
 - [x] 新增函数、事件、字段均在计划中定义；示例是接口/测试锚点，不宣称完整实现。
 - [x] 实施命令按包和文件限定；任务 2～7 统一发布；实现完成前不标记文档为已落地。
 - [x] 审核发现的服务端历史遗漏、辅助调用保护退化、用量完整性缺失均已分配接口、文件、任务及验收用例。
+- [x] 二次审核的截断提示顺序、输出上限冻结和 Desktop 合并快照兼容均已纳入任务与回归命令。
 
 以上勾选仅表示文档覆盖自检完成，不表示功能、测试或任务已实施。
+
+## 实施进度记录（2026-09-26）
+
+接手补完后的测试与整体审核见[补完与审核记录](./2026-09-26-model-network-retry-verification.md)。以下为首次交接时的历史进度，最新状态以该记录及后续“接手收尾”一节为准。
+
+本节记录实际执行结果，不替代上面的任务勾选。只有对应定向测试与类型检查通过的项目才标为已完成。
+
+- **任务 0**：已执行。基线 `@vykor/api` 48 测试、`@vykor/core` integration 64 测试通过；协议版本实施时为 4。
+- **任务 1**：已完成。新增 `packages/core/src/engine/model-retry.ts` 与 `model-retry.test.ts`（16 测试）；`types/events.ts`、`types/client.ts`、`types/runtime.ts`、`types/usage.ts`、`cost-tracker.ts`、`index.ts` 已更新；`pnpm --filter @vykor/core check-types` 通过。
+- **任务 2**：已完成。`errors/index.ts` 增加 `toModelRequestFailure`/`parseRetryAfterMs`；三个适配器改为单次请求（SDK `maxRetries: 0`）、完整结束校验、超时生命周期；`errors/index.test.ts`、`retry.test.ts`、三个 provider 测试全部通过（70 测试）；`@vykor/api` 全量 150 测试通过。
+- **任务 3**：已完成。`query-engine.ts` 在单次模型调用边界重试；新增 `model-retry.integration.test.ts`（12 测试）与 `cost-tracker.test.ts`（4 测试）；`integration.test.ts` 仅更新取消信号断言；`@vykor/core` 全量 290 测试通过。
+- **任务 3A**：已完成。新增 `buffered-model-retry.ts` 与测试（6 测试）；`toCompactClient`、`memory-runtime.ts`、`memory-extract.ts` 接入独立缓冲重试；三处定向测试通过。
+- **任务 4**：已完成。`framework-agent-run.ts` 增加事件映射与输出截断替换；`stream-event-mapping.test.ts` 扩展、新增 `framework-agent-run-retry.test.ts`（3 测试）；`@vykor/agent-runtime check-types` 通过。
+- **任务 5**：已完成核心部分。`protocol/src/session.ts` 增加安全读取函数与 `session.model.attempt.finished` 注册；`transcript-projection.ts` 跟踪 generation part、被替代标记与 committed；`daemon-agent-event-projector.ts` 写入 `run.metadata.modelRetry`/`modelUsage` 并按 `(runId, generationId, attempt)` 去重；`run-stall-watchdog`/`session-run-executor` 接入重试截止时间。定向测试通过。
+- **任务 5A**：已完成。`transcript-text.ts` 排除被替代 part、提供 committed 判定；`buildAgentTranscript` 在建立 byMessage 前统一过滤；新增 `transcript-text.test.ts`、扩展 `agent-transcript.test.ts`。
+- **任务 6**：已完成。协议版本 4 → 5，相关握手/中间件/服务端测试同步更新；`selectors.ts`/`reducer.ts` 过滤被替代输出、拒绝迟到 delta；新增 `selectors.test.ts`、扩展 `reducer.test.ts`；`@vykor/client check-types` 通过。
+- **任务 7**：部分完成。Desktop 新增 `model-retry-notice.tsx` 及测试并在 `transcript.tsx` 接线（3 测试通过，`@vykor/desktop typecheck` 通过）。CLI 与 TUI 的展示、以及合并快照/用量文案验收未完成。
+- **任务 8**：未完成。端到端矩阵、文档最终状态、人工观察尚未执行。
+
+首次交接的统一发布边界：当时任务 7、8 未完成，任务 2～7 尚不可作为一组发布。
+
+## 接手收尾与整体审核（2026-09-26）
+
+- 任务 7：CLI、TUI、Desktop 接线完成。普通 CLI 重试及用量提示写 stderr；JSON 最终正文排除失败尝试，stream-json 提供失效标记。TUI 和 Desktop 显示倒计时及用量不完整说明，Desktop 合并窗口测试覆盖只交付最终快照。
+- 任务 8 自动验收：新增 model-retry-flow.test.ts，真实引擎/运行事件/SQLite/客户端链路共 8 项测试通过，包含在途取消、等待取消、重载后再请求、工具只执行一次、截断提示提交和投影失败隔离。其余预算、错误分类和辅助调用场景由对应定向测试覆盖。
+- 整体审核：独立审核发现 5 项问题并全部修复，复审中发现的自动压缩执行上下文残留也已清理，新增同引擎手动压缩回归通过。结算事件成为持久用量唯一更新来源，usage.updated 只作观察通知，避免分离事务及重复计费。
+- 门禁：严格协议版本验证同步为 5；事务入口复用后旧式存储调用数保持 123，不提高架构基线。公开 API、类型检查、文档及补丁格式检查记录于[验证报告](./2026-09-26-model-network-retry-verification.md)。
+- 未执行：真实计费模型调用、完整全仓测试、宿主 Desktop/TUI 窗口人工点击观察。自动组件与真实 CLI daemon 测试不等同于人工观感验收；未将这项手工检查标为完成。
+- 工作区原位保留所有改动，未提交、推送、合并或发布。上线仍需前后端按协议 5 一起更新。

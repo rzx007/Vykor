@@ -24,7 +24,32 @@ export type {
   ErrorEvent,
   UsageEvent,
   CompleteEvent,
+  GenerationStartedEvent,
+  ModelRetryEvent,
+  ModelAttemptFinishedEvent,
 } from "./types/events";
+
+export type {
+  ModelFailureKind,
+  ModelFailureInfo,
+  GenerationIdentity,
+  ModelRetryState,
+  ModelRetryPolicy,
+  RetryCounters,
+  NextModelRetryDelayInput,
+  ModelAttemptUsageStatus,
+} from "./engine/model-retry";
+export {
+  ModelRequestFailure,
+  DEFAULT_MODEL_RETRY_POLICY,
+  normalizeModelRetryPolicy,
+  nextModelRetryDelay,
+  waitForModelRetry,
+} from "./engine/model-retry";
+export {
+  streamBufferedModelWithRetry,
+  type BufferedModelRetryOptions,
+} from "./engine/buffered-model-retry";
 
 export type {
   ToolDefinition,

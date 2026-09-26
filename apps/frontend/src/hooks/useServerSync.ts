@@ -5,6 +5,8 @@ import {
   createPromptRequestId,
   createInitialClientState,
   readSessionRuntimeConfig,
+  readSessionModelUsage,
+  selectSessionModelRetry,
   type CommandCatalogEntry,
   type ModelProviderInfo,
   type VykorClientState,
@@ -739,6 +741,14 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   );
 
   const bucket = activeSessionId ? clientState.buckets[activeSessionId] : undefined;
+  const latestRun = useMemo(() => Object.values(bucket?.runs ?? {}).sort((a, b) => b.updatedAt - a.updatedAt)[0], [bucket]);
+  const knownUsage = useMemo(() => {
+    const attempts = Object.values(bucket?.attempts ?? {}).filter((attempt) => attempt.runId === latestRun?.id);
+    return {
+      inputTokens: attempts.reduce((sum, attempt) => sum + (attempt.inputTokens ?? 0), 0),
+      outputTokens: attempts.reduce((sum, attempt) => sum + (attempt.outputTokens ?? 0), 0),
+    };
+  }, [bucket, latestRun]);
   const recoveryItems = useMemo(
     () =>
       recoverableInterruptedRuns(bucket).map((run) => ({
@@ -764,6 +774,9 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     () => ({
       transcript: transcriptView.transcript,
       assistantBuffer: transcriptView.assistantBuffer,
+      retry: selectSessionModelRetry(bucket),
+      usage: latestRun ? readSessionModelUsage(latestRun.metadata) : undefined,
+      knownUsage,
       status,
       jobState,
       jobs: jobState.jobs,
@@ -783,6 +796,6 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
       loadModels,
       sendRequest,
     }),
-    [commandDetails, commands, displayRequest, jobDetailState, jobState, loadModels, localBusy, mcpServers, modal, ready, running, selectRequest, sendRequest, status, transcriptView, waitingForSubmittedRun],
+    [bucket, commandDetails, commands, displayRequest, jobDetailState, jobState, knownUsage, latestRun, loadModels, localBusy, mcpServers, modal, ready, running, selectRequest, sendRequest, status, transcriptView, waitingForSubmittedRun],
   );
 }

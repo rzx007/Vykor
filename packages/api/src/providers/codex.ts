@@ -8,7 +8,14 @@ import type {
   ToolDefinition,
 } from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
-import { AuthenticationFailure, RateLimitFailure, RequestFailure, requestFailure } from "../errors/index";
+import {
+  AuthenticationFailure,
+  protocolFailure,
+  streamIncompleteFailure,
+  toModelRequestFailure,
+} from "../errors/index";
+import { createRequestLifecycle } from "./retry";
+import { ModelRequestFailure } from "@vykor/core";
 import {
   prepareNativeImagePayload,
   preparedImageDataUrl,
@@ -17,10 +24,6 @@ import {
 
 const DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api";
 const JWT_AUTH_CLAIM = "https://api.openai.com/auth";
-const MAX_RETRIES = 3;
-const BASE_DELAY = 1000;
-const MAX_DELAY = 30_000;
-const RETRYABLE_CODES = new Set([429, 500, 502, 503, 504]);
 
 export function resolveCodexUrl(baseURL?: string): string {
   let trimmed = (baseURL ?? "").trim();
@@ -63,24 +66,7 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
   }
 
   async *streamMessage(params: StreamMessageParams): AsyncIterable<StreamEvent> {
-    let lastError: Error | undefined;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        yield* this.streamOnce(params);
-        return;
-      } catch (error) {
-        lastError = this.classifyError(error);
-        const status = (error as any)?.status ?? (error as any)?.statusCode;
-        if (attempt < MAX_RETRIES && status && RETRYABLE_CODES.has(status)) {
-          const jitter = Math.random() * 1000;
-          const delay = Math.min(BASE_DELAY * 2 ** attempt + jitter, MAX_DELAY);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
-        }
-        throw lastError;
-      }
-    }
-    if (lastError) throw lastError;
+    yield* this.streamOnce(params);
   }
 
   private async *streamOnce(params: StreamMessageParams): AsyncIterable<StreamEvent> {
@@ -100,95 +86,165 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
       body.tools = params.tools.map(convertToolToCodex);
     }
 
-    const response = await fetch(this.url, {
-      method: "POST",
-      headers: buildCodexHeaders(this.config.apiKey),
-      body: JSON.stringify(body),
-      signal: params.abortSignal,
+    const lifecycle = createRequestLifecycle({
+      external: params.abortSignal,
+      requestTimeoutMs: params.requestTimeoutMs,
+      streamIdleTimeoutMs: params.streamIdleTimeoutMs,
     });
 
-    if (!response.ok) {
-      const payload = await response.text();
-      throw requestFailure(formatStatusError(response.status, payload), response.status);
-    }
-    if (!response.body) {
-      throw new RequestFailure("Codex response did not include a stream body.");
-    }
-
-    const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-    const outputPhases = new Map<string, "commentary" | "final_answer">();
-    let usage = { inputTokens: 0, outputTokens: 0 };
-    let stopReason = "end_turn";
-
-    for await (const event of iterSseEvents(response.body)) {
-      const eventType = event.type;
-      if (eventType === "response.output_item.added") {
-        const item = event.item;
-        if (isRecord(item) && typeof item.id === "string") {
-          const phase = assistantPhase(item.phase);
-          if (phase) outputPhases.set(item.id, phase);
-        }
-      } else if (eventType === "response.output_text.delta") {
-        const delta = event.delta;
-        if (typeof delta === "string" && delta) {
-          const itemId = typeof event.item_id === "string" ? event.item_id : "";
-          const phase = outputPhases.get(itemId);
-          yield { type: "text_delta", delta, ...(phase ? { phase } : {}) };
-        }
-      } else if (eventType === "response.output_item.done") {
-        const item = event.item;
-        if (!isRecord(item)) continue;
-        if (typeof item.id === "string") {
-          const phase = assistantPhase(item.phase);
-          if (phase) outputPhases.set(item.id, phase);
-        }
-        if (item.type !== "function_call") continue;
-        const callId = typeof item.call_id === "string" ? item.call_id : "";
-        const name = typeof item.name === "string" ? item.name : "";
-        if (!callId || !name) continue;
-        toolCalls.push({
-          id: callId,
-          name,
-          input: parseArguments(item.arguments),
+    try {
+      let response: Response;
+      try {
+        response = await fetch(this.url, {
+          method: "POST",
+          headers: buildCodexHeaders(this.config.apiKey),
+          body: JSON.stringify(body),
+          signal: lifecycle.signal,
         });
-      } else if (eventType === "response.completed") {
-        const responsePayload = event.response;
-        if (isRecord(responsePayload)) {
-          usage = usageFromResponse(responsePayload);
-          stopReason = toolCalls.length > 0 ? "tool_use" : "stop";
-        }
-      } else if (eventType === "response.failed") {
-        throw new RequestFailure(formatCodexStreamError(event, "Codex response failed"));
-      } else if (eventType === "error") {
-        throw new RequestFailure(formatCodexStreamError(event, "Codex error"));
+      } catch (error) {
+        throw this.failModelRequest(error, "request", lifecycle, params.abortSignal);
       }
-    }
 
-    for (const toolUse of toolCalls) {
-      yield {
-        type: "tool_use_start",
-        toolUse: { type: "tool_use", ...toolUse },
-      };
-    }
+      if (!response.ok) {
+        const payload = await response.text();
+        let code: string | undefined;
+        try {
+          const parsed = JSON.parse(payload) as unknown;
+          if (isRecord(parsed) && isRecord(parsed.error) && typeof parsed.error.code === "string") {
+            code = parsed.error.code;
+          }
+        } catch { /* Non-JSON error body has no structured code. */ }
+        throw toModelRequestFailure(
+          Object.assign(new Error(formatStatusError(response.status, payload)), {
+            status: response.status,
+            headers: response.headers,
+            ...(code ? { code } : {}),
+          }),
+          "request",
+        );
+      }
+      if (!response.body) {
+        throw new ModelRequestFailure(
+          "Codex response did not include a stream body.",
+          { kind: "protocol", phase: "request", retryable: false },
+        );
+      }
 
-    yield { type: "usage", usage };
-    yield { type: "complete", stopReason };
+      const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+      const outputPhases = new Map<string, "commentary" | "final_answer">();
+      let stopReason = "end_turn";
+      let completed = false;
+      let incompleteReason: string | undefined;
+
+      lifecycle.markStreamStarted();
+      try {
+        for await (const event of iterSseEvents(response.body, () => lifecycle.touch())) {
+          const eventType = event.type;
+          const responsePayload = event.response;
+          if (isRecord(responsePayload)) {
+            const usage = usageFromResponse(responsePayload);
+            if (usage) yield { type: "usage", usage };
+          }
+          if (eventType === "response.output_item.added") {
+            const item = event.item;
+            if (isRecord(item) && typeof item.id === "string") {
+              const phase = assistantPhase(item.phase);
+              if (phase) outputPhases.set(item.id, phase);
+            }
+          } else if (eventType === "response.output_text.delta") {
+            const delta = event.delta;
+            if (typeof delta === "string" && delta) {
+              const itemId = typeof event.item_id === "string" ? event.item_id : "";
+              const phase = outputPhases.get(itemId);
+              yield { type: "text_delta", delta, ...(phase ? { phase } : {}) };
+            }
+          } else if (eventType === "response.output_item.done") {
+            const item = event.item;
+            if (!isRecord(item)) continue;
+            if (typeof item.id === "string") {
+              const phase = assistantPhase(item.phase);
+              if (phase) outputPhases.set(item.id, phase);
+            }
+            if (item.type !== "function_call") continue;
+            const callId = typeof item.call_id === "string" ? item.call_id : "";
+            const name = typeof item.name === "string" ? item.name : "";
+            if (!callId || !name) continue;
+            toolCalls.push({
+              id: callId,
+              name,
+              input: parseArguments(item.arguments, name),
+            });
+          } else if (eventType === "response.completed") {
+            completed = true;
+            stopReason = toolCalls.length > 0 ? "tool_use" : "stop";
+          } else if (eventType === "response.incomplete") {
+            incompleteReason = readIncompleteReason(event);
+          } else if (eventType === "response.failed") {
+            throw this.streamFailure(event, "Codex response failed");
+          } else if (eventType === "error") {
+            throw this.streamFailure(event, "Codex error");
+          }
+        }
+      } catch (error) {
+        throw this.failModelRequest(error, "stream", lifecycle, params.abortSignal);
+      }
+
+      if (!completed) {
+        if (incompleteReason !== undefined && isLengthLimitedIncomplete(incompleteReason)) {
+          stopReason = toolCalls.length > 0 ? "tool_use" : "max_tokens";
+        } else if (incompleteReason !== undefined) {
+          throw protocolFailure(`Codex 响应未完成：${incompleteReason}`);
+        } else {
+          throw streamIncompleteFailure(
+            "Codex 流在收到 response.completed 前结束",
+          );
+        }
+      }
+
+      for (const toolUse of toolCalls) {
+        yield {
+          type: "tool_use_start",
+          toolUse: { type: "tool_use", ...toolUse },
+        };
+      }
+
+      yield { type: "complete", stopReason };
+    } finally {
+      lifecycle.dispose();
+    }
   }
 
-  private classifyError(error: unknown): Error {
-    if (error instanceof AuthenticationFailure || error instanceof RateLimitFailure || error instanceof RequestFailure) {
-      if (error instanceof RequestFailure) {
-        if (error.statusCode === 401 || error.statusCode === 403) {
-          return new AuthenticationFailure(error.message);
-        }
-        if (error.statusCode === 429) {
-          return new RateLimitFailure(error.message);
-        }
-      }
-      return error;
+  private failModelRequest(
+    error: unknown,
+    phase: "request" | "stream",
+    lifecycle: ReturnType<typeof createRequestLifecycle>,
+    external?: AbortSignal,
+  ): Error {
+    if (external?.aborted) {
+      return external.reason instanceof Error ? external.reason : new Error(String(external.reason));
     }
-    if (error instanceof Error) return error;
-    return new Error(String(error));
+    const timeout = lifecycle.timeoutFailure();
+    if (timeout) return timeout;
+    return toModelRequestFailure(error, phase);
+  }
+
+  private streamFailure(event: Record<string, unknown>, fallback: string): ModelRequestFailure {
+    const error = isRecord(event.error) ? event.error : event;
+    const code = typeof error.code === "string" ? error.code : undefined;
+    const requestId =
+      typeof error.request_id === "string" ? error.request_id : undefined;
+    const kind =
+      code === "rate_limit_exceeded" || code === "rate_limit"
+        ? "rate_limit"
+        : code && /quota|balance/i.test(code)
+          ? "quota"
+          : "server";
+    return new ModelRequestFailure(formatCodexStreamError(event, fallback), {
+      kind,
+      phase: "stream",
+      retryable: false,
+      ...(requestId ? { requestId } : {}),
+    });
   }
 }
 
@@ -294,7 +350,10 @@ function convertToolToCodex(tool: ToolDefinition): Record<string, unknown> {
   };
 }
 
-async function* iterSseEvents(body: ReadableStream<Uint8Array>): AsyncIterable<Record<string, unknown>> {
+async function* iterSseEvents(
+  body: ReadableStream<Uint8Array>,
+  onRead?: () => void,
+): AsyncIterable<Record<string, unknown>> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -303,6 +362,7 @@ async function* iterSseEvents(body: ReadableStream<Uint8Array>): AsyncIterable<R
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      onRead?.();
       buffer += decoder.decode(value, { stream: true });
       yield* drainSseBuffer(buffer, (next) => {
         buffer = next;
@@ -344,23 +404,38 @@ function* drainSseBuffer(
   setBuffer(buffer.slice(cursor));
 }
 
-function parseArguments(value: unknown): Record<string, unknown> {
+function parseArguments(value: unknown, toolName: string): Record<string, unknown> {
   if (typeof value !== "string" || !value) return {};
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(value) as unknown;
-    return isRecord(parsed) ? parsed : {};
+    parsed = JSON.parse(value);
   } catch {
-    return {};
+    throw protocolFailure(`Codex 工具调用参数不是合法 JSON（tool=${toolName}）`);
   }
+  return isRecord(parsed) ? parsed : {};
+}
+
+function readIncompleteReason(event: Record<string, unknown>): string | undefined {
+  const response = isRecord(event.response) ? event.response : undefined;
+  const details = isRecord(response?.incomplete_details)
+    ? response!.incomplete_details
+    : isRecord(event.incomplete_details)
+      ? event.incomplete_details
+      : undefined;
+  return isRecord(details) && typeof details.reason === "string" ? details.reason : undefined;
+}
+
+function isLengthLimitedIncomplete(reason: string): boolean {
+  return reason === "max_output_tokens" || reason === "max_tokens" || reason === "length";
 }
 
 function assistantPhase(value: unknown): "commentary" | "final_answer" | undefined {
   return value === "commentary" || value === "final_answer" ? value : undefined;
 }
 
-function usageFromResponse(response: Record<string, unknown>): { inputTokens: number; outputTokens: number } {
+function usageFromResponse(response: Record<string, unknown>): { inputTokens: number; outputTokens: number } | undefined {
   const usage = response.usage;
-  if (!isRecord(usage)) return { inputTokens: 0, outputTokens: 0 };
+  if (!isRecord(usage)) return undefined;
   return {
     inputTokens: numberValue(usage.input_tokens),
     outputTokens: numberValue(usage.output_tokens),
@@ -386,7 +461,7 @@ function formatStatusError(status: number, payload: string): string {
   } catch {
     // fall through
   }
-  return payload.trim() || `Codex request failed with status ${status}`;
+  return `Codex request failed with status ${status}`;
 }
 
 function formatCodexStreamError(event: Record<string, unknown>, fallback: string): string {

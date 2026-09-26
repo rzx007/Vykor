@@ -1,11 +1,12 @@
 import type { ContentBlock, Message, TextBlock, ToolUseBlock } from "@vykor/core";
 import { toolFeedbackFields } from "@vykor/core";
-import type {
-  AttachmentIntent,
-  ReplaceTranscriptMessageInput,
-  ReplaceTranscriptPartInput,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
+import {
+  isCommittedModelPart,
+  type AttachmentIntent,
+  type ReplaceTranscriptMessageInput,
+  type ReplaceTranscriptPartInput,
+  type SessionMessagePartRecord,
+  type SessionMessageRecord,
 } from "@vykor/protocol";
 import { publicTextFromParts } from "../../session/transcript-text.js";
 
@@ -30,6 +31,9 @@ export function buildAgentTranscript(
 ): AgentTranscript {
   const byMessage = new Map<string, SessionMessagePartRecord[]>();
   for (const part of parts) {
+    // Rebuilt model history must exclude superseded or uncommitted new-format
+    // parts; legacy parts without generation metadata keep their meaning.
+    if (!isCommittedModelPart(part)) continue;
     const rows = byMessage.get(part.messageId) ?? [];
     rows.push(part);
     byMessage.set(part.messageId, rows);

@@ -327,75 +327,111 @@ describe("convertMessages image passing", () => {
 });
 
 describe("OpenAICompatibleClient cancellation", () => {
-  it("passes abortSignal to the OpenAI request", async () => {
-    const controller = new AbortController();
-    const create = vi.fn(async () => ({
-      async *[Symbol.asyncIterator]() {},
-    }));
+  it("forwards external cancellation to the OpenAI request", async () => {
+    const external = new AbortController();
+    const interrupted = new Error("caller cancelled");
+    let received: AbortSignal | undefined;
+    const create = vi.fn(async (_params: unknown, options?: { signal?: AbortSignal }) => {
+      received = options?.signal;
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [{ delta: { content: "hi" }, finish_reason: null }] };
+          await new Promise<void>((resolve) => {
+            received?.addEventListener("abort", () => resolve(), { once: true });
+          });
+          throw interrupted;
+        },
+      };
+    });
+    const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: undefined } as any);
+    client.client = { chat: { completions: { create } } } as any;
+
+    let rejection: unknown;
+    const run = (async () => {
+      for await (const _ of client.streamMessage({
+        model: "gpt-4o",
+        messages: [{ type: "user", content: "hello" }],
+        abortSignal: external.signal,
+      })) {}
+    })().catch((error) => {
+      rejection = error;
+    });
+
+    await vi.waitFor(() => expect(received).toBeDefined());
+    external.abort(interrupted);
+    await run;
+
+    expect(received?.aborted).toBe(true);
+    expect(received?.reason).toBe(interrupted);
+    expect(rejection).toBe(interrupted);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("issues exactly one request and surfaces a retryable failure", async () => {
+    const retryable = Object.assign(new Error("rate limited"), {
+      status: 429,
+      headers: { get: () => "30" },
+    });
+    const create = vi.fn().mockRejectedValue(retryable);
     const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: undefined } as any);
     client.client = {
       chat: { completions: { create } },
     } as any;
 
-    for await (const _ of client.streamMessage({
-      model: "gpt-4o",
-      messages: [{ type: "user", content: "hello" }],
-      abortSignal: controller.signal,
-    })) {}
-
-    expect(create).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({ signal: controller.signal }),
-    );
-  });
-
-  it("aborts retry backoff without starting another request", async () => {
-    vi.useFakeTimers();
-    let run: Promise<void> | undefined;
+    let caught: any;
     try {
-      const retryable = Object.assign(new Error("rate limited"), {
-        status: 429,
-        headers: { get: () => "30" },
-      });
-      const create = vi.fn().mockRejectedValue(retryable);
-      const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: undefined } as any);
-      client.client = {
-        chat: { completions: { create } },
-      } as any;
-      const controller = new AbortController();
-      const interrupted = new Error("retry interrupted");
-      let rejection: unknown;
-
-      run = (async () => {
-        for await (const _ of client.streamMessage({
-          model: "gpt-4o",
-          messages: [{ type: "user", content: "hello" }],
-          abortSignal: controller.signal,
-        })) {}
-      })();
-      void run.catch((error) => {
-        rejection = error;
-      });
-      await vi.advanceTimersByTimeAsync(0);
-      expect(create).toHaveBeenCalledTimes(1);
-
-      controller.abort(interrupted);
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(rejection).toBe(interrupted);
-      expect(create).toHaveBeenCalledTimes(1);
-    } finally {
-      await vi.runAllTimersAsync();
-      await run?.catch(() => {});
-      vi.useRealTimers();
+      for await (const _ of client.streamMessage({
+        model: "gpt-4o",
+        messages: [{ type: "user", content: "hello" }],
+      })) {}
+    } catch (error) {
+      caught = error;
     }
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(caught).toMatchObject({
+      name: "ModelRequestFailure",
+      info: {
+        kind: "rate_limit",
+        phase: "request",
+        retryable: true,
+        statusCode: 429,
+        retryAfterMs: 30_000,
+      },
+    });
   });
 });
 
 describe("OpenAICompatibleClient reasoning effort", () => {
+  it("leaves absent usage unknown and preserves usage observed before stream failure", async () => {
+    const makeClient = (chunks: Array<Record<string, unknown>>) => {
+      const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gw.example/v1" });
+      client.client = { chat: { completions: { create: async () => ({
+        async *[Symbol.asyncIterator]() { for (const chunk of chunks) {
+          if (chunk.type === "failure") throw new Error("disconnect");
+          yield chunk;
+        } },
+      }) } } } as any;
+      return client;
+    };
+    const collect = async (client: OpenAICompatibleClient) => {
+      const events: any[] = [];
+      try {
+        for await (const event of client.streamMessage({ model: "gpt-4o", messages: [{ type: "user", content: "hi" }] })) events.push(event);
+      } catch { /* Stream failure is expected in the second case. */ }
+      return events.filter((event) => event.type === "usage");
+    };
+    expect(await collect(makeClient([{ choices: [{ delta: {}, finish_reason: "stop" }] }]))).toEqual([]);
+    expect(await collect(makeClient([
+      { choices: [], usage: { prompt_tokens: 6, completion_tokens: 2 } },
+      { type: "failure" },
+    ]))).toEqual([{ type: "usage", usage: { inputTokens: 6, outputTokens: 2 } }]);
+  });
   function streamingClient() {
     const create = vi.fn(async (_params: unknown) => ({
-      async *[Symbol.asyncIterator]() {},
+      async *[Symbol.asyncIterator]() {
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      },
     }));
     const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gw.example/v1" });
     client.client = { chat: { completions: { create } } } as any;
@@ -628,13 +664,23 @@ describe("OpenAICompatibleClient stop reason normalization", () => {
 
   it("keeps ordinary finish reasons unchanged", async () => {
     expect(await completeReason(finishClient("stop"))).toBe("stop");
-    expect(await completeReason(finishClient(null))).toBe("end_turn");
+  });
+
+  it("rejects a stream that ends without any finish reason", async () => {
+    await expect(completeReason(finishClient(null))).rejects.toMatchObject({
+      name: "ModelRequestFailure",
+      info: { kind: "stream_incomplete", phase: "stream", retryable: true },
+    });
   });
 });
 
 describe("OpenAICompatibleClient output token cap", () => {
   it("defaults max_tokens to the 32k cap when the caller omits it", async () => {
-    const create = vi.fn(async () => ({ async *[Symbol.asyncIterator]() {} }));
+    const create = vi.fn(async () => ({
+      async *[Symbol.asyncIterator]() {
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      },
+    }));
     const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gw.example/v1" });
     client.client = { chat: { completions: { create } } } as any;
     for await (const _ of client.streamMessage({
