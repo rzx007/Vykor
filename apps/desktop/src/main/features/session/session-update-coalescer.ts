@@ -7,8 +7,6 @@ export interface SessionUpdateCoalescerOptions<TState, TSource> {
 export interface SessionUpdateCoalescer<TState, TSource> {
   /** Record the latest state and open the window if none is pending. */
   queue(state: TState, source: TSource): void
-  /** Drop the pending state and timer without disabling the coalescer. */
-  cancelPending(): void
   /** Deliver the given state immediately, dropping any pending one. */
   flushNow(state: TState, source: TSource): void
   /** Stop delivering entirely. */
@@ -49,10 +47,6 @@ export function createSessionUpdateCoalescer<TState, TSource>(
       if (disposed) return
       pending = { state, source }
       if (timer === null) timer = setTimeout(flush, options.delayMs)
-    },
-    cancelPending() {
-      clearTimer()
-      pending = null
     },
     flushNow(state, source) {
       if (disposed) return

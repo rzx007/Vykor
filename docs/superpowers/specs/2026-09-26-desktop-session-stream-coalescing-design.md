@@ -1,6 +1,6 @@
 # 桌面会话流式更新合并设计
 
-> 状态：设计（2026-09-26）。仅覆盖 Electron 桌面端主进程向渲染进程推送会话状态的路径；不改协议、不改 daemon、不改 CLI/TUI。
+> 状态：已实施（2026-09-26，阶段一）。仅覆盖 Electron 桌面端主进程向渲染进程推送会话状态的路径；不改协议、不改 daemon、不改 CLI/TUI。
 
 ## 目标与现状
 
@@ -27,19 +27,20 @@
 1. 频率：固定窗口节流（非 debounce）。稳态流式下同一订阅任意两次发送间隔 ≥ 窗口（默认 50ms，≤20 次/秒）；重连的强制 `flushNow` 不受此约束。持续输出时每窗口最多一次。
 2. 内容：每次发送都是刷出时刻的最新整份视图，不发送过期于最后入队 state 的视图。
 3. 终态不丢：任一窗口必有一次 trailing 刷出；只有订阅真正结束（切会话/删除/窗口销毁）才丢弃挂起状态。
-4. 重连：收到 reconnecting（`SyncEventUpdate.source === "reconnecting"`，由 `onUpdate` 交付）或订阅迭代器结束时，取消挂起定时器并立即以最近一次 state 用 reconnecting 语义发送，保持顺序。取消挂起用 `cancelPending()`，实例保持可复用，不 `dispose()`。
+4. 重连：收到 reconnecting（`SyncEventUpdate.source === "reconnecting"`，由 `onUpdate` 交付）或订阅迭代器结束时，用 `flushNow` 立即以最近一次 state 以 reconnecting 语义发送（`flushNow` 会取消挂起窗口），保持顺序；实例保持可复用，不 `dispose()`。
 5. 竞态与失效：订阅结束时通过 abort signal 触发 `dispose()`，停止后续发送。定时器回调刷出与 `flushNow` 共用同一个由 `pumpSession` 注入的 `send` 校验：`webContents.isDestroyed()`、订阅仍 current、且 `state.buckets[sessionId]?.session` 仍存在；任一不满足即静默丢弃，避免向已删会话发送或在 `setTimeout` 里抛错。
 6. CPU：本阶段只把 `toDesktopSessionView()` 从每事件一次降为每窗口一次，从而减少主进程视图构造、IPC 与渲染端整页重渲染；客户端 `syncEvents` reducer 仍逐事件运行，这部分 CPU 不在本阶段优化。
 
 ## 连带影响与已知取舍
 
-- `refreshGoal`（`apps/desktop/src/renderer/src/stores/desktop-session/store.ts:117-120`）改为尾延防抖（约 1s），保留现有单飞。
+- `refreshGoal`（`apps/desktop/src/renderer/src/stores/desktop-session/store.ts:117-120`）改为尾延防抖（约 1s），保留现有单飞。代价：只要流式更新间隔持续小于 1s，goal 状态要等输出出现空档才刷新（此前是每条更新一次）；goal 变化由事件驱动，run 结束或用户操作也会触发刷新，接受这一取舍。防抖按 sessionId 记录，不随切换会话取消，旧会话的刷新最多晚 1s 到达且只写 `goalsBySession[旧 id]`，无副作用。
+- reconnecting 帧可能经 `onUpdate` 与迭代器结束两条路径各发一次；两次内容相同、cursor 单调，按幂等处理。
 - `applySessionUpdate` 用「上一份视图有 running run、下一份变终态」判定 run 结束并刷新上下文用量（`apps/desktop/src/renderer/src/stores/desktop-session/session-view-actions.ts:36,87-101`）。合并窗口理论上可能让一个 run 的首个交付状态就已经是终态（run 在单个窗口内起止），从而漏一次刷新。实际 agent run 远长于 50ms，且现有 `didActiveRunFinish` 已明确忽略「上一份视图未见过的新终态 run」（`apps/desktop/src/renderer/src/stores/desktop-session/session-view-actions.context-usage.test.ts:52-57`）；本阶段不改变这一语义，接受这一可忽略的理论边界，并在验收里记录。
 
 ## 实现位置
 
-- 新增 `apps/desktop/src/main/features/session/session-update-coalescer.ts`：纯窗口合并器，暴露 `queue(state, source)`、`cancelPending()`、`flushNow(state, source)`、`dispose()`；不 import Electron。是否允许发送的校验由 `pumpSession` 注入的 `send` 回调统一负责，定时器刷出与 `flushNow()` 共用。
-- 修改 `apps/desktop/src/main/features/session/session-subscription-service.ts`：`pumpSession` 的主/辅订阅都用合并器；构造函数可选注入窗口毫秒数；重连走 `cancelPending()+flushNow()`；订阅结束走 `dispose()`。
+- 新增 `apps/desktop/src/main/features/session/session-update-coalescer.ts`：纯窗口合并器，暴露 `queue(state, source)`、`flushNow(state, source)`、`dispose()`；不 import Electron。是否允许发送的校验由 `pumpSession` 注入的 `deliver` 统一负责（`isDestroyed`/`isCurrent`/session 存在，并吞掉窗口销毁瞬间的 `send` 异常），定时器刷出与 `flushNow()` 共用。
+- 修改 `apps/desktop/src/main/features/session/session-subscription-service.ts`：`pumpSession` 的主/辅订阅都用合并器；构造函数可选注入窗口毫秒数；重连与迭代器结束走 `flushNow()`；订阅结束走 `dispose()`。
 - 修改 `apps/desktop/src/renderer/src/stores/desktop-session/store.ts:117-120`：`refreshGoal` 改尾延防抖。
 
 ## 验收

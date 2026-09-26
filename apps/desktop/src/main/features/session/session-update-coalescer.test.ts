@@ -72,19 +72,17 @@ describe("createSessionUpdateCoalescer", () => {
     expect(deliver).toHaveBeenCalledTimes(1)
   })
 
-  it("stays reusable after cancelPending", () => {
+  it("opens a new window after flushNow", () => {
     vi.useFakeTimers()
     const { deliver, coalescer } = createCoalescer()
 
     coalescer.queue({ n: 1 }, "live")
-    coalescer.cancelPending()
-    vi.advanceTimersByTime(1_000)
-    expect(deliver).not.toHaveBeenCalled()
-
-    coalescer.queue({ n: 2 }, "live")
+    coalescer.flushNow({ n: 2 }, "reconnecting")
+    coalescer.queue({ n: 3 }, "live")
     vi.advanceTimersByTime(50)
-    expect(deliver).toHaveBeenCalledTimes(1)
-    expect(deliver).toHaveBeenLastCalledWith({ n: 2 }, "live")
+
+    expect(deliver).toHaveBeenCalledTimes(2)
+    expect(deliver).toHaveBeenLastCalledWith({ n: 3 }, "live")
   })
 
   it("stops delivering after dispose", () => {

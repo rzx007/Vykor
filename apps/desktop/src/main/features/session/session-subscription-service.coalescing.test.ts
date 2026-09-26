@@ -39,6 +39,18 @@ function sessionUpdated(seq: number): SessionEventRecord {
   } as SessionEventRecord
 }
 
+function sessionDeleted(seq: number): SessionEventRecord {
+  return {
+    id: `e${seq}`,
+    seq,
+    type: "session.deleted",
+    schemaVersion: 1,
+    sessionId: "s1",
+    payload: { sessionIds: ["s1"] },
+    createdAt: seq,
+  } as SessionEventRecord
+}
+
 function clientWithStream(stream: () => AsyncIterable<SessionEventRecord>) {
   return {
     sessions: { getState: vi.fn(async () => snapshot(1)) },
@@ -48,15 +60,16 @@ function clientWithStream(stream: () => AsyncIterable<SessionEventRecord>) {
 
 function webContents() {
   const sent: Array<{ channel: string; payload: unknown }> = []
+  let destroyed = false
   const contents = {
     id: 77,
     once: vi.fn(),
-    isDestroyed: () => false,
+    isDestroyed: () => destroyed,
     send: vi.fn((channel: string, payload: unknown) => {
       sent.push({ channel, payload })
     }),
   }
-  return { contents, sent }
+  return { contents, sent, destroy: () => { destroyed = true } }
 }
 
 afterEach(() => {
@@ -151,6 +164,77 @@ describe("SessionSubscriptionService coalescing", () => {
     expect(sent[0]!.channel).toBe("session:aux-updated")
     expect(sent[0]!.payload).toMatchObject({ subscriptionId: "aux1" })
 
+    service.clearAll()
+  })
+
+  it("drops a pending window when the window is destroyed", async () => {
+    vi.useFakeTimers()
+    const client = clientWithStream(async function* () {
+      yield sessionUpdated(2)
+      yield sessionUpdated(3)
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent, destroy } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    await service.openSession(client as never, contents as never, "s1")
+    await vi.advanceTimersByTimeAsync(1)
+    expect(sent).toHaveLength(0)
+
+    destroy()
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(sent).toHaveLength(0)
+    service.clearAll()
+  })
+
+  it("cancels a pending window when the same auxiliary slot is reopened", async () => {
+    vi.useFakeTimers()
+    const first = clientWithStream(async function* () {
+      yield sessionUpdated(2)
+      yield sessionUpdated(3)
+      await new Promise<never>(() => undefined)
+    })
+    const second = clientWithStream(async function* () {
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    await service.openAuxSession(first as never, contents as never, {
+      subscriptionId: "aux1",
+      sessionId: "s1",
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(sent).toHaveLength(0)
+
+    await service.openAuxSession(second as never, contents as never, {
+      subscriptionId: "aux1",
+      sessionId: "s1",
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(sent).toHaveLength(0)
+    service.clearAll()
+  })
+
+  it("drops the subscription when the session disappears mid-stream", async () => {
+    vi.useFakeTimers()
+    const client = clientWithStream(async function* () {
+      yield sessionUpdated(2)
+      yield sessionDeleted(3)
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+
+    await service.openSession(client as never, contents as never, "s1")
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(service.hasPrimary(contents.id, "s1")).toBe(false)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(sent).toHaveLength(0)
     service.clearAll()
   })
 })

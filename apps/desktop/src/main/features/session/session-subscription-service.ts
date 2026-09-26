@@ -157,12 +157,16 @@ export class SessionSubscriptionService {
     const deliver = (view: DesktopSessionView): void => {
       if (webContents.isDestroyed()) return
       if (!subscription || !this.subscriptions.isCurrent(webContents.id, slot, subscription)) return
-      if (auxiliarySubscriptionId) {
-        const payload: DesktopAuxSessionUpdate = { subscriptionId: auxiliarySubscriptionId, view }
-        webContents.send(IpcEvents.sessionAuxUpdated, payload)
-        return
+      try {
+        if (auxiliarySubscriptionId) {
+          const payload: DesktopAuxSessionUpdate = { subscriptionId: auxiliarySubscriptionId, view }
+          webContents.send(IpcEvents.sessionAuxUpdated, payload)
+          return
+        }
+        webContents.send(IpcEvents.sessionUpdated, view)
+      } catch {
+        // The window can be torn down between the guard above and the send.
       }
-      webContents.send(IpcEvents.sessionUpdated, view)
     }
     const coalescer = createSessionUpdateCoalescer<VykorClientState, SyncEventUpdate["source"]>({
       delayMs: this.sessionUpdateIntervalMs,

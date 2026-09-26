@@ -18,7 +18,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `apps/desktop/src/main/features/session/session-update-coalescer.ts` | 纯窗口合并器：`queue` / `cancelPending` / `flushNow` / `dispose` |
+| `apps/desktop/src/main/features/session/session-update-coalescer.ts` | 纯窗口合并器：`queue` / `flushNow` / `dispose` |
 | `apps/desktop/src/main/features/session/session-update-coalescer.test.ts` | 合并器单测（假定时器） |
 | `apps/desktop/src/main/features/session/session-subscription-service.ts` | 主/辅订阅接入合并器，注入窗口与发送校验 |
 | `apps/desktop/src/main/features/session/session-subscription-service.coalescing.test.ts` | 服务级合并/重连/删除竞态/辅订阅测试 |
@@ -30,7 +30,7 @@
 
 **文件：** 新增 `session-update-coalescer.ts`、`session-update-coalescer.test.ts`。
 
-- [x] **步骤 1：先写失败测试。** 用假定时器断言：窗口内 `queue` N 次 → 只 `deliver` 1 次且内容是最后一次 state；`flushNow(next)` 立即发送并取消挂起；`cancelPending()` 后实例可继续 `queue`；`dispose()` 后 `queue`/定时器都不再发送；不重复发送。
+- [x] **步骤 1：先写失败测试。** 用假定时器断言：窗口内 `queue` N 次 → 只 `deliver` 1 次且内容是最后一次 state；`flushNow(next)` 立即发送并取消挂起；`flushNow` 后实例可继续 `queue`；`dispose()` 后 `queue`/定时器都不再发送；不重复发送。
 - [x] **步骤 2：确认红灯。** 在 `apps/desktop` 执行 `../../node_modules/.bin/vitest.CMD run src/main/features/session/session-update-coalescer.test.ts`。预期 FAIL，不是配置错误。
 - [x] **步骤 3：实现最小合并器。** 固定窗口（首次 `queue` 起定时器，窗口内覆盖最新、不重置）；`deliver` 由调用方注入；不 import Electron。
 - [x] **步骤 4：绿灯、审查、提交。**
