@@ -98,7 +98,7 @@ export function AssistantMessage({
               </summary>
               <p className="mt-2 border-l pl-3.5 leading-6 whitespace-pre-wrap">{truncated.text}</p>
               {truncated.omitted > 0 ? (
-                <p className="mt-1 text-ui-caption text-ui-muted">
+                <p className="text-ui-caption mt-1 text-ui-muted">
                   已省略前 {truncated.omitted} 个字符
                 </p>
               ) : null}

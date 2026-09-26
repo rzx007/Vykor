@@ -598,7 +598,7 @@ function ConversationPane({
                 "mx-auto mb-2 w-[min(760px,calc(100%-32px))] shrink-0 px-px",
                 singleAskUserPrompt
                   ? "overflow-visible"
-                  : "max-h-[min(18rem,35vh)] overflow-y-auto scrollbar-thin"
+                  : "max-h-[min(18rem,35vh)] scrollbar-thin overflow-y-auto"
               )}
             >
               <div className="space-y-2">
