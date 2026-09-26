@@ -114,6 +114,7 @@ describe("resolveApiClient request header templates", () => {
       return new Response(
         [
           'data: {"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"hi"}}]}\n\n',
+          'data: {"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n',
           "data: [DONE]\n\n",
         ].join(""),
         { status: 200, headers: { "content-type": "text/event-stream" } },

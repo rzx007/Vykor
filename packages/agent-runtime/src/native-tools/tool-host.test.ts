@@ -345,7 +345,10 @@ describe("NativeToolHost", () => {
     });
 
     expect(activation.state).toBe("active");
-    expect(logs.join("\n")).toContain("output limit reached (16 bytes)");
+    // stdout/stderr arrive on separate streams from the registration IPC reply.
+    await vi.waitFor(() =>
+      expect(logs.join("\n")).toContain("output limit reached (16 bytes)"),
+    );
     await activation.host?.stop();
   });
 
