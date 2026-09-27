@@ -45,6 +45,7 @@
    - 用户在 `Separator` 上拖拽/键盘改宽后，外层 `Group` 的 `onLayoutChanged(layout, meta)` 在 `meta.isUserInteraction === true` 且 `sidebarPanelRef.current.getSize().inPixels > 1` 时，持久化该像素值。窗口缩放（`isUserInteraction === false`）不写。
    - 持久化键 `vykor.desktop.workspace-sidebar-width-px`，值形如 `312`（原始十进制字符串）；脏数据回退默认值。
 3. sidebar 展开/收起动画：`toggleSidebar` 调 `panel.expand()/collapse()` 前后，给外层 `Group` 元素加 `data-panel-animating="true"`；CSS 规则 `[data-panel-animating] > [data-panel] { transition: flex-grow 200ms ease-out }`（写在 `assets/main.css` 的 `@layer utilities`）。属性在约 240ms 后由定时器移除；`cancel()` 可提前移除。收起时 sidebar 的 `flex-grow` 归 0、`workspace` 面板同步让位，两列一起过渡。
+   - **内容不重排**：开合过程中侧栏内容保持在展开宽度（`--sidebar-content-width`，动画期间不随面板变窄更新），由面板 `overflow: hidden` 裁剪；视觉上表现为右侧对话区滑过来覆盖它。只有指针/键盘实时改宽（`size.inPixels > 1` 且非动画中）才更新内容宽度。
 4. utility 展开/收起动画：同机制，作用在内层 `Group`。`collapse()/restore()/toggleMaximized()` 等显式开合路径都包一层"加属性 → 调 imperative → 到时移除"。
 5. 非开合路径不加过渡：窗口原生缩放、用户拖拽分隔线、切会话（scope 变更）应用已存布局时，属性必须不存在。切换 scope 的 `group.setLayout` 之前先 `cancel()`。
 6. 首帧正确：外/内两个 `Group` 都不再使用 `useDefaultLayout`；首帧布局由同步状态得出：
@@ -88,6 +89,7 @@
 - `main-layout.tsx`：
   - sidebar `Panel.defaultSize` 改用 `sidebar-width.ts` 的同步像素值；删除外层 `useDefaultLayout` 与 RAF 补正 effect；外层 `Group` 增 `elementRef` 与 `onLayoutChanged`（按 item 2 持久化）。
   - `toggleSidebar` 用 `panel.expand()/collapse()` + `beginPanelToggleTransition(outerGroupElement)`。
+  - 侧栏内容包一层固定宽度容器（`width: var(--sidebar-content-width)`），`Panel` 传 `style={{ overflow: "hidden" }}` 裁剪；`onResize` 仅在 `size.inPixels > 1` 且非 `data-panel-animating` 时更新该变量，实现 item 3 的"内容不重排"。
   - 内层 `Group` 增 `elementRef`（传给控制器）；其余 `defaultLayout`/`minSize`/`maxSize` 按连带影响调整。
 - `utility-panel/use-utility-panel-controller.ts`：选项改造（见连带影响）；显式开合路径包 `beginPanelToggleTransition(groupElementRef.current)`；首次冷启动 `restore()` 在过渡下落到持久化尺寸；切 scope 的 `setLayout` 前 `cancel()`。
 - `main-layout-project-operation-error.test.ts`：更新 mock。
@@ -102,7 +104,7 @@
 2. sidebar 拖到 360px、utility 拖到某宽度后重启：恢复为用户宽度，无跳动。
 3. 上次收起 utility（但展开宽度已知）后重启，首次用 `$mod+j`/按钮展开：落到持久化宽度，不是 320px 最小值。
 4. 上次最大化 utility 后重启：仍是最大化态；退出最大化恢复原分栏。
-5. 收起/展开 sidebar（按钮、`$mod+b`、菜单）：宽度 200ms 过渡；过渡中再次触发不错乱。
+5. 收起/展开 sidebar（按钮、`$mod+b`、菜单）：宽度 200ms 过渡；过渡中再次触发不错乱；**侧栏内容不重排/不换行，像被对话区覆盖**。
 6. 收起/展开 utility（按钮、`$mod+j`）：面板与中列 200ms 过渡，无瞬间跳变。
 7. 开合动画未结束就切会话（scope 变更）：切换后的布局直接到位、不带动画。
 8. 拖拽 sidebar 改宽：跟手无滞后（拖拽期间无过渡）；松手后宽度稳定并持久化。
