@@ -522,15 +522,15 @@ html.dark[data-window-shell="translucent"] {
     margin-top: 0.5rem;
   }
 
-  /* Links — subtle, no heavy underline */
+  /* Links — underline only on hover */
   .desktop-streamdown [data-streamdown="link"] {
-    text-decoration: underline;
+    text-decoration: none;
     text-underline-offset: 2px;
-    text-decoration-color: oklch(0.556 0 0 / 40%);
     transition: text-decoration-color 0.15s;
   }
 
   .desktop-streamdown [data-streamdown="link"]:hover {
+    text-decoration: underline;
     text-decoration-color: currentColor;
   }
 

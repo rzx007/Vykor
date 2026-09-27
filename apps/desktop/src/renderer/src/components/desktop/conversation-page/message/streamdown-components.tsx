@@ -1,8 +1,11 @@
 import type { ComponentProps } from "react"
+import { Globe } from "lucide-react"
 import { Streamdown } from "streamdown"
 
 import { parseFileReference } from "./message-render-model"
 import { FileButton, StreamdownCodeBlock } from "./streamdown-renderers"
+
+const HTTP_LINK = /^https?:\/\//i
 
 type StreamdownComponents = NonNullable<ComponentProps<typeof Streamdown>["components"]>
 
@@ -15,8 +18,12 @@ export function createStreamdownComponents({
     a: ({ href, children, ...props }) => {
       const file = href ? parseFileReference(href) : null
       if (!file || !onOpenFile) {
+        const isExternal = href ? HTTP_LINK.test(href) : false
         return (
           <a href={href} data-streamdown="link" {...props}>
+            {isExternal ? (
+              <Globe aria-hidden="true" className="mr-0.5 inline-block size-3.5 align-[-0.125em]" />
+            ) : null}
             {children}
           </a>
         )
