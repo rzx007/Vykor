@@ -45,6 +45,21 @@ describe("appearance font registry", () => {
     ])
   })
 
+  it("appends a deterministic CJK fallback to every font stack", () => {
+    for (const option of [...UI_FONT_OPTIONS, ...CODE_FONT_OPTIONS]) {
+      expect(option.family, option.id).toContain('"Microsoft YaHei UI"')
+    }
+
+    for (const option of UI_FONT_OPTIONS) {
+      expect(option.family, option.id).toContain('"PingFang SC"')
+      expect(option.family, option.id).toMatch(/sans-serif$/)
+    }
+
+    for (const option of CODE_FONT_OPTIONS) {
+      expect(option.family, option.id).toMatch(/monospace$/)
+    }
+  })
+
   it("repairs an unavailable saved local font to its bundled fallback", () => {
     const preferences: AppearancePreferences = {
       ...DEFAULT_APPEARANCE_PREFERENCES,

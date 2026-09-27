@@ -39,4 +39,22 @@ describe("Markdown table styles", () => {
       /\.assistant-markdown \[data-streamdown="link"\]\s*\{[^}]*overflow-wrap:\s*anywhere;/s
     )
   })
+
+  it("keeps the chat reading rhythm for the assistant transcript", () => {
+    expect(stylesheet).toMatch(/--chat-font-size:\s*calc\(var\(--ui-font-size\) \+ 1px\);/)
+    expect(stylesheet).toMatch(/--chat-line-height:\s*1\.6;/)
+    expect(stylesheet).toMatch(/--code-line-height:\s*1\.5;/)
+    expect(stylesheet).toMatch(
+      /\.assistant-markdown \[data-streamdown="heading-2"\]\s*\{[^}]*font-size:\s*var\(--ui-font-size-xl\);[^}]*font-weight:\s*600;/s
+    )
+    expect(stylesheet).toMatch(
+      /\.desktop-streamdown \[data-streamdown="strong"\]\s*\{[^}]*font-weight:\s*600;/s
+    )
+    expect(stylesheet).toMatch(
+      /\.assistant-markdown \[data-streamdown="paragraph"\]\s*\+\s*\[data-streamdown="paragraph"\]\s*\{[^}]*margin-top:\s*0\.8em;/s
+    )
+    expect(stylesheet).toMatch(
+      /\.assistant-markdown \[data-streamdown="list-item"\]\s*\{[^}]*margin-block:\s*0\.4em;/s
+    )
+  })
 })

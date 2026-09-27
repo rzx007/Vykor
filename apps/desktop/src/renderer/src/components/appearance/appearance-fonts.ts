@@ -8,24 +8,32 @@ export type AppearanceFontOption<Id extends string> = {
   checkQuery?: string
 }
 
+/**
+ * 中文回退链：只在前面的拉丁字体缺字时生效，保证各平台中文落到确定的字体上。
+ * 与 assets/main.css 的 @theme 字体栈保持一致。
+ */
+const CJK_SANS_FALLBACK =
+  '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
+const CJK_MONO_FALLBACK = '"Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", monospace'
+
 export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
   {
     id: "system",
     label: "系统默认",
     source: "system-generic",
-    family: '"Segoe UI Variable Text", "Segoe UI", sans-serif',
+    family: `"Segoe UI Variable Text", "Segoe UI", ${CJK_SANS_FALLBACK}`,
   },
   {
     id: "inter",
     label: "Inter",
     source: "bundled",
-    family: '"Inter Variable", Inter, sans-serif',
+    family: `"Inter Variable", Inter, ${CJK_SANS_FALLBACK}`,
   },
   {
     id: "segoe-ui",
     label: "Segoe UI",
     source: "local",
-    family: '"Segoe UI Variable Text", "Segoe UI", sans-serif',
+    family: `"Segoe UI Variable Text", "Segoe UI", ${CJK_SANS_FALLBACK}`,
     checkQuery: '12px "Segoe UI Variable Text"',
   },
 ]
@@ -35,27 +43,27 @@ export const CODE_FONT_OPTIONS: readonly AppearanceFontOption<CodeFontId>[] = [
     id: "geist-mono",
     label: "Geist Mono",
     source: "bundled",
-    family: '"Geist Mono Variable", monospace',
+    family: `"Geist Mono Variable", ${CJK_MONO_FALLBACK}`,
   },
   {
     id: "cascadia-code",
     label: "Cascadia Code",
     source: "local",
-    family: '"Cascadia Code", "Geist Mono Variable", Consolas, monospace',
+    family: `"Cascadia Code", "Geist Mono Variable", Consolas, ${CJK_MONO_FALLBACK}`,
     checkQuery: '12px "Cascadia Code"',
   },
   {
     id: "cascadia-mono",
     label: "Cascadia Mono",
     source: "local",
-    family: '"Cascadia Mono", "Geist Mono Variable", Consolas, monospace',
+    family: `"Cascadia Mono", "Geist Mono Variable", Consolas, ${CJK_MONO_FALLBACK}`,
     checkQuery: '12px "Cascadia Mono"',
   },
   {
     id: "consolas",
     label: "Consolas",
     source: "local",
-    family: 'Consolas, "Geist Mono Variable", monospace',
+    family: `Consolas, "Geist Mono Variable", ${CJK_MONO_FALLBACK}`,
     checkQuery: '12px "Consolas"',
   },
 ]

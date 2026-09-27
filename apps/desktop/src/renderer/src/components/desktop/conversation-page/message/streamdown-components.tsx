@@ -36,7 +36,7 @@ export function createStreamdownComponents({
     },
     inlineCode: ({ children, ...props }) => {
       return (
-        <code className="text-ui-small rounded-md bg-input/80 px-1.5 py-0.5" {...props}>
+        <code className="rounded-md bg-input/80 px-1.5 py-0.5 text-[0.87em]" {...props}>
           {children}
         </code>
       )

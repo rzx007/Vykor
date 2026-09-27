@@ -180,7 +180,7 @@ function UserMessageBlock({
                 setEditing(false)
                 userActions.onEdit(draft)
               }}
-              className="text-ui-small min-h-20 w-full resize-y rounded-xl bg-user-message/70 px-4 py-3 leading-6 whitespace-pre-wrap text-foreground outline-none"
+              className="text-chat min-h-20 w-full resize-y rounded-xl bg-user-message/70 px-4 py-3 whitespace-pre-wrap text-foreground outline-none"
             />
             <div className="flex items-center gap-1">
               <MessageActionButton label="取消编辑" onClick={() => setEditing(false)}>
@@ -288,7 +288,7 @@ function UserMessageBubble({
   const collapsed = longEnough && !expanded
 
   return (
-    <div className="text-ui-small max-w-[78%] overflow-hidden rounded-xl bg-input/50 leading-6 text-sidebar-foreground">
+    <div className="text-chat max-w-[78%] overflow-hidden rounded-xl bg-input/50 text-sidebar-foreground">
       <div className="relative">
         <div
           className={cn("px-4 py-3 whitespace-pre-wrap", collapsed && "max-h-72 overflow-hidden")}

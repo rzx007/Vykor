@@ -102,7 +102,7 @@ export function RichPromptInput({
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               className={cn(
-                "text-ui-small block max-h-44 min-h-18 w-full overflow-y-auto bg-transparent px-4 pt-3 leading-6 break-words whitespace-pre-wrap text-foreground outline-none",
+                "text-chat block max-h-44 min-h-18 w-full overflow-y-auto bg-transparent px-4 pt-3 break-words whitespace-pre-wrap text-foreground outline-none",
                 "**:text-inherit empty:before:content-none focus-visible:outline-none",
                 className
               )}
@@ -152,7 +152,7 @@ function RichPromptPlaceholder({
   return (
     <div
       className={cn(
-        "text-ui-small pointer-events-none absolute top-3 left-4 leading-6 text-placeholder/65",
+        "text-chat pointer-events-none absolute top-3 left-4 text-placeholder/65",
         className
       )}
     >

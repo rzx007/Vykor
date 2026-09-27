@@ -27,7 +27,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   uiFont: "system",
   codeFont: "geist-mono",
   uiFontSize: 14,
-  codeFontSize: 13,
+  codeFontSize: 14,
   reducedMotion: "system",
 }
 

@@ -15,7 +15,7 @@ describe("appearance preferences", () => {
       uiFont: "system",
       codeFont: "geist-mono",
       uiFontSize: 14,
-      codeFontSize: 13,
+      codeFontSize: 14,
       reducedMotion: "system",
     })
   })
@@ -67,7 +67,7 @@ describe("appearance preferences", () => {
       uiFont: "system",
       codeFont: "geist-mono",
       uiFontSize: 14,
-      codeFontSize: 13,
+      codeFontSize: 14,
       reducedMotion: "system",
     })
   })
