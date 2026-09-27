@@ -4,6 +4,7 @@ import {
   Group,
   Panel,
   type Layout,
+  type LayoutChangedMeta,
   useDefaultLayout,
   useGroupRef,
   usePanelRef,
@@ -24,12 +25,18 @@ import {
 import { TitleBar } from "../title-bar"
 import { useDesktopWindowChrome } from "../use-desktop-window-chrome"
 import { MainLayoutContext } from "./main-layout-context"
+import { beginPanelToggleTransition } from "./panel-toggle-transition"
+import {
+  SIDEBAR_MAX_WIDTH_PX,
+  SIDEBAR_MIN_WIDTH_PX,
+  persistSidebarWidthPx,
+  resolveSidebarDefaultWidthPx,
+  shouldPersistSidebarWidth,
+} from "./sidebar-width"
 import { Sidebar } from "./sidebar"
 import { UtilityPanel, useUtilityPanelController } from "./utility-panel"
 
 const resizeTargetMinimumSize = { fine: 12, coarse: 28 }
-const sidebarDefaultWidth = 288
-const sidebarMinimumWidth = 266
 const conversationMinimumWidth = 350
 const utilityMinimumWidth = 320
 const workspaceMinimumWidth = conversationMinimumWidth + utilityMinimumWidth
@@ -65,12 +72,11 @@ export function MainLayout(): React.JSX.Element {
   const utilityPanelRef = usePanelRef()
   const workspaceGroupRef = useGroupRef()
   const contentRef = useRef<HTMLDivElement>(null)
+  const outerGroupElementRef = useRef<HTMLDivElement | null>(null)
+  const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
+  const [sidebarDefaultSizePx] = useState(resolveSidebarDefaultWidthPx)
   const { isMaximized, zoomLevel, zoomIn, zoomOut, resetZoom, minimize, toggleMaximize, close } =
     useDesktopWindowChrome()
-  const outerLayout = useDefaultLayout({
-    id: "desktop-shell-layout",
-    panelIds: ["sidebar", "workspace"],
-  })
   const workspaceLayout = useDefaultLayout({
     id: "desktop-workspace-layout",
     panelIds: ["conversation", "utility"],
@@ -100,18 +106,22 @@ export function MainLayout(): React.JSX.Element {
   const openTerminal = utilityPanel.openTerminal
   const openUtilityTool = utilityPanel.openTool
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const sidebarSize = sidebarPanelRef.current?.getSize()
-      if (!sidebarSize) return
-      contentRef.current?.style.setProperty("--sidebar-width", `${sidebarSize.inPixels}px`)
-      setSidebarOpen((current) => {
-        const nextOpen = sidebarSize.inPixels > 1
-        return current === nextOpen ? current : nextOpen
-      })
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [sidebarPanelRef])
+  useEffect(
+    () => () => {
+      sidebarTransitionCancelRef.current?.()
+      sidebarTransitionCancelRef.current = null
+    },
+    []
+  )
+
+  const handleOuterLayoutChanged = useCallback(
+    (_layout: Layout, meta: LayoutChangedMeta): void => {
+      const size = sidebarPanelRef.current?.getSize()
+      if (!size || !shouldPersistSidebarWidth(meta, size.inPixels)) return
+      persistSidebarWidthPx(size.inPixels)
+    },
+    [sidebarPanelRef]
+  )
 
   const toggleSidebar = useCallback((): void => {
     const panel = sidebarPanelRef.current
@@ -120,6 +130,8 @@ export function MainLayout(): React.JSX.Element {
       return
     }
 
+    sidebarTransitionCancelRef.current?.()
+    sidebarTransitionCancelRef.current = beginPanelToggleTransition(outerGroupElementRef.current)
     if (panel.isCollapsed()) {
       panel.expand()
     } else {
@@ -201,7 +213,7 @@ export function MainLayout(): React.JSX.Element {
     <div
       ref={contentRef}
       className="relative min-h-0 flex-1 overflow-visible"
-      style={{ "--sidebar-width": `${sidebarDefaultWidth}px` } as React.CSSProperties}
+      style={{ "--sidebar-width": `${sidebarDefaultSizePx}px` } as React.CSSProperties}
     >
       <div
         aria-hidden="true"
@@ -212,16 +224,16 @@ export function MainLayout(): React.JSX.Element {
         id="desktop-shell"
         orientation="horizontal"
         className="h-full min-h-0"
+        elementRef={outerGroupElementRef}
         resizeTargetMinimumSize={resizeTargetMinimumSize}
-        defaultLayout={outerLayout.defaultLayout}
-        onLayoutChanged={outerLayout.onLayoutChanged}
+        onLayoutChanged={handleOuterLayoutChanged}
       >
         <Panel
           id="sidebar"
           panelRef={sidebarPanelRef}
-          defaultSize={sidebarDefaultWidth}
-          minSize={sidebarMinimumWidth}
-          maxSize={420}
+          defaultSize={sidebarDefaultSizePx}
+          minSize={SIDEBAR_MIN_WIDTH_PX}
+          maxSize={SIDEBAR_MAX_WIDTH_PX}
           collapsedSize={0}
           collapsible
           groupResizeBehavior="preserve-pixel-size"
