@@ -296,8 +296,9 @@ function readFiniteNumber(value: unknown): number | undefined {
 
 /** 安全解析 Run metadata 中的重试状态；非法/未知数据返回 undefined。 */
 export function readSessionModelRetryState(
-  metadata: Record<string, unknown>,
+  metadata: Record<string, unknown> | undefined,
 ): SessionModelRetryState | undefined {
+  if (!isRecordValue(metadata)) return undefined;
   const raw = metadata.modelRetry;
   if (!isRecordValue(raw)) return undefined;
   const generationId = readNonEmptyString(raw.generationId);
@@ -332,8 +333,9 @@ export function readSessionModelRetryState(
 
 /** 安全解析 part metadata 中的生成归属；非法数据返回 undefined。 */
 export function readModelGenerationMetadata(
-  metadata: Record<string, unknown>,
+  metadata: Record<string, unknown> | undefined,
 ): SessionModelGenerationMetadata | undefined {
+  if (!isRecordValue(metadata)) return undefined;
   const raw = metadata.modelGeneration;
   if (!isRecordValue(raw)) return undefined;
   const generationId = readNonEmptyString(raw.generationId);
@@ -363,8 +365,9 @@ export function isCommittedModelPart(part: SessionMessagePartRecord): boolean {
 }
 
 export function readSessionModelUsage(
-  metadata: Record<string, unknown>,
+  metadata: Record<string, unknown> | undefined,
 ): SessionModelUsageSummary | undefined {
+  if (!isRecordValue(metadata)) return undefined;
   const raw = metadata.modelUsage;
   if (!isRecordValue(raw)) return undefined;
   return {
