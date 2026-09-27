@@ -1,6 +1,6 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Outlet, useNavigate, useParams, useRouter, useRouterState } from "@tanstack/react-router"
-import { Group, Panel, useDefaultLayout, usePanelRef } from "react-resizable-panels"
+import { Group, Panel, type Layout, type LayoutChangedMeta, usePanelRef } from "react-resizable-panels"
 
 import {
   settingsSectionLabel,
@@ -8,15 +8,22 @@ import {
 } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
+import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { selectActiveSessionId } from "@renderer/stores/desktop-session/selectors"
 import { TitleBar } from "../title-bar"
 import { useDesktopWindowChrome } from "../use-desktop-window-chrome"
+import { beginPanelToggleTransition } from "../main-layout/panel-toggle-transition"
+import { createPanelWidthStore, shouldPersistPanelWidth } from "../panel-width-store"
 import { SettingsSidebar } from "./settings-sidebar"
 
 const resizeTargetMinimumSize = { fine: 12, coarse: 28 }
-const sidebarDefaultWidth = 288
-const sidebarMinimumWidth = 236
+const sidebarWidthStore = createPanelWidthStore({
+  storageKey: "vykor.desktop.settings-sidebar-width-px",
+  defaultPx: 288,
+  minPx: 236,
+  maxPx: 420,
+})
 
 export function SettingsLayout(): React.JSX.Element {
   const navigate = useNavigate()
@@ -33,10 +40,28 @@ export function SettingsLayout(): React.JSX.Element {
   const { isMaximized, zoomLevel, zoomIn, zoomOut, resetZoom, minimize, toggleMaximize, close } =
     useDesktopWindowChrome()
   const sidebarPanelRef = usePanelRef()
-  const layout = useDefaultLayout({
-    id: "desktop-settings-layout-v1",
-    panelIds: ["settings-sidebar", "settings-content"],
-  })
+  const shellRef = useRef<HTMLDivElement>(null)
+  const sidebarGroupElementRef = useRef<HTMLDivElement | null>(null)
+  const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
+  const [sidebarDefaultSizePx] = useState(() => sidebarWidthStore.resolveDefault())
+  const [sidebarMasked, setSidebarMasked] = useState(false)
+
+  useEffect(
+    () => () => {
+      sidebarTransitionCancelRef.current?.()
+      sidebarTransitionCancelRef.current = null
+    },
+    []
+  )
+
+  const handleLayoutChanged = useCallback(
+    (_layout: Layout, meta: LayoutChangedMeta): void => {
+      const size = sidebarPanelRef.current?.getSize()
+      if (!size || !shouldPersistPanelWidth(meta, size.inPixels)) return
+      sidebarWidthStore.persist(size.inPixels)
+    },
+    [sidebarPanelRef]
+  )
 
   const openCurrentConversation = useCallback((): void => {
     if (activeSessionId) {
@@ -55,9 +80,16 @@ export function SettingsLayout(): React.JSX.Element {
 
   const toggleSidebar = useCallback((): void => {
     const panel = sidebarPanelRef.current
-    if (!panel) return
-    if (panel.isCollapsed()) panel.expand()
-    else panel.collapse()
+    if (!panel) {
+      setSidebarOpen((current) => !current)
+      return
+    }
+    sidebarTransitionCancelRef.current?.()
+    sidebarTransitionCancelRef.current = beginPanelToggleTransition(sidebarGroupElementRef.current)
+    const collapsing = !panel.isCollapsed()
+    setSidebarMasked(collapsing)
+    if (collapsing) panel.collapse()
+    else panel.expand()
   }, [sidebarPanelRef])
 
   useDesktopShortcuts({
@@ -76,7 +108,15 @@ export function SettingsLayout(): React.JSX.Element {
   })
 
   return (
-    <main className="flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
+    <main
+      ref={shellRef}
+      className="flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground"
+      style={
+        {
+          "--settings-sidebar-content-width": `${sidebarDefaultSizePx}px`,
+        } as React.CSSProperties
+      }
+    >
       <TitleBar
         sidebarOpen={sidebarOpen}
         panelOpen={false}
@@ -111,32 +151,56 @@ export function SettingsLayout(): React.JSX.Element {
         id="desktop-settings"
         orientation="horizontal"
         className="min-h-0 flex-1"
+        elementRef={sidebarGroupElementRef}
         resizeTargetMinimumSize={resizeTargetMinimumSize}
-        defaultLayout={layout.defaultLayout}
-        onLayoutChanged={layout.onLayoutChanged}
+        onLayoutChanged={handleLayoutChanged}
       >
         <Panel
           id="settings-sidebar"
           panelRef={sidebarPanelRef}
-          defaultSize={sidebarDefaultWidth}
-          minSize={sidebarMinimumWidth}
-          maxSize={420}
+          defaultSize={sidebarDefaultSizePx}
+          minSize={sidebarWidthStore.minPx}
+          maxSize={sidebarWidthStore.maxPx}
           collapsedSize={0}
           collapsible
           groupResizeBehavior="preserve-pixel-size"
           className="h-full min-h-0 overflow-hidden"
-          onResize={(size) => setSidebarOpen(size.inPixels > 1)}
-        >
-          <SettingsSidebar
-            selectedSection={selectedSection}
-            onSelectSection={(nextSection) =>
-              void navigate({
-                to: "/settings/$section",
-                params: { section: settingsSectionSlug(nextSection) },
-              })
+          style={{ overflow: "hidden" }}
+          onResize={(size) => {
+            if (
+              size.inPixels > 1 &&
+              !sidebarGroupElementRef.current?.hasAttribute("data-panel-animating")
+            ) {
+              shellRef.current?.style.setProperty(
+                "--settings-sidebar-content-width",
+                `${size.inPixels}px`
+              )
             }
-            onClose={openCurrentConversation}
-          />
+            setSidebarOpen(size.inPixels > 1)
+          }}
+        >
+          <div
+            className="relative h-full"
+            style={{ width: "var(--settings-sidebar-content-width)" }}
+          >
+            <SettingsSidebar
+              selectedSection={selectedSection}
+              onSelectSection={(nextSection) =>
+                void navigate({
+                  to: "/settings/$section",
+                  params: { section: settingsSectionSlug(nextSection) },
+                })
+              }
+              onClose={openCurrentConversation}
+            />
+            <div
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute inset-0 z-20 bg-linear-to-l from-background/60 to-transparent transition-opacity duration-200 ease-out",
+                sidebarMasked ? "opacity-100" : "opacity-0"
+              )}
+            />
+          </div>
         </Panel>
         <PanelResizeHandle label="调整设置侧边栏宽度" />
         <Panel

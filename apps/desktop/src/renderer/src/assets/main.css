@@ -353,6 +353,10 @@ html.dark[data-window-shell="translucent"] {
     box-shadow: var(--workspace-top-shadow);
   }
 
+  [data-panel-animating] > [data-panel] {
+    transition: flex-grow 200ms ease-out;
+  }
+
   .utility-tab-strip {
     scrollbar-width: none;
   }

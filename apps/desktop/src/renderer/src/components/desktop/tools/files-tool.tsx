@@ -44,6 +44,11 @@ import { Button } from "@renderer/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { beginPanelToggleTransition } from "@renderer/components/desktop/layout/main-layout/panel-toggle-transition"
+import {
+  createPanelWidthStore,
+  shouldPersistPanelWidth,
+} from "@renderer/components/desktop/layout/panel-width-store"
 import {
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
@@ -58,9 +63,13 @@ type LoadState = "idle" | "loading" | "ready" | "error"
 type FileTreeAction =
   "reveal" | "open-html-in-browser" | "copy-relative" | "copy-absolute" | "add-to-chat"
 
-const fileTreeDefaultWidth = 300
-const fileTreeMinimumWidth = 220
 const resizeTargetMinimumSize = { fine: 12, coarse: 28 }
+const fileTreeWidthStore = createPanelWidthStore({
+  storageKey: "vykor.desktop.file-tree-width-px",
+  defaultPx: 300,
+  minPx: 220,
+  maxPx: 1200,
+})
 
 type FilesToolProps = {
   tabs: FileViewerTab[]
@@ -99,10 +108,22 @@ export function FilesTool({
   const [viewModeByPath, setViewModeByPath] = useState<Record<string, FileViewMode>>({})
   const [treeOpen, setTreeOpen] = useState(true)
   const treePanelRef = usePanelRef()
+  const fileTreeShellRef = useRef<HTMLElement | null>(null)
+  const filesGroupElementRef = useRef<HTMLDivElement | null>(null)
+  const treeTransitionCancelRef = useRef<(() => void) | null>(null)
+  const [fileTreeDefaultSizePx] = useState(() => fileTreeWidthStore.resolveDefault())
   const restoredProjectRef = useRef<string | null>(null)
   const handledOpenRequestRef = useRef<number | null>(null)
   const resolvedOpenRequestPathRef = useRef<string | null>(null)
   const attemptedPreviewPathRef = useRef<string | null>(null)
+
+  useEffect(
+    () => () => {
+      treeTransitionCancelRef.current?.()
+      treeTransitionCancelRef.current = null
+    },
+    []
+  )
 
   const fileEntries = useMemo(() => {
     const map = new Map<string, WorkspaceFileEntry>()
@@ -284,6 +305,15 @@ export function FilesTool({
     return () => window.clearTimeout(timer)
   }, [loadState, selectedProject?.path, restoreActivePath, restorePaths, tabs.length])
 
+  const handleTreeLayoutChanged = (
+    _layout: Record<string, number>,
+    meta: { isUserInteraction: boolean }
+  ): void => {
+    const size = treePanelRef.current?.getSize()
+    if (!size || !shouldPersistPanelWidth(meta, size.inPixels)) return
+    fileTreeWidthStore.persist(size.inPixels)
+  }
+
   const toggleTree = (): void => {
     const panel = treePanelRef.current
     if (!panel) {
@@ -291,6 +321,8 @@ export function FilesTool({
       return
     }
 
+    treeTransitionCancelRef.current?.()
+    treeTransitionCancelRef.current = beginPanelToggleTransition(filesGroupElementRef.current)
     if (panel.isCollapsed()) {
       panel.expand()
     } else {
@@ -324,7 +356,15 @@ export function FilesTool({
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col">
+    <section
+      ref={fileTreeShellRef}
+      className="flex h-full min-h-0 flex-col"
+      style={
+        {
+          "--file-tree-content-width": `${fileTreeDefaultSizePx}px`,
+        } as React.CSSProperties
+      }
+    >
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border/45 px-2.5">
         <FileBreadcrumb
           projectName={selectedProject.name}
@@ -391,7 +431,9 @@ export function FilesTool({
           id="desktop-files-tool"
           orientation="horizontal"
           className="min-h-0 flex-1"
+          elementRef={filesGroupElementRef}
           resizeTargetMinimumSize={resizeTargetMinimumSize}
+          onLayoutChanged={handleTreeLayoutChanged}
         >
           <Panel
             id="file-preview"
@@ -437,19 +479,32 @@ export function FilesTool({
           <Panel
             id="file-tree"
             panelRef={treePanelRef}
-            defaultSize={fileTreeDefaultWidth}
-            minSize={fileTreeMinimumWidth}
+            defaultSize={fileTreeDefaultSizePx}
+            minSize={fileTreeWidthStore.minPx}
             maxSize="45%"
             collapsedSize={0}
             collapsible
             groupResizeBehavior="preserve-pixel-size"
             className="min-h-0 overflow-hidden border-l border-border/45"
+            style={{ overflow: "hidden" }}
             onResize={(size) => {
+              if (
+                size.inPixels > 1 &&
+                !filesGroupElementRef.current?.hasAttribute("data-panel-animating")
+              ) {
+                fileTreeShellRef.current?.style.setProperty(
+                  "--file-tree-content-width",
+                  `${size.inPixels}px`
+                )
+              }
               const nextOpen = size.inPixels > 1
               setTreeOpen((current) => (current === nextOpen ? current : nextOpen))
             }}
           >
-            <div className="flex h-full min-h-0 flex-col">
+            <div
+              className="flex h-full min-h-0 flex-col"
+              style={{ width: "var(--file-tree-content-width)" }}
+            >
               <ProjectFileTree
                 rootPath={selectedProject.path}
                 paths={treePaths}

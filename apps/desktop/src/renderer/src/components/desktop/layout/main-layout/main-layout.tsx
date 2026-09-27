@@ -4,7 +4,7 @@ import {
   Group,
   Panel,
   type Layout,
-  useDefaultLayout,
+  type LayoutChangedMeta,
   useGroupRef,
   usePanelRef,
 } from "react-resizable-panels"
@@ -15,6 +15,7 @@ import { defaultSettingsSection } from "@renderer/components/desktop/settings-pa
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
+import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   selectActiveSessionId,
@@ -24,21 +25,23 @@ import {
 import { TitleBar } from "../title-bar"
 import { useDesktopWindowChrome } from "../use-desktop-window-chrome"
 import { MainLayoutContext } from "./main-layout-context"
+import { beginPanelToggleTransition } from "./panel-toggle-transition"
+import {
+  SIDEBAR_MAX_WIDTH_PX,
+  SIDEBAR_MIN_WIDTH_PX,
+  persistSidebarWidthPx,
+  resolveSidebarDefaultWidthPx,
+  shouldPersistSidebarWidth,
+} from "./sidebar-width"
 import { Sidebar } from "./sidebar"
 import { UtilityPanel, useUtilityPanelController } from "./utility-panel"
 
 const resizeTargetMinimumSize = { fine: 12, coarse: 28 }
-const sidebarDefaultWidth = 288
-const sidebarMinimumWidth = 266
 const conversationMinimumWidth = 350
 const utilityMinimumWidth = 320
 const workspaceMinimumWidth = conversationMinimumWidth + utilityMinimumWidth
-const defaultWorkspaceLayout: Layout = { conversation: 40, utility: 60 }
+const defaultWorkspaceLayout: Layout = { conversation: 50, utility: 50 }
 const collapsedWorkspaceLayout: Layout = { conversation: 100, utility: 0 }
-
-function isOpenWorkspaceLayout(layout: Layout | null | undefined): layout is Layout {
-  return Number(layout?.conversation) > 5 && Number(layout?.utility) > 5
-}
 
 export function MainLayout(): React.JSX.Element {
   const navigate = useNavigate()
@@ -65,31 +68,30 @@ export function MainLayout(): React.JSX.Element {
   const utilityPanelRef = usePanelRef()
   const workspaceGroupRef = useGroupRef()
   const contentRef = useRef<HTMLDivElement>(null)
+  const outerGroupElementRef = useRef<HTMLDivElement | null>(null)
+  const innerGroupElementRef = useRef<HTMLDivElement | null>(null)
+  const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
+  const [sidebarDefaultSizePx] = useState(resolveSidebarDefaultWidthPx)
+  const [sidebarMasked, setSidebarMasked] = useState(false)
   const { isMaximized, zoomLevel, zoomIn, zoomOut, resetZoom, minimize, toggleMaximize, close } =
     useDesktopWindowChrome()
-  const outerLayout = useDefaultLayout({
-    id: "desktop-shell-layout",
-    panelIds: ["sidebar", "workspace"],
-  })
-  const workspaceLayout = useDefaultLayout({
-    id: "desktop-workspace-layout",
-    panelIds: ["conversation", "utility"],
-  })
-  const workspaceDefaultLayout = isOpenWorkspaceLayout(workspaceLayout.defaultLayout)
-    ? workspaceLayout.defaultLayout
-    : defaultWorkspaceLayout
+  const collapseSidebar = useCallback((): void => {
+    sidebarTransitionCancelRef.current?.()
+    sidebarTransitionCancelRef.current = beginPanelToggleTransition(outerGroupElementRef.current)
+    setSidebarMasked(true)
+    sidebarPanelRef.current?.collapse()
+  }, [sidebarPanelRef])
   const utilityPanel = useUtilityPanelController({
     activeSessionId,
     selectedProjectId,
     sessionIds,
-    sidebarOpen,
-    defaultLayout: workspaceDefaultLayout,
+    defaultLayout: defaultWorkspaceLayout,
     collapsedLayout: collapsedWorkspaceLayout,
-    sidebarPanelRef,
     conversationPanelRef,
     utilityPanelRef,
     workspaceGroupRef,
-    onWorkspaceLayoutChanged: workspaceLayout.onLayoutChanged,
+    groupElementRef: innerGroupElementRef,
+    onCollapseSidebar: collapseSidebar,
   })
   const panelOpen = utilityPanel.open
   const utilityMaximized = utilityPanel.maximized
@@ -100,18 +102,22 @@ export function MainLayout(): React.JSX.Element {
   const openTerminal = utilityPanel.openTerminal
   const openUtilityTool = utilityPanel.openTool
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const sidebarSize = sidebarPanelRef.current?.getSize()
-      if (!sidebarSize) return
-      contentRef.current?.style.setProperty("--sidebar-width", `${sidebarSize.inPixels}px`)
-      setSidebarOpen((current) => {
-        const nextOpen = sidebarSize.inPixels > 1
-        return current === nextOpen ? current : nextOpen
-      })
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [sidebarPanelRef])
+  useEffect(
+    () => () => {
+      sidebarTransitionCancelRef.current?.()
+      sidebarTransitionCancelRef.current = null
+    },
+    []
+  )
+
+  const handleOuterLayoutChanged = useCallback(
+    (_layout: Layout, meta: LayoutChangedMeta): void => {
+      const size = sidebarPanelRef.current?.getSize()
+      if (!size || !shouldPersistSidebarWidth(meta, size.inPixels)) return
+      persistSidebarWidthPx(size.inPixels)
+    },
+    [sidebarPanelRef]
+  )
 
   const toggleSidebar = useCallback((): void => {
     const panel = sidebarPanelRef.current
@@ -120,10 +126,14 @@ export function MainLayout(): React.JSX.Element {
       return
     }
 
-    if (panel.isCollapsed()) {
-      panel.expand()
-    } else {
+    sidebarTransitionCancelRef.current?.()
+    sidebarTransitionCancelRef.current = beginPanelToggleTransition(outerGroupElementRef.current)
+    const collapsing = !panel.isCollapsed()
+    setSidebarMasked(collapsing)
+    if (collapsing) {
       panel.collapse()
+    } else {
+      panel.expand()
     }
   }, [sidebarPanelRef])
 
@@ -201,7 +211,12 @@ export function MainLayout(): React.JSX.Element {
     <div
       ref={contentRef}
       className="relative min-h-0 flex-1 overflow-visible"
-      style={{ "--sidebar-width": `${sidebarDefaultWidth}px` } as React.CSSProperties}
+      style={
+        {
+          "--sidebar-width": `${sidebarDefaultSizePx}px`,
+          "--sidebar-content-width": `${sidebarDefaultSizePx}px`,
+        } as React.CSSProperties
+      }
     >
       <div
         aria-hidden="true"
@@ -212,27 +227,48 @@ export function MainLayout(): React.JSX.Element {
         id="desktop-shell"
         orientation="horizontal"
         className="h-full min-h-0"
+        elementRef={outerGroupElementRef}
         resizeTargetMinimumSize={resizeTargetMinimumSize}
-        defaultLayout={outerLayout.defaultLayout}
-        onLayoutChanged={outerLayout.onLayoutChanged}
+        onLayoutChanged={handleOuterLayoutChanged}
       >
         <Panel
           id="sidebar"
           panelRef={sidebarPanelRef}
-          defaultSize={sidebarDefaultWidth}
-          minSize={sidebarMinimumWidth}
-          maxSize={420}
+          defaultSize={sidebarDefaultSizePx}
+          minSize={SIDEBAR_MIN_WIDTH_PX}
+          maxSize={SIDEBAR_MAX_WIDTH_PX}
           collapsedSize={0}
           collapsible
           groupResizeBehavior="preserve-pixel-size"
           className="h-full min-h-0 overflow-hidden"
+          style={{ overflow: "hidden" }}
           onResize={(size) => {
             contentRef.current?.style.setProperty("--sidebar-width", `${size.inPixels}px`)
+            // During an explicit open/close the sidebar content is held at its expanded
+            // width so it gets clipped by the shrinking panel instead of reflowing under
+            // the pointer; only live pointer/keyboard resizes update the content width.
+            // A collapsed panel (width 0) or an in-flight toggle must not resize the
+            // content, otherwise a window resize while collapsed would blank the sidebar.
+            if (size.inPixels > 1 && !outerGroupElementRef.current?.hasAttribute("data-panel-animating")) {
+              contentRef.current?.style.setProperty(
+                "--sidebar-content-width",
+                `${size.inPixels}px`
+              )
+            }
             const nextOpen = size.inPixels > 1
             setSidebarOpen((current) => (current === nextOpen ? current : nextOpen))
           }}
         >
-          {sidebar}
+          <div className="relative h-full" style={{ width: "var(--sidebar-content-width)" }}>
+            {sidebar}
+            <div
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute inset-0 z-20 bg-linear-to-l from-background/60 to-transparent transition-opacity duration-200 ease-out",
+                sidebarMasked ? "opacity-100" : "opacity-0"
+              )}
+            />
+          </div>
         </Panel>
         <PanelResizeHandle label="调整侧边栏宽度" />
         <Panel
@@ -253,6 +289,7 @@ export function MainLayout(): React.JSX.Element {
     <Group
       id="desktop-workspace"
       groupRef={workspaceGroupRef}
+      elementRef={innerGroupElementRef}
       orientation="horizontal"
       className="h-full min-h-0 w-full"
       resizeTargetMinimumSize={resizeTargetMinimumSize}
@@ -288,11 +325,12 @@ export function MainLayout(): React.JSX.Element {
       <Panel
         id="utility"
         panelRef={utilityPanelRef}
-        defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 60}%` : 0}
-        minSize={panelOpen || utilityMaximized ? utilityMinimumWidth : 0}
+          defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 50}%` : 0}
+        minSize={utilityMinimumWidth}
         maxSize={utilityMaximized ? "100%" : "70%"}
         collapsedSize={0}
         collapsible
+        disabled={!panelOpen}
         groupResizeBehavior="preserve-pixel-size"
         className="h-full min-h-0 overflow-hidden"
         onResize={(size) => {

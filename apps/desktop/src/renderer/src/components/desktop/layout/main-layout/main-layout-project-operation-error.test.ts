@@ -29,7 +29,6 @@ vi.mock("@tanstack/react-router", async () => {
 vi.mock("react-resizable-panels", () => ({
   Group: ({ children }: { children?: React.ReactNode }) => children,
   Panel: ({ children }: { children?: React.ReactNode }) => children,
-  useDefaultLayout: () => ({ defaultLayout: null, onLayoutChanged: vi.fn() }),
   useGroupRef: () => ({ current: null }),
   usePanelRef: () => ({ current: null }),
 }))
@@ -80,6 +79,8 @@ vi.mock("@renderer/components/desktop/layout/main-layout/utility-panel", () => (
     handleLayoutChanged: vi.fn(),
     handlePanelResize: vi.fn(),
     collapse: vi.fn(),
+    restore: vi.fn(),
+    toggleMaximized: vi.fn(),
     instanceKey: "test",
     scopeId: "test",
     fileOpenRequest: null,
