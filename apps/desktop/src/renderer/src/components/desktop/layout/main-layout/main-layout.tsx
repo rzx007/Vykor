@@ -5,7 +5,6 @@ import {
   Panel,
   type Layout,
   type LayoutChangedMeta,
-  useDefaultLayout,
   useGroupRef,
   usePanelRef,
 } from "react-resizable-panels"
@@ -43,10 +42,6 @@ const workspaceMinimumWidth = conversationMinimumWidth + utilityMinimumWidth
 const defaultWorkspaceLayout: Layout = { conversation: 40, utility: 60 }
 const collapsedWorkspaceLayout: Layout = { conversation: 100, utility: 0 }
 
-function isOpenWorkspaceLayout(layout: Layout | null | undefined): layout is Layout {
-  return Number(layout?.conversation) > 5 && Number(layout?.utility) > 5
-}
-
 export function MainLayout(): React.JSX.Element {
   const navigate = useNavigate()
   const router = useRouter()
@@ -73,29 +68,27 @@ export function MainLayout(): React.JSX.Element {
   const workspaceGroupRef = useGroupRef()
   const contentRef = useRef<HTMLDivElement>(null)
   const outerGroupElementRef = useRef<HTMLDivElement | null>(null)
+  const innerGroupElementRef = useRef<HTMLDivElement | null>(null)
   const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
   const [sidebarDefaultSizePx] = useState(resolveSidebarDefaultWidthPx)
   const { isMaximized, zoomLevel, zoomIn, zoomOut, resetZoom, minimize, toggleMaximize, close } =
     useDesktopWindowChrome()
-  const workspaceLayout = useDefaultLayout({
-    id: "desktop-workspace-layout",
-    panelIds: ["conversation", "utility"],
-  })
-  const workspaceDefaultLayout = isOpenWorkspaceLayout(workspaceLayout.defaultLayout)
-    ? workspaceLayout.defaultLayout
-    : defaultWorkspaceLayout
+  const collapseSidebar = useCallback((): void => {
+    sidebarTransitionCancelRef.current?.()
+    sidebarTransitionCancelRef.current = beginPanelToggleTransition(outerGroupElementRef.current)
+    sidebarPanelRef.current?.collapse()
+  }, [sidebarPanelRef])
   const utilityPanel = useUtilityPanelController({
     activeSessionId,
     selectedProjectId,
     sessionIds,
-    sidebarOpen,
-    defaultLayout: workspaceDefaultLayout,
+    defaultLayout: defaultWorkspaceLayout,
     collapsedLayout: collapsedWorkspaceLayout,
-    sidebarPanelRef,
     conversationPanelRef,
     utilityPanelRef,
     workspaceGroupRef,
-    onWorkspaceLayoutChanged: workspaceLayout.onLayoutChanged,
+    groupElementRef: innerGroupElementRef,
+    onCollapseSidebar: collapseSidebar,
   })
   const panelOpen = utilityPanel.open
   const utilityMaximized = utilityPanel.maximized
@@ -265,6 +258,7 @@ export function MainLayout(): React.JSX.Element {
     <Group
       id="desktop-workspace"
       groupRef={workspaceGroupRef}
+      elementRef={innerGroupElementRef}
       orientation="horizontal"
       className="h-full min-h-0 w-full"
       resizeTargetMinimumSize={resizeTargetMinimumSize}
@@ -301,10 +295,11 @@ export function MainLayout(): React.JSX.Element {
         id="utility"
         panelRef={utilityPanelRef}
         defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 60}%` : 0}
-        minSize={panelOpen || utilityMaximized ? utilityMinimumWidth : 0}
+        minSize={utilityMinimumWidth}
         maxSize={utilityMaximized ? "100%" : "70%"}
         collapsedSize={0}
         collapsible
+        disabled={!panelOpen}
         groupResizeBehavior="preserve-pixel-size"
         className="h-full min-h-0 overflow-hidden"
         onResize={(size) => {
