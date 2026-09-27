@@ -213,7 +213,7 @@ export function shouldPersistSidebarWidth(
 - [ ] **Step 4: 运行测试确认通过**
 
 Run: `pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/layout/main-layout/sidebar-width.test.ts`
-Expected: PASS（12 个用例）。
+Expected: PASS（11 个用例）。
 
 - [ ] **Step 5: 提交**
 
