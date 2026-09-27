@@ -1,5 +1,5 @@
 import { Bot, ListFilter, MoreHorizontal, PanelRight, ShieldAlert } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
@@ -70,6 +70,7 @@ import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
 import { ConversationTranscriptSkeletonOverlay } from "./transcript/conversation-transcript-skeleton"
 import { ConversationPreviewRail } from "./transcript/conversation-preview-rail"
+import { ConversationScrollHold } from "./conversation-scroll-hold"
 import { ConversationTranscript } from "./transcript/transcript"
 import { useShowReasoning } from "./use-show-reasoning"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./types"
@@ -100,6 +101,7 @@ function ConversationPane({
     error?: string
   } | null>(null)
   const navigate = useNavigate()
+  const messageViewportRef = useRef<HTMLDivElement>(null)
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
   const activeSession = useDesktopSessionStore(selectActiveSessionRecord)
@@ -549,7 +551,7 @@ function ConversationPane({
                   sessionView && "animate-in duration-200 fade-in-0 motion-reduce:animate-none"
                 )}
               >
-                <MessageScrollerViewport className="overflow-x-hidden">
+                <MessageScrollerViewport ref={messageViewportRef} className="overflow-x-hidden">
                   <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
                     {openingSession && !sessionView ? null : (
                       <ConversationTranscript
@@ -590,6 +592,7 @@ function ConversationPane({
                 runs={sessionView?.runs ?? []}
                 showReasoning={showReasoning}
               />
+              <ConversationScrollHold running={running} viewportRef={messageViewportRef} />
             </MessageScrollerProvider>
             <ConversationTranscriptSkeletonOverlay
               key={activeSessionId}

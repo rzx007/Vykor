@@ -120,6 +120,16 @@ export function ConversationTranscript({
             (Boolean(run.inputId) && run.inputId === entry.turn.inputId)
         )
         const userMessage = entry.turn.userMessage
+        const turnUsageRuns = runs.filter(
+          (run) =>
+            entry.turn.runIds.includes(run.id) && readSessionModelUsage(run.metadata)?.incomplete
+        )
+        const turnPlan = planTurnBlocks(entry.turn, {
+          streaming: running && entry === lastTurn,
+        })
+        const lastAssistantKey = [...turnPlan]
+          .reverse()
+          .find((item) => item.kind === "assistant")?.key
         return (
           <Fragment key={entry.turn.id}>
             {userMessage ? (
@@ -144,7 +154,7 @@ export function ConversationTranscript({
                 />
               </MessageScrollerItem>
             ) : null}
-            {planTurnBlocks(entry.turn, { streaming: running && entry === lastTurn }).map((item) =>
+            {turnPlan.map((item) =>
               item.kind === "divider" && item.phase ? (
                 <MessageScrollerItem key={item.key} messageId={item.messageId}>
                   <ContextCompactionDivider
@@ -174,25 +184,34 @@ export function ConversationTranscript({
                       onFork={onForkAssistantMessage}
                     />
                   ) : null}
+                  {item.key === lastAssistantKey &&
+                  (turnUsageRuns.length > 0 || turnFailures.length > 0) ? (
+                    <div className="mt-3 flex flex-col gap-3">
+                      {turnUsageRuns.map((run) => (
+                        <ModelUsageNotice key={run.id} metadata={run.metadata} />
+                      ))}
+                      {turnFailures.map((run) => (
+                        <RunErrorNotice key={run.id} error={run.error} />
+                      ))}
+                    </div>
+                  ) : null}
                 </MessageScrollerItem>
               )
             )}
-            {turnFailures.map((run) => (
-              <MessageScrollerItem key={run.id} messageId={`run-error-${run.id}`}>
-                <RunErrorNotice error={run.error} />
-              </MessageScrollerItem>
-            ))}
-            {runs
-              .filter(
-                (run) =>
-                  entry.turn.runIds.includes(run.id) &&
-                  readSessionModelUsage(run.metadata)?.incomplete
-              )
-              .map((run) => (
-                <MessageScrollerItem key={`usage-${run.id}`} messageId={`usage-${run.id}`}>
-                  <ModelUsageNotice metadata={run.metadata} />
-                </MessageScrollerItem>
-              ))}
+            {lastAssistantKey === undefined ? (
+              <>
+                {turnUsageRuns.map((run) => (
+                  <MessageScrollerItem key={`usage-${run.id}`} messageId={`usage-${run.id}`}>
+                    <ModelUsageNotice metadata={run.metadata} />
+                  </MessageScrollerItem>
+                ))}
+                {turnFailures.map((run) => (
+                  <MessageScrollerItem key={run.id} messageId={`run-error-${run.id}`}>
+                    <RunErrorNotice error={run.error} />
+                  </MessageScrollerItem>
+                ))}
+              </>
+            ) : null}
           </Fragment>
         )
       })}
