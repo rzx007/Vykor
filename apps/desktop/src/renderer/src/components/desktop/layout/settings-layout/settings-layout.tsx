@@ -8,6 +8,7 @@ import {
 } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
+import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { selectActiveSessionId } from "@renderer/stores/desktop-session/selectors"
 import { TitleBar } from "../title-bar"
@@ -43,6 +44,7 @@ export function SettingsLayout(): React.JSX.Element {
   const sidebarGroupElementRef = useRef<HTMLDivElement | null>(null)
   const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
   const [sidebarDefaultSizePx] = useState(() => sidebarWidthStore.resolveDefault())
+  const [sidebarMasked, setSidebarMasked] = useState(false)
 
   useEffect(
     () => () => {
@@ -84,8 +86,10 @@ export function SettingsLayout(): React.JSX.Element {
     }
     sidebarTransitionCancelRef.current?.()
     sidebarTransitionCancelRef.current = beginPanelToggleTransition(sidebarGroupElementRef.current)
-    if (panel.isCollapsed()) panel.expand()
-    else panel.collapse()
+    const collapsing = !panel.isCollapsed()
+    setSidebarMasked(collapsing)
+    if (collapsing) panel.collapse()
+    else panel.expand()
   }, [sidebarPanelRef])
 
   useDesktopShortcuts({
@@ -175,7 +179,10 @@ export function SettingsLayout(): React.JSX.Element {
             setSidebarOpen(size.inPixels > 1)
           }}
         >
-          <div className="h-full" style={{ width: "var(--settings-sidebar-content-width)" }}>
+          <div
+            className="relative h-full"
+            style={{ width: "var(--settings-sidebar-content-width)" }}
+          >
             <SettingsSidebar
               selectedSection={selectedSection}
               onSelectSection={(nextSection) =>
@@ -185,6 +192,13 @@ export function SettingsLayout(): React.JSX.Element {
                 })
               }
               onClose={openCurrentConversation}
+            />
+            <div
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute inset-0 z-20 bg-linear-to-l from-black/40 to-transparent transition-opacity duration-200 ease-out",
+                sidebarMasked ? "opacity-100" : "opacity-0"
+              )}
             />
           </div>
         </Panel>

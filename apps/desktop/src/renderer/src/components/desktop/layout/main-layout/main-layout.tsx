@@ -15,6 +15,7 @@ import { defaultSettingsSection } from "@renderer/components/desktop/settings-pa
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
+import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   selectActiveSessionId,
@@ -71,11 +72,13 @@ export function MainLayout(): React.JSX.Element {
   const innerGroupElementRef = useRef<HTMLDivElement | null>(null)
   const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
   const [sidebarDefaultSizePx] = useState(resolveSidebarDefaultWidthPx)
+  const [sidebarMasked, setSidebarMasked] = useState(false)
   const { isMaximized, zoomLevel, zoomIn, zoomOut, resetZoom, minimize, toggleMaximize, close } =
     useDesktopWindowChrome()
   const collapseSidebar = useCallback((): void => {
     sidebarTransitionCancelRef.current?.()
     sidebarTransitionCancelRef.current = beginPanelToggleTransition(outerGroupElementRef.current)
+    setSidebarMasked(true)
     sidebarPanelRef.current?.collapse()
   }, [sidebarPanelRef])
   const utilityPanel = useUtilityPanelController({
@@ -125,10 +128,12 @@ export function MainLayout(): React.JSX.Element {
 
     sidebarTransitionCancelRef.current?.()
     sidebarTransitionCancelRef.current = beginPanelToggleTransition(outerGroupElementRef.current)
-    if (panel.isCollapsed()) {
-      panel.expand()
-    } else {
+    const collapsing = !panel.isCollapsed()
+    setSidebarMasked(collapsing)
+    if (collapsing) {
       panel.collapse()
+    } else {
+      panel.expand()
     }
   }, [sidebarPanelRef])
 
@@ -254,8 +259,15 @@ export function MainLayout(): React.JSX.Element {
             setSidebarOpen((current) => (current === nextOpen ? current : nextOpen))
           }}
         >
-          <div className="h-full" style={{ width: "var(--sidebar-content-width)" }}>
+          <div className="relative h-full" style={{ width: "var(--sidebar-content-width)" }}>
             {sidebar}
+            <div
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute inset-0 z-20 bg-linear-to-l from-black/40 to-transparent transition-opacity duration-200 ease-out",
+                sidebarMasked ? "opacity-100" : "opacity-0"
+              )}
+            />
           </div>
         </Panel>
         <PanelResizeHandle label="调整侧边栏宽度" />
