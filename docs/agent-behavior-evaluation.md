@@ -32,7 +32,7 @@ J3 先让 Agent 完成 A 并结束第一轮对话，再通过公开 `loadHistory
 
 `VYKOR_EVAL_MODE=live` 使用 Vykor 已配置的 provider 客户端。当前评测强制选择 `opencode-go / deepseek-v4.1-flash`，从对应的本地 credential 读取凭据；配置不匹配或凭据缺失时会在发请求前终止。配置文件限制每批最多 36 个样本、每样本最多 25 次逻辑请求、全批最多 500 次逻辑请求、每样本最多 20 轮、单次普通响应最多 8,192 token、截止时间最多 120 秒。`maxRequests` 统计 `streamMessage` 调用；Vykor 适配器最多重试 3 次，OpenAI SDK 最多再重试 2 次，所以保守上限为每次逻辑请求 12 次 HTTP 尝试。报告明确标出 provider 费用未知、缺失 usage 未知；不会记录凭据、设置内容或 header。
 
-限定 C3 smoke（2026-09-25）使用 1 个样本，最多 4 次逻辑请求、3 轮、单次普通响应 1,024 token、90 秒截止。结果文件：[C3 live smoke](C:/Users/ruanz/AppData/Local/Temp/vykor-live-c3-smoke-d645c5ac-49a9-46b5-adfd-b37ec1c983b5.json)。该次运行 exit 0，Agent 没有重复运行测试；provider 回报输入 1,936 token、输出 156 token，账单金额未知。这只证明该模型和 provider 能走通这条单一流程。
+限定 C3 smoke（2026-09-25）使用 1 个样本，最多 4 次逻辑请求、3 轮、单次普通响应 1,024 token、90 秒截止。结果文件写在系统临时目录，文件名为 `vykor-live-c3-smoke-d645c5ac-49a9-46b5-adfd-b37ec1c983b5.json`。该次运行 exit 0，Agent 没有重复运行测试；provider 回报输入 1,936 token、输出 156 token，账单金额未知。这只证明该模型和 provider 能走通这条单一流程。
 
 首轮阶段 A live 运行只到 12/36，后确认合成工具 schema、源码诊断和资料目标不够真实，因此不作为模型证据。修复夹具后完整运行了 36 个样本、90 次逻辑请求。该 raw JSON 记录的 Git revision 为 `b9ce6e42`、fixture 字段为 `agent-behavior-v3`；当时 fixture 更新仍在工作区未提交，所以两个字段不能单独完整还原运行时的测试文件状态。初始 raw JSON 有 26 passed、6 pending_review、4 failed，测试进程因 4 条验证器误判而退出 1；核对工具轨迹并用定向回归复核后，4 条分别是 C1 两条修后只跑一次测试、C3 已知通过结果措辞、J2 用“退出状态尚不可得”表达未知状态，都符合用例要求。raw JSON 原样保留，未改写测试结果字段；相应 v4 fixture 源码会随最终交付提交，后续新 run 会记录正确的 v4 标签。有效结论为 30 条通过、6 条待人工内容评分、0 条确认的功能失败。
 
