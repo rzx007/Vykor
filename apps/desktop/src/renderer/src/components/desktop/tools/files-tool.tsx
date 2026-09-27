@@ -1,7 +1,6 @@
 import {
   BookOpenText,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   Code2,
   Copy,
@@ -30,6 +29,15 @@ import { Group, Panel, usePanelRef } from "react-resizable-panels"
 
 import { OpenWithSubmenu } from "@renderer/components/desktop/open-with"
 import { DesktopEmptyState } from "@renderer/components/desktop/desktop-empty-state"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@renderer/components/motion/breadcrumb"
+import { cn } from "@renderer/lib/utils"
 import {
   FileViewer,
   type FileSearchMatch,
@@ -535,37 +543,46 @@ function FileBreadcrumb({
   const rootName = scope === "extra-root" && rootLabel ? rootLabel : projectName
   const normalizedPath = path.trim() || "/"
   const segments = normalizedPath === "/" ? [] : normalizedPath.split("/").filter(Boolean)
+  const labels = [rootName, ...(segments.length === 0 ? ["/"] : segments)]
 
   return (
-    <nav
-      aria-label="文件路径"
-      className="text-ui-small flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-ui-muted"
-    >
-      <span className="max-w-40 shrink-0 truncate text-ui-foreground" title={rootName}>
-        {rootName}
-      </span>
-      {segments.length === 0 ? (
-        <>
-          <ChevronRight className="size-3.5 shrink-0 text-ui-muted/70" strokeWidth={1.8} />
-          <span className="font-medium text-ui-foreground">/</span>
-        </>
-      ) : (
-        segments.map((segment, index) => {
-          const last = index === segments.length - 1
+    <Breadcrumb className="min-w-0 flex-1 overflow-hidden">
+      <BreadcrumbList
+        maxItems={4}
+        overflowLabel="显示被折叠的路径"
+        className="text-ui-small flex-nowrap"
+      >
+        {labels.map((label, index) => {
+          const last = index === labels.length - 1
+          const isRoot = index === 0
+          const key = isRoot ? "root" : `${label}-${index}`
           return (
-            <span key={`${segment}-${index}`} className="flex min-w-0 items-center gap-1">
-              <ChevronRight className="size-3.5 shrink-0 text-ui-muted/70" strokeWidth={1.8} />
-              <span
-                className={last ? "truncate font-semibold text-ui-foreground" : "truncate"}
-                title={segment}
-              >
-                {segment}
-              </span>
-            </span>
+            <BreadcrumbItem key={key}>
+              {index > 0 && <BreadcrumbSeparator className="text-ui-muted/70" />}
+              {last ? (
+                <BreadcrumbPage
+                  title={label}
+                  className="text-ui-small font-semibold text-ui-foreground"
+                >
+                  {label}
+                </BreadcrumbPage>
+              ) : (
+                <BreadcrumbLink
+                  tabIndex={-1}
+                  title={label}
+                  className={cn(
+                    "text-ui-small text-ui-muted hover:bg-transparent",
+                    isRoot && "max-w-40 shrink-0"
+                  )}
+                >
+                  <span className="truncate">{label}</span>
+                </BreadcrumbLink>
+              )}
+            </BreadcrumbItem>
           )
-        })
-      )}
-    </nav>
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
   )
 }
 
