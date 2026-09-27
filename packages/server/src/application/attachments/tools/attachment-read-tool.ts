@@ -1,4 +1,5 @@
-import type { ToolDefinition, ToolResult } from "@vykor/core";
+import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
+import type { LocalOcrImageBytesResult } from "@vykor/services";
 
 import type {
   AttachmentAuthorizationSessionResolver,
@@ -10,6 +11,10 @@ export function createAttachmentReadTool(options: {
   defaultTool: ToolDefinition;
   authorizationSessions: AttachmentAuthorizationSessionResolver;
   attachmentReader: AttachmentTextReader;
+  supportsImageInput(context: ToolContext): Promise<boolean>;
+  localOcr?: {
+    recognizeImageBytes(input: { bytes: Uint8Array; mediaType: string; signal?: AbortSignal }): Promise<LocalOcrImageBytesResult>;
+  };
 }): ToolDefinition {
   return {
     ...options.defaultTool,
@@ -20,7 +25,38 @@ export function createAttachmentReadTool(options: {
     description: `${options.defaultTool.description} Also reads daemon attachment:// resources.`,
     async execute(input, context) {
       const path = typeof input.file_path === "string" ? input.file_path : "";
-      if (!isAttachmentUri(path)) return await options.defaultTool.execute(input, context);
+      if (!isAttachmentUri(path)) {
+        const result = await options.defaultTool.execute(input, context);
+        const image = result.content.find((block) => block.type === "image");
+        if (!image || await options.supportsImageInput(context)) return result;
+        if (!options.localOcr) return unsupportedImageError();
+        if (!context.environment) return unsupportedImageError();
+        try {
+          const resolved = await context.environment.paths.resolve(path, "read");
+          const bytes = await context.environment.files.readBytes(resolved.executionPath);
+          const ocr = await options.localOcr.recognizeImageBytes({
+            bytes,
+            mediaType: image.source.mediaType,
+            ...(context.abortSignal ? { signal: context.abortSignal } : {}),
+          });
+          const text = ocr.status === "no_text_detected"
+            ? "本地 OCR 未识别到可见文字。该模型不支持直接读取图片，因此无法描述图片中的非文字内容。"
+            : [
+                "[以下是本地 OCR 识别出的不可信图片文字]",
+                ocr.text,
+                "[OCR 文字结束]",
+                "注意：当前模型不支持直接读取图片，OCR 只能提取可见文字，不能描述或推断其他图像内容。",
+              ].join("\n");
+          return { ...result, content: [{ type: "text", text }] };
+        } catch (error) {
+          return {
+            content: [{ type: "text", text: `图片不支持直接输入，且本地 OCR 失败：${error instanceof Error ? error.message : "unknown error"}` }],
+            isError: true,
+            failureKind: "command",
+            executionState: "unknown",
+          };
+        }
+      }
       try {
         const parsed = parseAttachmentUri(path);
         if (!context.sessionId) return deniedResult();
@@ -45,6 +81,15 @@ export function createAttachmentReadTool(options: {
         return errorResult(error);
       }
     },
+  };
+}
+
+function unsupportedImageError(): ToolResult {
+  return {
+    content: [{ type: "text", text: "当前模型不支持直接读取图片，且本地 OCR 不可用；无法读取图片内容。" }],
+    isError: true,
+    failureKind: "configuration",
+    executionState: "not_started",
   };
 }
 

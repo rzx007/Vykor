@@ -112,6 +112,7 @@ import {
   createAttachmentTextReader,
 } from "./attachments/tools/attachment-access.js";
 import { createAttachmentReadTool } from "./attachments/tools/attachment-read-tool.js";
+import { supportsNativeImageInput } from "./attachments/routing/attachment-capabilities.js";
 import {
   createDaemonImageGenerationTool,
   createDaemonImageToTextTool,
@@ -498,6 +499,9 @@ export class DaemonApplication implements DurableAgentApplication {
             defaultTool: fileReadTool,
             authorizationSessions: attachmentAuthorizationSessions,
             attachmentReader,
+            supportsImageInput: async (context) =>
+              supportsNativeImageInput(context, await this.modelCatalog.load()),
+            localOcr: this.localOcr,
           }),
         ],
         trustedToolOverrides: ["Read"],

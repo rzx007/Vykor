@@ -44,6 +44,12 @@ export interface LocalOcrResult {
   durationMs: number;
 }
 
+export interface LocalOcrImageBytesResult {
+  status: "completed" | "no_text_detected";
+  text: string;
+  lineCount: number;
+}
+
 export interface LocalOcrServiceOptions {
   resolveAsset(assetId: string, signal?: AbortSignal): Promise<LocalOcrAsset>;
   repository: LocalOcrRepresentationRepository;
@@ -77,6 +83,26 @@ export class LocalOcrService {
     const work = this.run(asset, cacheKey, request);
     this.inflight.set(key, work);
     try { return await work; } finally { this.inflight.delete(key); }
+  }
+
+  async recognizeImageBytes(input: {
+    bytes: Uint8Array;
+    mediaType: string;
+    signal?: AbortSignal;
+  }): Promise<LocalOcrImageBytesResult> {
+    input.signal?.throwIfAborted();
+    const normalized = await this.normalize(input.bytes, input.mediaType);
+    input.signal?.throwIfAborted();
+    const result = await this.recognizeWithOneRetry(normalized, {
+      assetId: "inline-image",
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+    const lines = result.lines.filter((line) => line.text.trim().length > 0);
+    return {
+      status: lines.length > 0 ? "completed" : "no_text_detected",
+      text: lines.map((line) => line.text).join("\n").slice(0, 100_000),
+      lineCount: lines.length,
+    };
   }
 
   close(): Promise<void> {

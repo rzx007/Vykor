@@ -7,6 +7,27 @@ import {
 import { LocalOcrError } from "../local-ocr-errors.js";
 
 describe("LocalOcrService", () => {
+  it("recognizes image bytes without requiring a stored attachment", async () => {
+    const engine = {
+      recognize: vi.fn(async () => ({
+        lines: [{ text: "hello", confidence: 0.99 }],
+        timing: { totalMs: 1 },
+        modelProfile: "small",
+      })),
+      close: vi.fn(async () => undefined),
+    };
+    const service = new LocalOcrService({
+      engine,
+      repository: memoryRepository(),
+      resolveAsset: async () => { throw new Error("should not resolve a stored asset"); },
+      normalize: async (bytes) => ({ bytes, mediaType: "image/png", width: 1, height: 1, normalized: false }),
+    });
+
+    await expect(service.recognizeImageBytes({ bytes: new Uint8Array([1]), mediaType: "image/png" }))
+      .resolves.toMatchObject({ status: "completed", text: "hello", lineCount: 1 });
+    expect(engine.recognize).toHaveBeenCalledOnce();
+  });
+
   it("caches completed OCR by asset hash and processor inputs", async () => {
     const records = new Map<string, any>();
     const repository: LocalOcrRepresentationRepository = {
