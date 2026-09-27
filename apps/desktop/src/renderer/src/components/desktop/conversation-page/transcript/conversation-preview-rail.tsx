@@ -34,7 +34,7 @@ export function ConversationPreviewRail({
 }): React.JSX.Element | null {
   const reduce = useReducedMotion()
   const { scrollToMessage } = useMessageScroller()
-  const { currentAnchorId } = useMessageScrollerVisibility()
+  const { visibleMessageIds } = useMessageScrollerVisibility()
 
   const items = useMemo(() => {
     const visibleParts = visibleTranscriptParts(parts, showReasoning)
@@ -75,9 +75,8 @@ export function ConversationPreviewRail({
   )
 
   const showRail = shouldShowConversationRail(items.length, size.width)
-  const activeId = items.some((item) => item.id === currentAnchorId)
-    ? (currentAnchorId as string)
-    : items.at(-1)?.id
+  const activeId =
+    visibleMessageIds.find((id) => items.some((item) => item.id === id)) ?? items.at(-1)?.id
 
   return (
     <div ref={containerRef} className="pointer-events-none absolute inset-0 z-20">
