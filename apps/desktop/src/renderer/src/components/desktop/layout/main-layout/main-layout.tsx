@@ -206,7 +206,12 @@ export function MainLayout(): React.JSX.Element {
     <div
       ref={contentRef}
       className="relative min-h-0 flex-1 overflow-visible"
-      style={{ "--sidebar-width": `${sidebarDefaultSizePx}px` } as React.CSSProperties}
+      style={
+        {
+          "--sidebar-width": `${sidebarDefaultSizePx}px`,
+          "--sidebar-content-width": `${sidebarDefaultSizePx}px`,
+        } as React.CSSProperties
+      }
     >
       <div
         aria-hidden="true"
@@ -231,13 +236,27 @@ export function MainLayout(): React.JSX.Element {
           collapsible
           groupResizeBehavior="preserve-pixel-size"
           className="h-full min-h-0 overflow-hidden"
+          style={{ overflow: "hidden" }}
           onResize={(size) => {
             contentRef.current?.style.setProperty("--sidebar-width", `${size.inPixels}px`)
+            // During an explicit open/close the sidebar content is held at its expanded
+            // width so it gets clipped by the shrinking panel instead of reflowing under
+            // the pointer; only live pointer/keyboard resizes update the content width.
+            // A collapsed panel (width 0) or an in-flight toggle must not resize the
+            // content, otherwise a window resize while collapsed would blank the sidebar.
+            if (size.inPixels > 1 && !outerGroupElementRef.current?.hasAttribute("data-panel-animating")) {
+              contentRef.current?.style.setProperty(
+                "--sidebar-content-width",
+                `${size.inPixels}px`
+              )
+            }
             const nextOpen = size.inPixels > 1
             setSidebarOpen((current) => (current === nextOpen ? current : nextOpen))
           }}
         >
-          {sidebar}
+          <div className="h-full" style={{ width: "var(--sidebar-content-width)" }}>
+            {sidebar}
+          </div>
         </Panel>
         <PanelResizeHandle label="调整侧边栏宽度" />
         <Panel
