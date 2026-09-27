@@ -39,8 +39,8 @@
 
 1. 结构不变：外层 `Group`（`sidebar|workspace`）与内层 `Group`（`conversation|utility`）保留；不新增自定义列或自定义手柄。sidebar 拖拽、键盘调整、`aria-*`、命中热区全部继续由 RRP `Separator` 提供。
 2. sidebar 宽度用像素持久化：
-   - 默认 288px、最小 266px、最大 420px（沿用现值）。
-   - `defaultSize` 取"同步读到的持久化像素值 ?? 288"（在 render 期经 `useState` 初始化函数读取），首帧即目标宽度。
+   - 默认 320px、最小 266px、最大 420px（默认明显高于最小，避免"展开即最小值"的观感）。
+   - `defaultSize` 取"同步读到的持久化像素值 ?? 320"（在 render 期经 `useState` 初始化函数读取），首帧即目标宽度。
    - 删除外层 `useDefaultLayout("desktop-shell-layout")`，从而百分比不再覆盖像素 `defaultSize`。
    - 用户在 `Separator` 上拖拽/键盘改宽后，外层 `Group` 的 `onLayoutChanged(layout, meta)` 在 `meta.isUserInteraction === true` 且 `sidebarPanelRef.current.getSize().inPixels > 1` 时，持久化该像素值。窗口缩放（`isUserInteraction === false`）不写。
    - 持久化键 `vykor.desktop.workspace-sidebar-width-px`，值形如 `312`（原始十进制字符串）；脏数据回退默认值。
@@ -50,7 +50,7 @@
 5. 非开合路径不加过渡：窗口原生缩放、用户拖拽分隔线、切会话（scope 变更）应用已存布局时，属性必须不存在。切换 scope 的 `group.setLayout` 之前先 `cancel()`。
 6. 首帧正确：外/内两个 `Group` 都不再使用 `useDefaultLayout`；首帧布局由同步状态得出：
    - 外层：sidebar `defaultSize` px，`workspace` 自动填充。
-   - 内层 `defaultLayout` 三态（沿用现状）：`maximized → {conversation:0,utility:100}`、`open → 仓库内的 {conversation,utility}`、否则 `{conversation:100,utility:0}`。
+   - 内层 `defaultLayout` 三态（沿用现状）：`maximized → {conversation:0,utility:100}`、`open → 仓库内的 {conversation,utility}`、否则 `{conversation:100,utility:0}`。无持久化时的默认展开比例为 `{conversation:50, utility:50}`（会话区与右侧栏 5:5）。
    - RRP 挂载后不接受 `defaultLayout` 变更，故挂载后不得用 `setLayout` 去"修正"首帧布局。
 7. 冷启动恢复宽度：
    - sidebar：靠 item 2 的像素 `defaultSize` 首帧到位。
@@ -80,7 +80,7 @@
 
 新增（放在 `main-layout/` 下，2 个文件）：
 
-- `sidebar-width.ts`：常量（默认 288 / 最小 266 / 最大 420）+ 纯函数 `readStoredSidebarWidthPx(): number | null`、`clampSidebarWidthPx(width): number`、`persistSidebarWidthPx(width): void`。存原始十进制字符串。可单测。
+- `sidebar-width.ts`：常量（默认 320 / 最小 266 / 最大 420）+ 纯函数 `readStoredSidebarWidthPx(): number | null`、`clampSidebarWidthPx(width): number`、`persistSidebarWidthPx(width): void`。存原始十进制字符串。可单测。
 - `panel-toggle-transition.ts`：`beginPanelToggleTransition(groupElement: HTMLElement | null): () => void`——加 `data-panel-animating="true"`、起 240ms 定时器移除、返回 `cancel()`（清定时器 + 移除属性）。纯 DOM 操作，可在 jsdom 单测（用 `vi.useFakeTimers()`）。
 
 修改：
