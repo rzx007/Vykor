@@ -196,7 +196,7 @@ export function SettingsLayout(): React.JSX.Element {
             <div
               aria-hidden="true"
               className={cn(
-                "pointer-events-none absolute inset-0 z-20 bg-linear-to-l from-black/40 to-transparent transition-opacity duration-200 ease-out",
+                "pointer-events-none absolute inset-0 z-20 bg-linear-to-l from-background/60 to-transparent transition-opacity duration-200 ease-out",
                 sidebarMasked ? "opacity-100" : "opacity-0"
               )}
             />
