@@ -119,6 +119,8 @@ export function useUtilityPanelController({
   const [reviewRequest, setReviewRequest] = useState<ScopedReviewRequest | null>(null)
 
   const toggleTransitionCancelRef = useRef<(() => void) | null>(null)
+  const maximizedRef = useRef(maximized)
+  const skipMaximizeTransitionRef = useRef(false)
 
   const runAnimatedLayoutChange = useCallback(
     (apply: () => void): void => {
@@ -180,6 +182,7 @@ export function useUtilityPanelController({
     setStateScopeId(scopeId)
     setLayout(nextLayout)
     setOpen(nextView.open)
+    skipMaximizeTransitionRef.current = nextView.maximized !== maximizedRef.current
     setMaximized(nextView.maximized)
 
     const frame = window.requestAnimationFrame(() => {
@@ -332,6 +335,18 @@ export function useUtilityPanelController({
   )
 
   useEffect(() => {
+    maximizedRef.current = maximized
+  }, [maximized])
+
+  useEffect(() => {
+    const skip = skipMaximizeTransitionRef.current
+    skipMaximizeTransitionRef.current = false
+    if (skip) {
+      toggleTransitionCancelRef.current?.()
+      toggleTransitionCancelRef.current = null
+      return
+    }
+
     const group = workspaceGroupRef.current
     if (!group) return
 
