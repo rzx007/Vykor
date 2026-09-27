@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef } from "react"
-import { isHoveringPointer } from "@/lib/touch"
+import { isHoveringPointer } from "@renderer/lib/touch"
 
 interface BoundaryEvent {
   pointerId: number

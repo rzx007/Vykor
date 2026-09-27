@@ -16,6 +16,7 @@ import { useDismiss } from "@renderer/lib/hooks/use-dismiss"
 import { useHoverGesture } from "@renderer/lib/hooks/use-hover-gesture"
 import { useTapGesture } from "@renderer/lib/hooks/use-tap-gesture"
 import { cn } from "@renderer/lib/utils"
+import { resolveTickScale } from "./preview-rail-scale"
 
 export interface PreviewRailItem {
   id: string
@@ -39,6 +40,9 @@ export interface PreviewRailProps {
   showPreview?: boolean
   previewSide?: "before" | "after"
   highlightActive?: boolean
+  activeScale?: number
+  tickClassName?: string
+  activeTickClassName?: string
   itemSize?: number
   children?: ReactNode
   className?: string
@@ -80,6 +84,9 @@ export function PreviewRail({
   showPreview = true,
   previewSide = "after",
   highlightActive = false,
+  activeScale = 1,
+  tickClassName = "text-muted-foreground",
+  activeTickClassName = "text-foreground",
   itemSize = 24,
   children,
   className,
@@ -113,7 +120,8 @@ export function PreviewRail({
     ? requestedActiveId
     : (items[0]?.id ?? "")
   const displayedId = hoveredId ?? pinnedId ?? focusedId ?? ""
-  const highlightedId = displayedId || (highlightActive ? selectedId : "")
+  const hovering = displayedId !== ""
+  const highlightedId = hovering ? displayedId : highlightActive ? selectedId : ""
   const displayedIndex = items.findIndex((item) => item.id === highlightedId)
   const rowTemplate = items.length ? `repeat(${items.length}, ${itemSize}px)` : undefined
   const isHorizontal = orientation === "horizontal"
@@ -162,7 +170,7 @@ export function PreviewRail({
           const highlighted = item.id === highlightedId
           const distance =
             displayedIndex < 0 ? Number.POSITIVE_INFINITY : Math.abs(index - displayedIndex)
-          const scale = highlighted ? 1 : distance === 1 ? 0.68 : distance === 2 ? 0.44 : 0.25
+          const scale = resolveTickScale(highlighted, hovering, distance, activeScale)
 
           const itemContent = (
             <>
@@ -174,14 +182,15 @@ export function PreviewRail({
                 className={cn(
                   "block bg-current",
                   isHorizontal ? "h-12 w-0.5 origin-bottom" : "h-0.5 w-12 origin-left",
-                  highlighted ? "text-foreground" : undefined
+                  highlighted ? activeTickClassName : undefined
                 )}
               />
             </>
           )
 
           const sharedClassName = cn(
-            "relative flex text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+            "relative flex focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+            tickClassName,
             isHorizontal ? "h-12 w-6 items-end justify-center" : "h-6 w-12 items-center"
           )
           const sharedStyle = isHorizontal ? { width: itemSize } : { height: itemSize }

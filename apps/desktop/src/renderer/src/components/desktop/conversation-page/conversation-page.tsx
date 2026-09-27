@@ -69,6 +69,7 @@ import { SessionMoreMenu } from "./session/session-more-menu"
 import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
 import { ConversationTranscriptSkeletonOverlay } from "./transcript/conversation-transcript-skeleton"
+import { ConversationPreviewRail } from "./transcript/conversation-preview-rail"
 import { ConversationTranscript } from "./transcript/transcript"
 import { useShowReasoning } from "./use-show-reasoning"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./types"
@@ -583,6 +584,12 @@ function ConversationPane({
                   ) : undefined}
                 </MessageScrollerButton>
               </MessageScroller>
+              <ConversationPreviewRail
+                messages={transcript.messages}
+                parts={transcript.parts}
+                runs={sessionView?.runs ?? []}
+                showReasoning={showReasoning}
+              />
             </MessageScrollerProvider>
             <ConversationTranscriptSkeletonOverlay
               key={activeSessionId}
