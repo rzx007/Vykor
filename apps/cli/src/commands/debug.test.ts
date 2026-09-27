@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/client";
 
 import { printProjectionSettlements, printRunInspection, requestDebug } from "./debug.js";
 
@@ -16,10 +17,10 @@ describe("debug protocol handshake", () => {
         const headers = new Headers(init?.headers);
         calls.push({ path: requestPath, headers });
         if (requestPath === "/capabilities") {
-          return Response.json({ serverVersion: "test", protocol: { version: 4 }, features: {} });
+          return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: {} });
         }
         expect(new URL(String(url)).searchParams.get("includeContent")).toBe("true");
-        return headers.get("x-vykor-protocol-version") === "4"
+        return headers.get("x-vykor-protocol-version") === String(CURRENT_PROTOCOL_VERSION)
           ? Response.json({ diagnosticOk: true })
           : Response.json({ error: "protocol_version_mismatch" }, { status: 426 });
       });
@@ -28,7 +29,7 @@ describe("debug protocol handshake", () => {
       expect(calls.map((call) => call.path)).toEqual(["/capabilities", path]);
       expect(calls[0]!.headers.has("authorization")).toBe(false);
       expect(calls[1]!.headers.get("authorization")).toBe("Bearer secret");
-      expect(calls[1]!.headers.get("x-vykor-protocol-version")).toBe("4");
+      expect(calls[1]!.headers.get("x-vykor-protocol-version")).toBe(String(CURRENT_PROTOCOL_VERSION));
     },
   );
 
