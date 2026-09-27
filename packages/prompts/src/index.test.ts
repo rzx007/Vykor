@@ -362,6 +362,18 @@ describe("buildRuntimeSystemPrompt", () => {
     expect(result).toContain("[label](/absolute/path/to/file.ts:42)");
     expect(result).toContain("/D:/repo/src/file.ts:42");
     expect(result).toContain("Do not invent a file path or line number");
+    expect(result).toContain(
+      "Bold at most one or two key entities, numbers, or conclusions",
+    );
+    expect(result).toContain("Never bold whole sentences");
+    expect(result).toContain(
+      "Use numbered lists only for ordered steps or dependencies",
+    );
+    expect(result).toContain("Do not nest lists");
+    expect(result).toContain("Do not indent text with leading spaces");
+    expect(result).toContain(
+      "Always tag fenced code blocks with a language",
+    );
   });
 
   it("can omit the Markdown presentation policy", async () => {

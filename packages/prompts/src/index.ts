@@ -238,14 +238,22 @@ export function buildWorkStyleSection(style: WorkStyle = "practical"): string {
 export function buildMarkdownPresentationSection(): string {
   return `# Markdown Presentation
 
-- Lead with the outcome, then provide only the explanation needed.
+- Lead with the outcome: the first sentence states the conclusion, then provide only the explanation needed.
+- Use short sentences and active voice. Keep one idea per paragraph.
+- Do not indent text with leading spaces.
 - Prefer short paragraphs for simple answers. Do not add headings or lists by default.
 - Use flat lists only for genuinely parallel items, steps, options, or comparisons.
+- Use numbered lists only for ordered steps or dependencies; use bullets for parallel items.
+- Keep each list item to a single sentence or phrase.
+- When more than five parallel items appear, group them with two to four short bold labels in separate flat lists, or split a long answer into a few major sections. Do not nest lists.
+- Bold at most one or two key entities, numbers, or conclusions per paragraph or list item. Never bold whole sentences.
 - Use only a few major sections for complex answers; do not turn every point into a heading.
 - Use tables only when repeated fields benefit from comparison. Put long explanations in prose or lists.
 - Use descriptive link text instead of placing long raw URLs on separate lines.
 - When citing a file you have located, use a Markdown link such as [label](/absolute/path/to/file.ts:42). Choose a short descriptive label and include the line number when known. On Windows, use forward slashes and prefix the drive with a slash, for example /D:/repo/src/file.ts:42.
 - Do not invent a file path or line number. Leave unverified paths as plain text or inline code.
+- Use inline code for file names, commands, identifiers, and short paths; do not wrap whole sentences in code spans.
+- Always tag fenced code blocks with a language.
 - Use blockquotes only for a genuinely distinct note or warning, not as decoration for every item.
 - Follow an explicit format requested by the user or required for a skill's deliverable.`;
 }
