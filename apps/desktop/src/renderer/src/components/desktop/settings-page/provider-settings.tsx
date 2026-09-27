@@ -1,6 +1,4 @@
 import {
-  CircleAlert,
-  CircleCheck,
   Link2,
   LoaderCircle,
   Pencil,
@@ -9,7 +7,6 @@ import {
   Search,
   Sparkles,
   Trash2,
-  X,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
@@ -23,15 +20,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@renderer/components/ui/alert-dialog"
-import { Alert, AlertAction, AlertDescription } from "@renderer/components/ui/alert"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@renderer/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -44,6 +35,7 @@ import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
+import { toast } from "@renderer/lib/toast"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type {
@@ -52,7 +44,6 @@ import type {
   DesktopProviderInfo,
   DesktopProviderSnapshot,
 } from "@shared/provider-types"
-import { scheduleProviderNoticeDismissal } from "./provider-feedback"
 import {
   ProviderConnectionDialog,
   type ProviderConnectionSubmitValue,
@@ -106,8 +97,6 @@ export function ProviderSettings(): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<DesktopProviderSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyProvider, setBusyProvider] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   const [connectTarget, setConnectTarget] = useState<DesktopProviderInfo | null>(null)
   const [disconnectTarget, setDisconnectTarget] = useState<DesktopProviderInfo | null>(null)
   const [moreProvidersOpen, setMoreProvidersOpen] = useState(false)
@@ -119,12 +108,10 @@ export function ProviderSettings(): React.JSX.Element {
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
-    setError(null)
-    setMessage(null)
     try {
       setSnapshot(await window.desktop.providers.snapshot())
     } catch (loadError) {
-      setError(errorMessage(loadError))
+      toast.error(errorMessage(loadError))
     } finally {
       setLoading(false)
     }
@@ -138,7 +125,7 @@ export function ProviderSettings(): React.JSX.Element {
         if (!cancelled) setSnapshot(nextSnapshot)
       })
       .catch((loadError: unknown) => {
-        if (!cancelled) setError(errorMessage(loadError))
+        if (!cancelled) toast.error(errorMessage(loadError))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -147,16 +134,6 @@ export function ProviderSettings(): React.JSX.Element {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    if (!message) return
-    return scheduleProviderNoticeDismissal(() => setMessage(null), 4_000)
-  }, [message])
-
-  useEffect(() => {
-    if (!error) return
-    return scheduleProviderNoticeDismissal(() => setError(null), 6_000)
-  }, [error])
 
   const connectedProviders = useMemo(
     () => snapshot?.providers.filter((provider) => provider.connected) ?? [],
@@ -207,8 +184,6 @@ export function ProviderSettings(): React.JSX.Element {
     if (mutationInFlight.current) return false
     mutationInFlight.current = true
     setBusyProvider(providerName)
-    setError(null)
-    setMessage(null)
     try {
       const nextSnapshot = await operation()
       setSnapshot(nextSnapshot)
@@ -216,13 +191,13 @@ export function ProviderSettings(): React.JSX.Element {
         await useDesktopSessionStore.getState().refreshBootstrap()
         setSnapshot(await window.desktop.providers.snapshot())
       } catch (refreshError) {
-        setError(`供应商设置已生效，但对话模型刷新失败：${errorMessage(refreshError)}`)
+        toast.error(`供应商设置已生效，但对话模型刷新失败：${errorMessage(refreshError)}`)
         return true
       }
-      setMessage(successMessage)
+      toast.success(successMessage)
       return true
     } catch (mutationError) {
-      setError(errorMessage(mutationError))
+      toast.error(errorMessage(mutationError))
       return false
     } finally {
       mutationInFlight.current = false
@@ -295,41 +270,6 @@ export function ProviderSettings(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-8">
-      {error ? (
-        <Alert variant="destructive" aria-live="assertive">
-          <CircleAlert />
-          <AlertDescription>{error}</AlertDescription>
-          <AlertAction>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label="关闭错误提示"
-              onClick={() => setError(null)}
-            >
-              <X data-icon="inline-start" />
-            </Button>
-          </AlertAction>
-        </Alert>
-      ) : null}
-      {message ? (
-        <Alert role="status" aria-live="polite">
-          <CircleCheck />
-          <AlertDescription>{message}</AlertDescription>
-          <AlertAction>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label="关闭成功提示"
-              onClick={() => setMessage(null)}
-            >
-              <X data-icon="inline-start" />
-            </Button>
-          </AlertAction>
-        </Alert>
-      ) : null}
-
       <section className="flex flex-col gap-4" aria-labelledby="provider-heading">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">

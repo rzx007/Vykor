@@ -7,10 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_APPEARANCE_PREFERENCES } from "./appearance-preferences"
 
 const mocks = vi.hoisted(() => ({ useAppearance: vi.fn() }))
+const toastMocks = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 
 vi.mock("./appearance-provider", () => ({
   useAppearance: mocks.useAppearance,
 }))
+
+vi.mock("@renderer/lib/toast", () => ({ toast: toastMocks }))
 
 import { AppearanceSettings } from "./appearance-settings"
 
@@ -38,6 +41,8 @@ describe("AppearanceSettings", () => {
     setPreference = vi.fn(() => true)
     resetAppearance = vi.fn(() => true)
     setWindowMaterial = vi.fn()
+    toastMocks.error.mockClear()
+    toastMocks.success.mockClear()
     mocks.useAppearance.mockReturnValue({
       preferences: DEFAULT_APPEARANCE_PREFERENCES,
       resolvedTheme: "light",
@@ -161,7 +166,7 @@ describe("AppearanceSettings", () => {
     expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
   })
 
-  it("renders an inline alert when automatic saving fails", async () => {
+  it("shows a toast when automatic saving fails", async () => {
     mocks.useAppearance.mockReturnValue({
       preferences: DEFAULT_APPEARANCE_PREFERENCES,
       resolvedTheme: "light",
@@ -175,7 +180,7 @@ describe("AppearanceSettings", () => {
     })
     await renderSettings()
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("无法保存外观设置")
+    expect(toastMocks.error).toHaveBeenCalledWith("外观设置未保存", "无法保存外观设置")
   })
 
   it("clamps number inputs and commits the reduced-motion preference", async () => {

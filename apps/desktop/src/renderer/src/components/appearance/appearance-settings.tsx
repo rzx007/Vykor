@@ -1,7 +1,6 @@
-import { CircleAlert, RotateCcw } from "lucide-react"
-import { useState } from "react"
+import { RotateCcw } from "lucide-react"
+import { useEffect, useState } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +36,7 @@ import {
 import { Separator } from "@renderer/components/ui/separator"
 import { Slider } from "@renderer/components/ui/slider"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
+import { toast } from "@renderer/lib/toast"
 import type { DesktopWindowMaterialPreference } from "@shared/window-material-types"
 
 import { ACCENT_PRESET_COLORS } from "./appearance-colors"
@@ -98,6 +98,11 @@ export function AppearanceSettings(): React.JSX.Element {
     if (value) commit(value)
   }
 
+  useEffect(() => {
+    if (saveState.status !== "error") return
+    toast.error("外观设置未保存", saveState.message ?? "请稍后重试。")
+  }, [saveState.status, saveState.message])
+
   return (
     <div data-appearance-settings className="flex flex-col gap-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -106,14 +111,6 @@ export function AppearanceSettings(): React.JSX.Element {
         </p>
         <ResetAppearanceDialog onReset={resetAppearance} />
       </div>
-
-      {saveState.status === "error" ? (
-        <Alert variant="destructive">
-          <CircleAlert />
-          <AlertTitle>外观设置未保存</AlertTitle>
-          <AlertDescription>{saveState.message ?? "请稍后重试。"}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <AppearanceSection title="主题">
         <FieldGroup>

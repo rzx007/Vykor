@@ -2,6 +2,7 @@ import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router"
 
 import { DesktopSessionEventBridge } from "@renderer/components/desktop/desktop-session-event-bridge"
 import { shouldAttachDesktopSessionEvents } from "@renderer/components/desktop/desktop-session-event-bridge-path"
+import { DesktopToastHost } from "@renderer/components/desktop/desktop-toast-host"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -23,6 +24,7 @@ function DesktopRoot(): React.JSX.Element {
     <>
       <DesktopSessionEventBridge enabled={shouldAttachDesktopSessionEvents(pathname)} />
       <Outlet />
+      <DesktopToastHost />
       {appOperationError ? (
         <div className="fixed inset-x-4 top-4 z-50 mx-auto w-full max-w-190">
           <ScopedOperationError error={appOperationError} />

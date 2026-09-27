@@ -42,6 +42,7 @@ import {
 } from "@renderer/components/ui/card"
 import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
+import { toast } from "@renderer/lib/toast"
 import {
   canCollectStorage,
   canRepairStorage,
@@ -88,7 +89,6 @@ export function AttachmentStorageSettings(): React.JSX.Element {
   const [report, setReport] = useState<AttachmentStorageReport | null>(null)
   const [operation, setOperation] = useState<Operation>("scanning")
   const [initialError, setInitialError] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [unsupported, setUnsupported] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -99,6 +99,11 @@ export function AttachmentStorageSettings(): React.JSX.Element {
       mounted.current = false
     }
   }, [])
+
+  function notifyFeedback(feedback: Feedback): void {
+    if (feedback.tone === "destructive") toast.error(feedback.title, feedback.description)
+    else toast.success(feedback.title, feedback.description)
+  }
 
   const api = attachmentDiagnosticsApi()
   const busy = operation !== "idle"
@@ -128,7 +133,6 @@ export function AttachmentStorageSettings(): React.JSX.Element {
   async function refresh(): Promise<void> {
     if (!api || busy) return
     setOperation("scanning")
-    setFeedback(null)
     try {
       const nextReport = await api.scanStorage()
       if (!mounted.current) return
@@ -137,7 +141,7 @@ export function AttachmentStorageSettings(): React.JSX.Element {
     } catch (error) {
       if (!mounted.current) return
       if (report) {
-        setFeedback({
+        notifyFeedback({
           tone: "destructive",
           title: "重新扫描失败",
           description: `${errorMessage(error)} 当前页面保留的是上一次扫描结果。`,
@@ -153,13 +157,12 @@ export function AttachmentStorageSettings(): React.JSX.Element {
   async function repair(): Promise<void> {
     if (!api || !report || busy || !canRepairStorage(report)) return
     setOperation("repairing")
-    setFeedback(null)
     let result: AttachmentStorageRepairResult
     try {
       result = await api.repairStorage()
     } catch (error) {
       if (mounted.current) {
-        setFeedback({
+        notifyFeedback({
           tone: "destructive",
           title: "安全修复失败",
           description: errorMessage(error),
@@ -173,10 +176,10 @@ export function AttachmentStorageSettings(): React.JSX.Element {
       const nextReport = await api.scanStorage()
       if (!mounted.current) return
       setReport(nextReport)
-      setFeedback(repairFeedback(result))
+      notifyFeedback(repairFeedback(result))
     } catch (error) {
       if (mounted.current) {
-        setFeedback({
+        notifyFeedback({
           tone: "destructive",
           title: "安全修复完成，状态刷新失败",
           description: `${repairFeedback(result).description} ${errorMessage(error)} 当前页面保留的是上一次扫描结果。`,
@@ -191,13 +194,12 @@ export function AttachmentStorageSettings(): React.JSX.Element {
     if (!api || !report || busy || !canCollectStorage(report)) return
     setConfirmOpen(false)
     setOperation("collecting")
-    setFeedback(null)
     let result: AttachmentStorageGcResult
     try {
       result = await api.gcStorage()
     } catch (error) {
       if (mounted.current) {
-        setFeedback({
+        notifyFeedback({
           tone: "destructive",
           title: "附件清理失败",
           description: `${errorMessage(error)} 请重新扫描后再试。`,
@@ -211,10 +213,10 @@ export function AttachmentStorageSettings(): React.JSX.Element {
       const nextReport = await api.scanStorage()
       if (!mounted.current) return
       setReport(nextReport)
-      setFeedback(collectionFeedback(result))
+      notifyFeedback(collectionFeedback(result))
     } catch (error) {
       if (mounted.current) {
-        setFeedback({
+        notifyFeedback({
           tone: "destructive",
           title: "附件清理完成，状态刷新失败",
           description: `${collectionFeedback(result).description} ${errorMessage(error)} 当前页面保留的是上一次扫描结果。`,
@@ -265,14 +267,6 @@ export function AttachmentStorageSettings(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-10">
-      {feedback ? (
-        <Alert variant={feedback.tone === "destructive" ? "destructive" : "default"}>
-          {feedback.tone === "destructive" ? <AlertCircle /> : <CheckCircle2 />}
-          <AlertTitle>{feedback.title}</AlertTitle>
-          <AlertDescription>{feedback.description}</AlertDescription>
-        </Alert>
-      ) : null}
-
       <StorageOverview report={report} operation={operation} onRefresh={() => void refresh()} />
       <StorageHealth issues={groupedIssues} />
 

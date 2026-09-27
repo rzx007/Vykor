@@ -10,6 +10,19 @@ import type {
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
 } from "@vykor/client"
+
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  show: vi.fn(),
+  update: vi.fn(),
+  dismiss: vi.fn(),
+}))
+
+vi.mock("@renderer/lib/toast", () => ({ toast: toastMocks }))
+
 import { AttachmentStorageSettings } from "./attachment-storage-settings"
 
 describe("AttachmentStorageSettings", () => {
@@ -29,6 +42,8 @@ describe("AttachmentStorageSettings", () => {
     scanStorage = vi.fn(async () => storageReport())
     repairStorage = vi.fn(async () => repairResult)
     gcStorage = vi.fn(async () => gcResult)
+    toastMocks.error.mockClear()
+    toastMocks.success.mockClear()
     setAttachmentApi({ scanStorage, repairStorage, gcStorage })
   })
 
@@ -93,8 +108,10 @@ describe("AttachmentStorageSettings", () => {
 
     expect(repairStorage).toHaveBeenCalledTimes(1)
     expect(scanStorage).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain("已清除 1 个过期占用")
-    expect(container.textContent).toContain("释放 64 MB")
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "安全修复完成",
+      expect.stringContaining("已清除 1 个过期占用")
+    )
   })
 
   it("does not report a completed repair as failed when only the follow-up scan fails", async () => {
@@ -107,9 +124,11 @@ describe("AttachmentStorageSettings", () => {
 
     expect(repairStorage).toHaveBeenCalledTimes(1)
     expect(scanStorage).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain("安全修复完成，状态刷新失败")
-    expect(container.textContent).toContain("refresh unavailable")
-    expect(container.textContent).not.toContain("安全修复失败")
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      "安全修复完成，状态刷新失败",
+      expect.stringContaining("refresh unavailable")
+    )
+    expect(toastMocks.success).not.toHaveBeenCalled()
   })
 
   it("requires explicit confirmation before garbage collection", async () => {
@@ -127,8 +146,10 @@ describe("AttachmentStorageSettings", () => {
 
     expect(gcStorage).toHaveBeenCalledTimes(1)
     expect(scanStorage).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain("已删除 2 个附件")
-    expect(container.textContent).toContain("释放 128 MB")
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "附件清理完成",
+      expect.stringContaining("已删除 2 个附件")
+    )
   })
 
   it("does not report completed garbage collection as failed when only the follow-up scan fails", async () => {
@@ -142,9 +163,11 @@ describe("AttachmentStorageSettings", () => {
 
     expect(gcStorage).toHaveBeenCalledTimes(1)
     expect(scanStorage).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain("附件清理完成，状态刷新失败")
-    expect(container.textContent).toContain("refresh unavailable")
-    expect(container.textContent).not.toContain("附件清理失败")
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      "附件清理完成，状态刷新失败",
+      expect.stringContaining("refresh unavailable")
+    )
+    expect(toastMocks.success).not.toHaveBeenCalled()
   })
 
   it("renders an unsupported state when the Desktop diagnostics API is missing", async () => {

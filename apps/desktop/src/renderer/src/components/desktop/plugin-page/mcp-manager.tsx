@@ -25,6 +25,7 @@ import { Separator } from "@renderer/components/ui/separator"
 import { Switch } from "@renderer/components/ui/switch"
 import { Textarea } from "@renderer/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
+import { toast } from "@renderer/lib/toast"
 import type {
   DesktopMcpAuthMode,
   DesktopMcpAuthStatus,
@@ -102,10 +103,14 @@ function canAuthorize(server: DesktopMcpServer): boolean {
   return server.transport === "http" && server.authMode === "oauth"
 }
 
-export function McpManager({ query, addRequest, refreshRequest, notify }: McpManagerProps): React.JSX.Element {
+export function McpManager({
+  query,
+  addRequest,
+  refreshRequest,
+  notify,
+}: McpManagerProps): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<DesktopMcpSnapshot | null>(null)
   const [loadError, setLoadError] = useState("")
-  const [operationError, setOperationError] = useState("")
   const [filter, setFilter] = useState("all")
   const [editor, setEditor] = useState<Editor | null>(null)
   const [detailName, setDetailName] = useState<string | null>(null)
@@ -152,7 +157,6 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
   useEffect(() => {
     if (refreshRequest === seenRefresh.current) return
     seenRefresh.current = refreshRequest
-    setOperationError("")
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshRequest])
@@ -190,12 +194,15 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
 
   async function openEditor(server: DesktopMcpServer): Promise<void> {
     setDetailName(null)
-    setOperationError("")
     try {
       const config = (await window.desktop.mcp.getConfig({ name: server.name })) as McpConfig
-      setEditor({ initial: serverDocument(server, config), editingName: server.name, expectedConfig: config })
+      setEditor({
+        initial: serverDocument(server, config),
+        editingName: server.name,
+        expectedConfig: config,
+      })
     } catch (error) {
-      setOperationError(errorMessage(error))
+      toast.error("MCP 操作失败", errorMessage(error))
       notify(errorMessage(error))
     }
   }
@@ -218,7 +225,7 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
       setSnapshot(result.snapshot)
       reportResult(result, enabled ? "启用" : "停用", server.name)
     } catch (error) {
-      setOperationError(errorMessage(error))
+      toast.error("MCP 操作失败", errorMessage(error))
       notify(errorMessage(error))
     } finally {
       setBusyName(null)
@@ -255,7 +262,7 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
       if (current?.authStatus === "valid" || current?.authStatus === "expired-refreshable") {
         notify(`授权已保存，但重连失败：${server.name}`)
       } else {
-        setOperationError(errorMessage(error))
+        toast.error("MCP 操作失败", errorMessage(error))
         notify(errorMessage(error))
       }
     } finally {
@@ -275,7 +282,7 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
       if (current?.authStatus === "not-logged-in") {
         notify(`已退出登录，但断开活动会话失败：${server.name}`)
       } else {
-        setOperationError(errorMessage(error))
+        toast.error("MCP 操作失败", errorMessage(error))
         notify(errorMessage(error))
       }
     } finally {
@@ -290,7 +297,7 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
       setExportJson(JSON.stringify({ mcpServers: result.mcpServers }, null, 2))
       setExportOpen(true)
     } catch (error) {
-      setOperationError(errorMessage(error))
+      toast.error("MCP 操作失败", errorMessage(error))
       notify(errorMessage(error))
     }
   }
@@ -346,18 +353,23 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
             <ToggleGroupItem value="enabled">已启用</ToggleGroupItem>
             <ToggleGroupItem value="disabled">已停用</ToggleGroupItem>
           </ToggleGroup>
-          <Button variant="ghost" size="sm" disabled={Boolean(loadError)} onClick={() => void openExport()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={Boolean(loadError)}
+            onClick={() => void openExport()}
+          >
             <Download data-icon="inline-start" />
             导出 JSON
           </Button>
         </div>
       ) : null}
-      {(loadError || operationError) && (
+      {loadError ? (
         <Alert variant="destructive">
           <AlertTitle>MCP 状态未更新</AlertTitle>
-          <AlertDescription>{loadError || operationError}</AlertDescription>
+          <AlertDescription>{loadError}</AlertDescription>
         </Alert>
-      )}
+      ) : null}
       {visible.length ? (
         <ul aria-label="已保存的 MCP 服务器">
           {visible.map((server, index) => {
@@ -427,7 +439,9 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
         <McpEditor
           initial={editor.initial}
           editingName={editor.editingName}
-          existingNames={servers.filter((item) => item.name !== editor.editingName).map((item) => item.name)}
+          existingNames={servers
+            .filter((item) => item.name !== editor.editingName)
+            .map((item) => item.name)}
           onSave={saveEditor}
           onClose={() => {
             setEditor(null)
@@ -445,9 +459,7 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
           <DialogHeader className="pr-8">
             <DialogTitle className="break-all">{detail?.name}</DialogTitle>
             <DialogDescription>
-              {detail
-                ? `${detail.enabled ? "已启用" : "已停用"} · ${statusLabel(detail)}`
-                : ""}
+              {detail ? `${detail.enabled ? "已启用" : "已停用"} · ${statusLabel(detail)}` : ""}
             </DialogDescription>
           </DialogHeader>
           {detail && (
@@ -487,7 +499,9 @@ export function McpManager({ query, addRequest, refreshRequest, notify }: McpMan
                       disabled={busyName === detail.name}
                       onClick={() => void login(detail)}
                     >
-                      {detail.authStatus === "reauthentication-required" ? "重新授权" : "浏览器授权"}
+                      {detail.authStatus === "reauthentication-required"
+                        ? "重新授权"
+                        : "浏览器授权"}
                     </Button>
                   )}
                 </div>

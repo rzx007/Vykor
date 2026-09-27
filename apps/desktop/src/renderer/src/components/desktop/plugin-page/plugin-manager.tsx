@@ -21,11 +21,6 @@ import {
   DialogTitle,
 } from "@renderer/components/ui/dialog"
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@renderer/components/ui/collapsible"
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -40,6 +35,7 @@ import { Spinner } from "@renderer/components/ui/spinner"
 import { Switch } from "@renderer/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
+import { toast } from "@renderer/lib/toast"
 import type {
   DesktopPluginArchiveConfirmResult,
   DesktopPluginArchiveFailureDetail,
@@ -56,11 +52,6 @@ export interface PluginManagerProps {
   refreshRequest: number
   projectPath: string
   notify: (message: string) => void
-}
-type ImportFeedback = {
-  message: string
-  details?: DesktopPluginArchiveFailureDetail[]
-  variant?: "destructive"
 }
 type Approval = Extract<DesktopPluginArchiveImportResult, { status: "approval-required" }> & {
   source: "archive" | "git"
@@ -106,7 +97,6 @@ export function PluginManager({
   const [snapshot, setSnapshot] = useState<DesktopPluginSnapshot | null>(null)
   const [loading, setLoading] = useState(Boolean(api))
   const [busy, setBusy] = useState(Boolean(api))
-  const [feedback, setFeedback] = useState<ImportFeedback | null>(null)
   const [filter, setFilter] = useState("all")
   const [detailId, setDetailId] = useState<string | null>(null)
   const [removal, setRemoval] = useState<{ id: string; name: string } | null>(null)
@@ -128,6 +118,16 @@ export function PluginManager({
       mounted.current = false
     }
   }, [])
+  function reportFeedback(
+    message: string,
+    options: { details?: DesktopPluginArchiveFailureDetail[]; destructive?: boolean } = {}
+  ): void {
+    const description = options.details?.length
+      ? options.details.map((detail) => detail.code).join("；")
+      : undefined
+    if (options.destructive) toast.error(message, description)
+    else toast.success(message, description)
+  }
   useEffect(() => {
     if (!api) return
     const requestId = ++loadId.current
@@ -139,7 +139,7 @@ export function PluginManager({
         if (!cancelled) setSnapshot(value)
       })
       .catch((cause) => {
-        if (!cancelled) setFeedback({ message: errorText(cause), variant: "destructive" })
+        if (!cancelled) reportFeedback(errorText(cause), { destructive: true })
       })
       .finally(() => {
         if (requestId === loadId.current) lock.current = false
@@ -172,25 +172,22 @@ export function PluginManager({
       return
     }
     if (result.status === "unknown") {
-      setFeedback({ message: result.message, details: result.details })
+      reportFeedback(result.message, { details: result.details })
       return
     }
-    setFeedback({
-      message: result.message || "导入插件失败，请重试。",
+    reportFeedback(result.message || "导入插件失败，请重试。", {
       details: result.details,
-      variant: "destructive",
+      destructive: true,
     })
   }
   async function importArchive(): Promise<void> {
     if (!api || lock.current) return
     lock.current = true
     setBusy(true)
-    setFeedback(null)
     try {
       applyImportResult(await api.importArchive({ cwd: projectPath }))
     } catch {
-      if (mounted.current)
-        setFeedback({ message: "导入插件失败，请重试。", variant: "destructive" })
+      if (mounted.current) reportFeedback("导入插件失败，请重试。", { destructive: true })
     } finally {
       lock.current = false
       if (mounted.current) setBusy(false)
@@ -200,7 +197,6 @@ export function PluginManager({
     if (!api || !approval || lock.current) return
     lock.current = true
     setBusy(true)
-    setFeedback(null)
     try {
       const result = await (approval.source === "git" ? api.confirmGit : api.confirmArchive)({
         cwd: projectPath,
@@ -210,8 +206,7 @@ export function PluginManager({
       setApproval(null)
       applyImportResult(result)
     } catch {
-      if (mounted.current)
-        setFeedback({ message: "导入插件失败，请重试。", variant: "destructive" })
+      if (mounted.current) reportFeedback("导入插件失败，请重试。", { destructive: true })
     } finally {
       lock.current = false
       if (mounted.current) setBusy(false)
@@ -226,8 +221,7 @@ export function PluginManager({
     try {
       await (source === "git" ? api.cancelGit : api.cancelArchive)({ selectionId })
     } catch {
-      if (mounted.current)
-        setFeedback({ message: "取消导入失败，请重试。", variant: "destructive" })
+      if (mounted.current) reportFeedback("取消导入失败，请重试。", { destructive: true })
     }
   }
   useEffect(() => {
@@ -247,7 +241,6 @@ export function PluginManager({
   useEffect(() => {
     if (!gitAddRequest || gitAddRequest === previousGitAdd.current) return
     previousGitAdd.current = gitAddRequest
-    setFeedback(null)
     setGitDialogOpen(true)
   }, [gitAddRequest])
   async function importGit(): Promise<void> {
@@ -255,12 +248,11 @@ export function PluginManager({
     const url = gitUrl.trim()
     const ref = gitRef.trim()
     if (!url) {
-      setFeedback({ message: "请输入 Git 地址。", variant: "destructive" })
+      reportFeedback("请输入 Git 地址。", { destructive: true })
       return
     }
     lock.current = true
     setBusy(true)
-    setFeedback(null)
     try {
       setGitDialogOpen(false)
       applyImportResult(
@@ -272,8 +264,7 @@ export function PluginManager({
         "git"
       )
     } catch {
-      if (mounted.current)
-        setFeedback({ message: "从 Git 安装插件失败，请重试。", variant: "destructive" })
+      if (mounted.current) reportFeedback("从 Git 安装插件失败，请重试。", { destructive: true })
     } finally {
       lock.current = false
       if (mounted.current) setBusy(false)
@@ -284,7 +275,6 @@ export function PluginManager({
     previousRefresh.current = refreshRequest
     lock.current = true
     setBusy(true)
-    setFeedback(null)
     void api
       .reload({ cwd: projectPath })
       .then((value) => {
@@ -294,7 +284,7 @@ export function PluginManager({
         }
       })
       .catch((cause) => {
-        if (mounted.current) setFeedback({ message: errorText(cause), variant: "destructive" })
+        if (mounted.current) reportFeedback(errorText(cause), { destructive: true })
       })
       .finally(() => {
         lock.current = false
@@ -305,7 +295,6 @@ export function PluginManager({
     if (!api || lock.current || plugin.scope === "managed") return
     lock.current = true
     setBusy(true)
-    setFeedback(null)
     try {
       const input = { cwd: projectPath, pluginId: plugin.identity.id }
       const result = await (uninstall
@@ -321,7 +310,7 @@ export function PluginManager({
       }
       notify(`${displayName(plugin)} 已${uninstall ? "卸载" : plugin.enabled ? "禁用" : "启用"}。`)
     } catch (cause) {
-      if (mounted.current) setFeedback({ message: errorText(cause), variant: "destructive" })
+      if (mounted.current) reportFeedback(errorText(cause), { destructive: true })
     } finally {
       lock.current = false
       if (mounted.current) setBusy(false)
@@ -344,7 +333,6 @@ export function PluginManager({
   const detail = plugins.find((plugin) => plugin.identity.id === detailId) ?? null
   return (
     <div className="flex flex-col gap-9">
-      {feedback ? <ImportFeedbackAlert feedback={feedback} /> : null}
       {snapshot?.warnings.length ? (
         <Alert>
           <CircleAlert />
@@ -588,33 +576,6 @@ export function PluginManager({
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-function ImportFeedbackAlert({ feedback }: { feedback: ImportFeedback }): React.JSX.Element {
-  return (
-    <Alert variant={feedback.variant}>
-      <CircleAlert />
-      <AlertDescription>
-        <p>{feedback.message}</p>
-        {feedback.details?.length ? (
-          <Collapsible>
-            <CollapsibleTrigger render={<Button variant="link" size="sm" className="px-0" />}>
-              查看详情
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <ul className="mt-2 flex flex-col gap-1 text-xs">
-                {feedback.details.map((detail, index) => (
-                  <li key={`${detail.code}-${detail.path ?? index}`}>
-                    {detail.code}
-                    {detail.path ? ` · ${detail.path}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </CollapsibleContent>
-          </Collapsible>
-        ) : null}
-      </AlertDescription>
-    </Alert>
   )
 }
 function ExtensionRow({

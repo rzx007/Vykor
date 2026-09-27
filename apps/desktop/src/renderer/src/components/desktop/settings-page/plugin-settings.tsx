@@ -61,6 +61,7 @@ import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Switch } from "@renderer/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@renderer/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
+import { toast } from "@renderer/lib/toast"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopPluginInfo, DesktopPluginSnapshot } from "@shared/plugin-types"
@@ -101,7 +102,6 @@ export function PluginSettings(): React.JSX.Element {
   const [reloading, setReloading] = useState(false)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<PluginFilter>("all")
-  const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [detailTarget, setDetailTarget] = useState<DesktopPluginInfo | null>(null)
   const [uninstallTarget, setUninstallTarget] = useState<DesktopPluginInfo | null>(null)
@@ -116,7 +116,7 @@ export function PluginSettings(): React.JSX.Element {
         if (!cancelled) setSnapshot(nextSnapshot)
       })
       .catch((loadError: unknown) => {
-        if (!cancelled) setError(errorMessage(loadError))
+        if (!cancelled) toast.error(errorMessage(loadError))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -163,7 +163,6 @@ export function PluginSettings(): React.JSX.Element {
     if (mutationInFlight.current) return false
     mutationInFlight.current = true
     setBusyPlugin(plugin.identity.id)
-    setError(null)
     setMessage(null)
     try {
       const nextSnapshot = await operation()
@@ -176,7 +175,7 @@ export function PluginSettings(): React.JSX.Element {
       setMessage(successMessage)
       return true
     } catch (mutationError) {
-      setError(errorMessage(mutationError))
+      toast.error(errorMessage(mutationError))
       return false
     } finally {
       mutationInFlight.current = false
@@ -197,13 +196,12 @@ export function PluginSettings(): React.JSX.Element {
     if (mutationInFlight.current) return
     mutationInFlight.current = true
     setReloading(true)
-    setError(null)
     setMessage(null)
     try {
       setSnapshot(await pluginApi.reload({ cwd }))
       setMessage("插件注册表和运行状态已重新加载。")
     } catch (reloadError) {
-      setError(errorMessage(reloadError))
+      toast.error(errorMessage(reloadError))
     } finally {
       mutationInFlight.current = false
       setReloading(false)
@@ -237,12 +235,6 @@ export function PluginSettings(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-7">
-      {error ? (
-        <Alert variant="destructive">
-          <CircleAlert />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
       {message ? (
         <div
           role="status"
@@ -635,7 +627,8 @@ function PluginHealthBadge({ plugin }: { plugin: DesktopPluginInfo }): React.JSX
   if (plugin.runtimeStatus.state === "failed") {
     return <Badge variant="destructive">失败</Badge>
   }
-  if (plugin.runtimeStatus.state === "pending_reload") return <Badge variant="secondary">待生效</Badge>
+  if (plugin.runtimeStatus.state === "pending_reload")
+    return <Badge variant="secondary">待生效</Badge>
   if (plugin.runtimeStatus.state === "degraded") {
     return <Badge variant="secondary">部分可用</Badge>
   }

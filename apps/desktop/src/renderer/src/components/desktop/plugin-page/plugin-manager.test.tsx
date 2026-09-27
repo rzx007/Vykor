@@ -3,6 +3,19 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { DesktopPluginInfo, DesktopPluginSnapshot } from "@shared/plugin-types"
+
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(),
+  show: vi.fn(),
+  update: vi.fn(),
+  dismiss: vi.fn(),
+}))
+
+vi.mock("@renderer/lib/toast", () => ({ toast: toastMocks }))
+
 import { PluginManager, type PluginManagerProps } from "./plugin-manager"
 
 const snapshot = { cwd: "D:/project", plugins: [], warnings: [] }
@@ -285,7 +298,7 @@ describe("PluginManager archive import", () => {
     expect(api().cancelArchive).toHaveBeenCalledWith({ selectionId: "selection-2" })
   })
 
-  it("keeps failed diagnostics closed until requested and allows another import", async () => {
+  it("reports a failed import and allows another import", async () => {
     api()
       .importArchive.mockResolvedValueOnce({
         status: "failed",
@@ -296,11 +309,7 @@ describe("PluginManager archive import", () => {
     await render()
     await requestImport()
 
-    const alert = document.querySelector('[role="alert"]')
-    expect(alert?.textContent).toContain("压缩包无法安装")
-    expect(alert?.textContent).not.toContain("plugin_archive_invalid")
-    await click("查看详情")
-    expect(alert?.textContent).toContain("plugin_archive_invalid")
+    expect(toastMocks.error).toHaveBeenCalledWith("压缩包无法安装", "plugin_archive_invalid")
 
     await requestImport()
     expect(api().importArchive).toHaveBeenCalledTimes(2)
@@ -317,8 +326,9 @@ describe("PluginManager archive import", () => {
     await render()
     await requestImport()
 
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      "安装结果暂时无法确认，请刷新插件列表。"
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "安装结果暂时无法确认，请刷新插件列表。",
+      "plugin_archive_install_unknown"
     )
     expect(props.notify).not.toHaveBeenCalled()
   })
