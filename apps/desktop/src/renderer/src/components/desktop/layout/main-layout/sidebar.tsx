@@ -26,6 +26,7 @@ import { useMatchRoute } from "@tanstack/react-router"
 
 import { nextExplicitTheme } from "@renderer/components/appearance/appearance-actions"
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
+import { SharedLayoutBg } from "@renderer/components/motion/shared-layout-bg"
 import { Button } from "@renderer/components/ui/button"
 import {
   Dialog,
@@ -252,47 +253,54 @@ export function Sidebar({
         </div>
 
         <nav className="min-w-0 px-2" aria-label="主要导航">
-          <SidebarNavigationButton
-            icon={SquarePen}
-            label="新对话"
-            onClick={() => beginNewConversation()}
-          />
-          {secondaryNavigation.map(({ icon, label }) => {
-            const isScheduled = label === "定时任务"
-            const isPlugins = label === "插件"
-            return (
+          <SharedLayoutBg inset={0} pillClassName="rounded-md bg-sidebar-accent">
+            <div>
               <SidebarNavigationButton
-                key={label}
-                icon={icon}
-                label={label}
-                selected={(isScheduled && scheduledSelected) || (isPlugins && pluginsSelected)}
-                badge={isScheduled ? scheduledUnread : 0}
-                running={isScheduled && scheduledRunning}
-                onClick={
-                  isScheduled
-                    ? () => {
-                        setArchiveMode(false)
-                        onOpenScheduled()
-                      }
-                    : isPlugins
-                      ? () => {
-                          setArchiveMode(false)
-                          onOpenPlugins()
-                        }
-                      : undefined
-                }
+                icon={SquarePen}
+                label="新对话"
+                onClick={() => beginNewConversation()}
               />
-            )
-          })}
-          <SidebarNavigationButton
-            icon={Archive}
-            label="已归档"
-            selected={archiveMode && !scheduledSelected}
-            onClick={() => {
-              onOpenConversation()
-              setArchiveMode((current) => !current)
-            }}
-          />
+            </div>
+            {secondaryNavigation.map(({ icon, label }) => {
+              const isScheduled = label === "定时任务"
+              const isPlugins = label === "插件"
+              return (
+                <div key={label}>
+                  <SidebarNavigationButton
+                    icon={icon}
+                    label={label}
+                    selected={(isScheduled && scheduledSelected) || (isPlugins && pluginsSelected)}
+                    badge={isScheduled ? scheduledUnread : 0}
+                    running={isScheduled && scheduledRunning}
+                    onClick={
+                      isScheduled
+                        ? () => {
+                            setArchiveMode(false)
+                            onOpenScheduled()
+                          }
+                        : isPlugins
+                          ? () => {
+                              setArchiveMode(false)
+                              onOpenPlugins()
+                            }
+                          : undefined
+                    }
+                  />
+                </div>
+              )
+            })}
+            <div>
+              <SidebarNavigationButton
+                icon={Archive}
+                label="已归档"
+                selected={archiveMode && !scheduledSelected}
+                onClick={() => {
+                  onOpenConversation()
+                  setArchiveMode((current) => !current)
+                }}
+              />
+            </div>
+          </SharedLayoutBg>
         </nav>
 
         <ScrollArea
@@ -427,17 +435,18 @@ export function Sidebar({
                     {recentSessions.length === 0 ? (
                       <p className="px-2.5 py-2 text-xs text-sidebar-muted">暂无最近会话</p>
                     ) : (
-                      <div className="space-y-0.5">
+                      <SessionList className="gap-0.5">
                         {recentSessions.map((session) => (
-                          <SessionRow
-                            key={session.id}
-                            session={session}
-                            active={activeSessionId === session.id}
-                            actions={sessionActions}
-                            nested={false}
-                          />
+                          <div key={session.id}>
+                            <SessionRow
+                              session={session}
+                              active={activeSessionId === session.id}
+                              actions={sessionActions}
+                              nested={false}
+                            />
+                          </div>
                         ))}
-                      </div>
+                      </SessionList>
                     )}
                   </motion.div>
                 ) : null}
@@ -678,6 +687,20 @@ function SessionRow({
   )
 }
 
+function SessionList({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}): React.JSX.Element {
+  return (
+    <SharedLayoutBg inset={0} pillClassName="rounded-md bg-sidebar-accent" className={className}>
+      {children}
+    </SharedLayoutBg>
+  )
+}
+
 function ProjectGroup({
   project,
   sessions,
@@ -778,14 +801,17 @@ function ProjectGroup({
             className="overflow-hidden"
           >
             <div className="pb-1">
-              {visibleSessions.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  active={activeSessionId === session.id}
-                  actions={actions}
-                />
-              ))}
+              <SessionList>
+                {visibleSessions.map((session) => (
+                  <div key={session.id}>
+                    <SessionRow
+                      session={session}
+                      active={activeSessionId === session.id}
+                      actions={actions}
+                    />
+                  </div>
+                ))}
+              </SessionList>
               {sessions.length > 5 ? (
                 <button
                   type="button"
@@ -825,14 +851,17 @@ function ImSessionGroup({
         </span>
       </div>
       <div className="pb-1">
-        {visibleSessions.map((session) => (
-          <SessionRow
-            key={session.id}
-            session={session}
-            active={activeSessionId === session.id}
-            actions={actions}
-          />
-        ))}
+        <SessionList>
+          {visibleSessions.map((session) => (
+            <div key={session.id}>
+              <SessionRow
+                session={session}
+                active={activeSessionId === session.id}
+                actions={actions}
+              />
+            </div>
+          ))}
+        </SessionList>
         {group.sessions.length > 5 ? (
           <button
             type="button"
@@ -862,16 +891,19 @@ function ArchivedSessionList({
       {sessions.length === 0 ? (
         <p className="px-2.5 py-2 text-xs leading-5 text-sidebar-muted">还没有归档的会话。</p>
       ) : (
-        sessions.map((session) => (
-          <SessionRow
-            key={session.id}
-            session={session}
-            active={activeSessionId === session.id}
-            actions={actions}
-            archived
-            nested={false}
-          />
-        ))
+        <SessionList>
+          {sessions.map((session) => (
+            <div key={session.id}>
+              <SessionRow
+                session={session}
+                active={activeSessionId === session.id}
+                actions={actions}
+                archived
+                nested={false}
+              />
+            </div>
+          ))}
+        </SessionList>
       )}
     </section>
   )
@@ -900,7 +932,7 @@ function SidebarNavigationButton({
         badge ? `${label}，${badge} 个结果待查看` : running ? `${label}，正在运行` : label
       }
       className={cn(
-        "text-ui-small flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left font-[450] text-sidebar-foreground transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "text-ui-small flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left font-[450] text-sidebar-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         selected && "bg-sidebar-selected"
       )}
     >

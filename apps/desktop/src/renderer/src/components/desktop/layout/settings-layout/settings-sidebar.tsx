@@ -6,6 +6,7 @@ import {
   personalSettingsNavigation,
   type SettingsNavigationItem,
 } from "@renderer/components/desktop/settings-page/settings-navigation"
+import { SharedLayoutBg } from "@renderer/components/motion/shared-layout-bg"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
@@ -98,25 +99,26 @@ function SettingsNavigationGroup({
   return (
     <nav className="mb-5" aria-label={`${label}设置`}>
       <p className="px-2 pb-1.5 text-xs text-sidebar-muted/70">{label}</p>
-      <div className="flex flex-col gap-0.5">
+      <SharedLayoutBg className="gap-0.5" inset={0} pillClassName="rounded-md bg-sidebar-accent">
         {items.map(({ label: itemLabel, icon: Icon }) => (
-          <button
-            key={itemLabel}
-            type="button"
-            aria-current={selectedSection === itemLabel ? "page" : undefined}
-            onClick={() => onSelect(itemLabel)}
-            className={cn(
-              "text-ui-small flex h-8 items-center gap-2.5 rounded-md px-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              selectedSection === itemLabel
-                ? "bg-sidebar-selected font-medium text-sidebar-foreground"
-                : "text-sidebar-foreground/82 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            )}
-          >
-            <Icon className="size-4 text-sidebar-muted" strokeWidth={1.8} />
-            {itemLabel}
-          </button>
+          <div key={itemLabel}>
+            <button
+              type="button"
+              aria-current={selectedSection === itemLabel ? "page" : undefined}
+              onClick={() => onSelect(itemLabel)}
+              className={cn(
+                "text-ui-small flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                selectedSection === itemLabel
+                  ? "bg-sidebar-selected font-medium text-sidebar-foreground"
+                  : "text-sidebar-foreground/82"
+              )}
+            >
+              <Icon className="size-4 text-sidebar-muted" strokeWidth={1.8} />
+              {itemLabel}
+            </button>
+          </div>
         ))}
-      </div>
+      </SharedLayoutBg>
     </nav>
   )
 }
