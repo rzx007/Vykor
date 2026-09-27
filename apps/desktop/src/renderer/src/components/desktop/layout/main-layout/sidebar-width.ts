@@ -4,7 +4,7 @@ export { shouldPersistPanelWidth as shouldPersistSidebarWidth } from "../panel-w
 
 const sidebarWidthStore = createPanelWidthStore({
   storageKey: "vykor.desktop.workspace-sidebar-width-px",
-  defaultPx: 288,
+  defaultPx: 320,
   minPx: 266,
   maxPx: 420,
 })

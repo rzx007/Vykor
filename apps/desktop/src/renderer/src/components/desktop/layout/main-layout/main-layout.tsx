@@ -40,7 +40,7 @@ const resizeTargetMinimumSize = { fine: 12, coarse: 28 }
 const conversationMinimumWidth = 350
 const utilityMinimumWidth = 320
 const workspaceMinimumWidth = conversationMinimumWidth + utilityMinimumWidth
-const defaultWorkspaceLayout: Layout = { conversation: 40, utility: 60 }
+const defaultWorkspaceLayout: Layout = { conversation: 50, utility: 50 }
 const collapsedWorkspaceLayout: Layout = { conversation: 100, utility: 0 }
 
 export function MainLayout(): React.JSX.Element {
@@ -325,7 +325,7 @@ export function MainLayout(): React.JSX.Element {
       <Panel
         id="utility"
         panelRef={utilityPanelRef}
-        defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 60}%` : 0}
+          defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 50}%` : 0}
         minSize={utilityMinimumWidth}
         maxSize={utilityMaximized ? "100%" : "70%"}
         collapsedSize={0}
