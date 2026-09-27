@@ -121,6 +121,7 @@ export function useUtilityPanelController({
   const toggleTransitionCancelRef = useRef<(() => void) | null>(null)
   const maximizedRef = useRef(maximized)
   const skipMaximizeTransitionRef = useRef(false)
+  const maximizeEffectMountedRef = useRef(false)
 
   const runAnimatedLayoutChange = useCallback(
     (apply: () => void): void => {
@@ -236,12 +237,12 @@ export function useUtilityPanelController({
     const group = workspaceGroupRef.current
     const panel = utilityPanelRef.current
     const nextLayout = lastOpenLayoutRef.current ?? defaultLayout
-    runAnimatedLayoutChange(() => {
-      if (panel?.isCollapsed()) {
+    if (panel?.isCollapsed()) {
+      runAnimatedLayoutChange(() => {
         panel.expand()
         group?.setLayout(nextLayout)
-      }
-    })
+      })
+    }
     persistActiveView({ open: true })
     setOpen(true)
   }, [
@@ -284,23 +285,22 @@ export function useUtilityPanelController({
   }, [collapse, persistActiveView, restore, utilityPanelRef])
 
   const toggleMaximized = useCallback((): void => {
-    setMaximized((current) => {
-      if (current) {
-        conversationPanelRef.current?.expand()
-        persistActiveView({ maximized: false })
-        return false
-      }
+    if (maximizedRef.current) {
+      maximizedRef.current = false
+      persistActiveView({ maximized: false })
+      setMaximized(false)
+      return
+    }
 
-      const currentLayout = workspaceGroupRef.current?.getLayout()
-      if (currentLayout?.conversation && currentLayout.utility)
-        previousLayoutRef.current = currentLayout
-      if (utilityPanelRef.current?.isCollapsed()) utilityPanelRef.current.expand()
-      conversationPanelRef.current?.collapse()
-      persistActiveView({ open: true, maximized: true })
-      setOpen(true)
-      return true
-    })
-  }, [conversationPanelRef, persistActiveView, utilityPanelRef, workspaceGroupRef])
+    const currentLayout = workspaceGroupRef.current?.getLayout()
+    if (currentLayout?.conversation && currentLayout.utility) {
+      previousLayoutRef.current = currentLayout
+    }
+    maximizedRef.current = true
+    persistActiveView({ open: true, maximized: true })
+    setOpen(true)
+    setMaximized(true)
+  }, [persistActiveView, workspaceGroupRef])
 
   const openFile = useCallback(
     (path: string, line?: number): void => {
@@ -347,12 +347,20 @@ export function useUtilityPanelController({
       return
     }
 
+    if (!maximizeEffectMountedRef.current) {
+      maximizeEffectMountedRef.current = true
+      return
+    }
+
     const group = workspaceGroupRef.current
     if (!group) return
 
     runAnimatedLayoutChange(() => {
       window.requestAnimationFrame(() => {
         if (maximized) {
+          if (utilityPanelRef.current?.isCollapsed()) {
+            utilityPanelRef.current.expand()
+          }
           conversationPanelRef.current?.collapse()
           group.setLayout({ conversation: 0, utility: 100 })
           return
@@ -366,7 +374,7 @@ export function useUtilityPanelController({
         }
       })
     })
-  }, [conversationPanelRef, maximized, runAnimatedLayoutChange, workspaceGroupRef])
+  }, [conversationPanelRef, maximized, runAnimatedLayoutChange, utilityPanelRef, workspaceGroupRef])
 
   const handleLayoutChanged = useCallback(
     (nextLayout: Layout): void => {
