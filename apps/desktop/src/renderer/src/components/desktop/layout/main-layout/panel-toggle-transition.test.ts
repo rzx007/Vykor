@@ -20,7 +20,7 @@ describe("beginPanelToggleTransition", () => {
     expect(group.hasAttribute("data-panel-animating")).toBe(false)
   })
 
-  it("cancel removes the attribute immediately and is idempotent", () => {
+  it("cancel removes the attribute immediately, clears the timer, and is idempotent", () => {
     vi.useFakeTimers()
     const group = document.createElement("div")
 
@@ -28,7 +28,37 @@ describe("beginPanelToggleTransition", () => {
     cancel()
 
     expect(group.hasAttribute("data-panel-animating")).toBe(false)
+    // Advancing past the original window must not resurrect or re-touch the attribute.
+    vi.advanceTimersByTime(240)
+    expect(group.hasAttribute("data-panel-animating")).toBe(false)
     expect(() => cancel()).not.toThrow()
+  })
+
+  it("re-entrant begin cancels the previous transition so it cannot strip the new one early", () => {
+    vi.useFakeTimers()
+    const group = document.createElement("div")
+
+    beginPanelToggleTransition(group)
+    vi.advanceTimersByTime(200)
+    beginPanelToggleTransition(group)
+
+    // 240ms since the first begin, but only 40ms since the second: still animating.
+    vi.advanceTimersByTime(40)
+    expect(group.getAttribute("data-panel-animating")).toBe("true")
+
+    vi.advanceTimersByTime(200)
+    expect(group.hasAttribute("data-panel-animating")).toBe(false)
+  })
+
+  it("an old cancel does not touch an element owned by a newer transition", () => {
+    vi.useFakeTimers()
+    const group = document.createElement("div")
+
+    const firstCancel = beginPanelToggleTransition(group)
+    beginPanelToggleTransition(group)
+
+    firstCancel()
+    expect(group.getAttribute("data-panel-animating")).toBe("true")
   })
 
   it("is a no-op for a missing element", () => {

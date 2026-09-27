@@ -120,8 +120,11 @@ export function useUtilityPanelController({
 
   const toggleTransitionCancelRef = useRef<(() => void) | null>(null)
   const maximizedRef = useRef(maximized)
+  // Set when a scope switch changes the maximized value, so the maximize effect
+  // applies the stored layout without animating. Assumes a user maximize and a
+  // scope switch are not batched into one render (the UI does not do this).
   const skipMaximizeTransitionRef = useRef(false)
-  const maximizeEffectMountedRef = useRef(false)
+  const appliedMaximizedRef = useRef(maximized)
 
   const runAnimatedLayoutChange = useCallback(
     (apply: () => void): void => {
@@ -341,16 +344,17 @@ export function useUtilityPanelController({
   useEffect(() => {
     const skip = skipMaximizeTransitionRef.current
     skipMaximizeTransitionRef.current = false
+    // Only apply when the maximized value actually changed. This replaces a plain
+    // mount guard so a StrictMode mount→cleanup→mount replay (which keeps refs) also
+    // skips, without suppressing genuine toggles or scope switches.
+    const changed = appliedMaximizedRef.current !== maximized
+    appliedMaximizedRef.current = maximized
     if (skip) {
       toggleTransitionCancelRef.current?.()
       toggleTransitionCancelRef.current = null
       return
     }
-
-    if (!maximizeEffectMountedRef.current) {
-      maximizeEffectMountedRef.current = true
-      return
-    }
+    if (!changed) return
 
     const group = workspaceGroupRef.current
     if (!group) return

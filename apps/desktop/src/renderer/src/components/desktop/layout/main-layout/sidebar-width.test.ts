@@ -74,10 +74,12 @@ describe("resolveSidebarDefaultWidthPx", () => {
 })
 
 describe("shouldPersistSidebarWidth", () => {
-  it("persists only for user interactions with a positive width", () => {
+  it("persists only for user interactions with a width above 1px", () => {
     expect(shouldPersistSidebarWidth({ isUserInteraction: true }, 312)).toBe(true)
     expect(shouldPersistSidebarWidth({ isUserInteraction: false }, 312)).toBe(false)
     expect(shouldPersistSidebarWidth({ isUserInteraction: true }, 0)).toBe(false)
+    expect(shouldPersistSidebarWidth({ isUserInteraction: true }, 1)).toBe(false)
+    expect(shouldPersistSidebarWidth({ isUserInteraction: true }, 0.5)).toBe(false)
     expect(shouldPersistSidebarWidth({ isUserInteraction: true }, Number.NaN)).toBe(false)
   })
 })
