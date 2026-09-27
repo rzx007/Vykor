@@ -1,8 +1,17 @@
 import { AnimatePresence, motion } from "motion/react"
 import { CalendarClock, CircleAlert, X } from "lucide-react"
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
+import { createPanelWidthStore } from "@renderer/components/desktop/layout/panel-width-store"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
@@ -25,7 +34,13 @@ const easeOutQuint = [0.22, 1, 0.36, 1] as const
 const splitEase = "cubic-bezier(0.22, 1, 0.36, 1)"
 const splitDuration = "0.42s"
 const overviewColumns = "minmax(0, 1fr) minmax(0, 46rem) minmax(0, 1fr)"
-const splitColumns = "minmax(0, 0fr) minmax(0, 44rem) minmax(0, 1fr)"
+const detailMinimumWidthPx = 360
+const listWidthStore = createPanelWidthStore({
+  storageKey: "vykor.desktop.scheduled-list-width-px",
+  defaultPx: 704,
+  minPx: 360,
+  maxPx: 900,
+})
 
 export function ScheduledPage({
   onStartConversation,
@@ -43,6 +58,15 @@ export function ScheduledPage({
   const [error, setError] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorTask, setEditorTask] = useState<DesktopScheduledTask | null>(null)
+  const [listWidthPx, setListWidthPx] = useState(() => listWidthStore.resolveDefault())
+  const [isResizingList, setIsResizingList] = useState(false)
+  const gridRef = useRef<HTMLDivElement | null>(null)
+  const listWidthRef = useRef(listWidthPx)
+  const listResizeRef = useRef<{
+    pointerId: number
+    startX: number
+    startWidthPx: number
+  } | null>(null)
   const scheduledActivity = useDesktopSessionStore((state) => state.activity.scheduledRuns)
   const activityInitialized = useDesktopSessionStore((state) => state.activity.initialized)
   const lastDeletedTaskId = useDesktopSessionStore((state) => state.activity.lastDeletedTaskId)
@@ -84,6 +108,58 @@ export function ScheduledPage({
   const selectTask = useCallback((nextSelectedId: string | null): void => {
     selectedIdRef.current = nextSelectedId
     setSelectedId(nextSelectedId)
+  }, [])
+
+  useEffect(() => {
+    listWidthRef.current = listWidthPx
+  }, [listWidthPx])
+
+  const clampListWidth = useCallback((width: number): number => {
+    const gridWidth = gridRef.current?.getBoundingClientRect().width ?? 0
+    const maxByGrid =
+      gridWidth > 0
+        ? Math.max(listWidthStore.minPx, gridWidth - detailMinimumWidthPx)
+        : listWidthStore.maxPx
+    const maxWidth = Math.min(listWidthStore.maxPx, maxByGrid)
+    return Math.round(Math.min(maxWidth, Math.max(listWidthStore.minPx, width)))
+  }, [])
+
+  const handleListResizeStart = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>): void => {
+      if (event.pointerType === "mouse" && event.button !== 0) return
+      listResizeRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidthPx: listWidthRef.current,
+      }
+      setIsResizingList(true)
+      event.currentTarget.setPointerCapture(event.pointerId)
+      event.preventDefault()
+    },
+    []
+  )
+
+  const handleListResizeMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>): void => {
+      const session = listResizeRef.current
+      if (!session || session.pointerId !== event.pointerId) return
+      event.preventDefault()
+      const nextWidth = clampListWidth(session.startWidthPx + event.clientX - session.startX)
+      listWidthRef.current = nextWidth
+      setListWidthPx(nextWidth)
+    },
+    [clampListWidth]
+  )
+
+  const finishListResize = useCallback((event: ReactPointerEvent<HTMLDivElement>): void => {
+    const session = listResizeRef.current
+    if (!session || session.pointerId !== event.pointerId) return
+    listResizeRef.current = null
+    setIsResizingList(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    listWidthStore.persist(listWidthRef.current)
   }, [])
 
   const applyTaskList = useCallback(
@@ -311,12 +387,16 @@ export function ScheduledPage({
       ) : null}
 
       <div
+        ref={gridRef}
         className="grid min-h-0 w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden"
         style={{
-          gridTemplateColumns: hasSelection ? splitColumns : overviewColumns,
-          transition: resolvedReducedMotion
-            ? undefined
-            : `grid-template-columns ${splitDuration} ${splitEase}`,
+          gridTemplateColumns: hasSelection
+            ? `minmax(0, 0fr) minmax(0, ${listWidthPx}px) minmax(0, 1fr)`
+            : overviewColumns,
+          transition:
+            resolvedReducedMotion || isResizingList
+              ? undefined
+              : `grid-template-columns ${splitDuration} ${splitEase}`,
         }}
       >
         <div aria-hidden className="min-h-0 min-w-0 overflow-hidden" />
@@ -406,7 +486,19 @@ export function ScheduledPage({
           </div>
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+        <div className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+          {hasSelection ? (
+            <div
+              role="separator"
+              aria-label="调整任务列表宽度"
+              aria-orientation="vertical"
+              onPointerCancel={finishListResize}
+              onPointerDown={handleListResizeStart}
+              onPointerMove={handleListResizeMove}
+              onPointerUp={finishListResize}
+              className="group/list-resize absolute inset-y-0 left-0 z-30 w-1.5 cursor-col-resize touch-none outline-none after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-px after:bg-border/0 after:transition-colors after:content-[''] hover:after:bg-primary/50 focus-visible:after:bg-primary/50"
+            />
+          ) : null}
           <AnimatePresence initial={false}>
             {selected ? (
               <motion.section
