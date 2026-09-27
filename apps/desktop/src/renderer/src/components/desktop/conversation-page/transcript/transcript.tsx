@@ -135,7 +135,7 @@ export function ConversationTranscript({
             {userMessage ? (
               <MessageScrollerItem
                 messageId={userMessage.inputId ?? userMessage.id}
-                scrollAnchor
+                scrollAnchor={userMessage.id === lastUserMessage?.id}
                 className="pt-2"
               >
                 <MessageBlock
