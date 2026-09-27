@@ -19,7 +19,11 @@ vi.mock("motion/react", () => ({
     div: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
       <div className={className}>{children}</div>
     ),
+    ul: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+      <ul className={className}>{children}</ul>
+    ),
   },
+  useReducedMotion: () => false,
 }))
 
 vi.mock("@renderer/components/ui/scroll-area", () => ({
