@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { link, lstat, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, posix, relative } from "node:path";
 import type { Settings, ToolContext } from "@vykor/core";
 import type {
@@ -15,12 +16,29 @@ export interface FileEntry {
 export interface FileStat {
   isFile: boolean;
   isDirectory: boolean;
+  isSymbolicLink?: boolean;
 }
 
 export interface GrepOptions {
   include?: string;
   caseSensitive: boolean;
   limit: number;
+}
+
+/**
+ * 明确表示“目标不存在”的结构化错误。
+ * 只有 Host 的 ENOENT 与 WSL 固定脚本的不存在分支会映射到这里；
+ * 权限、目录误用和其它 I/O 错误必须保持原错误类型，绝不能伪装成不存在。
+ */
+export class FileNotFoundError extends Error {
+  constructor(readonly path: string) {
+    super(`Path not found: ${path}`);
+    this.name = "FileNotFoundError";
+  }
+}
+
+function isEnoent(error: unknown): boolean {
+  return error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT";
 }
 
 export interface FileOperations extends EnvironmentFileSystem {
@@ -39,8 +57,13 @@ export function fileOperationsFor(context: ToolContext): FileOperations {
 
 export class HostFileOperations implements FileOperations {
   async stat(path: string): Promise<FileStat> {
-    const item = await stat(path);
-    return { isFile: item.isFile(), isDirectory: item.isDirectory() };
+    try {
+      const [item, linkInfo] = await Promise.all([stat(path), lstat(path)]);
+      return { isFile: item.isFile(), isDirectory: item.isDirectory(), isSymbolicLink: linkInfo.isSymbolicLink() };
+    } catch (error) {
+      if (isEnoent(error)) throw new FileNotFoundError(path);
+      throw error;
+    }
   }
 
   async listDir(path: string): Promise<FileEntry[]> {
@@ -53,7 +76,12 @@ export class HostFileOperations implements FileOperations {
   }
 
   async readBytes(path: string): Promise<Uint8Array> {
-    return await readFile(path);
+    try {
+      return await readFile(path);
+    } catch (error) {
+      if (isEnoent(error)) throw new FileNotFoundError(path);
+      throw error;
+    }
   }
 
   async writeText(path: string, content: string): Promise<void> {
@@ -64,6 +92,53 @@ export class HostFileOperations implements FileOperations {
   async writeBytes(path: string, content: Uint8Array): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, content);
+  }
+
+  async createTextExclusive(path: string, content: string): Promise<void> {
+    await mkdir(dirname(path), { recursive: true });
+    const temporary = join(dirname(path), `.vykor-write-${randomUUID()}`);
+    try {
+      const handle = await open(temporary, "wx");
+      try {
+        await handle.writeFile(content, "utf8");
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await link(temporary, path);
+    } finally {
+      await unlink(temporary).catch(() => undefined);
+    }
+  }
+
+  async writeTextAtomic(path: string, content: string): Promise<void> {
+    await mkdir(dirname(path), { recursive: true });
+    let existingMode: number | undefined;
+    try {
+      existingMode = (await stat(path)).mode & 0o7777;
+    } catch (error) {
+      if (!isEnoent(error)) throw error;
+    }
+    const temporary = join(dirname(path), `.vykor-write-${randomUUID()}`);
+    try {
+      const handle = await open(temporary, "wx");
+      try {
+        await handle.writeFile(content, "utf8");
+        if (existingMode !== undefined) await handle.chmod(existingMode);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await rename(temporary, path);
+    } finally {
+      await unlink(temporary).catch(() => undefined);
+    }
+  }
+
+  async removeFile(path: string): Promise<void> {
+    const item = await lstat(path);
+    if (!item.isFile()) throw new Error(`Refusing to remove non-file path: ${path}`);
+    await unlink(path);
   }
 
   async glob(basePath: string, pattern: string, limit: number): Promise<string[]> {
@@ -98,17 +173,74 @@ export class HostFileOperations implements FileOperations {
   }
 }
 
+// 固定 shell 脚本：路径只作为位置参数传入，绝不拼进脚本文本。
+const WSL_MISSING_PARENT_SCRIPT = `ancestor=$(dirname -- "$1")
+while [ ! -e "$ancestor" ]; do
+  parent=$(dirname -- "$ancestor")
+  if [ "$parent" = "$ancestor" ]; then exit 13; fi
+  ancestor=$parent
+done
+if [ -d "$ancestor" ] && [ -x "$ancestor" ]; then exit "$missing_exit"; fi
+exit 13`;
+
+const WSL_READ_SCRIPT = `if [ ! -e "$1" ]; then
+  missing_exit=3
+  ${WSL_MISSING_PARENT_SCRIPT}
+fi
+/bin/cat -- "$1"`;
+
+const WSL_STAT_SCRIPT = `if [ -L "$1" ]; then
+  if [ -f "$1" ]; then printf symlink-file
+  elif [ -d "$1" ]; then printf symlink-directory
+  else printf symlink
+  fi
+elif [ -f "$1" ]; then printf file
+elif [ -d "$1" ]; then printf directory
+elif [ -e "$1" ]; then printf other
+else
+  missing_exit=2
+  ${WSL_MISSING_PARENT_SCRIPT}
+fi`;
+
+const WSL_ATOMIC_WRITE_SCRIPT = `set -eu
+target=$1
+parent=$(dirname -- "$target")
+mkdir -p -- "$parent"
+tmp=$(mktemp -- "$parent/.vykor-write.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+cat > "$tmp"
+if [ -e "$target" ]; then chmod --reference="$target" -- "$tmp"; fi
+mv -T -f -- "$tmp" "$target"`;
+
+const WSL_EXCLUSIVE_CREATE_SCRIPT = `set -eu
+target=$1
+parent=$(dirname -- "$target")
+mkdir -p -- "$parent"
+tmp=$(mktemp -- "$parent/.vykor-write.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+cat > "$tmp"
+ln -- "$tmp" "$target"`;
+
+const WSL_REMOVE_SCRIPT = `set -eu
+if [ -L "$1" ] || [ ! -f "$1" ]; then echo "Refusing to remove non-file path: $1" >&2; exit 4; fi
+rm -- "$1"`;
+
 export class WslFileOperations implements FileOperations {
   constructor(private readonly environment: ExecutionEnvironmentHandle) {}
 
   async stat(path: string): Promise<FileStat> {
     const result = await this.run([
-      "/bin/sh", "-c",
-      'if [ -f "$1" ]; then printf file; elif [ -d "$1" ]; then printf directory; else exit 2; fi',
-      "vk-stat", path,
+      "/bin/sh", "-c", WSL_STAT_SCRIPT, "vk-stat", path,
     ]);
-    if (result.exitCode !== 0) throw new Error(result.output || `Path not found: ${path}`);
-    return { isFile: result.output === "file", isDirectory: result.output === "directory" };
+    if (result.exitCode !== 0) {
+      if (result.exitCode === 2) throw new FileNotFoundError(path);
+      throw new Error(result.output || `Cannot stat path: ${path}`);
+    }
+    return {
+      isFile: result.output === "file" || result.output === "symlink-file",
+      isDirectory: result.output === "directory" || result.output === "symlink-directory",
+      isSymbolicLink: result.output.startsWith("symlink"),
+    };
   }
 
   async listDir(path: string): Promise<FileEntry[]> {
@@ -127,8 +259,11 @@ export class WslFileOperations implements FileOperations {
   }
 
   async readBytes(path: string): Promise<Uint8Array> {
-    const result = await this.run(["/bin/cat", "--", path], undefined, true);
-    if (result.exitCode !== 0) throw new Error(result.output || `Cannot read file: ${path}`);
+    const result = await this.run(["/bin/sh", "-c", WSL_READ_SCRIPT, "vk-read", path], undefined, true);
+    if (result.exitCode !== 0) {
+      if (result.exitCode === 3) throw new FileNotFoundError(path);
+      throw new Error(result.output || `Cannot read file: ${path}`);
+    }
     return result.bytes;
   }
 
@@ -141,6 +276,29 @@ export class WslFileOperations implements FileOperations {
       "/bin/sh", "-c", 'mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', "vk-write", path,
     ], content, true);
     if (result.exitCode !== 0) throw new Error(result.output || `Cannot write file: ${path}`);
+  }
+
+  async createTextExclusive(path: string, content: string): Promise<void> {
+    const result = await this.run(
+      ["/bin/sh", "-c", WSL_EXCLUSIVE_CREATE_SCRIPT, "vk-exclusive", path],
+      new TextEncoder().encode(content),
+      true,
+    );
+    if (result.exitCode !== 0) throw new Error(result.output || `Cannot exclusively create file: ${path}`);
+  }
+
+  async writeTextAtomic(path: string, content: string): Promise<void> {
+    const result = await this.run(
+      ["/bin/sh", "-c", WSL_ATOMIC_WRITE_SCRIPT, "vk-atomic", path],
+      new TextEncoder().encode(content),
+      true,
+    );
+    if (result.exitCode !== 0) throw new Error(result.output || `Cannot write file: ${path}`);
+  }
+
+  async removeFile(path: string): Promise<void> {
+    const result = await this.run(["/bin/sh", "-c", WSL_REMOVE_SCRIPT, "vk-remove", path], undefined, true);
+    if (result.exitCode !== 0) throw new Error(result.output || `Cannot remove file: ${path}`);
   }
 
   async glob(basePath: string, pattern: string, limit: number): Promise<string[]> {

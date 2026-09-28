@@ -188,7 +188,7 @@ function createLocalPathResolver(binding: WorkspaceBinding): EnvironmentPathReso
 
 function unavailableFileSystem(): EnvironmentFileSystem {
   const unavailable = async (): Promise<never> => { throw new Error("Environment file operations are not configured"); };
-  return { stat: unavailable, listDir: unavailable, readText: unavailable, readBytes: unavailable, writeText: unavailable, writeBytes: unavailable, glob: unavailable, grep: unavailable };
+  return { stat: unavailable, listDir: unavailable, readText: unavailable, readBytes: unavailable, writeText: unavailable, writeBytes: unavailable, createTextExclusive: unavailable, writeTextAtomic: unavailable, removeFile: unavailable, glob: unavailable, grep: unavailable };
 }
 
 function hostOsName(): string {

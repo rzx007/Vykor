@@ -10,6 +10,7 @@ import type { AgentDefinition, WorkflowRunRepository } from "@vykor/coordinator"
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { feishuPushTool } from "./channels/index.js";
 import {
+  applyPatchTool,
   fileEditTool,
   fileReadTool,
   fileWriteTool,
@@ -92,6 +93,7 @@ export function createDefaultToolRegistry(
   registerBuiltin(fileReadTool, environment());
   registerBuiltin(fileWriteTool, environment());
   registerBuiltin(fileEditTool, environment());
+  registerBuiltin(applyPatchTool, environment());
   registerBuiltin(globTool, environment());
   registerBuiltin(grepTool, environment());
   registerBuiltin(webFetchTool, controlPlane(true));

@@ -14,6 +14,7 @@ describe("createDefaultToolRegistry", () => {
     expect(names).toContain("Read");
     expect(names).toContain("Write");
     expect(names).toContain("Edit");
+    expect(names).toContain("ApplyPatch");
     expect(names).toContain("Glob");
     expect(names).toContain("Grep");
     expect(names).toContain("WebFetch");
@@ -45,7 +46,7 @@ describe("createDefaultToolRegistry", () => {
     expect(names).not.toContain("ImageToText");
     expect(names).not.toContain("ImageGeneration");
     expect(names).toContain("FeishuPush");
-    expect(tools).toHaveLength(31);
+    expect(tools).toHaveLength(32);
     expect(names).not.toEqual(
       expect.arrayContaining([
         "TaskGet",

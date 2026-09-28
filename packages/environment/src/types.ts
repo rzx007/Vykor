@@ -106,6 +106,7 @@ export interface EnvironmentTerminalFactory {
 export interface EnvironmentFileStat {
   isFile: boolean;
   isDirectory: boolean;
+  isSymbolicLink?: boolean;
 }
 
 export interface EnvironmentFileEntry {
@@ -126,6 +127,9 @@ export interface EnvironmentFileSystem {
   readBytes(path: string): Promise<Uint8Array>;
   writeText(path: string, content: string): Promise<void>;
   writeBytes(path: string, content: Uint8Array): Promise<void>;
+  createTextExclusive(path: string, content: string): Promise<void>;
+  writeTextAtomic(path: string, content: string): Promise<void>;
+  removeFile(path: string): Promise<void>;
   glob(basePath: string, pattern: string, limit: number): Promise<string[]>;
   grep(
     basePath: string,

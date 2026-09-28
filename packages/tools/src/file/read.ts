@@ -2,15 +2,16 @@ import { extname, posix, win32 } from "node:path";
 import type { ToolDefinition } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
-import { fileOperationsFor, type FileOperations } from "./operations.js";
+import { FileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
+import { decodeUtf8Text } from "./text-content.js";
+
+export { BINARY_CONTROL_RATIO, BINARY_SAMPLE_CHARS, isBinaryContent } from "./text-content.js";
 
 export const DEFAULT_READ_LIMIT = 2000;
 export const MAX_READ_BYTES = 50 * 1024;
 export const MAX_READ_BYTES_LABEL = "50 KB";
 export const MAX_LINE_LENGTH = 2000;
 export const MAX_LINE_SUFFIX = ` ... (line truncated to ${MAX_LINE_LENGTH} chars)`;
-export const BINARY_SAMPLE_CHARS = 4096;
-export const BINARY_CONTROL_RATIO = 0.3;
 export const MAX_SUGGESTIONS = 3;
 
 export function normalizeReadInteger(value: unknown, fallback: number): number {
@@ -23,19 +24,6 @@ export function normalizeReadInteger(value: unknown, fallback: number): number {
 export function splitReadLines(content: string): string[] {
   if (content === "") return [];
   return (content.endsWith("\n") ? content.slice(0, -1) : content).split("\n");
-}
-
-/** 含 NUL，或前 4096 字符中控制字符占比超过阈值，即判定为二进制。 */
-export function isBinaryContent(content: string): boolean {
-  if (content.includes("\u0000")) return true;
-  const sample = content.slice(0, BINARY_SAMPLE_CHARS);
-  if (sample.length === 0) return false;
-  let control = 0;
-  for (let index = 0; index < sample.length; index += 1) {
-    const code = sample.charCodeAt(index);
-    if (code < 9 || (code > 13 && code < 32)) control += 1;
-  }
-  return control / sample.length > BINARY_CONTROL_RATIO;
 }
 
 export function truncateReadLine(line: string): string {
@@ -206,16 +194,8 @@ export const fileReadTool: ToolDefinition = {
 
       let content: string;
       try {
-        content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+        content = decodeUtf8Text(bytes);
       } catch {
-        return {
-          content: [{ type: "text", text: `Cannot read binary file: ${filePath}` }],
-          isError: true,
-          failureKind: "invalid_input",
-          executionState: "completed",
-        };
-      }
-      if (isBinaryContent(content)) {
         return {
           content: [{ type: "text", text: `Cannot read binary file: ${filePath}` }],
           isError: true,
@@ -357,7 +337,8 @@ async function describeMissingPath(
     };
   }
 
-  const missing = statError !== null && typeof statError === "object" && "code" in statError && statError.code === "ENOENT";
+  const missing = statError instanceof FileNotFoundError ||
+    (statError !== null && typeof statError === "object" && "code" in statError && statError.code === "ENOENT");
   return {
     content: [{
       type: "text",

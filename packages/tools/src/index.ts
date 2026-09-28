@@ -15,6 +15,7 @@ export {
   type ShellRunnerSpec,
 } from "./shell/index.js";
 export {
+  applyPatchTool,
   buildUnifiedDiff,
   computeFileChange,
   computeToolDiff,

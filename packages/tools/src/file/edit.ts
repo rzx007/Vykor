@@ -3,6 +3,7 @@ import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { fileOperationsFor } from "./operations.js";
 import { managedPersistencePathKind } from "./managed-persistence-path.js";
+import { isSystemPath } from "./file-mutation-guard.js";
 import {
   EditMatchError,
   convertToLineEnding,
@@ -12,22 +13,10 @@ import {
   replace as replaceFuzzy,
 } from "./edit-replacers.js";
 
-// System directories that must never be edited, regardless of permission mode.
-const SYSTEM_DIR_PREFIXES = [
-  "/etc/", "/sys/", "/proc/", "/dev/", "/boot/",
-  "/usr/bin/", "/usr/sbin/", "/bin/", "/sbin/",
-  "c:\\windows\\", "c:\\program files\\", "c:\\program files (x86)\\",
-];
-
-function isSystemPath(p: string): boolean {
-  const normalized = p.replace(/\\/g, "/").toLowerCase();
-  return SYSTEM_DIR_PREFIXES.some((prefix) => normalized.startsWith(prefix.replace(/\\/g, "/")));
-}
-
 export const fileEditTool: ToolDefinition = {
   name: "Edit",
   description:
-    "Perform exact string replacements in files.",
+    "Modify an existing text file with a precise old/new replacement. Prefer ApplyPatch for multiple hunks or files.",
   inputSchema: {
     type: "object",
     properties: {
