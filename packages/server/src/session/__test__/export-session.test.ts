@@ -66,6 +66,17 @@ describe("writeSessionExport", () => {
         metadata: {},
         createdAt: 1,
         updatedAt: 1,
+      }, {
+        id: "p4",
+        sessionId: "s1",
+        messageId: "m1",
+        seq: 4,
+        type: "text" as const,
+        status: "interrupted" as const,
+        text: "partial model output",
+        metadata: { modelGeneration: { generationId: "g1", attempt: 1, committed: false } },
+        createdAt: 1,
+        updatedAt: 1,
       }];
       const inputs = [{
         id: "i1",
@@ -102,6 +113,7 @@ describe("writeSessionExport", () => {
       expect(markdown).toContain("hello export");
       expect(markdown).toContain("[附件: screen.png | image/png | 42 bytes | assetId=att_1]");
       expect(markdown).not.toContain("internal chain of thought");
+      expect(markdown).not.toContain("partial model output");
       expect(markdown).not.toMatch(/storage|blob|sha256/i);
 
       const json = await writeSessionExport({
@@ -120,7 +132,7 @@ describe("writeSessionExport", () => {
       expect(parsed.message_count).toBe(1);
       expect(parsed.messages[0]?.content).toBe("hello export");
       expect(parsed.inputs).toEqual(inputs);
-      expect(parsed.messages[0]?.parts).toEqual(parts);
+      expect(parsed.messages[0]?.parts).toEqual(parts.slice(0, 3));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

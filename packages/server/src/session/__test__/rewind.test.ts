@@ -34,6 +34,18 @@ function textPart(id: string, messageId: string, seq: number, text: string): Ses
   };
 }
 
+function uncommittedTextPart(
+  id: string,
+  messageId: string,
+  seq: number,
+  text: string,
+): SessionMessagePartRecord {
+  return {
+    ...textPart(id, messageId, seq, text),
+    metadata: { modelGeneration: { generationId: "g1", attempt: 1, committed: false } },
+  };
+}
+
 describe("rewindTranscript", () => {
   it("removes the last user turn and trailing assistant messages", () => {
     const messages = [
@@ -63,5 +75,22 @@ describe("rewindTranscript", () => {
     expect(result.turns).toBe(1);
     expect(result.removed).toBe(1);
     expect(result.kept).toEqual([]);
+  });
+
+  it("does not persist uncommitted model parts in the rewound transcript", () => {
+    const messages = [
+      message("m1", 1, "user"),
+      message("m2", 2, "assistant"),
+      message("m3", 3, "user"),
+    ];
+    const parts = [
+      textPart("p1", "m1", 1, "keep this turn"),
+      uncommittedTextPart("p2", "m2", 2, "partial model output"),
+      textPart("p3", "m3", 3, "rewind this turn"),
+    ];
+
+    const result = rewindTranscript(messages, parts, 1);
+
+    expect(result.kept[1]?.parts).toEqual([]);
   });
 });

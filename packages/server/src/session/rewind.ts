@@ -3,10 +3,11 @@
  * Counts user turns from the end.
  */
 
-import type {
-  ReplaceTranscriptMessageInput,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
+import {
+  isCommittedModelPart,
+  type ReplaceTranscriptMessageInput,
+  type SessionMessagePartRecord,
+  type SessionMessageRecord,
 } from "@vykor/protocol";
 import { publicTextFromParts } from "./transcript-text.js";
 
@@ -48,6 +49,7 @@ export function rewindTranscript(
 ): RewindTranscriptResult {
   const byMessage = new Map<string, SessionMessagePartRecord[]>();
   for (const part of parts) {
+    if (!isCommittedModelPart(part)) continue;
     const rows = byMessage.get(part.messageId) ?? [];
     rows.push(part);
     byMessage.set(part.messageId, rows);

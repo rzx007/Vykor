@@ -204,6 +204,17 @@ describe("SessionMaintenanceService", () => {
       metadata: {},
       createdAt: 1,
       updatedAt: 1,
+    }, {
+      id: "p3",
+      seq: 3,
+      sessionId: "s1",
+      messageId: "m1",
+      type: "text",
+      status: "interrupted",
+      text: "partial model output",
+      metadata: { modelGeneration: { generationId: "g1", attempt: 1, committed: false } },
+      createdAt: 1,
+      updatedAt: 1,
     }] as any);
 
     await expect(maintenance.remember("s1")).resolves.toBe(remembered);

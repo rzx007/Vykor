@@ -4,7 +4,7 @@ import type {
   SessionRecord,
 } from "@vykor/protocol";
 import type { SessionInputConversationCatalog } from "./session-input-materializer.js";
-import { isPublicTextPart } from "../../session/transcript-text.js";
+import { isCommittedPublicTextPart } from "../../session/transcript-text.js";
 
 const MAX_CONVERSATION_CONTEXT_CHARS = 12_000;
 
@@ -25,7 +25,7 @@ export function conversationContextCatalog(
       if (!session || session.status === "archived") return undefined;
       const partsByMessage = new Map<string, string[]>();
       for (const part of store.listMessageParts(id)) {
-        if (!isPublicTextPart(part) || !part.text) continue;
+        if (!isCommittedPublicTextPart(part) || !part.text) continue;
         const texts = partsByMessage.get(part.messageId) ?? [];
         texts.push(part.text);
         partsByMessage.set(part.messageId, texts);

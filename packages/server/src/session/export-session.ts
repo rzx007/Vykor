@@ -2,13 +2,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { getDataDir } from "@vykor/core";
 
-import type {
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
+import {
+  isCommittedModelPart,
+  type SessionInputRecord,
+  type SessionMessagePartRecord,
+  type SessionMessageRecord,
+  type SessionRecord,
 } from "@vykor/protocol";
-import { isPublicTextPart, publicTextFromParts } from "./transcript-text.js";
+import { isCommittedPublicTextPart, publicTextFromParts } from "./transcript-text.js";
 
 export type SessionExportFormat = "md" | "json";
 
@@ -33,17 +34,18 @@ function partsForMessage(
 ): SessionMessagePartRecord[] {
   return parts
     .filter((part) => part.messageId === messageId)
+    .filter(isCommittedModelPart)
     .sort((a, b) => a.seq - b.seq);
 }
 
 function textFromParts(parts: SessionMessagePartRecord[]): string {
-  return publicTextFromParts(parts);
+  return publicTextFromParts(parts, "", { requireCommitted: true });
 }
 
 function markdownFromParts(parts: SessionMessagePartRecord[]): string {
   return parts
     .flatMap((part) => {
-      if (isPublicTextPart(part)) {
+      if (isCommittedPublicTextPart(part)) {
         return part.text ? [part.text] : [];
       }
       if (part.type === "attachment") {

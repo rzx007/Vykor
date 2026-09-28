@@ -4,7 +4,7 @@ import { updateRulesFromSession, type SessionMessageLike } from "@vykor/personal
 import type { SessionStore } from "@vykor/services";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
-import { isPublicTextPart } from "../../session/transcript-text.js";
+import { isCommittedPublicTextPart } from "../../session/transcript-text.js";
 
 export interface SessionPostRunMaintenanceContext {
   data: Pick<SessionStore, "conversations" | "runs" | "sessions" | "goals">;
@@ -126,7 +126,7 @@ function transcriptMessages(
     .map((message) => {
       const content = store.conversations.listMessageParts(sessionId, { messageId: message.id })
         .sort((a, b) => a.seq - b.seq)
-        .filter(isPublicTextPart)
+        .filter(isCommittedPublicTextPart)
         .map((part) => part.text ?? (typeof part.output === "string" ? part.output : ""))
         .filter(Boolean)
         .join("\n");

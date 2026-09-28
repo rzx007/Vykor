@@ -15,6 +15,13 @@ function createStore(runStatus = "completed") {
     listMessageParts: vi.fn(() => [
       { id: "p1", seq: 1, type: "text", text: "ssh ops@10.0.0.9" },
       { id: "p2", seq: 2, type: "reasoning", text: "private reasoning" },
+      {
+        id: "p3",
+        seq: 3,
+        type: "text",
+        text: "partial model output",
+        metadata: { modelGeneration: { generationId: "g1", attempt: 1, committed: false } },
+      },
     ]),
     listSessions: vi.fn(() => []),
   };
