@@ -92,6 +92,10 @@ vk mcp add beui --url https://mcp.beui.dev/mcp
 # OAuth HTTP MCP：显式声明 scope，再授权
 vk mcp add linear --url https://mcp.linear.app/mcp --scope read
 vk mcp login linear --scopes read
+vk mcp status linear --json
+vk mcp logout linear
+# 无浏览器时打印授权地址，粘贴完整 callback URL
+vk mcp login linear --scopes read --no-browser
 vk plugin list|install|uninstall|enable|disable
 vk sandbox enable|disable|status|check
 vk daemon start|status|stop|install|uninstall
@@ -100,6 +104,10 @@ vk config set <key> <value>
 vk workflow list|status|validate|template|reconcile|cancel
 vk channels add|allow|status|serve
 ```
+
+MCP OAuth 的 `login/logout` 有独立规则：已有兼容 daemon 时共用其授权接口；明确离线时使用本地流程，不为授权启动 daemon。请求可能已被受理后不会切回本地重复登录。授权已保存但连接同步失败会提示警告并以非零退出，凭据不会回滚。Desktop 入口位于“主页 → 插件 → MCP”，授权 URL 和 Token 不传给页面。
+
+OAuth 凭据首次实际修改会从 v1 升到 v2。同一配置目录的 CLI、daemon 和 Desktop 需一起更新；更新时先停止旧 daemon。当前仍使用独立明文凭据文件，未启用 OS Keyring。
 
 开启登录后自动拉起 daemon（可选）：
 

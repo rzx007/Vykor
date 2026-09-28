@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
+import { VykorClient, VykorApiError, IncompatibleProtocolError } from "@vykor/client";
+type OAuthOperationView = Awaited<ReturnType<VykorClient["mcp"]["getLogin"]>>;
+type OAuthOperationEvent = ReturnType<VykorClient["mcp"]["watchLogin"]> extends AsyncIterable<infer T> ? T : never;
 import {
   loadSettings,
   updateSettings,
@@ -14,6 +18,7 @@ import {
 import {
   McpOAuthApplicationError,
   McpOAuthApplicationService,
+  readDaemonRegistry,
 } from "@vykor/server";
 import { summarizeMcpEndpoint } from "@vykor/mcp";
 import { createCliMcpRuntimeCoordinator } from "../mcp-runtime-coordinator.js";
@@ -25,8 +30,9 @@ export interface McpCommandDeps {
   /** Ask active sessions to re-check the latest global config for one server. */
   reconcile?(name: string): Promise<Array<{ runtimeId: string; message: string }>>;
   openBrowser(url: string): Promise<void>;
-  readLine(prompt: string): Promise<string>;
+  readLine(prompt: string, signal?: AbortSignal): Promise<string>;
   stdout(line: string): void;
+  daemon?: { connect(): Promise<{ client: Pick<VykorClient, "mcp" | "protocol">; instanceId: string } | undefined> };
 }
 
 export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command {
@@ -113,12 +119,21 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
       await requireServer(deps, name);
       const scopes = opts.scopes?.split(",").map(value => value.trim()).filter(Boolean) ?? [];
       try {
+        const daemon = await deps.daemon?.connect();
+        if (daemon) {
+          await loginThroughDaemon(deps, daemon, name, scopes, opts.browser === false);
+          return;
+        }
         const snapshot = await deps.application.login({
           name,
           scopes,
           noBrowser: opts.browser === false,
           readCallbackUrl: deps.readLine,
           openBrowser: deps.openBrowser,
+          ...(opts.browser === false ? { onAuthorizationUrl: (url: string) => {
+            assertAuthorizationUrl(url);
+            deps.stdout(`Open this authorization URL: ${url}`);
+          } } : {}),
         });
         const server = snapshot.servers.find((entry) => entry.name === name);
         deps.stdout(`Logged in to ${name} with scopes: ${(server?.scopes ?? scopes).join(", ") || "(none)"}`);
@@ -134,6 +149,12 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
     .action(async (name: string) => {
       await requireServer(deps, name);
       try {
+        const daemon = await deps.daemon?.connect();
+        if (daemon) {
+          await logoutThroughDaemon(deps, daemon.client, name);
+          deps.stdout(`Logged out from ${name}.`);
+          return;
+        }
         await deps.application.logout(name);
         deps.stdout(`Logged out from ${name}.`);
       } catch (error) {
@@ -148,13 +169,16 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
     .action(async (name: string) => {
       const settings = await deps.loadSettings();
       if (!settings.mcpServers?.[name]) throw new Error(`MCP server not found: ${name}`);
-      let syncFailure: McpOAuthApplicationError | undefined;
+      let syncFailure: McpOAuthApplicationError | VykorApiError | undefined;
       try {
-        await deps.application.logout(name);
+        const daemon = await deps.daemon?.connect();
+        if (daemon) await logoutThroughDaemon(deps, daemon.client, name);
+        else await deps.application.logout(name);
       } catch (error) {
         // A failed Runtime cleanup does not undo the credential deletion.
-        if (!(error instanceof McpOAuthApplicationError) || error.code !== "oauth-removed-runtime-sync-failed") throw error;
-        reportRuntimeSyncFailure(deps, error, name, "removed");
+        if (error instanceof McpOAuthApplicationError && error.code === "oauth-removed-runtime-sync-failed") {
+          reportRuntimeSyncFailure(deps, error, name, "removed");
+        } else if (!isDaemonLogoutSyncFailure(error)) throw error;
         syncFailure = error;
       }
       await deps.updateSettings((current) => {
@@ -170,6 +194,24 @@ export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command 
   return cmd;
 }
 
+function isDaemonLogoutSyncFailure(error: unknown): error is VykorApiError {
+  return error instanceof VykorApiError && isRecord(error.body) && error.body.code === "oauth-removed-runtime-sync-failed";
+}
+
+async function logoutThroughDaemon(
+  deps: McpCommandDeps,
+  client: Pick<VykorClient, "mcp">,
+  name: string,
+): Promise<void> {
+  try { await client.mcp.logout(name); }
+  catch (error) {
+    if (isDaemonLogoutSyncFailure(error)) {
+      deps.stdout(`OAuth credentials were removed for ${name}, but Runtime synchronization failed.`);
+    }
+    throw error;
+  }
+}
+
 export function createDefaultMcpCommandDeps(): McpCommandDeps {
   const coordinator = createCliMcpRuntimeCoordinator();
   const application = new McpOAuthApplicationService({ coordinator });
@@ -177,6 +219,24 @@ export function createDefaultMcpCommandDeps(): McpCommandDeps {
     loadSettings,
     updateSettings,
     application,
+    daemon: { connect: async () => {
+      let registry: ReturnType<typeof readDaemonRegistry>;
+      try { registry = readDaemonRegistry(); }
+      catch { throw new Error("MCP daemon registry could not be read; login was not started."); }
+      if (!registry) return undefined;
+      const client = new VykorClient({ baseUrl: registry.url, token: registry.token });
+      let capabilities: Awaited<ReturnType<typeof client.protocol.capabilities>>;
+      try { capabilities = await client.protocol.capabilities(); }
+      catch (error) {
+        // An unreachable daemon is genuinely offline before any login request is sent.
+        if (isNetworkFailure(error)) return undefined;
+        throw error;
+      }
+      if (capabilities.features.mcpOAuth !== 1 || !capabilities.mcpOAuth?.instanceId) {
+        throw new Error("This daemon does not support MCP OAuth operations; update or restart it.");
+      }
+      return { client, instanceId: capabilities.mcpOAuth.instanceId };
+    } },
     reconcile: async (name) => {
       try {
         return (await coordinator.reconcileGlobal(name)).failures;
@@ -185,12 +245,152 @@ export function createDefaultMcpCommandDeps(): McpCommandDeps {
       }
     },
     openBrowser: openSystemBrowser,
-    readLine: async prompt => {
+    readLine: async (prompt, signal) => {
       const reader = createInterface({ input: stdin, output: stdout });
-      try { return await reader.question(prompt); } finally { reader.close(); }
+      try { return await reader.question(prompt, { signal }); } finally { reader.close(); }
     },
     stdout: line => console.log(line),
   };
+}
+
+function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof VykorApiError || error instanceof IncompatibleProtocolError) return false;
+  if (error instanceof TypeError && /fetch failed/i.test(error.message)) return true;
+  let current = error as { code?: string; cause?: unknown } | undefined;
+  for (let i = 0; current && i < 5; i++, current = current.cause as typeof current) {
+    if (["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH"].includes(current.code ?? "")) return true;
+  }
+  return false;
+}
+
+async function loginThroughDaemon(
+  deps: McpCommandDeps,
+  daemon: { client: Pick<VykorClient, "mcp" | "protocol">; instanceId: string },
+  name: string,
+  scopes: string[],
+  noBrowser: boolean,
+): Promise<void> {
+  const { client, instanceId } = daemon;
+  const controller = new AbortController();
+  const inputController = new AbortController();
+  let interrupted = false;
+  const onInterrupt = () => { interrupted = true; controller.abort(); inputController.abort(); };
+  process.once("SIGINT", onInterrupt);
+  const input = { oauthInstanceId: instanceId, requestId: randomUUID(), scopes, callbackMode: noBrowser ? "manual" as const : "local" as const };
+  let loginId: string | undefined;
+  let opened = false;
+  let rejectCallback!: (error: unknown) => void;
+  const callbackFailure = noBrowser ? new Promise<never>((_resolve, reject) => { rejectCallback = reject; }) : undefined;
+  void callbackFailure?.catch(() => {});
+  try {
+    let operation: OAuthOperationView;
+    try {
+      const accepted = await client.mcp.startLogin(name, input, { signal: controller.signal });
+      loginId = accepted.loginId;
+      operation = accepted.operation;
+    } catch (error) {
+      // The POST may have been accepted. Retry only against the original daemon
+      // instance, with exactly the same idempotency key.
+      if (!isNetworkFailure(error) || controller.signal.aborted) throw error;
+      const capabilities = await client.protocol.capabilities();
+      if (capabilities.mcpOAuth?.instanceId !== instanceId) throw new Error("MCP OAuth daemon restarted; login cannot be recovered.");
+      const accepted = await client.mcp.startLogin(name, input, { signal: controller.signal });
+      loginId = accepted.loginId;
+      operation = accepted.operation;
+    }
+    const showAuthorization = async (view: OAuthOperationView): Promise<void> => {
+      if (opened || !view.authorizationReady || !loginId) return;
+      const detail = view.authorizationUrl ? view : await client.mcp.getLogin(loginId, { signal: controller.signal });
+      if (!detail.authorizationUrl) return;
+      opened = true;
+      if (noBrowser) {
+        deps.stdout(`Open this authorization URL: ${detail.authorizationUrl}`);
+        const inputTask = (async () => {
+          while (!inputController.signal.aborted) {
+            const callbackUrl = await deps.readLine("Paste the full callback URL: ", inputController.signal);
+            try {
+              await client.mcp.submitCallback(loginId!, callbackUrl, { signal: controller.signal });
+              return;
+            } catch (error) {
+              if (!(error instanceof VykorApiError) || error.status !== 400) throw error;
+              deps.stdout("Callback URL was rejected. Paste the full callback URL again.");
+            }
+          }
+        })();
+        void inputTask.catch(rejectCallback);
+      } else {
+        assertAuthorizationUrl(detail.authorizationUrl);
+        await deps.openBrowser(detail.authorizationUrl);
+      }
+    };
+    await showAuthorization(operation);
+    for (let attempt = 0; operation.state === "pending" && attempt < 3; attempt++) {
+      try {
+        const readEvents = async (): Promise<OAuthOperationEvent | undefined> => {
+          for await (const event of client.mcp.watchLogin(loginId!, { signal: controller.signal })) {
+            if (event.event === "mcp.oauth.login.updated") await showAuthorization(event.data);
+            if (event.event === "mcp.oauth.login.completed") return event;
+          }
+          return undefined;
+        };
+        const terminal = await (callbackFailure ? Promise.race([readEvents(), callbackFailure]) : readEvents());
+        if (terminal) {
+          inputController.abort();
+          await finishDaemonLogin(deps, client, name, scopes, terminal);
+          return;
+        }
+      } catch (error) {
+        if (controller.signal.aborted || error instanceof VykorApiError || error instanceof IncompatibleProtocolError || !isStreamDisconnect(error)) throw error;
+      }
+      const capabilities = await client.protocol.capabilities();
+      if (capabilities.mcpOAuth?.instanceId !== instanceId) throw new Error("MCP OAuth daemon restarted; login cannot be recovered.");
+      operation = await client.mcp.getLogin(loginId!, { signal: controller.signal });
+      await showAuthorization(operation);
+      if (operation.state === "pending") await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    if (operation.state === "pending") throw new Error(`MCP OAuth operation ${loginId} is still pending. Run \`vk mcp status ${name}\` to check authorization; \`vk mcp logout ${name}\` stops it and also removes any existing authorization.`);
+    await finishDaemonLogin(deps, client, name, scopes, { event: "mcp.oauth.login.completed", data: operation });
+  } finally {
+    process.removeListener("SIGINT", onInterrupt);
+    inputController.abort();
+    controller.abort();
+    if (interrupted && loginId) {
+      try { await client.mcp.cancelLogin(loginId); } catch { /* best effort */ }
+    }
+  }
+}
+
+function isStreamDisconnect(error: unknown): boolean {
+  return isNetworkFailure(error) || error instanceof TypeError || (error instanceof Error && /terminated|socket closed/i.test(error.message));
+}
+
+function assertAuthorizationUrl(value: string): void {
+  const target = new URL(value);
+  if (target.protocol !== "https:" || target.username || target.password || target.hash) {
+    throw new Error("OAuth authorization URL must be a safe HTTPS URL.");
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function finishDaemonLogin(
+  deps: McpCommandDeps,
+  client: Pick<VykorClient, "mcp">,
+  name: string,
+  scopes: string[],
+  event: OAuthOperationEvent,
+): Promise<void> {
+  const state = event.data;
+  if (state.state !== "completed" || !state.credentialCommitted) throw new Error(`MCP OAuth login ${state.state}: ${state.errorCode ?? "unknown error"}`);
+  const status = await client.mcp.authStatus();
+  const server = status.servers.find((entry) => entry.name === name);
+  if (event.data.runtimeSync?.failures.length || event.data.runtimeSync?.status === "error") {
+    deps.stdout(`OAuth authorization was saved for ${name}, but Runtime synchronization failed.`);
+    throw new Error("MCP OAuth Runtime synchronization failed");
+  }
+  deps.stdout(`Logged in to ${name} with scopes: ${(server?.scopes ?? scopes).join(", ") || "(none)"}`);
 }
 
 async function reportReconcileFailures(

@@ -3,6 +3,7 @@ import type {
   DesktopMcpAddInput,
   DesktopMcpGetConfigInput,
   DesktopMcpLoginInput,
+  DesktopMcpLoginOperationInput,
   DesktopMcpLogoutInput,
   DesktopMcpRemoveInput,
   DesktopMcpSetEnabledInput,
@@ -39,7 +40,15 @@ export const mcpIpcContribution: IpcContribution = {
       },
       {
         channel: IpcChannels.mcpLogin,
-        handler: (_event, input) => desktopMcpService.login(input as DesktopMcpLoginInput),
+        handler: (event, input) => desktopMcpService.login(input as DesktopMcpLoginInput, event.sender),
+      },
+      {
+        channel: IpcChannels.mcpLoginStatus,
+        handler: (_event, input) => desktopMcpService.loginStatus(input as DesktopMcpLoginOperationInput),
+      },
+      {
+        channel: IpcChannels.mcpCancelLogin,
+        handler: (_event, input) => desktopMcpService.cancelLogin(input as DesktopMcpLoginOperationInput),
       },
       {
         channel: IpcChannels.mcpLogout,

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { McpOAuthCredentialRecord, McpRuntimeStatus, Settings } from "@vykor/core";
 import { buildMcpAuthServerSnapshot } from "@vykor/mcp";
 import { McpOAuthApplicationError } from "@vykor/server";
+import { VykorApiError } from "@vykor/client";
 import { createMcpCommand, type McpCommandDeps } from "./mcp.js";
 
 function credential(): McpOAuthCredentialRecord {
@@ -61,14 +62,144 @@ function fixture(options: { runtimeStatus?: McpRuntimeStatus } = {}) {
     application: { snapshot, login, logout },
     reconcile,
     openBrowser: vi.fn(async () => undefined),
-    readLine: vi.fn(async () => ""),
+    readLine: vi.fn(async () => "http://127.0.0.1/callback?code=ok&state=state"),
     stdout: line => output.push(line),
   };
   const run = (...args: string[]) => createMcpCommand(deps).parseAsync(["node", "vk", ...args]);
   return { deps, run, login, logout, output, credentials, snapshot, reconcile, getSettings: () => settings };
 }
 
+function daemonFixture() {
+  const test = fixture();
+  const operation = { loginId: "login-1", name: "linear", state: "pending" as const, credentialCommitted: false, authorizationReady: true, authorizationUrl: "https://auth.example/authorize" };
+  const client = {
+    protocol: { capabilities: vi.fn(async () => ({ features: { mcpOAuth: 1 }, mcpOAuth: { instanceId: "instance-1" } })) },
+    mcp: {
+      startLogin: vi.fn(async () => ({ loginId: "login-1", operation })),
+      getLogin: vi.fn(async () => operation),
+      watchLogin: vi.fn(async function* () { yield { event: "mcp.oauth.login.completed", data: { ...operation, state: "completed", credentialCommitted: true, authorizationReady: true, runtimeSync: { status: "connected", affectedRuntimes: 1, failures: [] } } }; }),
+      submitCallback: vi.fn(async () => operation),
+      cancelLogin: vi.fn(async () => operation),
+      authStatus: vi.fn(async () => ({ servers: [{ name: "linear", scopes: ["read"], authStatus: "valid" }] })),
+      logout: vi.fn(async () => ({ servers: [] })),
+    },
+  };
+  test.deps.daemon = { connect: vi.fn(async () => ({ client: client as never, instanceId: "instance-1" })) };
+  return { ...test, client, operation };
+}
+
 describe("mcp command", () => {
+  it("uses the daemon operation and keeps the browser on this CLI host", async () => {
+    const test = daemonFixture();
+    await test.run("login", "linear");
+    expect(test.client.mcp.startLogin).toHaveBeenCalledWith("linear", expect.objectContaining({ oauthInstanceId: "instance-1", callbackMode: "local" }), expect.any(Object));
+    expect(test.deps.openBrowser).toHaveBeenCalledWith("https://auth.example/authorize");
+    expect(test.login).not.toHaveBeenCalled();
+  });
+
+  it("recovers a lost accept response using the same request ID", async () => {
+    const test = daemonFixture();
+    test.client.mcp.startLogin.mockRejectedValueOnce(new TypeError("fetch failed"));
+    await test.run("login", "linear");
+    const requests = test.client.mcp.startLogin.mock.calls.map((call) => call[1] as { requestId: string });
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.requestId).toBe(requests[1]?.requestId);
+    expect(test.login).not.toHaveBeenCalled();
+  });
+
+  it("resubscribes to the same login after a broken stream", async () => {
+    const test = daemonFixture();
+    test.client.mcp.watchLogin.mockImplementationOnce(async function* () { throw new TypeError("terminated"); });
+    await test.run("login", "linear");
+    expect(test.client.mcp.startLogin).toHaveBeenCalledTimes(1);
+    expect(test.client.mcp.watchLogin).toHaveBeenCalledTimes(2);
+    expect(test.client.mcp.getLogin).toHaveBeenCalledWith("login-1", expect.any(Object));
+    expect(test.deps.openBrowser).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses recovery if the daemon instance changed", async () => {
+    const test = daemonFixture();
+    test.client.mcp.startLogin.mockRejectedValueOnce(new TypeError("fetch failed"));
+    test.client.protocol.capabilities.mockResolvedValueOnce({ features: { mcpOAuth: 1 }, mcpOAuth: { instanceId: "instance-2" } });
+    await expect(test.run("login", "linear")).rejects.toThrow("restarted");
+    expect(test.client.mcp.startLogin).toHaveBeenCalledTimes(1);
+    expect(test.login).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back locally after a daemon authorization error", async () => {
+    const test = daemonFixture();
+    test.client.mcp.startLogin.mockRejectedValueOnce(new VykorApiError("unauthorized", 401, { error: "unauthorized" }));
+    await expect(test.run("login", "linear")).rejects.toMatchObject({ status: 401 });
+    expect(test.login).not.toHaveBeenCalled();
+  });
+
+  it("does not start local authorization when daemon discovery fails", async () => {
+    const test = fixture();
+    test.deps.daemon = { connect: vi.fn(async () => { throw new Error("MCP daemon registry could not be read"); }) };
+    await expect(test.run("login", "linear")).rejects.toThrow("registry could not be read");
+    expect(test.login).not.toHaveBeenCalled();
+  });
+
+  it("removes config after daemon logout removed credentials but Runtime sync failed", async () => {
+    const test = daemonFixture();
+    test.client.mcp.logout.mockRejectedValueOnce(new VykorApiError("sync failed", 500, { code: "oauth-removed-runtime-sync-failed", credentialRemoved: true }));
+    await expect(test.run("remove", "linear")).rejects.toMatchObject({ status: 500 });
+    expect(test.getSettings().mcpServers?.linear).toBeUndefined();
+    expect(test.logout).not.toHaveBeenCalled();
+    expect(test.output.join("\n")).toContain("credentials were removed");
+  });
+
+  it("prints the URL and submits the pasted callback in no-browser mode", async () => {
+    const test = daemonFixture();
+    await test.run("login", "linear", "--no-browser");
+    expect(test.output.join("\n")).toContain("https://auth.example/authorize");
+    expect(test.deps.readLine).toHaveBeenCalled();
+    expect(test.client.mcp.submitCallback).toHaveBeenCalledWith("login-1", "http://127.0.0.1/callback?code=ok&state=state", expect.any(Object));
+    expect(test.deps.openBrowser).not.toHaveBeenCalled();
+  });
+
+  it("stops waiting for pasted input when the daemon completes first", async () => {
+    const test = daemonFixture();
+    let inputAborted = false;
+    test.deps.readLine = vi.fn(async (_prompt, signal) => await new Promise<string>((_resolve, reject) => {
+      signal?.addEventListener("abort", () => { inputAborted = true; reject(new Error("input aborted")); }, { once: true });
+    }));
+    await test.run("login", "linear", "--no-browser");
+    expect(inputAborted).toBe(true);
+    expect(test.client.mcp.cancelLogin).not.toHaveBeenCalled();
+  });
+
+  it("closes the watch stream if manual input fails without cancelling the daemon operation", async () => {
+    const test = daemonFixture();
+    test.deps.readLine = vi.fn(async () => { throw new Error("input failed"); });
+    test.client.mcp.watchLogin.mockImplementationOnce(async function* (_loginId: string, options: { signal?: AbortSignal }) {
+      await new Promise<void>((resolve) => options.signal?.addEventListener("abort", () => resolve(), { once: true }));
+    });
+    await expect(test.run("login", "linear", "--no-browser")).rejects.toThrow("input failed");
+    const signal = (test.client.mcp.watchLogin.mock.calls[0]?.[1] as { signal: AbortSignal }).signal;
+    expect(signal.aborted).toBe(true);
+    expect(test.client.mcp.cancelLogin).not.toHaveBeenCalled();
+  });
+
+  it("lets a rejected manual callback be pasted again without a new login", async () => {
+    const test = daemonFixture();
+    let complete!: () => void;
+    const submitted = new Promise<void>((resolve) => { complete = resolve; });
+    test.client.mcp.submitCallback.mockRejectedValueOnce(new VykorApiError("invalid callback", 400, { error: "invalid callback" }));
+    test.client.mcp.submitCallback.mockImplementationOnce(async () => { complete(); return test.operation; });
+    test.client.mcp.watchLogin.mockImplementationOnce(async function* () { await submitted; yield { event: "mcp.oauth.login.completed", data: { ...test.operation, state: "completed", credentialCommitted: true } }; });
+    await test.run("login", "linear", "--no-browser");
+    expect(test.client.mcp.startLogin).toHaveBeenCalledTimes(1);
+    expect(test.client.mcp.submitCallback).toHaveBeenCalledTimes(2);
+    expect(test.output.join("\n")).toContain("rejected");
+  });
+
+  it("exits nonzero when a committed login has a Runtime warning", async () => {
+    const test = daemonFixture();
+    test.client.mcp.watchLogin.mockImplementationOnce(async function* () { yield { event: "mcp.oauth.login.completed", data: { ...test.operation, state: "completed", credentialCommitted: true, runtimeSync: { status: "error", affectedRuntimes: 1, failures: [{ runtimeId: "r1", message: "failed" }] } } }; });
+    await expect(test.run("login", "linear")).rejects.toThrow("Runtime");
+    expect(test.output.join("\n")).toContain("saved");
+  });
   it("adds HTTP and stdio servers using Codex-compatible shapes", async () => {
     const test = fixture();
     await test.run("add", "linear2", "--url", "https://mcp.linear.app/mcp");
@@ -178,6 +309,17 @@ describe("mcp command", () => {
       scopes: ["read", "issues:read"],
       noBrowser: true,
     }));
+  });
+
+  it("prints the authorization URL in offline no-browser mode", async () => {
+    const test = fixture();
+    test.login.mockImplementationOnce(async (request: { name: string; onAuthorizationUrl?: (url: string) => void }) => {
+      request.onAuthorizationUrl?.("https://auth.example/authorize?state=private");
+      return test.snapshot();
+    });
+    await test.run("login", "linear", "--no-browser");
+    expect(test.output.join("\n")).toContain("https://auth.example/authorize?state=private");
+    expect(test.deps.openBrowser).not.toHaveBeenCalled();
   });
 
   it("keeps login successful when no runtime is available", async () => {

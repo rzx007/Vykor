@@ -139,6 +139,8 @@ describe("desktop MCP preload bridge", () => {
     await desktopAPI.mcp.remove({ name: "linear" })
     await desktopAPI.mcp.setEnabled({ name: "linear", enabled: false })
     await desktopAPI.mcp.login({ name: "linear", scopes: ["read"] })
+    await desktopAPI.mcp.loginStatus({ loginId: "login-1" })
+    await desktopAPI.mcp.cancelLogin({ loginId: "login-1" })
     await desktopAPI.mcp.logout({ name: "linear" })
 
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpSnapshot)
@@ -163,5 +165,7 @@ describe("desktop MCP preload bridge", () => {
       scopes: ["read"],
     })
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpLogout, { name: "linear" })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpLoginStatus, { loginId: "login-1" })
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpCancelLogin, { loginId: "login-1" })
   })
 })

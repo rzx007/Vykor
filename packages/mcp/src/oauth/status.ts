@@ -2,9 +2,11 @@ import type {
   McpAuthMode,
   McpOAuthAuthStatus,
   McpOAuthCredentialRecord,
+  McpRemoteServerConfig,
   McpServerConfig,
 } from "@vykor/core";
 import { uniqueScopes } from "./security.js";
+import { credentialBindingMatches } from "./resource-binding.js";
 
 export function oauthScopesChanged(configured: readonly string[] | undefined, granted: readonly string[]): boolean {
   if (configured === undefined) return false;
@@ -50,13 +52,18 @@ export function resolveMcpOAuthStatus(
   if (config.type === "stdio" || config.type === "sse") return "unsupported";
   if (config.headers && Object.keys(config.headers).some(key => key.toLowerCase() === "authorization")) return "static";
   if (credential && oauthScopesChanged(config.oauth?.scopes, credential.tokens.scope)) return "reauthentication-required";
-  if (credential) return credentialStatus(config.url, credential, now);
+  if (credential) return credentialStatus(config, credential, now);
   return config.oauth === undefined ? "not-configured" : "not-logged-in";
 }
 
-function credentialStatus(serverUrl: string, credential: McpOAuthCredentialRecord, now: number): McpOAuthAuthStatus {
+function credentialStatus(config: McpRemoteServerConfig, credential: McpOAuthCredentialRecord, now: number): McpOAuthAuthStatus {
   if (credential.diagnostic?.code === "reauthentication-required") return "reauthentication-required";
-  if (credential.serverUrl !== serverUrl) return "reauthentication-required";
+  if (credential.serverUrl !== config.url) return "reauthentication-required";
+  // Old records predate `binding.resourceUrl`; interpret them as the endpoint
+  // they were actually obtained for.
+  if (!credentialBindingMatches(config, credential)) {
+    return "reauthentication-required";
+  }
   if (credential.registration.client_secret_expires_at && credential.registration.client_secret_expires_at * 1000 <= now) {
     return "reauthentication-required";
   }

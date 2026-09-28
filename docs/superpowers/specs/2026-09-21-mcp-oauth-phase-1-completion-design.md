@@ -485,4 +485,4 @@ vk mcp status linear --json
 
 ## 后续阶段边界
 
-配置 scope 变化的按需拦截已实现。2026-09-21 用户决定将“刷新错误分类”和“resource URL 绑定校验”移入第三阶段，与 OS Keyring、文件降级、可配置 resource/callback、App Server 登录接口和完成事件一起设计。该调整是范围迁移，不代表这两项已经完成。第三阶段详见 [设计文档](2026-09-21-mcp-oauth-phase-3-design.md)。
+配置 scope 变化的按需拦截已实现。2026-09-21 用户决定将“刷新错误分类”和“resource URL 绑定校验”移入第三阶段，与可配置 resource/callback、App Server 登录接口和完成事件一起设计。2026-09-28 用户明确暂缓 OS Keyring + file fallback，第三阶段只保留现有文件凭据及必要的并发保护。该调整是范围迁移，不代表这些功能已经完成。第三阶段详见 [设计文档](2026-09-21-mcp-oauth-phase-3-design.md)。

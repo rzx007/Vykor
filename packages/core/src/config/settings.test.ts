@@ -279,11 +279,20 @@ describe("daemon settings", () => {
   it("accepts non-secret MCP OAuth settings and rejects token fields", async () => {
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
       mcpServers: {
-        linear: { type: "http", url: "https://mcp.linear.app/mcp", oauth: { scopes: ["read"], callbackPort: 43119 } },
+        linear: {
+          type: "http",
+          url: "https://mcp.linear.app/mcp",
+          oauth: {
+            scopes: ["read"],
+            callbackPort: 43119,
+            resourceUrl: "https://mcp.linear.app/mcp",
+            callbackUrl: "http://127.0.0.1:43119/oauth/callback",
+          },
+        },
       },
     }));
     await expect(loadSettings()).resolves.toMatchObject({
-      mcpServers: { linear: { oauth: { scopes: ["read"] } } },
+      mcpServers: { linear: { oauth: { scopes: ["read"], resourceUrl: "https://mcp.linear.app/mcp" } } },
     });
 
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({
@@ -293,6 +302,15 @@ describe("daemon settings", () => {
     }));
     await expect(loadSettings()).rejects.toMatchObject({
       field: "settings.mcpServers.linear.oauth.accessToken",
+    });
+
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
+      mcpServers: {
+        linear: { type: "http", url: "https://mcp.linear.app/mcp", oauth: { resourceUrl: 42 } },
+      },
+    }));
+    await expect(loadSettings()).rejects.toMatchObject({
+      field: "settings.mcpServers.linear.oauth.resourceUrl",
     });
   });
 

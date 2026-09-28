@@ -35,13 +35,26 @@ export interface McpOAuthLoginRequest {
   openBrowser(url: string): Promise<void>;
   /** Print the authorization URL and accept a pasted callback URL instead. */
   noBrowser?: boolean;
-  readCallbackUrl?(prompt: string): Promise<string>;
+  readCallbackUrl?(prompt: string, signal?: AbortSignal): Promise<string>;
+  /** Notify the caller that the authorization URL is ready; never opens a browser. */
+  onAuthorizationUrl?(url: string): void | Promise<void>;
+  onCallbackAccepted?(): void;
+  onCallbackRejected?(error: McpOAuthError): void;
+  /** External cancellation; combined with logout/cancel signals. */
+  signal?: AbortSignal;
+}
+
+/** Result of a login that reached the commit point. */
+export interface McpOAuthCommitOutcome {
+  credentialCommitted: true;
+  runtimeSync: McpRuntimeSyncResult;
 }
 
 export type McpOAuthApplicationErrorCode =
   | "oauth-not-required"
   | "oauth-login-failed"
   | "oauth-login-verification-failed"
+  | "oauth-login-stale"
   | "oauth-saved-runtime-sync-failed"
   | "oauth-removed-runtime-sync-failed";
 
@@ -73,9 +86,22 @@ export interface McpOAuthApplicationServiceDeps {
     serverName: string;
     config: Parameters<typeof verifyMcpOAuthConnection>[0]["config"];
     store: McpOAuthCredentialStore;
+    signal?: AbortSignal;
   }): Promise<void>;
   warn?(message: string): void;
 }
+
+/** Only the authorization-affecting fields; unrelated settings must not cancel a commit. */
+interface AuthConfigSnapshot {
+  url: string;
+  resourceUrl?: string;
+  callbackUrl?: string;
+  callbackPort?: number;
+  clientId?: string;
+  scopes: string[];
+}
+
+const UNAVAILABLE_SYNC: McpRuntimeSyncResult = { status: "unavailable", affectedRuntimes: 0, failures: [] };
 
 export class McpOAuthApplicationService {
   private readonly deps: McpOAuthApplicationServiceDeps;
@@ -96,6 +122,7 @@ export class McpOAuthApplicationService {
           serverName: input.serverName,
           config: input.config,
           runtime: new McpOAuthRuntime({ store: input.store }),
+          signal: input.signal,
         }),
       ...overrides,
     };
@@ -116,49 +143,77 @@ export class McpOAuthApplicationService {
     return { servers: servers.sort((a, b) => a.name.localeCompare(b.name)) };
   }
 
+  /**
+   * Existing CLI behavior: a committed credential whose Runtime sync failed is
+   * reported as `oauth-saved-runtime-sync-failed` (non-zero exit) while the
+   * credential itself stays valid.
+   */
   async login(request: McpOAuthLoginRequest): Promise<McpOAuthSnapshot> {
-    if (this.activeLogins.has(request.name))
-      throw new Error(`MCP 服务正在登录：${request.name}`);
-    const browser = new AbortController();
-    this.activeLogins.set(request.name, browser);
+    const outcome = await this.beginLogin(request);
+    if (isSyncFailure(outcome.runtimeSync)) {
+      throw new McpOAuthApplicationError(
+        "oauth-saved-runtime-sync-failed",
+        `OAuth authorization was saved for ${request.name}, but the active runtime failed to reconnect.`,
+        outcome.runtimeSync.failures,
+      );
+    }
+    return this.snapshot();
+  }
+
+  /**
+   * Run a login to its commit point and report the outcome without converting a
+   * Runtime warning into an authorization failure. Callers that need the
+   * current state afterwards re-read the auth snapshot separately.
+   */
+  async beginLogin(request: McpOAuthLoginRequest): Promise<McpOAuthCommitOutcome> {
+    if (this.activeLogins.has(request.name)) {
+      throw new McpOAuthApplicationError("oauth-login-failed", `MCP 服务正在登录：${request.name}`);
+    }
+    const controller = new AbortController();
+    const signal = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal;
+    this.activeLogins.set(request.name, controller);
     try {
       return await this.runServerOperation(request.name, async () => {
         const config = await this.requireServer(request.name);
-        if (config.type !== "http")
-          throw new Error("OAuth 登录仅支持 Streamable HTTP MCP 服务。");
+        if (config.type !== "http") throw new Error("OAuth 登录仅支持 Streamable HTTP MCP 服务。");
 
-        const result = await this.runLogin(request, config, browser);
-        await this.commitVerifiedCredential(request.name, result);
-        await this.synchronize(
-          request.name,
-          config,
-          "oauth-saved-runtime-sync-failed",
-          `OAuth authorization was saved for ${request.name}, but the active runtime failed to reconnect.`,
-        );
-        return await this.snapshot();
+        const startEpoch = await this.deps.credentialStore.readLogoutEpoch(request.name);
+        const startConfig = captureAuthConfig(config);
+        const result = await this.runLogin({ ...request, signal }, config, controller);
+        await this.commitVerifiedCredential(request.name, result, startEpoch, startConfig, signal);
+        const runtimeSync = await this.synchronizeResult(request.name, config);
+        return { credentialCommitted: true, runtimeSync };
       });
     } finally {
-      if (this.activeLogins.get(request.name) === browser)
-        this.activeLogins.delete(request.name);
+      if (this.activeLogins.get(request.name) === controller) this.activeLogins.delete(request.name);
     }
   }
 
   async logout(name: string): Promise<McpOAuthSnapshot> {
-    this.activeLogins
-      .get(name)
-      ?.abort(new Error("MCP OAuth login cancelled by logout"));
+    this.activeLogins.get(name)?.abort(new DOMException("MCP OAuth login cancelled by logout", "AbortError"));
     return await this.runServerOperation(name, async () => {
       const config = await this.requireServer(name);
-      await this.backfillOAuthScopes(name, config).catch(() => {
-        this.deps.warn?.(`Could not backfill OAuth scopes for ${name}.`);
-      });
-      await this.deps.revoke({ serverName: name, store: this.deps.credentialStore });
-      await this.synchronize(
-        name,
-        config,
-        "oauth-removed-runtime-sync-failed",
-        `OAuth credentials were removed for ${name}, but the active runtime failed to disconnect.`,
-      );
+      // Take and delete under the file lock first: the epoch advances and the
+      // record is gone even if the remote revocation or Runtime sync fails.
+      const removed = await this.deps.credentialStore.takeAndDelete(name);
+      if (removed && config.type === "http" && !config.oauth?.scopes?.length) {
+        await this.deps.updateSettings((latest) =>
+          withMcpServerOAuthScopes(latest, name, removed.tokens.scope),
+        ).catch(() => {
+          this.deps.warn?.(`Could not backfill OAuth scopes for ${name}.`);
+        });
+      }
+      // Best-effort remote revocation of the record we already removed; never
+      // re-read the store, so a concurrent new login is not revoked.
+      await this.deps.revoke({ serverName: name, store: this.deps.credentialStore, credential: removed }).catch(() => undefined);
+      const runtimeSync = await this.synchronizeResult(name, config);
+      if (isSyncFailure(runtimeSync)) {
+        throw new McpOAuthApplicationError(
+          "oauth-removed-runtime-sync-failed",
+          `OAuth credentials were removed for ${name}, but the active runtime failed to disconnect.`,
+          runtimeSync.failures,
+        );
+      }
       return await this.snapshot();
     });
   }
@@ -166,7 +221,7 @@ export class McpOAuthApplicationService {
   private async runLogin(
     request: McpOAuthLoginRequest,
     config: McpRemoteServerConfig,
-    browser: AbortController,
+    controller: AbortController,
   ): Promise<McpOAuthLoginResult> {
     try {
       return await this.deps.login(
@@ -175,7 +230,7 @@ export class McpOAuthApplicationService {
           config,
           scopes: request.scopes.length ? request.scopes : undefined,
           store: this.deps.credentialStore,
-          signal: browser.signal,
+          signal: request.signal,
           ...(request.noBrowser ? { noBrowser: true } : {}),
         },
         {
@@ -183,16 +238,19 @@ export class McpOAuthApplicationService {
             try {
               await request.openBrowser(url);
             } catch (error) {
-              browser.abort(error);
+              controller.abort(error);
               throw error;
             }
           },
           ...(request.readCallbackUrl ? { readCallbackUrl: request.readCallbackUrl } : {}),
+          ...(request.onAuthorizationUrl ? { onAuthorizationUrl: request.onAuthorizationUrl } : {}),
+          ...(request.onCallbackAccepted ? { onCallbackAccepted: request.onCallbackAccepted } : {}),
+          ...(request.onCallbackRejected ? { onCallbackRejected: request.onCallbackRejected } : {}),
           verifyConnection: (input) => this.deps.verify(input),
         },
       );
     } catch (error) {
-      if (browser.signal.aborted) throw error;
+      if (request.signal?.aborted) throw error;
       if (error instanceof McpOAuthError && error.code === "oauth-login-verification-failed") {
         throw new McpOAuthApplicationError(
           "oauth-login-verification-failed",
@@ -213,23 +271,49 @@ export class McpOAuthApplicationService {
   }
 
   /**
-   * Commit the verified candidate inside the shared credential lock: patch the
-   * latest settings (not the pre-login snapshot), save them, then replace the
-   * credential in one `runExclusive` section. A failure here leaves the old
-   * shared credential untouched.
+   * Commit the verified candidate inside the shared credential lock. The
+   * captured logout epoch and authorization config must still match, otherwise
+   * a login that started before a logout or config edit is rejected without
+   * writing anything.
    */
   private async commitVerifiedCredential(
     name: string,
     result: McpOAuthLoginResult,
+    startEpoch: number,
+    startConfig: AuthConfigSnapshot,
+    signal?: AbortSignal,
   ): Promise<void> {
     try {
-      await this.deps.credentialStore.runExclusive(name, async () => {
-        await this.deps.updateSettings((latest) =>
-          withMcpServerOAuthScopes(latest, name, result.credential.tokens.scope),
-        );
+      await this.deps.credentialStore.runExclusive(name, async (_current, context) => {
+        // Re-check cancellation only after the lock is held and before any write.
+        if (signal?.aborted) throw signal.reason ?? new Error("OAuth login was cancelled");
+        if (context.logoutEpoch !== startEpoch) {
+          throw new McpOAuthError("oauth-login-stale", "OAuth login was superseded by a logout");
+        }
+        await this.deps.updateSettings((latest) => {
+          // updateSettings may wait for its own queue/lock after the credential
+          // lock was acquired. This is the last check before settings mutation.
+          signal?.throwIfAborted();
+          const latestConfig = latest.mcpServers?.[name];
+          if (
+            !latestConfig ||
+            latestConfig.type !== "http" ||
+            authConfigChanged(captureAuthConfig(latestConfig), startConfig)
+          ) {
+            throw new McpOAuthError("oauth-login-stale", "OAuth configuration changed while logging in");
+          }
+          return withMcpServerOAuthScopes(latest, name, result.credential.tokens.scope);
+        });
         return { next: result.credential, result: undefined };
       });
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason ?? error;
+      if (error instanceof McpOAuthError && error.code === "oauth-login-stale") {
+        throw new McpOAuthApplicationError(
+          "oauth-login-stale",
+          `OAuth configuration changed for ${name} before the authorization completed.`,
+        );
+      }
       throw new McpOAuthApplicationError(
         "oauth-login-failed",
         `OAuth authorization could not be saved for ${name}.`,
@@ -237,45 +321,19 @@ export class McpOAuthApplicationService {
     }
   }
 
-  private async backfillOAuthScopes(
-    name: string,
-    config: McpServerConfig,
-  ): Promise<void> {
-    if (config.type !== "http" || config.oauth?.scopes?.length) return;
-    await this.deps.credentialStore.runExclusive(name, async (current) => {
-      if (!current) return { next: current, result: undefined };
-      await this.deps.updateSettings((latest) =>
-        withMcpServerOAuthScopes(latest, name, current.tokens.scope),
-      );
-      return { next: current, result: undefined };
-    });
-  }
-
-  private async synchronize(
-    name: string,
-    config: McpServerConfig,
-    code: McpOAuthApplicationErrorCode,
-    message: string,
-  ): Promise<void> {
-    if (config.type !== "http") return;
+  /** Never throws for a coordinator error; the failure is reported in the result. */
+  private async synchronizeResult(name: string, config: McpServerConfig): Promise<McpRuntimeSyncResult> {
+    if (config.type !== "http") return UNAVAILABLE_SYNC;
     const identity = createMcpServerIdentity(name, config);
-    if (!identity) return;
-    let result: McpRuntimeSyncResult;
+    if (!identity) return UNAVAILABLE_SYNC;
     try {
-      result = await this.deps.coordinator.synchronize(identity);
+      return await this.deps.coordinator.synchronize(identity);
     } catch {
-      throw new McpOAuthApplicationError(
-        code,
-        `${message} The daemon control request failed.`,
-        [{ runtimeId: "daemon", message: "MCP runtime control request failed" }],
-      );
-    }
-    if (result.failures.length > 0) {
-      throw new McpOAuthApplicationError(
-        code,
-        `${message} ${result.failures.length} active runtime(s) reported failures.`,
-        result.failures,
-      );
+      return {
+        status: "error",
+        affectedRuntimes: 0,
+        failures: [{ runtimeId: "daemon", message: "MCP runtime control request failed" }],
+      };
     }
   }
 
@@ -302,4 +360,32 @@ export class McpOAuthApplicationService {
     if (!config) throw new Error(`MCP 服务不存在：${name}`);
     return config;
   }
+}
+
+function isSyncFailure(result: McpRuntimeSyncResult): boolean {
+  return result.status === "error" || result.failures.length > 0;
+}
+
+function captureAuthConfig(config: McpRemoteServerConfig): AuthConfigSnapshot {
+  return {
+    url: config.url,
+    resourceUrl: config.oauth?.resourceUrl,
+    callbackUrl: config.oauth?.callbackUrl,
+    callbackPort: config.oauth?.callbackPort,
+    clientId: config.oauth?.clientId,
+    scopes: [...(config.oauth?.scopes ?? [])],
+  };
+}
+
+function authConfigChanged(left: AuthConfigSnapshot, right: AuthConfigSnapshot): boolean {
+  if (
+    left.url !== right.url ||
+    left.resourceUrl !== right.resourceUrl ||
+    left.callbackUrl !== right.callbackUrl ||
+    left.callbackPort !== right.callbackPort ||
+    left.clientId !== right.clientId
+  ) return true;
+  const a = new Set(left.scopes);
+  const b = new Set(right.scopes);
+  return a.size !== b.size || [...a].some((scope) => !b.has(scope));
 }

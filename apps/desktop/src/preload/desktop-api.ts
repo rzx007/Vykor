@@ -249,6 +249,10 @@ export const desktopAPI = {
       invoke(IpcChannels.mcpSetEnabled, input),
     login: (input: IpcInvokeMap[typeof IpcChannels.mcpLogin]["args"][0]) =>
       invoke(IpcChannels.mcpLogin, input),
+    loginStatus: (input: IpcInvokeMap[typeof IpcChannels.mcpLoginStatus]["args"][0]) =>
+      invoke(IpcChannels.mcpLoginStatus, input),
+    cancelLogin: (input: IpcInvokeMap[typeof IpcChannels.mcpCancelLogin]["args"][0]) =>
+      invoke(IpcChannels.mcpCancelLogin, input),
     logout: (input: IpcInvokeMap[typeof IpcChannels.mcpLogout]["args"][0]) =>
       invoke(IpcChannels.mcpLogout, input),
   },

@@ -42,6 +42,8 @@ export interface SystemRoutesContext {
     | "listProjectionDiagnostics"
   >;
   capabilities?: ServerCapabilities;
+  /** Random per-daemon-boot MCP OAuth instance id advertised in capabilities. */
+  mcpOAuthInstanceId?: string;
   attachmentLimits?: AttachmentLimits;
   retention?: Pick<
     ApplicationRetentionService,
@@ -69,11 +71,15 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               retention: 1,
               attachments: 1,
               pluginCapabilities: 1,
+              mcpOAuth: 1,
             },
             attachments: {
               limits: context.attachmentLimits ?? DEFAULT_ATTACHMENT_LIMITS,
               uploadModes: ["single"],
             },
+            ...(context.mcpOAuthInstanceId
+              ? { mcpOAuth: { instanceId: context.mcpOAuthInstanceId } }
+              : {}),
             ...(context.settingsService?.agentEnvironmentCapabilities
               ? {
                   agentEnvironments:

@@ -29,6 +29,16 @@ describe("resolveMcpOAuthStatus", () => {
     )).toBe("reauthentication-required");
   });
 
+  it("requires reauthorization when the configured resource no longer matches the binding", () => {
+    const bound = { ...credential, binding: { ...credential.binding, resourceUrl: "https://mcp.test/mcp" } };
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["read"] } }, bound, now)).toBe("expired-refreshable");
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["read"], resourceUrl: "https://mcp.test/other" } }, bound, now)).toBe("reauthentication-required");
+    // A legacy record without a resource binding is interpreted as its endpoint.
+    const legacy = credential;
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["read"] } }, legacy, now)).toBe("expired-refreshable");
+    expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["read"], resourceUrl: "https://mcp.test/other" } }, legacy, now)).toBe("reauthentication-required");
+  });
+
   it("requires reauthorization for any configured scope-set change", () => {
     const granted = { ...credential, tokens: { ...credential.tokens, scope: ["read", "write"] } };
     expect(resolveMcpOAuthStatus({ type: "http", url: credential.serverUrl, oauth: { scopes: ["write", "read"] } }, granted, now)).toBe("expired-refreshable");

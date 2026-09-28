@@ -135,6 +135,8 @@ import type {
   DesktopMcpExportResult,
   DesktopMcpGetConfigInput,
   DesktopMcpLoginInput,
+  DesktopMcpLoginOperationInput,
+  DesktopMcpLoginState,
   DesktopMcpLogoutInput,
   DesktopMcpOperationResult,
   DesktopMcpRemoveInput,
@@ -299,6 +301,8 @@ export const IpcChannels = {
   mcpRemove: "mcp:remove",
   mcpSetEnabled: "mcp:set-enabled",
   mcpLogin: "mcp:login",
+  mcpLoginStatus: "mcp:login-status",
+  mcpCancelLogin: "mcp:cancel-login",
   mcpLogout: "mcp:logout",
 
   connectionsSnapshot: "connections:snapshot",
@@ -495,7 +499,9 @@ export interface IpcInvokeMap {
     args: [input: DesktopMcpSetEnabledInput]
     result: DesktopMcpOperationResult
   }
-  [IpcChannels.mcpLogin]: { args: [input: DesktopMcpLoginInput]; result: DesktopMcpSnapshot }
+  [IpcChannels.mcpLogin]: { args: [input: DesktopMcpLoginInput]; result: DesktopMcpLoginState }
+  [IpcChannels.mcpLoginStatus]: { args: [input: DesktopMcpLoginOperationInput]; result: DesktopMcpLoginState }
+  [IpcChannels.mcpCancelLogin]: { args: [input: DesktopMcpLoginOperationInput]; result: DesktopMcpLoginState }
   [IpcChannels.mcpLogout]: { args: [input: DesktopMcpLogoutInput]; result: DesktopMcpSnapshot }
 
   [IpcChannels.connectionsSnapshot]: { args: []; result: DesktopConnectionsSnapshot }

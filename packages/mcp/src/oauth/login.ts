@@ -4,8 +4,12 @@ import {
   registerClient,
   startAuthorization,
 } from "@modelcontextprotocol/sdk/client/auth.js";
-import type { McpOAuthCredentialRecord, McpRemoteServerConfig } from "@vykor/core";
-import { createOAuthCallback, type OAuthCallbackController } from "./callback.js";
+import type {
+  CredentialMutationContext,
+  McpOAuthCredentialRecord,
+  McpRemoteServerConfig,
+} from "@vykor/core";
+import { createOAuthCallback, parseCallbackUrl, type OAuthCallbackController } from "./callback.js";
 import { McpOAuthError } from "./errors.js";
 import {
   discoverOAuth,
@@ -21,14 +25,25 @@ export interface McpOAuthCredentialStore {
   set(name: string, credential: McpOAuthCredentialRecord): Promise<void>;
   delete(name: string): Promise<boolean>;
   update(name: string, mutate: (current: McpOAuthCredentialRecord | undefined) => McpOAuthCredentialRecord | undefined): Promise<McpOAuthCredentialRecord | undefined>;
-  runExclusive<T>(name: string, operation: (current: McpOAuthCredentialRecord | undefined) => Promise<{ next: McpOAuthCredentialRecord | undefined; result: T }>): Promise<T>;
+  runExclusive<T>(name: string, operation: (current: McpOAuthCredentialRecord | undefined, context: CredentialMutationContext) => Promise<{ next: McpOAuthCredentialRecord | undefined; result: T }>): Promise<T>;
+  /** Atomically remove a record and return what was removed, advancing the logout epoch. */
+  takeAndDelete(name: string): Promise<McpOAuthCredentialRecord | undefined>;
+  /** Current logout counter; a completed commit must match the value captured at login start. */
+  readLogoutEpoch(name: string): Promise<number>;
 }
 
 export interface McpOAuthLoginDeps {
   fetch?: typeof fetch;
   callbackFactory?: typeof createOAuthCallback;
   openBrowser?(url: string): Promise<void>;
-  readCallbackUrl?(prompt: string): Promise<string>;
+  readCallbackUrl?(prompt: string, signal?: AbortSignal): Promise<string>;
+  onCallbackAccepted?(): void;
+  onCallbackRejected?(error: McpOAuthError): void;
+  /**
+   * Notified once when the authorization URL is ready. This is not a browser
+   * open: a daemon only needs the URL to return to its client.
+   */
+  onAuthorizationUrl?(url: string): void | Promise<void>;
   /**
    * Verify the candidate credential against the real MCP server. The provided
    * store is an operation-local, writable copy: any refresh or token rotation
@@ -39,6 +54,7 @@ export interface McpOAuthLoginDeps {
     serverName: string;
     config: McpRemoteServerConfig;
     store: McpOAuthCredentialStore;
+    signal?: AbortSignal;
   }): Promise<void>;
   stdout?(line: string): void;
 }
@@ -84,10 +100,21 @@ async function performLogin(
   if (hasAuthorizationHeader(input.config.headers)) {
     throw new McpOAuthError("oauth-static-auth-conflict", "Remove the configured Authorization header before OAuth login");
   }
+  if (input.config.oauth?.callbackPort !== undefined && input.config.oauth?.callbackUrl !== undefined) {
+    throw new McpOAuthError("oauth-callback-config-conflict", "Configure either oauth.callbackUrl or oauth.callbackPort, not both");
+  }
+  const configuredCallback = input.config.oauth?.callbackUrl
+    ? parseCallbackUrl(input.config.oauth.callbackUrl)
+    : undefined;
+  const manual = configuredCallback?.manual === true || input.noBrowser === true;
+  if (manual && !deps.readCallbackUrl) {
+    throw new McpOAuthError("oauth-callback-unavailable", "A manual or HTTPS callback requires a way to submit the callback URL");
+  }
   const fetchImpl = deps.fetch ?? fetch;
   const discovered = await discoverOAuth(input.config.url, fetchImpl, {
     allowLoopbackHttp: input.allowLoopbackHttp,
     signal: input.signal,
+    resourceUrl: input.config.oauth?.resourceUrl,
   });
     const configured = uniqueScopes(input.scopes ?? input.config.oauth?.scopes ?? []);
     const advertised = uniqueScopes(discovered.resource.scopes_supported ?? discovered.authorization.scopes_supported ?? []);
@@ -101,6 +128,7 @@ async function performLogin(
       expectedIssuer: discovered.authorization.issuer,
       requireIssuer: discovered.authorization.authorization_response_iss_parameter_supported,
       port: input.config.oauth?.callbackPort,
+      callbackUrl: input.config.oauth?.callbackUrl,
       deadlineMs: 300_000,
     });
     try {
@@ -111,18 +139,42 @@ async function performLogin(
         redirectUrl: liveCallback.redirectUri,
         scope: configured.length ? configured.join(" ") : undefined,
         state,
-        resource: new URL(input.config.url),
+        resource: discovered.resourceUrl,
       });
+      await deps.onAuthorizationUrl?.(authorizationUrl.toString());
       deps.stdout?.(`Open this URL to authorize:\n${authorizationUrl}`);
-      if (!input.noBrowser && deps.openBrowser) {
+      if (!manual && deps.openBrowser) {
         await deps.openBrowser(authorizationUrl.toString()).catch(() => undefined);
       }
       let callbackResult: Awaited<ReturnType<OAuthCallbackController["wait"]>>;
-      if (input.noBrowser && deps.readCallbackUrl) {
-        callbackResult = await Promise.race([
-          liveCallback.wait(input.signal),
-          deps.readCallbackUrl("Paste the full callback URL: ").then(value => liveCallback.accept(new URL(value.trim()))),
-        ]);
+      if (manual && deps.readCallbackUrl) {
+        const reader = new AbortController();
+        const readerSignal = input.signal ? AbortSignal.any([input.signal, reader.signal]) : reader.signal;
+        const waiting = liveCallback.wait(input.signal);
+        const submission = (async () => {
+          while (true) {
+            readerSignal.throwIfAborted();
+            const value = await Promise.race([deps.readCallbackUrl!("Paste the full callback URL: ", readerSignal).then(value => ({ value })), waiting.then(result => ({ result }))]);
+            if ("result" in value) return value.result;
+            try {
+              const result = await liveCallback.accept(new URL(value.value.trim()));
+              deps.onCallbackAccepted?.();
+              return result;
+            } catch (error) {
+              if (error instanceof McpOAuthError && error.code === "oauth-authorization-denied") {
+                deps.onCallbackAccepted?.();
+                throw error;
+              }
+              const safe = error instanceof McpOAuthError ? error : new McpOAuthError("oauth-callback-invalid", "OAuth callback URL is invalid");
+              deps.onCallbackRejected?.(safe);
+            }
+          }
+        })();
+        try {
+          callbackResult = await Promise.race([waiting, submission]);
+        } finally {
+          reader.abort(new DOMException("OAuth callback input is no longer needed", "AbortError"));
+        }
       } else {
         callbackResult = await liveCallback.wait(input.signal);
       }
@@ -132,7 +184,7 @@ async function performLogin(
           authorizationCode: callbackResult.code,
           codeVerifier,
           redirectUri: liveCallback.redirectUri,
-          resource: new URL(input.config.url),
+          resource: discovered.resourceUrl,
           fetchFn: sdkFetch(fetchImpl, input.signal) as any,
         }).catch(() => {
           throw new McpOAuthError("oauth-token-failed", "OAuth token exchange failed");
@@ -160,6 +212,11 @@ async function performLogin(
           registrationEndpoint: discovered.authorization.registration_endpoint,
           revocationEndpoint: discovered.authorization.revocation_endpoint,
           authorizationResponseIssParameterSupported: discovered.authorization.authorization_response_iss_parameter_supported,
+          resourceUrl: discovered.resourceUrl.href,
+          configuredResourceUrl: input.config.oauth?.resourceUrl ?? null,
+          configuredCallbackUrl: input.config.oauth?.callbackUrl ?? null,
+          configuredCallbackPort: input.config.oauth?.callbackPort ?? null,
+          configuredClientId: input.config.oauth?.clientId ?? null,
         },
         registration,
         tokens: {
@@ -182,6 +239,7 @@ async function performLogin(
             serverName: input.serverName,
             config: { ...input.config, oauth: { ...input.config.oauth, scopes: configured } },
             store: candidateStore,
+            signal: input.signal,
           });
           verified = true;
         } catch {
@@ -234,11 +292,21 @@ function createMemoryCredentialStore(
     get: async () => value,
     set: async (_name, next) => { value = next; },
     delete: async () => { const had = value !== undefined; value = undefined; return had; },
-    update: async (_name, mutate) => { value = mutate(value); return value; },
+    takeAndDelete: async () => { const previous = value; value = undefined; return previous; },
+    readLogoutEpoch: async () => 0,
+    update: async (_name, mutate) => withLock(async () => {
+      const next = mutate(value);
+      if (next !== value) value = next ? { ...next, revision: (value?.revision ?? 0) + 1 } : undefined;
+      return value;
+    }),
     runExclusive: async (_name, operation) =>
       withLock(async () => {
-        const { next, result } = await operation(value);
-        value = next;
+        const nextRevision = (value?.revision ?? 0) + 1;
+        const { next, result } = await operation(value, {
+          nextRevision,
+          logoutEpoch: 0,
+        });
+        if (next !== value) value = next ? { ...next, revision: nextRevision } : undefined;
         return result;
       }),
   };
@@ -260,23 +328,26 @@ async function revokeCandidateTokens(input: {
   await revokeToken({ endpoint, token: credential.tokens.accessToken, hint: "access_token", registration: credential.registration, fetch: input.fetch, signal: input.signal }).catch(() => undefined);
 }
 
+/**
+ * Best-effort remote revocation of one credential.
+ *
+ * When `credential` is provided the caller already removed it from the shared
+ * store; this function then never reads the store again, so it can never revoke
+ * a different login. Otherwise the record is atomically taken and deleted first.
+ */
 export async function revokeMcpOAuthCredential(input: {
   serverName: string;
   store: McpOAuthCredentialStore;
+  credential?: McpOAuthCredentialRecord;
   fetch?: typeof fetch;
   signal?: AbortSignal;
 }): Promise<void> {
-  const credential = await input.store.get(input.serverName);
-  try {
-    if (credential?.binding.revocationEndpoint) {
-      if (credential.tokens.refreshToken) {
-        await revokeToken({ endpoint: credential.binding.revocationEndpoint, token: credential.tokens.refreshToken, hint: "refresh_token", registration: credential.registration, fetch: input.fetch ?? fetch, signal: input.signal }).catch(() => undefined);
-      }
-      await revokeToken({ endpoint: credential.binding.revocationEndpoint, token: credential.tokens.accessToken, hint: "access_token", registration: credential.registration, fetch: input.fetch ?? fetch, signal: input.signal }).catch(() => undefined);
-    }
-  } finally {
-    await input.store.delete(input.serverName);
+  const credential = Object.hasOwn(input, "credential") ? input.credential : await input.store.takeAndDelete(input.serverName);
+  if (!credential?.binding.revocationEndpoint) return;
+  if (credential.tokens.refreshToken) {
+    await revokeToken({ endpoint: credential.binding.revocationEndpoint, token: credential.tokens.refreshToken, hint: "refresh_token", registration: credential.registration, fetch: input.fetch ?? fetch, signal: input.signal }).catch(() => undefined);
   }
+  await revokeToken({ endpoint: credential.binding.revocationEndpoint, token: credential.tokens.accessToken, hint: "access_token", registration: credential.registration, fetch: input.fetch ?? fetch, signal: input.signal }).catch(() => undefined);
 }
 
 async function resolveRegistration(

@@ -10,3 +10,4 @@ export * from "./capabilities.js";
 export * from "./attachment.js";
 export * from "./session-input-items.js";
 export * from "./session-goals.js";
+export * from "./mcp-oauth.js";

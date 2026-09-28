@@ -13,6 +13,16 @@ export interface ServerCapabilities {
   features: Record<string, number>;
   attachments?: AttachmentTransferCapabilities;
   agentEnvironments?: AgentEnvironmentCapabilities;
+  /**
+   * Present when this daemon instance serves the MCP OAuth operation API.
+   * The random `instanceId` changes on every daemon start so a client can
+   * detect a restart and refuse to replay an operation from an old instance.
+   */
+  mcpOAuth?: McpOAuthCapabilities;
+}
+
+export interface McpOAuthCapabilities {
+  instanceId: string;
 }
 
 export interface AgentEnvironmentCapabilities {
@@ -52,13 +62,30 @@ export function parseServerCapabilities(value: unknown): ServerCapabilities {
   const agentEnvironments = parseAgentEnvironmentCapabilities(
     value.agentEnvironments,
   );
+  const mcpOAuth = parseMcpOAuthCapabilities(value.mcpOAuth);
   return {
     serverVersion: value.serverVersion,
     protocol: { version },
     features,
     ...(attachments ? { attachments } : {}),
     ...(agentEnvironments ? { agentEnvironments } : {}),
+    ...(mcpOAuth ? { mcpOAuth } : {}),
   };
+}
+
+function parseMcpOAuthCapabilities(
+  value: unknown,
+): McpOAuthCapabilities | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !isRecord(value) ||
+    typeof value.instanceId !== "string" ||
+    value.instanceId.length === 0 ||
+    value.instanceId.length > 200
+  ) {
+    throw new Error("mcpOAuth.instanceId must be a bounded non-empty string");
+  }
+  return { instanceId: value.instanceId };
 }
 
 function parseAgentEnvironmentCapabilities(

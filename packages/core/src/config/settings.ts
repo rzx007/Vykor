@@ -421,10 +421,18 @@ function validateSettingsFields(
       assertNestedFields(
         server,
         "oauth",
-        ["scopes", "clientId", "callbackPort"],
+        ["scopes", "clientId", "callbackPort", "resourceUrl", "callbackUrl"],
         configPath,
         `settings.mcpServers.${name}`,
       );
+      const oauth = recordValue(server.oauth);
+      if (oauth) {
+        for (const field of ["resourceUrl", "callbackUrl"] as const) {
+          if (oauth[field] !== undefined && typeof oauth[field] !== "string") {
+            throw new SettingsFileError(`settings.mcpServers.${name}.oauth.${field}`, configPath);
+          }
+        }
+      }
     }
   }
 }

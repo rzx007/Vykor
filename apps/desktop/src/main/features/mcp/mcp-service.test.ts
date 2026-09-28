@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { EventEmitter } from "node:events"
 import type { McpServerSummary } from "@vykor/server"
 import { DesktopMcpService } from "./mcp-service"
 
@@ -28,23 +29,104 @@ function createService() {
     remove: vi.fn(async () => ({ persisted: true, credentialRemoved: true, runtimeFailures: [] })),
     setEnabled: vi.fn(async () => ({ persisted: true, credentialRemoved: false, runtimeFailures: [] })),
   }
-  const oauth = {
-    login: vi.fn(async (input: { openBrowser: (url: string) => Promise<void> }) => {
-      await input.openBrowser("https://linear.example/authorize")
-      return { servers: [] }
-    }),
-    logout: vi.fn(async () => ({ servers: [] })),
-  }
   const openExternal = vi.fn(async () => undefined)
+  const client = {
+    protocol: { capabilities: vi.fn(async () => ({ features: { mcpOAuth: 1 }, mcpOAuth: { instanceId: "instance-1" } })) },
+    mcp: {
+      startLogin: vi.fn(async () => ({ loginId: "login-1", operation: { loginId: "login-1", name: "linear", state: "pending" as const, credentialCommitted: false, authorizationReady: true, authorizationUrl: "https://linear.example/authorize" } })),
+      getLogin: vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "pending" as const, credentialCommitted: false, authorizationReady: true, authorizationUrl: "https://linear.example/authorize" })),
+      watchLogin: vi.fn(async function* () { yield { event: "mcp.oauth.login.completed", data: { loginId: "login-1", name: "linear", state: "completed", credentialCommitted: true, authorizationReady: true } }; }),
+      cancelLogin: vi.fn(async () => ({ loginId: "login-1", name: "linear", state: "cancelled" as const, credentialCommitted: false, authorizationReady: true })),
+      logout: vi.fn(async () => ({ servers: [] })),
+      authStatus: vi.fn(async () => ({ servers: [] })),
+    },
+  }
   const service = new DesktopMcpService({
     config: config as never,
-    oauth: oauth as never,
     openExternal,
+    daemonClient: async () => client as never,
   })
-  return { service, config, oauth, openExternal }
+  return { service, config, openExternal, client }
 }
 
 describe("DesktopMcpService", () => {
+  it("starts through the connected daemon, opens the URL once and returns only safe state", async () => {
+    const { service, openExternal } = createService()
+    const operation = { loginId: "login-1", name: "linear", state: "pending", credentialCommitted: false, authorizationReady: true, authorizationUrl: "https://auth.example/authorize?state=private" }
+    const client = {
+      protocol: { capabilities: vi.fn(async () => ({ features: { mcpOAuth: 1 }, mcpOAuth: { instanceId: "instance-1" } })) },
+      mcp: {
+        startLogin: vi.fn(async () => ({ loginId: "login-1", operation })),
+        getLogin: vi.fn(async () => operation),
+        watchLogin: vi.fn(async function* () { yield { event: "mcp.oauth.login.updated", data: operation }; }),
+        cancelLogin: vi.fn(async () => ({ ...operation, state: "cancelled" })),
+        logout: vi.fn(async () => ({ servers: [] })),
+        authStatus: vi.fn(async () => ({ servers: [] })),
+      },
+    }
+    const connected = vi.fn(async () => client)
+    const daemonService = new DesktopMcpService({
+      config: (service as never)["config"],
+      openExternal,
+      daemonClient: connected,
+    } as never)
+    const result = await daemonService.login({ name: "linear", scopes: [] })
+    await Promise.resolve()
+    expect(connected).toHaveBeenCalledTimes(1)
+    expect(client.mcp.startLogin).toHaveBeenCalledTimes(1)
+    expect(openExternal).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(result)).not.toContain("auth.example")
+    expect(JSON.stringify(result)).not.toContain("private")
+  })
+
+  it("does not leak an authorization URL when the OS refuses to open it", async () => {
+    const { config, client } = createService()
+    const openExternal = vi.fn(async (url: string) => { throw new Error(`Failed to open ${url}`) })
+    const service = new DesktopMcpService({ config: config as never, daemonClient: async () => client as never, openExternal })
+    const error = await service.login({ name: "linear", scopes: [] }).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toContain("无法打开 OAuth 授权页面")
+    expect((error as Error).message).not.toContain("linear.example")
+  })
+
+  it("does not create or open an operation after its window has closed", async () => {
+    const { config, client, openExternal } = createService()
+    const service = new DesktopMcpService({ config: config as never, daemonClient: async () => client as never, openExternal })
+    const owner = { isDestroyed: () => true } as never
+    await expect(service.login({ name: "linear", scopes: [] }, owner)).rejects.toThrow("窗口已关闭")
+    expect(client.mcp.startLogin).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it("opens the authorization URL once when SSE and status race for details", async () => {
+    const { config, client, openExternal } = createService()
+    let release!: (value: unknown) => void
+    const detail = new Promise<unknown>((resolve) => { release = resolve })
+    client.mcp.startLogin.mockResolvedValueOnce({ loginId: "login-1", operation: { loginId: "login-1", name: "linear", state: "pending", credentialCommitted: false, authorizationReady: true } } as never)
+    client.mcp.getLogin.mockImplementation(async () => await detail as never)
+    client.mcp.watchLogin.mockImplementationOnce(async function* () { yield { event: "mcp.oauth.login.updated", data: { loginId: "login-1", name: "linear", state: "pending", credentialCommitted: false, authorizationReady: true } }; })
+    const service = new DesktopMcpService({ config: config as never, daemonClient: async () => client as never, openExternal })
+    const started = service.login({ name: "linear", scopes: [] })
+    await vi.waitFor(() => expect(client.mcp.getLogin).toHaveBeenCalledTimes(1))
+    const status = service.loginStatus({ loginId: "login-1" })
+    release({ loginId: "login-1", name: "linear", state: "pending", credentialCommitted: false, authorizationReady: true, authorizationUrl: "https://linear.example/authorize?state=private" })
+    await Promise.all([started, status])
+    expect(openExternal).toHaveBeenCalledTimes(1)
+  })
+
+  it("drops the local UI subscription when its window closes without cancelling daemon login", async () => {
+    const { config, client, openExternal } = createService()
+    client.mcp.watchLogin.mockImplementationOnce(async function* () { await new Promise<void>(() => undefined) })
+    const owner = new EventEmitter() as EventEmitter & { isDestroyed(): boolean }
+    let destroyed = false
+    owner.isDestroyed = () => destroyed
+    const service = new DesktopMcpService({ config: config as never, daemonClient: async () => client as never, openExternal })
+    await service.login({ name: "linear", scopes: [] }, owner as never)
+    destroyed = true
+    owner.emit("destroyed")
+    await expect(service.loginStatus({ loginId: "login-1" })).rejects.toThrow("已过期")
+    expect(client.mcp.cancelLogin).not.toHaveBeenCalled()
+  })
   it("returns a secret-free snapshot with enabled and safe summary", async () => {
     const { service } = createService()
 
@@ -114,39 +196,36 @@ describe("DesktopMcpService", () => {
     expect(result.snapshot.servers).toHaveLength(1)
   })
 
-  it("normalizes scopes, opens the authorization URL, and returns a fresh snapshot", async () => {
-    const { service, oauth, openExternal } = createService()
+  it("normalizes scopes, opens the authorization URL, and returns safe operation state", async () => {
+    const { service, client, openExternal } = createService()
 
     await expect(
       service.login({ name: " linear ", scopes: ["read", " read ", ""] })
-    ).resolves.toMatchObject({ servers: [expect.objectContaining({ name: "linear" })] })
-    expect(oauth.login).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "linear", scopes: ["read"] })
+    ).resolves.toMatchObject({ loginId: "login-1", name: "linear", state: "pending" })
+    expect(client.mcp.startLogin).toHaveBeenCalledWith(
+      "linear", expect.objectContaining({ scopes: ["read"] })
     )
     expect(openExternal).toHaveBeenCalledWith("https://linear.example/authorize")
   })
 
   it("returns the updated snapshot after logout", async () => {
-    const { service, oauth } = createService()
+    const { service, client } = createService()
     await expect(service.logout({ name: "linear" })).resolves.toMatchObject({
       servers: [expect.objectContaining({ name: "linear" })],
     })
-    expect(oauth.logout).toHaveBeenCalledWith("linear")
+    expect(client.mcp.logout).toHaveBeenCalledWith("linear")
   })
 
   it("rejects unsafe authorization URLs before Electron opens them", async () => {
-    const { service, openExternal, oauth } = createService()
-    oauth.login.mockImplementationOnce(async (input: { openBrowser: (url: string) => Promise<void> }) => {
-      await input.openBrowser("javascript:alert(1)")
-      return { servers: [] }
-    })
+    const { service, openExternal, client } = createService()
+    client.mcp.startLogin.mockResolvedValueOnce({ loginId: "login-1", operation: { loginId: "login-1", name: "linear", state: "pending", credentialCommitted: false, authorizationReady: true, authorizationUrl: "javascript:alert(1)" } } as never)
 
     await expect(service.login({ name: "linear", scopes: [] })).rejects.toThrow("安全的 HTTPS URL")
     expect(openExternal).not.toHaveBeenCalled()
   })
 
   it("rejects malformed IPC inputs before calling the application", async () => {
-    const { service, config, oauth } = createService()
+    const { service, config } = createService()
 
     await expect(service.login({ name: "linear", scopes: [1] } as never)).rejects.toThrow(
       "登录参数无效"
@@ -157,6 +236,5 @@ describe("DesktopMcpService", () => {
       "启停参数无效"
     )
     expect(config.add).not.toHaveBeenCalled()
-    expect(oauth.login).not.toHaveBeenCalled()
   })
 })

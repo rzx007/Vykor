@@ -2,24 +2,24 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
-**目标：** 完成第三阶段的刷新错误分类、资源绑定、安全凭据存储及 App Server 授权操作，保留已有 CLI、Desktop 和 Session 行为。
+**目标：** 完成第三阶段的刷新错误分类、资源绑定及 App Server 授权操作，保留已有 CLI、Desktop 和 Session 行为。
 
-**架构：** 在现有 mcp/auth/server/client 分工内扩展；先完成协议可靠性，再升级存储，最后接入授权操作接口。MCP 层不依赖系统 Keyring，agent-runtime 不解析授权策略，OAuth 临时操作不写 Session 事件库。
+**架构：** 在现有 mcp/auth/server/client 分工内扩展；先完成协议可靠性，再补最小文件并发保护并接入授权操作接口。MCP 层不依赖文件实现，agent-runtime 不解析授权策略，OAuth 临时操作不写 Session 事件库。
 
-**技术栈：** TypeScript、现有 MCP SDK 1.29.x、Node crypto、Vitest、Hono、typed HTTP/SSE client、Electron、可选原生依赖 `@napi-rs/keyring`。
+**技术栈：** TypeScript、现有 MCP SDK 1.29.x、Vitest、Hono、typed HTTP/SSE client、Electron。
 
 ---
 
 ## 执行依据与范围
 
-- 设计：[第三阶段设计](../specs/2026-09-21-mcp-oauth-phase-3-design.md)，已经过两位子代理两轮审核修订。
+- 设计：[第三阶段设计](../specs/2026-09-21-mcp-oauth-phase-3-design.md)，2026-09-28 按用户要求暂缓 Keyring，并重新进行子代理范围审核。
 - 本文件是实现顺序和测试安排；设计中的行为约束高于代码草图。
-- 批次 A：任务 1–2；批次 B：任务 3–5；批次 C：任务 6–10；任务 11 为交付验收。
-- 本轮只编写文档；下列复选框均未执行，不代表实现或测试已完成。
+- 批次 A：任务 1–2；批次 B：任务 3–8；任务 9 为交付验收。任务 3 与任务 5 的退出计数生产者/消费者必须一起验收后交付。
+- 当前任务 1–8 已实现并经审核修复，任务 9 的真实服务/安装产物验收待完成。下列步骤保留原始任务定义；实际执行证据及未验证项以 [验收记录](../reviews/2026-09-21-mcp-oauth-phase-3-acceptance.md) 为准。本轮按用户要求未创建 Git 提交。
 - 执行开始时记录 HEAD 和 dirty paths。仓库可能同时有请求配置、思考过程或其他 Desktop 改动，只提交本任务文件/hunk，不改写其他人的提交。
 - 使用独立工作区实施优先；不共享正在更新的 node_modules 或生成目录。先确认基线测试，针对失败记录具体原因，不把当前环境问题当作可永久跳过的清单。
 - Windows 沙箱无法读取 pnpm 依赖时，请求运行权限后用本地 `node_modules/.bin/vitest.CMD`；不要重新安装依赖去规避文件访问限制。
-- 每个任务依次完成失败测试、最小实现、通过测试和独立提交；不为绿灯放宽安全断言。
+- 每个任务依次完成失败测试、最小实现和通过测试；按依赖闭合、可验证的变更提交；不为绿灯放宽安全断言。
 
 ## 文件职责
 
@@ -28,17 +28,14 @@
 | `packages/mcp/src/oauth/runtime-auth.ts`、`errors.ts`、`protocol.ts` | 结构化刷新失败、Token 使用版本、发现来源、资源选择 |
 | 新建 `packages/mcp/src/oauth/resource-binding.ts` | 资源标识精确比较及 endpoint 包含关系，集中复用 |
 | `packages/mcp/src/oauth/login.ts`、`callback.ts` | 配置快照、URL 通知、可取消授权与完整 callback |
-| `packages/auth/src/mcp-oauth-credential-store.ts` | 继续作为唯一存储入口，锁、v1/v2、epoch、删除 |
-| 新建 `packages/auth/src/mcp-oauth-keyring.ts` | 原生后端适配和明确错误分类 |
-| 新建 `packages/auth/src/mcp-oauth-envelope.ts` | AES-GCM 编解码、格式校验、权限保护 |
-| `packages/core/src/types/mcp-oauth.ts`、`config/settings.ts` | resource/callback 配置、binding、存储状态和操作上下文类型 |
+| `packages/auth/src/mcp-oauth-credential-store.ts` | 继续作为唯一存储入口，锁、最小 v1/v2 兼容、epoch、原子删除 |
+| `packages/core/src/types/mcp-oauth.ts`、`config/settings.ts` | resource/callback 配置、binding 和操作上下文类型 |
 | 新建 `packages/server/src/application/mcp-oauth-operation-service.ts` | 进程内有界登录操作、幂等、取消与订阅 |
 | `packages/server/src/application/mcp-oauth-application-service.ts` | 实际授权提交/退出用例，仍为协议与存储编排入口 |
 | 新建 `packages/protocol/src/mcp-oauth.ts` | HTTP 操作输入/输出与安全事件 DTO、运行时校验 |
 | `packages/server/src/http/routes/mcp.ts`、`routes/system.ts`、`server.ts` | 路由、能力声明、SSE，沿用已有中间件 |
 | `packages/client/src/resources/mcp-resource.ts` | typed 操作资源，不在 CLI/Desktop 写裸 fetch |
-| CLI MCP command、Desktop MCP main/IPC/settings | 用户交互、授权 URL 与回调输入、状态和取消 |
-| CLI/Agent bundle、Electron packaging | 原生模块 external、安装产物与跨宿主验证 |
+| CLI MCP command、Desktop MCP main/IPC、主页插件页 MCP tab | 用户交互、授权 URL 与回调输入、状态和取消 |
 
 新增实现文件各自配同名 `.test.ts`；React 测试使用现有 `.test.tsx` 位置。不增加通用存储插件框架、后台刷新队列或持久 OAuth 事件日志。
 
@@ -57,11 +54,10 @@
 ```ts
 interface CredentialMutationContext {
   nextRevision: number;
-  logoutEpoch: number; // v1 固定为 0，任务 4 启用持久 epoch
 }
 ```
 
-  store 保证实际写入 revision 等于 nextRevision；`next === current` 的不变结果不写文件、不递增。内部刷新返回实际使用的 Token 与写入 revision 的快照；公共 getAccessToken 可仍返回字符串。失效写入先比较该快照，CAS 未命中直接保留 current。
+  store 保证实际写入 revision 等于 nextRevision；`next === current` 的不变结果不写文件、不递增。回调不得原地修改 current，要修改时必须返回新对象。内部刷新返回实际使用的 Token 与写入 revision 的快照；公共 getAccessToken 可仍返回字符串。失效写入先比较该快照，CAS 未命中直接保留 current。
 - [ ] 在 HTTP 失败边界保留安全状态码和 SDK errorCode，按设计错误表转换为 `McpOAuthError`。调用取消原样结束；临时错误 `retryable=true`，不新增 retry loop。存储写失败不落入 invalid_grant 分支。
 - [ ] 跑 `pnpm --filter @vykor/mcp exec vitest run src/oauth/runtime-auth.test.ts src/oauth/login.test.ts` 与 `pnpm --filter @vykor/auth exec vitest run src/mcp-oauth-credential-store.test.ts`。用两个真实文件 store 实例验证 CAS miss 文件内容不变；诊断不能复活被删除项。通过后提交 `fix(mcp): classify refresh failures without invalidating fresh credentials`，仅暂存本任务文件。
 
@@ -90,84 +86,34 @@ function validateResourceBinding(input: ResourceBindingInput): URL;
 
 - [ ] 运行 `pnpm --filter @vykor/mcp exec vitest run src/oauth/resource-binding.test.ts src/oauth/protocol.test.ts`，确认当前 origin-only 校验不能拒绝同域不同资源。
 - [ ] 为 `oauth.resourceUrl?: string` 和 `binding.resourceUrl?: string` 增加类型、settings 白名单及校验。由 discovery 代码在发请求前确定 expectedResource，返回值携带已验证 resourceUrl；禁止收到 metadata 后反向生成 expectedResource。SDK 不暴露最终发现来源时，在本模块显式执行已有候选 URL 顺序，不复制整个 SDK 授权流程。
-- [ ] 将 authorization、code exchange 和 refresh 的 `resource` 参数都改为验证后的值；旧记录缺字段按原 serverUrl 解释。现有注入项 `getConfiguredScopes` 收敛为 `getConfiguredOAuth(name, config): Promise<McpOAuthSettings | undefined>`，由 Session 组装入口提供最新非秘密 OAuth 设置；统一更新全部调用者和测试，不同时保留两套读取逻辑。McpOAuthSettings 为 core 现有类型，本任务加 resourceUrl，任务 6 加 callbackUrl。策略仍留在 mcp。URL 或 audience 不匹配必须在发 Token 前报重新授权；为带 Token fetch 设置禁止跨 origin 跳转的处理。
+- [ ] 将 authorization、code exchange 和 refresh 的 `resource` 参数都改为验证后的值；旧记录缺字段按原 serverUrl 解释。现有注入项 `getConfiguredScopes` 收敛为 `getConfiguredOAuth(name, config): Promise<McpOAuthSettings | undefined>`，由 Session 组装入口提供最新非秘密 OAuth 设置；统一更新全部调用者和测试，不同时保留两套读取逻辑。McpOAuthSettings 为 core 现有类型，本任务加 resourceUrl，任务 4 加 callbackUrl。策略仍留在 mcp。URL 或 audience 不匹配必须在发 Token 前报重新授权；为带 Token fetch 设置禁止跨 origin 跳转的处理。
 - [ ] 跑 `pnpm --filter @vykor/mcp test`、`pnpm --filter @vykor/core exec vitest run src/config/settings.test.ts` 和 `pnpm --filter @vykor/agent-runtime exec vitest run src/runtime-integrations.test.ts`；记录捕获的三种 OAuth resource 参数一致性，通过后提交 `feat(mcp): validate discovered resource bindings`。
 
-## 任务 3：Keyring 主密钥与加密 envelope
+## 任务 3：最小文件格式与跨进程退出保护
 
-**创建：** `packages/auth/src/mcp-oauth-keyring.ts`、`mcp-oauth-keyring.test.ts`、`mcp-oauth-envelope.ts`、`mcp-oauth-envelope.test.ts`。
-
-**修改：** `packages/auth/package.json`、`pnpm-lock.yaml`。
-
-**交付物：** 与 OAuth 无关的窄秘密存储适配器及加密编码。
-
-- [ ] 在新测试中定义内存 Keyring fake，只替代 OS 交互；加解密使用真实 Node crypto。测试 nonce 不重复、篡改密文/tag/AAD 拒绝、不同 name/configDir 不能互解，以及锁定与缺失必须返回不同结果。
-- [ ] 执行 `pnpm --filter @vykor/auth exec vitest run src/mcp-oauth-keyring.test.ts src/mcp-oauth-envelope.test.ts`，确认新实现缺失的红灯。
-- [ ] 定义且只实现两个平台方法，使用字节密钥而非 OAuth Record：
-
-```ts
-interface McpKeyring {
-  read(account: string): Promise<Uint8Array | undefined>;
-  write(account: string, key: Uint8Array): Promise<void>;
-}
-type KeyringFailure = "unavailable" | "locked" | "denied" | "invalid-key";
-```
-
-  错误转换只输出上述枚举。固定 service，account 由配置目录摘要计算。主密钥使用 Node `randomBytes(32)`，nonce 使用 `randomBytes(12)`，AES-256-GCM 验证 tag 后才解析 JSON。
-- [ ] 将 `@napi-rs/keyring` 作为可选原生依赖接入，实施时固定经过验证的版本；首次候选为已查证的 2.1.0。Linux 显式选择 secret-service，缺失不能静默改用 keyutils。只有 load/调用该后端时才加载原生模块，file 模式启动不依赖它。
-- [ ] 跑上述两组测试与 auth 类型检查。对原生 adapter 额外进行本机临时 account 的真实 set/get/delete 验证，临时 account 不使用生产服务记录；不把秘密打印到终端。通过后提交 `feat(auth): add keyring-backed MCP credential encryption`。
-
-## 任务 4：v2 store、降级、logout epoch 与删除保障
-
-**修改：** `packages/auth/src/mcp-oauth-credential-store.ts`、`mcp-oauth-envelope.ts`、`packages/core/src/types/mcp-oauth.ts`、`packages/mcp/src/oauth/login.ts`。
+**修改：** `packages/auth/src/mcp-oauth-credential-store.ts`、`packages/core/src/types/mcp-oauth.ts`、`packages/mcp/src/oauth/login.ts`。
 
 **测试：** `packages/auth/src/mcp-oauth-credential-store.test.ts`、`packages/mcp/src/oauth/login.test.ts`。
 
-**交付物：** 同一个 store facade 支持新旧格式、加密与明确降级，退出不依赖解密。
+**交付物：** 保留现有明文记录和单文件锁，只增加退出计数及原子删除。与任务 5 一起验收，不把始终返回 0 的占位实现当成保护。
 
-- [ ] 用临时目录和两个真实 store 实例增加以下测试：v1 可读但 get 不迁移；写入变 v2；刷新保持后端；auto 锁定不降级；不同服务并发不丢项；文件 rename 失败保留原文；密钥丢失不被当成首次初始化；全部密文删除后明确 missing key 可重建。
-- [ ] 在当前实现运行测试确认格式/epoch 行为缺失。v2 结构按设计定义，fixture 示例：
+- [ ] 用两个真实 store 实例测试 v1 只读不迁移、首次实际修改升级、其他服务记录保留、CAS miss 不写文件、不存在的目标退出仍递增 epoch、rename 失败保留原文件。先运行 auth store 测试，确认当前实现缺失这些行为。
+- [ ] 仅采用以下格式，不新增 backend 包装、加密或存储选择：
 
 ```ts
 interface McpOAuthStoreV2 {
   version: 2;
   logoutEpochs: Record<string, number>;
-  servers: Record<string,
-    | { backend: "file"; record: McpOAuthCredentialRecord }
-    | { backend: "keyring"; nonce: string; tag: string; ciphertext: string }
-  >;
+  servers: Record<string, McpOAuthCredentialRecord>;
 }
 ```
 
-  `McpOAuthCredentialRecord` 使用 core 现有类型。不能将 entire store 作为一个密文，否则单项 logout 需要解密所有数据。
-- [ ] 保留 file lock，新增 `readLogoutEpoch(name)` 和 `takeAndDelete(name)`；后者在锁内尽力解密旧目标、删除 raw entry、增加 epoch，返回旧凭据或安全的读取失败标记。即使不存在 entry 也增加 epoch。`runExclusive` 的上下文读取同一文件中的 logoutEpoch；delete 委托 takeAndDelete。
-- [ ] 将协议撤销拆成“对传入旧 Record 尽力 revoke”与 store 删除编排；不能删除后重读 store。Keyring locked 的 takeAndDelete 必须可成功，文件结构损坏/写失败仍如实失败。实现 POSIX 权限与 Windows SID ACL，仅操作凭据文件/临时文件及新建凭据目录，不递归改配置树权限。
-- [ ] 跑 auth 全套与 MCP login/runtime-auth 测试。增加跨进程测试：旧登录读取 epoch=0，另一进程 logout 后 epoch=1，旧登录提交在锁内被拒绝；CAS miss 保持原文件字节与 revision。通过后提交 `feat(auth): migrate MCP credentials with safe fallback and logout fencing`。
+  v1 缺省 epoch 为 0；未知版本或非法 epoch 拒绝，不按空文件处理。epoch 必须是非负安全整数，递增溢出时报错而非回绕。读取 v1 不修改文件，实际写入在原锁内原子替换为 v2。旧 reader 拒绝 v2；注明同配置目录的所有客户端必须一起更新。
+- [ ] 新增 `readLogoutEpoch(name)` 和 `takeAndDelete(name)`。前者持锁读取；后者在同一锁内取出旧 Record、删除、递增 epoch 并落盘，返回旧 Record 供撤销。普通 `delete` 委托它；空删除也保留计数。任务 1 的 mutation context 此时增加真实 `logoutEpoch`，同步所有实现与测试替身，不提前发布占位上下文。
+- [ ] 将 revoke 收敛为对传入旧 Record 的尽力撤销；删除后不重新读取共享 store。文件读写失败如实失败。沿用现有权限措施，本轮不加入 Windows ACL 工具或原生依赖。
+- [ ] 跑 `pnpm --filter @vykor/auth exec vitest run src/mcp-oauth-credential-store.test.ts` 和 `pnpm --filter @vykor/mcp exec vitest run src/oauth/login.test.ts src/oauth/runtime-auth.test.ts`。保留跨进程 fixture 供任务 5 验证迟到提交被拒绝；与消费者一起提交可验证的退出保护。
 
-## 任务 5：存储状态展示与原生打包
-
-**修改：** `packages/core/src/types/mcp-oauth.ts`、`packages/mcp/src/oauth/snapshot.ts`、`packages/server/src/application/mcp-oauth-application-service.ts`、`apps/cli/src/commands/mcp.ts`、`apps/desktop/src/shared/mcp-types.ts`、`apps/desktop/src/main/features/mcp/mcp-service.ts`、`apps/desktop/src/renderer/src/components/desktop/settings-page/mcp-settings.tsx`。
-
-**打包：** `apps/cli/package.json`、`apps/cli/build.ts`、`packages/agent-runtime/package.json`、`packages/agent-runtime/scripts/build.mjs`、`apps/desktop/package.json`、`apps/desktop/electron-builder.yml`；创建 `scripts/verify-mcp-keyring-packaging.mjs`。
-
-**测试：** 现有 snapshot、application-service、CLI MCP、Desktop MCP service/settings 测试及新脚本配套 `.test.mjs`。
-
-- [ ] 先测试一个 Keyring 项 locked、另一个 file 项 valid 的 snapshot；列表必须仍返回两项，前者 authStatus=unavailable。CLI 输出安全的降级提示；UI 不把存储不可读显示成未登录。
-- [ ] 定向执行上述测试确认新字段/状态缺失。只新增以下可见信息：
-
-```ts
-type CredentialStorage = "keyring" | "file";
-// McpOAuthAuthStatus 增加 unavailable
-// snapshot 可选字段：
-credentialStorage?: CredentialStorage;
-credentialError?: { code: "credential-storage-unavailable" };
-```
-
-- [ ] 应用服务逐项捕获已知 storage error，未知配置/协议错误不统一吞成未登录。保留旧 snapshot 字段。更新 Desktop 的状态标签和按钮条件，锁定时提供存储故障提示及退出动作，不自动打开授权浏览器。
-- [ ] 把原生 package 加入三个安装产物的正确生产/可选依赖及 external/unpack 配置。验证脚本使用产物目录的 `createRequire` 实际解析原生模块；file 模式在缺少模块时也能执行状态命令。不要把工作区依赖可读当成安装包合格。
-- [ ] 跑定向测试、`pnpm --filter @rzx/ohs build`、`pnpm --filter @vykor/agent-runtime test:pack`、`pnpm --filter @vykor/desktop build:unpack`。在 Windows/macOS/Linux 各自验收 Keyring 持久性；缺少平台结果时可交付代码，但批次 B 的跨平台发布验收保持未完成。通过可用平台检查后提交 `feat(mcp): expose credential storage status and package keyring runtime`。
-
-## 任务 6：完整 callback URL 与抗无关请求干扰
+## 任务 4：完整 callback URL 与抗无关请求干扰
 
 **修改：** `packages/core/src/types/mcp-oauth.ts`、`packages/core/src/config/settings.ts`、`packages/mcp/src/oauth/callback.ts`、`login.ts`。
 
@@ -187,7 +133,7 @@ await deps.onAuthorizationUrl?.(authorizationUrl.toString());
 
 - [ ] 跑 `pnpm --filter @vykor/mcp exec vitest run src/oauth/callback.test.ts src/oauth/login.test.ts` 和 settings 测试。检查 abort/timeout 关闭监听器与 timer，通过后提交 `feat(mcp): support validated custom and manual callbacks`。
 
-## 任务 7：应用服务的可取消提交与跨进程 logout
+## 任务 5：应用服务的可取消提交与跨进程 logout
 
 **修改：** `packages/server/src/application/mcp-oauth-application-service.ts`、`packages/mcp/src/oauth/login.ts`；维护现有 CLI 本地调用兼容。
 
@@ -210,7 +156,7 @@ interface McpOAuthCommitOutcome {
   `McpRuntimeSyncResult` 复用 core；保留 CLI 现有非零退出语义。logout 在队列外 abort，锁内 takeAndDelete 先落盘，再 revoke 返回的旧记录并同步。snapshot 读取失败不能抹掉 credentialCommitted 的事实。
 - [ ] 跑应用服务、auth store、CLI MCP 测试，覆盖成功双登录仍最后提交生效、logout epoch 永不回退。通过后提交 `fix(server): fence OAuth commits against cancellation and logout`。
 
-## 任务 8：有界授权操作与状态订阅
+## 任务 6：有界授权操作与状态订阅
 
 **创建：** `packages/server/src/application/mcp-oauth-operation-service.ts`、`mcp-oauth-operation-service.test.ts`。
 
@@ -238,7 +184,7 @@ interface OAuthOperationView {
 - [ ] begin 调用先查幂等再限额；没有可清理的过期终态时拒绝新建。cancel 先 abort 再等收尾；进入不可回滚提交区的取消返回冲突。daemon.close 中停止接收新操作、abort 未提交项、等待已提交区收尾并释放 timer/listener。
 - [ ] 测试 GET 不改变状态，终态订阅立即返回且关闭，HTTP 断开只释放订阅。通过后提交 `feat(server): manage bounded MCP OAuth login operations`。
 
-## 任务 9：协议、HTTP/SSE 和 typed client
+## 任务 7：协议、HTTP/SSE 和 typed client
 
 **创建：** `packages/protocol/src/mcp-oauth.ts`、`mcp-oauth.test.ts`。
 
@@ -263,9 +209,11 @@ interface McpOAuthLoginInput {
 - [ ] 挂载路由时复用全局协议/Bearer/origin 中间件。client 资源增加 authStatus/startLogin/getLogin/watchLogin/submitCallback/cancelLogin/logout 方法，SSE 复用现有 transport，并支持 AbortSignal。保持原 runtimeStatus/synchronize 方法。pending 的 updated 事件只暴露 authorizationReady，客户端收到 true 后 GET 私有操作详情取 URL；completed 后调用 authStatus 读取最新服务状态。
 - [ ] 跑 `pnpm --filter @vykor/protocol exec vitest run src/mcp-oauth.test.ts src/capabilities.test.ts`、`pnpm --filter @vykor/server exec vitest run src/http/routes/mcp.test.ts`、`pnpm --filter @vykor/client exec vitest run src/resources/__test__/mcp-resource.test.ts src/transport/__test__/protocol-handshake.test.ts` 与 `pnpm check:client-api`。通过后提交 `feat(client): expose MCP OAuth operations and completion events`。
 
-## 任务 10：CLI 与 Desktop 用户流程
+## 任务 8：CLI 与 Desktop 用户流程
 
-**修改：** `apps/cli/src/commands/mcp.ts`、`mcp.test.ts`、`apps/cli/src/mcp-runtime-coordinator.ts`、对应测试；`apps/desktop/src/main/features/mcp/mcp-service.ts`、`mcp-service.test.ts`、`ipc.ts`、`apps/desktop/src/shared/mcp-types.ts`、`ipc-channels.ts`、`desktop-api-contract.ts`、`apps/desktop/src/preload/desktop-api.ts`、对应测试、`apps/desktop/src/renderer/src/components/desktop/settings-page/mcp-settings.tsx` 与测试。
+**修改：** `apps/cli/src/commands/mcp.ts`、`mcp.test.ts`、`apps/cli/src/mcp-runtime-coordinator.ts`、对应测试；`apps/desktop/src/main/features/mcp/mcp-service.ts`、`mcp-service.test.ts`、`ipc.ts`、`apps/desktop/src/shared/mcp-types.ts`、`ipc-channels.ts`、`desktop-api-contract.ts`、`apps/desktop/src/preload/desktop-api.ts`、对应测试、`apps/desktop/src/renderer/src/components/desktop/plugin-page/mcp-manager.tsx` 与 `mcp-manager.test.tsx`。
+
+**界面入口：** 主页 → 插件 → MCP tab。复用 `plugin-page/plugin-page.tsx` 的现有挂载，不恢复旧设置页、不另建 MCP 管理入口；本任务不重构插件导航、MCP 编辑器或表单。
 
 **参考：** `apps/desktop/src/main/features/session/daemon-connection-service.ts` 的接管与 dispose 行为，不改写整个连接服务。
 
@@ -274,20 +222,19 @@ interface McpOAuthLoginInput {
 - [ ] CLI 测试同实例响应丢失恢复、instanceId 改变停止、手动打印 URL、粘贴 callback、完成但 Runtime 警告非零退出。Desktop 测试 renderer 从不收到 Token/Bearer/授权 URL，main 收到 pending URL 后只打开一次浏览器。
 - [ ] 在当前 CLI/Desktop 运行定向测试，确认尚未使用 operation resource。
 - [ ] CLI 仅在明确离线且尚未发出可能被受理请求时走本地 service；否则固定 instanceId/requestId/loginId 查询。手动模式通过 typed client 提交 callback。取消信号释放本地 readline/SSE，并尽力取消未提交操作。
-- [ ] Desktop 在开始前完成连接/接管，main 管理 operation 与 URL 校验/openExternal；renderer 获取安全 operation 状态和取消按钮。窗口退出时释放 UI 订阅，内置 daemon 停止交给任务 8 cleanup。旧 daemon 能力不支持时显示升级提示。scope 请求错误仍只有手动重新授权提示，不自动重放 MCP 工具调用。
-- [ ] 跑 `pnpm --filter @rzx/ohs exec vitest run src/commands/mcp.test.ts src/mcp-runtime-coordinator.test.ts`、Desktop MCP service/settings/preload 的定向测试及 `pnpm --filter @vykor/desktop typecheck`。通过后提交 `feat(desktop): use shared MCP OAuth login operations`。
+- [ ] Desktop 只接入现有 daemon 主路径，开始前完成连接/接管；连接失败明确报错，不新增本地回退分支。main 管理 operation 与 URL 校验/openExternal；renderer 获取安全 operation 状态和取消按钮。窗口退出时释放 UI 订阅，内置 daemon 停止交给任务 6 cleanup。旧 daemon 能力不支持时显示升级提示。scope 请求错误仍只有手动重新授权提示，不自动重放 MCP 工具调用。
+- [ ] 跑 `pnpm --filter @rzx/ohs exec vitest run src/commands/mcp.test.ts src/mcp-runtime-coordinator.test.ts`、Desktop MCP service/preload 的定向测试、`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/plugin-page/mcp-manager.test.tsx` 及 `pnpm --filter @vykor/desktop typecheck`。通过后提交 `feat(desktop): use shared MCP OAuth login operations`。
 
-## 任务 11：阶段验收与交接
+## 任务 9：阶段验收与交接
 
 **修改：** `packages/mcp/README.md`、`apps/cli/README.md`；创建 `docs/superpowers/reviews/2026-09-21-mcp-oauth-phase-3-acceptance.md` 记录真实结果。
 
-**交付物：** 可复核的发布前验收记录，不以单测冒充真实 Keyring/Linear 结果。
+**交付物：** 可复核的发布前验收记录，不以单测冒充真实 Linear 结果。
 
 - [ ] 依次跑完整 `mcp`、`auth`、`agent-runtime` 测试；Server、Client、CLI、Desktop 跑本阶段全部变更文件及相关集成测试。已有无关失败记录实际触发条件，保持失败记录可见。
 - [ ] 跑 `pnpm check-types`、`pnpm --filter @vykor/desktop typecheck`、`pnpm check:client-api`、`node scripts/architecture-boundaries.mjs`、`node scripts/check-docs.mjs`；不修改架构基线来容纳新的层间依赖。
-- [ ] 在实际安装产物进行 OS Keyring 验收：本机及支持平台重启后仍能读；同用户 CLI/Desktop/daemon 互读；无 Keyring 显示 file；锁定已有 Keyring 不降级；logout 无法解密时仍删除目标记录。只使用测试记录。
 - [ ] 真实 Linear 验收：本地 CLI、daemon CLI、Desktop 显式登录各一次；活跃 Session 重连和 logout；固定 loopback callback；手动 URL 模式；人为配置不同 resource 被拒绝。临时刷新错误与 invalid_grant 用本地受控 OAuth server 注入，不破坏真实账号 Token。
-- [ ] 报告各任务提交 SHA、命令/退出码、未验证平台、存储格式兼容限制、已知风险；仅在证据齐全的批次标完成。提交文档 `docs(mcp): record phase three acceptance evidence`。不自动发布、部署或创建 PR。
+- [ ] 报告各交付提交 SHA 及覆盖任务、命令/退出码、未验证路径、最小文件格式兼容限制、已知风险；仅在证据齐全的批次标完成。提交文档 `docs(mcp): record phase three acceptance evidence`。不自动发布、部署或创建 PR。
 
 ## 规格覆盖与复查清单
 
@@ -295,14 +242,16 @@ interface McpOAuthLoginInput {
 |---|---|
 | 刷新失败分类、版本快照、CAS 无副作用 | 1 |
 | metadata 来源、resource 配置/传参/旧记录绑定 | 2 |
-| Keyring 主密钥、真实加密、平台后端 | 3 |
-| v1/v2、锁、fallback、权限、logout epoch | 4 |
-| unavailable 状态、降级提示、安装产物 | 5 |
-| 完整 callback、错误 state、不相关请求、有效拒绝 | 6 |
-| 取消先 abort、配置提交复核、跨进程退出不复活 | 7 |
-| 操作容量/TTL、幂等、实例重启、内存订阅 | 8 |
-| 受认证 API、SSE、客户端能力协商 | 9 |
-| CLI 离线、手动模式、Desktop main 边界 | 10 |
-| 原功能回归、真实平台/Linear、发布交接 | 11 |
+| 最小 v2、退出计数、原子删除 | 3、5（联合验收） |
+| 完整 callback、错误 state、不相关请求、有效拒绝 | 4 |
+| 取消先 abort、配置提交复核、跨进程退出不复活 | 5 |
+| 操作容量/TTL、幂等、实例重启、内存订阅 | 6 |
+| 受认证 API、SSE、客户端能力协商 | 7 |
+| CLI 离线、手动模式、Desktop main 边界 | 8 |
+| 原功能回归、真实 Linear、交接 | 9 |
 
-实施期间如需新增 Keyring 产品、服务端授权模式或跨机器秘密同步，应单独提出范围变更；本计划不为这些能力预留框架。
+## 明确不做
+
+OS Keyring + file fallback 整体暂缓，不安装原生依赖，不创建加密/后端适配文件，不增加存储模式开关、专用展示字段或跨平台打包验收。保留现有独立文件不等于实现了 file fallback。
+
+不新建通用操作框架、持久事件库、后台刷新服务、多账号体系或跨机器秘密同步。自定义 resource/callback 与 App Server 接口仍按已定范围实现；DCR 复用现有能力。需要扩大这些范围时单独提出，不提前留框架。

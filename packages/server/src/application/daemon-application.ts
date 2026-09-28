@@ -43,6 +43,8 @@ import {
 import { validateRequestSelection } from "./session/request-selection-validation.js";
 import { createDaemonAgentLoader, type CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import { McpRuntimeConnectionCoordinator } from "./mcp-runtime-connection-coordinator.js";
+import { McpOAuthApplicationService } from "./mcp-oauth-application-service.js";
+import { McpOAuthOperationService } from "./mcp-oauth-operation-service.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
 import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
 import { DaemonJobService } from "../jobs/daemon-job-service.js";
@@ -173,6 +175,10 @@ export interface DurableAgentApplication {
   readonly retention: ApplicationRetentionService;
   /** Process-wide coordinator for OAuth-driven MCP Runtime reconnects. */
   readonly mcpRuntimes: McpRuntimeConnectionCoordinator;
+  /** MCP OAuth credential operations (login/logout) for this daemon. */
+  readonly mcpOAuth: McpOAuthApplicationService;
+  /** Bounded, in-memory OAuth login operations owned by this daemon instance. */
+  readonly mcpOAuthOperations: McpOAuthOperationService;
   ready(): Promise<void>;
   close(): Promise<void>;
 }
@@ -211,6 +217,8 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly workflows: SessionWorkflowRunRepository;
   readonly retention: ApplicationRetentionService;
   readonly mcpRuntimes: McpRuntimeConnectionCoordinator;
+  readonly mcpOAuth: McpOAuthApplicationService;
+  readonly mcpOAuthOperations: McpOAuthOperationService;
   private readonly attachmentResources: SessionAttachmentResources;
   private readonly modelCatalog: ReturnType<typeof createModelCatalogService>;
 
@@ -236,6 +244,8 @@ export class DaemonApplication implements DurableAgentApplication {
     const { store } = options;
     this.store = store;
     this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
+    this.mcpOAuth = new McpOAuthApplicationService({ coordinator: this.mcpRuntimes });
+    this.mcpOAuthOperations = new McpOAuthOperationService({ application: this.mcpOAuth });
     this.modelCatalog = createModelCatalogService();
     // 同一份会话库同时只允许一个 daemon 当主人。心跳断了，别人才能接管。
     this.ownerLease = store.acquireApplicationOwner({
@@ -983,6 +993,13 @@ export class DaemonApplication implements DurableAgentApplication {
   private async closeWork(): Promise<void> {
     bindContextUsageLiveAssembler(undefined);
     const failures: unknown[] = [];
+    // Stop accepting OAuth logins, abort uncommitted ones and let commit
+    // regions settle before the store is released.
+    try {
+      await this.mcpOAuthOperations.close();
+    } catch (error) {
+      failures.push(error);
+    }
     try {
       await this.startupRecovery;
     } catch (error) {

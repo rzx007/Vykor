@@ -62,6 +62,22 @@ describe("protocol capabilities", () => {
     });
   });
 
+  it("parses an optional MCP OAuth instance id and stays backward compatible", () => {
+    expect(server.mcpOAuth).toBeUndefined();
+    expect(parseServerCapabilities({
+      serverVersion: "0.4.0",
+      protocol: { version: CURRENT_PROTOCOL_VERSION },
+      features: { mcpOAuth: 1 },
+      mcpOAuth: { instanceId: "boot-1" },
+    }).mcpOAuth).toEqual({ instanceId: "boot-1" });
+    expect(() => parseServerCapabilities({
+      serverVersion: "x",
+      protocol: { version: 2 },
+      features: {},
+      mcpOAuth: { instanceId: "" },
+    })).toThrow("mcpOAuth.instanceId");
+  });
+
   it("rejects malformed attachment limits and upload modes", () => {
     const base = {
       serverVersion: "0.4.0",

@@ -342,6 +342,7 @@ export class VykorHttpServer {
         control: this.application.control,
         retention: this.application.retention,
         attachmentLimits: this.application.attachments.limits,
+        mcpOAuthInstanceId: this.application.mcpOAuthOperations?.oauthInstanceId,
       }),
     );
     this.app.route(
@@ -385,7 +386,11 @@ export class VykorHttpServer {
     );
     this.app.route(
       "/mcp",
-      createMcpRoutes({ runtimes: this.application.mcpRuntimes }),
+      createMcpRoutes({
+        runtimes: this.application.mcpRuntimes,
+        oauth: this.application.mcpOAuth,
+        operations: this.application.mcpOAuthOperations,
+      }),
     );
     this.app.route("/git", createGitRoutes({ gitService: this.services.git }));
     this.app.route("/channels", createChannelRoutes(this.application.channels));

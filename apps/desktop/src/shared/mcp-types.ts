@@ -36,6 +36,21 @@ export interface DesktopMcpLoginInput {
   scopes: string[]
 }
 
+/** Only safe operation fields cross to the renderer. */
+export interface DesktopMcpLoginState {
+  loginId: string
+  name: string
+  state: "pending" | "completed" | "failed" | "cancelled"
+  credentialCommitted: boolean
+  authorizationReady: boolean
+  errorCode?: string
+  runtimeWarning?: boolean
+}
+
+export interface DesktopMcpLoginOperationInput {
+  loginId: string
+}
+
 export interface DesktopMcpLogoutInput {
   name: string
 }

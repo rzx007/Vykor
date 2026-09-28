@@ -30,6 +30,7 @@ import type {
   DesktopMcpAuthMode,
   DesktopMcpAuthStatus,
   DesktopMcpOperationResult,
+  DesktopMcpLoginState,
   DesktopMcpRuntimeStatus,
   DesktopMcpServer,
   DesktopMcpSnapshot,
@@ -121,6 +122,7 @@ export function McpManager({
   const [exportJson, setExportJson] = useState("")
   const [exportError, setExportError] = useState("")
   const [busyName, setBusyName] = useState<string | null>(null)
+  const [loginOperation, setLoginOperation] = useState<DesktopMcpLoginState | null>(null)
   const seenAdd = useRef(addRequest)
   const seenRefresh = useRef(refreshRequest)
 
@@ -160,6 +162,28 @@ export function McpManager({
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshRequest])
+
+  useEffect(() => {
+    if (loginOperation?.state !== "pending") return
+    let disposed = false
+    const timer = window.setInterval(() => {
+      void window.desktop.mcp.loginStatus({ loginId: loginOperation.loginId }).then(async (next) => {
+        if (disposed) return
+        setLoginOperation(next)
+        if (next.state !== "pending") {
+          await load()
+          if (next.credentialCommitted && next.runtimeWarning) notify(`授权已保存，但重连失败：${next.name}`)
+          else if (next.credentialCommitted) notify(`${next.name} 授权已保存`)
+          else if (next.state === "failed") notify(`授权失败：${next.errorCode ?? "请重试"}`)
+        }
+      }).catch((error) => {
+        if (!disposed) notify(errorMessage(error))
+      })
+    }, 800)
+    return () => { disposed = true; window.clearInterval(timer) }
+    // The operation ID determines this subscription; load and notify come from the current component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginOperation?.loginId, loginOperation?.state])
 
   function reportResult(result: DesktopMcpOperationResult, action: string, name: string): void {
     if (!result.persisted) {
@@ -254,8 +278,13 @@ export function McpManager({
     setBusyName(server.name)
     try {
       const next = await window.desktop.mcp.login({ name: server.name, scopes: [] })
-      setSnapshot(next)
-      notify(`${server.name} 授权已保存`)
+      setLoginOperation(next)
+      if (next.state !== "pending") {
+        await load()
+        if (next.credentialCommitted && next.runtimeWarning) notify(`授权已保存，但重连失败：${server.name}`)
+        else if (next.credentialCommitted) notify(`${server.name} 授权已保存`)
+        else notify(`授权失败：${next.errorCode ?? "请重试"}`)
+      }
     } catch (error) {
       const refreshed = await load()
       const current = refreshed?.servers.find((item) => item.name === server.name)
@@ -267,6 +296,21 @@ export function McpManager({
       }
     } finally {
       setBusyName(null)
+    }
+  }
+
+  async function cancelLogin(): Promise<void> {
+    if (!loginOperation) return
+    try {
+      const next = await window.desktop.mcp.cancelLogin({ loginId: loginOperation.loginId })
+      setLoginOperation(next)
+      if (next.state !== "pending") await load()
+      if (next.credentialCommitted && next.runtimeWarning) notify(`授权已保存，但重连失败：${next.name}`)
+      else if (next.credentialCommitted) notify(`${next.name} 授权已保存`)
+      else if (next.state === "cancelled") notify(`${next.name} 授权已取消`)
+      else notify(`授权状态：${next.state}`)
+    } catch (error) {
+      notify(errorMessage(error))
     }
   }
 
@@ -485,6 +529,13 @@ export function McpManager({
 
               {canAuthorize(detail) ? (
                 <div className="flex flex-wrap items-center gap-2">
+                  {loginOperation?.name === detail.name && loginOperation.state === "pending" ? (
+                    <>
+                      <span role="status" className="text-xs text-muted-foreground">等待浏览器授权</span>
+                      <Button variant="outline" onClick={() => void cancelLogin()}>取消授权</Button>
+                    </>
+                  ) : (
+                    <>
                   {detail.authStatus === "valid" || detail.authStatus === "expired-refreshable" ? (
                     <Button
                       variant="outline"
@@ -503,6 +554,8 @@ export function McpManager({
                         ? "重新授权"
                         : "浏览器授权"}
                     </Button>
+                  )}
+                    </>
                   )}
                 </div>
               ) : detail.authMode === "none" ? (

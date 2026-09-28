@@ -145,6 +145,8 @@ import type {
   DesktopMcpExportResult,
   DesktopMcpGetConfigInput,
   DesktopMcpLoginInput,
+  DesktopMcpLoginOperationInput,
+  DesktopMcpLoginState,
   DesktopMcpLogoutInput,
   DesktopMcpOperationResult,
   DesktopMcpRemoveInput,
@@ -305,7 +307,9 @@ export type DesktopAPI = {
     update: (input: DesktopMcpUpdateInput) => Promise<DesktopMcpOperationResult>
     remove: (input: DesktopMcpRemoveInput) => Promise<DesktopMcpOperationResult>
     setEnabled: (input: DesktopMcpSetEnabledInput) => Promise<DesktopMcpOperationResult>
-    login: (input: DesktopMcpLoginInput) => Promise<DesktopMcpSnapshot>
+    login: (input: DesktopMcpLoginInput) => Promise<DesktopMcpLoginState>
+    loginStatus: (input: DesktopMcpLoginOperationInput) => Promise<DesktopMcpLoginState>
+    cancelLogin: (input: DesktopMcpLoginOperationInput) => Promise<DesktopMcpLoginState>
     logout: (input: DesktopMcpLogoutInput) => Promise<DesktopMcpSnapshot>
   }
   connections: {

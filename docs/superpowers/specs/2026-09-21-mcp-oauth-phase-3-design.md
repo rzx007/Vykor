@@ -1,8 +1,9 @@
 # MCP OAuth 第三阶段设计
 
 **日期：** 2026-09-21
-**状态：** 两轮独立审核通过，已修订；实施前供用户审阅
-**目标：** 在已验收的 Streamable HTTP OAuth 闭环上补齐可靠性、系统安全存储和 App Server 授权入口，保持 CLI、Desktop 与 Session Runtime 的职责清晰。
+**更新：** 2026-09-28，按用户要求暂缓 Keyring，重新审核范围
+**状态：** 2026-09-28 设计复审通过，任务 1–8 已实现并完成自动检查；真实服务/安装产物验收见 [验收记录](../reviews/2026-09-21-mcp-oauth-phase-3-acceptance.md)
+**目标：** 在已验收的 Streamable HTTP OAuth 闭环上补齐可靠性和 App Server 授权入口，保持 CLI、Desktop 与 Session Runtime 的职责清晰。
 
 ## 阶段调整与现状
 
@@ -10,13 +11,12 @@
 
 已完成的能力继续复用：PKCE、localhost callback、DCR（动态注册 OAuth 客户端）、独立凭据文件、请求前到期检查、刷新锁、401 单次刷新重试、CLI 手动回调模式、Desktop 授权入口、活动 Session 重连与退出断开、scope 变更后的按需拦截。
 
-用户已报告真实 Linear 登录、读取、重连与退出冒烟测试成功。该结果不覆盖 Token 到期、网络失败、Keyring 或本设计新增接口。
+用户已报告真实 Linear 登录、读取、重连与退出冒烟测试成功。该结果不覆盖 Token 到期、网络失败或本设计新增接口。
 
 | 第三阶段交付 | 现状 | 本阶段变化 |
 |---|---|---|
 | 刷新错误分类 | 任意刷新异常都会写入需要重新授权 | 区分临时错误、失效凭据与配置错误 |
 | resource 绑定 | 仅校验 metadata resource 的 origin | 明确发现来源、资源标识及 Token audience 参数 |
-| OS Keyring + file fallback | 凭据保存在独立 JSON 文件 | Keyring 密钥保护加密记录；明确的文件降级 |
 | oauth resource / callback 配置 | resource 使用 endpoint；callback 仅可改端口 | 增加 `oauth.resourceUrl`、`oauth.callbackUrl` |
 | App Server 登录与完成事件 | daemon 仅提供 Runtime 查询/同步 | 有界的授权操作、状态查询和完成事件 |
 | CLI / Desktop | 各自执行本地授权流程 | daemon 可用时共用操作接口，CLI 离线能力保留 |
@@ -31,11 +31,11 @@
 
 | 模块 | 负责 | 不负责 |
 |---|---|---|
-| `packages/mcp` | discovery、resource/issuer/callback 校验、PKCE、DCR、Token 交换与刷新、连接决策、MCP client | 文件路径、OS Keyring、浏览器、HTTP 登录路由 |
-| `packages/auth` | 凭据存取、加密、后端选择、迁移、跨进程锁 | OAuth 协议与 Runtime 重连 |
-| `packages/server` | 配置读取与提交、授权操作生命周期、Runtime 协调、登录 HTTP 接口 | OS Keyring 的平台 API、界面弹窗 |
+| `packages/mcp` | discovery、resource/issuer/callback 校验、PKCE、DCR、Token 交换与刷新、连接决策、MCP client | 文件路径、浏览器、HTTP 登录路由 |
+| `packages/auth` | 现有文件凭据存取、版本比较、退出计数、跨进程锁 | OAuth 协议与 Runtime 重连 |
+| `packages/server` | 配置读取与提交、授权操作生命周期、Runtime 协调、登录 HTTP 接口 | 协议策略、界面弹窗 |
 | `packages/agent-runtime` | 组装 Session 连接、执行连接决策、工具集合替换、Run 连接租约 | 解析刷新错误、判断 Token 权限、持久化登录流程 |
-| `packages/core` / `packages/protocol` | 领域类型 / HTTP 与事件 DTO | Keyring 原生代码和授权执行逻辑 |
+| `packages/core` / `packages/protocol` | 领域类型 / HTTP 与事件 DTO | 存储实现和授权执行逻辑 |
 | `packages/client`、CLI、Desktop | typed API 调用、显示 URL/结果、用户确认后打开浏览器 | Token、client secret、PKCE verifier 的传递与展示 |
 
 `McpOAuthRuntime.getConnectionAction()` 继续返回 `connect / disconnect / ignore`；agent-runtime 不重新读取或解析凭据记录。Session 配置读取由现有组装入口传给 MCP 层，避免新增全局配置 watcher。
@@ -54,7 +54,7 @@
 | 刷新后重试仍为 401 | 需要重新授权 | 仅标记本次实际使用的凭据版本 | 用户显式 login |
 | `invalid_client`、`unauthorized_client`、不支持的 grant/client auth | 配置错误 | 不删除 Token，不无限重试 DCR | 提示检查客户端配置或重新注册 |
 | scope 扩张、绑定不一致 | 安全校验失败 | 不发布候选 Token；旧/新记录不得交叉标记 | 明确提示修复配置或重新授权 |
-| 凭据文件锁/读写/Keyring 故障 | 存储错误 | 不将授权标记成永久失效 | 修复存储后重试 |
+| 凭据文件锁/读写故障 | 存储错误 | 不将授权标记成永久失效 | 修复存储后重试 |
 
 不新增后台刷新或自动退避循环。每次 MCP 请求仍最多执行一次 401 刷新恢复和一次请求重试；临时失败返回调用者，由下一次用户请求重新尝试。
 
@@ -108,51 +108,23 @@ endpoint 包含检查才使用解析后的 origin 与路径段，并拒绝含编
 
 凭据 `binding` 增加 `resourceUrl`。旧记录没有该字段时按旧代码实际使用的 `serverUrl` 解释，不在刷新中静默改 audience。新 discovery 或配置选出不同 resource 时要求重新授权。issuer、resource、endpoint、固定 callback 的变化都禁止沿用不匹配的凭据。
 
-## 交付 B：系统安全存储与文件降级
+实现时在 binding 内同时保留授权时显式配置的 resourceUrl、callbackUrl、callbackPort 和 clientId，未配置用 null 表示，旧记录缺字段仍兼容。这样既能识别配置改值，也能识别删除显式配置；这些字段不进入页面或事件。未配置 resourceUrl 时继续使用登录时已验证的资源标识，不错误地把合法根级资源强制改回 endpoint。
 
-### 方案
+## 本轮存储范围：只补并发安全
 
-Keyring 保存每个配置目录的随机 256 位主密钥；现有凭据文件保存逐服务 AES-256-GCM 加密记录。这样保留现有单文件锁、revision 和原子 rename 提交，不把一次刷新拆成“metadata 文件 + 多个系统秘密”的跨后端事务。
+继续使用现有独立 JSON 凭据文件，不引入 Keyring、加密 envelope、后端选择、降级模式或原生依赖。文件仍包含明文秘密，不能把本轮交付描述为系统安全存储；沿用现有权限措施，不宣称已完成 Windows ACL 加固。
 
-这不是逐 Token 直接塞入 Keyring。该选择避免完整 OAuth 记录超过部分系统凭据项大小限制，也能在 Keyring 临时不可用时删除某一个服务的本地凭据，而不必解密其他服务。
+为防止另一个进程退出后旧登录重新写回凭据，保留最小格式升级：version 2 的 `servers` 直接存放现有 Record，仅新增 `logoutEpochs: Record<string, number>`，记录每个服务的退出次数。不包裹 backend 字段，不预留加密接口。
 
-优先采用 `@napi-rs/keyring` 的原生绑定，平台调用封装在 `packages/auth` 一个适配文件内。Linux 明确选择持久化 Secret Service，不接受库自动降级到重启即丢失的内核 keyutils。首次实现需固定兼容版本并完成 Node/Bun/Electron 打包验收；原生模块加载失败按“后端不可用”分类，而不是让 CLI 启动崩溃。
+v1 继续可读，缺少的 epoch 按 0 处理；只读查询不迁移。第一次实际修改在原有文件锁内原子写入 v2，保留其他服务记录。CAS 未命中不迁移、不写入。旧实现会拒绝 v2，避免旧进程忽略退出计数继续写入；使用同一配置目录的 CLI、daemon 和 Desktop 必须一起更新。格式损坏或未知版本报错，不按空文件覆盖。
 
-主密钥使用 service `vykor.mcp-oauth`，account 为规范化配置目录绝对路径的 SHA-256 摘要；Windows 路径大小写按现有路径策略统一。CLI、daemon、Desktop 在同一 OS 用户和配置目录下使用同一个键。不同配置目录独立。
+store 提供锁内读取 epoch、比较提交和原子取出并删除目标记录的窄操作。删除即使目标已空也递增 epoch；与 CAS 未命中的无操作语义分开。不增加第二个文件、数据库、存储插件框架或迁移后台任务。
 
-### 格式与选择规则
+### 明确暂缓
 
-凭据文件升级为 version 2：`servers[name]` 为 `file` 明文记录或 `keyring` 加密 envelope，另保留非秘密的 `logoutEpochs[name]`（见授权并发规则）。每个 envelope 使用独立随机 nonce；认证附加数据绑定格式版本、配置目录摘要和 server name。Token、registration client secret 及完整 binding 均在密文内。内存中仍还原为现有 `McpOAuthCredentialRecord`，上层不感知加密细节。
+OS Keyring + file fallback 整体暂缓：主密钥、AES-GCM、存储模式环境变量、加密迁移、存储专用状态字段、跨平台原生打包及验收全部移出本轮。后续有实际需求时独立设计，不保留旧方案为已选定实现。
 
-使用一个非秘密配置开关 `VYKOR_MCP_CREDENTIAL_STORAGE=auto|keyring|file`，默认 `auto`，作用于新登录的存储选择：
-
-| 模式/状态 | 行为 |
-|---|---|
-| auto + 持久 Keyring 可用 | 加密写入 |
-| auto + 平台无持久 Keyring/原生绑定不可用 | 文件写入，CLI/Desktop 显示降级提示 |
-| keyring + 不可用 | 登录提交失败，保留旧凭据 |
-| file | 新登录使用受权限保护的明文文件，显式显示后端 |
-| 既有加密记录 + 密钥丢失/Keyring 锁定或拒绝访问 | 报存储不可用；不得自动降级或生成新密钥覆盖 |
-
-记录已经选定的存储格式是读取和刷新的依据，环境变量变化不能把一次读取变成迁移。刷新沿用该记录后端；显式成功登录可按选择模式替换目标记录。既有加密记录降级为 file 必须来自用户显式选择 file 后的新登录，auto 不执行该降级。
-
-file fallback 在 POSIX 使用目录 0700/文件 0600；Windows 设置仅当前用户及必要系统主体可访问的 ACL，不能把 chmod 成功当作 Windows 权限验证。无法建立所需权限时拒绝写入。
-
-v1 明文记录继续可读。第一次受锁保护的写入将其封装为 v2 的 file 项；目标服务的成功新登录可升级为加密项，其他服务保持原记录。status/list 不迁移、不创建密钥。旧版本客户端读取 v2 必须失败而不是覆盖；升级说明要求同一配置目录中的进程一起更新，不支持新旧版本混写。
-
-### 原子性、退出与打包
-
-继续复用跨进程文件锁。创建/读取主密钥、加密和文件替换发生在同一提交区；新密文写入失败不能先删除原记录。只有“当前文件没有任何加密记录且 Keyring 明确返回不存在”才能创建主密钥；所有服务删除后可据此重新初始化，无需额外历史标记。锁定、拒绝与不可用均不等于不存在。认证失败或既有密文的密钥缺失不当成空凭据。
-
-logout 的远端撤销是尽力而为；本地删除不依赖解密成功。即使 Keyring 锁定，也要在文件锁内移除目标 envelope 并通知 Runtime 断开。不得把凭据读取放在删除保障的 try/finally 之外。退出不删除主密钥，避免破坏其他服务或并发写入。
-
-快照新增可选 `credentialStorage: "keyring" | "file"` 和安全的存储故障/降级提示；不返回主密钥、nonce 对应明文、密文、系统 account 标识或秘密文件内容。读取某项失败时该服务的 `authStatus` 使用新增 `unavailable`，其余服务仍正常列出；不能把存储锁定显示成未登录或已失效。CLI/Desktop 同批更新此枚举，HTTP 客户端通过能力声明确认支持。
-
-加密记录备份只包含密文，不包含系统密钥；恢复需要同一 OS 用户、配置目录身份和 Keyring 密钥。跨机器/跨配置目录转移秘密不在本阶段支持范围内，不能把复制凭据文件描述成可移植备份。
-
-原生绑定作为按平台安装的可选依赖；CLI bundle、agent-runtime bundle 与 Electron packaging 必须正确 externalize 并携带实际二进制。CI fake backend 只覆盖逻辑，发布前必须分别在 Windows、macOS、Linux Secret Service 和无 Keyring 环境验证写入、跨进程读取、重启后读取、删除及降级。
-
-## 交付 C：自定义 callback 与 App Server 授权操作
+## 交付 B：自定义 callback 与 App Server 授权操作
 
 ### Callback 配置
 
@@ -173,7 +145,7 @@ logout 的远端撤销是尽力而为；本地删除不依赖解密成功。即�
 
 | 接口 | 用途 |
 |---|---|
-| `GET /mcp/oauth/status` | 读取当前服务认证快照，含存储状态与 Runtime 状态 |
+| `GET /mcp/oauth/status` | 读取当前服务认证快照，复用现有认证与 Runtime 状态，不新增存储后端字段 |
 | `POST /mcp/:name/oauth/login` | `{oauthInstanceId, requestId, scopes?, callbackMode:"local"|"manual"}`；创建操作，返回 202 与 `loginId` |
 | `GET /mcp/oauth/operations/:loginId` | 查询当前操作、可用的授权 URL 和最终安全结果 |
 | `GET /mcp/oauth/operations/:loginId/events` | 订阅当前状态及完成事件 |
@@ -195,9 +167,9 @@ daemon 重启后操作丢失；旧实例创建请求返回实例冲突，不在�
 
 取消、超时与同进程 logout 先在队列外设置 abort，及时中断 discovery、callback 和候选验证，再进入按服务串行入口收尾。取得文件锁后、写入 settings 之前再次检查取消信号。已真正进入提交步骤时取消返回冲突/已完成，最终查询反映提交事实；不能声称已经回滚成功提交的凭据。
 
-跨进程防护复用 v2 文件中的 `logoutEpochs`：登录开始时持锁读取服务 epoch（缺省 0）；提交时在同一文件锁内比较；logout/remove 即使目标凭据已经为空也递增 epoch，删除后保留该值。任何旧登录的迟到 callback 都不能通过 epoch 检查。普通刷新、诊断更新及成功登录不递增 logout epoch；跨进程同时成功登录仍按原先最后成功提交者生效。
+跨进程防护使用上述最小 v2 文件中的 `logoutEpochs`：登录开始时持锁读取服务 epoch（缺省 0）；提交时在同一文件锁内比较；logout/remove 即使目标凭据已经为空也递增 epoch，删除后保留该值。任何旧登录的迟到 callback 都不能通过 epoch 检查。普通刷新、诊断更新及成功登录不递增 logout epoch；跨进程同时成功登录仍按原先最后成功提交者生效。
 
-logout 必须尽早持锁递增 epoch 并从本地可读集合删除记录，再用已取得的旧凭据尽力远端 revoke，并通知 Runtime。Keyring 不可读时跳过 revoke，仍完成删除与通知。撤销不能在删除之后重新读共享 store 取 Token，以免撤销另一次新登录。
+logout 必须尽早持锁递增 epoch 并从本地可读集合删除记录，再用已取得的旧凭据尽力远端 revoke，并通知 Runtime。本地文件删除失败须如实报错，不能宣称退出成功。撤销不能在删除之后重新读共享 store 取 Token，以免撤销另一次新登录。
 
 同一提交区还要重新加载配置，比较本次授权启动时的 endpoint、显式 resource、固定 callback、clientId 与配置 scope 集合。等待浏览器期间这些值发生变化则拒绝候选提交与 scopes 写入；不能把过时授权提交给修改后的服务。未修改的 scopes 仍可被本次用户显式选择值更新。
 
@@ -215,10 +187,12 @@ logout 必须尽早持锁递增 epoch 并从本地可读集合删除记录，再
 
 ### CLI、Desktop 与无浏览器模式
 
+Desktop 的现有入口为“主页 → 插件 → MCP tab”，由 `plugin-page/plugin-page.tsx` 挂载 `mcp-manager.tsx`。授权状态、授权/重新授权、退出及新增取消动作都在该入口内接入，不恢复旧设置页或新增第二个管理入口。
+
 - daemon 可用且声明该能力时，CLI/Desktop 使用 `@vykor/client` 的操作接口；浏览器由 CLI/Desktop 本机打开，daemon 不执行系统 open 命令。
 - CLI 的 `--no-browser` 明确打印授权 URL 并接收粘贴 callback URL；本地与 daemon 两条路径保持同样的 URL/state/issuer 校验。
 - CLI 未运行 daemon 时保留现有本地应用服务执行，不为 login 启动 daemon。401、协议不兼容或操作已经被受理后的网络中断不触发本地重新登录；受理响应丢失时用同一 requestId 恢复。
-- Desktop 在创建授权操作前完成现有 daemon 连接/接管动作；创建后固定 instanceId/loginId，不在掉线时切到其他 daemon 或本地授权。已启动的旧 daemon 不支持该功能时提示更新/重启。只有操作尚未受理、也未发出可能已受理的请求时，明确离线才可沿用现有本地应用服务路径。
+- Desktop 只接入现有 daemon 主路径，在创建授权操作前完成连接/接管；不可用时显示连接错误，不另建本地回退分支。创建后固定 instanceId/loginId，不在掉线时切到其他 daemon 或本地授权。旧 daemon 不支持该功能时提示更新/重启。CLI 的离线能力保持不变。
 - Electron main 持有 Bearer、授权 URL、SSE 和 `shell.openExternal()`；renderer 只接收安全状态、loginId 及按钮动作。关闭窗口释放 UI 订阅，daemon 仍存活则操作继续；关闭内置 daemon 时 abort 所有未提交操作并清理 listener，正在提交的操作等待提交点收尾。
 - Desktop 延续首次授权、重新授权与退出按钮，补充取消和安全失败提示。scope 变更仅在下一次使用时拦截并提示；本阶段不增加工具调用自动暂停、自动弹浏览器或授权后自动重放写操作。
 
@@ -230,7 +204,7 @@ logout 必须尽早持锁递增 epoch 并从本地可读集合删除记录，再
 
 ## 分批验收
 
-第三阶段按三个可独立交付的批次形成实施计划，顺序为 A→B→C。按用户本次要求，设计独立审核修订通过后编写计划；代码实施等待用户审阅本设计及计划后安排。
+第三阶段按两个批次形成实施计划，顺序为 A→B；最小文件并发改动是 B 的前置任务。设计审核修订后已实施；自动检查与真实环境验收分别记录，不以单元测试替代真实服务验收。
 
 ### A：协议可靠性
 
@@ -240,15 +214,11 @@ logout 必须尽早持锁递增 epoch 并从本地可读集合删除记录，再
 - 授权、交换和刷新捕获的 resource 参数完全一致；旧记录更换 audience 时请求被拦截。
 - 用真实 Linear 再验收一次，发现兼容性差异必须说明具体 metadata 来源，不能退回 origin-only 校验。
 
-### B：存储
+### B：文件并发与授权入口
 
-- fake Keyring 断言成功、缺失、锁定、拒绝、文件提交失败与解密失败；临时不可用不生成替代密钥。
-- v1→v2、混合记录、成功登录升级和刷新保持后端都有 fixture；恢复错误不能覆盖原文件。
-- CAS 未命中不增加 revision；logout epoch 在空记录和加密不可读时仍更新，旧登录无法跨退出提交。
-- Keyring 锁定时 logout 仍删除目标记录并断开 Runtime。
-- Node、Bun、Electron 的安装产物可读同一份已加密记录，实际 OS Keyring 重启测试通过。
-
-### C：控制面与界面
+- v1 读取不迁移，实际写入原子升级为最小 v2；不包含加密或后端选择。
+- CAS 未命中不增加 revision；空记录 logout 同样递增 epoch，旧登录无法跨退出提交。
+- 两个真实 store 实例验证并发不丢记录；写失败保留原文件，旧版本拒绝 v2。
 
 - 登录创建、URL 获取、手动 callback、取消、超时、busy、重复 requestId、同实例响应丢失恢复、跨实例拒绝恢复和终态重放；缓存未过期满额时拒绝新建。
 - 取消/提交/logout 并发测试；未认证和非法 origin 请求在产生副作用前拒绝。
@@ -262,13 +232,11 @@ logout 必须尽早持锁递增 epoch 并从本地可读集合删除记录，再
 
 协议依据：[MCP 2025-11-25 Authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)、[RFC 9728 §3.3](https://www.rfc-editor.org/rfc/rfc9728.html#section-3.3)、[RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)、[RFC 6749 §5.2](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.2)。前述 metadata 来源校验与 resource 使用依据这些规范；显式 override 的限制、存储格式和操作接口为本项目设计。
 
-原生绑定依据：[keyring-node README](https://github.com/Brooooooklyn/keyring-node/blob/main/README.md)。Linux 必须固定持久化后端；不能把内核 keyutils 的可写误报成持久安全存储。
-
 主要现有落点：
 
 - `packages/mcp/src/oauth/runtime-auth.ts`、`protocol.ts`、`login.ts`、`callback.ts`：协议校验与错误分类。
-- `packages/auth/src/mcp-oauth-credential-store.ts`：锁、记录格式、后端与迁移。
+- `packages/auth/src/mcp-oauth-credential-store.ts`：锁、最小记录格式升级与退出计数。
 - `packages/core/src/types/mcp-oauth.ts`、`packages/core/src/config/settings.ts`：配置字段和领域契约。
 - `packages/server/src/application/mcp-oauth-application-service.ts`、`packages/server/src/http/routes/mcp.ts`：操作编排与路由。
-- `packages/client/src/resources/mcp-resource.ts`、CLI MCP command、Desktop MCP service/settings：用户入口与 typed API。
-- `apps/cli/build.ts`、`packages/agent-runtime/scripts/build.mjs`、`apps/desktop/electron-builder.yml`：原生依赖打包。
+- `packages/client/src/resources/mcp-resource.ts`、CLI MCP command、Desktop MCP service：用户入口与 typed API。
+- `apps/desktop/src/renderer/src/components/desktop/plugin-page/mcp-manager.tsx` 及其测试：主页插件页 MCP tab 的授权交互；`plugin-page.tsx` 仅负责现有 tab 挂载。

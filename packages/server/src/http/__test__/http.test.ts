@@ -701,6 +701,40 @@ describe("VykorHttpServer", () => {
     });
   });
 
+  it("guards MCP OAuth routes before side effects and advertises this daemon instance", async () => {
+    await withServer(async ({ baseUrl, token, server }) => {
+      const capabilities = await (await fetch(`${baseUrl}/capabilities`)).json();
+      expect(capabilities).toMatchObject({ features: { mcpOAuth: 1 }, mcpOAuth: {
+        instanceId: server.application.mcpOAuthOperations.oauthInstanceId,
+      } });
+      const begin = vi.spyOn(server.application.mcpOAuthOperations, "begin");
+      const logout = vi.spyOn(server.application.mcpOAuth, "logout");
+      const routes = [
+        ["GET", "/mcp/oauth/status"],
+        ["POST", "/mcp/linear/oauth/login"],
+        ["GET", "/mcp/oauth/operations/missing"],
+        ["GET", "/mcp/oauth/operations/missing/events"],
+        ["POST", "/mcp/oauth/operations/missing/callback"],
+        ["DELETE", "/mcp/oauth/operations/missing"],
+        ["POST", "/mcp/linear/oauth/logout"],
+      ];
+      for (const [method, path] of routes) {
+        expect((await fetch(`${baseUrl}${path}`, { method })).status).toBe(401);
+        expect((await fetch(`${baseUrl}${path}`, { method, headers: { ...auth(token), origin: "https://untrusted.example" } })).status).toBe(403);
+      }
+      expect(begin).not.toHaveBeenCalled();
+      expect(logout).not.toHaveBeenCalled();
+      const authorized = await fetch(`${baseUrl}/mcp/oauth/operations/missing`, { headers: auth(token) });
+      expect(authorized.status).toBe(404);
+      const incompatible = await globalThis.fetch(`${baseUrl}/mcp/linear/oauth/login`, {
+        method: "POST", headers: { ...auth(token), "x-vykor-protocol-version": "999", "content-type": "application/json" },
+        body: JSON.stringify({ oauthInstanceId: capabilities.mcpOAuth.instanceId, requestId: "r", callbackMode: "manual" }),
+      });
+      expect(incompatible.status).toBe(426);
+      expect(begin).not.toHaveBeenCalled();
+    });
+  });
+
   it("serves durable authenticated attachments and recovers interrupted imports", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vk-attachments-e2e-"));
     const storePath = join(dir, "sessions.db");
