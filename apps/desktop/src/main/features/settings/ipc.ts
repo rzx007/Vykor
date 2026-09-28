@@ -1,5 +1,6 @@
 import { IpcChannels } from "../../../shared/ipc-channels"
 import type {
+  UpdateDesktopBrowserDeveloperModeInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
@@ -42,6 +43,13 @@ export const settingsIpcContribution: IpcContribution = {
         handler: (_event, input) =>
           desktopSettingsService.updateReasoningVisibility(
             input as UpdateDesktopReasoningVisibilityInput
+          ),
+      },
+      {
+        channel: IpcChannels.settingsUpdateBrowserDeveloperMode,
+        handler: (_event, input) =>
+          desktopSettingsService.updateBrowserDeveloperMode(
+            input as UpdateDesktopBrowserDeveloperModeInput
           ),
       },
       {

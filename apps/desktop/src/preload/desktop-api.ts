@@ -284,6 +284,9 @@ export const desktopAPI = {
     updateReasoningVisibility: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateReasoningVisibility]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateReasoningVisibility, input),
+    updateBrowserDeveloperMode: (
+      input: IpcInvokeMap[typeof IpcChannels.settingsUpdateBrowserDeveloperMode]["args"][0]
+    ) => invoke(IpcChannels.settingsUpdateBrowserDeveloperMode, input),
     updateDefaultOpener: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateDefaultOpener]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateDefaultOpener, input),

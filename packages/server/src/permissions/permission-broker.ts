@@ -69,8 +69,15 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   async ask(input: PermissionAskInput): Promise<AgentPermissionDecision> {
-    const permissionSessionId = this.resolvePermissionSessionId(input.sessionId);
-    const reusable = this.findSessionApproval(input.sessionId, input.toolName);
+    // BrowserDeveloper is deliberately non-reusable and never routed to a parent
+    // session: each inspection must be approved on its own, in its own session.
+    const isDeveloper = input.toolName === "BrowserDeveloper";
+    const permissionSessionId = isDeveloper
+      ? input.sessionId
+      : this.resolvePermissionSessionId(input.sessionId);
+    const reusable = isDeveloper
+      ? undefined
+      : this.findSessionApproval(input.sessionId, input.toolName);
     const previousEventSeq = this.latestEventSeq();
     const request = this.permissions.create({
       sessionId: permissionSessionId,
@@ -130,10 +137,16 @@ export class StorePermissionBroker implements PermissionBroker {
     if (current.status !== "pending") throw new Error(`Permission request already resolved: ${input.requestId}`);
 
     const previousEventSeq = this.latestEventSeq();
+    // Even if a client submits "session", a developer inspection is only ever
+    // approved for this single request.
+    const decision =
+      current.toolName === "BrowserDeveloper" && input.status === "approved"
+        ? "once"
+        : input.decision;
     const replied = this.permissions.reply({
       requestId: input.requestId,
       status: input.status,
-      decision: input.decision,
+      decision,
       clientId: input.clientId,
       ...(input.answer !== undefined ? { answer: input.answer } : {}),
     });

@@ -12,6 +12,7 @@ import {
 
 export interface DesktopPreferences {
   notificationMode: DesktopNotificationMode
+  browserDeveloperMode?: boolean
   defaultOpenerId?: string
   defaultTerminalShellId?: string
   installIdentity?: DesktopInstallIdentity
@@ -39,6 +40,7 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
       notificationMode: isDesktopNotificationMode(raw.notificationMode)
         ? raw.notificationMode
         : defaults.notificationMode,
+      ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
       ...(defaultOpenerId ? { defaultOpenerId } : {}),
       ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
       ...(isInstallIdentity(raw.installIdentity) ? { installIdentity: raw.installIdentity } : {}),
@@ -60,6 +62,7 @@ export function patchDesktopPreferencesAt(
   const defaultTerminalShellId = normalizeDefaultTerminalShellId(next.defaultTerminalShellId)
   const persisted: DesktopPreferences = {
     notificationMode: next.notificationMode,
+    ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
     ...(defaultOpenerId ? { defaultOpenerId } : {}),
     ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
     ...(isInstallIdentity(next.installIdentity) ? { installIdentity: next.installIdentity } : {}),

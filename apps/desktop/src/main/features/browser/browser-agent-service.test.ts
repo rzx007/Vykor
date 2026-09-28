@@ -237,13 +237,18 @@ describe("BrowserAgentService cold start", () => {
   it("opens a blank tab, requests origin approval, then navigates to the requested URL", async () => {
     const service = new BrowserAgentService()
     const page = new FakeWebContents()
+    let tabRequestSent = false
     electronState.fromId.mockImplementation((id: number) => id === page.id ? page : undefined)
     service.setOpenTabRequestHandler(() => {
+      tabRequestSent = true
       service.trackGuest(7, page as never)
       service.bindTab(7, "browser-tab-cold", page.id)
       service.setActiveTab(7, "browser-tab-cold")
     })
-    const approve = vi.fn(async () => true)
+    const approve = vi.fn(async () => {
+      expect(tabRequestSent).toBe(false)
+      return true
+    })
 
     const result = await service.execute({
       action: { action: "navigate", url: "https://example.org/start" },
@@ -254,6 +259,7 @@ describe("BrowserAgentService cold start", () => {
     })
 
     expect(approve).toHaveBeenCalledOnce()
+    expect(tabRequestSent).toBe(true)
     expect(result.url).toBe("https://example.org/start")
     expect(result.pageText).toBe("navigated by agent")
   })

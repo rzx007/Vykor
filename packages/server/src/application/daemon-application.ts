@@ -117,7 +117,7 @@ import {
   createDaemonImageGenerationTool,
   createDaemonImageToTextTool,
 } from "./visual-tools/index.js";
-import { createBrowserTool, type BrowserHost } from "./browser-tools/index.js";
+import { createBrowserDeveloperTool, createBrowserTool, type BrowserHost } from "./browser-tools/index.js";
 
 export interface DaemonApplicationOptions {
   store: SessionStore;
@@ -492,6 +492,7 @@ export class DaemonApplication implements DurableAgentApplication {
               })
               return (await this.attachments.resolveReadyContentPath(asset.id)).path
             }, () => this.modelCatalog.load()),
+            createBrowserDeveloperTool(options.browserHost),
           ]
         },
         toolOverrides: [

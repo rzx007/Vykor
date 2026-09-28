@@ -425,6 +425,30 @@ function MessageActionButton({
   )
 }
 
+const developerActionLabels: Record<string, string> = {
+  inspect_dom: "DOM 结构",
+  inspect_styles: "计算样式",
+  start_diagnostics: "开始控制台与网络采集",
+  read_diagnostics: "读取控制台与网络采集结果",
+  stop_diagnostics: "停止采集",
+}
+
+/** Reads only a validated developer scope; malformed payloads render nothing extra. */
+function readDeveloperScope(
+  permission: DesktopPermissionRequest
+): { reason: string; action: string; label: string } | null {
+  if (permission.toolName !== "BrowserDeveloper") return null
+  const rawInput = permission.payload.input
+  const action =
+    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+      ? (rawInput as Record<string, unknown>).action
+      : undefined
+  if (typeof action !== "string" || !(action in developerActionLabels)) return null
+  const rawReason = permission.payload.reason
+  const reason = typeof rawReason === "string" ? rawReason.trim().slice(0, 600) : ""
+  return { reason, action, label: developerActionLabels[action]! }
+}
+
 export function PermissionCard({
   permission,
   onReply,
@@ -438,6 +462,7 @@ export function PermissionCard({
   replyError?: string | null
   className?: string
 }): React.JSX.Element {
+  const developerScope = readDeveloperScope(permission)
   return (
     <section className={cn("mt-6 rounded-xl border bg-background px-4 py-3 shadow-sm", className)}>
       <div className="flex items-start gap-3">
@@ -450,6 +475,25 @@ export function PermissionCard({
             {"Vykor 请求运行 "}
             {permission.toolName}
           </p>
+          {developerScope ? (
+            <div className="mt-2 space-y-1">
+              {developerScope.reason ? (
+                <p className="text-xs leading-snug break-words text-foreground">
+                  {developerScope.reason}
+                </p>
+              ) : null}
+              <p className="text-ui-caption text-ui-muted">
+                {"检查类别："}
+                {developerScope.label}
+                {"（"}
+                {developerScope.action}
+                {"）"}
+              </p>
+              <p className="text-ui-caption leading-snug text-ui-muted">
+                {"检查当前标签页主框架；网络结果也可能包含其请求的第三方资源 URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。"}
+              </p>
+            </div>
+          ) : null}
           {replyError ? (
             <p role="alert" className="mt-1 text-xs leading-snug text-destructive">
               {replyError}
@@ -472,7 +516,7 @@ export function PermissionCard({
           disabled={replyPending}
           onClick={() => onReply("approved", "once")}
         >
-          {replyPending ? "正在提交" : "允许"}
+          {replyPending ? "正在提交" : developerScope ? "允许本次" : "允许"}
         </Button>
       </div>
     </section>

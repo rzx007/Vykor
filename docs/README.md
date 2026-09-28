@@ -120,6 +120,7 @@
 ### 工具、扩展与执行环境
 
 - [Permission Flow](./permission-flow.md)：权限请求、durable decision 和取消。
+- [Desktop 浏览器能力](./browser-capabilities.md)：普通 Browser 的页面操作、Developer mode 的受控检查、授权和数据范围。
 - [Agent 运行环境调用链](./sandbox-runtime-flow.md)：Native/WSL 中命令、文件和终端实际在哪里执行。
 - [Native / WSL 运行环境与 SRT](./sandbox-runtime-design.md)：运行位置与本机 SRT 权限边界。
 - [LSP Client 设计](./lsp-client-design.md)：把当前正则/ripgrep 近似实现替换成真实语言服务器连接，说明协议库选型、Runtime 生命周期、环境路径、权限和分阶段验收。

@@ -116,6 +116,7 @@ import type {
   DesktopSettingsSnapshot,
   DesktopDaemonAutoStartSnapshot,
   UpdateDesktopAgentEnvironmentInput,
+  UpdateDesktopBrowserDeveloperModeInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
@@ -341,6 +342,9 @@ export type DesktopAPI = {
     ) => Promise<DesktopSettingsSnapshot>
     updateReasoningVisibility: (
       input: UpdateDesktopReasoningVisibilityInput
+    ) => Promise<DesktopSettingsSnapshot>
+    updateBrowserDeveloperMode: (
+      input: UpdateDesktopBrowserDeveloperModeInput
     ) => Promise<DesktopSettingsSnapshot>
     updateDefaultOpener: (
       input: UpdateDesktopDefaultOpenerInput

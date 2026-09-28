@@ -137,6 +137,7 @@ function settingsSnapshot(defaultTerminalShellId: string | null): DesktopSetting
     notificationMode: "when_unfocused",
     agentEnvironment: "native",
     showReasoning: true,
+    browserDeveloperMode: false,
     restartRequired: false,
     defaultOpenerId: null,
     defaultTerminalShellId,

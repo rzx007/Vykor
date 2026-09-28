@@ -10,6 +10,7 @@ import {
 import type {
   DesktopSettingsSnapshot,
   UpdateDesktopAgentEnvironmentInput,
+  UpdateDesktopBrowserDeveloperModeInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
@@ -17,6 +18,7 @@ import type {
   UpdateDesktopWorkStyleInput,
 } from "../../../shared/settings-types"
 import { desktopSessionService } from "../session/session-service"
+import { browserAgentService } from "../browser/browser-agent-service"
 import {
   getDesktopPreferences,
   patchDesktopPreferences,
@@ -71,6 +73,21 @@ export class DesktopSettingsService {
       const settings = await client.system.patchSettings({ showReasoning: input.showReasoning })
       return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
     })
+  }
+
+  async updateBrowserDeveloperMode(
+    input: UpdateDesktopBrowserDeveloperModeInput
+  ): Promise<DesktopSettingsSnapshot> {
+    if (typeof input.enabled !== "boolean") {
+      throw new Error("Developer mode must be a boolean.")
+    }
+    const preferences = this.dependencies.patchPreferences({
+      browserDeveloperMode: input.enabled,
+    })
+    // Turning the switch off must immediately tear down any active capture,
+    // not just block the next tool call.
+    if (!input.enabled) browserAgentService.stopDeveloperDiagnostics()
+    return this.snapshotWithPreferences(preferences)
   }
 
   async updateNotificationMode(

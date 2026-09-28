@@ -5,6 +5,7 @@ import {
   resolveBootstrapRuntimeSelection,
   resolveDesktopRuntimeSnapshot,
 } from "./runtime-selection"
+import { browserAgentService } from "../browser/browser-agent-service"
 import { DesktopSessionService } from "./session-service"
 import { resolveProviderForModel } from "./session-operations"
 
@@ -305,6 +306,22 @@ describe("DesktopSessionService.listCommands", () => {
       messageCount: 3,
     })
     expect(compactSession).toHaveBeenCalledWith("session-1")
+  })
+})
+
+describe("DesktopSessionService.deleteSession", () => {
+  it("stops developer diagnostics before deleting the session tree", async () => {
+    const remove = vi.fn(async () => ["session-1"])
+    const service = serviceWithClient({ sessions: { delete: remove } })
+    const stop = vi.spyOn(browserAgentService, "stopDeveloperDiagnostics").mockReturnValue(true)
+
+    try {
+      await expect(service.deleteSession(1, "session-1")).resolves.toEqual(["session-1"])
+      expect(stop).toHaveBeenCalledOnce()
+      expect(remove).toHaveBeenCalledWith("session-1")
+    } finally {
+      stop.mockRestore()
+    }
   })
 })
 

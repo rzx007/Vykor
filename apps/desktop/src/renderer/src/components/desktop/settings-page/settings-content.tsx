@@ -122,6 +122,12 @@ function GeneralSettings(): React.JSX.Element {
           description="允许智能体在无需逐次批准的情况下访问工作区外的文件和网络。"
           control={<Switch aria-label="完整访问权限" />}
         />
+        <Separator />
+        <SettingRow
+          title="开发者模式"
+          description="允许智能体在当前浏览器标签页上请求 DOM、计算样式、控制台和网络排障。默认关闭；开启后每次检查仍会单独请求你的批准。"
+          control={<BrowserDeveloperModeControl />}
+        />
       </SettingsSection>
 
       <SettingsSection title="常规">
@@ -347,6 +353,63 @@ export function ReasoningVisibilityControl(): React.JSX.Element {
     <div className="flex flex-col items-end gap-1.5">
       <Switch
         aria-label="思考过程"
+        checked={enabled}
+        disabled={loading || saving}
+        onCheckedChange={update}
+      />
+      {error ? (
+        <p role="alert" className="text-ui-caption max-w-56 text-right text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function BrowserDeveloperModeControl(): React.JSX.Element {
+  const [enabled, setEnabled] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.desktop.settings
+      .snapshot()
+      .then((snapshot) => {
+        if (!cancelled) setEnabled(snapshot.browserDeveloperMode)
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) setError(errorMessage(loadError))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const update = (next: boolean): void => {
+    if (saving || next === enabled) return
+    const previous = enabled
+    setEnabled(next)
+    setSaving(true)
+    setError(null)
+    void window.desktop.settings
+      .updateBrowserDeveloperMode({ enabled: next })
+      .then((snapshot) => setEnabled(snapshot.browserDeveloperMode))
+      .catch((saveError: unknown) => {
+        setEnabled(previous)
+        setError(errorMessage(saveError))
+      })
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Switch
+        aria-label="开发者模式"
         checked={enabled}
         disabled={loading || saving}
         onCheckedChange={update}

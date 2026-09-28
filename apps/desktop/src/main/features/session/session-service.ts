@@ -422,6 +422,9 @@ export class DesktopSessionService {
   }
 
   async deleteSession(webContentsId: number, sessionIdInput: string): Promise<string[]> {
+    // Only one developer capture can exist, so stop it before the asynchronous
+    // delete so nothing is readable while the session tree is being removed.
+    browserAgentService.stopDeveloperDiagnostics()
     const sessionId = requireString(sessionIdInput, "会话 ID")
     if (this.subscriptions.hasPrimary(webContentsId, sessionId)) {
       this.closeSession(webContentsId)

@@ -180,6 +180,71 @@ describe("StorePermissionBroker", () => {
     });
   });
 
+  it("does not reuse a parent BrowserDeveloper approval for a child request", async () => {
+    await withBroker(async ({ broker, store }) => {
+      store.sessions.create({ id: "child", parentId: "s1", cwd: process.cwd(), model: "m" });
+      const childInput = store.conversationTransactions.admitPrompt({
+        id: "child-input",
+        sessionId: "child",
+        content: "inspect",
+      });
+      store.runs.createRun({ id: "child-run", sessionId: "child", inputId: childInput.id });
+
+      const parentAsk = broker.ask({ sessionId: "s1", runId: "r1", toolName: "BrowserDeveloper" });
+      const parentRequest = store.permissions.list({ sessionId: "s1", status: "pending" })[0]!;
+      broker.reply({ requestId: parentRequest.id, status: "approved", decision: "session" });
+      await expect(parentAsk).resolves.toMatchObject({ status: "approved" });
+
+      const childAsk = broker.ask({
+        sessionId: "child",
+        runId: "child-run",
+        toolName: "BrowserDeveloper",
+        input: { action: "inspect_dom" },
+      });
+      const childPending = store.permissions.list({
+        sessionId: "child",
+        status: "pending",
+        toolName: "BrowserDeveloper",
+      });
+      expect(childPending).toHaveLength(1);
+      broker.reply({ requestId: childPending[0]!.id, status: "approved", decision: "once" });
+      await expect(childAsk).resolves.toMatchObject({ status: "approved", decision: "once" });
+      expect(store.permissions.list({ sessionId: "s1", toolName: "BrowserDeveloper" })).toHaveLength(1);
+    });
+  });
+
+  it("keeps each BrowserDeveloper ask pending until it is answered separately", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const first = broker.ask({ sessionId: "s1", runId: "r1", toolName: "BrowserDeveloper" });
+      const second = broker.ask({ sessionId: "s1", runId: "r1", toolName: "BrowserDeveloper" });
+      expect(
+        store.permissions.list({ sessionId: "s1", status: "pending", toolName: "BrowserDeveloper" }),
+      ).toHaveLength(2);
+
+      const [pending] = store.permissions.list({ sessionId: "s1", status: "pending", toolName: "BrowserDeveloper" });
+      broker.reply({ requestId: pending!.id, status: "approved", decision: "once" });
+      await expect(first).resolves.toMatchObject({ status: "approved" });
+
+      expect(
+        store.permissions.list({ sessionId: "s1", status: "pending", toolName: "BrowserDeveloper" }),
+      ).toHaveLength(1);
+      const remaining = store.permissions.list({ sessionId: "s1", status: "pending", toolName: "BrowserDeveloper" })[0]!;
+      broker.reply({ requestId: remaining.id, status: "approved", decision: "once" });
+      await expect(second).resolves.toMatchObject({ status: "approved" });
+    });
+  });
+
+  it("stores a submitted BrowserDeveloper session reply as once", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const ask = broker.ask({ sessionId: "s1", runId: "r1", toolName: "BrowserDeveloper" });
+      const request = store.permissions.list({ status: "pending" })[0]!;
+      const replied = broker.reply({ requestId: request.id, status: "approved", decision: "session" });
+
+      expect(replied).toMatchObject({ status: "approved", decision: "once" });
+      await expect(ask).resolves.toEqual({ status: "approved", decision: "once" });
+    });
+  });
+
   it("expires a pending request when its run is interrupted", async () => {
     await withBroker(async ({ broker, store }) => {
       const controller = new AbortController();

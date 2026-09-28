@@ -180,6 +180,57 @@ describe("desktop preferences", () => {
     })
   })
 
+  it("defaults browser developer mode to off when absent", async () => {
+    const { getDesktopPreferences } = await import("./desktop-preferences")
+    expect(getDesktopPreferences().browserDeveloperMode).toBeUndefined()
+    expect(getDesktopPreferences()).toEqual({ notificationMode: "when_unfocused" })
+  })
+
+  it("falls back to off when browser developer mode is malformed", async () => {
+    await writeFile(
+      join(userDataPath, "desktop-preferences.json"),
+      JSON.stringify({ notificationMode: "always", browserDeveloperMode: "true" }),
+      "utf8"
+    )
+    const { getDesktopPreferences } = await import("./desktop-preferences")
+    expect(getDesktopPreferences()).toEqual({ notificationMode: "always" })
+  })
+
+  it("reads an explicit browser developer mode value without dropping other fields", async () => {
+    await writeFile(
+      join(userDataPath, "desktop-preferences.json"),
+      JSON.stringify({ notificationMode: "always", browserDeveloperMode: true }),
+      "utf8"
+    )
+    const { getDesktopPreferences } = await import("./desktop-preferences")
+    expect(getDesktopPreferences()).toEqual({
+      notificationMode: "always",
+      browserDeveloperMode: true,
+    })
+  })
+
+  it("omits a false browser developer mode from disk", async () => {
+    const { patchDesktopPreferences, getDesktopPreferences, getDesktopPreferencesPath } =
+      await import("./desktop-preferences")
+    const { readFile } = await import("node:fs/promises")
+    patchDesktopPreferences({ browserDeveloperMode: true })
+    patchDesktopPreferences({ browserDeveloperMode: false })
+    expect(getDesktopPreferences()).toEqual({ notificationMode: "when_unfocused" })
+    expect(JSON.parse(await readFile(getDesktopPreferencesPath(), "utf8"))).not.toHaveProperty(
+      "browserDeveloperMode"
+    )
+  })
+
+  it("keeps notification mode when toggling browser developer mode", async () => {
+    const { patchDesktopPreferences, getDesktopPreferences } = await import("./desktop-preferences")
+    patchDesktopPreferences({ notificationMode: "never" })
+    patchDesktopPreferences({ browserDeveloperMode: true })
+    expect(getDesktopPreferences()).toEqual({
+      notificationMode: "never",
+      browserDeveloperMode: true,
+    })
+  })
+
   it("throws when the preferences file cannot be written", async () => {
     const { mkdir } = await import("node:fs/promises")
     await mkdir(join(userDataPath, "desktop-preferences.json"))

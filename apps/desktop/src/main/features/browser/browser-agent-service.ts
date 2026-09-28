@@ -1,7 +1,24 @@
 import { webContents, type WebContents } from "electron"
 import { isAbsolute, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { BrowserAction, BrowserHost, BrowserObservation } from "@vykor/server"
+import type {
+  BrowserAction,
+  BrowserDeveloperExecuteInput,
+  BrowserDeveloperResult,
+  BrowserHost,
+  BrowserObservation,
+} from "@vykor/server"
+import { getDesktopPreferences } from "../settings/desktop-preferences"
+import {
+  BrowserDeveloperInspector,
+  describeDeveloperAction,
+  resolveDeveloperScope,
+  sanitizeUrl,
+  type DeveloperGuest,
+  type DeveloperDomView,
+  type DeveloperDiagnosticsPage,
+  type DeveloperScope,
+} from "./browser-developer-inspector"
 
 type ElementTarget = {
   webContentsId: number
@@ -74,6 +91,11 @@ export class BrowserAgentService implements BrowserHost {
   private readonly annotations = new Map<number, BrowserAnnotation[]>()
   private readonly approvedOrigins = new Map<string, Set<string>>()
   private readonly pageFingerprints = new Map<number, string>()
+  private readonly developerInspector = new BrowserDeveloperInspector()
+  private readonly navigationEpochs = new Map<number, number>()
+  private developerGeneration = 0
+  private activeDeveloperRequestSessionId: string | null = null
+  private readonly queuedDeveloperRequests = new Set<{ sessionId: string; cancelled: boolean }>()
   private activeTabId: string | null = null
   private targetSequence = 0
   private openTabRequestHandler?: () => void
@@ -81,10 +103,25 @@ export class BrowserAgentService implements BrowserHost {
   // ponytail: serialize browser operations globally; use per-tab queues only if throughput becomes a measured bottleneck.
   private operationQueue: Promise<void> = Promise.resolve()
 
+  constructor(
+    private readonly options: { isDeveloperModeEnabled?: () => boolean } = {}
+  ) {}
+
   trackGuest(ownerId: number, guest: WebContents): void {
     const guests = this.guestsByWindow.get(ownerId) ?? new Set<number>()
     guests.add(guest.id)
     this.guestsByWindow.set(ownerId, guests)
+    const onMainNavigation = (details: unknown, url: unknown): void => {
+      const info =
+        details && typeof details === "object" ? (details as Record<string, unknown>) : undefined
+      if (info?.isMainFrame !== true || info?.isSameDocument === true) return
+      const nextUrl = typeof info?.url === "string" ? info.url : typeof url === "string" ? url : ""
+      const epoch = (this.navigationEpochs.get(guest.id) ?? 0) + 1
+      this.navigationEpochs.set(guest.id, epoch)
+      this.developerInspector.handleNavigationStart(guest.id, nextUrl || undefined, epoch)
+    }
+    guest.on("did-start-navigation", onMainNavigation)
+    guest.on("did-redirect-navigation", onMainNavigation)
     guest.once("destroyed", () => {
       this.guestsByWindow.get(ownerId)?.delete(guest.id)
       for (const [tabId, tab] of this.tabs) {
@@ -95,6 +132,8 @@ export class BrowserAgentService implements BrowserHost {
       }
       this.annotations.delete(guest.id)
       this.pageFingerprints.delete(guest.id)
+      this.navigationEpochs.delete(guest.id)
+      if (this.developerInspector.summary()?.webContentsId === guest.id) this.stopDeveloperDiagnostics()
     })
   }
 
@@ -107,17 +146,27 @@ export class BrowserAgentService implements BrowserHost {
       throw new Error("Browser tab is not attached to this application window.")
     }
     if (!/^[\w-]{1,100}$/.test(tabId)) throw new Error("Invalid browser tab ID.")
+    const previous = this.tabs.get(tabId)
+    if (previous && previous.webContentsId !== webContentsId) {
+      this.developerGeneration += 1
+      if (this.developerInspector.summary()?.tabId === tabId) {
+        this.developerInspector.stopDiagnostics("tab rebound")
+      }
+    }
     this.tabs.set(tabId, { ownerId, webContentsId })
   }
 
   setActiveTab(ownerId: number, tabId: string | null): void {
     if (tabId === null) {
-      if (this.activeTabId && this.tabs.get(this.activeTabId)?.ownerId === ownerId)
+      if (this.activeTabId && this.tabs.get(this.activeTabId)?.ownerId === ownerId) {
+        this.stopDeveloperDiagnostics()
         this.activeTabId = null
+      }
       return
     }
     const tab = this.tabs.get(tabId)
     if (!tab || tab.ownerId !== ownerId) throw new Error("Unknown browser tab.")
+    if (this.activeTabId !== tabId) this.stopDeveloperDiagnostics()
     this.activeTabId = tabId
     for (const resolve of this.activeTabWaiters) resolve(tabId)
     this.activeTabWaiters.clear()
@@ -125,8 +174,18 @@ export class BrowserAgentService implements BrowserHost {
 
   unbindTab(ownerId: number, tabId: string): void {
     if (this.tabs.get(tabId)?.ownerId !== ownerId) return
+    if (this.activeTabId === tabId || this.developerInspector.summary()?.tabId === tabId) {
+      this.stopDeveloperDiagnostics()
+    }
     this.tabs.delete(tabId)
     if (this.activeTabId === tabId) this.activeTabId = null
+  }
+
+  /** Immediately stop any active developer capture. Safe to call synchronously. */
+  stopDeveloperDiagnostics(): boolean {
+    this.developerGeneration += 1
+    for (const request of this.queuedDeveloperRequests) request.cancelled = true
+    return this.developerInspector.stopDiagnostics("stopped")
   }
 
   addAnnotation(ownerId: number, tabId: string, annotation: BrowserAnnotation): void {
@@ -162,7 +221,27 @@ export class BrowserAgentService implements BrowserHost {
     approve: (question: string) => Promise<boolean>
   }): Promise<BrowserObservation> {
     const requestedTabId = this.activeTabId
-    const operation = this.operationQueue.then(() => this.executeOnTab(input, requestedTabId))
+    return this.enqueue(() => this.executeOnTab(input, requestedTabId))
+  }
+
+  executeDeveloper(input: BrowserDeveloperExecuteInput): Promise<BrowserDeveloperResult> {
+    if (input.action.action === "stop_diagnostics") return this.executeDeveloperOnTab(input)
+    const request = { sessionId: input.sessionId, cancelled: false }
+    this.queuedDeveloperRequests.add(request)
+    return this.enqueue(async () => {
+      this.queuedDeveloperRequests.delete(request)
+      if (request.cancelled) throw new Error("Browser developer request was cancelled.")
+      this.activeDeveloperRequestSessionId = input.sessionId
+      try {
+        return await this.executeDeveloperOnTab(input)
+      } finally {
+        this.activeDeveloperRequestSessionId = null
+      }
+    })
+  }
+
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const operation = this.operationQueue.then(task)
     this.operationQueue = operation.then(
       () => undefined,
       () => undefined
@@ -180,8 +259,12 @@ export class BrowserAgentService implements BrowserHost {
     },
     requestedTabId: string | null
   ): Promise<BrowserObservation> {
-    if (!requestedTabId && input.action.action !== "navigate") {
+    const openingTab = !requestedTabId
+    if (openingTab && input.action.action !== "navigate") {
       throw new Error("Use Browser navigate with a URL to open a page.")
+    }
+    if (openingTab && input.action.action === "navigate") {
+      await this.requireOrigin(input.action.url, input.sessionId, input.cwd, input.approve)
     }
     const tabId = requestedTabId ?? (await this.openBrowserTab())
     if (!tabId) throw new Error("Open a page in the desktop browser first.")
@@ -192,7 +275,9 @@ export class BrowserAgentService implements BrowserHost {
     this.assertActiveTab(tabId, contents)
 
     const destination = input.action.action === "navigate" ? input.action.url : contents.getURL()
-    await this.requireOrigin(contents, destination, input.sessionId, input.cwd, input.approve)
+    if (!openingTab) {
+      await this.requireOrigin(destination, input.sessionId, input.cwd, input.approve)
+    }
     this.assertActiveTab(tabId, contents)
 
     if (input.action.action === "click") {
@@ -200,7 +285,7 @@ export class BrowserAgentService implements BrowserHost {
       if (target?.href) {
         const link = new URL(target.href, contents.getURL())
         if (link.protocol === "http:" || link.protocol === "https:" || link.protocol === "file:") {
-          await this.requireOrigin(contents, link.href, input.sessionId, input.cwd, input.approve)
+          await this.requireOrigin(link.href, input.sessionId, input.cwd, input.approve)
           this.assertActiveTab(tabId, contents)
         }
       }
@@ -250,6 +335,7 @@ export class BrowserAgentService implements BrowserHost {
   }
 
   async dispose(): Promise<void> {
+    this.developerInspector.stopDiagnostics("disposed")
     this.guestsByWindow.clear()
     this.tabs.clear()
     this.targets.clear()
@@ -257,6 +343,227 @@ export class BrowserAgentService implements BrowserHost {
     this.approvedOrigins.clear()
     this.pageFingerprints.clear()
     this.activeTabWaiters.clear()
+    this.navigationEpochs.clear()
+  }
+
+  private developerModeEnabled(): boolean {
+    if (this.options.isDeveloperModeEnabled) return this.options.isDeveloperModeEnabled()
+    try {
+      return getDesktopPreferences().browserDeveloperMode === true
+    } catch {
+      return false
+    }
+  }
+
+  private activeDeveloperGuest(): { tabId: string; contents: WebContents } | null {
+    const tabId = this.activeTabId
+    if (!tabId) return null
+    const tab = this.tabs.get(tabId)
+    const contents = tab ? webContents.fromId(tab.webContentsId) : undefined
+    if (!contents || contents.isDestroyed()) return null
+    return { tabId, contents }
+  }
+
+  private async executeDeveloperOnTab(
+    input: BrowserDeveloperExecuteInput
+  ): Promise<BrowserDeveloperResult> {
+    const action = input.action
+
+    // Stopping is always allowed so a stuck capture can be cleaned up.
+    if (action.action === "stop_diagnostics") {
+      const owner = this.developerInspector.summary()?.sessionId ?? this.activeDeveloperRequestSessionId
+      if (owner && owner !== input.sessionId) {
+        throw new Error("Another session owns the active browser diagnostics capture.")
+      }
+      for (const request of this.queuedDeveloperRequests) {
+        if (request.sessionId === input.sessionId) request.cancelled = true
+      }
+      this.developerGeneration += 1
+      const stopped = this.developerInspector.stopDiagnostics("requested")
+      return {
+        action: "stop_diagnostics",
+        url: "",
+        data: { stopped },
+      }
+    }
+
+    if (!this.developerModeEnabled()) {
+      this.developerInspector.stopDiagnostics("developer mode disabled")
+      throw new Error("Browser developer mode is off in Desktop settings.")
+    }
+
+    const active = this.activeDeveloperGuest()
+    if (!active) throw new Error("Open a page in the desktop browser first.")
+    const { tabId, contents } = active
+    const url = contents.getURL()
+    const resultUrl = sanitizeUrl(url)
+    const scope = resolveDeveloperScope(url, input.cwd)
+    if (!scope) {
+      throw new Error(
+        "Browser developer inspection supports HTTP, HTTPS, and workspace-local file pages only."
+      )
+    }
+    const epoch = this.navigationEpochs.get(contents.id) ?? 0
+    const generation = this.developerGeneration
+    const guest = contents as unknown as DeveloperGuest
+
+    if (action.action === "read_diagnostics") {
+      const page = this.developerInspector.readDiagnostics(guest, {
+        sessionId: input.sessionId,
+        scope: scope.scope,
+        navigationEpoch: epoch,
+      })
+      this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+      return capDeveloperDiagnosticsResult({
+        action: "read_diagnostics",
+        url: page.url,
+        data: page,
+        ...(page.truncated ? { truncated: true } : {}),
+      })
+    }
+
+    if (this.developerInspector.active && !this.developerInspector.ownsSession(input.sessionId)) {
+      throw new Error("Another session is already capturing browser diagnostics.")
+    }
+
+    const snapshot = {
+      tabId,
+      webContentsId: contents.id,
+      scope: scope.scope,
+      epoch,
+      generation,
+    }
+    await this.requireOrigin(scope.url, input.sessionId, input.cwd, input.approveOrigin)
+    this.assertDeveloperSnapshot(snapshot, input.cwd)
+    const approved = await input.approveDeveloper(
+      this.developerReason(scope, action.action)
+    )
+    this.assertDeveloperSnapshot(snapshot, input.cwd)
+    if (!approved) {
+      throw new Error(
+        `Browser developer ${describeDeveloperAction(action.action)} was not approved.`
+      )
+    }
+
+    if (action.action === "start_diagnostics") {
+      const { expiresAt } = await this.developerInspector.startDiagnostics(guest, {
+        sessionId: input.sessionId,
+        tabId,
+        scope: scope.scope,
+        cwd: input.cwd,
+        url,
+        navigationEpoch: epoch,
+      })
+      try {
+        this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+        if (!this.developerInspector.ownsSession(input.sessionId)) {
+          throw new Error("Browser diagnostics stopped while starting.")
+        }
+      } catch (error) {
+        this.stopDeveloperDiagnostics()
+        throw error
+      }
+      return {
+        action: "start_diagnostics",
+        url: resultUrl,
+        data: { startedAt: Date.now(), expiresAt },
+      }
+    }
+
+    if (action.action === "inspect_dom") {
+      const data = await this.developerInspector.inspectDom(guest, action.selector)
+      this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+      return capDeveloperReadResult({ action: "inspect_dom", url: resultUrl, data })
+    }
+
+    if (action.action === "inspect_styles") {
+      const data = await this.developerInspector.inspectStyles(guest, action.selector)
+      this.assertDeveloperIdentity(input.sessionId, tabId, contents, scope.scope, epoch, generation, input.cwd)
+      return capDeveloperReadResult({ action: "inspect_styles", url: resultUrl, data })
+    }
+
+    throw new Error("Unsupported browser developer action.")
+  }
+
+  private developerReason(scope: DeveloperScope, action: string): string {
+    const target = scope.kind === "file" ? `local file ${scope.filePath}` : scope.scope
+    const networkScope =
+      action === "start_diagnostics"
+        ? " Network results can include third-party subresource URLs requested by the main frame."
+        : ""
+    return (
+      `Allow Browser developer inspection of ${target}? Category: ${describeDeveloperAction(action)}. ` +
+      `It inspects the active tab's main frame.${networkScope} Results may contain internal page data, and the page ` +
+      `can write secrets into DOM text or console output. This approval applies to this single request only.`
+    )
+  }
+
+  private assertDeveloperSnapshot(
+    snapshot: { tabId: string; webContentsId: number; scope: string; epoch: number; generation: number },
+    cwd: string
+  ): void {
+    if (!this.developerModeEnabled()) {
+      throw new Error("Browser developer mode was turned off in Desktop settings.")
+    }
+    if (this.activeTabId !== snapshot.tabId) {
+      throw new Error(
+        "The active browser tab changed while the tool was waiting. Inspect the page again."
+      )
+    }
+    if (this.tabs.get(snapshot.tabId)?.webContentsId !== snapshot.webContentsId) {
+      throw new Error("The browser tab changed while the tool was waiting. Inspect the page again.")
+    }
+    if (this.developerGeneration !== snapshot.generation) {
+      throw new Error("The browser tab changed while the tool was waiting. Inspect the page again.")
+    }
+    const current = webContents.fromId(snapshot.webContentsId)
+    if (!current || current.isDestroyed()) {
+      throw new Error("The browser tab is no longer available.")
+    }
+    if ((this.navigationEpochs.get(snapshot.webContentsId) ?? 0) !== snapshot.epoch) {
+      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+    }
+    const scope = resolveDeveloperScope(current.getURL(), cwd)
+    if (!scope || scope.scope !== snapshot.scope) {
+      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+    }
+  }
+
+  private assertDeveloperIdentity(
+    sessionId: string,
+    tabId: string,
+    contents: WebContents,
+    scope: string,
+    epoch: number,
+    generation: number,
+    cwd: string
+  ): void {
+    if (
+      this.activeTabId !== tabId ||
+      this.tabs.get(tabId)?.webContentsId !== contents.id ||
+      contents.isDestroyed()
+    ) {
+      throw new Error(
+        "The active browser tab changed while the tool was waiting. Inspect the page again."
+      )
+    }
+    if (!this.developerModeEnabled()) {
+      this.developerInspector.stopDiagnostics("developer mode disabled")
+      throw new Error("Browser developer mode was turned off in Desktop settings.")
+    }
+    if (this.developerGeneration !== generation) {
+      throw new Error("The browser tab changed while the tool was waiting. Inspect the page again.")
+    }
+    if ((this.navigationEpochs.get(contents.id) ?? 0) !== epoch) {
+      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+    }
+    const currentScope = resolveDeveloperScope(contents.getURL(), cwd)
+    if (!currentScope || currentScope.scope !== scope) {
+      throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+    }
+    if (this.developerInspector.active && !this.developerInspector.ownsSession(sessionId)) {
+      throw new Error("Another session is already capturing browser diagnostics.")
+    }
   }
 
   private async openBrowserTab(): Promise<string> {
@@ -285,7 +592,6 @@ export class BrowserAgentService implements BrowserHost {
   }
 
   private async requireOrigin(
-    contents: WebContents,
     urlValue: string,
     sessionId: string,
     cwd: string,
@@ -503,3 +809,63 @@ function fingerprintPage(page: InspectedPage): string {
 }
 
 export const browserAgentService = new BrowserAgentService()
+
+function capDeveloperReadResult(result: BrowserDeveloperResult): BrowserDeveloperResult {
+  const maxBytes = 48 * 1024
+  if (result.url.length > 2_048) {
+    result.url = result.url.slice(0, 2_048)
+    result.truncated = true
+  }
+  const data = result.data as {
+    document?: DeveloperDomView
+    node?: DeveloperDomView
+    properties?: unknown[]
+  }
+  while (Buffer.byteLength(JSON.stringify(result), "utf8") > maxBytes) {
+    result.truncated = true
+    if (data.properties?.length) {
+      data.properties.pop()
+    } else if (trimDomView(data.document ?? data.node)) {
+      continue
+    } else {
+      result.data = { omitted: "Developer inspection result exceeded the size limit." }
+      break
+    }
+  }
+  return result
+}
+
+function capDeveloperDiagnosticsResult(result: BrowserDeveloperResult): BrowserDeveloperResult {
+  const page = result.data as DeveloperDiagnosticsPage
+  while (Buffer.byteLength(JSON.stringify(result), "utf8") > 48 * 1024) {
+    result.truncated = true
+    page.truncated = true
+    if (page.network.length) page.network.pop()
+    else if (page.console.length) page.console.pop()
+    else {
+      result.data = { omitted: "Browser diagnostics result exceeded the size limit." }
+      break
+    }
+  }
+  return result
+}
+
+function trimDomView(view: DeveloperDomView | undefined): boolean {
+  if (!view) return false
+  if (view.children?.length) {
+    view.children.pop()
+    return true
+  }
+  if (view.attributes) {
+    const last = Object.keys(view.attributes).at(-1)
+    if (last) {
+      delete view.attributes[last]
+      return true
+    }
+  }
+  if (view.text) {
+    delete view.text
+    return true
+  }
+  return false
+}

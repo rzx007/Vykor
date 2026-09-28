@@ -17,6 +17,7 @@ export interface DesktopSettingsSnapshot {
   notificationMode: DesktopNotificationMode
   agentEnvironment: DesktopAgentEnvironment
   showReasoning: boolean
+  browserDeveloperMode: boolean
   restartRequired: boolean
   defaultOpenerId: string | null
   defaultTerminalShellId: string | null
@@ -37,6 +38,10 @@ export interface UpdateDesktopAgentEnvironmentInput {
 
 export interface UpdateDesktopReasoningVisibilityInput {
   showReasoning: boolean
+}
+
+export interface UpdateDesktopBrowserDeveloperModeInput {
+  enabled: boolean
 }
 
 export interface UpdateDesktopDefaultOpenerInput {
@@ -66,6 +71,7 @@ export function buildDesktopSettingsSnapshot(
     notificationMode: unknown
     defaultOpenerId: unknown
     defaultTerminalShellId: unknown
+    browserDeveloperMode: unknown
   }> = {},
   options: Partial<{ restartRequired: boolean; wslSupported: boolean }> = {}
 ): DesktopSettingsSnapshot {
@@ -76,6 +82,7 @@ export function buildDesktopSettingsSnapshot(
       : "when_unfocused",
     agentEnvironment: resolveDesktopAgentEnvironment(settings.agentEnvironment),
     showReasoning: settings.showReasoning !== false,
+    browserDeveloperMode: preferences.browserDeveloperMode === true,
     restartRequired: options.restartRequired ?? false,
     defaultOpenerId: normalizeDefaultOpenerId(preferences.defaultOpenerId),
     defaultTerminalShellId: normalizeDefaultTerminalShellId(preferences.defaultTerminalShellId),

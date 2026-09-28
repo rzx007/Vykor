@@ -107,6 +107,7 @@ import type {
   DesktopSettingsSnapshot,
   DesktopDaemonAutoStartSnapshot,
   UpdateDesktopAgentEnvironmentInput,
+  UpdateDesktopBrowserDeveloperModeInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
@@ -333,6 +334,7 @@ export const IpcChannels = {
   settingsUpdateNotificationMode: "settings:update-notification-mode",
   settingsUpdateAgentEnvironment: "settings:update-agent-environment",
   settingsUpdateReasoningVisibility: "settings:update-reasoning-visibility",
+  settingsUpdateBrowserDeveloperMode: "settings:update-browser-developer-mode",
   settingsUpdateDefaultOpener: "settings:update-default-opener",
   settingsUpdateDefaultTerminalShell: "settings:update-default-terminal-shell",
   daemonAutoStartSnapshot: "daemon-autostart:snapshot",
@@ -452,6 +454,10 @@ export interface IpcInvokeMap {
   }
   [IpcChannels.settingsUpdateReasoningVisibility]: {
     args: [input: UpdateDesktopReasoningVisibilityInput]
+    result: DesktopSettingsSnapshot
+  }
+  [IpcChannels.settingsUpdateBrowserDeveloperMode]: {
+    args: [input: UpdateDesktopBrowserDeveloperModeInput]
     result: DesktopSettingsSnapshot
   }
   [IpcChannels.settingsUpdateDefaultOpener]: {
