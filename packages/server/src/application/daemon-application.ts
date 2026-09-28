@@ -940,6 +940,7 @@ export class DaemonApplication implements DurableAgentApplication {
         finalizeClosingSessions: () => { store.finalizeClosingSessions(); },
         recoverAttachments: () => this.attachments.recover(),
         reconcileBackgroundTasks: () => this.backgroundShells.reconcileActiveTasks(DAEMON_RESTART_TASK_REASON),
+        recoverGoalWaits: () => { this.goals.recoverExternalWaits(); },
         recoverWorkflows: () => recoverInterruptedWorkflows({ workflows: this.workflows }),
       });
       this.startupRecovery = recovery.run()

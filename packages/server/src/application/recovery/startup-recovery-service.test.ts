@@ -26,6 +26,7 @@ describe("StartupRecoveryService", () => {
       finalizeClosingSessions: () => { order.push("sessions"); store.finalizeClosingSessions(); },
       recoverAttachments: async () => { order.push("attachments"); },
       reconcileBackgroundTasks: async () => { order.push("background"); },
+      recoverGoalWaits: () => { order.push("goal-waits"); },
       recoverWorkflows: async () => { order.push("workflows"); },
     });
     await recovery.run();
@@ -36,6 +37,7 @@ describe("StartupRecoveryService", () => {
     expect(store.runs.getRun("r1")?.status).toBe("interrupted");
     expect(order.slice(0, 6)).toEqual(["projection", "runs", "goals", "inputs", "permissions", "sessions"]);
     expect(order.filter((entry) => entry === "workflows")).toHaveLength(2);
+    expect(order.filter((entry) => entry === "goal-waits")).toHaveLength(2);
   });
 
   it("rejects immediately when a required recovery step fails", async () => {
@@ -43,7 +45,7 @@ describe("StartupRecoveryService", () => {
       recoverProjectionSettlements: () => { throw new Error("projection failed"); },
       interruptActiveRuns: () => {}, pauseActiveGoals: () => {}, terminalizeUnownedInputs: () => {},
       expirePendingPermissions: () => {}, finalizeClosingSessions: () => {},
-      recoverAttachments: async () => {}, reconcileBackgroundTasks: async () => {}, recoverWorkflows: async () => {},
+      recoverAttachments: async () => {}, reconcileBackgroundTasks: async () => {}, recoverGoalWaits: () => {}, recoverWorkflows: async () => {},
     });
     await expect(recovery.run()).rejects.toThrow("projection failed");
   });
@@ -55,7 +57,7 @@ describe("StartupRecoveryService", () => {
     const recovery = new StartupRecoveryService({
       recoverProjectionSettlements: () => {}, interruptActiveRuns: () => {}, pauseActiveGoals: () => {},
       terminalizeUnownedInputs: () => {}, expirePendingPermissions: () => {}, finalizeClosingSessions: () => {},
-      recoverAttachments: step("attachments"), reconcileBackgroundTasks: step("background"), recoverWorkflows: step("workflows"),
+      recoverAttachments: step("attachments"), reconcileBackgroundTasks: step("background"), recoverGoalWaits: () => {}, recoverWorkflows: step("workflows"),
     });
     await expect(recovery.run()).rejects.toThrow(`${failed} failed`);
   });

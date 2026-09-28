@@ -44,6 +44,25 @@ describe("SessionStore goals", () => {
     } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
   })
 
+  it("preserves an active goal that is durably waiting on an external handle", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-external-wait-recovery-"))
+    const store = new SessionStore({ path: join(directory, "store.db") })
+    try {
+      store.sessions.create({ id: "waiting-external", cwd: process.cwd(), model: "m" })
+      const goal = store.goals.createGoal({ sessionId: "waiting-external", objective: "wait", maxAutoTurns: 2 })
+      store.goals.updateGoal(goal.id, {
+        expectedRevision: goal.revision,
+        wait: { kind: "external", handleId: "job-1", runId: "run-1", deadlineAt: Date.now() + 60_000 },
+      })
+
+      expect(store.goals.pauseActiveGoalsOnStartup()).toBe(0)
+      expect(store.goals.getGoal(goal.id)).toMatchObject({
+        status: "active",
+        wait: { kind: "external", handleId: "job-1" },
+      })
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it("commits a continuation with its input/run identities and rolls back a duplicated intent", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-goal-intent-"))
     const path = join(directory, "store.db")
@@ -91,5 +110,18 @@ describe("SessionStore goals", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
+  })
+
+  it.each(["completed", "cancelled"] as const)("does not return a %s goal as current", (status) => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-goal-terminal-current-"))
+    const store = new SessionStore({ path: join(directory, "store.db") })
+    try {
+      store.sessions.create({ id: "s1", cwd: process.cwd(), model: "m" })
+      const goal = store.goals.createGoal({ sessionId: "s1", objective: "done", maxAutoTurns: 2 })
+      store.goals.updateGoal(goal.id, { expectedRevision: goal.revision, status })
+
+      expect(store.goals.getCurrentGoal("s1")).toBeUndefined()
+      expect(store.goals.getGoal(goal.id)?.status).toBe(status)
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }) }
   })
 })

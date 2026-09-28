@@ -7,6 +7,7 @@ export interface StartupRecoveryServiceOptions {
   finalizeClosingSessions(): void;
   recoverAttachments(): Promise<unknown>;
   reconcileBackgroundTasks(): Promise<unknown>;
+  recoverGoalWaits(): void;
   recoverWorkflows(): Promise<unknown>;
 }
 
@@ -25,6 +26,7 @@ export class StartupRecoveryService {
       this.options.recoverAttachments(),
       this.options.reconcileBackgroundTasks(),
     ]);
+    this.options.recoverGoalWaits();
     await this.options.recoverWorkflows();
   }
 }

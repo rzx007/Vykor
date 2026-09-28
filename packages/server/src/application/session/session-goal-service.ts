@@ -49,6 +49,12 @@ export class SessionGoalService {
     this.requireSession(sessionId);
     return this.context.goals.getCurrentGoal(sessionId) ?? null;
   }
+
+  recoverExternalWaits(): number {
+    const goals = this.context.goals.listActiveExternalWaitGoals();
+    for (const goal of goals) this.observeExternalWait(goal);
+    return goals.length;
+  }
   getRequest(sessionId: string, requestId: string): ReturnType<GoalOperations["getGoalRequest"]> {
     this.requireSession(sessionId);
     const request = this.context.goals.getGoalRequest(requestId);

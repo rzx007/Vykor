@@ -271,7 +271,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
       try {
         const saved = await window.desktop.sessions.goalAction(actionInput)
         invalidateRead(sessionId)
-        saveGoal(sessionId, saved)
+        saveGoal(sessionId, saved.status === "cancelled" ? null : saved)
         updateComposer(scope, { request: undefined })
       } catch (error) {
         updateComposer(scope, { error: goalErrorMessage(error) })

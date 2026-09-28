@@ -208,6 +208,26 @@ describe("goal actions", () => {
     expect(useDesktopSessionStore.getState().goalsBySession.s1?.status).toBe("paused")
   })
 
+  it("removes a cancelled goal immediately but keeps a completed result for this view", async () => {
+    vi.mocked(window.desktop.sessions.getGoal).mockRejectedValue(new Error("offline"))
+    useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
+    vi.mocked(window.desktop.sessions.goalAction).mockResolvedValueOnce(
+      goal("s1", { status: "cancelled", revision: 1 })
+    )
+
+    await useDesktopSessionStore.getState().applyGoalAction("s1", { action: "cancel" })
+    expect(useDesktopSessionStore.getState().goalsBySession.s1).toBeNull()
+
+    useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
+    vi.mocked(window.desktop.sessions.goalAction).mockResolvedValueOnce(
+      goal("s1", { status: "completed", revision: 1 })
+    )
+    await useDesktopSessionStore
+      .getState()
+      .applyGoalAction("s1", { action: "confirm", questionId: "goal-complete-run" })
+    expect(useDesktopSessionStore.getState().goalsBySession.s1?.status).toBe("completed")
+  })
+
   it("ignores goal refresh when the desktop bridge is unavailable", async () => {
     vi.stubGlobal("window", {})
 

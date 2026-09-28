@@ -56,6 +56,7 @@ export interface GoalOperations {
     automatic: boolean,
   ): boolean;
   finishGoalRun(runId: string): void;
+  listActiveExternalWaitGoals(): SessionGoal[];
   pauseActiveGoalsOnStartup(): number;
 }
 
@@ -85,6 +86,10 @@ export class GoalTransactions implements GoalOperations {
 
   goalEvidenceSignatures(goalId: string): string[] {
     return this.options.repository.evidenceSignatures(goalId);
+  }
+
+  listActiveExternalWaitGoals(): SessionGoal[] {
+    return this.options.repository.listActiveExternalWaitGoals();
   }
 
   createGoal(input: CreateSessionGoalStoreInput): SessionGoal {
@@ -210,8 +215,10 @@ export class GoalTransactions implements GoalOperations {
   pauseActiveGoalsOnStartup(): number {
     return this.write(() => {
       const goalIds = this.options.repository.listActiveGoalIds();
+      const pausedGoalIds: string[] = [];
       for (const id of goalIds) {
         const goal = this.options.repository.getGoal(id)!;
+        if (goal.wait?.kind === "external") continue;
         const paused = this.options.repository.updateGoalRevision(id, {
           expectedRevision: goal.revision,
           status: "paused",
@@ -219,9 +226,10 @@ export class GoalTransactions implements GoalOperations {
           reason: "应用重启后需要手动继续",
         });
         this.emit("session.goal.updated", paused);
+        pausedGoalIds.push(id);
       }
       this.options.repository.cancelPendingContinuations();
-      return goalIds.length;
+      return pausedGoalIds.length;
     });
   }
 

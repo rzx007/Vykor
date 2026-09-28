@@ -30,8 +30,8 @@ export class GoalRepository {
       .prepare(
         `SELECT * FROM session_goal
       WHERE session_id = ?
-      ORDER BY CASE WHEN status IN ('active','waiting_user','blocked','paused') THEN 0 ELSE 1 END,
-               updated_at DESC
+        AND status IN ('active','waiting_user','blocked','paused')
+      ORDER BY updated_at DESC
       LIMIT 1`,
       )
       .get(sessionId);
@@ -268,6 +268,14 @@ export class GoalRepository {
         .prepare("SELECT id FROM session_goal WHERE status = 'active'")
         .all() as { id: string }[]
     ).map((row) => row.id);
+  }
+
+  listActiveExternalWaitGoals(): SessionGoal[] {
+    return (this.database
+      .prepare("SELECT * FROM session_goal WHERE status = 'active' AND wait_json IS NOT NULL")
+      .all() as Record<string, unknown>[])
+      .map(sessionGoalFromRow)
+      .filter((goal) => goal.wait?.kind === "external");
   }
 
   cancelPendingContinuations(): void {

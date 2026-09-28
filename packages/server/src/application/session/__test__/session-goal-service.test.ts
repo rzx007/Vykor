@@ -691,6 +691,38 @@ describe("SessionGoalService durable lifecycle", () => {
     }
   });
 
+  it("reattaches a persisted external wait after the goal service restarts", async () => {
+    vi.useFakeTimers();
+    try {
+      let turns = 0;
+      const { service, store, control } = harness(
+        async (store, runId) => {
+          turns += 1;
+          assessment(store, runId, {
+            decision: "waiting_user",
+            progressAssessment: { kind: "waiting", summary: "等待验收" },
+            question: "请验收",
+          });
+        },
+        { check: () => ({ state: "completed" }) },
+      );
+      const created = store.goals.createGoal({ sessionId: "s1", objective: "重启后继续", maxAutoTurns: 2 });
+      store.goals.updateGoal(created.id, {
+        expectedRevision: created.revision,
+        wait: { kind: "external", handleId: "build-run", runId: "old-run", deadlineAt: Date.now() + 60_000 },
+      });
+
+      service.recoverExternalWaits();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await control.waitForRuns(store.runs.listRuns("s1").map((run) => run.id));
+
+      expect(store.goals.getGoal(created.id)).toMatchObject({ status: "waiting_user", wait: { kind: "user" } });
+      expect(turns).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not complete a failed run even if it submitted complete", async () => {
     const { service, store, control, admission } = harness(async (store, runId) => {
       assessment(store, runId, { decision: "complete" }, "failed");
