@@ -103,6 +103,7 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
     const webview = webviewRef.current
     if (!webview) return
     const url = webview.getURL?.() ?? null
+    if (url === "about:blank" && !tab.url) return
     const title = webview.getTitle?.() || (url ? browserTitleFromUrl(url) : "新标签页")
     onUpdate({
       title,
@@ -278,17 +279,18 @@ export function BrowserTool({ tab, active, onUpdate }: BrowserToolProps): React.
       </div>
 
       <div className="relative min-h-0 flex-1 bg-background">
-        {tab.url ? (
-          <webview
-            {...{
-              ref: bindWebview,
-              src: tab.url,
-              partition: "persist:vykor-browser",
-              className: "h-full w-full bg-background",
-            }}
-          />
-        ) : (
-          <DesktopEmptyState icon={Globe2} title="开始浏览" description="输入 URL 以打开页面" />
+        <webview
+          {...{
+            ref: bindWebview,
+            src: tab.url ?? "about:blank",
+            partition: "persist:vykor-browser",
+            className: "h-full w-full bg-background",
+          }}
+        />
+        {!tab.url && (
+          <div className="absolute inset-0 bg-background">
+            <DesktopEmptyState icon={Globe2} title="开始浏览" description="输入 URL 以打开页面" />
+          </div>
         )}
         {tab.url && annotationMode && (
           <div

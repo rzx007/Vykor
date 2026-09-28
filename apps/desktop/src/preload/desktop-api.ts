@@ -78,6 +78,11 @@ export const desktopAPI = {
       invoke(IpcChannels.browserInspectAt, input),
     addAnnotation: (input: IpcInvokeMap[typeof IpcChannels.browserAddAnnotation]["args"][0]) =>
       invoke(IpcChannels.browserAddAnnotation, input),
+    onOpenRequest: (listener: () => void): (() => void) => {
+      const wrapped = (): void => listener()
+      ipcRenderer.on(IpcEvents.browserOpenRequest, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.browserOpenRequest, wrapped)
+    },
   },
   tray: {
     flash: () => invoke(IpcChannels.trayFlash),

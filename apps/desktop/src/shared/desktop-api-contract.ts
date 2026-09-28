@@ -211,6 +211,7 @@ export type DesktopAPI = {
     addAnnotation: (
       input: IpcInvokeMap[typeof IpcChannels.browserAddAnnotation]["args"][0]
     ) => Promise<void>
+    onOpenRequest: (listener: () => void) => () => void
   }
   tray: {
     flash: () => Promise<void>

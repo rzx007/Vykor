@@ -39,6 +39,10 @@ class FakeWebContents extends EventEmitter {
     return Promise.resolve({ toPNG: () => Buffer.from("screenshot") })
   }
 
+  async loadURL(url: string): Promise<void> {
+    navigate(this, url, "navigated by agent")
+  }
+
   async executeJavaScript<T = unknown>(script: string): Promise<T> {
     if (script.includes("document.querySelectorAll")) {
       return {
@@ -226,5 +230,46 @@ describe("BrowserAgentService screenshot capability", () => {
 
     expect(page.captureCount).toBe(1)
     expect(result.screenshotBytes).toEqual(Buffer.from("screenshot"))
+  })
+})
+
+describe("BrowserAgentService cold start", () => {
+  it("opens a blank tab, requests origin approval, then navigates to the requested URL", async () => {
+    const service = new BrowserAgentService()
+    const page = new FakeWebContents()
+    electronState.fromId.mockImplementation((id: number) => id === page.id ? page : undefined)
+    service.setOpenTabRequestHandler(() => {
+      service.trackGuest(7, page as never)
+      service.bindTab(7, "browser-tab-cold", page.id)
+      service.setActiveTab(7, "browser-tab-cold")
+    })
+    const approve = vi.fn(async () => true)
+
+    const result = await service.execute({
+      action: { action: "navigate", url: "https://example.org/start" },
+      sessionId: "session-cold",
+      cwd: "D:/workspace",
+      includeScreenshot: false,
+      approve,
+    })
+
+    expect(approve).toHaveBeenCalledOnce()
+    expect(result.url).toBe("https://example.org/start")
+    expect(result.pageText).toBe("navigated by agent")
+  })
+
+  it("does not create a tab for inspection without a page", async () => {
+    const service = new BrowserAgentService()
+    const openTab = vi.fn()
+    service.setOpenTabRequestHandler(openTab)
+
+    await expect(service.execute({
+      action: { action: "inspect" },
+      sessionId: "session-cold",
+      cwd: "D:/workspace",
+      includeScreenshot: false,
+      approve: async () => true,
+    })).rejects.toThrow("Use Browser navigate with a URL to open a page.")
+    expect(openTab).not.toHaveBeenCalled()
   })
 })

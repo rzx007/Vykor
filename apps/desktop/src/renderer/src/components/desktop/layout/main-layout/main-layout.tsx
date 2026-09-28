@@ -103,6 +103,11 @@ export function MainLayout(): React.JSX.Element {
   const openUtilityTool = utilityPanel.openTool
 
   useEffect(
+    () => window.desktop.browser.onOpenRequest(() => openUtilityTool("browser")),
+    [openUtilityTool]
+  )
+
+  useEffect(
     () => () => {
       sidebarTransitionCancelRef.current?.()
       sidebarTransitionCancelRef.current = null
@@ -249,11 +254,11 @@ export function MainLayout(): React.JSX.Element {
             // the pointer; only live pointer/keyboard resizes update the content width.
             // A collapsed panel (width 0) or an in-flight toggle must not resize the
             // content, otherwise a window resize while collapsed would blank the sidebar.
-            if (size.inPixels > 1 && !outerGroupElementRef.current?.hasAttribute("data-panel-animating")) {
-              contentRef.current?.style.setProperty(
-                "--sidebar-content-width",
-                `${size.inPixels}px`
-              )
+            if (
+              size.inPixels > 1 &&
+              !outerGroupElementRef.current?.hasAttribute("data-panel-animating")
+            ) {
+              contentRef.current?.style.setProperty("--sidebar-content-width", `${size.inPixels}px`)
             }
             const nextOpen = size.inPixels > 1
             setSidebarOpen((current) => (current === nextOpen ? current : nextOpen))
@@ -325,7 +330,7 @@ export function MainLayout(): React.JSX.Element {
       <Panel
         id="utility"
         panelRef={utilityPanelRef}
-          defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 50}%` : 0}
+        defaultSize={panelOpen ? `${visiblePanelLayout.utility ?? 50}%` : 0}
         minSize={utilityMinimumWidth}
         maxSize={utilityMaximized ? "100%" : "70%"}
         collapsedSize={0}

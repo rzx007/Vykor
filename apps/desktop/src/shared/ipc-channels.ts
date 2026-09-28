@@ -354,6 +354,7 @@ export const IpcEvents = {
   terminalStatus: "terminal:status",
   terminalExit: "terminal:exit",
   terminalError: "terminal:error",
+  browserOpenRequest: "browser:open-request",
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

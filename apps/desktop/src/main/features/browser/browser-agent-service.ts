@@ -76,6 +76,8 @@ export class BrowserAgentService implements BrowserHost {
   private readonly pageFingerprints = new Map<number, string>()
   private activeTabId: string | null = null
   private targetSequence = 0
+  private openTabRequestHandler?: () => void
+  private readonly activeTabWaiters = new Set<(tabId: string) => void>()
   // ponytail: serialize browser operations globally; use per-tab queues only if throughput becomes a measured bottleneck.
   private operationQueue: Promise<void> = Promise.resolve()
 
@@ -96,6 +98,10 @@ export class BrowserAgentService implements BrowserHost {
     })
   }
 
+  setOpenTabRequestHandler(handler?: () => void): void {
+    this.openTabRequestHandler = handler
+  }
+
   bindTab(ownerId: number, tabId: string, webContentsId: number): void {
     if (!this.guestsByWindow.get(ownerId)?.has(webContentsId)) {
       throw new Error("Browser tab is not attached to this application window.")
@@ -113,6 +119,8 @@ export class BrowserAgentService implements BrowserHost {
     const tab = this.tabs.get(tabId)
     if (!tab || tab.ownerId !== ownerId) throw new Error("Unknown browser tab.")
     this.activeTabId = tabId
+    for (const resolve of this.activeTabWaiters) resolve(tabId)
+    this.activeTabWaiters.clear()
   }
 
   unbindTab(ownerId: number, tabId: string): void {
@@ -155,7 +163,10 @@ export class BrowserAgentService implements BrowserHost {
   }): Promise<BrowserObservation> {
     const requestedTabId = this.activeTabId
     const operation = this.operationQueue.then(() => this.executeOnTab(input, requestedTabId))
-    this.operationQueue = operation.then(() => undefined, () => undefined)
+    this.operationQueue = operation.then(
+      () => undefined,
+      () => undefined
+    )
     return operation
   }
 
@@ -169,7 +180,10 @@ export class BrowserAgentService implements BrowserHost {
     },
     requestedTabId: string | null
   ): Promise<BrowserObservation> {
-    const tabId = requestedTabId
+    if (!requestedTabId && input.action.action !== "navigate") {
+      throw new Error("Use Browser navigate with a URL to open a page.")
+    }
+    const tabId = requestedTabId ?? (await this.openBrowserTab())
     if (!tabId) throw new Error("Open a page in the desktop browser first.")
     const tab = this.tabs.get(tabId)
     const contents = tab ? webContents.fromId(tab.webContentsId) : undefined
@@ -242,6 +256,32 @@ export class BrowserAgentService implements BrowserHost {
     this.annotations.clear()
     this.approvedOrigins.clear()
     this.pageFingerprints.clear()
+    this.activeTabWaiters.clear()
+  }
+
+  private async openBrowserTab(): Promise<string> {
+    if (!this.openTabRequestHandler) throw new Error("Open a page in the desktop browser first.")
+    const activeTab = this.activeTabId && this.tabs.has(this.activeTabId) ? this.activeTabId : null
+    if (activeTab) return activeTab
+
+    return await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.activeTabWaiters.delete(onReady)
+        reject(new Error("Timed out while opening the desktop browser tab."))
+      }, 15_000)
+      const onReady = (tabId: string): void => {
+        clearTimeout(timer)
+        resolve(tabId)
+      }
+      this.activeTabWaiters.add(onReady)
+      try {
+        this.openTabRequestHandler!()
+      } catch (error) {
+        clearTimeout(timer)
+        this.activeTabWaiters.delete(onReady)
+        reject(error)
+      }
+    })
   }
 
   private async requireOrigin(
@@ -418,7 +458,9 @@ export class BrowserAgentService implements BrowserHost {
 
   private assertActiveTab(tabId: string, contents: WebContents): void {
     if (this.activeTabId !== tabId || contents.isDestroyed()) {
-      throw new Error("The active browser tab changed while the tool was waiting. Inspect the page again.")
+      throw new Error(
+        "The active browser tab changed while the tool was waiting. Inspect the page again."
+      )
     }
   }
 }
@@ -434,7 +476,7 @@ async function waitForPageUpdate(contents: WebContents, before: string): Promise
 
     let page: InspectedPage
     try {
-      page = await contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT) as InspectedPage
+      page = (await contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT)) as InspectedPage
     } catch {
       // Navigation can replace the execution context between load events.
       continue

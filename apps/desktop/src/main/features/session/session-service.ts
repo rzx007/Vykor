@@ -454,9 +454,8 @@ export class DesktopSessionService {
   }
 
   set clientPromise(promise: Promise<VykorClient> | null) {
-    ;(
-      this.connection as unknown as { clientPromise: Promise<VykorClient> | null }
-    ).clientPromise = promise
+    ;(this.connection as unknown as { clientPromise: Promise<VykorClient> | null }).clientPromise =
+      promise
   }
 
   private getClient(): Promise<VykorClient> {

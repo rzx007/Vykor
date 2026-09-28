@@ -120,6 +120,11 @@ export function showMainWindow(win: BrowserWindow): void {
 
 function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
   attachWebviewPolicy(win)
+  browserAgentService.setOpenTabRequestHandler(() => {
+    showMainWindow(win)
+    win.webContents.send(IpcEvents.browserOpenRequest)
+  })
+  win.once("closed", () => browserAgentService.setOpenTabRequestHandler(undefined))
   const clearUnreadAttention = (): void => clearAttention(() => win)
 
   win.once("ready-to-show", () => {
