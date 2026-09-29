@@ -1,6 +1,7 @@
 export interface StartupRecoveryServiceOptions {
   recoverProjectionSettlements(): void;
   interruptActiveRuns(): void;
+  failIncompleteReviewsOnStartup?(): number;
   pauseActiveGoals(): void;
   terminalizeUnownedInputs(): void;
   expirePendingPermissions(): void;
@@ -18,6 +19,7 @@ export class StartupRecoveryService {
   async run(): Promise<void> {
     this.options.recoverProjectionSettlements();
     this.options.interruptActiveRuns();
+    this.options.failIncompleteReviewsOnStartup?.();
     this.options.pauseActiveGoals();
     this.options.terminalizeUnownedInputs();
     this.options.expirePendingPermissions();

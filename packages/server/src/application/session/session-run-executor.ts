@@ -1,4 +1,4 @@
-import type { SessionRecord } from "@vykor/protocol";
+import type { AutoReviewMode, SessionRecord } from "@vykor/protocol";
 import { readSessionModelRetryState } from "@vykor/protocol";
 import type { ProviderInputCapabilities } from "@vykor/api";
 import { PluginPreparationError } from "@vykor/agent-runtime";
@@ -8,6 +8,7 @@ import type { GoalOperations, SessionStore } from "@vykor/services";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import { RunInterruptedError, type SessionRunWorkContext } from "../../runtime/run-coordinator.js";
 import type { AgentPool } from "../agent/agent-pool.js";
+import type { SessionAutoReviewService } from "../auto-review/session-auto-review-service.js";
 import { RunStallWatchdog } from "./run-stall-watchdog.js";
 import type { SessionPostRunMaintenance } from "./session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
@@ -59,6 +60,16 @@ export interface SessionRunExecutorContext {
   ): Promise<NativeAttachmentRouteResult>;
   traceIdForRun(runId: string): string;
   log(event: ObservabilityEvent): void;
+  /**
+   * Persisted risk-based auto review. Optional so tests and unwired daemons keep
+   * running; it is only ever called in its own try/catch and never changes the
+   * parent Run's terminal status.
+   */
+  autoReview?: Pick<
+    SessionAutoReviewService,
+    "captureBaseline" | "reviewCompletedRun" | "settleUnreviewedRun"
+  >;
+  resolveAutoReviewMode?(cwd: string): Promise<AutoReviewMode>;
   postRunMaintenance?: Pick<SessionPostRunMaintenance, "run">;
   attachmentResources?: Pick<SessionAttachmentResources, "materializeRun">;
   attachmentOcrAvailable?: boolean;
@@ -229,6 +240,9 @@ export class SessionRunExecutor {
         goalBinding = { goalId: goal.id, revision: goal.revision, objective: goal.objective };
       }
 
+      // Capture the git baseline before the Agent runs so post-run changes stay attributable.
+      await this.captureAutoReviewBaseline(sessionId, runId, session.cwd);
+
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
       const run = agent.submitMessage(submittedContent, {
@@ -319,6 +333,17 @@ export class SessionRunExecutor {
       // 模型回合、工具、JobWait 都在这次 result 里。成功时 projector 已经把 run 标成 completed。
       await run.result;
 
+      // Auto review runs before memory/personalization maintenance and never overrides
+      // the parent Run's completed status on review failure.
+      await this.reviewAutoReview({
+        sessionId,
+        inputId,
+        runId,
+        cwd: session.cwd,
+        agent,
+        signal: workContext.signal,
+      });
+
       // 只在成功走完之后做记忆/个性化/auto-dream。失败路径不跑，避免半截对话被写进长期记忆。
       await this.context.postRunMaintenance?.run(sessionId, runId, agent);
 
@@ -365,6 +390,7 @@ export class SessionRunExecutor {
 
       // projector / interrupt 已经写下终态就不要再改：否则会把 completed 覆盖成 failed。
       if (current && ["completed", "failed", "interrupted"].includes(current.status)) {
+        if (current.status !== "completed") this.settleUnreviewedAutoReview(sessionId, runId);
         this.context.contextUsageCache?.invalidate(sessionId);
         return;
       }
@@ -440,6 +466,7 @@ export class SessionRunExecutor {
         error: message,
       });
       this.context.events.publishSince(before);
+      this.settleUnreviewedAutoReview(sessionId, runId);
       // Failed / interrupted terminal: drop stale usage; next usage() may reassemble.
       this.context.contextUsageCache?.invalidate(sessionId);
     } finally {
@@ -472,6 +499,90 @@ export class SessionRunExecutor {
           });
         }
       }
+    }
+  }
+
+  private async captureAutoReviewBaseline(
+    sessionId: string,
+    runId: string,
+    cwd: string,
+  ): Promise<void> {
+    const autoReview = this.context.autoReview;
+    if (!autoReview) return;
+    try {
+      const mode = this.context.resolveAutoReviewMode
+        ? await this.context.resolveAutoReviewMode(cwd)
+        : "off";
+      await autoReview.captureBaseline({ sessionId, runId, cwd, mode });
+    } catch (error) {
+      this.context.log({
+        level: "error",
+        event: "auto_review.capture_failed",
+        traceId: this.context.traceIdForRun(runId),
+        sessionId,
+        runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async reviewAutoReview(input: {
+    sessionId: string;
+    inputId: string;
+    runId: string;
+    cwd: string;
+    agent: Awaited<ReturnType<AgentPool["acquireSession"]>>;
+    signal: AbortSignal;
+  }): Promise<void> {
+    const autoReview = this.context.autoReview;
+    if (!autoReview) return;
+    try {
+      const settled = this.context.data.runs.getRun(input.runId);
+      if (settled?.status === "completed") {
+        await autoReview.reviewCompletedRun({
+          sessionId: input.sessionId,
+          inputId: input.inputId,
+          runId: input.runId,
+          traceId: this.context.traceIdForRun(input.runId),
+          cwd: input.cwd,
+          agent: input.agent,
+          signal: input.signal,
+        });
+      } else {
+        autoReview.settleUnreviewedRun({
+          sessionId: input.sessionId,
+          runId: input.runId,
+          reason: "parent_run_not_completed",
+        });
+      }
+    } catch (error) {
+      this.context.log({
+        level: "error",
+        event: "auto_review.failed",
+        traceId: this.context.traceIdForRun(input.runId),
+        sessionId: input.sessionId,
+        runId: input.runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private settleUnreviewedAutoReview(sessionId: string, runId: string): void {
+    try {
+      this.context.autoReview?.settleUnreviewedRun({
+        sessionId,
+        runId,
+        reason: "parent_run_not_completed",
+      });
+    } catch (error) {
+      this.context.log({
+        level: "error",
+        event: "auto_review.settle_failed",
+        traceId: this.context.traceIdForRun(runId),
+        sessionId,
+        runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

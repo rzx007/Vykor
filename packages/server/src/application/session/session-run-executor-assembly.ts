@@ -35,6 +35,9 @@ export function assembleSessionRunExecutor(options: SessionRunExecutorAssemblyOp
     if (!settings) throw new Error("session_input_skill_catalog_unavailable");
     return (await discoverVykorExtensions(session.cwd, settings)).skillRegistry;
   };
+  const resolveAutoReviewMode =
+    options.resolveAutoReviewMode ??
+    (async (cwd: string) => (await options.resolveSessionSettings(cwd))?.autoReview?.mode ?? "off");
   const materializeSteerInput = async (sessionId: string, items: readonly SessionUserInputItem[]) => {
     const session = options.store.sessions.get(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
@@ -49,6 +52,7 @@ export function assembleSessionRunExecutor(options: SessionRunExecutorAssemblyOp
     data: options.store,
     attachments: options.store.attachments,
     resolveSkillCatalog,
+    resolveAutoReviewMode,
     routeAttachments: (input) => attachmentRouter.route(input),
     resolveCapabilities: async (session) => {
       const settings = await options.resolveSessionSettings(session.cwd);

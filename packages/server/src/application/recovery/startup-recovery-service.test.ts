@@ -40,6 +40,25 @@ describe("StartupRecoveryService", () => {
     expect(order.filter((entry) => entry === "goal-waits")).toHaveLength(2);
   });
 
+  it("converges incomplete auto reviews right after interrupting active runs", async () => {
+    const order: string[] = [];
+    const recovery = new StartupRecoveryService({
+      recoverProjectionSettlements: () => { order.push("projection"); },
+      interruptActiveRuns: () => { order.push("runs"); },
+      failIncompleteReviewsOnStartup: () => { order.push("reviews"); return 2; },
+      pauseActiveGoals: () => { order.push("goals"); },
+      terminalizeUnownedInputs: () => {},
+      expirePendingPermissions: () => {},
+      finalizeClosingSessions: () => {},
+      recoverAttachments: async () => {},
+      reconcileBackgroundTasks: async () => {},
+      recoverGoalWaits: () => {},
+      recoverWorkflows: async () => {},
+    });
+    await recovery.run();
+    expect(order.slice(0, 3)).toEqual(["projection", "runs", "reviews"]);
+  });
+
   it("rejects immediately when a required recovery step fails", async () => {
     const recovery = new StartupRecoveryService({
       recoverProjectionSettlements: () => { throw new Error("projection failed"); },

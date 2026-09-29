@@ -488,6 +488,173 @@ describe("SessionRunExecutor", () => {
     handle.complete();
     await execution;
   });
+
+  it("captures the baseline before submit and reviews only a projector-completed run", async () => {
+    const store = createStore();
+    const run = store.spies.getRun() as { status: string };
+    const calls: string[] = [];
+    const autoReview = {
+      captureBaseline: vi.fn(async () => { calls.push("capture"); }),
+      reviewCompletedRun: vi.fn(async () => { calls.push("review"); return {} as never; }),
+      settleUnreviewedRun: vi.fn(() => ({} as never)),
+    };
+    const postRunMaintenance = { run: vi.fn(async () => { calls.push("maintenance"); }) };
+    const submitMessage = vi.fn(() => {
+      calls.push("submit");
+      run.status = "completed";
+      return completedHandle();
+    });
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+      autoReview,
+      resolveAutoReviewMode: async () => "risk_based",
+      postRunMaintenance,
+    });
+
+    await executor.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} },
+    );
+
+    expect(autoReview.captureBaseline).toHaveBeenCalledWith({
+      sessionId: "s1", runId: "run-1", cwd: "/repo", mode: "risk_based",
+    });
+    expect(calls).toEqual(["capture", "submit", "review", "maintenance"]);
+    expect(autoReview.settleUnreviewedRun).not.toHaveBeenCalled();
+  });
+
+  it("passes the run signal to the reviewer and settles a non-completed run", async () => {
+    const store = createStore();
+    const controller = new AbortController();
+    const autoReview = {
+      captureBaseline: vi.fn(async () => {}),
+      reviewCompletedRun: vi.fn(async () => ({} as never)),
+      settleUnreviewedRun: vi.fn(() => ({} as never)),
+    };
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => completedHandle() }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+      autoReview,
+      resolveAutoReviewMode: async () => "risk_based",
+    });
+
+    await executor.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: controller.signal, registerHandle: async () => {} },
+    );
+
+    expect(autoReview.reviewCompletedRun).not.toHaveBeenCalled();
+    expect(autoReview.settleUnreviewedRun).toHaveBeenCalledWith({
+      sessionId: "s1", runId: "run-1", reason: "parent_run_not_completed",
+    });
+
+    // A second run that does complete forwards the run signal to the reviewer.
+    const store2 = createStore();
+    const run2 = store2.spies.getRun() as { status: string };
+    const autoReview2 = {
+      captureBaseline: vi.fn(async () => {}),
+      reviewCompletedRun: vi.fn(async () => ({} as never)),
+      settleUnreviewedRun: vi.fn(() => ({} as never)),
+    };
+    const executor2 = new SessionRunExecutor({
+      data: store2.data, attachments: store2.attachments, goals: store2.goals,
+      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run2.status = "completed"; return completedHandle(); } }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+      autoReview: autoReview2,
+      resolveAutoReviewMode: async () => "risk_based",
+    });
+    await executor2.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: controller.signal, registerHandle: async () => {} },
+    );
+    expect(autoReview2.reviewCompletedRun).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal, runId: "run-1" }),
+    );
+  });
+
+  it("keeps maintenance, usage refresh, and closeIfStale running when auto review throws", async () => {
+    const store = createStore();
+    const run = store.spies.getRun() as { status: string };
+    const autoReview = {
+      captureBaseline: vi.fn(async () => {}),
+      reviewCompletedRun: vi.fn(async () => { throw new Error("review exploded"); }),
+      settleUnreviewedRun: vi.fn(() => ({} as never)),
+    };
+    const postRunMaintenance = { run: vi.fn(async () => {}) };
+    const refreshContextUsage = vi.fn(async () => {});
+    const closeIfStale = vi.fn(async () => {});
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run.status = "completed"; return completedHandle(); } }), close: async () => {}, closeIfStale } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: vi.fn(),
+      autoReview,
+      resolveAutoReviewMode: async () => "risk_based",
+      postRunMaintenance,
+      refreshContextUsage,
+    });
+
+    await executor.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} },
+    );
+
+    expect(postRunMaintenance.run).toHaveBeenCalledWith("s1", "run-1", expect.anything());
+    expect(refreshContextUsage).toHaveBeenCalled();
+    expect(closeIfStale).toHaveBeenCalledWith("s1");
+    expect(store.spies.updateRun).not.toHaveBeenCalledWith(
+      "run-1",
+      expect.objectContaining({ status: "failed" }),
+    );
+    expect(run.status).toBe("completed");
+  });
+
+  it("keeps the watchdog active while a review child is running", async () => {
+    const store = createStore();
+    const run = store.spies.getRun() as { status: string };
+    let releaseReview!: () => void;
+    const reviewGate = new Promise<void>((resolve) => { releaseReview = resolve; });
+    const autoReview = {
+      captureBaseline: vi.fn(async () => {}),
+      reviewCompletedRun: vi.fn(async () => { await reviewGate; return {} as never; }),
+      settleUnreviewedRun: vi.fn(() => ({} as never)),
+    };
+    store.data.runs.listSessionTasks = vi.fn(() => [
+      { childSessionId: "child-session", status: "running", updatedAt: Date.now() } as never,
+    ]);
+    const handle = deferredHandle();
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      agentPool: { configured: true, acquireSession: async () => ({ setModel: () => {}, submitMessage: () => { run.status = "completed"; return handle; } }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+      autoReview,
+      resolveAutoReviewMode: async () => "risk_based",
+      stallTimeoutMs: 20,
+      stallCheckIntervalMs: 5,
+    });
+
+    const execution = executor.execute(
+      { sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} },
+    );
+    handle.complete();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(handle.interrupt).not.toHaveBeenCalled();
+    releaseReview();
+    await execution;
+  });
 });
 
 function capabilitySnapshot(

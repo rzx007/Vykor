@@ -82,6 +82,8 @@ import { SessionQueryService } from "./session/session-query-service.js";
 import { SessionRunEngine } from "./session/session-run-engine.js";
 import { assembleSessionRunServices } from "./session/session-run-assembly.js";
 import { assembleSessionRunExecutor } from "./session/session-run-executor-assembly.js";
+import { SessionAutoReviewService } from "./auto-review/session-auto-review-service.js";
+import { createGitRunChangeInspector } from "./auto-review/git-run-change-inspector.js";
 import { createSessionRuntimeDiscovery } from "./session/session-runtime-discovery.js";
 import { RunAdmissionService } from "./session/run-admission-service.js";
 import { RunControlService } from "./session/run-control-service.js";
@@ -695,12 +697,27 @@ export class DaemonApplication implements DurableAgentApplication {
         });
       });
 
+      const autoReview = new SessionAutoReviewService({
+        store,
+        events: this.eventPublisher,
+        inspector: createGitRunChangeInspector(),
+        log: (entry) => {
+          options.log({
+            level: "warn",
+            event: typeof entry.event === "string" ? entry.event : "auto_review.error",
+            ...(typeof entry.sessionId === "string" ? { sessionId: entry.sessionId } : {}),
+            ...(typeof entry.runId === "string" ? { runId: entry.runId } : {}),
+            ...(typeof entry.error === "string" ? { error: entry.error } : {}),
+          });
+        },
+      });
+
       const runExecution = assembleSessionRunExecutor({
         store, attachmentService: this.attachments, goals: store.goals,
         agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
         traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
         attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,
-        resolveSessionSettings,
+        resolveSessionSettings, autoReview,
       });
       const runExecutor = runExecution.executor;
       const materializeSteerInput = runExecution.materializeSteerInput;
@@ -964,6 +981,7 @@ export class DaemonApplication implements DurableAgentApplication {
       const recovery = new StartupRecoveryService({
         recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
         interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
+        failIncompleteReviewsOnStartup: () => autoReview.failIncompleteReviewsOnStartup(),
         pauseActiveGoals: () => { store.goals.pauseActiveGoalsOnStartup(); },
         terminalizeUnownedInputs: () => { store.terminalizeUnownedInputs(DAEMON_RESTART_INPUT_REASON); },
         expirePendingPermissions: () => { store.permissions.expirePending(DAEMON_RESTART_PERMISSION_REASON); },
