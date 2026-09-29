@@ -243,7 +243,7 @@ describe("system routes", () => {
     });
     const failed = await failing.request("/debug/executions");
     expect(failed.status).toBe(500);
-    await expect(failed.json()).resolves.toEqual({ error: "storage unavailable" });
+    await expect(failed.json()).resolves.toEqual({ error: "execution_observation_query_failed" });
   });
 
   it("advertises the executionObservability capability", async () => {

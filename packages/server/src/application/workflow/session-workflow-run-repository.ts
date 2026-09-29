@@ -115,7 +115,9 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
     const diagnostics: WorkflowReadDiagnostic[] = [];
     for (const record of this.options.workflows.listEventRecords(runId)) {
       try {
-        events.push(decodeWorkflowRunEvent(record.eventJson));
+        const event = decodeWorkflowRunEvent(record.eventJson);
+        if (event.runId !== runId) throw new Error("Workflow event identity mismatch");
+        events.push(event);
       } catch {
         diagnostics.push({
           code: "invalid_workflow_event",
@@ -140,7 +142,9 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
     const diagnostics: WorkflowReadDiagnostic[] = [];
     for (const stored of this.options.workflows.listRuns()) {
       try {
-        snapshots.push(decodeWorkflowRunSnapshot(stored.snapshotJson));
+        const snapshot = decodeWorkflowRunSnapshot(stored.snapshotJson);
+        if (snapshot.runId !== stored.runId) throw new Error("Workflow snapshot identity mismatch");
+        snapshots.push(snapshot);
       } catch {
         diagnostics.push({
           code: "invalid_workflow_snapshot",

@@ -1,5 +1,7 @@
 # Agent 执行观测底座实现计划
 
+> 状态：8 个实现任务已完成；最终验收修复补齐 token 语义、完整性降级、损坏记录诊断、失败分类与安全错误边界。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 从现有 Session Run、Child Agent 投影和 Workflow 持久化数据生成统一、可过滤、可聚合且默认不泄漏内容的执行观测 JSON。
@@ -195,6 +197,7 @@ export interface ExecutionObservation {
   usage: {
     inputTokens?: number;
     outputTokens?: number;
+    totalTokens?: number;
     cacheReadTokens?: number;
     cacheCreationTokens?: number;
     completeness: ExecutionUsageCompleteness;
@@ -230,10 +233,19 @@ export interface ExecutionKindSummary {
   unknown: number;
   completionRate?: number;
   failureRate?: number;
+  cancellationRate?: number;
+  skipRate?: number;
   duration: { count: number; sumMs: number; minMs?: number; maxMs?: number };
   usage: {
     inputTokens: number;
     outputTokens: number;
+    totalTokens: number;
+    inputTokenRecords: number;
+    outputTokenRecords: number;
+    totalTokenRecords: number;
+    averageInputTokens?: number;
+    averageOutputTokens?: number;
+    averageTotalTokens?: number;
     completeRecords: number;
     partialRecords: number;
     unknownRecords: number;
@@ -775,7 +787,7 @@ export class ExecutionObservationService {
 
 `query()` 顺序固定：读 Session → 把 backing map 交给 Workflow → 合并 warnings → 过滤 → 稳定排序 → 按 `executionKind` 聚合。不得生成跨 kind totals。百分比没有分母时省略字段，不输出 `NaN`。
 
-`technicalTerminal = completed + failed + timed_out`；`completionRate = completed / technicalTerminal`；`failureRate = (failed + timed_out) / technicalTerminal`。cancelled、blocked、skipped、unknown 和尚未结束的记录不进入这两个比率的分母。
+`technicalTerminal = completed + failed + timed_out`；`completionRate = completed / technicalTerminal`；`failureRate = (failed + timed_out) / technicalTerminal`。cancelled、blocked、skipped、unknown 和尚未结束的记录不进入这两个比率的分母。另计算 `cancellationRate = cancelled / total` 与 `skipRate = skipped / total`。input、output、total token 分别维护总量、已知样本数和均值。
 
 - [ ] **步骤 4：运行三个观测测试和类型检查**
 
@@ -1047,6 +1059,7 @@ git commit -m "feat(cli): export execution observations"
 - [ ] Workflow Task 与 backing Child Run 可以关联，summary 不跨 kind 相加。
 - [ ] `interrupted` 没有结构化原因时为 `unknown`。
 - [ ] Workflow retry budget 无累计证明时为 `partial`。
+- [ ] Workflow `tokensUsed` 只进入 `totalTokens`；Agent Run 的 input/output/total 与各自样本数、均值语义一致。
 - [ ] snapshot/event 单条损坏产生安全 warning，其余数据仍导出；底层读取失败返回 500。
 - [ ] Workflow Run 没有完整 durable 时间事件时不计算 duration。
 - [ ] 默认 JSON 不含 prompt、模型正文、工具内容、原始错误、绝对路径、环境变量和 provider base URL。

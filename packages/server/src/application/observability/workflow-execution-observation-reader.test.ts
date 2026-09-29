@@ -123,6 +123,7 @@ describe("readWorkflowExecutionObservations", () => {
         startedAt: 1,
         finishedAt: 2,
         budget: { tokensUsed: 42 },
+        metadata: { workerTaskId: "retry-worker" },
       }],
     });
 
@@ -130,11 +131,13 @@ describe("readWorkflowExecutionObservations", () => {
       source([snapshot], {
         "wf-2": [event("wf-2", "workflow_started", 10), event("wf-2", "workflow_finished", 20)],
       }),
-      new Map(),
+      new Map([["retry-worker", ["agent-run:retry-worker"]]]),
     );
 
-    expect(result.records.find((row) => row.workflowTaskId === "retry")?.usage)
-      .toMatchObject({ completeness: "partial" });
+    const retry = result.records.find((row) => row.workflowTaskId === "retry");
+    expect(retry?.usage).toMatchObject({ totalTokens: 42, completeness: "partial" });
+    expect(retry?.usage.inputTokens).toBeUndefined();
+    expect(retry?.completeness).toBe("partial");
   });
 
   it("marks a cumulative task budget complete", () => {
@@ -163,7 +166,7 @@ describe("readWorkflowExecutionObservations", () => {
       .toBe("complete");
   });
 
-  it("degrades the workflow run duration when an event is corrupt", () => {
+  it("omits workflow duration when any event is corrupt", () => {
     const snapshot = buildSnapshot({
       runId: "wf-3",
       taskIds: ["one"],
@@ -181,8 +184,8 @@ describe("readWorkflowExecutionObservations", () => {
     const result = readWorkflowExecutionObservations(
       source(
         [snapshot],
-        { "wf-3": [event("wf-3", "workflow_started", 100)] },
-        { "wf-3": [{ code: "invalid_workflow_event", sourceId: "wf-3:event:2" }] },
+        { "wf-3": [event("wf-3", "workflow_started", 100), event("wf-3", "workflow_finished", 200)] },
+        { "wf-3": [{ code: "invalid_workflow_event", sourceId: "wf-3:event:3" }] },
       ),
       new Map(),
     );
@@ -193,7 +196,29 @@ describe("readWorkflowExecutionObservations", () => {
     expect(run?.finishedAt).toBeUndefined();
     expect(result.warnings).toContainEqual({
       code: "invalid_workflow_event",
-      sourceId: "wf-3:event:2",
+      sourceId: "wf-3:event:3",
+    });
+  });
+
+  it("classifies a timed out task with a structured failure kind", () => {
+    const snapshot = buildSnapshot({
+      runId: "wf-timeout",
+      taskIds: ["slow"],
+      results: [{
+        taskId: "slow",
+        status: "failed",
+        summary: "timeout",
+        attempts: 1,
+        dependencies: [],
+        startedAt: 1,
+        finishedAt: 2,
+        timedOut: true,
+      }],
+    });
+    const result = readWorkflowExecutionObservations(source([snapshot], { "wf-timeout": [] }), new Map());
+    expect(result.records.find((row) => row.workflowTaskId === "slow")).toMatchObject({
+      outcome: "timed_out",
+      failureKind: "timeout",
     });
   });
 

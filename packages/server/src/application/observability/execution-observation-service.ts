@@ -58,10 +58,10 @@ function matchesFilter(record: ExecutionObservation, filter: ExecutionObservatio
   if (filter.executionKinds && !filter.executionKinds.includes(record.executionKind)) return false;
   if (filter.outcomes && !filter.outcomes.includes(record.outcome)) return false;
   if (
-    filter.failureKinds &&
-    (record.failureKind === undefined || !filter.failureKinds.includes(record.failureKind))
+    filter.failureKinds
   ) {
-    return false;
+    const failureKind = effectiveFailureKind(record);
+    if (failureKind === undefined || !filter.failureKinds.includes(failureKind)) return false;
   }
   if (filter.sessionId !== undefined && record.sessionId !== filter.sessionId) return false;
   if (filter.runId !== undefined && record.runId !== filter.runId) return false;
@@ -111,6 +111,10 @@ function summarize(records: ExecutionObservation[]): ExecutionKindSummary {
     usage: {
       inputTokens: 0,
       outputTokens: 0,
+      totalTokens: 0,
+      inputTokenRecords: 0,
+      outputTokenRecords: 0,
+      totalTokenRecords: 0,
       completeRecords: 0,
       partialRecords: 0,
       unknownRecords: 0,
@@ -153,14 +157,26 @@ function summarize(records: ExecutionObservation[]): ExecutionKindSummary {
       minMs = minMs === undefined ? record.durationMs : Math.min(minMs, record.durationMs);
       maxMs = maxMs === undefined ? record.durationMs : Math.max(maxMs, record.durationMs);
     }
-    if (record.usage.inputTokens !== undefined) summary.usage.inputTokens += record.usage.inputTokens;
-    if (record.usage.outputTokens !== undefined) summary.usage.outputTokens += record.usage.outputTokens;
+    if (record.usage.inputTokens !== undefined) {
+      summary.usage.inputTokens += record.usage.inputTokens;
+      summary.usage.inputTokenRecords += 1;
+    }
+    if (record.usage.outputTokens !== undefined) {
+      summary.usage.outputTokens += record.usage.outputTokens;
+      summary.usage.outputTokenRecords += 1;
+    }
+    const totalTokens = effectiveTotalTokens(record);
+    if (totalTokens !== undefined) {
+      summary.usage.totalTokens += totalTokens;
+      summary.usage.totalTokenRecords += 1;
+    }
     if (record.usage.completeness === "complete") summary.usage.completeRecords += 1;
     else if (record.usage.completeness === "partial") summary.usage.partialRecords += 1;
     else summary.usage.unknownRecords += 1;
 
-    if (record.failureKind !== undefined) {
-      summary.failures[record.failureKind] = (summary.failures[record.failureKind] ?? 0) + 1;
+    const failureKind = effectiveFailureKind(record);
+    if (failureKind !== undefined) {
+      summary.failures[failureKind] = (summary.failures[failureKind] ?? 0) + 1;
     }
   }
 
@@ -168,6 +184,22 @@ function summarize(records: ExecutionObservation[]): ExecutionKindSummary {
   if (summary.technicalTerminal > 0) {
     summary.completionRate = summary.completed / summary.technicalTerminal;
     summary.failureRate = (summary.failed + summary.timedOut) / summary.technicalTerminal;
+  }
+  if (summary.total > 0) {
+    summary.cancellationRate = summary.cancelled / summary.total;
+    summary.skipRate = summary.skipped / summary.total;
+  }
+  if (summary.usage.inputTokenRecords > 0) {
+    summary.usage.averageInputTokens =
+      summary.usage.inputTokens / summary.usage.inputTokenRecords;
+  }
+  if (summary.usage.outputTokenRecords > 0) {
+    summary.usage.averageOutputTokens =
+      summary.usage.outputTokens / summary.usage.outputTokenRecords;
+  }
+  if (summary.usage.totalTokenRecords > 0) {
+    summary.usage.averageTotalTokens =
+      summary.usage.totalTokens / summary.usage.totalTokenRecords;
   }
   if (minMs !== undefined) summary.duration.minMs = minMs;
   if (maxMs !== undefined) summary.duration.maxMs = maxMs;
@@ -214,6 +246,7 @@ function sanitizeRecord(record: ExecutionObservation): ExecutionObservation {
     usage: {
       ...(record.usage.inputTokens !== undefined ? { inputTokens: record.usage.inputTokens } : {}),
       ...(record.usage.outputTokens !== undefined ? { outputTokens: record.usage.outputTokens } : {}),
+      ...(record.usage.totalTokens !== undefined ? { totalTokens: record.usage.totalTokens } : {}),
       ...(record.usage.cacheReadTokens !== undefined ? { cacheReadTokens: record.usage.cacheReadTokens } : {}),
       ...(record.usage.cacheCreationTokens !== undefined
         ? { cacheCreationTokens: record.usage.cacheCreationTokens }
@@ -223,4 +256,21 @@ function sanitizeRecord(record: ExecutionObservation): ExecutionObservation {
     source: { kind: record.source.kind, id: record.source.id },
     completeness: record.completeness,
   };
+}
+
+function effectiveTotalTokens(record: ExecutionObservation): number | undefined {
+  if (record.usage.totalTokens !== undefined) return record.usage.totalTokens;
+  if (record.usage.inputTokens === undefined || record.usage.outputTokens === undefined) {
+    return undefined;
+  }
+  return record.usage.inputTokens + record.usage.outputTokens;
+}
+
+function effectiveFailureKind(
+  record: ExecutionObservation,
+): ExecutionObservation["failureKind"] | undefined {
+  if (record.failureKind !== undefined) return record.failureKind;
+  return record.outcome === "failed" || record.outcome === "timed_out"
+    ? "unknown"
+    : undefined;
 }

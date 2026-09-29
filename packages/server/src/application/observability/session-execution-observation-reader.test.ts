@@ -115,7 +115,7 @@ describe("readSessionExecutionObservations", () => {
           executionId: "agent-run:root-run",
           model: "final-model",
           provider: "provider-b",
-          usage: expect.objectContaining({ inputTokens: 30, completeness: "complete" }),
+          usage: expect.objectContaining({ inputTokens: 30, outputTokens: 7, totalTokens: 37, completeness: "complete" }),
         }),
         expect.objectContaining({
           executionKind: "child_agent_run",
@@ -169,6 +169,37 @@ describe("readSessionExecutionObservations", () => {
       const result = readSessionExecutionObservations(sourceFor(store));
       const record = result.records.find((row) => row.runId === "r-partial");
       expect(record?.usage).toMatchObject({ inputTokens: 5, completeness: "partial" });
+      expect(result.warnings).toContainEqual({
+        code: "partial_usage",
+        sourceId: "agent-run:r-partial",
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("does not call empty or legacy usage complete", () => {
+    const directory = temporaryDirectory();
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      store.runs.createRun({ id: "empty", sessionId: "s1", metadata: { usage: {} } });
+      store.runs.createRun({
+        id: "legacy",
+        sessionId: "s1",
+        metadata: { usage: { inputTokens: 4, outputTokens: 2 } },
+      });
+      completeRun(store, "empty");
+      completeRun(store, "legacy");
+
+      const result = readSessionExecutionObservations(sourceFor(store));
+      expect(result.records.find((row) => row.runId === "empty")?.usage.completeness).toBe("unknown");
+      expect(result.records.find((row) => row.runId === "legacy")?.usage).toMatchObject({
+        totalTokens: 6,
+        completeness: "partial",
+      });
+      expect(result.warnings).toContainEqual({ code: "partial_usage", sourceId: "agent-run:empty" });
+      expect(result.warnings).toContainEqual({ code: "partial_usage", sourceId: "agent-run:legacy" });
     } finally {
       store.close();
     }

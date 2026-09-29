@@ -82,6 +82,12 @@ function projectRun(
     run.startedAt !== undefined && run.finishedAt !== undefined
       ? Math.max(0, run.finishedAt - run.startedAt)
       : undefined;
+  const usage = readUsage(run.metadata);
+  const outcome = mapRunOutcome(run.status);
+  if (usage.completeness === "partial" ||
+      (usage.completeness === "unknown" && (outcome === "completed" || outcome === "failed"))) {
+    warnings.push({ code: "partial_usage", sourceId: executionId });
+  }
 
   const record: ExecutionObservation = {
     schemaVersion: 1,
@@ -101,8 +107,9 @@ function projectRun(
     ...(run.startedAt !== undefined ? { startedAt: run.startedAt } : {}),
     ...(run.finishedAt !== undefined ? { finishedAt: run.finishedAt } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
-    outcome: mapRunOutcome(run.status),
-    usage: readUsage(run.metadata),
+    outcome,
+    ...(outcome === "failed" ? { failureKind: "unknown" as const } : {}),
+    usage,
     source: { kind: "session_run", id: run.id },
     completeness,
   };
@@ -150,22 +157,23 @@ function isFinishedAttempt(attempt: SessionRunAttemptRecord): boolean {
 function readUsage(metadata: Record<string, unknown>): ExecutionObservation["usage"] {
   const usage = readRecord(metadata.usage);
   const modelUsage = readSessionModelUsage(metadata);
-  const completeness: ExecutionUsageCompleteness =
-    !usage && !modelUsage
-      ? "unknown"
-      : modelUsage?.incomplete ||
-          (modelUsage?.unknownAttempts ?? 0) > 0 ||
-          (modelUsage?.partialAttempts ?? 0) > 0
-        ? "partial"
-        : "complete";
-
   const inputTokens = readNonNegativeInteger(usage?.inputTokens);
   const outputTokens = readNonNegativeInteger(usage?.outputTokens);
   const cacheReadTokens = readNonNegativeInteger(usage?.cacheReadTokens);
   const cacheCreationTokens = readNonNegativeInteger(usage?.cacheCreationTokens);
+  const hasAnyUsage = [inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens]
+    .some((value) => value !== undefined);
+  const hasCoreUsage = inputTokens !== undefined && outputTokens !== undefined;
+  const completeness: ExecutionUsageCompleteness = !hasAnyUsage
+    ? "unknown"
+    : !modelUsage || !hasCoreUsage || modelUsage.incomplete ||
+        modelUsage.unknownAttempts > 0 || modelUsage.partialAttempts > 0
+      ? "partial"
+      : "complete";
   return {
     ...(inputTokens !== undefined ? { inputTokens } : {}),
     ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(hasCoreUsage ? { totalTokens: inputTokens + outputTokens } : {}),
     ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
     ...(cacheCreationTokens !== undefined ? { cacheCreationTokens } : {}),
     completeness,

@@ -75,6 +75,7 @@ export interface ExecutionObservation {
   usage: {
     inputTokens?: number;
     outputTokens?: number;
+    totalTokens?: number;
     cacheReadTokens?: number;
     cacheCreationTokens?: number;
     completeness: ExecutionUsageCompleteness;
@@ -110,10 +111,19 @@ export interface ExecutionKindSummary {
   unknown: number;
   completionRate?: number;
   failureRate?: number;
+  cancellationRate?: number;
+  skipRate?: number;
   duration: { count: number; sumMs: number; minMs?: number; maxMs?: number };
   usage: {
     inputTokens: number;
     outputTokens: number;
+    totalTokens: number;
+    inputTokenRecords: number;
+    outputTokenRecords: number;
+    totalTokenRecords: number;
+    averageInputTokens?: number;
+    averageOutputTokens?: number;
+    averageTotalTokens?: number;
     completeRecords: number;
     partialRecords: number;
     unknownRecords: number;

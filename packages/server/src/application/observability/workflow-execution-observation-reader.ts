@@ -42,7 +42,13 @@ export function readWorkflowExecutionObservations(
     const taskRecords = snapshot.plan.tasks.map((task) =>
       projectTask(snapshot, task.id, backingExecutionsByTaskId, warnings),
     );
-    records.push(projectRun(snapshot, eventRead.events, eventRead.diagnostics.length > 0, taskRecords));
+    records.push(projectRun(
+      snapshot,
+      eventRead.events,
+      eventRead.diagnostics.length > 0,
+      taskRecords,
+      warnings,
+    ));
     records.push(...taskRecords);
   }
 
@@ -54,9 +60,10 @@ function projectRun(
   events: WorkflowRunEvent[],
   hasEventDiagnostic: boolean,
   taskRecords: ExecutionObservation[],
+  warnings: ExecutionObservationWarning[],
 ): ExecutionObservation {
-  const startedAt = earliestStarted(events);
-  const finishedAt = latestTerminal(events);
+  const startedAt = hasEventDiagnostic ? undefined : earliestStarted(events);
+  const finishedAt = hasEventDiagnostic ? undefined : latestTerminal(events);
   const durationMs =
     startedAt !== undefined && finishedAt !== undefined
       ? Math.max(0, finishedAt - startedAt)
@@ -67,6 +74,12 @@ function projectRun(
       : "partial";
   const ownerRun = readNonEmptyString(snapshot.ownerRun);
   const ownerSession = readNonEmptyString(snapshot.ownerSession);
+  const usage = aggregateUsage(taskRecords);
+  const outcome = mapRunOutcome(snapshot);
+  if (usage.completeness === "partial" ||
+      (usage.completeness === "unknown" && outcome !== "running")) {
+    warnings.push({ code: "partial_usage", sourceId: `workflow:${snapshot.runId}` });
+  }
 
   return {
     schemaVersion: 1,
@@ -83,8 +96,8 @@ function projectRun(
     ...(startedAt !== undefined ? { startedAt } : {}),
     ...(finishedAt !== undefined ? { finishedAt } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
-    outcome: mapRunOutcome(snapshot),
-    usage: aggregateUsage(taskRecords),
+    outcome,
+    usage,
     source: { kind: "workflow_snapshot", id: snapshot.runId },
     completeness,
   };
@@ -126,6 +139,13 @@ function projectTask(
 
   if (result) {
     const backing = readBacking(result.metadata, executionId, backingExecutionsByTaskId, warnings);
+    const usage = readTaskUsage(result.budget, result.metadata);
+    if (usage.completeness === "partial" ||
+        (usage.completeness === "unknown" && result.status !== "skipped")) {
+      warnings.push({ code: "partial_usage", sourceId: executionId });
+    }
+    const retryBackingIncomplete =
+      result.attempts > 1 && result.metadata?.backingExecutionsCumulativeAcrossAttempts !== true;
     return {
       ...base,
       ...(backing.ids ? { backingExecutionIds: backing.ids } : {}),
@@ -134,21 +154,32 @@ function projectTask(
       finishedAt: result.finishedAt,
       durationMs: Math.max(0, result.finishedAt - result.startedAt),
       outcome: result.timedOut === true ? "timed_out" : mapTaskStatus(result.status),
-      usage: readTaskUsage(result.budget, result.metadata),
-      completeness: backing.completeness,
+      ...(result.timedOut === true
+        ? { failureKind: "timeout" as const }
+        : result.status === "failed"
+          ? { failureKind: "unknown" as const }
+          : {}),
+      usage,
+      completeness: backing.completeness === "partial" || retryBackingIncomplete ? "partial" : "complete",
     };
   }
 
   if (running) {
     const backing = readBacking(running.metadata, executionId, backingExecutionsByTaskId, warnings);
+    const usage = readTaskUsage(running.budget, running.metadata);
+    if (usage.completeness === "partial") {
+      warnings.push({ code: "partial_usage", sourceId: executionId });
+    }
+    const retryBackingIncomplete =
+      running.attempt > 1 && running.metadata?.backingExecutionsCumulativeAcrossAttempts !== true;
     return {
       ...base,
       ...(backing.ids ? { backingExecutionIds: backing.ids } : {}),
       attemptCount: running.attempt,
       startedAt: running.startedAt,
       outcome: "running",
-      usage: readTaskUsage(running.budget, running.metadata),
-      completeness: backing.completeness,
+      usage,
+      completeness: backing.completeness === "partial" || retryBackingIncomplete ? "partial" : "complete",
     };
   }
 
@@ -204,25 +235,39 @@ function readTaskUsage(
   if (tokensUsed === undefined) return { completeness: "unknown" };
   const cumulative = metadata?.budgetCumulativeAcrossAttempts === true;
   return {
-    inputTokens: tokensUsed,
+    totalTokens: tokensUsed,
     completeness: cumulative ? "complete" : "partial",
   };
 }
 
 function aggregateUsage(records: ExecutionObservation[]): ExecutionObservation["usage"] {
   let inputTokens = 0;
-  let hasTokens = false;
+  let outputTokens = 0;
+  let totalTokens = 0;
+  let hasInputTokens = false;
+  let hasOutputTokens = false;
+  let hasTotalTokens = false;
   let completeness: ExecutionUsageCompleteness = "complete";
   for (const record of records) {
     if (record.usage.inputTokens !== undefined) {
       inputTokens += record.usage.inputTokens;
-      hasTokens = true;
+      hasInputTokens = true;
+    }
+    if (record.usage.outputTokens !== undefined) {
+      outputTokens += record.usage.outputTokens;
+      hasOutputTokens = true;
+    }
+    if (record.usage.totalTokens !== undefined) {
+      totalTokens += record.usage.totalTokens;
+      hasTotalTokens = true;
     }
     completeness = worseUsageCompleteness(completeness, record.usage.completeness);
   }
   if (records.length === 0) completeness = "unknown";
   return {
-    ...(hasTokens ? { inputTokens } : {}),
+    ...(hasInputTokens ? { inputTokens } : {}),
+    ...(hasOutputTokens ? { outputTokens } : {}),
+    ...(hasTotalTokens ? { totalTokens } : {}),
     completeness,
   };
 }

@@ -130,7 +130,9 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return errorResponse(message.startsWith("invalid_") ? 400 : 500, message);
+        return message.startsWith("invalid_")
+          ? errorResponse(400, message)
+          : errorResponse(500, "execution_observation_query_failed");
       }
     })
     .get("/attachments/storage", async () => {

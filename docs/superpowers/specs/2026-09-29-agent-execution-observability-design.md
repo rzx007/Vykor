@@ -1,6 +1,6 @@
 # Agent 执行观测底座设计
 
-> 状态：已确认设计，待实现。
+> 状态：已实现并通过定向测试、HTTP 集成测试、全仓类型检查与独立代码复审。
 
 ## 目标
 
@@ -115,6 +115,7 @@ interface ExecutionObservation {
   usage: {
     inputTokens?: number;
     outputTokens?: number;
+    totalTokens?: number;
     cacheReadTokens?: number;
     cacheCreationTokens?: number;
     completeness: "complete" | "partial" | "unknown";
@@ -204,6 +205,7 @@ type ExecutionFailureKind =
 - Agent Run 复用已有模型 attempt/usage 结算结果。
 - Child Agent 的 token 记在对应子 Session Run，不重复累计到父 Run 记录。
 - Workflow Task 使用 snapshot 中已上报的 budget；未上报时保持未知。当前重试逻辑只保留最后一次已知 budget，并不保证跨 attempt 累计，因此只有来源明确带有“跨 attempt 累计”标记时才能记为 `complete`；`attemptCount > 1` 且没有该标记时必须为 `partial`。
+- Workflow budget 的 `tokensUsed` 是总 token，只能投影到 `totalTokens`，不得冒充 `inputTokens` 或 `outputTokens`。Agent Run 在 input/output 都已知时以二者之和填充 `totalTokens`。
 - Workflow Run 的 token 是其 Workflow Task 已知用量之和，并继承 Task 的不完整性。该数值属于调度层视图，不得再与 backing Child Run 的 token 相加。
 - 首版不计算货币成本。模型价格、缓存计价和第三方工具费用可能缺失或变化，用 token 冒充金额会产生误导。
 - 后续如引入金额估算，必须同时记录价格表版本、币种和 `estimated` 标记。
@@ -218,7 +220,8 @@ type ExecutionFailureKind =
 - `cancellationRate`：单独统计 `cancelled`，不混入技术失败率。
 - `skipRate`：单独统计 `skipped`，不进入完成率分母。
 - `durationMs`：只统计同时具备起止时间的记录，并报告样本数。
-- token 总量和均值：只对已知字段求和，同时报告 `complete / partial / unknown` 样本数。
+- `cancellationRate = cancelled / total`，`skipRate = skipped / total`；两者是独立状态占比，不进入技术完成率。
+- token 总量和均值：input、output、total 分别只对已知字段求和，并分别报告样本数；同时报告 `complete / partial / unknown` 记录数。
 - 失败类型分布：按 `failureKind` 分组，未知单列。
 
 “成功率”在产品文案中统一使用 `completionRate` 或 `technicalSuccessRate` 的明确名字，避免把用户取消和依赖跳过算成模型失败。

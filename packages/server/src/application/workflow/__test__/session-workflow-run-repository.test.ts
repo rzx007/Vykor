@@ -72,20 +72,56 @@ describe("SessionWorkflowRunRepository diagnostics", () => {
         updatedAt: 1,
         taskAttempts: [],
       });
+      store.workflows.saveRun({
+        runId: "identity-mismatch",
+        status: "running",
+        snapshotJson: JSON.stringify({
+          ...createWorkflowRunSnapshot({
+            runId: "another-run",
+            status: "running",
+            summary: "mismatch",
+            spec,
+            plan: createWorkflowPlan(spec),
+            results: new Map(),
+            running: new Set(["one"]),
+            createdAt: 10,
+          }),
+        }),
+        createdAt: 1,
+        updatedAt: 1,
+        taskAttempts: [],
+      });
       store.workflows.appendEvent({
         runId: "valid",
         type: "broken",
         eventJson: "{broken",
         createdAt: 12,
       });
+      store.workflows.appendEvent({
+        runId: "valid",
+        type: "workflow_finished",
+        eventJson: JSON.stringify({
+          version: 1,
+          runId: "another-run",
+          type: "workflow_finished",
+          timestamp: 13,
+        }),
+        createdAt: 13,
+      });
 
       expect(repository.listWithDiagnostics()).toMatchObject({
         snapshots: [expect.objectContaining({ runId: "valid" })],
-        diagnostics: [{ code: "invalid_workflow_snapshot", sourceId: "broken" }],
+        diagnostics: expect.arrayContaining([
+          { code: "invalid_workflow_snapshot", sourceId: "broken" },
+          { code: "invalid_workflow_snapshot", sourceId: "identity-mismatch" },
+        ]),
       });
       expect(repository.loadEventsWithDiagnostics("valid")).toMatchObject({
         events: [expect.objectContaining({ type: "workflow_started" })],
-        diagnostics: [{ code: "invalid_workflow_event" }],
+        diagnostics: [
+          expect.objectContaining({ code: "invalid_workflow_event" }),
+          expect.objectContaining({ code: "invalid_workflow_event" }),
+        ],
       });
     } finally {
       store.close();

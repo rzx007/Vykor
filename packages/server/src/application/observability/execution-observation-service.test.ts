@@ -94,6 +94,8 @@ describe("ExecutionObservationService", () => {
       total: 3,
       skipped: 1,
       cancelled: 1,
+      cancellationRate: 1 / 3,
+      skipRate: 1 / 3,
     });
     expect(report.summary).not.toHaveProperty("all");
   });
@@ -165,10 +167,40 @@ describe("ExecutionObservationService", () => {
     expect(summary?.usage).toEqual({
       inputTokens: 14,
       outputTokens: 6,
+      totalTokens: 20,
+      inputTokenRecords: 2,
+      outputTokenRecords: 2,
+      totalTokenRecords: 2,
+      averageInputTokens: 7,
+      averageOutputTokens: 3,
+      averageTotalTokens: 10,
       completeRecords: 1,
       partialRecords: 1,
       unknownRecords: 1,
     });
+  });
+
+  it("counts unclassified technical failures as unknown and filters them", () => {
+    const service = serviceWith({
+      sessionRecords: [
+        observation({ executionKind: "root_agent_run", executionId: "failed", outcome: "failed" }),
+        observation({ executionKind: "root_agent_run", executionId: "completed", outcome: "completed" }),
+        observation({ executionKind: "root_agent_run", executionId: "running", outcome: "running" }),
+        observation({
+          executionKind: "root_agent_run",
+          executionId: "timeout",
+          outcome: "timed_out",
+          failureKind: "timeout",
+        }),
+      ],
+    });
+
+    expect(service.query({}).summary.root_agent_run?.failures).toEqual({
+      unknown: 1,
+      timeout: 1,
+    });
+    expect(service.query({ failureKinds: ["unknown"] }).records.map((row) => row.executionId))
+      .toEqual(["failed"]);
   });
 
   it("deduplicates warnings by code and source id", () => {

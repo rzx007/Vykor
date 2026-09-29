@@ -296,15 +296,42 @@ describe("FileWorkflowRunRepository", () => {
     });
     store.save(valid);
     writeFileSync(join(dir, "broken.json"), "{broken", "utf8");
-    appendFileSync(store.eventPathFor("valid"), "{broken\n", "utf8");
+    writeFileSync(join(dir, "shape-broken.json"), JSON.stringify({
+      ...valid,
+      runId: "shape-broken",
+      plan: { ...valid.plan, tasks: "not-an-array" },
+    }), "utf8");
+    writeFileSync(join(dir, "identity-mismatch.json"), JSON.stringify({
+      ...valid,
+      runId: "another-run",
+    }), "utf8");
+    appendFileSync(store.eventPathFor("valid"), [
+      JSON.stringify({ version: 1, runId: "valid", type: "workflow_started", timestamp: 1 }),
+      JSON.stringify({ version: 1, runId: "valid", type: "task_started", timestamp: 2, taskId: "one" }),
+      "{broken",
+      JSON.stringify({ version: 1, runId: "valid", type: "not_a_real_event", timestamp: 3 }),
+      JSON.stringify({ version: 1, runId: "another-run", type: "workflow_finished", timestamp: 4 }),
+      "",
+    ].join("\n"), "utf8");
 
     expect(store.listWithDiagnostics()).toEqual({
       snapshots: [expect.objectContaining({ runId: "valid" })],
-      diagnostics: [{ code: "invalid_workflow_snapshot", sourceId: "broken" }],
+      diagnostics: expect.arrayContaining([
+        { code: "invalid_workflow_snapshot", sourceId: "broken" },
+        { code: "invalid_workflow_snapshot", sourceId: "shape-broken" },
+        { code: "invalid_workflow_snapshot", sourceId: "identity-mismatch" },
+      ]),
     });
     expect(store.loadEventsWithDiagnostics("valid")).toEqual({
-      events: [],
-      diagnostics: [{ code: "invalid_workflow_event", sourceId: "valid:event:1" }],
+      events: [
+        expect.objectContaining({ type: "workflow_started", runId: "valid" }),
+        expect.objectContaining({ type: "task_started", runId: "valid", taskId: "one" }),
+      ],
+      diagnostics: [
+        { code: "invalid_workflow_event", sourceId: "valid:event:3" },
+        { code: "invalid_workflow_event", sourceId: "valid:event:4" },
+        { code: "invalid_workflow_event", sourceId: "valid:event:5" },
+      ],
     });
   });
 
