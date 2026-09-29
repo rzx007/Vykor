@@ -1697,6 +1697,115 @@ describe("VykorHttpServer", () => {
     );
   });
 
+  it("exports an execution observation tree without leaking content", async () => {
+    await withServer(async ({ baseUrl, token, server }) => {
+      const store = server.store;
+      const cwd = process.cwd();
+
+      store.sessions.create({ id: "obs-root", cwd, model: "obs-model" });
+      store.runs.createRun({
+        id: "obs-root-run",
+        sessionId: "obs-root",
+        metadata: {
+          usage: { inputTokens: 30, outputTokens: 7, cacheReadTokens: 5, cacheCreationTokens: 2 },
+          modelUsage: { incomplete: false, unknownAttempts: 0, partialAttempts: 0 },
+          prompt: "prompt secret",
+        },
+      });
+      const firstAttempt = store.runs.createRunAttempt({ runId: "obs-root-run", sequence: 1, model: "first-model", provider: "provider-a" });
+      store.runs.updateRunAttempt(firstAttempt.id, { status: "completed" });
+      const finalAttempt = store.runs.createRunAttempt({ runId: "obs-root-run", sequence: 2, model: "final-model", provider: "provider-b" });
+      store.runs.updateRunAttempt(finalAttempt.id, { status: "completed" });
+      store.runs.updateRun("obs-root-run", { status: "running" });
+      store.runs.updateRun("obs-root-run", { status: "completed" });
+
+      store.sessions.create({
+        id: "obs-child-session",
+        parentId: "obs-root",
+        cwd,
+        model: "obs-child-model",
+        metadata: { childId: "obs-child" },
+      });
+      store.runs.createRun({
+        id: "obs-child-run",
+        sessionId: "obs-child-session",
+        metadata: { parentRunId: "obs-root-run", toolOutput: "tool secret" },
+      });
+      const childAttempt = store.runs.createRunAttempt({ runId: "obs-child-run", sequence: 1, model: "obs-child-model", provider: "provider-c" });
+      store.runs.updateRunAttempt(childAttempt.id, { status: "completed" });
+      store.runs.updateRun("obs-child-run", { status: "running" });
+      store.runs.updateRun("obs-child-run", { status: "completed" });
+      store.runs.createSessionTask({
+        id: "obs-child",
+        sessionId: "obs-root",
+        childSessionId: "obs-child-session",
+        type: "agent",
+        description: "child",
+        cwd,
+        metadata: {},
+      });
+
+      const spec = { mode: "parallel" as const, tasks: [{ id: "done" }, { id: "blocked" }, { id: "skipped" }] };
+      store.workflows.saveRun({
+        runId: "obs-wf",
+        ownerSessionId: "obs-root",
+        ownerRunId: "obs-root-run",
+        status: "completed",
+        snapshotJson: JSON.stringify(createWorkflowRunSnapshot({
+          runId: "obs-wf",
+          ownerSession: "obs-root",
+          ownerRun: "obs-root-run",
+          status: "completed",
+          summary: "obs",
+          spec,
+          plan: createWorkflowPlan(spec),
+          results: new Map([
+            ["done", { taskId: "done", status: "completed", summary: "done", attempts: 1, dependencies: [], startedAt: 10, finishedAt: 20 }],
+            ["skipped", { taskId: "skipped", status: "skipped", summary: "skipped", attempts: 0, dependencies: [], startedAt: 20, finishedAt: 21 }],
+          ]),
+          running: new Set(),
+          blockedTasks: new Map([["blocked", { taskId: "blocked", reason: "waiting", waitingForTaskIds: [] }]]),
+          createdAt: 5,
+        })),
+        createdAt: 5,
+        updatedAt: 25,
+        taskAttempts: [],
+      });
+      store.workflows.appendEvent({
+        runId: "obs-wf",
+        type: "workflow_started",
+        eventJson: JSON.stringify({ version: 1, runId: "obs-wf", type: "workflow_started", timestamp: 100 }),
+        createdAt: 100,
+      });
+      store.workflows.appendEvent({
+        runId: "obs-wf",
+        type: "workflow_finished",
+        eventJson: JSON.stringify({ version: 1, runId: "obs-wf", type: "workflow_finished", timestamp: 200 }),
+        createdAt: 200,
+      });
+      store.workflows.appendEvent({ runId: "obs-wf", type: "broken", eventJson: "{broken", createdAt: 201 });
+
+      const response = await fetch(`${baseUrl}/debug/executions`, { headers: auth(token) });
+      expect(response.status).toBe(200);
+      const report = (await response.json()) as {
+        schemaVersion: number;
+        summary: Record<string, unknown>;
+        records: Array<{ executionKind: string; outcome?: string }>;
+        warnings: Array<{ code: string }>;
+      };
+      expect(report.schemaVersion).toBe(1);
+      expect(report.records).toEqual(expect.arrayContaining([
+        expect.objectContaining({ executionKind: "root_agent_run" }),
+        expect.objectContaining({ executionKind: "child_agent_run" }),
+        expect.objectContaining({ executionKind: "workflow_run" }),
+        expect.objectContaining({ executionKind: "workflow_task", outcome: "blocked" }),
+      ]));
+      expect(report.summary).not.toHaveProperty("all");
+      expect(report.warnings).toContainEqual(expect.objectContaining({ code: "invalid_workflow_event" }));
+      expect(JSON.stringify(report)).not.toMatch(/prompt secret|tool secret|[A-Z]:\\/);
+    });
+  });
+
   it("propagates a trace ID through HTTP, persisted prompt/run, and tool lifecycle logs", async () => {
     const events: ObservabilityEvent[] = [];
     const runtimeFactory: TestAgentProgramFactory = {

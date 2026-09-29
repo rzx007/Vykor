@@ -8,6 +8,23 @@ interface DebugOptions {
   daemonToken?: string;
 }
 
+interface ExecutionDebugOptions extends DebugOptions {
+  kind?: string;
+  outcome?: string;
+  failureKind?: string;
+  session?: string;
+  run?: string;
+  child?: string;
+  workflow?: string;
+  task?: string;
+  model?: string;
+  provider?: string;
+  from?: string;
+  to?: string;
+}
+
+type DebugQuery = Record<string, string | number | boolean | undefined>;
+
 export function createDebugCommand(): Command {
   const command = new Command("debug").description("Read-only diagnostics for durable runs and projections");
   command
@@ -36,14 +53,54 @@ export function createDebugCommand(): Command {
       printProjectionSettlements(result, options.json === true);
       if (!readDiagnosticOk(result)) process.exitCode = 2;
     });
+
+  command
+    .command("executions")
+    .description("Query normalized agent and workflow execution observations")
+    .option("--kind <kinds>", "Comma-separated execution kinds")
+    .option("--outcome <outcomes>", "Comma-separated outcomes")
+    .option("--failure-kind <kinds>", "Comma-separated failure kinds")
+    .option("--session <id>", "Filter by session id")
+    .option("--run <id>", "Filter by agent run id")
+    .option("--child <id>", "Filter by child id")
+    .option("--workflow <id>", "Filter by workflow run id")
+    .option("--task <id>", "Filter by workflow task id")
+    .option("--model <model>", "Filter by final attempt model")
+    .option("--provider <provider>", "Filter by final attempt provider")
+    .option("--from <timestamp>", "Inclusive epoch-millisecond lower bound")
+    .option("--to <timestamp>", "Inclusive epoch-millisecond upper bound")
+    .option("--json", "Print the complete versioned JSON report")
+    .option("--daemon-url <url>", "Use an explicit daemon URL")
+    .option("--daemon-token <token>", "Bearer token for --daemon-url")
+    .action(async (options: ExecutionDebugOptions) => {
+      const result = await requestDebug("/debug/executions", options, {
+        kind: options.kind,
+        outcome: options.outcome,
+        failureKind: options.failureKind,
+        sessionId: options.session,
+        runId: options.run,
+        childId: options.child,
+        workflowRunId: options.workflow,
+        workflowTaskId: options.task,
+        model: options.model,
+        provider: options.provider,
+        from: options.from,
+        to: options.to,
+      });
+      printExecutionObservations(result, options.json === true);
+    });
   return command;
 }
 
-export async function requestDebug(path: string, options: DebugOptions): Promise<Record<string, unknown>> {
+export async function requestDebug(
+  path: string,
+  options: DebugOptions,
+  query: DebugQuery = {},
+): Promise<Record<string, unknown>> {
   const daemon = await resolveDaemon(options);
   const transport = new HttpTransport({ baseUrl: daemon.url, token: daemon.token });
   return transport.request<Record<string, unknown>>(path, {
-    query: { includeContent: options.includeContent },
+    query: { includeContent: options.includeContent, ...query },
   });
 }
 
@@ -81,6 +138,34 @@ export function printProjectionSettlements(result: Record<string, unknown>, json
     console.log(`- ${String(row.id)}  ${String(row.status)}  projector=${String(row.projector)}  action=${String(row.action)}  attempts=${String(row.attemptCount)}`);
   }
   if (rows.length === 0) console.log("No projection settlements recorded.");
+}
+
+export function printExecutionObservations(result: Record<string, unknown>, json: boolean): void {
+  if (json) return printJson(result);
+  const summary = asRecord(result.summary);
+  const records = asArray(result.records);
+  const warnings = asArray(result.warnings);
+  const total = records.length > 0 ? records.length : sumKindTotals(summary);
+  console.log(`Execution observations: ${total} records, ${warnings.length} ${warnings.length === 1 ? "warning" : "warnings"}`);
+  for (const [kind, value] of Object.entries(summary)) {
+    const row = asRecord(value);
+    console.log(
+      `${kind}: completed=${Number(row.completed ?? 0)} failed=${Number(row.failed ?? 0)} timed_out=${Number(row.timedOut ?? 0)} cancelled=${Number(row.cancelled ?? 0)} skipped=${Number(row.skipped ?? 0)}`,
+    );
+  }
+  for (const warning of warnings) {
+    const item = asRecord(warning);
+    console.log(`- [${String(item.code ?? "warning")}] ${String(item.sourceId ?? "")}`);
+  }
+}
+
+function sumKindTotals(summary: Record<string, unknown>): number {
+  let total = 0;
+  for (const value of Object.values(summary)) {
+    const row = asRecord(value);
+    total += typeof row.total === "number" ? row.total : 0;
+  }
+  return total;
 }
 
 async function resolveDaemon(options: DebugOptions): Promise<{ url: string; token: string }> {
