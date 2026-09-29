@@ -87,6 +87,11 @@ describe("DurableEventRegistry", () => {
       { runId: "r1" },
       "s1",
     )).toThrow("review must be an object");
+    expect(() => defaultDurableEventRegistry.prepareWrite(
+      "session.auto_review.updated",
+      { runId: "r1", review, patch: "secret" },
+      "s1",
+    )).toThrow("patch is not allowed");
   });
 
   it("requires a non-empty list of session IDs in a global deletion event", () => {

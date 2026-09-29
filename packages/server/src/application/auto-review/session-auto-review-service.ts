@@ -134,10 +134,17 @@ export class SessionAutoReviewService {
   async reviewCompletedRun(input: ReviewCompletedRunInput): Promise<AutoReviewRunMetadata> {
     const entry = this.baselines.get(input.runId);
     this.baselines.delete(input.runId);
+    const existing = this.readReview(input.runId);
+    // Disabled runs never captured a baseline; preserve their real state instead of
+    // overwriting it with an unattributable failure.
+    if (existing && (existing.mode === "off" || existing.status === "disabled")) {
+      return existing;
+    }
     const startedAt = this.now();
     if (!entry) {
+      if (existing && existing.status !== "captured") return existing;
       return this.settle(input.sessionId, input.runId, {
-        mode: "risk_based",
+        mode: existing?.mode ?? "risk_based",
         riskLevel: "unknown",
         status: "unavailable",
         reasons: ["git_inspection_failed"],

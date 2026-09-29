@@ -112,6 +112,41 @@ describe("SessionAutoReviewService", () => {
     expect(reviewEvents().at(-1)?.payload.review).toEqual(metadata());
   });
 
+  it("keeps mode off disabled when the completed-run hook still fires", async () => {
+    const svc = service(changeSet([]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "off" });
+    const review = await svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+    });
+    expect(review).toMatchObject({ status: "disabled", mode: "off" });
+    expect(calls).toHaveLength(0);
+    expect(metadata()).toMatchObject({ status: "disabled", mode: "off" });
+  });
+
+  it("preserves an unavailable capture reason on the completed-run hook", async () => {
+    const publisher = new SessionEventPublisher(store.conversations, {
+      broadcastSince: () => undefined,
+      broadcastEvent: () => undefined,
+    });
+    const svc = new SessionAutoReviewService({
+      store,
+      events: publisher,
+      inspector: {
+        capture: async () => ({ attribution: "unavailable", reason: "not_git_repository" }),
+        compare: async () => changeSet([]),
+      } as never,
+    });
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    expect(metadata()).toMatchObject({ status: "unavailable", reasons: ["not_git_repository"] });
+    const review = await svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+    });
+    expect(review).toMatchObject({ status: "unavailable", reasons: ["not_git_repository"] });
+    expect(calls).toHaveLength(0);
+  });
+
   it("skips a run with no attributable changes", async () => {
     const svc = service(changeSet([]));
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });

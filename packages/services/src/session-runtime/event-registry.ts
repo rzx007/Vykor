@@ -208,6 +208,9 @@ export const DEFAULT_DURABLE_EVENT_DEFINITIONS: readonly DurableEventDefinition[
     requireRecord(payload, "attemptUsage");
   }),
   sessionDefinition("session.auto_review.updated", (payload) => {
+    for (const key of Object.keys(payload)) {
+      if (key !== "runId" && key !== "review") throw new Error(`${key} is not allowed`);
+    }
     requireString(payload, "runId");
     const review = requireRecord(payload, "review");
     if (!readAutoReviewRunMetadata(review)) {
