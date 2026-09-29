@@ -47,6 +47,14 @@ function daemonControl(overrides: Record<string, unknown> = {}) {
       diagnosticOk: true,
       includeContent: false,
     }),
+    queryExecutionObservations: () => ({
+      schemaVersion: 1,
+      generatedAt: 0,
+      filters: {},
+      summary: {},
+      records: [],
+      warnings: [],
+    }),
     ...overrides,
   };
 }
@@ -192,6 +200,58 @@ describe("system routes", () => {
       activeRunCount: 1,
       queuedRunCount: 3,
     });
+  });
+
+  it("queries normalized execution observations with parsed filters", async () => {
+    const queryExecutionObservations = vi.fn(() => ({
+      schemaVersion: 1,
+      generatedAt: 123,
+      filters: { executionKinds: ["child_agent_run"] },
+      summary: {},
+      records: [],
+      warnings: [],
+    }));
+    const app = createSystemRoutes({
+      control: daemonControl({ queryExecutionObservations }),
+    });
+
+    const response = await app.request(
+      "/debug/executions?kind=child_agent_run&outcome=completed,failed&from=100&to=200",
+    );
+
+    expect(response.status).toBe(200);
+    expect(queryExecutionObservations).toHaveBeenCalledWith({
+      executionKinds: ["child_agent_run"],
+      outcomes: ["completed", "failed"],
+      from: 100,
+      to: 200,
+    });
+  });
+
+  it("rejects invalid execution filters and surfaces storage failures", async () => {
+    const invalid = createSystemRoutes({ control: daemonControl() });
+    const rejected = await invalid.request("/debug/executions?kind=other");
+    expect(rejected.status).toBe(400);
+    await expect(rejected.json()).resolves.toEqual({ error: "invalid_execution_kind" });
+
+    const failing = createSystemRoutes({
+      control: daemonControl({
+        queryExecutionObservations: () => {
+          throw new Error("storage unavailable");
+        },
+      }),
+    });
+    const failed = await failing.request("/debug/executions");
+    expect(failed.status).toBe(500);
+    await expect(failed.json()).resolves.toEqual({ error: "storage unavailable" });
+  });
+
+  it("advertises the executionObservability capability", async () => {
+    const app = createSystemRoutes({ control: daemonControl() });
+    const response = await app.request("/capabilities");
+    const body = (await response.json()) as { features: Record<string, number> };
+    expect(response.status).toBe(200);
+    expect(body.features.executionObservability).toBe(1);
   });
 
   it("lists built-in and provider commands", async () => {

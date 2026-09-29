@@ -1594,6 +1594,7 @@ describe("VykorHttpServer", () => {
       });
 
       expect((await fetch(`${baseUrl}/debug/runtime`)).status).toBe(401);
+      expect((await fetch(`${baseUrl}/debug/executions`)).status).toBe(401);
       const runtime = await fetch(`${baseUrl}/debug/runtime`, {
         headers: auth(token),
       });
@@ -1673,6 +1674,14 @@ describe("VykorHttpServer", () => {
           coordinator: { activeRunCount: 1, queuedRunCount: 1 },
         });
         expect(JSON.stringify(snapshot)).not.toContain("private");
+
+        const executions = await fetch(`${baseUrl}/debug/executions`, {
+          headers: auth(token),
+        });
+        expect(executions.status).toBe(200);
+        const report = (await executions.json()) as { schemaVersion: number };
+        expect(report.schemaVersion).toBe(1);
+        expect(JSON.stringify(report)).not.toContain("private");
 
         releaseFirst.resolve();
         await waitForEvent(

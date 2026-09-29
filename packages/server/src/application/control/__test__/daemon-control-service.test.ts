@@ -50,17 +50,28 @@ function createControl() {
     invalidateWarmAgents: vi.fn(async () => {}),
   };
   const operationGate = new DaemonOperationGate();
+  const executionObservations = {
+    query: vi.fn(() => ({
+      schemaVersion: 1 as const,
+      generatedAt: 0,
+      filters: {},
+      summary: {},
+      records: [],
+      warnings: [],
+    })),
+  };
   const control = new DaemonControlService({
     store: store as any,
     permissions: store.permissions,
     workflows: { listRuns: () => [{ runId: "workflow-1", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 2 }] },
+    executionObservations,
     runControl: runEngine as any,
     agentPool: agentPool as any,
     operationGate,
     startedAt: Date.now() - 100,
     sseClientCount: () => 2,
   });
-  return { control, store, runEngine, agentPool, operationGate };
+  return { control, store, runEngine, agentPool, operationGate, executionObservations };
 }
 
 describe("DaemonControlService", () => {
@@ -152,6 +163,12 @@ describe("DaemonControlService", () => {
       { id: "hook-1", event: "pre_tool_use", type: "command", enabled: true, origin: "runtime" },
     ]);
     expect(agentPool.acquireSession).toHaveBeenCalledWith("s1");
+  });
+
+  it("forwards execution observation queries to the injected service", () => {
+    const { control, executionObservations } = createControl();
+    control.queryExecutionObservations({ executionKinds: ["workflow_task"] });
+    expect(executionObservations.query).toHaveBeenCalledWith({ executionKinds: ["workflow_task"] });
   });
 
   it("invalidates warm agents without requiring a global mutation lease", async () => {

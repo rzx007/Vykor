@@ -21,6 +21,7 @@ import type { ApplicationRetentionService } from "../../application/retention/ap
 import {
   DEFAULT_ATTACHMENT_LIMITS,
   CURRENT_PROTOCOL_VERSION,
+  parseExecutionObservationFilter,
   type AttachmentLimits,
   type ServerCapabilities,
 } from "@vykor/protocol";
@@ -40,6 +41,7 @@ export interface SystemRoutesContext {
     | "runtimeSnapshot"
     | "inspectRun"
     | "listProjectionDiagnostics"
+    | "queryExecutionObservations"
   >;
   capabilities?: ServerCapabilities;
   /** Random per-daemon-boot MCP OAuth instance id advertised in capabilities. */
@@ -72,6 +74,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               attachments: 1,
               pluginCapabilities: 1,
               mcpOAuth: 1,
+              executionObservability: 1,
             },
             attachments: {
               limits: context.attachmentLimits ?? DEFAULT_ATTACHMENT_LIMITS,
@@ -119,6 +122,17 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         }),
       ),
     )
+    .get("/debug/executions", (c) => {
+      try {
+        const query = Object.fromEntries(new URL(c.req.url).searchParams.entries());
+        return jsonResponse(
+          context.control.queryExecutionObservations(parseExecutionObservationFilter(query)),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return errorResponse(message.startsWith("invalid_") ? 400 : 500, message);
+      }
+    })
     .get("/attachments/storage", async () => {
       if (!context.retention) {
         return errorResponse(

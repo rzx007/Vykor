@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { SessionStore } from "@vykor/services";
+import type { ExecutionObservationExport, ExecutionObservationFilter } from "@vykor/protocol";
 
 import type { HookInfo } from "../settings-api.js";
 import type { RunControlService } from "../session/run-control-service.js";
 import type { AgentPool } from "../agent/agent-pool.js";
+import type { ExecutionObservationService } from "../observability/execution-observation-service.js";
 import type { DaemonOperationGate, DaemonOperationLease } from "./daemon-operation-gate.js";
 import { countByStatus, type VykorRuntimeSnapshot } from "../support.js";
 import { buildRuntimeMetricsSnapshot } from "../../shared/runtime-metrics.js";
@@ -16,6 +18,7 @@ export interface DaemonControlServiceContext {
   >;
   permissions: Pick<SessionStore["permissions"], "list">;
   workflows: Pick<SessionStore["workflows"], "listRuns">;
+  executionObservations: Pick<ExecutionObservationService, "query">;
   runControl: Pick<RunControlService, "activeRunId" | "hasActiveRunsForCwd" | "hasAnyActiveRuns" | "queuedRunIds" | "stopAndDrain">;
   agentPool: Pick<
     AgentPool,
@@ -107,6 +110,12 @@ export class DaemonControlService {
 
   listProjectionDiagnostics(options: { includeContent?: boolean } = {}) {
     return listProjectionDiagnostics(this.context.store, options.includeContent === true);
+  }
+
+  queryExecutionObservations(
+    filter: ExecutionObservationFilter,
+  ): ExecutionObservationExport {
+    return this.context.executionObservations.query(filter);
   }
 
   hasAnyActiveRuns(): boolean {

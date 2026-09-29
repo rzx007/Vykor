@@ -98,6 +98,9 @@ import { ChannelApplicationService } from "./channel/channel-application-service
 import { ChannelOnboardingService } from "./channel/channel-onboarding-service.js";
 import { ChannelRuntimeService } from "../daemon/channel-runtime-service.js";
 import { SessionWorkflowRunRepository } from "./workflow/session-workflow-run-repository.js";
+import { ExecutionObservationService } from "./observability/execution-observation-service.js";
+import { readSessionExecutionObservations } from "./observability/session-execution-observation-reader.js";
+import { readWorkflowExecutionObservations } from "./observability/workflow-execution-observation-reader.js";
 import { ApplicationRetentionService } from "./retention/application-retention-service.js";
 import { buildCompactAttachmentSection } from "./attachments/resources/compact-attachment-catalog.js";
 import { SessionAttachmentResources } from "./attachments/resources/session-attachment-resources.js";
@@ -719,6 +722,15 @@ export class DaemonApplication implements DurableAgentApplication {
         },
         permissions: store.permissions,
         workflows: store.workflows,
+        executionObservations: new ExecutionObservationService({
+          readSessions: () => readSessionExecutionObservations({
+            listSessions: () => store.sessions.list({ includeArchived: true }),
+            listRuns: (sessionId) => store.runs.listRuns(sessionId),
+            listRunAttempts: (runId) => store.runs.listRunAttempts(runId),
+            listSessionTasks: (sessionId) => store.runs.listSessionTasks(sessionId),
+          }),
+          readWorkflows: (backing) => readWorkflowExecutionObservations(this.workflows, backing),
+        }),
         runControl: this.runControl,
         agentPool: this.agentPool,
         operationGate: this.operationGate,
