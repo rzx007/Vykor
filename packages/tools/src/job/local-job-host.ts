@@ -161,7 +161,12 @@ export class LocalAgentJobHost implements AgentJobHost, AgentBackgroundShellHost
       await Promise.resolve();
       const output = source.value.result?.output ?? source.value.result?.error ?? "";
       const selected = selectOutput(output, input.after, input.maxChars);
-      return { ...selected, snapshot: this.childSnapshot(source.value) };
+      const activity = source.value.handle.activity;
+      return {
+        ...selected,
+        snapshot: this.childSnapshot(source.value),
+        ...(activity ? { details: { activity } } : {}),
+      };
     }
     if (source.kind === "task") {
       const output = this.processes.readOutput(source.value.id, Number.MAX_SAFE_INTEGER);
@@ -187,12 +192,20 @@ export class LocalAgentJobHost implements AgentJobHost, AgentBackgroundShellHost
       throw new Error("Job wait timeoutMs must be a positive finite number.");
     }
     const deadline = Date.now() + input.timeoutMs;
+    const source = this.resolve(input.jobId);
+    // Only child Runs expose a live activity cursor; other job kinds keep the
+    // original terminal-status wait and must not be woken by unrelated updates.
+    const tracksActivity = source.kind === "child";
     let current = await this.read(input);
     if (isTerminalJobStatus(current.snapshot.status)) return { ...current, timedOut: false };
+    const initialCursor = tracksActivity ? childActivityCursor(current) : undefined;
     while (Date.now() < deadline) {
       await delay(Math.min(POLL_INTERVAL_MS, deadline - Date.now()), input.signal);
       current = await this.read(input);
       if (isTerminalJobStatus(current.snapshot.status)) return { ...current, timedOut: false };
+      if (tracksActivity && childActivityCursor(current) !== initialCursor) {
+        return { ...current, timedOut: false };
+      }
     }
     return { ...current, timedOut: true };
   }
@@ -431,8 +444,17 @@ function workflowDetails(workflow: WorkflowRunSnapshot): Record<string, unknown>
   };
 }
 
-function selectOutput(text: string, after: number | undefined, maxChars: number | undefined) {
-  const cursor = text.length;
+function childActivityCursor(result: JobReadResult): string | number {
+  const activity = result.details?.activity as
+    | { runId?: unknown; updatedAt?: unknown; modelTurns?: unknown; toolCalls?: unknown }
+    | undefined;
+  if (!activity || typeof activity.runId !== "string" || typeof activity.updatedAt !== "number") {
+    return result.snapshot.updatedAt;
+  }
+  return `${activity.runId}:${activity.updatedAt}:${String(activity.modelTurns)}:${String(activity.toolCalls)}`;
+}
+
+function selectOutput(text: string, after: number | undefined, maxChars: number | undefined) {  const cursor = text.length;
   const unread = after === undefined ? text : text.slice(Math.max(0, Math.floor(after)));
   return { ...limitOutput(unread, maxChars), cursor };
 }

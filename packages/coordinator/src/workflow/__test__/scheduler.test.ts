@@ -288,6 +288,69 @@ describe("runWorkflow", () => {
     }));
   });
 
+  it("does not accept a successful result that arrives after the deadline", async () => {
+    const result = await runWorkflow(
+      { mode: "parallel", tasks: [{ id: "late", timeoutMs: 1 }] },
+      async ({ signal }) => {
+        await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
+        return { summary: "late success", result: "partial work" };
+      },
+    );
+
+    expect(result.results.late).toEqual(expect.objectContaining({
+      status: "failed",
+      timedOut: true,
+      result: "partial work",
+      error: "Task timed out after 1ms",
+    }));
+  });
+
+  it("passes a run signal and deadline to the runner", async () => {
+    let seen: { signal?: AbortSignal; deadlineAt?: number } = {};
+    await runWorkflow(
+      { mode: "parallel", tasks: [{ id: "work", timeoutMs: 5_000 }] },
+      (context) => { seen = context; return { summary: "ok" }; },
+    );
+
+    expect(seen.signal).toBeInstanceOf(AbortSignal);
+    expect(seen.signal?.aborted).toBe(false);
+    expect(seen.deadlineAt).toBeGreaterThan(Date.now());
+  });
+
+  it("does not abort a runner that finishes before its deadline", async () => {
+    let aborted = false;
+    const result = await runWorkflow(
+      { mode: "parallel", tasks: [{ id: "quick", timeoutMs: 5_000 }] },
+      async ({ signal }) => {
+        signal?.addEventListener("abort", () => { aborted = true; });
+        return { summary: "done" };
+      },
+    );
+
+    expect(result.results.quick?.status).toBe("completed");
+    expect(aborted).toBe(false);
+  });
+
+  it("marks cleanup unconfirmed when a runner ignores the abort after its deadline", async () => {
+    const result = await runWorkflow(
+      { mode: "parallel", tasks: [{ id: "stubborn", timeoutMs: 1 }] },
+      async ({ signal }) => {
+        await new Promise<void>((resolve) => {
+          signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        await new Promise(() => { /* never settles */ });
+        return { summary: "too late" };
+      },
+    );
+
+    expect(result.results.stubborn).toEqual(expect.objectContaining({
+      status: "failed",
+      attempts: 1,
+      timedOut: true,
+      cleanupUnconfirmed: true,
+    }));
+  }, 15_000);
+
   it("emits structured workflow events", async () => {
     const events: WorkflowRunEvent[] = [];
 

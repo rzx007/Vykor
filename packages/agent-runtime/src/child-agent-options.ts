@@ -19,6 +19,25 @@ export interface DeriveChildAgentOptionsInput {
   sessionId: string;
 }
 
+export interface ChildTurnBudgetInput {
+  /** Explicit Agent-definition budget passed by the delegating tool or workflow. */
+  roleMaxTurns?: number;
+  /** Caller-requested cap from the Agent tool; it can only tighten. */
+  requestedMaxTurns?: number;
+  requestConfigurationMaxTurns?: number;
+  settingsMaxTurns?: number;
+}
+
+/** Role budget > request configuration > settings; a caller request only tightens. */
+export function resolveChildMaxTurns(input: ChildTurnBudgetInput): number | undefined {
+  const base =
+    input.roleMaxTurns ?? input.requestConfigurationMaxTurns ?? input.settingsMaxTurns;
+  if (base === undefined) return input.requestedMaxTurns;
+  return input.requestedMaxTurns === undefined
+    ? base
+    : Math.min(base, input.requestedMaxTurns);
+}
+
 /** Derive one child runtime without widening the host's tool or capability boundary. */
 export function deriveChildAgentOptions(
   input: DeriveChildAgentOptionsInput,
@@ -46,7 +65,12 @@ export function deriveChildAgentOptions(
       configuration.disallowedTools,
       child.disallowedTools,
     ),
-    maxTurns: child.maxTurns ?? configuration.maxTurns,
+    maxTurns: resolveChildMaxTurns({
+      roleMaxTurns: child.maxTurns,
+      requestedMaxTurns: child.requestedMaxTurns,
+      requestConfigurationMaxTurns: configuration.maxTurns,
+      settingsMaxTurns: input.settings.maxTurns,
+    }),
     effort: childEffort,
     reasoningEffort: inheritsModel && effortUnchanged
       ? configuration.reasoningEffort

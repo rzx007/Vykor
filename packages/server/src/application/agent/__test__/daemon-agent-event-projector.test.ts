@@ -88,6 +88,85 @@ describe("DaemonAgentEventProjector", () => {
     });
   });
 
+  it("writes delegation scope and expected result into the parent task metadata", async () => {
+    const sessions = new Map<string, any>([["parent", {
+      id: "parent", cwd: "/repo", model: "model-b",
+      metadata: { runtime: { model: "model-b" } },
+    }]]);
+    const updateSessionTask = vi.fn();
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+        updateSessionTask,
+      }),
+      transcriptProjection: {} as any,
+      executionProjector: { createBridge: () => ({
+        registerChildExecution: (input: any) => ({ id: input.id }),
+        bindChildExecutionRun: async () => {},
+        completeChildExecution: async () => {},
+      }) } as any,
+      liveChildren: { register: () => {}, unregister: () => {} },
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+
+    await projector.apply(event("child.created", {
+      childId: "child-scoped", sessionId: "child-session-scoped", cwd: "/repo",
+      spawn: {
+        description: "review", prompt: "inspect", agent: "worker", cwd: "/repo",
+        scope: "docs/report.md", expectedResult: "findings with evidence",
+      },
+    }, { sessionId: "parent", runId: "root-run", childId: "child-scoped" }));
+    await projector.apply(event("child.created", {
+      childId: "child-scope-only", sessionId: "child-session-scope-only", cwd: "/repo",
+      spawn: {
+        description: "review", prompt: "inspect", agent: "worker", cwd: "/repo",
+        scope: "docs/report.md",
+      },
+    }, { sessionId: "parent", runId: "root-run", childId: "child-scope-only" }));
+
+    expect(updateSessionTask).toHaveBeenCalledWith("child-scoped", {
+      metadata: { scope: "docs/report.md", expectedResult: "findings with evidence" },
+    });
+    expect(updateSessionTask).toHaveBeenCalledWith("child-scope-only", {
+      metadata: { scope: "docs/report.md" },
+    });
+  });
+
+  it("does not write delegation metadata for child creation without scope or expected result", async () => {
+    const sessions = new Map<string, any>([["parent", {
+      id: "parent", cwd: "/repo", model: "model-b",
+      metadata: { runtime: { model: "model-b" } },
+    }]]);
+    const updateSessionTask = vi.fn();
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+        updateSessionTask,
+      }),
+      transcriptProjection: {} as any,
+      executionProjector: { createBridge: () => ({
+        registerChildExecution: (input: any) => ({ id: input.id }),
+        bindChildExecutionRun: async () => {},
+        completeChildExecution: async () => {},
+      }) } as any,
+      liveChildren: { register: () => {}, unregister: () => {} },
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+
+    await projector.apply(event("child.created", {
+      childId: "child-legacy", sessionId: "child-session-legacy", cwd: "/repo",
+      spawn: { description: "review", prompt: "inspect", agent: "worker", cwd: "/repo" },
+    }, { sessionId: "parent", runId: "root-run", childId: "child-legacy" }));
+
+    expect(updateSessionTask).not.toHaveBeenCalled();
+  });
+
   it("updates the applied model without writing a divider when a request starts", async () => {
     let session = {
       id: "s1", cwd: "/repo", model: "model-b",
@@ -192,6 +271,232 @@ describe("DaemonAgentEventProjector", () => {
     expect([...inputs.values()]).toEqual([expect.objectContaining({ sessionId: "child-session", content: "inspect" })]);
     expect(runs.get("root-run").status).toBe("running");
     expect(task.status).toBe("failed");
+  });
+
+  it("advances the parent task activity cursor on each committed child turn", async () => {
+    const sessions = new Map<string, any>([["parent", {
+      id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } },
+    }]]);
+    const inputs = new Map<string, any>();
+    const tasks = new Map<string, any>();
+    const runs = new Map<string, any>();
+    const updateSessionTask = vi.fn((id: string, input: any) => {
+      const row = tasks.get(id);
+      Object.assign(row, {
+        metadata: { ...row.metadata, ...(input.metadata ?? {}) },
+        updatedAt: row.updatedAt + 1,
+      });
+      return row;
+    });
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+        getSessionTask: (id: string) => tasks.get(id),
+        getInput: (id: string) => inputs.get(id),
+        admitPrompt: (input: any) => {
+          const row = { ...input, content: input.items.map((item: any) => item.text).join("") };
+          inputs.set(input.id, row);
+          return row;
+        },
+        getRun: (id: string) => runs.get(id),
+        createRun: (input: any) => {
+          const row = { ...input, status: "pending", metadata: {} };
+          runs.set(input.id, row);
+          return row;
+        },
+        updateRun: (id: string, patch: any) => Object.assign(runs.get(id), patch),
+        createRunAttempt: (input: any) => ({ id: input.id ?? "attempt-1", ...input }),
+        updateRunAttempt: vi.fn(),
+        listRunAttempts: () => [],
+        updateSessionTask,
+      }),
+      transcriptProjection: {
+        beginRun: vi.fn(() => ({})),
+        projectStreamEvent: vi.fn(() => ({})),
+        hasOpenTextPart: vi.fn(() => false),
+        projectSteeredInputs: vi.fn(),
+        completeOpenTextPart: vi.fn(),
+        finalizeRunParts: vi.fn(),
+      } as any,
+      executionProjector: { createBridge: () => ({
+        registerChildExecution: (input: any) => {
+          tasks.set(input.id, { id: input.id, status: "pending", metadata: {}, updatedAt: 10 });
+          return { id: input.id };
+        },
+        bindChildExecutionRun: async () => {},
+        completeChildExecution: async () => {},
+      }) } as any,
+      liveChildren: { register: () => {}, unregister: () => {} },
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+
+    await projector.apply(event("child.created", {
+      childId: "child-1", sessionId: "child-session", cwd: "/repo",
+      spawn: { description: "review", prompt: "inspect", agent: "worker", cwd: "/repo" },
+    }, { sessionId: "parent", runId: "root-run", childId: "child-1" }));
+    await projector.apply(event("input.accepted", {
+      content: "inspect", delivery: "queue",
+    }, { sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1" }));
+    await projector.apply(event("run.started", {}, {
+      sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
+    }));
+
+    await projector.apply(event("output.text.delta", { delta: "SECRET PLANNING" }, {
+      sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
+    }));
+    expect(updateSessionTask).not.toHaveBeenCalled();
+
+    const turn = event("output.turn.completed", { stopReason: "end_turn" }, {
+      sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
+    });
+    await projector.apply(turn);
+
+    expect(updateSessionTask).toHaveBeenCalledTimes(1);
+    expect(tasks.get("child-1").metadata.childActivity).toMatchObject({
+      runId: "run-1", turns: 1, lastEventId: turn.id,
+    });
+    expect(JSON.stringify(tasks.get("child-1").metadata)).not.toContain("SECRET");
+
+    await projector.apply(turn);
+    expect(updateSessionTask).toHaveBeenCalledTimes(1);
+
+    await projector.apply(event("output.turn.completed", { stopReason: "end_turn" }, {
+      sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
+    }));
+    expect(updateSessionTask).toHaveBeenCalledTimes(2);
+    expect(tasks.get("child-1").metadata.childActivity.turns).toBe(2);
+
+    // A follow-up Run becomes current, then a late event from run-1 must not
+    // move the parent cursor or its counters.
+    await projector.apply(event("input.accepted", { content: "again", delivery: "queue" }, {
+      sessionId: "child-session", inputId: "input-2", runId: "run-2", childId: "child-1",
+    }));
+    await projector.apply(event("run.started", {}, {
+      sessionId: "child-session", inputId: "input-2", runId: "run-2", childId: "child-1",
+    }));
+    await projector.apply(event("output.turn.completed", { stopReason: "end_turn" }, {
+      sessionId: "child-session", inputId: "input-2", runId: "run-2", childId: "child-1",
+    }));
+    expect(updateSessionTask).toHaveBeenCalledTimes(3);
+    expect(tasks.get("child-1").metadata.childActivity).toMatchObject({ runId: "run-2", turns: 3 });
+
+    await projector.apply(event("output.turn.completed", { stopReason: "end_turn" }, {
+      sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
+    }));
+    expect(updateSessionTask).toHaveBeenCalledTimes(3);
+    expect(tasks.get("child-1").metadata.childActivity).toMatchObject({ runId: "run-2", turns: 3 });
+  });
+
+  it("completes a child task with trusted failure detail on run.failed and ignores a later child.closed", async () => {
+    const sessions = new Map<string, any>([["parent", {
+      id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } },
+    }]]);
+    const inputs = new Map<string, any>();
+    const tasks = new Map<string, any>();
+    const runs = new Map<string, any>();
+    const completeChildExecution = vi.fn(async (id: string, result: any) => {
+      Object.assign(tasks.get(id), {
+        status: result.status,
+        output: result.output,
+        metadata: {
+          ...tasks.get(id).metadata,
+          ...(result.failureKind || result.partialResult
+            ? {
+                childFailure: {
+                  ...(result.failureKind ? { failureKind: result.failureKind } : {}),
+                  ...(result.partialResult ? { partialResult: result.partialResult } : {}),
+                },
+              }
+            : {}),
+        },
+      });
+    });
+    const projector = new DaemonAgentEventProjector({
+      rootAgent: {} as any,
+      store: projectorStore({
+        getSession: (id: string) => sessions.get(id),
+        createSession: (input: any) => { sessions.set(input.id, input); return input; },
+        getSessionTask: (id: string) => tasks.get(id),
+        getInput: (id: string) => inputs.get(id),
+        admitPrompt: (input: any) => {
+          const row = { ...input, content: input.items.map((item: any) => item.text).join("") };
+          inputs.set(input.id, row);
+          return row;
+        },
+        getRun: (id: string) => runs.get(id),
+        createRun: (input: any) => {
+          const row = { ...input, status: "pending", metadata: {} };
+          runs.set(input.id, row);
+          return row;
+        },
+        updateRun: (id: string, patch: any) => Object.assign(runs.get(id), patch),
+        createRunAttempt: (input: any) => ({ id: input.id ?? "attempt-1", ...input }),
+        updateRunAttempt: vi.fn(),
+        listRunAttempts: () => [],
+      }),
+      transcriptProjection: {
+        beginRun: () => ({}),
+        projectStreamEvent: () => ({}),
+        hasOpenTextPart: () => false,
+        projectSteeredInputs: vi.fn(),
+        completeOpenTextPart: vi.fn(),
+        completeOpenReasoningPart: vi.fn(),
+        finalizeRunParts: vi.fn(),
+      } as any,
+      executionProjector: { createBridge: () => ({
+        registerChildExecution: (input: any) => {
+          tasks.set(input.id, { id: input.id, status: "pending", metadata: {}, updatedAt: 10 });
+          return { id: input.id };
+        },
+        bindChildExecutionRun: async () => {},
+        completeChildExecution,
+      }) } as any,
+      liveChildren: { register: () => {}, unregister: () => {} },
+      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
+      log: vi.fn(),
+    });
+    const partialResult = {
+      version: 1,
+      childSessionId: "child-session",
+      runId: "run-1",
+      source: "limit_finalization",
+      text: "final report",
+      truncated: false,
+    };
+
+    await projector.apply(event("child.created", {
+      childId: "child-1", sessionId: "child-session", cwd: "/repo",
+      spawn: { description: "review", prompt: "inspect", agent: "worker", cwd: "/repo" },
+    }, { sessionId: "parent", runId: "root-run", childId: "child-1" }));
+    await projector.apply(event("input.accepted", {
+      content: "inspect", delivery: "queue",
+    }, { sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1" }));
+    await projector.apply(event("run.started", {}, {
+      sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
+    }));
+
+    await projector.apply(event("run.failed", {
+      error: { name: "MaxTurnsExceeded", message: "Exceeded maximum agentic turns (2)" },
+      output: "final report",
+      failureKind: "max_turns",
+      partialResult,
+    }, { sessionId: "child-session", runId: "run-1", childId: "child-1" }));
+
+    expect(completeChildExecution).toHaveBeenCalledWith("child-1", expect.objectContaining({
+      status: "failed",
+      failureKind: "max_turns",
+      partialResult,
+    }));
+
+    await projector.apply(event("child.closed", {
+      childId: "child-1", sessionId: "child-session",
+      result: { status: "failed", output: "final report", failureKind: "max_turns", partialResult },
+    }, { sessionId: "parent", runId: "root-run", childId: "child-1" }));
+
+    expect(completeChildExecution).toHaveBeenCalledTimes(1);
   });
 
   it("accepts only assessments bound to the current nonterminal session run", async () => {

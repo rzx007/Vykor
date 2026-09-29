@@ -6,7 +6,7 @@ import { SessionStore } from "@vykor/services";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
-import { DaemonJobService } from "./daemon-job-service.js";
+import { DaemonJobService, readPersistedChildActivity } from "./daemon-job-service.js";
 import { SessionExecutionProjector } from "../application/session/session-execution-projector.js";
 
 const terminal: TerminalSessionInfo = {
@@ -279,6 +279,245 @@ describe("DaemonJobService", () => {
     expect(result).toMatchObject({ timedOut: false, text: "done", snapshot: { status: "completed", exitCode: 0 } });
   });
 
+  it("attaches the child activity snapshot to a framework child JobRead", async () => {
+    const childTask: SessionExecutionRecord = {
+      ...task,
+      id: "child-task-1",
+      childSessionId: "child-session-1",
+      runId: "run-1",
+      metadata: { executionBackend: "child_agent", runtimeExecutionId: "child-agent-1" },
+    };
+    const activity = {
+      version: 1 as const,
+      runId: "run-1",
+      updatedAt: 20,
+      latestAssistantText: "working",
+      toolCalls: 1,
+      modelTurns: 1,
+    };
+    const readChildActivity = vi.fn(() => activity);
+    const { service } = createService(childTask, { readChildActivity });
+
+    const result = await service.read({ sessionId: "session-1", jobId: "child-task-1" });
+
+    expect(readChildActivity).toHaveBeenCalledWith({
+      parentSessionId: "session-1",
+      childSessionId: "child-session-1",
+      runId: "run-1",
+    });
+    expect(result.details).toEqual({ activity });
+    expect(result.snapshot).toMatchObject({
+      id: "child-task-1",
+      metadata: { childSessionId: "child-session-1" },
+    });
+  });
+
+  it("returns a non-timeout wait when the child task cursor advances while still running", async () => {
+    const childTask: SessionExecutionRecord = {
+      ...task,
+      id: "child-task-1",
+      childSessionId: "child-session-1",
+      runId: "run-1",
+      metadata: { executionBackend: "child_agent", runtimeExecutionId: "child-agent-1" },
+    };
+    const advanced = { ...childTask, updatedAt: 13, metadata: { ...childTask.metadata } };
+    const waitForSessionTaskChange = vi.fn(async () => advanced);
+    const { service } = createService(childTask, { waitForSessionTaskChange });
+
+    const result = await service.wait({ sessionId: "session-1", jobId: "child-task-1", timeoutMs: 50 });
+
+    expect(waitForSessionTaskChange).toHaveBeenCalledWith(
+      "child-task-1",
+      12,
+      expect.objectContaining({ timeoutMs: 50 }),
+    );
+    expect(result).toMatchObject({ timedOut: false, snapshot: { status: "running" } });
+  });
+
+  it("reports a timeout when the child task does not change before the deadline", async () => {
+    const childTask: SessionExecutionRecord = {
+      ...task,
+      id: "child-task-1",
+      childSessionId: "child-session-1",
+      runId: "run-1",
+      metadata: { executionBackend: "child_agent", runtimeExecutionId: "child-agent-1" },
+    };
+    const waitForSessionTaskChange = vi.fn(async () => ({ ...childTask }));
+    const { service } = createService(childTask, { waitForSessionTaskChange });
+
+    const result = await service.wait({ sessionId: "session-1", jobId: "child-task-1", timeoutMs: 50 });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.snapshot.status).toBe("running");
+  });
+
+  it("exposes a terminal child failure and partial result through JobRead", async () => {
+    const partialResult = {
+      version: 1,
+      childSessionId: "child-session-1",
+      runId: "run-1",
+      source: "limit_finalization",
+      text: "final report",
+      truncated: false,
+    };
+    const childTask: SessionExecutionRecord = {
+      ...task,
+      id: "child-task-1",
+      status: "failed",
+      childSessionId: "child-session-1",
+      runId: "run-1",
+      metadata: {
+        executionBackend: "child_agent",
+        runtimeExecutionId: "child-agent-1",
+        childFailure: { failureKind: "max_turns", partialResult },
+      },
+    };
+    const { service } = createService(childTask);
+
+    const result = await service.read({ sessionId: "session-1", jobId: "child-task-1" });
+
+    expect(result.details).toMatchObject({
+      childFailure: { failureKind: "max_turns", partialResult },
+    });
+    expect(result.snapshot.metadata).toMatchObject({ childFailure: { failureKind: "max_turns" } });
+  });
+
+  it("does not read child activity for detached process jobs", async () => {
+    const detached: SessionExecutionRecord = {
+      ...task,
+      id: "detached-1",
+      type: "shell",
+      metadata: { executionBackend: "detached_process", runtimeExecutionId: "process-1" },
+    };
+    const readChildActivity = vi.fn();
+    const { service } = createService(detached, { readChildActivity });
+
+    const result = await service.read({ sessionId: "session-1", jobId: "detached-1" });
+
+    expect(readChildActivity).not.toHaveBeenCalled();
+    expect(result.details).toBeUndefined();
+  });
+
+  it("reads only committed child activity from the durable store", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-child-activity-"));
+    const path = join(dir, "store.db");
+    let store = new SessionStore({ path });
+    let reopened: SessionStore | undefined;
+    try {
+      store.sessions.create({ id: "parent", cwd: "/repo", model: "test" });
+      store.sessions.create({
+        id: "child",
+        parentId: "parent",
+        cwd: "/repo",
+        model: "test",
+        metadata: { childId: "c1" },
+      });
+      store.runs.createRun({ id: "run-1", sessionId: "child" });
+      store.runs.createRun({ id: "run-other", sessionId: "parent" });
+      const message = store.conversations.createMessage({
+        sessionId: "child",
+        role: "assistant",
+        runId: "run-1",
+      });
+      store.conversations.upsertMessagePart({
+        sessionId: "child",
+        messageId: message.id,
+        type: "reasoning",
+        status: "completed",
+        text: "SECRET REASONING",
+      });
+      store.conversations.upsertMessagePart({
+        sessionId: "child",
+        messageId: message.id,
+        type: "text",
+        status: "completed",
+        text: "committed answer",
+        metadata: { modelGeneration: { generationId: "g1", attempt: 1, committed: true } },
+      });
+      store.conversations.upsertMessagePart({
+        sessionId: "child",
+        messageId: message.id,
+        type: "text",
+        status: "completed",
+        text: "superseded text",
+        metadata: { modelGeneration: { generationId: "g2", attempt: 1, superseded: true } },
+      });
+      store.conversations.upsertMessagePart({
+        sessionId: "child",
+        messageId: message.id,
+        type: "text",
+        status: "running",
+        text: "uncommitted text",
+        metadata: { modelGeneration: { generationId: "g3", attempt: 1 } },
+      });
+      store.conversations.upsertMessagePart({
+        sessionId: "child",
+        messageId: message.id,
+        type: "tool",
+        status: "completed",
+        toolUseId: "t1",
+        toolName: "Read",
+        input: { file_path: "/secret/path" },
+        output: "SECRET BODY",
+      });
+      const attempt = store.runs.createRunAttempt({ runId: "run-1" });
+      store.runs.updateRunAttempt(attempt.id, {
+        status: "completed",
+        inputTokens: 10,
+        outputTokens: 5,
+      });
+
+      const activity = readPersistedChildActivity(durableReader(store), {
+        parentSessionId: "parent",
+        childSessionId: "child",
+        runId: "run-1",
+      });
+
+      expect(activity).toMatchObject({
+        version: 1,
+        runId: "run-1",
+        latestAssistantText: "committed answer",
+        toolCalls: 1,
+        modelTurns: 1,
+        latestTool: { name: "Read", status: "completed" },
+        usage: { inputTokens: 10, outputTokens: 5, incomplete: false },
+      });
+      const serialized = JSON.stringify(activity);
+      expect(serialized).not.toContain("SECRET");
+      expect(serialized).not.toContain("uncommitted");
+      expect(serialized).not.toContain("/secret/path");
+
+      expect(readPersistedChildActivity(durableReader(store), {
+        parentSessionId: "other",
+        childSessionId: "child",
+        runId: "run-1",
+      })).toBeUndefined();
+      expect(readPersistedChildActivity(durableReader(store), {
+        parentSessionId: "parent",
+        childSessionId: "missing",
+        runId: "run-1",
+      })).toBeUndefined();
+      expect(readPersistedChildActivity(durableReader(store), {
+        parentSessionId: "parent",
+        childSessionId: "child",
+        runId: "run-other",
+      })).toBeUndefined();
+
+      store.close();
+      reopened = new SessionStore({ path });
+      await expect(Promise.resolve(readPersistedChildActivity(durableReader(reopened), {
+        parentSessionId: "parent",
+        childSessionId: "child",
+        runId: "run-1",
+      }))).resolves.toMatchObject({ latestAssistantText: "committed answer", runId: "run-1" });
+      store = reopened;
+    } finally {
+      reopened?.close();
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not let an Agent address another session through its host", async () => {
     const { service } = createService();
     const host = service.createTerminalAgentHost({ id: "session-1" } as any);
@@ -453,6 +692,16 @@ describe("DaemonJobService", () => {
   });
 });
 
+function durableReader(store: SessionStore) {
+  return {
+    getSession: (id: string) => store.sessions.get(id),
+    listMessages: (id: string) => store.conversations.listMessages(id),
+    listMessageParts: (id: string) => store.conversations.listMessageParts(id),
+    getRun: (id: string) => store.runs.getRun(id),
+    listRunAttempts: (id: string) => store.runs.listRunAttempts(id),
+  };
+}
+
 function createService(
   projectedTask: SessionExecutionRecord | SessionExecutionRecord[] = task,
   overrides: {
@@ -467,6 +716,8 @@ function createService(
       stopExecution: ReturnType<typeof vi.fn>;
     };
     workflows?: Record<string, unknown>;
+    readChildActivity?: ReturnType<typeof vi.fn>;
+    waitForSessionTaskChange?: ReturnType<typeof vi.fn>;
   } = {},
 ) {
   const projectedTasks = Array.isArray(projectedTask) ? projectedTask : [projectedTask];
@@ -478,6 +729,9 @@ function createService(
       ...projectedTasks[0]!,
       ...input,
     })),
+    ...(overrides.readChildActivity ? { readChildActivity: overrides.readChildActivity } : {}),
+    ...(overrides.waitForSessionTaskChange
+      ? { waitForSessionTaskChange: overrides.waitForSessionTaskChange } : {}),
   };
   const terminals = {
     list: vi.fn(async () => [terminal]),

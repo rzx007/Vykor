@@ -190,13 +190,14 @@ describe("AgentDefinitions", () => {
     expect(hasRequiredMcpServers({ name: "y", description: "" }, [])).toBe(true);
   });
 
-  it("ships all 7 built-in agents aligned with the Python original", () => {
+  it("ships all 8 built-in agents aligned with the Python original", () => {
     const names = getBuiltinAgentDefinitions().map((a) => a.name);
     expect(names).toEqual([
       "general-purpose",
       "Explore",
       "Plan",
       "worker",
+      "review",
       "verification",
       "statusline-setup",
       "claude-code-guide",

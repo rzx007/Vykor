@@ -109,6 +109,36 @@ it("preserves original structured items in root and steer acceptance events", as
   ]);
 });
 
+it("passes the trusted hardMaxTurns to the execution context of its own run only", async () => {
+  const seen: Array<number | undefined> = [];
+  let runIndex = 0;
+  const makeRun = (hardMaxTurns?: number) => new FrameworkAgentRun({
+    agentId: "a",
+    ids: { inputId: `i-${runIndex}`, runId: `r-${runIndex++}`, traceId: "t" },
+    content: "work",
+    delivery: "queue",
+    eventBus: new AgentEventBus(() => {}),
+    session: {
+      id: "s",
+      getHistory: () => [],
+      submitMessage: async function* (_content: string, options: any) {
+        seen.push(options.execution.hardMaxTurns);
+        yield { type: "complete", stopReason: "end_turn" };
+      },
+    } as any,
+    runtime: { queryEngine: { getTotalUsage: () => ({ inputTokens: 0, outputTokens: 0 }) } } as any,
+    effects: {} as any,
+    children: { cwd: "/repo", createController: () => ({}) } as any,
+    ...(hardMaxTurns !== undefined ? { hardMaxTurns } : {}),
+    onSettled: () => {},
+  });
+
+  await makeRun(7).result;
+  await makeRun().result;
+
+  expect(seen).toEqual([7, undefined]);
+});
+
 it("scopes the assessment tool and binding to each run without mutating the runtime registry", async () => {
   const toolRegistry = new ToolRegistry();
   const observed: unknown[] = [];

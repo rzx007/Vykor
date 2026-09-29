@@ -64,6 +64,55 @@ describe("projection settlement recovery", () => {
     });
   });
 
+  it("preserves trusted child failure detail through compensation", () => {
+    withStorePath((path) => {
+      const first = new SessionStore({ path });
+      first.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      first.sessions.create({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
+      first.createSessionTask({
+        id: "child-1",
+        sessionId: "parent",
+        childSessionId: "child-session",
+        type: "agent",
+        description: "child",
+        cwd: process.cwd(),
+      });
+      const partialResult = {
+        version: 1,
+        childSessionId: "child-session",
+        runId: "run-1",
+        source: "limit_finalization",
+        text: "final report",
+        truncated: false,
+      };
+      first.createProjectionSettlement(projectionSettlementInput(
+        "daemon-agent:old-agent",
+        "parent",
+        childEvent("run.failed", 11, {
+          error: { name: "MaxTurnsExceeded", message: "Exceeded maximum agentic turns (2)" },
+          output: "final report",
+          failureKind: "max_turns",
+          partialResult,
+        }, { runId: "run-1" }),
+        "compensate-child",
+        new Error("terminal projection failed"),
+      ));
+      first.close();
+
+      const restarted = new SessionStore({ path });
+      try {
+        expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 1, pending: 0 });
+        expect(restarted.getSessionTask("child-1")).toMatchObject({
+          status: "failed",
+          metadata: { childFailure: { failureKind: "max_turns", partialResult } },
+        });
+        expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 0, pending: 0 });
+      } finally {
+        restarted.close();
+      }
+    });
+  });
+
   it("uses durable compensation for live-only child creation after restart", () => {
     withStorePath((path) => {
       const first = new SessionStore({ path });
@@ -136,7 +185,7 @@ describe("projection settlement recovery", () => {
 });
 
 function childEvent(
-  type: "child.created" | "child.closed",
+  type: "child.created" | "child.closed" | "run.failed",
   sequence: number,
   data: Record<string, unknown>,
   context: Record<string, unknown> = {},

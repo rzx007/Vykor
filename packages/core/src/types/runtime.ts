@@ -172,6 +172,15 @@ export interface AgentChildSpawnInput {
   requiredMcpServers?: string[];
   disallowedTools?: string[];
   maxTurns?: number;
+  /** Caller-requested turn cap. At most it tightens the resolved role/configuration budget. */
+  requestedMaxTurns?: number;
+  timeoutSeconds?: number;
+  /** Caller-requested wall-clock cap. At most it tightens the resolved role budget. */
+  requestedTimeoutSeconds?: number;
+  /** Task boundary the child owns. Task context only, never a permission or path allowlist. */
+  scope?: string;
+  /** Deliverable the parent expects back. Task context only, never a permission or path allowlist. */
+  expectedResult?: string;
   effort?: string;
   isolate?: boolean;
   metadata?: Record<string, unknown>;
@@ -187,10 +196,51 @@ export interface AgentChildInput {
   metadata?: Record<string, unknown>;
 }
 
+/** A bounded, sourced view of one child Run; never reasoning or raw tool payloads. */
+export interface ChildActivitySnapshot {
+  version: 1;
+  runId: string;
+  updatedAt: number;
+  /** Latest committed user-visible assistant text, at most 2,000 characters. */
+  latestAssistantText?: string;
+  latestTool?: { name: string; status: "running" | "completed" | "failed"; at: number };
+  toolCalls: number;
+  modelTurns: number;
+  usage?: { inputTokens?: number; outputTokens?: number; incomplete: boolean };
+}
+
+/** Trusted non-completion sources; never inferred from free-form error text. */
+export type ChildFailureKind =
+  | "max_turns" | "timeout" | "user_cancelled" | "parent_interrupted"
+  | "model_error" | "tool_error" | "unknown";
+
+/** Durable, length-bounded evidence of unfinished child work. */
+export interface ChildPartialResult {
+  version: 1;
+  childSessionId: string;
+  runId: string;
+  source: "committed_assistant_text" | "limit_finalization";
+  text: string;
+  truncated: boolean;
+}
+
 export interface AgentChildResult {
   status: "completed" | "failed" | "interrupted" | "stopped";
   output: string;
   error?: string;
+  failureKind?: ChildFailureKind;
+  partialResult?: ChildPartialResult;
+}
+
+/** Trusted marker on an aborted child Run signal; the run copies its kind onto the terminal event. */
+export class ChildRunTerminationError extends Error {
+  constructor(
+    readonly failureKind: Extract<ChildFailureKind, "timeout" | "user_cancelled" | "parent_interrupted">,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ChildRunTerminationError";
+  }
 }
 
 /** Limits shared by every descendant of one root agent. The root itself is depth 0. */
@@ -292,11 +342,21 @@ export type AgentEventInput =
   | { type: "run.completed"; data: { output: string; stopReason?: string } }
   | {
       type: "run.failed";
-      data: { error: AgentSerializedError; output?: string };
+      data: {
+        error: AgentSerializedError;
+        output?: string;
+        failureKind?: ChildFailureKind;
+        partialResult?: ChildPartialResult;
+      };
     }
   | {
       type: "run.interrupted";
-      data: { error: AgentSerializedError; output?: string };
+      data: {
+        error: AgentSerializedError;
+        output?: string;
+        failureKind?: ChildFailureKind;
+        partialResult?: ChildPartialResult;
+      };
     }
   | {
       type: "output.text.delta";
@@ -448,6 +508,7 @@ export interface RunAgentBinding {
     effort?: string | number;
     permissionMode?: string;
     maxTurns?: number;
+    timeoutSeconds?: number;
     skills?: string[];
     mcpServers?: unknown[];
     hooks?: Record<string, unknown>;
@@ -486,6 +547,8 @@ export interface RunCapabilityView {
 export interface AgentExecutionContext {
   readonly scope: AgentRunScope;
   readonly capabilityView?: RunCapabilityView;
+  /** Trusted, run-scoped ceiling for this Run only. Later configuration cannot raise it. */
+  readonly hardMaxTurns?: number;
   /** Trusted, run-scoped capabilities supplied by the host. */
   readonly contribution?: AgentRunContribution;
   readonly effects: AgentEffects;
@@ -520,6 +583,8 @@ export interface AgentChildHandle {
   readonly sessionId: string;
   readonly state: "starting" | "running" | "idle" | "suspended" | "closing" | "closed";
   readonly result: Promise<AgentChildResult>;
+  /** Read-only bounded activity of the current Run; undefined without observed events. */
+  readonly activity?: ChildActivitySnapshot;
   /** Host-owned current Run selection, separate from user input and metadata. */
   send(input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt>;
   interrupt(reason?: string): Promise<void>;

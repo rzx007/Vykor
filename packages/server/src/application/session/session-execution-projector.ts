@@ -1,3 +1,4 @@
+import type { ChildFailureKind, ChildPartialResult } from "@vykor/core";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 
@@ -15,7 +16,12 @@ export interface SessionChildExecutionBridge {
   bindChildExecutionRun(taskId: string, runId: string): Promise<void>;
   completeChildExecution(
     taskId: string,
-    input: { status: "completed" | "failed" | "stopped" | "interrupted"; output: string },
+    input: {
+      status: "completed" | "failed" | "stopped" | "interrupted";
+      output: string;
+      failureKind?: ChildFailureKind;
+      partialResult?: ChildPartialResult;
+    },
   ): Promise<unknown>;
 }
 
@@ -155,10 +161,12 @@ export class SessionExecutionProjector {
           registryError = error;
         }
         const before = this.context.events.checkpoint();
+        const failureMetadata = childFailureMetadata(input);
         this.context.store.updateSessionTask(taskId, {
           status: input.status,
           output: input.output,
           ...(input.status === "failed" ? { error: input.output } : {}),
+          ...(failureMetadata ? { metadata: { childFailure: failureMetadata } } : {}),
         });
         const persisted = this.context.store.getSessionTask(taskId);
         this.context.log({
@@ -242,6 +250,17 @@ export class SessionExecutionProjector {
 
 function isTerminalTaskStatus(status: DurableTaskStatus): boolean {
   return status === "completed" || status === "failed" || status === "stopped" || status === "interrupted";
+}
+
+/** Persist only the trusted terminal detail; absent fields are never fabricated. */
+export function childFailureMetadata(input: {
+  failureKind?: ChildFailureKind;
+  partialResult?: ChildPartialResult;
+}): { failureKind?: ChildFailureKind; partialResult?: ChildPartialResult } | undefined {
+  const metadata: { failureKind?: ChildFailureKind; partialResult?: ChildPartialResult } = {};
+  if (input.failureKind !== undefined) metadata.failureKind = input.failureKind;
+  if (input.partialResult !== undefined) metadata.partialResult = input.partialResult;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 function isTerminalRuntimeStatus(status: string): boolean {

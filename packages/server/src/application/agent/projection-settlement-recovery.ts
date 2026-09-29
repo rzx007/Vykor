@@ -1,4 +1,4 @@
-import type { AgentChildResult, AgentEvent } from "@vykor/core";
+import type { AgentChildResult, AgentEvent, ChildFailureKind, ChildPartialResult } from "@vykor/core";
 import type { SessionStore } from "@vykor/services";
 import type {
   CreateProjectionSettlementInput,
@@ -115,6 +115,7 @@ function recoverChildTerminalProjection(store: SettlementStore, event: AgentEven
   validateChildResult(result);
   const task = store.getSessionTask(event.data.childId);
   if (!task) throw new Error(`Child task not found during settlement recovery: ${event.data.childId}`);
+  const failure = childFailureMetadata(result);
 
   if (
     task.status !== result.status ||
@@ -125,6 +126,7 @@ function recoverChildTerminalProjection(store: SettlementStore, event: AgentEven
       status: result.status,
       output: result.output,
       ...(result.status === "failed" ? { error: result.error ?? result.output } : {}),
+      ...(failure ? { metadata: { childFailure: failure } } : {}),
     });
   }
   appendFrameworkEventOnce(store, event, "agent.child.closed", {
@@ -150,7 +152,13 @@ function compensateChildProjection(store: SettlementStore, event: AgentEvent, me
   if (childId) {
     const task = store.getSessionTask(childId);
     if (task && (task.status === "pending" || task.status === "running")) {
-      store.updateSessionTask(task.id, { status: "failed", output: message, error: message });
+      const failure = childFailureFromEvent(event);
+      store.updateSessionTask(task.id, {
+        status: "failed",
+        output: message,
+        error: message,
+        ...(failure ? { metadata: { childFailure: failure } } : {}),
+      });
     }
   }
 
@@ -205,8 +213,25 @@ function appendRunErrorOnce(
   }
 }
 
-function validateChildResult(value: unknown): asserts value is AgentChildResult {
-  if (
+type ChildFailureMetadata = { failureKind?: ChildFailureKind; partialResult?: ChildPartialResult };
+
+/** Preserve trusted terminal detail so compensation never replaces it with a generic error. */
+function childFailureFromEvent(event: AgentEvent): ChildFailureMetadata | undefined {
+  if (event.type !== "run.failed" && event.type !== "run.interrupted") return undefined;
+  const metadata: ChildFailureMetadata = {};
+  if (event.data.failureKind !== undefined) metadata.failureKind = event.data.failureKind;
+  if (event.data.partialResult !== undefined) metadata.partialResult = event.data.partialResult;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function childFailureMetadata(result: AgentChildResult): ChildFailureMetadata | undefined {
+  const metadata: ChildFailureMetadata = {};
+  if (result.failureKind !== undefined) metadata.failureKind = result.failureKind;
+  if (result.partialResult !== undefined) metadata.partialResult = result.partialResult;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function validateChildResult(value: unknown): asserts value is AgentChildResult {  if (
     !isRecord(value) ||
     !["completed", "failed", "interrupted", "stopped"].includes(String(value.status)) ||
     typeof value.output !== "string"

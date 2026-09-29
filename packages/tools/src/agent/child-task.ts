@@ -10,6 +10,8 @@ export async function awaitFrameworkChildTask(
     status: result.status === "interrupted" ? "stopped" : result.status,
     output: result.output || result.error || "",
     failureKind: result.status,
+    ...(result.failureKind ? { childFailureKind: result.failureKind } : {}),
+    ...(result.partialResult ? { partialResult: result.partialResult } : {}),
   }));
   if (timeoutMs === undefined) return completion;
 

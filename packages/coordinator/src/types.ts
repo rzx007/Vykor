@@ -8,6 +8,8 @@ export interface AgentDefinition {
   effort?: string | number;
   permissionMode?: string;
   maxTurns?: number;
+  /** Optional wall-clock budget for one worker run; only set when the task type needs it. */
+  timeoutSeconds?: number;
   skills?: string[];
   mcpServers?: unknown[];
   hooks?: Record<string, unknown>;

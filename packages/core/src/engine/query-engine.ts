@@ -53,6 +53,8 @@ const DEFAULT_TOOL_TIMEOUT_MS = 300_000;
 const RECOVERY_TOOL_TURNS = 2;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
+const CHILD_FINALIZATION_PROMPT =
+  "Stop using tools for this response. This delegated run reached its turn limit. State what was completed, what remains unfinished, and the evidence you have. Do not claim the task is verified.";
 
 // ---------------------------------------------------------------------------
 // Tool output budget — mirrors packages/services/src/tool-outputs.ts
@@ -172,7 +174,11 @@ function isTruncatedStopReason(stopReason: string): boolean {
 }
 
 export class MaxTurnsExceeded extends Error {
-  constructor(public readonly maxTurns: number) {
+  constructor(
+    public readonly maxTurns: number,
+    /** The reserved tool-free finalization reply, when one was produced. */
+    public readonly finalizationText?: string,
+  ) {
     super(`Exceeded maximum agentic turns (${maxTurns})`);
     this.name = "MaxTurnsExceeded";
   }
@@ -354,20 +360,28 @@ export class QueryEngine implements IQueryEngine {
     const trajectoryControl = createTrajectoryLoopControl();
     let recoveryToolTurnsRemaining: number | null = null;
     let forceFinalResponse = false;
+    let childFinalizing = false;
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
+
+    // The host may freeze a Run-scoped ceiling. It is applied locally to every
+    // comparison so request configuration, setMaxTurns and accepted follow-ups
+    // can only move the reusable engine's baseline, never this Run's ceiling.
+    const hardMaxTurns = options.execution?.hardMaxTurns;
+    const maxTurnsLimit = (): number =>
+      hardMaxTurns === undefined ? this.maxTurns : Math.min(this.maxTurns, hardMaxTurns);
 
     // 执行会话开始时的钩子函数
     await this.hookExecutor.execute("session_start", {});
 
-    while (turnCount < this.maxTurns || forceFinalResponse) {
+    while (turnCount < maxTurnsLimit() || forceFinalResponse) {
       // The first request must use the same client that prepared its attachments.
       const requestConfiguration = turnCount === 0
         ? initialRequestConfiguration
         : preparedNextRequestConfiguration ?? await this.resolveRequestConfiguration(options);
       preparedNextRequestConfiguration = undefined;
       this.applyRequestMaxTurns(requestConfiguration.maxTurns);
-      if (turnCount >= this.maxTurns && !forceFinalResponse) {
-        throw new MaxTurnsExceeded(this.maxTurns);
+      if (turnCount >= maxTurnsLimit() && !forceFinalResponse) {
+        throw new MaxTurnsExceeded(maxTurnsLimit());
       }
       const runSystemPrompt = requestConfiguration.systemPrompt
         ?? (options.execution?.capabilityView && this.options.systemPromptForRun
@@ -415,13 +429,21 @@ export class QueryEngine implements IQueryEngine {
       }
       this.messages = sanitizeMessageHistory(this.messages);
 
-      const forcedFinalTurn = forceFinalResponse;
+      // Reserve the last request under a frozen child cap for a tool-free
+      // partial summary. Do not make an extra request after reaching the cap.
+      if (hardMaxTurns !== undefined && turnCount + 1 >= maxTurnsLimit()) {
+        childFinalizing = true;
+      }
+      const forcedFinalTurn = forceFinalResponse || childFinalizing;
       const visibleTools = runToolRegistry.getAll();
       const tools = forcedFinalTurn
         ? []
         : visibleTools.filter((tool) => !trajectoryControl.hiddenTools.includes(tool.name));
       const recoverySystem = forcedFinalTurn
-        ? appendSystemGuidance(turnSystemPrompt, RECOVERY_FINALIZATION_PROMPT)
+        ? appendSystemGuidance(
+            turnSystemPrompt,
+            childFinalizing ? CHILD_FINALIZATION_PROMPT : RECOVERY_FINALIZATION_PROMPT,
+          )
         : turnSystemPrompt;
       const system = trajectoryControl.guidance
         ? appendSystemGuidance(recoverySystem, trajectoryControl.guidance)
@@ -583,6 +605,11 @@ export class QueryEngine implements IQueryEngine {
 
         toolUses = attemptToolUses;
         this.settleModelAttempt(attemptUsage, false);
+        if (childFinalizing && toolUses.length > 0) {
+          // A provider can still emit a tool call when tools were omitted.
+          // Reject it before recording an unexecuted call as committed history.
+          throw new MaxTurnsExceeded(maxTurnsLimit());
+        }
         for (const toolUse of toolUses) {
           yield { type: "tool_use_start", toolUse };
         }
@@ -676,14 +703,17 @@ export class QueryEngine implements IQueryEngine {
           preparedNextRequestConfiguration = await this.resolveRequestConfiguration(options);
           this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
         }
-        if (turnCount >= this.maxTurns) {
+        if (turnCount >= maxTurnsLimit()) {
+          options.execution?.closeSteering();
           if (!forcedFinalTurn && recoveryToolTurnsRemaining !== null) {
-            options.execution?.closeSteering();
+            // Keep the root recovery path's existing blocker-report behavior.
             forceFinalResponse = true;
             continue;
           }
-          options.execution?.closeSteering();
-          throw new MaxTurnsExceeded(this.maxTurns);
+          throw new MaxTurnsExceeded(
+            maxTurnsLimit(),
+            childFinalizing && assistantText ? assistantText : undefined,
+          );
         }
         preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(
           (await this.consumeFollowUps(options)).requestConfiguration,
@@ -697,8 +727,13 @@ export class QueryEngine implements IQueryEngine {
         preparedNextRequestConfiguration = await this.resolveRequestConfiguration(options);
         this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
       }
-      if (turnCount + 1 >= this.maxTurns) {
+      if (turnCount + 1 >= maxTurnsLimit()) {
         options.execution?.closeSteering();
+        // The reserved child finalization is never a success signal: it only
+        // leaves committed text for the caller to treat as an incomplete result.
+        if (childFinalizing) {
+          throw new MaxTurnsExceeded(maxTurnsLimit(), assistantText ? assistantText : undefined);
+        }
         return;
       }
       const followUp = await this.consumeFollowUps(options, true);
@@ -713,7 +748,7 @@ export class QueryEngine implements IQueryEngine {
       return;
     }
 
-    throw new MaxTurnsExceeded(this.maxTurns);
+    throw new MaxTurnsExceeded(maxTurnsLimit());
   }
 
   private async consumeFollowUps(

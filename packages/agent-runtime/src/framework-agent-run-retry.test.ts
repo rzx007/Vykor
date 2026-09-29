@@ -151,6 +151,37 @@ describe("FrameworkAgentRun model retry projection", () => {
     ]);
   });
 
+  it("carries only the last committed text boundary when a later generation fails", async () => {
+    const events: AgentEventInput[] = [];
+    const run = new FrameworkAgentRun({
+      agentId: "a",
+      ids: { inputId: "i", runId: "r", traceId: "t" },
+      content: "work",
+      delivery: "queue",
+      eventBus: new AgentEventBus((event) => {
+        events.push(event);
+      }),
+      session: {
+        id: "s",
+        getHistory: () => [],
+        submitMessage: async function* (): AsyncIterable<StreamEvent> {
+          yield { type: "text_delta", delta: "committed answer" };
+          yield { type: "complete", stopReason: "end_turn" };
+          yield { type: "text_delta", delta: "uncommitted tail" };
+          throw new Error("provider down");
+        },
+      } as any,
+      runtime: { queryEngine: { getTotalUsage: () => ({ inputTokens: 0, outputTokens: 0 }) } } as any,
+      effects: {} as any,
+      children: { cwd: "/repo", createController: () => ({}) } as any,
+      onSettled: () => {},
+    });
+
+    await expect(run.result).rejects.toThrow("provider down");
+    const failed = events.find((event) => event.type === "run.failed");
+    expect(failed && failed.type === "run.failed" && failed.data.output).toBe("committed answer");
+  });
+
   it("places the truncation notice before output.turn.completed", async () => {
     const { run, events } = runWith([
       { type: "generation_started", generationId: "g1", attempt: 1 },

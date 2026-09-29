@@ -154,6 +154,9 @@ export type {
   AgentChildInvocation,
   AgentChildResult,
   AgentChildSpawnInput,
+  ChildActivitySnapshot,
+  ChildFailureKind,
+  ChildPartialResult,
   AgentScheduleEffects,
   AgentScheduledRun,
   AgentScheduledTask,
@@ -185,7 +188,7 @@ export type {
   QueryRequestConfiguration,
 } from "./types/runtime";
 
-export { AgentChildBudgetExceededError } from "./types/runtime";
+export { AgentChildBudgetExceededError, ChildRunTerminationError } from "./types/runtime";
 
 export { AgentRunNotAcceptingInputError, RuntimeBundle } from "./types/runtime";
 export {

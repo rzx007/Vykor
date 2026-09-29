@@ -203,6 +203,42 @@ describe("createAgentWorkflowRunner", () => {
     }));
   });
 
+  it("carries a failed framework child's partial result into the task metadata", async () => {
+    const partialResult = {
+      version: 1 as const,
+      childSessionId: "child-session",
+      runId: "run-1",
+      source: "limit_finalization" as const,
+      text: "final report",
+      truncated: false,
+    };
+    const runner = createAgentWorkflowRunner({
+      cwd: "/repo",
+      spawnWorker: async () => ({
+        success: true,
+        agentId: "worker@default",
+        taskId: "task_partial",
+        backendType: "framework",
+      }),
+      awaitTask: async () => ({
+        status: "failed",
+        output: "Exceeded maximum agentic turns (2)",
+        failureKind: "failed",
+        childFailureKind: "max_turns",
+        partialResult,
+      }),
+      getAgentDefinition: () => undefined,
+    });
+
+    const result = await runner({ task: { id: "verify" }, attempt: 1, dependencyResults: {} });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      metadata: { childFailureKind: "max_turns", partialResult },
+    });
+    expect(result.metadata?.failureKind).toBe("failed");
+  });
+
   it("maps spawn failures, stopped tasks, and timed-out waits to workflow statuses", async () => {
     const spawnFailure = createAgentWorkflowRunner({
       cwd: "/repo",
@@ -320,6 +356,55 @@ describe("createAgentWorkflowRunner", () => {
     expect(new Set(sessions).size).toBe(2);
     expect(sessions[0]).toContain("wf-flaky-1-");
     expect(sessions[1]).toContain("wf-flaky-2-");
+  });
+
+  it("reports unconfirmed cleanup when a stopped worker never settles", async () => {
+    const stopTask = vi.fn(async () => undefined);
+    const runner = createAgentWorkflowRunner({
+      cwd: "/repo",
+      spawnWorker: async () => ({
+        success: true,
+        agentId: "worker@default",
+        taskId: "task_slow",
+        backendType: "framework",
+      }),
+      awaitTask: async () => ({ status: "running", output: "still working", timedOut: true }),
+      stopTask,
+      getAgentDefinition: () => undefined,
+    });
+
+    const result = await runner({ task: { id: "slow", timeoutMs: 10 }, attempt: 1, dependencyResults: {} });
+
+    expect(stopTask).toHaveBeenCalledWith("task_slow");
+    expect(result.status).toBe("failed");
+    expect(result.metadata).toMatchObject({ cleanupUnconfirmed: true });
+  });
+
+  it("uses the earliest of the role timeout, task deadline and wait budget", async () => {
+    const waits: Array<number | undefined> = [];
+    const runner = createAgentWorkflowRunner({
+      cwd: "/repo",
+      spawnWorker: async () => ({
+        success: true,
+        agentId: "verifier@default",
+        taskId: "task_deadline",
+        backendType: "framework",
+      }),
+      awaitTask: async (_taskId, options) => {
+        waits.push(options?.timeoutMs);
+        return { status: "completed", output: "ok" };
+      },
+      getAgentDefinition: () => ({ name: "verifier", description: "verify", timeoutSeconds: 1 }),
+    });
+
+    await runner({
+      task: { id: "verify" },
+      attempt: 1,
+      dependencyResults: {},
+      deadlineAt: Date.now() + 60_000,
+    });
+
+    expect(waits[0]).toBeLessThanOrEqual(1_000);
   });
 
   it("requests stop when a resumed workflow task wait times out", async () => {

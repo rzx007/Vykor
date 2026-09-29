@@ -42,7 +42,7 @@ export async function runWorkflowTask(
         summary: attempt === 1 ? "Task running" : `Retry attempt ${attempt} running`,
       });
       lastResult = await runRunnerAttempt(
-        runner({
+        (signal, deadlineAt) => runner({
           task,
           attempt,
           dependencyResults,
@@ -51,6 +51,8 @@ export async function runWorkflowTask(
           budgetMode,
           budgetConserve,
           reportProgress: recordProgress,
+          signal,
+          deadlineAt,
         }),
         timeoutMs,
       );
@@ -69,18 +71,23 @@ export async function runWorkflowTask(
       }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
-      const timedOut = error instanceof WorkflowTaskTimeoutError;
-      if (!retry.retryOn.includes("failed") || attempt === retry.maxAttempts) {
+      const timeoutError = error instanceof WorkflowTaskTimeoutError ? error : undefined;
+      const timedOut = timeoutError !== undefined;
+      if (timeoutError?.lateResult) lastResult = timeoutError.lateResult;
+      if (timeoutError?.cleanupUnconfirmed || !retry.retryOn.includes("failed") || attempt === retry.maxAttempts) {
         return {
           taskId: task.id,
           status: "failed",
           summary: lastError,
-          budget: lastProgressBudget,
+          result: timeoutError?.lateResult?.result,
+          metadata: timeoutError?.lateResult?.metadata,
+          budget: workflowBudgetFromMetadata(timeoutError?.lateResult?.metadata) ?? lastProgressBudget,
           attempts: attempt,
           dependencies: [...(task.dependsOn ?? [])],
           startedAt,
           finishedAt: Date.now(),
           timedOut,
+          ...(timeoutError?.cleanupUnconfirmed ? { cleanupUnconfirmed: true } : {}),
           error: lastError,
         };
       }
@@ -102,27 +109,65 @@ export async function runWorkflowTask(
   };
 }
 
+const CLEANUP_GRACE_MS = 5_000;
+
 async function runRunnerAttempt(
-  result: Promise<WorkflowWorkerResult> | WorkflowWorkerResult,
+  start: (signal: AbortSignal, deadlineAt: number | undefined) => Promise<WorkflowWorkerResult> | WorkflowWorkerResult,
   timeoutMs: number | undefined,
 ): Promise<WorkflowWorkerResult> {
-  const resultPromise = Promise.resolve(result);
-  if (timeoutMs === undefined) return resultPromise;
+  const controller = new AbortController();
+  if (timeoutMs === undefined) return await start(controller.signal, undefined);
 
+  const deadlineAt = Date.now() + timeoutMs;
+  const resultPromise = Promise.resolve().then(() => start(controller.signal, deadlineAt));
   let timeout: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => reject(new WorkflowTaskTimeoutError(timeoutMs)), timeoutMs);
-  });
+  let graceTimer: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    return await Promise.race([resultPromise, timeoutPromise]);
+    // Natural completion wins: the timer is cleared without aborting the runner.
+    const winner = await Promise.race([
+      resultPromise.then((value) => ({ timedOut: false as const, value })),
+      new Promise<{ timedOut: true }>((resolve) => {
+        timeout = setTimeout(() => {
+          controller.abort(new WorkflowTaskTimeoutError(timeoutMs));
+          resolve({ timedOut: true });
+        }, timeoutMs);
+        timeout.unref?.();
+      }),
+    ]);
+    if (!winner.timedOut) return winner.value;
+
+    // The runner may still be settling its own worker; give it a bounded window
+    // before reporting that cleanup is unconfirmed.
+    const settled = await Promise.race([
+      resultPromise.then(
+        (value) => ({ confirmed: true as const, value }),
+        () => ({ confirmed: true as const }),
+      ),
+      new Promise<{ confirmed: false }>((resolve) => {
+        graceTimer = setTimeout(() => resolve({ confirmed: false }), CLEANUP_GRACE_MS);
+        graceTimer.unref?.();
+      }),
+    ]);
+    // Once the deadline wins, a late success must not turn a timed-out task
+    // into a completed one. Keep any late result only as partial evidence.
+    throw new WorkflowTaskTimeoutError(
+      timeoutMs,
+      !settled.confirmed,
+      settled.confirmed && "value" in settled ? settled.value : undefined,
+    );
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
+    if (graceTimer !== undefined) clearTimeout(graceTimer);
   }
 }
 
 class WorkflowTaskTimeoutError extends Error {
-  constructor(timeoutMs: number) {
+  constructor(
+    timeoutMs: number,
+    readonly cleanupUnconfirmed = false,
+    readonly lateResult?: WorkflowWorkerResult,
+  ) {
     super(`Task timed out after ${timeoutMs}ms`);
     this.name = "WorkflowTaskTimeoutError";
   }

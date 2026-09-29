@@ -156,6 +156,7 @@ export function buildAgentDefinition(
     effort,
     permissionMode: pickEnum(fm.permissionMode, PERMISSION_MODES),
     maxTurns: parsePositiveInt(fm.maxTurns),
+    timeoutSeconds: parsePositiveInt(fm.timeoutSeconds),
     skills: parseStrList(fm.skills) ?? [],
     mcpServers,
     hooks,

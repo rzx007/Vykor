@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import type { AgentEffects, AgentEventContext, AgentEventInput, AgentExecutionContext, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope, AgentSteerInput, ContentBlock, StreamEvent } from "@vykor/core";
-import { AgentRunNotAcceptingInputError, type AgentSession, type RuntimeBundle } from "@vykor/core";
+import type { AgentEffects, AgentEventContext, AgentEventInput, AgentExecutionContext, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope, AgentSteerInput, ChildFailureKind, ChildPartialResult, ContentBlock, StreamEvent } from "@vykor/core";
+import { AgentRunNotAcceptingInputError, ChildRunTerminationError, MaxTurnsExceeded, type AgentSession, type RuntimeBundle } from "@vykor/core";
 
 import type { AgentChildManager } from "./child-agent.js";
 import { abortError, serializeError } from "./agent-errors.js";
@@ -26,6 +26,7 @@ interface FrameworkAgentRunOptions {
   inputItems?: readonly unknown[];
   ids: { inputId: string; runId: string; traceId: string };
   externalSignal?: AbortSignal;
+  hardMaxTurns?: number;
   delivery: "queue" | "steer";
   metadata?: Record<string, unknown>;
   onSettled(result: AgentRunResult | undefined, toolActivity: FrameworkAgentRunToolActivity | undefined): void;
@@ -169,6 +170,9 @@ export class FrameworkAgentRun implements AgentRunHandle {
 
   private async execute(): Promise<AgentRunResult> {
     let output = "";
+    // Only text that survived a successful `complete` may be reported as an
+    // unfinished result; retries and in-flight fragments never reach it.
+    let committedOutput = "";
     let stopReason: string | undefined;
     let currentGenerationId: string | undefined;
     let generationOutputStart = 0;
@@ -184,6 +188,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
     const execution: AgentExecutionContext = {
       scope,
       capabilityView: this.options.capabilityView,
+      ...(this.options.hardMaxTurns !== undefined ? { hardMaxTurns: this.options.hardMaxTurns } : {}),
       ...(this.options.goal ? { contribution: createGoalRunContribution(this.options.goal) } : {}),
       effects: this.options.effects,
       children: this.options.children.createController(scope, this.options.capabilityView),
@@ -230,6 +235,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
           output += event.delta;
         } else if (event.type === "complete") {
           stopReason = event.stopReason;
+          committedOutput = output;
         }
         await this.projectStreamEvent(event);
       }
@@ -254,7 +260,11 @@ export class FrameworkAgentRun implements AgentRunHandle {
         const interrupted = this.controller.signal.aborted;
         await this.emit({
           type: interrupted ? "run.interrupted" : "run.failed",
-          data: { error: serializeError(error), ...(output ? { output } : {}) },
+          data: {
+            error: serializeError(error),
+            ...(committedOutput ? { output: committedOutput } : {}),
+            ...childFailureData(this.options.identity, this.options.externalSignal, error, this.sessionId, this.id, committedOutput),
+          },
         }).catch(() => {});
       }
       throw error;
@@ -367,8 +377,47 @@ export class FrameworkAgentRun implements AgentRunHandle {
   }
 }
 
-function deferred<T>(): {
-  promise: Promise<T>;
+const MAX_CHILD_PARTIAL_TEXT = 12_000;
+
+/**
+ * Terminal detail for a child Run only. Root runs never carry it, and the
+ * source is always a trusted error type or a typed abort marker.
+ */
+function childFailureData(
+  identity: FrameworkAgentRunOptions["identity"],
+  externalSignal: AbortSignal | undefined,
+  error: unknown,
+  sessionId: string,
+  runId: string,
+  committedOutput: string,
+): { failureKind?: ChildFailureKind; partialResult?: ChildPartialResult } {
+  if (!identity?.childId) return {};
+  const termination = externalSignal?.reason;
+  const failureKind: ChildFailureKind = error instanceof MaxTurnsExceeded
+    ? "max_turns"
+    : termination instanceof ChildRunTerminationError
+      ? termination.failureKind
+      : "unknown";
+  const finalizationText = error instanceof MaxTurnsExceeded ? error.finalizationText : undefined;
+  const text = finalizationText && finalizationText.length > 0 ? finalizationText : committedOutput;
+  if (!text) return { failureKind };
+  const truncated = text.length > MAX_CHILD_PARTIAL_TEXT;
+  return {
+    failureKind,
+    partialResult: {
+      version: 1,
+      childSessionId: sessionId,
+      runId,
+      source: finalizationText && finalizationText.length > 0
+        ? "limit_finalization"
+        : "committed_assistant_text",
+      text: truncated ? text.slice(0, MAX_CHILD_PARTIAL_TEXT) : text,
+      truncated,
+    },
+  };
+}
+
+function deferred<T>(): {  promise: Promise<T>;
   resolve(value: T): void;
   reject(error: unknown): void;
 } {

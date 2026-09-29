@@ -140,6 +140,26 @@ describe("deriveChildAgentOptions", () => {
     expect(options.disallowedTools).toBeUndefined();
   });
 
+  it("resolves child turn budgets by role, request configuration, settings, then delegation tightening", () => {
+    const settings = { model: "m", maxTurns: 50 } as any;
+    const child = { description: "d", prompt: "p", agent: "worker", cwd: "/repo" } as const;
+    const derive = (configuration: Record<string, unknown>, overrides: Record<string, unknown> = {}) =>
+      deriveChildAgentOptions({
+        configuration: { model: "m", ...configuration } as any,
+        settings,
+        child: { ...child, ...overrides },
+        cwd: "/repo",
+        sessionId: "s",
+      }).maxTurns;
+
+    expect(derive({ maxTurns: 40 }, { maxTurns: 30 })).toBe(30);
+    expect(derive({ maxTurns: 40 })).toBe(40);
+    expect(derive({})).toBe(50);
+    expect(derive({ maxTurns: 40 }, { requestedMaxTurns: 10 })).toBe(10);
+    expect(derive({ maxTurns: 40 }, { requestedMaxTurns: 90 })).toBe(40);
+    expect(derive({ maxTurns: 40 }, { maxTurns: 30, requestedMaxTurns: 15 })).toBe(15);
+  });
+
   it("inherits reasoning effort only when the model and effort are unchanged", () => {
     const base = {
       configuration: {

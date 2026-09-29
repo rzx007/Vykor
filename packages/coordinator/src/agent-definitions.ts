@@ -253,6 +253,22 @@ const VERIFICATION_DISALLOWED_TOOLS = [
   "NotebookEdit",
 ] as const;
 
+const REVIEW_DISALLOWED_TOOLS = [
+  "Agent",
+  "ExitPlanMode",
+  "Shell",
+  "Edit",
+  "Write",
+  "NotebookEdit",
+] as const;
+
+const REVIEW_PROMPT = `You are a read-only review agent. Check documents, plans, code, or reports against their source evidence.
+
+- Use Read, Grep, and Glob only. Do not run commands, edit files, or delegate to other agents.
+- Take the \`scope\` as the boundary: cover the named files, modules, questions, or assertion categories, and do not widen it.
+- Take the \`expectedResult\` as the deliverable: report findings with concrete evidence, or state clearly what you could not verify.
+- Do not run the full test suite by default. Base every claim on cited evidence instead of restating the delegate's summary.`;
+
 const STATUSLINE_PROMPT = `You are a status line setup agent for Claude Code. Your job is to create or update the statusLine command in the user's Claude Code settings.
 
 When asked to convert the user's shell PS1 configuration, follow these steps:
@@ -443,6 +459,20 @@ const BUILTIN_AGENTS: AgentDefinition[] = [
     disallowedTools: [...WORKER_DISALLOWED_TOOLS],
     systemPrompt: WORKER_PROMPT,
     subagentType: "worker",
+    source: "builtin",
+    baseDir: "built-in",
+  },
+  {
+    name: "review",
+    description:
+      "Read-only reviewer for documents, plans, code, and reports. Use this for evidence-backed " +
+      "fact checking and plan review instead of running the full test suite. Pass the scope you " +
+      "want covered and the expected deliverable; it cannot edit files, run shell commands, or delegate.",
+    tools: ["Read", "Grep", "Glob"],
+    disallowedTools: [...REVIEW_DISALLOWED_TOOLS],
+    systemPrompt: REVIEW_PROMPT,
+    omitClaudeMd: true,
+    subagentType: "review",
     source: "builtin",
     baseDir: "built-in",
   },

@@ -79,6 +79,54 @@ describe("SessionExecutionProjector", () => {
     }));
   });
 
+  it("persists trusted child failure detail with the terminal task", async () => {
+    const context = createContext();
+    const manager = createTaskManager();
+    context.getChildAgentExecutionRegistry.mockReturnValue(manager);
+    context.store.updateSessionTask.mockReturnValue({ sessionId: "s1" });
+    context.store.getSessionTask.mockReturnValue({ id: "task-1", sessionId: "s1", runId: "run-1" });
+    const bridge = new SessionExecutionProjector(context).createBridge({ id: "s1", cwd: "/repo" });
+    const partialResult = {
+      version: 1 as const,
+      childSessionId: "child-1",
+      runId: "run-1",
+      source: "limit_finalization" as const,
+      text: "final report",
+      truncated: false,
+    };
+
+    await bridge.completeChildExecution("task-1", {
+      status: "failed",
+      output: "Exceeded maximum agentic turns (2)",
+      failureKind: "max_turns",
+      partialResult,
+    });
+
+    expect(context.store.updateSessionTask).toHaveBeenCalledWith("task-1", {
+      status: "failed",
+      output: "Exceeded maximum agentic turns (2)",
+      error: "Exceeded maximum agentic turns (2)",
+      metadata: { childFailure: { failureKind: "max_turns", partialResult } },
+    });
+  });
+
+  it("does not fabricate child failure metadata for an ordinary failure", async () => {
+    const context = createContext();
+    const manager = createTaskManager();
+    context.getChildAgentExecutionRegistry.mockReturnValue(manager);
+    context.store.updateSessionTask.mockReturnValue({ sessionId: "s1" });
+    context.store.getSessionTask.mockReturnValue({ id: "task-1", sessionId: "s1", runId: "run-1" });
+    const bridge = new SessionExecutionProjector(context).createBridge({ id: "s1", cwd: "/repo" });
+
+    await bridge.completeChildExecution("task-1", { status: "failed", output: "boom" });
+
+    expect(context.store.updateSessionTask).toHaveBeenCalledWith("task-1", {
+      status: "failed",
+      output: "boom",
+      error: "boom",
+    });
+  });
+
   it("moves both live and durable task state back to running when a child starts another run", async () => {
     const context = createContext();
     const manager = createTaskManager();

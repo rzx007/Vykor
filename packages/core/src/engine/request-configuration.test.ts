@@ -198,6 +198,111 @@ describe("QueryEngine request configuration", () => {
     expect(requests).toEqual(["model-a", "model-a"]);
   });
 
+  it("ignores setMaxTurns that would raise the run's frozen hard cap", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    let requests = 0;
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests++;
+        if (requests === 1) { started(); await held; }
+        if ((params.tools?.length ?? 0) === 0) {
+          yield { type: "text_delta" as const, delta: "final" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+          return;
+        }
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: `tu${requests}`, name: "Echo", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echo", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1 },
+    );
+    const running = (async () => {
+      for await (const _ of engine.submitMessage("run", {
+        execution: {
+          hardMaxTurns: 1,
+          emit: async () => {}, closeSteering: () => {},
+          takeSteeredInputs: async () => [],
+        } as never,
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    engine.setMaxTurns(50);
+    release();
+    await expect(running).rejects.toThrow("Exceeded maximum agentic turns (1)");
+    expect(requests).toBe(1);
+  });
+
+  it("stops an accepted follow-up at the frozen hard cap even when the request limit rises", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const firstStarted = new Promise<void>((resolve) => { started = resolve; });
+    let maxTurns = 1;
+    const models: string[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        models.push(params.model);
+        if (models.length === 1) { started(); await held; }
+        if ((params.tools?.length ?? 0) === 0) {
+          yield { type: "text_delta" as const, delta: "final" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+          return;
+        }
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: `tu${models.length}`, name: "Echo", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "Echo", description: "Echo", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+    const engine = new QueryEngine(client, tools,
+      { checkTool: async () => ({ action: "allow", reason: "test" }) } as never,
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { maxTurns: 1, resolveRequestConfiguration: async () => ({
+        revision: 0, model: "model-a", client, maxTurns,
+      }) },
+    );
+    const running = (async () => {
+      let accepted = false;
+      for await (const _ of engine.submitMessage("run", {
+        execution: {
+          hardMaxTurns: 2,
+          emit: async () => {}, closeSteering: () => {},
+          takeSteeredInputs: async () => {
+            if (accepted) return [];
+            accepted = true;
+            maxTurns = 10;
+            return [{ id: "follow-up", content: "continue" }];
+          },
+        } as never,
+      })) { /* consume */ }
+    })();
+    await firstStarted;
+    maxTurns = 5;
+    release();
+    await expect(running).rejects.toThrow("Exceeded maximum agentic turns (2)");
+    expect(models).toEqual(["model-a", "model-a"]);
+  });
+
   it("prepares a steered follow-up with the client selected for its request", async () => {
     const prepared: string[] = [];
     let release!: () => void;

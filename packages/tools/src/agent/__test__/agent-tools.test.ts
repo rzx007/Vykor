@@ -79,6 +79,117 @@ describe("agentTool framework child controller", () => {
     expect(props.mode).toBeUndefined();
   });
 
+  it("declares the delegation contract fields in inputSchema", () => {
+    const props = (agentTool.inputSchema as { properties: Record<string, unknown> }).properties;
+    for (const field of ["scope", "expectedResult", "maxTurns", "timeoutSeconds"]) {
+      expect(props[field], field).toBeDefined();
+    }
+  });
+
+  it("describes the independent scope and expected result in the tool description", () => {
+    expect(agentTool.description).toMatch(/scope/i);
+    expect(agentTool.description).toMatch(/expected result/i);
+  });
+
+  it("passes scope, expectedResult, maxTurns and timeoutSeconds to the framework child controller", async () => {
+    const { agent, calls } = createAgentContext();
+
+    await agentTool.execute(
+      {
+        description: "review",
+        prompt: "inspect the report",
+        scope: "docs/plugin-mechanism-report.md",
+        expectedResult: "findings with evidence",
+        maxTurns: 40,
+        timeoutSeconds: 600,
+      },
+      { cwd: "/work", agent },
+    );
+
+    expect(calls.at(-1)).toMatchObject({
+      scope: "docs/plugin-mechanism-report.md",
+      expectedResult: "findings with evidence",
+      requestedMaxTurns: 40,
+      requestedTimeoutSeconds: 600,
+    });
+    expect(calls.at(-1)?.maxTurns).toBeUndefined();
+    expect(calls.at(-1)?.timeoutSeconds).toBeUndefined();
+  });
+
+  it("passes role budgets separately from caller tightening", async () => {
+    const { agent, calls } = createAgentContext();
+    const capabilityView = {
+      agents: new Map([["plugin:scoped", { ownerPluginId: "plugin", definition: {
+        name: "plugin:scoped", description: "Scoped", systemPrompt: "Child-only", tools: ["Read"],
+        maxTurns: 30, timeoutSeconds: 600,
+      } }]]), tools: new Map(), skills: new Map(), mcpServers: new Map(),
+    };
+
+    await agentTool.execute(
+      { description: "review", prompt: "inspect", subagentType: "plugin:scoped", maxTurns: 40, timeoutSeconds: 900 },
+      { cwd: "/work", agent, capabilityView },
+    );
+
+    expect(calls.at(-1)).toMatchObject({
+      maxTurns: 30,
+      timeoutSeconds: 600,
+      requestedMaxTurns: 40,
+      requestedTimeoutSeconds: 900,
+    });
+  });
+
+  it("leaves the delegation fields undefined for legacy calls", async () => {
+    const { agent, calls } = createAgentContext();
+
+    await agentTool.execute({ description: "d", prompt: "explore" }, { cwd: "/work", agent });
+
+    const spawn = calls.at(-1)!;
+    expect(spawn.scope).toBeUndefined();
+    expect(spawn.expectedResult).toBeUndefined();
+    expect(spawn.timeoutSeconds).toBeUndefined();
+    expect(spawn.requestedMaxTurns).toBeUndefined();
+    expect(spawn.requestedTimeoutSeconds).toBeUndefined();
+  });
+
+  it("rejects non-positive or fractional budgets without spawning", async () => {
+    for (const field of ["maxTurns", "timeoutSeconds"] as const) {
+      for (const value of [0, -3, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+        const { agent, children } = createAgentContext();
+
+        const result = await agentTool.execute(
+          { description: "d", prompt: "do work", [field]: value },
+          { cwd: "/work", agent },
+        );
+
+        expect(result.isError, `${field}=${value}`).toBe(true);
+        expect((result.content[0] as { text: string }).text, `${field}=${value}`).toContain(field);
+        expect(children.spawnChildAgent, `${field}=${value}`).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("rejects empty or oversized delegation text without spawning", async () => {
+    const cases: Array<[string, string]> = [
+      ["scope", "   "],
+      ["scope", "x".repeat(2_001)],
+      ["expectedResult", ""],
+      ["expectedResult", "x".repeat(2_001)],
+    ];
+
+    for (const [field, value] of cases) {
+      const { agent, children } = createAgentContext();
+
+      const result = await agentTool.execute(
+        { description: "d", prompt: "do work", [field]: value },
+        { cwd: "/work", agent },
+      );
+
+      expect(result.isError, `${field}:${value.length}`).toBe(true);
+      expect((result.content[0] as { text: string }).text, `${field}:${value.length}`).toContain(field);
+      expect(children.spawnChildAgent, `${field}:${value.length}`).not.toHaveBeenCalled();
+    }
+  });
+
   it("rejects explicit mode instead of treating it as compatibility", async () => {
     const { agent, children } = createAgentContext();
 

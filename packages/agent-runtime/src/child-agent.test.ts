@@ -1,4 +1,4 @@
-import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@vykor/core";
+import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError, MaxTurnsExceeded } from "@vykor/core";
 import type { AgentChildResult, AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope } from "@vykor/core";
 import { describe, expect, it, vi } from "vitest";
 
@@ -315,6 +315,100 @@ describe("AgentChildManager", () => {
     expect(manager.list()).toEqual([]);
   });
 
+  it("composes the child's initial task with its delegation scope and expected result", async () => {
+    const bus = new AgentEventBus();
+    const events: any[] = [];
+    bus.subscribe((event) => { events.push(event); });
+    const submitted: unknown[] = [];
+    const manager = createManager(bus, async () => fakeAgent((content: unknown) => {
+      submitted.push(content);
+      return completedRun("done");
+    }));
+    try {
+      const invocation = await manager.createController(parentScope()).spawnChildAgent({
+        description: "review",
+        prompt: "inspect the report",
+        agent: "worker",
+        cwd: "/repo",
+        scope: "docs/plugin-mechanism-report.md",
+        expectedResult: "findings with evidence",
+      });
+      await invocation.result;
+
+      expect(submitted).toEqual([
+        "inspect the report\n\nTask scope:\ndocs/plugin-mechanism-report.md\n\nExpected result:\nfindings with evidence",
+      ]);
+      const created = events.find((event) => event.type === "child.created");
+      expect(created?.data.spawn).toMatchObject({
+        scope: "docs/plugin-mechanism-report.md",
+        expectedResult: "findings with evidence",
+      });
+    } finally {
+      await manager.closeAll();
+    }
+  });
+
+  it("resolves the child run turn budget from role, current configuration and delegation for every run", async () => {
+    const observed: any[] = [];
+    let requestConfiguration: Record<string, unknown> = { maxTurns: 5 };
+    const manager = createManager(
+      new AgentEventBus(),
+      async () => fakeAgent((_content: unknown, options: any) => {
+        observed.push(options);
+        return completedRun("done");
+      }),
+      undefined,
+      undefined,
+      false,
+      {},
+      undefined,
+      () => requestConfiguration,
+    );
+    const controller = manager.createController(parentScope());
+    try {
+      const scoped = await controller.spawnChildAgent({
+        description: "d",
+        prompt: "work",
+        agent: "worker",
+        cwd: "/repo",
+        maxTurns: 30,
+        requestedMaxTurns: 10,
+      });
+      await scoped.result;
+      expect(observed.at(-1)?.hardMaxTurns).toBe(10);
+      requestConfiguration = { maxTurns: 50 };
+      await controller.sendChildInput(scoped.id, { content: "more" });
+      await controller.awaitChildAgent(scoped.id);
+      expect(observed.at(-1)?.hardMaxTurns).toBe(10);
+
+      requestConfiguration = { maxTurns: 5 };
+      const configured = await controller.spawnChildAgent({
+        description: "d",
+        prompt: "work",
+        agent: "worker",
+        cwd: "/repo",
+      });
+      await configured.result;
+      expect(observed.at(-1)?.hardMaxTurns).toBe(5);
+      requestConfiguration = { maxTurns: 8 };
+      await controller.sendChildInput(configured.id, { content: "more" });
+      await controller.awaitChildAgent(configured.id);
+      expect(observed.at(-1)?.hardMaxTurns).toBe(8);
+
+      const tightened = await controller.spawnChildAgent({
+        description: "d",
+        prompt: "work",
+        agent: "worker",
+        cwd: "/repo",
+        requestedMaxTurns: 90,
+      });
+      await tightened.result;
+      expect(observed.at(-1)?.hardMaxTurns).toBe(8);
+    } finally {
+      await manager.closeAll();
+    }
+  });
+
   it("steers an active child through its framework run handle", async () => {
     const pending = deferred<AgentRunResult>();
     const steer = vi.fn(async (input) => ({ sessionId: "child-session", inputId: input.id!, runId: "run-1" }));
@@ -338,6 +432,101 @@ describe("AgentChildManager", () => {
     await manager.closeAll();
   });
 
+  it("returns a partial max-turns result carrying the finalization reply", async () => {
+    const pending = deferred<AgentRunResult>();
+    const submitMessage = vi.fn(() => runHandle(pending.promise, vi.fn()));
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(submitMessage));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+
+    pending.reject(new MaxTurnsExceeded(2, "final report"));
+
+    await expect(invocation.result).resolves.toMatchObject({
+      status: "failed",
+      failureKind: "max_turns",
+      partialResult: {
+        version: 1,
+        childSessionId: invocation.sessionId,
+        runId: invocation.runId,
+        source: "limit_finalization",
+        text: "final report",
+        truncated: false,
+      },
+    });
+    await manager.closeAll();
+  });
+
+  it("bounds a max-turns finalization partial at 12,000 characters", async () => {
+    const pending = deferred<AgentRunResult>();
+    const submitMessage = vi.fn(() => runHandle(pending.promise, vi.fn()));
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(submitMessage));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+
+    pending.reject(new MaxTurnsExceeded(2, "x".repeat(12_001)));
+
+    const result = await invocation.result;
+    expect(result.partialResult).toMatchObject({ source: "limit_finalization", truncated: true });
+    expect(result.partialResult?.text).toHaveLength(12_000);
+    await manager.closeAll();
+  });
+
+  it("returns committed child text as a partial result after a mid-run failure", async () => {
+    const bus = new AgentEventBus();
+    const pending = deferred<AgentRunResult>();
+    const submitMessage = vi.fn(() => runHandle(pending.promise, vi.fn()));
+    const manager = createManager(bus, async () => fakeAgent(submitMessage));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+    const context = activityContext(invocation);
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "draft-" } }, context);
+    await bus.emit({ type: "output.text.delta", data: { delta: "evidence" } }, context);
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, context);
+    pending.reject(new Error("model down"));
+
+    await expect(invocation.result).resolves.toMatchObject({
+      status: "failed",
+      failureKind: "unknown",
+      partialResult: {
+        source: "committed_assistant_text",
+        text: "draft-evidence",
+      },
+    });
+    await manager.closeAll();
+  });
+
+  it("does not create an empty partial result when nothing was committed", async () => {
+    const pending = deferred<AgentRunResult>();
+    const submitMessage = vi.fn(() => runHandle(pending.promise, vi.fn()));
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(submitMessage));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+
+    pending.reject(new Error("model down"));
+
+    const result = await invocation.result;
+    expect(result.failureKind).toBe("unknown");
+    expect(result.partialResult).toBeUndefined();
+    await manager.closeAll();
+  });
+
   it("propagates parent abort to the child", async () => {
     const pending = deferred<AgentRunResult>();
     const interrupt = vi.fn(async () => pending.reject(new Error("interrupted")));
@@ -353,8 +542,317 @@ describe("AgentChildManager", () => {
 
     parent.abort();
 
-    await expect(invocation.result).resolves.toMatchObject({ status: "interrupted" });
+    await expect(invocation.result).resolves.toMatchObject({
+      status: "interrupted",
+      failureKind: "parent_interrupted",
+    });
     expect(interrupt).toHaveBeenCalled();
+  });
+
+  it("fails a child run whose wall-clock budget expires with a trusted timeout source", async () => {
+    vi.useFakeTimers();
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(signalAwareHangingRun()));
+    try {
+      const invocation = await manager.createController(parentScope()).spawnChildAgent({
+        description: "d",
+        prompt: "p",
+        agent: "worker",
+        cwd: "/repo",
+        timeoutSeconds: 30,
+      });
+      let outcome: AgentChildResult | "pending" = "pending";
+      invocation.result.then((result) => { outcome = result; });
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(outcome).toMatchObject({ status: "failed", failureKind: "timeout" });
+      expect((outcome as AgentChildResult).error).toContain("time budget");
+      await manager.closeAll();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not fail a child run without a configured time budget", async () => {
+    vi.useFakeTimers();
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(vi.fn(() => completedRun("done"))));
+    try {
+      const invocation = await manager.createController(parentScope()).spawnChildAgent({
+        description: "d",
+        prompt: "p",
+        agent: "worker",
+        cwd: "/repo",
+      });
+      await expect(invocation.result).resolves.toEqual({ status: "completed", output: "done" });
+
+      await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+
+      await expect(invocation.result).resolves.toEqual({ status: "completed", output: "done" });
+      await manager.closeAll();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears a settled deadline and re-arms it for the next run", async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    const submitMessage = vi.fn((_content: unknown, options: any) => {
+      call++;
+      if (call === 1) {
+        const pending = deferred<AgentRunResult>();
+        pending.resolve(completedResult("first"));
+        return runHandle(pending.promise, vi.fn());
+      }
+      return signalAwareHangingRun()(_content, options);
+    });
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(submitMessage));
+    try {
+      const controller = manager.createController(parentScope());
+      const invocation = await controller.spawnChildAgent({
+        description: "d",
+        prompt: "p",
+        agent: "worker",
+        cwd: "/repo",
+        timeoutSeconds: 30,
+      });
+      await expect(invocation.result).resolves.toMatchObject({ status: "completed" });
+
+      await vi.advanceTimersByTimeAsync(31_000);
+      await expect(invocation.result).resolves.toMatchObject({ status: "completed" });
+
+      await controller.sendChildInput(invocation.id, { content: "more" });
+      let second: AgentChildResult | "pending" = "pending";
+      controller.awaitChildAgent(invocation.id).then((result) => { second = result; });
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(second).toMatchObject({ status: "failed", failureKind: "timeout" });
+      await manager.closeAll();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps an explicit cancellation distinct from a deadline", async () => {
+    const pending = deferred<AgentRunResult>();
+    const interrupt = vi.fn(async () => pending.reject(new Error("User cancelled")));
+    const submitMessage = vi.fn(() => runHandle(pending.promise, vi.fn(), interrupt));
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(submitMessage));
+    const controller = manager.createController(parentScope());
+    const invocation = await controller.spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+      timeoutSeconds: 600,
+    });
+
+    await controller.interruptChildAgent(invocation.id, "User cancelled");
+
+    const result = await invocation.result;
+    expect(result.status).toBe("interrupted");
+    expect(result.failureKind).toBe("user_cancelled");
+    expect(result.error).toContain("User cancelled");
+  });
+
+  it("exposes only committed assistant text and successful turns in the child activity snapshot", async () => {
+    const bus = new AgentEventBus();
+    const manager = createManager(bus, async () => fakeAgent(vi.fn(() => completedRun("done"))));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+    const context = activityContext(invocation);
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "partial answer" } }, context);
+    expect(manager.get(invocation.id)?.activity?.latestAssistantText).toBeUndefined();
+
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, context);
+    expect(manager.get(invocation.id)?.activity).toMatchObject({
+      version: 1,
+      runId: invocation.runId,
+      modelTurns: 1,
+      latestAssistantText: "partial answer",
+    });
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "final" } }, context);
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, context);
+    expect(manager.get(invocation.id)?.activity).toMatchObject({
+      modelTurns: 2,
+      latestAssistantText: "final",
+    });
+    await manager.closeAll();
+  });
+
+  it("caps committed activity text at 2,000 characters", async () => {
+    const bus = new AgentEventBus();
+    const manager = createManager(bus, async () => fakeAgent(vi.fn(() => completedRun("done"))));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+    const context = activityContext(invocation);
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "x".repeat(2_500) } }, context);
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, context);
+
+    expect(manager.get(invocation.id)?.activity?.latestAssistantText).toHaveLength(2_000);
+    await manager.closeAll();
+  });
+
+  it("discards staged text on retry and failure without losing committed text", async () => {
+    const bus = new AgentEventBus();
+    const manager = createManager(bus, async () => fakeAgent(vi.fn(() => completedRun("done"))));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+    const context = activityContext(invocation);
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "stale" } }, context);
+    await bus.emit({ type: "output.generation.started", data: { generationId: "g1", attempt: 1 } }, context);
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, context);
+    expect(manager.get(invocation.id)?.activity?.latestAssistantText).toBeUndefined();
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "fresh" } }, context);
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, context);
+    expect(manager.get(invocation.id)?.activity?.latestAssistantText).toBe("fresh");
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "doomed" } }, context);
+    await bus.emit({
+      type: "run.failed",
+      data: { error: { name: "Error", message: "boom" } },
+    }, context);
+    expect(manager.get(invocation.id)?.activity?.latestAssistantText).toBe("fresh");
+    await manager.closeAll();
+  });
+
+  it("never exposes reasoning or tool payloads in the child activity snapshot", async () => {
+    const bus = new AgentEventBus();
+    const manager = createManager(bus, async () => fakeAgent(vi.fn(() => completedRun("done"))));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+    const context = activityContext(invocation);
+
+    await bus.emit({ type: "output.reasoning.delta", data: { delta: "SECRET REASONING", source: "think" } }, context);
+    await bus.emit({
+      type: "tool.started",
+      data: { toolUse: { type: "tool_use", id: "t1", name: "Read", input: { file_path: "/secret/path" } } },
+    }, context);
+    expect(manager.get(invocation.id)?.activity).toMatchObject({
+      toolCalls: 1,
+      latestTool: { name: "Read", status: "running" },
+    });
+    await bus.emit({
+      type: "tool.completed",
+      data: { toolUseId: "t1", result: { content: [{ type: "text", text: "SECRET BODY" }] } },
+    }, context);
+    expect(manager.get(invocation.id)?.activity?.latestTool).toMatchObject({ name: "Read", status: "completed" });
+
+    await bus.emit({
+      type: "tool.started",
+      data: { toolUse: { type: "tool_use", id: "t2", name: "Shell", input: { command: "echo secret" } } },
+    }, context);
+    await bus.emit({
+      type: "tool.completed",
+      data: { toolUseId: "t2", result: { content: [{ type: "text", text: "SECRET" }], isError: true } },
+    }, context);
+    expect(manager.get(invocation.id)?.activity?.latestTool).toMatchObject({ name: "Shell", status: "failed" });
+
+    const serialized = JSON.stringify(manager.get(invocation.id)?.activity);
+    expect(serialized).not.toContain("SECRET REASONING");
+    expect(serialized).not.toContain("SECRET BODY");
+    expect(serialized).not.toContain("/secret/path");
+    expect(serialized).not.toContain("echo secret");
+    expect(manager.get(invocation.id)?.activity?.toolCalls).toBe(2);
+    await manager.closeAll();
+  });
+
+  it("isolates the activity snapshot per run", async () => {
+    const bus = new AgentEventBus();
+    const manager = createManager(bus, async () => fakeAgent(vi.fn((_content, options) => runHandle(
+      Promise.resolve(completedResult("done")),
+      vi.fn(),
+      vi.fn(async () => {}),
+      Promise.resolve({ sessionId: "child-session", ...options.ids }),
+    ))));
+    const controller = manager.createController(parentScope());
+    const invocation = await controller.spawnChildAgent({
+      description: "d",
+      prompt: "p",
+      agent: "worker",
+      cwd: "/repo",
+    });
+    const first = activityContext(invocation);
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "first run text" } }, first);
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, first);
+    await bus.emit({
+      type: "tool.started",
+      data: { toolUse: { type: "tool_use", id: "t1", name: "Read", input: {} } },
+    }, first);
+    expect(manager.get(invocation.id)?.activity).toMatchObject({ modelTurns: 1, toolCalls: 1 });
+
+    await invocation.result;
+    const receipt = await controller.sendChildInput(invocation.id, { content: "follow up" });
+    const second = activityContext(invocation, receipt.runId);
+    await bus.emit({
+      type: "tool.started",
+      data: { toolUse: { type: "tool_use", id: "t2", name: "Grep", input: {} } },
+    }, second);
+
+    await bus.emit({ type: "output.text.delta", data: { delta: "stale text" } }, first);
+    await bus.emit({ type: "output.turn.completed", data: { stopReason: "end_turn" } }, first);
+
+    expect(manager.get(invocation.id)?.activity).toMatchObject({
+      runId: receipt.runId,
+      modelTurns: 0,
+      toolCalls: 1,
+      latestTool: { name: "Grep", status: "running" },
+    });
+    expect(manager.get(invocation.id)?.activity?.latestAssistantText).toBeUndefined();
+    await manager.closeAll();
+  });
+
+  it("returns the durable terminal partial instead of the shorter activity preview", async () => {
+    const bus = new AgentEventBus();
+    const pending = deferred<AgentRunResult>();
+    const manager = createManager(bus, async () => fakeAgent(vi.fn((_content, options) => runHandle(
+      pending.promise,
+      vi.fn(),
+      vi.fn(async () => {}),
+      Promise.resolve({ sessionId: "child-session", ...options.ids }),
+    ))));
+    const invocation = await manager.createController(parentScope()).spawnChildAgent({
+      description: "d", prompt: "p", agent: "worker", cwd: "/repo",
+    });
+    const partialResult = {
+      version: 1 as const,
+      childSessionId: invocation.sessionId,
+      runId: invocation.runId!,
+      source: "committed_assistant_text" as const,
+      text: "x".repeat(3_000),
+      truncated: false,
+    };
+    await bus.emit({
+      type: "run.failed",
+      data: { error: { name: "Error", message: "boom" }, partialResult },
+    }, activityContext(invocation));
+    pending.reject(new Error("boom"));
+
+    expect((await invocation.result).partialResult).toEqual(partialResult);
+    await manager.closeAll();
   });
 
   it("queues a new run when an active run has stopped accepting steer", async () => {
@@ -965,6 +1463,27 @@ function fakeAgent(submitMessage: any, close = vi.fn(async () => {})) {
 
 function completedRun(output: string): AgentRunHandle {
   return runHandle(Promise.resolve(completedResult(output)), vi.fn());
+}
+
+function signalAwareHangingRun() {
+  return (_content: unknown, options: any): AgentRunHandle => {
+    const pending = deferred<AgentRunResult>();
+    options.signal.addEventListener(
+      "abort",
+      () => pending.reject(options.signal.reason ?? new Error("aborted")),
+      { once: true },
+    );
+    return runHandle(pending.promise, vi.fn());
+  };
+}
+
+function activityContext(invocation: { id: string; sessionId: string; runId?: string }, runId = invocation.runId!) {
+  return {
+    agentId: "child-agent",
+    sessionId: invocation.sessionId,
+    runId,
+    childId: invocation.id,
+  };
 }
 
 function runHandle(

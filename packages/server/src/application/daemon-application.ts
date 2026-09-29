@@ -47,7 +47,7 @@ import { McpOAuthApplicationService } from "./mcp-oauth-application-service.js";
 import { McpOAuthOperationService } from "./mcp-oauth-operation-service.js";
 import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
 import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
-import { DaemonJobService } from "../jobs/daemon-job-service.js";
+import { DaemonJobService, readPersistedChildActivity } from "../jobs/daemon-job-service.js";
 import type { ObservabilityEvent } from "../shared/observability.js";
 import { DaemonTerminalService } from "../terminal/daemon-terminal-service.js";
 import { createSessionEnvironmentAcquirer } from "../runtime/session-execution-environment.js";
@@ -383,6 +383,14 @@ export class DaemonApplication implements DurableAgentApplication {
         getSessionTask: store.getSessionTask.bind(store),
         listSessionTasks: store.listSessionTasks.bind(store),
         waitForSessionTaskChange: store.waitForSessionTaskChange.bind(store),
+        readChildActivity: (input: { parentSessionId: string; childSessionId: string; runId?: string }) =>
+          readPersistedChildActivity({
+            getSession: (id) => store.sessions.get(id),
+            listMessages: (id) => store.conversations.listMessages(id),
+            listMessageParts: (id) => store.conversations.listMessageParts(id),
+            getRun: (id) => store.runs.getRun(id),
+            listRunAttempts: (id) => store.runs.listRunAttempts(id),
+          }, input),
       };
       this.backgroundShells = new BackgroundShellService({
         store: taskStore,

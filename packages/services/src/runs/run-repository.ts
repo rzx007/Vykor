@@ -433,6 +433,10 @@ export class RunRepository {
       task.runId = input.runId;
     }
     const timestamp = now();
+    // Waiters compare updatedAt against the value they last observed. Two
+    // updates inside the same millisecond must still be distinguishable, so
+    // the cursor is strictly monotonic per task.
+    const updatedAt = Math.max(timestamp, task.updatedAt + 1);
     const previousStatus = task.status;
     if (input.status) {
       task.status = input.status;
@@ -450,7 +454,7 @@ export class RunRepository {
     if (input.output !== undefined) task.output = input.output;
     if (input.error !== undefined) task.error = input.error;
     if (input.metadata) task.metadata = { ...task.metadata, ...input.metadata };
-    task.updatedAt = timestamp;
+    task.updatedAt = updatedAt;
     session.updatedAt = timestamp;
     this.storage.mutations.tasks.add(taskId);
     this.storage.mutations.sessions.add(session.id);

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SessionStore } from "../session-runtime/store.js";
 import { RunRepository } from "./run-repository.js";
@@ -154,7 +154,38 @@ describe("RunRepository read operations", () => {
 });
 
 describe("RunRepository write operations", () => {
-    it("creates and updates runs with session status refresh, input alignment, terminal guards, and events", () => {
+    it("keeps session task updatedAt strictly increasing within one millisecond", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-task-clock-"));
+    const store = new SessionStore({ path: join(directory, "store.db") });
+    vi.useFakeTimers({ now: 1_000 });
+    try {
+      const repository = new RunRepository({
+        storage: (store as any).storage,
+        appendEvent: (input) => store.conversations.appendEvent(input),
+        save: () => (store as any).save(),
+      });
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      const created = repository.createSessionTask({
+        id: "task-1",
+        sessionId: "s1",
+        type: "agent",
+        description: "d",
+        cwd: directory,
+        metadata: {},
+      });
+      const first = repository.updateSessionTask("task-1", { metadata: { childActivity: { turns: 1 } } });
+      const second = repository.updateSessionTask("task-1", { metadata: { childActivity: { turns: 2 } } });
+
+      expect(first.updatedAt).toBeGreaterThan(created.updatedAt);
+      expect(second.updatedAt).toBeGreaterThan(first.updatedAt);
+    } finally {
+      vi.useRealTimers();
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("creates and updates runs with session status refresh, input alignment, terminal guards, and events", () => {
       const directory = mkdtempSync(join(tmpdir(), "vk-run-repo-write-"));
       const store = new SessionStore({ path: join(directory, "store.db") });
       try {

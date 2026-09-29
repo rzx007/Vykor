@@ -19,13 +19,28 @@ import {
   type JobWaitResult,
 } from "@vykor/jobs";
 import { DEFAULT_RETENTION_POLICY } from "@vykor/services";
-import type { SessionRecord, SessionExecutionRecord } from "@vykor/protocol";
+import {
+  isCommittedModelPart,
+  type SessionExecutionRecord,
+  type SessionMessagePartRecord,
+  type SessionMessageRecord,
+  type SessionRecord,
+  type SessionRunAttemptRecord,
+  type SessionRunRecord,
+} from "@vykor/protocol";
+import type { ChildActivitySnapshot } from "@vykor/core";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 
 import type { DaemonTerminalService } from "../terminal/index.js";
 
 export interface JobSessionQueries {
   getSession(sessionId: string): SessionRecord | undefined;
+  /** Read-only bounded activity of a verified child Run; omit when the identity cannot be verified. */
+  readChildActivity?(input: {
+    parentSessionId: string;
+    childSessionId: string;
+    runId?: string;
+  }): ChildActivitySnapshot | undefined;
 }
 
 export interface JobTaskOperations {
@@ -187,7 +202,21 @@ export class DaemonJobService {
         ? ""
         : this.readTaskOutput(source.value);
       const limited = limitOutput(text, input.maxChars);
-      return { ...limited, cursor: snapshot.updatedAt, snapshot };
+      const activity = this.readTaskActivity(source.value);
+      const childFailure = readChildFailure(source.value);
+      return {
+        ...limited,
+        cursor: snapshot.updatedAt,
+        snapshot,
+        ...(activity || childFailure
+          ? {
+              details: {
+                ...(activity ? { activity } : {}),
+                ...(childFailure ? { childFailure } : {}),
+              },
+            }
+          : {}),
+      };
     }
     const snapshot = workflowSnapshot(source.value, source.cwd);
     const text = input.after !== undefined && input.after >= snapshot.updatedAt
@@ -234,12 +263,17 @@ export class DaemonJobService {
       return { ...current, timedOut: !isFinished(current.snapshot.status) };
     }
     if (source.kind === "task" && this.store.waitForSessionTaskChange) {
-      await this.store.waitForSessionTaskChange(source.value.id, source.value.updatedAt, {
+      const previous = source.value.updatedAt;
+      const changed = await this.store.waitForSessionTaskChange(source.value.id, previous, {
         timeoutMs: input.timeoutMs,
         signal: input.signal,
       });
       const current = await this.read(input);
-      return { ...current, timedOut: !isFinished(current.snapshot.status) };
+      const finished = isFinished(current.snapshot.status);
+      return {
+        ...current,
+        timedOut: !finished && !(changed !== undefined && changed.updatedAt > previous),
+      };
     }
     return { ...initial, timedOut: true };
   }
@@ -349,6 +383,17 @@ export class DaemonJobService {
     } catch {
       return task.output ?? "";
     }
+  }
+
+  private readTaskActivity(task: SessionExecutionRecord): ChildActivitySnapshot | undefined {
+    if (!task.childSessionId || executionBackend(task) !== "child_agent") return undefined;
+    const query = this.store.readChildActivity;
+    if (!query) return undefined;
+    return query({
+      parentSessionId: task.sessionId,
+      childSessionId: task.childSessionId,
+      ...(task.runId ? { runId: task.runId } : {}),
+    });
   }
 
   private async resolve(
@@ -523,6 +568,104 @@ function isFinished(status: JobStatus): boolean {
   return status === "completed" || status === "failed" || status === "killed";
 }
 
+function readChildFailure(task: SessionExecutionRecord): Record<string, unknown> | undefined {
+  const value = task.metadata.childFailure;
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
 function qualifiedWorkflowId(runId: string): string {
   return `workflow:${runId}`;
+}
+
+const MAX_ACTIVITY_TEXT = 2_000;
+
+/** Minimal read-only durable queries needed to build one child Run's activity view. */
+export interface ChildActivityReader {
+  getSession(sessionId: string): SessionRecord | undefined;
+  listMessages(sessionId: string): SessionMessageRecord[];
+  listMessageParts(sessionId: string): SessionMessagePartRecord[];
+  getRun(runId: string): SessionRunRecord | undefined;
+  listRunAttempts(runId: string): SessionRunAttemptRecord[];
+}
+
+/**
+ * Build the bounded activity view from persisted child records. Returns undefined
+ * when the parent/child/run identities cannot be verified, so a forged
+ * childSessionId or foreign Run is never exposed.
+ */
+export function readPersistedChildActivity(
+  reader: ChildActivityReader,
+  input: { parentSessionId: string; childSessionId: string; runId?: string },
+): ChildActivitySnapshot | undefined {
+  if (!input.runId) return undefined;
+  const child = reader.getSession(input.childSessionId);
+  if (!child || child.parentId !== input.parentSessionId) return undefined;
+  const run = reader.getRun(input.runId);
+  if (!run || run.sessionId !== input.childSessionId) return undefined;
+
+  const messages = new Map(
+    reader.listMessages(input.childSessionId)
+      .filter((message) => message.runId === input.runId)
+      .map((message) => [message.id, message] as const),
+  );
+  const parts = reader.listMessageParts(input.childSessionId)
+    .filter((part) => messages.has(part.messageId) && isCommittedModelPart(part))
+    .sort((left, right) => left.seq - right.seq);
+  const latestText = parts
+    .filter((part) =>
+      part.type === "text" &&
+      messages.get(part.messageId)?.role === "assistant" &&
+      (part.text ?? "").length > 0)
+    .at(-1)?.text;
+  const toolParts = parts.filter((part) => part.type === "tool" && part.toolName);
+  const latestToolPart = toolParts.at(-1);
+  const attempts = reader.listRunAttempts(input.runId);
+  const knownAttempts = attempts.filter(
+    (attempt) => attempt.inputTokens !== undefined && attempt.outputTokens !== undefined,
+  );
+  const usage = attempts.length === 0
+    ? undefined
+    : {
+        ...(knownAttempts.length > 0
+          ? {
+              inputTokens: knownAttempts.reduce((total, attempt) => total + (attempt.inputTokens ?? 0), 0),
+              outputTokens: knownAttempts.reduce((total, attempt) => total + (attempt.outputTokens ?? 0), 0),
+            }
+          : {}),
+        incomplete: knownAttempts.length !== attempts.length,
+      };
+
+  return {
+    version: 1,
+    runId: input.runId,
+    updatedAt: Math.max(
+      run.updatedAt,
+      ...parts.map((part) => part.updatedAt),
+      ...attempts.map((attempt) => attempt.updatedAt),
+    ),
+    ...(latestText ? { latestAssistantText: latestText.slice(0, MAX_ACTIVITY_TEXT) } : {}),
+    ...(latestToolPart
+      ? {
+          latestTool: {
+            name: latestToolPart.toolName!,
+            status: persistedToolStatus(latestToolPart),
+            at: latestToolPart.updatedAt,
+          },
+        }
+      : {}),
+    toolCalls: toolParts.length,
+    modelTurns: attempts.filter((attempt) => attempt.status === "completed").length,
+    ...(usage ? { usage } : {}),
+  };
+}
+
+function persistedToolStatus(
+  part: SessionMessagePartRecord,
+): "running" | "completed" | "failed" {
+  if (part.isError === true || part.status === "failed" || part.status === "interrupted") {
+    return "failed";
+  }
+  return part.status === "completed" ? "completed" : "running";
 }

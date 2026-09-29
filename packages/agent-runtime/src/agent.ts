@@ -85,6 +85,8 @@ export interface VykorAgentSubmitOptions {
   capabilityView?: RunCapabilityView;
   goal?: { goalId: string; revision: number; objective?: string };
   signal?: AbortSignal;
+  /** Trusted Run-scoped turn ceiling resolved by the host; later configuration cannot raise it. */
+  hardMaxTurns?: number;
   inputItems?: readonly unknown[];
   delivery?: "queue" | "steer";
   metadata?: Record<string, unknown>;
@@ -233,6 +235,7 @@ class DefaultVykorAgent implements VykorAgent {
       inputItems: options.inputItems,
       ids,
       externalSignal: options.signal,
+      hardMaxTurns: options.hardMaxTurns,
       delivery: options.delivery ?? "queue",
       metadata: options.metadata,
       goal: options.goal,

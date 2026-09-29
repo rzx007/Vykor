@@ -6,6 +6,7 @@ import type {
   AgentChildDirectory,
   AgentChildHandle,
   AgentChildResult,
+  ChildActivitySnapshot,
 } from "@vykor/core";
 import {
   createWorkflowPlan,
@@ -166,6 +167,108 @@ describe("LocalAgentJobHost adapter", () => {
       timedOut: false,
       snapshot: { id: "child-1", status: "completed" },
     });
+  });
+
+  it("reports a running child's activity from its handle and wakes on a new turn", async () => {
+    const cwd = temporaryDirectory();
+    let activity: ChildActivitySnapshot = {
+      version: 1,
+      runId: "run-1",
+      updatedAt: 100,
+      latestAssistantText: "looking around",
+      toolCalls: 1,
+      modelTurns: 1,
+    };
+    const handle: AgentChildHandle = {
+      id: "child-1",
+      sessionId: "child-session",
+      state: "running",
+      result: new Promise<AgentChildResult>(() => {}),
+      get activity() { return { ...activity }; },
+      send: vi.fn(async () => ({ sessionId: "child-session", inputId: "i1", runId: "run-1" })),
+      interrupt: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    };
+    const host = new LocalAgentJobHost({
+      cwd,
+      sessionId: "session-1",
+      childManager: directory(handle),
+      workflowRepository: undefined,
+    });
+
+    await expect(host.read({ sessionId: "session-1", jobId: "child-1" })).resolves.toMatchObject({
+      snapshot: { id: "child-1", status: "running" },
+      details: { activity: { runId: "run-1", latestAssistantText: "looking around" } },
+    });
+
+    const waiting = host.wait({ sessionId: "session-1", jobId: "child-1", timeoutMs: 400 });
+    setTimeout(() => {
+      activity = {
+        version: 1,
+        runId: "run-1",
+        updatedAt: 200,
+        latestAssistantText: "found it",
+        toolCalls: 1,
+        modelTurns: 2,
+      };
+    }, 80);
+
+    await expect(waiting).resolves.toMatchObject({
+      timedOut: false,
+      snapshot: { status: "running" },
+      details: { activity: { modelTurns: 2, latestAssistantText: "found it" } },
+    });
+  });
+
+  it("keeps a child wait bounded when no new turn arrives", async () => {
+    const cwd = temporaryDirectory();
+    const activity: ChildActivitySnapshot = {
+      version: 1,
+      runId: "run-1",
+      updatedAt: 100,
+      toolCalls: 0,
+      modelTurns: 0,
+    };
+    const handle: AgentChildHandle = {
+      id: "child-1",
+      sessionId: "child-session",
+      state: "running",
+      result: new Promise<AgentChildResult>(() => {}),
+      activity,
+      send: vi.fn(async () => ({ sessionId: "child-session", inputId: "i1", runId: "run-1" })),
+      interrupt: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+    };
+    const host = new LocalAgentJobHost({
+      cwd,
+      sessionId: "session-1",
+      childManager: directory(handle),
+      workflowRepository: undefined,
+    });
+
+    await expect(host.wait({ sessionId: "session-1", jobId: "child-1", timeoutMs: 150 }))
+      .resolves.toMatchObject({ timedOut: true, snapshot: { status: "running" } });
+  });
+
+  it("does not expose child activity for shell jobs", async () => {
+    const cwd = temporaryDirectory();
+    const host = new LocalAgentJobHost({
+      cwd,
+      sessionId: "session-1",
+      childManager: directory(),
+      workflowRepository: undefined,
+    });
+    const created = await host.create({
+      requestId: "tool:no-activity",
+      cwd,
+      sessionId: "session-1",
+      command: `${JSON.stringify(process.execPath)} -e "process.stdout.write('ok')"`,
+      description: "print once",
+    });
+
+    const result = await host.read({ sessionId: "session-1", jobId: created.jobId });
+    expect(result.details).toBeUndefined();
+    await host.wait({ sessionId: "session-1", jobId: created.jobId, timeoutMs: 2_000 });
   });
 
   it("rejects a different session owner", async () => {

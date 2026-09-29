@@ -71,6 +71,7 @@ describe("loadAgentsDir", () => {
         "effort: high",
         "permissionMode: plan",
         "maxTurns: 7",
+        "timeoutSeconds: 900",
         "skills: commit, review",
         "color: red",
         "background: true",
@@ -94,6 +95,7 @@ describe("loadAgentsDir", () => {
     expect(agent!.effort).toBe("high");
     expect(agent!.permissionMode).toBe("plan");
     expect(agent!.maxTurns).toBe(7);
+    expect(agent!.timeoutSeconds).toBe(900);
     expect(agent!.skills).toEqual(["commit", "review"]);
     expect(agent!.color).toBe("red");
     expect(agent!.background).toBe(true);
@@ -121,13 +123,14 @@ describe("loadAgentsDir", () => {
   it("silently drops invalid enum values (color/memory/permissionMode)", () => {
     writeAgent(
       "weird",
-      ["---", "name: weird", "color: rainbow", "memory: galaxy", "permissionMode: yolo", "maxTurns: -3", "---", "x"].join("\n"),
+      ["---", "name: weird", "color: rainbow", "memory: galaxy", "permissionMode: yolo", "maxTurns: -3", "timeoutSeconds: 0", "---", "x"].join("\n"),
     );
     const [agent] = loadAgentsDir(tmp);
     expect(agent!.color).toBeUndefined();
     expect(agent!.memory).toBeUndefined();
     expect(agent!.permissionMode).toBeUndefined();
     expect(agent!.maxTurns).toBeUndefined();
+    expect(agent!.timeoutSeconds).toBeUndefined();
   });
 
   it("accepts free-form effort strings and positive integers, dropping empties", () => {

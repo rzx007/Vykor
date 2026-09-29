@@ -143,6 +143,8 @@ export interface WorkflowTaskRunResult {
   finishedAt: number;
   skippedReason?: string;
   timedOut?: boolean;
+  /** The runner did not confirm it stopped its worker within the cleanup grace window. */
+  cleanupUnconfirmed?: boolean;
   error?: string;
 }
 
@@ -155,6 +157,10 @@ export interface WorkflowRunnerContext {
   budgetMode?: "normal" | "conserve";
   budgetConserve?: WorkflowConservePolicy;
   reportProgress?: (progress: WorkflowTaskProgress) => void;
+  /** Aborted by the scheduler when the attempt deadline is reached. */
+  signal?: AbortSignal;
+  /** Epoch ms by which the runner must settle; earlier than any role budget when smaller. */
+  deadlineAt?: number;
 }
 
 export type WorkflowRunner = (

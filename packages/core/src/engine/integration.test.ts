@@ -1253,6 +1253,160 @@ describe("Integration: Full Agent Loop", () => {
     expect(history.filter((m) => m.type === "tool_result")).toHaveLength(2);
   });
 
+  it("keeps a child run within the frozen hardMaxTurns when request configuration raises the limit", async () => {
+    const registry = new ToolRegistry();
+    let executions = 0;
+    registry.register(makeTool("Loop", () => { executions++; return "looped"; }));
+
+    let callCount = 0;
+    const client = {
+      streamMessage: async function* (params: { tools?: unknown[] }) {
+        callCount++;
+        if ((params.tools?.length ?? 0) === 0) {
+          yield { type: "text_delta" as const, delta: "child summary" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+          return;
+        }
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: `tu${callCount}`, name: "Loop", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), {
+      maxTurns: 10,
+      resolveRequestConfiguration: async () => ({
+        revision: 0,
+        model: "test-model",
+        client,
+        maxTurns: 99,
+      }),
+    });
+    let failure: unknown;
+    try {
+      for await (const _ of engine.submitMessage("loop", {
+        execution: {
+          hardMaxTurns: 2,
+          emit: async () => {},
+          closeSteering: () => {},
+          takeSteeredInputs: async () => [],
+        } as never,
+      })) { /* consume */ }
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain("Exceeded maximum agentic turns (2)");
+    expect(executions).toBe(1);
+    expect(callCount).toBe(2);
+  });
+
+  it("lets a child run finalize without tools at the frozen hard cap", async () => {
+    const registry = new ToolRegistry();
+    let executions = 0;
+    registry.register(makeTool("Loop", () => { executions++; return "looped"; }));
+    const toolsPerRequest: number[] = [];
+    const client = {
+      streamMessage: async function* (params: { tools?: unknown[] }) {
+        toolsPerRequest.push(params.tools?.length ?? 0);
+        if ((params.tools?.length ?? 0) === 0) {
+          yield { type: "text_delta" as const, delta: "final report" };
+          yield { type: "complete" as const, stopReason: "end_turn" };
+          return;
+        }
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: `tu${toolsPerRequest.length}`, name: "Loop", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const { MaxTurnsExceeded } = await import("./query-engine.js");
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { maxTurns: 2 });
+    const events: StreamEvent[] = [];
+    const execution = {
+      ...createExecutionContext({ takeSteeredInputs: async () => [] }),
+      hardMaxTurns: 2,
+    };
+
+    let failure: unknown;
+    try {
+      for await (const event of engine.submitMessage("loop", { execution })) events.push(event);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(MaxTurnsExceeded);
+    expect(toolsPerRequest).toEqual([1, 0]);
+    expect(executions).toBe(1);
+    expect(events.some((event) => event.type === "text_delta" && event.delta === "final report")).toBe(true);
+    expect(engine.getHistory().some(
+      (message) => message.type === "assistant" && message.content === "final report",
+    )).toBe(true);
+  });
+
+  it("does not reserve a tool-free finalization for a root agent", async () => {
+    const registry = new ToolRegistry();
+    let executions = 0;
+    registry.register(makeTool("Loop", () => { executions++; return "looped"; }));
+    const toolsPerRequest: number[] = [];
+    const client = {
+      streamMessage: async function* (params: { tools?: unknown[] }) {
+        toolsPerRequest.push(params.tools?.length ?? 0);
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: `tu${toolsPerRequest.length}`, name: "Loop", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const { MaxTurnsExceeded } = await import("./query-engine.js");
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { maxTurns: 2 });
+
+    let failure: unknown;
+    try {
+      for await (const _ of engine.submitMessage("loop", {
+        execution: createExecutionContext({ takeSteeredInputs: async () => [] }),
+      })) { /* consume */ }
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(MaxTurnsExceeded);
+    expect(toolsPerRequest).toEqual([1, 1]);
+    expect(executions).toBe(2);
+  });
+
+  it("fails the child run when its tool-free finalization fails", async () => {
+    const registry = new ToolRegistry();
+    registry.register(makeTool("Loop", () => "looped"));
+    const client = {
+      streamMessage: async function* (params: { tools?: unknown[] }) {
+        if ((params.tools?.length ?? 0) === 0) throw new Error("finalization provider failed");
+        yield {
+          type: "tool_use_start" as const,
+          toolUse: { type: "tool_use", id: "tu1", name: "Loop", input: {} },
+        };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      },
+    };
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), {
+      maxTurns: 1,
+      modelRetry: { maxTotalRetries: 0 },
+    });
+    const execution = {
+      ...createExecutionContext({ takeSteeredInputs: async () => [] }),
+      hardMaxTurns: 1,
+    };
+
+    await expect(async () => {
+      for await (const _ of engine.submitMessage("loop", { execution })) { /* consume */ }
+    }).rejects.toThrow("finalization provider failed");
+  });
+
   it("multiple submitMessage calls maintain history", async () => {
     const { client } = createMockStreamClient([
       [

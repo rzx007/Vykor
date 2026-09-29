@@ -1,5 +1,12 @@
 import type { VykorAgent } from "@vykor/agent-runtime";
-import type { AgentEvent, ContentBlock, StreamEvent } from "@vykor/core";
+import type {
+  AgentChildSpawnInput,
+  AgentEvent,
+  ChildFailureKind,
+  ChildPartialResult,
+  ContentBlock,
+  StreamEvent,
+} from "@vykor/core";
 import {
   type SessionStore,
 } from "@vykor/services";
@@ -135,6 +142,7 @@ export class DaemonAgentEventProjector {
         return;
       case "output.turn.completed":
         this.projectStream(event, { type: "complete", stopReason: event.data.stopReason });
+        this.noteChildTurnActivity(event);
         return;
       case "output.generation.started":
         this.projectGenerationStarted(event);
@@ -277,6 +285,12 @@ export class DaemonAgentEventProjector {
       });
       if (registered.id !== taskId) throw new Error(`Child task identity conflict: ${registered.id}/${taskId}`);
     }
+    const delegationMetadata = childDelegationMetadata(spawn);
+    if (delegationMetadata) {
+      const before = this.context.events.checkpoint();
+      this.context.store.updateSessionTask(taskId, { metadata: delegationMetadata });
+      this.context.events.publishSince(before);
+    }
     this.context.liveChildren.register(sessionId, childId, this.context.rootAgent);
     this.children.set(childId, { childId, sessionId, parentSessionId: parent.id, parentRunId: event.context.runId, prompt: spawn.prompt, taskId, bridge });
   }
@@ -284,6 +298,40 @@ export class DaemonAgentEventProjector {
   private async projectChildClosed(event: Extract<AgentEvent, { type: "child.closed" }>): Promise<void> {
     const state = this.children.get(event.data.childId);
     await this.completeChildCloseProjection(event, state);
+  }
+
+  /**
+   * After a child model turn is projected, advance a small counter on the parent
+   * Task so an existing JobWait wakes while the child is still running. Only the
+   * cursor is copied: no model text, tool input or tool output reaches the parent.
+   */
+  private noteChildTurnActivity(event: Extract<AgentEvent, { type: "output.turn.completed" }>): void {
+    const childId = event.context.childId;
+    if (!childId) return;
+    const child = this.children.get(childId);
+    if (!child) return;
+    // Only the child's current Run may move its parent-task cursor; a late
+    // event from a superseded Run must not overwrite newer progress.
+    const runId = event.context.runId;
+    if (!runId || child.runId !== runId) return;
+    const task = this.context.store.getSessionTask(child.taskId);
+    if (!task) return;
+    const previous = isRecord(task.metadata.childActivity) ? task.metadata.childActivity : undefined;
+    if (previous?.lastEventId === event.id) return;
+    const turns = typeof previous?.turns === "number" && Number.isSafeInteger(previous.turns)
+      ? previous.turns
+      : 0;
+    const before = this.context.events.checkpoint();
+    this.context.store.updateSessionTask(child.taskId, {
+      metadata: {
+        childActivity: {
+          runId,
+          turns: turns + 1,
+          lastEventId: event.id,
+        },
+      },
+    });
+    this.context.events.publishSince(before);
   }
 
   private projectInput(event: Extract<AgentEvent, { type: "input.accepted" }>): void {
@@ -668,6 +716,7 @@ export class DaemonAgentEventProjector {
             status: interrupted ? "interrupted" as const : "failed" as const,
             output: event.data.output ?? error ?? "",
             ...(error ? { error } : {}),
+            ...childFailureFromEvent(event),
           };
         await child.bridge.completeChildExecution(child.taskId, result);
       }
@@ -738,7 +787,11 @@ export class DaemonAgentEventProjector {
     if (!child) return;
     const task = this.context.store.getSessionTask(child.taskId);
     if (task && (task.status === "pending" || task.status === "running")) {
-      await child.bridge.completeChildExecution(child.taskId, { status: "failed", output: message });
+      await child.bridge.completeChildExecution(child.taskId, {
+        status: "failed",
+        output: message,
+        ...childFailureFromEvent(event),
+      });
     }
   }
 
@@ -951,6 +1004,27 @@ export class DaemonAgentEventProjector {
 
 function isRuntimeEffort(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+/** Read only trusted terminal failure detail already carried by the event. */
+function childFailureFromEvent(
+  event: AgentEvent,
+): { failureKind?: ChildFailureKind; partialResult?: ChildPartialResult } {
+  if (event.type !== "run.failed" && event.type !== "run.interrupted") return {};
+  return {
+    ...(event.data.failureKind !== undefined ? { failureKind: event.data.failureKind } : {}),
+    ...(event.data.partialResult !== undefined ? { partialResult: event.data.partialResult } : {}),
+  };
+}
+
+/** Persist only the two delegation task descriptions; they never imply permissions. */
+function childDelegationMetadata(spawn: AgentChildSpawnInput): Record<string, string> | undefined {
+  const metadata: Record<string, string> = {};
+  if (typeof spawn.scope === "string" && spawn.scope.length > 0) metadata.scope = spawn.scope;
+  if (typeof spawn.expectedResult === "string" && spawn.expectedResult.length > 0) {
+    metadata.expectedResult = spawn.expectedResult;
+  }
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 function snapshotTranscript(state: ActiveTranscriptProjectionState): ActiveTranscriptProjectionState {

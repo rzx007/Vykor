@@ -6,11 +6,15 @@ import {
 } from "@vykor/coordinator";
 
 const scopedAgentDefinitions = new WeakMap<ToolDefinition, AgentDefinition[]>();
+const MAX_DELEGATION_TEXT_LENGTH = 2_000;
 
 export const agentTool: ToolDefinition = {
   name: "Agent",
   description:
-    "Spawn an in-process child-agent job. Use JobWait, JobRead, JobSend, and JobCancel with the returned jobId.",
+    "Spawn an in-process child-agent job for one independently deliverable scope. Give it a " +
+    "`scope` (the files, modules, or assertion categories it owns) and an `expectedResult` " +
+    "(the expected result you need back), then track it with JobWait, JobRead, JobSend, and " +
+    "JobCancel using the returned jobId.",
   inputSchema: {
     type: "object",
     properties: {
@@ -32,6 +36,30 @@ export const agentTool: ToolDefinition = {
           "For parallel write tasks, isolate the sub-agent into its own git worktree (separate branch) " +
           "so concurrent file edits don't conflict. Not needed for read-only exploration.",
       },
+      scope: {
+        type: "string",
+        maxLength: MAX_DELEGATION_TEXT_LENGTH,
+        description:
+          "Task boundary the child owns: files, modules, questions or assertion categories. " +
+          "It narrows the described work only; it never grants tools, paths or permissions.",
+      },
+      expectedResult: {
+        type: "string",
+        maxLength: MAX_DELEGATION_TEXT_LENGTH,
+        description:
+          "Deliverable the parent needs back, such as evidence-backed findings, changes with test " +
+          "results, or explicit blockers.",
+      },
+      maxTurns: {
+        type: "integer",
+        minimum: 1,
+        description: "Optional turn budget for this child run. It can only tighten the configured budget.",
+      },
+      timeoutSeconds: {
+        type: "integer",
+        minimum: 1,
+        description: "Optional wall-clock budget for this child run. Legacy calls without it get no timer.",
+      },
     },
     required: ["description", "prompt"],
   },
@@ -48,6 +76,28 @@ export const agentTool: ToolDefinition = {
     const permissionMode = input.permissionMode as string | undefined;
     if (permissionMode !== undefined && !["default", "plan", "full_auto"].includes(permissionMode)) {
       return { content: [{ type: "text", text: "Invalid permissionMode. Use default, plan, or full_auto." }], isError: true };
+    }
+
+    const scope = input.scope;
+    const expectedResult = input.expectedResult;
+    for (const [name, value] of [["scope", scope], ["expectedResult", expectedResult]] as const) {
+      if (value !== undefined && !isDelegationText(value)) {
+        return {
+          content: [{
+            type: "text",
+            text: `Invalid ${name}. Provide non-empty text up to ${MAX_DELEGATION_TEXT_LENGTH} characters.`,
+          }],
+          isError: true,
+        };
+      }
+    }
+    const maxTurns = input.maxTurns;
+    if (maxTurns !== undefined && !isPositiveBudget(maxTurns)) {
+      return { content: [{ type: "text", text: "Invalid maxTurns. Use a positive integer." }], isError: true };
+    }
+    const timeoutSeconds = input.timeoutSeconds;
+    if (timeoutSeconds !== undefined && !isPositiveBudget(timeoutSeconds)) {
+      return { content: [{ type: "text", text: "Invalid timeoutSeconds. Use a positive integer." }], isError: true };
     }
 
     const children = context.agent?.children;
@@ -82,7 +132,12 @@ export const agentTool: ToolDefinition = {
         requiredMcpServers: agentDef?.requiredMcpServers,
         disallowedTools: agentDef?.disallowedTools,
         maxTurns: agentDef?.maxTurns,
+        timeoutSeconds: agentDef?.timeoutSeconds,
         effort: agentDef?.effort != null ? String(agentDef.effort) : undefined,
+        ...(typeof scope === "string" ? { scope } : {}),
+        ...(typeof expectedResult === "string" ? { expectedResult } : {}),
+        ...(maxTurns !== undefined ? { requestedMaxTurns: maxTurns } : {}),
+        ...(typeof timeoutSeconds === "number" ? { requestedTimeoutSeconds: timeoutSeconds } : {}),
       });
 
       if (input.team) {
@@ -125,6 +180,16 @@ export const agentTool: ToolDefinition = {
 export interface CreateAgentToolOptions {
   /** Plugin definitions owned by this tool's runtime. An empty array explicitly disables global plugins. */
   agentDefinitions?: AgentDefinition[];
+}
+
+function isDelegationText(value: unknown): value is string {
+  return typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= MAX_DELEGATION_TEXT_LENGTH;
+}
+
+function isPositiveBudget(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 }
 
 export function createAgentTool(options: CreateAgentToolOptions = {}): ToolDefinition {

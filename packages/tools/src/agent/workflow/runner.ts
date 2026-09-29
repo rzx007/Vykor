@@ -71,12 +71,18 @@ export interface AgentWorkflowRunnerOptions {
  * or runtime host wiring.
  */
 export function createAgentWorkflowRunner(options: AgentWorkflowRunnerOptions): WorkflowRunner {
-  return async ({ task, attempt, dependencyResults, pipelineInput, resumeFrom, budgetMode, budgetConserve, reportProgress }) => {
+  return async ({ task, attempt, dependencyResults, pipelineInput, resumeFrom, budgetMode, budgetConserve, reportProgress, signal, deadlineAt }) => {
+    void signal;
     const prompt = buildWorkerPrompt(task, dependencyResults, pipelineInput, budgetMode, budgetConserve);
     const subagentType = task.subagentType ?? "worker";
     const agentDef = options.getAgentDefinition
       ? options.getAgentDefinition(subagentType)
       : await defaultGetAgentDefinition(subagentType);
+    const waitTimeoutMs = earliestDefined(
+      options.timeoutMs,
+      agentDef?.timeoutSeconds !== undefined ? agentDef.timeoutSeconds * 1_000 : undefined,
+      deadlineAt !== undefined ? Math.max(0, deadlineAt - Date.now()) : undefined,
+    );
     const team = task.team ?? options.team ?? "default";
     const workerSessionId = createWorkerSessionId(task.id, attempt);
     const spawnWorker = options.spawnWorker ?? ((config) => defaultSpawnWorker(options.cwd, config, options.agent));
@@ -90,8 +96,12 @@ export function createAgentWorkflowRunner(options: AgentWorkflowRunnerOptions): 
           summary: `Waiting for existing task ${resumedTaskId}`,
           metadata: resumeFrom?.metadata,
         });
-        const waited = await awaitTask(resumedTaskId, { timeoutMs: options.timeoutMs });
-        await stopTimedOutTask(stopTask, resumedTaskId, waited);
+        const waited = await stopTimedOutTask(
+          stopTask,
+          resumedTaskId,
+          await awaitTask(resumedTaskId, { timeoutMs: waitTimeoutMs }),
+          awaitTask,
+        );
         const spawn = {
           success: true,
           agentId: getStringMetadata(resumeFrom?.metadata, "agentId") ?? `${subagentType}@${team}`,
@@ -150,8 +160,12 @@ export function createAgentWorkflowRunner(options: AgentWorkflowRunnerOptions): 
       summary: `Waiting for task ${spawn.taskId}`,
       metadata: spawnMetadata(spawn),
     });
-    const waited = await awaitTask(spawn.taskId, { timeoutMs: options.timeoutMs });
-    await stopTimedOutTask(stopTask, spawn.taskId, waited);
+    const waited = await stopTimedOutTask(
+      stopTask,
+      spawn.taskId,
+      await awaitTask(spawn.taskId, { timeoutMs: waitTimeoutMs }),
+      awaitTask,
+    );
     reportProgress?.({
       summary: `Worker task ${spawn.taskId} ${waited.timedOut ? "timed out" : "finished"}; collecting changes`,
       metadata: spawnMetadata(spawn),
@@ -161,17 +175,32 @@ export function createAgentWorkflowRunner(options: AgentWorkflowRunnerOptions): 
   };
 }
 
+const CLEANUP_GRACE_MS = 5_000;
+
 async function stopTimedOutTask(
   stopTask: (taskId: string) => Promise<unknown>,
   taskId: string,
   waited: AwaitExecutionResult,
-): Promise<void> {
-  if (!waited.timedOut) return;
+  awaitTask: (taskId: string, options?: { timeoutMs?: number }) => Promise<AwaitExecutionResult>,
+): Promise<AwaitExecutionResult> {
+  if (!waited.timedOut) return waited;
+  let stopRequested = false;
   try {
     await stopTask(taskId);
+    stopRequested = true;
   } catch {
-    // Best-effort: a failed stop must not mask the timeout result.
+    // A failed stop still leaves cleanup unconfirmed; keep the timeout result.
   }
+  const confirmed = stopRequested
+    ? await awaitTask(taskId, { timeoutMs: CLEANUP_GRACE_MS }).catch(() => undefined)
+    : undefined;
+  if (confirmed && confirmed.status !== "running" && !confirmed.timedOut) return confirmed;
+  return { ...waited, cleanupUnconfirmed: true };
+}
+
+function earliestDefined(...values: Array<number | undefined>): number | undefined {
+  const defined = values.filter((value): value is number => value !== undefined);
+  return defined.length > 0 ? Math.min(...defined) : undefined;
 }
 
 function buildWorkerPrompt(
@@ -249,7 +278,10 @@ function mapAwaitedTaskToWorkerResult(
       ...(spawn.notice ? { notice: spawn.notice } : {}),
       ...(diff && diff.changedFiles.length > 0 ? { changedFiles: diff.changedFiles, diff } : {}),
       ...(waited.timedOut ? { timedOut: true } : {}),
+      ...(waited.cleanupUnconfirmed ? { cleanupUnconfirmed: true } : {}),
       ...(waited.failureKind ? { failureKind: waited.failureKind } : {}),
+      ...(waited.childFailureKind ? { childFailureKind: waited.childFailureKind } : {}),
+      ...(waited.partialResult ? { partialResult: waited.partialResult } : {}),
     },
   };
 }

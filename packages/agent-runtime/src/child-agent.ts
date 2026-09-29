@@ -11,13 +11,22 @@ import type {
   AgentChildInvocation,
   AgentChildResult,
   AgentChildSpawnInput,
+  AgentEvent,
   AgentInputReceipt,
   AgentRunHandle,
   AgentRunScope,
+  ChildActivitySnapshot,
+  ChildFailureKind,
+  ChildPartialResult,
   RunCapabilityView,
   Settings,
 } from "@vykor/core";
-import { AgentChildBudgetExceededError, AgentRunNotAcceptingInputError } from "@vykor/core";
+import {
+  AgentChildBudgetExceededError,
+  AgentRunNotAcceptingInputError,
+  ChildRunTerminationError,
+  MaxTurnsExceeded,
+} from "@vykor/core";
 
 import type { VykorAgent, VykorAgentOptions } from "./agent.js";
 import type {
@@ -31,9 +40,23 @@ import {
   type AgentChildEnvironmentProvider,
 } from "./child-environment.js";
 import type { AgentEventBus } from "./event-source.js";
-import { deriveChildAgentOptions, deriveChildCapabilityView } from "./child-agent-options.js";
+import {
+  deriveChildAgentOptions,
+  deriveChildCapabilityView,
+  resolveChildMaxTurns,
+} from "./child-agent-options.js";
 
 export type { AgentChildEnvironmentLease, AgentChildEnvironmentProvider } from "./child-environment.js";
+
+interface ChildActivityState {
+  snapshot: ChildActivitySnapshot;
+  stagedText: string;
+  toolNames: Map<string, string>;
+  terminalPartial?: ChildPartialResult;
+}
+
+const MAX_CHILD_ACTIVITY_TEXT = 2_000;
+const MAX_CHILD_PARTIAL_TEXT = 12_000;
 
 interface ChildRecord {
   id: string;
@@ -48,6 +71,7 @@ interface ChildRecord {
   creating?: Promise<VykorAgent>;
   suspendedHistory?: ReturnType<VykorAgent["getHistory"]>;
   idleTimer?: ReturnType<typeof setTimeout>;
+  runDeadline?: ReturnType<typeof setTimeout>;
   suspending?: Promise<void>;
   abortController?: AbortController;
   currentRun?: AgentRunHandle;
@@ -57,6 +81,11 @@ interface ChildRecord {
   parentAbortHandler?: () => void;
   requests: Map<string, { input: AgentChildInput; receipt: Promise<AgentInputReceipt>; settled: boolean }>;
   state: AgentChildHandle["state"];
+  activity?: ChildActivityState;
+  activityRunId?: string;
+  activityUnsubscribe?: () => void;
+  /** Trusted origin of an explicit cancellation, never inferred from reason text. */
+  cancelSource?: Extract<ChildFailureKind, "user_cancelled" | "parent_interrupted">;
   closePromise?: Promise<void>;
   cleanupPromise?: Promise<void>;
   handle: ChildHandle;
@@ -324,6 +353,9 @@ export class AgentChildManager implements AgentChildDirectory {
     try {
       this.directory.register(handle);
       this.records.set(childId, record);
+      record.activityUnsubscribe = this.options.eventBus.subscribe((event) => {
+        this.applyChildActivityEvent(record, event);
+      });
       await this.emitChild(record, {
         type: "child.created",
         data: {
@@ -354,15 +386,18 @@ export class AgentChildManager implements AgentChildDirectory {
         : undefined;
       await this.ensureAgent(record, false);
       const parentAbortHandler = () => {
+        const current = this.find(childId);
+        if (current) current.cancelSource = "parent_interrupted";
         void this.interrupt(childId, "Parent run interrupted").catch(() => {});
       };
       record.parentAbortHandler = parentAbortHandler;
       parentScope.signal.addEventListener("abort", parentAbortHandler, { once: true });
       if (parentScope.signal.aborted) {
+        record.cancelSource = "parent_interrupted";
         await this.interrupt(childId, "Parent run interrupted");
         throw new Error("Parent run interrupted");
       }
-      const receipt = await this.beginRun(record, { content: input.prompt });
+      const receipt = await this.beginRun(record, { content: childInitialTask(input) });
       budgetReservation.commit();
       return {
         id: childId,
@@ -414,6 +449,8 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   async interrupt(childId: string, reason?: string): Promise<void> {
+    const record = this.find(childId);
+    if (record && !record.cancelSource) record.cancelSource = "user_cancelled";
     await this.close(childId, reason ?? "Child agent interrupted");
   }
 
@@ -425,7 +462,11 @@ export class AgentChildManager implements AgentChildDirectory {
     const closing = (async () => {
       const failures: unknown[] = [];
       const activeRun = record.currentRun;
-      record.abortController?.abort(reason ?? "Child agent closed");
+      record.abortController?.abort(
+        record.cancelSource
+          ? new ChildRunTerminationError(record.cancelSource, reason ?? "Child agent closed")
+          : (reason ?? "Child agent closed"),
+      );
       try {
         await activeRun?.interrupt(reason ?? "Child agent closed");
       } catch (error) {
@@ -480,22 +521,85 @@ export class AgentChildManager implements AgentChildDirectory {
       runId: `run_${randomUUID()}`,
       traceId: input.traceId ?? randomUUID(),
     };
-    const run = agent.submitMessage(input.content, {
-      capabilityView: record.capabilityView,
-      ids,
-      inputItems: input.inputItems,
-      signal: controller.signal,
-      delivery: input.delivery ?? "queue",
-      metadata: input.metadata,
+    record.activityRunId = ids.runId;
+    record.activity = undefined;
+    const runConfiguration = this.options.configurationForChild?.() ?? this.options.configuration;
+    const hardMaxTurns = resolveChildMaxTurns({
+      roleMaxTurns: record.spawn.maxTurns,
+      requestedMaxTurns: record.spawn.requestedMaxTurns,
+      requestConfigurationMaxTurns: runConfiguration.maxTurns,
+      settingsMaxTurns: this.options.settings.maxTurns,
     });
+    const timeoutMs = childRunTimeoutMs(record.spawn);
+    let timedOut = false;
+    if (timeoutMs !== undefined) {
+      // Trusted deadline source: the flag, never the abort reason text, classifies the failure.
+      record.runDeadline = setTimeout(() => {
+        timedOut = true;
+        controller.abort(new ChildRunTerminationError("timeout", childTimeoutMessage(timeoutMs)));
+      }, timeoutMs);
+      record.runDeadline.unref?.();
+    }
+    let run: AgentRunHandle;
+    try {
+      run = agent.submitMessage(input.content, {
+        capabilityView: record.capabilityView,
+        ids,
+        inputItems: input.inputItems,
+        signal: controller.signal,
+        delivery: input.delivery ?? "queue",
+        metadata: input.metadata,
+        ...(hardMaxTurns !== undefined ? { hardMaxTurns } : {}),
+      });
+    } catch (error) {
+      this.clearRunDeadline(record);
+      if (record.abortController === controller) record.abortController = undefined;
+      throw error;
+    }
     record.currentRun = run;
     const result = run.result.then<AgentChildResult>((completed) => ({
       status: "completed",
       output: completed.output,
-    })).catch<AgentChildResult>((error) => controller.signal.aborted
-      ? { status: "interrupted", output: "", error: errorMessage(error) }
-      : failedResult(error));
+    })).catch<AgentChildResult>((error) => {
+      const message = errorMessage(error);
+      if (timedOut) {
+        const timeoutMessage = childTimeoutMessage(timeoutMs!);
+        return {
+          status: "failed",
+          output: timeoutMessage,
+          error: timeoutMessage,
+          failureKind: "timeout",
+          ...partialResultFields(record, ids.runId),
+        };
+      }
+      if (error instanceof MaxTurnsExceeded) {
+        return {
+          status: "failed",
+          output: message,
+          error: message,
+          failureKind: "max_turns",
+          ...partialResultFields(record, ids.runId, error.finalizationText),
+        };
+      }
+      if (controller.signal.aborted) {
+        return {
+          status: "interrupted",
+          output: "",
+          error: message,
+          failureKind: record.cancelSource ?? "unknown",
+          ...partialResultFields(record, ids.runId),
+        };
+      }
+      return {
+        status: "failed",
+        output: message,
+        error: message,
+        failureKind: "unknown",
+        ...partialResultFields(record, ids.runId),
+      };
+    });
     record.result = result.finally(() => {
+      this.clearRunDeadline(record);
       if (record.abortController === controller) record.abortController = undefined;
       if (record.currentRun === run) record.currentRun = undefined;
       if (!isChildUnavailable(record)) record.state = "idle";
@@ -632,6 +736,7 @@ export class AgentChildManager implements AgentChildDirectory {
     record.state = "closed";
     this.detachParentAbort(record);
     this.clearIdleTimer(record);
+    this.clearRunDeadline(record);
     try {
       await record.suspending;
     } catch (error) {
@@ -678,6 +783,86 @@ export class AgentChildManager implements AgentChildDirectory {
     });
   }
 
+  /**
+   * Merge one trusted bus event into the child's bounded activity view. Only
+   * committed text and tool names/status/counts are exposed; reliable-sink
+   * success has already happened before subscribers run.
+   */
+  private applyChildActivityEvent(record: ChildRecord, event: AgentEvent): void {
+    const { childId, runId } = event.context;
+    if (childId !== record.id || !runId || runId !== record.activityRunId) return;
+    let state = record.activity;
+    if (state?.snapshot.runId !== runId) {
+      state = {
+        snapshot: { version: 1, runId, updatedAt: Date.now(), toolCalls: 0, modelTurns: 0 },
+        stagedText: "",
+        toolNames: new Map(),
+      };
+      record.activity = state;
+    }
+    const snapshot = state.snapshot;
+    const at = Date.parse(event.occurredAt) || Date.now();
+    switch (event.type) {
+      case "output.generation.started":
+        state.stagedText = "";
+        return;
+      case "output.text.delta":
+        state.stagedText += event.data.delta;
+        return;
+      case "output.turn.completed":
+        if (state.stagedText.length > 0) {
+          snapshot.latestAssistantText = state.stagedText.slice(0, MAX_CHILD_ACTIVITY_TEXT);
+        }
+        state.stagedText = "";
+        snapshot.modelTurns++;
+        snapshot.updatedAt = at;
+        return;
+      case "tool.started":
+        state.toolNames.set(event.data.toolUse.id, event.data.toolUse.name);
+        snapshot.latestTool = { name: event.data.toolUse.name, status: "running", at };
+        snapshot.toolCalls++;
+        snapshot.updatedAt = at;
+        return;
+      case "tool.completed": {
+        const name = state.toolNames.get(event.data.toolUseId);
+        if (name) {
+          snapshot.latestTool = {
+            name,
+            status: event.data.result.isError ? "failed" : "completed",
+            at,
+          };
+        }
+        snapshot.updatedAt = at;
+        return;
+      }
+      case "run.failed":
+      case "run.interrupted":
+        state.stagedText = "";
+        state.terminalPartial = event.data.partialResult;
+        snapshot.updatedAt = at;
+        return;
+      case "usage.updated": {
+        const usage = event.data.usage;
+        snapshot.usage = {
+          ...(snapshot.usage ?? { incomplete: false }),
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          incomplete: snapshot.usage?.incomplete === true || usage.usageIncomplete === true,
+        };
+        snapshot.updatedAt = at;
+        return;
+      }
+      case "model.attempt.finished":
+        if (event.data.usageStatus !== "complete") {
+          snapshot.usage = { ...(snapshot.usage ?? {}), incomplete: true };
+          snapshot.updatedAt = at;
+        }
+        return;
+      default:
+        return;
+    }
+  }
+
   private find(value: string): ChildRecord | undefined {
     return this.records.get(value);
   }
@@ -689,6 +874,8 @@ export class AgentChildManager implements AgentChildDirectory {
   }
 
   private deleteRecord(record: ChildRecord): void {
+    record.activityUnsubscribe?.();
+    record.activityUnsubscribe = undefined;
     this.directory.unregister(record.handle);
     this.records.delete(record.id);
     record.budgetReservation.release();
@@ -698,6 +885,12 @@ export class AgentChildManager implements AgentChildDirectory {
     if (!record.idleTimer) return;
     clearTimeout(record.idleTimer);
     record.idleTimer = undefined;
+  }
+
+  private clearRunDeadline(record: ChildRecord): void {
+    if (!record.runDeadline) return;
+    clearTimeout(record.runDeadline);
+    record.runDeadline = undefined;
   }
 
   private detachParentAbort(record: ChildRecord): void {
@@ -717,6 +910,15 @@ class ChildHandle implements AgentChildHandle {
   get sessionId(): string { return this.record().sessionId; }
   get state(): AgentChildHandle["state"] { return this.record().state; }
   get result(): Promise<AgentChildResult> { return this.record().result; }
+  get activity(): ChildActivitySnapshot | undefined {
+    const snapshot = this.record().activity?.snapshot;
+    if (!snapshot) return undefined;
+    return {
+      ...snapshot,
+      ...(snapshot.latestTool ? { latestTool: { ...snapshot.latestTool } } : {}),
+      ...(snapshot.usage ? { usage: { ...snapshot.usage } } : {}),
+    };
+  }
   send(input: AgentChildInput, authorization?: Pick<RunCapabilityView, "pluginId">): Promise<AgentInputReceipt> {
     return this.manager.send(this.id, input, authorization);
   }
@@ -750,9 +952,61 @@ function isChildUnavailable(record: ChildRecord): boolean {
   return record.state === "closing" || record.state === "closed";
 }
 
+/** Scope and expected result are task context only; they never widen the child's permissions. */
+function childInitialTask(input: AgentChildSpawnInput): string {
+  const sections = [input.prompt];
+  if (input.scope) sections.push("", "Task scope:", input.scope);
+  if (input.expectedResult) sections.push("", "Expected result:", input.expectedResult);
+  return sections.join("\n");
+}
+
+/** No configured time budget means no timer; a caller request can only tighten the role budget. */
+function childRunTimeoutMs(spawn: AgentChildSpawnInput): number | undefined {
+  const role = positiveSeconds(spawn.timeoutSeconds);
+  const requested = positiveSeconds(spawn.requestedTimeoutSeconds);
+  const seconds = role === undefined ? requested : requested === undefined ? role : Math.min(role, requested);
+  return seconds === undefined ? undefined : seconds * 1000;
+}
+
+function positiveSeconds(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function childTimeoutMessage(timeoutMs: number): string {
+  return `Child run exceeded its time budget (${timeoutMs / 1000} seconds)`;
+}
+
 function failedResult(error: unknown): AgentChildResult {
   const message = errorMessage(error);
   return { status: "failed", output: message, error: message };
+}
+
+function partialResultFields(
+  record: ChildRecord,
+  runId: string,
+  finalizationText?: string,
+): { partialResult?: ChildPartialResult } {
+  const terminalPartial = record.activity?.snapshot.runId === runId
+    ? record.activity.terminalPartial
+    : undefined;
+  if (terminalPartial) return { partialResult: terminalPartial };
+  const finalization = finalizationText && finalizationText.length > 0 ? finalizationText : undefined;
+  const committed = finalization
+    ?? (record.activity?.snapshot.runId === runId
+      ? record.activity.snapshot.latestAssistantText
+      : undefined);
+  if (!committed) return {};
+  const truncated = committed.length > MAX_CHILD_PARTIAL_TEXT;
+  return {
+    partialResult: {
+      version: 1,
+      childSessionId: record.sessionId,
+      runId,
+      source: finalization ? "limit_finalization" : "committed_assistant_text",
+      text: truncated ? committed.slice(0, MAX_CHILD_PARTIAL_TEXT) : committed,
+      truncated,
+    },
+  };
 }
 
 function errorMessage(error: unknown): string {

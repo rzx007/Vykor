@@ -1,4 +1,4 @@
-import type { AgentChildResult, Settings } from "@vykor/core";
+import type { AgentChildResult, ChildFailureKind, ChildPartialResult, Settings } from "@vykor/core";
 import type { EnvironmentProcessExecutor } from "@vykor/environment";
 import type { SandboxPolicy } from "@vykor/sandbox";
 
@@ -56,6 +56,12 @@ export interface AwaitExecutionResult {
   output: string;
   /** Exact framework-child outcome; process backends may omit it. */
   failureKind?: AgentChildResult["status"];
+  /** Trusted child failure source; process backends never set it. */
+  childFailureKind?: ChildFailureKind;
+  /** Bounded unfinished work from a framework child; process backends never set it. */
+  partialResult?: ChildPartialResult;
+  /** The timeout stop could not be confirmed within the cleanup grace window. */
+  cleanupUnconfirmed?: boolean;
   exitCode?: number;
   timedOut?: boolean;
 }
