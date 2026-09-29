@@ -22,6 +22,7 @@ import { createRequestLifecycle } from "./retry";
 import {
   prepareNativeImagePayload,
   prepareUserContentWithVisionImages,
+  replaceMissingToolResultImages,
 } from "./native-image-payload.js";
 
 export class AnthropicClient implements StreamingMessageClient {
@@ -224,7 +225,10 @@ export class AnthropicClient implements StreamingMessageClient {
               {
                 type: "tool_result" as const,
                 tool_use_id: msg.toolUseId,
-                content: await convertUserContentToAnthropic(msg.content, signal),
+                content: await convertUserContentToAnthropic(
+                  await replaceMissingToolResultImages(msg.content),
+                  signal,
+                ),
                 is_error: msg.isError,
               } as Anthropic.ToolResultBlockParam,
             ],

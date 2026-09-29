@@ -20,6 +20,7 @@ import {
   prepareNativeImagePayload,
   preparedImageDataUrl,
   prepareUserContentWithVisionImages,
+  replaceMissingToolResultImages,
 } from "./native-image-payload.js";
 
 const DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api";
@@ -296,7 +297,7 @@ async function convertMessagesToCodex(
         type: "function_call_output",
         call_id: msg.toolUseId,
         output: msg.content.some((block) => block.type === "image")
-          ? await convertUserContent(msg.content, signal)
+          ? await convertUserContent(await replaceMissingToolResultImages(msg.content), signal)
           : contentBlocksToText(msg.content),
       });
     }

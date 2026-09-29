@@ -1,4 +1,6 @@
 import type { ContentBlock } from "@vykor/core";
+import { access } from "node:fs/promises";
+import { basename } from "node:path";
 
 import {
   type PreparedVisionImage,
@@ -7,6 +9,24 @@ import {
 import { assertNativeImageMediaType } from "./registry.js";
 
 export const sharedVisionImagePreparer = new VisionImagePreparer();
+
+export async function replaceMissingToolResultImages(
+  content: ContentBlock[],
+): Promise<ContentBlock[]> {
+  return Promise.all(content.map(async (block): Promise<ContentBlock> => {
+    if (block.type !== "image") return block;
+    try {
+      await access(block.source.path);
+      return block;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      return {
+        type: "text",
+        text: `[Historical image unavailable: ${basename(block.source.path)}]`,
+      };
+    }
+  }));
+}
 
 export async function prepareUserContentWithVisionImages(
   content: string | ContentBlock[],

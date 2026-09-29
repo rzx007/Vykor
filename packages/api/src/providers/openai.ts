@@ -22,6 +22,7 @@ import {
   prepareNativeImagePayload,
   preparedImageDataUrl,
   prepareUserContentWithVisionImages,
+  replaceMissingToolResultImages,
 } from "./native-image-payload.js";
 import { extractThinkBlocks } from "./think-blocks.js";
 
@@ -441,11 +442,12 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
           break;
         }
         case "tool_result": {
-          const text = msg.content
+          const availableContent = await replaceMissingToolResultImages(msg.content);
+          const text = availableContent
             .filter((block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text")
             .map((block) => block.text)
             .join("\n");
-          pendingToolImages.push(...msg.content.filter(
+          pendingToolImages.push(...availableContent.filter(
             (block): block is Extract<ContentBlock, { type: "image" }> => block.type === "image",
           ));
           messages.push({
