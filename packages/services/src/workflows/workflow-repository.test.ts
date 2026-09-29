@@ -99,6 +99,26 @@ describe("WorkflowRepository", () => {
     }
   });
 
+  it("keeps stable event record ids and order", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-event-records-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const repository = new WorkflowRepository((store as any).storage);
+      repository.saveRun({ runId: "wf-1", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 1, taskAttempts: [] });
+      repository.appendEvent({ runId: "wf-1", type: "started", eventJson: '{"type":"workflow_started"}', createdAt: 1 });
+      repository.appendEvent({ runId: "wf-1", type: "broken", eventJson: "{broken", createdAt: 2 });
+
+      const records = repository.listEventRecords("wf-1");
+      expect(records.map((row) => row.eventJson)).toEqual(['{"type":"workflow_started"}', "{broken"]);
+      expect(records[0]?.id).toBeTruthy();
+      expect(records[1]?.id).not.toBe(records[0]?.id);
+      expect(repository.listEvents("wf-1")).toEqual(['{"type":"workflow_started"}', "{broken"]);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("reloads replacements and rejects writes after the application owner changes", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-workflow-owner-"));
     const path = join(directory, "sessions.db");

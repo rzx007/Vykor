@@ -28,6 +28,12 @@ export interface StoredWorkflowEventInput {
   createdAt: number;
 }
 
+/** 原始事件记录：`id` 是持久层稳定序号，用于在不泄漏内容的前提下定位坏记录。 */
+export interface StoredWorkflowEventRecord {
+  id: string;
+  eventJson: string;
+}
+
 export interface WorkflowRunClaim {
   ownerId: string;
   generation: number;

@@ -4,6 +4,7 @@ import {
   type StoredWorkflowRunInput,
   type StoredWorkflowRunRecord,
   type StoredWorkflowEventInput,
+  type StoredWorkflowEventRecord,
   type WorkflowRunClaim,
 } from "./workflow-records.js";
 
@@ -100,14 +101,18 @@ export class WorkflowRepository {
     return Number(result.lastInsertRowid);
   }
 
-  listEvents(runId: string): string[] {
+  listEventRecords(runId: string): StoredWorkflowEventRecord[] {
     return (
       this.storage.database.connection
         .prepare(
-          "SELECT event_json FROM workflow_event WHERE workflow_run_id = ? ORDER BY seq",
+          "SELECT seq, event_json FROM workflow_event WHERE workflow_run_id = ? ORDER BY seq",
         )
-        .all(runId) as Array<{ event_json: string }>
-    ).map((row) => row.event_json);
+        .all(runId) as Array<{ seq: number; event_json: string }>
+    ).map((row) => ({ id: String(row.seq), eventJson: row.event_json }));
+  }
+
+  listEvents(runId: string): string[] {
+    return this.listEventRecords(runId).map((row) => row.eventJson);
   }
 
   claimRun(runId: string, ownerId: string): WorkflowRunClaim {

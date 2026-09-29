@@ -4,10 +4,13 @@ import {
   createWorkflowRunSummary,
   decodeWorkflowRunEvent,
   decodeWorkflowRunSnapshot,
+  type WorkflowEventReadResult,
+  type WorkflowReadDiagnostic,
   type WorkflowRunEvent,
   type WorkflowRunRepository,
   type WorkflowRunSnapshot,
   type WorkflowRunSummary,
+  type WorkflowSnapshotReadResult,
 } from "@vykor/coordinator";
 import type {
   StoredWorkflowRunInput,
@@ -25,6 +28,7 @@ export interface WorkflowStorage {
     createdAt: number;
   }): number;
   listEvents(runId: string): string[];
+  listEventRecords(runId: string): Array<{ id: string; eventJson: string }>;
   claimRun(
     runId: string,
     ownerId: string,
@@ -103,7 +107,23 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
   }
 
   loadEvents(runId: string): WorkflowRunEvent[] {
-    return this.options.workflows.listEvents(runId).map(decodeWorkflowRunEvent);
+    return this.loadEventsWithDiagnostics(runId).events;
+  }
+
+  loadEventsWithDiagnostics(runId: string): WorkflowEventReadResult {
+    const events: WorkflowRunEvent[] = [];
+    const diagnostics: WorkflowReadDiagnostic[] = [];
+    for (const record of this.options.workflows.listEventRecords(runId)) {
+      try {
+        events.push(decodeWorkflowRunEvent(record.eventJson));
+      } catch {
+        diagnostics.push({
+          code: "invalid_workflow_event",
+          sourceId: `${runId}:event:${record.id}`,
+        });
+      }
+    }
+    return { events, diagnostics };
   }
 
   load(runId: string): WorkflowRunSnapshot | undefined {
@@ -112,7 +132,23 @@ export class SessionWorkflowRunRepository implements WorkflowRunRepository {
   }
 
   list(): WorkflowRunSnapshot[] {
-    return this.options.workflows.listRuns().map((stored) => decodeWorkflowRunSnapshot(stored.snapshotJson));
+    return this.listWithDiagnostics().snapshots;
+  }
+
+  listWithDiagnostics(): WorkflowSnapshotReadResult {
+    const snapshots: WorkflowRunSnapshot[] = [];
+    const diagnostics: WorkflowReadDiagnostic[] = [];
+    for (const stored of this.options.workflows.listRuns()) {
+      try {
+        snapshots.push(decodeWorkflowRunSnapshot(stored.snapshotJson));
+      } catch {
+        diagnostics.push({
+          code: "invalid_workflow_snapshot",
+          sourceId: stored.runId,
+        });
+      }
+    }
+    return { snapshots, diagnostics };
   }
 
   listSummaries(): WorkflowRunSummary[] {
