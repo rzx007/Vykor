@@ -127,6 +127,15 @@ vykor debug executions --json
 
 ## 数据边界
 
-- patch、prompt、finding 正文只进入 reviewer Child Session 的持久输入（`input.accepted`）一次。
-- 父 Run metadata、父 Session Task、`child.created` 事件、`session.auto_review.updated` 事件、Execution Observation 默认导出都不复制 patch/findings 正文。
-- `vykor debug inspect-run` / session export 默认不含 patch；显式 `includeContent` 才允许人工读取 Child input。
+- 原始 patch 与完整 reviewer instructions 只进入 reviewer Child Session 的持久输入一次（`session_input` 及其 `session.input.admitted`）。
+- 父 Run metadata、`session.auto_review.updated` 事件、`child.created` 的 spawn 摘要、Execution Observation 默认导出都不含 patch、prompt 正文、finding 正文或绝对路径。
+- `vykor debug inspect-run` / session export 默认不含 patch；显式 `includeContent` 才允许读取 Child input。
+
+## 已知取舍：finding 正文会作为 Child Task 输出落库
+
+reviewer 子代理结束时，框架**通用**的子代理收尾逻辑会把它的最终输出（评审 JSON，含 `summary` 与 `findings` 正文）写进父会话的 `session_task.output`，并复制到 `agent.child.closed` 事件。它和「父 Run metadata、自动评审事件只存有界摘要」是两条不同的通道。
+
+- 这是**有意保留**的行为：本计划任务 5 的约定是「完整 findings 仅保留在 Child Task output」，即把 reviewer 子会话/子任务视为承载结论正文的位置，父 Run metadata 与自动评审事件不承担该内容。
+- 它与计划开头「父 Session Task 只能持久化摘要」的字面要求存在冲突；当前按前者执行，**未**对系统评审子代理的输出做额外脱敏。
+- 影响：原始 diff 仍然只存在于 reviewer Child Session 输入中（这条经过真实端到端验证）；但由 diff 推导出的 finding 正文会出现在父会话的 `session_task.output` 与 `agent.child.closed` 事件里，`includeContent` 视图和任何读取父会话任务的一方都能看到。
+- 如果某个部署要求「父可见记录里不能出现由 diff 推导出的 finding 正文」，需要额外改造通用子代理收尾投影层，只向父会话任务写入 `status/riskLevel/verdict/findingCount/highestSeverity` 等摘要。当前版本**未**做此改造。
