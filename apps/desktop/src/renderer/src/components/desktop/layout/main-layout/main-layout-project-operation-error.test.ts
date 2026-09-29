@@ -108,6 +108,7 @@ beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   Reflect.set(window, "desktop", {
     settings: { snapshot: vi.fn(async () => ({ showReasoning: false })) },
+    browser: { onOpenRequest: () => () => undefined },
   })
   useDesktopSessionStore.setState(stateWith({}), true)
 })
