@@ -241,9 +241,12 @@ export class SessionAutoReviewService {
       const outcome = await input.agent.runChildForCompletedRun(
         {
           description: "Automatic risk-based review",
-          prompt: built.prompt,
+          // Only a bounded summary is published in child.created / the parent Task;
+          // full instructions and the untrusted patch travel via sensitive initial content.
+          prompt: "Automatic read-only review of this run's changes",
           agent: "review",
           cwd: input.cwd,
+          ...(role.systemPrompt ? { systemPrompt: role.systemPrompt } : {}),
           allowedTools: [],
           requiredMcpServers: [],
           ...(decision.requestedMaxTurns !== undefined
@@ -324,14 +327,20 @@ export class SessionAutoReviewService {
     });
   }
 
-  settleUnreviewedRun(input: { sessionId: string; runId: string; reason: "parent_run_not_completed" }): AutoReviewRunMetadata {
+  settleUnreviewedRun(input: {
+    sessionId: string;
+    runId: string;
+    reason: "parent_run_not_completed";
+  }): AutoReviewRunMetadata | undefined {
     const existing = this.readReview(input.runId);
+    this.baselines.delete(input.runId);
+    // Only a captured baseline can be converged. Disabled runs and capture-time
+    // unavailability keep their real state and precise reason.
+    if (!existing || existing.status !== "captured") return existing;
     return this.settle(input.sessionId, input.runId, {
-      mode: existing?.mode ?? "risk_based",
-      riskLevel: existing?.riskLevel ?? "unknown",
+      ...existing,
       status: "unavailable",
       reasons: [input.reason],
-      ...(existing?.patchTruncated !== undefined ? { patchTruncated: existing.patchTruncated } : {}),
       finishedAt: this.now(),
     });
   }

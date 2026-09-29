@@ -147,6 +147,14 @@ describe("SessionAutoReviewService", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("does not overwrite disabled or already-unavailable states when settling an unreviewed run", async () => {
+    const svc = service(changeSet([]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "off" });
+    const result = svc.settleUnreviewedRun({ sessionId, runId, reason: "parent_run_not_completed" });
+    expect(result).toMatchObject({ status: "disabled", mode: "off", reasons: ["mode_off"] });
+    expect(metadata()).toMatchObject({ status: "disabled", mode: "off", reasons: ["mode_off"] });
+  });
+
   it("skips a run with no attributable changes", async () => {
     const svc = service(changeSet([]));
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });

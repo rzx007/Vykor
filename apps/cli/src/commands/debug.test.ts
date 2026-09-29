@@ -138,7 +138,7 @@ describe("debug executions", () => {
 
     const output = log.mock.calls.map((call) => String(call[0])).join("\n");
     expect(output).toContain("Execution observations: 4 records, 1 warning");
-    expect(output).toContain("child_agent_run: completed=1 failed=1 timed_out=0 cancelled=0 skipped=0 reviews=findings:1,passed:2");
+    expect(output).toContain("child_agent_run: completed=1 failed=1 timed_out=0 cancelled=0 skipped=0 reviews=passed:2,findings:1");
     expect(output).toContain("workflow_task: completed=1 failed=0 timed_out=1 cancelled=0 skipped=0");
     expect(output).not.toContain("workflow_task: completed=1 failed=0 timed_out=1 cancelled=0 skipped=0 reviews=");
     expect(output).toContain("[invalid_workflow_event] wf-1:event:2");

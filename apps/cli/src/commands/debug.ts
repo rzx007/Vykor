@@ -27,6 +27,19 @@ interface ExecutionDebugOptions extends DebugOptions {
 
 type DebugQuery = Record<string, string | number | boolean | undefined>;
 
+const REVIEW_STATUS_ORDER = [
+  "passed",
+  "findings",
+  "partial",
+  "failed",
+  "timed_out",
+  "unavailable",
+  "skipped",
+  "captured",
+  "pending",
+  "disabled",
+] as const;
+
 export function createDebugCommand(): Command {
   const command = new Command("debug").description("Read-only diagnostics for durable runs and projections");
   command
@@ -156,8 +169,9 @@ export function printExecutionObservations(result: Record<string, unknown>, json
   for (const [kind, value] of Object.entries(summary)) {
     const row = asRecord(value);
     const reviews = asRecord(row.reviews);
-    const reviewText = Object.entries(reviews)
-      .map(([status, count]) => `${status}:${Number(count)}`)
+    const reviewText = REVIEW_STATUS_ORDER
+      .filter((status) => typeof reviews[status] === "number")
+      .map((status) => `${status}:${Number(reviews[status])}`)
       .join(",");
     console.log(
       `${kind}: completed=${Number(row.completed ?? 0)} failed=${Number(row.failed ?? 0)} timed_out=${Number(row.timedOut ?? 0)} cancelled=${Number(row.cancelled ?? 0)} skipped=${Number(row.skipped ?? 0)}${reviewText ? ` reviews=${reviewText}` : ""}`,
