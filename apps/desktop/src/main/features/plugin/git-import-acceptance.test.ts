@@ -114,6 +114,9 @@ function createDesktopService(): DesktopPluginService {
         listProjectionDiagnostics: () => {
           throw new Error("Projection diagnostics are outside this Git acceptance test")
         },
+        queryExecutionObservations: () => {
+          throw new Error("Execution observations are outside this Git acceptance test")
+        },
       },
     })
   )

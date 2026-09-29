@@ -123,6 +123,7 @@ function createDesktopService(archivePath: string): DesktopPluginService {
       runtimeSnapshot: () => { throw new Error("Runtime snapshot is outside this archive test") },
       inspectRun: () => undefined,
       listProjectionDiagnostics: () => { throw new Error("Projection diagnostics are outside this archive test") },
+      queryExecutionObservations: () => { throw new Error("Execution observations are outside this archive test") },
     },
   }))
   const client = new VykorClient({
