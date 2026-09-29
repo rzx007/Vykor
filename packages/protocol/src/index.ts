@@ -12,3 +12,4 @@ export * from "./session-input-items.js";
 export * from "./session-goals.js";
 export * from "./mcp-oauth.js";
 export * from "./execution-observability.js";
+export * from "./auto-review.js";

@@ -43,6 +43,10 @@ export function coerceConfigValue(key: string, value: string): unknown {
       if (["default", "plan", "full_auto"].includes(value)) return value;
       return undefined;
 
+    case "autoReview.mode":
+      if (value === "off" || value === "risk_based") return value;
+      return undefined;
+
     default:
       return value;
   }

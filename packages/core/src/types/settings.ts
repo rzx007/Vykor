@@ -99,6 +99,11 @@ export interface DaemonConfig {
   autoStart: boolean;
 }
 
+/** Controls whether completed root runs get an automatic read-only review. */
+export interface AutoReviewSettings {
+  mode: "off" | "risk_based";
+}
+
 /** Whether one input kind is natively accepted, rejected, or not declared. */
 export type InputSupport = "native" | "unsupported" | "unknown";
 
@@ -148,6 +153,7 @@ export interface Settings {
     enabled: boolean;
   };
   daemon?: DaemonConfig;
+  autoReview?: AutoReviewSettings;
   theme?: string;
   outputStyle?: string;
   workStyle?: WorkStyle;

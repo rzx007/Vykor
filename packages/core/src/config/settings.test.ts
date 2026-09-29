@@ -377,4 +377,43 @@ describe("daemon settings", () => {
       field: "settings.mcpServers.bad.enabled",
     });
   });
+
+  it("keeps automatic review off by default and accepts risk_based", async () => {
+    expect((await loadSettings()).autoReview).toEqual({ mode: "off" });
+
+    writeFileSync(
+      join(configDir, "settings.json"),
+      JSON.stringify({ autoReview: { mode: "risk_based" } }),
+    );
+    expect((await loadSettings()).autoReview).toEqual({ mode: "risk_based" });
+  });
+
+  it("accepts an automatic review mode from CLI overrides", async () => {
+    expect((await loadSettings({ autoReview: { mode: "risk_based" } })).autoReview).toEqual({
+      mode: "risk_based",
+    });
+  });
+
+  it("rejects an unknown automatic review mode", async () => {
+    writeFileSync(
+      join(configDir, "settings.json"),
+      JSON.stringify({ autoReview: { mode: "always" } }),
+    );
+
+    await expect(loadSettings()).rejects.toMatchObject({
+      name: "SettingsFileError",
+      field: "settings.autoReview.mode",
+    });
+  });
+
+  it("rejects unknown fields nested under automatic review", async () => {
+    writeFileSync(
+      join(configDir, "settings.json"),
+      JSON.stringify({ autoReview: { mode: "off", threshold: 1 } }),
+    );
+
+    await expect(loadSettings()).rejects.toMatchObject({
+      field: "settings.autoReview.threshold",
+    });
+  });
 });

@@ -106,6 +106,7 @@ export type {
   PermissionSettings,
   PathRuleConfig,
   DaemonConfig,
+  AutoReviewSettings,
   CustomProviderSettings,
   CustomProviderModelSettings,
   InputSupport,

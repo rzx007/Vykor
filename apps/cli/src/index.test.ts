@@ -1,3 +1,7 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -51,5 +55,31 @@ describe("CLI plugin options", () => {
     await import("./index.js");
     await vi.waitFor(() => expect(mocks.mainAction).toHaveBeenCalledOnce());
     expect(mocks.mainAction.mock.calls[0]?.[1]).toMatchObject({ plugins: false });
+  });
+
+  it("writes autoReview.mode through the real config set route", async () => {
+    const actual = await vi.importActual<typeof import("./config-coerce")>("./config-coerce");
+    const mocked = await import("./config-coerce");
+    vi.mocked(mocked.coerceConfigValue).mockImplementation(actual.coerceConfigValue);
+    vi.mocked(mocked.buildSettingsPatch).mockImplementation(actual.buildSettingsPatch);
+
+    const configDir = mkdtempSync(join(tmpdir(), "vykor-cli-config-"));
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = configDir;
+
+    process.argv = ["node", "vk", "config", "set", "autoReview.mode", "risk_based"];
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      await import("./index.js");
+      await vi.waitFor(() => {
+        const saved = JSON.parse(readFileSync(join(configDir, "settings.json"), "utf-8"));
+        expect(saved.autoReview).toEqual({ mode: "risk_based" });
+      }, { timeout: 5000 });
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+      rmSync(configDir, { recursive: true, force: true });
+    }
   });
 });

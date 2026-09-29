@@ -17,6 +17,7 @@ export * from "./backup/application-backup.js";
 export * from "./retention/application-retention-service.js";
 export * from "./workflow/session-workflow-run-repository.js";
 export * from "./observability/index.js";
+export * from "./auto-review/index.js";
 export * from "./mcp-oauth-application-service.js";
 export * from "./mcp-oauth-operation-service.js";
 export * from "./mcp-config-application-service.js";

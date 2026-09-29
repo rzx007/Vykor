@@ -56,6 +56,7 @@ const DEFAULT_SETTINGS: Settings = {
   daemon: {
     autoStart: false,
   },
+  autoReview: { mode: "off" },
   effort: "medium",
   passes: 1,
   outputStyle: "default",
@@ -147,6 +148,13 @@ export async function loadSettings(
     ...envSettings.plugins,
     ...cliOverrides?.plugins,
   } as NonNullable<Settings["plugins"]>;
+  merged.autoReview = {
+    ...DEFAULT_SETTINGS.autoReview,
+    ...fileSettings?.autoReview,
+    ...projectSettings?.autoReview,
+    ...envSettings.autoReview,
+    ...cliOverrides?.autoReview,
+  } as NonNullable<Settings["autoReview"]>;
   merged.customProviders = fileSettings?.customProviders;
   return merged;
 }
@@ -336,6 +344,7 @@ const TOP_LEVEL_SETTINGS_FIELDS = new Set([
   "mcpServers",
   "plugins",
   "daemon",
+  "autoReview",
   "theme",
   "outputStyle",
   "workStyle",
@@ -399,6 +408,16 @@ function validateSettingsFields(
   assertNestedFields(settings, "terminal", ["localShell"], configPath);
   assertNestedFields(settings, "plugins", ["enabled"], configPath);
   assertNestedFields(settings, "daemon", ["autoStart"], configPath);
+  assertNestedFields(settings, "autoReview", ["mode"], configPath);
+  const autoReview = recordValue(settings.autoReview);
+  if (
+    autoReview &&
+    autoReview.mode !== undefined &&
+    autoReview.mode !== "off" &&
+    autoReview.mode !== "risk_based"
+  ) {
+    throw new SettingsFileError("settings.autoReview.mode", configPath);
+  }
   assertNestedFields(settings, "childBudget", [
     "maxDepth",
     "maxActiveChildren",
