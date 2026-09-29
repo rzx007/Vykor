@@ -95,6 +95,7 @@
 - [Protocol Contract](./protocol-contract.md)：协议版本、请求错误、snapshot、SSE 和升级规则。
 - [Client Sync Flow](./client-sync-flow.md)：HTTP client、snapshot、SSE、cursor 和 reducer。
 - [Observability](./observability.md)：trace、结构化日志、runtime snapshot 和排障。
+- [按风险自动评审](./auto-review.md)：Run 结束后按固定风险规则对可归因改动做只读评审，并把通过/发现问题/失败/超时记录为真实状态。
 - [Scheduled Tasks Flow](./scheduled-tasks-flow.md)：定时任务怎样保存、触发、运行和记录结果。
 - [Channels Flow](./channels-flow.md)：Bot/Channel 消息怎样进入同一套 durable Session/Run。
 - [Daemon System Service](./daemon-system-service.md)：daemon 怎样作为系统常驻服务运行。
