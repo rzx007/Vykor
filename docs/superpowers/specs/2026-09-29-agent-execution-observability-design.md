@@ -89,6 +89,7 @@ interface ExecutionObservation {
   executionKind: ExecutionKind;
   executionId: string;
   parentExecutionId?: string;
+  backingExecutionIds?: string[];
   traceId?: string;
 
   sessionId?: string;
@@ -118,13 +119,6 @@ interface ExecutionObservation {
     completeness: "complete" | "partial" | "unknown";
   };
 
-  review?: {
-    mode: "none" | "automatic" | "manual";
-    verdict?: "pass" | "fail" | "partial";
-    findingCount?: number;
-    overridden?: boolean;
-  };
-
   source: {
     kind: "session_run" | "workflow_snapshot";
     id: string;
@@ -133,7 +127,7 @@ interface ExecutionObservation {
 }
 ```
 
-`review` 在本阶段通常为 `{ mode: "none" }`。字段提前固定是为了下一阶段加入自动评审时保持导出格式稳定；本阶段不推断评审是否发生。
+`model` 和 `provider` 表示最后一个已结束 model attempt 使用的值；过滤也只针对这个值。一个 Run 的完整 attempt 序列仍保留在原始 Session Store，不在首版记录中复制。后续评审字段可以作为可选字段新增，不需要为了尚未存在的数据在首版预留空对象。
 
 ## 身份与父子关系
 
@@ -161,9 +155,13 @@ interface ExecutionObservation {
 
 - `executionId = "workflow-task:" + workflowRunId + ":" + taskId`
 - `parentExecutionId = "workflow:" + workflowRunId`
-- attempt、起止时间、预算用量和终态来自 Workflow task result/running task。
+- 逐个遍历 `plan.tasks`，按 `result > running > blocked > pending` 的优先级为每个 Task 生成且只生成一条记录。
+- attempt、起止时间、预算用量和终态来自对应的 result、running task、blocked task 或 pending 列表。
+- 若 Task metadata 中的 `workerTaskId` 能关联到持久 Session Task/Child Run，则把对应 Agent Run 写入 `backingExecutionIds`。Workflow 重试目前只保留最后一次 worker metadata，无法找回更早 attempt 的 Child Run 时必须标记 `partial`。
 
 若关联数据缺失，记录仍可导出，但 `parentExecutionId` 留空并将 `completeness` 标为 `partial`。
+
+Workflow Task 与其 Child Run 是同一工作的逻辑层和物理执行层，不能直接相加。默认 summary 必须按 `executionKind` 分组；不提供跨四种 kind 的总完成数、总耗时或总 token。调用方如要比较调度层，使用 `workflow_task`；如要分析模型实际消耗，使用 `child_agent_run`。
 
 ## 状态归一化
 
@@ -173,8 +171,8 @@ interface ExecutionObservation {
 | --- | --- |
 | 正常完成 | `completed` |
 | 明确执行失败 | `failed` |
-| timeout 标志或超时错误分类 | `timed_out` |
-| 用户、父任务或系统取消 | `cancelled` |
+| 结构化 timeout 标志 | `timed_out` |
+| 结构化取消原因 | `cancelled` |
 | 等待依赖、权限或资源且没有执行 | `blocked` |
 | 因依赖、预算或 fail-fast 未启动 | `skipped` |
 | 正在执行 | `running` |
@@ -198,20 +196,20 @@ type ExecutionFailureKind =
   | "unknown";
 ```
 
-只有原始状态、结构化 metadata 或稳定错误类型能够证明分类时才设置具体值；禁止仅根据自由文本关键词猜测。原始错误字符串默认不进入导出。
+只有原始状态、结构化 metadata 或稳定错误类型能够证明分类时才设置具体值；禁止仅根据自由文本关键词猜测。当前 Session Run 的 `interrupted` 没有持久化结构化的用户取消、父取消、超时或恢复失败原因，因此首版必须映射为 `unknown`，不能伪装成 `cancelled`。同理，`tool_error` 和 `permission_denied` 仅在来源存在结构化分类时使用。原始错误字符串默认不进入导出。
 
 ## 用量与成本口径
 
 - Agent Run 复用已有模型 attempt/usage 结算结果。
 - Child Agent 的 token 记在对应子 Session Run，不重复累计到父 Run 记录。
-- Workflow Task 使用 snapshot 中已上报的 budget；未上报时保持未知。
-- Workflow Run 的 token 是其 Task 已知用量之和，并继承 Task 的不完整性。
+- Workflow Task 使用 snapshot 中已上报的 budget；未上报时保持未知。当前重试逻辑只保留最后一次已知 budget，并不保证跨 attempt 累计，因此只有来源明确带有“跨 attempt 累计”标记时才能记为 `complete`；`attemptCount > 1` 且没有该标记时必须为 `partial`。
+- Workflow Run 的 token 是其 Workflow Task 已知用量之和，并继承 Task 的不完整性。该数值属于调度层视图，不得再与 backing Child Run 的 token 相加。
 - 首版不计算货币成本。模型价格、缓存计价和第三方工具费用可能缺失或变化，用 token 冒充金额会产生误导。
 - 后续如引入金额估算，必须同时记录价格表版本、币种和 `estimated` 标记。
 
 ## 聚合指标定义
 
-查询服务可以在统一记录上计算：
+查询服务按 `executionKind` 分组计算，不生成跨 kind 的默认总计：
 
 - `completionRate`：`completed / 已结束且实际开始的记录`。
 - `failureRate`：`failed + timed_out / 已结束且实际开始的记录`。
@@ -232,7 +230,6 @@ type ExecutionFailureKind =
 - Session、Run、Child、Workflow Run 或 Task ID；
 - outcome 和 failureKind；
 - model/provider；
-- 是否启用评审及评审结论。
 
 JSON 导出结构：
 
@@ -247,7 +244,11 @@ interface ExecutionObservationExport {
 }
 ```
 
-`warnings` 必须说明缺失来源、损坏 snapshot、usage 不完整和无法关联的父执行。单个损坏 Workflow snapshot 不应让全部导出失败；它应被跳过并生成 warning。Session Store 无法读取属于整体数据源失败，查询应明确失败，不能返回空报告伪装成没有数据。
+`warnings` 必须说明缺失来源、损坏 snapshot、usage 不完整和无法关联的父执行。warning 只能包含稳定错误码和不透明记录 ID，不能拼接 decoder exception、原始 JSON 或绝对 snapshot 路径。
+
+现有 Workflow Repository 的 snapshot 与 event 读取都无法满足诊断要求：文件实现会静默忽略损坏 snapshot 或 event 行，SQLite 实现会因一条损坏记录让整批读取失败。Workflow 带诊断读取阶段必须为 snapshot 列表和单个 Run 的 event 列表增加逐条解码接口，同时返回有效记录和安全诊断。
+
+单个损坏 snapshot 被跳过并产生 warning；单个损坏 event 被跳过，只让对应 Workflow Run 的时间与 `completeness` 变为 `partial`，其余有效事件仍可用于投影。底层存储整体不可读时查询明确失败，不能返回空报告伪装成没有数据。
 
 导出先接到现有 CLI/本地 API 的只读入口；具体命令名在实现计划中根据当前 CLI 命令结构确定。本阶段不增加 Desktop 页面。
 
@@ -256,12 +257,14 @@ interface ExecutionObservationExport {
 观测服务分成三个小组件：
 
 1. `SessionExecutionObservationReader`：读取 Session Run、Session Task、Session 元数据和 usage。
-2. `WorkflowExecutionObservationReader`：读取持久 Workflow snapshot，生成 Run 与 Task 记录。
+2. `WorkflowExecutionObservationReader`：通过带诊断的 snapshot/event 读取接口获取持久 Workflow 数据，生成 Run 与 Task 记录。
 3. `ExecutionObservationService`：合并、过滤、排序、聚合并导出。
 
 Reader 只负责把一个来源转成统一记录；Service 不反向修改原始记录。排序固定使用 `startedAt`，缺失时回退到来源创建时间，再以 `executionId` 保证稳定输出。
 
-不新增通用 Repository 接口来强迫 SQLite 与文件 snapshot 伪装成同一种存储。统一发生在只读领域模型层。
+Workflow snapshot 只有 `createdAt/updatedAt`，其中 `updatedAt` 可能被恢复、对账或后续保存改变，不能直接当作精确结束时间。Workflow Run 优先从持久的 `workflow_started`、`workflow_finished`、`workflow_cancelled` 事件取得起止时间；缺少事件时只保留可证明的时间，并将 `durationMs` 留空、`completeness` 标为 `partial`。
+
+不新增横跨 Session Store 与 Workflow Repository 的通用存储抽象。文件和 SQLite Workflow Repository 继续实现已有的同一领域接口，只补充 snapshot/event 带安全诊断的读取能力；最终统一仍发生在只读观测模型层。
 
 ## 安全与隐私
 
@@ -283,37 +286,47 @@ Reader 只负责把一个来源转成统一记录；Service 不反向修改原�
 
 ## 实施阶段
 
-### 阶段一：统一记录与 Reader
+### 阶段一：协议与纯函数
 
-- 在共享协议层定义 observation、filter、summary 和 export 类型。
-- 实现 Session 与 Workflow 两个 Reader。
-- 覆盖身份映射、状态归一化、usage 完整性和损坏数据处理测试。
+- 在共享协议层定义 observation、filter、summary 和 export 类型及解析测试。
+- 用纯函数测试状态归一化、usage 完整性和安全 warning 格式。
 
-### 阶段二：查询、聚合和导出
+### 阶段二：Session Reader
 
-- 实现过滤、稳定排序和聚合口径。
+- 从 Session Run、attempt、Session Task 和 Child 元数据生成 Root/Child Run。
+- 测试 follow-up、缺失父关系、多 attempt 最终模型语义和 interrupted → unknown。
+
+### 阶段三：Workflow 带诊断读取
+
+- 为文件与 SQLite Workflow Repository 的 snapshot 和 event 增加逐条解码诊断。
+- 测试单条损坏 snapshot、单条损坏 event、底层存储失败和诊断内容不泄漏路径/原文。
+
+### 阶段四：Workflow Reader
+
+- 按 `result > running > blocked > pending` 投影所有 plan task。
+- 测试 backing Child 关联、重试 budget partial、事件时间和每个 Task 恰好一条记录。
+
+### 阶段五：查询、聚合和导出
+
+- 实现过滤、稳定排序、按 kind 聚合及重复计数防护。
 - 增加本地只读 API 与 CLI JSON 导出入口。
-- 用固定 fixture 验证报告内容可重复、无正文泄漏。
+- 用固定 fixture 验证报告内容可重复、无正文/错误/路径泄漏。
 
-### 阶段三：为自动评审预留实验标签
-
-- 只加入明确由调用方提供的实验/评审标签，不自动触发评审。
-- 验证同一任务的评审开启/关闭记录可以被可靠分组。
-
-自动评审策略本身属于下一份设计，不在本阶段实现。
+自动评审标签的持久化来源和触发策略属于下一份设计，不在本阶段预留或实现。
 
 ## 验收标准
 
 1. 同一个父 Agent、两个 Child Run、一个 Workflow Run 和多个 Workflow Task 能导出一棵父子关系明确的执行树。
-2. follow-up Child Run 独立计数，token 不与父 Run 或同 Child 的其它 Run 重复。
-3. failed、timed out、cancelled、blocked、skipped 能按稳定规则区分。
+2. follow-up Child Run 独立计数；Workflow Task 能关联已知 backing Child Run；默认聚合不跨 kind 相加。
+3. failed、timed out、cancelled、blocked、skipped 只在结构化来源足够时区分；无法证明的 interrupted Run 输出 `unknown`。
 4. usage 缺失或部分可用时，报告同时保留已知值和完整性状态，不补零伪装完整。
-5. 聚合结果明确排除 skipped，单列 cancelled，并报告实际样本数。
-6. 损坏的单个 Workflow snapshot 产生 warning，其余记录仍可导出。
+5. 聚合结果按 executionKind 分组，明确排除 skipped，单列 cancelled，并报告实际样本数。
+6. 损坏的单个 Workflow snapshot 或 event 产生安全 warning；坏 event 只让所属 Workflow Run 的时间与完整性降级，其余记录仍可导出。
 7. Session Store 整体读取失败时导出失败，不返回误导性的空结果。
 8. 默认 JSON 不包含 prompt、模型正文、工具内容、原始错误或绝对路径。
 9. 不修改 Child Agent、Workflow 的调度、预算和恢复行为。
-10. 不新增数据库表、远程遥测或 Desktop 指标页面。
+10. Workflow Run 只在持久事件提供边界时计算 duration，不把 snapshot `updatedAt` 当精确结束时间。
+11. 不新增数据库表、远程遥测或 Desktop 指标页面。
 
 ## 后续决策门槛
 
