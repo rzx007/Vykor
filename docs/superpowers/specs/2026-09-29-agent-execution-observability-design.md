@@ -105,6 +105,7 @@ interface ExecutionObservation {
   configuredConcurrency?: number;
   attemptCount?: number;
 
+  createdAt?: number;
   startedAt?: number;
   finishedAt?: number;
   durationMs?: number;
@@ -211,8 +212,9 @@ type ExecutionFailureKind =
 
 查询服务按 `executionKind` 分组计算，不生成跨 kind 的默认总计：
 
-- `completionRate`：`completed / 已结束且实际开始的记录`。
-- `failureRate`：`failed + timed_out / 已结束且实际开始的记录`。
+- `technicalTerminal`：`completed + failed + timed_out`，作为技术完成率的固定分母；不含 cancelled、blocked、skipped 或 unknown。
+- `completionRate`：`completed / technicalTerminal`。
+- `failureRate`：`failed + timed_out / technicalTerminal`。
 - `cancellationRate`：单独统计 `cancelled`，不混入技术失败率。
 - `skipRate`：单独统计 `skipped`，不进入完成率分母。
 - `durationMs`：只统计同时具备起止时间的记录，并报告样本数。
@@ -260,7 +262,7 @@ interface ExecutionObservationExport {
 2. `WorkflowExecutionObservationReader`：通过带诊断的 snapshot/event 读取接口获取持久 Workflow 数据，生成 Run 与 Task 记录。
 3. `ExecutionObservationService`：合并、过滤、排序、聚合并导出。
 
-Reader 只负责把一个来源转成统一记录；Service 不反向修改原始记录。排序固定使用 `startedAt`，缺失时回退到来源创建时间，再以 `executionId` 保证稳定输出。
+Reader 只负责把一个来源转成统一记录；Service 不反向修改原始记录。`createdAt` 保存来源可证明的创建时间。排序和时间范围过滤使用 `startedAt ?? createdAt`，两者都缺失的记录排在有时间记录之后，再以 `executionId` 保证稳定输出。
 
 Workflow snapshot 只有 `createdAt/updatedAt`，其中 `updatedAt` 可能被恢复、对账或后续保存改变，不能直接当作精确结束时间。Workflow Run 优先从持久的 `workflow_started`、`workflow_finished`、`workflow_cancelled` 事件取得起止时间；缺少事件时只保留可证明的时间，并将 `durationMs` 留空、`completeness` 标为 `partial`。
 
