@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -279,6 +279,33 @@ describe("FileWorkflowRunRepository", () => {
       type: "workflow_cancelled",
       summary: "user cancelled",
     }));
+  });
+
+  it("returns usable workflow data with safe diagnostics for corrupt files", () => {
+    const dir = tempDir();
+    const store = new FileWorkflowRunRepository({ dir });
+    const valid = createWorkflowRunSnapshot({
+      runId: "valid",
+      status: "completed",
+      summary: "done",
+      spec: { mode: "sequential", tasks: [] },
+      plan: createWorkflowPlan({ mode: "sequential", tasks: [] }),
+      results: new Map(),
+      running: new Set(),
+      createdAt: 10,
+    });
+    store.save(valid);
+    writeFileSync(join(dir, "broken.json"), "{broken", "utf8");
+    appendFileSync(store.eventPathFor("valid"), "{broken\n", "utf8");
+
+    expect(store.listWithDiagnostics()).toEqual({
+      snapshots: [expect.objectContaining({ runId: "valid" })],
+      diagnostics: [{ code: "invalid_workflow_snapshot", sourceId: "broken" }],
+    });
+    expect(store.loadEventsWithDiagnostics("valid")).toEqual({
+      events: [],
+      diagnostics: [{ code: "invalid_workflow_event", sourceId: "valid:event:1" }],
+    });
   });
 
   it("does not launch pending work or overwrite an externally cancelled active run", async () => {

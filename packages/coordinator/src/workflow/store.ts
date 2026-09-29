@@ -25,14 +25,36 @@ export interface FileWorkflowRunRepositoryOptions {
   dir?: string;
 }
 
+export type WorkflowReadDiagnosticCode =
+  | "invalid_workflow_snapshot"
+  | "invalid_workflow_event";
+
+/** 读取持久 Workflow 数据时，单条损坏记录对应的安全诊断（不含路径或原始内容）。 */
+export interface WorkflowReadDiagnostic {
+  code: WorkflowReadDiagnosticCode;
+  sourceId: string;
+}
+
+export interface WorkflowSnapshotReadResult {
+  snapshots: WorkflowRunSnapshot[];
+  diagnostics: WorkflowReadDiagnostic[];
+}
+
+export interface WorkflowEventReadResult {
+  events: WorkflowRunEvent[];
+  diagnostics: WorkflowReadDiagnostic[];
+}
+
 /** Workflow 持久化入口。具体数据可以放在项目文件、SQLite 或其他宿主存储中。 */
 export interface WorkflowRunRepository {
   readonly repositoryKey: string;
   save(snapshot: WorkflowRunSnapshot): void;
   appendEvent(event: WorkflowRunEvent): void;
   loadEvents(runId: string): WorkflowRunEvent[];
+  loadEventsWithDiagnostics(runId: string): WorkflowEventReadResult;
   load(runId: string): WorkflowRunSnapshot | undefined;
   list(): WorkflowRunSnapshot[];
+  listWithDiagnostics(): WorkflowSnapshotReadResult;
   listSummaries(): WorkflowRunSummary[];
   latest(): WorkflowRunSnapshot | undefined;
   claim(runId: string): { ownerId: string; generation: number; claimedAt: number };
@@ -108,18 +130,28 @@ export class FileWorkflowRunRepository implements WorkflowRunRepository {
   }
 
   loadEvents(runId: string): WorkflowRunEvent[] {
+    return this.loadEventsWithDiagnostics(runId).events;
+  }
+
+  loadEventsWithDiagnostics(runId: string): WorkflowEventReadResult {
     const path = this.eventPathFor(runId);
-    if (!existsSync(path)) return [];
+    if (!existsSync(path)) return { events: [], diagnostics: [] };
     const events: WorkflowRunEvent[] = [];
-    for (const line of readFileSync(path, "utf-8").split(/\r?\n/)) {
+    const diagnostics: WorkflowReadDiagnostic[] = [];
+    const lines = readFileSync(path, "utf-8").split(/\r?\n/);
+    for (const [index, line] of lines.entries()) {
       if (line.trim() === "") continue;
       try {
         events.push(decodeWorkflowRunEvent(line));
       } catch {
-        // Ignore corrupt event lines so a partial append doesn't hide the usable timeline.
+        // Report a safe diagnostic so a partial append doesn't hide the usable timeline.
+        diagnostics.push({
+          code: "invalid_workflow_event",
+          sourceId: `${runId}:event:${index + 1}`,
+        });
       }
     }
-    return events;
+    return { events, diagnostics };
   }
 
   load(runId: string): WorkflowRunSnapshot | undefined {
@@ -129,8 +161,13 @@ export class FileWorkflowRunRepository implements WorkflowRunRepository {
   }
 
   list(): WorkflowRunSnapshot[] {
-    if (!existsSync(this.dir)) return [];
+    return this.listWithDiagnostics().snapshots;
+  }
+
+  listWithDiagnostics(): WorkflowSnapshotReadResult {
+    if (!existsSync(this.dir)) return { snapshots: [], diagnostics: [] };
     const snapshots: WorkflowRunSnapshot[] = [];
+    const diagnostics: WorkflowReadDiagnostic[] = [];
     for (const entry of readdirSync(this.dir, { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
       try {
@@ -138,9 +175,13 @@ export class FileWorkflowRunRepository implements WorkflowRunRepository {
         snapshots.push(snapshot);
       } catch {
         // Ignore corrupt or partial files so one bad snapshot doesn't hide the rest.
+        diagnostics.push({
+          code: "invalid_workflow_snapshot",
+          sourceId: entry.name.slice(0, -".json".length),
+        });
       }
     }
-    return snapshots.sort((a, b) => b.updatedAt - a.updatedAt);
+    return { snapshots: snapshots.sort((a, b) => b.updatedAt - a.updatedAt), diagnostics };
   }
 
   listSummaries(): WorkflowRunSummary[] {

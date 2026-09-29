@@ -110,4 +110,8 @@ export {
   type RunPersistentWorkflowOptions,
   type FileWorkflowRunRepositoryOptions,
   type WorkflowRunRepository,
+  type WorkflowReadDiagnostic,
+  type WorkflowReadDiagnosticCode,
+  type WorkflowSnapshotReadResult,
+  type WorkflowEventReadResult,
 } from "./workflow/index.js";
