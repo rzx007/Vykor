@@ -228,6 +228,29 @@ describe("system routes", () => {
     });
   });
 
+  it("passes automatic review filters through and rejects unknown values", async () => {
+    const queryExecutionObservations = vi.fn(() => ({
+      schemaVersion: 1,
+      generatedAt: 1,
+      filters: {},
+      summary: {},
+      records: [],
+      warnings: [],
+    }));
+    const app = createSystemRoutes({ control: daemonControl({ queryExecutionObservations }) });
+
+    const response = await app.request("/debug/executions?reviewStatus=findings,passed&reviewRisk=high");
+    expect(response.status).toBe(200);
+    expect(queryExecutionObservations).toHaveBeenCalledWith({
+      reviewStatuses: ["findings", "passed"],
+      reviewRiskLevels: ["high"],
+    });
+
+    const rejected = await app.request("/debug/executions?reviewStatus=wibble");
+    expect(rejected.status).toBe(400);
+    await expect(rejected.json()).resolves.toEqual({ error: "invalid_execution_review_status" });
+  });
+
   it("rejects invalid execution filters and surfaces storage failures", async () => {
     const invalid = createSystemRoutes({ control: daemonControl() });
     const rejected = await invalid.request("/debug/executions?kind=other");

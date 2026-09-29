@@ -28,4 +28,22 @@ describe("parseExecutionObservationFilter", () => {
   ])("rejects %j", (input, code) => {
     expect(() => parseExecutionObservationFilter(input)).toThrow(code);
   });
+
+  it("parses automatic review filters", () => {
+    expect(
+      parseExecutionObservationFilter({ reviewStatus: "passed,findings", reviewRisk: "high,medium" }),
+    ).toEqual({
+      reviewStatuses: ["passed", "findings"],
+      reviewRiskLevels: ["high", "medium"],
+    });
+  });
+
+  it("rejects unknown automatic review filters", () => {
+    expect(() => parseExecutionObservationFilter({ reviewStatus: "wibble" })).toThrow(
+      "invalid_execution_review_status",
+    );
+    expect(() => parseExecutionObservationFilter({ reviewRisk: "critical" })).toThrow(
+      "invalid_execution_review_risk",
+    );
+  });
 });

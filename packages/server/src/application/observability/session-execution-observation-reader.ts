@@ -1,4 +1,5 @@
 import {
+  readAutoReviewRunMetadata,
   readSessionModelUsage,
   type ExecutionObservation,
   type ExecutionObservationWarning,
@@ -84,6 +85,7 @@ function projectRun(
       : undefined;
   const usage = readUsage(run.metadata);
   const outcome = mapRunOutcome(run.status);
+  const review = readExecutionReview(run.metadata);
   if (usage.completeness === "partial" ||
       (usage.completeness === "unknown" && (outcome === "completed" || outcome === "failed"))) {
     warnings.push({ code: "partial_usage", sourceId: executionId });
@@ -112,8 +114,24 @@ function projectRun(
     usage,
     source: { kind: "session_run", id: run.id },
     completeness,
+    ...(review ? { review } : {}),
   };
   return { record, warnings };
+}
+
+/** Bounded projection of the parent Run's auto review metadata; invalid data is ignored. */
+function readExecutionReview(
+  metadata: Record<string, unknown>,
+): ExecutionObservation["review"] | undefined {
+  const parsed = readAutoReviewRunMetadata(metadata.autoReview);
+  if (!parsed) return undefined;
+  return {
+    policyVersion: parsed.policyVersion,
+    riskLevel: parsed.riskLevel,
+    status: parsed.status,
+    ...(parsed.verdict !== undefined ? { verdict: parsed.verdict } : {}),
+    ...(parsed.findingCount !== undefined ? { findingCount: parsed.findingCount } : {}),
+  };
 }
 
 function agentExecutionId(runId: string): string {

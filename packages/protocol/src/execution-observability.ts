@@ -1,3 +1,11 @@
+import {
+  AUTO_REVIEW_RISK_LEVELS,
+  AUTO_REVIEW_STATUSES,
+  type AutoReviewRiskLevel,
+  type AutoReviewStatus,
+  type AutoReviewVerdict,
+} from "./auto-review.js";
+
 export const EXECUTION_KINDS = [
   "root_agent_run",
   "child_agent_run",
@@ -82,6 +90,14 @@ export interface ExecutionObservation {
   };
   source: { kind: "session_run" | "workflow_snapshot"; id: string };
   completeness: "complete" | "partial";
+  /** Bounded automatic review outcome projected from the parent Run metadata. */
+  review?: {
+    policyVersion: "risk-v1";
+    riskLevel: AutoReviewRiskLevel;
+    status: AutoReviewStatus;
+    verdict?: AutoReviewVerdict;
+    findingCount?: number;
+  };
 }
 
 export interface ExecutionObservationFilter {
@@ -97,6 +113,8 @@ export interface ExecutionObservationFilter {
   workflowTaskId?: string;
   model?: string;
   provider?: string;
+  reviewStatuses?: AutoReviewStatus[];
+  reviewRiskLevels?: AutoReviewRiskLevel[];
 }
 
 export interface ExecutionKindSummary {
@@ -129,6 +147,7 @@ export interface ExecutionKindSummary {
     unknownRecords: number;
   };
   failures: Partial<Record<ExecutionFailureKind, number>>;
+  reviews: Partial<Record<AutoReviewStatus, number>>;
 }
 
 export interface ExecutionObservationExport {
@@ -143,6 +162,8 @@ export interface ExecutionObservationExport {
 const EXECUTION_KIND_SET = new Set<string>(EXECUTION_KINDS);
 const EXECUTION_OUTCOME_SET = new Set<string>(EXECUTION_OUTCOMES);
 const EXECUTION_FAILURE_KIND_SET = new Set<string>(EXECUTION_FAILURE_KINDS);
+const AUTO_REVIEW_STATUS_SET = new Set<string>(AUTO_REVIEW_STATUSES);
+const AUTO_REVIEW_RISK_LEVEL_SET = new Set<string>(AUTO_REVIEW_RISK_LEVELS);
 
 const MAX_FILTER_ITEMS = 16;
 const MAX_TEXT_LENGTH = 256;
@@ -170,6 +191,16 @@ export function parseExecutionObservationFilter(
     EXECUTION_FAILURE_KIND_SET,
     "invalid_execution_failure_kind",
   ) as ExecutionFailureKind[] | undefined;
+  const reviewStatuses = parseEnumList(
+    input.reviewStatus ?? input.reviewStatuses,
+    AUTO_REVIEW_STATUS_SET,
+    "invalid_execution_review_status",
+  ) as AutoReviewStatus[] | undefined;
+  const reviewRiskLevels = parseEnumList(
+    input.reviewRisk ?? input.reviewRiskLevels,
+    AUTO_REVIEW_RISK_LEVEL_SET,
+    "invalid_execution_review_risk",
+  ) as AutoReviewRiskLevel[] | undefined;
 
   const from = parseTimestamp(input.from, "invalid_observation_from");
   const to = parseTimestamp(input.to, "invalid_observation_to");
@@ -197,6 +228,8 @@ export function parseExecutionObservationFilter(
     ...(executionKinds ? { executionKinds } : {}),
     ...(outcomes ? { outcomes } : {}),
     ...(failureKinds ? { failureKinds } : {}),
+    ...(reviewStatuses ? { reviewStatuses } : {}),
+    ...(reviewRiskLevels ? { reviewRiskLevels } : {}),
     ...(sessionId ? { sessionId } : {}),
     ...(runId ? { runId } : {}),
     ...(childId ? { childId } : {}),

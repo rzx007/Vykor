@@ -97,6 +97,8 @@ describe("debug executions", () => {
       sessionId: "s1",
       from: "100",
       to: "200",
+      reviewStatus: "findings,passed",
+      reviewRisk: "high,medium",
     });
 
     expect(requestUrl?.searchParams.get("kind")).toBe("child_agent_run,workflow_task");
@@ -104,6 +106,8 @@ describe("debug executions", () => {
     expect(requestUrl?.searchParams.get("sessionId")).toBe("s1");
     expect(requestUrl?.searchParams.get("from")).toBe("100");
     expect(requestUrl?.searchParams.get("to")).toBe("200");
+    expect(requestUrl?.searchParams.get("reviewStatus")).toBe("findings,passed");
+    expect(requestUrl?.searchParams.get("reviewRisk")).toBe("high,medium");
   });
 
   it("prints the versioned JSON report verbatim", () => {
@@ -120,7 +124,7 @@ describe("debug executions", () => {
       generatedAt: 1,
       filters: {},
       summary: {
-        child_agent_run: kindSummary({ completed: 1, failed: 1 }),
+        child_agent_run: { ...kindSummary({ completed: 1, failed: 1 }), reviews: { findings: 1, passed: 2 } },
         workflow_task: kindSummary({ completed: 1, timedOut: 1 }),
       },
       records: [
@@ -134,8 +138,9 @@ describe("debug executions", () => {
 
     const output = log.mock.calls.map((call) => String(call[0])).join("\n");
     expect(output).toContain("Execution observations: 4 records, 1 warning");
-    expect(output).toContain("child_agent_run: completed=1 failed=1 timed_out=0 cancelled=0 skipped=0");
+    expect(output).toContain("child_agent_run: completed=1 failed=1 timed_out=0 cancelled=0 skipped=0 reviews=findings:1,passed:2");
     expect(output).toContain("workflow_task: completed=1 failed=0 timed_out=1 cancelled=0 skipped=0");
+    expect(output).not.toContain("workflow_task: completed=1 failed=0 timed_out=1 cancelled=0 skipped=0 reviews=");
     expect(output).toContain("[invalid_workflow_event] wf-1:event:2");
     expect(output).not.toContain("prompt secret");
   });

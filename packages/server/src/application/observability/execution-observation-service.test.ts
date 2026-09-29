@@ -238,4 +238,30 @@ describe("ExecutionObservationService", () => {
     expect(json).not.toContain("provider.example");
     expect(json).not.toMatch(/[A-Z]:\\/);
   });
+
+  it("filters and summarizes bounded automatic review outcomes", () => {
+    const service = serviceWith({
+      sessionRecords: [
+        observation({
+          executionKind: "root_agent_run",
+          executionId: "agent-run:r1",
+          outcome: "completed",
+          review: { policyVersion: "risk-v1", riskLevel: "high", status: "findings", verdict: "fail", findingCount: 2 },
+        }),
+        observation({
+          executionKind: "root_agent_run",
+          executionId: "agent-run:r2",
+          outcome: "completed",
+          review: { policyVersion: "risk-v1", riskLevel: "medium", status: "passed", verdict: "pass" },
+        }),
+        observation({ executionKind: "root_agent_run", executionId: "agent-run:r3", outcome: "completed" }),
+      ],
+    });
+
+    const filtered = service.query({ reviewStatuses: ["findings"], reviewRiskLevels: ["high"] });
+    expect(filtered.records.map((record) => record.executionId)).toEqual(["agent-run:r1"]);
+
+    const all = service.query({});
+    expect(all.summary.root_agent_run?.reviews).toEqual({ findings: 1, passed: 1 });
+  });
 });

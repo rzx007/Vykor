@@ -21,6 +21,8 @@ interface ExecutionDebugOptions extends DebugOptions {
   provider?: string;
   from?: string;
   to?: string;
+  reviewStatus?: string;
+  reviewRisk?: string;
 }
 
 type DebugQuery = Record<string, string | number | boolean | undefined>;
@@ -69,6 +71,8 @@ export function createDebugCommand(): Command {
     .option("--provider <provider>", "Filter by final attempt provider")
     .option("--from <timestamp>", "Inclusive epoch-millisecond lower bound")
     .option("--to <timestamp>", "Inclusive epoch-millisecond upper bound")
+    .option("--review-status <statuses>", "Comma-separated automatic review statuses")
+    .option("--review-risk <levels>", "Comma-separated automatic review risk levels")
     .option("--json", "Print the complete versioned JSON report")
     .option("--daemon-url <url>", "Use an explicit daemon URL")
     .option("--daemon-token <token>", "Bearer token for --daemon-url")
@@ -86,6 +90,8 @@ export function createDebugCommand(): Command {
         provider: options.provider,
         from: options.from,
         to: options.to,
+        reviewStatus: options.reviewStatus,
+        reviewRisk: options.reviewRisk,
       });
       printExecutionObservations(result, options.json === true);
     });
@@ -149,8 +155,12 @@ export function printExecutionObservations(result: Record<string, unknown>, json
   console.log(`Execution observations: ${total} records, ${warnings.length} ${warnings.length === 1 ? "warning" : "warnings"}`);
   for (const [kind, value] of Object.entries(summary)) {
     const row = asRecord(value);
+    const reviews = asRecord(row.reviews);
+    const reviewText = Object.entries(reviews)
+      .map(([status, count]) => `${status}:${Number(count)}`)
+      .join(",");
     console.log(
-      `${kind}: completed=${Number(row.completed ?? 0)} failed=${Number(row.failed ?? 0)} timed_out=${Number(row.timedOut ?? 0)} cancelled=${Number(row.cancelled ?? 0)} skipped=${Number(row.skipped ?? 0)}`,
+      `${kind}: completed=${Number(row.completed ?? 0)} failed=${Number(row.failed ?? 0)} timed_out=${Number(row.timedOut ?? 0)} cancelled=${Number(row.cancelled ?? 0)} skipped=${Number(row.skipped ?? 0)}${reviewText ? ` reviews=${reviewText}` : ""}`,
     );
   }
   for (const warning of warnings) {

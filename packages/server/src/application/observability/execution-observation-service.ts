@@ -70,6 +70,18 @@ function matchesFilter(record: ExecutionObservation, filter: ExecutionObservatio
   if (filter.workflowTaskId !== undefined && record.workflowTaskId !== filter.workflowTaskId) return false;
   if (filter.model !== undefined && record.model !== filter.model) return false;
   if (filter.provider !== undefined && record.provider !== filter.provider) return false;
+  if (
+    filter.reviewStatuses &&
+    (!record.review || !filter.reviewStatuses.includes(record.review.status))
+  ) {
+    return false;
+  }
+  if (
+    filter.reviewRiskLevels &&
+    (!record.review || !filter.reviewRiskLevels.includes(record.review.riskLevel))
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -120,6 +132,7 @@ function summarize(records: ExecutionObservation[]): ExecutionKindSummary {
       unknownRecords: 0,
     },
     failures: {},
+    reviews: {},
   };
 
   let minMs: number | undefined;
@@ -177,6 +190,9 @@ function summarize(records: ExecutionObservation[]): ExecutionKindSummary {
     const failureKind = effectiveFailureKind(record);
     if (failureKind !== undefined) {
       summary.failures[failureKind] = (summary.failures[failureKind] ?? 0) + 1;
+    }
+    if (record.review) {
+      summary.reviews[record.review.status] = (summary.reviews[record.review.status] ?? 0) + 1;
     }
   }
 
@@ -255,6 +271,19 @@ function sanitizeRecord(record: ExecutionObservation): ExecutionObservation {
     },
     source: { kind: record.source.kind, id: record.source.id },
     completeness: record.completeness,
+    ...(record.review
+      ? {
+          review: {
+            policyVersion: record.review.policyVersion,
+            riskLevel: record.review.riskLevel,
+            status: record.review.status,
+            ...(record.review.verdict !== undefined ? { verdict: record.review.verdict } : {}),
+            ...(record.review.findingCount !== undefined
+              ? { findingCount: record.review.findingCount }
+              : {}),
+          },
+        }
+      : {}),
   };
 }
 

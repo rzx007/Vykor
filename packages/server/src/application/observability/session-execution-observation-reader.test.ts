@@ -232,4 +232,49 @@ describe("readSessionExecutionObservations", () => {
       store.close();
     }
   });
+
+  it("projects bounded automatic review outcomes and ignores invalid metadata", () => {
+    const directory = temporaryDirectory();
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      store.runs.createRun({
+        id: "with-review",
+        sessionId: "s1",
+        metadata: {
+          autoReview: {
+            version: 1,
+            policyVersion: "risk-v1",
+            mode: "risk_based",
+            riskLevel: "high",
+            status: "findings",
+            reasons: ["sensitive_path"],
+            verdict: "fail",
+            findingCount: 2,
+          },
+        },
+      });
+      completeRun(store, "with-review");
+      store.runs.createRun({
+        id: "bad-review",
+        sessionId: "s1",
+        metadata: { autoReview: { version: 1, status: "wibble" } },
+      });
+      completeRun(store, "bad-review");
+
+      const result = readSessionExecutionObservations(sourceFor(store));
+      const reviewed = result.records.find((row) => row.runId === "with-review");
+      expect(reviewed?.review).toEqual({
+        policyVersion: "risk-v1",
+        riskLevel: "high",
+        status: "findings",
+        verdict: "fail",
+        findingCount: 2,
+      });
+      expect(JSON.stringify(reviewed?.review)).not.toContain("sensitive_path");
+      expect(result.records.find((row) => row.runId === "bad-review")?.review).toBeUndefined();
+    } finally {
+      store.close();
+    }
+  });
 });
