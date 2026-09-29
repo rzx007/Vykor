@@ -257,6 +257,15 @@ export class RunRepository {
     );
   }
 
+  /** Every Run across all sessions, oldest first. Used by startup recovery sweeps. */
+  listAllRuns(): SessionRunRecord[] {
+    return clone(
+      Object.values(this.storage.state.runs).sort(
+        (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+      ),
+    );
+  }
+
   getRunAttempt(attemptId: string): SessionRunAttemptRecord | undefined {
     const attempt = this.storage.state.attempts[attemptId];
     return attempt ? clone(attempt) : undefined;

@@ -1,5 +1,6 @@
-export type DurableEventScope = "session" | "global";
+import { readAutoReviewRunMetadata } from "@vykor/protocol";
 
+export type DurableEventScope = "session" | "global";
 export interface DurableEventDefinition {
   type: string;
   currentVersion: number;
@@ -205,6 +206,13 @@ export const DEFAULT_DURABLE_EVENT_DEFINITIONS: readonly DurableEventDefinition[
   sessionDefinition("session.model.attempt.finished", (payload) => {
     requireString(payload, "runId");
     requireRecord(payload, "attemptUsage");
+  }),
+  sessionDefinition("session.auto_review.updated", (payload) => {
+    requireString(payload, "runId");
+    const review = requireRecord(payload, "review");
+    if (!readAutoReviewRunMetadata(review)) {
+      throw new Error("review must be a valid AutoReviewRunMetadata record");
+    }
   }),
   sessionDefinition("session.run.interrupt_requested", (payload) => {
     if (payload.runId !== undefined && typeof payload.runId !== "string") throw new Error("runId must be a string");

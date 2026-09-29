@@ -63,6 +63,32 @@ describe("DurableEventRegistry", () => {
     )).toThrow("attemptUsage must be an object");
   });
 
+  it("validates automatic review event payloads", () => {
+    const review = {
+      version: 1,
+      policyVersion: "risk-v1",
+      mode: "risk_based",
+      riskLevel: "high",
+      status: "findings",
+      reasons: ["sensitive_path"],
+    };
+    expect(defaultDurableEventRegistry.prepareWrite(
+      "session.auto_review.updated",
+      { runId: "r1", review },
+      "s1",
+    )).toMatchObject({ type: "session.auto_review.updated", schemaVersion: 1 });
+    expect(() => defaultDurableEventRegistry.prepareWrite(
+      "session.auto_review.updated",
+      { runId: "r1", review: { ...review, status: "wibble" } },
+      "s1",
+    )).toThrow("review must be a valid AutoReviewRunMetadata record");
+    expect(() => defaultDurableEventRegistry.prepareWrite(
+      "session.auto_review.updated",
+      { runId: "r1" },
+      "s1",
+    )).toThrow("review must be an object");
+  });
+
   it("requires a non-empty list of session IDs in a global deletion event", () => {
     expect(() => defaultDurableEventRegistry.prepareWrite("session.deleted", { sessionIds: [] }))
       .toThrow("sessionIds must be a non-empty string array");
