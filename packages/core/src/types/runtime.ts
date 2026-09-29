@@ -310,6 +310,17 @@ export interface AgentRunScope {
   signal: AbortSignal;
 }
 
+/**
+ * Identity of one already-completed Root Run that a trusted post-run Child may
+ * be attributed to. Callers cannot widen this into a forged session/agent/cwd.
+ */
+export interface AgentPostRunChildParent {
+  inputId: string;
+  runId: string;
+  traceId: string;
+  signal?: AbortSignal;
+}
+
 export interface AgentEventContext {
   agentId: string;
   sessionId: string;

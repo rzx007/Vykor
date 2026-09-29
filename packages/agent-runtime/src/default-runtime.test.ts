@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import {
   createVykorRuntime,
+  intersectToolLimits,
   resolveAutoApproveTools,
   resolveCustomProviderRuntime,
   resolveEffectiveAllowedTools,
@@ -827,6 +828,39 @@ it("uses a smaller catalog output limit unchanged", async () => {
   try {
     for await (const _ of runtime.queryEngine.submitMessage("hi")) { /* consume */ }
     expect(requested).toEqual([4_096]);
+  } finally {
+    await runtime.close();
+  }
+});
+
+it("absorbs every other limit into a forced none ToolLimit", () => {
+  expect(intersectToolLimits({ kind: "none" }, { kind: "all" })).toEqual({ kind: "none" });
+  expect(intersectToolLimits({ kind: "only", names: new Set(["Read"]) }, { kind: "none" })).toEqual({ kind: "none" });
+  expect(intersectToolLimits({ kind: "none" }, { kind: "none" })).toEqual({ kind: "none" });
+  expect(
+    resolveEffectiveAllowedTools({ internalToolLimitNone: true, knownToolNames: ["Read"] }),
+  ).toEqual({ kind: "none" });
+});
+
+it("hides every model-visible tool under the trusted none ceiling", async () => {
+  const seen: Array<ToolDefinition[] | undefined> = [];
+  const runtime = await createVykorRuntime({
+    settings: { ...BASE_SETTINGS, sandbox: { enabled: false } },
+    configuration: {
+      internalToolLimitNone: true,
+      client: {
+        async *streamMessage(input) {
+          seen.push(input.tools);
+          yield { type: "complete" as const, stopReason: "end_turn" as const };
+        },
+      },
+    },
+    requestConfigurationStore: { read: async () => ({ revision: 0, configuration: { model: "model-a" } }) },
+  });
+  try {
+    for await (const _ of runtime.queryEngine.submitMessage("hi")) { /* consume */ }
+    expect(seen[0] ?? []).toEqual([]);
+    expect(runtime.toolRegistry.getAll()).toEqual([]);
   } finally {
     await runtime.close();
   }

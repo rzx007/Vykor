@@ -96,7 +96,10 @@ export function resolveEffectiveAllowedTools(options: {
   roleAllowedTools?: string[];
   settingsAllowedTools?: string[];
   knownToolNames?: string[];
+  /** Trusted internal flag; not constructible from user/Agent tool input. */
+  internalToolLimitNone?: boolean;
 }): ToolLimit {
+  if (options.internalToolLimitNone) return { kind: "none" };
   const knownToolNames = options.knownToolNames ?? [];
   const hostCeiling = resolveToolLimit(
     options.hostToolCeiling ?? options.settingsAllowedTools ?? [],
@@ -162,6 +165,7 @@ export async function createVykorRuntime(
     roleAllowedTools: configuration.roleAllowedTools,
     settingsAllowedTools: settings.permission.allowedTools,
     knownToolNames,
+    internalToolLimitNone: configuration.internalToolLimitNone,
   });
   const effectiveDenied = new Set(
     normalizeToolNames(
@@ -415,7 +419,8 @@ function resolveToolLimit(
     : { kind: "only", names: new Set(names) };
 }
 
-function intersectToolLimits(left: ToolLimit, right: ToolLimit): ToolLimit {
+export function intersectToolLimits(left: ToolLimit, right: ToolLimit): ToolLimit {
+  if (left.kind === "none" || right.kind === "none") return { kind: "none" };
   if (left.kind === "all") return right;
   if (right.kind === "all") return left;
   const names = [...left.names].filter((tool) => right.names.has(tool));

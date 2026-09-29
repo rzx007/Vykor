@@ -179,6 +179,7 @@ export type {
   AgentRunHandle,
   AgentRunResult,
   AgentRunScope,
+  AgentPostRunChildParent,
   AgentSerializedError,
   AgentSteerInput,
   AgentRequestConfiguration,

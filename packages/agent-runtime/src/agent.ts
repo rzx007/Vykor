@@ -4,11 +4,16 @@ import type {
   CompactContextProvider,
   AgentChildDirectory,
   AgentChildBudgetSnapshot,
+  AgentChildInvocation,
+  AgentChildResult,
+  AgentChildSpawnInput,
   AgentEffects,
   AgentEventListener,
   AgentEventSubscription,
+  AgentPostRunChildParent,
   AgentRunHandle,
   AgentRunResult,
+  AgentRunScope,
   AgentSession,
   ContentBlock,
   HookDefinition,
@@ -161,6 +166,20 @@ export interface VykorAgent {
   ): void;
   compact(): Promise<AgentCompactResult>;
   remember(options?: { automatic?: boolean }): Promise<AgentRememberResult>;
+  /**
+   * Trusted host-only entry point for a bounded, strictly read-only post-run child.
+   *
+   * Reuses the maintenance mutex so the Root is not idle for the whole review;
+   * only the Root's own RunScope is constructed, so callers cannot forge the
+   * parent session/agent/cwd. The sensitive initial content is delivered to the
+   * child once and never recorded in spawn summaries or events.
+   */
+  runChildForCompletedRun(
+    input: AgentChildSpawnInput,
+    parent: AgentPostRunChildParent,
+    sensitiveInitialContent: string,
+    capabilityView?: RunCapabilityView,
+  ): Promise<{ invocation: AgentChildInvocation; result: AgentChildResult }>;
   getUsage(): UsageSnapshot;
   getCapabilities(): AgentCapabilitySnapshot;
   inspect(): AgentInspection;
@@ -175,7 +194,7 @@ class DefaultVykorAgent implements VykorAgent {
   private activeRun?: FrameworkAgentRun;
   private completedRunToolActivity?: FrameworkAgentRunToolActivity;
   private maintenance?: {
-    kind: "compact" | "remember";
+    kind: "compact" | "remember" | "review";
     settled: Promise<void>;
   };
   private lifecycleState: VykorAgentState = "idle";
@@ -349,6 +368,35 @@ class DefaultVykorAgent implements VykorAgent {
     });
   }
 
+  runChildForCompletedRun(
+    input: AgentChildSpawnInput,
+    parent: AgentPostRunChildParent,
+    sensitiveInitialContent: string,
+    capabilityView?: RunCapabilityView,
+  ): Promise<{ invocation: AgentChildInvocation; result: AgentChildResult }> {
+    return this.runMaintenance("review", async () => {
+      const scope: AgentRunScope = {
+        agentId: this.id,
+        sessionId: this.id,
+        runId: parent.runId,
+        inputId: parent.inputId,
+        cwd: this.childManager.cwd,
+        traceId: parent.traceId,
+        signal: parent.signal ?? new AbortController().signal,
+      };
+      const invocation = await this.childManager.spawnSystemChild(
+        scope,
+        input,
+        sensitiveInitialContent,
+        capabilityView,
+      );
+      const result = await invocation.result;
+      // Release the one-shot system child before returning so the next review can start.
+      await this.childManager.close(invocation.id, "System review finished").catch(() => undefined);
+      return { invocation, result };
+    });
+  }
+
   getUsage(): UsageSnapshot {
     return this.runtime.queryEngine.getTotalUsage();
   }
@@ -441,7 +489,7 @@ class DefaultVykorAgent implements VykorAgent {
   }
 
   private runMaintenance<T>(
-    kind: "compact" | "remember",
+    kind: "compact" | "remember" | "review",
     work: () => Promise<T>,
   ): Promise<T> {
     this.assertIdle(kind);

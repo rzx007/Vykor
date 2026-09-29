@@ -6,7 +6,9 @@ import type { VykorAgentConfiguration } from "./agent-options.js";
 import { GOAL_ASSESSMENT_TOOL_NAME } from "./goal-assessment-tool.js";
 
 export type ToolLimit =
-  { kind: "all" } | { kind: "only"; names: ReadonlySet<string> };
+  | { kind: "all" }
+  | { kind: "none" }
+  | { kind: "only"; names: ReadonlySet<string> };
 
 export function applyConfiguredTools(
   registry: IToolRegistry,
@@ -137,6 +139,7 @@ class RuntimeToolRegistry implements IToolRegistry {
   }
 
   private isVisible(tool: ToolDefinition): boolean {
+    if (this.allowedTools.kind === "none") return false;
     if (this.deniedTools.has(tool.name)) return false;
     const execution = resolveToolExecution(tool);
     const environmentKind = this.environment?.info.kind ?? "local";

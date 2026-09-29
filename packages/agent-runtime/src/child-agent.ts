@@ -64,6 +64,8 @@ interface ChildRecord {
   cwd: string;
   spawn: AgentChildSpawnInput;
   parentScope: AgentRunScope;
+  /** Trusted host-owned system child (post-run review); never set from Agent tool input. */
+  system: boolean;
   capabilityView?: RunCapabilityView;
   lease: AgentChildEnvironmentLease;
   createAgent(): Promise<VykorAgent>;
@@ -150,7 +152,12 @@ export class AgentChildRegistry implements AgentChildDirectory {
     return { ...this.budget, activeChildren: this.activeChildren, totalChildren: this.totalChildren };
   }
 
-  reserve(parentSessionId: string, childSessionId: string): AgentChildBudgetReservation {
+  reserve(
+    parentSessionId: string,
+    childSessionId: string,
+    options: { system?: boolean } = {},
+  ): AgentChildBudgetReservation {
+    const system = options.system === true;
     if (this.depthBySessionId.has(childSessionId)) {
       throw new Error(`Child agent session is already live or being allocated: ${childSessionId}`);
     }
@@ -165,7 +172,7 @@ export class AgentChildRegistry implements AgentChildDirectory {
         this.activeChildren,
       );
     }
-    if (this.totalChildren >= this.budget.maxTotalChildren) {
+    if (!system && this.totalChildren >= this.budget.maxTotalChildren) {
       throw new AgentChildBudgetExceededError(
         "totalChildren",
         this.budget.maxTotalChildren,
@@ -174,7 +181,7 @@ export class AgentChildRegistry implements AgentChildDirectory {
     }
 
     this.activeChildren++;
-    this.totalChildren++;
+    if (!system) this.totalChildren++;
     this.depthBySessionId.set(childSessionId, childDepth);
     let state: "reserved" | "committed" | "released" = "reserved";
     return {
@@ -185,7 +192,7 @@ export class AgentChildRegistry implements AgentChildDirectory {
         if (state !== "reserved") return;
         state = "released";
         this.activeChildren--;
-        this.totalChildren--;
+        if (!system) this.totalChildren--;
         this.depthBySessionId.delete(childSessionId);
       },
       release: () => {
@@ -193,7 +200,7 @@ export class AgentChildRegistry implements AgentChildDirectory {
         const rollbackTotal = state === "reserved";
         state = "released";
         this.activeChildren--;
-        if (rollbackTotal) this.totalChildren--;
+        if (rollbackTotal && !system) this.totalChildren--;
         this.depthBySessionId.delete(childSessionId);
       },
     };
@@ -232,6 +239,7 @@ export class AgentChildManager implements AgentChildDirectory {
   private readonly backgroundClosures = new Set<Promise<void>>();
   private readonly environment: AgentChildEnvironmentProvider;
   private readonly directory: AgentChildRegistry;
+  private systemChildId?: string;
 
   constructor(private readonly options: AgentChildManagerOptions) {
     this.environment =
@@ -286,16 +294,66 @@ export class AgentChildManager implements AgentChildDirectory {
     throwFailures(failures, "Child agent cleanup failed");
   }
 
-  private async spawn(parentScope: AgentRunScope, input: AgentChildSpawnInput, parentView?: RunCapabilityView): Promise<AgentChildInvocation> {
+  /**
+   * Trusted host-only spawn for a bounded post-run system child (for example a
+   * read-only reviewer). It counts toward depth and activeChildren, runs at most
+   * one at a time, never consumes the model-callable cumulative child budget, and
+   * is force-limited to zero model-visible tools. The sensitive initial content is
+   * the child's first message; it never appears in persisted spawn summaries.
+   */
+  async spawnSystemChild(
+    parentScope: AgentRunScope,
+    input: AgentChildSpawnInput,
+    sensitiveInitialContent: string,
+    capabilityView?: RunCapabilityView,
+  ): Promise<AgentChildInvocation> {
+    if (this.systemChildId !== undefined) {
+      throw new Error("A system review child is already active");
+    }
+    return await this.spawnInternal(parentScope, input, {
+      system: true,
+      ...(capabilityView ? { capabilityView } : {}),
+      initialContent: sensitiveInitialContent,
+    });
+  }
+
+  private async spawn(
+    parentScope: AgentRunScope,
+    input: AgentChildSpawnInput,
+    parentView?: RunCapabilityView,
+  ): Promise<AgentChildInvocation> {
+    return await this.spawnInternal(parentScope, input, { parentView });
+  }
+
+  private async spawnInternal(
+    parentScope: AgentRunScope,
+    input: AgentChildSpawnInput,
+    options: {
+      parentView?: RunCapabilityView;
+      capabilityView?: RunCapabilityView;
+      system?: boolean;
+      initialContent?: string;
+    },
+  ): Promise<AgentChildInvocation> {
+    const system = options.system === true;
+    const parentView = options.parentView;
     const childId = `child_${randomUUID()}`;
     const sessionId = input.sessionId ?? `agent_session_${randomUUID()}`;
+    if (system) {
+      if (this.systemChildId !== undefined) {
+        throw new Error("A system review child is already active");
+      }
+      this.systemChildId = childId;
+    }
     if (this.directory.getBySessionId(sessionId)) {
+      if (system && this.systemChildId === childId) this.systemChildId = undefined;
       throw new Error(`Child agent session is already live: ${sessionId}`);
     }
     let budgetReservation: AgentChildBudgetReservation;
     try {
-      budgetReservation = this.directory.reserve(parentScope.sessionId, sessionId);
+      budgetReservation = this.directory.reserve(parentScope.sessionId, sessionId, { system });
     } catch (error) {
+      if (system && this.systemChildId === childId) this.systemChildId = undefined;
       if (error instanceof AgentChildBudgetExceededError) {
         this.options.onWarning?.({
           level: "warn",
@@ -327,6 +385,7 @@ export class AgentChildManager implements AgentChildDirectory {
       cwd: lease.cwd,
       spawn: input,
       parentScope,
+      system,
       lease,
       createAgent: () => this.options.createAgent(deriveChildAgentOptions({
         configuration: parentRequestConfiguration,
@@ -336,6 +395,7 @@ export class AgentChildManager implements AgentChildDirectory {
         child: input,
         cwd: lease.cwd,
         sessionId,
+        ...(system ? { internalToolLimitNone: true } : {}),
       }), {
         childId,
         parentSessionId: parentScope.sessionId,
@@ -381,9 +441,11 @@ export class AgentChildManager implements AgentChildDirectory {
       // A normal Coordinator role is not the host ceiling for its workers.
       // Normal children rebuild their non-plugin baseline under their own role;
       // a selected plugin keeps the parent's captured bindings and cannot widen.
-      record.capabilityView = parentView?.pluginId
-        ? deriveChildCapabilityView(parentView, input)
-        : undefined;
+      record.capabilityView = system
+        ? options.capabilityView
+        : parentView?.pluginId
+          ? deriveChildCapabilityView(parentView, input)
+          : undefined;
       await this.ensureAgent(record, false);
       const parentAbortHandler = () => {
         const current = this.find(childId);
@@ -397,8 +459,18 @@ export class AgentChildManager implements AgentChildDirectory {
         await this.interrupt(childId, "Parent run interrupted");
         throw new Error("Parent run interrupted");
       }
-      const receipt = await this.beginRun(record, { content: childInitialTask(input) });
+      const receipt = await this.beginRun(record, {
+        content: options.initialContent ?? childInitialTask(input),
+      });
       budgetReservation.commit();
+      if (system) {
+        // A system child is one-shot: release its environment as soon as it settles.
+        void record.result.catch(() => {}).finally(() => {
+          if (this.records.has(childId)) {
+            void this.close(childId, "System review finished").catch(() => {});
+          }
+        });
+      }
       return {
         id: childId,
         sessionId,
@@ -878,6 +950,7 @@ export class AgentChildManager implements AgentChildDirectory {
     record.activityUnsubscribe = undefined;
     this.directory.unregister(record.handle);
     this.records.delete(record.id);
+    if (record.system && this.systemChildId === record.id) this.systemChildId = undefined;
     record.budgetReservation.release();
   }
 
