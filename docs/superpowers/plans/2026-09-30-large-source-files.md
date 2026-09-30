@@ -226,3 +226,8 @@
 
 - `packages/services/src/conversations/conversation-transactions.ts` 从 972 行降至 784 行；复制历史创建分支会话、删除会话树与树遍历归入同目录 `conversation-tree-operations.ts`。原类方法保留入口，事务仍在这些操作内部开始，测试钩子和提示词准入回调按调用时的当前值传入。
 - 验证：services 包类型检查通过；会话事务与 SessionStore 测试共 2 个文件、121 条通过。
+
+### 2026-10-01：桌面新会话首条提交
+
+- `apps/desktop/src/renderer/src/stores/desktop-session/session-actions.ts` 从 950 行降至 581 行；新会话创建、首条提示词提交和草稿清理／恢复归入同目录 `start-session-action.ts`。原 Store 动作入口不变，导航代数和打开会话回调在调用时传入。
+- 验证：桌面 Web 类型检查通过；会话动作、提示词动作和 Store 集成测试共 3 个文件、84 条通过。
