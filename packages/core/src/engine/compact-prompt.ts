@@ -129,4 +129,3 @@ function formatSupplementalSections(
   }
   return sections;
 }
-

@@ -99,4 +99,3 @@ export function formatSummary(raw: string): string {
   }
   return text.replace(/\n\n+/g, "\n\n").trim();
 }
-

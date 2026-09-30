@@ -281,3 +281,8 @@
 
 - `packages/core/src/engine/compact-service.ts` 从 896 行降至 592 行；摘要提示词与上下文拼装归入 `compact-prompt.ts`，流式摘要收集、格式化及超窗错误识别归入 `compact-summary.ts`，公开类型归入 `compact-types.ts`。原公开导出路径保留，压缩服务继续控制重试、检查点和消息替换。
 - 验证：core 包完整 Vitest 共 31 个文件、306 条通过；全仓 `pnpm check-types` 61 项通过。
+
+### 2026-10-01：服务端运行自动审查
+
+- `packages/server/src/application/session/session-run-executor.ts` 从 619 行降至 537 行；自动审查的基线获取、已完成运行审查和未审查运行收尾归入同目录 `run-auto-review.ts`。原执行器仍控制调用顺序和运行状态结算。
+- 验证：server 包类型检查通过；运行执行器及装配测试共 2 个文件、17 条通过。

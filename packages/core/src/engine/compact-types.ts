@@ -97,4 +97,3 @@ export interface CompactClient {
     options?: { signal?: AbortSignal },
   ): AsyncIterable<StreamEvent>;
 }
-
