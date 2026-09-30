@@ -171,3 +171,9 @@
 
 - `packages/skills/src/index.ts` 从 638 行降至 469 行；Frontmatter 和正文元数据解析归入同包 `parse-skill-markdown.ts`，原函数和类型继续从 `index.ts` 导出。注册表、目录加载与来源覆盖顺序保持在原文件。
 - 验证：skills 包类型检查通过；完整 Vitest 共 1 个文件、50 条通过。
+
+### 2026-10-01：压缩服务的确定性消息处理
+
+- `packages/core/src/engine/compact-service.ts` 从 1247 行降至 896 行；工具结果清理、文本折叠、按轮截断、工具调用配对切分、图片占位、边界标记和 token 估算归入同目录 `compact-messages.ts`。原公开方法保留，服务类继续控制压缩顺序、摘要模型调用和检查点。
+- 删除两个没有调用者的旧工具 ID 辅助函数。抽取中修复了一处多行返回类型的机械搬移错误，随后重新验证。
+- 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
