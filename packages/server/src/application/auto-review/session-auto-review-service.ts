@@ -47,6 +47,8 @@ export interface SessionAutoReviewServiceOptions {
   session: AutoReviewSessionPort;
   events: AutoReviewEventPublisherPort;
   inspector: GitRunChangeInspector;
+  /** Read accepted/queued user work before starting optional post-run work. */
+  hasUserWork?: (sessionId: string) => boolean;
   now?: () => number;
   log?: (entry: Record<string, unknown>) => void;
 }
@@ -85,17 +87,24 @@ const SEVERITY_RANK: Record<AutoReviewSeverity, number> = {
  * 持久化的按风险自动评审状态机。
  *
  * 只写入有界的父 Run metadata 与 `session.auto_review.updated` 事件：patch、prompt、
- * findings 正文和绝对路径永不进入父级持久状态。任一失败分支都记录真实状态，
+ * findings 正文和绝对路径不进入这两类摘要。完整报告沿用 Child Task 交付。
+ * 任一失败分支都记录真实状态，
  * 绝不把异常降级为 passed。
  */
 export class SessionAutoReviewService {
   private readonly baselines = new Map<string, BaselineEntry>();
+  private readonly activeReviews = new Map<string, AbortController>();
   private readonly now: () => number;
   private readonly log: (entry: Record<string, unknown>) => void;
 
   constructor(private readonly options: SessionAutoReviewServiceOptions) {
     this.now = options.now ?? (() => Date.now());
     this.log = options.log ?? (() => undefined);
+  }
+
+  /** A new user prompt takes precedence over optional post-run review work. */
+  preemptForUserInput(sessionId: string): void {
+    this.activeReviews.get(sessionId)?.abort("user_input");
   }
 
   async captureBaseline(input: CaptureBaselineInput): Promise<void> {
@@ -153,8 +162,33 @@ export class SessionAutoReviewService {
       });
     }
 
+    const controller = new AbortController();
+    this.activeReviews.set(input.sessionId, controller);
+    const signal = AbortSignal.any([input.signal, controller.signal]);
+    let onAbort: (() => void) | undefined;
     try {
-      const compared = await this.options.inspector.compare(input.cwd, entry.baseline);
+      if (this.options.hasUserWork?.(input.sessionId)) controller.abort("user_input");
+      const interrupted = new Promise<"interrupted">((resolve) => {
+        onAbort = () => resolve("interrupted");
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      });
+      const compared = signal.aborted ? "interrupted" : await Promise.race([
+        this.options.inspector.compare(input.cwd, entry.baseline),
+        interrupted,
+      ]);
+      if (onAbort) signal.removeEventListener("abort", onAbort);
+      if (compared === "interrupted" || signal.aborted) {
+        const userPreempted = signal.reason === "user_input";
+        return this.settle(input.sessionId, input.runId, {
+          mode: entry.mode,
+          riskLevel: "unknown",
+          status: userPreempted ? "skipped" : "failed",
+          reasons: [userPreempted ? "review_preempted_by_user" : "review_child_failed"],
+          startedAt,
+          finishedAt: this.now(),
+        });
+      }
       if (isUnavailable(compared)) {
         return this.settle(input.sessionId, input.runId, {
           mode: entry.mode,
@@ -165,7 +199,7 @@ export class SessionAutoReviewService {
           finishedAt: this.now(),
         });
       }
-      return await this.runReview(input, entry.mode, compared, startedAt);
+      return await this.runReview({ ...input, signal }, entry.mode, compared, startedAt);
     } catch (error) {
       this.log({ event: "auto_review.error", runId: input.runId, error: errorText(error) });
       return this.settle(input.sessionId, input.runId, {
@@ -176,6 +210,9 @@ export class SessionAutoReviewService {
         startedAt,
         finishedAt: this.now(),
       });
+    } finally {
+      if (onAbort) signal.removeEventListener("abort", onAbort);
+      if (this.activeReviews.get(input.sessionId) === controller) this.activeReviews.delete(input.sessionId);
     }
   }
 
@@ -269,8 +306,8 @@ export class SessionAutoReviewService {
       return this.settle(input.sessionId, input.runId, {
         mode,
         riskLevel: decision.level,
-        status: "failed",
-        reasons: ["review_child_failed"],
+        status: input.signal.reason === "user_input" ? "skipped" : "failed",
+        reasons: [input.signal.reason === "user_input" ? "review_preempted_by_user" : "review_child_failed"],
         patchTruncated: changeSet.patchTruncated,
         ...(invocationId ? { reviewTaskId: invocationId } : {}),
         startedAt,
@@ -279,6 +316,19 @@ export class SessionAutoReviewService {
     }
 
     const finishedAt = this.now();
+    if (input.signal.aborted) {
+      const userPreempted = input.signal.reason === "user_input";
+      return this.settle(input.sessionId, input.runId, {
+        mode,
+        riskLevel: decision.level,
+        status: userPreempted ? "skipped" : "failed",
+        reasons: [userPreempted ? "review_preempted_by_user" : "review_child_failed"],
+        patchTruncated: changeSet.patchTruncated,
+        ...(invocationId !== undefined ? { reviewTaskId: invocationId } : {}),
+        startedAt,
+        finishedAt,
+      });
+    }
     if (childResult.status !== "completed") {
       const timedOut = childResult.failureKind === "timeout";
       return this.settle(input.sessionId, input.runId, {

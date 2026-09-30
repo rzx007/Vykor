@@ -395,7 +395,7 @@ export class AgentChildManager implements AgentChildDirectory {
         child: input,
         cwd: lease.cwd,
         sessionId,
-        ...(system ? { internalToolLimitNone: true } : {}),
+        ...(system ? { internalTextOnly: true } : {}),
       }), {
         childId,
         parentSessionId: parentScope.sessionId,
@@ -461,16 +461,9 @@ export class AgentChildManager implements AgentChildDirectory {
       }
       const receipt = await this.beginRun(record, {
         content: options.initialContent ?? childInitialTask(input),
+        ...(system ? { metadata: { sensitiveInput: true } } : {}),
       });
       budgetReservation.commit();
-      if (system) {
-        // A system child is one-shot: release its environment as soon as it settles.
-        void record.result.catch(() => {}).finally(() => {
-          if (this.records.has(childId)) {
-            void this.close(childId, "System review finished").catch(() => {});
-          }
-        });
-      }
       return {
         id: childId,
         sessionId,

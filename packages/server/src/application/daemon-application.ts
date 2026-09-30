@@ -701,6 +701,7 @@ export class DaemonApplication implements DurableAgentApplication {
         session: store,
         events: this.eventPublisher,
         inspector: createGitRunChangeInspector(),
+        hasUserWork: (sessionId) => this.runControl.hasUserWork(sessionId),
         log: (entry) => {
           options.log({
             level: "warn",
@@ -723,6 +724,7 @@ export class DaemonApplication implements DurableAgentApplication {
       const materializeSteerInput = runExecution.materializeSteerInput;
       const runServices = assembleSessionRunServices({
         store, goals: store.goals, agentPool: this.agentPool, runExecutor, events: this.eventPublisher,
+        preemptAutoReview: (sessionId) => autoReview.preemptForUserInput(sessionId),
         attachmentLimits: this.attachments.limits, materializeSteerInput,
         assertReady: () => this.assertReady(),
         settleGoalRun: (sessionId, runId) => this.goals.settleRun(sessionId, runId),

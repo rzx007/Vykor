@@ -8,6 +8,7 @@ import { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";
 
 export interface SessionRunAssemblyOptions {
+  preemptAutoReview?: (sessionId: string) => void;
   store: Pick<SessionStore, "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction">;
   goals: GoalOperations;
   agentPool: AgentPool;
@@ -79,7 +80,13 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     },
     runtimeQueue: {
       hasRuntime: options.agentPool.configured,
-      enqueueRun: (run, inputId) => engine.runtimeBridge.enqueueRun(run, inputId),
+      enqueueRun: (run, inputId) => {
+        // Admission, replay and recovered steering all pass this accepted-run boundary.
+        if (!run.metadata?.goalRunKind || run.metadata.goalRunKind === "user") {
+          options.preemptAutoReview?.(run.sessionId);
+        }
+        return engine.runtimeBridge.enqueueRun(run, inputId);
+      },
       runState: (sessionId, runId) => engine.runtimeBridge.runState(sessionId, runId),
       steer: (sessionId, input) => engine.runtimeBridge.steer(sessionId, input),
     },

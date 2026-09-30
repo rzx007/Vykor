@@ -23,6 +23,8 @@ export interface DetailedHookResult {
 
 /** Options for configuring a {@link HookExecutor}. */
 export interface HookExecutorOptions {
+  /** Trusted system children may register hooks for compatibility but never run them. */
+  disabled?: boolean;
   /**
    * （可选）用于评估 `prompt`/`agent` 钩子的模型客户端。
    * 如果未提供，则这类钩子类型为非阻塞无操作（no-op）。
@@ -137,6 +139,7 @@ function parseHookJson(text: string): { ok: boolean; reason?: string } {
 }
 
 export class HookExecutor implements IHookExecutor {
+  private readonly disabled: boolean;
   private hooks = new Map<string, HookDefinition>();
   private client?: StreamingMessageClient;
   private defaultModel?: string;
@@ -146,6 +149,7 @@ export class HookExecutor implements IHookExecutor {
   private processExecutor?: EnvironmentProcessExecutor;
 
   constructor(options?: HookExecutorOptions) {
+    this.disabled = options?.disabled ?? false;
     this.client = options?.client;
     this.defaultModel = options?.defaultModel;
     this.cwd = options?.cwd ?? process.cwd();
@@ -219,6 +223,7 @@ export class HookExecutor implements IHookExecutor {
     event: HookEvent,
     context?: Record<string, unknown>
   ): HookDefinition[] {
+    if (this.disabled) return [];
     const subject = context ? matchSubject(context) : "";
     const filtered = [...this.hooks.values()].filter((h) => {
       if (h.event !== event || !h.enabled) return false;

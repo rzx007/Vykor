@@ -69,11 +69,11 @@ export interface VykorAgentConfiguration {
   /** First-party replacements that retain the replaced built-in permission classification. */
   trustedToolOverrides?: string[];
   /**
-   * Trusted internal ceiling that forces the `none` ToolLimit (no model-visible
-   * tools). Only a host-owned system spawn may set it; it is never constructible
-   * from user or Agent tool input.
+   * Trusted host-only text execution: no model-visible tools, plugins, MCP
+   * connections, programmatic extensions or hooks. This is an execution
+   * constraint, not a rule about which result the parent may receive.
    */
-  internalToolLimitNone?: boolean;
+  internalTextOnly?: boolean;
   /** Overrides the root-tree child-agent limits. */
   childBudget?: Partial<AgentChildBudget>;
   /** Selects the managed Desktop environment path; CLI callers omit it. */

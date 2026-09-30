@@ -7,6 +7,27 @@ import { describe, expect, it } from "vitest";
 import { writeSessionExport } from "../export-session.js";
 
 describe("writeSessionExport", () => {
+  it.each(["sensitiveInput", "autoReviewSensitive"])("redacts sensitive sessions marked with %s in both export formats", async (marker) => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-review-export-"));
+    try {
+      const session = { id: "review-session", cwd: dir, title: "review", model: "m", status: "idle" as const, metadata: {}, createdAt: 1, updatedAt: 1 };
+      const inputs = [{ id: "i1", sessionId: session.id, seq: 1, delivery: "queue" as const, content: "SECRET_PATCH_CONTENT", items: [], attachments: [], metadata: { [marker]: true }, createdAt: 1 }];
+      const messages = [
+        { id: "m1", sessionId: session.id, seq: 1, role: "user" as const, inputId: "i1", metadata: {}, createdAt: 1, updatedAt: 1 },
+        { id: "m2", sessionId: session.id, seq: 2, role: "assistant" as const, metadata: {}, createdAt: 1, updatedAt: 1 },
+      ];
+      const parts = messages.map((message) => ({ id: `p-${message.id}`, sessionId: session.id, messageId: message.id, seq: 1, type: "text" as const, status: "completed" as const, text: "SECRET_PATCH_CONTENT", metadata: {}, createdAt: 1, updatedAt: 1 }));
+      for (const format of ["md", "json"] as const) {
+        const result = await writeSessionExport({ session, inputs, messages, parts, format, filename: join(dir, `out.${format}`) });
+        const exported = readFileSync(result.filepath, "utf8");
+        expect(exported).not.toContain("SECRET_PATCH_CONTENT");
+        expect(exported).toContain("[redacted: sensitive content]");
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("writes markdown and json exports", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oh-export-"));
     try {

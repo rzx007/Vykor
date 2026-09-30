@@ -92,12 +92,31 @@ describe("runChildForCompletedRun", () => {
       const accepted = events.filter((event) => event.type === "input.accepted");
       expect(accepted).toHaveLength(1);
       expect(JSON.stringify(accepted[0]?.data)).toContain("SECRET_PATCH_CONTENT");
+      expect(accepted[0]?.data).toMatchObject({ metadata: { sensitiveInput: true } });
       expect(JSON.stringify(events.filter((event) => event.type !== "input.accepted"))).not.toContain(
         "SECRET_PATCH_CONTENT",
       );
 
       expect(requests).toHaveLength(1);
       expect(requests[0]!.tools ?? []).toEqual([]);
+    } finally {
+      await agent.close();
+    }
+  });
+
+  it("does not report a passing review when durable child closure fails", async () => {
+    const cwd = tempDir();
+    const agent = await createDefaultNodeAgent({
+      cwd,
+      settings: SETTINGS,
+      client: passingClient(),
+      onEvent: (event) => {
+        if (event.type === "child.closed") throw new Error("projection unavailable");
+      },
+    });
+    try {
+      await expect(agent.runChildForCompletedRun(reviewInput(cwd), PARENT, "patch"))
+        .rejects.toThrow("projection unavailable");
     } finally {
       await agent.close();
     }

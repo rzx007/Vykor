@@ -28,6 +28,14 @@ export interface SessionExportResult {
   messageCount: number;
 }
 
+const REDACTED_CONTENT = "[redacted: sensitive content]";
+
+function hasSensitiveInput(inputs: SessionInputRecord[]): boolean {
+  return inputs.some((item) => item.metadata.sensitiveInput === true
+    // Preserve the export boundary of records produced before the generic marker.
+    || item.metadata.autoReviewSensitive === true);
+}
+
 function partsForMessage(
   messageId: string,
   parts: SessionMessagePartRecord[],
@@ -59,6 +67,7 @@ function markdownFromParts(parts: SessionMessagePartRecord[]): string {
 }
 
 function buildMarkdown(input: BuildSessionExportInput): string {
+  const sensitiveSession = hasSensitiveInput(input.inputs);
   const lines = [
     "# Vykor Conversation Export",
     "",
@@ -72,6 +81,10 @@ function buildMarkdown(input: BuildSessionExportInput): string {
   ];
 
   for (const message of [...input.messages].sort((a, b) => a.seq - b.seq)) {
+    if (sensitiveSession) {
+      lines.push(`## ${message.role}`, "", REDACTED_CONTENT, "", "---", "");
+      continue;
+    }
     const messageParts = partsForMessage(message.id, input.parts);
     if (message.role === "user") {
       lines.push("## User", "", markdownFromParts(messageParts), "", "---", "");
@@ -106,9 +119,13 @@ function buildMarkdown(input: BuildSessionExportInput): string {
 }
 
 function buildJson(input: BuildSessionExportInput): string {
+  const sensitiveSession = hasSensitiveInput(input.inputs);
   const messages = [...input.messages]
     .sort((a, b) => a.seq - b.seq)
     .map((message) => {
+      if (sensitiveSession) {
+        return { role: message.role, content: REDACTED_CONTENT, parts: [] };
+      }
       const messageParts = partsForMessage(message.id, input.parts);
       if (message.role === "user" || message.role === "system") {
         return { role: message.role, content: textFromParts(messageParts), parts: messageParts };
@@ -135,7 +152,11 @@ function buildJson(input: BuildSessionExportInput): string {
       model: input.session.model,
       exported_at: new Date().toISOString(),
       message_count: input.messages.length,
-      inputs: [...input.inputs].sort((a, b) => a.seq - b.seq),
+      inputs: [...input.inputs].sort((a, b) => a.seq - b.seq).map((item) =>
+        sensitiveSession
+          ? { ...item, content: REDACTED_CONTENT, items: [], attachments: [] }
+          : item
+      ),
       messages,
     },
     null,

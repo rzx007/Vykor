@@ -838,7 +838,7 @@ it("absorbs every other limit into a forced none ToolLimit", () => {
   expect(intersectToolLimits({ kind: "only", names: new Set(["Read"]) }, { kind: "none" })).toEqual({ kind: "none" });
   expect(intersectToolLimits({ kind: "none" }, { kind: "none" })).toEqual({ kind: "none" });
   expect(
-    resolveEffectiveAllowedTools({ internalToolLimitNone: true, knownToolNames: ["Read"] }),
+    resolveEffectiveAllowedTools({ internalTextOnly: true, knownToolNames: ["Read"] }),
   ).toEqual({ kind: "none" });
 });
 
@@ -847,7 +847,7 @@ it("hides every model-visible tool under the trusted none ceiling", async () => 
   const runtime = await createVykorRuntime({
     settings: { ...BASE_SETTINGS, sandbox: { enabled: false } },
     configuration: {
-      internalToolLimitNone: true,
+      internalTextOnly: true,
       client: {
         async *streamMessage(input) {
           seen.push(input.tools);
@@ -858,6 +858,8 @@ it("hides every model-visible tool under the trusted none ceiling", async () => 
     requestConfigurationStore: { read: async () => ({ revision: 0, configuration: { model: "model-a" } }) },
   });
   try {
+    runtime.hookExecutor.register({ id: "installed-plugin-hook", event: "session_start", type: "command", command: "echo unsafe", enabled: true });
+    expect(runtime.hookExecutor.getHooksForEvent("session_start")).toEqual([]);
     for await (const _ of runtime.queryEngine.submitMessage("hi")) { /* consume */ }
     expect(seen[0] ?? []).toEqual([]);
     expect(runtime.toolRegistry.getAll()).toEqual([]);

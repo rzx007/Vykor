@@ -117,7 +117,7 @@ async function composeVykorAgentInternal(
   const cwd = options.cwd ?? process.cwd();
   const settings = options.settings ?? (await loadSettings({}));
   const discovery = await discoverVykorExtensions(cwd, settings, {
-    pluginsEnabled: options.pluginsEnabled,
+    pluginsEnabled: options.internalTextOnly ? false : options.pluginsEnabled,
   });
   for (const warning of discovery.warnings) {
     process.stderr.write(`[plugins] ${warning}\n`);
@@ -206,11 +206,11 @@ async function composeVykorAgentInternal(
     settings,
     runtime,
     discovery,
-    extensions: options.extensions,
-    mcpServers: options.mcpServers,
+    extensions: options.internalTextOnly ? [] : options.extensions,
+    mcpServers: options.internalTextOnly ? {} : options.mcpServers,
     memory: environment.memory,
     executionEnvironment,
-    mcpRuntimeRegistry: options.mcpRuntimeRegistry,
+    mcpRuntimeRegistry: options.internalTextOnly ? undefined : options.mcpRuntimeRegistry,
   });
   const session = createAgentSession({
     queryEngine: runtime.queryEngine,

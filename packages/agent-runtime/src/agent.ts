@@ -194,7 +194,7 @@ class DefaultVykorAgent implements VykorAgent {
   private activeRun?: FrameworkAgentRun;
   private completedRunToolActivity?: FrameworkAgentRunToolActivity;
   private maintenance?: {
-    kind: "compact" | "remember" | "review";
+    kind: "compact" | "remember" | "post_run_child";
     settled: Promise<void>;
   };
   private lifecycleState: VykorAgentState = "idle";
@@ -374,7 +374,7 @@ class DefaultVykorAgent implements VykorAgent {
     sensitiveInitialContent: string,
     capabilityView?: RunCapabilityView,
   ): Promise<{ invocation: AgentChildInvocation; result: AgentChildResult }> {
-    return this.runMaintenance("review", async () => {
+    return this.runMaintenance("post_run_child", async () => {
       const scope: AgentRunScope = {
         agentId: this.id,
         sessionId: this.id,
@@ -390,9 +390,13 @@ class DefaultVykorAgent implements VykorAgent {
         sensitiveInitialContent,
         capabilityView,
       );
-      const result = await invocation.result;
-      // Release the one-shot system child before returning so the next review can start.
-      await this.childManager.close(invocation.id, "System review finished").catch(() => undefined);
+      let result: AgentChildResult;
+      try {
+        result = await invocation.result;
+      } finally {
+        // Return only after required lifecycle cleanup and event delivery succeed.
+        await this.childManager.close(invocation.id, "Post-run child finished");
+      }
       return { invocation, result };
     });
   }
@@ -489,7 +493,7 @@ class DefaultVykorAgent implements VykorAgent {
   }
 
   private runMaintenance<T>(
-    kind: "compact" | "remember" | "review",
+    kind: "compact" | "remember" | "post_run_child",
     work: () => Promise<T>,
   ): Promise<T> {
     this.assertIdle(kind);

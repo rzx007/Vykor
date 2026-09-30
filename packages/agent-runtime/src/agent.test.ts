@@ -25,6 +25,36 @@ afterEach(() => {
 });
 
 describe("createDefaultNodeAgent", () => {
+  it("keeps text-only execution isolated from extensions and MCP initialization", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "vykor-text-only-"));
+    tempDirs.push(cwd);
+    const prepare = vi.spyOn(McpClientManager.prototype, "prepareConnection")
+      .mockRejectedValue(new Error("MCP must not start"));
+    const agent = await createDefaultNodeAgent({
+      cwd,
+      internalTextOnly: true,
+      settings: {
+        apiFormat: "openai", model: "test-model", maxTurns: 1,
+        permission: { mode: "default" }, sandbox: { enabled: false },
+        memory: { enabled: false }, plugins: { enabled: true },
+      },
+      extensions: [{ setup: () => { throw new Error("Extension must not start"); } }],
+      mcpServers: { unsafe: { command: "must-not-start" } },
+      client: { async *streamMessage(params) {
+        expect(params.tools ?? []).toEqual([]);
+        yield { type: "text_delta" as const, delta: "isolated result" };
+        yield { type: "complete" as const, stopReason: "end_turn" as const };
+      } },
+    });
+    try {
+      expect((await agent.runMessage("return a result")).output).toBe("isolated result");
+      expect(agent.inspect().mcpServers).toEqual([]);
+      expect(prepare).not.toHaveBeenCalled();
+    } finally {
+      await agent.close();
+    }
+  });
+
   it("keeps a host-trusted Read summary through a real Run capability view", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "vykor-agent-trusted-read-"));
     tempDirs.push(cwd);

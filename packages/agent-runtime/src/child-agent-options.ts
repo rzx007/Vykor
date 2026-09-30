@@ -17,8 +17,8 @@ export interface DeriveChildAgentOptionsInput {
   child: AgentChildSpawnInput;
   cwd: string;
   sessionId: string;
-  /** Trusted host-only flag: force the none ToolLimit for a system child. */
-  internalToolLimitNone?: boolean;
+  /** Trusted host-only flag: text execution without tools or integrations. */
+  internalTextOnly?: boolean;
 }
 
 export interface ChildTurnBudgetInput {
@@ -63,7 +63,7 @@ export function deriveChildAgentOptions(
     permissionMode: child.permissionMode ?? configuration.permissionMode,
     hostToolCeiling: configuration.hostToolCeiling,
     roleAllowedTools: child.allowedTools,
-    ...(input.internalToolLimitNone ? { internalToolLimitNone: true } : {}),
+    ...(input.internalTextOnly ? { internalTextOnly: true } : {}),
     disallowedTools: mergeToolLists(
       configuration.disallowedTools,
       child.disallowedTools,

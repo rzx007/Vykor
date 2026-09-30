@@ -1,5 +1,7 @@
 # 按风险自动触发只读评审实现计划
 
+> 2026-09-30 审核修订：结果交付以[子代理结果交付边界规范](../specs/2026-09-30-child-result-delivery-boundary-design.md)为准。父 Task 可以承载最终评审报告；“只含摘要”限定于父 Run 的评审状态与默认观测数据，不再要求新增通用投影器或推迟 Task 结算。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 在一次成功的 Root Agent Run 结束后，对本次 Run 可归因的代码改动做确定性风险分类；中高风险改动自动启动有界、严格只读的 `review` 子代理，并把跳过、通过、发现问题、部分覆盖、失败或超时作为持久状态记录，绝不把评审异常伪报为通过。
@@ -18,7 +20,7 @@
 - 自动评审是独立质量状态，不把已经完成的父 Run 改成 failed，也不自动开启修复 Run。
 - 只有严格解析出的 `pass` 才能记为 passed。输出无法解析、Child 失败、超时、部分覆盖、daemon 重启或改动无法安全归因时分别记录真实状态。
 - 不审查整个脏工作区。只能评审能够证明属于当前 Run 的 commit range 或新增 dirty path；与 Run 前已有脏文件重叠时记为 unavailable。
-- post-run Child 使用“公开 spawn 摘要 + 敏感初始内容”双通道：`child.created` 和父 Session Task 只能持久化摘要；真实 patch 只进入 Child Session 的 `input.accepted` 一次。不得复制到父 Run metadata、父 Task、framework child.created event、durable review event 或 Execution Observation。显式 `includeContent` 读取 Child input 时仍可看到 patch，这是已有的人工诊断能力；默认导出必须隐藏。
+- post-run Child 使用“公开 spawn 摘要 + 敏感初始内容”双通道：`child.created` 和父 Task 的创建信息只持久化任务摘要；真实 patch 作为初始输入进入 Child Session，不由框架额外复制到父 Run metadata、父 Task、framework child.created event、durable review event 或 Execution Observation。父 Task 的最终输出可以承载 reviewer 提交的报告，子代理工作记录与最终报告分开。模型可能在报告中引用代码，这不是内容脱敏保证。授权诊断入口允许查看 Child input，默认导出遵守现有敏感输入规则。
 - patch 超过 512 KiB 或被截断时风险至少为 high，最终 verdict 最高只能是 partial。
 - 首版不做 Desktop 设置 UI；通过现有 `config set autoReview.mode risk_based` 启用。
 - 不引入第二套 Agent、Job 或 Workflow 生命周期；Child Task、JobRead、JobWait、partialResult 和 failureKind 全部复用现有实现。
@@ -488,7 +490,7 @@ export class SessionAutoReviewService {
 }
 ```
 
-`captureBaseline` 将安全摘要放在内存 map，并在 Run metadata 写 `captured/disabled`。`reviewCompletedRun` 先持久化 pending，再调用 `runChildForCompletedRun`；role 必须从 `getBuiltinAgentDefinitions()` 中按 name 取出并断言 `source === "builtin"`。实际 spawn 强制 `allowedTools: []`、`requiredMcpServers: []`，并传入一个经测试确认 `tools.size === 0` 的 capability view；不得依赖通配符 deny 语义。随后传入 scope、expectedResult 和风险预算。完成后严格 parse 并校验 change-set paths；patch truncated 时强制 partial；再持久化最终状态。完整 findings 仅保留在 Child Task output，父 metadata 不存正文。
+`captureBaseline` 将安全摘要放在内存 map，并在 Run metadata 写 `captured/disabled`。`reviewCompletedRun` 先持久化 pending，再调用 `runChildForCompletedRun`；role 必须从 `getBuiltinAgentDefinitions()` 中按 name 取出并断言 `source === "builtin"`。实际 spawn 强制 `allowedTools: []`、`requiredMcpServers: []`，并传入一个经测试确认 `tools.size === 0` 的 capability view；不得依赖通配符 deny 语义。随后传入 scope、expectedResult 和风险预算。完成后严格 parse 并校验 change-set paths；patch truncated 时强制 partial；再持久化最终状态。完整 findings 可以通过 Child Task output 和既有结果通知交付，父 Run 的评审 metadata 不存正文。
 
 所有状态写入必须走同一个私有 `transition()`：在 `store.transaction` 内同时更新 `metadata.autoReview` 和 append `session.auto_review.updated`，事务外通过 `SessionEventPublisher.checkpoint/publishSince` 发布。写入或 event 校验失败时整笔回滚；startup recovery 复用同一入口。Service 对自身异常做 fail-closed：能定位父 Run 时写 failed/unavailable 并记录固定 reason；只记录详细异常到本地 structured log。
 
@@ -682,7 +684,7 @@ git commit -m "test(review): verify risk-based automatic review flow"
 - [ ] reviewer findings 不自动改代码，不覆盖父 Run completed。
 - [ ] Child Task 能通过 JobRead/JobWait 查看 activity、partialResult 和失败原因。
 - [ ] review 期间 Root Agent 的 submit/compact/remember 被互斥，完成后恢复；系统 review 不耗尽模型 Child 累计配额。
-- [ ] diff 只存在 reviewer Child 的正常持久输入；父 Run metadata、review event 和 observation 不复制 patch/findings/error 正文。
+- [ ] diff 作为输入保存在 reviewer Child；框架不额外把输入 patch 拼接到父结果中。父 Run metadata、review event 和 observation 不复制 patch/findings/error 正文；最终报告允许引用代码，不能将上下文隔离视为内容脱敏。
 - [ ] Execution Observation 能按 risk/status 查询并用于开启/关闭 A/B 对照。
 - [ ] 默认导出不泄漏 prompt、diff、finding evidence、绝对路径或 provider 配置。
 - [ ] 无数据库表迁移、无 Desktop 页面、无远程遥测。

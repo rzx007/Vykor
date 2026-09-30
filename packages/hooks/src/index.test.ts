@@ -50,6 +50,14 @@ function fakeClient(responseText: string): {
 }
 
 describe("HookExecutor", () => {
+  it("does not execute registered command hooks when disabled for a system child", async () => {
+    const processExecutor = { execute: vi.fn(() => { throw new Error("hook must not run"); }) };
+    const executor = new HookExecutor({ disabled: true, processExecutor: processExecutor as never });
+    executor.register({ id: "plugin-hook", event: "session_start", type: "command", command: "echo unsafe", enabled: true });
+    expect(executor.getHooksForEvent("session_start")).toEqual([]);
+    await expect(executor.execute("session_start", {})).resolves.toEqual({ blocked: false });
+    expect(processExecutor.execute).not.toHaveBeenCalled();
+  });
   it("fails closed for a blocking command hook when strict SRT is unavailable", async () => {
     const executor = new HookExecutor({
       cwd: process.cwd(),

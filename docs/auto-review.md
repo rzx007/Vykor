@@ -68,7 +68,7 @@ pnpm-workspace.yaml
 | --- | --- |
 | `disabled` | 模式为 off，未启用。 |
 | `captured` | 已保存 Run 前的 Git 基线，等待 Run 结束。 |
-| `skipped` | 风险为 none/low，未启动评审。 |
+| `skipped` | 风险为 none/low，或因用户任务优先而跳过/中止评审。 |
 | `pending` | 已启动只读评审子代理，等待结果。 |
 | `passed` | 评审通过（严格解析出的 `pass`）。 |
 | `findings` | 评审发现问题（`fail`）。 |
@@ -85,11 +85,12 @@ pnpm-workspace.yaml
 - Run 结束后只评审能证明属于本次 Run 的 commit range（要求线性、且 Run 后 working tree 与基线脏状态相同）或本次新增的 dirty path。
 - 与 Run 前已有脏文件重叠时记为 `unavailable`，**不会**去评审整个脏工作区。
 - 非 Git 工作区、Git 命令失败、非线性 HEAD 变化都记为 `unavailable`，不回退到全量审查。
+- 变更路径命中 `.env`、`.env.*`、`.npmrc`、`.pypirc`、`credentials.json` 或已列出的私钥扩展名时，在读取 patch 前记为 `unavailable`（`sensitive_content_path`），包括重命名前的路径。该路径检查不代替对任意源码中密钥的检测。
 - patch 超过 512 KiB 会被截断，此时风险至少为 high，最终 verdict 最高只能是 `partial`。
 
 ## 评审不运行测试
 
-`review` 子代理被强制为无工具（`allowedTools: []`，并显式使用 none 工具上限），只能阅读本次 patch。它不会执行命令、不会读取 `.env`、绝对路径或 change set 之外的文件，也不会运行测试。恶意 diff 中的指令不会被服从。
+`review` 子代理使用宿主内部的 `internalTextOnly` 约束：模型无可见工具，不加载插件和程序扩展、不连接 MCP 服务，也不执行 hook（自动回调）。它只能处理传入的 patch，不能通过执行工具响应 diff 中的指令。已有用户任务排队时跳过评审；评审过程中接纳新的用户任务则中止评审，记录为 `skipped`（`review_preempted_by_user`），收尾后按原队列继续执行。
 
 ## 导出评审结果
 
@@ -127,15 +128,17 @@ vykor debug executions --json
 
 ## 数据边界
 
-- 原始 patch 与完整 reviewer instructions 只进入 reviewer Child Session 的持久输入一次（`session_input` 及其 `session.input.admitted`）。
+- 原始 patch 与完整 reviewer instructions 作为初始输入进入 reviewer Child Session（`session_input` 及其 `session.input.admitted`），框架不额外拼接这些内容到父侧报告或统计记录。
 - 父 Run metadata、`session.auto_review.updated` 事件、`child.created` 的 spawn 摘要、Execution Observation 默认导出都不含 patch、prompt 正文、finding 正文或绝对路径。
-- `vykor debug inspect-run` / session export 默认不含 patch；显式 `includeContent` 才允许读取 Child input。
+- `vykor debug inspect-run` 默认不含 patch；带有 `sensitiveInput` 标记的 Child Session 在 Markdown/JSON 导出时隐去内容，也兼容早期的评审专用标记。该规则约束导出，不改变授权诊断入口对原始持久记录的访问。
 
-## 已知取舍：finding 正文会作为 Child Task 输出落库
+## 最终报告与观测摘要
 
-reviewer 子代理结束时，框架**通用**的子代理收尾逻辑会把它的最终输出（评审 JSON，含 `summary` 与 `findings` 正文）写进父会话的 `session_task.output`，并复制到 `agent.child.closed` 事件。它和「父 Run metadata、自动评审事件只存有界摘要」是两条不同的通道。
+reviewer 子代理结束时，通用子代理生命周期会把最终输出（可能包含评审 JSON 的 `summary` 与 `findings` 正文）写进父会话的 `session_task.output`，并通过 `agent.child.closed` 交付。这是任务成果；父 Run metadata、自动评审状态事件及默认 Execution Observation 只存有界摘要。
 
-- 这是**有意保留**的行为：本计划任务 5 的约定是「完整 findings 仅保留在 Child Task output」，即把 reviewer 子会话/子任务视为承载结论正文的位置，父 Run metadata 与自动评审事件不承担该内容。
-- 它与计划开头「父 Session Task 只能持久化摘要」的字面要求存在冲突；当前按前者执行，**未**对系统评审子代理的输出做额外脱敏。
-- 影响：原始 diff 仍然只存在于 reviewer Child Session 输入中（这条经过真实端到端验证）；但由 diff 推导出的 finding 正文会出现在父会话的 `session_task.output` 与 `agent.child.closed` 事件里，`includeContent` 视图和任何读取父会话任务的一方都能看到。
-- 如果某个部署要求「父可见记录里不能出现由 diff 推导出的 finding 正文」，需要额外改造通用子代理收尾投影层，只向父会话任务写入 `status/riskLevel/verdict/findingCount/highestSeverity` 等摘要。当前版本**未**做此改造。
+- 父代理和用户可通过现有授权 Task/Child Session 入口查看完整报告；普通 Agent 与 Workflow 的结果交付规则保持一致。
+- Task 输出是模型提交的结果，保存不代表系统已采信。Task `completed`、报告中的 `verdict: pass` 和权威的 `autoReview.status: passed` 分开；格式、覆盖、运行与必要收尾验证均成功后才能记录后者。
+- 独立上下文不等于保密隔离：最终报告可能引用输入中的代码，JobRead 活动查询也可返回已提交的文本片段。JSON 校验或字段名为 summary 都不构成脱敏保证。
+- 如果以后需要不同读者之间的严格内容限制，应一起设计结果、事件、错误、部分结果、活动查询、恢复记录与导出的访问边界。
+
+详细职责与验收标准见[子代理结果交付边界规范](superpowers/specs/2026-09-30-child-result-delivery-boundary-design.md)。

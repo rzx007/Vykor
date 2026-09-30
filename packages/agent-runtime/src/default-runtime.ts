@@ -97,9 +97,9 @@ export function resolveEffectiveAllowedTools(options: {
   settingsAllowedTools?: string[];
   knownToolNames?: string[];
   /** Trusted internal flag; not constructible from user/Agent tool input. */
-  internalToolLimitNone?: boolean;
+  internalTextOnly?: boolean;
 }): ToolLimit {
-  if (options.internalToolLimitNone) return { kind: "none" };
+  if (options.internalTextOnly) return { kind: "none" };
   const knownToolNames = options.knownToolNames ?? [];
   const hostCeiling = resolveToolLimit(
     options.hostToolCeiling ?? options.settingsAllowedTools ?? [],
@@ -165,7 +165,7 @@ export async function createVykorRuntime(
     roleAllowedTools: configuration.roleAllowedTools,
     settingsAllowedTools: settings.permission.allowedTools,
     knownToolNames,
-    internalToolLimitNone: configuration.internalToolLimitNone,
+    internalTextOnly: configuration.internalTextOnly,
   });
   const effectiveDenied = new Set(
     normalizeToolNames(
@@ -209,6 +209,7 @@ export async function createVykorRuntime(
   });
 
   const hookExecutor = new HookExecutor({
+    disabled: configuration.internalTextOnly === true,
     cwd: options.executionEnvironment?.workspace.executionRoot ?? hostCwd,
     sessionId: options.sessionId,
     settings,

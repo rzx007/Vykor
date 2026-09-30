@@ -191,6 +191,75 @@ describe("SessionAutoReviewService", () => {
     expect(reviewEvents().at(-1)?.payload.review).toEqual(metadata());
   });
 
+  it("preempts an active reviewer for a new user prompt without claiming pass", async () => {
+    const svc = service(changeSet([{ path: "packages/server/src/a.ts" }]));
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    let started!: () => void;
+    const childStarted = new Promise<void>((resolve) => { started = resolve; });
+    const agent = {
+      runChildForCompletedRun: async (_spawn: unknown, parent: { signal: AbortSignal }) => {
+        started();
+        await new Promise<void>((resolve) => parent.signal.addEventListener("abort", () => resolve(), { once: true }));
+        return { invocation: { id: "child-preempted" }, result: completed(PASS) };
+      },
+    } as unknown as VykorAgent;
+    const review = svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent, signal: new AbortController().signal,
+    });
+    await childStarted;
+    svc.preemptForUserInput(sessionId);
+    await expect(review).resolves.toMatchObject({ status: "skipped", reasons: ["review_preempted_by_user"] });
+  });
+
+  it("skips review before inspecting Git when user work was queued earlier", async () => {
+    const svc = new SessionAutoReviewService({
+      session: store,
+      events: new SessionEventPublisher(store.conversations, { broadcastSince: () => undefined, broadcastEvent: () => undefined }),
+      inspector: {
+        capture: async () => BASELINE,
+        compare: async () => { throw new Error("Queued user work must run first"); },
+      },
+      hasUserWork: (id) => store.runs.listRuns(id).some((run) => run.status === "pending"),
+    });
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    store.runs.updateRun(runId, { status: "completed" });
+    store.runs.createRun({ sessionId });
+    const review = await svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent(completed(PASS)), signal: new AbortController().signal,
+    });
+    expect(review).toMatchObject({ status: "skipped", reasons: ["review_preempted_by_user"] });
+    expect(calls).toHaveLength(0);
+    expect(store.runs.getRun(runId)?.status).toBe("completed");
+  });
+
+  it.each(["new_user", "cancel"] as const)("releases pending Git inspection on %s", async (reason) => {
+    let compareStarted!: () => void;
+    const started = new Promise<void>((resolve) => { compareStarted = resolve; });
+    const svc = new SessionAutoReviewService({
+      session: store,
+      events: new SessionEventPublisher(store.conversations, { broadcastSince: () => undefined, broadcastEvent: () => undefined }),
+      inspector: {
+        capture: async () => BASELINE,
+        compare: async () => { compareStarted(); return await new Promise<GitRunChangeSet>(() => {}); },
+      },
+    });
+    await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });
+    const controller = new AbortController();
+    const review = svc.reviewCompletedRun({
+      sessionId, inputId: "input-1", runId, traceId: "trace-1", cwd: dir,
+      agent: fakeAgent(completed(PASS)), signal: controller.signal,
+    });
+    await started;
+    if (reason === "new_user") svc.preemptForUserInput(sessionId);
+    else controller.abort("cancelled");
+    await expect(review).resolves.toMatchObject(reason === "new_user"
+      ? { status: "skipped", reasons: ["review_preempted_by_user"] }
+      : { status: "failed", reasons: ["review_child_failed"] });
+    expect(calls).toHaveLength(0);
+  });
+
   it("records high-risk findings with counts but no finding bodies", async () => {
     const svc = service(changeSet([{ path: "packages/auth/src/token.ts", lines: 5 }]));
     await svc.captureBaseline({ sessionId, runId, cwd: dir, mode: "risk_based" });

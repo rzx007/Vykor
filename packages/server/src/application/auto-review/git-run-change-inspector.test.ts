@@ -144,6 +144,59 @@ describe("git run change inspector (real repositories)", () => {
     expect(delta.patch).toContain("diff --git");
   });
 
+  it("attributes an untracked file named __proto__", async () => {
+    write("base.txt", "base\n");
+    commit("init");
+    const inspector = createGitRunChangeInspector();
+    const baseline = (await inspector.capture(repo)) as GitRunBaseline;
+    write("__proto__", "new file\n");
+
+    const delta = await inspector.compare(repo, baseline);
+    expect(delta).toMatchObject({ attribution: "complete" });
+    expect((delta as GitRunChangeSet).files).toEqual([
+      { path: "__proto__", status: "added", lines: expect.any(Number) },
+    ]);
+  });
+
+  it.each([".env", "private.pem", ".npmrc"])(
+    "does not send the contents of %s to the reviewer",
+    async (path) => {
+      write("base.txt", "base\n");
+      commit("init");
+      const inspector = createGitRunChangeInspector();
+      const baseline = (await inspector.capture(repo)) as GitRunBaseline;
+      write(path, "DO_NOT_SEND_THIS_SECRET\n");
+
+      const delta = await inspector.compare(repo, baseline);
+      expect(delta).toEqual({ attribution: "unavailable", reason: "sensitive_content_path" });
+    },
+  );
+
+  it("rejects a committed secret change before building its patch", async () => {
+    write("private.pem", "OLD_SECRET\n");
+    commit("init");
+    const inspector = createGitRunChangeInspector();
+    const baseline = (await inspector.capture(repo)) as GitRunBaseline;
+    write("private.pem", "NEW_SECRET\n");
+    commit("rotate key");
+
+    expect(await inspector.compare(repo, baseline)).toEqual({
+      attribution: "unavailable",
+      reason: "sensitive_content_path",
+    });
+  });
+
+  it("checks the old path when a secret file is renamed to a normal source path", async () => {
+    write(".env", "DO_NOT_SEND_THIS_SECRET\n");
+    commit("init");
+    const inspector = createGitRunChangeInspector();
+    const baseline = (await inspector.capture(repo)) as GitRunBaseline;
+    git(["mv", ".env", "config.ts"]);
+    expect(await inspector.compare(repo, baseline)).toEqual({
+      attribution: "unavailable", reason: "sensitive_content_path",
+    });
+  });
+
   it("reviews only new dirty paths when the baseline already had other dirty files", async () => {
     write("a.txt", "a\n");
     write("b.txt", "b\n");

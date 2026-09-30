@@ -18,6 +18,19 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it("carries the trusted text-only constraint into the child runtime", () => {
+    const input = {
+      configuration: { pluginsEnabled: true },
+      settings: { model: "test-model", mcpServers: { unsafe: { command: "unsafe" } } } as never,
+      child: { description: "review", prompt: "review", agent: "review", cwd: "/repo" },
+      cwd: "/repo",
+      sessionId: "child-session",
+    };
+    expect(deriveChildAgentOptions({ ...input, internalTextOnly: true })).toMatchObject({
+      internalTextOnly: true,
+    });
+    expect(deriveChildAgentOptions(input).pluginsEnabled).toBe(true);
+  });
   it.each([
     { allowedTools: ["Bash"], disallowedTools: undefined, expected: ["Shell"] },
     { allowedTools: ["*"], disallowedTools: ["Bash"], expected: [] },

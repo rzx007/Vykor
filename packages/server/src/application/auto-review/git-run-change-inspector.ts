@@ -153,7 +153,7 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     if (!collected) return unavailable("git_inspection_failed");
     const digestA = buildDigest(first, relevant, collected.hashes);
 
-    let result: GitRunChangeSet | undefined;
+    let result: GitRunChangeSet | GitRunChangeUnavailable | undefined;
     if (first.head === baseline.head) {
       for (const path of Object.keys(baseline.dirty)) {
         const current = collected.entries[path];
@@ -168,21 +168,22 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
           return unavailable("preexisting_dirty_overlap");
         }
       }
-      const newPaths = currentPaths.filter((path) => !(path in baseline.dirty));
+      const newPaths = currentPaths.filter((path) => !Object.hasOwn(baseline.dirty, path));
       const contextPaths = first.entries
         .map((entry) => entry.oldPath)
-        .filter((path): path is string => path !== undefined && !(path in baseline.dirty));
+        .filter((path): path is string => path !== undefined && !Object.hasOwn(baseline.dirty, path));
       result = await this.buildWorktreeChangeSet(cwd, first, newPaths, contextPaths);
     } else {
       const ancestor = await this.isAncestor(cwd, baseline.head, first.head);
       if (!ancestor) return unavailable("non_linear_head_change");
-      const currentDirty: Record<string, GitDirtyEntry> = {};
+      const currentDirty: Record<string, GitDirtyEntry> = Object.create(null);
       for (const path of currentPaths) currentDirty[path] = collected.entries[path]!;
       if (!sameDirtyMap(currentDirty, baseline.dirty)) {
         return unavailable("post_commit_worktree_changed");
       }
       result = await this.buildCommitChangeSet(cwd, baseline.head, first.head);
     }
+    if (result && isUnavailable(result)) return result;
     if (!result) return unavailable("git_inspection_failed");
 
     const second = await readRepoState(this.executor, cwd);
@@ -200,11 +201,12 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     state: RepoState,
     newPaths: string[],
     contextPaths: string[],
-  ): Promise<GitRunChangeSet | undefined> {
+  ): Promise<GitRunChangeSet | GitRunChangeUnavailable | undefined> {
     const pathspec = uniquePaths([...newPaths, ...contextPaths]);
 
     const nameStatus = await this.readNameStatus(cwd, ["HEAD", "--", ...pathspec]);
     if (!nameStatus) return undefined;
+    if (hasSensitiveContentPath(newPaths, nameStatus)) return unavailable("sensitive_content_path");
     const numstat = await this.readNumstat(cwd, ["HEAD", "--", ...pathspec]);
     if (!numstat) return undefined;
 
@@ -260,9 +262,12 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     cwd: string,
     baseHead: string,
     head: string,
-  ): Promise<GitRunChangeSet | undefined> {
+  ): Promise<GitRunChangeSet | GitRunChangeUnavailable | undefined> {
     const nameStatus = await this.readNameStatus(cwd, [baseHead, head]);
     if (!nameStatus) return undefined;
+    if (hasSensitiveContentPath([...nameStatus.keys()], nameStatus)) {
+      return unavailable("sensitive_content_path");
+    }
     const numstat = await this.readNumstat(cwd, [baseHead, head]);
     if (!numstat) return undefined;
 
@@ -294,8 +299,8 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     cwd: string,
     paths: string[],
   ): Promise<CollectedEntries | undefined> {
-    const entries: Record<string, GitDirtyEntry> = {};
-    const hashes: Record<string, string | "missing"> = {};
+    const entries: Record<string, GitDirtyEntry> = Object.create(null);
+    const hashes: Record<string, string | "missing"> = Object.create(null);
     for (const path of paths) {
       const status = state.statusByPath.get(path) ?? "";
       if (isUnmergedStatus(status)) return undefined;
@@ -354,6 +359,29 @@ class DefaultGitRunChangeInspector implements GitRunChangeInspector {
     const parsed = parseNumstat(result.stdout);
     return parsed?.get(path) ?? 0;
   }
+}
+
+function isUnavailable(value: GitRunChangeSet | GitRunChangeUnavailable): value is GitRunChangeUnavailable {
+  return value.attribution === "unavailable";
+}
+
+function hasSensitiveContentPath(
+  paths: string[],
+  nameStatus: Map<string, { code: string; oldPath?: string }>,
+): boolean {
+  return paths.some((path) => {
+    const oldPath = nameStatus.get(path)?.oldPath;
+    return isSensitiveContentPath(path) || (oldPath !== undefined && isSensitiveContentPath(oldPath));
+  });
+}
+
+function isSensitiveContentPath(path: string): boolean {
+  const name = path.replace(/\\/g, "/").split("/").at(-1)?.toLowerCase() ?? "";
+  return /^\.env(?:\.|$)/.test(name)
+    || name === ".npmrc"
+    || name === ".pypirc"
+    || name === "credentials.json"
+    || /\.(?:pem|key|p12|pfx|jks|keystore)$/.test(name);
 }
 
 function unavailable(reason: AutoReviewReason): GitRunChangeUnavailable {

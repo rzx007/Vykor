@@ -22,6 +22,7 @@ export const AUTO_REVIEW_REASONS = [
   "large_change",
   "many_files",
   "sensitive_path",
+  "sensitive_content_path",
   "production_delete_or_rename",
   "patch_truncated",
   "not_git_repository",
@@ -32,6 +33,7 @@ export const AUTO_REVIEW_REASONS = [
   "review_output_invalid",
   "review_child_failed",
   "review_child_timed_out",
+  "review_preempted_by_user",
   "parent_run_not_completed",
   "daemon_restarted",
 ] as const;
