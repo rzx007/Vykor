@@ -236,3 +236,8 @@
 
 - `packages/core/src/engine/query-engine.ts` 从 1530 行降至 1465 行；重复失败拦截、工具查找、输入规范化及校验归入同目录 `query-tool-preparation.ts`。权限判断、钩子、执行并发及结果回填仍在原调用顺序中。
 - 抽取时修正新文件的一处注册表类型别名；随后通过类型检查和完整 core 测试（31 个文件、306 条）。
+
+### 2026-10-01：服务端运行准入工作段
+
+- `packages/server/src/application/session/run-admission-service.ts` 从 709 行降至 488 行；已接收输入的持久化、恢复、steer 物化及投递失败收尾归入同目录 `run-admission-work.ts`。主服务保留停机检查、目标优先级及同 ID 请求的在途去重。
+- 在隔离工作区先构建 `@vykor/agent-runtime` 声明文件后，server 类型检查通过；完整 Vitest 共 121 个文件、1183 条通过。
