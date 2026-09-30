@@ -306,3 +306,8 @@
 
 - `packages/server/src/application/session/session-interaction-service.ts` 从 605 行降至 553 行；依赖接口及编辑、恢复、排队命令的输入／结果类型归入同目录 `session-interaction-types.ts`。原服务模块继续重导出这些类型，运行操作和纯辅助函数保留在服务中。
 - 首次类型检查发现返回类型仍引用 `RunControlService`，补回类型导入后验证通过；交互服务测试 9 条通过。
+
+### 2026-10-01：桌面浏览器页面检查与结果限额
+
+- `apps/desktop/src/main/features/browser/browser-agent-service.ts` 从 871 行降至 721 行；注入页面的检查脚本、页面变化等待和指纹归入 `browser-page-inspection.ts`，开发者检查结果的大小限制归入 `browser-developer-result-limits.ts`。浏览器服务仍持有标签页、导航及操作队列状态。
+- 验证：桌面 Node 类型检查通过；浏览器服务与开发者检查相关测试共 3 个文件、64 条通过。
