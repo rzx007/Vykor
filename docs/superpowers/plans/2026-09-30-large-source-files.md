@@ -200,3 +200,8 @@
 - `packages/tools/src/file/operations.ts` 从 628 行降至 509 行；Host 上的 ripgrep 查找、参数构造、输出过滤和 glob 正则转换归入同目录 `host-search.ts`，原 `globToRegex` 导出路径保留。Host／WSL 文件读写和回退搜索仍在原模块。
 - 删除没有调用者的内嵌文件助手脚本。初次检查发现 Host glob 仍需要 `existsSync`，恢复导入后重新验证。
 - 验证：tools 包类型检查通过；完整 Vitest 共 37 个文件，444 条通过、1 条原有跳过。
+
+### 2026-10-01：子代理预算注册表
+
+- `packages/agent-runtime/src/child-agent.ts` 从 1091 行降至 955 行；共享子代理索引、深度／并发／累计预算的预留和释放归入同包 `child-registry.ts`。原 `AgentChildRegistry` 与默认预算的导出路径保留，管理器继续持有子代理运行和关闭状态。
+- 验证：agent-runtime 包类型检查通过；完整 Vitest 共 37 个文件、349 条通过。
