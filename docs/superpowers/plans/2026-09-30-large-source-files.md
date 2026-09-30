@@ -215,3 +215,9 @@
 
 - `packages/coordinator/src/workflow/store.ts` 从 637 行降至 502 行；快照与事件的 JSON 解码和字段校验归入同目录 `store-decoding.ts`，原公开导出保持可用。文件存储、运行取消及活动运行索引仍在原模块。
 - 验证：coordinator 包类型检查通过；完整 Vitest 共 6 个文件、107 条通过。
+
+### 2026-10-01：SessionStore 的 SQL 落盘
+
+- `packages/services/src/session-runtime/store.ts` 从 1487 行降至 1166 行；变更集合的删除与逐表写入归入同目录 `store-persistence.ts`。`TransactionCoordinator` 仍通过原 `persistChanges()` 回调在同一事务中执行，活动状态与回滚仍由 `SessionStore` 管理。
+- 初次完整测试发现事务协调器测试依赖原私有入口；保留薄入口委托后重新验证。
+- 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。
