@@ -188,3 +188,9 @@
 
 - `packages/server/src/application/auto-review/git-run-change-inspector.ts` 从 668 行降至 442 行，继续负责调用 Git、读取仓库状态及比对运行前后。NUL 分隔输出解析、路径规范化、状态映射和补丁组装归入同目录 `git-change-parsing.ts`；原 `GIT_PATCH_LIMIT_BYTES` 导出路径保留。
 - 验证：server 包类型检查通过；Git 改动检查 24 条真实仓库测试与自动评审 8 条集成测试通过。
+
+### 2026-10-01：浏览器开发者诊断
+
+- `browser-developer-inspector.ts` 从 780 行降至 585 行，保留诊断会话、事件监听和采集状态。DOM／网络结果脱敏与大小限制归入同目录 `browser-developer-projection.ts`，HTTP 和工作区文件的作用域校验归入 `browser-developer-scope.ts`；原 `sanitizeUrl`、`resolveDeveloperScope` 等公开路径保留。
+- 初次检查发现检查器仍使用已搬出的 DOM 深度常量和作用域函数，补齐本地导入后重新验证。
+- 验证：桌面 Node 类型检查通过；浏览器诊断与服务测试共 2 个文件、56 条通过。
