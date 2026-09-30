@@ -291,3 +291,8 @@
 
 - `packages/server/src/application/session/transcript-projection.ts` 从 625 行降至 583 行；工具结果中的图片资产字段校验归入同目录 `transcript-image-metadata.ts`。投影器仍决定何时写入消息部件及发送事件。
 - 验证：server 包类型检查通过；会话记录投影测试 25 条通过。
+
+### 2026-10-01：MCP 连接配置与类型
+
+- `packages/mcp/src/index.ts` 从 633 行降至 554 行；传输方式校验、连接描述和准备／激活结果类型归入同目录 `connection-types.ts`。原包入口继续重导出这些公开成员，连接管理器仍负责连接、切换和资源调用。
+- 验证：MCP 包类型检查通过；完整 Vitest 共 10 个文件、156 条通过。
