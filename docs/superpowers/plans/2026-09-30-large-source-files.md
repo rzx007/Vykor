@@ -116,7 +116,7 @@
 |---|---|---|
 | 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1205；`packages/agent-runtime/src/child-agent.ts` 955；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
 | 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/server/src/daemon/channel-runtime-service.ts` 724；`apps/desktop/src/main/features/browser/browser-agent-service.ts` 721；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
-| 界面按组件责任拆 | `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx` 852；`apps/frontend/src/hooks/useServerSync.ts` 801；`apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx` 776；`apps/desktop/src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx` 691；`apps/desktop/src/renderer/src/components/desktop/plugin-page/mcp-manager.tsx` 660；`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx` 624 | 先确认局部状态和独立子组件；保持唯一状态持有者，不拆出一套并行状态容器 |
+| 界面按组件责任拆 | `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx` 706；`apps/frontend/src/hooks/useServerSync.ts` 801；`apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx` 776；`apps/desktop/src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx` 691；`apps/desktop/src/renderer/src/components/desktop/plugin-page/mcp-manager.tsx` 660；`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx` 624 | 先确认局部状态和独立子组件；保持唯一状态持有者，不拆出一套并行状态容器 |
 | 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1213；`apps/desktop/src/renderer/src/assets/main.css` 934；`apps/desktop/src/shared/ipc-channels.ts` 925；`packages/services/src/session-runtime/schema.ts` 685；`apps/desktop/src/renderer/src/components/ui/gridreveal.tsx` 654；`apps/desktop/src/renderer/src/components/ui/github-activity.tsx` 630 | 主要是有顺序的装配、声明、样式级联或单一组件；只有出现可验证的维护边界时再整理 |
 
 ## 每批的验收方法
@@ -337,3 +337,8 @@
 
 - 全仓 `pnpm check-types`：61 项通过。server 完整 Vitest：121 个文件、1183 条通过。MCP 完整 Vitest：10 个文件、156 条通过。core 完整 Vitest：31 个文件、306 条通过。
 - desktop 完整 Vitest：207 个文件中 206 个通过，1320 条中 1319 条通过。唯一失败是 `project-actions.test.ts` 的恢复会话用例；单独复跑仍报 `document is not defined`。调用来自本轮拆分前已有的 `bootstrap-actions.ts` → `startup-overlay.ts` 默认参数，不在本轮改动路径内；本计划不顺带修改该功能。浏览器相关定向测试 64 条通过，桌面 Node 类型检查通过。
+
+### 2026-10-01：桌面终端展示辅助
+
+- `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx` 从 852 行降至 706 行；右键菜单归入同目录 `terminal-context-menu.tsx`，标签名称、坐标、会话匹配和错误文案归入 `terminal-display.ts`。终端连接、事件订阅及生命周期仍由主组件管理，原公开 `TerminalSessionTabInfo` 导出保留。
+- 首次桌面 Web 类型检查发现之前 client 类型归类留下未使用的 `AdmitPromptInput` 导入，移除后通过；终端相关定向测试 3 个文件、4 条通过。此批尚未重跑含上述既有失败用例的桌面完整套件。

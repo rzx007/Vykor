@@ -12,7 +12,6 @@ export type * from "./sync-types.js";
 
 import type {
   AdmitPromptAttachmentInput,
-  AdmitPromptInput,
   AttachmentAssetRecord,
   CreateScheduledTaskInput,
   CreateSessionInput,
