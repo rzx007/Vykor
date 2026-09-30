@@ -3,24 +3,22 @@ import type { ToolExecutionResult, ToolRegistry } from "../types/tools";
 import type { ToolFailureMemory } from "./tool-failure-memory";
 import { normalizeToolInput, validateToolInput } from "./tool-input-schema";
 
+export type PreparedToolCall = {
+  idx: number;
+  toolUse: ToolUseBlock;
+  tool: NonNullable<ReturnType<ToolRegistry["get"]>>;
+};
+
 export function prepareToolCalls(
   toolUses: ToolUseBlock[],
   failedToolCalls: ToolFailureMemory | undefined,
   toolRegistry: ToolRegistry,
 ): {
   results: ToolExecutionResult[];
-  readyForPermission: Array<{
-    idx: number;
-    toolUse: ToolUseBlock;
-    tool: NonNullable<ReturnType<ToolRegistry["get"]>>;
-  }>;
+  readyForPermission: PreparedToolCall[];
 } {
   const results: ToolExecutionResult[] = new Array(toolUses.length);
-  const readyForPermission: {
-    idx: number;
-    toolUse: ToolUseBlock;
-    tool: NonNullable<ReturnType<ToolRegistry["get"]>>;
-  }[] = [];
+  const readyForPermission: PreparedToolCall[] = [];
 
   for (let i = 0; i < toolUses.length; i++) {
     const toolUse = toolUses[i]!;

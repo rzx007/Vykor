@@ -271,3 +271,8 @@
 
 - `packages/client/src/types/index.ts` 从 690 行降至 442 行；附件存储类型归入 `attachment-types.ts`，插件／技能／Agent 信息归入 `extension-types.ts`，会话同步状态归入 `sync-types.ts`。原入口重导出所有成员，client 的公开 API 形状保持不变。
 - 验证：client 包类型检查及完整 Vitest 12 个文件、132 条通过（含公开 API 契约）；全仓 `pnpm check-types` 61 项通过。
+
+### 2026-10-01：QueryEngine 工具权限与执行前钩子
+
+- `packages/core/src/engine/query-engine.ts` 从 1465 行降至 1355 行；并行权限检查、用户确认和执行前钩子归入同目录 `query-tool-permissions.ts`，与既有 `query-tool-preparation.ts` 顺序相接。实际工具执行、执行后钩子及结果回填仍由引擎持有。
+- 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
