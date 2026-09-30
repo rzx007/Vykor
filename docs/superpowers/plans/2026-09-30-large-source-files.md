@@ -266,3 +266,8 @@
 
 - `packages/core/src/types/runtime.ts` 从 738 行降至 409 行；子代理输入、预算、句柄和错误类归入 `runtime-child.ts`，Agent 运行事件及订阅类型归入 `runtime-events.ts`。原 `runtime.ts` 重导出这些成员，运行配置和 `RuntimeBundle` 留在原文件。
 - 验证：core 包类型检查与完整 Vitest 31 个文件、306 条通过；全仓 `pnpm check-types` 61 项通过。
+
+### 2026-10-01：Client 公开类型归类
+
+- `packages/client/src/types/index.ts` 从 690 行降至 442 行；附件存储类型归入 `attachment-types.ts`，插件／技能／Agent 信息归入 `extension-types.ts`，会话同步状态归入 `sync-types.ts`。原入口重导出所有成员，client 的公开 API 形状保持不变。
+- 验证：client 包类型检查及完整 Vitest 12 个文件、132 条通过（含公开 API 契约）；全仓 `pnpm check-types` 61 项通过。

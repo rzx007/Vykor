@@ -5,6 +5,11 @@
  * HTTP 请求参数、响应体，以及 reducer 使用的本地聚合状态结构。
  */
 
+import type { PluginInfo } from "./extension-types.js";
+export type * from "./attachment-types.js";
+export type * from "./extension-types.js";
+export type * from "./sync-types.js";
+
 import type {
   AdmitPromptAttachmentInput,
   AdmitPromptInput,
@@ -67,81 +72,6 @@ export type {
   SessionUserInputItem,
   ListMessagePartsOptions,
 };
-
-export interface UploadAttachmentInput {
-  displayName: string;
-  mediaType?: string;
-  body: Blob | ArrayBuffer | Uint8Array | ReadableStream<Uint8Array>;
-  signal?: AbortSignal;
-}
-
-export interface DownloadAttachmentOptions {
-  range?: {
-    start?: number;
-    end?: number;
-    suffixBytes?: number;
-  };
-  signal?: AbortSignal;
-}
-
-export interface AttachmentStorageIssue {
-  code:
-    | "missing_blob"
-    | "size_mismatch"
-    | "orphan_blob"
-    | "stale_lease"
-    | "deleted_asset_retained";
-  severity: "warning" | "error";
-  assetId?: string;
-  sha256?: string;
-  expectedSizeBytes?: number;
-  actualSizeBytes?: number;
-  collectible?: boolean;
-}
-
-export interface AttachmentStorageReport {
-  summary: {
-    assets: Record<"importing" | "ready" | "failed" | "deleted", number>;
-    uniqueBlobs: number;
-    physicalBytes: number;
-    logicalBytes: number;
-    deduplicatedBytes: number;
-    activeLeases: number;
-    expiredLeases: number;
-    reclaimableBytes: number;
-  };
-  issues: AttachmentStorageIssue[];
-  latestGcAudit?: {
-    id: string;
-    policy: string;
-    result: unknown;
-    createdAt: number;
-  };
-}
-
-export interface AttachmentStorageRepairResult {
-  expiredLeases: number;
-  deletedOrphanBlobs: number;
-  releasedBytes: number;
-}
-
-export interface AttachmentStorageGcResult {
-  scannedAssets: number;
-  expiredLeases: number;
-  deletedAssets: number;
-  deletedBlobs: number;
-  releasedBytes: number;
-  skipped: Record<
-    | "notDeleted"
-    | "gracePeriod"
-    | "missingHash"
-    | "referenced"
-    | "activeLease"
-    | "sharedBlob",
-    number
-  >;
-  errors: Array<{ assetId: string; code: "blob_delete_failed" }>;
-}
 
 export interface ScheduledTaskStatusSummary {
   running: true;
@@ -487,126 +417,6 @@ export interface OutputStyleInfo {
   source: "builtin" | "user";
 }
 
-export type PluginRuntimeStatus =
-  | { state: "disabled"; message: string; action: "enable" }
-  | { state: "pending_reload"; message: string; action: "reload" }
-  | { state: "loaded"; message: string; action: "none" }
-  | {
-      state: "degraded";
-      code: string;
-      message: string;
-      action: "details" | "reimport" | "approve" | "disable";
-    }
-  | {
-      state: "failed";
-      code: string;
-      message: string;
-      action: "reimport" | "approve" | "disable" | "uninstall";
-    };
-
-export interface PluginInfo {
-  identity: { id: string; name: string; version: string; displayName?: string };
-  origin: "native" | "converted";
-  sourceFormat?: string;
-  scope: "user" | "managed";
-  enabled: boolean;
-  installation: "installed" | "missing" | "invalid";
-  activation: "inactive" | "active" | "partial" | "reload-required";
-  /** Installed-state view. Live Tool Host state belongs to the owning Agent runtime. */
-  toolRuntime?: {
-    state:
-      | "inactive"
-      | "reload-required"
-      | "starting"
-      | "active"
-      | "degraded"
-      | "error";
-    declaredEntries: number;
-    activatableEntries: number;
-    hostCount: number;
-    registeredToolCount: number;
-    lastStartedAt?: string;
-    lastError?: string;
-  };
-  runtimeStatus: PluginRuntimeStatus;
-  inventory: Record<string, number>;
-  permissions: { requested: string[]; approved: string[]; missing: string[] };
-  diagnostics: Array<{
-    severity: "info" | "warning" | "error";
-    phase: string;
-    code: string;
-    message: string;
-    path?: string;
-  }>;
-}
-
-export interface PluginArchivePreview {
-  archiveDigest: string;
-  identity: { id: string; name: string; version: string; displayName?: string };
-  requestedPermissions: string[];
-  approvalRequired: boolean;
-  inventory: Record<string, number>;
-  diagnostics: PluginInfo["diagnostics"];
-}
-
-export interface PluginGitPreview {
-  sourceDigest: string;
-  url: string;
-  ref?: string;
-  commit: string;
-  identity: { id: string; name: string; version: string; displayName?: string };
-  requestedPermissions: string[];
-  approvalRequired: boolean;
-  inventory: Record<string, number>;
-  diagnostics: PluginInfo["diagnostics"];
-}
-
-export interface PluginArchiveError {
-  code: string;
-  message: string;
-  diagnostics?: PluginInfo["diagnostics"];
-}
-
-export type SkillSource = "bundled" | "agent" | "project" | "personal" | "standard";
-
-export interface SkillInfo {
-  id: string;
-  name: string;
-  description: string;
-  content: string;
-  path: string;
-  source: SkillSource;
-  readOnly: boolean;
-  projectPath?: string;
-  projectName?: string;
-}
-
-export interface SkillProject {
-  name: string;
-  path: string;
-}
-
-export interface SkillSnapshot {
-  skills: SkillInfo[];
-  projects: SkillProject[];
-  warnings: string[];
-}
-
-export interface AgentPersonaInfo {
-  name: string;
-  description: string;
-  source?: string;
-  model?: string;
-}
-
-export interface HookInfo {
-  id: string;
-  event: string;
-  type: string;
-  enabled: boolean;
-  origin: "settings" | "runtime";
-}
-
 /** `POST /background-shells` 请求体。 */
 export interface CreateBackgroundShellInput {
   /** Stable caller identity for safe retries of one logical creation request. */
@@ -629,62 +439,3 @@ export interface InterruptSessionResponse {
   queuedRunIds: string[];
   interrupted: boolean;
 }
-
-/**
- * 单个 session 在客户端的聚合视图。
- * 由事件 reducer 从 event log 归并得出，不是服务端直接返回的结构。
- */
-export interface SessionBucket {
-  session?: SessionRecord;
-  inputs: SessionInputRecord[];
-  messages: SessionMessageRecord[];
-  partsByMessageId: Record<string, SessionMessagePartRecord[]>;
-  runs: Record<string, SessionRunRecord>;
-  attempts: Record<string, SessionRunAttemptRecord>;
-  tasks: Record<string, SessionExecutionRecord>;
-  permissions: Record<string, PermissionRequestRecord>;
-}
-
-/**
- * 客户端权威状态：由 snapshot/live（或全局 replay/live）经 reducer 收敛。
- * 多端 attach 同一 daemon 时，应得到一致的状态形状。
- */
-export interface VykorClientState {
-  sessions: Record<string, SessionRecord>;
-  /** 按 `updatedAt` 降序的 session id 列表。 */
-  sessionOrder: string[];
-  buckets: Record<string, SessionBucket>;
-  /** Durable replay events indexed by seq; live text deltas are not retained. */
-  eventsBySeq: Record<number, SessionEventRecord>;
-  /** Latest atomic snapshot cursor for each session; older delayed SSE events are ignored. */
-  snapshotCursorBySession: Record<string, number>;
-  /** Highest ordered transient event seq already applied; prevents SSE reconnect replay. */
-  transientCursor: number;
-  /** 当前已应用到的最大事件序号，用作 SSE cursor。 */
-  lastSeq: number;
-}
-
-/** `syncEvents` / `streamEvents` 的过滤与取消选项。 */
-export interface EventSyncOptions {
-  sessionId?: string;
-  cursor?: number;
-  signal?: AbortSignal;
-  /**
-   * Delay before a live-stream reconnect attempt (attempt is 0-based).
-   * Defaults to exponential backoff capped at 30s. Tests may pass `() => 0`.
-   */
-  reconnectDelayMs?: (attempt: number) => number;
-  /** 会话事件流空闲超时（毫秒）；默认由 sync 层填 60s。 */
-  idleTimeoutMs?: number;
-}
-
-/** `syncEvents` 产出的单次状态更新。 */
-export interface SyncEventUpdate {
-  event?: SessionEventRecord;
-  state: VykorClientState;
-  /** Session attach starts from an atomic snapshot, then consumes SSE deltas. */
-  source: "snapshot" | "replay" | "live" | "reconnecting";
-}
-
-/** 去掉 sessionId 后的 admit prompt 输入（sessionId 由路径提供）。 */
-export type PromptInputForClient = Omit<AdmitPromptInput, "sessionId">;
