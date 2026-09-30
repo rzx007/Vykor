@@ -210,3 +210,8 @@
 
 - `packages/services/src/executions/detached-process-supervisor.ts` 从 824 行降至 692 行；环境进程适配、输入帧编码、进程退出等待和进程树终止归入同目录 `process-support.ts`。主类仍管理任务状态、重启和监听器。
 - 验证：services 包类型检查通过；相关执行测试 3 个文件、42 条通过，包括真实进程树终止。
+
+### 2026-10-01：工作流持久化解码
+
+- `packages/coordinator/src/workflow/store.ts` 从 637 行降至 502 行；快照与事件的 JSON 解码和字段校验归入同目录 `store-decoding.ts`，原公开导出保持可用。文件存储、运行取消及活动运行索引仍在原模块。
+- 验证：coordinator 包类型检查通过；完整 Vitest 共 6 个文件、107 条通过。
