@@ -161,3 +161,8 @@
 - `packages/memory/src/index.ts` 从 958 行降至 579 行，继续提供 `MemoryManager` 和原公开导出。类型、常量、分词、签名、Markdown 记录解析／渲染、记录与元数据转换及 `MEMORY.md` 截断归入同包 `memory-format.ts`。
 - 这项原列在阶段 4；因格式处理与管理器之间已有清楚的纯函数边界，提前独立执行，没有改动数据格式或存储顺序。
 - 验证：memory 包类型检查通过；完整 Vitest 共 3 个文件、59 条通过。
+
+### 2026-10-01：个人提示词文件
+
+- `packages/prompts/src/index.ts` 从 939 行降至 547 行，保留系统提示词组装及全部原公开导出。个人提示词文件的扫描、初始化、读取、追加及待批准更新归入同包 `personal-prompt-files.ts`。
+- 验证：prompts 包类型检查通过；完整 Vitest 共 2 个文件、54 条通过。
