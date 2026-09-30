@@ -124,7 +124,7 @@ Installed Plugin 是已经完成以下步骤的 Native Plugin：
 
 Desktop 插件页目前支持两个最小安装入口：从本地 Native Plugin 包导入，以及从 Git URL 安装。入口都收在右上角“添加”菜单里，Git 安装只打开一个 URL/ref 弹窗，不在页面主体常驻表单。本地包格式支持 `.zip`、`.tar`、`.tar.gz` 和 `.tgz`；Git 来源使用系统 `git` 固定到实际 commit，并在安装前移除 `.git`。两条入口都会在后台静态校验，未申请权限时直接安装，申请权限时只请求一次完整确认；重新导入同一插件 ID 时，既有批准覆盖本次权限便直接安装，只有新增权限才重新确认。重新安装沿用同一条安装链路，成功切换前保留旧记录，并保留插件原来的启停状态。结果返回成功、失败或待刷新确认，成功后的激活从下一次对话开始。绝对插件包路径和摘要不返回 Renderer，安装器收到的仍是已经准备好的目录。
 
-这不改变最终多来源架构：Agent 对话安装、Claude Code/Codex 转换、npm、归档 URL 和 Marketplace 还没有进入 Desktop。旧插件页 localStorage 配置仅被隐藏，未迁移或删除。
+对话中的 `PluginInstall` 工具也可使用这两种来源：本地插件包路径或 Git URL/ref。它先调用同一服务预览身份、来源和权限，用户明确回复“确认安装”后才安装；安装后标记现有 Agent 为待重建，新插件从下一次对话生效。Claude Code/Codex 转换、npm、归档 URL 和 Marketplace 仍未支持。旧插件页 localStorage 配置仅被隐藏，未迁移或删除。
 
 ## 4. Native Plugin 包结构
 
@@ -674,7 +674,7 @@ Native Plugin → 在 daemon 主进程注册 Converter
 后续不要一次实现所有 Component。建议顺序如下：
 
 1. **Codex Converter**：首版已接入 Converter → Native → Installer，并增加依据真实 manifest 结构独立编写的 fixture；范围和限制见 [Codex 转换器设计](./superpowers/specs/2026-09-09-codex-plugin-converter-design.md)。
-2. **Desktop Native 插件安装入口**：已完成最简导入、后台校验、权限确认和结构化失败反馈；当前支持本地 `.zip`、`.tar`、`.tar.gz`、`.tgz`，以及 Git URL/ref 安装。Agent 对话、Claude/Codex、npm、归档 URL 和 Marketplace 仍延后。
+2. **Native 插件安装入口**：Desktop 已支持本地 `.zip`、`.tar`、`.tar.gz`、`.tgz` 和 Git URL/ref；Agent 对话也可用 `PluginInstall` 从这两种来源安装，经用户确认后复用相同校验与安装服务。Claude/Codex、npm、归档 URL 和 Marketplace 仍延后。
 3. **Native Plugin 运行诊断 v1**：已完成。Plugin Service 返回用户可读的运行主状态，Desktop 列表与详情页直接显示下一步建议。
 4. **作者体验小修**：已完成。开发指南和参考插件 README 已补充打包、重装验证、看诊断和常见失败排查说明。
 5. **声明式贡献**：`output_styles` 已决定暂缓；Themes、Monitors、Workflows 等需要重新开规格后再做。

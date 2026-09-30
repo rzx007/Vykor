@@ -125,6 +125,8 @@ import {
   createDaemonImageToTextTool,
 } from "./visual-tools/index.js";
 import { createBrowserDeveloperTool, createBrowserTool, type BrowserHost } from "./browser-tools/index.js";
+import { createDefaultPluginService } from "./default-services/plugin-service.js";
+import { createPluginInstallTool } from "./plugin-install-tool.js";
 
 export interface DaemonApplicationOptions {
   store: SessionStore;
@@ -500,6 +502,10 @@ export class DaemonApplication implements DurableAgentApplication {
         workflowRepository: this.workflows,
         tools: async () => {
           return [
+            createPluginInstallTool(
+              createDefaultPluginService({ current: options.getSettings?.() ?? options.settings ?? failMissingSettings() }),
+              () => this.agentPool.invalidateWarmAgents(),
+            ),
             imageToTextTool,
             imageGenerationTool,
             createBrowserTool(options.browserHost, async ({ bytes }) => {

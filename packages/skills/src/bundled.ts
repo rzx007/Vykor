@@ -233,6 +233,49 @@ the \`Skill\` tool. Newly written skills are picked up on the next \`Skill\` /
 \`ListSkills\` call (filesystem refresh).
 `;
 
+const CREATE_PLUGIN = `
+# create-plugin
+
+Create a Vykor Native Plugin when the user asks to make a reusable plugin.
+For an ordinary reusable prompt or procedure, prefer a Skill alone; use a plugin
+when the user wants to package one or more Skills, Agents, Hooks, MCP servers,
+or Native Tools together.
+
+## Workflow
+
+1. Decide the plugin ID, name, scope of behavior, and which components it needs.
+   If a choice changes behavior or requested permissions, ask the user.
+2. Create a new plugin directory in the user's chosen location. If they give no
+   location, use a descriptive directory under the current workspace. Do not
+   overwrite an existing plugin directory.
+3. Write \`.vykor-plugin/plugin.json\` with \`schemaVersion: 1\`, a stable \`id\`,
+   \`name\`, \`version\`, and explicit \`components\` paths. Only declare components
+   that exist. Keep permissions to the actual minimum.
+4. Write the component files. For a Skill component, include a \`SKILL.md\` with
+   YAML \`name\` and \`description\` frontmatter. For a Node Tool, use a separate
+   \`.mjs\` entry and declare its permissions in the manifest; it runs in a Tool
+   Host process, not in the daemon.
+5. Run \`vk plugin validate <plugin-directory>\` and fix validation errors.
+   Report any check that could not run. Do not install or link the plugin unless
+   the user asked to install or use it. If installation was requested, use the
+   existing plugin installation flow and obtain any required permission approval.
+
+Minimal Skill-only manifest:
+
+\`\`\`json
+{
+  "schemaVersion": 1,
+  "id": "example.my-plugin",
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "components": { "skills": ["./skills/my-skill/SKILL.md"] }
+}
+\`\`\`
+
+When working in the Vykor repository, consult \`docs/native-plugin-authoring.md\`
+and \`examples/plugins/text-inspector\` for current component examples.
+`;
+
 /**
  * 随包发布的内置技能集合。
  * 加载顺序最低优先级：bundled < user < project（同名后者覆盖）。
@@ -247,5 +290,10 @@ export const BUNDLED_SKILLS: SkillDefinition[] = [
     "create-skill",
     "Create or install a local skill by writing SKILL.md under ~/.vykor/skills or the project .vykor/skills directory. Use when the user asks to add, write, or install a skill on disk.",
     CREATE_SKILL,
+  ),
+  bundled(
+    "create-plugin",
+    "Create a Vykor Native Plugin package with a manifest and real components, then validate it. Use when the user asks to create or build a plugin.",
+    CREATE_PLUGIN,
   ),
 ];

@@ -399,7 +399,7 @@ describe("BUNDLED_SKILLS", () => {
 
   it("contains the bundled skills including create-skill", () => {
     const names = BUNDLED_SKILLS.map((s) => s.name).sort();
-    expect(names).toEqual(["commit", "create-skill", "debug", "plan", "review", "test"]);
+    expect(names).toEqual(["commit", "create-plugin", "create-skill", "debug", "plan", "review", "test"]);
   });
 
   it("create-skill tells the model where to write local skills", () => {
