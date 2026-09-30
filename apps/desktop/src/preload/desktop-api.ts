@@ -277,6 +277,12 @@ export const desktopAPI = {
   },
   settings: {
     snapshot: () => invoke(IpcChannels.settingsSnapshot),
+    updateCustomInstructions: (
+      input: IpcInvokeMap[typeof IpcChannels.settingsUpdateCustomInstructions]["args"][0]
+    ) => invoke(IpcChannels.settingsUpdateCustomInstructions, input),
+    updateMemorySettings: (
+      input: IpcInvokeMap[typeof IpcChannels.settingsUpdateMemorySettings]["args"][0]
+    ) => invoke(IpcChannels.settingsUpdateMemorySettings, input),
     updateWorkStyle: (input: IpcInvokeMap[typeof IpcChannels.settingsUpdateWorkStyle]["args"][0]) =>
       invoke(IpcChannels.settingsUpdateWorkStyle, input),
     updateNotificationMode: (

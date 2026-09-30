@@ -1,9 +1,11 @@
 import { IpcChannels } from "../../../shared/ipc-channels"
 import type {
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopMemorySettingsInput,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
@@ -18,6 +20,18 @@ export const settingsIpcContribution: IpcContribution = {
       {
         channel: IpcChannels.settingsSnapshot,
         handler: () => desktopSettingsService.snapshot(),
+      },
+      {
+        channel: IpcChannels.settingsUpdateCustomInstructions,
+        handler: (_event, input) =>
+          desktopSettingsService.updateCustomInstructions(
+            input as UpdateDesktopCustomInstructionsInput
+          ),
+      },
+      {
+        channel: IpcChannels.settingsUpdateMemorySettings,
+        handler: (_event, input) =>
+          desktopSettingsService.updateMemorySettings(input as UpdateDesktopMemorySettingsInput),
       },
       {
         channel: IpcChannels.settingsUpdateWorkStyle,

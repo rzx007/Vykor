@@ -44,4 +44,9 @@ describe("settings runtime impact", () => {
   it("invalidates warm agents when outputTokenMax changes", () => {
     expect(settingsPatchRuntimeImpact({ path: "outputTokenMax", value: 16_000 })).toBe("invalidate");
   });
+
+  it("invalidates warm agents when custom instructions or memory availability changes", () => {
+    expect(settingsPatchRuntimeImpact({ systemPrompt: "new instruction" })).toBe("invalidate");
+    expect(settingsPatchRuntimeImpact({ memory: { enabled: false } })).toBe("invalidate");
+  });
 });

@@ -117,9 +117,11 @@ import type {
   DesktopDaemonAutoStartSnapshot,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
 } from "./settings-types"
@@ -337,6 +339,12 @@ export type DesktopAPI = {
   }
   settings: {
     snapshot: () => Promise<DesktopSettingsSnapshot>
+    updateCustomInstructions: (
+      input: UpdateDesktopCustomInstructionsInput
+    ) => Promise<DesktopSettingsSnapshot>
+    updateMemorySettings: (
+      input: UpdateDesktopMemorySettingsInput
+    ) => Promise<DesktopSettingsSnapshot>
     updateWorkStyle: (input: UpdateDesktopWorkStyleInput) => Promise<DesktopSettingsSnapshot>
     updateNotificationMode: (
       input: UpdateDesktopNotificationModeInput

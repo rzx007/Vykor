@@ -106,10 +106,12 @@ describe("SessionPostRunMaintenance", () => {
   it("keeps personalization active when semantic memory is disabled", async () => {
     const personalizationUpdater = vi.fn(() => 1);
     const remember = vi.fn();
+    const sessionMemoryWriter = vi.fn();
     const maintenance = new SessionPostRunMaintenance({
       data: createStore() as any,
       getSettings: vi.fn(async () => ({ memory: { enabled: false } } as any)),
       personalizationUpdater,
+      sessionMemoryWriter,
       log: vi.fn(),
     });
 
@@ -117,6 +119,7 @@ describe("SessionPostRunMaintenance", () => {
 
     expect(personalizationUpdater).toHaveBeenCalledOnce();
     expect(remember).not.toHaveBeenCalled();
+    expect(sessionMemoryWriter).toHaveBeenCalledOnce();
   });
 
   it("logs best-effort failures without failing the completed run", async () => {

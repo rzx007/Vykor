@@ -117,5 +117,8 @@ function settingsSnapshot(defaultOpenerId: string | null): DesktopSettingsSnapsh
     restartRequired: false,
     defaultOpenerId,
     defaultTerminalShellId: null,
+    customInstructions: "",
+    memoryEnabled: true,
+    autoExtractEnabled: true,
   }
 }

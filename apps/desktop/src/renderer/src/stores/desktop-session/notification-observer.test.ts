@@ -20,6 +20,9 @@ describe("notifyForSessionViewChange", () => {
     restartRequired: false,
     defaultOpenerId: null,
     defaultTerminalShellId: null,
+    customInstructions: "",
+    memoryEnabled: true,
+    autoExtractEnabled: true,
   }))
 
   beforeEach(() => {
@@ -90,6 +93,9 @@ describe("notifyForSessionViewChange", () => {
       restartRequired: false,
       defaultOpenerId: null,
       defaultTerminalShellId: null,
+      customInstructions: "",
+      memoryEnabled: true,
+      autoExtractEnabled: true,
     })
 
     await notifyForSessionViewChange({
@@ -110,6 +116,9 @@ describe("notifyForSessionViewChange", () => {
       restartRequired: false,
       defaultOpenerId: null,
       defaultTerminalShellId: null,
+      customInstructions: "",
+      memoryEnabled: true,
+      autoExtractEnabled: true,
     })
 
     await notifyForSessionViewChange({

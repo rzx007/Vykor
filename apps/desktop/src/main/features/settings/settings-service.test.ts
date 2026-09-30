@@ -14,6 +14,9 @@ const defaultSnapshot = {
   restartRequired: false,
   defaultOpenerId: null,
   defaultTerminalShellId: null,
+  customInstructions: "",
+  memoryEnabled: true,
+  autoExtractEnabled: true,
 } as const
 
 const preferences = () => ({
@@ -86,7 +89,8 @@ describe("buildDesktopSettingsSnapshot", () => {
   it("defaults browser developer mode to off", () => {
     expect(buildDesktopSettingsSnapshot({}).browserDeveloperMode).toBe(false)
     expect(
-      buildDesktopSettingsSnapshot({}, { browserDeveloperMode: "yes" as never }).browserDeveloperMode
+      buildDesktopSettingsSnapshot({}, { browserDeveloperMode: "yes" as never })
+        .browserDeveloperMode
     ).toBe(false)
   })
 
@@ -94,6 +98,50 @@ describe("buildDesktopSettingsSnapshot", () => {
     expect(
       buildDesktopSettingsSnapshot({}, { browserDeveloperMode: true }).browserDeveloperMode
     ).toBe(true)
+  })
+
+  it("reads custom instructions and semantic memory switches from daemon settings", () => {
+    expect(
+      buildDesktopSettingsSnapshot({
+        systemPrompt: "请先说结论",
+        memory: { enabled: false, autoExtractEnabled: false },
+      })
+    ).toMatchObject({
+      customInstructions: "请先说结论",
+      memoryEnabled: false,
+      autoExtractEnabled: false,
+    })
+  })
+})
+
+describe("DesktopSettingsService personalization", () => {
+  const createService = () => {
+    const patchSettings = vi.fn(async (patch: Record<string, unknown>) => patch)
+    const service = new DesktopSettingsService({
+      daemonClient: async () => ({
+        protocol: { capabilities: vi.fn() },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
+      refreshDaemonClient: async () => ({
+        protocol: { capabilities: vi.fn() },
+        system: { getSettings: vi.fn(), patchSettings },
+      }),
+      getPreferences: preferences,
+      patchPreferences: vi.fn(),
+    })
+    return { service, patchSettings }
+  }
+
+  it("saves custom instructions as the daemon systemPrompt", async () => {
+    const { service, patchSettings } = createService()
+    await service.updateCustomInstructions({ content: "先给结论" })
+    expect(patchSettings).toHaveBeenCalledWith({ systemPrompt: "先给结论" })
+  })
+
+  it("patches one memory setting without clearing the other", async () => {
+    const { service, patchSettings } = createService()
+    await service.updateMemorySettings({ enabled: false })
+    expect(patchSettings).toHaveBeenCalledWith({ memory: { enabled: false } })
   })
 })
 
@@ -207,9 +255,9 @@ describe("DesktopSettingsService.updateBrowserDeveloperMode", () => {
     const patchPreferences = vi.fn()
     const service = serviceWith(patchPreferences)
 
-    await expect(
-      service.updateBrowserDeveloperMode({ enabled: "true" as never })
-    ).rejects.toThrow("Developer mode must be a boolean.")
+    await expect(service.updateBrowserDeveloperMode({ enabled: "true" as never })).rejects.toThrow(
+      "Developer mode must be a boolean."
+    )
     expect(patchPreferences).not.toHaveBeenCalled()
   })
 
@@ -232,9 +280,7 @@ describe("DesktopSettingsService.updateBrowserDeveloperMode", () => {
       ...patch,
     }))
     const service = serviceWith(patchPreferences)
-    const stop = vi
-      .spyOn(browserAgentService, "stopDeveloperDiagnostics")
-      .mockReturnValue(true)
+    const stop = vi.spyOn(browserAgentService, "stopDeveloperDiagnostics").mockReturnValue(true)
 
     try {
       await service.updateBrowserDeveloperMode({ enabled: false })
@@ -250,9 +296,7 @@ describe("DesktopSettingsService.updateBrowserDeveloperMode", () => {
       ...patch,
     }))
     const service = serviceWith(patchPreferences)
-    const stop = vi
-      .spyOn(browserAgentService, "stopDeveloperDiagnostics")
-      .mockReturnValue(true)
+    const stop = vi.spyOn(browserAgentService, "stopDeveloperDiagnostics").mockReturnValue(true)
 
     try {
       await service.updateBrowserDeveloperMode({ enabled: true })

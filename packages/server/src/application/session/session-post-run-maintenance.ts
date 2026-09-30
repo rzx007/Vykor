@@ -58,7 +58,7 @@ export class SessionPostRunMaintenance {
     });
 
     const settings = await this.context.getSettings(session.cwd);
-    if (!settings || settings.memory?.enabled === false) return;
+    if (!settings) return;
 
     if (settings.memory?.sessionMemoryEnabled !== false) {
       await this.bestEffort("session.memory.checkpoint_failed", sessionId, runId, async () => {
@@ -70,6 +70,8 @@ export class SessionPostRunMaintenance {
         else this.context.sessionMemoryWriter?.(session.cwd, messages, sessionId);
       });
     }
+
+    if (settings.memory?.enabled === false) return;
 
     if (settings.memory?.autoExtractEnabled !== false) {
       await this.bestEffort("session.memory.auto_extract_failed", sessionId, runId, async () => {

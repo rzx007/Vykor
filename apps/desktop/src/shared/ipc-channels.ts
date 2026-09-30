@@ -108,9 +108,11 @@ import type {
   DesktopDaemonAutoStartSnapshot,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
 } from "./settings-types"
@@ -334,6 +336,8 @@ export const IpcChannels = {
   skillRemove: "skill:remove",
 
   settingsSnapshot: "settings:snapshot",
+  settingsUpdateCustomInstructions: "settings:update-custom-instructions",
+  settingsUpdateMemorySettings: "settings:update-memory-settings",
   settingsUpdateWorkStyle: "settings:update-work-style",
   settingsUpdateNotificationMode: "settings:update-notification-mode",
   settingsUpdateAgentEnvironment: "settings:update-agent-environment",
@@ -420,7 +424,12 @@ export interface IpcInvokeMap {
     result: DesktopWindowMaterialState
   }
   [IpcChannels.browserTabUpdate]: {
-    args: [input: { action: "bind"; tabId: string; webContentsId: number } | { action: "active"; tabId: string | null } | { action: "unbind"; tabId: string }]
+    args: [
+      input:
+        | { action: "bind"; tabId: string; webContentsId: number }
+        | { action: "active"; tabId: string | null }
+        | { action: "unbind"; tabId: string },
+    ]
     result: void
   }
   [IpcChannels.browserInspectAt]: {
@@ -444,6 +453,14 @@ export interface IpcInvokeMap {
   [IpcChannels.petSetIgnoreMouseEvents]: { args: [value: boolean]; result: PetState }
 
   [IpcChannels.settingsSnapshot]: { args: []; result: DesktopSettingsSnapshot }
+  [IpcChannels.settingsUpdateCustomInstructions]: {
+    args: [input: UpdateDesktopCustomInstructionsInput]
+    result: DesktopSettingsSnapshot
+  }
+  [IpcChannels.settingsUpdateMemorySettings]: {
+    args: [input: UpdateDesktopMemorySettingsInput]
+    result: DesktopSettingsSnapshot
+  }
   [IpcChannels.settingsUpdateWorkStyle]: {
     args: [input: UpdateDesktopWorkStyleInput]
     result: DesktopSettingsSnapshot
@@ -500,8 +517,14 @@ export interface IpcInvokeMap {
     result: DesktopMcpOperationResult
   }
   [IpcChannels.mcpLogin]: { args: [input: DesktopMcpLoginInput]; result: DesktopMcpLoginState }
-  [IpcChannels.mcpLoginStatus]: { args: [input: DesktopMcpLoginOperationInput]; result: DesktopMcpLoginState }
-  [IpcChannels.mcpCancelLogin]: { args: [input: DesktopMcpLoginOperationInput]; result: DesktopMcpLoginState }
+  [IpcChannels.mcpLoginStatus]: {
+    args: [input: DesktopMcpLoginOperationInput]
+    result: DesktopMcpLoginState
+  }
+  [IpcChannels.mcpCancelLogin]: {
+    args: [input: DesktopMcpLoginOperationInput]
+    result: DesktopMcpLoginState
+  }
   [IpcChannels.mcpLogout]: { args: [input: DesktopMcpLogoutInput]; result: DesktopMcpSnapshot }
 
   [IpcChannels.connectionsSnapshot]: { args: []; result: DesktopConnectionsSnapshot }

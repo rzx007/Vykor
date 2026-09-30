@@ -11,9 +11,11 @@ import type {
   DesktopSettingsSnapshot,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
 } from "../../../shared/settings-types"
@@ -59,6 +61,31 @@ export class DesktopSettingsService {
     }
     return this.withDaemonRetry(async (client) => {
       const settings = await client.system.patchSettings({ workStyle: input.workStyle })
+      return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
+    })
+  }
+
+  async updateCustomInstructions(
+    input: UpdateDesktopCustomInstructionsInput
+  ): Promise<DesktopSettingsSnapshot> {
+    if (typeof input.content !== "string") throw new Error("自定义指令必须是文本。")
+    return this.withDaemonRetry(async (client) => {
+      const settings = await client.system.patchSettings({ systemPrompt: input.content })
+      return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
+    })
+  }
+
+  async updateMemorySettings(
+    input: UpdateDesktopMemorySettingsInput
+  ): Promise<DesktopSettingsSnapshot> {
+    if (
+      (input.enabled === undefined && input.autoExtractEnabled === undefined) ||
+      (input.enabled !== undefined && typeof input.enabled !== "boolean") ||
+      (input.autoExtractEnabled !== undefined && typeof input.autoExtractEnabled !== "boolean")
+    )
+      throw new Error("记忆设置必须是开关值。")
+    return this.withDaemonRetry(async (client) => {
+      const settings = await client.system.patchSettings({ memory: input })
       return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
     })
   }

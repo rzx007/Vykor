@@ -30,6 +30,8 @@ import { DaemonAutoStartControl } from "./daemon-autostart-control"
 import { AppearanceSettings } from "@renderer/components/appearance/appearance-settings"
 import { ConnectionsSettings } from "./connections-settings"
 import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings"
+import { ProfileSettings } from "./profile-settings"
+import { PersonalizationSettings } from "./personalization-settings"
 import { isDesktopNotificationMode, isDesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopNotificationMode, DesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopAppInfo } from "@shared/ipc-channels"
@@ -39,6 +41,22 @@ type SettingsContentProps = {
 }
 
 export function SettingsContent({ selectedSection }: SettingsContentProps): React.JSX.Element {
+  if (selectedSection === "个性化") {
+    return (
+      <ScrollArea horizontal={false} className="h-full min-w-0 flex-1 bg-conversation">
+        <PersonalizationSettings />
+      </ScrollArea>
+    )
+  }
+
+  if (selectedSection === "个人资料") {
+    return (
+      <ScrollArea horizontal={false} className="h-full min-w-0 flex-1 bg-conversation">
+        <ProfileSettings />
+      </ScrollArea>
+    )
+  }
+
   return (
     <ScrollArea horizontal={false} className="h-full min-w-0 flex-1 bg-conversation">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-10 py-16 lg:px-16">

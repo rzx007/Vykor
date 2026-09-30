@@ -9,6 +9,23 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 个人资料热图从当前主题色派生色阶。 */
+.profile-activity-cell[data-level="0"] {
+  background: color-mix(in oklab, var(--muted) 72%, var(--background));
+}
+.profile-activity-cell[data-level="1"] {
+  background: color-mix(in oklab, var(--primary) 22%, var(--background));
+}
+.profile-activity-cell[data-level="2"] {
+  background: color-mix(in oklab, var(--primary) 44%, var(--background));
+}
+.profile-activity-cell[data-level="3"] {
+  background: color-mix(in oklab, var(--primary) 67%, var(--background));
+}
+.profile-activity-cell[data-level="4"] {
+  background: color-mix(in oklab, var(--primary) 90%, var(--background));
+}
+
 /* Sparse extension navigation and optional compact rows. */
 .extension-tabs [data-slot="tabs-trigger"] {
   padding-inline: 0.75rem;

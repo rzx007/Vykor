@@ -39,6 +39,8 @@ const SOFT_RUNTIME_INVALIDATE_KEYS = new Set([
   "effort",
   "fastMode",
   "workStyle",
+  "systemPrompt",
+  "memory",
 ]);
 
 export type SettingsRuntimeImpact = "restart" | "invalidate" | "none";

@@ -21,11 +21,23 @@ export interface DesktopSettingsSnapshot {
   restartRequired: boolean
   defaultOpenerId: string | null
   defaultTerminalShellId: string | null
+  customInstructions: string
+  memoryEnabled: boolean
+  autoExtractEnabled: boolean
   wslSupported?: boolean
 }
 
 export interface UpdateDesktopWorkStyleInput {
   workStyle: DesktopWorkStyle
+}
+
+export interface UpdateDesktopCustomInstructionsInput {
+  content: string
+}
+
+export interface UpdateDesktopMemorySettingsInput {
+  enabled?: boolean
+  autoExtractEnabled?: boolean
 }
 
 export interface UpdateDesktopNotificationModeInput {
@@ -75,6 +87,7 @@ export function buildDesktopSettingsSnapshot(
   }> = {},
   options: Partial<{ restartRequired: boolean; wslSupported: boolean }> = {}
 ): DesktopSettingsSnapshot {
+  const memory = isRecord(settings.memory) ? settings.memory : {}
   return {
     workStyle: isDesktopWorkStyle(settings.workStyle) ? settings.workStyle : "practical",
     notificationMode: isDesktopNotificationMode(preferences.notificationMode)
@@ -86,6 +99,9 @@ export function buildDesktopSettingsSnapshot(
     restartRequired: options.restartRequired ?? false,
     defaultOpenerId: normalizeDefaultOpenerId(preferences.defaultOpenerId),
     defaultTerminalShellId: normalizeDefaultTerminalShellId(preferences.defaultTerminalShellId),
+    customInstructions: typeof settings.systemPrompt === "string" ? settings.systemPrompt : "",
+    memoryEnabled: memory.enabled !== false,
+    autoExtractEnabled: memory.autoExtractEnabled !== false,
     wslSupported: options.wslSupported ?? false,
   }
 }
