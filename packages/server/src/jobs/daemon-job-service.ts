@@ -1,7 +1,5 @@
 import {
   cancelPersistentWorkflow,
-  createWorkflowNotification,
-  createWorkflowResultFromSnapshot,
   type WorkflowRunRepository,
   type WorkflowRunSnapshot,
 } from "@vykor/coordinator";
@@ -9,29 +7,36 @@ import {
   filterJobSnapshots,
   type AgentJobHost,
   type JobCancelRequest,
-  type JobKind,
   type JobListRequest,
   type JobReadRequest,
   type JobReadResult,
   type JobSnapshot,
-  type JobStatus,
   type JobWaitRequest,
   type JobWaitResult,
 } from "@vykor/jobs";
 import { DEFAULT_RETENTION_POLICY } from "@vykor/services";
-import {
-  isCommittedModelPart,
-  type SessionExecutionRecord,
-  type SessionMessagePartRecord,
-  type SessionMessageRecord,
-  type SessionRecord,
-  type SessionRunAttemptRecord,
-  type SessionRunRecord,
-} from "@vykor/protocol";
+import type { SessionExecutionRecord, SessionRecord } from "@vykor/protocol";
 import type { ChildActivitySnapshot } from "@vykor/core";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 
 import type { DaemonTerminalService } from "../terminal/index.js";
+import {
+  executionBackend,
+  formatWorkflowOutput,
+  isDetachedProcessAgentTask,
+  isFinished,
+  limitOutput,
+  normalizeLimit,
+  readChildFailure,
+  runtimeExecutionId,
+  taskAcceptsInput,
+  taskSnapshot,
+  terminalSnapshot,
+  workflowDetails,
+  workflowSnapshot,
+} from "./job-snapshots.js";
+
+export { readPersistedChildActivity, type ChildActivityReader } from "./child-activity.js";
 
 export interface JobSessionQueries {
   getSession(sessionId: string): SessionRecord | undefined;
@@ -64,8 +69,6 @@ interface JobExecutionRuntime {
   writeInput(executionId: string, data: string): Promise<void>;
   stopExecution(executionId: string): Promise<unknown>;
 }
-
-const DEFAULT_OUTPUT_LIMIT = 12_000;
 
 type ResolvedJobSource =
   | { kind: "terminal"; value: TerminalSessionInfo }
@@ -415,257 +418,4 @@ export class DaemonJobService {
     }
     throw new Error(`Job not found: ${jobId}`);
   }
-}
-
-function terminalSnapshot(terminal: TerminalSessionInfo): JobSnapshot {
-  const updated = terminal.exitedAt ?? terminal.createdAt;
-  return {
-    id: terminal.id,
-    kind: "terminal",
-    label: terminal.name,
-    ownerSession: terminal.sessionId!,
-    status: terminal.status,
-    capabilities: { read: true, wait: true, send: terminal.status === "running", cancel: terminal.status === "running" },
-    cwd: terminal.cwd,
-    startedAt: Date.parse(terminal.createdAt),
-    updatedAt: Date.parse(updated),
-    ...(terminal.exitedAt ? { finishedAt: Date.parse(terminal.exitedAt) } : {}),
-    ...(terminal.exitCode !== undefined ? { detail: `exit code: ${terminal.exitCode ?? "signal"}` } : {}),
-    ...(terminal.exitCode !== undefined ? { exitCode: terminal.exitCode } : {}),
-    metadata: { runtime: terminal.runtime, shell: terminal.shell, source: terminal.source },
-  };
-}
-
-function taskSnapshot(task: SessionExecutionRecord): JobSnapshot {
-  return {
-    id: task.id,
-    kind: taskKind(task.type),
-    label: task.description,
-    ownerSession: task.sessionId,
-    status: taskStatus(task.status),
-    capabilities: {
-      read: true,
-      wait: true,
-      send: taskAcceptsInput(task),
-      cancel: task.status === "pending" || task.status === "running",
-    },
-    cwd: task.cwd,
-    startedAt: task.startedAt ?? task.createdAt,
-    updatedAt: task.updatedAt,
-    ...(task.finishedAt ? { finishedAt: task.finishedAt } : {}),
-    ...(task.error ? { detail: task.error } : {}),
-    ...(task.status !== "pending" && task.status !== "running" &&
-      task.metadata.executionBackend === "detached_process" &&
-      (task.metadata.processExitCode === null ||
-        (typeof task.metadata.processExitCode === "number" && Number.isInteger(task.metadata.processExitCode)))
-      ? { exitCode: task.metadata.processExitCode as number | null } : {}),
-    metadata: { ...task.metadata, ...(task.childSessionId ? { childSessionId: task.childSessionId } : {}) },
-  };
-}
-
-function workflowSnapshot(workflow: WorkflowRunSnapshot, cwd: string): JobSnapshot {
-  const cancelled = workflow.termination === "cancelled";
-  return {
-    id: qualifiedWorkflowId(workflow.runId),
-    kind: "workflow",
-    label: workflow.summary,
-    ownerSession: workflow.ownerSession!,
-    status: workflow.status === "running" ? "running" : cancelled ? "killed" : workflow.status,
-    capabilities: { read: true, wait: true, send: false, cancel: workflow.status === "running" },
-    cwd,
-    startedAt: workflow.createdAt,
-    updatedAt: workflow.updatedAt,
-    ...(workflow.status !== "running" ? { finishedAt: workflow.updatedAt } : {}),
-    metadata: {
-      mode: workflow.plan.mode,
-      totalTasks: workflow.plan.tasks.length,
-      runningTasks: workflow.runningTaskIds.length,
-      pendingTasks: workflow.pendingTaskIds.length,
-    },
-  };
-}
-
-function taskKind(type: string): JobKind {
-  return type === "shell" || type === "dream" ? type : "agent";
-}
-
-function taskStatus(status: SessionExecutionRecord["status"]): JobStatus {
-  if (status === "completed" || status === "failed") return status;
-  if (status === "stopped" || status === "interrupted") return "killed";
-  return "running";
-}
-
-function taskAcceptsInput(task: SessionExecutionRecord): boolean {
-  return task.type === "agent" && task.status !== "stopped" && task.status !== "interrupted";
-}
-
-function runtimeExecutionId(task: SessionExecutionRecord): string {
-  if (typeof task.metadata.runtimeExecutionId === "string") return task.metadata.runtimeExecutionId;
-  if (typeof task.metadata.taskManagerId === "string") return task.metadata.taskManagerId;
-  return task.id;
-}
-
-function executionBackend(task: SessionExecutionRecord): "detached_process" | "child_agent" {
-  if (task.metadata.executionBackend === "child_agent") return "child_agent";
-  if (task.metadata.executionBackend === "detached_process") return "detached_process";
-  return task.metadata.origin === "child_session" ? "child_agent" : "detached_process";
-}
-
-function isDetachedProcessAgentTask(task: SessionExecutionRecord): boolean {
-  if (
-    task.childSessionId ||
-    task.metadata.executionBackend === "child_agent" ||
-    task.metadata.origin === "child_session"
-  ) {
-    return false;
-  }
-  return task.type === "shell" ||
-    task.metadata.executionBackend === "detached_process";
-}
-
-function formatWorkflowOutput(workflow: WorkflowRunSnapshot): string {
-  return JSON.stringify({
-    summary: workflow.summary,
-    status: workflow.status,
-    pendingTaskIds: workflow.pendingTaskIds,
-    runningTaskIds: workflow.runningTaskIds,
-    results: workflow.orderedResults,
-  }, null, 2);
-}
-
-function workflowDetails(workflow: WorkflowRunSnapshot): Record<string, unknown> {
-  const notification = createWorkflowNotification(createWorkflowResultFromSnapshot(workflow));
-  return {
-    status: workflow.status,
-    termination: workflow.termination,
-    plan: workflow.plan,
-    pendingTaskIds: workflow.pendingTaskIds,
-    blockedTaskIds: workflow.blockedTaskIds,
-    blockedTasks: workflow.blockedTasks,
-    runningTaskIds: workflow.runningTaskIds,
-    runningTasks: workflow.runningTasks,
-    results: workflow.results,
-    budget: workflow.budget,
-    needsReconciliation: notification.needsReconciliation,
-    reconciliationIssues: notification.reconciliationIssues,
-    reconciliationSummary: notification.reconciliationSummary,
-    reconciliationPlan: notification.reconciliationPlan,
-  };
-}
-
-function normalizeLimit(value: number | undefined): number {
-  return value === undefined || !Number.isFinite(value)
-    ? DEFAULT_OUTPUT_LIMIT
-    : Math.max(1, Math.floor(value));
-}
-
-function limitOutput(text: string, maxChars = DEFAULT_OUTPUT_LIMIT): Pick<JobReadResult, "text" | "truncated"> {
-  const limit = normalizeLimit(maxChars);
-  return text.length > limit ? { text: text.slice(-limit), truncated: true } : { text, truncated: false };
-}
-
-function isFinished(status: JobStatus): boolean {
-  return status === "completed" || status === "failed" || status === "killed";
-}
-
-function readChildFailure(task: SessionExecutionRecord): Record<string, unknown> | undefined {
-  const value = task.metadata.childFailure;
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
-}
-
-function qualifiedWorkflowId(runId: string): string {
-  return `workflow:${runId}`;
-}
-
-const MAX_ACTIVITY_TEXT = 2_000;
-
-/** Minimal read-only durable queries needed to build one child Run's activity view. */
-export interface ChildActivityReader {
-  getSession(sessionId: string): SessionRecord | undefined;
-  listMessages(sessionId: string): SessionMessageRecord[];
-  listMessageParts(sessionId: string): SessionMessagePartRecord[];
-  getRun(runId: string): SessionRunRecord | undefined;
-  listRunAttempts(runId: string): SessionRunAttemptRecord[];
-}
-
-/**
- * Build the bounded activity view from persisted child records. Returns undefined
- * when the parent/child/run identities cannot be verified, so a forged
- * childSessionId or foreign Run is never exposed.
- */
-export function readPersistedChildActivity(
-  reader: ChildActivityReader,
-  input: { parentSessionId: string; childSessionId: string; runId?: string },
-): ChildActivitySnapshot | undefined {
-  if (!input.runId) return undefined;
-  const child = reader.getSession(input.childSessionId);
-  if (!child || child.parentId !== input.parentSessionId) return undefined;
-  const run = reader.getRun(input.runId);
-  if (!run || run.sessionId !== input.childSessionId) return undefined;
-
-  const messages = new Map(
-    reader.listMessages(input.childSessionId)
-      .filter((message) => message.runId === input.runId)
-      .map((message) => [message.id, message] as const),
-  );
-  const parts = reader.listMessageParts(input.childSessionId)
-    .filter((part) => messages.has(part.messageId) && isCommittedModelPart(part))
-    .sort((left, right) => left.seq - right.seq);
-  const latestText = parts
-    .filter((part) =>
-      part.type === "text" &&
-      messages.get(part.messageId)?.role === "assistant" &&
-      (part.text ?? "").length > 0)
-    .at(-1)?.text;
-  const toolParts = parts.filter((part) => part.type === "tool" && part.toolName);
-  const latestToolPart = toolParts.at(-1);
-  const attempts = reader.listRunAttempts(input.runId);
-  const knownAttempts = attempts.filter(
-    (attempt) => attempt.inputTokens !== undefined && attempt.outputTokens !== undefined,
-  );
-  const usage = attempts.length === 0
-    ? undefined
-    : {
-        ...(knownAttempts.length > 0
-          ? {
-              inputTokens: knownAttempts.reduce((total, attempt) => total + (attempt.inputTokens ?? 0), 0),
-              outputTokens: knownAttempts.reduce((total, attempt) => total + (attempt.outputTokens ?? 0), 0),
-            }
-          : {}),
-        incomplete: knownAttempts.length !== attempts.length,
-      };
-
-  return {
-    version: 1,
-    runId: input.runId,
-    updatedAt: Math.max(
-      run.updatedAt,
-      ...parts.map((part) => part.updatedAt),
-      ...attempts.map((attempt) => attempt.updatedAt),
-    ),
-    ...(latestText ? { latestAssistantText: latestText.slice(0, MAX_ACTIVITY_TEXT) } : {}),
-    ...(latestToolPart
-      ? {
-          latestTool: {
-            name: latestToolPart.toolName!,
-            status: persistedToolStatus(latestToolPart),
-            at: latestToolPart.updatedAt,
-          },
-        }
-      : {}),
-    toolCalls: toolParts.length,
-    modelTurns: attempts.filter((attempt) => attempt.status === "completed").length,
-    ...(usage ? { usage } : {}),
-  };
-}
-
-function persistedToolStatus(
-  part: SessionMessagePartRecord,
-): "running" | "completed" | "failed" {
-  if (part.isError === true || part.status === "failed" || part.status === "interrupted") {
-    return "failed";
-  }
-  return part.status === "completed" ? "completed" : "running";
 }

@@ -177,3 +177,9 @@
 - `packages/core/src/engine/compact-service.ts` 从 1247 行降至 896 行；工具结果清理、文本折叠、按轮截断、工具调用配对切分、图片占位、边界标记和 token 估算归入同目录 `compact-messages.ts`。原公开方法保留，服务类继续控制压缩顺序、摘要模型调用和检查点。
 - 删除两个没有调用者的旧工具 ID 辅助函数。抽取中修复了一处多行返回类型的机械搬移错误，随后重新验证。
 - 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：服务端 Job 结果转换
+
+- `packages/server/src/jobs/daemon-job-service.ts` 从 671 行降至 422 行，保留列表、读取、等待、发送和取消的入口。终端／任务／工作流快照及输出转换归入 `jobs/job-snapshots.ts`，持久化子任务活动读取归入 `jobs/child-activity.ts`。
+- `readPersistedChildActivity` 和 `ChildActivityReader` 仍从原模块导出，保持已有调用路径。
+- 验证：server 包类型检查通过；Job 服务定向测试 26 条通过。
