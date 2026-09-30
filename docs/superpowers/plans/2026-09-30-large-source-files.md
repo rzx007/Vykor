@@ -231,3 +231,8 @@
 
 - `apps/desktop/src/renderer/src/stores/desktop-session/session-actions.ts` 从 950 行降至 581 行；新会话创建、首条提示词提交和草稿清理／恢复归入同目录 `start-session-action.ts`。原 Store 动作入口不变，导航代数和打开会话回调在调用时传入。
 - 验证：桌面 Web 类型检查通过；会话动作、提示词动作和 Store 集成测试共 3 个文件、84 条通过。
+
+### 2026-10-01：QueryEngine 工具调用准备
+
+- `packages/core/src/engine/query-engine.ts` 从 1530 行降至 1465 行；重复失败拦截、工具查找、输入规范化及校验归入同目录 `query-tool-preparation.ts`。权限判断、钩子、执行并发及结果回填仍在原调用顺序中。
+- 抽取时修正新文件的一处注册表类型别名；随后通过类型检查和完整 core 测试（31 个文件、306 条）。

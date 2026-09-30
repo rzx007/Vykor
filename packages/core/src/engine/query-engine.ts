@@ -37,7 +37,7 @@ import {
 } from "./model-retry";
 import { streamBufferedModelWithRetry } from "./buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
-import { normalizeToolInput, validateToolInput } from "./tool-input-schema";
+import { prepareToolCalls } from "./query-tool-preparation";
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
@@ -1027,72 +1027,7 @@ export class QueryEngine implements IQueryEngine {
     toolRegistry: IToolRegistry = this.visibleToolRegistry(),
     internalTools: ReadonlySet<string> = new Set(),
   ): Promise<ToolExecutionResult[]> {
-    const results: ToolExecutionResult[] = new Array(toolUses.length);
-    const readyForPermission: {
-      idx: number;
-      toolUse: ToolUseBlock;
-      tool: NonNullable<ReturnType<IToolRegistry["get"]>>;
-    }[] = [];
-
-    for (let i = 0; i < toolUses.length; i++) {
-      const toolUse = toolUses[i]!;
-
-      if (failedToolCalls?.shouldReplayFailure(toolUse.name, toolUse.input)) {
-        results[i] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [
-            {
-              type: "text" as const,
-              text: "Tool call already failed with the same input. Do not repeat it unless the input or underlying condition changes; choose another approach or explain the blocker.",
-            },
-          ],
-          isError: true,
-          failureKind: "policy",
-          executionState: "not_started",
-          metadata: { recoveryGuard: "repeated_failed_call" },
-        };
-        continue;
-      }
-
-      const tool = toolRegistry.get(toolUse.name);
-      if (!tool) {
-        results[i] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [{ type: "text" as const, text: `Unknown tool: ${toolUse.name}` }],
-          isError: true,
-          failureKind: "invalid_input",
-          executionState: "not_started",
-        };
-        continue;
-      }
-
-      toolUse.input = normalizeToolInput(tool.inputSchema, toolUse.input) as Record<
-        string,
-        unknown
-      >;
-
-      const validationError = validateToolInput(tool.inputSchema, toolUse.input);
-      if (validationError) {
-        results[i] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [
-            {
-              type: "text" as const,
-              text: `Tool input validation failed: ${validationError}`,
-            },
-          ],
-          isError: true,
-          failureKind: "invalid_input",
-          executionState: "not_started",
-        };
-        continue;
-      }
-
-      readyForPermission.push({ idx: i, toolUse, tool });
-    }
+    const { results, readyForPermission } = prepareToolCalls(toolUses, failedToolCalls, toolRegistry);
 
     // 并行检查所有工具的权限状态（单个 checkTool 抛错不应波及其他工具）
     const checks = await Promise.all(
