@@ -246,3 +246,8 @@
 
 - `packages/services/src/session-runtime/store.ts` 从 1166 行降至 1024 行；已结束记录的保留期清理及审计读写归入同目录 `session-retention.ts`。原方法和默认策略导出保持可用，所有权检查仍在 `SessionStore` 入口，清理和审计仍在同一个数据库事务中完成。
 - 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。
+
+### 2026-10-01：SessionStore 投影结算
+
+- `packages/services/src/session-runtime/store.ts` 从 1024 行降至 876 行；结算记录的创建、查询、重试、失败、解决和放弃，以及数据库行转换归入同目录 `projection-settlements.ts`。原方法保留，在写操作前继续检查 Application Owner。
+- 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。
