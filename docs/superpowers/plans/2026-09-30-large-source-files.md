@@ -241,3 +241,8 @@
 
 - `packages/server/src/application/session/run-admission-service.ts` 从 709 行降至 488 行；已接收输入的持久化、恢复、steer 物化及投递失败收尾归入同目录 `run-admission-work.ts`。主服务保留停机检查、目标优先级及同 ID 请求的在途去重。
 - 在隔离工作区先构建 `@vykor/agent-runtime` 声明文件后，server 类型检查通过；完整 Vitest 共 121 个文件、1183 条通过。
+
+### 2026-10-01：SessionStore 保留策略与审计
+
+- `packages/services/src/session-runtime/store.ts` 从 1166 行降至 1024 行；已结束记录的保留期清理及审计读写归入同目录 `session-retention.ts`。原方法和默认策略导出保持可用，所有权检查仍在 `SessionStore` 入口，清理和审计仍在同一个数据库事务中完成。
+- 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。

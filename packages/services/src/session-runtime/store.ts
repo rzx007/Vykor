@@ -141,6 +141,16 @@ import {
 } from "./store-state.js";
 import { persistSessionChanges } from "./store-persistence.js";
 import {
+  DEFAULT_RETENTION_POLICY,
+  applyRetention,
+  latestRetentionAudit,
+  listRetentionAudits,
+  recordRetentionAudit,
+  type RetentionPolicy,
+} from "./session-retention.js";
+
+export { DEFAULT_RETENTION_POLICY, type RetentionPolicy } from "./session-retention.js";
+import {
   normalizePromptAttachments,
   promptAttachmentFingerprint,
   uniqueReferencedBytes,
@@ -175,28 +185,6 @@ export class ApplicationOwnerConflictError extends Error {
     this.name = "ApplicationOwnerConflictError";
   }
 }
-
-export interface RetentionPolicy {
-  durableEventMaxAgeMs: number;
-  workflowEventMaxAgeMs: number;
-  workflowRunMaxAgeMs: number;
-  runAttemptMaxAgeMs: number;
-  projectionSettlementMaxAgeMs: number;
-  completedJobVisibleForMs: number;
-  terminalOutputMaxBytes: number;
-  attachmentGracePeriodMs: number;
-}
-
-export const DEFAULT_RETENTION_POLICY: RetentionPolicy = {
-  durableEventMaxAgeMs: 30 * 24 * 60 * 60 * 1_000,
-  workflowEventMaxAgeMs: 30 * 24 * 60 * 60 * 1_000,
-  workflowRunMaxAgeMs: 90 * 24 * 60 * 60 * 1_000,
-  runAttemptMaxAgeMs: 90 * 24 * 60 * 60 * 1_000,
-  projectionSettlementMaxAgeMs: 30 * 24 * 60 * 60 * 1_000,
-  completedJobVisibleForMs: 7 * 24 * 60 * 60 * 1_000,
-  terminalOutputMaxBytes: 10 * 1024 * 1024,
-  attachmentGracePeriodMs: 7 * 24 * 60 * 60 * 1_000,
-};
 
 export class SessionStore {
   readonly path: string;
@@ -522,109 +510,12 @@ export class SessionStore {
     runAttempts: number;
     settlements: number;
   } {
-    if (this.activeOwnerLease)
-      this.assertApplicationOwner(this.activeOwnerLease);
-    const result = this.database.transaction(() => {
-      const workflowEvents = this.database
-        .prepare(
-          `
-        DELETE FROM workflow_event
-        WHERE created_at < ? AND workflow_run_id IN (
-          SELECT run_id FROM workflow_run WHERE status != 'running'
-        )
-      `,
-        )
-        .run(timestamp - policy.workflowEventMaxAgeMs).changes;
-      const workflows = this.database
-        .prepare(
-          `
-        DELETE FROM workflow_run
-        WHERE updated_at < ? AND status != 'running'
-          AND NOT EXISTS (
-            SELECT 1 FROM workflow_execution_claim c
-            WHERE c.workflow_run_id = workflow_run.run_id AND c.status = 'running'
-          )
-      `,
-        )
-        .run(timestamp - policy.workflowRunMaxAgeMs).changes;
-      const runAttempts = this.database
-        .prepare(
-          `
-        DELETE FROM session_run_attempt
-        WHERE updated_at < ? AND status NOT IN ('pending', 'running')
-      `,
-        )
-        .run(timestamp - policy.runAttemptMaxAgeMs).changes;
-      const settlements = this.database
-        .prepare(
-          `
-        DELETE FROM projection_settlement
-        WHERE updated_at < ? AND status IN ('resolved', 'abandoned')
-      `,
-        )
-        .run(timestamp - policy.projectionSettlementMaxAgeMs).changes;
-      const removableEvents = this.database
-        .prepare(
-          `
-        SELECT e.id FROM session_event e
-        LEFT JOIN session s ON s.id = e.session_id
-        WHERE e.created_at < ?
-          AND e.session_id IS NOT NULL
-          AND s.status = 'archived'
-          AND NOT EXISTS (
-            SELECT 1 FROM session_run r
-            WHERE r.session_id = e.session_id AND r.status IN ('pending', 'running')
-          )
-      `,
-        )
-        .all(timestamp - policy.durableEventMaxAgeMs) as Array<{ id: string }>;
-      if (removableEvents.length > 0) {
-        const remove = this.database.prepare(
-          "DELETE FROM session_event WHERE id = ?",
-        );
-        for (const event of removableEvents) remove.run(event.id);
-      }
-      const retentionResult = {
-        events: removableEvents.length,
-        workflowEvents,
-        workflows,
-        runAttempts,
-        settlements,
-      };
-      this.database
-        .prepare(
-          `
-        INSERT INTO retention_audit (id, policy, result_json, created_at)
-        VALUES (?, ?, ?, ?)
-      `,
-        )
-        .run(
-          randomUUID(),
-          JSON.stringify(policy),
-          JSON.stringify(retentionResult),
-          timestamp,
-        );
-      return retentionResult;
-    })();
-    if (result.events > 0) {
-      const removed = new Set(
-        (
-          this.database.prepare("SELECT id FROM session_event").all() as Array<{
-            id: string;
-          }>
-        ).map((row) => row.id),
-      );
-      this.state.events = this.state.events.filter((event) =>
-        removed.has(event.id),
-      );
-    }
-    return result;
+    if (this.activeOwnerLease) this.assertApplicationOwner(this.activeOwnerLease);
+    return applyRetention(this.database, this.state, policy, timestamp);
   }
 
   listRetentionAudits(): Array<Record<string, unknown>> {
-    return this.database
-      .prepare("SELECT * FROM retention_audit ORDER BY created_at DESC")
-      .all() as Array<Record<string, unknown>>;
+    return listRetentionAudits(this.database);
   }
 
   recordRetentionAudit(input: {
@@ -632,17 +523,7 @@ export class SessionStore {
     result: unknown;
     timestamp?: number;
   }): void {
-    this.database
-      .prepare(
-        `INSERT INTO retention_audit (id, policy, result_json, created_at)
-       VALUES (?, ?, ?, ?)`,
-      )
-      .run(
-        randomUUID(),
-        input.policy,
-        JSON.stringify(input.result),
-        input.timestamp ?? now(),
-      );
+    recordRetentionAudit(this.database, input);
   }
 
   latestRetentionAudit(policy: string):
@@ -653,30 +534,7 @@ export class SessionStore {
         createdAt: number;
       }
     | undefined {
-    const row = this.database
-      .prepare(
-        `SELECT id, policy, result_json, created_at
-       FROM retention_audit
-       WHERE policy = ?
-       ORDER BY created_at DESC, rowid DESC
-       LIMIT 1`,
-      )
-      .get(policy) as
-      | {
-          id: string;
-          policy: string;
-          result_json: string;
-          created_at: number;
-        }
-      | undefined;
-    return row
-      ? {
-          id: row.id,
-          policy: row.policy,
-          result: JSON.parse(row.result_json) as unknown,
-          createdAt: row.created_at,
-        }
-      : undefined;
+    return latestRetentionAudit(this.database, policy);
   }
 
   claimWorkflowRun(
