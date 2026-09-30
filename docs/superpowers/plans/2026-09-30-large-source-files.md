@@ -276,3 +276,8 @@
 
 - `packages/core/src/engine/query-engine.ts` 从 1465 行降至 1355 行；并行权限检查、用户确认和执行前钩子归入同目录 `query-tool-permissions.ts`，与既有 `query-tool-preparation.ts` 顺序相接。实际工具执行、执行后钩子及结果回填仍由引擎持有。
 - 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：压缩服务摘要流程与类型
+
+- `packages/core/src/engine/compact-service.ts` 从 896 行降至 592 行；摘要提示词与上下文拼装归入 `compact-prompt.ts`，流式摘要收集、格式化及超窗错误识别归入 `compact-summary.ts`，公开类型归入 `compact-types.ts`。原公开导出路径保留，压缩服务继续控制重试、检查点和消息替换。
+- 验证：core 包完整 Vitest 共 31 个文件、306 条通过；全仓 `pnpm check-types` 61 项通过。

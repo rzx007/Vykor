@@ -15,7 +15,6 @@
  */
 import type {
   Message,
-  StreamEvent,
   ToolUseBlock,
   IHookExecutor,
 } from "../index";
@@ -23,15 +22,39 @@ import { DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE } from "../constants/vision-tokens"
 import {
   createCompactBoundaryMarker,
   estimateMessageTokens,
-  isTextBlock,
   microCompactMessages,
   replaceImagesWithPlaceholders,
   simpleCompactMessages,
   splitMessagesPreservingToolPairs,
-  toolFactsText,
   truncateHeadForPtlRetry,
   tryContextCollapseMessages,
 } from "./compact-messages";
+import { buildCompactPrompt, deriveWorkLog, extractRecentFiles } from "./compact-prompt";
+import { collectSummary, formatSummary, isPromptTooLongError } from "./compact-summary";
+export { isPromptTooLongError } from "./compact-summary";
+import type {
+  CompactCheckpoint,
+  CompactClient,
+  CompactContext,
+  CompactContextProvider,
+  CompactProgressCallback,
+  CompactProgressEvent,
+  CompactServiceOptions,
+  CompactTrigger,
+} from "./compact-types";
+
+export type {
+  CompactCheckpoint,
+  CompactClient,
+  CompactContext,
+  CompactContextProvider,
+  CompactContextSection,
+  CompactProgressCallback,
+  CompactProgressEvent,
+  CompactProgressPhase,
+  CompactServiceOptions,
+  CompactTrigger,
+} from "./compact-types";
 
 // ---------------------------------------------------------------------------
 // 常量（与 Python vykor v0.1.9 services/compact 对齐）
@@ -46,172 +69,12 @@ const MAX_CONSECUTIVE_FAILURES = 3;
 /** Prompt Too Long（PTL）时，对摘要输入做头部截断后的最大重试次数。 */
 const MAX_PTL_RETRIES = 3;
 
-/**
- * LLM 摘要提示词。
- * 要求模型先写 <analysis>（草稿/推理），再写 <summary>（正式续聊用摘要）；
- * formatSummary 会丢掉 analysis，只保留 summary 内容。
- */
-const COMPACT_PROMPT = `Summarize the following conversation between the user and an AI assistant.
-
-Produce your summary in two sections:
-
-<analysis>
-- Briefly describe what the user was trying to accomplish
-- What approach was taken
-- Key findings and decisions made
-- Any errors encountered and how they were resolved
-</analysis>
-
-<summary>
-- Concise narrative of the conversation progress
-- Key state: files modified, tools used, results obtained
-- Any pending items or follow-up actions needed
-</summary>
-
-Keep the summary concise and focused on information needed for continuing the task.`;
-
-// ---------------------------------------------------------------------------
-// 公开类型：触发源 / 进度事件 / 检查点
-// ---------------------------------------------------------------------------
-
-/** 压缩触发来源：自动（每轮）、手动（/compact）、被动（如 API 报超窗后）。 */
-export type CompactTrigger = "auto" | "manual" | "reactive";
-
-/** 压缩流水线各阶段，供 UI / 日志订阅。 */
-export type CompactProgressPhase =
-  | "context_collapse_start"
-  | "context_collapse_end"
-  | "compact_start"
-  | "compact_retry"
-  | "compact_end"
-  | "compact_failed";
-
-/** 进度回调入参：阶段 + 触发源 + 可选说明 / 重试次数 / 检查点快照。 */
-export interface CompactProgressEvent {
-  phase: CompactProgressPhase;
-  trigger: CompactTrigger;
-  message?: string;
-  attempt?: number;
-  checkpoint?: string;
-  metadata?: Record<string, unknown>;
-}
-
-export type CompactProgressCallback = (
-  event: CompactProgressEvent,
-) => void | Promise<void>;
-
-/**
- * 压缩过程中记录的检查点快照（消息数、token 数等），
- * 便于调试「压到哪一步、前后 footprint 变化」。
- */
-export interface CompactCheckpoint {
-  checkpoint: string;
-  trigger: CompactTrigger;
-  messageCount: number;
-  tokenCount: number;
-  attempt?: number;
-  [key: string]: unknown;
-}
-
-// ---------------------------------------------------------------------------
-// Compact context（B.2）—— 注入摘要 prompt 的结构化上下文
-// ---------------------------------------------------------------------------
-
-/**
- * 压缩摘要时附加的结构化上下文。
- * 目的：摘要后模型仍能知道「当前任务 / 最近文件 / 计划」，降低断档感。
- */
-export interface CompactContext {
-  /** session_memory checkpoint 内容（帮助压缩后恢复任务状态，由 CLI 读入注入）。 */
-  sessionMemory?: string;
-  /** 当前正在进行的执行描述（来自具体运行时）。 */
-  taskFocus?: string;
-  /** 本会话访问过的文件路径（自动从历史抽取，或由外部注入覆盖）。 */
-  recentFiles?: string[];
-  /** 当前计划 / TODO 内容。 */
-  plan?: string;
-  /** 工具调用摘要（从历史自动统计，如 `Read×12, Shell×5`）。 */
-  workLog?: string;
-  /** 业务层提供的有界补充章节；core 只负责统一清洗和限额。 */
-  supplementalSections?: CompactContextSection[];
-}
-
-export interface CompactContextSection {
-  heading: string;
-  content: string;
-}
-
-/** 由调用方（QueryEngine / CLI）提供外部上下文的工厂函数。 */
-export type CompactContextProvider = () =>
-  | CompactContext
-  | Promise<CompactContext>;
-
 class CompactContextProviderError extends Error {
   constructor(cause: unknown) {
     super("Compact context provider failed", { cause });
     this.name = "CompactContextProviderError";
   }
 }
-
-/** 构造 CompactService 的可选配置。 */
-export interface CompactServiceOptions {
-  /** 用于生成摘要的 LLM 客户端；未提供时只能走 micro/collapse/simple。 */
-  client?: CompactClient;
-  /** 压缩前后 hook 执行器（pre_compact / post_compact）。 */
-  hookExecutor?: IHookExecutor;
-  /** 进度回调，供 TUI / 前端展示压缩阶段。 */
-  progressCallback?: CompactProgressCallback;
-  /** 单图 token 估算覆盖值；默认 DEFAULT_VISION_IMAGE_TOKEN_ESTIMATE。 */
-  imageTokenEstimate?: number;
-  /** 外部上下文提供者（附件目录、任务、计划、session memory 等）。 */
-  contextProvider?: CompactContextProvider;
-}
-
-/** 摘要客户端最小接口：提交一段 prompt，消费流式事件。 */
-export interface CompactClient {
-  submitMessage(
-    content: string,
-    options?: { signal?: AbortSignal },
-  ): AsyncIterable<StreamEvent>;
-}
-
-// ---------------------------------------------------------------------------
-// 错误分类：识别 llama.cpp / OpenAI 兼容接口的「上下文溢出」类错误
-// ---------------------------------------------------------------------------
-
-/** 错误消息中常见的「prompt 过长 / context 超限」关键词（小写匹配）。 */
-const PTL_NEEDLES = [
-  "prompt too long",
-  "context_length_exceeded",
-  "context length",
-  "maximum context",
-  "context window",
-  "input tokens exceed",
-  "messages resulted in",
-  "reduce the length of the messages",
-  "configured limit",
-  "too many tokens",
-  "too large for the model",
-  "maximum context length",
-  "exceed_context",
-  "exceeds the available context size",
-  "available context size",
-];
-
-/**
- * 判断错误是否属于 Prompt Too Long（上下文溢出）。
- * 命中后 llmCompact 会对摘要输入做头部截断并重试，而不是直接失败。
- */
-export function isPromptTooLongError(err: unknown): boolean {
-  const text = String(
-    err instanceof Error ? err.message : err,
-  ).toLowerCase();
-  return PTL_NEEDLES.some((needle) => text.includes(needle));
-}
-
-// ---------------------------------------------------------------------------
-// Message 辅助函数（TS Message 为判别联合类型）
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // CompactService
@@ -291,111 +154,6 @@ export class CompactService {
   /** 注册 / 替换上下文提供者（由 QueryEngine 或 Host 接线后注入运行时上下文）。 */
   setCompactContextProvider(fn: CompactContextProvider | undefined): void {
     this.contextProvider = fn;
-  }
-
-  // -------------------------------------------------------------------------
-  // Compact context 辅助（B.2）
-  // -------------------------------------------------------------------------
-
-  /**
-   * 从消息历史自动提取最近访问的文件路径。
-   * 扫描 assistant 的 Read / Write / Edit / MultiEdit 工具输入中的 file_path，
-   * 去重后只保留最近 20 个，供摘要 prompt 的「Recently Accessed Files」段使用。
-   */
-  private extractRecentFiles(messages: Message[]): string[] {
-    const FILE_TOOLS = new Set(["Read", "Write", "Edit", "MultiEdit"]);
-    const seen = new Set<string>();
-    const files: string[] = [];
-    for (const msg of messages) {
-      if (msg.type === "assistant" && msg.toolUses) {
-        for (const tu of msg.toolUses) {
-          if (FILE_TOOLS.has(tu.name)) {
-            const fp = (tu.input as Record<string, unknown>)?.file_path;
-            if (typeof fp === "string" && !seen.has(fp)) {
-              seen.add(fp);
-              files.push(fp);
-            }
-          }
-        }
-      }
-    }
-    return files.slice(-20);
-  }
-
-  /**
-   * 从消息历史统计工具调用次数，生成 `ToolName×count` 形式的 work log。
-   * 按调用次数降序，帮助摘要模型理解「本会话主要在做什么」。
-   */
-  private deriveWorkLog(messages: Message[]): string | undefined {
-    const counts = new Map<string, number>();
-    for (const msg of messages) {
-      if (msg.type === "assistant" && msg.toolUses) {
-        for (const tu of msg.toolUses) {
-          counts.set(tu.name, (counts.get(tu.name) ?? 0) + 1);
-        }
-      }
-    }
-    if (counts.size === 0) return undefined;
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => `${name}×${count}`)
-      .join(", ");
-  }
-
-  /**
-   * 把 context 拼进 COMPACT_PROMPT。
-   * 无任何附加上下文时直接返回基础 prompt；有上下文则包在 <context> 中，
-   * 并提示模型把这些信息写进摘要以便续聊。
-   */
-  private buildCompactPrompt(context: CompactContext): string {
-    const sections: string[] = [];
-    if (context.sessionMemory) {
-      sections.push(`## Session Memory Checkpoint\n${context.sessionMemory}`);
-    }
-    if (context.taskFocus) {
-      sections.push(`## Current Task\n${context.taskFocus}`);
-    }
-    if (context.recentFiles?.length) {
-      sections.push(`## Recently Accessed Files\n${context.recentFiles.join("\n")}`);
-    }
-    if (context.plan) {
-      sections.push(`## Current Plan\n${context.plan}`);
-    }
-    if (context.workLog) {
-      sections.push(`## Work Log\n${context.workLog}`);
-    }
-    sections.push(...this.formatSupplementalSections(context.supplementalSections));
-    if (sections.length === 0) return COMPACT_PROMPT;
-    return (
-      COMPACT_PROMPT +
-      "\n\n<context>\n" +
-      sections.join("\n\n") +
-      "\n</context>\n\nIncorporate the above context into your summary to help resume work effectively."
-    );
-  }
-
-  private formatSupplementalSections(
-    supplementalSections: CompactContextSection[] | undefined,
-  ): string[] {
-    const sections: string[] = [];
-    let remainingContentChars = 32_000;
-    for (const section of supplementalSections ?? []) {
-      if (sections.length >= 8 || remainingContentChars <= 0) break;
-      const heading = section.heading
-        .replace(/[\r\n]+/g, " ")
-        .trim()
-        .slice(0, 120);
-      const content = section.content.trim();
-      if (!heading || !content) continue;
-      const boundedContent = content.slice(
-        0,
-        Math.min(16_000, remainingContentChars),
-      );
-      if (!boundedContent) continue;
-      sections.push(`## ${heading}\n${boundedContent}`);
-      remainingContentChars -= boundedContent.length;
-    }
-    return sections;
   }
 
   /** 挂载 hook 执行器，使 PRE_COMPACT / POST_COMPACT 事件生效。 */
@@ -597,8 +355,8 @@ export class CompactService {
     let summarizable = this.replaceImagesWithPlaceholders(older);
 
     // 汇总 context：先自动从历史抽取，再与外部 provider 合并（外部优先）。
-    const autoFiles = this.extractRecentFiles(messages);
-    const autoWorkLog = this.deriveWorkLog(messages);
+    const autoFiles = extractRecentFiles(messages);
+    const autoWorkLog = deriveWorkLog(messages);
     let context: CompactContext = {
       recentFiles: autoFiles.length > 0 ? autoFiles : undefined,
       workLog: autoWorkLog,
@@ -620,7 +378,7 @@ export class CompactService {
           external.supplementalSections ?? context.supplementalSections,
       };
     }
-    const compactPrompt = this.buildCompactPrompt(context);
+    const compactPrompt = buildCompactPrompt(context);
 
     let summaryText = "";
     let ptlRetries = 0;
@@ -629,7 +387,7 @@ export class CompactService {
     // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
-        summaryText = await this.collectSummary(summarizable, compactPrompt, signal);
+        summaryText = await collectSummary(this.client, summarizable, compactPrompt, signal);
         break;
       } catch (err) {
         if (signal?.aborted) throw signal.reason;
@@ -659,7 +417,7 @@ export class CompactService {
       }
     }
 
-    const formatted = this.formatSummary(summaryText) ||
+    const formatted = formatSummary(summaryText) ||
       "[Conversation compacted via LLM summary]";
 
     const summary: Message = {
@@ -704,68 +462,6 @@ export class CompactService {
       }),
     });
     return result;
-  }
-
-  /**
-   * 把待摘要消息序列化成对话文本，拼进 prompt，流式收集摘要模型输出。
-   * 每条消息最多 4000 字符；完整受控事实在前，剩余预算再放正文。
-   */
-  private async collectSummary(
-    messages: Message[],
-    customPrompt?: string,
-    signal?: AbortSignal,
-  ): Promise<string> {
-    if (!this.client) throw new Error("No LLM client");
-
-    const conversationText = messages
-      .map((m) => {
-        const role =
-          m.type === "user"
-            ? "User"
-            : m.type === "assistant"
-              ? "Assistant"
-              : m.type === "tool_result"
-                ? "ToolResult"
-                : "System";
-        const facts = m.type === "tool_result" ? toolFactsText(m) : undefined;
-        const body = m.type === "tool_result" && facts
-          ? m.content.filter((b) => !isTextBlock(b) || b.text !== facts)
-          : m.content;
-        const content =
-          typeof body === "string" ? body : JSON.stringify(body);
-        const prefix = facts ? `${facts}\n` : "";
-        return `${role}: ${prefix}${content.slice(0, 4000 - prefix.length)}`;
-      })
-      .join("\n\n");
-
-    const basePrompt = customPrompt ?? COMPACT_PROMPT;
-    const prompt = `${basePrompt}\n\n<conversation>\n${conversationText}\n</conversation>`;
-
-    let summaryText = "";
-    for await (const event of this.client.submitMessage(prompt, { signal })) {
-      if (event.type === "text_delta") {
-        summaryText += event.delta;
-      } else if (event.type === "error") {
-        throw event.error;
-      }
-    }
-    if (!summaryText.trim()) {
-      throw new Error("Compaction interrupted before a complete summary was returned.");
-    }
-    return summaryText;
-  }
-
-  /**
-   * 后处理原始摘要：去掉 <analysis> 草稿区；
-   * 若有 <summary> 则改写成 `Summary:\n...` 形式；压缩多余空行。
-   */
-  private formatSummary(raw: string): string {
-    let text = raw.replace(/<analysis>[\s\S]*?<\/analysis>/g, "");
-    const m = text.match(/<summary>([\s\S]*?)<\/summary>/);
-    if (m) {
-      text = text.replace(m[0], `Summary:\n${m[1]!.trim()}`);
-    }
-    return text.replace(/\n\n+/g, "\n\n").trim();
   }
 
   // -------------------------------------------------------------------------
