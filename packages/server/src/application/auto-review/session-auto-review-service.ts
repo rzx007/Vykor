@@ -44,7 +44,7 @@ export interface AutoReviewEventPublisherPort {
 }
 
 export interface SessionAutoReviewServiceOptions {
-  store: AutoReviewSessionPort;
+  session: AutoReviewSessionPort;
   events: AutoReviewEventPublisherPort;
   inspector: GitRunChangeInspector;
   now?: () => number;
@@ -348,7 +348,7 @@ export class SessionAutoReviewService {
   /** Converge unfinished reviews left behind by a daemon restart. Idempotent. */
   failIncompleteReviewsOnStartup(): number {
     let count = 0;
-    for (const run of this.options.store.runs.listAllRuns()) {
+    for (const run of this.options.session.runs.listAllRuns()) {
       const review = readAutoReviewRunMetadata(run.metadata?.autoReview);
       if (!review) continue;
       if (review.status === "pending") {
@@ -373,7 +373,7 @@ export class SessionAutoReviewService {
   }
 
   private readReview(runId: string): AutoReviewRunMetadata | undefined {
-    return readAutoReviewRunMetadata(this.options.store.runs.getRun(runId)?.metadata?.autoReview);
+    return readAutoReviewRunMetadata(this.options.session.runs.getRun(runId)?.metadata?.autoReview);
   }
 
   private settle(
@@ -392,9 +392,9 @@ export class SessionAutoReviewService {
     const validated = readAutoReviewRunMetadata({ ...review, version: 1, policyVersion: "risk-v1" });
     if (!validated) throw new Error(`Invalid auto review metadata for run ${runId}`);
     const seq = this.options.events.checkpoint();
-    this.options.store.transaction(() => {
-      this.options.store.runs.updateRun(runId, { metadata: { autoReview: validated } });
-      this.options.store.conversations.appendEvent({
+    this.options.session.transaction(() => {
+      this.options.session.runs.updateRun(runId, { metadata: { autoReview: validated } });
+      this.options.session.conversations.appendEvent({
         type: AUTO_REVIEW_EVENT_TYPE,
         sessionId,
         payload: { runId, review: validated },

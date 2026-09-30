@@ -90,7 +90,7 @@ describe("SessionAutoReviewService", () => {
       broadcastSince: () => undefined,
       broadcastEvent: () => undefined,
     });
-    return new SessionAutoReviewService({ store, events: publisher, inspector: inspectorWith(compareResult) });
+    return new SessionAutoReviewService({ session: store, events: publisher, inspector: inspectorWith(compareResult) });
   }
 
   function reviewEvents() {
@@ -103,7 +103,7 @@ describe("SessionAutoReviewService", () => {
 
   it("records disabled without scheduling anything when the mode is off", async () => {
     const svc = new SessionAutoReviewService({
-      store,
+      session: store,
       events: new SessionEventPublisher(store.conversations, { broadcastSince: () => undefined, broadcastEvent: () => undefined }),
       inspector: inspectorWith(changeSet([])),
     });
@@ -130,7 +130,7 @@ describe("SessionAutoReviewService", () => {
       broadcastEvent: () => undefined,
     });
     const svc = new SessionAutoReviewService({
-      store,
+      session: store,
       events: publisher,
       inspector: {
         capture: async () => ({ attribution: "unavailable", reason: "not_git_repository" }),

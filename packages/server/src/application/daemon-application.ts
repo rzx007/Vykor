@@ -698,7 +698,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
 
       const autoReview = new SessionAutoReviewService({
-        store,
+        session: store,
         events: this.eventPublisher,
         inspector: createGitRunChangeInspector(),
         log: (entry) => {

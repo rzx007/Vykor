@@ -47,6 +47,8 @@ function projectorStore(flat: Record<string, any>) {
       createRunAttempt: flat.createRunAttempt ?? vi.fn(),
       updateRunAttempt: flat.updateRunAttempt ?? vi.fn(),
       listRunAttempts: flat.listRunAttempts ?? vi.fn(() => []),
+      getSessionTask: flat.runsGetSessionTask ?? flat.getSessionTask ?? vi.fn(),
+      updateSessionTask: flat.runsUpdateSessionTask ?? flat.updateSessionTask ?? vi.fn(),
     },
     createProjectionSettlement: flat.createProjectionSettlement ?? vi.fn(),
     failProjectionSettlement: flat.failProjectionSettlement ?? vi.fn(),

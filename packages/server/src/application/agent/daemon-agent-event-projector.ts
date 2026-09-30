@@ -264,7 +264,7 @@ export class DaemonAgentEventProjector {
     }
 
     const bridge = this.context.executionProjector.createBridge({ id: parent.id, cwd: parent.cwd });
-    let taskId = this.context.store.getSessionTask(childId)?.id;
+    let taskId = this.context.store.runs.getSessionTask(childId)?.id;
     if (!taskId) {
       taskId = childId;
       const registered = bridge.registerChildExecution({
@@ -288,7 +288,7 @@ export class DaemonAgentEventProjector {
     const delegationMetadata = childDelegationMetadata(spawn);
     if (delegationMetadata) {
       const before = this.context.events.checkpoint();
-      this.context.store.updateSessionTask(taskId, { metadata: delegationMetadata });
+      this.context.store.runs.updateSessionTask(taskId, { metadata: delegationMetadata });
       this.context.events.publishSince(before);
     }
     this.context.liveChildren.register(sessionId, childId, this.context.rootAgent);
@@ -314,7 +314,7 @@ export class DaemonAgentEventProjector {
     // event from a superseded Run must not overwrite newer progress.
     const runId = event.context.runId;
     if (!runId || child.runId !== runId) return;
-    const task = this.context.store.getSessionTask(child.taskId);
+    const task = this.context.store.runs.getSessionTask(child.taskId);
     if (!task) return;
     const previous = isRecord(task.metadata.childActivity) ? task.metadata.childActivity : undefined;
     if (previous?.lastEventId === event.id) return;
@@ -322,7 +322,7 @@ export class DaemonAgentEventProjector {
       ? previous.turns
       : 0;
     const before = this.context.events.checkpoint();
-    this.context.store.updateSessionTask(child.taskId, {
+    this.context.store.runs.updateSessionTask(child.taskId, {
       metadata: {
         childActivity: {
           runId,

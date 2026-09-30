@@ -57,7 +57,7 @@ describe("risk-based auto review integration", () => {
 
   function service(inspector: GitRunChangeInspector = createGitRunChangeInspector()): SessionAutoReviewService {
     return new SessionAutoReviewService({
-      store,
+      session: store,
       events: new SessionEventPublisher(store.conversations, {
         broadcastSince: () => undefined,
         broadcastEvent: () => undefined,
