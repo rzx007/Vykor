@@ -256,3 +256,8 @@
 
 - `apps/desktop/src/main/features/session/session-operations.ts` 从 726 行降至 501 行；会话输入和权限／供应商校验归入 `session-operation-input.ts`，项目 Git 命令及项目信息转换归入 `project-operations-support.ts`。原公开辅助函数仍从 `session-operations.ts` 导出。
 - 隔离工作区的 Electron 依赖未执行安装脚本，测试时复用主工作区已有 Electron 路径；桌面 Node 类型检查与相关测试 2 个文件、18 条通过。
+
+### 2026-10-01：协议会话类型归类
+
+- `packages/protocol/src/session.ts` 从 835 行降至 270 行，保留基础会话、消息、运行记录和原导出路径。模型重试／用量解析归入 `session-model.ts`，定时任务类型归入 `scheduled.ts`，创建与查询请求类型归入 `session-requests.ts`。
+- 验证：protocol 包类型检查及完整 Vitest 13 个文件、146 条通过；全仓 `pnpm check-types` 61 项通过。
