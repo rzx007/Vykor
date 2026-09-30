@@ -1,12 +1,12 @@
 # 超长源码整理与分阶段拆分计划
 
-> 状态：盘点与实施计划；阶段 1 持续进行，client 命令及四处桌面界面文件已拆分。统计日期：2026-09-30。
+> 状态：分阶段持续实施。初次盘点 2026-09-30；最近一次复盘 2026-10-01。
 
 **目标：** 降低超长源码的阅读和修改成本，同时保持现有功能、公开导出、持久化格式和事件顺序。
 
 **范围：** 仓库中超过 600 个物理行的非测试 TypeScript、TSX、JavaScript 和样式文件。排除测试、测试夹具、构建产物、依赖目录、JSON 数据、迁移快照及 API 契约。
 
-**统计结果：** 48 个文件。其中 Desktop 19 个，Frontend 1 个，其余包 28 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
+**统计结果：** 初次 48 个文件，其中 Desktop 19 个、Frontend 1 个、其余包 28 个；2026-10-01 复盘剩余 20 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
 
 ## 实施约束
 
@@ -14,7 +14,7 @@
 - 优先抽出纯转换、格式化、解析和已有的独立子组件。拥有运行状态的对象先留在原模块；需要移动状态时单独安排并验证生命周期。
 - 同一职责的源码、类型和定向测试放在同一现有领域目录。新建子目录须能容纳至少两个紧密相关的文件，避免一文件一文件夹。
 - 仅改变文件位置和内部组织时，保持命令输出、错误文字、事件顺序、数据库事务边界、UI 可见行为和公开导出路径。
-- 每批修改前重新查看 `git status`，保留并避开其他工作中的修改；特别是当前已修改的 `main.css`、`ipc-channels.ts`、`daemon-application.ts` 和未跟踪的 `github-activity.tsx`。
+- 每批修改前重新查看 `git status`，保留并避开其他工作中的修改；不要依据初次盘点时的工作区状态判断文件归属。
 - 每批只做一个可独立检查的职责拆分，先运行所在包的定向测试与类型检查；只有跨包导出、协议或应用装配变化才扩大检查范围。下文测试命令是未来实施指引，不代表已经运行。
 
 ## 建议的目录归纳
@@ -107,6 +107,17 @@
 | `packages/services/src/session-runtime/schema.ts` | 685 | 数据库表定义可以保留；如拆分，迁移产物及表名不能改变 |
 | `packages/skills/src/index.ts` | 638 | 注册、解析、加载放同包文件，保留公共导出 |
 | `packages/tools/src/file/operations.ts` | 628 | 按文件操作类别整理，仍留在 `file/` |
+
+## 2026-10-01 剩余清单与下一轮选择
+
+以下是当前超过 600 行的 20 个非测试文件，按下一轮处理方式归类。数字是本次扫描的物理行数；“先观察”不是永不拆分，而是需要先证明独立职责或测试保护，不为过线数字增加包装层。
+
+| 下一轮处理 | 文件与当前行数 | 判断依据 |
+|---|---|---|
+| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1205；`packages/agent-runtime/src/child-agent.ts` 955；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
+| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/server/src/daemon/channel-runtime-service.ts` 724；`apps/desktop/src/main/features/browser/browser-agent-service.ts` 721；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
+| 界面按组件责任拆 | `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx` 852；`apps/frontend/src/hooks/useServerSync.ts` 801；`apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx` 776；`apps/desktop/src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx` 691；`apps/desktop/src/renderer/src/components/desktop/plugin-page/mcp-manager.tsx` 660；`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx` 624 | 先确认局部状态和独立子组件；保持唯一状态持有者，不拆出一套并行状态容器 |
+| 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1213；`apps/desktop/src/renderer/src/assets/main.css` 934；`apps/desktop/src/shared/ipc-channels.ts` 925；`packages/services/src/session-runtime/schema.ts` 685；`apps/desktop/src/renderer/src/components/ui/gridreveal.tsx` 654；`apps/desktop/src/renderer/src/components/ui/github-activity.tsx` 630 | 主要是有顺序的装配、声明、样式级联或单一组件；只有出现可验证的维护边界时再整理 |
 
 ## 每批的验收方法
 
@@ -321,3 +332,8 @@
 
 - `packages/core/src/engine/query-engine.ts` 从 1268 行降至 1205 行；输出截断阈值、超时配置与超时错误归入同目录 `query-tool-limits.ts`。引擎在原位置应用限制，工具结果及图片块处理顺序不变。
 - 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：本轮统一验收与已知测试问题
+
+- 全仓 `pnpm check-types`：61 项通过。server 完整 Vitest：121 个文件、1183 条通过。MCP 完整 Vitest：10 个文件、156 条通过。core 完整 Vitest：31 个文件、306 条通过。
+- desktop 完整 Vitest：207 个文件中 206 个通过，1320 条中 1319 条通过。唯一失败是 `project-actions.test.ts` 的恢复会话用例；单独复跑仍报 `document is not defined`。调用来自本轮拆分前已有的 `bootstrap-actions.ts` → `startup-overlay.ts` 默认参数，不在本轮改动路径内；本计划不顺带修改该功能。浏览器相关定向测试 64 条通过，桌面 Node 类型检查通过。
