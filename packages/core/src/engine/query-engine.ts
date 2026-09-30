@@ -40,6 +40,7 @@ import { sanitizeMessageHistory } from "../utils/message-history";
 import { prepareToolCalls } from "./query-tool-preparation";
 import { authorizeToolCalls } from "./query-tool-permissions";
 import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
+import { applyToolOutputBudget, ToolTimeoutError, toolExecutionTimeoutMs } from "./query-tool-limits";
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
@@ -51,75 +52,11 @@ import {
 
 const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
-const DEFAULT_TOOL_TIMEOUT_MS = 300_000;
 const RECOVERY_TOOL_TURNS = 2;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =
   "Stop using tools for this response. This delegated run reached its turn limit. State what was completed, what remains unfinished, and the evidence you have. Do not claim the task is verified.";
-
-// ---------------------------------------------------------------------------
-// Tool output budget — mirrors packages/services/src/tool-outputs.ts
-// ---------------------------------------------------------------------------
-
-function readPositiveIntEnv(name: string, defaultValue: number, minimum: number): number {
-  const raw = (process.env[name] ?? "").trim();
-  if (!raw) return defaultValue;
-  const parsed = Number(raw);
-  if (!Number.isInteger(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
-}
-
-function toolOutputInlineChars(): number {
-  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_INLINE_CHARS", 16_000, 256);
-}
-
-function toolOutputPreviewChars(): number {
-  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_PREVIEW_CHARS", 3_000, 128);
-}
-
-function toolExecutionTimeoutMs(override: number | undefined): number {
-  if (typeof override === "number" && Number.isInteger(override) && override > 0) return override;
-  return readPositiveIntEnv("VYKOR_TOOL_TIMEOUT_MS", DEFAULT_TOOL_TIMEOUT_MS, 1);
-}
-
-class ToolTimeoutError extends Error {
-  constructor(readonly timeoutMs: number) {
-    super(`Tool execution timed out after ${timeoutMs} ms`);
-    this.name = "ToolTimeoutError";
-  }
-}
-
-/**
- * 若工具输出总文本超过 inline 阈值，截断至 preview 阈值并附提示。
- * 图像块原样保留（由 token estimator 独立计算）。
- */
-function applyToolOutputBudget(content: ContentBlock[]): ContentBlock[] {
-  const inlineChars = toolOutputInlineChars();
-  const previewChars = toolOutputPreviewChars();
-
-  const totalText = content.reduce((sum, b) => sum + (b.type === "text" ? b.text.length : 0), 0);
-  if (totalText <= inlineChars) return content;
-
-  const notice = `\n[输出已截断：原始长度 ${totalText} 字符，仅保留前 ${previewChars} 字符]`;
-  let remaining = previewChars;
-  const out: ContentBlock[] = [];
-  for (const block of content) {
-    if (block.type === "image") {
-      out.push(block);
-      continue;
-    }
-    if (remaining <= 0) continue;
-    if (block.text.length <= remaining) {
-      out.push(block);
-      remaining -= block.text.length;
-    } else {
-      out.push({ type: "text", text: block.text.slice(0, remaining) + notice });
-      remaining = 0;
-    }
-  }
-  return out;
-}
 
 function userContentToText(content: string | ContentBlock[]): string {
   if (typeof content === "string") return content;
