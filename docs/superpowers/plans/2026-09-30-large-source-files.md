@@ -155,3 +155,9 @@
 - `packages/tools/src/agent/workflow/tool.ts` 从 983 行降至 540 行，继续负责动作分发、运行及仓库访问。输入解析与校验移到同目录 `input.ts`，时间线、历史、模板和校验结果的格式化移到 `presentation.ts`。
 - 拆分时发现原 `secondsToMs` 函数没有调用者，已删除。首次检查发现 `parsePermissionMode` 跨文件导入遗漏，补齐后重新验证通过。
 - 验证：tools 包类型检查通过；完整 Vitest 共 37 个文件，444 条通过、1 条原有跳过。
+
+### 2026-09-30：记忆模块的独立整理
+
+- `packages/memory/src/index.ts` 从 958 行降至 579 行，继续提供 `MemoryManager` 和原公开导出。类型、常量、分词、签名、Markdown 记录解析／渲染、记录与元数据转换及 `MEMORY.md` 截断归入同包 `memory-format.ts`。
+- 这项原列在阶段 4；因格式处理与管理器之间已有清楚的纯函数边界，提前独立执行，没有改动数据格式或存储顺序。
+- 验证：memory 包类型检查通过；完整 Vitest 共 3 个文件、59 条通过。
