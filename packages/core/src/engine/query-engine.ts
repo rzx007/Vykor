@@ -39,6 +39,7 @@ import { streamBufferedModelWithRetry } from "./buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
 import { prepareToolCalls } from "./query-tool-preparation";
 import { authorizeToolCalls } from "./query-tool-permissions";
+import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
@@ -491,7 +492,7 @@ export class QueryEngine implements IQueryEngine {
         toolUses = [];
         stopReason = "end_turn";
 
-        const attemptSignal = this.createAttemptSignal(options.signal, recoveryDeadlineAt);
+        const attemptSignal = createAttemptSignal(options.signal, recoveryDeadlineAt);
         const attemptToolUses: ToolUseBlock[] = [];
         let attemptUsage: UsageSnapshot | undefined;
         let completionSeen = false;
@@ -549,14 +550,14 @@ export class QueryEngine implements IQueryEngine {
             );
           }
         } catch (error) {
-          attemptFailed = this.describeModelFailure(error, options.signal, attemptSignal);
+          attemptFailed = describeModelFailure(error, options.signal, attemptSignal);
         } finally {
           attemptSignal.dispose();
         }
 
         if (attemptFailed) {
           this.settleModelAttempt(attemptUsage, true);
-          yield this.attemptFinishedEvent(
+          yield attemptFinishedEvent(
             generationId, attempt, options.signal?.aborted ? "interrupted" : "failed", attemptUsage,
           );
 
@@ -614,7 +615,7 @@ export class QueryEngine implements IQueryEngine {
         for (const toolUse of toolUses) {
           yield { type: "tool_use_start", toolUse };
         }
-        yield this.attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
+        yield attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
 
         // 如果助手有文本、思考内容或工具调用，则将其添加到消息历史中
         if (assistantText || toolUses.length > 0 || assistantReasoning) {
@@ -821,100 +822,12 @@ export class QueryEngine implements IQueryEngine {
   }
 
   /**
-   * 为一次模型请求创建组合信号：外部取消优先保留原原因；进入恢复窗口后，
-   * 最早的截止时间会中止本次请求并标记预算耗尽。
-   */
-  private createAttemptSignal(external?: AbortSignal, deadlineAt?: number): {
-    signal: AbortSignal;
-    deadlineExceeded: () => boolean;
-    dispose: () => void;
-  } {
-    const controller = new AbortController();
-    let deadlineExceeded = false;
-    const onExternalAbort = () => controller.abort(external?.reason);
-    if (external) {
-      if (external.aborted) onExternalAbort();
-      else external.addEventListener("abort", onExternalAbort, { once: true });
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (deadlineAt !== undefined && !controller.signal.aborted) {
-      const remaining = deadlineAt - Date.now();
-      const abortForBudget = () => {
-        deadlineExceeded = true;
-        controller.abort(
-          new ModelRequestFailure(
-            "模型恢复时间预算已耗尽",
-            { kind: "timeout", phase: "stream", retryable: false },
-          ),
-        );
-      };
-      if (remaining <= 0) abortForBudget();
-      else timer = setTimeout(abortForBudget, remaining);
-    }
-    return {
-      signal: controller.signal,
-      deadlineExceeded: () => deadlineExceeded,
-      dispose: () => {
-        if (timer) clearTimeout(timer);
-        external?.removeEventListener("abort", onExternalAbort);
-      },
-    };
-  }
-
-  private describeModelFailure(
-    error: unknown,
-    external: AbortSignal | undefined,
-    attemptSignal: { deadlineExceeded: () => boolean },
-  ): ModelRequestFailure {
-    if (error instanceof ModelRequestFailure) return error;
-    if (external?.aborted) {
-      return new ModelRequestFailure(
-        "模型调用已取消",
-        { kind: "unknown", phase: "stream", retryable: false },
-        external.reason,
-      );
-    }
-    if (attemptSignal.deadlineExceeded()) {
-      return new ModelRequestFailure(
-        "模型恢复时间预算已耗尽",
-        { kind: "timeout", phase: "stream", retryable: false },
-        error,
-      );
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    return new ModelRequestFailure(
-      message,
-      { kind: "unknown", phase: "stream", retryable: false },
-      error,
-    );
-  }
-
-  /**
    * 每次实际请求恰好结算一次用量：已知快照累加一次，未知/不完整标记保留。
    * 不把适配器每次请求的累计快照重复相加。
    */
   private settleModelAttempt(usage: UsageSnapshot | undefined, incomplete: boolean): void {
     if (usage) this.costTracker.addUsage(usage);
     if (incomplete || !usage) this.costTracker.markUsageIncomplete();
-  }
-
-  private attemptFinishedEvent(
-    generationId: string,
-    attempt: number,
-    status: "completed" | "failed" | "interrupted",
-    usage: UsageSnapshot | undefined,
-  ): ModelAttemptFinishedEvent {
-    const usageStatus = status === "completed"
-      ? (usage ? "complete" : "unknown")
-      : (usage ? "partial" : "unknown");
-    return {
-      type: "model_attempt_finished",
-      generationId,
-      attempt,
-      status,
-      usageStatus,
-      ...(usage ? { usage } : {}),
-    };
   }
 
   getHistory(): Message[] {

@@ -311,3 +311,8 @@
 
 - `apps/desktop/src/main/features/browser/browser-agent-service.ts` 从 871 行降至 721 行；注入页面的检查脚本、页面变化等待和指纹归入 `browser-page-inspection.ts`，开发者检查结果的大小限制归入 `browser-developer-result-limits.ts`。浏览器服务仍持有标签页、导航及操作队列状态。
 - 验证：桌面 Node 类型检查通过；浏览器服务与开发者检查相关测试共 3 个文件、64 条通过。
+
+### 2026-10-01：QueryEngine 模型请求辅助
+
+- `packages/core/src/engine/query-engine.ts` 从 1355 行降至 1268 行；单次模型请求的取消／截止时间信号、失败分类和结束事件构造归入同目录 `query-model-attempt.ts`。用量累加仍由引擎持有，避免改变请求结算点。
+- 首次类型检查发现压缩客户端回调仍引用 `ModelAttemptFinishedEvent`，补回类型导入后通过；core 完整 Vitest 共 31 个文件、306 条通过。
