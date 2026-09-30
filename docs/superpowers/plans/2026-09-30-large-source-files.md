@@ -205,3 +205,8 @@
 
 - `packages/agent-runtime/src/child-agent.ts` 从 1091 行降至 955 行；共享子代理索引、深度／并发／累计预算的预留和释放归入同包 `child-registry.ts`。原 `AgentChildRegistry` 与默认预算的导出路径保留，管理器继续持有子代理运行和关闭状态。
 - 验证：agent-runtime 包类型检查通过；完整 Vitest 共 37 个文件、349 条通过。
+
+### 2026-10-01：脱离会话进程辅助
+
+- `packages/services/src/executions/detached-process-supervisor.ts` 从 824 行降至 692 行；环境进程适配、输入帧编码、进程退出等待和进程树终止归入同目录 `process-support.ts`。主类仍管理任务状态、重启和监听器。
+- 验证：services 包类型检查通过；相关执行测试 3 个文件、42 条通过，包括真实进程树终止。
