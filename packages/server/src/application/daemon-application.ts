@@ -501,11 +501,16 @@ export class DaemonApplication implements DurableAgentApplication {
           })),
         workflowRepository: this.workflows,
         tools: async () => {
+          const pluginSettings = options.getSettings?.() ?? options.settings;
           return [
-            createPluginInstallTool(
-              createDefaultPluginService({ current: options.getSettings?.() ?? options.settings ?? failMissingSettings() }),
-              () => this.agentPool.invalidateWarmAgents(),
-            ),
+            ...(pluginSettings
+              ? [
+                  createPluginInstallTool(
+                    createDefaultPluginService({ current: pluginSettings }),
+                    () => this.agentPool.invalidateWarmAgents(),
+                  ),
+                ]
+              : []),
             imageToTextTool,
             imageGenerationTool,
             createBrowserTool(options.browserHost, async ({ bytes }) => {
