@@ -13,7 +13,7 @@ export type AppearanceFontOption<Id extends string> = {
  * 与 assets/main.css 的 @theme 字体栈保持一致。
  */
 const CJK_SANS_FALLBACK =
-  '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
+  '"Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
 const CJK_MONO_FALLBACK = '"Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", monospace'
 
 export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
@@ -27,7 +27,7 @@ export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
     id: "inter",
     label: "Inter",
     source: "bundled",
-    family: `"Inter Variable", Inter, ${CJK_SANS_FALLBACK}`,
+    family: `"Inter Variable", ${CJK_SANS_FALLBACK}`,
   },
   {
     id: "segoe-ui",

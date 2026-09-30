@@ -24,7 +24,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   version: 1,
   theme: "system",
   accent: { kind: "preset", id: "neutral" },
-  uiFont: "system",
+  uiFont: "inter",
   codeFont: "geist-mono",
   uiFontSize: 14,
   codeFontSize: 14,

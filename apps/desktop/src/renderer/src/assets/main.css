@@ -29,12 +29,12 @@
     transition-duration: 0.01ms !important;
   }
 }
-/* 中文回退与 components/appearance/appearance-fonts.ts 保持一致：
-   拉丁字体先解析英文/数字，汉字落到系统自带的中文字体，避免各平台默认回退不一致。 */
+/* 与 components/appearance/appearance-fonts.ts 保持一致：
+   Inter 负责拉丁字符，Noto Sans SC 负责中文，后续系统字体用于缺字回退。 */
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans:
-    "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+    "Inter Variable", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
     "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
   --font-mono:
     "Cascadia Code", "SFMono-Regular", Consolas, "Microsoft YaHei UI", "Microsoft YaHei",
@@ -119,9 +119,9 @@
   --ui-font-size-title: calc(var(--ui-font-size) + 6px);
   --ui-font-size-2xl: calc(var(--ui-font-size) + 10px);
   --ui-font-size-display: calc(var(--ui-font-size) + 12px);
-  /* 对话正文比界面基准大一档：AI 输出是阅读主体，需要更高的可读性。 */
-  --chat-font-size: calc(var(--ui-font-size) + 1px);
-  --chat-line-height: 1.6;
+  /* 对话正文是阅读主体：字号与行高比控件更舒展，长篇中文更容易连续阅读。 */
+  --chat-font-size: calc(var(--ui-font-size) + 2px);
+  --chat-line-height: 1.68;
   --code-font-size: 13px;
   --code-line-height: 1.5;
   --background: oklch(0.99 0 0);
@@ -590,7 +590,7 @@ html.dark[data-window-shell="translucent"] {
 
   .assistant-markdown [data-streamdown="list-item"] {
     padding-block: 0;
-    margin-block: 0.4em;
+    margin-block: 0.45em;
   }
 
   .assistant-markdown [data-streamdown="blockquote"] {
@@ -604,7 +604,15 @@ html.dark[data-window-shell="translucent"] {
   }
 
   .assistant-markdown [data-streamdown="paragraph"] + [data-streamdown="paragraph"] {
-    margin-top: 0.8em;
+    margin-top: 1em;
+  }
+
+  /* 技术回答中的行内代码要融入句子，避免变成一串细小、厚重的灰色标签。 */
+  .assistant-markdown [data-streamdown="inline-code"] {
+    background: color-mix(in oklab, var(--muted) 42%, transparent);
+    padding-inline: 0.32em;
+    font-size: 0.9em;
+    font-weight: 400;
   }
 
   .assistant-markdown [data-streamdown="link"] {
