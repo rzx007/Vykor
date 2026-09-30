@@ -18,6 +18,15 @@ export function normalizeToolInput(
   const propertyNames = Object.keys(properties);
   if (propertyNames.length === 0) return input;
 
+  if (
+    !Object.prototype.hasOwnProperty.call(properties, "arguments")
+    && Object.keys(input).length === 1
+    && isRecord(input.arguments)
+    && validateToolInput(schema, input.arguments) === null
+  ) {
+    return input.arguments;
+  }
+
   const normalized: Record<string, unknown> = { ...input };
   const copiedFrom = new Set<string>();
 

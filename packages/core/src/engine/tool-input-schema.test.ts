@@ -31,6 +31,40 @@ const notebookSchema = {
 };
 
 describe("normalizeToolInput", () => {
+  it("unwraps a sole arguments object when it satisfies the tool schema", () => {
+    const shellSchema = {
+      type: "object",
+      properties: { command: { type: "string" } },
+      required: ["command"],
+    };
+
+    expect(normalizeToolInput(shellSchema, {
+      arguments: { command: "git status --short" },
+    })).toEqual({ command: "git status --short" });
+  });
+
+  it("keeps an arguments object when unwrapping would not satisfy the schema", () => {
+    expect(normalizeToolInput(readSchema, {
+      arguments: { offset: 10 },
+    })).toEqual({ arguments: { offset: 10 } });
+  });
+
+  it("keeps arguments when the schema declares it or sibling fields exist", () => {
+    const schemaWithArguments = {
+      type: "object",
+      properties: { arguments: { type: "object" } },
+      required: ["arguments"],
+    };
+
+    expect(normalizeToolInput(schemaWithArguments, {
+      arguments: { command: "git status" },
+    })).toEqual({ arguments: { command: "git status" } });
+    expect(normalizeToolInput(readSchema, {
+      arguments: { file_path: "a.ts" },
+      note: "keep",
+    })).toEqual({ arguments: { file_path: "a.ts" }, note: "keep" });
+  });
+
   it("copies path and contents onto Write file_path and content", () => {
     expect(
       normalizeToolInput(writeSchema, {
