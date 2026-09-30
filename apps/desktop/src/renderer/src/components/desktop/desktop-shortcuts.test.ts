@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest"
 import { matchKeybindingPress, parseKeybinding } from "tinykeys"
 
-import { desktopShortcuts, shortcutLabel } from "./desktop-shortcuts"
+import {
+  desktopShortcuts,
+  getShortcut,
+  setShortcutBinding,
+  shortcutLabel,
+} from "./desktop-shortcuts"
 
 describe("desktop shortcuts", () => {
   it("uses valid tinykeys combinations for every command", () => {
@@ -21,6 +26,19 @@ describe("desktop shortcuts", () => {
     expect(matches("$mod+Shift+Equal", "+", "Equal", ["Control", "Shift"])).toBe(true)
     expect(matches("$mod+Minus", "-", "Minus", ["Control"])).toBe(true)
     expect(matches("$mod+NumpadAdd", "+", "NumpadAdd", ["Control"])).toBe(true)
+  })
+
+  it("uses a saved replacement for both the keyboard handler and displayed label", () => {
+    expect(setShortcutBinding("toggleSidebar", "$mod+Shift+KeyL", "Shift+L")).toBe("updated")
+    expect(getShortcut("toggleSidebar").bindings).toEqual(["$mod+Shift+KeyL"])
+    expect(shortcutLabel("toggleSidebar")).toBe("Ctrl+Shift+L")
+    expect(shortcutLabel("toggleSidebar", true)).toBe("⌘+Shift+L")
+    expect(setShortcutBinding("toggleSidebar", "$mod+b", "B")).toBe("updated")
+  })
+
+  it("rejects a binding already used by another command", () => {
+    expect(setShortcutBinding("toggleSidebar", "$mod+KeyN", "N")).toBe("conflict")
+    expect(getShortcut("toggleSidebar").bindings).toEqual(["$mod+b"])
   })
 })
 

@@ -29,6 +29,7 @@ import { errorMessage } from "./settings-error-message"
 import { DaemonAutoStartControl } from "./daemon-autostart-control"
 import { AppearanceSettings } from "@renderer/components/appearance/appearance-settings"
 import { ConnectionsSettings } from "./connections-settings"
+import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings"
 import { isDesktopNotificationMode, isDesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopNotificationMode, DesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopAppInfo } from "@shared/ipc-channels"
@@ -52,9 +53,11 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
                   ? "调整 Vykor 在当前设备上的显示方式。更改会立即预览并自动保存。"
                   : selectedSection === "连接"
                     ? "把飞书接入 Vykor：扫码或手填创建机器人，管理白名单，并查看真实连接状态。"
-                  : selectedSection === "存储"
-                    ? "查看并维护当前设备上的对话附件存储。"
-                    : `${selectedSection}页面将在后续迭代中接入。`}
+                    : selectedSection === "键盘快捷键"
+                      ? "查找并修改常用操作的按键组合。按下 Esc 可取消录入。"
+                      : selectedSection === "存储"
+                        ? "查看并维护当前设备上的对话附件存储。"
+                        : `${selectedSection}页面将在后续迭代中接入。`}
           </p>
         </header>
 
@@ -68,6 +71,8 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
           <AttachmentStorageSettings />
         ) : selectedSection === "连接" ? (
           <ConnectionsSettings />
+        ) : selectedSection === "键盘快捷键" ? (
+          <KeyboardShortcutsSettings />
         ) : (
           <Card>
             <CardHeader>

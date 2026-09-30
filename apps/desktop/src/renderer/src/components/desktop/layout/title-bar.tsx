@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { ArrowLeft, ArrowRight, Minus, Square, X } from "lucide-react"
 import { IconLayoutSidebar } from "@tabler/icons-react"
 import {
@@ -17,7 +17,11 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu"
-import { shortcutLabel } from "@renderer/components/desktop/desktop-shortcuts"
+import {
+  getShortcutRevision,
+  shortcutLabel,
+  subscribeShortcutChanges,
+} from "@renderer/components/desktop/desktop-shortcuts"
 import { UpdateStatusCapsule } from "@renderer/components/desktop/update/update-status-capsule"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { cn } from "@renderer/lib/utils"
@@ -89,6 +93,7 @@ export function TitleBar({
   const [infoDialog, setInfoDialog] = useState<InfoDialog>(null)
   const [appInfo, setAppInfo] = useState<DesktopAppInfo | null>(null)
   const [isMac, setIsMac] = useState(false)
+  useSyncExternalStore(subscribeShortcutChanges, getShortcutRevision)
 
   useEffect(() => {
     const rememberEditingTarget = (event: FocusEvent): void => {
@@ -300,9 +305,7 @@ export function TitleBar({
                 <DropdownMenuShortcut>{shortcutLabel("showShortcuts", isMac)}</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setInfoDialog("about")}>
-                关于 Vykor
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setInfoDialog("about")}>关于 Vykor</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </nav>
