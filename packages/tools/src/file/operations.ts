@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { link, lstat, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, posix, relative } from "node:path";
@@ -8,6 +7,17 @@ import type {
   EnvironmentFileSystem,
   ExecutionEnvironmentHandle,
 } from "@vykor/environment";
+import {
+  MAX_LINE_BYTES,
+  filterGlobOutput,
+  filterGrepOutput,
+  findRipgrep,
+  globToRegex,
+  grepArgs,
+  runHostProcess,
+} from "./host-search.js";
+
+export { globToRegex } from "./host-search.js";
 
 export interface FileEntry {
   name: string;
@@ -485,18 +495,6 @@ export async function fallbackGrep(
   return results;
 }
 
-export function globToRegex(pattern: string): RegExp {
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*\//g, "{{GLOBSTARSLASH}}")
-    .replace(/\*\*/g, "{{GLOBSTAR}}")
-    .replace(/\*/g, "[^/]*")
-    .replace(/\?/g, "[^/]")
-    .replace(/\{\{GLOBSTARSLASH\}\}/g, "(?:.*/)?")
-    .replace(/\{\{GLOBSTAR\}\}/g, ".*");
-  return new RegExp(`^${escaped}$`);
-}
-
 const SKIP_DIRS = new Set([
   "node_modules",
   ".venv",
@@ -508,121 +506,3 @@ const SKIP_DIRS = new Set([
   ".turbo",
   "__pycache__",
 ]);
-
-const MAX_LINE_BYTES = 64 * 1024;
-const FILE_HELPER_SCRIPT = `
-const fs = require("node:fs");
-const path = require("node:path");
-let raw = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", chunk => raw += chunk);
-process.stdin.on("end", () => {
-  try {
-    const input = JSON.parse(raw || "{}");
-    if (input.op === "stat") {
-      const st = fs.statSync(input.path);
-      console.log(JSON.stringify({ isFile: st.isFile(), isDirectory: st.isDirectory() }));
-    } else if (input.op === "listDir") {
-      const entries = fs.readdirSync(input.path, { withFileTypes: true })
-        .map(entry => ({ name: entry.name, isDirectory: entry.isDirectory() }));
-      console.log(JSON.stringify(entries));
-    } else if (input.op === "readText") {
-      console.log(JSON.stringify({ content: fs.readFileSync(input.path, "utf8") }));
-    } else if (input.op === "readBytes") {
-      console.log(JSON.stringify({ content: fs.readFileSync(input.path).toString("base64") }));
-    } else if (input.op === "writeText") {
-      fs.mkdirSync(path.dirname(input.path), { recursive: true });
-      fs.writeFileSync(input.path, input.content ?? "", "utf8");
-      console.log(JSON.stringify({ ok: true }));
-    } else if (input.op === "writeBytes") {
-      fs.mkdirSync(path.dirname(input.path), { recursive: true });
-      fs.writeFileSync(input.path, Buffer.from(input.content ?? "", "base64"));
-      console.log(JSON.stringify({ ok: true }));
-    } else {
-      throw new Error("unknown file helper op: " + input.op);
-    }
-  } catch (error) {
-    console.error(error && error.stack ? error.stack : String(error));
-    process.exit(1);
-  }
-});
-`;
-
-interface ProcessResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
-
-function findRipgrep(): string | null {
-  const finder = process.platform === "win32" ? "where" : "which";
-  try {
-    const out = execFileSync(finder, ["rg"], {
-      windowsHide: true,
-      timeout: 3000,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).toString().trim();
-    const matches = out.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const first = process.platform === "win32"
-      ? matches.find((line) => line.toLowerCase().endsWith(".exe")) ?? matches[0]
-      : matches[0];
-    return first || null;
-  } catch {
-    return null;
-  }
-}
-
-function grepArgs(basePath: string, pattern: string, options: GrepOptions): string[] {
-  const args = ["--no-heading", "--line-number", "--color", "never"];
-  if (existsSync(join(basePath, ".git")) || existsSync(join(basePath, ".gitignore"))) args.push("--hidden");
-  if (!options.caseSensitive) args.push("-i");
-  if (options.include) args.push("--glob", options.include);
-  args.push("--", pattern, ".");
-  return args;
-}
-
-function filterGlobOutput(stdout: string, pattern: string, limit: number): string[] {
-  const matchesPattern = globToRegex(pattern);
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => normalizeRgPath(line.trim()))
-    .filter((line) => line && matchesPattern.test(line.replace(/\\/g, "/")))
-    .slice(0, limit);
-}
-
-function filterGrepOutput(stdout: string, limit: number): string[] {
-  const matches: string[] = [];
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    if (Buffer.byteLength(line, "utf-8") > MAX_LINE_BYTES) continue;
-    matches.push(line.trim());
-    if (matches.length >= limit) break;
-  }
-  return matches;
-}
-
-function normalizeRgPath(path: string): string {
-  return path.replace(/^\.[\\/]/, "");
-}
-
-function runHostProcess(command: string, args: string[], options: { cwd: string }): Promise<ProcessResult> {
-  return new Promise((resolve) => {
-    const child = execFileSync;
-    try {
-      const stdout = child(command, args, {
-        cwd: options.cwd,
-        windowsHide: true,
-        timeout: 30_000,
-        stdio: ["ignore", "pipe", "ignore"],
-      }).toString();
-      resolve({ exitCode: 0, stdout, stderr: "" });
-    } catch (error) {
-      const err = error as { status?: number; stdout?: Buffer; stderr?: Buffer };
-      resolve({
-        exitCode: typeof err.status === "number" ? err.status : -1,
-        stdout: err.stdout?.toString() ?? "",
-        stderr: err.stderr?.toString() ?? "",
-      });
-    }
-  });
-}

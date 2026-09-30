@@ -194,3 +194,9 @@
 - `browser-developer-inspector.ts` 从 780 行降至 585 行，保留诊断会话、事件监听和采集状态。DOM／网络结果脱敏与大小限制归入同目录 `browser-developer-projection.ts`，HTTP 和工作区文件的作用域校验归入 `browser-developer-scope.ts`；原 `sanitizeUrl`、`resolveDeveloperScope` 等公开路径保留。
 - 初次检查发现检查器仍使用已搬出的 DOM 深度常量和作用域函数，补齐本地导入后重新验证。
 - 验证：桌面 Node 类型检查通过；浏览器诊断与服务测试共 2 个文件、56 条通过。
+
+### 2026-10-01：文件工具的 Host 搜索辅助
+
+- `packages/tools/src/file/operations.ts` 从 628 行降至 509 行；Host 上的 ripgrep 查找、参数构造、输出过滤和 glob 正则转换归入同目录 `host-search.ts`，原 `globToRegex` 导出路径保留。Host／WSL 文件读写和回退搜索仍在原模块。
+- 删除没有调用者的内嵌文件助手脚本。初次检查发现 Host glob 仍需要 `existsSync`，恢复导入后重新验证。
+- 验证：tools 包类型检查通过；完整 Vitest 共 37 个文件，444 条通过、1 条原有跳过。
