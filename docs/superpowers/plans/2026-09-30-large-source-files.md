@@ -183,3 +183,8 @@
 - `packages/server/src/jobs/daemon-job-service.ts` 从 671 行降至 422 行，保留列表、读取、等待、发送和取消的入口。终端／任务／工作流快照及输出转换归入 `jobs/job-snapshots.ts`，持久化子任务活动读取归入 `jobs/child-activity.ts`。
 - `readPersistedChildActivity` 和 `ChildActivityReader` 仍从原模块导出，保持已有调用路径。
 - 验证：server 包类型检查通过；Job 服务定向测试 26 条通过。
+
+### 2026-10-01：自动评审 Git 输出解析
+
+- `packages/server/src/application/auto-review/git-run-change-inspector.ts` 从 668 行降至 442 行，继续负责调用 Git、读取仓库状态及比对运行前后。NUL 分隔输出解析、路径规范化、状态映射和补丁组装归入同目录 `git-change-parsing.ts`；原 `GIT_PATCH_LIMIT_BYTES` 导出路径保留。
+- 验证：server 包类型检查通过；Git 改动检查 24 条真实仓库测试与自动评审 8 条集成测试通过。
