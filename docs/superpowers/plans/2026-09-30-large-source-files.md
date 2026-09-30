@@ -251,3 +251,8 @@
 
 - `packages/services/src/session-runtime/store.ts` 从 1024 行降至 876 行；结算记录的创建、查询、重试、失败、解决和放弃，以及数据库行转换归入同目录 `projection-settlements.ts`。原方法保留，在写操作前继续检查 Application Owner。
 - 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。
+
+### 2026-10-01：桌面主进程会话操作辅助
+
+- `apps/desktop/src/main/features/session/session-operations.ts` 从 726 行降至 501 行；会话输入和权限／供应商校验归入 `session-operation-input.ts`，项目 Git 命令及项目信息转换归入 `project-operations-support.ts`。原公开辅助函数仍从 `session-operations.ts` 导出。
+- 隔离工作区的 Electron 依赖未执行安装脚本，测试时复用主工作区已有 Electron 路径；桌面 Node 类型检查与相关测试 2 个文件、18 条通过。
