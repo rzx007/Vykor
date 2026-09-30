@@ -38,7 +38,8 @@ let router: typeof DesktopRouter
 describe("desktop router", () => {
   beforeAll(async () => {
     ;({ router } = await import("./router"))
-  }, 60_000)
+    // 整棵 routeTree.gen 的导入在全量并行时会明显变慢，60s 仍会超时（非断言失败）。
+  }, 180_000)
 
   it("builds a stable route for a conversation", () => {
     const location = router.buildLocation({
