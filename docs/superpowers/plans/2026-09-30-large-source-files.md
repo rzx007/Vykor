@@ -166,3 +166,8 @@
 
 - `packages/prompts/src/index.ts` 从 939 行降至 547 行，保留系统提示词组装及全部原公开导出。个人提示词文件的扫描、初始化、读取、追加及待批准更新归入同包 `personal-prompt-files.ts`。
 - 验证：prompts 包类型检查通过；完整 Vitest 共 2 个文件、54 条通过。
+
+### 2026-10-01：技能 Markdown 解析
+
+- `packages/skills/src/index.ts` 从 638 行降至 469 行；Frontmatter 和正文元数据解析归入同包 `parse-skill-markdown.ts`，原函数和类型继续从 `index.ts` 导出。注册表、目录加载与来源覆盖顺序保持在原文件。
+- 验证：skills 包类型检查通过；完整 Vitest 共 1 个文件、50 条通过。
