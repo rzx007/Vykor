@@ -199,7 +199,7 @@
 - `docs/adr/`：已经作出的长期决定。当前有 [Projection Settlement 失败分类与恢复边界](./adr/0001-projection-settlement-failure-policy.md)。
 - `docs/plans/`：阶段实施计划和完成记录，不是当前 API 手册。
 - `docs/superpowers/plans/`、`docs/superpowers/specs/`：更细的历史实施过程。
-- [超长源码整理与分阶段拆分计划](./superpowers/plans/2026-09-30-large-source-files.md)：48 个非测试源码与样式文件的盘点、目录归纳和分阶段实施顺序；尚未开始拆分。
+- [超长源码整理与分阶段拆分计划](./superpowers/plans/2026-09-30-large-source-files.md)：48 个非测试源码与样式文件的盘点、目录归纳和分阶段实施顺序；client 命令拆分已完成。
 - 文件名包含 `review`、`notes` 或明确标为“历史设计”的文档：用于解释过去，不用于决定当前 API。
 - [Compatibility surface 实施审计](./compatibility-surface-audit.md)：Stage 8 删除/保留裁定的实施证据，不是当前 API 清单。
 - [Session 存储增强历史设计](./session-storage-design.md)：已经退场的项目级 JSON snapshot 设计；当前 SQLite 边界见 [Session Runtime 存储架构](./session-runtime-storage-architecture.md)。
