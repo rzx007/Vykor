@@ -1,6 +1,6 @@
 # 超长源码整理与分阶段拆分计划
 
-> 状态：盘点与实施计划；阶段 1 的 client 命令拆分已完成，桌面界面部分尚未开始。统计日期：2026-09-30。
+> 状态：盘点与实施计划；阶段 1 的 client 命令和桌面文件工具拆分已完成，其余文件按表推进。统计日期：2026-09-30。
 
 **目标：** 降低超长源码的阅读和修改成本，同时保持现有功能、公开导出、持久化格式和事件顺序。
 
@@ -125,3 +125,9 @@
 - Job、记忆与环境事实、诊断、配置命令分别归入同一 `commands/` 目录下的 `job-commands.ts`、`knowledge-commands.ts`、`diagnostic-commands.ts`、`settings-commands.ts`。展示回调仍由原入口提供，避免改变各宿主的呈现方式。
 - 验证：client 包 Vitest 共 12 个文件、132 条测试通过；client `tsc --noEmit` 通过；`git diff --check` 无空白错误。client 的公开 API 契约测试包含在上述测试中。
 - 阶段 1 的桌面界面文件仍按上表逐批处理，尤其避开当前工作区正在修改的文件。
+
+### 2026-09-30：阶段 1，桌面文件工具
+
+- `apps/desktop/src/renderer/src/components/desktop/tools/files-tool.tsx` 从盘点时的 1013 行降至 540 行，仍负责文件加载、选择预览和页面组合。
+- 文件树及其右键菜单、面包屑路径、文件内搜索控件分别放在同级 `tools/files/` 目录的 `project-file-tree.tsx`、`file-breadcrumb.tsx`、`file-search-controls.tsx`。组件内部逻辑与外部属性保持原样。
+- 验证：桌面 Web 类型检查通过；桌面 Vitest 共 207 个文件、1319 条测试通过。现有测试没有直接覆盖 `FilesTool` 的完整交互，本批属于代码原样搬移，未改变其状态管理。
