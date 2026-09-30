@@ -296,3 +296,8 @@
 
 - `packages/mcp/src/index.ts` 从 633 行降至 554 行；传输方式校验、连接描述和准备／激活结果类型归入同目录 `connection-types.ts`。原包入口继续重导出这些公开成员，连接管理器仍负责连接、切换和资源调用。
 - 验证：MCP 包类型检查通过；完整 Vitest 共 10 个文件、156 条通过。
+
+### 2026-10-01：目标外部等待观察器
+
+- `packages/server/src/application/session/session-goal-service.ts` 从 652 行降至 580 行；外部任务等待的定时器、重试、完成后续跑派发与失败暂停归入同目录 `goal-external-wait-observer.ts`。目标服务仍决定何时开始或清除观察，恢复运行的输入构造复用原方法。
+- 验证：server 包类型检查通过；目标服务、等待校验和派发事件测试共 3 个文件、28 条通过。
