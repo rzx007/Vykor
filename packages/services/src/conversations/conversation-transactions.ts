@@ -26,6 +26,7 @@ import {
 
 import type { StorageContext } from "../database/storage-context.js";
 import type { ConversationRepository } from "./conversation-repository.js";
+import { deleteSessionTree, forkSessionWithHistory } from "./conversation-tree-operations.js";
 import type { SessionRepository } from "../sessions/session-repository.js";
 import type { RunRepository } from "../runs/run-repository.js";
 import { AttachmentError } from "../attachments/attachment-errors.js";
@@ -623,212 +624,23 @@ export class ConversationTransactions {
     afterMessageId?: string;
     session: CreateSessionInput;
   }): SessionRecord {
-    return this.storage.atomic(() => {
-      const source = assertSession(this.storage.state, input.sourceSessionId);
-      const sourceMessages = this.conversations.listMessages(source.id);
-      const beforeMessage = input.beforeMessageId
-        ? sourceMessages.find(({ id }) => id === input.beforeMessageId)
-        : undefined;
-      const afterMessage = input.afterMessageId
-        ? sourceMessages.find(({ id }) => id === input.afterMessageId)
-        : undefined;
-      if ((input.beforeMessageId && !beforeMessage) || (input.afterMessageId && !afterMessage)) {
-        throw new Error("Fork point not found");
-      }
-      const beforeSeq = beforeMessage?.seq ?? Number.POSITIVE_INFINITY;
-      const afterSeq = afterMessage?.seq ?? Number.POSITIVE_INFINITY;
-      const copiedMessages = sourceMessages.filter(
-        ({ seq }) => seq < beforeSeq && seq <= afterSeq,
-      );
-      const sourceParts = this.conversations.listMessageParts(source.id);
-      const fork = this.requireSessions().create({ ...input.session, parentId: source.id });
-      this.testHooks?.afterForkSessionCreated?.();
-
-      const inputIdMap = new Map<string, string>();
-      const attachmentReferenceIdMap = new Map<string, string>();
-      for (const message of copiedMessages) {
-        if (!message.inputId || inputIdMap.has(message.inputId)) continue;
-        const sourceInput = this.storage.state.inputs[message.inputId];
-        if (!sourceInput) continue;
-        const copiedInput = this.admitPrompt({
-          sessionId: fork.id,
-          delivery: sourceInput.delivery,
-          items: sourceInput.items,
-          attachments: sourceInput.attachments.map((attachment) => ({
-            assetId: attachment.assetId,
-            intent: attachment.intent,
-            displayName: attachment.displayName,
-          })),
-          metadata: sourceInput.metadata,
-        });
-        inputIdMap.set(sourceInput.id, copiedInput.id);
-        sourceInput.attachments.forEach((attachment, index) => {
-          const copiedReference = copiedInput.attachments[index];
-          if (copiedReference) attachmentReferenceIdMap.set(attachment.id, copiedReference.id);
-        });
-      }
-      this.testHooks?.afterForkInputsCopied?.();
-
-      const messageIdMap = new Map<string, string>();
-      for (const message of copiedMessages) {
-        const copiedMessage = this.conversations.createMessage({
-          sessionId: fork.id,
-          role: message.role,
-          ...(message.inputId && inputIdMap.has(message.inputId)
-            ? { inputId: inputIdMap.get(message.inputId)! }
-            : {}),
-          metadata: message.metadata,
-        });
-        messageIdMap.set(message.id, copiedMessage.id);
-      }
-      this.testHooks?.afterForkMessagesCopied?.();
-
-      for (const part of sourceParts) {
-        const messageId = messageIdMap.get(part.messageId);
-        if (!messageId) continue;
-        const sourceReferenceId = typeof part.metadata.inputAttachmentId === "string"
-          ? part.metadata.inputAttachmentId
-          : undefined;
-        this.conversations.upsertMessagePart({
-          sessionId: fork.id,
-          messageId,
-          type: part.type,
-          status: part.status,
-          ...(part.text !== undefined ? { text: part.text } : {}),
-          ...(part.toolUseId !== undefined ? { toolUseId: part.toolUseId } : {}),
-          ...(part.toolName !== undefined ? { toolName: part.toolName } : {}),
-          ...(part.input !== undefined ? { input: part.input } : {}),
-          ...(part.output !== undefined ? { output: part.output } : {}),
-          ...(part.isError !== undefined ? { isError: part.isError } : {}),
-          ...(part.assetId !== undefined ? { assetId: part.assetId } : {}),
-          ...(part.intent !== undefined ? { intent: part.intent } : {}),
-          ...(part.displayName !== undefined ? { displayName: part.displayName } : {}),
-          ...(part.mediaType !== undefined ? { mediaType: part.mediaType } : {}),
-          ...(part.sizeBytes !== undefined ? { sizeBytes: part.sizeBytes } : {}),
-          ...(part.kind !== undefined ? { kind: part.kind } : {}),
-          ...(part.representationId !== undefined ? { representationId: part.representationId } : {}),
-          ...(part.processor !== undefined ? { processor: part.processor } : {}),
-          ...(part.transformationError !== undefined ? { transformationError: part.transformationError } : {}),
-          metadata: sourceReferenceId && attachmentReferenceIdMap.has(sourceReferenceId)
-            ? { ...part.metadata, inputAttachmentId: attachmentReferenceIdMap.get(sourceReferenceId) }
-            : part.metadata,
-        });
-      }
-      this.testHooks?.afterForkPartsCopied?.();
-      return clone(assertSession(this.storage.state, fork.id));
+    return forkSessionWithHistory(input, {
+      storage: this.storage,
+      conversations: this.conversations,
+      testHooks: this.testHooks,
+      requireSessions: () => this.requireSessions(),
+      admitPrompt: (prompt) => this.admitPrompt(prompt),
     });
   }
 
   deleteSessionTree(sessionId: string): string[] {
-    if (this.storage.coordinator?.inTransaction) {
-      throw new Error("deleteSessionTree cannot be called inside a store transaction");
-    }
-    assertSession(this.storage.state, sessionId);
-    const sessionIds = this.collectSessionTreeIds(sessionId);
-    const sessionIdSet = new Set(sessionIds);
-    const runIds = new Set(
-      Object.values(this.storage.state.runs)
-        .filter((run) => sessionIdSet.has(run.sessionId))
-        .map(({ id }) => id),
-    );
-
-    return this.storage.atomic(() => {
-      const placeholders = sessionIds.map(() => "?").join(", ");
-      const database = this.storage.database.connection;
-      const timestamp = Date.now();
-      database.prepare(`UPDATE scheduled_run SET session_id = NULL, updated_at = ? WHERE session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
-      database.prepare(`UPDATE scheduled_task SET status = CASE WHEN destination = 'chat' THEN 'paused' ELSE status END, next_run_at = CASE WHEN destination = 'chat' THEN NULL ELSE next_run_at END, session_id = NULL, updated_at = ? WHERE session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
-      database.prepare(`UPDATE scheduled_task SET created_from_session_id = NULL, updated_at = ? WHERE created_from_session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
-      database.prepare(`DELETE FROM permission_request WHERE session_id IN (${placeholders})`).run(...sessionIds);
-      database.prepare(`DELETE FROM session_task WHERE session_id IN (${placeholders})`).run(...sessionIds);
-      database.prepare(`DELETE FROM session_run_attempt WHERE run_id IN (SELECT id FROM session_run WHERE session_id IN (${placeholders}))`).run(...sessionIds);
-      database.prepare(`DELETE FROM session_run WHERE session_id IN (${placeholders})`).run(...sessionIds);
-      database.prepare(`DELETE FROM session_message_part WHERE session_id IN (${placeholders})`).run(...sessionIds);
-      database.prepare(`DELETE FROM session_message WHERE session_id IN (${placeholders})`).run(...sessionIds);
-      database.prepare(`DELETE FROM session_input WHERE session_id IN (${placeholders})`).run(...sessionIds);
-      database.prepare(`DELETE FROM session_event WHERE session_id IN (${placeholders})`).run(...sessionIds);
-      database.prepare(`DELETE FROM session WHERE id IN (${placeholders})`).run(...sessionIds);
-
-      for (const id of sessionIds) {
-        delete this.storage.state.sessions[id];
-        this.storage.mutations.sessions.delete(id);
-      }
-      this.testHooks?.duringDeleteMemory?.();
-      for (const [id, row] of Object.entries(this.storage.state.inputs)) {
-        if (!sessionIdSet.has(row.sessionId)) continue;
-        delete this.storage.state.inputs[id];
-        this.storage.mutations.inputs.delete(id);
-        this.storage.mutations.deletedInputs.delete(id);
-      }
-      for (const [id, row] of Object.entries(this.storage.state.inputAttachments)) {
-        if (!sessionIdSet.has(row.sessionId)) continue;
-        delete this.storage.state.inputAttachments[id];
-        this.storage.mutations.inputAttachments.delete(id);
-        this.storage.mutations.deletedInputAttachments.delete(id);
-      }
-      for (const [id, row] of Object.entries(this.storage.state.messages)) {
-        if (!sessionIdSet.has(row.sessionId)) continue;
-        delete this.storage.state.messages[id];
-        this.storage.mutations.messages.delete(id);
-        this.storage.mutations.deletedMessages.delete(id);
-      }
-      for (const [id, row] of Object.entries(this.storage.state.parts)) {
-        if (!sessionIdSet.has(row.sessionId)) continue;
-        delete this.storage.state.parts[id];
-        this.storage.mutations.parts.delete(id);
-        this.storage.mutations.deletedParts.delete(id);
-        this.storage.deltaCheckpoint.delete(id);
-      }
-      for (const [id, row] of Object.entries(this.storage.state.runs)) {
-        if (!sessionIdSet.has(row.sessionId)) continue;
-        delete this.storage.state.runs[id];
-        this.storage.mutations.runs.delete(id);
-        this.storage.mutations.deletedRuns.delete(id);
-      }
-      for (const [id, row] of Object.entries(this.storage.state.attempts)) {
-        if (!runIds.has(row.runId)) continue;
-        delete this.storage.state.attempts[id];
-        this.storage.mutations.attempts.delete(id);
-        this.storage.mutations.deletedAttempts.delete(id);
-      }
-      for (const [id, row] of Object.entries(this.storage.state.tasks)) {
-        if (!sessionIdSet.has(row.sessionId)) continue;
-        delete this.storage.state.tasks[id];
-        this.storage.mutations.tasks.delete(id);
-      }
-      for (const [id, row] of Object.entries(this.storage.state.permissions)) {
-        if (!sessionIdSet.has(row.sessionId)) continue;
-        delete this.storage.state.permissions[id];
-        this.storage.mutations.permissions.delete(id);
-      }
-      const removedEventIds = new Set(
-        this.storage.state.events
-          .filter((event) => event.sessionId && sessionIdSet.has(event.sessionId))
-          .map(({ id }) => id),
-      );
-      this.storage.state.events = this.storage.state.events.filter(
-        (event) => !event.sessionId || !sessionIdSet.has(event.sessionId),
-      );
-      for (const id of removedEventIds) this.storage.mutations.events.delete(id);
-      this.conversations.appendEvent({ type: "session.deleted", payload: { sessionIds } });
-      this.testHooks?.afterDeleteMemory?.();
-      return sessionIds;
+    return deleteSessionTree(sessionId, {
+      storage: this.storage,
+      conversations: this.conversations,
+      testHooks: this.testHooks,
     });
   }
 
-  private collectSessionTreeIds(sessionId: string): string[] {
-    const result: string[] = [];
-    const visit = (id: string): void => {
-      result.push(id);
-      for (const child of Object.values(this.storage.state.sessions)
-        .filter((session) => session.parentId === id)
-        .sort((left, right) => left.createdAt - right.createdAt)) {
-        visit(child.id);
-      }
-    };
-    visit(sessionId);
-    return result;
-  }
 
   private notifyTaskAfterCommit(taskId: string): void {
     const notify = this.options.notifySessionTask;

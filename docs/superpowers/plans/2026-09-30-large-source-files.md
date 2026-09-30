@@ -221,3 +221,8 @@
 - `packages/services/src/session-runtime/store.ts` 从 1487 行降至 1166 行；变更集合的删除与逐表写入归入同目录 `store-persistence.ts`。`TransactionCoordinator` 仍通过原 `persistChanges()` 回调在同一事务中执行，活动状态与回滚仍由 `SessionStore` 管理。
 - 初次完整测试发现事务协调器测试依赖原私有入口；保留薄入口委托后重新验证。
 - 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。
+
+### 2026-10-01：会话树事务
+
+- `packages/services/src/conversations/conversation-transactions.ts` 从 972 行降至 784 行；复制历史创建分支会话、删除会话树与树遍历归入同目录 `conversation-tree-operations.ts`。原类方法保留入口，事务仍在这些操作内部开始，测试钩子和提示词准入回调按调用时的当前值传入。
+- 验证：services 包类型检查通过；会话事务与 SessionStore 测试共 2 个文件、121 条通过。
