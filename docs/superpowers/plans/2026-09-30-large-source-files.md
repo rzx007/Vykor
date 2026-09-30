@@ -301,3 +301,8 @@
 
 - `packages/server/src/application/session/session-goal-service.ts` 从 652 行降至 580 行；外部任务等待的定时器、重试、完成后续跑派发与失败暂停归入同目录 `goal-external-wait-observer.ts`。目标服务仍决定何时开始或清除观察，恢复运行的输入构造复用原方法。
 - 验证：server 包类型检查通过；目标服务、等待校验和派发事件测试共 3 个文件、28 条通过。
+
+### 2026-10-01：会话交互类型归类
+
+- `packages/server/src/application/session/session-interaction-service.ts` 从 605 行降至 553 行；依赖接口及编辑、恢复、排队命令的输入／结果类型归入同目录 `session-interaction-types.ts`。原服务模块继续重导出这些类型，运行操作和纯辅助函数保留在服务中。
+- 首次类型检查发现返回类型仍引用 `RunControlService`，补回类型导入后验证通过；交互服务测试 9 条通过。
