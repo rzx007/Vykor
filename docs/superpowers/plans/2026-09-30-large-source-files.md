@@ -149,3 +149,9 @@
 
 - `review-tool.tsx` 从 669 行降至 294 行，保留 Git 改动读取、范围选择和当前文件状态；列表、diff 视图及展示辅助函数归入同目录 `review-tool-view.tsx`。
 - 验证：桌面 Web 类型检查通过；代码审查工具交互测试 2 条通过。
+
+### 2026-09-30：阶段 2，工作流工具
+
+- `packages/tools/src/agent/workflow/tool.ts` 从 983 行降至 540 行，继续负责动作分发、运行及仓库访问。输入解析与校验移到同目录 `input.ts`，时间线、历史、模板和校验结果的格式化移到 `presentation.ts`。
+- 拆分时发现原 `secondsToMs` 函数没有调用者，已删除。首次检查发现 `parsePermissionMode` 跨文件导入遗漏，补齐后重新验证通过。
+- 验证：tools 包类型检查通过；完整 Vitest 共 37 个文件，444 条通过、1 条原有跳过。
