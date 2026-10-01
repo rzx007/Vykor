@@ -1,7 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
 
-import { resolveChannelWorkspaceRoot } from "@vykor/core";
 import type { AgentBackgroundShellHost, Settings } from "@vykor/core";
 import type { ChannelConfigStore } from "@vykor/auth";
 import { createModelCatalogService } from "@vykor/api";
@@ -95,8 +93,9 @@ import { StartupRecoveryService } from "./recovery/startup-recovery-service.js";
 import { ApplicationEventService } from "./events/application-event-service.js";
 import { ProjectApplicationService } from "./project-application-service.js";
 import { ChannelApplicationService } from "./channel/channel-application-service.js";
-import { ChannelOnboardingService } from "./channel/channel-onboarding-service.js";
-import { ChannelRuntimeService } from "../daemon/channel-runtime-service.js";
+import type { ChannelOnboardingService } from "./channel/channel-onboarding-service.js";
+import type { ChannelRuntimeService } from "../daemon/channel-runtime-service.js";
+import { createDaemonChannelRuntime } from "./channel/channel-runtime-assembly.js";
 import { SessionWorkflowRunRepository } from "./workflow/session-workflow-run-repository.js";
 import { ExecutionObservationService } from "./observability/execution-observation-service.js";
 import { readSessionExecutionObservations } from "./observability/session-execution-observation-reader.js";
@@ -896,38 +895,16 @@ export class DaemonApplication implements DurableAgentApplication {
           this.channelRuntime?.downloadAttachment(messageId, attachment, signal),
       });
       if (options.channelConfigStore) {
-        const channelConfig = options.channelConfigStore;
-        this.channelRuntime = new ChannelRuntimeService({
-          application: {
-            handleMessage: (input) => this.channels.handleMessage(input),
-            pendingDeliveries: async (listOptions) =>
-              this.channels.pendingDeliveries(listOptions),
-            recordDelivery: async (id, input) =>
-              this.channels.recordDelivery(id, input),
-          },
-          config: { getFeishu: () => channelConfig.getFeishu() },
-          getSettings: () => options.getSettings?.() ?? options.settings,
-          workspaceRoot: resolveChannelWorkspaceRoot({
-            envDir: process.env.VYKOR_CHANNELS_DIR,
-            outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
-            homedir: homedir(),
-          }),
-          logger: options.log,
+        const channelServices = createDaemonChannelRuntime({
+          channelConfig: options.channelConfigStore,
+          channels: this.channels,
+          getSettings: options.getSettings,
+          settings: options.settings,
+          outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
+          log: options.log,
         });
-        this.channelOnboarding = new ChannelOnboardingService({
-          config: channelConfig,
-          onConfigChanged: async () => {
-            await this.channelRuntime?.applyFeishuConfig(
-              await channelConfig.getFeishu(),
-            );
-          },
-          readBotName: () =>
-            this.channelRuntime
-              ?.status()
-              .connectors.find((connector) => connector.connector === "feishu")
-              ?.botName,
-          logger: options.log,
-        });
+        this.channelRuntime = channelServices.runtime;
+        this.channelOnboarding = channelServices.onboarding;
       }
       /**
        * 定时任务服务：

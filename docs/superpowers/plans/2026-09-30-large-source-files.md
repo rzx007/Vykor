@@ -116,7 +116,7 @@
 |---|---|---|
 | 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1025；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
 | 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
-| 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1149；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
+| 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1126；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
 
 ## 每批的验收方法
 
@@ -379,3 +379,8 @@
 
 - `packages/server/src/application/daemon-application.ts` 从 1213 行降至 1149 行；BlobStore、附件服务、会话附件资源、本地 OCR 与有界字节读取归入现有 `application/attachments/` 下的 `daemon-attachment-services.ts`。构造函数仍在原位置创建它们，并将同一 BlobStore 交给完整性检查。
 - 初次验证发现完整性检查仍引用旧局部变量，改为返回共享 BlobStore 后复验；server 类型检查及相关测试 4 个文件、29 条通过。
+
+### 2026-10-01：DaemonApplication 可选渠道装配
+
+- `packages/server/src/application/daemon-application.ts` 从 1149 行降至 1126 行；可选的渠道运行时及接入服务配对构造归入现有 `application/channel/` 下的 `channel-runtime-assembly.ts`。原应用仍在创建会话命令与交互服务后创建渠道，并持有启动、关闭入口。
+- 验证：server 类型检查通过；渠道装配、渠道服务和应用测试共 4 个文件、52 条通过。
