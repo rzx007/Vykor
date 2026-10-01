@@ -30,7 +30,78 @@ const notebookSchema = {
   required: ["path", "cellIndex", "newSource"],
 };
 
+const shellSchema = {
+  type: "object",
+  properties: { command: { type: "string" } },
+  required: ["command"],
+};
+
+function wrapArguments(input: Record<string, unknown>, depth: number): Record<string, unknown> {
+  for (let i = 0; i < depth; i++) input = { arguments: input };
+  return input;
+}
+
 describe("normalizeToolInput", () => {
+  it.each([2, 8])("unwraps %i arguments layers without changing the command or source objects", (depth) => {
+    const leaf = Object.freeze({ command: "Write-Output '$value'", workdir: "C:/workspace" });
+    const input = wrapArguments(leaf, depth);
+    const original = JSON.stringify(input);
+    expect(normalizeToolInput(shellSchema, input)).toEqual({ command: "Write-Output '$value'", workdir: "C:/workspace" });
+    expect(JSON.stringify(input)).toBe(original);
+  });
+
+  it("normalizes aliases inside the wrapper using the same strict schema rules", () => {
+    const leaf = Object.freeze({ path: "src/a.ts", contents: "hello" });
+    expect(normalizeToolInput({ ...writeSchema, additionalProperties: false }, wrapArguments(leaf, 2)))
+      .toEqual({ file_path: "src/a.ts", content: "hello" });
+    expect(leaf).toEqual({ path: "src/a.ts", contents: "hello" });
+  });
+
+  it("rejects nine layers without returning a partially unwrapped call", () => {
+    const input = wrapArguments({ command: "Write-Output probe" }, 9);
+    expect(normalizeToolInput(shellSchema, input)).toBe(input);
+    expect(validateToolInput(shellSchema, normalizeToolInput(shellSchema, input))).not.toBeNull();
+  });
+
+  it("returns finitely for a cyclic wrapper", () => {
+    const input: Record<string, unknown> = {};
+    input.arguments = input;
+    expect(normalizeToolInput(shellSchema, input)).toBe(input);
+  });
+
+  it("does not mistake a hidden arguments property for the sole enumerable key", () => {
+    const input = { note: "keep" };
+    Object.defineProperty(input, "arguments", { value: { command: "probe" }, enumerable: false });
+    expect(normalizeToolInput(shellSchema, input)).toBe(input);
+  });
+
+  it.each([{ command: 123 }, {}, { arguments: "{\"command\":\"probe\"}" }, { arguments: [] }])(
+    "does not invent or parse missing/wrongly typed parameters: %j", (leaf) => {
+      const input = { arguments: leaf };
+      expect(normalizeToolInput(shellSchema, input)).toBe(input);
+      expect(validateToolInput(shellSchema, normalizeToolInput(shellSchema, input))).not.toBeNull();
+    },
+  );
+
+  it.each([
+    { arguments: { command: "probe" }, note: "keep" },
+    { arguments: { arguments: { command: "probe" }, note: "keep" } },
+  ])("does not discard sibling fields at any wrapping layer", (input) => {
+    expect(normalizeToolInput(shellSchema, input)).toBe(input);
+  });
+
+  it("keeps an already valid business input even when its inner arguments also look valid", () => {
+    const optionalSchema = { type: "object", properties: { command: { type: "string" } } };
+    const input = { arguments: { command: "probe" } };
+    expect(normalizeToolInput(optionalSchema, input)).toBe(input);
+  });
+
+  it.each(["anyOf", "oneOf", "allOf", "$ref"])("does not guess wrappers for a %s schema", (key) => {
+    const schema = { ...shellSchema, [key]: key === "$ref" ? "#/$defs/input" : [shellSchema] };
+    const input = { arguments: { command: "probe" } };
+    expect(normalizeToolInput(schema, input)).toBe(input);
+  });
+
   it("unwraps a sole arguments object when it satisfies the tool schema", () => {
     const shellSchema = {
       type: "object",

@@ -627,6 +627,86 @@ describe("Integration: Full Agent Loop", () => {
     expect(toolEnd.result.content[2].text).toContain("Unknown tool");
   });
 
+  it.each(["allow", "deny"] as const)("uses the effective nested Shell input for %s permissions", async (action) => {
+    const registry = new ToolRegistry();
+    const executed: Record<string, unknown>[] = [];
+    registry.register({ name: "Shell", description: "in-memory command", inputSchema: {
+      type: "object", properties: { command: { type: "string" } }, required: ["command"],
+    }, execute: async (input) => {
+      executed.push(input);
+      return { content: [{ type: "text", text: "ran in memory" }] };
+    } });
+    const checked: Record<string, unknown>[] = [];
+    const permissionChecker = { checkTool: async (_name: string, input: Record<string, unknown>) => {
+      checked.push(input);
+      return { action };
+    } };
+    const { client } = createMockStreamClient([
+      [{ type: "tool_use_start", toolUse: { type: "tool_use", id: "nested", name: "Shell",
+        input: { arguments: { arguments: { command: "Write-Output probe" } } },
+      } }, { type: "complete", stopReason: "tool_use" }],
+      [{ type: "text_delta", delta: "done" }, { type: "complete", stopReason: "end_turn" }],
+    ]);
+    const engine = new QueryEngine(client, registry, permissionChecker, noopHooks(), { trajectoryTrackerFactory: false });
+    const events: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("probe")) events.push(event);
+    expect(checked).toEqual([{ command: "Write-Output probe" }]);
+    expect(executed).toEqual(action === "allow" ? [{ command: "Write-Output probe" }] : []);
+    const toolEnd = events.find((event) => event.type === "tool_use_end") as any;
+    if (action === "deny") expect(toolEnd.result).toMatchObject({ failureKind: "permission", executionState: "not_started" });
+    else expect(toolEnd.result.content[0].text).toBe("ran in memory");
+  });
+
+  it("keeps repeated malformed wrappers invalid without reaching permissions or execution", async () => {
+    const registry = new ToolRegistry();
+    let executions = 0;
+    let checks = 0;
+    registry.register({ name: "Shell", description: "in-memory command", inputSchema: {
+      type: "object", properties: { command: { type: "string" } }, required: ["command"],
+    }, execute: async () => { executions++; return { content: [{ type: "text", text: "unexpected" }] }; } });
+    const { client } = createMockStreamClient([
+      ...["bad1", "bad2"].map((id): StreamEvent[] => [
+        { type: "tool_use_start", toolUse: { type: "tool_use", id, name: "Shell", input: { arguments: { command: 123 } } } },
+        { type: "complete", stopReason: "tool_use" },
+      ]),
+      [{ type: "text_delta", delta: "stopped" }, { type: "complete", stopReason: "end_turn" }],
+    ]);
+    const engine = new QueryEngine(client, registry, { checkTool: async () => { checks++; return { action: "allow" }; } }, noopHooks(), { trajectoryTrackerFactory: false });
+    const events: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("probe")) events.push(event);
+    const ends = events.filter((event) => event.type === "tool_use_end") as any[];
+    expect(ends).toHaveLength(2);
+    for (const end of ends) expect(end.result).toMatchObject({ failureKind: "invalid_input", executionState: "not_started" });
+    expect(checks).toBe(0);
+    expect(executions).toBe(0);
+  });
+
+  it.each([1, 2])("does not bypass a recorded failure by adding %i arguments layers", async (depth) => {
+    const registry = new ToolRegistry();
+    let executions = 0;
+    registry.register({ name: "Shell", description: "in-memory command", inputSchema: {
+      type: "object", properties: { command: { type: "string" } }, required: ["command"],
+    }, execute: async () => {
+      executions++;
+      return { content: [{ type: "text", text: "failed" }], isError: true, failureKind: "command", executionState: "completed" };
+    } });
+    let wrapped: Record<string, unknown> = { command: "Write-Output probe" };
+    for (let i = 0; i < depth; i++) wrapped = { arguments: wrapped };
+    const { client } = createMockStreamClient([
+      ...[{ command: "Write-Output probe" }, wrapped].map((input, index): StreamEvent[] => [
+        { type: "tool_use_start", toolUse: { type: "tool_use", id: `repeat${index}`, name: "Shell", input } },
+        { type: "complete", stopReason: "tool_use" },
+      ]),
+      [{ type: "text_delta", delta: "stopped" }, { type: "complete", stopReason: "end_turn" }],
+    ]);
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    const events: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("probe")) events.push(event);
+    const ends = events.filter((event) => event.type === "tool_use_end") as any[];
+    expect(executions).toBe(1);
+    expect(ends[1].result).toMatchObject({ failureKind: "policy", executionState: "not_started", metadata: { recoveryGuard: "repeated_failed_call" } });
+  });
+
   it("normalizes Write path/contents aliases before schema validation", async () => {
     const registry = new ToolRegistry();
     const execute = vi.fn(async (input: Record<string, unknown>) => ({

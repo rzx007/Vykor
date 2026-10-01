@@ -18,19 +18,34 @@ export function normalizeToolInput(
   const propertyNames = Object.keys(properties);
   if (propertyNames.length === 0) return input;
 
-  if (
-    !Object.prototype.hasOwnProperty.call(properties, "arguments")
-    && Object.keys(input).length === 1
-    && isRecord(input.arguments)
-    && validateToolInput(schema, input.arguments) === null
-  ) {
-    return input.arguments;
-  }
+  const normalized = normalizePropertyAliases(schema, input);
+  if (validateToolInput(schema, normalized) === null) return normalized;
+  // Preserve legitimate arguments fields and schemas whose shape is ambiguous.
+  if (Object.hasOwn(properties, "arguments")
+    || ["anyOf", "oneOf", "allOf", "$ref"].some((key) => key in schema)) return normalized;
 
+  let candidate = input;
+  // Bounded even for cyclic SDK input; only return a fully validated candidate.
+  for (let depth = 0; depth < 8; depth++) {
+    const keys = Object.keys(candidate);
+    if (keys.length !== 1 || keys[0] !== "arguments"
+      || !isRecord(candidate.arguments)) break;
+    candidate = candidate.arguments;
+    const result = normalizePropertyAliases(schema, candidate);
+    if (validateToolInput(schema, result) === null) return result;
+  }
+  return normalized;
+}
+
+function normalizePropertyAliases(
+  schema: Record<string, unknown>,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  const properties = isRecord(schema.properties) ? schema.properties : {};
   const normalized: Record<string, unknown> = { ...input };
   const copiedFrom = new Set<string>();
 
-  for (const key of propertyNames) {
+  for (const key of Object.keys(properties)) {
     if (Object.prototype.hasOwnProperty.call(normalized, key)) continue;
     const aliases = PROPERTY_ALIASES[key];
     if (!aliases) continue;
@@ -46,7 +61,7 @@ export function normalizeToolInput(
   if (copiedFrom.size === 0) return input;
 
   if (schema.additionalProperties === false) {
-    const known = new Set(propertyNames);
+    const known = new Set(Object.keys(properties));
     for (const alias of copiedFrom) {
       if (!known.has(alias)) delete normalized[alias];
     }

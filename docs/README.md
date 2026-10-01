@@ -82,6 +82,7 @@
 - [Agent Child Session Flow](./agent-child-session-flow.md)：child 创建、等待、follow-up、预算、关闭和 durable 投影。
 - [CompactService](./compact-service-design.md)：上下文压缩、checkpoint、Tool 配对和失败策略。
 - [模型请求自动重试与工具参数恢复](./model-network-retry-design.md)：当前网络错误分类、断流恢复、工具执行保护与重试上限。
+- [工具参数包装 Spec](./superpowers/specs/2026-10-02-tool-arguments-normalization-design.md) / [实施计划](./superpowers/plans/2026-10-02-tool-arguments-normalization.md)：统一处理多层 arguments 包装，保留校验、权限及重复失败保护。
 - [模型网络自动重试执行计划](./superpowers/plans/2026-09-25-model-network-retry.md)：逐阶段文件清单、接口、测试命令、验收与发布边界。
 - [Prompt Layering](./prompt-layering-design.md)：系统提示词怎样分层组装。
 - [Personalization](./personalization-design.md)：用户个性化设置的边界。

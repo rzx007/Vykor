@@ -40,24 +40,6 @@ export function prepareToolCalls(
       continue;
     }
 
-    if (failedToolCalls?.shouldReplayFailure(toolUse.name, toolUse.input)) {
-      results[i] = {
-        toolUseId: toolUse.id,
-        toolName: toolUse.name,
-        content: [
-          {
-            type: "text" as const,
-            text: "Tool call already failed with the same input. Do not repeat it unless the input or underlying condition changes; choose another approach or explain the blocker.",
-          },
-        ],
-        isError: true,
-        failureKind: "policy",
-        executionState: "not_started",
-        metadata: { recoveryGuard: "repeated_failed_call" },
-      };
-      continue;
-    }
-
     const tool = toolRegistry.get(toolUse.name);
     if (!tool) {
       results[i] = {
@@ -90,6 +72,25 @@ export function prepareToolCalls(
         isError: true,
         failureKind: "invalid_input",
         executionState: "not_started",
+      };
+      continue;
+    }
+
+    // Match the same effective input that is recorded after execution fails.
+    if (failedToolCalls?.shouldReplayFailure(toolUse.name, toolUse.input)) {
+      results[i] = {
+        toolUseId: toolUse.id,
+        toolName: toolUse.name,
+        content: [
+          {
+            type: "text" as const,
+            text: "Tool call already failed with the same input. Do not repeat it unless the input or underlying condition changes; choose another approach or explain the blocker.",
+          },
+        ],
+        isError: true,
+        failureKind: "policy",
+        executionState: "not_started",
+        metadata: { recoveryGuard: "repeated_failed_call" },
       };
       continue;
     }

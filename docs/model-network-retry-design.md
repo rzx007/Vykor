@@ -1,6 +1,6 @@
 # 模型请求自动重试与工具参数恢复
 
-> 状态：当前实现与设计说明；最近核对：2026-10-01。自动化测试覆盖恢复边界，未进行宿主窗口人工观察。
+> 状态：当前实现与设计说明；最近核对：2026-10-02。自动化测试覆盖恢复边界，未进行宿主窗口人工观察。
 > 最近修订：补充 HTTP 200 流内错误、永久错误优先级及工具参数纠正；下文标注日期的改造前缺口仅作历史背景。
 > 本文基于当前工作区代码和已读取的 Codex 官方配置文档。未复现用户当次断线，也未核验 Codex 源码中的完整恢复流程。
 >
@@ -21,7 +21,9 @@
 - [错误分类](../packages/api/src/errors/index.ts) 将提供商错误统一为结构化失败。认证、额度耗尽、无效请求和证书错误优先判定为不可重试；408、临时过载及已知连接故障才进入有界重试。未知错误不根据模糊关键词一律重试。
 - 三个适配器统一分类可获得的错误信息；Anthropic 和 Codex 还保留原响应头中的 `Retry-After`、请求标识，OpenAI 路径取决于 SDK 错误携带的信息。HTTP 200 只表示连接建立，不代表流式生成成功。`Upstream stream terminated unexpectedly before completion` 的明确错误消息仅在流阶段按中断处理。
 - [QueryEngine](../packages/core/src/engine/query-engine.ts) 是主生成重试的负责人；SDK 自动重试关闭，避免多层循环放大请求数。每次失败只重新请求当前生成，不重跑已完成工具。
+- `ModelRequestFailure` 使用进程内共享的 Symbol 标记识别不同打包模块产生的实例，保留错误分类、等待提示和原始原因；普通同名错误不因此获得重试资格。这不用于跨进程序列化或重启恢复。
 - [工具参数解析](../packages/api/src/providers/tool-input.ts) 和 [执行前检查](../packages/core/src/engine/query-tool-preparation.ts) 处理另一类问题：完整响应中的工具参数不是合法 JSON 或对象。它不是网络故障，不重发同一个请求；返回 `invalid_input/not_started` 给模型，最多允许两轮纠正，仍失败则进入不调用工具的最终说明。空对象占位不能被执行或进入失败工具记忆。
+- [工具参数归一化](../packages/core/src/engine/tool-input-schema.ts) 在原输入不合法、工具参数结构明确时，最多拆 8 层单一 `arguments` 包装，复用已有字段别名规则。业务 `arguments`、组合 schema、额外包装字段不猜测处理；原输入已合法时保持其含义。只有合法候选才替换执行输入，随后用同一份有效参数检查失败记忆和权限，不能靠换包装重跑已失败的调用。详见 [Spec](./superpowers/specs/2026-10-02-tool-arguments-normalization-design.md) 与 [实施计划](./superpowers/plans/2026-10-02-tool-arguments-normalization.md)。
 - 自动化证据见 [SDK 工具参数回归测试](../packages/api/src/providers/tool-input-recovery.test.ts)；网络恢复测试覆盖已完成工具不重跑、残缺调用不执行、固定输入、取消和等待预算。文件工具本身的路径错误及 Shell 检查见 [运行环境调用链](./sandbox-runtime-flow.md)。
 
 ## Codex 官方文档确认的机制
