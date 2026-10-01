@@ -365,3 +365,7 @@
 
 - `packages/core/src/engine/query-engine.ts` 从 1205 行降至 1156 行；不依赖引擎状态的取消信号、截止时间和工具超时竞赛归入既有 `query-tool-limits.ts`。引擎仍创建工具上下文、运行钩子并回填结果，没有新增目录或包装类。
 - 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：本轮统一验证
+
+- 渠道连接类型、连接器装配和 QueryEngine 工具超时三批提交后，全仓 `pnpm check-types` 通过；server 完整 Vitest 共 121 个文件、1183 条通过。core 完整 Vitest 共 31 个文件、306 条通过。
