@@ -6,7 +6,7 @@
 
 **当前实施范围：** `packages/` 中超过 600 个物理行的非测试源码。`apps/desktop/` 和 `apps/frontend/` 不再处理；原盘点和已完成记录保留为历史。继续排除测试、测试夹具、构建产物、依赖目录、JSON 数据、迁移快照及 API 契约。
 
-**统计结果：** 初次 48 个文件，其中 Desktop 19 个、Frontend 1 个、其余包 28 个；2026-10-01 全仓复盘剩余 20 个，按当前范围剩余 9 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
+**统计结果：** 初次 48 个文件，其中 Desktop 19 个、Frontend 1 个、其余包 28 个；2026-10-01 全仓复盘剩余 20 个，按当前范围剩余 8 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
 
 ## 实施约束
 
@@ -110,12 +110,12 @@
 
 ## 2026-10-01 剩余清单与下一轮选择
 
-以下只列当前范围内超过 600 行的 9 个非测试文件。早期阶段表格仍保留初始全仓盘点，不表示桌面端或 `apps/frontend` 继续在实施范围内。数字是本次扫描的物理行数；“先观察”不是永不拆分，而是需要先证明独立职责或测试保护，不为过线数字增加包装层。
+以下只列当前范围内超过 600 行的 8 个非测试文件。早期阶段表格仍保留初始全仓盘点，不表示桌面端或 `apps/frontend` 继续在实施范围内。数字是本次扫描的物理行数；“先观察”不是永不拆分，而是需要先证明独立职责或测试保护，不为过线数字增加包装层。
 
 | 下一轮处理 | 文件与当前行数 | 判断依据 |
 |---|---|---|
 | 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1205；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
-| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/server/src/daemon/channel-runtime-service.ts` 646；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
+| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
 | 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1213；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
 
 ## 每批的验收方法
@@ -355,3 +355,8 @@
 
 - `packages/server/src/daemon/channel-runtime-service.ts` 从 724 行降至 646 行；应用端口、附件下载、运行时句柄、创建参数和配置类型归入同目录 `channel-runtime-types.ts`，旧模块继续重导出公开类型。运行服务继续控制连接状态和启停顺序。
 - 首次类型检查发现内部状态类型仍需原位导入，补回后通过；渠道相关测试 4 个文件、74 条通过。
+
+### 2026-10-01：渠道连接器装配
+
+- `packages/server/src/daemon/channel-runtime-service.ts` 从 646 行降至 577 行；实际飞书适配器、消息总线和持久投递桥的组装归入同目录 `channel-runtime-factory.ts`。服务仍持有连接状态、串行启停与回调处理。
+- 验证：server 包类型检查通过；渠道相关测试 4 个文件、74 条通过。
