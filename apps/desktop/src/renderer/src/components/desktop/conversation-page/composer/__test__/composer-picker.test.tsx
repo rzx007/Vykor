@@ -4,12 +4,8 @@ import { act, createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import {
-  ComposerPicker,
-  pickerItems,
-  toComposerSkills,
-  type ComposerPickerItem,
-} from "../composer-picker"
+import { ComposerPicker, type ComposerPickerItem } from "../composer-picker"
+import { pickerItems, toComposerSkills } from "../composer-picker-model"
 import { ContextPicker, type ContextPickerItem } from "../context-picker"
 
 const skills: ComposerPickerItem[] = [
@@ -72,6 +68,40 @@ describe("ComposerPicker", () => {
     Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
   })
 
+  it("does not select a command while Enter is confirming Chinese composition", async () => {
+    const onSelect = vi.fn()
+    await act(async () => {
+      root.render(
+        createElement(ComposerPicker, { items: skills, query: "", onSelect, onDismiss: vi.fn() })
+      )
+    })
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true })
+      )
+    })
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it("resets keyboard selection when available items change without changing their count", async () => {
+    const onSelect = vi.fn()
+    const props = { query: "", onSelect, onDismiss: vi.fn() }
+    await act(async () => {
+      root.render(createElement(ComposerPicker, { ...props, items: skills }))
+    })
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
+    })
+    await act(async () => {
+      root.render(createElement(ComposerPicker, { ...props, items: [...skills].reverse() }))
+    })
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain("Review")
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    })
+    expect(onSelect).toHaveBeenCalledWith(skills[1])
+  })
+
   it("shows only matching Skills and selects the highlighted item with Enter", async () => {
     const onSelect = vi.fn()
     await act(async () => {
@@ -122,16 +152,30 @@ describe("ComposerPicker", () => {
   it("renders category headings and dismisses when clicking outside", async () => {
     const onDismiss = vi.fn()
     const items: ContextPickerItem[] = [
-      { id: "files", label: "文件和文件夹", description: "添加本地文件", group: "添加", action: { kind: "files" } },
-      { id: "chat", label: "历史会话", description: "引用历史对话", group: "历史对话", action: { kind: "conversation", sessionId: "s2", displayName: "历史会话" } },
+      {
+        id: "files",
+        label: "文件和文件夹",
+        description: "添加本地文件",
+        group: "添加",
+        action: { kind: "files" },
+      },
+      {
+        id: "chat",
+        label: "历史会话",
+        description: "引用历史对话",
+        group: "历史对话",
+        action: { kind: "conversation", sessionId: "s2", displayName: "历史会话" },
+      },
     ]
     await act(async () => {
-      root.render(createElement(ContextPicker, {
-        items,
-        query: "",
-        onSelect: vi.fn(),
-        onDismiss,
-      }))
+      root.render(
+        createElement(ContextPicker, {
+          items,
+          query: "",
+          onSelect: vi.fn(),
+          onDismiss,
+        })
+      )
     })
 
     expect(container.querySelector('[aria-label="添加上下文"]')).not.toBeNull()

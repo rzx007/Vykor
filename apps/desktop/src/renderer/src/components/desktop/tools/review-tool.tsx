@@ -1,8 +1,4 @@
-import {
-  FileDiff,
-  GitPullRequestDraft,
-  RefreshCw,
-} from "lucide-react"
+import { FileDiff, GitPullRequestDraft, RefreshCw } from "lucide-react"
 import type * as React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
@@ -17,7 +13,11 @@ import {
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
-import type { DesktopGitChangesResult, DesktopGitDiffScope } from "@shared/git-types"
+import type {
+  DesktopGitChangesResult,
+  DesktopGitDiffScope,
+  DesktopGitReviewRequest,
+} from "@shared/git-types"
 import type { DesktopSessionView } from "@shared/session-types"
 import { toProjectRelativePath } from "@shared/workspace-open-path"
 import {
@@ -34,14 +34,14 @@ type LoadState = "idle" | "loading" | "ready" | "error"
 export function ReviewTool({
   openRequest,
 }: {
-  openRequest?: { id: number; path?: string } | null
+  openRequest?: DesktopGitReviewRequest | null
 }): React.JSX.Element {
   const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
   const selectedProjectPath = selectedProject?.path
   const [loadState, setLoadState] = useState<LoadState>("idle")
   const [diffState, setDiffState] = useState<DiffState>("idle")
-  const [reviewRange, setReviewRange] = useState<ReviewRange>("last-turn")
+  const [reviewRange, setReviewRange] = useState<ReviewRange>(openRequest?.scope ?? "last-turn")
   const [changes, setChanges] = useState<DesktopGitChangesResult | null>(null)
   const [activePath, setActivePath] = useState<string | null>(null)
   const [patch, setPatch] = useState("")
@@ -50,10 +50,12 @@ export function ReviewTool({
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("unified")
   const { resolvedTheme: themeType } = useAppearance()
   const handledOpenRequestRef = useRef<number | null>(null)
+  const changesRequestVersionRef = useRef(0)
   const lastTurnFilePaths = useMemo(() => collectLastTurnFilePaths(sessionView), [sessionView])
 
   const loadChanges = useCallback(
     async ({ force = false }: { force?: boolean } = {}): Promise<void> => {
+      const requestVersion = ++changesRequestVersionRef.current
       if (!selectedProjectPath) {
         setChanges(null)
         setLoadState("idle")
@@ -70,6 +72,7 @@ export function ReviewTool({
           },
           { force }
         )
+        if (requestVersion !== changesRequestVersionRef.current) return
         const visibleResult =
           reviewRange === "last-turn"
             ? filterChangesByPaths(result, lastTurnFilePaths, selectedProjectPath)
@@ -82,6 +85,7 @@ export function ReviewTool({
         )
         setLoadState("ready")
       } catch (loadError) {
+        if (requestVersion !== changesRequestVersionRef.current) return
         setError(errorMessage(loadError))
         setLoadState("error")
       }
@@ -93,24 +97,33 @@ export function ReviewTool({
     const timer = window.setTimeout(() => {
       void loadChanges()
     }, 0)
-    return () => window.clearTimeout(timer)
+    return () => {
+      window.clearTimeout(timer)
+      // This is a request counter, not a DOM ref; cleanup must invalidate the latest request.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      changesRequestVersionRef.current++
+    }
   }, [loadChanges])
 
   useEffect(() => {
     if (!openRequest || handledOpenRequestRef.current === openRequest.id) return
-    handledOpenRequestRef.current = openRequest.id
     const path = openRequest.path
       ? toProjectRelativePath(openRequest.path, selectedProjectPath)
       : null
     if (openRequest.path && !path) return
     const timer = window.setTimeout(() => {
+      handledOpenRequestRef.current = openRequest.id
       if (path) setActivePath(path)
+      if (openRequest.scope && openRequest.scope !== reviewRange) {
+        setReviewRange(openRequest.scope)
+        return
+      }
       if (!changes?.files.length || (path && !changes.files.some((file) => file.path === path))) {
         void loadChanges()
       }
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [changes?.files, loadChanges, openRequest, selectedProjectPath])
+  }, [changes?.files, loadChanges, openRequest, reviewRange, selectedProjectPath])
 
   const activeFile = changes?.files.find((file) => file.path === activePath) ?? null
 

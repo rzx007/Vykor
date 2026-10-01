@@ -1,4 +1,4 @@
-import { Bot, ListFilter, MoreHorizontal, PanelRight, ShieldAlert } from "lucide-react"
+import { Bot, MoreHorizontal, PanelRight, ShieldAlert } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
@@ -39,6 +39,7 @@ import {
   selectCommandCatalogCwd,
   selectNewConversationError,
   selectNewConversationSending,
+  selectActiveWorkspaceProject,
 } from "@renderer/stores/desktop-session/selectors"
 import { Composer } from "./composer/composer"
 import { pluginMentionsEnabled } from "./composer/plugin-mentions-feature"
@@ -53,18 +54,19 @@ import {
   derivePendingHandoffSubmission,
   mergeOptimisticTranscript,
 } from "./transcript/optimistic-transcript"
-import {
-  toComposerCommands,
-  toComposerSkills,
-  type ComposerPickerCommand,
-} from "./composer/composer-picker"
+import type { ComposerPickerCommand } from "./composer/composer-picker"
+import { toComposerCommands } from "./composer/composer-command-catalog"
+import { toComposerSkills } from "./composer/composer-picker-model"
 import type { ComposerSkill } from "./composer/rich-prompt-input"
 import { HeaderIconButton } from "./composer/controls"
+import { resolveEffortTiers } from "./composer/effort-picker"
+import { isSessionPinned } from "@renderer/stores/desktop-session/helpers"
 import { NewConversationStart } from "./session/new-conversation-start"
 import { PermissionCard } from "./message/message-block"
 import { AskUserCard } from "./message/ask-user-card"
 import { isAskUserPermission } from "./message/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
+import { SessionSummaryPopover } from "./session/session-summary-popover"
 import { SessionMoreMenu } from "./session/session-more-menu"
 import { useSessionActionDialogs } from "./session/session-action-dialogs"
 import { ScopedOperationError } from "./session/scoped-operation-errors"
@@ -117,6 +119,7 @@ function ConversationPane({
   const selectedEffort = useDesktopSessionStore((state) => state.selectedEffort)
   const workspaceMode = useDesktopSessionStore((state) => state.workspaceMode)
   const selectedProject = useDesktopSessionStore((state) => state.selectedProject)
+  const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const selectedProjectGit = useDesktopSessionStore((state) => state.selectedProjectGit)
   const branch = useDesktopSessionStore((state) => state.branch)
   const branches = useDesktopSessionStore((state) => state.branches)
@@ -141,6 +144,8 @@ function ConversationPane({
   const pendingPromptSubmissions = useDesktopSessionStore(selectActiveSessionPromptSubmissions)
   const permissionReplies = useDesktopSessionStore(selectActiveSessionPermissionReplies)
   const forkSession = useDesktopSessionStore((state) => state.forkSession)
+  const startConversationFrom = useDesktopSessionStore((state) => state.startConversationFrom)
+  const togglePinSession = useDesktopSessionStore((state) => state.togglePinSession)
   const chooseProject = useDesktopSessionStore((state) => state.chooseProject)
   const selectProject = useDesktopSessionStore((state) => state.selectProject)
   const selectOutsideProject = useDesktopSessionStore((state) => state.selectOutsideProject)
@@ -280,9 +285,6 @@ function ConversationPane({
     sessionView?.parts ?? [],
     transcriptSubmissions
   )
-  const hasAgentTasks = Boolean(
-    sessionView?.tasks.some((task) => task.type === "agent" && task.childSessionId)
-  )
   const scrollerAgentStatus = resolveScrollerAgentStatus({
     running,
     parts: sessionView?.parts ?? [],
@@ -295,7 +297,15 @@ function ConversationPane({
   const commandCatalog =
     commandCwd && skillCommandSnapshot?.cwd === commandCwd ? skillCommandSnapshot.commands : []
   const skillCommands: ComposerSkill[] = toComposerSkills(commandCatalog)
-  const applicationCommands = toComposerCommands(commandCatalog)
+  const applicationCommands = toComposerCommands(commandCatalog, {
+    hasSession: Boolean(activeSessionId && sessionView?.session.id === activeSessionId),
+    running,
+    canOpenReview,
+    pinned: Boolean(activeSession && isSessionPinned(activeSession)),
+    permissionMode: selectedPermissionMode,
+    hasModels: models.length > 0,
+    hasEffortTiers: resolveEffortTiers(models, currentModel, selectedProvider).length > 0,
+  })
   const pluginCatalog =
     pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd ? pluginSnapshot.plugins : []
   const pluginCatalogError =
@@ -413,7 +423,40 @@ function ConversationPane({
         await navigate({ to: "/plugins" })
         return
       }
-      throw new Error(`Desktop 尚未支持 /${command.id}。`)
+      if (command.id === "plan") {
+        const mode = selectedPermissionMode === "plan" ? "default" : "plan"
+        if (activeSessionId) await updateSessionPermissionMode(activeSessionId, mode)
+        else selectPermissionMode(mode)
+        return
+      }
+      if (command.id === "diff") {
+        if (!canOpenReview) throw new Error("当前目录无法查看 Git 变更。")
+        onOpenReview(undefined, "uncommitted")
+        return
+      }
+      if (!activeSession) throw new Error("请先打开聊天。")
+      if (command.id === "new") {
+        await startConversationFrom(activeSession)
+        if (!useDesktopSessionStore.getState().activeSessionId) await navigate({ to: "/" })
+        return
+      }
+      if (command.id === "pin") {
+        await togglePinSession(activeSession.id)
+        return
+      }
+      if (command.id === "rename") {
+        sessionActions.beginRename(activeSession)
+        return
+      }
+      if (command.id === "fork") {
+        if (running) throw new Error("请等待当前任务结束后再创建聊天分支。")
+        const forked = await forkSession(activeSession.id)
+        if (useDesktopSessionStore.getState().activeSessionId === forked.id) {
+          await navigate({ to: "/conversation/$sessionId", params: { sessionId: forked.id } })
+        }
+        return
+      }
+      throw new Error(`暂不支持 /${command.id}。`)
     },
     [
       activeSessionId,
@@ -422,6 +465,16 @@ function ConversationPane({
       refreshContextUsage,
       resyncActiveSessionSnapshot,
       running,
+      activeSession,
+      selectedPermissionMode,
+      updateSessionPermissionMode,
+      selectPermissionMode,
+      canOpenReview,
+      onOpenReview,
+      startConversationFrom,
+      togglePinSession,
+      sessionActions,
+      forkSession,
     ]
   )
 
@@ -459,15 +512,20 @@ function ConversationPane({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
-            {hasAgentTasks ? (
-              <HeaderIconButton label="查看子智能体" onClick={onOpenAgents}>
-                <Bot />
-              </HeaderIconButton>
-            ) : null}
             <OpenWithSplitButton folderPath={sessionView?.session.cwd ?? selectedProject?.path} />
-            <HeaderIconButton label="会话视图">
-              <ListFilter />
-            </HeaderIconButton>
+            <SessionSummaryPopover
+              view={sessionView?.session.id === activeSessionId ? sessionView : null}
+              workspace={workspaceProject}
+              canOpenReview={canOpenReview}
+              onOpenReview={onOpenReview}
+              onOpenAgents={onOpenAgents}
+              onOpenFile={onOpenFile}
+              onPickFiles={
+                attachmentSupport.interactionEnabled && !archived
+                  ? () => void pickAttachmentFiles(composerScope)
+                  : undefined
+              }
+            />
             {!panelOpen && (
               <HeaderIconButton label="展开工具面板" onClick={onTogglePanel}>
                 <PanelRight />
@@ -502,7 +560,7 @@ function ConversationPane({
           onGoalModeChange={changeGoalMode}
           goalAutoTurns={goalComposer.maxAutoTurns}
           onGoalAutoTurnsChange={(count) => setGoalAutoTurns(composerScope, count)}
-          commands={applicationCommands.filter((item) => item.command?.id !== "compact")}
+          commands={applicationCommands}
           onCommand={executeComposerCommand}
           skills={skillCommands}
           plugins={pluginCatalog}
@@ -693,9 +751,7 @@ function ConversationPane({
                 skills={skillCommands}
                 plugins={pluginCatalog}
                 pluginMentionsEnabled={pluginMentionsEnabled}
-                commands={applicationCommands.filter(
-                  (item) => item.command?.id !== "compact" || !running
-                )}
+                commands={applicationCommands}
                 conversations={sessions}
                 activeSessionId={activeSessionId}
                 goalMode={goalMode}

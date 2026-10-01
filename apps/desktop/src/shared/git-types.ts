@@ -3,6 +3,12 @@ export type DesktopGitFileStatus =
 
 export type DesktopGitDiffScope = "uncommitted" | "unstaged" | "staged"
 
+export interface DesktopGitReviewRequest {
+  id: number
+  path?: string
+  scope?: DesktopGitDiffScope
+}
+
 export interface DesktopGitChangesInput {
   rootPath: string
   scope?: DesktopGitDiffScope

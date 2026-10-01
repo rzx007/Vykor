@@ -15,6 +15,7 @@ import { defaultSettingsSection } from "@renderer/components/desktop/settings-pa
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
+import type { DesktopGitDiffScope } from "@shared/git-types"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
@@ -166,9 +167,9 @@ export function MainLayout(): React.JSX.Element {
   }, [openConversationRoute])
 
   const requestOpenReview = useCallback(
-    (path?: string): void => {
+    (path?: string, scope?: DesktopGitDiffScope): void => {
       void refreshSelectedProjectGit({ force: true })
-      openReview(path)
+      openReview(path, scope)
     },
     [openReview, refreshSelectedProjectGit]
   )

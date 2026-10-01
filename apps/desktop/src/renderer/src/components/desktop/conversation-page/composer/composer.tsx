@@ -117,6 +117,21 @@ export function Composer({
   const [activePicker, setActivePicker] = useState<"model" | "permission" | "effort" | null>(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
+  const effortTiers = resolveEffortTiers(models, selectedModel, selectedProvider)
+  const executeCommand = async (command: ComposerPickerCommand): Promise<void> => {
+    if (command.id === "model") {
+      if (models.length === 0) throw new Error("暂无可用模型。")
+      setActivePicker("model")
+      return
+    }
+    if (command.id === "effort") {
+      if (effortTiers.length === 0) throw new Error("当前模型不支持调整推理强度。")
+      setActivePicker("effort")
+      return
+    }
+    if (!onCommand) throw new Error("当前界面不支持该命令。")
+    await onCommand(command)
+  }
   const permissionLabel = resolvePermissionModeLabel(permissionMode)
   const closePicker = (): void => setActivePicker(null)
   const allowSubmit = canSubmit ?? draft.items.length > 0
@@ -158,13 +173,15 @@ export function Composer({
           displayName: session.title.trim() || "未命名对话",
         },
       })),
-    ...(pluginMentionsEnabled ? plugins.map((plugin): ContextPickerItem => ({
-      id: `context:plugin:${plugin.pluginId}`,
-      label: plugin.displayName,
-      description: plugin.description,
-      group: "插件",
-      action: { kind: "plugin", pluginId: plugin.pluginId, displayName: plugin.displayName },
-    })) : []),
+    ...(pluginMentionsEnabled
+      ? plugins.map((plugin): ContextPickerItem => ({
+          id: `context:plugin:${plugin.pluginId}`,
+          label: plugin.displayName,
+          description: plugin.description,
+          group: "插件",
+          action: { kind: "plugin", pluginId: plugin.pluginId, displayName: plugin.displayName },
+        }))
+      : []),
   ]
 
   const submit = (): void => {
@@ -217,7 +234,7 @@ export function Composer({
         className={textareaClassName}
         onChange={onDraftChange}
         onSubmit={submit}
-        onCommand={onCommand}
+        onCommand={executeCommand}
         onPasteFiles={attachmentInteractionEnabled && !sending ? onPasteFiles : undefined}
         contextItems={contextItems}
         contextPickerRequest={contextPickerRequest}
@@ -315,7 +332,7 @@ export function Composer({
         <EffortPicker
           open={activePicker === "effort"}
           onOpenChange={(open) => setActivePicker(open ? "effort" : null)}
-          tiers={resolveEffortTiers(models, selectedModel, selectedProvider)}
+          tiers={effortTiers}
           value={effort}
           onSelect={(nextEffort) => {
             onSelectEffort(nextEffort)

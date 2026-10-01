@@ -31,6 +31,14 @@ let root: Root
 
 beforeEach(() => {
   mocks.queryGitChanges.mockReset()
+  Object.defineProperty(window, "desktop", {
+    configurable: true,
+    value: {
+      git: {
+        fileDiff: vi.fn(async () => ({ path: "manual.ts", patch: "(no diff)", binary: false })),
+      },
+    },
+  })
   store.state = {
     selectedProject: { path: "D:/repo" },
     sessionView: null,
@@ -132,4 +140,50 @@ it("loads changes for an outside-project session instead of showing the empty st
     },
     { force: false }
   )
+})
+
+it("opens the work summary's uncommitted range instead of filtering it to the last turn", async () => {
+  mocks.queryGitChanges.mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [{ path: "manual.ts", status: "modified", additions: 12, deletions: 3, binary: false }],
+    totalAdditions: 12,
+    totalDeletions: 3,
+  })
+  await act(async () => {
+    root.render(<ReviewTool openRequest={{ id: 1, scope: "uncommitted" }} />)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+  })
+  expect(container.textContent).toContain("manual.ts")
+  expect(container.textContent).toContain("未提交")
+  expect(container.textContent).toContain("+12")
+})
+
+it("switches an already mounted review panel to the summary's requested range", async () => {
+  mocks.queryGitChanges.mockResolvedValue({
+    rootPath: "D:/repo",
+    files: [{ path: "manual.ts", status: "modified", additions: 12, deletions: 3, binary: false }],
+    totalAdditions: 12,
+    totalDeletions: 3,
+  })
+  await act(async () => {
+    root.render(<ReviewTool />)
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 20))
+  })
+  expect(container.textContent).not.toContain("manual.ts")
+  await act(async () => {
+    root.render(<ReviewTool openRequest={{ id: 2, scope: "uncommitted" }} />)
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 20))
+  })
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 20))
+  })
+  expect(container.textContent).toContain("manual.ts")
+  expect(container.textContent).toContain("未提交")
 })

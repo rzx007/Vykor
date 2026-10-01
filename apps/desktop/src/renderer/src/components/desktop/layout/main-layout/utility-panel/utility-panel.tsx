@@ -13,6 +13,7 @@ import {
 } from "@renderer/components/desktop/tools/file-viewer"
 import { PlaceholderTool } from "@renderer/components/desktop/tools/placeholder-tool"
 import { ReviewTool } from "@renderer/components/desktop/tools/review-tool"
+import type { DesktopGitReviewRequest } from "@shared/git-types"
 import { TerminalTool } from "@renderer/components/desktop/tools/terminal/terminal-tool"
 import { AgentsTool } from "@renderer/components/desktop/tools/agents/agents-tool"
 import type {
@@ -47,7 +48,7 @@ type UtilityPanelProps = {
   onToggleMaximized: () => void
   onClose: () => void
   fileOpenRequest: { id: number; path: string; line?: number } | null
-  reviewOpenRequest: { id: number; path?: string } | null
+  reviewOpenRequest: DesktopGitReviewRequest | null
   terminalOpenRequest: { id: number; terminalId: string } | null
   toolOpenRequest: { id: number; tool: UtilityToolRequest } | null
   onOpenFile: (path: string, line?: number) => void

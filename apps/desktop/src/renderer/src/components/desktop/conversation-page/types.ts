@@ -1,11 +1,12 @@
 import type { DesktopPermissionMode } from "@shared/session-types"
+import type { DesktopGitDiffScope } from "@shared/git-types"
 
 export type ConversationPaneProps = {
   panelOpen: boolean
   onTogglePanel: () => void
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
-  onOpenReview: (path?: string) => void
+  onOpenReview: (path?: string, scope?: DesktopGitDiffScope) => void
   onOpenTerminal: (terminalId: string) => void
   onOpenAgents: () => void
 }

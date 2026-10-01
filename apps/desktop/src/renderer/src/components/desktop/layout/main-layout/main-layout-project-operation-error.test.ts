@@ -3,6 +3,12 @@
 import { act, createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  getNearestEditorFromDOMNode,
+} from "lexical"
 
 import type { DesktopOperation, DesktopSessionState } from "@renderer/stores/desktop-session/types"
 
@@ -99,6 +105,7 @@ vi.mock("@renderer/stores/desktop-session", async () => {
 
 import { MainLayout } from "./main-layout"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import { isSessionPinned } from "@renderer/stores/desktop-session/helpers"
 
 const initialStoreState = useDesktopSessionStore.getState()
 let mountedRoot: Root | null = null
@@ -257,6 +264,37 @@ function mountLayout(state: DesktopSessionState): HTMLDivElement {
 }
 
 describe("MainLayout selected project operation error owner", () => {
+  it("replaces the independent agent shortcut with the current chat summary", async () => {
+    const view = sessionView("session-active", "idle")
+    view.tasks = [
+      {
+        id: "task",
+        sessionId: view.session.id,
+        childSessionId: "child",
+        type: "agent",
+        status: "running",
+        description: "Check code",
+        cwd: view.session.cwd,
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]
+    let container!: HTMLDivElement
+    await act(async () => {
+      container = mountLayout(
+        stateWith({
+          activeSessionId: view.session.id,
+          sessionView: view,
+          sessions: [view.session],
+          selectedProject: project("project-a", "项目 A"),
+        })
+      )
+    })
+    expect(container.querySelector('[aria-label="查看子智能体"]')).toBeNull()
+    expect(container.querySelector('[aria-label="当前聊天的工作摘要"]')).not.toBeNull()
+  })
+
   it("keeps an older bootstrap without attachment support on the text-only composer", () => {
     const container = mountLayout(
       stateWith({
@@ -353,5 +391,102 @@ describe("MainLayout selected project operation error owner", () => {
     expect(container.textContent).not.toContain("项目 A 操作失败")
     expect(container.textContent).toContain("项目 B 操作失败")
     expect(container.textContent?.split("项目 B 操作失败")).toHaveLength(2)
+  })
+})
+
+describe("desktop slash command actions", () => {
+  async function mountChat(
+    overrides: Partial<DesktopSessionState> = {},
+    api: Record<string, unknown> = {}
+  ) {
+    const view = sessionView("slash-chat", "idle")
+    Object.assign(window.desktop, { sessions: api })
+    let container!: HTMLDivElement
+    await act(async () => {
+      container = mountLayout(
+        stateWith({
+          activeSessionId: view.session.id,
+          sessionView: view,
+          sessions: [view.session],
+          ...overrides,
+        })
+      )
+    })
+    return { container, view }
+  }
+
+  async function runSlash(container: HTMLDivElement, id: string): Promise<void> {
+    const editor = getNearestEditorFromDOMNode(container.querySelector('[role="textbox"]')!)!
+    await act(async () => {
+      editor.update(
+        () => {
+          const text = $createTextNode(`/${id}`)
+          $getRoot().clear().append($createParagraphNode().append(text))
+          text.selectEnd()
+        },
+        { discrete: true }
+      )
+    })
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+      (button) => button.textContent?.includes(`/${id}`)
+    )
+    expect(option).toBeTruthy()
+    await act(async () => {
+      option!.click()
+    })
+  }
+
+  it("toggles plan mode through the real session setting action", async () => {
+    const { container } = await mountChat(
+      { updateSessionPermissionMode: initialStoreState.updateSessionPermissionMode },
+      {
+        updatePermissionMode: async ({ permissionMode }: { permissionMode: string }) => ({
+          ...session("slash-chat", "idle"),
+          metadata: { runtime: { permissionMode } },
+        }),
+      }
+    )
+    await runSlash(container, "plan")
+    expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("plan")
+    await runSlash(container, "plan")
+    expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("default")
+  })
+
+  it("pins and unpins the current chat without submitting a prompt", async () => {
+    const { container } = await mountChat(
+      { togglePinSession: initialStoreState.togglePinSession },
+      {
+        setPinned: async ({ pinned }: { pinned: boolean }) => ({
+          ...session("slash-chat", "idle"),
+          metadata: { desktop: { pinnedAt: pinned ? 2 : 0 } },
+        }),
+      }
+    )
+    await runSlash(container, "pin")
+    expect(isSessionPinned(useDesktopSessionStore.getState().sessions[0]!)).toBe(true)
+    await runSlash(container, "pin")
+    expect(isSessionPinned(useDesktopSessionStore.getState().sessions[0]!)).toBe(false)
+  })
+
+  it("opens the existing rename dialog with the current title", async () => {
+    const { container } = await mountChat()
+    await runSlash(container, "rename")
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("重命名会话")
+    expect(document.querySelector<HTMLInputElement>('input[name="name"]')?.value).toBe(
+      "slash-chat 会话"
+    )
+  })
+
+  it("starts a blank chat using the current configuration", async () => {
+    const { container } = await mountChat(
+      { startConversationFrom: initialStoreState.startConversationFrom },
+      {
+        close: async () => {},
+      }
+    )
+    await runSlash(container, "new")
+    expect(useDesktopSessionStore.getState().activeSessionId).toBeNull()
+    expect(useDesktopSessionStore.getState().selectedModel).toBe("test-model")
+    expect(container.querySelector("#new-conversation-composer")).not.toBeNull()
   })
 })

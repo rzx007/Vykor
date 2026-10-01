@@ -8,7 +8,7 @@ export interface ComposerTrigger {
   mode: ComposerTriggerMode
 }
 
-const queryCharacter = /[A-Za-z0-9._:-]/
+const queryCharacter = /[A-Za-z0-9._:\u3400-\u9fff-]/
 const asciiWhitespace = /[ \t\n\r\f\v]/
 
 /** Finds the slash/dollar token containing the given UTF-16 cursor offset. */

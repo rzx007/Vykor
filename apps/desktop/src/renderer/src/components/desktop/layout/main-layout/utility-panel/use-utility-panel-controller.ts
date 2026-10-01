@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react"
-import type {
-  GroupImperativeHandle,
-  Layout,
-  PanelImperativeHandle,
-} from "react-resizable-panels"
+import type { GroupImperativeHandle, Layout, PanelImperativeHandle } from "react-resizable-panels"
 
 import { beginPanelToggleTransition } from "../panel-toggle-transition"
+import type { DesktopGitDiffScope, DesktopGitReviewRequest } from "@shared/git-types"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
 import {
   moveUtilityPanelScope,
@@ -40,10 +37,8 @@ type ScopedToolRequest = {
   tool: UtilityToolRequest
 }
 
-type ScopedReviewRequest = {
-  id: number
+type ScopedReviewRequest = DesktopGitReviewRequest & {
   scopeId: string
-  path?: string
 }
 
 type UseUtilityPanelControllerOptions = {
@@ -74,7 +69,7 @@ export type UtilityPanelController = {
   toggle: () => void
   toggleMaximized: () => void
   openFile: (path: string, line?: number) => void
-  openReview: (path?: string) => void
+  openReview: (path?: string, scope?: DesktopGitDiffScope) => void
   openTerminal: (terminalId: string) => void
   openTool: (tool: UtilityToolRequest) => void
   handleLayoutChanged: (layout: Layout) => void
@@ -314,9 +309,9 @@ export function useUtilityPanelController({
   )
 
   const openReview = useCallback(
-    (path?: string): void => {
+    (path?: string, scope?: DesktopGitDiffScope): void => {
       restore()
-      setReviewRequest({ id: Date.now(), scopeId: activeScopeIdRef.current, path })
+      setReviewRequest({ id: Date.now(), scopeId: activeScopeIdRef.current, path, scope })
     },
     [restore]
   )

@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest"
 import { findComposerTrigger } from "../composer-trigger"
 
 describe("findComposerTrigger", () => {
+  it("accepts Chinese command queries without swallowing Chinese punctuation", () => {
+    expect(findComposerTrigger("/模型", 3)).toMatchObject({
+      sigil: "/",
+      query: "模型",
+      mode: "leading",
+    })
+    expect(findComposerTrigger("/压缩，继续", 3)?.query).toBe("压缩")
+    expect(findComposerTrigger("/压缩，继续", 4)).toBeNull()
+    expect(findComposerTrigger("请用 /代码审查", 8)).toMatchObject({
+      query: "代码审查",
+      mode: "inline",
+    })
+  })
+
   it("finds leading slash and inline slash tokens at the cursor", () => {
     expect(findComposerTrigger("/rev", 4)).toEqual({
       sigil: "/",
