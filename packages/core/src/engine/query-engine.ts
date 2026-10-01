@@ -18,10 +18,7 @@ import type {
   ToolContext,
   ToolDefinition,
   ToolExecutionResult,
-  ToolRegistrationSource,
   ToolRegistry as IToolRegistry,
-  ToolRegistryView,
-  ToolDescriptor,
 } from "../types/tools";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
@@ -44,6 +41,7 @@ import { applyToolOutputBudget, executeToolWithTimeout, ToolTimeoutError, toolEx
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
+import { runToolRegistry as runToolRegistryForRun, toolRegistryView, visibleToolRegistry } from "./tool-registry";
 import {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,
@@ -283,7 +281,9 @@ export class QueryEngine implements IQueryEngine {
       }
     }
     const contribution = options.execution?.contribution;
-    const runToolRegistry = this.runToolRegistry(contribution, options.execution?.capabilityView);
+    const runToolRegistry = runToolRegistryForRun(
+      this.toolRegistry, this.allowedTools, contribution, options.execution?.capabilityView,
+    );
     const internalTools = new Set(
       contribution?.tools
         ?.filter((item) => item.permission === "host-internal")
@@ -875,7 +875,7 @@ export class QueryEngine implements IQueryEngine {
     execution?: AgentExecutionContext,
     requestConfiguration?: ToolContext["requestConfiguration"],
     failedToolCalls?: ToolFailureMemory,
-    toolRegistry: IToolRegistry = this.visibleToolRegistry(),
+    toolRegistry: IToolRegistry = visibleToolRegistry(this.toolRegistry, this.allowedTools),
     internalTools: ReadonlySet<string> = new Set(),
   ): Promise<ToolExecutionResult[]> {
     const { results, readyForPermission } = prepareToolCalls(toolUses, failedToolCalls, toolRegistry);
@@ -901,7 +901,7 @@ export class QueryEngine implements IQueryEngine {
             runAbortSignal: signal,
             settings: this.options.settings,
             ...(requestConfiguration ? { requestConfiguration } : {}),
-            toolRegistry: this.toolRegistryView(toolRegistry),
+            toolRegistry: toolRegistryView(toolRegistry),
             capabilityView: execution?.capabilityView,
             skillRegistry: this.skillRegistry,
             // Global MCP meta APIs can bypass captured tools by serverName. Until a
@@ -1018,139 +1018,8 @@ export class QueryEngine implements IQueryEngine {
     }
     return toolDefinitionIdentity(tool) === approved.identity && tool.execute === approved.execute;
   }
-
-  private visibleToolRegistry(alwaysAllowed: readonly string[] = []): IToolRegistry {
-    const allowedTools = this.allowedTools;
-    if (!allowedTools || allowedTools.includes("*")) return this.toolRegistry;
-    const allowed = new Set([...allowedTools, ...alwaysAllowed]);
-    const inner = this.toolRegistry;
-    return {
-      register(tool: ToolDefinition, source): void {
-        inner.register(tool, source);
-      },
-      override(tool: ToolDefinition, source): void {
-        inner.override(tool, source);
-      },
-      replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void {
-        inner.replaceBySource(source, tools);
-      },
-      unregister(name: string): boolean {
-        return inner.unregister?.(name) ?? false;
-      },
-      get(name: string): ToolDefinition | undefined {
-        return allowed.has(name) ? inner.get(name) : undefined;
-      },
-      getAll(): ToolDefinition[] {
-        return inner.getAll().filter((tool) => allowed.has(tool.name));
-      },
-      has(name: string): boolean {
-        return allowed.has(name) && inner.has(name);
-      },
-      inspect(name: string) {
-        return allowed.has(name) ? inner.inspect(name) : undefined;
-      },
-    };
-  }
-
-  private runToolRegistry(
-    contribution: AgentExecutionContext["contribution"],
-    view?: AgentExecutionContext["capabilityView"],
-  ): IToolRegistry {
-    const captured = view && new Map([...view.tools].map(([name, binding]) => [
-      name, { ...binding.definition, execute: binding.invoke },
-    ]));
-    const base: IToolRegistry = captured ? {
-      register: () => { throw new Error("Run capability view is immutable"); },
-      override: () => { throw new Error("Run capability view is immutable"); },
-      replaceBySource: () => { throw new Error("Run capability view is immutable"); },
-      get: (name) => captured.get(name),
-      getAll: () => [...captured.values()],
-      has: (name) => captured.has(name),
-      inspect: (name) => {
-        const binding = view!.tools.get(name);
-        return binding ? { name, source: binding.source ?? { kind: "runtime" } } : undefined;
-      },
-    } : this.visibleToolRegistry();
-    const contributed = contribution?.tools ?? [];
-    if (contributed.length === 0) return base;
-    const additions = new Map<string, ToolDefinition>();
-    for (const { definition } of contributed) {
-      if (base.has(definition.name) || additions.has(definition.name))
-        throw new Error(`Run tool conflicts with an existing tool: ${definition.name}`);
-      additions.set(definition.name, definition);
-    }
-    return {
-      register: () => {
-        throw new Error("Run-scoped tool registry is immutable");
-      },
-      override: () => {
-        throw new Error("Run-scoped tool registry is immutable");
-      },
-      replaceBySource: () => {
-        throw new Error("Run-scoped tool registry is immutable");
-      },
-      unregister: () => false,
-      get: (name) => additions.get(name) ?? base.get(name),
-      getAll: () => [...base.getAll(), ...additions.values()],
-      has: (name) => additions.has(name) || base.has(name),
-      inspect: (name) =>
-        additions.has(name)
-          ? { name, source: { kind: "runtime", id: "run-contribution" } }
-          : base.inspect(name),
-    };
-  }
-
-  private toolRegistryView(registry: IToolRegistry): ToolRegistryView {
-    return {
-      get: (name) => {
-        const tool = registry.get(name);
-        return tool ? toolDescriptor(tool) : undefined;
-      },
-      getAll: () => registry.getAll().map(toolDescriptor),
-      has: (name) => registry.has(name),
-      inspect: (name) => registry.inspect(name),
-    };
-  }
 }
 
 function appendSystemGuidance(systemPrompt: string | undefined, guidance: string): string {
   return systemPrompt?.trim() ? `${systemPrompt}\n\n${guidance}` : guidance;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableJson(item)).join(",")}]`;
-  }
-  if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`);
-    return `{${entries.join(",")}}`;
-  }
-  return JSON.stringify(value) ?? String(value);
-}
-
-function toolDescriptor(tool: ToolDefinition): ToolDescriptor {
-  return Object.freeze({
-    name: tool.name,
-    description: tool.description,
-    inputSchema: deepFrozenCopy(tool.inputSchema),
-    ...(tool.safeToRetry === undefined ? {} : { safeToRetry: tool.safeToRetry }),
-  });
-}
-
-function deepFrozenCopy<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return Object.freeze(value.map((item) => deepFrozenCopy(item))) as T;
-  }
-  if (value && typeof value === "object") {
-    const copied = Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-        key,
-        deepFrozenCopy(item),
-      ]),
-    );
-    return Object.freeze(copied) as T;
-  }
-  return value;
 }
