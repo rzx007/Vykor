@@ -182,7 +182,7 @@ describe("CodexSubscriptionClient stream completion validation", () => {
     });
   });
 
-  it("does not execute a tool whose arguments are not valid JSON", async () => {
+  it("marks malformed tool arguments for correction without failing the model stream", async () => {
     const client = clientWith(() => sse([
       {
         type: "response.output_item.done",
@@ -190,10 +190,11 @@ describe("CodexSubscriptionClient stream completion validation", () => {
       },
       { type: "response.completed", response: { usage: { input_tokens: 0, output_tokens: 0 } } },
     ]));
-    await expect(collect(client)).rejects.toMatchObject({
-      name: "ModelRequestFailure",
-      info: { kind: "protocol", retryable: false },
+    const events = await collect(client);
+    expect(events.find((event) => event.type === "tool_use_start")).toMatchObject({
+      toolUse: { id: "call_1", name: "Read", inputError: { reason: "invalid_json" } },
     });
+    expect(events.at(-1)).toMatchObject({ type: "complete", stopReason: "tool_use" });
   });
 
   it("surfaces response.failed as a non-retryable server failure", async () => {

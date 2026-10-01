@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { ToolDefinition, ToolResult } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
-import { FileNotFoundError, fileOperationsFor } from "./operations.js";
+import { isFileNotFoundError, fileOperationsFor } from "./operations.js";
 import { managedPersistencePathKind } from "./managed-persistence-path.js";
 import { isSystemPath } from "./file-mutation-guard.js";
 
@@ -140,7 +140,7 @@ export const fileWriteTool: ToolDefinition = {
         }
         existing = await operations.readBytes(filePath);
       } catch (error) {
-        if (!(error instanceof FileNotFoundError)) throw error;
+        if (!isFileNotFoundError(error)) throw error;
       }
 
       if (!existing) {

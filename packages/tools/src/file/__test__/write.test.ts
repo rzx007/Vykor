@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { join, resolve } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { fileWriteTool } from "../write.js";
+import { FileNotFoundError, HostFileOperations } from "../operations.js";
 
 const sha256 = (value: string) =>
   createHash("sha256").update(Buffer.from(value, "utf8")).digest("hex");
@@ -44,6 +45,42 @@ describe("fileWriteTool feedback", () => {
 });
 
 describe("fileWriteTool safety", () => {
+  it("creates a file when the environment's filesystem comes from another module instance", async () => {
+    await withTempDir(async (dir) => {
+      vi.resetModules();
+      const duplicate = await import("../operations.js");
+      expect(duplicate.FileNotFoundError).not.toBe(FileNotFoundError);
+      const file = join(dir, "new.txt");
+      const result = await fileWriteTool.execute({ file_path: file, content: "created across modules" }, {
+        cwd: dir,
+        environment: {
+          files: new duplicate.HostFileOperations(),
+          paths: { resolve: async (path: string) => ({ executionPath: resolve(dir, path), mountMode: "rw" }) },
+        },
+      } as any);
+      expect(result).toMatchObject({ executionState: "completed" });
+      expect(await readFile(file, "utf8")).toBe("created across modules");
+    });
+  });
+
+  it("does not treat permission errors as permission to create a missing file", async () => {
+    await withTempDir(async (dir) => {
+      class DeniedFiles extends HostFileOperations {
+        async stat(): Promise<never> { throw Object.assign(new Error("denied"), { code: "EACCES" }); }
+      }
+      const file = join(dir, "denied.txt");
+      const result = await fileWriteTool.execute({ file_path: file, content: "must not write" }, {
+        cwd: dir,
+        environment: {
+          files: new DeniedFiles(),
+          paths: { resolve: async (path: string) => ({ executionPath: resolve(dir, path), mountMode: "rw" }) },
+        },
+      } as any);
+      expect(result.isError).toBe(true);
+      await expect(readFile(file)).rejects.toMatchObject({ code: "ENOENT" });
+    });
+  });
+
   it("creates a new file with parent directories", async () => {
     await withTempDir(async (dir) => {
       const file = join(dir, "nested", "deep", "new.txt");

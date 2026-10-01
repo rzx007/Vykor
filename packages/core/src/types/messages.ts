@@ -77,6 +77,14 @@ export interface ToolUseBlock {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** Unparsed input uses an empty placeholder and must never reach tool execution. */
+  inputError?: {
+    reason: "invalid_json" | "invalid_shape";
+    /** Character count, not a copy of potentially sensitive file content. */
+    argumentLength: number;
+    position?: number;
+    stopReason?: string;
+  };
 }
 
 export type ContentBlock = TextBlock | ImageBlock;

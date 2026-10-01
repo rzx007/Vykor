@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/core";
+import type { ToolDefinition, ToolResult } from "@vykor/core";
 import {
   shellResultMetadata,
   type ShellDescriptor,
@@ -40,8 +40,14 @@ export function createShellTool(
     },
     async execute(input, context) {
       const command = typeof input.command === "string" ? input.command.trim() : "";
+      const descriptor = context.environment?.info.shellDescriptor ?? shell;
       const hasExplicitTimeout = input.timeout !== undefined;
-      if (command && !hasExplicitTimeout && shouldCreateBackgroundShell(command, context)) {
+      const background = Boolean(command && !hasExplicitTimeout && shouldCreateBackgroundShell(command, context));
+      if (descriptor || background) {
+        const error = shellCommandSyntaxError(command, descriptor);
+        if (error) return error;
+      }
+      if (background) {
         try {
           const requestedCwd = typeof input.workdir === "string" && input.workdir.trim()
             ? input.workdir.trim()
@@ -150,20 +156,6 @@ async function executeInEnvironment(
   }
   const environment = context.environment!;
   const descriptor = environment.info.shellDescriptor;
-  const shell = descriptorHostLauncher(descriptor);
-  const problems = diagnoseShellDialectMismatch(command, shell);
-  if (problems.length > 0) {
-    return {
-      content: [{
-        type: "text" as const,
-        text: formatShellDialectMismatch({ shell, problems }),
-      }],
-      isError: true,
-      failureKind: "invalid_input" as const,
-      executionState: "not_started" as const,
-      metadata: shellResultMetadata(descriptor, null, "failed"),
-    };
-  }
   const rawWorkdir = typeof input.workdir === "string" && input.workdir.trim()
     ? input.workdir.trim()
     : environment.workspace.executionRoot;
@@ -260,12 +252,13 @@ export const shellTool: ToolDefinition = createShellTool();
 
 export function createShellDescription(shell?: ShellDescriptor): string {
   const background = "For long-running commands such as dev servers, watchers, installs, builds, migrations, docker compose, or commands likely to take more than a brief moment, use BackgroundShellCreate and then JobWait or JobRead.";
+  const powershellQuoting = "This tool already runs PowerShell: execute scripts directly. If another powershell/pwsh process is needed, use a single-quoted -Command script or a script block; double-quoted scripts expand $variables in the outer shell. A here-string opener (@' or @\") must be followed by a newline before any content; put its matching terminator ('@ or \"@) on its own line.";
   if (!shell) return `Execute a short-lived command using the execution environment's resolved shell. ${background}`;
   if (shell.dialect === "windows-powershell") {
-    return `Execute a short-lived command with ${shell.displayName}. Use PowerShell syntax and Windows paths. Prefer native PowerShell pipelines such as Get-Content -Raw -Encoding UTF8 -LiteralPath and ConvertFrom-Json for object and JSON processing. ConvertFrom-Json does not support -Depth in Windows PowerShell 5.1. Use curl.exe when the native curl executable is intended. Avoid embedding multiline programs in python -c. Do not use Bash heredoc syntax; use a PowerShell here-string piped to python - when multiline Python is unavoidable. ${background}`;
+    return `Execute a short-lived command with ${shell.displayName}. Use PowerShell syntax and Windows paths. ${powershellQuoting} Prefer native PowerShell pipelines such as Get-Content -Raw -Encoding UTF8 -LiteralPath and ConvertFrom-Json for object and JSON processing. ConvertFrom-Json does not support -Depth in Windows PowerShell 5.1. Use curl.exe when the native curl executable is intended. Avoid embedding multiline programs in python -c. Do not use Bash heredoc syntax; use a PowerShell here-string piped to python - when multiline Python is unavoidable. ${background}`;
   }
   if (shell.dialect === "pwsh") {
-    return `Execute a short-lived command with ${shell.displayName}. Use PowerShell syntax and ${shell.pathStyle} paths. Prefer native PowerShell pipelines such as Get-Content -Raw -LiteralPath and ConvertFrom-Json for object and JSON processing. PowerShell 7 supports && and ||. Avoid embedding multiline programs in python -c. Do not use Bash heredoc syntax. ${background}`;
+    return `Execute a short-lived command with ${shell.displayName}. Use PowerShell syntax and ${shell.pathStyle} paths. ${powershellQuoting} Prefer native PowerShell pipelines such as Get-Content -Raw -LiteralPath and ConvertFrom-Json for object and JSON processing. PowerShell 7 supports && and ||. Avoid embedding multiline programs in python -c. Do not use Bash heredoc syntax. ${background}`;
   }
   if (shell.dialect === "cmd") {
     return `Execute a short-lived command with Command Prompt. Use cmd.exe syntax and Windows paths. ${background}`;
@@ -304,6 +297,20 @@ export interface ShellDialectProblem {
 export interface ShellDialectMismatch {
   shell: HostShellLauncher;
   problems: ShellDialectProblem[];
+}
+
+/** Shared by short commands and detached jobs; no process has started here. */
+export function shellCommandSyntaxError(command: string, descriptor?: ShellDescriptor): ToolResult | undefined {
+  const shell = descriptor ? descriptorHostLauncher(descriptor) : resolveHostShellLauncher();
+  const problems = diagnoseShellDialectMismatch(command, shell);
+  if (problems.length === 0) return undefined;
+  return {
+    content: [{ type: "text", text: formatShellDialectMismatch({ shell, problems }) }],
+    isError: true,
+    failureKind: "invalid_input",
+    executionState: "not_started",
+    ...(descriptor ? { metadata: shellResultMetadata(descriptor, null, "failed") } : {}),
+  };
 }
 
 export function diagnoseShellDialectMismatch(
@@ -438,6 +445,32 @@ export function diagnoseShellDialectMismatch(
       suggestion: check.suggestion,
     });
   }
+  if (shell.kind === "powershell") problems.push(...diagnosePowerShellQuoting(command));
+  return problems;
+}
+
+/** Check the observed quoting mistakes, skipping quoted examples and here-string bodies. */
+function diagnosePowerShellQuoting(command: string): ShellDialectProblem[] {
+  const problems: ShellDialectProblem[] = [];
+  const tokens = /<#[\s\S]*?#>|(?<![^\s;|&({])#[^\r\n]*|@(?<hereQuote>['"])[^\S\r\n]*\r?\n[\s\S]*?^\k<hereQuote>@|(?:\b(?:powershell|pwsh)(?:\.exe)?|"(?:[^"\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?"|'(?:[^'\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?')\s+(?:-(?:NoLogo|NoProfile|NonInteractive)\s+)*-(?:Command|c)\s+"(?<nestedScript>(?:`[\s\S]|""|[^"`])*)"|(?<badHeader>@['"][^\r\n])|'(?:[^']|'')*'|"(?:`[\s\S]|""|[^"`])*"|`[\s\S]/gim;
+  for (const token of command.matchAll(tokens)) {
+    if (token.groups?.badHeader && !problems.some((problem) => problem.code === "powershell-here-string-header")) {
+      problems.push({
+        code: "powershell-here-string-header",
+        message: "puts content on the opening line of a PowerShell here-string.",
+        suggestion: "Insert a newline immediately after @' or @\"; place the matching terminator on its own line.",
+      });
+    }
+    const script = token.groups?.nestedScript;
+    if (script !== undefined && [...script.matchAll(/`[\s\S]|(\$(?:[A-Za-z_]|\{|\())/g)].some((match) => match[1])) {
+      if (problems.some((problem) => problem.code === "powershell-nested-expansion")) continue;
+      problems.push({
+        code: "powershell-nested-expansion",
+        message: "wraps a variable-containing PowerShell script in a double-quoted -Command argument; the outer shell expands those variables first.",
+        suggestion: "Run the script directly in this PowerShell tool, or use a single-quoted -Command script / script block for the child process.",
+      });
+    }
+  }
   return problems;
 }
 
@@ -451,7 +484,7 @@ function diagnoseShellCommand(
 
 function formatShellDialectMismatch(mismatch: ShellDialectMismatch): string {
   const lines = [
-    `Shell dialect mismatch: the active shell is ${describeHostShellLauncher(mismatch.shell)}, but this command uses syntax from another shell.`,
+    `Shell dialect mismatch or syntax error: the active shell is ${describeHostShellLauncher(mismatch.shell)}.`,
     "",
     "Problems:",
   ];

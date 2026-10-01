@@ -9,7 +9,6 @@ import type {
 import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import {
-  protocolFailure,
   streamIncompleteFailure,
   toModelRequestFailure,
 } from "../errors/index";
@@ -25,6 +24,7 @@ import {
   replaceMissingToolResultImages,
 } from "./native-image-payload.js";
 import { extractThinkBlocks } from "./think-blocks.js";
+import { parseToolInput } from "./tool-input.js";
 
 // Model families that reject `max_tokens` and require `max_completion_tokens`.
 const MAX_COMPLETION_TOKEN_MODEL_PREFIXES = ["gpt-5", "o1", "o3", "o4"];
@@ -324,24 +324,11 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
     for (const [, tc] of collectedToolCalls) {
       if (!tc.name) continue;
       nativeToolUseCount++;
-      let input: Record<string, unknown>;
-      if (!tc.arguments) {
-        input = {};
-      } else {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(tc.arguments);
-        } catch {
-          throw protocolFailure(`OpenAI 工具调用参数不是合法 JSON（tool=${tc.name}）`);
-        }
-        input =
-          parsed && typeof parsed === "object" && !Array.isArray(parsed)
-            ? (parsed as Record<string, unknown>)
-            : {};
-      }
+      const parsed = parseToolInput(tc.arguments);
+      if (parsed.inputError) parsed.inputError.stopReason = finishReason;
       yield {
         type: "tool_use_start",
-        toolUse: { type: "tool_use", id: tc.id, name: tc.name, input },
+        toolUse: { type: "tool_use", id: tc.id, name: tc.name, ...parsed },
       };
     }
 

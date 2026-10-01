@@ -2,7 +2,7 @@ import { extname, posix, win32 } from "node:path";
 import type { ToolDefinition } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
-import { FileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
+import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
 import { decodeUtf8Text } from "./text-content.js";
 
 export { BINARY_CONTROL_RATIO, BINARY_SAMPLE_CHARS, isBinaryContent } from "./text-content.js";
@@ -337,8 +337,7 @@ async function describeMissingPath(
     };
   }
 
-  const missing = statError instanceof FileNotFoundError ||
-    (statError !== null && typeof statError === "object" && "code" in statError && statError.code === "ENOENT");
+  const missing = isFileNotFoundError(statError);
   return {
     content: [{
       type: "text",

@@ -54,6 +54,41 @@ describe("diagnoseShellDialectMismatch", () => {
     expect(diagnoseShellDialectMismatch("git status && git diff", pwsh)).toEqual([]);
   });
 
+  it.each([
+    'powershell -Command "$s=1; Write-Output $s"',
+    'powershell.exe -NoProfile -Command "$chars=\'abc\'; Write-Output $chars"',
+    'pwsh -NoLogo -Command "$s=1; Write-Output $s"',
+    '& "powershell.exe" -Command "$s=1; Write-Output $s"',
+    '& \'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\' -Command "$s=1; Write-Output $s"',
+    'powershell -Command "Write-Output ""hello""; $s=1; Write-Output $s"',
+    'Write-Output foo#bar; powershell -Command "$s=1; Write-Output $s"',
+  ])("flags variables expanded by an outer PowerShell command: %s", (command) => {
+    expect(diagnoseShellDialectMismatch(command, powershell).map((problem) => problem.code))
+      .toContain("powershell-nested-expansion");
+  });
+
+  it.each([
+    "@'{\n  value\n'@",
+    "$code = @'print('hello')\n'@\n$code | python -",
+    '@"hello\n"@',
+  ])("flags content on a PowerShell here-string opening line: %s", (command) => {
+    expect(diagnoseShellDialectMismatch(command, powershell).map((problem) => problem.code))
+      .toContain("powershell-here-string-header");
+  });
+
+  it.each([
+    "$s = 'abc'; Write-Output $s.Length",
+    "powershell -Command '$s=1; Write-Output $s'",
+    'powershell -Command "`$s=1; Write-Output `$s"',
+    "$code = @'\nprint('hello')\n'@\n$code | python -",
+    "Write-Output 'Example: powershell -Command \"$s=1\"'",
+    '# powershell -Command "$s=1"',
+    'Write-Output "literal; powershell -Command ""$s=1"""',
+    "$code = @'\npowershell -Command \"$s=1\"\n@'{\n'@\n$code | python -",
+  ])("allows correctly quoted PowerShell and literal code examples: %s", (command) => {
+    expect(diagnoseShellDialectMismatch(command, powershell)).toEqual([]);
+  });
+
   it("describes PowerShell 5.1 JSON and UTF-8 constraints", async () => {
     const { createShellDescription } = await import("./shell.js");
     const description = createShellDescription({

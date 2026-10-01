@@ -1,4 +1,4 @@
-import { resolveSandboxPolicy, type HostShellLauncher } from "@vykor/sandbox";
+import { resolveHostShellLauncher, resolveSandboxPolicy, type HostShellLauncher } from "@vykor/sandbox";
 import { describe, expect, it, vi } from "vitest";
 import { createShellTool as createBashTool } from "../shell.js";
 import type {
@@ -12,6 +12,31 @@ import type {
 const posixShell: HostShellLauncher = { kind: "posix-sh" };
 
 describe("createBashTool", () => {
+  it.skipIf(resolveHostShellLauncher().kind !== "powershell")("checks the host shell before automatically creating a background job", async () => {
+    let launches = 0;
+    const tool = createBashTool(fakeExecutor(result()));
+    const feedback = await tool.execute({ command: 'powershell -Command "$s=1; npm install"' }, {
+      cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
+      backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
+    });
+    expect(feedback).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+    expect(launches).toBe(0);
+  });
+
+  it.each([
+    'powershell -Command "$s=1; Write-Output $s"',
+    "$code = @'print('hello')\n'@\n$code | python -",
+  ])("rejects broken PowerShell syntax before executing: %s", async (command) => {
+    let executions = 0;
+    const executor: ShellExecutor = {
+      async resolve(request) { return spec({ command: request.command, hostShell: { kind: "powershell", bin: "powershell.exe" } }); },
+      async run() { executions++; return result(); },
+    };
+    const feedback = await createBashTool(executor).execute({ command }, { cwd: process.cwd() });
+    expect(feedback).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+    expect(executions).toBe(0);
+  });
+
   it("keeps a legacy failed command with null exit code unknown", async () => {
     const tool = createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: null, output: "partial diagnostic" })));
     const feedback = await tool.execute({ command: "inspect" }, { cwd: process.cwd() });

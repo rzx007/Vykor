@@ -8,11 +8,11 @@ import { AnthropicClient } from "./anthropic.js";
 describe("AnthropicClient cancellation", () => {
   it("emits cumulative partial usage before a disconnect", async () => {
     const client = new AnthropicClient({ apiKey: "test" } as any);
-    (client as any).client = { messages: { stream: () => ({
+    (client as any).client = { messages: { create: () => ({
       async *[Symbol.asyncIterator]() {
         yield { type: "message_start", message: { usage: { input_tokens: 9, output_tokens: 0 } } };
-        yield { type: "message_delta", usage: { output_tokens: 3 } };
-        yield { type: "message_delta", usage: { output_tokens: 5 } };
+        yield { type: "message_delta", delta: { stop_reason: null, stop_sequence: null }, usage: { output_tokens: 3 } };
+        yield { type: "message_delta", delta: { stop_reason: null, stop_sequence: null }, usage: { output_tokens: 5 } };
         throw new Error("disconnect");
       },
     }) } };
@@ -41,14 +41,10 @@ describe("AnthropicClient cancellation", () => {
           });
           throw interrupted;
         },
-        finalMessage: async () => ({
-          usage: { input_tokens: 0, output_tokens: 0 },
-          stop_reason: "end_turn",
-        }),
       };
     });
     const client = new AnthropicClient({ apiKey: "test", baseURL: undefined } as any);
-    (client as any).client = { messages: { stream } };
+    (client as any).client = { messages: { create: stream } };
 
     let rejection: unknown;
     const run = (async () => {
@@ -80,7 +76,7 @@ describe("AnthropicClient cancellation", () => {
       throw retryable;
     });
     const client = new AnthropicClient({ apiKey: "test", baseURL: undefined } as any);
-    (client as any).client = { messages: { stream } };
+    (client as any).client = { messages: { create: stream } };
 
     let caught: any;
     try {
@@ -124,13 +120,9 @@ describe("AnthropicClient native image input", () => {
         async *[Symbol.asyncIterator]() {
           yield { type: "message_stop" };
         },
-        finalMessage: async () => ({
-          usage: { input_tokens: 0, output_tokens: 0 },
-          stop_reason: "end_turn",
-        }),
       }));
       const client = new AnthropicClient({ apiKey: "test" } as any);
-      (client as any).client = { messages: { stream } };
+      (client as any).client = { messages: { create: stream } };
 
       for await (const _ of client.streamMessage({
         model: "claude-test",
@@ -188,7 +180,7 @@ describe("AnthropicClient native image input", () => {
   it("does not call Anthropic when image conversion fails", async () => {
     const stream = vi.fn();
     const client = new AnthropicClient({ apiKey: "test" } as any);
-    (client as any).client = { messages: { stream } };
+    (client as any).client = { messages: { create: stream } };
 
     await expect(async () => {
       for await (const _ of client.streamMessage({
@@ -217,13 +209,9 @@ describe("AnthropicClient native image input", () => {
         async *[Symbol.asyncIterator]() {
           yield { type: "message_stop" };
         },
-        finalMessage: async () => ({
-          usage: { input_tokens: 0, output_tokens: 0 },
-          stop_reason: "end_turn",
-        }),
       }));
       const client = new AnthropicClient({ apiKey: "test" } as any);
-      (client as any).client = { messages: { stream } };
+      (client as any).client = { messages: { create: stream } };
 
       for await (const _ of client.streamMessage({
         model: "claude-test",

@@ -51,6 +51,7 @@ import {
 const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
 const RECOVERY_TOOL_TURNS = 2;
+const TOOL_INPUT_CORRECTIONS = 2;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =
@@ -298,6 +299,7 @@ export class QueryEngine implements IQueryEngine {
         : (this.options.trajectoryTrackerFactory?.() ?? new DefaultTrajectoryTracker());
     const trajectoryControl = createTrajectoryLoopControl();
     let recoveryToolTurnsRemaining: number | null = null;
+    let consecutiveInvalidInputTurns = 0;
     let forceFinalResponse = false;
     let childFinalizing = false;
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
@@ -544,10 +546,15 @@ export class QueryEngine implements IQueryEngine {
 
         toolUses = attemptToolUses;
         this.settleModelAttempt(attemptUsage, false);
-        if (childFinalizing && toolUses.length > 0) {
+        if (forcedFinalTurn && toolUses.length > 0) {
           // A provider can still emit a tool call when tools were omitted.
           // Reject it before recording an unexecuted call as committed history.
-          throw new MaxTurnsExceeded(maxTurnsLimit());
+          yield attemptFinishedEvent(generationId, attempt, "failed", attemptUsage);
+          if (childFinalizing) throw new MaxTurnsExceeded(maxTurnsLimit());
+          throw new ModelRequestFailure(
+            "模型在停止工具调用后仍返回了工具请求，本次请求未执行",
+            { kind: "protocol", phase: "stream", retryable: false },
+          );
         }
         for (const toolUse of toolUses) {
           yield { type: "tool_use_start", toolUse };
@@ -599,7 +606,7 @@ export class QueryEngine implements IQueryEngine {
           // the "new evidence unlocks a retry" contract whenever the evidence arrives earlier
           // in the same batch — leaving the recovered call blocked and burning the recovery
           // budget until the engine forces a blocker report.
-          if (result.isError && !recoveryGuard && (!tool || tool.safeToRetry !== true)) {
+          if (result.isError && !toolUse.inputError && !recoveryGuard && (!tool || tool.safeToRetry !== true)) {
             failedToolCalls.recordFailure(toolUse.name, toolUse.input);
           }
           if (recoveryGuard) {
@@ -619,6 +626,10 @@ export class QueryEngine implements IQueryEngine {
         // Evaluate the whole batch so a successful alternative cancels recovery
         // regardless of whether it appears before or after a rejected retry.
         if (results.some((result) => !result.isError)) recoveryToolTurnsRemaining = null;
+        // Count failed correction turns, even if raw arguments or sibling calls change.
+        consecutiveInvalidInputTurns = results.some((result) => result.failureKind === "invalid_input")
+          ? consecutiveInvalidInputTurns + 1 : 0;
+        if (consecutiveInvalidInputTurns > TOOL_INPUT_CORRECTIONS) forceFinalResponse = true;
         // Single removable integration point: commenting out this statement disables trajectory decisions.
         applyTrajectoryTracker(
           trajectoryTracker,
@@ -644,7 +655,8 @@ export class QueryEngine implements IQueryEngine {
         }
         if (turnCount >= maxTurnsLimit()) {
           options.execution?.closeSteering();
-          if (!forcedFinalTurn && recoveryToolTurnsRemaining !== null) {
+          if (!forcedFinalTurn && (recoveryToolTurnsRemaining !== null
+            || (hardMaxTurns === undefined && consecutiveInvalidInputTurns > 0))) {
             // Keep the root recovery path's existing blocker-report behavior.
             forceFinalResponse = true;
             continue;

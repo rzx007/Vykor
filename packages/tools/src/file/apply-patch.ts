@@ -6,7 +6,7 @@ import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { isSystemPath } from "./file-mutation-guard.js";
 import { managedPersistencePathKind } from "./managed-persistence-path.js";
-import { FileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
+import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
 import {
   isDevNullPath,
   normalizePatchPath,
@@ -116,7 +116,7 @@ async function statExists(operations: FileOperations, executionPath: string): Pr
     await operations.stat(executionPath);
     return true;
   } catch (error) {
-    if (error instanceof FileNotFoundError) return false;
+    if (isFileNotFoundError(error)) return false;
     throw error;
   }
 }
@@ -130,7 +130,7 @@ async function readExisting(
   try {
     item = await operations.stat(executionPath);
   } catch (error) {
-    if (error instanceof FileNotFoundError) {
+    if (isFileNotFoundError(error)) {
       throw new PatchToolError("invalid_input", `Patch target does not exist: ${label}`);
     }
     throw error;
@@ -377,7 +377,7 @@ export async function executePatchPlan(plan: PatchPlan, operations: FileOperatio
       }
       current = await operations.readBytes(change.executionPath);
     } catch (error) {
-      if (error instanceof FileNotFoundError) {
+      if (isFileNotFoundError(error)) {
         throw new PatchToolError(
           "invalid_input",
           `Patch target changed or disappeared before writing: ${change.relativePath}`,

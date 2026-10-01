@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { resolveHostShellLauncher } from "@vykor/sandbox";
 
 import { backgroundShellCreateTool, createBackgroundShellTool } from "../background-shell-tools.js";
 
@@ -11,6 +12,27 @@ const shellDescriptor = {
 } as const;
 
 describe("BackgroundShellCreate", () => {
+  it.skipIf(resolveHostShellLauncher().kind !== "powershell")("checks the default host shell when no descriptor is supplied", async () => {
+    let launches = 0;
+    const result = await backgroundShellCreateTool.execute({ description: "install", command: 'powershell -Command "$s=1; npm install"' }, {
+      cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
+      backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
+    });
+    expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+    expect(launches).toBe(0);
+  });
+
+  it("rejects variable expansion mistakes before launching a background PowerShell job", async () => {
+    let launches = 0;
+    const tool = createBackgroundShellTool(shellDescriptor);
+    const result = await tool.execute({ description: "install", command: 'powershell -Command "$s=1; npm install"' }, {
+      cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
+      backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
+    });
+    expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+    expect(launches).toBe(0);
+  });
+
   it("is discoverable for long-running bash or shell commands", () => {
     expect(backgroundShellCreateTool.description).toMatch(/long-running/i);
     expect(backgroundShellCreateTool.description).toMatch(/bash|shell/i);

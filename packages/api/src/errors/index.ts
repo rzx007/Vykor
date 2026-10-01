@@ -337,7 +337,7 @@ export function toModelRequestFailure(
   return new ModelRequestFailure(display, info, error);
 }
 
-/** 生成一个明确的、不可重试的协议错误（例如无法解析工具参数）。 */
+/** 生成一个明确的、不可重试的响应协议错误；工具参数错误通过工具反馈恢复。 */
 export function protocolFailure(message: string): ModelRequestFailure {
   return new ModelRequestFailure(message, {
     kind: "protocol",

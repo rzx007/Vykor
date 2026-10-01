@@ -23,6 +23,23 @@ export function prepareToolCalls(
   for (let i = 0; i < toolUses.length; i++) {
     const toolUse = toolUses[i]!;
 
+    if (toolUse.inputError) {
+      const error = toolUse.inputError;
+      const detail = error.reason === "invalid_json" ? "arguments are not valid JSON" : "arguments must be a JSON object";
+      const position = error.position !== undefined ? `; position=${error.position}` : "";
+      const stopped = error.stopReason ? `; stopReason=${error.stopReason}` : "";
+      results[i] = {
+        toolUseId: toolUse.id,
+        toolName: toolUse.name,
+        content: [{ type: "text", text: `Tool input parsing failed: ${detail}; argumentLength=${error.argumentLength}${position}${stopped}. The tool was not executed. Regenerate complete valid arguments; split large file writes into smaller changes if the output was truncated.` }],
+        isError: true,
+        failureKind: "invalid_input",
+        executionState: "not_started",
+        metadata: { toolInputError: error },
+      };
+      continue;
+    }
+
     if (failedToolCalls?.shouldReplayFailure(toolUse.name, toolUse.input)) {
       results[i] = {
         toolUseId: toolUse.id,

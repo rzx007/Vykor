@@ -1,4 +1,4 @@
-import type { ContentBlock } from "./messages";
+import type { ContentBlock, ToolUseBlock } from "./messages";
 import type { AssistantMessagePhase } from "./messages";
 import type { UsageSnapshot } from "./usage";
 import type {
@@ -23,12 +23,7 @@ export interface ReasoningDeltaEvent {
 
 export interface ToolUseStartEvent {
   type: "tool_use_start";
-  toolUse: {
-    type: "tool_use";
-    id: string;
-    name: string;
-    input: Record<string, unknown>;
-  };
+  toolUse: ToolUseBlock;
 }
 
 export interface ToolUseEndEvent {

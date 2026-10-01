@@ -41,10 +41,16 @@ export interface GrepOptions {
  * 权限、目录误用和其它 I/O 错误必须保持原错误类型，绝不能伪装成不存在。
  */
 export class FileNotFoundError extends Error {
+  readonly code = "ENOENT";
   constructor(readonly path: string) {
     super(`Path not found: ${path}`);
     this.name = "FileNotFoundError";
   }
+}
+
+/** Bundles may contain two copies of this class; use the stable filesystem code. */
+export function isFileNotFoundError(error: unknown): boolean {
+  return error instanceof FileNotFoundError || isEnoent(error);
 }
 
 function isEnoent(error: unknown): boolean {

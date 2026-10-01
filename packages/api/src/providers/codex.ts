@@ -6,6 +6,7 @@ import type {
   StreamingMessageClient,
   StreamMessageParams,
   ToolDefinition,
+  ToolUseBlock,
 } from "@vykor/core";
 import { assertNativeImageMediaType, type ProviderConfig } from "./registry";
 import {
@@ -15,6 +16,7 @@ import {
   toModelRequestFailure,
 } from "../errors/index";
 import { createRequestLifecycle } from "./retry";
+import { parseToolInput } from "./tool-input.js";
 import { ModelRequestFailure } from "@vykor/core";
 import {
   prepareNativeImagePayload,
@@ -131,7 +133,7 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
         );
       }
 
-      const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+      const toolCalls: ToolUseBlock[] = [];
       const outputPhases = new Map<string, "commentary" | "final_answer">();
       let stopReason = "end_turn";
       let completed = false;
@@ -171,9 +173,10 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
             const name = typeof item.name === "string" ? item.name : "";
             if (!callId || !name) continue;
             toolCalls.push({
+              type: "tool_use",
               id: callId,
               name,
-              input: parseArguments(item.arguments, name),
+              ...parseToolInput(item.arguments),
             });
           } else if (eventType === "response.completed") {
             completed = true;
@@ -203,9 +206,10 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
       }
 
       for (const toolUse of toolCalls) {
+        if (toolUse.inputError) toolUse.inputError.stopReason = incompleteReason ?? stopReason;
         yield {
           type: "tool_use_start",
-          toolUse: { type: "tool_use", ...toolUse },
+          toolUse,
         };
       }
 
@@ -403,17 +407,6 @@ function* drainSseBuffer(
     }
   }
   setBuffer(buffer.slice(cursor));
-}
-
-function parseArguments(value: unknown, toolName: string): Record<string, unknown> {
-  if (typeof value !== "string" || !value) return {};
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    throw protocolFailure(`Codex 工具调用参数不是合法 JSON（tool=${toolName}）`);
-  }
-  return isRecord(parsed) ? parsed : {};
 }
 
 function readIncompleteReason(event: Record<string, unknown>): string | undefined {

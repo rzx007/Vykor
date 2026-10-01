@@ -6,6 +6,7 @@ import type {
   Message,
   ToolDefinition,
   ContentBlock,
+  ToolUseBlock,
 } from "@vykor/core";
 import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
 import {
@@ -14,11 +15,11 @@ import {
   type ProviderConfig,
 } from "./registry";
 import {
-  protocolFailure,
   streamIncompleteFailure,
   toModelRequestFailure,
 } from "../errors/index";
 import { createRequestLifecycle } from "./retry";
+import { parseToolInput } from "./tool-input.js";
 import {
   prepareNativeImagePayload,
   prepareUserContentWithVisionImages,
@@ -58,15 +59,18 @@ export class AnthropicClient implements StreamingMessageClient {
     });
 
     try {
-      let stream: ReturnType<Anthropic["messages"]["stream"]>;
+      // The high-level MessageStream parses partial tool JSON before emitting it.
+      // Read raw events so malformed arguments can reach our recovery boundary.
+      let stream: AsyncIterable<Anthropic.MessageStreamEvent>;
       try {
-        stream = this.client.messages.stream({
+        stream = await this.client.messages.create({
           model: params.model,
           messages,
           system: params.system,
           tools: tools?.length ? tools : undefined,
           max_tokens: params.maxTokens ?? DEFAULT_OUTPUT_TOKEN_MAX,
           temperature: params.temperature,
+          stream: true,
         }, {
           signal: lifecycle.signal,
         });
@@ -74,10 +78,11 @@ export class AnthropicClient implements StreamingMessageClient {
         throw this.failModelRequest(error, "request", lifecycle, params.abortSignal);
       }
 
-      const toolInputBuffers: Map<number, { id: string; name: string; partialJson: string }> =
+      const toolInputBuffers: Map<number, { id: string; name: string; initialInput: unknown; partialJson: string }> =
         new Map();
-      const completedToolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+      const completedToolUses: ToolUseBlock[] = [];
       let sawMessageStop = false;
+      let stopReason: string = "end_turn";
       let usage: { inputTokens: number; outputTokens: number; cacheCreationTokens?: number; cacheReadTokens?: number } | undefined;
 
       lifecycle.markStreamStarted();
@@ -95,9 +100,12 @@ export class AnthropicClient implements StreamingMessageClient {
               cacheReadTokens: current.cache_read_input_tokens ?? undefined,
             };
             yield { type: "usage", usage };
-          } else if (event.type === "message_delta" && usage) {
-            usage = { ...usage, outputTokens: event.usage.output_tokens };
-            yield { type: "usage", usage };
+          } else if (event.type === "message_delta") {
+            if (event.delta.stop_reason) stopReason = event.delta.stop_reason;
+            if (usage) {
+              usage = { ...usage, outputTokens: event.usage.output_tokens };
+              yield { type: "usage", usage };
+            }
           } else if (
             event.type === "content_block_delta" &&
             event.delta.type === "text_delta"
@@ -110,6 +118,7 @@ export class AnthropicClient implements StreamingMessageClient {
             toolInputBuffers.set(event.index, {
               id: event.content_block.id,
               name: event.content_block.name,
+              initialInput: event.content_block.input,
               partialJson: "",
             });
           } else if (
@@ -124,9 +133,10 @@ export class AnthropicClient implements StreamingMessageClient {
             const buf = toolInputBuffers.get(event.index);
             if (buf) {
               completedToolUses.push({
+                type: "tool_use",
                 id: buf.id,
                 name: buf.name,
-                input: parseToolInput(buf),
+                ...parseToolInput(buf.partialJson || JSON.stringify(buf.initialInput)),
               });
               toolInputBuffers.delete(event.index);
             }
@@ -140,30 +150,15 @@ export class AnthropicClient implements StreamingMessageClient {
         throw streamIncompleteFailure("Anthropic 流在收到 message_stop 前结束");
       }
 
-      let final: Awaited<ReturnType<typeof stream.finalMessage>>;
-      try {
-        final = await stream.finalMessage();
-      } catch (error) {
-        throw this.failModelRequest(error, "stream", lifecycle, params.abortSignal);
-      }
-
       for (const toolUse of completedToolUses) {
+        if (toolUse.inputError) toolUse.inputError.stopReason = stopReason;
         yield {
           type: "tool_use_start",
-          toolUse: { type: "tool_use", id: toolUse.id, name: toolUse.name, input: toolUse.input },
+          toolUse,
         };
       }
 
-      yield {
-        type: "usage",
-        usage: {
-          inputTokens: final.usage.input_tokens,
-          outputTokens: final.usage.output_tokens,
-          cacheCreationTokens: final.usage.cache_creation_input_tokens ?? undefined,
-          cacheReadTokens: final.usage.cache_read_input_tokens ?? undefined,
-        },
-      };
-      yield { type: "complete", stopReason: final.stop_reason ?? "end_turn" };
+      yield { type: "complete", stopReason };
     } finally {
       lifecycle.dispose();
     }
@@ -251,19 +246,6 @@ export class AnthropicClient implements StreamingMessageClient {
       input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
     };
   }
-}
-
-function parseToolInput(buf: { name: string; partialJson: string }): Record<string, unknown> {
-  if (!buf.partialJson) return {};
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(buf.partialJson);
-  } catch {
-    throw protocolFailure(`Anthropic 工具调用参数不是合法 JSON（tool=${buf.name}）`);
-  }
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as Record<string, unknown>)
-    : {};
 }
 
 export async function convertUserContentToAnthropic(
