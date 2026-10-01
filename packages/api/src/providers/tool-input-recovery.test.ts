@@ -96,15 +96,18 @@ describe("native tool input recovery", () => {
       client = openAIClient(() => [{ name: "Write", arguments: raw }]);
     } else if (provider === "anthropic") {
       client = new AnthropicClient({ apiKey: "test" });
-      (client as any).client = { messages: { create: () => ({
-        async *[Symbol.asyncIterator]() {
-          yield { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "call_1", name: "Write" } };
-          yield { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: raw } };
-          yield { type: "content_block_stop", index: 0 };
-          yield { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 3 } };
-          yield { type: "message_stop" };
+      (client as any).client = { messages: { create: () => ({ withResponse: async () => ({
+        response: { headers: new Headers() },
+        data: {
+          async *[Symbol.asyncIterator]() {
+            yield { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "call_1", name: "Write" } };
+            yield { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: raw } };
+            yield { type: "content_block_stop", index: 0 };
+            yield { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 3 } };
+            yield { type: "message_stop" };
+          },
         },
-      }) } };
+      }) }) } };
     } else {
       const payload = Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "test" } })).toString("base64url");
       client = new CodexSubscriptionClient({ apiKey: `header.${payload}.sig` });

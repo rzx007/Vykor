@@ -84,10 +84,10 @@ describe("CodexSubscriptionClient phases", () => {
 describe("CodexSubscriptionClient stream completion validation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  function sse(frames: Array<Record<string, unknown>>): Response {
+  function sse(frames: Array<Record<string, unknown>>, headers: Record<string, string> = {}): Response {
     return new Response(
       frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join(""),
-      { status: 200, headers: { "content-type": "text/event-stream" } },
+      { status: 200, headers: { "content-type": "text/event-stream", ...headers } },
     );
   }
 
@@ -108,6 +108,43 @@ describe("CodexSubscriptionClient stream completion validation", () => {
     }
     return events;
   }
+
+  it.each([
+    ["server_error", "server", true], ["rate_limit_exceeded", "rate_limit", true],
+    ["usage_limit_reached", "quota", false], ["invalid_request_error", "invalid_request", false],
+  ])("classifies nested response.failed %s errors", async (code, kind, retryable) => {
+    const client = clientWith(() => sse([
+      { type: "response.failed", request_id: "req-event", response: { error: { code, message: "upstream failed" } } },
+    ]));
+    await expect(collect(client)).rejects.toMatchObject({
+      info: { kind, phase: "stream", retryable, requestId: "req-event" },
+    });
+  });
+
+  it("recognizes an explicit upstream disconnect in a Codex error event", async () => {
+    const client = clientWith(() => sse([
+      { type: "error", message: "Upstream stream terminated unexpectedly before completion" },
+    ]));
+    await expect(collect(client)).rejects.toMatchObject({
+      info: { kind: "stream_incomplete", phase: "stream", retryable: true },
+    });
+  });
+
+  it.each([{ request_id: "req-disconnect" }, { code: "gateway_error" }])("recognizes a disconnect with diagnostic fields %j", async (fields) => {
+    const client = clientWith(() => sse([
+      { type: "error", message: "Upstream stream terminated unexpectedly before completion", ...fields },
+    ]));
+    await expect(collect(client)).rejects.toMatchObject({ info: { kind: "stream_incomplete", retryable: true } });
+  });
+
+  it("preserves response header retry hints on a mid-stream Codex error", async () => {
+    const client = clientWith(() => sse([
+      { type: "error", code: "rate_limit_exceeded", message: "slow down" },
+    ], { "retry-after": "20", "x-request-id": "req-stream-header" }));
+    await expect(collect(client)).rejects.toMatchObject({
+      info: { kind: "rate_limit", retryable: true, retryAfterMs: 20_000, requestId: "req-stream-header" },
+    });
+  });
 
   it("preserves structured quota and retry headers on HTTP errors", async () => {
     const quota = clientWith(() => new Response(JSON.stringify({
@@ -197,13 +234,13 @@ describe("CodexSubscriptionClient stream completion validation", () => {
     expect(events.at(-1)).toMatchObject({ type: "complete", stopReason: "tool_use" });
   });
 
-  it("surfaces response.failed as a non-retryable server failure", async () => {
+  it("surfaces an invalid request as a non-retryable failure", async () => {
     const client = clientWith(() => sse([
       { type: "response.failed", error: { code: "invalid_request", message: "bad" } },
     ]));
     await expect(collect(client)).rejects.toMatchObject({
       name: "ModelRequestFailure",
-      info: { kind: "server", retryable: false },
+      info: { kind: "invalid_request", retryable: false },
     });
   });
 });

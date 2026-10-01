@@ -8,7 +8,7 @@ import type {
   ContentBlock,
   ToolUseBlock,
 } from "@vykor/core";
-import { DEFAULT_OUTPUT_TOKEN_MAX } from "@vykor/core";
+import { DEFAULT_OUTPUT_TOKEN_MAX, ModelRequestFailure } from "@vykor/core";
 import {
   assertNativeImageMediaType,
   type NativeImageMediaType,
@@ -62,8 +62,9 @@ export class AnthropicClient implements StreamingMessageClient {
       // The high-level MessageStream parses partial tool JSON before emitting it.
       // Read raw events so malformed arguments can reach our recovery boundary.
       let stream: AsyncIterable<Anthropic.MessageStreamEvent>;
+      let responseHeaders: unknown;
       try {
-        stream = await this.client.messages.create({
+        const result = await this.client.messages.create({
           model: params.model,
           messages,
           system: params.system,
@@ -73,7 +74,9 @@ export class AnthropicClient implements StreamingMessageClient {
           stream: true,
         }, {
           signal: lifecycle.signal,
-        });
+        }).withResponse();
+        stream = result.data;
+        responseHeaders = result.response.headers;
       } catch (error) {
         throw this.failModelRequest(error, "request", lifecycle, params.abortSignal);
       }
@@ -143,7 +146,7 @@ export class AnthropicClient implements StreamingMessageClient {
           }
         }
       } catch (error) {
-        throw this.failModelRequest(error, "stream", lifecycle, params.abortSignal);
+        throw this.failModelRequest(error, "stream", lifecycle, params.abortSignal, responseHeaders);
       }
 
       if (!sawMessageStop) {
@@ -169,13 +172,35 @@ export class AnthropicClient implements StreamingMessageClient {
     phase: "request" | "stream",
     lifecycle: ReturnType<typeof createRequestLifecycle>,
     external?: AbortSignal,
+    responseHeaders?: unknown,
   ): Error {
     if (external?.aborted) {
       return external.reason instanceof Error ? external.reason : new Error(String(external.reason));
     }
     const timeout = lifecycle.timeoutFailure();
     if (timeout) return timeout;
-    return toModelRequestFailure(error, phase);
+    if (error instanceof ModelRequestFailure) return error;
+    // SDK 0.40 wraps SSE errors as APIConnectionError with the JSON frame in
+    // its message. Decode only that SDK shape, preserving the original cause.
+    if (phase === "stream" && error instanceof Anthropic.APIConnectionError) {
+      let payload: unknown;
+      try { payload = JSON.parse(error.message); } catch { /* Ordinary connection errors stay unchanged. */ }
+      if (payload && typeof payload === "object" && "type" in payload && payload.type === "error"
+        && "error" in payload && payload.error && typeof payload.error === "object") {
+        return toModelRequestFailure({
+          error: payload.error,
+          message: "message" in payload.error ? payload.error.message : error.message,
+          headers: responseHeaders ?? error.headers,
+          request_id: "request_id" in payload ? payload.request_id : error.request_id,
+          cause: error,
+        }, phase);
+      }
+    }
+    return toModelRequestFailure(responseHeaders ? {
+      message: error instanceof Error ? error.message : String(error),
+      headers: responseHeaders,
+      cause: error,
+    } : error, phase);
   }
 
   private async convertMessages(

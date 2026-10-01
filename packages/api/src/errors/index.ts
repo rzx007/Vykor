@@ -71,6 +71,10 @@ const RETRYABLE_NETWORK_CODES = new Set([
 ]);
 
 const AUTH_STATUS = new Set([401, 403]);
+const AUTH_CODES = new Set(["authentication_error", "permission_error", "invalid_api_key", "invalid_token"]);
+const INVALID_REQUEST_CODES = new Set([
+  "invalid_request", "invalid_request_error", "context_length_exceeded", "content_filter", "content_policy_violation",
+]);
 const QUOTA_CODES = new Set([
   "insufficient_quota",
   "quota_exceeded",
@@ -78,6 +82,20 @@ const QUOTA_CODES = new Set([
   "billing_hard_limit_reached",
   "insufficient_balance",
   "account_deactivated",
+  "billing_error",
+  "usage_limit_reached",
+  "credit_balance_exhausted",
+  "organization_spend_limit_exceeded",
+  "project_spend_limit_exceeded",
+  "organization_usage_limit_exceeded",
+]);
+const RETRYABLE_PROVIDER_CODES = new Map<string, ModelFailureKind>([
+  ["server_error", "server"], ["internal_server_error", "server"], ["internal_error", "server"],
+  ["api_error", "server"], ["overloaded_error", "server"], ["server_is_overloaded", "server"],
+  ["service_unavailable_error", "server"],
+  ["rate_limit_exceeded", "rate_limit"], ["rate_limit_error", "rate_limit"], ["rate_limit", "rate_limit"], ["slow_down", "rate_limit"],
+  ["timeout_error", "timeout"], ["request_timeout", "timeout"],
+  ["upstream_stream_error", "stream_incomplete"], ["stream_incomplete", "stream_incomplete"],
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -191,8 +209,10 @@ function extractCodes(chain: unknown[]): string[] {
     if (direct) codes.push(direct);
     const nestedError = item.error;
     if (isRecord(nestedError)) {
-      const nested = readString(nestedError.code) ?? readString(nestedError.type);
-      if (nested) codes.push(nested);
+      for (const value of [nestedError.code, nestedError.type]) {
+        const nested = readString(value);
+        if (nested) codes.push(nested);
+      }
     }
     const type = readString(item.type);
     if (type) codes.push(type);
@@ -210,6 +230,7 @@ function extractMessage(chain: unknown[]): string {
 }
 
 function isCertificateError(chain: unknown[]): boolean {
+  if (extractCodes(chain).some((code) => /CERT|TLS|SSL/i.test(code))) return true;
   return chain.some((item) => {
     if (!isRecord(item)) return false;
     const code = readString(item.code) ?? readString(item.name) ?? "";
@@ -227,11 +248,12 @@ interface Classification {
   requestId?: string;
 }
 
-function classifyChain(chain: unknown[], now: number): Classification {
+function classifyChain(chain: unknown[], now: number, phase: "request" | "stream"): Classification {
   const requestId = extractRequestId(chain);
   const statusCode = extractStatus(chain);
   const codes = extractCodes(chain);
   const upperCodes = codes.map((code) => code.toUpperCase());
+  const lowerCodes = codes.map((code) => code.toLowerCase());
   const retryAfterMs = extractRetryAfterMs(chain, now);
 
   if (isCertificateError(chain)) {
@@ -243,11 +265,11 @@ function classifyChain(chain: unknown[], now: number): Classification {
     };
   }
 
-  if (statusCode !== undefined && AUTH_STATUS.has(statusCode)) {
+  if ((statusCode !== undefined && AUTH_STATUS.has(statusCode)) || lowerCodes.some((code) => AUTH_CODES.has(code))) {
     return {
       kind: "authentication",
       retryable: false,
-      statusCode,
+      ...(statusCode !== undefined ? { statusCode } : {}),
       ...(requestId ? { requestId } : {}),
     };
   }
@@ -256,6 +278,14 @@ function classifyChain(chain: unknown[], now: number): Classification {
     return {
       kind: "quota",
       retryable: false,
+      ...(statusCode !== undefined ? { statusCode } : {}),
+      ...(requestId ? { requestId } : {}),
+    };
+  }
+
+  if (lowerCodes.some((code) => INVALID_REQUEST_CODES.has(code))) {
+    return {
+      kind: "invalid_request", retryable: false,
       ...(statusCode !== undefined ? { statusCode } : {}),
       ...(requestId ? { requestId } : {}),
     };
@@ -272,6 +302,13 @@ function classifyChain(chain: unknown[], now: number): Classification {
   }
 
   if (statusCode !== undefined) {
+    if (statusCode === 408) {
+      return {
+        kind: "timeout", retryable: true, statusCode,
+        ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+        ...(requestId ? { requestId } : {}),
+      };
+    }
     if (statusCode >= 500) {
       return {
         kind: "server",
@@ -299,6 +336,24 @@ function classifyChain(chain: unknown[], now: number): Classification {
     };
   }
 
+  const providerKind = lowerCodes.map((code) => RETRYABLE_PROVIDER_CODES.get(code)).find((kind) => kind !== undefined);
+  // Exact, phase-limited fallback for gateways that omit structured error codes.
+  const upstreamTerminated = phase === "stream" && chain.some((item) => {
+    if (!isRecord(item)) return false;
+    return [item.message, isRecord(item.error) ? item.error.message : undefined].some((message) =>
+      typeof message === "string" && /^Upstream stream terminated unexpectedly before completion[.!]?$/i.test(message.trim()),
+    );
+  });
+  const kind = providerKind ?? (upstreamTerminated ? "stream_incomplete" : undefined);
+  if (kind !== undefined && (kind !== "stream_incomplete" || phase === "stream")) {
+    return {
+      kind, retryable: true,
+      ...(statusCode !== undefined ? { statusCode } : {}),
+      ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+      ...(requestId ? { requestId } : {}),
+    };
+  }
+
   return {
     kind: "unknown",
     retryable: false,
@@ -320,7 +375,7 @@ export function toModelRequestFailure(
 ): ModelRequestFailure {
   if (error instanceof ModelRequestFailure) return error;
   const chain = collectCauseChain(error);
-  const classification = classifyChain(chain, now);
+  const classification = classifyChain(chain, now, phase);
   const message = extractMessage(chain);
   const hasDns = extractCodes(chain).some((code) => /EAI_AGAIN|ENOTFOUND/i.test(code));
   const info: ModelFailureInfo = {

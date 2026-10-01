@@ -23,6 +23,75 @@ describe("requestFailure", () => {
   });
 });
 describe("toModelRequestFailure", () => {
+  const terminated = "Upstream stream terminated unexpectedly before completion";
+
+  it("recognizes the upstream termination message only while consuming a stream", () => {
+    expect(toModelRequestFailure(new Error(terminated), "stream").info)
+      .toMatchObject({ kind: "stream_incomplete", phase: "stream", retryable: true });
+    expect(toModelRequestFailure(new Error(terminated), "request").info.retryable).toBe(false);
+    expect(toModelRequestFailure(new Error("Example: " + terminated), "stream").info.retryable).toBe(false);
+  });
+
+  it("recognizes an upstream termination inside a wrapped SDK error", () => {
+    const original = new Error("SDK stream failed", { cause: new Error(terminated) });
+    const failure = toModelRequestFailure(original, "stream");
+    expect(failure.info).toMatchObject({ kind: "stream_incomplete", retryable: true });
+    expect(failure.cause).toBe(original);
+  });
+
+  it("uses the original stream error message when a provider decorates the display message", () => {
+    const failure = toModelRequestFailure({
+      message: terminated + " (code=gateway_error)", error: { code: "gateway_error", message: terminated },
+    }, "stream");
+    expect(failure.info).toMatchObject({ kind: "stream_incomplete", retryable: true });
+  });
+
+  it("does not retry a structured certificate error even when its type is server_error", () => {
+    const failure = toModelRequestFailure({
+      message: terminated, error: { code: "CERT_HAS_EXPIRED", type: "server_error" },
+    }, "stream");
+    expect(failure.info).toMatchObject({ kind: "network", retryable: false });
+  });
+
+  it.each([
+    ["server_error", "server"], ["api_error", "server"], ["overloaded_error", "server"],
+    ["server_is_overloaded", "server"], ["rate_limit_exceeded", "rate_limit"],
+    ["rate_limit_error", "rate_limit"], ["timeout_error", "timeout"],
+    ["upstream_stream_error", "stream_incomplete"],
+  ])("recognizes a mid-stream %s without an HTTP error status", (code, kind) => {
+    const error = Object.assign(new Error("provider error"), {
+      error: { code }, headers: { "retry-after": "7", "x-request-id": "req-stream" },
+    });
+    expect(toModelRequestFailure(error, "stream").info).toMatchObject({
+      kind, retryable: true, phase: "stream", retryAfterMs: 7_000, requestId: "req-stream",
+    });
+  });
+
+  it("reads both the error code and type when the code alone is unknown", () => {
+    const error = { message: "provider error", error: { code: "gateway_specific", type: "overloaded_error" } };
+    expect(toModelRequestFailure(error, "stream").info).toMatchObject({ kind: "server", retryable: true });
+  });
+
+  it("retries HTTP 408 request timeouts", () => {
+    expect(toModelRequestFailure({ message: "timed out", status: 408 }, "request").info)
+      .toMatchObject({ kind: "timeout", phase: "request", retryable: true, statusCode: 408 });
+  });
+
+  it.each([
+    ["authentication_error", "authentication"], ["permission_error", "authentication"],
+    ["insufficient_quota", "quota"], ["billing_error", "quota"], ["usage_limit_reached", "quota"],
+    ["credit_balance_exhausted", "quota"], ["invalid_request", "invalid_request"],
+    ["context_length_exceeded", "invalid_request"], ["content_policy_violation", "invalid_request"],
+  ])("does not override permanent %s errors with a retryable stream message", (code, kind) => {
+    const error = { message: terminated, error: { code, type: "server_error" } };
+    expect(toModelRequestFailure(error, "stream").info).toMatchObject({ kind, retryable: false });
+  });
+
+  it.each([400, 401, 403, 404, 409])("does not override HTTP %s with transient event codes", (status) => {
+    expect(toModelRequestFailure({ message: terminated, status, error: { code: "server_error" } }, "stream").info.retryable)
+      .toBe(false);
+  });
+
   it("preserves a nested network cause without an HTTP status", () => {
     const cause = Object.assign(new Error("socket closed"), { code: "ECONNRESET" });
     const original = new TypeError("fetch failed", { cause });

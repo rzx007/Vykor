@@ -7,10 +7,37 @@ import {
   collectChangedFiles,
   parseFileReference,
   summarizeToolCall,
+  toolCallStatus,
   toolDisplayName,
 } from "../message-render-model"
 
 describe("message render model", () => {
+  it.each([
+    ["Edit", { arguments: { file_path: "C:/workspace/index.html", old_string: "old", new_string: "new" } }, "C:/workspace/index.html"],
+    ["Shell", { arguments: { command: "Get-Content -LiteralPath index.html" } }, "Get-Content -LiteralPath index.html"],
+    ["Shell", { arguments: { arguments: { command: "npm run dev" } } }, "npm run dev"],
+  ])("summarizes wrapped %s parameters", (name, input, detail) => {
+    expect(summarizeToolCall(toolPart(name, input)).detail).toBe(detail);
+  });
+
+  it("keeps explicit top-level fields instead of replacing them with nested business arguments", () => {
+    expect(summarizeToolCall(toolPart("Read", {
+      file_path: "root.txt", arguments: { file_path: "nested.txt" },
+    })).detail).toBe("root.txt");
+  });
+
+  it("recognizes failures recorded in separate tool results", () => {
+    const call = { ...toolPart("Shell", { command: "exit 1" }), status: "running" as const };
+    const result = { ...toolPart("Shell", {}), type: "tool_result" as const, isError: true };
+    expect(toolCallStatus(call, result)).toBe("failed");
+    expect(toolCallStatus(call, { ...result, isError: false })).toBe("completed");
+  });
+
+  it("does not claim that a failed edit changed a file", () => {
+    const edit = { ...toolPart("Edit", { arguments: { file_path: "index.html" } }), status: "failed" as const, isError: true };
+    expect(collectChangedFiles([edit])).toEqual([]);
+  });
+
   it("uses result metadata for the actual shell display name", () => {
     const call = toolPart("Shell", { command: "Get-ChildItem" })
     const result = {

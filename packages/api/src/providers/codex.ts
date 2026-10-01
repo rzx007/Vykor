@@ -184,9 +184,9 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
           } else if (eventType === "response.incomplete") {
             incompleteReason = readIncompleteReason(event);
           } else if (eventType === "response.failed") {
-            throw this.streamFailure(event, "Codex response failed");
+            throw this.streamFailure(event, "Codex response failed", response.headers);
           } else if (eventType === "error") {
-            throw this.streamFailure(event, "Codex error");
+            throw this.streamFailure(event, "Codex error", response.headers);
           }
         }
       } catch (error) {
@@ -233,23 +233,16 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
     return toModelRequestFailure(error, phase);
   }
 
-  private streamFailure(event: Record<string, unknown>, fallback: string): ModelRequestFailure {
-    const error = isRecord(event.error) ? event.error : event;
-    const code = typeof error.code === "string" ? error.code : undefined;
-    const requestId =
-      typeof error.request_id === "string" ? error.request_id : undefined;
-    const kind =
-      code === "rate_limit_exceeded" || code === "rate_limit"
-        ? "rate_limit"
-        : code && /quota|balance/i.test(code)
-          ? "quota"
-          : "server";
-    return new ModelRequestFailure(formatCodexStreamError(event, fallback), {
-      kind,
-      phase: "stream",
-      retryable: false,
-      ...(requestId ? { requestId } : {}),
-    });
+  private streamFailure(event: Record<string, unknown>, fallback: string, headers: Headers): ModelRequestFailure {
+    const response = isRecord(event.response) ? event.response : undefined;
+    const error = isRecord(event.error) ? event.error
+      : response && isRecord(response.error) ? response.error : event;
+    return toModelRequestFailure({
+      message: formatCodexStreamError(error, fallback),
+      error,
+      headers,
+      request_id: event.request_id ?? error.request_id ?? response?.request_id,
+    }, "stream");
   }
 }
 

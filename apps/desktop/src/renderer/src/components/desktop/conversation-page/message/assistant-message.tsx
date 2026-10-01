@@ -26,6 +26,7 @@ import {
   formatValue,
   isTurnComplete,
   summarizeToolCall,
+  toolCallStatus,
   toolDisplayName,
   type AssistantContentUnit,
   type ChangedFile,
@@ -194,9 +195,8 @@ type ContentBlock =
   | { id: string; type: "terminal"; payload: TerminalToolPayload; tool: ToolUnit }
 
 function isToolInFlight(tool: ToolUnit): boolean {
-  const status = tool.call.status
-  if (status === "pending" || status === "running") return true
-  return !tool.result && status !== "completed" && status !== "failed" && status !== "interrupted"
+  const status = toolCallStatus(tool.call, tool.result)
+  return status === "pending" || status === "running"
 }
 
 function isTerminalActivityActive(
@@ -321,10 +321,13 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
     /bash|shell|terminal|exec|command/i.test(tool.call.toolName ?? "")
   )
   const reads = tools.length - edits.length - commands.length
+  const failures = tools.filter(
+    (tool) => toolCallStatus(tool.call, tool.result) === "failed"
+  ).length
   const activityHeading = [
-    edits.length ? `编辑了 ${edits.length} 个文件` : "",
-    commands.length ? `运行了 ${commands.length} 个命令` : "",
-    reads > 0 ? `执行了 ${reads} 次查看` : "",
+    edits.length ? `文件编辑 ${edits.length} 次` : "",
+    commands.length ? `命令调用 ${commands.length} 次` : "",
+    reads > 0 ? `工具查看 ${reads} 次` : "",
   ]
     .filter(Boolean)
     .join("，")
@@ -338,13 +341,17 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
         className={cn(
-          "flex h-7 max-w-full items-center gap-2 hover:text-foreground",
+          "flex h-7 max-w-full items-center gap-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
           active && "shimmer"
         )}
       >
         <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
-        <span className="truncate">{heading || `执行了 ${tools.length} 个工具`}</span>
+        <span className="truncate">
+          {heading || `工具调用 ${tools.length} 次`}
+          {failures ? `（${failures} 次失败）` : ""}
+        </span>
         <ChevronDown
           className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
         />
@@ -355,24 +362,59 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
             const summary = summarizeToolCall(tool.call)
             const active = activeId === tool.id
             const calling = isToolInFlight(tool)
-            const output = tool.result?.output ?? tool.call.output ?? tool.call.input
+            const status = toolCallStatus(tool.call, tool.result)
+            const output = tool.result?.output ?? tool.call.output
+            const input = tool.call.input
+            const parseError =
+              tool.result?.metadata.toolInputError ?? tool.call.metadata.toolInputError
+            const unparsedInput = Boolean(
+              parseError && (input === undefined || Object.keys(input).length === 0)
+            )
+            const detail =
+              summary.detail ??
+              (unparsedInput
+                ? "参数解析失败"
+                : input === undefined
+                  ? "参数尚未提供"
+                  : Object.keys(input).length === 0
+                    ? "无参数"
+                    : "查看参数")
+            const statusText =
+              status === "failed"
+                ? "失败"
+                : status === "interrupted"
+                  ? "已中断"
+                  : status === "pending"
+                    ? "等待执行"
+                    : calling
+                      ? "运行中"
+                      : undefined
             return (
               <div key={tool.id}>
                 <button
                   type="button"
                   onClick={() => setActiveId(active ? null : tool.id)}
+                  aria-expanded={active}
                   className={cn(
-                    "flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground",
+                    "flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                     calling && "shimmer"
                   )}
                 >
                   <TerminalSquare className="size-3.5 shrink-0" strokeWidth={1.6} />
                   <span className="min-w-0 flex-1 truncate">
                     <span className="text-ui-foreground">{summary.name}</span>
-                    {summary.detail ? (
-                      <span className="ml-1.5 text-ui-muted/80">{summary.detail}</span>
-                    ) : null}
+                    <span className="ml-1.5 text-ui-muted/80">{detail}</span>
                   </span>
+                  {statusText ? (
+                    <span
+                      className={cn(
+                        "shrink-0 text-xs",
+                        status === "failed" ? "text-destructive" : "text-ui-muted"
+                      )}
+                    >
+                      {statusText}
+                    </span>
+                  ) : null}
                   <ChevronDown
                     className={cn("size-3.5 shrink-0 transition-transform", active && "rotate-180")}
                   />
@@ -382,9 +424,28 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                     <div className="border-b px-3 py-1.5 text-xs">
                       {toolDisplayName(tool.call, tool.result)}
                     </div>
-                    <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
-                      {formatValue(output)}
-                    </pre>
+                    <div className="px-3 pt-2 text-xs font-medium">参数</div>
+                    {unparsedInput ? (
+                      <p className="px-3 py-2 text-xs text-ui-muted">
+                        参数解析失败，请查看下方错误结果。
+                      </p>
+                    ) : input === undefined ? (
+                      <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
+                    ) : (
+                      <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
+                        {formatValue(input)}
+                      </pre>
+                    )}
+                    <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
+                    {output === undefined ? (
+                      <p className="px-3 py-2 text-xs text-ui-muted">
+                        {calling ? "等待工具返回结果" : "没有记录结果"}
+                      </p>
+                    ) : (
+                      <pre className="max-h-56 overflow-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
+                        {formatValue(output)}
+                      </pre>
+                    )}
                   </div>
                 ) : null}
               </div>

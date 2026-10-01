@@ -1,7 +1,4 @@
-import type {
-  DesktopAttachmentSessionPart,
-  DesktopSessionPart,
-} from "@shared/session-types"
+import type { DesktopAttachmentSessionPart, DesktopSessionPart } from "@shared/session-types"
 
 export type AssistantContentUnit =
   | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }
@@ -23,15 +20,7 @@ export type AssistantContentUnit =
     }
   | { id: string; type: "error"; text: string }
 
-export type ImageGenerationRatio =
-  | "1:1"
-  | "3:4"
-  | "4:3"
-  | "16:9"
-  | "9:16"
-  | "2:3"
-  | "3:2"
-  | "21:9"
+export type ImageGenerationRatio = "1:1" | "3:4" | "4:3" | "16:9" | "9:16" | "2:3" | "3:2" | "21:9"
 
 export type FileReference = { path: string; line?: number }
 
@@ -48,11 +37,7 @@ const pathKeys = new Set(["path", "file", "filePath", "file_path", "target", "de
 
 export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantContentUnit[] {
   const units: AssistantContentUnit[] = []
-  const results = new Map(
-    parts
-      .filter((part) => part.type === "tool_result" && part.toolUseId)
-      .map((part) => [part.toolUseId as string, part])
-  )
+  const results = toolResultsById(parts)
   const imageTools = new Map(
     parts
       .filter((part) => part.type === "tool" && part.toolName === "ImageGeneration")
@@ -141,9 +126,7 @@ export function normalizeImageGenerationRatio(value: unknown): ImageGenerationRa
   }
 }
 
-function generatedAttachmentToolUseId(
-  part: DesktopAttachmentSessionPart
-): string | undefined {
+function generatedAttachmentToolUseId(part: DesktopAttachmentSessionPart): string | undefined {
   if (part.metadata.source !== "image_generation") return undefined
   const toolUseId = part.metadata.toolUseId
   return typeof toolUseId === "string" && toolUseId.trim() ? toolUseId : undefined
@@ -157,7 +140,10 @@ export function parseFileReference(value: string): FileReference | null {
   const text = value.trim().replace(/^file:\/\//i, "")
   if (!text || /^(?:https?:|mailto:|#)/i.test(text) || text.startsWith("-")) return null
   const match = text.match(/^(.*?)(?::(\d+)(?::\d+)?)?$/)
-  const path = (match?.[1]?.replace(/^[`'"]|[`'"]$/g, "") ?? text).replace(/^\/(?=[a-z]:[\\/])/i, "")
+  const path = (match?.[1]?.replace(/^[`'"]|[`'"]$/g, "") ?? text).replace(
+    /^\/(?=[a-z]:[\\/])/i,
+    ""
+  )
   const hasSeparator = /[\\/]/.test(path)
   const hasExtension = /(?:^|[\\/])[^\\/]+\.[a-z0-9]{1,12}$/i.test(path)
   if (!hasSeparator && !hasExtension) return null
@@ -167,8 +153,13 @@ export function parseFileReference(value: string): FileReference | null {
 
 export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] {
   const changes = new Map<string, ChangedFile>()
+  const results = toolResultsById(parts)
   for (const part of parts) {
     if (part.type !== "tool" || !mutationToolPattern.test(part.toolName ?? "")) continue
+    if (
+      toolCallStatus(part, part.toolUseId ? results.get(part.toolUseId) : undefined) !== "completed"
+    )
+      continue
     const patch = findPatch(part.input)
     if (patch) collectPatchChanges(patch, changes)
     for (const path of collectPaths(part.input)) addChange(changes, path, 0, 0, false)
@@ -176,8 +167,37 @@ export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] 
   return [...changes.values()]
 }
 
+export function toolCallStatus(
+  call: DesktopSessionPart,
+  result?: DesktopSessionPart
+): DesktopSessionPart["status"] {
+  if (
+    call.isError ||
+    result?.isError ||
+    call.status === "failed" ||
+    result?.status === "failed" ||
+    recordValue(call.output)?.isError === true ||
+    recordValue(result?.output)?.isError === true
+  )
+    return "failed"
+  if (call.status === "interrupted" || result?.status === "interrupted") return "interrupted"
+  return result?.status ?? call.status
+}
+
 export function isTurnComplete(parts: DesktopSessionPart[]): boolean {
-  return parts.every((part) => part.status !== "pending" && part.status !== "running")
+  const results = toolResultsById(parts)
+  return parts.every((part) => {
+    const status = part.type === "tool"
+      ? toolCallStatus(part, part.toolUseId ? results.get(part.toolUseId) : undefined)
+      : part.status
+    return status !== "pending" && status !== "running"
+  })
+}
+
+function toolResultsById(parts: DesktopSessionPart[]): Map<string, DesktopSessionPart> {
+  return new Map(parts
+    .filter((part) => part.type === "tool_result" && part.toolUseId)
+    .map((part) => [part.toolUseId!, part]))
 }
 
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
@@ -273,6 +293,14 @@ function collectPaths(value: unknown): string[] {
 
 function summarizeToolInput(input: Record<string, unknown> | undefined): string | undefined {
   if (!input) return undefined
+  // Only unwrap the provider envelope, keeping mixed/business fields intact.
+  const seen = new Set<Record<string, unknown>>()
+  while (Object.keys(input).length === 1 && !seen.has(input)) {
+    seen.add(input)
+    const nested = recordValue(input.arguments)
+    if (!nested) break
+    input = nested
+  }
   for (const key of [
     "path",
     "file_path",
