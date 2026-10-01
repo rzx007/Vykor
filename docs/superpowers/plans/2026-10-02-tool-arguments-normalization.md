@@ -1,6 +1,6 @@
 # 工具 arguments 包装统一处理 Implementation Plan
 
-> 状态：实现、验证与子代理复审已完成，待提交和 push；用户已授权交付。
+> 状态：实现、验证、子代理复审、提交与 push 已完成。
 > **For agentic workers:** 按任务逐项实施并使用 test-driven-development；步骤采用 checkbox 跟踪。执行方式为当前会话 inline，子代理负责 spec 审核及交付前代码复审。
 
 **Goal:** 在统一执行前入口安全处理最多 8 层 arguments 包装，权限与失败记忆使用同一份有效参数。
@@ -106,7 +106,7 @@ git diff --check
 
 当前说明记录最多 8 层、歧义/组合 schema 保守拒绝、权限与失败记忆在归一化之后；只添加既有文档入口。子代理对照 spec 审核这两个源码文件及两个测试文件，修复有证据的重要缺口后 scoped 复审，不增加未请求的大重构。
 
-- [ ] **5. 完成后分开提交并 push。**
+- [x] **5. 完成后分开提交并 push。**
 
 先复核上一轮跨模块错误修复：运行 `model-retry.test.ts`、`model-retry.integration.test.ts`、`buffered-model-retry.test.ts`，仅暂存 `model-retry.ts` 与其集成测试，单独提交。当前统一包装改动、已审核 spec、计划与说明单独提交，不混入别人的文件。提交前检查 `git diff --cached --stat`；正常执行提交 hook，不执行 Desktop build。
 
@@ -129,3 +129,5 @@ git ls-remote --heads origin main
 代码复审发现 P3：隐藏的不可枚举 arguments 不能替代唯一可枚举键。新增回归先观察失败，再将判断收紧为唯一键名必须为 arguments；组合 schema 测试也改为要求 command，确保覆盖真正的停止条件。修订不扩大接口或模块范围。
 
 最终 scoped 复审通过。Core 128 项、API 25 项，共 153 项相关测试通过；core 类型和 368 个 Markdown 文件检查通过。上一轮跨模块错误修复的独立重试测试 40 项通过。没有构建 Desktop、启动真实 Shell 命令或重启服务。
+
+交付记录：`bc6fda2d` 单独提交跨模块错误修复；`346e9963` 提交本需求、spec、计划及说明。两次提交的仓库检查均为 61/61 成功。正常 push 到 `origin/main` 后，已只读确认远端为 `346e9963`，工作区无未提交代码。运行中服务未重启；源码交付不等于现有进程已加载更新。
