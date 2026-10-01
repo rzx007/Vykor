@@ -40,7 +40,7 @@ import { sanitizeMessageHistory } from "../utils/message-history";
 import { prepareToolCalls } from "./query-tool-preparation";
 import { authorizeToolCalls } from "./query-tool-permissions";
 import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
-import { applyToolOutputBudget, ToolTimeoutError, toolExecutionTimeoutMs } from "./query-tool-limits";
+import { applyToolOutputBudget, executeToolWithTimeout, ToolTimeoutError, toolExecutionTimeoutMs } from "./query-tool-limits";
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
@@ -923,7 +923,7 @@ export class QueryEngine implements IQueryEngine {
               : {}),
             agent: execution,
           };
-          const result = await this.executeToolWithTimeout(
+          const result = await executeToolWithTimeout(
             tool,
             toolUse.input,
             context,
@@ -1017,55 +1017,6 @@ export class QueryEngine implements IQueryEngine {
         && tool.execute === binding.invoke;
     }
     return toolDefinitionIdentity(tool) === approved.identity && tool.execute === approved.execute;
-  }
-
-  private async executeToolWithTimeout(
-    tool: NonNullable<ReturnType<IToolRegistry["get"]>>,
-    input: Record<string, unknown>,
-    context: ToolContext,
-    timeoutMs: number,
-    externalSignal?: AbortSignal,
-  ): Promise<Awaited<ReturnType<NonNullable<ReturnType<IToolRegistry["get"]>>["execute"]>>> {
-    const controller = new AbortController();
-    const timeoutError = new ToolTimeoutError(timeoutMs);
-    const deadlineAt = Date.now() + timeoutMs;
-    let abortListener: (() => void) | undefined;
-    const abortFromExternal = () => controller.abort(externalSignal?.reason);
-    if (externalSignal?.aborted) {
-      abortFromExternal();
-    } else {
-      externalSignal?.addEventListener("abort", abortFromExternal, {
-        once: true,
-      });
-    }
-    const timeout = setTimeout(() => {
-      controller.abort(timeoutError);
-    }, timeoutMs);
-    timeout.unref?.();
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      abortListener = () => reject(controller.signal.reason ?? timeoutError);
-      if (controller.signal.aborted) {
-        abortListener();
-      } else {
-        controller.signal.addEventListener("abort", abortListener, {
-          once: true,
-        });
-      }
-    });
-
-    try {
-      return await Promise.race([
-        tool.execute(input, { ...context, abortSignal: controller.signal, deadlineAt }),
-        timeoutPromise,
-      ]);
-    } finally {
-      clearTimeout(timeout);
-      if (abortListener) {
-        controller.signal.removeEventListener("abort", abortListener);
-      }
-      externalSignal?.removeEventListener("abort", abortFromExternal);
-    }
   }
 
   private visibleToolRegistry(alwaysAllowed: readonly string[] = []): IToolRegistry {

@@ -114,7 +114,7 @@
 
 | 下一轮处理 | 文件与当前行数 | 判断依据 |
 |---|---|---|
-| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1205；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
+| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1156；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
 | 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
 | 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1213；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
 
@@ -360,3 +360,8 @@
 
 - `packages/server/src/daemon/channel-runtime-service.ts` 从 646 行降至 577 行；实际飞书适配器、消息总线和持久投递桥的组装归入同目录 `channel-runtime-factory.ts`。服务仍持有连接状态、串行启停与回调处理。
 - 验证：server 包类型检查通过；渠道相关测试 4 个文件、74 条通过。
+
+### 2026-10-01：QueryEngine 工具执行超时
+
+- `packages/core/src/engine/query-engine.ts` 从 1205 行降至 1156 行；不依赖引擎状态的取消信号、截止时间和工具超时竞赛归入既有 `query-tool-limits.ts`。引擎仍创建工具上下文、运行钩子并回填结果，没有新增目录或包装类。
+- 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
