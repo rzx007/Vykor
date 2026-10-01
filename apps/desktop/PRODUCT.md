@@ -1,8 +1,10 @@
 # Product
 
-## Register
+<!-- impeccable:product-schema 1 -->
 
-product
+## Platform
+
+web
 
 ## Users
 
@@ -15,6 +17,20 @@ Provide a focused desktop workspace for running Vykor sessions. Success means th
 ## Brand Personality
 
 Quiet, capable, and precise. The interface should feel familiar to users of strong developer tools, with calm density and restrained feedback instead of decorative spectacle.
+
+## Operating Context
+
+An Electron desktop shell presents the web-based conversation UI alongside project navigation and supporting tools. Developers inspect agent tool calls, file changes, and failures while working in local project directories.
+
+## Capabilities and Constraints
+
+- Tool activities expose original parameters and results separately; summaries must not imply that failed operations succeeded.
+- Temporary model connection failures have bounded, cancellable recovery. Already completed tools are not rerun by that recovery; process restart recovery is outside its scope.
+- Updating source code does not update an already running service. Builds and service restarts are separate operations.
+
+## Evidence on Hand
+
+Current behavior is documented in [message rendering](../../docs/desktop-agent-message-rendering.md) and [model recovery](../../docs/model-network-retry-design.md). These describe implemented behavior and test boundaries, not a guarantee of uninterrupted upstream service.
 
 ## Anti-references
 
