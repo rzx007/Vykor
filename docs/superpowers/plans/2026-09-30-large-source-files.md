@@ -384,3 +384,8 @@
 
 - `packages/server/src/application/daemon-application.ts` 从 1149 行降至 1126 行；可选的渠道运行时及接入服务配对构造归入现有 `application/channel/` 下的 `channel-runtime-assembly.ts`。原应用仍在创建会话命令与交互服务后创建渠道，并持有启动、关闭入口。
 - 验证：server 类型检查通过；渠道装配、渠道服务和应用测试共 4 个文件、52 条通过。
+
+### 2026-10-01：优先文件统一验证与保留边界
+
+- QueryEngine 工具注册表、DaemonApplication 附件与渠道装配三批提交后，全仓 `pnpm check-types` 61 项通过；server 完整 Vitest 共 121 个文件、1183 条通过；core 完整 Vitest 共 31 个文件、306 条通过。
+- QueryEngine 的模型轮次状态、工具执行上下文及回填仍同属一次调用；DaemonApplication 的启动恢复、关机顺序和所有权释放仍由应用入口持有。现阶段不为压到 600 行而搬动这些共享状态和顺序约束。
