@@ -45,7 +45,6 @@ vi.mock("@renderer/stores/desktop-session", () => ({
 }))
 
 import { routeTree } from "./routeTree.gen"
-import { DesktopRoutePending } from "./routes/__root"
 
 let container: HTMLDivElement
 let root: Root
@@ -98,14 +97,13 @@ it("keeps the splash while child route initialization is pending, then reveals t
     history: createMemoryHistory({ initialEntries: ["/conversation/session-1"] }),
     defaultPendingMs: 0,
     defaultPendingMinMs: 0,
-    defaultPendingComponent: DesktopRoutePending,
   })
 
   await act(async () => root.render(<RouterProvider router={router} />))
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
   })
-  expect(container.textContent).toContain("正在恢复会话")
+  expect(container.textContent).toBe("")
   expect(overlay.dataset.startupReady).toBeUndefined()
 
   await act(async () => {
