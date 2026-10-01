@@ -106,7 +106,7 @@ export function SessionRow({
       >
         {pinned ? <Pin className="mr-1 inline size-3 -translate-y-px text-sidebar-muted" /> : null}
         {title}
-        {!archived && activity ? <SessionActivityIndicator activity={activity} /> : null}
+        {!archived && !active && activity ? <SessionActivityIndicator activity={activity} /> : null}
       </button>
       <SessionMoreMenu
         session={session}

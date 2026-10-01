@@ -17,7 +17,7 @@ import {
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
-import type { DesktopSessionPart } from "@shared/session-types"
+import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
 import { routeChangedFileClick, toProjectRelativePath } from "@shared/workspace-open-path"
 
 import {
@@ -37,6 +37,10 @@ import { truncateReasoning } from "./reasoning-text"
 import { MessageAttachment } from "./message-attachment"
 import { GeneratedImageGallery, ImageGenerationMessage } from "./image-generation-message"
 import { ContentEntrance } from "./content-entrance"
+import { AgentActivityMessage } from "./agent-activity-message"
+import { toolOutputText } from "./message-content"
+
+const emptyAgentTasks: DesktopSessionTask[] = []
 
 type ChangedFileStats = {
   additions: number
@@ -55,6 +59,8 @@ export function AssistantMessage({
   parts,
   streaming,
   initialPartIds,
+  tasks = emptyAgentTasks,
+  onOpenAgents,
   onOpenFile,
   canOpenReview,
   onOpenReview,
@@ -64,6 +70,8 @@ export function AssistantMessage({
   streaming: boolean
   /** 打开聊天时已有的内容，不重复播放入场。 */
   initialPartIds?: ReadonlySet<string>
+  tasks?: DesktopSessionTask[]
+  onOpenAgents?: (taskId?: string) => void
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
   onOpenReview: (path?: string) => void
@@ -104,6 +112,21 @@ export function AssistantMessage({
           )
         }
         const unit = block.unit
+        if (unit.type === "agent") {
+          return (
+            <ContentEntrance
+              key={unit.id}
+              animate={streaming && Boolean(initialPartIds && !initialPartIds.has(unit.id))}
+            >
+              <AgentActivityMessage
+                call={unit.call}
+                result={unit.result}
+                tasks={tasks}
+                onOpenAgents={onOpenAgents}
+              />
+            </ContentEntrance>
+          )
+        }
         if (unit.type === "markdown") {
           return (
             <AssistantMarkdown
@@ -316,7 +339,7 @@ function TerminalActivityCard({
 }
 
 function parseTerminalToolPayload(value: unknown): TerminalToolPayload | null {
-  const text = terminalPayloadText(value)
+  const text = toolOutputText(value)
   if (!text) return null
   try {
     const parsed = JSON.parse(text) as Partial<TerminalToolPayload>
@@ -328,41 +351,24 @@ function parseTerminalToolPayload(value: unknown): TerminalToolPayload | null {
   }
 }
 
-function terminalPayloadText(value: unknown): string | null {
-  if (typeof value === "string") return value
-  if (!value || typeof value !== "object") return null
-  const content = "content" in value ? value.content : undefined
-  if (!Array.isArray(content)) return null
-  const block = content.find(
-    (item): item is { type: "text"; text: string } =>
-      !!item &&
-      typeof item === "object" &&
-      "type" in item &&
-      item.type === "text" &&
-      "text" in item &&
-      typeof item.text === "string"
-  )
-  return block?.text ?? null
-}
-
 function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const active = tools.some(isToolInFlight)
-  const edits = tools.filter((tool) =>
-    /write|edit|patch|create|delete/i.test(tool.call.toolName ?? "")
-  )
-  const commands = tools.filter((tool) =>
-    /bash|shell|terminal|exec|command/i.test(tool.call.toolName ?? "")
-  )
-  const reads = tools.length - edits.length - commands.length
+  const counts = { edits: 0, commands: 0, reads: 0 }
+  for (const tool of tools) {
+    const name = tool.call.toolName ?? ""
+    if (/bash|shell|terminal|exec|command/i.test(name)) counts.commands++
+    else if (/write|edit|patch|create|delete/i.test(name)) counts.edits++
+    else counts.reads++
+  }
   const failures = tools.filter(
     (tool) => toolCallStatus(tool.call, tool.result) === "failed"
   ).length
   const activityHeading = [
-    edits.length ? `文件编辑 ${edits.length} 次` : "",
-    commands.length ? `命令调用 ${commands.length} 次` : "",
-    reads > 0 ? `工具查看 ${reads} 次` : "",
+    counts.edits ? `文件编辑 ${counts.edits} 次` : "",
+    counts.commands ? `命令调用 ${counts.commands} 次` : "",
+    counts.reads ? `工具查看 ${counts.reads} 次` : "",
   ]
     .filter(Boolean)
     .join("，")

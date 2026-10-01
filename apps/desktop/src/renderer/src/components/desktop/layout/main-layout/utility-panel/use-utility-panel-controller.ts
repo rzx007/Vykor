@@ -35,6 +35,7 @@ type ScopedToolRequest = {
   id: number
   scopeId: string
   tool: UtilityToolRequest
+  taskId?: string
 }
 
 type ScopedReviewRequest = DesktopGitReviewRequest & {
@@ -71,7 +72,7 @@ export type UtilityPanelController = {
   openFile: (path: string, line?: number) => void
   openReview: (path?: string, scope?: DesktopGitDiffScope) => void
   openTerminal: (terminalId: string) => void
-  openTool: (tool: UtilityToolRequest) => void
+  openTool: (tool: UtilityToolRequest, taskId?: string) => void
   handleLayoutChanged: (layout: Layout) => void
   handlePanelResize: (sizeInPixels: number) => void
 }
@@ -325,9 +326,14 @@ export function useUtilityPanelController({
   )
 
   const openTool = useCallback(
-    (tool: UtilityToolRequest): void => {
+    (tool: UtilityToolRequest, taskId?: string): void => {
       restore()
-      setToolRequest({ id: Date.now(), scopeId: activeScopeIdRef.current, tool })
+      setToolRequest({
+        id: Date.now(),
+        scopeId: activeScopeIdRef.current,
+        tool,
+        ...(tool === "agents" && taskId ? { taskId } : {}),
+      })
     },
     [restore]
   )

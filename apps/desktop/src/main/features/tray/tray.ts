@@ -5,6 +5,7 @@ import { quitApp } from "../../core/services/lifecycle"
 import { showMainWindow } from "../main-window/window"
 import { hidePetWindow, showPetWindow } from "../pet/window"
 import { noteUnfocusedAttention } from "./attention-badge"
+import { IpcEvents, type TrayNotificationOptions } from "../../../shared/ipc-channels"
 
 let tray: Tray | null = null
 let normalIcon: Electron.NativeImage | null = null
@@ -64,24 +65,34 @@ export function stopFlashTray(): void {
 }
 
 export function sendTrayNotification(
-  options: {
-    title: string
-    body: string
-    silent?: boolean
-    showWhenFocused?: boolean
-  },
+  options: TrayNotificationOptions,
   getMainWindow: () => BrowserWindow | null
 ): void {
-  const focused = Boolean(getMainWindow()?.isFocused())
+  const mainWindow = getMainWindow()
+  const focused = Boolean(
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    mainWindow.isVisible() &&
+    !mainWindow.isMinimized() &&
+    mainWindow.isFocused()
+  )
   if (!focused) noteUnfocusedAttention(getMainWindow)
   if (focused && !options.showWhenFocused) return
   if (!Notification.isSupported()) return
 
-  new Notification({
+  const notification = new Notification({
     title: options.title,
     body: options.body,
     silent: options.silent,
-  }).show()
+  })
+  notification.on("click", () => {
+    const win = getMainWindow()
+    if (!win || win.isDestroyed()) return
+    showMainWindow(win)
+    if (options.sessionId)
+      win.webContents.send(IpcEvents.trayNotificationClicked, options.sessionId)
+  })
+  notification.show()
 }
 
 export function destroyTray(): void {

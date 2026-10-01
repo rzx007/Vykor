@@ -46,6 +46,33 @@ vi.mock("@renderer/stores/desktop-session", () => ({
 
 import { routeTree } from "./routeTree.gen"
 
+it("opens the notification's chat from settings and releases the click listener", async () => {
+  let onClick: ((sessionId: string) => void) | undefined
+  const detach = vi.fn()
+  Object.defineProperty(window, "desktop", {
+    configurable: true,
+    value: {
+      tray: {
+        onNotificationClick(listener: (sessionId: string) => void) {
+          onClick = listener
+          return detach
+        },
+      },
+    },
+  })
+  const router = await mountRouter("/settings/general")
+  expect(onClick).toBeTypeOf("function")
+  await act(async () => {
+    onClick!("session-1")
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+  expect(router.state.location.pathname).toBe("/conversation/session-1")
+  act(() => root.unmount())
+  expect(detach).toHaveBeenCalledOnce()
+  root = createRoot(container)
+  delete (window as unknown as { desktop?: unknown }).desktop
+})
+
 let container: HTMLDivElement
 let root: Root
 

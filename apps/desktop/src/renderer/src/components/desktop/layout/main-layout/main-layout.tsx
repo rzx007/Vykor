@@ -324,7 +324,7 @@ export function MainLayout(): React.JSX.Element {
           canOpenReview={activeWorkspaceIsGit === true}
           onOpenReview={requestOpenReview}
           onOpenTerminal={openTerminal}
-          onOpenAgents={() => openUtilityTool("agents")}
+          onOpenAgents={(taskId) => openUtilityTool("agents", taskId)}
         />
       </Panel>
       {!utilityMaximized && <PanelResizeHandle label="调整工具面板宽度" />}

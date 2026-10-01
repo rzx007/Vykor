@@ -352,6 +352,7 @@ export const IpcChannels = {
 } as const
 
 export const IpcEvents = {
+  trayNotificationClicked: "tray:notification-clicked",
   updateStateChanged: "update:state-changed",
   windowMaximizedChanged: "window:maximized-changed",
   petClicked: "pet:clicked",
@@ -387,6 +388,7 @@ export interface TrayNotificationOptions {
   body: string
   silent?: boolean
   showWhenFocused?: boolean
+  sessionId?: string
 }
 
 export interface PetPosition {

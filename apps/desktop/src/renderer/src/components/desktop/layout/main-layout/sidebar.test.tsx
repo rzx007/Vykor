@@ -8,6 +8,7 @@ import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { createActivityState } from "@renderer/stores/desktop-session/activity-state"
 import { SIDEBAR_SECTIONS_STORAGE_KEY } from "./sidebar-section-expansion"
 import { Sidebar } from "./sidebar"
+import { SessionRow } from "./sidebar-session-groups"
 
 vi.mock("@tanstack/react-router", () => ({
   useMatchRoute: () => () => false,
@@ -102,6 +103,33 @@ describe("Sidebar collapsible sections and empty states", () => {
     expect(recentSectionBtn).toBeTruthy()
     expect(recentSectionBtn?.getAttribute("aria-expanded")).toBe("true")
     expect(container.textContent).toContain("暂无最近会话")
+  })
+
+  it("shows pending approval only outside the current chat, even after it has been read", () => {
+    const session = channelSession()
+    useDesktopSessionStore.setState({
+      activity: {
+        ...createActivityState(),
+        sessions: {
+          [session.id]: {
+            session,
+            executionState: "needs_input",
+            attentionState: "read",
+            activitySeq: 1,
+            updatedAt: 1,
+          },
+        },
+      },
+    })
+    const actions = { onOpen: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn() }
+    act(() => root.render(<SessionRow session={session} active={false} actions={actions} />))
+    expect(container.querySelector('[aria-label="等待处理"]')).not.toBeNull()
+    act(() => root.render(<SessionRow session={session} active actions={actions} />))
+    expect(container.querySelector('[aria-label="等待处理"]')).toBeNull()
+    act(() => root.render(<SessionRow session={session} active={false} actions={actions} />))
+    expect(container.querySelector('[aria-label="等待处理"]')).not.toBeNull()
+    act(() => useDesktopSessionStore.setState({ activity: createActivityState() }))
+    expect(container.querySelector('[aria-label="等待处理"]')).toBeNull()
   })
 
   it("can collapse and expand the projects section and saves state to localStorage", async () => {

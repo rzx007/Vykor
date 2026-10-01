@@ -4,6 +4,7 @@ export type AssistantContentUnit =
   | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }
   | { id: string; type: "reasoning"; text: string }
   | { id: string; type: "tool"; call: DesktopSessionPart; result?: DesktopSessionPart }
+  | { id: string; type: "agent"; call: DesktopSessionPart; result?: DesktopSessionPart }
   | {
       id: string
       type: "image_generation"
@@ -98,7 +99,7 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
       }
       units.push({
         id: part.id,
-        type: "tool",
+        type: part.toolName === "Agent" ? "agent" : "tool",
         call: part,
         result: part.toolUseId ? results.get(part.toolUseId) : undefined,
       })
@@ -187,17 +188,20 @@ export function toolCallStatus(
 export function isTurnComplete(parts: DesktopSessionPart[]): boolean {
   const results = toolResultsById(parts)
   return parts.every((part) => {
-    const status = part.type === "tool"
-      ? toolCallStatus(part, part.toolUseId ? results.get(part.toolUseId) : undefined)
-      : part.status
+    const status =
+      part.type === "tool"
+        ? toolCallStatus(part, part.toolUseId ? results.get(part.toolUseId) : undefined)
+        : part.status
     return status !== "pending" && status !== "running"
   })
 }
 
 function toolResultsById(parts: DesktopSessionPart[]): Map<string, DesktopSessionPart> {
-  return new Map(parts
-    .filter((part) => part.type === "tool_result" && part.toolUseId)
-    .map((part) => [part.toolUseId!, part]))
+  return new Map(
+    parts
+      .filter((part) => part.type === "tool_result" && part.toolUseId)
+      .map((part) => [part.toolUseId!, part])
+  )
 }
 
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
@@ -311,6 +315,7 @@ function summarizeToolInput(input: Record<string, unknown> | undefined): string 
     "cmd",
     "url",
     "cwd",
+    "description",
   ]) {
     const value = input[key]
     if (typeof value === "string" && value.trim()) return truncateSummary(value.trim())

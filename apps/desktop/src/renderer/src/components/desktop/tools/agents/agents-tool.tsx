@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowLeft, Bot, CircleCheck } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { ConversationTranscript } from "@renderer/components/desktop/conversation-page/transcript/transcript"
 import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
@@ -32,19 +32,25 @@ import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionTask, DesktopSessionView } from "@shared/session-types"
-import { groupAgentTasks, matchesAgentSessionUpdate } from "./agent-task-model"
+import {
+  agentTaskStatusLabel,
+  groupAgentTasks,
+  matchesAgentSessionUpdate,
+} from "./agent-task-model"
 
 const detailsSubscriptionId = "agents:details"
 const emptyTasks: DesktopSessionTask[] = []
 
 export function AgentsTool({
   active,
+  openRequest,
   onOpenFile,
   canOpenReview,
   onOpenReview,
   onOpenTerminal,
 }: {
   active: boolean
+  openRequest?: { id: number; taskId?: string } | null
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
   onOpenReview: (path?: string) => void
@@ -59,6 +65,7 @@ export function AgentsTool({
   const requestVersionRef = useRef(0)
   const selectedChildSessionIdRef = useRef<string | null>(null)
   const selectedTask = tasks.find((task) => task.id === selectedTaskId)
+  const handledOpenRequestRef = useRef<number | null>(null)
 
   useEffect(() => {
     return window.desktop.sessions.onAuxUpdated((update) => {
@@ -76,7 +83,7 @@ export function AgentsTool({
     }
   }, [])
 
-  const openTask = async (task: DesktopSessionTask): Promise<void> => {
+  const openTask = useCallback(async (task: DesktopSessionTask): Promise<void> => {
     if (!task.childSessionId) return
     const requestVersion = requestVersionRef.current + 1
     requestVersionRef.current = requestVersion
@@ -96,7 +103,18 @@ export function AgentsTool({
     } finally {
       if (requestVersionRef.current === requestVersion) setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!active || !openRequest?.taskId || handledOpenRequestRef.current === openRequest.id) return
+    const task = tasks.find((item) => item.id === openRequest.taskId && item.childSessionId)
+    if (!task) return
+    const timer = window.setTimeout(() => {
+      handledOpenRequestRef.current = openRequest.id
+      void openTask(task)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [active, openRequest, tasks, openTask])
 
   const showList = (): void => {
     requestVersionRef.current += 1
@@ -218,12 +236,12 @@ function AgentTaskItem({
       <ItemContent className="min-w-0">
         <ItemTitle className="max-w-full truncate">{task.description}</ItemTitle>
         <ItemDescription className="line-clamp-1">
-          {task.error ?? task.output ?? taskStatusLabel(task.status)}
+          {task.error ?? task.output ?? agentTaskStatusLabel(task.status)}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
         <Badge variant={failed ? "destructive" : running ? "secondary" : "outline"}>
-          {taskStatusLabel(task.status)}
+          {agentTaskStatusLabel(task.status)}
         </Badge>
       </ItemActions>
     </Item>
@@ -272,7 +290,9 @@ function AgentDetails({
           {task?.description ?? view?.session.title ?? "子智能体"}
         </h2>
         {task ? (
-          <Badge variant={failed ? "destructive" : "outline"}>{taskStatusLabel(task.status)}</Badge>
+          <Badge variant={failed ? "destructive" : "outline"}>
+            {agentTaskStatusLabel(task.status)}
+          </Badge>
         ) : null}
       </header>
       {task?.error ? (
@@ -310,6 +330,7 @@ function AgentDetails({
             <MessageScrollerViewport>
               <MessageScrollerContent className="min-h-full gap-6 px-5 py-5">
                 <ConversationTranscript
+                  tasks={view.tasks}
                   messages={view.messages}
                   parts={view.parts}
                   runs={view.runs}
@@ -333,17 +354,6 @@ function AgentDetails({
       ) : null}
     </>
   )
-}
-
-function taskStatusLabel(status: DesktopSessionTask["status"]): string {
-  return {
-    pending: "等待中",
-    running: "运行中",
-    completed: "已完成",
-    failed: "失败",
-    stopped: "已停止",
-    interrupted: "已中断",
-  }[status]
 }
 
 function errorMessage(error: unknown): string {

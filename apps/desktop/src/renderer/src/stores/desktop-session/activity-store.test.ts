@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createActivityState } from "./activity-state"
 import { useDesktopSessionStore } from "./store"
+import { emptySessionView } from "./store-test-fixtures"
+
+afterEach(() => vi.unstubAllGlobals())
 
 beforeEach(() => {
   useDesktopSessionStore.setState({
@@ -11,6 +14,50 @@ beforeEach(() => {
 })
 
 describe("Desktop Activity store", () => {
+  it.each(["when_unfocused", "always", "never"])(
+    "routes current-chat approval using %s notification mode",
+    async (notificationMode) => {
+      const notify = vi.fn(async () => undefined)
+      vi.stubGlobal("window", {
+        desktop: {
+          settings: { snapshot: async () => ({ notificationMode }) },
+          tray: { notify },
+        },
+      })
+      const view = emptySessionView("current")
+      useDesktopSessionStore.setState({ activeSessionId: "current", sessionView: view })
+      const activity = {
+        session: view.session,
+        executionState: "running" as const,
+        attentionState: "read" as const,
+        activitySeq: 1,
+        updatedAt: 1,
+      }
+      useDesktopSessionStore.getState().applyActivityUpdate({
+        cursor: 1,
+        delivery: "baseline",
+        sessions: [activity],
+        scheduled: [],
+      })
+      useDesktopSessionStore.getState().applyActivityUpdate({
+        cursor: 2,
+        delivery: "live",
+        sessions: [
+          { ...activity, executionState: "needs_input", permissionId: "p1", activitySeq: 2 },
+        ],
+        scheduled: [],
+      })
+      await Promise.resolve()
+      if (notificationMode === "never") expect(notify).not.toHaveBeenCalled()
+      else
+        expect(notify).toHaveBeenCalledWith({
+          title: "Vykor 需要处理",
+          body: `${view.session.title} 正在等待处理。`,
+          sessionId: "current",
+          ...(notificationMode === "always" ? { showWhenFocused: true } : {}),
+        })
+    }
+  )
   it("upserts a new IM session on a live event without refreshing bootstrap", () => {
     const refreshBootstrap = vi.fn(async () => undefined)
     useDesktopSessionStore.setState({ refreshBootstrap })

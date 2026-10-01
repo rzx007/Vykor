@@ -203,7 +203,7 @@ export function applyActivityUpdate(
     if (
       update.delivery === "live" &&
       transition &&
-      !active &&
+      (!active || activity.executionState === "needs_input") &&
       !activity.session.metadata["scheduledTask"] &&
       isResult(activity.executionState) &&
       activity.activitySeq > state.lastNotifiedCursor &&

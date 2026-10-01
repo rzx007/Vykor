@@ -88,6 +88,13 @@ export const desktopAPI = {
     flash: () => invoke(IpcChannels.trayFlash),
     stopFlash: () => invoke(IpcChannels.trayStopFlash),
     notify: (options: TrayNotificationOptions) => invoke(IpcChannels.trayNotify, options),
+    onNotificationClick: (listener: (sessionId: string) => void): (() => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, sessionId: string): void => {
+        if (typeof sessionId === "string" && sessionId) listener(sessionId)
+      }
+      ipcRenderer.on(IpcEvents.trayNotificationClicked, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.trayNotificationClicked, wrapped)
+    },
   },
   pet: {
     show: () => invoke(IpcChannels.petShow),

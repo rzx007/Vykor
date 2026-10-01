@@ -47,6 +47,21 @@ function click(text: string) {
 }
 
 describe("tool parameter and result display", () => {
+  it("counts a background command once without claiming a file edit", () => {
+    render([part("BackgroundShellCreate", { command: "npm run dev" })])
+    expect(container.textContent).toContain("命令调用 1 次")
+    expect(container.textContent).not.toContain("文件编辑")
+  })
+
+  it("keeps command, edit and read counts separate in a mixed group", () => {
+    render([
+      part("BackgroundShellCreate", { command: "npm run dev" }),
+      part("Read", { file_path: "index.html" }, { id: "tool-2", seq: 2, toolUseId: "call-2" }),
+      part("Write", { file_path: "style.css" }, { id: "tool-3", seq: 3, toolUseId: "call-3" }),
+    ])
+    expect(container.textContent).toContain("文件编辑 1 次，命令调用 1 次，工具查看 1 次")
+  })
+
   it("shows a wrapped failed edit's path, original parameters and result separately", () => {
     render([part("Edit", { arguments: { file_path: "C:/workspace/index.html", old_string: "original", new_string: "replacement" } }, {
       status: "failed", isError: true, output: { content: [{ type: "text", text: "old_string not found in file." }], isError: true },

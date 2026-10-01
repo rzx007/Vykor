@@ -8,7 +8,7 @@ export type ConversationPaneProps = {
   canOpenReview: boolean
   onOpenReview: (path?: string, scope?: DesktopGitDiffScope) => void
   onOpenTerminal: (terminalId: string) => void
-  onOpenAgents: () => void
+  onOpenAgents: (taskId?: string) => void
 }
 
 export interface AddToComposerEventDetail {

@@ -1,5 +1,16 @@
 import type { DesktopAuxSessionUpdate, DesktopSessionTask } from "@shared/session-types"
 
+export function agentTaskStatusLabel(status: DesktopSessionTask["status"]): string {
+  return {
+    pending: "等待中",
+    running: "运行中",
+    completed: "已完成",
+    failed: "失败",
+    stopped: "已停止",
+    interrupted: "已中断",
+  }[status]
+}
+
 export interface AgentTaskGroups {
   active: DesktopSessionTask[]
   completed: DesktopSessionTask[]

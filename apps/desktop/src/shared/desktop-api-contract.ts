@@ -222,6 +222,7 @@ export type DesktopAPI = {
     flash: () => Promise<void>
     stopFlash: () => Promise<void>
     notify: (options: TrayNotificationOptions) => Promise<void>
+    onNotificationClick: (listener: (sessionId: string) => void) => () => void
   }
   pet: {
     show: () => Promise<void>

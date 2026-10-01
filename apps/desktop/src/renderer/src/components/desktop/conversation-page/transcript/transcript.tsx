@@ -38,6 +38,8 @@ export function ConversationTranscript({
   onOpenReview,
   onOpenTerminal,
   showReasoning = true,
+  tasks,
+  onOpenAgents,
 }: {
   messages: DesktopSessionMessage[]
   inputs?: DesktopSessionInput[]
@@ -53,6 +55,8 @@ export function ConversationTranscript({
   onOpenReview: (path?: string) => void
   onOpenTerminal: (terminalId: string) => void
   showReasoning?: boolean
+  tasks?: import("@shared/session-types").DesktopSessionTask[]
+  onOpenAgents?: (taskId?: string) => void
 }): React.JSX.Element {
   // 外层滚动容器随聊天或加载状态重新挂载，这份初始记录只属于当前聊天。
   const [initialPartIds] = useState(() => new Set(parts.map((part) => part.id)))
@@ -178,6 +182,8 @@ export function ConversationTranscript({
                     parts={item.parts}
                     streaming={item.streaming}
                     initialPartIds={initialPartIds}
+                    tasks={tasks}
+                    onOpenAgents={onOpenAgents}
                     onOpenFile={onOpenFile}
                     canOpenReview={canOpenReview}
                     onOpenReview={onOpenReview}

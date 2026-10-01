@@ -22,6 +22,17 @@ import { IpcChannels, IpcEvents } from "../shared/ipc-channels"
 import { desktopAPI } from "./desktop-api"
 
 describe("desktop activity preload bridge", () => {
+  it("forwards valid notification chat IDs and releases its listener", () => {
+    const received: string[] = []
+    const unsubscribe = desktopAPI.tray.onNotificationClick((id) => received.push(id))
+    const [, wrapped] = electron.on.mock.lastCall!
+    wrapped({}, "chat-2")
+    wrapped({}, null)
+    wrapped({}, "")
+    expect(received).toEqual(["chat-2"])
+    unsubscribe()
+    expect(electron.removeListener).toHaveBeenCalledWith(IpcEvents.trayNotificationClicked, wrapped)
+  })
   it("opens the global activity stream", async () => {
     await desktopAPI.activity.open()
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.activityOpen)

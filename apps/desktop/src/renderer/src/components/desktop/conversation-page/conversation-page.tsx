@@ -613,6 +613,8 @@ function ConversationPane({
                   <MessageScrollerContent className="mx-auto min-h-full w-full max-w-190 min-w-0 gap-6 px-6 pt-7 pb-5 text-content-foreground">
                     {openingSession && !sessionView ? null : (
                       <ConversationTranscript
+                        tasks={sessionView?.tasks}
+                        onOpenAgents={onOpenAgents}
                         inputs={sessionView?.inputs ?? []}
                         messages={transcript.messages}
                         parts={transcript.parts}

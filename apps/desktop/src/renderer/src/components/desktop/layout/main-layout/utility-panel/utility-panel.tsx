@@ -50,7 +50,7 @@ type UtilityPanelProps = {
   fileOpenRequest: { id: number; path: string; line?: number } | null
   reviewOpenRequest: DesktopGitReviewRequest | null
   terminalOpenRequest: { id: number; terminalId: string } | null
-  toolOpenRequest: { id: number; tool: UtilityToolRequest } | null
+  toolOpenRequest: { id: number; tool: UtilityToolRequest; taskId?: string } | null
   onOpenFile: (path: string, line?: number) => void
   onOpenReview: (path?: string) => void
   onOpenTerminal: (terminalId: string) => void
@@ -337,8 +337,13 @@ export function UtilityPanel({
       setFileTabs(nextStoredFileTabs)
       setActiveFilePath(nextActivePath)
       persistFileTabs(
-        nextFileTabs.filter((tab) => tab.preview.scope !== "extra-root").map((tab) => tab.preview.path),
-        nextActivePath && nextFileTabs.some((tab) => tab.preview.path === nextActivePath && tab.preview.scope !== "extra-root")
+        nextFileTabs
+          .filter((tab) => tab.preview.scope !== "extra-root")
+          .map((tab) => tab.preview.path),
+        nextActivePath &&
+          nextFileTabs.some(
+            (tab) => tab.preview.path === nextActivePath && tab.preview.scope !== "extra-root"
+          )
           ? nextActivePath
           : null
       )
@@ -442,8 +447,7 @@ export function UtilityPanel({
     persistFileTabs(
       nextTabs
         .filter(
-          (tab) =>
-            (tab.projectPath ?? null) === nextProject && tab.preview.scope !== "extra-root"
+          (tab) => (tab.projectPath ?? null) === nextProject && tab.preview.scope !== "extra-root"
         )
         .map((tab) => tab.preview.path),
       nextFileTab.preview.scope === "extra-root" ? null : nextFileTab.preview.path
@@ -637,6 +641,7 @@ export function UtilityPanel({
           {tabs.some((tab) => tab.tool === "agents") ? (
             <AgentsTool
               key={activeSessionId ?? "no-session"}
+              openRequest={toolOpenRequest?.tool === "agents" ? toolOpenRequest : null}
               active={activeTab?.tool === "agents"}
               onOpenFile={onOpenFile}
               canOpenReview={activeWorkspaceIsGit === true}

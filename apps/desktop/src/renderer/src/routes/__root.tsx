@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router"
+import { createRootRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import { markStartupOverlayReady } from "@renderer/startup-overlay"
 
 import { DesktopSessionEventBridge } from "@renderer/components/desktop/desktop-session-event-bridge"
@@ -14,11 +14,20 @@ export const Route = createRootRoute({
 })
 
 function DesktopRoot(): React.JSX.Element {
+  const navigate = useNavigate()
   const routeReady = useRouterState({
     select: (state) => state.status === "idle" && !state.isLoading,
   })
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const sessionEventsEnabled = shouldAttachDesktopSessionEvents(pathname)
   const appOperationError = useDesktopSessionStore(selectAppOperationError)
+
+  useEffect(() => {
+    if (!sessionEventsEnabled) return
+    return window.desktop?.tray?.onNotificationClick?.((sessionId) => {
+      void navigate({ to: "/conversation/$sessionId", params: { sessionId } })
+    })
+  }, [navigate, sessionEventsEnabled])
 
   useEffect(() => {
     // effect 在页面提交后执行；数据返回、项目检查、会话恢复及重定向均不能提前撤掉遮罩。
@@ -27,7 +36,7 @@ function DesktopRoot(): React.JSX.Element {
 
   return (
     <>
-      <DesktopSessionEventBridge enabled={shouldAttachDesktopSessionEvents(pathname)} />
+      <DesktopSessionEventBridge enabled={sessionEventsEnabled} />
       <Outlet />
       <DesktopToastHost />
       {appOperationError ? (

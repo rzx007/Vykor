@@ -98,6 +98,7 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
             return window.desktop.tray.notify({
               title: notification.title,
               body: notification.body,
+              ...(notification.sessionId ? { sessionId: notification.sessionId } : {}),
               ...(settings.notificationMode === "always" ? { showWhenFocused: true } : {}),
             })
           })

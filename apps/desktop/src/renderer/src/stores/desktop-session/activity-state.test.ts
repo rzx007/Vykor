@@ -40,6 +40,56 @@ const update = (
 ): DesktopActivityUpdate => ({ cursor, delivery, sessions, scheduled })
 
 describe("Activity state", () => {
+  it("does not notify an older pending approval again when another approval is resolved", () => {
+    const initial = applyActivityUpdate(
+      createActivityState(),
+      update(1, "baseline", [{ ...session("other", "needs_input", 1), permissionId: "older" }]),
+      null
+    ).state
+    const asked = applyActivityUpdate(
+      initial,
+      {
+        ...update(2, "live", [{ ...session("other", "needs_input", 2), permissionId: "newer" }]),
+        eventType: "permission.asked",
+      },
+      null
+    )
+    expect(asked.notifications).toHaveLength(1)
+    const replied = applyActivityUpdate(
+      asked.state,
+      {
+        ...update(3, "live", [{ ...session("other", "needs_input", 2), permissionId: "older" }]),
+        eventType: "permission.replied",
+      },
+      null
+    )
+    expect(replied.notifications).toEqual([])
+  })
+  it("offers current-chat approvals for native notification without marking the chat unread", () => {
+    const initial = applyActivityUpdate(
+      createActivityState(),
+      update(1, "baseline", [session("current", "running", 1)]),
+      "current"
+    ).state
+    const approval = { ...session("current", "needs_input", 2), permissionId: "p1" }
+    const result = applyActivityUpdate(initial, update(2, "live", [approval]), "current")
+    expect(result.state.sessions.current.attentionState).toBe("read")
+    expect(result.notifications).toMatchObject([{ sessionId: "current", status: "needs_input" }])
+    expect(
+      applyActivityUpdate(
+        result.state,
+        update(3, "live", [{ ...approval, activitySeq: 3 }]),
+        "current"
+      ).notifications
+    ).toEqual([])
+    expect(
+      applyActivityUpdate(
+        result.state,
+        update(4, "live", [{ ...approval, permissionId: "p2", activitySeq: 4 }]),
+        "current"
+      ).notifications
+    ).toHaveLength(1)
+  })
   it("marks a background completion unread while keeping execution state separate", () => {
     const baseline = applyActivityUpdate(
       createActivityState(),
