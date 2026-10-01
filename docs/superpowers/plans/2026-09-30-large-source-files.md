@@ -4,9 +4,9 @@
 
 **目标：** 降低超长源码的阅读和修改成本，同时保持现有功能、公开导出、持久化格式和事件顺序。
 
-**范围：** 仓库中超过 600 个物理行的非测试 TypeScript、TSX、JavaScript 和样式文件。排除测试、测试夹具、构建产物、依赖目录、JSON 数据、迁移快照及 API 契约。
+**当前实施范围：** `packages/` 中超过 600 个物理行的非测试源码。`apps/desktop/` 和 `apps/frontend/` 不再处理；原盘点和已完成记录保留为历史。继续排除测试、测试夹具、构建产物、依赖目录、JSON 数据、迁移快照及 API 契约。
 
-**统计结果：** 初次 48 个文件，其中 Desktop 19 个、Frontend 1 个、其余包 28 个；2026-10-01 复盘剩余 20 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
+**统计结果：** 初次 48 个文件，其中 Desktop 19 个、Frontend 1 个、其余包 28 个；2026-10-01 全仓复盘剩余 20 个，按当前范围剩余 9 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
 
 ## 实施约束
 
@@ -110,14 +110,13 @@
 
 ## 2026-10-01 剩余清单与下一轮选择
 
-以下是当前超过 600 行的 20 个非测试文件，按下一轮处理方式归类。数字是本次扫描的物理行数；“先观察”不是永不拆分，而是需要先证明独立职责或测试保护，不为过线数字增加包装层。
+以下只列当前范围内超过 600 行的 9 个非测试文件。早期阶段表格仍保留初始全仓盘点，不表示桌面端或 `apps/frontend` 继续在实施范围内。数字是本次扫描的物理行数；“先观察”不是永不拆分，而是需要先证明独立职责或测试保护，不为过线数字增加包装层。
 
 | 下一轮处理 | 文件与当前行数 | 判断依据 |
 |---|---|---|
-| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1205；`packages/agent-runtime/src/child-agent.ts` 955；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
-| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/server/src/daemon/channel-runtime-service.ts` 724；`apps/desktop/src/main/features/browser/browser-agent-service.ts` 721；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
-| 界面按组件责任拆 | `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx` 706；`apps/frontend/src/hooks/useServerSync.ts` 801；`apps/desktop/src/renderer/src/components/desktop/conversation-page/conversation-page.tsx` 776；`apps/desktop/src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel.tsx` 691；`apps/desktop/src/renderer/src/components/desktop/plugin-page/mcp-manager.tsx` 660；`apps/desktop/src/renderer/src/components/desktop/plugin-page/plugin-manager.tsx` 624 | 先确认局部状态和独立子组件；保持唯一状态持有者，不拆出一套并行状态容器 |
-| 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1213；`apps/desktop/src/renderer/src/assets/main.css` 934；`apps/desktop/src/shared/ipc-channels.ts` 925；`packages/services/src/session-runtime/schema.ts` 685；`apps/desktop/src/renderer/src/components/ui/gridreveal.tsx` 654；`apps/desktop/src/renderer/src/components/ui/github-activity.tsx` 630 | 主要是有顺序的装配、声明、样式级联或单一组件；只有出现可验证的维护边界时再整理 |
+| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1205；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
+| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/server/src/daemon/channel-runtime-service.ts` 724；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
+| 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1213；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
 
 ## 每批的验收方法
 
@@ -342,3 +341,12 @@
 
 - `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx` 从 852 行降至 706 行；右键菜单归入同目录 `terminal-context-menu.tsx`，标签名称、坐标、会话匹配和错误文案归入 `terminal-display.ts`。终端连接、事件订阅及生命周期仍由主组件管理，原公开 `TerminalSessionTabInfo` 导出保留。
 - 首次桌面 Web 类型检查发现之前 client 类型归类留下未使用的 `AdmitPromptInput` 导入，移除后通过；终端相关定向测试 3 个文件、4 条通过。此批尚未重跑含上述既有失败用例的桌面完整套件。
+
+### 2026-10-01：实施范围收敛
+
+- 按用户决定，后续不再处理 `apps/desktop/` 和 `apps/frontend/`；此前已完成的拆分和测试记录保留，不撤销现有提交。当前只推进 `packages/`，超过 600 行的待评估文件为 9 个。
+
+### 2026-10-01：子代理活动投影
+
+- `packages/agent-runtime/src/child-agent.ts` 从 955 行降至 836 行；可信事件的最近活动投影、文本限额及未完成结果提取归入同目录 `child-activity.ts`。管理器仍负责事件订阅、子代理预算、运行与关闭。
+- 验证：agent-runtime 包类型检查通过；完整 Vitest 共 37 个文件、349 条通过。
