@@ -2,118 +2,40 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { getChannelWorkspaceRoot, type Settings } from "@vykor/core";
+import { getChannelWorkspaceRoot } from "@vykor/core";
 import type { FeishuChannelConfig } from "@vykor/auth";
 import type {
   ChannelConnectorRuntimeStatus,
-  ChannelDeliveryRecord,
   ChannelDenialNotice,
   ChannelRuntimeState,
   ChannelRuntimeStatus,
-  DurableChannelMessageInput,
-  DurableChannelMessageResult,
-  RecordChannelDeliveryInput,
 } from "@vykor/protocol";
 import type { InboundMessage } from "@vykor/channels";
+import type {
+  ChannelAttachmentDownload,
+  ChannelAttachmentDownloadInput,
+  ChannelRuntimeErrorCode,
+  ChannelRuntimeServiceOptions,
+  ConnectorEntry,
+  ConnectorRuntimeHandle,
+  CreateConnectorRuntimeInput,
+} from "./channel-runtime-types.js";
 
-import type { ObservabilityEvent } from "../shared/observability.js";
-
-/** daemon 侧需要的最小 application 端口（由 ChannelApplicationService 适配）。 */
-export interface ChannelRuntimeApplicationPort {
-  handleMessage(input: DurableChannelMessageInput): Promise<DurableChannelMessageResult>;
-  pendingDeliveries(options?: {
-    connector?: string;
-    limit?: number;
-  }): Promise<ChannelDeliveryRecord[]>;
-  recordDelivery(
-    id: string,
-    input: RecordChannelDeliveryInput,
-  ): Promise<ChannelDeliveryRecord>;
-}
-
-/** 平台附件下载结果：字节流 + 可选文件名/类型。 */
-export interface ChannelAttachmentDownload {
-  stream: ReadableStream<Uint8Array>;
-  name?: string;
-  mimeType?: string;
-}
-
-export interface ChannelAttachmentDownloadInput {
-  messageId: string;
-  type: "image" | "file";
-  externalId: string;
-  name?: string;
-  signal?: AbortSignal;
-}
-
-/** 一个 connector 的运行时句柄；由 createRuntime 返回。 */
-export interface ConnectorRuntimeHandle {
-  start(): Promise<void>;
-  stopInbound(): Promise<void>;
-  stopBridge(options?: { drainTimeoutMs?: number }): Promise<void>;
-  stop(): Promise<void>;
-  /** 可选：下载该 connector 入站消息的资源；未提供表示不支持。 */
-  downloadAttachment?(input: ChannelAttachmentDownloadInput): Promise<ChannelAttachmentDownload | undefined>;
-}
-
-export interface CreateConnectorRuntimeInput {
-  connector: string;
-  config: FeishuChannelConfig;
-  application: ChannelRuntimeApplicationPort;
-  model: string;
-  /** manager 持有同一引用；运行时原地修改即可让 ACL 立即生效。 */
-  acl: { allowFrom: string[] };
-  policy: { sendProgress?: boolean; sendToolHints?: boolean };
-  resolveCwd(message: InboundMessage): Promise<string>;
-  onDenied(info: { channel: string; sender: string; chatId: string }): void;
-  onDeliveryResult(result: {
-    deliveryId: string;
-    status: "sent" | "failed" | "unknown";
-    error?: string;
-  }): Promise<void> | void;
-}
-
-export interface ChannelRuntimeServiceOptions {
-  application: ChannelRuntimeApplicationPort;
-  config: { getFeishu(): Promise<FeishuChannelConfig | undefined> };
-  getSettings(): Settings | undefined;
-  createRuntime?(input: CreateConnectorRuntimeInput): Promise<ConnectorRuntimeHandle>;
-  verify?(input: {
-    appId: string;
-    appSecret: string;
-    domain: "feishu" | "lark";
-  }): Promise<{ name?: string }>;
-  workspaceRoot?: string;
-  drainTimeoutMs?: number;
-  /** 单个 connector 建立连接的硬上限；超时落 state=error，避免卡住 lane。 */
-  connectTimeoutMs?: number;
-  /** shutdown 等待 lane 的硬上限；超时后不再等，避免 daemon 关不掉。 */
-  shutdownTimeoutMs?: number;
-  logger?(event: ObservabilityEvent): void;
-  now?(): number;
-}
-
-export type ChannelRuntimeErrorCode =
-  | "unknown_connector"
-  | "not_configured"
-  | "not_enabled"
-  | "closed";
+export type {
+  ChannelAttachmentDownload,
+  ChannelAttachmentDownloadInput,
+  ChannelRuntimeApplicationPort,
+  ChannelRuntimeErrorCode,
+  ChannelRuntimeServiceOptions,
+  ConnectorRuntimeHandle,
+  CreateConnectorRuntimeInput,
+} from "./channel-runtime-types.js";
 
 export class ChannelRuntimeError extends Error {
   constructor(readonly code: ChannelRuntimeErrorCode, message: string) {
     super(message);
     this.name = "ChannelRuntimeError";
   }
-}
-
-interface ConnectorEntry {
-  config: FeishuChannelConfig | undefined;
-  fingerprint: string;
-  acl: { allowFrom: string[] };
-  policy: { sendProgress?: boolean; sendToolHints?: boolean };
-  status: ChannelConnectorRuntimeStatus;
-  lane: Promise<void>;
-  handle: ConnectorRuntimeHandle | null;
 }
 
 const CONNECTOR = "feishu";

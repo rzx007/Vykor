@@ -115,7 +115,7 @@
 | 下一轮处理 | 文件与当前行数 | 判断依据 |
 |---|---|---|
 | 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1205；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
-| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/server/src/daemon/channel-runtime-service.ts` 724；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
+| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/server/src/daemon/channel-runtime-service.ts` 646；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
 | 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1213；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
 
 ## 每批的验收方法
@@ -350,3 +350,8 @@
 
 - `packages/agent-runtime/src/child-agent.ts` 从 955 行降至 836 行；可信事件的最近活动投影、文本限额及未完成结果提取归入同目录 `child-activity.ts`。管理器仍负责事件订阅、子代理预算、运行与关闭。
 - 验证：agent-runtime 包类型检查通过；完整 Vitest 共 37 个文件、349 条通过。
+
+### 2026-10-01：渠道运行连接类型
+
+- `packages/server/src/daemon/channel-runtime-service.ts` 从 724 行降至 646 行；应用端口、附件下载、运行时句柄、创建参数和配置类型归入同目录 `channel-runtime-types.ts`，旧模块继续重导出公开类型。运行服务继续控制连接状态和启停顺序。
+- 首次类型检查发现内部状态类型仍需原位导入，补回后通过；渠道相关测试 4 个文件、74 条通过。
