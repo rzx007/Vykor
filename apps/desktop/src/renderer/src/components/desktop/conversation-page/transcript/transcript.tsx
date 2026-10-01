@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { readSessionModelRetryState, readSessionModelUsage } from "@vykor/client"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import type { DesktopSessionInput } from "@shared/session-types"
@@ -21,6 +21,7 @@ import type {
 } from "@shared/session-types"
 import { AssistantMessageActions, MessageBlock } from "../message/message-block"
 import { RunErrorNotice } from "../message/run-error-notice"
+import { ContentEntrance } from "../message/content-entrance"
 
 export function ConversationTranscript({
   messages,
@@ -53,6 +54,8 @@ export function ConversationTranscript({
   onOpenTerminal: (terminalId: string) => void
   showReasoning?: boolean
 }): React.JSX.Element {
+  // 外层滚动容器随聊天或加载状态重新挂载，这份初始记录只属于当前聊天。
+  const [initialPartIds] = useState(() => new Set(parts.map((part) => part.id)))
   const visibleParts = useMemo(
     () => visibleTranscriptParts(parts, showReasoning),
     [parts, showReasoning]
@@ -122,7 +125,9 @@ export function ConversationTranscript({
         const userMessage = entry.turn.userMessage
         const turnUsageRuns = runs.filter(
           (run) =>
-            entry.turn.runIds.includes(run.id) && readSessionModelUsage(run.metadata)?.incomplete
+            import.meta.env.DEV &&
+            entry.turn.runIds.includes(run.id) &&
+            readSessionModelUsage(run.metadata)?.incomplete
         )
         const turnPlan = planTurnBlocks(entry.turn, {
           streaming: running && entry === lastTurn,
@@ -138,20 +143,22 @@ export function ConversationTranscript({
                 scrollAnchor={userMessage.id === lastUserMessage?.id}
                 className="pt-2"
               >
-                <MessageBlock
-                  message={userMessage}
-                  inputItems={inputs.find((input) => input.id === userMessage.inputId)?.items}
-                  parts={entry.turn.userParts}
-                  streaming={false}
-                  userActions={{
-                    canEdit: canEditLastUserMessage && userMessage.id === lastUserMessage?.id,
-                    onEdit: (content) => onEditLastUserMessage(userMessage.id, content),
-                  }}
-                  onOpenFile={onOpenFile}
-                  canOpenReview={canOpenReview}
-                  onOpenReview={onOpenReview}
-                  onOpenTerminal={onOpenTerminal}
-                />
+                <ContentEntrance animate={userMessage.metadata.optimistic === true}>
+                  <MessageBlock
+                    message={userMessage}
+                    inputItems={inputs.find((input) => input.id === userMessage.inputId)?.items}
+                    parts={entry.turn.userParts}
+                    streaming={false}
+                    userActions={{
+                      canEdit: canEditLastUserMessage && userMessage.id === lastUserMessage?.id,
+                      onEdit: (content) => onEditLastUserMessage(userMessage.id, content),
+                    }}
+                    onOpenFile={onOpenFile}
+                    canOpenReview={canOpenReview}
+                    onOpenReview={onOpenReview}
+                    onOpenTerminal={onOpenTerminal}
+                  />
+                </ContentEntrance>
               </MessageScrollerItem>
             ) : null}
             {turnPlan.map((item) =>
@@ -170,6 +177,7 @@ export function ConversationTranscript({
                   <AssistantMessage
                     parts={item.parts}
                     streaming={item.streaming}
+                    initialPartIds={initialPartIds}
                     onOpenFile={onOpenFile}
                     canOpenReview={canOpenReview}
                     onOpenReview={onOpenReview}

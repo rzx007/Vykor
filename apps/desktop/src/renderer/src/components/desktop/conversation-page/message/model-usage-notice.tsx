@@ -5,7 +5,7 @@ export function ModelUsageNotice({
 }: {
   metadata: Record<string, unknown>
 }): React.JSX.Element | null {
-  if (!readSessionModelUsage(metadata)?.incomplete) return null
+  if (!import.meta.env.DEV || !readSessionModelUsage(metadata)?.incomplete) return null
   const usage = metadata.usage as { inputTokens?: unknown; outputTokens?: unknown } | undefined
   const known =
     typeof usage?.inputTokens === "number" && typeof usage?.outputTokens === "number"

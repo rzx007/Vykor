@@ -36,15 +36,25 @@ import { streamdownPlugins } from "./streamdown-plugins"
 import { truncateReasoning } from "./reasoning-text"
 import { MessageAttachment } from "./message-attachment"
 import { GeneratedImageGallery, ImageGenerationMessage } from "./image-generation-message"
+import { ContentEntrance } from "./content-entrance"
 
 type ChangedFileStats = {
   additions: number
   deletions: number
 }
 
+const streamingTextAnimation = {
+  animation: "fadeIn",
+  duration: 150,
+  easing: "ease-out",
+  sep: "char",
+  stagger: 0,
+} as const
+
 export function AssistantMessage({
   parts,
   streaming,
+  initialPartIds,
   onOpenFile,
   canOpenReview,
   onOpenReview,
@@ -52,6 +62,8 @@ export function AssistantMessage({
 }: {
   parts: DesktopSessionPart[]
   streaming: boolean
+  /** 打开聊天时已有的内容，不重复播放入场。 */
+  initialPartIds?: ReadonlySet<string>
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
   onOpenReview: (path?: string) => void
@@ -66,16 +78,29 @@ export function AssistantMessage({
     <div className="group/assistant min-w-0 space-y-3">
       {blocks.map((block, index) => {
         if (block.type === "tool-group") {
-          return <ToolActivityGroup key={block.id} tools={block.tools} />
+          return (
+            <ContentEntrance
+              key={block.id}
+              animate={
+                streaming && Boolean(initialPartIds && !initialPartIds.has(block.tools[0]!.id))
+              }
+            >
+              <ToolActivityGroup tools={block.tools} />
+            </ContentEntrance>
+          )
         }
         if (block.type === "terminal") {
           return (
-            <TerminalActivityCard
+            <ContentEntrance
               key={block.id}
-              payload={block.payload}
-              active={isTerminalActivityActive(block, streaming && index === blocks.length - 1)}
-              onOpenTerminal={onOpenTerminal}
-            />
+              animate={streaming && Boolean(initialPartIds && !initialPartIds.has(block.tool.id))}
+            >
+              <TerminalActivityCard
+                payload={block.payload}
+                active={isTerminalActivityActive(block, streaming && index === blocks.length - 1)}
+                onOpenTerminal={onOpenTerminal}
+              />
+            </ContentEntrance>
           )
         }
         const unit = block.unit
@@ -86,6 +111,7 @@ export function AssistantMessage({
               text={unit.text}
               phase={unit.phase}
               streaming={streaming && index === blocks.length - 1}
+              animateInitialText={Boolean(initialPartIds && !initialPartIds.has(unit.id))}
               onOpenFile={onOpenFile}
             />
           )
@@ -161,20 +187,29 @@ function AssistantMarkdown({
   text,
   phase,
   streaming,
+  animateInitialText,
   onOpenFile,
 }: {
   text: string
   phase?: "commentary" | "final_answer"
   streaming: boolean
+  animateInitialText: boolean
   onOpenFile: (path: string, line?: number) => void
 }): React.JSX.Element {
   const components = useMemo(() => createStreamdownComponents({ onOpenFile }), [onOpenFile])
+  // 让 Streamdown 记住已有文字，重新打开进行中的回复时不重播历史。
+  const [initialText] = useState(() => (animateInitialText ? "" : text))
 
   return (
-    <div className="assistant-markdown min-w-0" data-phase={phase}>
+    <div
+      className="assistant-markdown min-w-0"
+      data-phase={phase}
+      data-stream-initial={streaming && text === initialText ? "true" : undefined}
+    >
       <Streamdown
         className="desktop-streamdown space-y-0"
-        animated
+        animated={streamingTextAnimation}
+        isAnimating={streaming}
         mode={streaming ? "streaming" : "static"}
         controls
         lineNumbers={false}
