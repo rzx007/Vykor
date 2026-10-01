@@ -7,107 +7,28 @@ import type { EnvironmentProcessExecutor } from "@vykor/environment";
 import type { SandboxPolicy } from "@vykor/sandbox";
 import { SandboxStdioClientTransport } from "./sandbox-stdio-transport.js";
 import type { McpOAuthRuntime } from "./oauth/runtime-auth.js";
+import { resolveTransportKind } from "./connection-types.js";
+import type {
+  McpConnection,
+  McpConnectionActivation,
+  McpResourceInfo,
+  McpToolCallResult,
+  McpToolInfo,
+  McpTransportKind,
+  PreparedMcpConnection,
+} from "./connection-types.js";
 
 export type { McpServerConfig };
-
-export type McpTransportKind = "stdio" | "http" | "sse";
-
-/**
- * Decide which transport a server config should use.
- *
- * The current format requires an explicit transport and its required field.
- * Runtime checks remain because settings and plugin files enter as JSON.
- */
-export function resolveTransportKind(
-  config: McpServerConfig
-): McpTransportKind | { error: string } {
-  const raw = config as unknown as Record<string, unknown>;
-  const kind = raw.type;
-
-  if (kind !== "stdio" && kind !== "http" && kind !== "sse") {
-    return {
-      error: "Invalid MCP server config: `type` must be `stdio`, `http`, or `sse`",
-    };
-  }
-
-  if ((kind === "http" || kind === "sse") &&
-      (typeof raw.url !== "string" || raw.url.trim().length === 0)) {
-    return { error: `MCP ${kind} server requires a \`url\`` };
-  }
-  if (kind === "stdio" &&
-      (typeof raw.command !== "string" || raw.command.trim().length === 0)) {
-    return { error: "MCP stdio server requires a `command`" };
-  }
-  if (kind === "stdio" && (raw.url !== undefined || raw.headers !== undefined)) {
-    return { error: "MCP stdio server cannot contain remote transport fields" };
-  }
-  if (kind !== "stdio" &&
-      (raw.command !== undefined || raw.args !== undefined || raw.env !== undefined || raw.cwd !== undefined)) {
-    return { error: `MCP ${kind} server cannot contain stdio transport fields` };
-  }
-
-  return kind;
-}
-
-export interface McpResourceInfo {
-  serverName: string;
-  name: string;
-  uri: string;
-  description: string;
-}
-
-export interface McpConnection {
-  name: string;
-  config: McpServerConfig;
-  status: "disconnected" | "connecting" | "connected" | "error";
-  transport: McpTransportKind;
-  authConfigured: boolean;
-  tools: McpToolInfo[];
-  resources: McpResourceInfo[];
-  error?: Error;
-  /** Non-fatal transport-wise; selected plugins must still surface failed tool discovery. */
-  toolError?: Error;
-  /** Non-fatal error from listing resources (server connected but resources failed). */
-  resourceError?: Error;
-}
-
-export interface McpToolInfo {
-  serverName: string;
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
-
-export interface McpToolCallResult {
-  content: string;
-  isError?: boolean;
-}
-
-/**
- * A connection that has finished discovery but is not yet visible through the
- * manager's current-connection maps. Tool Definitions are bound to the staged
- * client, so they cannot reach the new connection until activation.
- */
-export interface PreparedMcpConnection {
-  readonly name: string;
-  readonly connection: McpConnection;
-  readonly client: Client;
-  readonly transport: Transport;
-  readonly tools: ToolDefinition[];
-}
-
-/**
- * Result of an atomic activation.
- *
- * `committed: true` means the staged connection is current and its tools were
- * committed; `closePrevious()` releases the replaced connection once active
- * Runs using it have settled. `committed:
- * false` means the tool commit failed and the previous connection was restored;
- * `discardPrepared()` releases the never-published staged connection.
- */
-export type McpConnectionActivation =
-  | { committed: true; closePrevious(): Promise<void> }
-  | { committed: false; error: unknown; discardPrepared(): Promise<void> };
+export { resolveTransportKind } from "./connection-types.js";
+export type {
+  McpConnection,
+  McpConnectionActivation,
+  McpResourceInfo,
+  McpToolCallResult,
+  McpToolInfo,
+  McpTransportKind,
+  PreparedMcpConnection,
+} from "./connection-types.js";
 
 export class McpClientManager {
   private connections = new Map<string, McpConnection>();

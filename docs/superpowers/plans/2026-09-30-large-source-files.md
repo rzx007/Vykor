@@ -1,12 +1,12 @@
 # 超长源码整理与分阶段拆分计划
 
-> 状态：盘点与实施计划；阶段 1 持续进行，client 命令及四处桌面界面文件已拆分。统计日期：2026-09-30。
+> 状态：分阶段持续实施。初次盘点 2026-09-30；最近一次复盘 2026-10-01。
 
 **目标：** 降低超长源码的阅读和修改成本，同时保持现有功能、公开导出、持久化格式和事件顺序。
 
-**范围：** 仓库中超过 600 个物理行的非测试 TypeScript、TSX、JavaScript 和样式文件。排除测试、测试夹具、构建产物、依赖目录、JSON 数据、迁移快照及 API 契约。
+**当前实施范围：** `packages/` 中超过 600 个物理行的非测试源码。`apps/desktop/` 和 `apps/frontend/` 不再处理；原盘点和已完成记录保留为历史。继续排除测试、测试夹具、构建产物、依赖目录、JSON 数据、迁移快照及 API 契约。
 
-**统计结果：** 48 个文件。其中 Desktop 19 个，Frontend 1 个，其余包 28 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
+**统计结果：** 初次 48 个文件，其中 Desktop 19 个、Frontend 1 个、其余包 28 个；2026-10-01 全仓复盘剩余 20 个，按当前范围剩余 8 个。行数只是发现线索，不是必须把每个文件压到 600 行以下的指标。
 
 ## 实施约束
 
@@ -14,7 +14,7 @@
 - 优先抽出纯转换、格式化、解析和已有的独立子组件。拥有运行状态的对象先留在原模块；需要移动状态时单独安排并验证生命周期。
 - 同一职责的源码、类型和定向测试放在同一现有领域目录。新建子目录须能容纳至少两个紧密相关的文件，避免一文件一文件夹。
 - 仅改变文件位置和内部组织时，保持命令输出、错误文字、事件顺序、数据库事务边界、UI 可见行为和公开导出路径。
-- 每批修改前重新查看 `git status`，保留并避开其他工作中的修改；特别是当前已修改的 `main.css`、`ipc-channels.ts`、`daemon-application.ts` 和未跟踪的 `github-activity.tsx`。
+- 每批修改前重新查看 `git status`，保留并避开其他工作中的修改；不要依据初次盘点时的工作区状态判断文件归属。
 - 每批只做一个可独立检查的职责拆分，先运行所在包的定向测试与类型检查；只有跨包导出、协议或应用装配变化才扩大检查范围。下文测试命令是未来实施指引，不代表已经运行。
 
 ## 建议的目录归纳
@@ -107,6 +107,16 @@
 | `packages/services/src/session-runtime/schema.ts` | 685 | 数据库表定义可以保留；如拆分，迁移产物及表名不能改变 |
 | `packages/skills/src/index.ts` | 638 | 注册、解析、加载放同包文件，保留公共导出 |
 | `packages/tools/src/file/operations.ts` | 628 | 按文件操作类别整理，仍留在 `file/` |
+
+## 2026-10-01 剩余清单与下一轮选择
+
+以下只列当前范围内超过 600 行的 8 个非测试文件。早期阶段表格仍保留初始全仓盘点，不表示桌面端或 `apps/frontend` 继续在实施范围内。数字是本次扫描的物理行数；“先观察”不是永不拆分，而是需要先证明独立职责或测试保护，不为过线数字增加包装层。
+
+| 下一轮处理 | 文件与当前行数 | 判断依据 |
+|---|---|---|
+| 继续按职责拆 | `packages/core/src/engine/query-engine.ts` 1025；`packages/agent-runtime/src/child-agent.ts` 836；`packages/services/src/session-runtime/store.ts` 875；`packages/services/src/conversations/conversation-transactions.ts` 784 | 已有同目录子模块，下一批仍应一次移动一个完整职责，保留引擎轮次、子代理预算和存储事务边界 |
+| 先做流程边界检查 | `packages/server/src/application/agent/daemon-agent-event-projector.ts` 1063；`packages/services/src/executions/detached-process-supervisor.ts` 691 | 都持有长期状态；只抽有明确输入输出的步骤，重点测试取消、重连与失败收尾 |
+| 先观察，暂不按行数硬拆 | `packages/server/src/application/daemon-application.ts` 1126；`packages/services/src/session-runtime/schema.ts` 685 | 前者是有顺序的应用装配，后者主要是数据库表声明；只有出现可验证的维护边界时再整理 |
 
 ## 每批的验收方法
 
@@ -231,3 +241,151 @@
 
 - `apps/desktop/src/renderer/src/stores/desktop-session/session-actions.ts` 从 950 行降至 581 行；新会话创建、首条提示词提交和草稿清理／恢复归入同目录 `start-session-action.ts`。原 Store 动作入口不变，导航代数和打开会话回调在调用时传入。
 - 验证：桌面 Web 类型检查通过；会话动作、提示词动作和 Store 集成测试共 3 个文件、84 条通过。
+
+### 2026-10-01：QueryEngine 工具调用准备
+
+- `packages/core/src/engine/query-engine.ts` 从 1530 行降至 1465 行；重复失败拦截、工具查找、输入规范化及校验归入同目录 `query-tool-preparation.ts`。权限判断、钩子、执行并发及结果回填仍在原调用顺序中。
+- 抽取时修正新文件的一处注册表类型别名；随后通过类型检查和完整 core 测试（31 个文件、306 条）。
+
+### 2026-10-01：服务端运行准入工作段
+
+- `packages/server/src/application/session/run-admission-service.ts` 从 709 行降至 488 行；已接收输入的持久化、恢复、steer 物化及投递失败收尾归入同目录 `run-admission-work.ts`。主服务保留停机检查、目标优先级及同 ID 请求的在途去重。
+- 在隔离工作区先构建 `@vykor/agent-runtime` 声明文件后，server 类型检查通过；完整 Vitest 共 121 个文件、1183 条通过。
+
+### 2026-10-01：SessionStore 保留策略与审计
+
+- `packages/services/src/session-runtime/store.ts` 从 1166 行降至 1024 行；已结束记录的保留期清理及审计读写归入同目录 `session-retention.ts`。原方法和默认策略导出保持可用，所有权检查仍在 `SessionStore` 入口，清理和审计仍在同一个数据库事务中完成。
+- 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。
+
+### 2026-10-01：SessionStore 投影结算
+
+- `packages/services/src/session-runtime/store.ts` 从 1024 行降至 876 行；结算记录的创建、查询、重试、失败、解决和放弃，以及数据库行转换归入同目录 `projection-settlements.ts`。原方法保留，在写操作前继续检查 Application Owner。
+- 验证：services 包类型检查通过；完整 Vitest 共 44 个文件、442 条通过。
+
+### 2026-10-01：桌面主进程会话操作辅助
+
+- `apps/desktop/src/main/features/session/session-operations.ts` 从 726 行降至 501 行；会话输入和权限／供应商校验归入 `session-operation-input.ts`，项目 Git 命令及项目信息转换归入 `project-operations-support.ts`。原公开辅助函数仍从 `session-operations.ts` 导出。
+- 隔离工作区的 Electron 依赖未执行安装脚本，测试时复用主工作区已有 Electron 路径；桌面 Node 类型检查与相关测试 2 个文件、18 条通过。
+
+### 2026-10-01：协议会话类型归类
+
+- `packages/protocol/src/session.ts` 从 835 行降至 270 行，保留基础会话、消息、运行记录和原导出路径。模型重试／用量解析归入 `session-model.ts`，定时任务类型归入 `scheduled.ts`，创建与查询请求类型归入 `session-requests.ts`。
+- 验证：protocol 包类型检查及完整 Vitest 13 个文件、146 条通过；全仓 `pnpm check-types` 61 项通过。
+
+### 2026-10-01：Core 运行类型归类
+
+- `packages/core/src/types/runtime.ts` 从 738 行降至 409 行；子代理输入、预算、句柄和错误类归入 `runtime-child.ts`，Agent 运行事件及订阅类型归入 `runtime-events.ts`。原 `runtime.ts` 重导出这些成员，运行配置和 `RuntimeBundle` 留在原文件。
+- 验证：core 包类型检查与完整 Vitest 31 个文件、306 条通过；全仓 `pnpm check-types` 61 项通过。
+
+### 2026-10-01：Client 公开类型归类
+
+- `packages/client/src/types/index.ts` 从 690 行降至 442 行；附件存储类型归入 `attachment-types.ts`，插件／技能／Agent 信息归入 `extension-types.ts`，会话同步状态归入 `sync-types.ts`。原入口重导出所有成员，client 的公开 API 形状保持不变。
+- 验证：client 包类型检查及完整 Vitest 12 个文件、132 条通过（含公开 API 契约）；全仓 `pnpm check-types` 61 项通过。
+
+### 2026-10-01：QueryEngine 工具权限与执行前钩子
+
+- `packages/core/src/engine/query-engine.ts` 从 1465 行降至 1355 行；并行权限检查、用户确认和执行前钩子归入同目录 `query-tool-permissions.ts`，与既有 `query-tool-preparation.ts` 顺序相接。实际工具执行、执行后钩子及结果回填仍由引擎持有。
+- 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：压缩服务摘要流程与类型
+
+- `packages/core/src/engine/compact-service.ts` 从 896 行降至 592 行；摘要提示词与上下文拼装归入 `compact-prompt.ts`，流式摘要收集、格式化及超窗错误识别归入 `compact-summary.ts`，公开类型归入 `compact-types.ts`。原公开导出路径保留，压缩服务继续控制重试、检查点和消息替换。
+- 验证：core 包完整 Vitest 共 31 个文件、306 条通过；全仓 `pnpm check-types` 61 项通过。
+
+### 2026-10-01：服务端运行自动审查
+
+- `packages/server/src/application/session/session-run-executor.ts` 从 619 行降至 537 行；自动审查的基线获取、已完成运行审查和未审查运行收尾归入同目录 `run-auto-review.ts`。原执行器仍控制调用顺序和运行状态结算。
+- 验证：server 包类型检查通过；运行执行器及装配测试共 2 个文件、17 条通过。
+
+### 2026-10-01：会话记录中图片元数据解析
+
+- `packages/server/src/application/session/transcript-projection.ts` 从 625 行降至 583 行；工具结果中的图片资产字段校验归入同目录 `transcript-image-metadata.ts`。投影器仍决定何时写入消息部件及发送事件。
+- 验证：server 包类型检查通过；会话记录投影测试 25 条通过。
+
+### 2026-10-01：MCP 连接配置与类型
+
+- `packages/mcp/src/index.ts` 从 633 行降至 554 行；传输方式校验、连接描述和准备／激活结果类型归入同目录 `connection-types.ts`。原包入口继续重导出这些公开成员，连接管理器仍负责连接、切换和资源调用。
+- 验证：MCP 包类型检查通过；完整 Vitest 共 10 个文件、156 条通过。
+
+### 2026-10-01：目标外部等待观察器
+
+- `packages/server/src/application/session/session-goal-service.ts` 从 652 行降至 580 行；外部任务等待的定时器、重试、完成后续跑派发与失败暂停归入同目录 `goal-external-wait-observer.ts`。目标服务仍决定何时开始或清除观察，恢复运行的输入构造复用原方法。
+- 验证：server 包类型检查通过；目标服务、等待校验和派发事件测试共 3 个文件、28 条通过。
+
+### 2026-10-01：会话交互类型归类
+
+- `packages/server/src/application/session/session-interaction-service.ts` 从 605 行降至 553 行；依赖接口及编辑、恢复、排队命令的输入／结果类型归入同目录 `session-interaction-types.ts`。原服务模块继续重导出这些类型，运行操作和纯辅助函数保留在服务中。
+- 首次类型检查发现返回类型仍引用 `RunControlService`，补回类型导入后验证通过；交互服务测试 9 条通过。
+
+### 2026-10-01：桌面浏览器页面检查与结果限额
+
+- `apps/desktop/src/main/features/browser/browser-agent-service.ts` 从 871 行降至 721 行；注入页面的检查脚本、页面变化等待和指纹归入 `browser-page-inspection.ts`，开发者检查结果的大小限制归入 `browser-developer-result-limits.ts`。浏览器服务仍持有标签页、导航及操作队列状态。
+- 验证：桌面 Node 类型检查通过；浏览器服务与开发者检查相关测试共 3 个文件、64 条通过。
+
+### 2026-10-01：QueryEngine 模型请求辅助
+
+- `packages/core/src/engine/query-engine.ts` 从 1355 行降至 1268 行；单次模型请求的取消／截止时间信号、失败分类和结束事件构造归入同目录 `query-model-attempt.ts`。用量累加仍由引擎持有，避免改变请求结算点。
+- 首次类型检查发现压缩客户端回调仍引用 `ModelAttemptFinishedEvent`，补回类型导入后通过；core 完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：QueryEngine 工具限制规则
+
+- `packages/core/src/engine/query-engine.ts` 从 1268 行降至 1205 行；输出截断阈值、超时配置与超时错误归入同目录 `query-tool-limits.ts`。引擎在原位置应用限制，工具结果及图片块处理顺序不变。
+- 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：本轮统一验收与已知测试问题
+
+- 全仓 `pnpm check-types`：61 项通过。server 完整 Vitest：121 个文件、1183 条通过。MCP 完整 Vitest：10 个文件、156 条通过。core 完整 Vitest：31 个文件、306 条通过。
+- desktop 完整 Vitest：207 个文件中 206 个通过，1320 条中 1319 条通过。唯一失败是 `project-actions.test.ts` 的恢复会话用例；单独复跑仍报 `document is not defined`。调用来自本轮拆分前已有的 `bootstrap-actions.ts` → `startup-overlay.ts` 默认参数，不在本轮改动路径内；本计划不顺带修改该功能。浏览器相关定向测试 64 条通过，桌面 Node 类型检查通过。
+
+### 2026-10-01：桌面终端展示辅助
+
+- `apps/desktop/src/renderer/src/components/desktop/tools/terminal/terminal-tool.tsx` 从 852 行降至 706 行；右键菜单归入同目录 `terminal-context-menu.tsx`，标签名称、坐标、会话匹配和错误文案归入 `terminal-display.ts`。终端连接、事件订阅及生命周期仍由主组件管理，原公开 `TerminalSessionTabInfo` 导出保留。
+- 首次桌面 Web 类型检查发现之前 client 类型归类留下未使用的 `AdmitPromptInput` 导入，移除后通过；终端相关定向测试 3 个文件、4 条通过。此批尚未重跑含上述既有失败用例的桌面完整套件。
+
+### 2026-10-01：实施范围收敛
+
+- 按用户决定，后续不再处理 `apps/desktop/` 和 `apps/frontend/`；此前已完成的拆分和测试记录保留，不撤销现有提交。当前只推进 `packages/`，超过 600 行的待评估文件为 9 个。
+
+### 2026-10-01：子代理活动投影
+
+- `packages/agent-runtime/src/child-agent.ts` 从 955 行降至 836 行；可信事件的最近活动投影、文本限额及未完成结果提取归入同目录 `child-activity.ts`。管理器仍负责事件订阅、子代理预算、运行与关闭。
+- 验证：agent-runtime 包类型检查通过；完整 Vitest 共 37 个文件、349 条通过。
+
+### 2026-10-01：渠道运行连接类型
+
+- `packages/server/src/daemon/channel-runtime-service.ts` 从 724 行降至 646 行；应用端口、附件下载、运行时句柄、创建参数和配置类型归入同目录 `channel-runtime-types.ts`，旧模块继续重导出公开类型。运行服务继续控制连接状态和启停顺序。
+- 首次类型检查发现内部状态类型仍需原位导入，补回后通过；渠道相关测试 4 个文件、74 条通过。
+
+### 2026-10-01：渠道连接器装配
+
+- `packages/server/src/daemon/channel-runtime-service.ts` 从 646 行降至 577 行；实际飞书适配器、消息总线和持久投递桥的组装归入同目录 `channel-runtime-factory.ts`。服务仍持有连接状态、串行启停与回调处理。
+- 验证：server 包类型检查通过；渠道相关测试 4 个文件、74 条通过。
+
+### 2026-10-01：QueryEngine 工具执行超时
+
+- `packages/core/src/engine/query-engine.ts` 从 1205 行降至 1156 行；不依赖引擎状态的取消信号、截止时间和工具超时竞赛归入既有 `query-tool-limits.ts`。引擎仍创建工具上下文、运行钩子并回填结果，没有新增目录或包装类。
+- 验证：core 包类型检查通过；完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：本轮统一验证
+
+- 渠道连接类型、连接器装配和 QueryEngine 工具超时三批提交后，全仓 `pnpm check-types` 通过；server 完整 Vitest 共 121 个文件、1183 条通过。core 完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：QueryEngine 工具注册表视图
+
+- 按优先级先处理 `packages/core/src/engine/query-engine.ts`：从 1156 行降至 1025 行。工具可见性过滤、单次运行的只读注册表及描述视图归入现有 `tool-registry.ts`；引擎仍决定调用顺序、授权、钩子和执行。顺手删除原文件中没有调用者的 `stableJson`。
+- 首次类型检查发现旧包入口的同名 `ToolRegistry` 指向实现类；改为原接口类型后复验通过。core 完整 Vitest 共 31 个文件、306 条通过。
+
+### 2026-10-01：DaemonApplication 附件服务装配
+
+- `packages/server/src/application/daemon-application.ts` 从 1213 行降至 1149 行；BlobStore、附件服务、会话附件资源、本地 OCR 与有界字节读取归入现有 `application/attachments/` 下的 `daemon-attachment-services.ts`。构造函数仍在原位置创建它们，并将同一 BlobStore 交给完整性检查。
+- 初次验证发现完整性检查仍引用旧局部变量，改为返回共享 BlobStore 后复验；server 类型检查及相关测试 4 个文件、29 条通过。
+
+### 2026-10-01：DaemonApplication 可选渠道装配
+
+- `packages/server/src/application/daemon-application.ts` 从 1149 行降至 1126 行；可选的渠道运行时及接入服务配对构造归入现有 `application/channel/` 下的 `channel-runtime-assembly.ts`。原应用仍在创建会话命令与交互服务后创建渠道，并持有启动、关闭入口。
+- 验证：server 类型检查通过；渠道装配、渠道服务和应用测试共 4 个文件、52 条通过。
+
+### 2026-10-01：优先文件统一验证与保留边界
+
+- QueryEngine 工具注册表、DaemonApplication 附件与渠道装配三批提交后，全仓 `pnpm check-types` 61 项通过；server 完整 Vitest 共 121 个文件、1183 条通过；core 完整 Vitest 共 31 个文件、306 条通过。
+- QueryEngine 的模型轮次状态、工具执行上下文及回填仍同属一次调用；DaemonApplication 的启动恢复、关机顺序和所有权释放仍由应用入口持有。现阶段不为压到 600 行而搬动这些共享状态和顺序约束。

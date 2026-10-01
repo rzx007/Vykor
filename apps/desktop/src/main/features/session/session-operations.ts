@@ -1,14 +1,10 @@
-import { execFile } from "node:child_process"
 import { stat } from "node:fs/promises"
-import { resolve } from "node:path"
-import { promisify } from "node:util"
 
 import {
   VykorClient,
   parseCreateSessionGoalInput,
   parseUpdateSessionGoalInput,
   parseGoalActionInput,
-  type ProjectRecord,
 } from "@vykor/client"
 
 import type {
@@ -18,7 +14,6 @@ import type {
   CreateDesktopSessionInput,
   DesktopCommandCatalogEntry,
   DesktopCompactSessionResult,
-  DesktopModel,
   DesktopProject,
   DesktopProjectDetails,
   DesktopPermissionMode,
@@ -53,14 +48,34 @@ import {
   removeEmptyOutsideProjectWorkspace,
 } from "./outside-project-workspace"
 import { readDesktopMetadata, toDesktopSessionRecord } from "./session-subscription-service"
+import { execGit, listLocalBranches, parseCurrentBranch, requireGitBranchName, toDesktopProject } from "./project-operations-support"
+import {
+  hasPromptItems,
+  normalizePermissionMode,
+  normalizePromptAttachments,
+  requirePermissionMode,
+  requirePromptItems,
+  requireString,
+  resolveProviderForModel,
+  resolveRequiredPath,
+} from "./session-operation-input"
 import { app } from "electron"
 
-type SessionOperationsClient = Pick<
+export type SessionOperationsClient = Pick<
   VykorClient,
   "projects" | "development" | "system" | "sessions" | "permissions" | "providers"
 >
 
-const execFileAsync = promisify(execFile)
+export { toDesktopProject } from "./project-operations-support"
+export {
+  normalizePermissionMode,
+  optionalProvider,
+  requirePermissionMode,
+  requireString,
+  resolveProviderForModel,
+  resolveRequiredPath,
+} from "./session-operation-input"
+
 const DESKTOP_SESSION_COMMAND_NAMES = new Set(["/compact", "/goal", "/status", "/skills"])
 
 export class SessionOperations {
@@ -482,245 +497,4 @@ export class SessionOperations {
   setEphemeralClient(client: VykorClient) {
     this.ephemeralClient = client
   }
-}
-
-export async function toDesktopProject(project: ProjectRecord): Promise<DesktopProject> {
-  let available = false
-  try {
-    available = (await stat(project.path)).isDirectory()
-  } catch {
-    available = false
-  }
-  return { ...project, available }
-}
-
-export function resolveRequiredPath(value: unknown): string {
-  return resolve(requireString(value, "项目路径"))
-}
-
-export function requireString(value: unknown, label: string): string {
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${label}不能为空。`)
-  return value.trim()
-}
-
-export function normalizePermissionMode(value: unknown): DesktopPermissionMode | undefined {
-  return value === "default" || value === "plan" || value === "full_auto" ? value : undefined
-}
-
-export function requirePermissionMode(value: unknown): DesktopPermissionMode {
-  const mode = normalizePermissionMode(value)
-  if (!mode) throw new Error("权限模式必须是 default、plan 或 full_auto。")
-  return mode
-}
-
-export function optionalProvider(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined
-  const provider = value.trim()
-  if (!provider || provider.toLowerCase() === "configured") return undefined
-  return provider
-}
-
-export async function resolveProviderForModel(
-  client: SessionOperationsClient,
-  model: string,
-  requestedProvider: unknown
-): Promise<string | undefined> {
-  const provider = optionalProvider(requestedProvider)
-  const models = (await client.providers.listModels()).flatMap((item) => item.models)
-  if (provider) {
-    if (!models.some((item) => item.id === model && item.providerName === provider)) {
-      throw new Error(`模型 ${model} 不属于 provider ${provider}。`)
-    }
-    return provider
-  }
-
-  const providers = uniqueModelProviders(models, model)
-  if (providers.length <= 1) return providers[0]
-  throw new Error(`模型 ${model} 在多个 provider 中同名，请明确指定 provider。`)
-}
-
-function uniqueModelProviders(models: DesktopModel[], model: string): string[] {
-  return [
-    ...new Set(
-      models
-        .filter((item) => item.id === model)
-        .map((item) => optionalProvider(item.providerName))
-        .filter((item): item is string => Boolean(item))
-    ),
-  ]
-}
-
-function normalizePromptAttachments(
-  value: unknown,
-  autoOnly: boolean
-): SendDesktopPromptInput["attachments"] {
-  if (!Array.isArray(value)) throw new Error("附件必须是数组。")
-  return value.map((attachment, index) => {
-    if (!attachment || typeof attachment !== "object") {
-      throw new Error(`第 ${index + 1} 个附件无效。`)
-    }
-    const record = attachment as Record<string, unknown>
-    const intent = requireAttachmentIntent(record.intent, index)
-    if (autoOnly && intent !== "auto") {
-      throw new Error(`第 ${index + 1} 个附件 intent 必须是 auto。`)
-    }
-    return {
-      assetId: requireString(record.assetId, `第 ${index + 1} 个附件 assetId`),
-      intent,
-      displayName: requireString(record.displayName, `第 ${index + 1} 个附件名称`),
-    }
-  })
-}
-
-function requirePromptItems(value: unknown): SessionUserInputItem[] {
-  if (!Array.isArray(value)) throw new Error("消息 items 必须是数组。")
-  return value.map((item, index) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error(`第 ${index + 1} 个消息 item 无效。`)
-    }
-    const record = item as Record<string, unknown>
-    if (record.type === "text" && typeof record.text === "string") {
-      return { type: "text", text: record.text }
-    }
-    if (
-      record.type === "context" &&
-      record.kind === "conversation" &&
-      typeof record.id === "string" &&
-      typeof record.displayName === "string"
-    ) {
-      return {
-        type: "context",
-        kind: "conversation",
-        id: record.id,
-        displayName: record.displayName,
-      }
-    }
-    if (
-      record.type === "mention" &&
-      typeof record.name === "string" &&
-      typeof record.path === "string"
-    ) {
-      return {
-        type: "mention",
-        name: record.name,
-        path: record.path,
-        ...(typeof record.displayName === "string" ? { displayName: record.displayName } : {}),
-      }
-    }
-    if (
-      record.type === "capability" &&
-      (record.kind === "plugin" || record.kind === "plugin_agent") &&
-      typeof record.pluginId === "string" &&
-      typeof record.displayName === "string"
-    ) {
-      if (record.kind === "plugin_agent") {
-        if (typeof record.agentId !== "string") {
-          throw new Error(`第 ${index + 1} 个消息 item 的 agentId 无效。`)
-        }
-        return {
-          type: "capability",
-          kind: "plugin_agent",
-          pluginId: record.pluginId,
-          agentId: record.agentId,
-          displayName: record.displayName,
-        }
-      }
-      return {
-        type: "capability",
-        kind: "plugin",
-        pluginId: record.pluginId,
-        displayName: record.displayName,
-      }
-    }
-    if (
-      record.type === "skill" &&
-      typeof record.name === "string" &&
-      typeof record.path === "string"
-    ) {
-      const source = record.source
-      if (
-        source !== undefined &&
-        source !== "bundled" &&
-        source !== "user" &&
-        source !== "project" &&
-        source !== "plugin"
-      ) {
-        throw new Error(`第 ${index + 1} 个消息 item 的 source 无效。`)
-      }
-      return {
-        type: "skill",
-        name: record.name,
-        path: record.path,
-        ...(typeof record.displayName === "string" ? { displayName: record.displayName } : {}),
-        ...(source ? { source } : {}),
-      }
-    }
-    throw new Error(`第 ${index + 1} 个消息 item 无效。`)
-  })
-}
-
-function hasPromptItems(items: readonly SessionUserInputItem[]): boolean {
-  return items.some((item) => item.type !== "text" || item.text.trim().length > 0)
-}
-
-function requireAttachmentIntent(
-  value: unknown,
-  index: number
-): SendDesktopPromptInput["attachments"][number]["intent"] {
-  if (
-    value === "auto" ||
-    value === "vision" ||
-    value === "ocr" ||
-    value === "document" ||
-    value === "tool_resource" ||
-    value === "workspace_reference"
-  ) {
-    return value
-  }
-  throw new Error(`第 ${index + 1} 个附件 intent 无效。`)
-}
-
-function parseCurrentBranch(output: string): string | null {
-  const trimmed = output.trim()
-  if (!trimmed) return null
-  const labeled = trimmed.match(/^Current branch:\s*(.+)$/i)?.[1]?.trim()
-  if (labeled) return labeled
-  const starred = trimmed
-    .split(/\r?\n/)
-    .find((line) => line.trimStart().startsWith("*"))
-    ?.replace(/^\s*\*\s*/, "")
-    .trim()
-  return starred || trimmed.split(/\r?\n/)[0]?.trim() || null
-}
-
-async function listLocalBranches(cwd: string): Promise<string[]> {
-  const { stdout } = await execGit(cwd, ["branch", "--format=%(refname:short)"])
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-}
-
-async function execGit(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
-  try {
-    const { stdout, stderr } = await execFileAsync("git", args, { cwd, windowsHide: true })
-    return { stdout, stderr }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`Git operation failed: ${message}`)
-  }
-}
-
-function requireGitBranchName(value: unknown): string {
-  const branch = requireString(value, "分支名称")
-  if (branch.startsWith("-")) throw new Error("分支名称不能以 - 开头。")
-  if (
-    [...branch].some((character) => {
-      const code = character.charCodeAt(0)
-      return code <= 31 || code === 127
-    })
-  ) {
-    throw new Error("分支名称不能包含控制字符。")
-  }
-  return branch
 }

@@ -18,10 +18,7 @@ import type {
   ToolContext,
   ToolDefinition,
   ToolExecutionResult,
-  ToolRegistrationSource,
   ToolRegistry as IToolRegistry,
-  ToolRegistryView,
-  ToolDescriptor,
 } from "../types/tools";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
@@ -37,10 +34,14 @@ import {
 } from "./model-retry";
 import { streamBufferedModelWithRetry } from "./buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
-import { normalizeToolInput, validateToolInput } from "./tool-input-schema";
+import { prepareToolCalls } from "./query-tool-preparation";
+import { authorizeToolCalls } from "./query-tool-permissions";
+import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
+import { applyToolOutputBudget, executeToolWithTimeout, ToolTimeoutError, toolExecutionTimeoutMs } from "./query-tool-limits";
 import { ToolFailureMemory } from "./tool-failure-memory";
 import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
+import { runToolRegistry as runToolRegistryForRun, toolRegistryView, visibleToolRegistry } from "./tool-registry";
 import {
   applyTrajectoryTracker,
   createTrajectoryLoopControl,
@@ -49,75 +50,11 @@ import {
 
 const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
-const DEFAULT_TOOL_TIMEOUT_MS = 300_000;
 const RECOVERY_TOOL_TURNS = 2;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =
   "Stop using tools for this response. This delegated run reached its turn limit. State what was completed, what remains unfinished, and the evidence you have. Do not claim the task is verified.";
-
-// ---------------------------------------------------------------------------
-// Tool output budget — mirrors packages/services/src/tool-outputs.ts
-// ---------------------------------------------------------------------------
-
-function readPositiveIntEnv(name: string, defaultValue: number, minimum: number): number {
-  const raw = (process.env[name] ?? "").trim();
-  if (!raw) return defaultValue;
-  const parsed = Number(raw);
-  if (!Number.isInteger(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
-}
-
-function toolOutputInlineChars(): number {
-  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_INLINE_CHARS", 16_000, 256);
-}
-
-function toolOutputPreviewChars(): number {
-  return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_PREVIEW_CHARS", 3_000, 128);
-}
-
-function toolExecutionTimeoutMs(override: number | undefined): number {
-  if (typeof override === "number" && Number.isInteger(override) && override > 0) return override;
-  return readPositiveIntEnv("VYKOR_TOOL_TIMEOUT_MS", DEFAULT_TOOL_TIMEOUT_MS, 1);
-}
-
-class ToolTimeoutError extends Error {
-  constructor(readonly timeoutMs: number) {
-    super(`Tool execution timed out after ${timeoutMs} ms`);
-    this.name = "ToolTimeoutError";
-  }
-}
-
-/**
- * 若工具输出总文本超过 inline 阈值，截断至 preview 阈值并附提示。
- * 图像块原样保留（由 token estimator 独立计算）。
- */
-function applyToolOutputBudget(content: ContentBlock[]): ContentBlock[] {
-  const inlineChars = toolOutputInlineChars();
-  const previewChars = toolOutputPreviewChars();
-
-  const totalText = content.reduce((sum, b) => sum + (b.type === "text" ? b.text.length : 0), 0);
-  if (totalText <= inlineChars) return content;
-
-  const notice = `\n[输出已截断：原始长度 ${totalText} 字符，仅保留前 ${previewChars} 字符]`;
-  let remaining = previewChars;
-  const out: ContentBlock[] = [];
-  for (const block of content) {
-    if (block.type === "image") {
-      out.push(block);
-      continue;
-    }
-    if (remaining <= 0) continue;
-    if (block.text.length <= remaining) {
-      out.push(block);
-      remaining -= block.text.length;
-    } else {
-      out.push({ type: "text", text: block.text.slice(0, remaining) + notice });
-      remaining = 0;
-    }
-  }
-  return out;
-}
 
 function userContentToText(content: string | ContentBlock[]): string {
   if (typeof content === "string") return content;
@@ -344,7 +281,9 @@ export class QueryEngine implements IQueryEngine {
       }
     }
     const contribution = options.execution?.contribution;
-    const runToolRegistry = this.runToolRegistry(contribution, options.execution?.capabilityView);
+    const runToolRegistry = runToolRegistryForRun(
+      this.toolRegistry, this.allowedTools, contribution, options.execution?.capabilityView,
+    );
     const internalTools = new Set(
       contribution?.tools
         ?.filter((item) => item.permission === "host-internal")
@@ -490,7 +429,7 @@ export class QueryEngine implements IQueryEngine {
         toolUses = [];
         stopReason = "end_turn";
 
-        const attemptSignal = this.createAttemptSignal(options.signal, recoveryDeadlineAt);
+        const attemptSignal = createAttemptSignal(options.signal, recoveryDeadlineAt);
         const attemptToolUses: ToolUseBlock[] = [];
         let attemptUsage: UsageSnapshot | undefined;
         let completionSeen = false;
@@ -548,14 +487,14 @@ export class QueryEngine implements IQueryEngine {
             );
           }
         } catch (error) {
-          attemptFailed = this.describeModelFailure(error, options.signal, attemptSignal);
+          attemptFailed = describeModelFailure(error, options.signal, attemptSignal);
         } finally {
           attemptSignal.dispose();
         }
 
         if (attemptFailed) {
           this.settleModelAttempt(attemptUsage, true);
-          yield this.attemptFinishedEvent(
+          yield attemptFinishedEvent(
             generationId, attempt, options.signal?.aborted ? "interrupted" : "failed", attemptUsage,
           );
 
@@ -613,7 +552,7 @@ export class QueryEngine implements IQueryEngine {
         for (const toolUse of toolUses) {
           yield { type: "tool_use_start", toolUse };
         }
-        yield this.attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
+        yield attemptFinishedEvent(generationId, attempt, "completed", attemptUsage);
 
         // 如果助手有文本、思考内容或工具调用，则将其添加到消息历史中
         if (assistantText || toolUses.length > 0 || assistantReasoning) {
@@ -820,100 +759,12 @@ export class QueryEngine implements IQueryEngine {
   }
 
   /**
-   * 为一次模型请求创建组合信号：外部取消优先保留原原因；进入恢复窗口后，
-   * 最早的截止时间会中止本次请求并标记预算耗尽。
-   */
-  private createAttemptSignal(external?: AbortSignal, deadlineAt?: number): {
-    signal: AbortSignal;
-    deadlineExceeded: () => boolean;
-    dispose: () => void;
-  } {
-    const controller = new AbortController();
-    let deadlineExceeded = false;
-    const onExternalAbort = () => controller.abort(external?.reason);
-    if (external) {
-      if (external.aborted) onExternalAbort();
-      else external.addEventListener("abort", onExternalAbort, { once: true });
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (deadlineAt !== undefined && !controller.signal.aborted) {
-      const remaining = deadlineAt - Date.now();
-      const abortForBudget = () => {
-        deadlineExceeded = true;
-        controller.abort(
-          new ModelRequestFailure(
-            "模型恢复时间预算已耗尽",
-            { kind: "timeout", phase: "stream", retryable: false },
-          ),
-        );
-      };
-      if (remaining <= 0) abortForBudget();
-      else timer = setTimeout(abortForBudget, remaining);
-    }
-    return {
-      signal: controller.signal,
-      deadlineExceeded: () => deadlineExceeded,
-      dispose: () => {
-        if (timer) clearTimeout(timer);
-        external?.removeEventListener("abort", onExternalAbort);
-      },
-    };
-  }
-
-  private describeModelFailure(
-    error: unknown,
-    external: AbortSignal | undefined,
-    attemptSignal: { deadlineExceeded: () => boolean },
-  ): ModelRequestFailure {
-    if (error instanceof ModelRequestFailure) return error;
-    if (external?.aborted) {
-      return new ModelRequestFailure(
-        "模型调用已取消",
-        { kind: "unknown", phase: "stream", retryable: false },
-        external.reason,
-      );
-    }
-    if (attemptSignal.deadlineExceeded()) {
-      return new ModelRequestFailure(
-        "模型恢复时间预算已耗尽",
-        { kind: "timeout", phase: "stream", retryable: false },
-        error,
-      );
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    return new ModelRequestFailure(
-      message,
-      { kind: "unknown", phase: "stream", retryable: false },
-      error,
-    );
-  }
-
-  /**
    * 每次实际请求恰好结算一次用量：已知快照累加一次，未知/不完整标记保留。
    * 不把适配器每次请求的累计快照重复相加。
    */
   private settleModelAttempt(usage: UsageSnapshot | undefined, incomplete: boolean): void {
     if (usage) this.costTracker.addUsage(usage);
     if (incomplete || !usage) this.costTracker.markUsageIncomplete();
-  }
-
-  private attemptFinishedEvent(
-    generationId: string,
-    attempt: number,
-    status: "completed" | "failed" | "interrupted",
-    usage: UsageSnapshot | undefined,
-  ): ModelAttemptFinishedEvent {
-    const usageStatus = status === "completed"
-      ? (usage ? "complete" : "unknown")
-      : (usage ? "partial" : "unknown");
-    return {
-      type: "model_attempt_finished",
-      generationId,
-      attempt,
-      status,
-      usageStatus,
-      ...(usage ? { usage } : {}),
-    };
   }
 
   getHistory(): Message[] {
@@ -1024,190 +875,14 @@ export class QueryEngine implements IQueryEngine {
     execution?: AgentExecutionContext,
     requestConfiguration?: ToolContext["requestConfiguration"],
     failedToolCalls?: ToolFailureMemory,
-    toolRegistry: IToolRegistry = this.visibleToolRegistry(),
+    toolRegistry: IToolRegistry = visibleToolRegistry(this.toolRegistry, this.allowedTools),
     internalTools: ReadonlySet<string> = new Set(),
   ): Promise<ToolExecutionResult[]> {
-    const results: ToolExecutionResult[] = new Array(toolUses.length);
-    const readyForPermission: {
-      idx: number;
-      toolUse: ToolUseBlock;
-      tool: NonNullable<ReturnType<IToolRegistry["get"]>>;
-    }[] = [];
+    const { results, readyForPermission } = prepareToolCalls(toolUses, failedToolCalls, toolRegistry);
 
-    for (let i = 0; i < toolUses.length; i++) {
-      const toolUse = toolUses[i]!;
-
-      if (failedToolCalls?.shouldReplayFailure(toolUse.name, toolUse.input)) {
-        results[i] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [
-            {
-              type: "text" as const,
-              text: "Tool call already failed with the same input. Do not repeat it unless the input or underlying condition changes; choose another approach or explain the blocker.",
-            },
-          ],
-          isError: true,
-          failureKind: "policy",
-          executionState: "not_started",
-          metadata: { recoveryGuard: "repeated_failed_call" },
-        };
-        continue;
-      }
-
-      const tool = toolRegistry.get(toolUse.name);
-      if (!tool) {
-        results[i] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [{ type: "text" as const, text: `Unknown tool: ${toolUse.name}` }],
-          isError: true,
-          failureKind: "invalid_input",
-          executionState: "not_started",
-        };
-        continue;
-      }
-
-      toolUse.input = normalizeToolInput(tool.inputSchema, toolUse.input) as Record<
-        string,
-        unknown
-      >;
-
-      const validationError = validateToolInput(tool.inputSchema, toolUse.input);
-      if (validationError) {
-        results[i] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [
-            {
-              type: "text" as const,
-              text: `Tool input validation failed: ${validationError}`,
-            },
-          ],
-          isError: true,
-          failureKind: "invalid_input",
-          executionState: "not_started",
-        };
-        continue;
-      }
-
-      readyForPermission.push({ idx: i, toolUse, tool });
-    }
-
-    // 并行检查所有工具的权限状态（单个 checkTool 抛错不应波及其他工具）
-    const checks = await Promise.all(
-      readyForPermission.map(async ({ toolUse }) => {
-        if (internalTools.has(toolUse.name)) {
-          return {
-            action: "allow" as const,
-            reason: "Trusted host-internal run tool",
-          };
-        }
-        try {
-          return await this.permissionChecker.checkTool(toolUse.name, toolUse.input);
-        } catch {
-          return { action: "deny" as const, reason: "permission check failed" };
-        }
-      }),
+    const executable = await authorizeToolCalls(
+      readyForPermission, results, this.permissionChecker, this.hookExecutor, execution, internalTools,
     );
-
-    const executable: {
-      idx: number;
-      toolUse: ToolUseBlock;
-      tool: NonNullable<ReturnType<IToolRegistry["get"]>>;
-    }[] = [];
-
-    for (let readyIndex = 0; readyIndex < readyForPermission.length; readyIndex++) {
-      const { idx, toolUse, tool } = readyForPermission[readyIndex]!;
-      const decision = checks[readyIndex]!;
-
-      // 处理权限被直接拒绝的情况
-      if (decision.action === "deny") {
-        results[idx] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [
-            {
-              type: "text" as const,
-              text: `Permission denied: ${decision.reason ?? "not allowed"}`,
-            },
-          ],
-          isError: true,
-          failureKind: "permission",
-          executionState: "not_started",
-        };
-        continue;
-      }
-
-      // 处理需要用户确认权限的情况
-      if (decision.action === "ask") {
-        let allowed = false;
-        if (execution) {
-          const requestId = `permission_${randomUUID()}`;
-          const request = {
-            toolName: toolUse.name,
-            reason: decision.reason,
-            input: toolUse.input,
-          };
-          await execution.emit({
-            type: "permission.requested",
-            data: { requestId, request },
-          });
-          const approval = await execution.effects.requestPermission(request, execution.scope);
-          await execution.emit({
-            type: "permission.resolved",
-            data: { requestId, decision: approval },
-          });
-          allowed = approval.status === "approved";
-        }
-        if (!allowed) {
-          results[idx] = {
-            toolUseId: toolUse.id,
-            toolName: toolUse.name,
-            content: [
-              {
-                type: "text" as const,
-                text: `Permission denied by user: ${decision.reason ?? "not confirmed"}`,
-              },
-            ],
-            isError: true,
-            failureKind: "permission",
-            executionState: "not_started",
-          };
-          continue;
-        }
-      }
-
-      // 执行工具使用前的钩子，若被钩子拦截则终止执行（hook 本身抛错时放行，不阻断执行）
-      let hookResult: { blocked: boolean; reason?: string };
-      try {
-        hookResult = await this.hookExecutor.execute("pre_tool_use", {
-          tool: toolUse.name,
-          input: toolUse.input,
-        });
-      } catch {
-        hookResult = { blocked: false };
-      }
-
-      if (hookResult.blocked) {
-        results[idx] = {
-          toolUseId: toolUse.id,
-          toolName: toolUse.name,
-          content: [
-            {
-              type: "text" as const,
-              text: `Blocked by hook: ${hookResult.reason ?? "pre-tool hook blocked execution"}`,
-            },
-          ],
-          isError: true,
-          failureKind: "policy",
-          executionState: "not_started",
-        };
-        continue;
-      }
-
-      executable.push({ idx, toolUse, tool });
-    }
 
     // 并行执行所有通过校验的工具，并捕获执行过程中的异常
     const timeoutMs = toolExecutionTimeoutMs(this.options.toolTimeoutMs);
@@ -1226,7 +901,7 @@ export class QueryEngine implements IQueryEngine {
             runAbortSignal: signal,
             settings: this.options.settings,
             ...(requestConfiguration ? { requestConfiguration } : {}),
-            toolRegistry: this.toolRegistryView(toolRegistry),
+            toolRegistry: toolRegistryView(toolRegistry),
             capabilityView: execution?.capabilityView,
             skillRegistry: this.skillRegistry,
             // Global MCP meta APIs can bypass captured tools by serverName. Until a
@@ -1248,7 +923,7 @@ export class QueryEngine implements IQueryEngine {
               : {}),
             agent: execution,
           };
-          const result = await this.executeToolWithTimeout(
+          const result = await executeToolWithTimeout(
             tool,
             toolUse.input,
             context,
@@ -1343,188 +1018,8 @@ export class QueryEngine implements IQueryEngine {
     }
     return toolDefinitionIdentity(tool) === approved.identity && tool.execute === approved.execute;
   }
-
-  private async executeToolWithTimeout(
-    tool: NonNullable<ReturnType<IToolRegistry["get"]>>,
-    input: Record<string, unknown>,
-    context: ToolContext,
-    timeoutMs: number,
-    externalSignal?: AbortSignal,
-  ): Promise<Awaited<ReturnType<NonNullable<ReturnType<IToolRegistry["get"]>>["execute"]>>> {
-    const controller = new AbortController();
-    const timeoutError = new ToolTimeoutError(timeoutMs);
-    const deadlineAt = Date.now() + timeoutMs;
-    let abortListener: (() => void) | undefined;
-    const abortFromExternal = () => controller.abort(externalSignal?.reason);
-    if (externalSignal?.aborted) {
-      abortFromExternal();
-    } else {
-      externalSignal?.addEventListener("abort", abortFromExternal, {
-        once: true,
-      });
-    }
-    const timeout = setTimeout(() => {
-      controller.abort(timeoutError);
-    }, timeoutMs);
-    timeout.unref?.();
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      abortListener = () => reject(controller.signal.reason ?? timeoutError);
-      if (controller.signal.aborted) {
-        abortListener();
-      } else {
-        controller.signal.addEventListener("abort", abortListener, {
-          once: true,
-        });
-      }
-    });
-
-    try {
-      return await Promise.race([
-        tool.execute(input, { ...context, abortSignal: controller.signal, deadlineAt }),
-        timeoutPromise,
-      ]);
-    } finally {
-      clearTimeout(timeout);
-      if (abortListener) {
-        controller.signal.removeEventListener("abort", abortListener);
-      }
-      externalSignal?.removeEventListener("abort", abortFromExternal);
-    }
-  }
-
-  private visibleToolRegistry(alwaysAllowed: readonly string[] = []): IToolRegistry {
-    const allowedTools = this.allowedTools;
-    if (!allowedTools || allowedTools.includes("*")) return this.toolRegistry;
-    const allowed = new Set([...allowedTools, ...alwaysAllowed]);
-    const inner = this.toolRegistry;
-    return {
-      register(tool: ToolDefinition, source): void {
-        inner.register(tool, source);
-      },
-      override(tool: ToolDefinition, source): void {
-        inner.override(tool, source);
-      },
-      replaceBySource(source: ToolRegistrationSource, tools: ToolDefinition[]): void {
-        inner.replaceBySource(source, tools);
-      },
-      unregister(name: string): boolean {
-        return inner.unregister?.(name) ?? false;
-      },
-      get(name: string): ToolDefinition | undefined {
-        return allowed.has(name) ? inner.get(name) : undefined;
-      },
-      getAll(): ToolDefinition[] {
-        return inner.getAll().filter((tool) => allowed.has(tool.name));
-      },
-      has(name: string): boolean {
-        return allowed.has(name) && inner.has(name);
-      },
-      inspect(name: string) {
-        return allowed.has(name) ? inner.inspect(name) : undefined;
-      },
-    };
-  }
-
-  private runToolRegistry(
-    contribution: AgentExecutionContext["contribution"],
-    view?: AgentExecutionContext["capabilityView"],
-  ): IToolRegistry {
-    const captured = view && new Map([...view.tools].map(([name, binding]) => [
-      name, { ...binding.definition, execute: binding.invoke },
-    ]));
-    const base: IToolRegistry = captured ? {
-      register: () => { throw new Error("Run capability view is immutable"); },
-      override: () => { throw new Error("Run capability view is immutable"); },
-      replaceBySource: () => { throw new Error("Run capability view is immutable"); },
-      get: (name) => captured.get(name),
-      getAll: () => [...captured.values()],
-      has: (name) => captured.has(name),
-      inspect: (name) => {
-        const binding = view!.tools.get(name);
-        return binding ? { name, source: binding.source ?? { kind: "runtime" } } : undefined;
-      },
-    } : this.visibleToolRegistry();
-    const contributed = contribution?.tools ?? [];
-    if (contributed.length === 0) return base;
-    const additions = new Map<string, ToolDefinition>();
-    for (const { definition } of contributed) {
-      if (base.has(definition.name) || additions.has(definition.name))
-        throw new Error(`Run tool conflicts with an existing tool: ${definition.name}`);
-      additions.set(definition.name, definition);
-    }
-    return {
-      register: () => {
-        throw new Error("Run-scoped tool registry is immutable");
-      },
-      override: () => {
-        throw new Error("Run-scoped tool registry is immutable");
-      },
-      replaceBySource: () => {
-        throw new Error("Run-scoped tool registry is immutable");
-      },
-      unregister: () => false,
-      get: (name) => additions.get(name) ?? base.get(name),
-      getAll: () => [...base.getAll(), ...additions.values()],
-      has: (name) => additions.has(name) || base.has(name),
-      inspect: (name) =>
-        additions.has(name)
-          ? { name, source: { kind: "runtime", id: "run-contribution" } }
-          : base.inspect(name),
-    };
-  }
-
-  private toolRegistryView(registry: IToolRegistry): ToolRegistryView {
-    return {
-      get: (name) => {
-        const tool = registry.get(name);
-        return tool ? toolDescriptor(tool) : undefined;
-      },
-      getAll: () => registry.getAll().map(toolDescriptor),
-      has: (name) => registry.has(name),
-      inspect: (name) => registry.inspect(name),
-    };
-  }
 }
 
 function appendSystemGuidance(systemPrompt: string | undefined, guidance: string): string {
   return systemPrompt?.trim() ? `${systemPrompt}\n\n${guidance}` : guidance;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableJson(item)).join(",")}]`;
-  }
-  if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`);
-    return `{${entries.join(",")}}`;
-  }
-  return JSON.stringify(value) ?? String(value);
-}
-
-function toolDescriptor(tool: ToolDefinition): ToolDescriptor {
-  return Object.freeze({
-    name: tool.name,
-    description: tool.description,
-    inputSchema: deepFrozenCopy(tool.inputSchema),
-    ...(tool.safeToRetry === undefined ? {} : { safeToRetry: tool.safeToRetry }),
-  });
-}
-
-function deepFrozenCopy<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return Object.freeze(value.map((item) => deepFrozenCopy(item))) as T;
-  }
-  if (value && typeof value === "object") {
-    const copied = Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-        key,
-        deepFrozenCopy(item),
-      ]),
-    );
-    return Object.freeze(copied) as T;
-  }
-  return value;
 }

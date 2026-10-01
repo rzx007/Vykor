@@ -28,6 +28,7 @@ import {
 import { conversationContextCatalog } from "./session-conversation-context.js";
 import type { ContextUsageCache } from "../context-usage-cache.js";
 import type { SessionContextUsageAgent } from "../assemble-session-context-usage.js";
+import { captureAutoReviewBaseline, reviewAutoReview, settleUnreviewedAutoReview } from "./run-auto-review.js";
 
 const ATTACHMENT_LEASE_TTL_MS = 2 * 60 * 1_000;
 const ATTACHMENT_LEASE_RENEW_INTERVAL_MS = 30 * 1_000;
@@ -241,7 +242,7 @@ export class SessionRunExecutor {
       }
 
       // Capture the git baseline before the Agent runs so post-run changes stay attributable.
-      await this.captureAutoReviewBaseline(sessionId, runId, session.cwd);
+      await captureAutoReviewBaseline(this.context, sessionId, runId, session.cwd);
 
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
@@ -335,7 +336,7 @@ export class SessionRunExecutor {
 
       // Auto review runs before memory/personalization maintenance and never overrides
       // the parent Run's completed status on review failure.
-      await this.reviewAutoReview({
+      await reviewAutoReview(this.context, {
         sessionId,
         inputId,
         runId,
@@ -390,7 +391,7 @@ export class SessionRunExecutor {
 
       // projector / interrupt 已经写下终态就不要再改：否则会把 completed 覆盖成 failed。
       if (current && ["completed", "failed", "interrupted"].includes(current.status)) {
-        if (current.status !== "completed") this.settleUnreviewedAutoReview(sessionId, runId);
+        if (current.status !== "completed") settleUnreviewedAutoReview(this.context, sessionId, runId);
         this.context.contextUsageCache?.invalidate(sessionId);
         return;
       }
@@ -466,7 +467,7 @@ export class SessionRunExecutor {
         error: message,
       });
       this.context.events.publishSince(before);
-      this.settleUnreviewedAutoReview(sessionId, runId);
+      settleUnreviewedAutoReview(this.context, sessionId, runId);
       // Failed / interrupted terminal: drop stale usage; next usage() may reassemble.
       this.context.contextUsageCache?.invalidate(sessionId);
     } finally {
@@ -502,89 +503,6 @@ export class SessionRunExecutor {
     }
   }
 
-  private async captureAutoReviewBaseline(
-    sessionId: string,
-    runId: string,
-    cwd: string,
-  ): Promise<void> {
-    const autoReview = this.context.autoReview;
-    if (!autoReview) return;
-    try {
-      const mode = this.context.resolveAutoReviewMode
-        ? await this.context.resolveAutoReviewMode(cwd)
-        : "off";
-      await autoReview.captureBaseline({ sessionId, runId, cwd, mode });
-    } catch (error) {
-      this.context.log({
-        level: "error",
-        event: "auto_review.capture_failed",
-        traceId: this.context.traceIdForRun(runId),
-        sessionId,
-        runId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  private async reviewAutoReview(input: {
-    sessionId: string;
-    inputId: string;
-    runId: string;
-    cwd: string;
-    agent: Awaited<ReturnType<AgentPool["acquireSession"]>>;
-    signal: AbortSignal;
-  }): Promise<void> {
-    const autoReview = this.context.autoReview;
-    if (!autoReview) return;
-    try {
-      const settled = this.context.data.runs.getRun(input.runId);
-      if (settled?.status === "completed") {
-        await autoReview.reviewCompletedRun({
-          sessionId: input.sessionId,
-          inputId: input.inputId,
-          runId: input.runId,
-          traceId: this.context.traceIdForRun(input.runId),
-          cwd: input.cwd,
-          agent: input.agent,
-          signal: input.signal,
-        });
-      } else {
-        autoReview.settleUnreviewedRun({
-          sessionId: input.sessionId,
-          runId: input.runId,
-          reason: "parent_run_not_completed",
-        });
-      }
-    } catch (error) {
-      this.context.log({
-        level: "error",
-        event: "auto_review.failed",
-        traceId: this.context.traceIdForRun(input.runId),
-        sessionId: input.sessionId,
-        runId: input.runId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  private settleUnreviewedAutoReview(sessionId: string, runId: string): void {
-    try {
-      this.context.autoReview?.settleUnreviewedRun({
-        sessionId,
-        runId,
-        reason: "parent_run_not_completed",
-      });
-    } catch (error) {
-      this.context.log({
-        level: "error",
-        event: "auto_review.settle_failed",
-        traceId: this.context.traceIdForRun(runId),
-        sessionId,
-        runId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
 }
 
 async function resolveSkillCatalog(

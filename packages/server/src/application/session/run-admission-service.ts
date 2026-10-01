@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import {
-  sessionUserInputText,
   type AdmitPromptAttachmentInput,
   type AttachmentLimits,
   type ReplaceTranscriptMessageInput,
@@ -14,14 +13,7 @@ import {
   promptAttachmentFingerprint,
 } from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../support.js";
-import { RunInterruptedError } from "../../runtime/run-coordinator.js";
-
-function inputItems(input: {
-  items?: readonly SessionUserInputItem[];
-  content?: string;
-}): SessionUserInputItem[] {
-  return input.items ? [...input.items] : [{ type: "text", text: input.content ?? "" }];
-}
+import { admitPromptWork, inputItems } from "./run-admission-work.js";
 
 function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
   return items.some(
@@ -453,7 +445,7 @@ export class RunAdmissionService {
         this.options.goals?.cancelGoalRuns?.(sessionId, goal.id, "用户消息优先", true);
       }
     }
-    if (!input.id) return this.admitPrompt(sessionId, input);
+    if (!input.id) return admitPromptWork(this.options, sessionId, input);
 
     const attachments = normalizePromptAttachments(input.attachments);
     const delivery =
@@ -478,7 +470,7 @@ export class RunAdmissionService {
       }
       return pending.promise;
     }
-    const promise = this.admitPrompt(sessionId, input).finally(() => {
+    const promise = admitPromptWork(this.options, sessionId, input).finally(() => {
       if (this.pendingAdmissions.get(input.id!)?.promise === promise) {
         this.pendingAdmissions.delete(input.id!);
       }
@@ -492,218 +484,5 @@ export class RunAdmissionService {
       promise,
     });
     return promise;
-  }
-
-  private async admitPrompt(
-    sessionId: string,
-    input: AdmitPromptInput,
-  ): Promise<AdmitPromptResult> {
-    const attachments = normalizePromptAttachments(input.attachments);
-    const delivery =
-      attachments.length > 0 && input.delivery === "steer"
-        ? "queue"
-        : (input.delivery ?? "queue");
-    const traceId =
-      normalizeTraceId(input.traceId) ??
-      normalizeTraceId(input.metadata?.traceId) ??
-      randomUUID();
-    const metadata = { ...(input.metadata ?? {}), traceId };
-    const runMetadata = { ...(input.runMetadata ?? {}), traceId };
-    const existingInput = input.id
-      ? this.options.conversationTransactions.getInput(input.id)
-      : undefined;
-
-    if (existingInput) {
-      if (
-        existingInput.sessionId !== sessionId ||
-        !jsonEqual(existingInput.items, inputItems(input)) ||
-        existingInput.delivery !== delivery ||
-        promptAttachmentFingerprint(
-          existingInput.attachments.map((reference) => ({
-            assetId: reference.assetId,
-            intent: reference.intent,
-            ...(typeof reference.metadata?.requestedDisplayName === "string"
-              ? { displayName: reference.metadata.requestedDisplayName }
-              : {}),
-          })),
-        ) !== promptAttachmentFingerprint(attachments) ||
-        !jsonEqual(
-          withoutTraceId(existingInput.metadata),
-          withoutTraceId(metadata),
-        )
-      ) {
-        throw new AttachmentError(
-          "prompt_id_conflict",
-          `Prompt id is already used: ${input.id}`,
-        );
-      }
-      const existingRun = this.options.runOperations.findRunByInput(existingInput.id);
-      if (!existingRun && this.options.runtimeQueue.hasRuntime) {
-        const before = this.options.events.checkpoint();
-        const recovered = this.options.runOperations.createRun({
-          sessionId,
-          inputId: existingInput.id,
-          metadata: { ...runMetadata, recoveredAdmission: true },
-        });
-        this.options.events.publishSince(before);
-        return {
-          input: existingInput,
-          run: recovered,
-          queue_state: this.options.runtimeQueue.enqueueRun(recovered, existingInput.id),
-        };
-      }
-      return {
-        input: existingInput,
-        ...(existingRun ? { run: existingRun } : {}),
-        ...(existingRun?.status === "running" ? { queue_state: "running" as const } : {}),
-        ...(existingRun?.status === "pending" ? { queue_state: "queued" as const } : {}),
-      };
-    }
-
-    const before = this.options.events.checkpoint();
-    if (delivery === "queue" && this.options.runtimeQueue.hasRuntime) {
-      const admission = {
-        prompt: {
-          id: input.id,
-          sessionId,
-          delivery,
-          items: inputItems(input),
-          content: input.content,
-          attachments,
-          metadata,
-        },
-        run: { metadata: runMetadata },
-      };
-      const admitted = this.options.attachmentLimits
-        ? this.options.conversationTransactions.admitPromptWithRun(admission, {
-            attachmentLimits: this.options.attachmentLimits,
-          })
-        : this.options.conversationTransactions.admitPromptWithRun(admission);
-      this.options.events.publishSince(before);
-      return {
-        input: admitted.input,
-        run: admitted.run,
-        queue_state: this.options.runtimeQueue.enqueueRun(admitted.run, admitted.input.id),
-      };
-    }
-
-    const admission = {
-      id: input.id,
-      sessionId,
-      delivery,
-      items: inputItems(input),
-      content: input.content,
-      attachments,
-      metadata,
-    };
-    const admitted = this.options.attachmentLimits
-      ? this.options.conversationTransactions.admitPrompt(admission, {
-          attachmentLimits: this.options.attachmentLimits,
-        })
-      : this.options.conversationTransactions.admitPrompt(admission);
-
-    if (delivery === "steer" && this.options.runtimeQueue.hasRuntime) {
-      const items = inputItems(input);
-      const steerContent = items.some((item) => item.type === "skill")
-        ? await this.materializeSteerInput(sessionId, items)
-        : admitted.content;
-      const steered = this.options.runtimeQueue.steer(sessionId, {
-        id: admitted.id,
-        content: steerContent,
-        inputItems: admitted.items,
-        delivery: "steer",
-        traceId,
-        metadata: admitted.metadata,
-      });
-      if (steered.merged && steered.activeRunId) {
-        this.options.events.publishSince(before);
-        let delivered: Awaited<typeof steered.delivery>;
-        try {
-          delivered = await steered.delivery;
-        } catch (error) {
-          this.terminalizeUndeliveredSteer(sessionId, admitted.id, traceId, error);
-          throw error;
-        }
-        const activeRun = this.options.runOperations.getRun(delivered.runId);
-        if (!activeRun || activeRun.sessionId !== sessionId) {
-          throw new Error(`Steered input run was not found: ${delivered.runId}`);
-        }
-        return {
-          input: admitted,
-          run: activeRun,
-          ...(activeRun.status === "running" ? { queue_state: "running" as const } : {}),
-          ...(activeRun.status === "pending" ? { queue_state: "queued" as const } : {}),
-        };
-      }
-    }
-
-    const run = this.options.runtimeQueue.hasRuntime
-      ? this.options.runOperations.createRun({
-          sessionId,
-          inputId: admitted.id,
-          metadata: runMetadata,
-        })
-      : undefined;
-    this.options.events.publishSince(before);
-    let queueState: "running" | "queued" | undefined;
-    if (run) {
-      queueState = this.options.runtimeQueue.enqueueRun(run, admitted.id);
-    }
-    return {
-      input: admitted,
-      ...(run ? { run, queue_state: queueState } : {}),
-    };
-  }
-
-  private async materializeSteerInput(
-    sessionId: string,
-    items: readonly SessionUserInputItem[],
-  ): Promise<string> {
-    if (!items.some((item) => item.type === "skill")) return sessionUserInputText(items);
-    if (!this.options.materializer?.materializeSteerInput) {
-      throw new Error("session_input_skill_catalog_unavailable");
-    }
-    return await this.options.materializer.materializeSteerInput(sessionId, items);
-  }
-
-  private terminalizeUndeliveredSteer(
-    sessionId: string,
-    inputId: string,
-    traceId: string,
-    error: unknown,
-  ): void {
-    if (this.options.runOperations.findRunByInput(inputId)) return;
-    const message = error instanceof Error ? error.message : String(error);
-    const interrupted = error instanceof RunInterruptedError;
-    const before = this.options.events.checkpoint();
-
-    const doTerminalize = () => {
-      const created = this.options.runOperations.createRun({
-        sessionId,
-        inputId,
-        metadata: { traceId, steerDeliveryFailed: true },
-      });
-      this.options.runOperations.appendEvent?.({
-        type: interrupted ? "session.run.interrupted" : "session.run.error",
-        sessionId,
-        payload: {
-          runId: created.id,
-          traceId,
-          error: message,
-          steerDeliveryFailure: true,
-        },
-      });
-      this.options.runOperations.updateRun(created.id, {
-        status: interrupted ? "interrupted" : "failed",
-        error: message,
-      });
-    };
-
-    if (this.options.runOperations.transaction) {
-      this.options.runOperations.transaction(doTerminalize);
-    } else {
-      doTerminalize();
-    }
-    this.options.events.publishSince(before);
   }
 }

@@ -9,11 +9,13 @@ import type { GoalWaitVerifier } from "./goal-wait-verifier.js";
 import type { SessionPluginCapabilityService } from "./session-plugin-capability-service.js";
 import type { RunAdmissionService } from "./run-admission-service.js";
 import type { RunControlService } from "./run-control-service.js";
+import { GoalExternalWaitObserver } from "./goal-external-wait-observer.js";
 
 export class SessionGoalService {
   private readonly requests = new Map<string, { fingerprint: string; promise: Promise<SessionGoal> }>();
   private readonly admission: Pick<RunAdmissionService, "persistGoalRun" | "dispatchPersistedRun">;
   private readonly control: Pick<RunControlService, "cancelGoalRuns" | "waitForRuns" | "hasUserWork">;
+  private readonly waitObserver: GoalExternalWaitObserver;
   constructor(
     private readonly context: {
       transaction: { transaction<T>(work: () => T): T };
@@ -42,8 +44,14 @@ export class SessionGoalService {
   ) {
     this.admission = context.admission;
     this.control = context.control;
+    this.waitObserver = new GoalExternalWaitObserver({
+      goals: context.goals,
+      admission: context.admission,
+      events: context.events,
+      waitVerifier: context.waitVerifier,
+      runInput: (goal, requestId, kind, input) => this.runInput(goal, requestId, kind, input),
+    });
   }
-  private readonly waitTimers = new Map<string, { attempt: number; timer: ReturnType<typeof setTimeout> }>();
 
   get(sessionId: string): SessionGoal | null {
     this.requireSession(sessionId);
@@ -52,7 +60,7 @@ export class SessionGoalService {
 
   recoverExternalWaits(): number {
     const goals = this.context.goals.listActiveExternalWaitGoals();
-    for (const goal of goals) this.observeExternalWait(goal);
+    for (const goal of goals) this.waitObserver.observe(goal);
     return goals.length;
   }
   getRequest(sessionId: string, requestId: string): ReturnType<GoalOperations["getGoalRequest"]> {
@@ -381,7 +389,7 @@ export class SessionGoalService {
           throw new Error("目标续跑已存在");
         nextRunId = admitted.run.id;
       });
-      if (waitToObserve) this.observeExternalWait(waitToObserve);
+      if (waitToObserve) this.waitObserver.observe(waitToObserve);
       if (nextRunId) {
         this.admission.dispatchPersistedRun(nextRunId);
         this.context.goals.markGoalContinuation(nextRunId, "dispatched");
@@ -401,86 +409,6 @@ export class SessionGoalService {
     } finally {
       this.context.events.publishSince(before);
     }
-  }
-
-  private observeExternalWait(goal: SessionGoal, attempt = 0): void {
-    const wait = goal.wait;
-    if (wait?.kind !== "external" || !this.context.waitVerifier) return;
-    this.clearWaitObserver(goal.id);
-    const delay = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000][Math.min(attempt, 5)]!;
-    const timer = setTimeout(() => {
-      this.waitTimers.delete(goal.id);
-      const current = this.context.goals.getGoal(goal.id);
-      if (!current || current.status !== "active" || current.revision !== goal.revision || current.wait?.kind !== "external" || current.wait.handleId !== wait.handleId) return;
-      const check = this.context.waitVerifier!.check(current.sessionId, current.wait);
-      if (check.state === "running" || check.state === "unknown") {
-        this.observeExternalWait(current, attempt + 1);
-        return;
-      }
-      const before = this.context.events.checkpoint();
-      try {
-        if (check.state !== "completed") {
-          this.context.goals.updateGoal(current.id, {
-            expectedRevision: current.revision,
-            status: "paused",
-            wait: null,
-            reason: check.state === "failed" ? check.reason : "等待的外部任务不存在或不属于当前会话",
-          });
-          return;
-        }
-        const continued = this.context.goals.updateGoal(current.id, {
-          expectedRevision: current.revision,
-          status: "active",
-          wait: null,
-          reason: null,
-        });
-        const inputId = `goal-wait-${continued.id}-${continued.revision}-${wait.handleId}`;
-        const admitted = this.admission.persistGoalRun(
-          continued.sessionId,
-          this.runInput(continued, inputId, "continuation", {
-            items: [
-              {
-                type: "text",
-                text: "等待的外部任务已结束。检查其结果并继续推进目标。",
-              },
-            ],
-          }),
-        );
-        if (
-          this.context.goals.recordGoalContinuation({
-            goalId: continued.id,
-            revision: continued.revision,
-            previousRunId: `wait:${wait.runId}:${wait.handleId}`,
-            inputId: admitted.input.id,
-            runId: admitted.run.id,
-          })
-        ) {
-          this.admission.dispatchPersistedRun(admitted.run.id);
-          this.context.goals.markGoalContinuation(admitted.run.id, "dispatched");
-        }
-      } catch (error) {
-        const failed = this.context.goals.getGoal(goal.id);
-        if (failed?.status === "active") {
-          this.context.goals.updateGoal(failed.id, {
-            expectedRevision: failed.revision,
-            status: "paused",
-            wait: null,
-            reason: `恢复等待目标失败：${error instanceof Error ? error.message : String(error)}`,
-          });
-        }
-      } finally {
-        this.context.events.publishSince(before);
-      }
-    }, delay);
-    timer.unref?.();
-    this.waitTimers.set(goal.id, { attempt, timer });
-  }
-
-  private clearWaitObserver(goalId: string): void {
-    const current = this.waitTimers.get(goalId);
-    if (!current) return;
-    clearTimeout(current.timer);
-    this.waitTimers.delete(goalId);
   }
 
   private validateResume(goal: SessionGoal, input: GoalActionInput): void {
@@ -629,7 +557,7 @@ export class SessionGoalService {
     return goal;
   }
   private async stopRuns(goal: SessionGoal, reason: string): Promise<void> {
-    this.clearWaitObserver(goal.id);
+    this.waitObserver.clear(goal.id);
     const before = this.context.events.checkpoint();
     const ids = this.control.cancelGoalRuns(goal.sessionId, goal.id, reason);
     this.context.events.publishSince(before);

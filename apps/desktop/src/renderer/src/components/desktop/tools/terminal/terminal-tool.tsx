@@ -4,14 +4,9 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import { Terminal as XTermTerminal } from "@xterm/xterm"
 import {
-  ClipboardCopy,
-  ClipboardPaste,
-  Eraser,
   Folder,
   Plus,
-  RotateCcw,
   SquareTerminal,
-  X,
 } from "lucide-react"
 import type * as React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -33,23 +28,16 @@ import { openTerminalWebLink } from "./open-terminal-web-link"
 import { userTerminalCreateInput } from "./user-terminal-create-input"
 import { getXtermTheme } from "./xterm-theme"
 import { resolveTerminalCreateTarget } from "./terminal-runtime-model"
+import { TerminalContextMenu, type TerminalContextMenuState } from "./terminal-context-menu"
+import { clampContextMenuPosition, nextTerminalName, recordBelongsToSession, terminalErrorMessage as errorMessage, toTabInfo, type TerminalSessionTabInfo } from "./terminal-display"
+
+export type { TerminalSessionTabInfo } from "./terminal-display"
 
 type TerminalDataEvent = Extract<DesktopTerminalEvent, { type: "data" }>
 
 type PendingAttach = {
   terminalId: string
   events: TerminalDataEvent[]
-}
-
-type TerminalContextMenuState = {
-  x: number
-  y: number
-  selectedText: string
-}
-
-export type TerminalSessionTabInfo = {
-  id: string
-  title: string
 }
 
 export type TerminalPanelCommand =
@@ -714,139 +702,4 @@ export function TerminalTool({
       </div>
     </section>
   )
-}
-
-function TerminalContextMenu({
-  menuRef,
-  state,
-  canPaste,
-  canManage,
-  onCopy,
-  onPaste,
-  onClear,
-  onRestart,
-  onClose,
-}: {
-  menuRef: React.RefObject<HTMLDivElement | null>
-  state: TerminalContextMenuState
-  canPaste: boolean
-  canManage: boolean
-  onCopy: () => void
-  onPaste: () => void
-  onClear: () => void
-  onRestart: () => void
-  onClose: () => void
-}): React.JSX.Element {
-  return (
-    <div
-      ref={menuRef}
-      role="menu"
-      style={{ left: state.x, top: state.y }}
-      className="text-ui-small fixed z-[100] w-44 rounded-md border border-border/80 bg-popover p-1 text-popover-foreground shadow-xl outline-none"
-    >
-      <TerminalContextMenuItem disabled={!state.selectedText} onClick={onCopy}>
-        <ClipboardCopy />
-        复制选区
-      </TerminalContextMenuItem>
-      <TerminalContextMenuItem disabled={!canPaste} onClick={onPaste}>
-        <ClipboardPaste />
-        粘贴
-      </TerminalContextMenuItem>
-      <div role="separator" className="-mx-1 my-1 h-px bg-border/75" />
-      <TerminalContextMenuItem disabled={!canManage} onClick={onClear}>
-        <Eraser />
-        清空
-      </TerminalContextMenuItem>
-      <TerminalContextMenuItem disabled={!canManage} onClick={onRestart}>
-        <RotateCcw />
-        重启
-      </TerminalContextMenuItem>
-      <TerminalContextMenuItem disabled={!canManage} onClick={onClose} destructive>
-        <X />
-        关闭
-      </TerminalContextMenuItem>
-    </div>
-  )
-}
-
-function TerminalContextMenuItem({
-  disabled,
-  destructive,
-  onClick,
-  children,
-}: {
-  disabled?: boolean
-  destructive?: boolean
-  onClick: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex h-8 w-full items-center gap-2 rounded px-2 text-left transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-3.5",
-        destructive &&
-          "text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive"
-      )}
-    >
-      {children}
-    </button>
-  )
-}
-
-function nextTerminalName(records: DesktopTerminalRecord[], sessionId: string): string {
-  const used = new Set(
-    records
-      .filter((record) => record.scope.kind === "session" && record.scope.sessionId === sessionId)
-      .map((record) => /^Terminal (\d+)$/.exec(record.name)?.[1])
-      .filter((value): value is string => Boolean(value))
-      .map(Number)
-  )
-  let index = 1
-  while (used.has(index)) index += 1
-  return `Terminal ${index}`
-}
-
-function recordBelongsToSession(
-  record: DesktopTerminalRecord,
-  session: { id: string; projectId?: string } | null
-): boolean {
-  if (!session) return false
-  if (record.scope.kind === "session") return record.scope.sessionId === session.id
-  return Boolean(session.projectId && record.scope.projectId === session.projectId)
-}
-
-function clampContextMenuPosition(x: number, y: number): { x: number; y: number } {
-  const width = 176
-  const height = 200
-  const margin = 8
-  return {
-    x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
-    y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
-  }
-}
-
-function shellName(shell: string): string {
-  return (
-    shell
-      .split(/[\\/]/)
-      .pop()
-      ?.replace(/\.exe$/i, "") || shell
-  )
-}
-
-function toTabInfo(record: DesktopTerminalRecord): TerminalSessionTabInfo {
-  return {
-    id: record.id,
-    title: `${shellName(record.shell)}:${record.cwd}`,
-  }
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error)
-    return error.message.replace(/^Error invoking remote method '[^']+': /, "")
-  return String(error)
 }
