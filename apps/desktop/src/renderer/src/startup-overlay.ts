@@ -86,7 +86,8 @@ export function watchStartupOverlay(
 }
 
 /** bootstrap 成功或失败后发出真实就绪信号；可早于 watchStartupOverlay() 调用。 */
-export function markStartupOverlayReady(doc: Document = document): void {
+export function markStartupOverlayReady(doc: Document | undefined = globalThis.document): void {
+  if (!doc) return
   const overlay = doc.getElementById(STARTUP_OVERLAY_ELEMENT_ID)
   if (!overlay) return
   overlay.dataset.startupReady = "true"
