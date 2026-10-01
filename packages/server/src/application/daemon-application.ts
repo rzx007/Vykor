@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 
 import { resolveChannelWorkspaceRoot } from "@vykor/core";
 import type { AgentBackgroundShellHost, Settings } from "@vykor/core";
@@ -17,10 +16,8 @@ import {
   type SessionRecord,
 } from "@vykor/protocol";
 import {
-  AttachmentBlobStore,
   AttachmentIntegrityService,
-  LightOcrEngine,
-  LocalOcrService,
+  type LocalOcrService,
   closeExecutionRuntimes,
   executeAutoDream,
   getChildAgentExecutionRegistry,
@@ -35,6 +32,7 @@ import {
 } from "@vykor/services";
 
 import { AttachmentService } from "./attachments/attachment-service.js";
+import { createDaemonAttachmentServices } from "./attachments/daemon-attachment-services.js";
 import {
   catalogModelContextWindow,
   catalogModelOutputLimit,
@@ -276,44 +274,15 @@ export class DaemonApplication implements DurableAgentApplication {
     }, options.ownerHeartbeatMs ?? 5_000);
     this.ownerHeartbeat.unref?.();
     try {
-      const attachmentBlobs = new AttachmentBlobStore({
-        root: options.attachmentRoot ?? join(dirname(store.path), "attachments"),
+      const attachmentServices = createDaemonAttachmentServices({
+        store,
+        attachmentRoot: options.attachmentRoot,
+        attachmentLimits: options.attachmentLimits,
+        attachments: options.attachments,
       });
-      this.attachments =
-        options.attachments ??
-        new AttachmentService({
-          store: store.attachments,
-          blobs: attachmentBlobs,
-          limits: options.attachmentLimits,
-        });
-      this.attachmentResources = new SessionAttachmentResources({
-        root: join(dirname(store.path), "attachment-session-resources"),
-        attachments: this.attachments,
-      });
-      const ocrEngine = new LightOcrEngine();
-      this.localOcr = new LocalOcrService({
-        engine: ocrEngine,
-        resolveAsset: async (assetId, signal) => {
-          signal?.throwIfAborted();
-          const opened = await this.attachments.openContent(assetId);
-          return {
-            assetId,
-            sha256: opened.sha256,
-            mediaType: opened.mediaType,
-            sizeBytes: opened.sizeBytes,
-            bytes: await readAttachmentBytes(opened.content, opened.sizeBytes, signal),
-          };
-        },
-        repository: {
-          findCompleted: (assetId, cacheKey) =>
-            store.attachments.findCompletedAttachmentRepresentation(assetId, "ocr_text", cacheKey),
-          begin: (input) => store.attachments.createAttachmentRepresentation(input),
-          complete: (id, output) => store.attachments.completeAttachmentRepresentation(id, output),
-          fail: (id, error) => {
-            store.attachments.failAttachmentRepresentation(id, error);
-          },
-        },
-      });
+      this.attachments = attachmentServices.attachments;
+      this.attachmentResources = attachmentServices.resources;
+      this.localOcr = attachmentServices.localOcr;
       // 上次进程可能是被杀掉的：内存里的 Agent/进程都没了，store 里却还挂着 running。
       // 先把这些半截状态结掉，再对外服务，免得窗口以为还在跑。
       // events：窗口订的 SSE。eventPublisher：各处写完 store 后，把增量广播出去。
@@ -334,7 +303,7 @@ export class DaemonApplication implements DurableAgentApplication {
         new AttachmentIntegrityService({
           store,
           attachments: store.attachments,
-          blobs: attachmentBlobs,
+          blobs: attachmentServices.blobs,
           operationGate: this.attachments.operationGate,
         }),
       );
@@ -1147,39 +1116,6 @@ export class DaemonApplication implements DurableAgentApplication {
     if (run) this.options.store.runs.updateRun(runId, { metadata: { traceId: generated } });
     return generated;
   }
-}
-
-async function readAttachmentBytes(
-  stream: ReadableStream<Uint8Array>,
-  expectedBytes: number,
-  signal?: AbortSignal,
-): Promise<Uint8Array> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      signal?.throwIfAborted();
-      const item = await reader.read();
-      if (item.done) break;
-      size += item.value.byteLength;
-      if (size > expectedBytes) throw new Error("attachment content exceeded recorded size");
-      chunks.push(item.value);
-    }
-  } catch (error) {
-    await reader.cancel(error).catch(() => {});
-    throw error;
-  } finally {
-    reader.releaseLock();
-  }
-  if (size !== expectedBytes) throw new Error("attachment content size did not match its record");
-  const output = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return output;
 }
 
 function isSessionInTree(
