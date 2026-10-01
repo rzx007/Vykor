@@ -18,11 +18,11 @@ const defaultClock: StartupOverlayClock = {
 }
 
 /**
- * 启动遮罩卸载状态机。卸载条件 = 入场动画结束 ∧ 应用 bootstrap 已结束。
+ * 启动遮罩卸载条件 = 入场动画结束 ∧ 路由就绪后的页面已提交。
  *
  * - 入场动画结束：`[data-startup-badge]` 的 animationend；reduced-motion 下 CSS 把 animation 关掉，
  *   事件永远不会来，由 STARTUP_OVERLAY_ANIMATION_FALLBACK_MS 兜底。
- * - 应用已就绪：bootstrap 成功或失败后调用 markStartupOverlayReady()。
+ * - 页面已就绪：根页面在路由结束等待后的 effect 中调用 markStartupOverlayReady()。
  * 两个信号都满足后写 `data-startup-dismissed="true"` 触发 0.16s 淡出，再等 REMOVE_DELAY 后真正 remove()。
  *
  * 返回值只在测试/中断场景使用，`main.tsx` 丢弃它。
@@ -85,7 +85,7 @@ export function watchStartupOverlay(
   }
 }
 
-/** bootstrap 成功或失败后发出真实就绪信号；可早于 watchStartupOverlay() 调用。 */
+/** 页面提交后发出就绪信号；可早于 watchStartupOverlay() 调用。 */
 export function markStartupOverlayReady(doc: Document | undefined = globalThis.document): void {
   if (!doc) return
   const overlay = doc.getElementById(STARTUP_OVERLAY_ELEMENT_ID)

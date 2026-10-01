@@ -66,16 +66,16 @@ describe("desktop session initialize splash", () => {
     await initialize
 
     expect(useDesktopSessionStore.getState().loadStatus).toBe("ready")
-    expect(document.getElementById("startup-loading")?.dataset.startupReady).toBe("true")
+    expect(document.getElementById("startup-loading")?.dataset.startupReady).toBeUndefined()
   })
 
-  it("marks a leftover splash ready when initialize is already ready", async () => {
+  it("leaves splash readiness to the rendered page when already initialized", async () => {
     stubDesktopSessions({})
     useDesktopSessionStore.setState({ loadStatus: "ready" })
 
     await useDesktopSessionStore.getState().initialize()
 
-    expect(document.getElementById("startup-loading")?.dataset.startupReady).toBe("true")
+    expect(document.getElementById("startup-loading")?.dataset.startupReady).toBeUndefined()
   })
 
   it("does not mark the splash ready while another initialize is in flight", async () => {
@@ -87,7 +87,7 @@ describe("desktop session initialize splash", () => {
     expect(document.getElementById("startup-loading")).not.toBeNull()
   })
 
-  it("marks the splash ready after initialize fails", async () => {
+  it("keeps the splash until the error page has rendered after initialize fails", async () => {
     stubDesktopSessions({
       bootstrap: vi.fn(async () => {
         throw new Error("bootstrap unavailable")
@@ -98,6 +98,6 @@ describe("desktop session initialize splash", () => {
     await useDesktopSessionStore.getState().initialize()
 
     expect(useDesktopSessionStore.getState().loadStatus).toBe("error")
-    expect(document.getElementById("startup-loading")?.dataset.startupReady).toBe("true")
+    expect(document.getElementById("startup-loading")?.dataset.startupReady).toBeUndefined()
   })
 })

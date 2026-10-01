@@ -9,6 +9,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 启动徽标存在时只显示一套加载提示；后续路由等待仍使用自己的提示。 */
+body:has(#startup-loading) .desktop-route-pending-content {
+  visibility: hidden;
+}
+
 /* 个人资料热图从当前主题色派生色阶。 */
 .profile-activity-cell[data-level="0"] {
   background: color-mix(in oklab, var(--muted) 72%, var(--background));

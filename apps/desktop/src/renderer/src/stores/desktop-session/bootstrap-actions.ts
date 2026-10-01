@@ -5,7 +5,6 @@ import type {
 } from "@shared/session-types"
 import { normalizeDesktopAttachmentSupport } from "@shared/attachment-types"
 
-import { markStartupOverlayReady } from "@renderer/startup-overlay"
 import {
   beginScopedOperation,
   errorMessage,
@@ -22,10 +21,7 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
   return {
     async initialize() {
       if (get().loadStatus === "loading") return
-      if (get().loadStatus === "ready") {
-        markStartupOverlayReady()
-        return
-      }
+      if (get().loadStatus === "ready") return
       const operationId = globalThis.crypto.randomUUID()
       set((state) => ({
         loadStatus: "loading",
@@ -79,7 +75,6 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
           selectedProjectGitCheckedAt: null,
           branches: [],
         })
-        markStartupOverlayReady()
         if (selectedProject)
           await get()
             .selectProject(selectedProject)
@@ -102,7 +97,6 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
           daemonStatus,
           appOperations: failScopedOperation(state.appOperations, operationId, message, Date.now()),
         }))
-        markStartupOverlayReady()
       }
     },
 

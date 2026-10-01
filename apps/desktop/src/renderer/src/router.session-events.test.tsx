@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 const sessionEvents = vi.hoisted(() => ({
   detach: vi.fn(),
   attach: vi.fn(() => sessionEvents.detach),
+  initialize: vi.fn<() => Promise<void>>(async () => undefined),
 }))
 
 // Keep the real route tree, root component and bridge; replace page bodies and IPC/store boundary.
@@ -28,15 +29,23 @@ vi.mock("@renderer/components/desktop/plugin-page", () => ({
 }))
 vi.mock("@renderer/stores/desktop-session", () => ({
   attachDesktopSessionEvents: sessionEvents.attach,
-  useDesktopSessionStore: Object.assign(() => null, {
-    getState: () => ({
-      initialize: async () => undefined,
-      sessionView: { session: { id: "session-1" } },
-    }),
-  }),
+  useDesktopSessionStore: Object.assign(
+    (selector: (state: unknown) => unknown) =>
+      selector({
+        appOperations: {},
+        daemonStatus: { phase: "ready", message: "正在恢复会话", updatedAt: 1 },
+      }),
+    {
+      getState: () => ({
+        initialize: sessionEvents.initialize,
+        sessionView: { session: { id: "session-1" } },
+      }),
+    }
+  ),
 }))
 
 import { routeTree } from "./routeTree.gen"
+import { DesktopRoutePending } from "./routes/__root"
 
 let container: HTMLDivElement
 let root: Root
@@ -46,6 +55,8 @@ beforeEach(() => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => undefined)
   sessionEvents.attach.mockClear()
   sessionEvents.detach.mockClear()
+  sessionEvents.initialize.mockReset()
+  sessionEvents.initialize.mockResolvedValue(undefined)
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -55,8 +66,55 @@ afterEach(() => {
   act(() => root.unmount())
   expect(sessionEvents.detach).toHaveBeenCalledTimes(sessionEvents.attach.mock.calls.length)
   container.remove()
+  document.getElementById("startup-loading")?.remove()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+it("marks startup ready only after the route page has committed", async () => {
+  const overlay = document.createElement("div")
+  overlay.id = "startup-loading"
+  document.body.append(overlay)
+
+  await mountRouter("/conversation/session-1")
+
+  expect(container.textContent).toBe("Conversation")
+  expect(overlay.dataset.startupReady).toBe("true")
+})
+
+it("keeps the splash while child route initialization is pending, then reveals the committed page", async () => {
+  let finishInitialization!: () => void
+  sessionEvents.initialize.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finishInitialization = resolve
+      })
+  )
+  const overlay = document.createElement("div")
+  overlay.id = "startup-loading"
+  document.body.append(overlay)
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: ["/conversation/session-1"] }),
+    defaultPendingMs: 0,
+    defaultPendingMinMs: 0,
+    defaultPendingComponent: DesktopRoutePending,
+  })
+
+  await act(async () => root.render(<RouterProvider router={router} />))
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+  expect(container.textContent).toContain("正在恢复会话")
+  expect(overlay.dataset.startupReady).toBeUndefined()
+
+  await act(async () => {
+    sessionEvents.initialize.mockResolvedValue(undefined)
+    finishInitialization()
+    await router.load()
+  })
+  expect(container.textContent).toBe("Conversation")
+  expect(overlay.dataset.startupReady).toBe("true")
 })
 
 async function mountRouter(path: string) {
