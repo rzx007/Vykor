@@ -35,6 +35,60 @@ async function collect(
 }
 
 describe("QueryEngine model network retry", () => {
+  it("retries a failure created by a separate copy of the core module", async () => {
+    vi.resetModules();
+    const { ModelRequestFailure: ForeignFailure } = await import("./model-retry.js");
+    const failure = new ForeignFailure("upstream closed", {
+      kind: "stream_incomplete", phase: "stream", retryable: true, requestId: "cross-module",
+    });
+    let calls = 0;
+    const client = { streamMessage: async function* (): AsyncIterable<StreamEvent> {
+      if (++calls === 1) throw failure;
+      yield { type: "text_delta", delta: "recovered" };
+      yield { type: "complete", stopReason: "end_turn" };
+    } };
+    const engine = new QueryEngine(client, new ToolRegistry(), allowAll(), noopHooks(), {
+      trajectoryTrackerFactory: false, modelRetry: { baseDelayMs: 0, maxDelayMs: 0 },
+    });
+    const events = await collect(engine);
+    expect(calls).toBe(2);
+    expect(events.filter((event) => event.type === "model_retry")).toMatchObject([
+      { reason: "stream_incomplete", retryNumber: 1 },
+    ]);
+    expect(events.filter((event) => event.type === "text_delta")).toMatchObject([{ delta: "recovered" }]);
+  });
+
+  it("preserves a separate module's permanent failure without retrying", async () => {
+    vi.resetModules();
+    const { ModelRequestFailure: ForeignFailure } = await import("./model-retry.js");
+    const failure = new ForeignFailure("invalid credentials", {
+      kind: "authentication", phase: "request", retryable: false, statusCode: 401, requestId: "auth-request",
+    });
+    let calls = 0;
+    const client = { streamMessage: async function* (): AsyncIterable<StreamEvent> {
+      calls++;
+      throw failure;
+    } };
+    const engine = new QueryEngine(client, new ToolRegistry(), allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    await expect(collect(engine)).rejects.toBe(failure);
+    expect(calls).toBe(1);
+  });
+
+  it("does not trust an ordinary error just because its name and info look retryable", async () => {
+    const failure = Object.assign(new Error("not a provider failure"), {
+      name: "ModelRequestFailure",
+      info: { kind: "network", phase: "request", retryable: true },
+    });
+    let calls = 0;
+    const client = { streamMessage: async function* (): AsyncIterable<StreamEvent> {
+      calls++;
+      throw failure;
+    } };
+    const engine = new QueryEngine(client, new ToolRegistry(), allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    await expect(collect(engine)).rejects.toMatchObject({ info: { kind: "unknown", retryable: false }, cause: failure });
+    expect(calls).toBe(1);
+  });
+
   it("projects compact attempt settlement into an active run only", async () => {
     const client = { streamMessage: async function* (): AsyncIterable<StreamEvent> {
       yield { type: "usage", usage: { inputTokens: 3, outputTokens: 1 } };

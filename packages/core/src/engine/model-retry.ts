@@ -33,7 +33,17 @@ export interface ModelFailureInfo {
  * 适配器抛出的统一模型失败类型。原始异常通过 `cause` 保留，只有该结构会进入
  * 重试策略；序列化到客户端时必须换成安全摘要，不能带完整 cause 对象。
  */
+const MODEL_REQUEST_FAILURE = Symbol.for("@vykor/core/ModelRequestFailure");
+
 export class ModelRequestFailure extends Error {
+  private readonly [MODEL_REQUEST_FAILURE] = true;
+
+  // Separate bundles have different constructors but share the global symbol.
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null
+      && MODEL_REQUEST_FAILURE in value && value[MODEL_REQUEST_FAILURE] === true;
+  }
+
   constructor(
     message: string,
     readonly info: ModelFailureInfo,
