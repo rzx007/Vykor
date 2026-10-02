@@ -1,9 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { StreamMessageParams, StreamingMessageClient } from "../types/client.js";
-import type { IHookExecutor } from "../index.js";
+import type { AgentExecutionContext, IHookExecutor } from "../index.js";
 import { QueryEngine } from "./query-engine.js";
 import { ToolRegistry } from "./tool-registry.js";
+
+function createExecutionContext(
+  takeSteeredInputs: AgentExecutionContext["takeSteeredInputs"],
+  hardMaxTurns?: number,
+): AgentExecutionContext {
+  return {
+    scope: {
+      agentId: "agent-test", sessionId: "session-test", inputId: "input-test",
+      runId: "run-test", traceId: "trace-test", cwd: "/work",
+      signal: new AbortController().signal,
+    },
+    ...(hardMaxTurns === undefined ? {} : { hardMaxTurns }),
+    effects: { requestPermission: async () => ({ status: "denied" }) },
+    children: {
+      hasChildAgent: () => false,
+      spawnChildAgent: async () => { throw new Error("not implemented in this test"); },
+      sendChildInput: async () => { throw new Error("not implemented in this test"); },
+      interruptChildAgent: async () => {},
+      awaitChildAgent: async () => { throw new Error("not implemented in this test"); },
+    },
+    emit: async () => {}, closeSteering: () => {}, takeSteeredInputs,
+  };
+}
 
 describe("QueryEngine request configuration", () => {
   it("passes the current model identity to dynamically injected tools", async () => {
@@ -87,10 +110,7 @@ describe("QueryEngine request configuration", () => {
       }) },
     );
     for await (const _ of engine.submitMessage("start", {
-      execution: {
-        emit: async () => {}, closeSteering: () => {},
-        takeSteeredInputs: async () => { model = "model-b"; return []; },
-      } as never,
+      execution: createExecutionContext(async () => { model = "model-b"; return []; }),
     })) { /* consume */ }
     expect(models).toEqual(["model-a", "model-b"]);
   });
@@ -122,16 +142,13 @@ describe("QueryEngine request configuration", () => {
     );
     const running = (async () => {
       for await (const _ of engine.submitMessage("first", {
-        execution: {
-          emit: async () => {}, closeSteering: () => {},
-          takeSteeredInputs: async () => {
-            if (!pending) return [];
-            pending = false;
-            model = "model-b";
-            maxTurns = 1;
-            return [{ id: "follow-up", content: "continue" }];
-          },
-        } as never,
+        execution: createExecutionContext(async () => {
+          if (!pending) return [];
+          pending = false;
+          model = "model-b";
+          maxTurns = 1;
+          return [{ id: "follow-up", content: "continue" }];
+        }),
       })) { /* consume */ }
     })();
     await firstStarted;
@@ -180,15 +197,12 @@ describe("QueryEngine request configuration", () => {
     const running = (async () => {
       let pending = true;
       for await (const _ of engine.submitMessage("run", {
-        execution: {
-          emit: async () => {}, closeSteering: () => {},
-          takeSteeredInputs: async () => {
-            if (!pending) return [];
-            pending = false;
-            maxTurns = 1;
-            return [{ id: "follow-up", content: "continue" }];
-          },
-        } as never,
+        execution: createExecutionContext(async () => {
+          if (!pending) return [];
+          pending = false;
+          maxTurns = 1;
+          return [{ id: "follow-up", content: "continue" }];
+        }),
       })) { /* consume */ }
     })();
     await firstStarted;
@@ -232,11 +246,7 @@ describe("QueryEngine request configuration", () => {
     );
     const running = (async () => {
       for await (const _ of engine.submitMessage("run", {
-        execution: {
-          hardMaxTurns: 1,
-          emit: async () => {}, closeSteering: () => {},
-          takeSteeredInputs: async () => [],
-        } as never,
+        execution: createExecutionContext(async () => [], 1),
       })) { /* consume */ }
     })();
     await firstStarted;
@@ -284,16 +294,12 @@ describe("QueryEngine request configuration", () => {
     const running = (async () => {
       let accepted = false;
       for await (const _ of engine.submitMessage("run", {
-        execution: {
-          hardMaxTurns: 2,
-          emit: async () => {}, closeSteering: () => {},
-          takeSteeredInputs: async () => {
-            if (accepted) return [];
-            accepted = true;
-            maxTurns = 10;
-            return [{ id: "follow-up", content: "continue" }];
-          },
-        } as never,
+        execution: createExecutionContext(async () => {
+          if (accepted) return [];
+          accepted = true;
+          maxTurns = 10;
+          return [{ id: "follow-up", content: "continue" }];
+        }, 2),
       })) { /* consume */ }
     })();
     await firstStarted;
@@ -331,15 +337,11 @@ describe("QueryEngine request configuration", () => {
     );
     const run = (async () => {
       for await (const _ of engine.submitMessage("initial", {
-        execution: {
-          emit: async () => {},
-          closeSteering: () => {},
-          takeSteeredInputs: async () => {
-            if (!pending) return [];
-            pending = false;
-            return [{ id: "followup", content: "later" }];
-          },
-        } as never,
+        execution: createExecutionContext(async () => {
+          if (!pending) return [];
+          pending = false;
+          return [{ id: "followup", content: "later" }];
+        }),
       })) { /* consume */ }
     })();
     await firstStarted;
