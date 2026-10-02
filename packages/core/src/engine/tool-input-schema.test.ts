@@ -102,6 +102,37 @@ describe("normalizeToolInput", () => {
     expect(normalizeToolInput(schema, input)).toBe(input);
   });
 
+  it.each(["anyOf", "oneOf", "allOf", "$ref"])("does not correct aliases in an ambiguous %s schema", key => {
+    const schema = { ...writeSchema, [key]: key === "$ref" ? "#/$defs/input" : [writeSchema] };
+    const input = { path: "target.txt", contents: "body" };
+    expect(normalizeToolInput(schema, input)).toBe(input);
+  });
+
+  it.each([
+    { type: "object", allOf: [
+      { properties: { file_path: { type: "string" } }, required: ["file_path"] },
+      { properties: { path: { type: "string" } }, required: ["path"] },
+    ] },
+    { type: "object", anyOf: [
+      { properties: { file_path: { type: "string" }, path: { type: "string" } }, required: ["file_path", "path"] },
+    ] },
+  ])("keeps composed business fields under their original structure validation: %j", schema => {
+    const input = { file_path: "target.txt", path: "business.txt" };
+    expect(normalizeToolInput(schema, input)).toBe(input);
+    expect(validateToolInput(schema, input)).toBeNull();
+    expect(validateToolInput(schema, { file_path: 123, path: "business.txt" })).not.toBeNull();
+    expect(validateToolInput(schema, { file_path: "target.txt" })).not.toBeNull();
+  });
+
+  it("stops alias inference inside a nested composed business object", () => {
+    const schema = { type: "object", properties: { payload: { type: "object", allOf: [
+      { properties: { file_path: { type: "string" } }, required: ["file_path"] },
+      { properties: { path: { type: "string" } }, required: ["path"] },
+    ] } }, required: ["payload"] };
+    expect(validateToolInput(schema, { payload: { file_path: "target.txt", path: "business.txt" } })).toBeNull();
+    expect(validateToolInput(schema, { payload: { file_path: 123, path: "business.txt" } })).not.toBeNull();
+  });
+
   it("unwraps a sole arguments object when it satisfies the tool schema", () => {
     const shellSchema = {
       type: "object",
@@ -188,18 +219,44 @@ describe("normalizeToolInput", () => {
     ).toMatchObject({ path: "nb.ipynb" });
   });
 
-  it("keeps the canonical field when both names are present", () => {
-    expect(
-      normalizeToolInput(writeSchema, {
-        file_path: "/canonical.ts",
-        path: "/alias.ts",
-        content: "keep",
-        contents: "ignore",
-      }),
-    ).toMatchObject({
-      file_path: "/canonical.ts",
-      content: "keep",
-    });
+  it.each([
+    { file_path: "private.txt", path: "public.txt", content: "body" },
+    { file_path: "private.txt", filePath: "public.txt", content: "body" },
+    { path: "private.txt", filePath: "public.txt", content: "body" },
+    { file_path: "private.txt", content: "one", contents: "two" },
+  ])("rejects conflicting non-business aliases: %j", input => {
+    for (const schema of [writeSchema, { ...writeSchema, additionalProperties: false }]) {
+      expect(validateToolInput(schema, normalizeToolInput(schema, input))).not.toBeNull();
+    }
+  });
+
+  it("rejects conflicting aliases inside multiple arguments wrappers", () => {
+    const input = wrapArguments({ file_path: "private.txt", path: "public.txt", content: "body" }, 3);
+    expect(validateToolInput(writeSchema, normalizeToolInput(writeSchema, input))).not.toBeNull();
+  });
+
+  it("accepts identical aliases including strict schemas", () => {
+    const input = { file_path: "same.txt", path: "same.txt", filePath: "same.txt", content: "body", contents: "body" };
+    const schema = { ...writeSchema, additionalProperties: false };
+    expect(normalizeToolInput(schema, input)).toEqual({ file_path: "same.txt", content: "body" });
+    expect(validateToolInput(schema, normalizeToolInput(schema, input))).toBeNull();
+  });
+
+  it("preserves independently declared business fields", () => {
+    const schema = { ...writeSchema, properties: { ...writeSchema.properties, path: { type: "string" }, contents: { type: "string" } } };
+    const input = { file_path: "target.txt", path: "business.txt", content: "one", contents: "two" };
+    expect(normalizeToolInput(schema, input)).toEqual(input);
+    expect(validateToolInput(schema, input)).toBeNull();
+    expect(normalizeToolInput(schema, { path: "business.txt", contents: "two" }))
+      .toEqual({ path: "business.txt", contents: "two" });
+    expect(validateToolInput(schema, normalizeToolInput(schema, { path: "business.txt", contents: "two" }))).not.toBeNull();
+  });
+
+  it.each(["constructor", "toString"])("accepts a JSON business field named %s without inheriting an alias entry", key => {
+    const schema = JSON.parse(`{"type":"object","properties":{"${key}":{"type":"string"}},"required":["${key}"]}`);
+    const input = JSON.parse(`{"${key}":"business value"}`);
+    expect(normalizeToolInput(schema, input)).toEqual({ [key]: "business value" });
+    expect(validateToolInput(schema, input)).toBeNull();
   });
 
   it("does not invent fields that the schema does not declare", () => {

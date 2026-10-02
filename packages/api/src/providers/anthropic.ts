@@ -124,6 +124,10 @@ export class AnthropicClient implements StreamingMessageClient {
               initialInput: event.content_block.input,
               partialJson: "",
             });
+            yield {
+              type: "tool_generation_progress", toolKey: String(event.index),
+              toolUseId: event.content_block.id, toolName: event.content_block.name, receivedChars: 0,
+            };
           } else if (
             event.type === "content_block_delta" &&
             event.delta.type === "input_json_delta"
@@ -131,6 +135,10 @@ export class AnthropicClient implements StreamingMessageClient {
             const buf = toolInputBuffers.get(event.index);
             if (buf) {
               buf.partialJson += event.delta.partial_json;
+              yield {
+                type: "tool_generation_progress", toolKey: String(event.index),
+                toolUseId: buf.id, toolName: buf.name, receivedChars: buf.partialJson.length,
+              };
             }
           } else if (event.type === "content_block_stop") {
             const buf = toolInputBuffers.get(event.index);

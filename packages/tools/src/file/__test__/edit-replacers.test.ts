@@ -5,9 +5,7 @@ import {
   ContextAwareReplacer,
   EditMatchError,
   EscapeNormalizedReplacer,
-  IndentationFlexibleReplacer,
   LineTrimmedReplacer,
-  MultiOccurrenceReplacer,
   SimpleReplacer,
   TrimmedBoundaryReplacer,
   WhitespaceNormalizedReplacer,
@@ -19,6 +17,18 @@ import {
   replace,
 } from "../edit-replacers.js";
 import type { Replacer } from "../edit-replacers.js";
+import { planTextEdits } from "../edit-plan.js";
+
+describe("exact replace_all edit plans", () => {
+  it.each([
+    ["aaaa", "aa", "bb", "bbbb"],
+    ["aaaaa", "aa", "bb", "bbbba"],
+    ["    let x = 1;\n", "  ", "\t", "\t\tlet x = 1;\n"],
+    ["aaaa", "aa", "$& $` $' $$", "$& $` $' $$$& $` $' $$"],
+  ])("replaces non-overlapping exact occurrences literally: %j", (content, old_string, new_string, expected) => {
+    expect(planTextEdits(content, { old_string, new_string, replace_all: true }).content).toBe(expected);
+  });
+});
 
 describe("line endings", () => {
   it("normalizes CRLF to LF", () => {
@@ -146,18 +156,6 @@ describe("WhitespaceNormalizedReplacer", () => {
   });
 });
 
-describe("IndentationFlexibleReplacer", () => {
-  it("matches a block that is indented differently as a whole", () => {
-    const content = "    if (x) {\n      go();\n    }";
-    const find = "if (x) {\n  go();\n}";
-    expect(collect(IndentationFlexibleReplacer, content, find).length).toBeGreaterThan(0);
-  });
-
-  it("yields nothing when block content differs", () => {
-    expect(collect(IndentationFlexibleReplacer, "  a\n  b", "a\nc")).toEqual([]);
-  });
-});
-
 describe("EscapeNormalizedReplacer", () => {
   it("matches when the find string carries literal escape sequences", () => {
     const content = "const a = 1;\nconst b = 2;";
@@ -180,17 +178,6 @@ describe("TrimmedBoundaryReplacer", () => {
 
   it("yields nothing when trimming would produce an empty candidate", () => {
     expect(collect(TrimmedBoundaryReplacer, "a\n\nb", "  \n  ")).toEqual([]);
-  });
-});
-
-describe("MultiOccurrenceReplacer", () => {
-  it("yields one entry per occurrence", () => {
-    expect(collect(MultiOccurrenceReplacer, "a-a-a", "a")).toEqual(["a", "a", "a"]);
-  });
-
-  it("yields nothing when the text is absent or find is empty", () => {
-    expect(collect(MultiOccurrenceReplacer, "abc", "z")).toEqual([]);
-    expect(collect(MultiOccurrenceReplacer, "abc", "")).toEqual([]);
   });
 });
 
@@ -283,6 +270,11 @@ describe("replace", () => {
     const content = "function f() {\n    return 1;\n}";
     const find = "function f() {\n  return 1;\n}";
     expect(replace(content, find, "function f() {\n  return 2;\n}")).toContain("return 2;");
+  });
+
+  it("recovers a block that is indented differently as a whole", () => {
+    expect(replace("    if (x) {\n      go();\n    }", "if (x) {\n  go();\n}", "if (x) {\n  stop();\n}"))
+      .toBe("if (x) {\n  stop();\n}");
   });
 
   it("throws identical when oldString equals newString", () => {

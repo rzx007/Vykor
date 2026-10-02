@@ -2,7 +2,7 @@ export class ToolFailureMemory {
   private evidenceRevision = 0;
   private readonly failures = new Map<string, number>();
 
-  recordFailure(toolName: string, input: Record<string, unknown>, _fingerprint?: string): void {
+  recordFailure(toolName: string, input: Record<string, unknown>): void {
     this.failures.set(signature(toolName, input), this.evidenceRevision);
   }
 

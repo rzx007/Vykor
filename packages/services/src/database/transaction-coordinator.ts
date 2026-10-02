@@ -101,7 +101,7 @@ export class TransactionCoordinator {
       })();
 
     } catch (error) {
-      this.storage.state = previousState;
+      Object.assign(this.storage.state, previousState);
       this.storage.eventSequence.restore(previousEventSequence);
       this.storage.deltaCheckpoint.restore(previousDeltaCheckpoint);
       restoreMutationBuffer(this.storage.mutations, previousMutations);

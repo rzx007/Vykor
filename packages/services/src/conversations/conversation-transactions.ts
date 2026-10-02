@@ -22,6 +22,7 @@ import {
   sessionUserInputText,
   parseAttachmentLimits,
   DEFAULT_ATTACHMENT_LIMITS,
+  settleSessionToolMetadata,
 } from "@vykor/protocol";
 
 import type { StorageContext } from "../database/storage-context.js";
@@ -709,17 +710,15 @@ export class ConversationTransactions {
             id: part.id, sessionId: part.sessionId, messageId: part.messageId, type: part.type,
             status: part.type === "tool" ? "failed" : "interrupted",
             ...(part.type === "tool" ? { metadata: {
-              ...part.metadata,
+              ...settleSessionToolMetadata(part.metadata),
               toolCallId: part.toolUseId ?? part.id,
               toolAttemptId: typeof part.metadata.toolAttemptId === "string"
                 ? part.metadata.toolAttemptId : `tool_attempt_${part.toolUseId ?? part.id}_1`,
-              outcome: "unknown", failureKind: "unknown_outcome",
-              outcomeWarning: "Tool may already have executed; automatic retry is disabled",
             } } : {}),
           });
         }
         this.settleActiveRunAttempts(run.id, "cancelled", reason);
-        this.requireRuns().updateRun(run.id, { status: "interrupted", error: reason });
+        this.requireRuns().updateRun(run.id, { status: "interrupted", error: reason, metadata: { toolGeneration: [] } });
         this.testHooks?.afterRecoveryMutation?.();
       }
       return active.length;

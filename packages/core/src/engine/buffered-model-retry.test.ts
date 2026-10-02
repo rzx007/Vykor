@@ -109,6 +109,43 @@ describe("streamBufferedModelWithRetry", () => {
     expect(calls).toBe(1);
   });
 
+  it("ends an active retry at the recovery deadline and keeps its partial usage", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const finished: ModelAttemptFinishedEvent[] = [];
+      const client = {
+        streamMessage: async function* (params: StreamMessageParams): AsyncIterable<StreamEvent> {
+          calls++;
+          if (calls === 1) {
+            throw new ModelRequestFailure("reset", { kind: "network", phase: "request", retryable: true });
+          }
+          yield { type: "usage", usage: { inputTokens: 7, outputTokens: 3 } };
+          yield { type: "text_delta", delta: "unfinished summary" };
+          await new Promise<void>((_resolve, reject) => {
+            params.abortSignal!.addEventListener("abort", () => reject(params.abortSignal!.reason), { once: true });
+          });
+        },
+      };
+      const run = collect(client, {
+        policy: { baseDelayMs: 0, maxDelayMs: 0, recoveryBudgetMs: 1_000 },
+        onAttemptFinished: (event) => finished.push(event),
+      });
+      const rejected = expect(run).rejects.toMatchObject({
+        info: { kind: "timeout", phase: "stream", retryable: false },
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+      await rejected;
+      expect(calls).toBe(2);
+      expect(finished.map(event => [event.attempt, event.status, event.usageStatus])).toEqual([
+        [1, "failed", "unknown"], [2, "failed", "partial"],
+      ]);
+      expect(finished[1]?.usage).toEqual({ inputTokens: 7, outputTokens: 3 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stops waiting and issues no further request when cancelled", async () => {
     vi.useFakeTimers();
     try {
@@ -150,6 +187,42 @@ describe("streamBufferedModelWithRetry", () => {
       vi.useRealTimers();
     }
   });
+
+  it.each([undefined, { inputTokens: 7, outputTokens: 3 }])(
+    "settles an active cancelled attempt as interrupted, preserving usage %j",
+    async (usage) => {
+      const controller = new AbortController();
+      const stopped = new Error("caller stopped auxiliary generation");
+      const finished: ModelAttemptFinishedEvent[] = [];
+      const delivered: StreamEvent[] = [];
+      let calls = 0;
+      const client = {
+        streamMessage: async function* (params: StreamMessageParams): AsyncIterable<StreamEvent> {
+          calls++;
+          if (usage) yield { type: "usage", usage };
+          yield { type: "text_delta", delta: "unfinished summary" };
+          controller.abort(stopped);
+          params.abortSignal?.throwIfAborted();
+        },
+      };
+
+      await expect((async () => {
+        for await (const event of streamBufferedModelWithRetry(
+          client as never,
+          { model: "m", messages: [], abortSignal: controller.signal },
+          { generationId: "aux-cancel", onAttemptFinished: (event) => finished.push(event) },
+        )) delivered.push(event);
+      })()).rejects.toBe(stopped);
+
+      expect(finished).toEqual([{
+        type: "model_attempt_finished", generationId: "aux-cancel", attempt: 1,
+        status: "interrupted", usageStatus: usage ? "partial" : "unknown",
+        ...(usage ? { usage } : {}),
+      }]);
+      expect(delivered).toEqual([]);
+      expect(calls).toBe(1);
+    },
+  );
 
   it("refuses to wrap a tool-bearing main generation", async () => {
     const client = {

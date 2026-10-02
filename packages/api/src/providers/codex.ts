@@ -135,6 +135,7 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
 
       const toolCalls: ToolUseBlock[] = [];
       const outputPhases = new Map<string, "commentary" | "final_answer">();
+      const toolProgress = new Map<string, { toolUseId?: string; toolName?: string; receivedChars: number }>();
       let stopReason = "end_turn";
       let completed = false;
       let incompleteReason: string | undefined;
@@ -153,6 +154,22 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
             if (isRecord(item) && typeof item.id === "string") {
               const phase = assistantPhase(item.phase);
               if (phase) outputPhases.set(item.id, phase);
+              if (item.type === "function_call") {
+                const progress = {
+                  ...(typeof item.call_id === "string" ? { toolUseId: item.call_id } : {}),
+                  ...(typeof item.name === "string" ? { toolName: item.name } : {}),
+                  receivedChars: typeof item.arguments === "string" ? item.arguments.length : 0,
+                };
+                toolProgress.set(item.id, progress);
+                yield { type: "tool_generation_progress", toolKey: item.id, ...progress };
+              }
+            }
+          } else if (eventType === "response.function_call_arguments.delta") {
+            if (typeof event.item_id === "string" && typeof event.delta === "string") {
+              const progress = toolProgress.get(event.item_id) ?? { receivedChars: 0 };
+              progress.receivedChars += event.delta.length;
+              toolProgress.set(event.item_id, progress);
+              yield { type: "tool_generation_progress", toolKey: event.item_id, ...progress };
             }
           } else if (eventType === "response.output_text.delta") {
             const delta = event.delta;
@@ -172,6 +189,13 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
             const callId = typeof item.call_id === "string" ? item.call_id : "";
             const name = typeof item.name === "string" ? item.name : "";
             if (!callId || !name) continue;
+            if (typeof item.id === "string") {
+              const previous = toolProgress.get(item.id);
+              const receivedChars = typeof item.arguments === "string" ? item.arguments.length : previous?.receivedChars ?? 0;
+              if (!previous || previous.receivedChars !== receivedChars || previous.toolUseId !== callId || previous.toolName !== name) {
+                yield { type: "tool_generation_progress", toolKey: item.id, toolUseId: callId, toolName: name, receivedChars };
+              }
+            }
             toolCalls.push({
               type: "tool_use",
               id: callId,

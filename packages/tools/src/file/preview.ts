@@ -1,4 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { parseTextEdits, planTextEdits } from "./edit-plan.js";
+import { decodeUtf8Text } from "./text-content.js";
+import { HostFileOperations } from "./operations.js";
 
 /**
  * 一次文件改动的预览：路径 + 改动前内容 + 改动后内容。**不写盘**。
@@ -10,10 +14,10 @@ export interface FileChangePreview {
 }
 
 /**
- * 计算 Edit/Write 将产生的文件改动，用于"改文件前看 diff"的权限预览。
+ * 计算宿主文件的 Edit/Write 改动，供调用方生成预览。这里不授予权限。
  *
- * **纯计算，不写盘**：只读当前文件内容，按与 `fileEditTool`/`fileWriteTool`
- * **完全一致**的替换逻辑算出 after，供权限层生成 diff 展示给用户。
+ * **不写盘**：Edit 与执行入口共用替换计算；具体执行环境、权限和写前
+ * 冲突检查仍由执行入口负责，不能把这个宿主预览当作安全授权。
  *
  * 返回 `null` 的情况（调用方应回退到无 diff 的普通确认）：
  * - 非 Edit/Write 工具（无 diff 概念）。
@@ -52,32 +56,18 @@ async function computeEditChange(
   input: Record<string, unknown>,
 ): Promise<FileChangePreview | null> {
   const path = input.file_path;
-  const oldString = input.old_string;
-  const newString = input.new_string;
-  const replaceAll = (input.replace_all as boolean) ?? false;
-  if (
-    typeof path !== "string" ||
-    typeof oldString !== "string" ||
-    typeof newString !== "string"
-  ) {
-    return null;
-  }
-
-  let before: string;
+  if (typeof path !== "string") return null;
   try {
-    before = await readFile(path, "utf-8");
-  } catch {
-    return null; // 文件不存在：Edit 会报错，无可预览。
+    parseTextEdits(input);
+    const operations = new HostFileOperations();
+    const item = await operations.stat(path);
+    if (!item.isFile || item.isSymbolicLink) return null;
+    const bytes = await operations.readBytes(path);
+    if (input.expected_sha256 !== undefined && (typeof input.expected_sha256 !== "string"
+      || !/^[a-f0-9]{64}$/i.test(input.expected_sha256)
+      || createHash("sha256").update(bytes).digest("hex") !== input.expected_sha256.toLowerCase())) return null;
+    const before = decodeUtf8Text(bytes);
+    return { path, before, after: planTextEdits(before, input).content };
   }
-
-  // 与 fileEditTool 一致的校验：找不到 / 多处匹配但未 replace_all → 无预览。
-  if (!before.includes(oldString)) return null;
-  const occurrences = before.split(oldString).length - 1;
-  if (occurrences > 1 && !replaceAll) return null;
-
-  const after = replaceAll
-    ? before.replaceAll(oldString, newString)
-    : before.replace(oldString, newString);
-
-  return { path, before, after };
+  catch { return null; }
 }

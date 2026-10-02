@@ -1,20 +1,5 @@
 import { DEFAULT_MODEL_RETRY_POLICY, ModelRequestFailure } from "@vykor/core";
 
-export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
-  signal?.throwIfAborted();
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(timeout);
-      reject(signal?.reason);
-    };
-    const timeout = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
 export interface RequestLifecycle {
   /** 传给 SDK/fetch 的信号；外部取消会转发到它。 */
   readonly signal: AbortSignal;

@@ -19,6 +19,6 @@ export function createSessionEnvironmentAcquirer(_input?: unknown) {
       sessionId: session.id,
       userSkillsRoot: getSkillsDir(),
     });
-    return { ...base, files: createEnvironmentFileSystem(base, { settings, sessionId: session.id }) };
+    return { ...base, files: createEnvironmentFileSystem(base) };
   };
 }

@@ -45,6 +45,48 @@ describe("fileWriteTool feedback", () => {
 });
 
 describe("fileWriteTool safety", () => {
+  it("does not overwrite bytes changed after the initial read", async () => {
+    await withTempDir(async dir => {
+      const file = join(dir, "a.txt");
+      await writeFile(file, "old", "utf8");
+      let firstRead = true;
+      class ConcurrentFiles extends HostFileOperations {
+        async readBytes(path: string) {
+          const bytes = await super.readBytes(path);
+          if (firstRead) { firstRead = false; await writeFile(path, "user's new content", "utf8"); }
+          return bytes;
+        }
+      }
+      const result = await fileWriteTool.execute({ file_path: file, content: "replacement", overwrite: true }, {
+        cwd: dir,
+        environment: { files: new ConcurrentFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) } },
+      } as never);
+      expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+      expect(await readFile(file, "utf8")).toBe("user's new content");
+    });
+  });
+
+  it.each([
+    { label: "missing content", input: { file_path: "value.txt" } },
+    { label: "unresolved reference", input: { file_path: "value.txt", content_from: "source" } },
+    { label: "content plus reference", input: { file_path: "value.txt", content: "body", content_from: "source" } },
+  ])("rejects $label before resolving a path", async ({ input }) => {
+    const context = { cwd: "/work", environment: { paths: {
+      resolve: async () => { throw new Error("must not access filesystem"); },
+    } } } as never;
+    const result = await fileWriteTool.execute(input, context);
+    expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+  });
+
+  it("creates an empty file when complete content is an empty string", async () => {
+    await withTempDir(async (dir) => {
+      const file = join(dir, "empty.txt");
+      const result = await fileWriteTool.execute({ file_path: file, content: "" }, { cwd: dir });
+      expect(result).toMatchObject({ executionState: "completed" });
+      expect(await readFile(file, "utf8")).toBe("");
+    });
+  });
+
   it("creates a file when the environment's filesystem comes from another module instance", async () => {
     await withTempDir(async (dir) => {
       vi.resetModules();

@@ -57,7 +57,7 @@ export interface DaemonAgentEventProjectorContext {
   rootSessionId?: string;
   rootAgent: VykorAgent;
   store: Pick<SessionStore,
-    "conversations" | "conversationTransactions" | "runs" | "sessions" |
+    "conversations" | "conversationTransactions" | "incrementalOutput" | "runs" | "sessions" |
     "createProjectionSettlement" | "failProjectionSettlement" | "getProjectionSettlement" |
     "getSessionTask" | "listProjectionSettlements" | "markProjectionSettlementRetrying" |
     "resolveProjectionSettlement" | "transaction" | "updateSessionTask"
@@ -167,6 +167,14 @@ export class DaemonAgentEventProjector {
         this.projectUsage(event);
         return;
       case "domain.event":
+        if (event.data.name === "tool.generation.progress") {
+          this.projectToolGeneration(event);
+          return;
+        }
+        if (event.data.name === "tool.lifecycle") {
+          this.projectToolLifecycle(event);
+          return;
+        }
         if (event.data.name === "request.configuration") {
           this.projectRequestConfiguration(event);
         }
@@ -501,11 +509,17 @@ export class DaemonAgentEventProjector {
         state.activeReasoningSource === stream.source);
     const before = direct ? undefined : this.context.events.checkpoint();
     let applied: ReturnType<SessionTranscriptProjection["projectStreamEvent"]>;
+    const project = () => {
+      const result = this.context.transcriptProjection.projectStreamEvent(state, stream);
+      if (stream.type === "tool_use_start") {
+        this.clearToolGeneration(runId, (entry) => entry.toolUseId !== stream.toolUse.id);
+      }
+      return result;
+    };
     try {
       applied = direct
-        ? this.context.transcriptProjection.projectStreamEvent(state, stream)
-        : this.context.store.transaction(() =>
-          this.context.transcriptProjection.projectStreamEvent(state, stream));
+        ? project()
+        : this.context.store.transaction(project);
     } catch (error) {
       restoreTranscript(state, stateSnapshot);
       throw error;
@@ -537,16 +551,23 @@ export class DaemonAgentEventProjector {
   private projectGenerationStarted(event: Extract<AgentEvent, { type: "output.generation.started" }>): void {
     const runId = required(event.context.runId, "runId", event.type);
     const state = this.transcripts.get(runId);
+    const activeRun = this.context.store.runs.getRun(runId);
+    if (!state || !activeRun || activeRun.status !== "running" || activeRun.sessionId !== event.context.sessionId) return;
     const stateSnapshot = state ? snapshotTranscript(state) : undefined;
     try {
       this.projectAtomicEvent(() => {
         if (state) {
+          const run = this.context.store.runs.getRun(runId);
+          if (!run || run.status !== "running" || run.sessionId !== event.context.sessionId) return;
+          if (state.generationId === event.data.generationId &&
+            (state.generationAttempt ?? 0) >= event.data.attempt) return;
           this.context.transcriptProjection.beginGeneration(
             state,
             event.data.generationId,
             event.data.attempt,
           );
         }
+        this.clearToolGeneration(runId);
         const run = this.context.store.runs.getRun(runId);
         if (run && run.metadata.modelRetry !== undefined) {
           this.context.store.runs.updateRun(runId, { metadata: { modelRetry: null } });
@@ -564,11 +585,79 @@ export class DaemonAgentEventProjector {
     this.context.events.publishSince(before);
   }
 
+  private clearToolGeneration(runId: string, keep?: (entry: Record<string, unknown>) => boolean): void {
+    const run = this.context.store.runs.getRun(runId);
+    if (!run) return;
+    const entries = Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration.filter(isRecord) : [];
+    const next = keep ? entries.filter(keep) : [];
+    if (run.metadata.toolGeneration === undefined && keep) return;
+    if (jsonEqual(entries, next) && run.metadata.toolGeneration !== undefined) return;
+    this.context.store.runs.updateRun(runId, { metadata: { toolGeneration: next } });
+  }
+
+  private projectToolGeneration(event: Extract<AgentEvent, { type: "domain.event" }>): void {
+    const runId = event.context.runId;
+    const state = runId ? this.transcripts.get(runId) : undefined;
+    const run = runId ? this.context.store.runs.getRun(runId) : undefined;
+    const payload = event.data.payload;
+    if (!runId || !state || !run || run.status !== "running" || run.sessionId !== event.context.sessionId ||
+      state.sessionId !== event.context.sessionId || state.generationSettled || !payload ||
+      typeof payload.generationId !== "string" || !payload.generationId || !Number.isSafeInteger(payload.attempt) || Number(payload.attempt) < 1 ||
+      payload.generationId !== state.generationId || payload.attempt !== state.generationAttempt ||
+      typeof payload.toolKey !== "string" || !payload.toolKey ||
+      !Number.isSafeInteger(payload.receivedChars) || Number(payload.receivedChars) < 0) return;
+    const entry = {
+      generationId: state.generationId, attempt: state.generationAttempt, toolKey: payload.toolKey,
+      ...(typeof payload.toolUseId === "string" && payload.toolUseId ? { toolUseId: payload.toolUseId } : {}),
+      ...(typeof payload.toolName === "string" && payload.toolName ? { toolName: payload.toolName } : {}),
+      receivedChars: payload.receivedChars,
+    };
+    const entries = Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration.filter(isRecord) : [];
+    const index = entries.findIndex(old => old.generationId === entry.generationId && old.attempt === entry.attempt && old.toolKey === entry.toolKey);
+    if (index < 0 && entries.length >= 32) return;
+    const previous = index < 0 ? undefined : entries[index];
+    if (previous && Number(previous.receivedChars) > Number(entry.receivedChars)) return;
+    const next = [...entries];
+    if (index < 0) next.push(entry);
+    else next[index] = { ...previous, ...entry };
+    if (jsonEqual(entries, next)) return;
+    this.context.events.publish(this.context.store.incrementalOutput.updateRunToolGeneration(runId, next));
+  }
+
+  private projectToolLifecycle(event: Extract<AgentEvent, { type: "domain.event" }>): void {
+    const runId = event.context.runId;
+    const run = runId ? this.context.store.runs.getRun(runId) : undefined;
+    const state = runId ? this.transcripts.get(runId) : undefined;
+    const payload = event.data.payload;
+    if (!run || !state || run.status !== "running" || run.sessionId !== event.context.sessionId ||
+      !payload || typeof payload.toolUseId !== "string" || typeof payload.toolAttemptId !== "string" ||
+      !["preparing", "waiting_permission", "queued", "running", "completed", "failed", "unknown"].includes(String(payload.phase))) return;
+    const active = state.toolParts.get(payload.toolUseId);
+    if (!active) return;
+    const message = this.context.store.conversations.listMessages(run.sessionId).find(row => row.id === active.messageId);
+    const part = this.context.store.conversations.listMessageParts(run.sessionId).find(row => row.id === active.partId);
+    if (!part || message?.runId !== runId || part.type !== "tool" || part.toolUseId !== payload.toolUseId ||
+      part.metadata.toolAttemptId !== payload.toolAttemptId || (part.status !== "running" && part.status !== "pending")) return;
+    const previous = isRecord(part.metadata.toolProgress) ? part.metadata.toolProgress : undefined;
+    if (["completed", "failed", "unknown"].includes(String(previous?.phase))) return;
+    const progress = { phase: payload.phase,
+      ...(["not_started", "completed", "unknown"].includes(String(payload.executionState)) ? { executionState: payload.executionState } : {}),
+    };
+    if (jsonEqual(previous, progress)) return;
+    this.projectAtomicEvent(() => this.context.store.conversations.upsertMessagePart({
+      id: part.id, sessionId: part.sessionId, messageId: part.messageId, type: "tool", metadata: { toolProgress: progress },
+    }));
+  }
+
   private projectModelRetry(event: Extract<AgentEvent, { type: "model.retry.scheduled" }>): void {
     const runId = required(event.context.runId, "runId", event.type);
     this.projectAtomicEvent(() => {
       const run = this.context.store.runs.getRun(runId);
       if (!run || (run.status !== "pending" && run.status !== "running")) return;
+      const state = this.transcripts.get(runId);
+      if (state && (state.generationId !== event.data.generationId || state.generationAttempt !== event.data.attempt)) return;
+      this.clearToolGeneration(runId);
+      if (state) state.generationSettled = true;
       this.context.store.runs.updateRun(runId, {
         metadata: { modelRetry: { ...event.data } },
       });
@@ -583,6 +672,9 @@ export class DaemonAgentEventProjector {
     this.projectAtomicEvent(() => {
       const run = this.context.store.runs.getRun(runId);
       if (!run || (run.status !== "pending" && run.status !== "running")) return;
+      this.clearToolGeneration(runId, entry => entry.generationId !== event.data.generationId || entry.attempt !== event.data.attempt);
+      const state = this.transcripts.get(runId);
+      if (state?.generationId === event.data.generationId && state.generationAttempt === event.data.attempt) state.generationSettled = true;
       const alreadyApplied = this.context.store.conversations
         .listEvents({ sessionId })
         .some((candidate) =>
@@ -679,7 +771,7 @@ export class DaemonAgentEventProjector {
           );
         }
         const existingRun = this.context.store.runs.getRun(runId);
-        const metadataPatch: Record<string, unknown> = {};
+        const metadataPatch: Record<string, unknown> = { toolGeneration: [] };
         if (event.type === "run.completed" && event.data.stopReason) {
           metadataPatch.stopReason = event.data.stopReason;
         }

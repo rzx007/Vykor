@@ -18,6 +18,86 @@ function setup(bytes = 1024) {
 }
 
 describe("IncrementalOutput", () => {
+  it("allocates an isolated run progress event before touching memory and leaves accepted progress on allocation failure", () => {
+    const { dir, store } = setup();
+    try {
+      store.runs.createRun({ id: "run", sessionId: "s", metadata: { keep: { value: 1 } } });
+      const storage = (store as any).storage;
+      const input = [{ generationId: "gen", attempt: 1, toolKey: "0", receivedChars: 1 }];
+      const output = new IncrementalOutput({ storage, appendTransientEvent: event => {
+        expect(store.runs.getRun("run")!.metadata.toolGeneration).toBeUndefined();
+        return store.conversations.appendEventInMemory(event, false);
+      } });
+      const before = store.conversations.latestEventSeq();
+      const event = output.updateRunToolGeneration("run", input);
+      expect(event).toMatchObject({ seq: before + 1, type: "session.run.updated", sessionId: "s", payload: { previousStatus: "pending" } });
+      input[0]!.receivedChars = 99;
+      store.incrementalOutput.updateRunToolGeneration("run", [{ ...input[0]!, receivedChars: 2 }]);
+      expect((event.payload.run as any).metadata.toolGeneration[0].receivedChars).toBe(1);
+      (event.payload.run as any).metadata.keep.value = 9;
+      expect(store.runs.getRun("run")!.metadata.keep).toEqual({ value: 1 });
+      const accepted = store.runs.getRun("run");
+      const allocator = vi.spyOn(storage.eventSequence, "allocate").mockImplementationOnce(() => { throw new Error("allocation failed"); });
+      expect(() => store.incrementalOutput.updateRunToolGeneration("run", input)).toThrow("allocation failed");
+      allocator.mockRestore();
+      expect(store.runs.getRun("run")).toEqual(accepted);
+      const cyclic: Record<string, unknown> = {};
+      cyclic.self = cyclic;
+      const beforeInvalid = store.conversations.latestEventSeq();
+      expect(() => store.incrementalOutput.updateRunToolGeneration("run", [cyclic])).toThrow();
+      expect(store.conversations.latestEventSeq()).toBe(beforeInvalid);
+      expect(store.runs.getRun("run")).toEqual(accepted);
+      expect(() => output.updateRunToolGeneration("missing", input)).toThrow("Session run not found: missing");
+      expect(store.conversations.listEvents({ afterSeq: before })).toEqual([]);
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("reserves event sequences sparsely while leaving run progress out of SQL", () => {
+    const { dir, store } = setup();
+    try {
+      store.runs.createRun({ id: "run", sessionId: "s" });
+      const storage = (store as any).storage;
+      const db = storage.database.connection;
+      const prepare = vi.spyOn(db, "prepare");
+      const before = store.conversations.latestEventSeq();
+      for (let receivedChars = 1; receivedChars <= 2048; receivedChars++) {
+        const event = store.incrementalOutput.updateRunToolGeneration("run", [{ receivedChars }]);
+        expect(event.seq).toBe(before + receivedChars);
+      }
+      expect(prepare.mock.calls).toHaveLength(2);
+      expect(prepare.mock.calls.every(([sql]) => String(sql).includes("INSERT INTO session_event_sequence"))).toBe(true);
+      prepare.mockRestore();
+      expect(storage.mutations.runs.size).toBe(0);
+      expect(storage.mutations.sessions.size).toBe(0);
+      expect(JSON.parse(db.prepare("SELECT metadata_json FROM session_run WHERE id='run'").get().metadata_json).toolGeneration).toBeUndefined();
+      expect(store.runs.getRun("run")!.metadata.toolGeneration).toEqual([{ receivedChars: 2048 }]);
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("preserves accepted transient progress across a failed reliable transaction", () => {
+    const { dir, store } = setup();
+    try {
+      store.runs.createRun({ id: "run", sessionId: "s" });
+      store.incrementalOutput.updateRunToolGeneration("run", [{ receivedChars: 240 }]);
+      const storage = (store as any).storage;
+      for (const receivedChars of [240, 241]) {
+        const before = store.conversations.latestEventSeq();
+        storage.coordinator.setHooks({ beforeCommit() { throw new Error("commit failed"); } });
+        expect(() => store.transaction(() => store.runs.updateRun("run", { metadata: { toolGeneration: [], marker: true } }))).toThrow("commit failed");
+        expect(store.runs.getRun("run")!.metadata).toEqual({ toolGeneration: [{ receivedChars }] });
+        expect(store.conversations.latestEventSeq()).toBe(before);
+        storage.coordinator.setHooks();
+        const next = store.incrementalOutput.updateRunToolGeneration("run", [{ receivedChars: receivedChars + 1 }]);
+        expect(next.seq).toBe(before + 1);
+        expect(store.conversationTransactions.getSessionState("s").cursor).toBe(next.seq);
+        expect(store.runs.getRun("run")!.metadata.toolGeneration).toEqual([{ receivedChars: receivedChars + 1 }]);
+      }
+      store.transaction(() => store.runs.updateRun("run", { status: "completed", metadata: { toolGeneration: [] } }));
+      expect(store.runs.getRun("run")!.metadata.toolGeneration).toEqual([]);
+      expect(store.runs.getRun("run")!.status).toBe("completed");
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it("flushes a low-threshold delta before database backup", async () => {
     const { dir, store } = setup();
     const backupPath = join(dir, "backup.db");

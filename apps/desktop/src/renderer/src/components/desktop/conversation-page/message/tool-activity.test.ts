@@ -7,6 +7,18 @@ const message: DesktopSessionMessage = { id: "m", sessionId: "s", seq: 1, runId:
 const part: DesktopSessionPart = { id: "p", messageId: "m", sessionId: "s", seq: 1, type: "tool", toolName: "Write", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 }
 
 describe("real tool activity labels", () => {
+  it("labels a terminal unknown outcome as uncertain", () => {
+    expect(toolActivityLabel({ ...part, status: "completed", metadata: { executionState: "unknown" } })).toBe("结果不确定")
+    expect(toolActivityLabel({ ...part, status: "failed", metadata: { failureKind: "unknown_outcome" } })).toBe("结果不确定")
+  })
+
+  it.each([{ failureKind: "unknown_outcome" }, { outcome: "unknown" }])("labels latest legacy unknown result before an older completed call: %j", metadata => {
+    const call = { ...part, status: "completed" as const, metadata: { executionState: "completed" } }
+    const result = { ...part, id: "result", type: "tool_result" as const, status: "completed" as const, metadata }
+    expect(toolActivityLabel(call, result)).toBe("结果不确定")
+    expect(toolActivityLabel(call, { ...result, metadata: {}, output: metadata })).toBe("结果不确定")
+  })
+
   it("shows raw parameter character counts only for an active run", () => {
     const generating = { ...run, metadata: { toolGeneration: [{ receivedChars: 8192 }, { receivedChars: 10 }] } }
     expect(conversationActivityLabel([generating], [message], [])).toContain("8,202")

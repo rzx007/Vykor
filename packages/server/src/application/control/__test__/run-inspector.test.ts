@@ -32,6 +32,21 @@ const workflowQueries = {
 };
 
 describe("inspectDurableRun", () => {
+  it.each([
+    [{ executionState: "not_started", failureKind: "unknown_outcome" }, false],
+    [{ executionState: "completed", failureKind: "unknown_outcome" }, false],
+    [{ executionState: "unknown", failureKind: "interrupted" }, true],
+    [{ failureKind: "unknown_outcome" }, true],
+    [{ executionState: null, failureKind: "unknown_outcome" }, true],
+    [{ executionState: "invalid", failureKind: "unknown_outcome" }, true],
+  ])("diagnoses execution facts before legacy failure kind: %j", (metadata, wantWarning) => {
+    const store = createStore();
+    const original = store.conversations.listMessageParts()[0]!;
+    store.conversations.listMessageParts.mockReturnValue([{ ...original, metadata }] as any);
+    const inspection = inspectDurableRun(store as any, permissions as any, workflowQueries, "r1")!;
+    expect(inspection.warnings.some(warning => warning.code === "unknown_tool_outcome")).toBe(wantWarning);
+  });
+
   it("redacts structured input text, names and paths unless content is requested", () => {
     const store = createStore();
     const items = [

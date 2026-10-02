@@ -25,6 +25,10 @@ export function createAttachmentReadTool(options: {
     description: `${options.defaultTool.description} Also reads daemon attachment:// resources.`,
     async execute(input, context) {
       const path = typeof input.file_path === "string" ? input.file_path : "";
+      if (isAttachmentUri(path) && input.info_only === true) {
+        return { content: [{ type: "text", text: "info_only inspects local workspace paths only; attachment resources are not Write targets." }],
+          isError: true, failureKind: "invalid_input", executionState: "not_started" };
+      }
       if (!isAttachmentUri(path)) {
         const result = await options.defaultTool.execute(input, context);
         const image = result.content.find((block) => block.type === "image");

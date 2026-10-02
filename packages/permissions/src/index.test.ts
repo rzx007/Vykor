@@ -21,6 +21,117 @@ async function withTempCwd(
 }
 
 describe("PermissionChecker", () => {
+  const businessPathsSchema = { type: "object", properties: {
+    file_path: { type: "string" }, path: { type: "string" },
+  } };
+
+  it("accepts separately declared business paths with explicit tool approval", async () => {
+    const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["BusinessTool"] });
+    await expect(checker.checkTool("BusinessTool", { file_path: "target.txt", path: "business.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "allow" });
+  });
+
+  it.each([
+    { file_path: "private.txt", path: "public.txt" },
+    { file_path: "public.txt", path: "private.txt" },
+  ])("checks deny rules on every independently declared path: %j", async input => {
+    const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["BusinessTool"],
+      pathRules: [{ pattern: "public.txt", allow: true }, { pattern: "private.txt", allow: false }] });
+    await expect(checker.checkTool("BusinessTool", input, businessPathsSchema))
+      .resolves.toMatchObject({ action: "deny", reason: expect.stringContaining("private.txt") });
+  });
+
+  it("requires path-rule approval for every independent target before implicitly allowing a tool", async () => {
+    const checker = new PermissionChecker({ mode: "default", pathRules: [{ pattern: "public.txt", allow: true }] });
+    await expect(checker.checkTool("BusinessTool", { file_path: "unmatched.txt", path: "public.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "ask" });
+    await expect(checker.checkTool("BusinessTool", { file_path: "public.txt", path: "public.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "allow" });
+  });
+
+  it("does not give local read-only trust to another declared target outside cwd", async () => {
+    const checker = new PermissionChecker({ mode: "default", cwd: "/workspace", pathStyle: "posix" });
+    await expect(checker.checkTool("Read", { file_path: "/outside/target.txt", path: "/workspace/business.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "ask" });
+  });
+
+  it("rejects an undeclared alias only when it disagrees with every declared path candidate", async () => {
+    const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["BusinessTool"] });
+    await expect(checker.checkTool("BusinessTool", { file_path: "target.txt", path: "business.txt", filePath: "unknown.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "deny" });
+    await expect(checker.checkTool("BusinessTool", { file_path: "target.txt", path: "business.txt", filePath: "business.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "allow" });
+    await expect(checker.checkTool("BusinessTool", { file_path: "same.txt", path: "same.txt", filePath: "same.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "allow" });
+  });
+
+  it("preserves an undeclared path alias beside an independently declared filePath business field", async () => {
+    const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["BusinessTool"] });
+    const schema = { properties: { file_path: { type: "string" }, filePath: { type: "string" } } };
+    await expect(checker.checkTool("BusinessTool", { file_path: "target.txt", filePath: "business.txt", path: "target.txt" }, schema))
+      .resolves.toMatchObject({ action: "allow" });
+  });
+
+  it("stops alias inference on composed schemas while keeping unrelated simple schemas under alias rules", async () => {
+    const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["BusinessTool"] });
+    const input = { file_path: "target.txt", path: "business.txt" };
+    await expect(checker.checkTool("BusinessTool", input, { anyOf: [businessPathsSchema] }))
+      .resolves.toMatchObject({ action: "allow" });
+    await expect(checker.checkTool("BusinessTool", input, { properties: { query: { type: "string" } } }))
+      .resolves.toMatchObject({ action: "deny" });
+  });
+
+  it("keeps an ordered permission deny rule applicable to any independently declared target", async () => {
+    const checker = new PermissionChecker({ mode: "default", rules: [
+      { tool: "BusinessTool", pathPattern: "private.txt", action: "deny" },
+      { tool: "BusinessTool", action: "allow" },
+    ] });
+    await expect(checker.checkTool("BusinessTool", { file_path: "private.txt", path: "public.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "deny" });
+    await expect(checker.checkTool("BusinessTool", { file_path: "target.txt", path: "business.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "allow" });
+  });
+
+  it("keeps existing ordered-rule behavior for single-target calls", async () => {
+    const checker = new PermissionChecker({ mode: "default", rules: [
+      { tool: "BusinessTool", pathPattern: "private.txt", action: "deny" },
+    ] });
+    const schema = { properties: { file_path: { type: "string" } } };
+    // Existing ordered rules are scoped by input.path, not an inferred path field.
+    await expect(checker.checkTool("BusinessTool", { file_path: "public.txt" }, schema))
+      .resolves.toMatchObject({ action: "deny" });
+  });
+
+  it("does not skip a matching confirmation rule because another business target differs", async () => {
+    const checker = new PermissionChecker({ mode: "default", rules: [
+      { tool: "BusinessTool", pathPattern: "public.txt", action: "ask" },
+      { tool: "BusinessTool", action: "allow" },
+    ] });
+    await expect(checker.checkTool("BusinessTool", { file_path: "target.txt", path: "public.txt" }, businessPathsSchema))
+      .resolves.toMatchObject({ action: "ask" });
+  });
+
+  it.each([
+    { file_path: "private.txt", path: "public.txt" },
+    { file_path: "private.txt", filePath: "public.txt" },
+    { path: "public.txt", filePath: "private.txt" },
+  ])("denies conflicting single-target path aliases before choosing a path: %j", async input => {
+    const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["Write"],
+      pathRules: [{ pattern: "private.txt", allow: false }, { pattern: "public.txt", allow: true }] });
+    await expect(checker.checkTool("Write", input)).resolves.toMatchObject({ action: "deny" });
+    await expect(checker.checkTool("Write", input, { properties: { file_path: { type: "string" } } }))
+      .resolves.toMatchObject({ action: "deny" });
+  });
+
+  it("keeps identical path aliases compatible and full_auto unchanged", async () => {
+    const checker = new PermissionChecker({ mode: "default", autoApproveTools: ["Write"] });
+    await expect(checker.checkTool("Write", { path: "same.txt", file_path: "same.txt", filePath: "same.txt" }))
+      .resolves.toMatchObject({ action: "allow" });
+    checker.setMode("full_auto");
+    await expect(checker.checkTool("Write", { path: "public.txt", file_path: "private.txt" }))
+      .resolves.toMatchObject({ action: "allow" });
+  });
+
   it("treats POSIX cwd paths in the execution namespace", async () => {
     const checker = new PermissionChecker({
       mode: "default",

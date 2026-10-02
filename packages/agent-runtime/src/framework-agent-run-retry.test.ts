@@ -30,6 +30,44 @@ function runWith(script: StreamEvent[], usage: { inputTokens: number; outputToke
 }
 
 describe("FrameworkAgentRun model retry projection", () => {
+  it("settles only committed calls after cancellation and preserves full returned results", async () => {
+    const controller = new AbortController();
+    const reason = new Error("cancel tools");
+    const { run, events } = runWith([
+      { type: "tool_use_start", toolUse: { type: "tool_use", id: "committed", name: "Write", input: {} } },
+      { type: "tool_use_end", toolUseId: "committed", result: { content: [{ type: "text", text: "already completed" }], executionState: "completed" } },
+      { type: "tool_use_end", toolUseId: "forged", result: { content: [{ type: "text", text: "must not appear" }] } },
+    ]);
+    const original = (run as any).options.session.submitMessage;
+    (run as any).options.session.submitMessage = async function* (...args: any[]) {
+      for await (const event of original(...args)) {
+        if (event.type === "tool_use_end") controller.abort(reason);
+        yield event;
+      }
+    };
+    (run as any).controller = controller;
+    await expect(run.result).rejects.toBe(reason);
+    expect(events.filter(e => e.type === "tool.completed")).toMatchObject([
+      { data: { toolUseId: "committed", result: { content: [{ type: "text", text: "already completed" }] } } },
+    ]);
+    expect(events.at(-1)?.type).toBe("run.interrupted");
+  });
+
+  it("projects parameter counts as domain events without committing tool activity", async () => {
+    const { run, events } = runWith([
+      { type: "generation_started", generationId: "g", attempt: 1 },
+      { type: "tool_generation_progress", toolKey: "0", toolUseId: "proposal", toolName: "Write", receivedChars: 1024, generationId: "g", attempt: 1 },
+      { type: "complete", stopReason: "end_turn" },
+    ]);
+    let activity: unknown;
+    (run as any).options.onSettled = (_: unknown, toolActivity: unknown) => { activity = toolActivity; };
+    await run.result;
+    expect(events.filter(e => e.type === "domain.event")).toMatchObject([
+      { data: { name: "tool.generation.progress", payload: { generationId: "g", attempt: 1, toolUseId: "proposal", receivedChars: 1024 } } },
+    ]);
+    expect(events.some(e => e.type === "tool.started")).toBe(false);
+    expect(activity).toMatchObject({ toolUses: [], toolResults: [] });
+  });
   it("projects an interrupted attempt before ending an in-flight cancelled run", async () => {
     const controller = new AbortController();
     const interrupted = new Error("cancelled while reading");

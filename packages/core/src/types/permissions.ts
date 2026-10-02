@@ -15,6 +15,8 @@ export interface PermissionDecision {
 export interface PermissionChecker {
   checkTool(
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    /** Host-owned schema declarations, used to distinguish business fields from aliases. */
+    inputSchema?: Record<string, unknown>,
   ): Promise<PermissionDecision>;
 }

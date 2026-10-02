@@ -36,9 +36,13 @@ export async function sandboxPathError(
     if (operation === "write" && result.mountMode === "ro") {
       return `Sandbox: path is on a read-only mount: ${result.executionPath}`;
     }
-    return undefined;
+    filePath = result.executionPath;
   }
-  const result = await sandboxPathDecision(filePath, cwd, operation, settingsOverride);
+  const settings = settingsOverride ?? await loadSettings();
+  if (environment?.info?.kind === "wsl" && settings.sandbox?.enabled) {
+    return "Sandbox: WSL cannot currently be combined with the configured local sandbox";
+  }
+  const result = await sandboxPathDecision(filePath, cwd, operation, settings);
   if (!result) return undefined;
   return result.allowed ? undefined : `Sandbox: ${result.reason}`;
 }

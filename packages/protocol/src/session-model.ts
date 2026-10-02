@@ -66,6 +66,28 @@ function isRecordValue(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Close delivery without replacing known tool execution facts with the Run's status. */
+export function settleSessionToolMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const progress = isRecordValue(metadata.toolProgress) ? metadata.toolProgress : undefined;
+  const readState = (value: unknown) => value === "not_started" || value === "completed" || value === "unknown" ? value : undefined;
+  const returnedState = readState(metadata.executionState)
+    ?? (["completed", "failed", "unknown"].includes(String(progress?.phase)) ? readState(progress?.executionState) : undefined);
+  const executionState = returnedState
+    ?? (["preparing", "waiting_permission", "queued"].includes(String(progress?.phase)) ? "not_started" : "unknown");
+  const knownOutcome = returnedState && ["completed", "failed", "interrupted", "unknown"].includes(String(metadata.outcome))
+    ? metadata.outcome : returnedState && ["completed", "failed"].includes(String(progress?.phase)) ? progress?.phase : undefined;
+  const outcome = executionState === "unknown" && knownOutcome === "completed" ? "unknown"
+    : knownOutcome ?? (executionState === "unknown" ? "unknown" : "interrupted");
+  const closed: Record<string, unknown> = { ...metadata, toolProgress: null, executionState, outcome };
+  if (returnedState && typeof metadata.failureKind === "string"
+    && !(executionState === "not_started" && metadata.failureKind === "unknown_outcome")) closed.failureKind = metadata.failureKind;
+  else if (outcome !== "completed") closed.failureKind = executionState === "unknown" ? "unknown_outcome" : "interrupted";
+  else delete closed.failureKind;
+  if (executionState === "unknown") closed.outcomeWarning = "Tool may already have executed; automatic retry is disabled";
+  else delete closed.outcomeWarning;
+  return closed;
+}
+
 function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }

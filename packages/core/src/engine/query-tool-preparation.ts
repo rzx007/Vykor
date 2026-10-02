@@ -1,7 +1,8 @@
-import type { ToolUseBlock } from "../index";
+import type { Message, ToolUseBlock } from "../index";
 import type { ToolExecutionResult, ToolRegistry } from "../types/tools";
 import type { ToolFailureMemory } from "./tool-failure-memory";
 import { normalizeToolInput, validateToolInput } from "./tool-input-schema";
+import { resolveToolInputReuse } from "./tool-input-reuse";
 
 export type PreparedToolCall = {
   idx: number;
@@ -13,12 +14,14 @@ export function prepareToolCalls(
   toolUses: ToolUseBlock[],
   failedToolCalls: ToolFailureMemory | undefined,
   toolRegistry: ToolRegistry,
+  history: readonly Message[] = [],
 ): {
   results: ToolExecutionResult[];
   readyForPermission: PreparedToolCall[];
 } {
   const results: ToolExecutionResult[] = new Array(toolUses.length);
   const readyForPermission: PreparedToolCall[] = [];
+  const batchIds = new Set(toolUses.map((call) => call.id));
 
   for (let i = 0; i < toolUses.length; i++) {
     const toolUse = toolUses[i]!;
@@ -57,6 +60,20 @@ export function prepareToolCalls(
       string,
       unknown
     >;
+
+    try {
+      toolUse.input = resolveToolInputReuse(tool, toolUse, history, batchIds);
+    } catch (error) {
+      results[i] = {
+        toolUseId: toolUse.id,
+        toolName: toolUse.name,
+        content: [{ type: "text", text: error instanceof Error ? error.message : "Cannot resolve tool input reference." }],
+        isError: true,
+        failureKind: "invalid_input",
+        executionState: "not_started",
+      };
+      continue;
+    }
 
     const validationError = validateToolInput(tool.inputSchema, toolUse.input);
     if (validationError) {

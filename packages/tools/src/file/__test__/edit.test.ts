@@ -27,9 +27,8 @@ describe("fileEditTool", () => {
 
       expect(result.isError).toBe(true);
       expect(result).toMatchObject({ executionState: "not_started", failureKind: "invalid_input" });
-      expect(result.recoveryHint).toContain("1, 3, 4");
-      expect((result.content[0] as { type: "text"; text: string }).text)
-        .toBe("Found 3 matches at lines 1, 3, 4. Make old_string more specific or use replace_all to replace all.");
+      expect(result.metadata?.editFailure).toMatchObject({ kind: "ambiguous", source: "original_file", matchCount: 3, matchLines: [1, 3, 4] });
+      expect((result.content[0] as { type: "text"; text: string }).text).toContain("1: same");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -149,7 +148,7 @@ describe("fileEditTool", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect((result.content[0] as { type: string; text: string }).text).toBe(
+      expect((result.content[0] as { type: string; text: string }).text).toContain(
         "No changes to apply: oldString and newString are identical.",
       );
       expect(await readFile(file, "utf-8")).toBe("keep me\n");
@@ -170,7 +169,7 @@ describe("fileEditTool", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect((result.content[0] as { type: string; text: string }).text).toBe(
+      expect((result.content[0] as { type: string; text: string }).text).toContain(
         "Found multiple matches for oldString. Provide more surrounding context to make the match unique.",
       );
     } finally {
@@ -236,7 +235,7 @@ describe("fileEditTool", () => {
         { cwd: dir, settings },
       );
       expect(result.isError).toBe(true);
-      expect((result.content[0] as { type: string; text: string }).text).toBe(
+      expect((result.content[0] as { type: string; text: string }).text).toContain(
         "old_string not found in file.",
       );
       expect(await readFile(file, "utf-8")).toBe("original\n");
@@ -263,7 +262,7 @@ describe("fileEditTool", () => {
         { cwd: dir, settings },
       );
       expect(result.isError).toBe(true);
-      expect((result.content[0] as { type: string; text: string }).text).toBe(
+      expect((result.content[0] as { type: string; text: string }).text).toContain(
         "Found multiple matches for oldString. Provide more surrounding context to make the match unique.",
       );
       expect(await readFile(file, "utf-8")).toBe(before);
@@ -283,7 +282,7 @@ describe("fileEditTool", () => {
         { cwd: dir, settings },
       );
       expect(result.isError).toBe(true);
-      expect((result.content[0] as { type: string; text: string }).text).toBe(
+      expect((result.content[0] as { type: string; text: string }).text).toContain(
         "old_string not found in file.",
       );
       expect(await readFile(file, "utf-8")).toBe(before);
@@ -303,7 +302,7 @@ describe("fileEditTool", () => {
         { cwd: dir, settings },
       );
       expect(result.isError).toBe(true);
-      expect((result.content[0] as { type: string; text: string }).text).toBe(
+      expect((result.content[0] as { type: string; text: string }).text).toContain(
         "old_string must not be empty.",
       );
       expect(await readFile(file, "utf-8")).toBe(before);

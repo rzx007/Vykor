@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { link, lstat, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, posix, relative } from "node:path";
-import type { Settings, ToolContext } from "@vykor/core";
+import type { ToolContext } from "@vykor/core";
 import type {
   EnvironmentFileSystem,
   ExecutionEnvironmentHandle,
@@ -71,13 +71,32 @@ export function fileOperationsFor(context: ToolContext): FileOperations {
   return new HostFileOperations();
 }
 
+/** Best-effort conflict check; atomic rename is not an OS compare-and-swap. */
+export async function fileSnapshotMatches(operations: FileOperations, path: string, beforeBytes: Uint8Array): Promise<boolean> {
+  try {
+    const item = await operations.stat(path);
+    if (!item.isFile || item.isSymbolicLink) return false;
+    return Buffer.from(beforeBytes).equals(Buffer.from(await operations.readBytes(path)));
+  } catch (error) {
+    if (isFileNotFoundError(error)) return false;
+    throw error;
+  }
+}
+
 export class HostFileOperations implements FileOperations {
   async stat(path: string): Promise<FileStat> {
     try {
       const [item, linkInfo] = await Promise.all([stat(path), lstat(path)]);
       return { isFile: item.isFile(), isDirectory: item.isDirectory(), isSymbolicLink: linkInfo.isSymbolicLink() };
     } catch (error) {
-      if (isEnoent(error)) throw new FileNotFoundError(path);
+      if (isEnoent(error)) {
+        // stat follows links; lstat can still identify a dangling link.
+        const item = await lstat(path).catch((linkError: unknown) => {
+          if (isEnoent(linkError)) throw new FileNotFoundError(path);
+          throw linkError;
+        });
+        if (item.isSymbolicLink()) return { isFile: false, isDirectory: false, isSymbolicLink: true };
+      }
       throw error;
     }
   }
@@ -384,11 +403,6 @@ export class WslFileOperations implements FileOperations {
 
 export function createEnvironmentFileSystem(
   environment: ExecutionEnvironmentHandle,
-  options: {
-    settings?: Settings;
-    sessionId?: string;
-    signal?: AbortSignal;
-  } = {},
 ): EnvironmentFileSystem {
   if (environment.info.kind === "wsl") return new WslFileOperations(environment);
   return new HostFileOperations();

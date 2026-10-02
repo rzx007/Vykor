@@ -20,6 +20,7 @@ export type {
   ReasoningDeltaEvent,
   ReasoningSource,
   ToolUseStartEvent,
+  ToolGenerationProgressEvent,
   ToolUseEndEvent,
   ErrorEvent,
   UsageEvent,

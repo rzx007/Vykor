@@ -163,8 +163,11 @@ export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] 
   for (const part of parts) {
     if (isToolGenerationPresentation(part)) continue
     if (part.type !== "tool" || !mutationToolPattern.test(part.toolName ?? "")) continue
+    const result = part.toolUseId ? results.get(part.toolUseId) : undefined
+    const executionState = toolExecutionState(part, result)
+    if (executionState === "not_started" || executionState === "unknown") continue
     if (
-      toolCallStatus(part, part.toolUseId ? results.get(part.toolUseId) : undefined) !== "completed"
+      toolCallStatus(part, result) !== "completed"
     )
       continue
     const patch = findPatch(part.input)
@@ -191,6 +194,19 @@ export function toolCallStatus(
   return result?.status ?? call.status
 }
 
+function toolExecutionState(call: DesktopSessionPart, result?: DesktopSessionPart): "not_started" | "completed" | "unknown" | undefined {
+  for (const source of [result, call]) {
+    const records = [source?.metadata, recordValue(source?.output)]
+      .filter((facts): facts is Record<string, unknown> => facts !== undefined)
+    for (const facts of records) {
+      const state = facts.executionState
+      if (state === "not_started" || state === "completed" || state === "unknown") return state
+    }
+    if (records.some(facts => facts.failureKind === "unknown_outcome" || facts.outcome === "unknown")) return "unknown"
+  }
+  return undefined
+}
+
 const toolPhaseLabels: Record<string, string> = {
   preparing: "正在准备工具",
   waiting_permission: "等待你的确认",
@@ -202,6 +218,7 @@ const toolPhaseLabels: Record<string, string> = {
 }
 
 export function toolActivityLabel(call: DesktopSessionPart, result?: DesktopSessionPart): string | undefined {
+  if (toolExecutionState(call, result) === "unknown") return "结果不确定"
   const status = toolCallStatus(call, result)
   if (status === "failed") return "失败"
   if (status === "interrupted") return "已中断"

@@ -44,6 +44,10 @@ interface PendingSteer {
 
 /** 把 StreamEvent 里与文本/思考相关的事件映射成 AgentEvent；其余事件交给调用方。 */
 export function streamEventToAgentEvent(event: StreamEvent): AgentEventInput | undefined {
+  if (event.type === "tool_generation_progress") {
+    const { type: _, ...payload } = event;
+    return { type: "domain.event", data: { name: "tool.generation.progress", payload } };
+  }
   if (event.type === "text_delta") {
     return {
       type: "output.text.delta",
@@ -219,8 +223,11 @@ export class FrameworkAgentRun implements AgentRunHandle {
         signal: this.controller.signal,
         execution,
       })) {
-        // A cancelled request still owes its per-attempt settlement to the run.
-        if (this.controller.signal.aborted && event.type !== "model_attempt_finished") {
+        // Cancellation still owes full results for calls committed before the abort.
+        const committedSettlement = event.type === "tool_use_end"
+          && this.toolActivity.toolUses.some(call => call.id === event.toolUseId)
+          && !this.toolActivity.toolResults.some(result => result.toolUseId === event.toolUseId);
+        if (this.controller.signal.aborted && event.type !== "model_attempt_finished" && !committedSettlement) {
           throw abortError(this.controller.signal);
         }
         if (event.type === "generation_started") {

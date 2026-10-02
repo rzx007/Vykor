@@ -3,6 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import { createAttachmentReadTool } from "../attachment-read-tool.js";
 
 describe("attachment Read tool", () => {
+  it("does not expose attachment content through local info_only mode", async () => {
+    const tool = createAttachmentReadTool({
+      defaultTool: { name: "Read", description: "read", inputSchema: {}, execute: async () => { throw new Error("must not read local files"); } },
+      authorizationSessions: { resolve: () => "session" },
+      attachmentReader: { readText: async () => { throw new Error("must not read attachment body"); } },
+      supportsImageInput: async () => false,
+    });
+    const result = await tool.execute({ file_path: "attachment://att-1/notes.txt", info_only: true }, { cwd: "C:/work", sessionId: "session" });
+    expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
+  });
+
   it("uses local OCR instead of returning an image to a non-visual model", async () => {
     const defaultExecute = vi.fn(async () => ({
       content: [{ type: "image" as const, source: { type: "file" as const, mediaType: "image/png", path: "C:/work/chart.png", sizeBytes: 4 } }],

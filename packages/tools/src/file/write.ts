@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { ToolDefinition, ToolResult } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
-import { isFileNotFoundError, fileOperationsFor } from "./operations.js";
+import { isFileNotFoundError, fileOperationsFor, fileSnapshotMatches } from "./operations.js";
 import { managedPersistencePathKind } from "./managed-persistence-path.js";
 import { isSystemPath } from "./file-mutation-guard.js";
 
@@ -58,13 +58,16 @@ function completed(operation: WriteOperation, filePath: string, content: string)
 
 export const fileWriteTool: ToolDefinition = {
   name: "Write",
+  serialGroup: "file_mutation",
   description:
-    "Create a new UTF-8 text file. Existing files are not overwritten unless overwrite=true. Prefer Edit for small changes and ApplyPatch for multi-file or multi-hunk changes.",
+    "Create a new UTF-8 text file. Before generating long content, use Read with info_only=true to check the target and overwrite conditions. Provide exactly one of content or content_from. To reuse a previous Write's complete content, pass its tool call ID as content_from instead of generating it again; supply the target and corrected options explicitly. Existing files are not overwritten unless overwrite=true. Prefer Edit for small changes and ApplyPatch for multi-file or multi-hunk changes.",
+  inputReuse: { property: "content", referenceProperty: "content_from" },
   inputSchema: {
     type: "object",
     properties: {
       file_path: { type: "string", description: "Absolute path to write to." },
       content: { type: "string", description: "Content to write." },
+      content_from: { type: "string", description: "Previous settled Write tool call ID whose complete content to reuse. Do not also pass content. Only works while that content remains in the current conversation history." },
       overwrite: {
         type: "boolean",
         description: "Set true to replace an existing file with the complete content.",
@@ -74,11 +77,14 @@ export const fileWriteTool: ToolDefinition = {
         description: "Optional SHA-256 of existing raw bytes for guarded overwrite.",
       },
     },
-    required: ["file_path", "content"],
+    required: ["file_path"],
   },
   async execute(input, context) {
+    if (Object.hasOwn(input, "content_from") || typeof input.content !== "string") {
+      return invalidInput("Write requires resolved string content; content_from must be resolved by the engine.");
+    }
     const rawPath = input.file_path as string;
-    const content = input.content as string;
+    const content = input.content;
     const cwd = (context as { cwd?: string } | undefined)?.cwd ?? process.cwd();
     const expectedSha256Input = input.expected_sha256;
     const expectedSha256 = typeof expectedSha256Input === "string" ? expectedSha256Input : undefined;
@@ -166,6 +172,9 @@ export const fileWriteTool: ToolDefinition = {
           "File already exists with different content. Use Edit, ApplyPatch, or set overwrite=true for a complete replacement.",
           "先 Read 现有内容；如确需整体替换，明确传 overwrite=true。",
         );
+      }
+      if (!await fileSnapshotMatches(operations, filePath, existing)) {
+        return invalidInput("Write conflict: the file changed after reading it.", "重新 Read 当前文件后再决定修改；不要覆盖其他进程的新内容。");
       }
       await operations.writeTextAtomic(filePath, content);
       return completed("overwrote", filePath, content);

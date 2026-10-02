@@ -44,6 +44,48 @@ describe("message render model", () => {
     expect(collectChangedFiles([edit])).toEqual([]);
   });
 
+  it.each([
+    { executionState: "unknown" }, { failureKind: "unknown_outcome" }, { outcome: "unknown" },
+  ])("does not summarize unknown edits as changed files: %j", (metadata) => {
+    const edit = { ...toolPart("Edit", { file_path: "index.html" }), metadata };
+    expect(collectChangedFiles([edit])).toEqual([]);
+  });
+
+  it("does not summarize unknown outcomes in separate results or stored output", () => {
+    const edit = { ...toolPart("Edit", { file_path: "index.html" }), toolUseId: "edit" };
+    const separate = { ...toolPart("Edit", {}), id: "result", toolUseId: "edit", type: "tool_result" as const, metadata: { executionState: "unknown" } };
+    expect(collectChangedFiles([edit, separate])).toEqual([]);
+    expect(collectChangedFiles([{ ...edit, output: { executionState: "unknown" } }])).toEqual([]);
+  });
+
+  it("does not summarize a successful not_started Write no-op as a changed file", () => {
+    const write = { ...toolPart("Write", { file_path: "index.html" }), metadata: { executionState: "not_started" } };
+    expect(toolCallStatus(write)).toBe("completed");
+    expect(collectChangedFiles([write])).toEqual([]);
+  });
+
+  it.each([{ executionState: "not_started" }, { failureKind: "unknown_outcome" }])("preserves completed result facts over older call metadata: %j", metadata => {
+    const edit = { ...toolPart("Edit", { file_path: "index.html" }), toolUseId: "edit", metadata };
+    const result = { ...toolPart("Edit", {}), id: "result", toolUseId: "edit", type: "tool_result" as const, metadata: { executionState: "completed" } };
+    expect(collectChangedFiles([edit, result])).toEqual([{ path: "index.html", additions: 0, deletions: 0, hasStats: false }]);
+  });
+
+  it.each([{ failureKind: "unknown_outcome" }, { outcome: "unknown" }])("prefers latest legacy unknown result over an older completed call: %j", metadata => {
+    const edit = { ...toolPart("Edit", { file_path: "index.html" }), toolUseId: "edit", metadata: { executionState: "completed" } };
+    const result = { ...toolPart("Edit", {}), id: "result", toolUseId: "edit", type: "tool_result" as const, metadata };
+    expect(collectChangedFiles([edit, result])).toEqual([]);
+    expect(collectChangedFiles([edit, { ...result, metadata: {}, output: metadata }])).toEqual([]);
+  });
+
+  it("prefers valid state over legacy unknown fields within the latest result", () => {
+    const edit = { ...toolPart("Edit", { file_path: "index.html" }), toolUseId: "edit", metadata: { executionState: "unknown" } };
+    const result = { ...toolPart("Edit", {}), id: "result", toolUseId: "edit", type: "tool_result" as const,
+      metadata: { outcome: "unknown" }, output: { executionState: "completed" } };
+    expect(collectChangedFiles([edit, result])).toEqual([{ path: "index.html", additions: 0, deletions: 0, hasStats: false }]);
+  });
+
+
+
   it("uses result metadata for the actual shell display name", () => {
     const call = toolPart("Shell", { command: "Get-ChildItem" })
     const result = {

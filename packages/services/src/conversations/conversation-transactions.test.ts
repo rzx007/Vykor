@@ -1521,6 +1521,29 @@ describe("ConversationTransactions.admitPrompt", () => {
         }
       });
 
+      it("preserves returned facts and distinguishes queued calls during restart", () => {
+        const dir = mkdtempSync(join(tmpdir(), "vk-recovery-facts-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          store.sessions.create({ id: "s1", cwd: dir, model: "m" });
+          const run = store.runs.createRun({ id: "r1", sessionId: "s1" });
+          const message = store.conversations.createMessage({ sessionId: "s1", role: "assistant", runId: run.id });
+          store.conversations.upsertMessagePart({ id: "queued", sessionId: "s1", messageId: message.id, type: "tool", status: "running",
+            metadata: { toolProgress: { phase: "queued", executionState: "not_started" } } });
+          store.conversations.upsertMessagePart({ id: "returned", sessionId: "s1", messageId: message.id, type: "tool", status: "running",
+            isError: true, output: { content: [{ type: "text", text: "command failed" }] },
+            metadata: { executionState: "completed", failureKind: "command", outcome: "failed", toolProgress: null } });
+          createTransactions(store).interruptActiveRuns();
+          const parts = store.conversations.listMessageParts("s1");
+          expect(parts.find(part => part.id === "queued")!.metadata).toMatchObject({ executionState: "not_started", outcome: "interrupted", failureKind: "interrupted" });
+          expect(parts.find(part => part.id === "returned")).toMatchObject({ isError: true, output: { content: [{ type: "text", text: "command failed" }] },
+            metadata: { executionState: "completed", failureKind: "command", outcome: "failed" } });
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
       it("interrupts active runs, marks unknown tool outcomes, terminalizes orphans, and finalizes eligible closing sessions", () => {
         const dir = mkdtempSync(join(tmpdir(), "vk-recovery-runs-"));
         const store = new SessionStore({ path: join(dir, "store.db") });

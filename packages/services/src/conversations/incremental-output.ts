@@ -11,6 +11,26 @@ export interface IncrementalOutputOptions {
 export class IncrementalOutput {
   constructor(private readonly options: IncrementalOutputOptions) {}
 
+  updateRunToolGeneration(runId: string, entries: Record<string, unknown>[]): SessionEventRecord {
+    const { storage } = this.options;
+    const run = storage.state.runs[runId];
+    if (!run) throw new Error(`Session run not found: ${runId}`);
+    assertSession(storage.state, run.sessionId);
+    const toolGeneration = clone(entries);
+    const updatedAt = now();
+    const event = this.options.appendTransientEvent({
+      type: "session.run.updated",
+      sessionId: run.sessionId,
+      payload: {
+        run: clone({ ...run, updatedAt, metadata: { ...run.metadata, toolGeneration } }),
+        previousStatus: run.status,
+      },
+    });
+    run.metadata = { ...run.metadata, toolGeneration };
+    run.updatedAt = updatedAt;
+    return event;
+  }
+
   appendMessagePartDelta(input: AppendMessagePartDeltaInput): SessionEventRecord {
     const { storage } = this.options;
     const session = assertSession(storage.state, input.sessionId);

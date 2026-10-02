@@ -94,7 +94,9 @@ export function inspectDurableRun(
   for (const row of projectionSettlements.filter((item) => item.status === "pending" || item.status === "retrying")) {
     warnings.push({ code: "pending_settlement", message: `Projection settlement ${row.id} is ${row.status}` });
   }
-  for (const part of parts.filter((row) => row.type === "tool" && row.metadata.failureKind === "unknown_outcome")) {
+  for (const part of parts.filter((row) => row.type === "tool" && (row.metadata.executionState === "unknown"
+    || (row.metadata.executionState !== "not_started" && row.metadata.executionState !== "completed"
+      && row.metadata.failureKind === "unknown_outcome")))) {
     warnings.push({ code: "unknown_tool_outcome", message: `Tool call ${part.toolUseId ?? part.id} may have executed; automatic retry is unsafe` });
   }
   const traceIds = uniqueStrings([

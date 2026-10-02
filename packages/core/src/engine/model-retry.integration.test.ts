@@ -35,6 +35,30 @@ async function collect(
 }
 
 describe("QueryEngine model network retry", () => {
+  it("shows failed-attempt argument progress but commits and executes only the successful retry", async () => {
+    let requests = 0, executions = 0;
+    const registry = new ToolRegistry();
+    registry.register(makeTool("Write", () => { executions++; }));
+    const client = { streamMessage: async function* (): AsyncIterable<StreamEvent> {
+      requests++;
+      if (requests <= 2) {
+        yield { type: "tool_generation_progress", toolKey: "0", toolUseId: `call${requests}`, toolName: "Write", receivedChars: requests === 1 ? 100 : 200 };
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `call${requests}`, name: "Write", input: {} } };
+        if (requests === 1) throw new ModelRequestFailure("stream disconnected", { kind: "network", phase: "stream", retryable: true });
+      }
+      yield { type: "complete", stopReason: requests <= 2 ? "tool_use" : "end_turn" };
+    } };
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false, modelRetry: { baseDelayMs: 0, maxDelayMs: 0 } });
+    const events = await collect(engine);
+    expect(events.filter(e => e.type === "tool_generation_progress")).toMatchObject([
+      { generationId: expect.any(String), attempt: 1, toolUseId: "call1", receivedChars: 100 },
+      { generationId: expect.any(String), attempt: 2, toolUseId: "call2", receivedChars: 200 },
+    ]);
+    expect(events.filter(e => e.type === "tool_use_start")).toMatchObject([{ toolUse: { id: "call2" } }]);
+    expect(events.filter(e => e.type === "model_attempt_finished").map(e => e.status)).toEqual(["failed", "completed", "completed"]);
+    expect(executions).toBe(1);
+    expect(JSON.stringify(engine.getHistory())).not.toContain("call1");
+  });
   it("retries a failure created by a separate copy of the core module", async () => {
     vi.resetModules();
     const { ModelRequestFailure: ForeignFailure } = await import("./model-retry.js");

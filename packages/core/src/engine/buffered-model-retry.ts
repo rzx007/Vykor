@@ -11,6 +11,7 @@ import {
   type ModelRetryPolicy,
   type RetryCounters,
 } from "./model-retry";
+import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
 
 export interface BufferedModelRetryOptions {
   policy?: Partial<ModelRetryPolicy>;
@@ -18,91 +19,6 @@ export interface BufferedModelRetryOptions {
   onAttemptFinished?: (event: ModelAttemptFinishedEvent) => void | Promise<void>;
   /** 测试可注入稳定的 generationId。 */
   generationId?: string;
-}
-
-function finishEvent(
-  generationId: string,
-  attempt: number,
-  status: "completed" | "failed",
-  usage: UsageSnapshot | undefined,
-): ModelAttemptFinishedEvent {
-  const usageStatus = status === "completed"
-    ? (usage ? "complete" : "unknown")
-    : (usage ? "partial" : "unknown");
-  return {
-    type: "model_attempt_finished",
-    generationId,
-    attempt,
-    status,
-    usageStatus,
-    ...(usage ? { usage } : {}),
-  };
-}
-
-function createAuxSignal(external?: AbortSignal, deadlineAt?: number): {
-  signal: AbortSignal;
-  deadlineExceeded: () => boolean;
-  dispose: () => void;
-} {
-  const controller = new AbortController();
-  let deadlineExceeded = false;
-  const onExternalAbort = () => controller.abort(external?.reason);
-  if (external) {
-    if (external.aborted) onExternalAbort();
-    else external.addEventListener("abort", onExternalAbort, { once: true });
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  if (deadlineAt !== undefined && !controller.signal.aborted) {
-    const remaining = deadlineAt - Date.now();
-    const abortForBudget = () => {
-      deadlineExceeded = true;
-      controller.abort(
-        new ModelRequestFailure("辅助模型恢复时间预算已耗尽", {
-          kind: "timeout",
-          phase: "stream",
-          retryable: false,
-        }),
-      );
-    };
-    if (remaining <= 0) abortForBudget();
-    else timer = setTimeout(abortForBudget, remaining);
-  }
-  return {
-    signal: controller.signal,
-    deadlineExceeded: () => deadlineExceeded,
-    dispose: () => {
-      if (timer) clearTimeout(timer);
-      external?.removeEventListener("abort", onExternalAbort);
-    },
-  };
-}
-
-function describeAuxFailure(
-  error: unknown,
-  external: AbortSignal | undefined,
-  deadlineExceeded: () => boolean,
-): ModelRequestFailure {
-  if (error instanceof ModelRequestFailure) return error;
-  if (external?.aborted) {
-    return new ModelRequestFailure(
-      "辅助模型调用已取消",
-      { kind: "unknown", phase: "stream", retryable: false },
-      external.reason,
-    );
-  }
-  if (deadlineExceeded()) {
-    return new ModelRequestFailure(
-      "辅助模型恢复时间预算已耗尽",
-      { kind: "timeout", phase: "stream", retryable: false },
-      error,
-    );
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  return new ModelRequestFailure(
-    message,
-    { kind: "unknown", phase: "stream", retryable: false },
-    error,
-  );
 }
 
 /**
@@ -131,12 +47,12 @@ export async function* streamBufferedModelWithRetry(
     let usage: UsageSnapshot | undefined;
     let completeSeen = false;
     let failure: ModelRequestFailure | undefined;
-    const auxSignal = createAuxSignal(params.abortSignal, recoveryDeadlineAt);
+    const attemptSignal = createAttemptSignal(params.abortSignal, recoveryDeadlineAt);
 
     try {
       const stream = client.streamMessage({
         ...params,
-        abortSignal: auxSignal.signal,
+        abortSignal: attemptSignal.signal,
         requestTimeoutMs: policy.requestTimeoutMs,
         streamIdleTimeoutMs: policy.streamIdleTimeoutMs,
       });
@@ -167,13 +83,15 @@ export async function* streamBufferedModelWithRetry(
         );
       }
     } catch (error) {
-      failure = describeAuxFailure(error, params.abortSignal, auxSignal.deadlineExceeded);
+      failure = describeModelFailure(error, params.abortSignal, attemptSignal);
     } finally {
-      auxSignal.dispose();
+      attemptSignal.dispose();
     }
 
     if (failure) {
-      await options.onAttemptFinished?.(finishEvent(generationId, attempt, "failed", usage));
+      await options.onAttemptFinished?.(attemptFinishedEvent(
+        generationId, attempt, params.abortSignal?.aborted ? "interrupted" : "failed", usage,
+      ));
       if (params.abortSignal?.aborted) throw params.abortSignal.reason;
       if (!failure.info.retryable) throw failure;
 
@@ -199,7 +117,7 @@ export async function* streamBufferedModelWithRetry(
       continue;
     }
 
-    await options.onAttemptFinished?.(finishEvent(generationId, attempt, "completed", usage));
+    await options.onAttemptFinished?.(attemptFinishedEvent(generationId, attempt, "completed", usage));
     for (const event of buffered) yield event;
     return;
   }

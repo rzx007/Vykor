@@ -142,10 +142,7 @@ async function composeVykorAgentInternal(
     });
     executionEnvironment = {
       ...baseEnvironment,
-      files: createEnvironmentFileSystem(baseEnvironment, {
-        settings,
-        sessionId,
-      }),
+      files: createEnvironmentFileSystem(baseEnvironment),
     };
     rollback.add(() => executionEnvironment?.release(), executionEnvironment);
   }

@@ -1,9 +1,12 @@
+import { createHash } from "node:crypto";
 import { extname, posix, win32 } from "node:path";
 import type { ToolDefinition } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
 import { decodeUtf8Text } from "./text-content.js";
+import { managedPersistencePathKind } from "./managed-persistence-path.js";
+import { isSystemPath } from "./file-mutation-guard.js";
 
 export { BINARY_CONTROL_RATIO, BINARY_SAMPLE_CHARS, isBinaryContent } from "./text-content.js";
 
@@ -115,7 +118,7 @@ export function suggestSimilarNames(target: string, entries: string[]): string[]
 export const fileReadTool: ToolDefinition = {
   name: "Read",
   description:
-    "Read a local text file, supported image, or directory. Text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large files or directories. Lines longer than 2000 characters and text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
+    "Read a local text file, supported image, or directory. Use info_only=true before generating long file content: inspect target existence, type, raw-byte SHA-256 and overwrite conditions without returning its body or changing files; this does not authorize a write. Otherwise text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large files or directories. Lines longer than 2000 characters and text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
   inputSchema: {
     type: "object",
     properties: {
@@ -125,10 +128,14 @@ export const fileReadTool: ToolDefinition = {
       },
       offset: { type: "number", description: "Start line (1-indexed)." },
       limit: { type: "number", description: "Max lines to read." },
+      info_only: { type: "boolean", description: "Only inspect a local file target's state and overwrite conditions. No body or mutation; not a permission grant." },
     },
     required: ["file_path"],
   },
   async execute(input, context) {
+    if (input.info_only !== undefined && typeof input.info_only !== "boolean") {
+      return { content: [{ type: "text", text: "info_only must be boolean." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
+    }
     const rawPath = input.file_path as string;
     const cwd = (context as { cwd?: string } | undefined)?.cwd ?? process.cwd();
     const offset = normalizeReadInteger(input.offset, 1);
@@ -148,6 +155,7 @@ export const fileReadTool: ToolDefinition = {
       }
 
       const operations = fileOperationsFor(context);
+      if (input.info_only === true) return await inspectFileInfo(operations, filePath, rawPath, context);
       let fileStat: Awaited<ReturnType<FileOperations["stat"]>>;
       try {
         fileStat = await operations.stat(filePath);
@@ -238,6 +246,47 @@ export const fileReadTool: ToolDefinition = {
     }
   },
 };
+
+async function inspectFileInfo(
+  operations: FileOperations,
+  filePath: string,
+  rawPath: string,
+  context: import("@vykor/core").ToolContext,
+): Promise<import("@vykor/core").ToolResult> {
+  let item: Awaited<ReturnType<FileOperations["stat"]>> | undefined;
+  try { item = await operations.stat(filePath); }
+  catch (error) { if (!isFileNotFoundError(error)) throw error; }
+  const kind = !item ? "missing" : item.isSymbolicLink ? "symlink"
+    : item.isFile ? "file" : item.isDirectory ? "directory" : "other";
+  const info: Record<string, unknown> = {
+    path: filePath, exists: item !== undefined, kind, parentExists: item ? true : null,
+    note: "This is a read-only snapshot, not write authorization. Changed existing content requires explicit overwrite=true; writes recheck current state.",
+  };
+  if (!item) {
+    const parent = readPathInfo(filePath).parent;
+    const denied = await sandboxPathError(parent, context.cwd, "read", context.settings, context.environment);
+    if (!denied) {
+      try { info.parentExists = (await operations.stat(parent)).isDirectory; }
+      catch (error) { if (isFileNotFoundError(error)) info.parentExists = false; }
+    }
+  }
+  if (kind === "file") {
+    const bytes = await operations.readBytes(filePath);
+    info.sizeBytes = bytes.byteLength;
+    info.sha256 = createHash("sha256").update(bytes).digest("hex");
+  }
+  const policy = isSystemPath(rawPath) || isSystemPath(filePath)
+    ? "System paths cannot be modified."
+    : managedPersistencePathKind(filePath, context.cwd)
+      ? "Managed persistence paths must use their dedicated tool."
+      : await sandboxPathError(filePath, context.cwd, "write", context.settings, context.environment);
+  if (policy) info.writePolicyError = policy;
+  return {
+    content: [{ type: "text", text: JSON.stringify(info, null, 2) }],
+    metadata: { fileInfo: info }, executionState: "completed",
+    compactSummary: `Read file info: ${filePath}; ${kind}; no write authorization`,
+  };
+}
 
 async function readDirectoryListing(
   operations: FileOperations,

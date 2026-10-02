@@ -3,6 +3,13 @@ import { formatToolResultForModel } from "./tool-result-feedback";
 import type { ToolExecutionResult } from "../types/tools";
 
 describe("formatToolResultForModel", () => {
+  it("labels explicit unknown output even when isError is absent", () => {
+    const content = formatToolResultForModel({ toolUseId: "unknown", toolName: "Write", executionState: "unknown",
+      content: [{ type: "text", text: "existing output" }] });
+    expect(content[0]).toEqual({ type: "text", text: "[tool-result kind=unknown_outcome execution=unknown]" });
+    expect(content).toContainEqual({ type: "text", text: "existing output" });
+  });
+
   it("prepends bounded feedback data without mutating text or images", () => {
     const result: ToolExecutionResult = {
       toolUseId: "call-1", toolName: "Write", isError: true, failureKind: "permission",

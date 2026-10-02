@@ -22,11 +22,15 @@ export function editMatchMessage(kind: EditMatchErrorKind): string {
 
 export class EditMatchError extends Error {
   readonly kind: EditMatchErrorKind;
+  readonly matchCount: number;
+  readonly locations: Array<{ start: number; end: number }>;
 
-  constructor(kind: EditMatchErrorKind) {
+  constructor(kind: EditMatchErrorKind, spans: readonly { start: number; end: number }[] = []) {
     super(EDIT_MATCH_MESSAGES[kind]);
     this.name = "EditMatchError";
     this.kind = kind;
+    this.matchCount = spans.length;
+    this.locations = spans.slice(0, 3).map(({ start, end }) => ({ start, end }));
   }
 }
 
@@ -131,35 +135,6 @@ export const WhitespaceNormalizedReplacer: Replacer = function* (content, find) 
   }
 };
 
-export const IndentationFlexibleReplacer: Replacer = function* (content, find) {
-  const removeIndentation = (text: string) => {
-    const lines = text.split("\n");
-    const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
-    if (nonEmptyLines.length === 0) return text;
-    const minIndent = Math.min(
-      ...nonEmptyLines.map((line) => {
-        const match = line.match(/^(\s*)/);
-        return match?.[1]?.length ?? 0;
-      }),
-    );
-    return lines
-      .map((line) => (line.trim().length === 0 ? line : line.slice(minIndent)))
-      .join("\n");
-  };
-
-  const normalizedFind = removeIndentation(find);
-  if (normalizedFind.length === 0) return;
-  const contentLines = content.split("\n");
-  const findLines = find.split("\n");
-
-  for (let i = 0; i <= contentLines.length - findLines.length; i++) {
-    const block = contentLines.slice(i, i + findLines.length).join("\n");
-    if (removeIndentation(block) === normalizedFind) {
-      yield block;
-    }
-  }
-};
-
 export const EscapeNormalizedReplacer: Replacer = function* (content, find) {
   const unescapeString = (str: string): string =>
     str.replace(/\\(n|t|r|'|"|`|\\|\n|\$)/g, (match, capturedChar: string) => {
@@ -218,17 +193,6 @@ export const TrimmedBoundaryReplacer: Replacer = function* (content, find) {
     if (block.trim() === trimmedFind) {
       yield block;
     }
-  }
-};
-
-export const MultiOccurrenceReplacer: Replacer = function* (content, find) {
-  if (find.length === 0) return;
-  let startIndex = 0;
-  while (true) {
-    const index = content.indexOf(find, startIndex);
-    if (index === -1) break;
-    yield find;
-    startIndex = index + find.length;
   }
 };
 
@@ -347,11 +311,9 @@ export const REPLACERS: Replacer[] = [
   LineTrimmedReplacer,
   BlockAnchorReplacer,
   WhitespaceNormalizedReplacer,
-  IndentationFlexibleReplacer,
   EscapeNormalizedReplacer,
   TrimmedBoundaryReplacer,
   ContextAwareReplacer,
-  MultiOccurrenceReplacer,
 ];
 
 interface MatchSpan {
@@ -360,14 +322,18 @@ interface MatchSpan {
   search: string;
 }
 
-function collectMatchSpans(content: string, searches: string[]): MatchSpan[] {
+function collectMatchSpans(content: string, searches: string[], oldString: string, exactReplaceAll: boolean): MatchSpan[] {
   const spans = new Map<string, MatchSpan>();
   for (const search of searches) {
     let start = content.indexOf(search);
     while (start !== -1) {
-      const span = { start, end: start + search.length, search };
-      spans.set(`${span.start}:${span.end}`, span);
-      start = content.indexOf(search, start + 1);
+      const end = start + search.length;
+      // Fuzzy line candidates must not swallow the CR of a following CRLF.
+      const preserveCarriage = search.endsWith("\r") && content[end] === "\n" && !oldString.endsWith("\r");
+      const span = { start, end: end - (preserveCarriage ? 1 : 0), search: preserveCarriage ? search.slice(0, -1) : search };
+      if (span.search.length > 0) spans.set(`${span.start}:${span.end}`, span);
+      // Exact replace_all consumes each literal match; fuzzy candidates still expose overlaps.
+      start = content.indexOf(search, start + (exactReplaceAll ? search.length : 1));
     }
   }
   return [...spans.values()].sort((left, right) => left.start - right.start || left.end - right.end);
@@ -386,24 +352,24 @@ export function replace(
     const searches = [...new Set(replacer(content, oldString))].filter(
       (search) => search.length > 0,
     );
-    const spans = collectMatchSpans(content, searches);
+    const spans = collectMatchSpans(content, searches, oldString, replaceAll && replacer === SimpleReplacer);
     if (spans.length === 0) continue;
 
     if (!replaceAll) {
-      if (spans.length > 1) throw new EditMatchError("ambiguous");
+      if (spans.length > 1) throw new EditMatchError("ambiguous", spans);
       const span = spans[0]!;
       if (isDisproportionateMatch(span.search, oldString)) {
-        throw new EditMatchError("disproportionate");
+        throw new EditMatchError("disproportionate", spans);
       }
       return content.slice(0, span.start) + newString + content.slice(span.end);
     }
 
     if (spans.some((span) => isDisproportionateMatch(span.search, oldString))) {
-      throw new EditMatchError("disproportionate");
+      throw new EditMatchError("disproportionate", spans);
     }
     for (let index = 1; index < spans.length; index++) {
       if (spans[index]!.start < spans[index - 1]!.end) {
-        throw new EditMatchError("ambiguous");
+        throw new EditMatchError("ambiguous", spans);
       }
     }
 

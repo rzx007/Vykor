@@ -71,6 +71,29 @@ function createInput(
 }
 
 describe("SessionTranscriptProjection", () => {
+  it.each(["failed", "interrupted"] as const)("closes queued tools as not started when the run is %s", (status) => {
+    const store = createStore();
+    store.listMessages.mockReturnValue([{ id: "m1", runId: "r1" }] as any);
+    store.listMessageParts.mockReturnValue([{ id: "queued", messageId: "m1", type: "tool", status: "running",
+      metadata: { toolProgress: { phase: "queued", executionState: "not_started" } } }] as any);
+    new SessionTranscriptProjection(store).finalizeRunParts("s1", "r1", status);
+    const closed = store.upsertMessagePart.mock.calls[0]![0];
+    expect(closed.metadata).toMatchObject({ executionState: "not_started", outcome: "interrupted", failureKind: "interrupted" });
+    expect(closed.metadata).not.toHaveProperty("outcomeWarning");
+    expect(closed).not.toHaveProperty("output");
+  });
+
+  it("preserves returned execution facts and complete output while closing unfinished delivery", () => {
+    const store = createStore();
+    store.listMessages.mockReturnValue([{ id: "m1", runId: "r1" }] as any);
+    store.listMessageParts.mockReturnValue([{ id: "returned", messageId: "m1", type: "tool", status: "running",
+      output: { content: [{ type: "text", text: "command failed" }] }, isError: true,
+      metadata: { executionState: "completed", failureKind: "command", outcome: "failed", toolProgress: null } }] as any);
+    new SessionTranscriptProjection(store).finalizeRunParts("s1", "r1", "interrupted");
+    expect(store.upsertMessagePart.mock.calls[0]![0].metadata).toMatchObject({ executionState: "completed", failureKind: "command", outcome: "failed" });
+    expect(store.upsertMessagePart.mock.calls[0]![0]).not.toHaveProperty("output");
+  });
+
   it("persists full feedback and controlled facts without accepting forged commit markers", () => {
     const store = createStore();
     const projection = new SessionTranscriptProjection(store as any);
@@ -319,6 +342,7 @@ describe("SessionTranscriptProjection", () => {
         toolCallId: "tool-1",
         toolAttemptId: "tool_attempt_tool-1_1",
         outcome: "completed",
+        toolProgress: null,
       },
     });
   });

@@ -530,7 +530,8 @@ describe("Integration: Full Agent Loop", () => {
       // drain
     }
 
-    expect(emitted).toEqual([{ type: "domain.event", data: { name: "tool.custom", payload: { ok: true } } }]);
+    expect(emitted.filter(event => event.type === "domain.event" && event.data.name === "tool.custom"))
+      .toEqual([{ type: "domain.event", data: { name: "tool.custom", payload: { ok: true } } }]);
   });
 
   it("multi-tool parallel execution", async () => {
@@ -761,6 +762,11 @@ describe("Integration: Full Agent Loop", () => {
         file_path: "/tmp/notes.ts",
         content: "export {}",
       }),
+      {
+        type: "object",
+        properties: { file_path: { type: "string" }, content: { type: "string" } },
+        required: ["file_path", "content"],
+      },
     );
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1368,11 +1374,9 @@ describe("Integration: Full Agent Loop", () => {
     try {
       for await (const _ of engine.submitMessage("loop", {
         execution: {
+          ...createExecutionContext(),
           hardMaxTurns: 2,
-          emit: async () => {},
-          closeSteering: () => {},
-          takeSteeredInputs: async () => [],
-        } as never,
+        },
       })) { /* consume */ }
     } catch (error) {
       failure = error;
@@ -1931,7 +1935,7 @@ describe("Integration: Permission Prompt (ask mode)", () => {
     expect(toolEnd.result.isError).toBe(true);
     expect(toolEnd.result.content[2].text).toContain("denied by user");
     expect(invocations).toBe(0);
-    expect(permissionEvents).toEqual([
+    expect(permissionEvents.filter(event => event.type === "permission.requested" || event.type === "permission.resolved")).toEqual([
       expect.objectContaining({ type: "permission.requested", data: expect.objectContaining({ request: expect.objectContaining({ toolName: "Bash" }) }) }),
       expect.objectContaining({ type: "permission.resolved", data: expect.objectContaining({ decision: { status: "denied" } }) }),
     ]);

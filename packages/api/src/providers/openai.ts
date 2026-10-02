@@ -269,6 +269,12 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
               if (tc.id) entry.id = tc.id;
               if (tc.function?.name) entry.name = tc.function.name;
               if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+              yield {
+                type: "tool_generation_progress", toolKey: String(idx),
+                ...(entry.id ? { toolUseId: entry.id } : {}),
+                ...(entry.name ? { toolName: entry.name } : {}),
+                receivedChars: entry.arguments.length,
+              };
             }
           }
 

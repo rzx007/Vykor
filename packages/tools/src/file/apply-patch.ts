@@ -36,8 +36,7 @@ export interface PatchChange {
   operation: PatchOperation;
   relativePath: string;
   executionPath: string;
-  /** 仅 update/delete：预演时读到的原始字节与其 SHA-256。 */
-  beforeBytes?: Uint8Array;
+  /** 仅 update/delete：预演时读到的原始字节的 SHA-256。 */
   beforeHash?: string;
   newContent: string;
 }
@@ -206,7 +205,6 @@ async function planChange(item: ClassifiedFile, deps: PlanDependencies): Promise
     operation: item.operation,
     relativePath: item.relativePath,
     executionPath,
-    beforeBytes,
     beforeHash: sha256(beforeBytes),
     newContent: validateNewContent(hasBom ? "\uFEFF" + converted : converted, item.relativePath),
   };
@@ -412,6 +410,7 @@ export async function executePatchPlan(plan: PatchPlan, operations: FileOperatio
 
 export const applyPatchTool: ToolDefinition = {
   name: "ApplyPatch",
+  serialGroup: "file_mutation",
   description:
     "Apply a standard unified diff for multi-file or multi-hunk text changes. Supports create, update, and delete; rejects rename, binary, fuzzy, and mode patches.",
   inputSchema: {

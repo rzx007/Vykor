@@ -126,8 +126,12 @@ export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** Resolve one parameter from a settled same-tool call before validation and authorization. */
+  inputReuse?: { property: string; referenceProperty: string };
   /** Automatic retry is forbidden unless this is explicitly true. */
   safeToRetry?: boolean;
+  /** Calls in the same response and group authorize and execute in model order. */
+  serialGroup?: string;
   /** Where this tool actually runs. Omission is fail-closed to local execution. */
   execution?: ToolExecutionSpec;
   execute: (

@@ -7,6 +7,7 @@ import type {
   SessionInputRecord,
   SessionMessagePartStatus,
 } from "@vykor/protocol";
+import { settleSessionToolMetadata } from "@vykor/protocol";
 import type { AttachmentRoutingDecision } from "../attachments/routing/attachment-routing-types.js";
 import { generatedImageAssets, recordValue } from "./transcript-image-metadata.js";
 
@@ -49,6 +50,7 @@ export type ActiveTranscriptProjectionState = {
   /** Current model generation identity, set by the first generation_started. */
   generationId?: string;
   generationAttempt?: number;
+  generationSettled?: boolean;
   /** Parts produced by the current attempt, so a retry can supersede them. */
   generationParts: Map<string, GenerationPartInfo>;
 };
@@ -243,6 +245,7 @@ export class SessionTranscriptProjection {
             toolCallId: event.toolUse.id,
             toolAttemptId: `tool_attempt_${event.toolUse.id}_1`,
             outcome: "pending",
+            toolProgress: { phase: "preparing", executionState: "not_started" },
             ...this.generationMetadata(state),
           },
         });
@@ -285,6 +288,7 @@ export class SessionTranscriptProjection {
             toolCallId: event.toolUseId,
             toolAttemptId: event.result.toolAttemptId ?? `tool_attempt_${event.toolUseId}_1`,
             outcome: event.result.isError ? "failed" : "completed",
+            toolProgress: null,
             ...feedback,
             ...(Object.keys(feedback).length ? { toolFeedbackVersion: 1 } : {}),
           },
@@ -322,6 +326,10 @@ export class SessionTranscriptProjection {
       case "model_attempt_finished": {
         // Retry status and per-attempt settlement are handled by the daemon
         // projector through run metadata, not the transcript stream.
+        return {};
+      }
+      case "tool_generation_progress": {
+        // Presentation-only progress is projected onto the Run through domain events.
         return {};
       }
       case "usage": {
@@ -407,6 +415,7 @@ export class SessionTranscriptProjection {
       state.generationId = generationId;
     }
     state.generationAttempt = attempt;
+    state.generationSettled = false;
     state.generationParts = new Map();
     delete state.activeTextPartId;
     delete state.activeTextPhase;
@@ -523,12 +532,7 @@ export class SessionTranscriptProjection {
         type: part.type,
         status,
         ...(part.type === "tool" ? {
-          metadata: {
-            ...part.metadata,
-            outcome: status,
-            failureKind: status === "interrupted" ? "interrupted" : "unknown_outcome",
-            ...(status === "failed" ? { outcomeWarning: "Tool may already have executed" } : {}),
-          },
+          metadata: settleSessionToolMetadata(part.metadata),
         } : {}),
       });
     }

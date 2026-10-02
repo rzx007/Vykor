@@ -26,6 +26,17 @@ export interface ToolUseStartEvent {
   toolUse: ToolUseBlock;
 }
 
+/** Display-only: partial arguments never authorize or execute a tool. */
+export interface ToolGenerationProgressEvent {
+  type: "tool_generation_progress";
+  toolKey: string;
+  toolUseId?: string;
+  toolName?: string;
+  receivedChars: number;
+  generationId?: string;
+  attempt?: number;
+}
+
 export interface ToolUseEndEvent {
   type: "tool_use_end";
   toolUseId: string;
@@ -74,6 +85,7 @@ export type StreamEvent =
   | TextDeltaEvent
   | ReasoningDeltaEvent
   | ToolUseStartEvent
+  | ToolGenerationProgressEvent
   | ToolUseEndEvent
   | ErrorEvent
   | UsageEvent
