@@ -86,7 +86,7 @@ function render(parts: DesktopSessionPart[], tasks: DesktopSessionTask[] = []) {
   )
 }
 
-it("separates delegation from adjacent tool groups without changing order", () => {
+it("separates delegation from adjacent standalone tools without changing order", () => {
   render(
     [
       { ...call, id: "read-before", toolName: "Read", output: undefined, seq: 1 },
@@ -97,10 +97,11 @@ it("separates delegation from adjacent tool groups without changing order", () =
   )
   const buttons = [...container.querySelectorAll("button")]
   expect(buttons).toHaveLength(3)
-  expect(buttons[0].textContent).toContain("1 次")
+  expect(buttons[0].textContent).toContain("读取文件")
   expect(buttons[1]).toBe(container.querySelector("[data-agent-activity]"))
   expect(buttons[1].textContent).toContain("检查消息渲染")
-  expect(buttons[2].textContent).toContain("1 次")
+  expect(buttons[2].textContent).toContain("读取文件")
+  expect(container.textContent).not.toContain("工具查看 1 次")
   expect(container.textContent).not.toContain("private instructions")
   act(() => buttons[1].click())
   expect(openAgents).toHaveBeenCalledWith("task-1")

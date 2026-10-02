@@ -6,6 +6,7 @@ import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-typ
 import { cn } from "@renderer/lib/utils"
 import { summarizeToolCall, toolCallStatus } from "./message-render-model"
 import { toolOutputText } from "./message-content"
+import { ElapsedTime } from "./task-duration"
 
 const dispatchStatusLabels = {
   pending: "启动中",
@@ -72,6 +73,13 @@ export function AgentActivityMessage({
       >
         {status}
       </span>
+      <ElapsedTime
+        key={task?.startedAt}
+        startedAt={task?.startedAt}
+        finishedAt={task?.finishedAt}
+        running={active}
+        prefix=" · "
+      />
       {task?.childSessionId && onOpenAgents ? (
         <ChevronRight className="size-3 shrink-0" aria-hidden="true" />
       ) : null}

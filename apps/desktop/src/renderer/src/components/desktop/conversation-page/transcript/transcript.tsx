@@ -12,9 +12,13 @@ import { ModelUsageNotice } from "../message/model-usage-notice"
 import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
 import { selectRunNotices } from "./run-notices"
-import { LoadingState } from "@renderer/components/ui/loading-state"
+import { TaskDuration } from "../message/task-duration"
+import { taskTiming } from "../message/task-timing"
 import { conversationActivityLabel } from "../message/message-render-model"
-import { isToolGenerationPresentation, withToolGenerationPresentation } from "../message/tool-generation-presentation"
+import {
+  isToolGenerationPresentation,
+  withToolGenerationPresentation,
+} from "../message/tool-generation-presentation"
 import { MessageScrollerItem } from "@renderer/components/ui/message-scroller"
 import type {
   DesktopSessionMessage,
@@ -67,7 +71,10 @@ export function ConversationTranscript({
     [parts, showReasoning]
   )
   const presentation = useMemo(
-    () => running ? withToolGenerationPresentation(runs, messages, visibleParts) : { messages, parts: visibleParts },
+    () =>
+      running
+        ? withToolGenerationPresentation(runs, messages, visibleParts)
+        : { messages, parts: visibleParts },
     [running, runs, messages, visibleParts]
   )
   const entries = useMemo(
@@ -89,7 +96,17 @@ export function ConversationTranscript({
     }
     return undefined
   }, [runs])
-  const activityLabel = useMemo(() => conversationActivityLabel(runs, messages, visibleParts), [runs, messages, visibleParts])
+  const activityLabel = useMemo(
+    () => conversationActivityLabel(runs, messages, visibleParts),
+    [runs, messages, visibleParts]
+  )
+  const activeRun =
+    runs.find((run) => run.status === "running") ?? runs.find((run) => run.status === "pending")
+  const activeRunGrouped = Boolean(
+    activeRun &&
+    entries.some((entry) => entry.type === "turn" && entry.turn.runIds.includes(activeRun.id))
+  )
+  const runningLabel = modelRetry ? "等待重试" : (activityLabel ?? "进行中")
 
   if (messages.length === 0 && !running && noticeRuns.length === 0) {
     return (
@@ -134,6 +151,7 @@ export function ConversationTranscript({
             (Boolean(run.inputId) && run.inputId === entry.turn.inputId)
         )
         const userMessage = entry.turn.userMessage
+        const timing = taskTiming(runs.filter((run) => entry.turn.runIds.includes(run.id)))
         const turnUsageRuns = runs.filter(
           (run) =>
             import.meta.env.DEV &&
@@ -196,6 +214,9 @@ export function ConversationTranscript({
                     onOpenReview={onOpenReview}
                     onOpenTerminal={onOpenTerminal}
                   />
+                  {item.key === lastAssistantKey ? (
+                    <TaskDuration timing={timing} label={runningLabel} />
+                  ) : null}
                   {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
                     <AssistantMessageActions
                       message={entry.turn.assistantMessages.at(-1)}
@@ -221,6 +242,11 @@ export function ConversationTranscript({
             )}
             {lastAssistantKey === undefined ? (
               <>
+                {timing ? (
+                  <MessageScrollerItem messageId={`${entry.turn.id}-duration`}>
+                    <TaskDuration timing={timing} label={runningLabel} />
+                  </MessageScrollerItem>
+                ) : null}
                 {turnUsageRuns.map((run) => (
                   <MessageScrollerItem key={`usage-${run.id}`} messageId={`usage-${run.id}`}>
                     <ModelUsageNotice metadata={run.metadata} />
@@ -241,9 +267,12 @@ export function ConversationTranscript({
           <ModelRetryNotice retry={modelRetry} />
         </MessageScrollerItem>
       ) : null}
-      {running && !modelRetry && activityLabel ? (
+      {running && !activeRunGrouped ? (
         <MessageScrollerItem messageId="conversation-running-status">
-          <LoadingState label={activityLabel} variant="Dots" />
+          <TaskDuration
+            timing={activeRun ? taskTiming([activeRun]) : { status: "pending" }}
+            label={runningLabel}
+          />
         </MessageScrollerItem>
       ) : null}
     </>

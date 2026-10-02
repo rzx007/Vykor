@@ -120,7 +120,7 @@ it("does not animate completed history", async () => {
   expect(container.textContent).toContain("历史正文")
 })
 
-it("enters a new tool group once and leaves restored tool groups settled", async () => {
+it("enters a new standalone tool once and leaves restored tools settled", async () => {
   const tool: DesktopSessionPart = {
     ...part(""),
     id: "tool-1",
@@ -156,5 +156,6 @@ it("enters a new tool group once and leaves restored tool groups settled", async
       />
     )
   )
-  expect(container.textContent).toContain("工具查看")
+  expect(container.textContent).toContain("读取文件")
+  expect(container.textContent).not.toContain("工具查看 1 次")
 })

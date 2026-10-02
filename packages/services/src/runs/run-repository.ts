@@ -115,7 +115,7 @@ export class RunRepository {
         delete run.error;
       }
       if (["completed", "failed", "interrupted"].includes(input.status))
-        run.finishedAt = timestamp;
+        run.finishedAt ??= timestamp;
     }
     if (input.error !== undefined) run.error = input.error;
     if (input.metadata) run.metadata = { ...run.metadata, ...input.metadata };
@@ -458,7 +458,7 @@ export class RunRepository {
       if (
         ["completed", "failed", "stopped", "interrupted"].includes(input.status)
       )
-        task.finishedAt = timestamp;
+        task.finishedAt ??= timestamp;
     }
     if (input.output !== undefined) task.output = input.output;
     if (input.error !== undefined) task.error = input.error;

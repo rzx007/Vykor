@@ -383,6 +383,7 @@ function parseTerminalToolPayload(value: unknown): TerminalToolPayload | null {
 function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const grouped = tools.length > 1
   const active = tools.some(isToolInFlight)
   const activityLabel = toolGroupActivityLabel(tools)
   const counts = { edits: 0, commands: 0, reads: 0 }
@@ -402,34 +403,31 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   ]
     .filter(Boolean)
     .join("，")
-  const onlyToolSummary = tools.length === 1 ? summarizeToolCall(tools[0]!.call) : undefined
-  const heading =
-    tools.length === 1 && tools[0]!.call.toolName === "ImageToText"
-      ? onlyToolSummary?.name
-      : activityHeading
   return (
     <section className="text-ui-small text-ui-muted">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className={cn(
-          "flex h-7 max-w-full items-center gap-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-          active && "shimmer"
-        )}
-      >
-        <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
-        <span className="truncate">
-          {heading || `工具调用 ${tools.length} 次`}
-          {failures ? `（${failures} 次失败）` : ""}
-          {activityLabel ? ` · ${activityLabel}` : ""}
-        </span>
-        <ChevronDown
-          className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
-        />
-      </button>
-      {open ? (
-        <div className="mt-1 space-y-0.5 border-l border-border/70 pl-4">
+      {grouped ? (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className={cn(
+            "flex h-7 max-w-full items-center gap-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            active && "shimmer"
+          )}
+        >
+          <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
+          <span className="truncate">
+            {activityHeading || `工具调用 ${tools.length} 次`}
+            {failures ? `（${failures} 次失败）` : ""}
+            {activityLabel ? ` · ${activityLabel}` : ""}
+          </span>
+          <ChevronDown
+            className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
+          />
+        </button>
+      ) : null}
+      {!grouped || open ? (
+        <div className={cn("space-y-0.5", grouped && "mt-1 border-l border-border/70 pl-4")}>
           {tools.map((tool) => {
             const summary = summarizeToolCall(tool.call)
             const active = activeId === tool.id
@@ -456,7 +454,11 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
               <div key={tool.id}>
                 <button
                   type="button"
-                  onClick={() => setActiveId(active ? null : tool.id)}
+                  onClick={() => {
+                    setActiveId(active ? null : tool.id)
+                    // 单行详情已打开时，随后归组仍保留当前展开状态。
+                    if (!grouped) setOpen(!active)
+                  }}
                   aria-expanded={active}
                   className={cn(
                     "flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",

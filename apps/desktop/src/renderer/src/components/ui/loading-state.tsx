@@ -66,12 +66,13 @@ function LoaderGrid({
   )
 }
 
-function useElapsed() {
+function useElapsed(enabled: boolean) {
   const [ds, setDs] = useState(0)
   useEffect(() => {
+    if (!enabled) return
     const t = setInterval(() => setDs((d) => d + 1), 100)
     return () => clearInterval(t)
-  }, [])
+  }, [enabled])
   const total = ds / 10
   if (total < 60) return `${total.toFixed(1)}s`
   return `${Math.floor(total / 60)}m ${(total % 60).toFixed(1)}s`
@@ -92,7 +93,7 @@ export function LoadingState({
   showElapsed?: boolean
   className?: string
 }) {
-  const elapsed = useElapsed()
+  const elapsed = useElapsed(showElapsed)
   const surfer = variant === "Surfer"
   const resolvedLabel = label ?? (surfer ? "Subway surfing" : "Churning")
   const [videoOk, setVideoOk] = useState(true)
