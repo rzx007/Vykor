@@ -181,6 +181,18 @@ describe("SessionExecutionProjector", () => {
     });
   });
 
+  it("rejects malformed or unrelated runtime log metadata", () => {
+    const context = createContext();
+    const manager = createTaskManager();
+    const projector = new SessionExecutionProjector(context);
+    for (const value of [0, "0", "01", "-1", "3.5", "oops", null]) {
+      projector.syncPersistentExecution({ id: "process-1", type: "shell", status: "running", description: "tests",
+        cwd: "/repo", metadata: { outputDiscardedBytes: value, outputWriteFailed: "true", unrelated: "secret" } }, manager);
+    }
+    expect(context.store.updateSessionTask).toHaveBeenCalledTimes(7);
+    for (const call of context.store.updateSessionTask.mock.calls) expect(call[1]).not.toHaveProperty("metadata");
+  });
+
   it("unregisters a process listener after the task reaches a terminal state", () => {
     const context = createContext();
     context.store.getSessionTask.mockReturnValue({

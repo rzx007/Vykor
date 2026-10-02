@@ -18,7 +18,7 @@ import {
   READ_ONLY_TOOLS,
 } from "@vykor/permissions";
 import { HookExecutor } from "@vykor/hooks";
-import { createDefaultToolRegistry } from "@vykor/tools";
+import { createDefaultToolRegistry, createShellOutputLogHost } from "@vykor/tools";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import type { SandboxRuntimeReporter } from "@vykor/sandbox";
 import type { SkillRegistry } from "@vykor/skills";
@@ -343,6 +343,7 @@ export async function createVykorRuntime(
     reasoningEffort: configuration.reasoningEffort,
     cwd,
     sessionId: options.sessionId,
+    shellOutputLogs: createShellOutputLogHost(),
     settings,
     executionEnvironment: options.executionEnvironment,
     skillRegistry: options.skillRegistry,

@@ -126,6 +126,16 @@ describe("DefaultShellExecutor.run", () => {
     expect(result.output.length).toBe(33);
   });
 
+  it("streams the full output to the callback with UTF-8 bytes split across writes", async () => {
+    const executor = processExecutor("process.stdout.write(Buffer.from([0xe4])); setTimeout(() => { process.stdout.write(Buffer.from([0xb8, 0xad])); process.stdout.write('x'.repeat(14000)); }, 20)");
+    const spec = await executor.resolve({ command: "ignored" }, { cwd: process.cwd() });
+    const chunks: string[] = [];
+    const result = await executor.run(spec, undefined, (value) => chunks.push(value));
+    expect(chunks.join("")).toBe("中" + "x".repeat(14000));
+    expect(result.outputTruncated).toBe(true);
+    expect(result.output.length).toBe(12001);
+  });
+
   it("retains output produced before a timeout", async () => {
     const executor = processExecutor(
       "process.stdout.write('partial-marker'); setTimeout(() => {}, 5_000)",

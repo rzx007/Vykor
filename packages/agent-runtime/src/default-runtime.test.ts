@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
 import { describe, it, expect, vi } from "vitest";
 
 import {
@@ -15,6 +16,31 @@ import type { Settings, ToolDefinition } from "@vykor/core";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { createAgentWorkspaceBinding } from "./agent-composition.js";
 import { createRunCapabilityView } from "./run-capability-view.js";
+
+it("provides managed Shell logs to a default runtime tool invocation", async () => {
+  const cwd = mkdtempSync(resolve(tmpdir(), "oh-runtime-log-context-"));
+  const seen: string[] = [];
+  const probe: ToolDefinition = {
+    name: "ProbeLogs", description: "probe", inputSchema: { type: "object" },
+    execute: async (_input, context) => ({ content: [{ type: "text", text: String(!!context.shellOutputLogs && context.sessionId === "owner") }] }),
+  };
+  const runtime = await createVykorRuntime({
+    cwd, sessionId: "owner", settings: { ...BASE_SETTINGS, sandbox: { enabled: false }, permission: { mode: "default", autoApproveTools: ["ProbeLogs"] } },
+    configuration: { tools: [probe], client: { async *streamMessage(input) {
+      seen.push(JSON.stringify(input.messages));
+      if (seen.length === 1) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "probe", name: "ProbeLogs", input: {} } };
+      yield { type: "complete" as const, stopReason: seen.length === 1 ? "tool_use" as const : "end_turn" as const };
+    } } },
+    requestConfigurationStore: { read: async () => ({ revision: 0, configuration: { model: "model-a" } }) },
+  });
+  try {
+    for await (const _ of runtime.queryEngine.submitMessage("probe")) { /* consume */ }
+    expect(seen[1]).toContain('"text":"true"');
+  } finally {
+    await runtime.close();
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
 
 it("rebuilds the next request prompt from changed file-backed settings", async () => {
   const prompts: string[] = [];

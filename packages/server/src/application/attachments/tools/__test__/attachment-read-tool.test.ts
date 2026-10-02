@@ -1,8 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createShellOutputLogHost } from "@vykor/services/executions";
+import { fileReadTool } from "@vykor/tools";
 
 import { createAttachmentReadTool } from "../attachment-read-tool.js";
 
 describe("attachment Read tool", () => {
+  it("delegates a managed Shell log reference to real Read with exact session ownership", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "oh-attachment-shell-log-"));
+    try {
+      const logs = createShellOutputLogHost({ directory });
+      const capture = logs.begin("owner", 1);
+      capture.append("recover this Shell output");
+      const ref = capture.finish(true).reference!;
+      const tool = createAttachmentReadTool({
+        defaultTool: fileReadTool,
+        authorizationSessions: { resolve: () => undefined },
+        attachmentReader: { readText: async () => { throw new Error("not an attachment"); } },
+      });
+      const allowed = await tool.execute({ file_path: ref }, { cwd: directory, sessionId: "owner", shellOutputLogs: logs });
+      expect((allowed.content[0] as { text: string }).text).toContain("recover this Shell output");
+      const denied = await tool.execute({ file_path: ref }, { cwd: directory, sessionId: "other", shellOutputLogs: logs });
+      expect(denied).toMatchObject({ isError: true, failureKind: "unknown_outcome", executionState: "unknown" });
+      expect((denied.content[0] as { text: string }).text).toMatch(/unavailable/i);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it("does not expose attachment content through local info_only mode", async () => {
     const tool = createAttachmentReadTool({
       defaultTool: { name: "Read", description: "read", inputSchema: {}, execute: async () => { throw new Error("must not read local files"); } },

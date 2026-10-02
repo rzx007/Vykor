@@ -1,8 +1,10 @@
 import type { SessionExecutionRecord } from "@vykor/protocol";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, renameSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStore } from "@vykor/services";
+import { DetachedProcessSupervisor } from "@vykor/services/executions";
+import { createDefaultToolRegistry } from "@vykor/tools";
 import type { TerminalSessionInfo } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
@@ -74,6 +76,66 @@ describe("DaemonJobService", () => {
       const [job] = await service.list({ sessionId: "session-1", includeFinished: true });
       expect(job).toMatchObject({ status: "failed", exitCode: 7, metadata: { owner: "kept" } });
     } finally {
+      reopened?.close();
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns only known background log facts through durable JobRead JSON", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oh-job-log-facts-"));
+    const path = join(dir, "store.db");
+    const store = new SessionStore({ path });
+    const supervisor = new DetachedProcessSupervisor(join(dir, "tasks"));
+    let reopened: SessionStore | undefined;
+    try {
+      store.sessions.create({ id: "session-1", cwd: dir, model: "test" });
+      const projector = new SessionExecutionProjector({
+        store, getChildAgentExecutionRegistry: () => { throw new Error("unused"); },
+        events: { checkpoint: () => 0, publishSince: () => undefined }, traceIdForRun: () => "", log: () => undefined,
+      });
+      for (const id of ["task-1", "task-2"]) {
+        store.createSessionTask({ id, sessionId: "session-1", type: "shell", description: "tests", cwd: dir,
+          metadata: { executionBackend: "detached_process" } });
+        projector.trackProcessExecution(supervisor, id);
+      }
+      await supervisor.startShellExecution({ id: "task-1", sessionId: "session-1", cwd: dir,
+        description: "large output", argv: [process.execPath, "-e", "process.stdout.write('a'.repeat(10 * 1024 * 1024 + 31))"] });
+      await supervisor.awaitExecution("task-1", { timeoutMs: 10_000 });
+      const failing = await supervisor.startShellExecution({ id: "task-2", sessionId: "session-1", cwd: dir,
+        description: "failed log write", argv: [process.execPath, "-e", "setTimeout(() => process.stdout.write('data'), 300)"] });
+      renameSync(failing.outputFile!, `${failing.outputFile}.old`);
+      mkdirSync(failing.outputFile!);
+      await expect(supervisor.awaitExecution("task-2", { timeoutMs: 10_000 })).rejects.toThrow(/EISDIR|directory/i);
+      for (let i = 0; i < 100 && (store.getSessionTask("task-1")?.status !== "completed" || store.getSessionTask("task-2")?.status !== "completed"); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(store.getSessionTask("task-1")?.status).toBe("completed");
+      expect(store.getSessionTask("task-2")?.status).toBe("completed");
+      store.close();
+      reopened = new SessionStore({ path });
+      const service = new DaemonJobService({
+        getSession: (id: string) => reopened!.sessions.get(id),
+        listSessionTasks: (id: string) => reopened!.listSessionTasks(id),
+        getSessionTask: (id: string) => reopened!.getSessionTask(id),
+      } as any, { list: async () => [] } as any, () => ({}) as any, () => ({}) as any,
+      { list: () => [], load: () => undefined } as any);
+      const read = await service.read({ sessionId: "session-1", jobId: "task-1" });
+      const json = JSON.stringify(read);
+      expect(json).toContain('"outputDiscardedBytes":"31"');
+      expect(read.text).toContain("a".repeat(100));
+      expect(read.text).not.toContain("已丢失");
+      const tool = createDefaultToolRegistry({ jobs: true }).get("JobRead")!;
+      const toolResult = await tool.execute({ jobId: "task-1" }, { cwd: dir, sessionId: "session-1", jobs: service });
+      expect(JSON.parse((toolResult.content[0] as { text: string }).text)).toMatchObject({ snapshot: { metadata: {
+        outputDiscardedBytes: "31",
+      } } });
+      const failureResult = await tool.execute({ jobId: "task-2" }, { cwd: dir, sessionId: "session-1", jobs: service });
+      expect(JSON.parse((failureResult.content[0] as { text: string }).text)).toMatchObject({ snapshot: { status: "completed", metadata: { outputWriteFailed: "1" } } });
+      const oldCursor = await service.read({ sessionId: "session-1", jobId: "task-1", after: read.cursor });
+      expect(oldCursor).toMatchObject({ text: "", cursor: read.cursor, snapshot: { metadata: { outputDiscardedBytes: "31" } } });
+    } finally {
+      await supervisor.aclose();
       reopened?.close();
       store.close();
       rmSync(dir, { recursive: true, force: true });

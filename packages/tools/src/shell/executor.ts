@@ -10,7 +10,8 @@ import {
   type HostShellLauncher,
   type SandboxPolicy,
 } from "@vykor/sandbox";
-import { decodeShellChunk, DEFAULT_MAX_OUTPUT_CHARS } from "./output.js";
+import { DEFAULT_MAX_OUTPUT_CHARS, looksLikeUtf16Le } from "./output.js";
+import { StringDecoder } from "node:string_decoder";
 import type {
   ShellExecContext,
   ShellExecRequest,
@@ -68,7 +69,7 @@ export class DefaultShellExecutor implements ShellExecutor {
     };
   }
 
-  run(spec: ShellExecSpec, signal?: AbortSignal): Promise<ShellRunResult> {
+  run(spec: ShellExecSpec, signal?: AbortSignal, onOutput?: (text: string) => void): Promise<ShellRunResult> {
     return new Promise<ShellRunResult>((resolve) => {
       let child: ChildProcess | undefined;
       let output = "";
@@ -80,9 +81,12 @@ export class DefaultShellExecutor implements ShellExecutor {
       let executionFailureKind: "runner" | "policy" = "runner";
       let timer: NodeJS.Timeout | undefined;
       let graceTimer: NodeJS.Timeout | undefined;
+      const stdout = new ShellStreamDecoder();
+      const stderr = new ShellStreamDecoder();
 
-      const append = (chunk: Buffer | string) => {
-        const decoded = decodeShellChunk(chunk);
+      const append = (decoded: string) => {
+        if (!decoded) return;
+        onOutput?.(decoded);
         const retainedLimit = spec.maxOutputChars + 1;
         const available = Math.max(0, retainedLimit - output.length);
         if (decoded.length > available) outputTruncated = true;
@@ -92,6 +96,8 @@ export class DefaultShellExecutor implements ShellExecutor {
 
       const finish = (exitCode: number | null) => {
         if (settled) return;
+        append(stdout.end());
+        append(stderr.end());
         settled = true;
         if (timer) clearTimeout(timer);
         if (graceTimer) clearTimeout(graceTimer);
@@ -140,8 +146,8 @@ export class DefaultShellExecutor implements ShellExecutor {
           return;
         }
 
-        startedChild.stdout?.on("data", append);
-        startedChild.stderr?.on("data", append);
+        startedChild.stdout?.on("data", (chunk: Buffer | string) => append(stdout.write(chunk)));
+        startedChild.stderr?.on("data", (chunk: Buffer | string) => append(stderr.write(chunk)));
 
         timer = setTimeout(() => {
           timedOut = true;
@@ -172,6 +178,33 @@ export class DefaultShellExecutor implements ShellExecutor {
         finish(null);
       });
     });
+  }
+}
+
+class ShellStreamDecoder {
+  private decoder?: StringDecoder;
+  private pending = Buffer.alloc(0);
+
+  write(chunk: Buffer | string): string {
+    if (typeof chunk === "string") return this.end() + chunk;
+    if (!this.decoder) {
+      this.pending = Buffer.concat([this.pending, chunk]);
+      if (this.pending.length < 4) return "";
+      this.decoder = new StringDecoder(looksLikeUtf16Le(this.pending) ? "utf16le" : "utf8");
+      const bytes = this.pending;
+      this.pending = Buffer.alloc(0);
+      return this.decoder.write(bytes);
+    }
+    return this.decoder.write(chunk);
+  }
+
+  end(): string {
+    if (!this.decoder && this.pending.length) {
+      this.decoder = new StringDecoder(looksLikeUtf16Le(this.pending) ? "utf16le" : "utf8");
+    }
+    const result = (this.decoder?.write(this.pending) ?? "") + (this.decoder?.end() ?? "");
+    this.pending = Buffer.alloc(0);
+    return result;
   }
 }
 

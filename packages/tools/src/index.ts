@@ -29,6 +29,7 @@ export {
   type FileChangePreview,
 } from "./file/index.js";
 export { grepTool } from "./search/index.js";
+export { createShellOutputLogHost } from "@vykor/services/executions";
 export {
   createWebFetchTool,
   createWebSearchTool,

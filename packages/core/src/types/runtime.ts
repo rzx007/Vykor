@@ -1,5 +1,5 @@
 import type { StreamingMessageClient } from "./client";
-import type { AgentBackgroundShellHost, McpAuthHost, ToolRegistry } from "./tools";
+import type { AgentBackgroundShellHost, McpAuthHost, ShellOutputLogHost, ToolRegistry } from "./tools";
 import type { PermissionChecker } from "./permissions";
 import type { HookExecutor } from "./hooks";
 import type { ContentBlock, Message } from "./messages";
@@ -343,6 +343,7 @@ export interface QueryEngineOptions {
   skillRegistry?: unknown;
   memoryRetriever?: MemoryRetriever;
   executionEnvironment?: import("@vykor/environment").ExecutionEnvironmentHandle;
+  shellOutputLogs?: ShellOutputLogHost;
   /** Optional per-run trajectory policy factory. False disables the default tracker. */
   trajectoryTrackerFactory?: false | (() => import("../engine/trajectory/tracker").TrajectoryTracker);
   compactProgressCallback?: import("../engine/compact-service").CompactProgressCallback;

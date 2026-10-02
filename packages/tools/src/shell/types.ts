@@ -60,5 +60,5 @@ export interface ShellRunResult {
 
 export interface ShellExecutor {
   resolve(request: ShellExecRequest, context: ShellExecContext): Promise<ShellExecSpec>;
-  run(spec: ShellExecSpec, signal?: AbortSignal): Promise<ShellRunResult>;
+  run(spec: ShellExecSpec, signal?: AbortSignal, onOutput?: (text: string) => void): Promise<ShellRunResult>;
 }

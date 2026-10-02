@@ -169,7 +169,14 @@ export class LocalAgentJobHost implements AgentJobHost, AgentBackgroundShellHost
       };
     }
     if (source.kind === "task") {
-      const output = this.processes.readOutput(source.value.id, Number.MAX_SAFE_INTEGER);
+      let output: string;
+      try { output = this.processes.readOutput(source.value.id, Number.MAX_SAFE_INTEGER); }
+      catch (error) {
+        if (source.value.metadata.outputWriteFailed !== "1") throw error;
+        return { text: "", cursor: input.after ?? 0, truncated: false,
+          snapshot: this.taskSnapshot(source.value),
+          details: { outputUnavailable: "Background log could not be read; output may be incomplete." } };
+      }
       const selected = selectOutput(output, input.after, input.maxChars);
       return { ...selected, snapshot: this.taskSnapshot(source.value) };
     }

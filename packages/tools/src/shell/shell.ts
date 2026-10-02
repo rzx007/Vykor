@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolResult } from "@vykor/core";
+import type { ShellOutputLogStatus, ToolDefinition, ToolResult } from "@vykor/core";
 import {
   shellResultMetadata,
   type ShellDescriptor,
@@ -114,10 +114,28 @@ export function createShellTool(
         };
       }
 
-      const result = await effectiveExecutor.run(spec, context.abortSignal);
+      const output = createBoundedOutputCollector();
+      const capture = context.shellOutputLogs?.begin(context.sessionId, spec.maxOutputChars);
+      let streamed = false;
+      const append = (text: string) => { streamed = true; output.append(text); capture?.append(text); };
+      let result: Awaited<ReturnType<ShellExecutor["run"]>>;
+      try {
+        result = await effectiveExecutor.run(spec, context.abortSignal, append);
+      } catch (error) {
+        const status = capture?.finish(false);
+        return {
+          content: shellOutputBlocks(output.value(), status, output.omitted(), !!capture,
+            error instanceof Error ? error.message : String(error)),
+          isError: true, failureKind: "unknown_outcome", executionState: "unknown",
+        };
+      }
+      if (!streamed) { output.append(result.output); capture?.append(result.output); }
+      const rawOutput = output.value();
+      const status = capture?.finish((result.status === "completed" || result.failureKind === "command") && result.exitCode !== null && (streamed || !result.outputTruncated));
+      const blocks = (text: string) => shellOutputBlocks(text, status, output.omitted() || result.outputTruncated, !!capture);
       if (result.status === "interrupted") {
         return {
-          content: [{ type: "text", text: formatInterruptedOutput(result.output, spec.maxOutputChars) }],
+          content: blocks(formatInterruptedOutput(rawOutput, spec.maxOutputChars)),
           isError: true,
           failureKind: "interrupted",
           executionState: "unknown",
@@ -125,17 +143,14 @@ export function createShellTool(
       }
       if (result.status === "timed_out") {
         return {
-          content: [{
-            type: "text",
-            text: formatTimeoutOutput(result.output, spec.timeoutMs, spec.maxOutputChars),
-          }],
+          content: blocks(formatTimeoutOutput(rawOutput, spec.timeoutMs, spec.maxOutputChars)),
           isError: true,
           failureKind: "timeout",
           executionState: "unknown",
         };
       }
       return {
-        content: [{ type: "text", text: formatOutput(result.output, spec.maxOutputChars) }],
+        content: blocks(formatOutput(rawOutput, spec.maxOutputChars)),
         isError: result.status === "failed" || result.exitCode === null,
         executionState: result.failureKind === "policy" ? "not_started" : result.exitCode === null || result.status === "failed" && result.failureKind !== "command" ? "unknown" : "completed",
         ...(result.status === "failed" || result.exitCode === null ? { failureKind: result.failureKind === "policy" ? "policy" as const : result.failureKind === "command" && result.exitCode !== null ? "command" as const : "unknown_outcome" as const } : {}),
@@ -165,34 +180,47 @@ async function executeInEnvironment(
   const controller = new AbortController();
   let timedOut = false;
   const abort = () => controller.abort();
-  context.abortSignal?.addEventListener("abort", abort, { once: true });
+  if (context.abortSignal?.aborted) abort();
+  else context.abortSignal?.addEventListener("abort", abort, { once: true });
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, timeoutMs);
   const output = createBoundedOutputCollector();
-  const stdoutDecoder = new TextDecoder("utf-8");
-  const stderrDecoder = new TextDecoder("utf-8");
+  const capture = context.shellOutputLogs?.begin(context.sessionId, DEFAULT_MAX_OUTPUT_CHARS);
+  const append = (text: string) => { output.append(text); capture?.append(text); };
+  const stdoutDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
+  const stderrDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
   try {
+    if (controller.signal.aborted) {
+      capture?.finish(false);
+      return {
+        content: [{ type: "text" as const, text: "Shell interrupted before the process started." }],
+        isError: true, failureKind: "interrupted" as const, executionState: "not_started" as const,
+        metadata: shellResultMetadata(descriptor, null, "interrupted"),
+      };
+    }
     const process = await environment.process.execShell(command, {
       cwd: resolved.executionPath,
       signal: controller.signal,
     });
     const stopListening = process.onOutput((chunk) => {
-      output.append(stdoutDecoder.decode(chunk, { stream: true }));
+      append(stdoutDecoder.decode(chunk, { stream: true }));
     });
     const stopErrors = process.onErrorOutput?.((chunk) => {
-      output.append(stderrDecoder.decode(chunk, { stream: true }));
+      append(stderrDecoder.decode(chunk, { stream: true }));
     });
     try {
       const result = await process.wait();
-      output.append(stdoutDecoder.decode());
-      output.append(stderrDecoder.decode());
+      append(stdoutDecoder.decode());
+      append(stderrDecoder.decode());
       const rawOutput = output.value();
       const formatted = formatOutput(rawOutput, DEFAULT_MAX_OUTPUT_CHARS);
+      const status = capture?.finish(!timedOut && !context.abortSignal?.aborted && result.exitCode !== null);
+      const blocks = (text: string) => shellOutputBlocks(text, status, output.omitted(), !!capture);
       if (timedOut) {
         return {
-          content: [{ type: "text" as const, text: formatTimeoutOutput(rawOutput, timeoutMs, DEFAULT_MAX_OUTPUT_CHARS) }],
+          content: blocks(formatTimeoutOutput(rawOutput, timeoutMs, DEFAULT_MAX_OUTPUT_CHARS)),
           isError: true,
           failureKind: "timeout" as const,
           executionState: "unknown" as const,
@@ -201,7 +229,7 @@ async function executeInEnvironment(
       }
       if (context.abortSignal?.aborted) {
         return {
-          content: [{ type: "text" as const, text: formatInterruptedOutput(rawOutput, DEFAULT_MAX_OUTPUT_CHARS) }],
+          content: blocks(formatInterruptedOutput(rawOutput, DEFAULT_MAX_OUTPUT_CHARS)),
           isError: true,
           failureKind: "interrupted" as const,
           executionState: "unknown" as const,
@@ -209,7 +237,7 @@ async function executeInEnvironment(
         };
       }
       return {
-        content: [{ type: "text" as const, text: formatted }],
+        content: blocks(formatted),
         isError: result.exitCode !== 0,
         executionState: result.exitCode === null ? "unknown" as const : "completed" as const,
         ...(result.exitCode === null
@@ -228,8 +256,12 @@ async function executeInEnvironment(
       stopErrors?.();
     }
   } catch (error) {
+    append(stdoutDecoder.decode());
+    append(stderrDecoder.decode());
+    const status = capture?.finish(false);
     return {
-      content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+      content: shellOutputBlocks(output.value(), status, output.omitted(), !!capture,
+        error instanceof Error ? error.message : String(error)),
       isError: true,
       failureKind: "unknown_outcome" as const,
       executionState: "unknown" as const,
@@ -239,6 +271,28 @@ async function executeInEnvironment(
     clearTimeout(timer);
     context.abortSignal?.removeEventListener("abort", abort);
   }
+}
+
+function shellOutputBlocks(
+  preview: string,
+  status: ShellOutputLogStatus | undefined,
+  omitted: boolean,
+  hostPresent: boolean,
+  error?: string,
+): Array<{ type: "text"; text: string }> {
+  const blocks = [{ type: "text" as const, text: error ? `${preview ? `${preview}\n` : ""}${error}` : preview }];
+  if (status?.reference) {
+    blocks.push({ type: "text", text: `[tool-output-ref: ${status.reference}]` });
+    const note = status.discardedBytes > 0
+      ? `Shell 日志仅保留前部 ${status.retainedBytes} 字节，后续 ${status.discardedBytes} 字节已丢失。`
+      : status.complete ? "预览省略的内容已留存。" : "Shell 日志不完整，已收到的内容仍可补读。";
+    blocks.push({ type: "text", text: `${note} 使用 Read(file_path="${status.reference}", cursor=0) 或 Grep(path="${status.reference}", pattern="...")。` });
+  } else if (omitted || (status && (status.retainedBytes > 0 || status.discardedBytes > 0))) {
+    blocks.push({ type: "text", text: hostPresent
+      ? `Shell 日志不可补读${status?.reason ? `：${status.reason}` : ""}；${status?.discardedBytes ? "部分输出已丢失。" : "预览之外的内容可能已丢失。"}`
+      : "Shell 日志能力未注入；预览省略的中间内容未保存，无法补读。" });
+  }
+  return blocks;
 }
 
 function isShellExecutor(value: ShellDescriptor | ShellExecutor | undefined): value is ShellExecutor {

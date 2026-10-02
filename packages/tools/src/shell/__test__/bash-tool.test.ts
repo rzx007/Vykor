@@ -71,9 +71,8 @@ describe("createBashTool", () => {
 
     expect(text).toContain('"stage":"composition"');
     expect(text).toContain("last diagnostic");
-    expect(text).toMatch(/truncated|省略/i);
-    expect(text).toContain("Read");
-    expect(text).toContain("redirect");
+    expect(text).toContain("preview omitted middle output");
+    expect(feedback.content.map((block) => (block as { text?: string }).text).join("\n")).toContain("未保存");
     expect(text.length).toBeLessThanOrEqual(12_000);
     expect(feedback).toMatchObject({ isError: true, failureKind: "command", executionState: "completed" });
     expect(feedback.metadata).toMatchObject({ exitCode: 7, status: "failed" });

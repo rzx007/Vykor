@@ -135,6 +135,23 @@ describe("job tools", () => {
     });
   });
 
+  it("shows a known unreadable log fact without replacing the supplied cursor", async () => {
+    const read = vi.fn(async () => ({ text: "", cursor: 17, truncated: false,
+      snapshot: { ...snapshot, status: "completed" as const, metadata: { outputWriteFailed: "1" } },
+      details: { outputUnavailable: "Background log could not be read; output may be incomplete." } }));
+    const result = await jobReadTool.execute({ jobId: "terminal-1", after: 17 }, context({ read }));
+    expect(result.isError).not.toBe(true);
+    expect(payload(result)).toMatchObject({ text: "", cursor: 17, snapshot: { status: "completed", metadata: { outputWriteFailed: "1" } },
+      details: { outputUnavailable: expect.stringMatching(/could not be read/i) } });
+  });
+
+  it("reports an unknown log read failure without a fabricated cursor", async () => {
+    const read = vi.fn(async () => { throw new Error("EISDIR: log read failed"); });
+    const result = await jobReadTool.execute({ jobId: "terminal-1", after: 17 }, context({ read }));
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain("EISDIR");
+  });
+
   it("preserves the complete 41-character task id", async () => {
     const id = `task_${"a".repeat(36)}`;
     const read = vi.fn(async () => ({ text: "", cursor: 2, truncated: false, snapshot: { ...snapshot, id } }));

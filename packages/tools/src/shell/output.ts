@@ -1,6 +1,6 @@
 export const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 
-const OMITTED_MIDDLE = "\n...[truncated: middle output omitted. If saved as a report, use Read; unsaved output cannot be recovered. Next time, explicitly redirect output to a file.]...\n";
+const OMITTED_MIDDLE = "\n...[preview omitted middle output]...\n";
 
 export function createBoundedOutputCollector() {
   const headLimit = Math.ceil((DEFAULT_MAX_OUTPUT_CHARS - OMITTED_MIDDLE.length) / 2);
@@ -31,6 +31,7 @@ export function createBoundedOutputCollector() {
     value() {
       return truncated ? head + OMITTED_MIDDLE + tail : complete;
     },
+    omitted() { return truncated; },
   };
 }
 

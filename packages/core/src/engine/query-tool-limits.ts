@@ -11,7 +11,7 @@ function readPositiveIntEnv(name: string, defaultValue: number, minimum: number)
   return Math.max(minimum, parsed);
 }
 
-function toolOutputInlineChars(): number {
+export function readToolOutputInlineChars(): number {
   return readPositiveIntEnv("VYKOR_TOOL_OUTPUT_INLINE_CHARS", 16_000, 256);
 }
 
@@ -33,29 +33,43 @@ export class ToolTimeoutError extends Error {
 
 /** Keep image blocks; truncate oversized text before it reaches model history. */
 export function applyToolOutputBudget(content: ContentBlock[]): ContentBlock[] {
-  const inlineChars = toolOutputInlineChars();
+  const inlineChars = readToolOutputInlineChars();
   const previewChars = toolOutputPreviewChars();
-
   const totalText = content.reduce((sum, b) => sum + (b.type === "text" ? b.text.length : 0), 0);
-  if (totalText <= inlineChars) return content;
+  const reference = content.find((block) => block.type === "text" &&
+    block.text.length <= 96 && /^\[tool-output-ref: \S+\]$/.test(block.text));
+  let seenReference = false;
+  const unique = content.filter((block) => {
+    if (block.type !== "text" || block.text.length > 96 || !/^\[tool-output-ref: \S+\]$/.test(block.text)) return true;
+    if (seenReference) return false;
+    seenReference = true;
+    return true;
+  });
+  if (totalText <= inlineChars) return unique;
 
-  const notice = `\n[输出已截断：原始长度 ${totalText} 字符，仅保留前 ${previewChars} 字符]`;
-  let remaining = previewChars;
+  const noticeFor = (count: number) => `\n[输出已截断：原始长度 ${totalText} 字符，仅保留前 ${count} 字符]`;
+  let remaining = Math.min(previewChars, Math.max(0, inlineChars - noticeFor(previewChars).length));
+  let retained = 0;
   const out: ContentBlock[] = [];
-  for (const block of content) {
+  for (const block of unique) {
     if (block.type === "image") {
       out.push(block);
       continue;
     }
+    if (block === reference) continue;
     if (remaining <= 0) continue;
     if (block.text.length <= remaining) {
       out.push(block);
       remaining -= block.text.length;
+      retained += block.text.length;
     } else {
-      out.push({ type: "text", text: block.text.slice(0, remaining) + notice });
+      out.push({ type: "text", text: block.text.slice(0, remaining) });
+      retained += remaining;
       remaining = 0;
     }
   }
+  out.push({ type: "text", text: noticeFor(retained) });
+  if (reference) out.push(reference);
   return out;
 }
 

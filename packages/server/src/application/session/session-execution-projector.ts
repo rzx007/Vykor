@@ -227,14 +227,21 @@ export class SessionExecutionProjector {
     ) return;
     let output: string | undefined;
     try { output = runtime.readOutput(task.id); } catch { /* output is optional */ }
+    const metadata: Record<string, unknown> = {};
+    if (task.processExitCode === null ||
+      (typeof task.processExitCode === "number" && Number.isInteger(task.processExitCode))) {
+      metadata.processExitCode = task.processExitCode;
+    }
+    if (typeof task.metadata.outputDiscardedBytes === "string" && /^[1-9]\d*$/.test(task.metadata.outputDiscardedBytes)) {
+      metadata.outputDiscardedBytes = task.metadata.outputDiscardedBytes;
+    }
+    if (task.metadata.outputWriteFailed === "1") metadata.outputWriteFailed = "1";
     const before = this.context.events.checkpoint();
     this.context.store.updateSessionTask(durableTaskId, {
       status,
       ...(output !== undefined ? { output } : {}),
       ...(status === "failed" ? { error: output ?? "Task failed" } : {}),
-      ...(task.processExitCode === null ||
-        (typeof task.processExitCode === "number" && Number.isInteger(task.processExitCode))
-        ? { metadata: { processExitCode: task.processExitCode } } : {}),
+      ...(Object.keys(metadata).length ? { metadata } : {}),
     });
     this.context.events.publishSince(before);
     if (isTerminalTaskStatus(status)) this.untrackProcessExecution(runtime, task.id);

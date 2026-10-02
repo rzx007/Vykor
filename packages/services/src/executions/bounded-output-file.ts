@@ -15,17 +15,31 @@ export function appendBoundedOutput(
   path: string,
   data: string | Buffer,
   maxBytes = MAX_PERSISTED_EXECUTION_OUTPUT_BYTES,
-): void {
+  mode: "tail" | "prefix" = "tail",
+): { retainedBytes: number; discardedBytes: number } {
   const incoming = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const existingBytes = existsSync(path) ? statSync(path).size : 0;
+  if (mode === "prefix") {
+    const text = Buffer.isBuffer(data) ? new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(data) : data;
+    let retainedBytes = 0;
+    let end = 0;
+    for (const character of text) {
+      const bytes = Buffer.byteLength(character);
+      if (existingBytes + retainedBytes + bytes > maxBytes) break;
+      end += character.length;
+      retainedBytes += bytes;
+    }
+    if (retainedBytes > 0) appendFileSync(path, text.slice(0, end));
+    return { retainedBytes, discardedBytes: incoming.length - retainedBytes };
+  }
   if (incoming.length >= maxBytes) {
     writeFileSync(path, incoming.subarray(incoming.length - maxBytes));
-    return;
+    return { retainedBytes: Math.min(incoming.length, maxBytes), discardedBytes: existingBytes + incoming.length - maxBytes };
   }
 
-  const existingBytes = existsSync(path) ? statSync(path).size : 0;
   if (existingBytes + incoming.length <= maxBytes) {
     appendFileSync(path, incoming);
-    return;
+    return { retainedBytes: incoming.length, discardedBytes: 0 };
   }
 
   const keepExistingBytes = maxBytes - incoming.length;
@@ -39,6 +53,7 @@ export function appendBoundedOutput(
     }
   }
   writeFileSync(path, Buffer.concat([tail, incoming]));
+  return { retainedBytes: incoming.length, discardedBytes: existingBytes - tail.length };
 }
 
 export function writeBoundedOutput(

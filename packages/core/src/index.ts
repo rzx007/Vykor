@@ -65,6 +65,11 @@ export type {
   McpAuthConfigureResult,
   McpAuthHost,
   AgentBackgroundShellHost,
+  ShellOutputCapture,
+  ShellOutputLogHost,
+  ShellOutputLogStatus,
+  ShellOutputLogPage,
+  ShellOutputLogSearchResult,
   ToolRegistry as IToolRegistry,
   ToolRegistryView,
   ToolDescriptor,
@@ -72,6 +77,7 @@ export type {
 } from "./types/tools";
 
 export { formatToolResultForModel, toolFeedbackFields, externalToolMetadata } from "./engine/tool-result-feedback";
+export { readToolOutputInlineChars } from "./engine/query-tool-limits";
 export { toolDefinitionIdentity } from "./engine/tool-definition-identity";
 
 export type { StreamingMessageClient, StreamMessageParams } from "./types/client";

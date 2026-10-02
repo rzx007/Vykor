@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, renameSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,6 +17,7 @@ import { getDetachedProcessSupervisor, resetExecutionRuntimes } from "@vykor/ser
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LocalAgentJobHost } from "./local-job-host.js";
+import { jobReadTool } from "./job-tools.js";
 
 const createdDirectories: string[] = [];
 
@@ -29,6 +30,79 @@ afterEach(async () => {
 });
 
 describe("LocalAgentJobHost adapter", () => {
+  it("returns bounded-log discard facts through the real local JobRead tool", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "oh-local-job-facts-"));
+    const cwd = fixtureDir;
+    const previous = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = fixtureDir;
+    try {
+      const host = new LocalAgentJobHost({ cwd, sessionId: "owner", childManager: directory(), workflowRepository: undefined });
+      const created = await host.create({
+        requestId: "log-facts", cwd, sessionId: "owner", description: "large output",
+        command: `${JSON.stringify(process.execPath)} -e "process.stdout.write('a'.repeat(10 * 1024 * 1024 + 31))"`,
+      });
+      await host.wait({ sessionId: "owner", jobId: created.jobId, timeoutMs: 10_000 });
+      const read = await host.read({ sessionId: "owner", jobId: created.jobId, maxChars: 32 });
+      expect(read.snapshot.metadata.outputDiscardedBytes).toBe("31");
+      expect(read.text).toBe("a".repeat(32));
+      const toolResult = await jobReadTool.execute({ jobId: created.jobId, maxChars: 32 }, { cwd, sessionId: "owner", jobs: host });
+      expect(JSON.parse((toolResult.content[0] as { text: string }).text)).toMatchObject({ snapshot: { metadata: { outputDiscardedBytes: "31" } } });
+      const after = await host.read({ sessionId: "owner", jobId: created.jobId, after: read.cursor });
+      expect(after).toMatchObject({ text: "", cursor: read.cursor, snapshot: { metadata: { outputDiscardedBytes: "31" } } });
+      const failing = await host.create({ requestId: "write-fail", cwd, sessionId: "owner", description: "failed log write",
+        command: `${JSON.stringify(process.execPath)} -e "process.stdout.write('p'.repeat(30)); setTimeout(() => process.stdout.write('data'), 300)"` });
+      const supervisor = getDetachedProcessSupervisor({ cwd, sessionId: "owner" });
+      const logPath = supervisor.getExecution(failing.jobId)!.outputFile!;
+      for (let i = 0; i < 100 && readFileSync(logPath, "utf8").length < 30; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(readFileSync(logPath, "utf8")).toBe("p".repeat(30));
+      renameSync(logPath, `${logPath}.old`);
+      mkdirSync(logPath);
+      for (let i = 0; i < 500 && supervisor.getExecution(failing.jobId)?.status !== "completed"; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const failedRead = await jobReadTool.execute({ jobId: failing.jobId, after: 17 }, { cwd, sessionId: "owner", jobs: host });
+      expect(JSON.parse((failedRead.content[0] as { text: string }).text)).toMatchObject({ snapshot: {
+        status: "completed", metadata: { outputWriteFailed: "1" },
+      }, cursor: 17, details: { outputUnavailable: expect.stringMatching(/could not be read/i) } });
+    } finally {
+      await getDetachedProcessSupervisor({ cwd, sessionId: "owner" }).aclose();
+      resetExecutionRuntimes({ cwd, sessionId: "owner" });
+      if (previous === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previous;
+      rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a pure log read error without resetting a previously supplied cursor", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "oh-local-job-read-error-"));
+    const previous = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = fixtureDir;
+    try {
+      const host = new LocalAgentJobHost({ cwd: fixtureDir, sessionId: "owner", childManager: directory(), workflowRepository: undefined });
+      const created = await host.create({ requestId: "read-error", cwd: fixtureDir, sessionId: "owner", description: "read error",
+        command: `${JSON.stringify(process.execPath)} -e "process.stdout.write('r'.repeat(30))"` });
+      await host.wait({ sessionId: "owner", jobId: created.jobId, timeoutMs: 2000 });
+      expect((await host.read({ sessionId: "owner", jobId: created.jobId, after: 17 })).cursor).toBe(30);
+      const supervisor = getDetachedProcessSupervisor({ cwd: fixtureDir, sessionId: "owner" });
+      const logPath = supervisor.getExecution(created.jobId)!.outputFile!;
+      renameSync(logPath, `${logPath}.old`);
+      mkdirSync(logPath);
+      expect(supervisor.getExecution(created.jobId)?.metadata.outputWriteFailed).toBeUndefined();
+      await expect(host.read({ sessionId: "owner", jobId: created.jobId, after: 17 })).rejects.toThrow(/EISDIR|directory/i);
+      const failed = await jobReadTool.execute({ jobId: created.jobId, after: 17 }, { cwd: fixtureDir, sessionId: "owner", jobs: host });
+      expect(failed.isError).toBe(true);
+      expect((failed.content[0] as { text: string }).text).toMatch(/EISDIR|directory/i);
+    } finally {
+      await getDetachedProcessSupervisor({ cwd: fixtureDir, sessionId: "owner" }).aclose();
+      resetExecutionRuntimes({ cwd: fixtureDir, sessionId: "owner" });
+      if (previous === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previous;
+      rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
   it("returns one shell job for concurrent retries of the same creation request", async () => {
     const cwd = temporaryDirectory();
     const host = new LocalAgentJobHost({

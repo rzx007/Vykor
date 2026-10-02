@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { extname, posix, win32 } from "node:path";
-import type { ToolDefinition } from "@vykor/core";
+import { readToolOutputInlineChars, type ToolDefinition, type ToolResult } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
@@ -118,14 +118,15 @@ export function suggestSimilarNames(target: string, entries: string[]): string[]
 export const fileReadTool: ToolDefinition = {
   name: "Read",
   description:
-    "Read a local text file, supported image, or directory. Use info_only=true to inspect target existence, type and raw-byte SHA-256 without returning its body or changing files; this does not authorize a write. Otherwise text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large files or directories. Lines longer than 2000 characters and text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
+    "Read a local text file, supported image, or directory. For Shell output use file_path=shell-output://UUID and cursor=0 (UTF-8 byte position); omit info_only/offset/limit. Use info_only=true to inspect local target existence, type and raw-byte SHA-256 without returning its body or changing files; this does not authorize a write. Otherwise local text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large local files or directories. Lines longer than 2000 characters and local text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
   inputSchema: {
     type: "object",
     properties: {
       file_path: {
         type: "string",
-        description: "An absolute or working-directory-relative local path.",
+        description: "An absolute or working-directory-relative local path, or shell-output://UUID from Shell.",
       },
+      cursor: { type: "number", description: "For shell-output:// only: UTF-8 byte cursor (default 0)." },
       offset: { type: "number", description: "Start line (1-indexed)." },
       limit: { type: "number", description: "Max lines to read." },
       info_only: { type: "boolean", description: "Only inspect a local file target's state and overwrite conditions. No body or mutation; not a permission grant." },
@@ -137,6 +138,12 @@ export const fileReadTool: ToolDefinition = {
       return { content: [{ type: "text", text: "info_only must be boolean." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
     }
     const rawPath = input.file_path as string;
+    if (typeof rawPath === "string" && /^shell-output:/i.test(rawPath)) {
+      return readShellOutput(input, context, rawPath);
+    }
+    if (input.cursor !== undefined) {
+      return { content: [{ type: "text", text: "cursor is only for shell-output:// references; use offset/limit for ordinary files." }], isError: true, failureKind: "invalid_input", executionState: "not_started" };
+    }
     const cwd = (context as { cwd?: string } | undefined)?.cwd ?? process.cwd();
     const offset = normalizeReadInteger(input.offset, 1);
     const limit = normalizeReadInteger(input.limit, DEFAULT_READ_LIMIT);
@@ -246,6 +253,37 @@ export const fileReadTool: ToolDefinition = {
     }
   },
 };
+
+async function readShellOutput(
+  input: Record<string, unknown>,
+  context: import("@vykor/core").ToolContext,
+  reference: string,
+): Promise<ToolResult> {
+  const invalid = (message: string): ToolResult => ({ content: [{ type: "text", text: message }], isError: true, failureKind: "invalid_input", executionState: "not_started" });
+  if (input.info_only !== undefined || input.offset !== undefined || input.limit !== undefined) {
+    return invalid('For Shell logs use Read(file_path="shell-output://UUID", cursor=0); omit info_only, offset and limit.');
+  }
+  const cursor = input.cursor ?? 0;
+  if (typeof cursor !== "number" || !Number.isSafeInteger(cursor) || cursor < 0) return invalid("cursor must be a non-negative safe UTF-8 byte position.");
+  if (!context.shellOutputLogs || !context.sessionId) return {
+    content: [{ type: "text", text: "Shell output reference unavailable in this session." }],
+    isError: true, failureKind: "configuration", executionState: "not_started",
+  };
+  const budget = readToolOutputInlineChars();
+  let maxBytes = Math.min(8192, Math.max(4, budget - 160));
+  for (;;) {
+    const page = await context.shellOutputLogs.read({ sessionId: context.sessionId, reference, cursor, maxBytes });
+    if (page.status !== "ok") return page.status === "invalid_cursor"
+      ? invalid("Invalid Shell output cursor: use a UTF-8 character boundary within retained bytes.")
+      : { content: [{ type: "text", text: "Shell output reference unavailable in this session." }],
+          isError: true, failureKind: "unknown_outcome", executionState: "unknown" };
+    const header = `Shell output: cursor=${cursor}; nextCursor=${page.nextCursor}; eof=${page.eof}; retainedBytes=${page.retainedBytes}; discardedBytes=${page.discardedBytes}; complete=${page.complete}\n`;
+    if (header.length + page.text.length <= budget) {
+      return { content: [{ type: "text", text: header + page.text }], executionState: "completed", compactSummary: `Read Shell output: cursor=${cursor}; nextCursor=${page.nextCursor}` };
+    }
+    maxBytes = Math.max(4, maxBytes - (header.length + page.text.length - budget) - 4);
+  }
+}
 
 async function inspectFileInfo(
   operations: FileOperations,

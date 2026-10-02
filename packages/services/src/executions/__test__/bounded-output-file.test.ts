@@ -27,6 +27,25 @@ describe("bounded execution output files", () => {
     writeBoundedOutput(path, "12345678", 5);
     expect(readFileSync(path, "utf8")).toBe("45678");
   });
+
+  it("retains the first complete UTF-8 characters and reports actual rejected bytes", () => {
+    const path = temporaryFile();
+    expect(appendBoundedOutput(path, "A界B", 4, "prefix")).toEqual({ retainedBytes: 4, discardedBytes: 1 });
+    expect(readFileSync(path, "utf8")).toBe("A界");
+    expect(appendBoundedOutput(path, "C", 4, "prefix")).toEqual({ retainedBytes: 0, discardedBytes: 1 });
+    expect(readFileSync(path, "utf8")).toBe("A界");
+  });
+
+  it("does not report loss when the prefix exactly fills its byte limit", () => {
+    const path = temporaryFile();
+    expect(appendBoundedOutput(path, "界", 3, "prefix")).toEqual({ retainedBytes: 3, discardedBytes: 0 });
+  });
+
+  it("preserves a UTF-8 BOM when prefix input is a Buffer", () => {
+    const path = temporaryFile();
+    expect(appendBoundedOutput(path, Buffer.from("\uFEFFabc"), 6, "prefix")).toEqual({ retainedBytes: 6, discardedBytes: 0 });
+    expect(readFileSync(path, "utf8")).toBe("\uFEFFabc");
+  });
 });
 
 function temporaryFile(): string {

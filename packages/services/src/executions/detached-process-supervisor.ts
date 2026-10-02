@@ -386,14 +386,14 @@ export class DetachedProcessSupervisor {
     if (!task) throw new Error(`Execution not found: ${executionId}`);
 
     if (isTerminal(task.status)) {
-      return Promise.resolve({
+      return Promise.resolve().then(() => ({
         status: task.status,
         output: this.readOutput(executionId),
         exitCode: task.exitCode,
-      });
+      }));
     }
 
-    return new Promise<AwaitExecutionResult>((resolve) => {
+    return new Promise<AwaitExecutionResult>((resolve, reject) => {
       let settled = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
       // Forward-declared so cleanup can reference the unregister handle even
@@ -407,44 +407,33 @@ export class DetachedProcessSupervisor {
         }
         unregister();
       };
-
-      unregister = this.registerCompletionListener((finished) => {
-        if (settled || finished.id !== executionId) return;
+      const finish = (status: AwaitExecutionResult["status"], exitCode?: number, timedOut = false) => {
+        if (settled) return;
         settled = true;
         cleanup();
-        resolve({
-          status: finished.status,
-          output: this.readOutput(executionId),
-          exitCode: finished.exitCode,
-        });
+        try {
+          resolve({ status, output: this.readOutput(executionId), exitCode, ...(timedOut ? { timedOut: true } : {}) });
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      unregister = this.registerCompletionListener((finished) => {
+        if (finished.id === executionId) finish(finished.status, finished.exitCode);
       });
 
       // Late-binding guard: if the task became terminal between the snapshot
       // above and the listener registration, resolve from current state.
       const now = this.executions.get(executionId);
       if (now && isTerminal(now.status) && !settled) {
-        settled = true;
-        cleanup();
-        resolve({
-          status: now.status,
-          output: this.readOutput(executionId),
-          exitCode: now.exitCode,
-        });
+        finish(now.status, now.exitCode);
         return;
       }
 
       if (opts?.timeoutMs != null) {
         timer = setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          cleanup();
           const current = this.executions.get(executionId);
-          resolve({
-            status: current?.status ?? "running",
-            output: this.readOutput(executionId),
-            exitCode: current?.exitCode,
-            timedOut: true,
-          });
+          finish(current?.status ?? "running", current?.exitCode, true);
         }, opts.timeoutMs);
         // Don't let a pending await timer keep the process alive on its own.
         if (typeof timer.unref === "function") timer.unref();
@@ -550,9 +539,19 @@ export class DetachedProcessSupervisor {
 
     const append = (chunk: Buffer | string) => {
       try {
-        if (task.outputFile) appendBoundedOutput(task.outputFile, chunk);
+        if (task.outputFile) {
+          const { discardedBytes } = appendBoundedOutput(task.outputFile, chunk);
+          if (discardedBytes > 0) {
+            const previous = Number(task.metadata.outputDiscardedBytes ?? "0");
+            task.metadata.outputDiscardedBytes = String(previous + discardedBytes);
+            if (previous === 0) this.notifyExecutionEvent(task, "updated");
+          }
+        }
       } catch {
-        /* output file may be gone after shutdown */
+        if (task.metadata.outputWriteFailed !== "1") {
+          task.metadata.outputWriteFailed = "1";
+          this.notifyExecutionEvent(task, "updated");
+        }
       }
     };
     child.stdout?.on("data", append);

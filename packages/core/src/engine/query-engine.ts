@@ -969,6 +969,7 @@ export class QueryEngine implements IQueryEngine {
                 cwd: this.cwd,
                 ...(this.options.executionEnvironment ? { environment: this.options.executionEnvironment } : {}),
                 sessionId: this.sessionId,
+                shellOutputLogs: this.options.shellOutputLogs,
                 toolCallId: toolUse.id,
                 toolAttemptId,
                 runAbortSignal: signal,

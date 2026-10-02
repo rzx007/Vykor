@@ -83,6 +83,60 @@ function makeTool(
 }
 
 describe("tool execution feedback", () => {
+  it("passes the optional Shell log host to the actual ToolContext", async () => {
+    const registry = new ToolRegistry();
+    const logs = { begin: () => undefined } as never;
+    registry.register({
+      name: "ProbeLogs", description: "probe", inputSchema: { type: "object" },
+      execute: async (_input, context) => ({ content: [{ type: "text", text: String(context.shellOutputLogs === logs && context.sessionId === "log-owner") }] }),
+    });
+    const seen: Message[][] = [];
+    const client = { streamMessage: async function* (params: { messages: Message[] }) {
+      seen.push(structuredClone(params.messages));
+      if (seen.length === 1) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "probe", name: "ProbeLogs", input: {} } };
+      yield { type: "complete" as const, stopReason: seen.length === 1 ? "tool_use" as const : "end_turn" as const };
+    } };
+    const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { sessionId: "log-owner", shellOutputLogs: logs, trajectoryTrackerFactory: false });
+    for await (const _ of engine.submitMessage("probe")) { /* consume */ }
+    expect(seen[1]?.find((message) => message.type === "tool_result")).toMatchObject({ content: [{ type: "text", text: "true" }] });
+  });
+
+  it("keeps one reference after error feedback formatting and a later history budget pass", async () => {
+    const registry = new ToolRegistry();
+    const ref = "[tool-output-ref: opaque://history]";
+    registry.register({ name: "FailWithLog", description: "failure", inputSchema: { type: "object" },
+      execute: async () => ({ isError: true, content: [
+        { type: "text" as const, text: "x".repeat(2000) },
+        { type: "text" as const, text: ref },
+        { type: "text" as const, text: ref },
+      ] }),
+    });
+    const seen: Message[][] = [];
+    const client = { streamMessage: async function* (params: { messages: Message[] }) {
+      seen.push(structuredClone(params.messages));
+      if (seen.length === 1) yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: "failure", name: "FailWithLog", input: {} } };
+      yield { type: "complete" as const, stopReason: seen.length === 1 ? "tool_use" as const : "end_turn" as const };
+    } };
+    const inline = process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS;
+    const preview = process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS;
+    process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = "256";
+    process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS = "128";
+    try {
+      const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+      for await (const _ of engine.submitMessage("fail")) { /* consume */ }
+      for await (const _ of engine.submitMessage("continue")) { /* consume */ }
+      for (const messages of [seen[1], seen[2]]) {
+        const result = messages?.find((message) => message.type === "tool_result");
+        expect(result?.type === "tool_result" && result.content.filter((block) => block.type === "text" && block.text === ref)).toHaveLength(1);
+      }
+    } finally {
+      if (inline === undefined) delete process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS;
+      else process.env.VYKOR_TOOL_OUTPUT_INLINE_CHARS = inline;
+      if (preview === undefined) delete process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS;
+      else process.env.VYKOR_TOOL_OUTPUT_PREVIEW_CHARS = preview;
+    }
+  });
+
   it("retains executed tool facts through micro compaction and the real summary request", async () => {
     const registry = new ToolRegistry();
     const body = "diagnostic body ".repeat(1000);

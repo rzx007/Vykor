@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
-import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getDetachedProcessSupervisor, resetExecutionRuntimes, DetachedProcessSupervisor } from "../index.js";
@@ -560,6 +560,44 @@ function environmentProcess(output: string) {
 }
 
 describe("DetachedProcessSupervisor.awaitExecution", () => {
+  it("rejects an unreadable completed log without inventing a write failure", async () => {
+    const directory = tempTasksDir();
+    const mgr = new DetachedProcessSupervisor(directory);
+    try {
+      const task = await mgr.startShellExecution({ argv: [NODE, "-e", "process.stdout.write('already finished')"],
+        description: "read failure", cwd: process.cwd() });
+      await waitFor(() => mgr.getExecution(task.id)?.status === "completed");
+      renameSync(task.outputFile!, `${task.outputFile}.old`);
+      mkdirSync(task.outputFile!);
+      await expect(mgr.awaitExecution(task.id)).rejects.toThrow(/EISDIR|directory/i);
+      expect(mgr.getExecution(task.id)).toMatchObject({ status: "completed", exitCode: 0 });
+      expect(mgr.getExecution(task.id)?.metadata.outputWriteFailed).toBeUndefined();
+    } finally { await mgr.aclose(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("rejects unreadable output from a pending completion listener and timeout", async () => {
+    const directory = tempTasksDir();
+    const mgr = new DetachedProcessSupervisor(directory);
+    try {
+      const ending = await mgr.startShellExecution({ argv: [NODE, "-e", "process.stdout.write('started'); setTimeout(() => process.exit(0), 350)"],
+        description: "listener read failure", cwd: process.cwd() });
+      await waitFor(() => mgr.readOutput(ending.id).includes("started"));
+      renameSync(ending.outputFile!, `${ending.outputFile}.old`);
+      mkdirSync(ending.outputFile!);
+      await expect(mgr.awaitExecution(ending.id, { timeoutMs: 2000 })).rejects.toThrow(/EISDIR|directory/i);
+      expect(mgr.getExecution(ending.id)).toMatchObject({ status: "completed", exitCode: 0 });
+      expect(mgr.getExecution(ending.id)?.metadata.outputWriteFailed).toBeUndefined();
+
+      const waiting = await mgr.startShellExecution({ argv: [NODE, "-e", "setInterval(() => {}, 1000)"],
+        description: "timeout read failure", cwd: process.cwd() });
+      renameSync(waiting.outputFile!, `${waiting.outputFile}.old`);
+      mkdirSync(waiting.outputFile!);
+      await expect(mgr.awaitExecution(waiting.id, { timeoutMs: 100 })).rejects.toThrow(/EISDIR|directory/i);
+      expect(mgr.getExecution(waiting.id)?.status).toBe("running");
+      expect(mgr.getExecution(waiting.id)?.metadata.outputWriteFailed).toBeUndefined();
+    } finally { await mgr.aclose(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it("returns immediately for an already-terminal task with its output/status", async () => {
     const mgr = makeManager();
     const task = await mgr.startShellExecution(
@@ -639,6 +677,44 @@ describe("DetachedProcessSupervisor.awaitExecution", () => {
 });
 
 describe("DetachedProcessSupervisor.registerExecutionListener", () => {
+  it("reports actual tail discard once while running and final bytes at completion", async () => {
+    const directory = tempTasksDir();
+    const mgr = new DetachedProcessSupervisor(directory);
+    try {
+      const events: Array<{ event: string; discarded?: string }> = [];
+      mgr.registerExecutionListener((task, event) => events.push({ event, discarded: task.metadata.outputDiscardedBytes }));
+      const task = await mgr.startShellExecution({
+        argv: [NODE, "-e", "process.stdout.write('a'.repeat(10 * 1024 * 1024 + 31))"],
+        description: "large output", cwd: process.cwd(),
+      });
+      await waitFor(() => mgr.getExecution(task.id)?.status === "completed", 10_000);
+      expect(Number(mgr.getExecution(task.id)?.metadata.outputDiscardedBytes)).toBe(31);
+      expect(events.filter((item) => item.event === "updated")).toEqual([{ event: "updated", discarded: "31" }]);
+      expect(events.at(-1)).toEqual({ event: "completed", discarded: "31" });
+      expect(mgr.readOutput(task.id, 32)).toBe("a".repeat(32));
+    } finally { await mgr.aclose(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("reports one write failure without changing the command result", async () => {
+    const directory = tempTasksDir();
+    const mgr = new DetachedProcessSupervisor(directory);
+    try {
+      const events: Array<{ event: string; failed?: string }> = [];
+      mgr.registerExecutionListener((task, event) => events.push({ event, failed: task.metadata.outputWriteFailed }));
+      const task = await mgr.startShellExecution({
+        argv: [NODE, "-e", "setTimeout(() => { process.stdout.write('first'); process.stdout.write('second'); }, 300)"],
+        description: "write failure", cwd: process.cwd(),
+      });
+      renameSync(task.outputFile!, `${task.outputFile}.old`);
+      mkdirSync(task.outputFile!);
+      await waitFor(() => mgr.getExecution(task.id)?.status === "completed", 10_000);
+      expect(mgr.getExecution(task.id)).toMatchObject({ exitCode: 0, metadata: { outputWriteFailed: "1" } });
+      await expect(mgr.awaitExecution(task.id)).rejects.toThrow(/EISDIR|directory/i);
+      expect(events.filter((item) => item.event === "updated")).toEqual([{ event: "updated", failed: "1" }]);
+      expect(events.at(-1)).toEqual({ event: "completed", failed: "1" });
+    } finally { await mgr.aclose(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it("fires 'created' when a task is created", async () => {
     const mgr = makeManager();
     const events: Array<{ id: string; event: string; status: string }> = [];
