@@ -21,16 +21,14 @@ export function normalizeToolInput(
 
   const normalized = normalizePropertyAliases(schema, input);
   if (validateToolInput(schema, normalized) === null) return normalized;
-  // Preserve legitimate arguments fields.
-  if (Object.hasOwn(properties, "arguments")) return normalized;
-
   let candidate = input;
   // Bounded even for cyclic SDK input; only return a fully validated candidate.
   for (let depth = 0; depth < 8; depth++) {
     const keys = Object.keys(candidate);
-    if (keys.length !== 1 || keys[0] !== "arguments"
-      || !isRecord(candidate.arguments)) break;
-    candidate = candidate.arguments;
+    const key = keys[0];
+    if (keys.length !== 1 || !key || !["arguments", "args", "parameters"].includes(key)
+      || Object.hasOwn(properties, key) || !isRecord(candidate[key])) break;
+    candidate = candidate[key];
     const result = normalizePropertyAliases(schema, candidate);
     if (validateToolInput(schema, result) === null) return result;
   }

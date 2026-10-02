@@ -1,6 +1,6 @@
 # 文件修改完整流程：统一 Spec 与实施记录
 
-> 状态：第一轮完整流程与生成工具卡修订已完成（§1–§14）；整体审核后的收口修正正在推进（§15 起）。交付为工作区改动，不替用户提交、部署或重启应用。
+> 状态：文件工具收敛已完成并验证；当前权威为 §22–§24，取代 §18–§21 的强制 Write 准备引用方案，前轮记录保留。交付为工作区改动，不替用户提交、部署或重启应用。
 
 ## 1. 范围与事实
 
@@ -855,3 +855,511 @@ Task 6: complete — 6.1–6.5 全部完成，任务 gate 和最终全流程审�
 无未解决的审核阻碍。已知限制：不保证消除 OS 文件竞争或跨文件回滚；审批宿主必须遵守现有取消合约；进程重启不保留最后字符计数；当前历史引用在压缩/重建后可能失效；Windows 未验证 POSIX 文件 mode；未测试真实模型、用户数据库或供应商速度。构建既有非致命提示如上保留，不对其另行扩展修改。
 
 本轮所有 Ruling 按形成顺序保留在本节“执行取舍”，其代价逐条可复核：保留当前未提交 checkout（判断错可原地调整）；统一文档/工作区 diff（审核需区分前轮基础）；进度为临时内存事实（重启丢最后计数）；取消不能吞可靠故障（取消并发仍报告故障）；metadata 条件按用途保留（少量校验不合并）；写权限下保留存在探测（不能读取拒绝正文/hash）；权限携带可选宿主 schema（增加窄参数）；权限规范实际路径（增加标准路径处理）；Task 6 补回漏列的无用 options 清理（无效可选参数消失，环境职责保留）；回滚保留根 state 身份（共享恢复方式变化，以 coordinator/序号/store/收尾联测覆盖）。没有静默丢失需求或删除执行证据。
+
+## 18. 真实任务纠偏 Spec：先决定目标，再生成正文
+
+### 18.1 证据与目标
+
+会话 `df5aae41-09c5-4c13-b324-f08c50d16f80` 已运行新代码。截取至 part seq=76：40 次工具调用，10 次失败；其中 Read/Write/Edit 共 23 次、5 次失败，工具阶段累计约 32.1 秒。一次 4,446 字符的完整修订稿所在模型请求耗时 421,982ms，Write 阶段 1,199ms，最后才因缺少 overwrite 被拒绝。失败调用先生成 content、后给 file_path，所以流式识别路径不能保证省去这段生成。
+
+失败内容复用已提示但未被使用；后续 Edit 的第一处失败仅为 `{` 后的空格差异，在内存中修正后第二处引用不存在的 width:104 再失败。诊断没有原文窗口却建议 Read offset=1。两次 Shell 校验输出静默只剩最后 12,000 字符，开头缺失；AskUser 则收到对象选项，而既有工具只声明字符串选项。后续还发生无效 JSON，不能凭这一段历史判定模型、供应商或程序谁应承担全部责任。
+
+目标是减少可预见的无效长生成和恢复往返，不以测试绿代替真实效果。不调查供应商速度，不回滚既有安全检查，不建立通用任务、缓存或日志平台。
+
+### 18.2 方案选择与边界
+
+- 仅增加提示词：改动少，但本次已经证明模型可能忽略，不作为主方案。
+- 流式猜路径并中止：参数可能 content 在前，字段也可能后续修正；容易引入不完整调用和重试分支，不采用。
+- 采用同一 Write 的两个阶段：先用小参数检查目标和明确意图，成功后通过准备调用的 ID 提交正文；模型看到的参数定义随保留的准备结果变化。准备阶段不提供正文参数。沿用现有历史、权限入口、进度展示和写前复核。
+
+普通 Read/Edit/ApplyPatch 保持现有使用方式；不强制所有工具两阶段，不强制 Write 改用 Edit。每个完整文件生成或覆盖增加一次小的准备调用，这是避免多分钟无效生成的明确代价。无约束上游仍可能生成未提供的字段或坏 JSON，本方案不能保证拦住其生成过程；保证的是正常声明的流程先检查、失败不误写、有可复用数据时不要求再输出全文。
+
+### 18.3 Write 的入口、状态和返回
+
+1. 未准备时，模型看到 Write 的准备参数：`action="prepare"`、`file_path`、可选的明确 `overwrite=true`。没有 content/content_from。准备调用只检查路径、类型、读写策略与创建/覆盖条件，不写文件，不返回旧正文。
+2. 已存在目标且未明确覆盖时，在准备阶段拒绝，说明仍可使用 Edit/ApplyPatch，或重新明确准备覆盖；此时无需生成正文。系统/托管路径、策略拒绝、非文件或符号链接等同样提前拒绝。
+3. 准备成功返回小的结构化文本，包含规范目标、创建/覆盖意图、旧字节 hash 或不存在条件；标记 `executionState="not_started"`，说明没有文件修改。其现有 tool call ID 就是 `prepared_from` 引用，不发明另一套 ID。
+4. 模型随后看到提交参数，必须给 `prepared_from`，再给 content 或 content_from 二选一；不允许在提交时改路径或覆盖意图。需要新目标/新意图时重新准备。
+5. 引用从当前历史中唯一、已结算、成功的同工具准备调用解析，拒绝同批引用、重复 ID、失败/未知准备、引用缺失、字段冲突或 malformed 准备结果。压缩或恢复后缺少必要原文时要求重新准备，不从自然语言摘要猜目标。
+6. core 只负责按工具声明提供本轮模型参数定义、统一入口的参数准备与复用顺序；tools/file 负责准备数据的结构、路径策略、原文快照以及执行。只增加可选 `ToolDefinition.inputPreparation`：`inputSchema` 是收到的协议 schema；纯函数 `modelSchema(history)` 生成本轮模型 schema；纯函数 `resolve(input, { history, toolUses, toolCallId })` 返回 `{ input, skipInputReuse? }`。入口顺序固定为协议 normalize/基础校验 → 工具 resolve → 未跳过时现有 content 复用 → 现有执行 schema 校验 → 失败去重 → 权限 → execute。无声明工具保持原流程。provider 与 ToolSearch 共用 schema 派生函数，不修改冻结的 registry，不扩展 Message，不让 core 知道 Write/文件系统业务。
+7. 准备不代替提交时的权限检查。提交先展开明确的目标和意图，再走现有校验/授权；最终文件工具复核 hash、路径策略和当前状态。准备后文件变化允许冲突拒绝，不能为了减少报错牺牲其他进程的改动。
+8. 任何已有提交引用均消费准备，包括明确 not_started 的失败；对同一规范目标的任何提交尝试同时使其他旧准备失效，不同目标保留。已生成正文仍可复用。模型声明不应继续推荐已知失效准备。展开后的历史输入保留 prepared_from；解析器同时检查当前批次前面的调用，拒绝后续重复消费同一凭据或同目标旧凭据。不能只检查 source ID 是否属于本批次，因为批次结果尚未进入历史。准备 call 与 result 都必须唯一，result 必须成功且明确 not_started，其 JSON 严格符合本工具的小凭据结构。正文复用可引用失败调用，与准备凭据的成功信任条件分开。准备之后出现成功、unknown 或无确定结果的 Edit/ApplyPatch，保守地使旧准备全部失效，不解析相对路径或 patch；这些工具明确 not_started 的失败不因此失效。已有凭据时模型仍能选择新 prepare；为修订当前文件重新做小准备，小修改仍直接 Edit。
+9. 保留公开 fileWriteTool.execute 的直接调用行为供非模型调用者使用，但经过 QueryEngine 的模型调用使用准备协议。无准备的旧式长调用不得自动猜覆盖；若已收到完整内容，失败反馈仍保留现有 content_from 复用入口，重新准备后可以复用。
+
+### 18.4 反馈不能悄悄丢失信息
+
+- Shell 的环境入口使用有界输出，保留开头和末尾，在正文中明确标记中间省略。若原命令已产生报告文件，提示用 Read 读取；没有报告时明确省略内容无法恢复，未来调用若需要完整输出应显式重定向到文件，不能承诺一个不存在的日志。小输出按既有换行规范化/trim 规则返回，不能静默从尾部切入 JSON 中间；不新增自动重跑或完整日志存储。
+- stdout/stderr 分别使用连续 UTF-8 解码，避免中文跨 chunk 被损坏；不能把修复 UTF-8 边界宣称为解决所有 Windows 外部程序编码。保留现有 timeout/cancel/exitCode/执行事实。
+- 与非环境入口复用现有输出格式规则及常量，避免再复制一个裁剪器；新缓冲只为流数据的有界保存，不扩大进程/任务系统。
+- Edit 仅改善定位，不放宽替换决策。已有声明/属性锚点之外，支持单行 JSON 对象稳定字符串 id 的定位；只给原始快照附近最多三个短窗口，保持既有 4,096 字符上限。不把 id 命中当作 old_string 命中。
+- 找不到原文锚点时不要虚构 offset=1 是有用位置；给 Grep/Read 定位建议。该例首次失败应返回 th-model 附近真实原文，让下一轮能一起修正空格与不存在值，不能假装编辑成功。
+
+### 18.5 AskUser 的明确兼容
+
+在 AskUser 自己的声明和入口明确支持字符串选项及 `{label: string, description?: string}` 选项，而不是在统一参数层猜对象含义。标签必填非空，description 若给出必须为字符串；额外结构不推断。转换为现有界面使用的字符串，描述非空时显示为 `label — description`，保留用户可见信息。字符串选项、radio/check、单题/多题旧行为不变；坏对象在调用 UI 前拒绝。
+
+### 18.6 验收、范围和非目标
+
+- 真实文件+脚本化模型的流程回归：检查拒绝发生前正文参数不被提供、既有文件缺覆盖意图仅一次小准备失败、批准的准备后写入/覆盖成功、正确复用正文、引用身份/同批/恢复/过期拒绝、同批双提交拒绝后者、准备和结果重复 ID 拒绝、提交权限与文件变化保护保留。使用临时文件，不修改目标用户会话或生成产物。
+- Shell 脚本化环境流：大报告首尾可读且明确省略，小报告无损，中文分片正确，timeout/cancel 事实不变。Edit 使用本次脱敏结构和原文空格/width 差异回归；AskUser 使用本次对象选项回归，验证实际交互收到的内容。
+- 在一份小的集成测试/报告中分开记录准备拒绝、参数错误、匹配错误、命令业务校验失败与执行故障；报告脚本化回放的调用数/正文次数，不把它说成真实模型成功率提高或供应商变快。
+- 不扩大别名推断，不自动推断覆盖，不自动修 JSON，不屏蔽布局校验失败，不调用真实模型做收费测试，不读取无关用户数据，不提交/push/部署/重启。当前已推送的功能分支内继续，原证据保留。
+
+### 18.7 Spec 审核记录
+
+- [x] 独立子代理检查流程是否真的前移、接口边界、历史恢复、权限与最小设计。
+- [x] 按审核修订后在同一文档写计划，再按任务实施并逐项审核。
+
+Spec 修正轮 1：独立架构审核给出 Needs fixes，三项已修订：明确可选声明与入口/ToolSearch 接线；补同批重复消费及唯一成功凭据；Shell 不承诺不存在的完整日志。两阶段流程本身可落地，仍等待修订后确认。
+
+Spec 修正轮 1 complete：独立架构复审 Spec Approved，三项已闭合，无新的实施阻碍。
+
+## 19. 真实任务纠偏 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development to implement this plan task-by-task. 本轮是 Task 7–10，旧 Task 1–6 不重做。
+
+**Goal:** 正常模型流程先检查 Write 目标和明确覆盖意图，避免可预见的无效长正文；反馈足以纠正一次错误，而不丢信息或误写。
+
+**Architecture:** core 只接工具声明的纯参数准备接口，文件工具负责两阶段 Write 及历史凭据；Shell 有界流缓冲明确报告截断；Edit 和 AskUser 在各自业务入口改善定位和明确兼容。所有状态沿用现有历史，无新数据库、缓存、后台任务或通用状态机。
+
+**Tech Stack:** 现有 TypeScript、Node 标准库、Vitest、既有 QueryEngine/ExecutionEnvironment。
+
+**Spec:** 本文件 §18。
+
+### Global Constraints
+
+- 不自动推断覆盖意图，不扩大路径别名猜测，不自动修 JSON，不屏蔽业务校验失败。
+- 准备结果只在现有保留历史中，准备不等于提交授权；提交仍重新检查权限、路径和文件状态。
+- 无声明工具保持现有流程，非模型调用者公开 fileWriteTool.execute 的直接调用行为保持。
+- 没有准备时模型参数不提供 content/content_from；有准备仍能重新 prepare。
+- 同批、重复、失败、unknown、缺失与已消费准备不可用；正文复用和准备引用的信任条件分开。
+- Shell 输出最多保留既有 12,000 字符的数据预算，明确中间省略；不新增自动重跑或完整日志存储。
+- Edit 定位只是提示，不作为匹配或替换依据；最多三个原始窗口、总诊断 4,096 字符上限。
+- AskUser 仅支持明确声明的字符串或 label/description 对象，坏对象调用 UI 前拒绝。
+- 不调用真实模型、不修改用户数据库或用户生成文件，不提交/push/部署/重启；验证使用已安装依赖。
+
+### Task 7：两阶段 Write 与统一参数入口
+
+**Files:** core/types/tools.ts；core/engine/query-engine.ts、query-tool-preparation.ts、tool-registry.ts；tools/file/write.ts、新 write-preparation.ts；必要的 engine/registry/preparation 和 file/__test__ 范围；既有文件流程/正文复用联测；仅确有必要时修改 tools/file/preview.ts 的 prepare 非修改预览识别。
+
+**Consumes:** Message 保留的 assistant toolUses + tool_result content、ToolDefinition.inputReuse、既有文件安全与原子写入、ToolRegistryView。
+
+**Produces:** 一个可选 inputPreparation 声明及共用的 model schema 派生函数；Write prepare/提交流程。准确类型：
+
+```ts
+inputPreparation?: {
+  inputSchema: Record<string, unknown>;
+  modelSchema(history: readonly Message[]): Record<string, unknown>;
+  resolve(input: Record<string, unknown>, context: {
+    history: readonly Message[];
+    toolUses: readonly ToolUseBlock[];
+    toolCallId: string;
+  }): { input: Record<string, unknown>; skipInputReuse?: boolean };
+};
+```
+
+- [x] 7.1：先用真实临时文件和脚本化模型补 RED：模型第一次拿到的 Write schema 无正文；existing+无 overwrite 的 prepare 只小参数拒绝；准备覆盖成功后以 prepared_from 提交并写入真实文件；ToolSearch 元数据同阶段；新目标可重新 prepare。
+
+```ts
+expect(firstWriteSchema.properties).not.toHaveProperty("content");
+expect(firstWriteSchema.properties).not.toHaveProperty("content_from");
+expect(await readFile(target, "utf8")).toBe("original");
+expect(rejectedPrepare.executionState).toBe("not_started");
+```
+
+- [x] 7.2：按 §18 的精确顺序接统一入口。可选声明无 IO；无声明工具分支不变。incoming schema 支持 arguments 包装的正常归一，但仍拒绝冲突；派生函数同时用于 provider 请求与 ToolRegistryView/ToolSearch。不改冻结 registry 和 Message。
+
+```ts
+const protocolSchema = tool.inputPreparation?.inputSchema ?? tool.inputSchema;
+const normalized = normalizeToolInput(protocolSchema, toolUse.input);
+const prepared = tool.inputPreparation?.resolve(normalized as Record<string, unknown>, {
+  history, toolUses, toolCallId: toolUse.id,
+});
+// 基础校验在 resolve 前；未 skip 才走 resolveToolInputReuse；之后用 tool.inputSchema 校验展开结果。
+```
+
+- [x] 7.3：tools/file 实现凭据与 prepare。成功小 JSON 严格保存规范目标、明确创建/覆盖意图、原字节 hash/不存在条件；成功 not_started、不写正文。工具自己的纯历史解析器检查同工具唯一 call/result、成功 not_started、JSON 类型和字段、当前批次前序消费；展开保留 prepared_from，提交不可自改路径/意图。旧式完整调用经 engine 拒绝但正文复用提示仍可用；直接 execute 旧行为保留。
+- [x] 7.4：补 RED/GREEN，覆盖 duplicate ID、无结果/unknown 准备、同批引用、双提交消费、压缩引用缺失、失败/unknown/已消费提交、prepare 后文件变化、权限改变、新建竞争及失败正文经重新准备后 content_from 复用。提交权限看到展开实际目标，路径拒绝仍保护旧正文/hash。调整旧流程联测为新协议，不能删除原安全、原文复用、串行与取消断言。
+- [x] 7.5：运行工具 Write/正文复用/流程/Native 文件策略范围、core preparation/registry/workflow/复用范围，core/tools 及必要 runtime 类型检查；报告模型回放中的准备拒绝、正文提交与无效正文次数；独立 Spec+代码审核。
+
+### Task 8：Shell 流输出有界且显式省略
+
+**Files:** tools/shell/output.ts、shell.ts，已有 shell/__test__/bash-tool.test.ts 与必要的输出回归；executor.ts 仅为复用同一输出规则需要时修改，保留现有默认执行器契约。
+
+**Consumes:** 环境 ProcessHandle 的 stdout/stderr bytes、既有 formatOutput 和 12,000 字符预算。
+
+**Produces:** 一个局部有界流缓冲 helper，输出含开头和末尾及省略标记，两个独立连续 UTF-8 decoder；既有 formatOutput/timeout/cancel 使用它的结果。
+
+- [x] 8.1：先补有效 RED：环境输出大于 12,000 字符时，首部 schema/ok/stage 和尾部诊断都可见，正文明确中间省略；小输出保留旧 normalize/trim 规则；stdout/stderr 中文跨 byte chunks 无 replacement char。
+
+```ts
+const report = '{"ok":false,"stage":"composition"}\n' + "x".repeat(16000) + "\nlast diagnostic";
+expect(text).toContain('"stage":"composition"');
+expect(text).toContain("last diagnostic");
+expect(text).toMatch(/truncated|省略/i);
+```
+
+- [x] 8.2：在 output.ts 放唯一有界收集实现，shell.ts 环境入口替换静默 slice(-12000)，stdout/stderr 各自 streaming decode 并末尾 flush。不增加日志文件、完整大数组、自动重跑或更多后台能力；提示已有报告用 Read，缺日志时省略不可恢复、未来可显式重定向。
+- [x] 8.3：运行环境/native Shell、默认 executor、output/timeout/cancel 与 tools 类型范围；独立审核内存上界、输出丢失提示和退出事实。不能把本次 UTF-8 chunk 修复宣称为所有 Windows 编码问题已解决。
+
+### Task 9：Edit 在单行 JSON 中提供真实定位
+
+**Files:** tools/file/edit-feedback.ts，file/__test__/edit-batch.test.ts 与必要反馈回归。不得改变 edit-replacers 的替换选择。
+
+**Consumes:** EditPlanError、原始文件快照，既有三窗口/4,096 字符边界。
+
+**Produces:** 字符串 id 定位锚点和诚实的无定位提示，仍只是原文窗口。
+
+- [x] 9.1：先补本次结构的有效 RED：old_string 以 `{"id":"th-model"...` 开头而原文 `{ "id": ...`；返回 th-model 附近原文。第二处不存在 width:104 的批次仍整体不写，附近 th-product 原文可见。找不到锚点时不指定伪位置 offset=1。
+
+```ts
+expect(result.metadata?.editFailure).toMatchObject({ source: "original_file" });
+expect(text).toContain('"id": "th-model"');
+expect(text).toContain('"id": "th-product"');
+expect(await readFile(path, "utf8")).toBe(original);
+```
+
+- [x] 9.2：扩展已有 declarationKey 的明确对象 id 行模式，不解析全文件 AST、不以相似程度自动编辑；沿用原始快照窗口，保留候选位置与定位提示区别。无窗口时 recoveryHint 改为 Read/Grep 定位，不提供具体 offset。
+- [x] 9.3：运行 edit/batch/preview/反馈范围及 tools 类型；独立审核未放宽误写边界、中文/转义 id 和诊断预算。
+
+### Task 10：AskUser 明确兼容与整体交付
+
+**Files:** tools/meta/ask-user.ts、meta/__test__/meta.test.ts 或新的 ask-user.test.ts；prompts/src/index.ts 的现有 Write 指导文案、core/engine/tool-input-reuse.ts 的通用复用提示与必要消费回归；本文件 §20 执行证据；必要的本次整体流程 fixture 放现有文件 workflow 测试，不新建评测平台。
+
+**Consumes:** 当前 questions/radio/check 及 askUserPrompt 字符串界面合约，Task 7–9 的最终接口。
+
+**Produces:** 明确的选项 schema/规范转换，完整验证后一次调用既有 UI；最终独立整体审核和验证记录。
+
+- [x] 10.1：先补 RED：本次 label/description 对象数组实际触发 UI，用户看到标签和描述；字符串选项不变；空 label、非字符串 description、未知结构拒绝且 UI 没被调用。
+
+```ts
+expect(JSON.parse(actualPrompt).questions[0].options).toEqual([
+  "流程图+卡片 — 展示主题关系", "纯信息版面",
+]);
+```
+
+- [x] 10.2：schema 明确 string 或严格 label/description；在 AskUser 内先验证全部题目再映射至现有 strings，不改统一参数别名层或 UI 合约。补声明中的一个短参数例子，不堆叠系统提示词。
+
+  按 §20 已授权补充，最小同步既有默认系统 Write 指导：先 action=prepare/file_path/明确 overwrite，再 prepared_from + content/content_from；失败正文复用先新小 prepare，不要求提交自传 path/options；Read info_only 保持可选只读检查。用实际默认 prompt 进入模型请求和真实文件结果的必要脚本化联测验证，不 grep 源码文案。
+
+  同步 withToolInputReuseHint 的旧“显式修正目标/options”提示：用不含文件业务的短通用措辞，要求按当前 schema 给目标或准备引用，意图选项在所需准备阶段确认；复用数据不继承权限。不新增声明字段，通过实际模型请求的工具反馈消费验证。
+- [x] 10.3：运行 meta/AskUser 范围及 tools 类型；独立任务审核。
+- [x] 10.4：全流程独立复审，以当前基点 b7988381 之后的工作区增量为准；补关键跨任务联测、受影响类型、docs、architecture、diff 检查及独立 Desktop 构建到新的忽略目录。不得覆盖现有 out、重启、提交或 push。
+- [x] 10.5：回填实际 RED/GREEN、脚本回放的调用/正文次数、限制和删增；不声称真实模型成功率或供应商速度已改善。所有取舍保留在本文件，不丢任务证据。
+
+## 20. 真实任务纠偏执行账本
+
+| 任务/关系 | 检查 | 结论 |
+|---|---|---|
+| Task 7 | 协议 schema、归一、引用、模型/ToolSearch 出口、权限与工具执行 | core 不含文件业务；prepare 跳过正文复用，commit 先展开目标再授权 |
+| Task 8 | 流字节 → 有界字符 → 格式化 → 执行结果 | 显式省略，不承诺不存在的日志；不改进程生命周期 |
+| Task 9 | 原始快照 → 锚点 → 原文窗口 | 只定位，不改变匹配策略和批次零写入 |
+| Task 10 | 明确对象/字符串 → 已有 UI strings | 不猜任意对象，先验证所有问题 |
+| 7 → 9 | 既有 workflow/batch 测试交界 | 串行实施；9 保留 7 的新协议联测，不回退安全断言 |
+| 7/8/9 → 10 | tools 类型、整体脚本回放与交付 | 最终只补实际风险联测，不重复全仓套件 |
+
+- [x] Spec 子代理审核及修正轮 1 Approved。
+- [x] 同文件计划与文件/接口关系自检。
+- [x] Task 7 完成及审核。
+- [x] Task 8 完成及审核。
+- [x] Task 9 完成及审核。
+- [x] Task 10 完成、全流程审核及交付。
+
+Ruling: 沿用已推送的 codex/tool-workflow-audit-convergence 分支和当前 checkout，不另建 worktree — 用户要求继续当前改动，上一轮已在此运行验证且当前代码基点干净；工作区检查确认不是 main — 代价是暂不具备 linked worktree 隔离，但不移动用户数据、不安装依赖、任务源文件增量可按基点核对。
+
+Ruling: 统一文档仍为 Spec/计划/账本；使用新的 `.superpowers/sdd/2026-10-02-file-workflow-design/` 保存本轮 briefs/reports/增量审核包，不提交也不删除证据 — 用户要求一处文档，当前请求未要求再次提交 — 代价是使用工作区和各任务起点副本审核而非 commit range；PowerShell 下按已读脚本同样的提取/包装规则用 apply_patch 生成文件，不用重定向写文件。
+
+基线：当前 HEAD b7988381，起始代码干净；只改统一 Spec/计划。tools Write 24、Edit batch 22、Shell tool 17，共 63 项相关已有测试通过；AskUser 回归目前在 meta.test.ts，本次新用例由 Task 10 补，未把不存在的测试路径当作已验证。
+
+Task 7: in_progress — implement_write_preparation 按独立 brief 实施。Task 8–10 brief 已从 §19 提取；旧 §16 的同名约束标题不属于本轮 brief，提取时明确先限定 §19。尚未实施后续任务。
+
+Task 7: review_pending — 13 个源码/测试文件（7 生产、6 测试）；core 182、tools 131 项通过，最后 schema 根对象修正后 44 项受影响测试复验通过，core/tools/runtime 类型通过。完整 71,124 字符增量审核包由独立 review_write_preflight_spec 做 Spec+质量 gate；未以测试绿替代审核。首个正常回放为 4 次调用、3 次小 prepare/1 次准备拒绝、1 次正文生成/提交，拒绝含正文调用 0；同批双提交与旧式违规调用另作拒绝保护，不宣称所有模型都会遵守 schema。
+
+Task 7: model_contract RED/GREEN — 主代理只读核对已安装 Anthropic SDK 的 InputSchema 根 type=object；已有准备时模型 schema 最初缺此根字段，回放有效 1 FAIL 转 44 GREEN。provider/runtime view 同派生，未调用真实接口。
+
+Task 7: fix round 1/5 — 独立审核 Spec 不符合、质量 Needs fixes，Important：同一目标先准备 p1/p2，用 p2 提交后，p1 旧 hash 仍被模型 schema 推荐；同批不同准备向同一目标先后提交也漏检。审核只读最小复现 enum=[p1]。原 worker 先补跨轮/同批双准备的有效 RED，再在 tools/file 既有失效判断修复；不能退回“生成后 hash 拒绝”。审核时三份相关起点保存在 task-7-fix-1-base；未开始 Task 8。
+
+Task 7: fix1 同目标消费补查 — 主代理纯内存复现同目标 p2 failed/not_started 后旧 p1 仍 resolve；相同实际 path/body/hash 因 prepared_from 不同使已有失败记忆返回 false。无真实文件/DB/model调用。为不增加 core 去重接口，将同目标任何提交尝试统一消费所有旧准备；下次取得新小准备的真实状态证据后正文仍复用。此场景加入修正回归。
+
+Task 7: fix round 1/5 reviewed — 原同目标过期问题 ADDRESSED；修正中新增 Important：路径身份未知的保守判断只覆盖后续 candidate，不覆盖准备 target。只读反向 namespace 复现准备 \\.\C:\Work\File.txt 后普通 C:\Work\File.txt Write 仍推荐旧准备。进入 fix round 2/5：任一侧未知都失效；不增加更广路径解析。修正 1 的六文件 98 GREEN/tools types/diff 证据保留，不因此标完成。
+
+Task 7: fix round 2/5 complete — 新 Important ADDRESSED，独立复审 Spec Compliant、质量 Approved，无新 Critical/Important/Minor。反向 namespace 的跨轮/同批/恢复真实引擎 schema 3 项有效 RED 转两文件 56 GREEN，tools types/diff 通过。仅现有 predicate 对两侧 unknown 对称失效，无额外 namespace 解析。
+
+Task 7: complete — 两轮修正后 gate 已闭合。原 core 182、tools 131；随后修正覆盖 98 和最终 56（有重叠，不累计），三包类型通过。13 个源码/测试文件，回放计数见新目录 task-7-report.md；新小 prepare 拒绝时未生成正文，权限/hash/创建竞争/正文复用和旧直接执行保留。当前源码未提交、未覆盖 out，允许开始 Task 8–10。
+
+Ruling: 同目标任何 Write 提交尝试使其他旧准备失效，含明确 not_started 失败，不同规范目标保留 — 有效内存复现证明不同引用 ID 可使相同实际调用躲过已有失败记忆；统一消费可沿用准备与现有证据机制，不加新的去重声明 — 代价是失败后其他同目标准备也需重新做小检查，正文依旧可复用；Edit/ApplyPatch 明确 not_started 的例外不变。
+
+Ruling: 任何已有 prepared_from 提交引用均消费该准备，包括明确 not_started 的失败 — 使用一条保守规则避免不同失败路径对凭据寿命作多套推测 — 代价是失败后需重新做小准备，但已生成正文仍可通过 content_from 复用，不要求重写全文。
+
+Ruling: 不让 ToolSearch 额外输出整份参数定义，一致性指其 ToolRegistryView 获取的 schema 与 provider 共用本轮派生 — 实际 ToolSearch 当前只展示 name/description，追加所有 schema 会进一步放大上下文 — 代价是阶段 schema 仍从正式工具定义获取，不新增一次文本复制。
+
+Ruling: 准备后的成功/unknown/无确定结果 Edit 或 ApplyPatch 使旧准备全部失效，明确 not_started 失败除外 — 纯历史回调没有执行 cwd，不能只处理绝对路径而漏掉已知相对文件修改，也不为此建立 patch/路径解析平台 — 代价是修改别的文件可能多一次小准备；最终文件状态复核仍保护不可观察的外部变化。
+
+Ruling: 达到新增代理线程上限后，复用已完成的协调/审核/实施身份并给新的独立 task brief，不改变实现与审核分离 — 运行环境不能继续创建全部新身份 — 代价是旧上下文可能残留，因此明确旧 Task 1–6 已完成、只读本轮 §18–20 与新报告，不把旧完成状态计入本轮。
+
+补充基线：AskUser 所在 meta.test.ts 28 项通过。一次错误 cwd 的 Node 路径调用仅为命令配置错误，不算行为 RED；正确 packages/tools cwd 验证通过。Task 8 起点的 12 个 Shell 文件已只读复制到新目录 task-8-base，未改源码。
+
+Task 8: in_progress — Task 7 最终 Spec Compliant/质量 Approved 后，由独立 implement_correction_task_8 开始 Shell 流输出纠偏；使用本轮 task-8-brief/report/base，已有 12 文件起点不覆盖。后续 Task 9/10 尚未实施，旧 Task 1–6 和旧证据不重做。
+
+Ruling: Task 8 原选 gpt-6.1-sol 未执行即报容量不足，改由 gpt-6-sol high 的鲜新独立实施者继续，审核 gate 保持 — 同等级标准模型可处理限定三文件流缓冲任务，避免反复等待容量 — 代价是可能多一些推理轮次；有疑问按既定修正/升级机制处理，不降低有效 RED/GREEN 或独立审核要求。
+
+Task 8: implementer replaced before execution — implement_correction_task_8 因模型容量失败，尚无报告或源码执行；唯一当前实施者为 implement_correction_task_8_available。任务起点未覆盖，没有并行实施。
+
+Task 8: RED/GREEN review_pending — 实際有效 RED 2 项（大报告首部丢失、UTF-8 跨块乱码），环境 Shell 20 项转全绿；其他 Shell/native/executor 38 项通过，tools 类型/diff 检查 exit 0。增量仅 output.ts、shell.ts 与 bash-tool.test.ts；留存有界，大上游单 chunk 的一次解码字符串不夸称不存在。生成完整 task-8-review.diff，独立 gate 尚未完成，不开始 Task 9。
+
+Task 8: minor (deferred to final review) — shell.ts 单个极大 Uint8Array 先整体解码，collector 常驻留存有界但瞬时解码字符串为 O(chunk)；现有 ProcessHandle 接口不规定单块硬上限。记录实现限制，最终整体审核再次裁定是否需要分段；未扩展为所有上游分配的硬内存承诺。
+
+Task 8: complete — 独立 Spec compliant、质量 Approved，无 Critical/Important；上述 Minor 明确留给最终复审，不静默丢弃。报告记录有效 2 RED→环境 20 GREEN，其他 38 GREEN、tools 类型/diff exit 0，未重复同代码完整套件。小输出/首尾省略/双流 UTF-8/timeout/cancel/退出事实保留；实际结果只来自脚本化环境流，不声称所有 Windows 编码或真实模型改善。
+
+Task 9: in_progress — 起点 edit-feedback 与四份范围测试保存在本轮 task-9-base；下一步只改原始 JSON id 定位和无锚点建议，不放宽 edit-replacers。
+
+Ruling: Task 10 附加最小默认系统 Write 指导同步及其真实消费联测 — 主代理只读确认 prompts/index.ts:85/87 仍指导 Read info_only 后自传 overwrite/hash、失败 content_from 改 options，和已批准两阶段提交协议冲突，明确授权纳入本轮 — 代价是增加一个既有 prompts 源文件和相关类型/消费者验证；只替换原两条指导，不叠加提示词平台或改工具协议。prompts 原文件已存 task-10-base，其余 Task 10 起点在实施前补存。
+
+Ruling: 同 Task 10 顺序修正 core 既有通用正文复用提示的过时 options 指导 — 主代理再次只读确认 withToolInputReuseHint 实际反馈会鼓励新提交自传 file_path/overwrite，明确授权一起同步 — 代价是多一个窄提示文件及真实模型反馈消费者回归；core 不加入 Write 判断/文件业务/声明字段，复用信任、权限和展开顺序不变，原文件起点已补存。
+
+Task 9: RED/GREEN review_pending — Edit batch 新增 5 项有效 RED（22 既有通过）转 27 GREEN；Edit/preview/文件流程与 Task 7 新 Write 协议共 171 项范围通过，tools 类型/diff exit 0。增量仅 edit-feedback 与 batch 测试；JSON id 只供原始定位、长单行窗口居中，无锚点不假造 offset。完整 task-9-review.diff 已生成，独立 gate 未结束，Task 10 尚未实施。
+
+Ruling: 接受 Task 9 独立审核在 MESSAGE 中完整交付的双 verdict/行号证据，保留随后最终消息的模型容量错误记录 — Spec compliant、质量 Approved、三档无问题与 cannot-verify 已明确交付，容量错误不撤销完成的只读审核 — 代价是没有第二份最终通道格式报告；将已交付内容保存 task-9-review.md，最终最强整体复审仍重新覆盖当前 Task 9 源码，不重复同一任务审核或绿测。
+
+Task 9: complete — 独立 MESSAGE gate 已给 Spec compliant/质量 Approved，无 Critical/Important/Minor，核对原始 id/窗口/匹配候选区别/无伪 offset 和零落盘回归；随后最终通道容量错误按上述 Ruling 记录。27/171 项有重叠的范围及类型/diff 通过，无未决源码问题。超长 id 仍受短窗口限制，需 Read 查看完整原文；不因提示命中误宣称编辑成功。
+
+Task 10: in_progress — 本轮 task-10-base 已保留 meta、实际默认 prompts、通用 reuse hint 及消费/workflow 测试起点；下一步 AskUser 兼容与两条已授权真实模型指导同步。10.4/10.5 由协调员负责，不交给实现者声称完成。
+
+Task 10: 10.1–10.3 review_pending — 实现者已 DONE，仅 6 文件（meta 与测试、默认 prompts、通用 core hint 与消费测试、实际 runtime prompt workflow）。实际 RED 覆盖对象选项/UI/schema、默认 system 模型请求及旧复用反馈；tools 117/core 27 项通过，最终 buildRuntimeSystemPrompt 消费回放 2 项重测通过（有重叠），tools/core/prompts 类型/diff exit 0。新建回放省略 overwrite、覆盖明确 true，不改 Task 7；临时 VYKOR_CONFIG_DIR 隔离配置读。完整 task-10-review.diff 已生成，任务 gate 和 10.4/10.5 尚未完成。
+
+Task 10: complete — 独立 gate 给出 Spec compliant、质量 Approved，无 Critical/Important；一个非阻断 Minor 是 workflow fixture 的临时配置目录不能隔离从 cwd 向祖先扫描的项目指令，审核时该祖先链没有候选规则。有效 RED/GREEN 和工具/模型实际消费详见 task-10-report.md，独立结论保存 task-10-review.md。审核者完整 MESSAGE 后的模型 capacity 错误不撤销已交付结论，也不是源码失败。
+
+Ruling: Task 10 测试保留现有真实 runtime prompt 入口与临时配置隔离，祖先项目指令扫描的可移植性限制记录为 Minor，不改生产运行语义 — 当前测试环境祖先链无规则，且任务需求不包括修改项目指令发现 — 代价是该 fixture 换到带祖先规则的环境可能读取它们，未来需要更严格隔离时应在测试层处理。
+
+Task 10: final_checks — 协调员新鲜运行本轮受影响 core 60/60、tools 273/273 范围回归；tools/core/prompts 类型，Desktop node/web 类型及工作区边界，371 文档、architecture 122 与 22/22 边界契约、精确 diff check 均 exit 0。默认沙箱读取已安装 TypeScript/Vitest 依赖失败后，同命令获准读取依赖并成功；前者不计行为 RED。Desktop 用全新忽略目录独立构建 main/preload/renderer，exit 0，未覆盖 out 或启动应用；构建同时包含用户并发 Desktop/services 改动，不能将其当作本轮源码审核。详细命令及提示见 final-verification.md。
+
+Task 10: final_review — 最强独立只读复审以 b7988381 对照本轮精确 13 生产 + 10 测试文件，Spec Compliant、质量 Approved，无 Critical/Important；Task 8 单个极大 Uint8Array 先整体解码会有 O(chunk) 瞬时字符串，为一个非阻断 Minor。常驻留存及最终文本仍有界，符合本次约定；若将来上游实际产生极大单块，可按固定字节段连续解码。双 verdict、行号和不能验证项见 final-review.md。未将用户并发四个已改文件或相关新增文件纳入本轮 review。
+
+Ruling: Task 8 的单块瞬时解码限制保留为已知 Minor，不加新的 chunk 切片逻辑 — §18 要求有界保存，现有 ProcessHandle 未定义单块硬上限，也没有实际超大单块故障证据 — 代价是上游若一次交付极大 Uint8Array，会有与该块大小成正比的瞬时内存占用；真实出现时再以固定字节片段修复并补有效 RED。
+
+本轮脚本化事实：正常 Write 回放为 4 次调用，其中 3 次小 prepare（1 次提前拒绝）、1 次正文提交；拒绝的准备未触发正文生成。新文件 Task 10 回放为 3 次模型请求、2 次 Write（prepare→commit）、1 次正文，无 Read；既有 workflow 为 7 次模型请求、6 次工具调用，失败旧式长调用的正文可在新准备后以 content_from 复用。这些仅是脚本客户端/真实临时文件的行为计数，不是实际模型成功率、供应商速度或 token 节省测量。任务范围源码/测试相对 b7988381 共 23 文件：tracked 19 文件增加 479 行、删除 61 行；4 个新增文件共 550 行，合计增加 1,029 行、删除 61 行（Git 行数口径；不含本文档与忽略证据）。最终不提交、push、部署、重启、调用真实模型或触碰用户数据库/生成文件；证据保存在新的 `.superpowers/sdd/2026-10-02-file-workflow-design/`。
+
+## 21. 准备引用可见性修正
+
+会话 `107cbb24-33f0-425c-abfa-e56b7141a272` 的新复用提示已生效，但截至 18:36 的五次 Write 准备成功、三次正文提交失败，模型明确表示准备结果没有可填的调用 ID，并多次填写不存在的引用。准备正文只有路径、意图、hash/不存在条件；旧回放脚本预先知道 ID，没有覆盖“仅从结果正文取得下一步参数”的实际使用边界。
+
+用户已批准再次修复。本次属于现有流程内的有限修正，不另建协议、缓存或任务系统：
+
+- 引擎内准备成功时，在唯一 JSON 文本中明确返回真实 toolCallId 的 prepared_from 和简短提交示例；示例只含 prepared_from 与 content，不含路径、覆盖或 hash。
+- 新可见引用必须匹配唯一历史源调用；显示字段不能改变目标、意图和原快照。安全的旧平面凭据和不带调用 ID 的直接 SDK 检查保持兼容，不编造 token。
+- 反馈区分禁止的提交字段、缺引用和无效/失效引用，不把“已成功准备”误说成没准备；原有正文复用、唯一性、消费/过期、同批、权限与文件变化检查保留。
+- 新回归使用不预先约定的 opaque ID，模型替身只读返回正文取 prepared_from/示例，再实际提交文件；不得读取 envelope ID、执行上下文或 schema enum 来替代返回字段。
+- 不改 Shell/Browser/GTK，不判断供应商速度，不调用收费真实模型，不提交/push/覆盖 out/重启，保留用户并发源码和正在运行任务。
+
+证据独立保存在忽略目录 `.superpowers/write-reference-visibility/`；七份实施前文件副本为本次增量起点，不把旧未提交功能或用户改动算成本次修正。此补充修复只需短设计、有效 RED/GREEN 与独立审核，不重做前轮全部 Spec/计划/测试。
+
+- [x] 修复范围已确认，实施前副本及 bounded brief 保存。
+- [x] 有效 RED → 最小实现 → 消费/信任边界验证。
+- [x] 独立审核、独立构建与交付记录。
+
+执行结果：限定七个源码/测试文件（三个生产文件 Write、准备解析、原两句 prompt；四个现有测试），没有改 core。新可见字段 prepared_from/submit_example 成对出现，前者等于唯一源调用 ID，后者是只含引用与正文占位符的 JSON 字符串；旧四字段凭据及缺调用 ID 的直接 SDK 检查保持兼容。反馈分别报告缺引用、无效/过期引用和禁止提交字段，明确 file_path 只在准备步骤使用。
+
+有效 RED 在真实 QueryEngine 下一轮模型参数中只读结果正文，原 prepared_from 为 undefined；创建/覆盖两路径失败后修正。工具六文件 109、core 四文件 56 项通过；指导同步后真实 runtime workflow 两项通过。主代理独立重跑创建/覆盖/正文复用三项，实际文件 raw Buffer 逐字节相等；复用案例正文仅生成一次（43,000 字节），从失败文本取得 content_from，再从新准备文本取得 prepared_from。tools/core/prompts 类型与 diff 检查通过。次数有重叠，不相加为新的全仓测试总量。
+
+独立限定差异审核 Spec Compliant、Quality Approved，无 Critical/Important/Minor；完整七文件增量为 `.superpowers/write-reference-visibility/review-complete.diff`。原 review.diff 的一份测试基点缺失条目不是有效 diff，已明确弃用；完整包对该文件使用前轮 Task 10 未修改的副本，实际差异只有 randomUUID import 与新增独立消费案例，其余四个案例不变。用户并发代码未纳入本次审核。
+
+独立提供方边界检查的两个本地探针通过：成功单 JSON 文本经过现有预算/formatter/OpenAI SDK 参数转换会进入 role=tool 的 content，而 tool_call_id 和 schema enum 仍在不同位置；没有 HTTP 或真实模型调用。详见 wire-review.md。默认预算下返回引用可消费；自设很低的输出预算、超长路径/ID 或历史压缩仍可能损坏/清除 JSON，使凭据安全失效。本次不为此增加预算绕过、缓存或泛化转换层，也不声称远端模型一定遵循。
+
+交付检查：371 文档检查通过；主代理用 electron-vite 构建到新的 `.superpowers/write-reference-visibility/desktop-build-final/`，exit 0，main/index.js、main/host-entry.mjs、preload/index.js、renderer/index.html 四产物存在。保留既有非致命提示：项目外 outDir 不自动清空、prompt-segments-assembly 混合动态/静态导入、pet.test.ts 无 Route。构建包含当前未提交前轮及并发工作树，不把用户其他改动算本次审核；未覆盖 out、提交、push、部署或重启。证据 report.md/wire-review.md/完整增量和实施前副本均保留。
+
+## 22. 对照 OpenCode 后的文件工具收敛 Spec
+
+用户已同意继续。此轮是现有跨模块流程的收敛，不新建文件系统、工具框架或恢复服务；先 Spec 子代理审核修订，再在本文件补计划，最后实施。
+
+### 22.1 事实、目标与选择
+
+会话 `5a2cb7ca-23e4-453a-8773-24dc274b1c48` 的准备引用已返回且复制正确，但提交成 `{arguments:{content,prepared_from},file_path}`，完整正文生成约 4 分 20 秒，约 0.9 秒校验后未开始写入。混合包装没有解开，正文复用又只识别根层 content；旧准备还可能因失败的同目标尝试过期。不是再次补一个可见 ID 就能解决。
+
+本地 OpenCode `1ddb0873ae` 的两版 Write 都接受一次平面路径与正文调用；旧版生成开始即显示同一工具卡。它也不提前执行、不自动修复所有参数错误、不保证首次生成更快。当前 Edit 已移植它的匹配策略，此轮不改 matcher。
+
+选择：正常调用保持简单，把权限、文件状态与落盘保护留在程序中；把长正文恢复作为失败兜底，而不是每次成功写入的必经阶段。
+
+未采用：继续强制两阶段并扩充引用规则（正常调用仍有额外往返和历史依赖）；自动合并任意混合包装并执行（目标和覆盖意图可能有歧义）；照搬 OpenCode 全部框架或放松覆盖检查（范围和安全约束不符）。
+
+### 22.2 正常 Write 与安全边界
+
+- Write 的模型参数保持平面、稳定：file_path、content、content_from、overwrite、expected_sha256。正常新建只需要 file_path + content；失败正文复用用 file_path + content_from。content 与 content_from 二选一，引用只复制正文。
+- 整文件替换是 Write 的合法用途；存在不同内容时仍须明确 overwrite=true。小修改优先 Edit，多文件/多处修改优先 ApplyPatch，不自动推断覆盖意图。
+- 删除强制 action=prepare、prepared_from、expected_absent 及历史准备消费/失效/动态 enum；删除仅服务这条路径的 inputPreparation 核心扩展和动态模型参数派生。不保留旧准备的兼容执行器或双轨协议。
+- Read.info_only 保留为可选的小检查，尤其目标状态不清楚或将生成长正文时；这不是 Write 权限，也不保证后续操作系统写入成功，不强制正常新建多一次 Read。
+- 保留路径归一与冲突别名拒绝、环境/沙箱/系统和受管理目录保护、执行前权限、普通文件/符号链接检查、可选原字节 hash、写前状态复核、排他新建及原子单文件替换。引用不继承权限、目标、覆盖和 hash；未知结果先检查实际文件。
+- 不自动重试、提前执行或写入半截参数。已保存的旧准备调用只是历史数据，后续过时提交应失败，不能继续产生副作用。
+
+### 22.3 参数格式与失败正文恢复分开
+
+- 参数处理仍只有 core 的统一入口。除已有 arguments 外，识别 args、parameters 的纯单字段包装；最多八层，只返回满足现有 schema 的完整候选。工具 schema 声明的同名业务字段、组合 schema、错误类型和别名冲突不猜测、不改值。
+- 带平级字段的包装不自动合并、不丢字段、不授权执行。对本次结构，正确行为是拒绝这次调用，并允许模型下一轮明确给出平面参数。
+- 长正文恢复沿用 inputReuse/content_from 与当前历史，不新增缓存、数据库、草稿、自动重放或第三种引用。对于已解析为对象但参数校验失败的调用，可以在根层或单一路径的已知包装中保留完整字符串正文；识别最多八层。
+- 恢复只读取工具声明的正文属性，不把嵌套路径/覆盖/hash 提升为执行参数。多个包装分支、不同正文候选、越界深度、循环输入、JSON 解析失败/截断、来源不唯一、未结算、同批来源、跨工具或历史丢失，均不提供可用引用。
+- 提示与实际引用使用同一份来源判断，避免提示一个无法复用的 ID。权限、预览、hook、执行和失败记忆仍使用同一份最终平面有效输入。失败保护、纠错上限和未开始/完成/未知结果区分不变。
+
+### 22.4 生成期间展示
+
+收到真实工具参数开始/增量后，Write 必须可以出现在工具组中，状态为正在生成参数，不能表述为正在改磁盘。生成项在增量期间保持稳定展示标识，正式工具调用出现后交接为真实调用项，不重复展示；不要求临时生成项成为同一数据库 part。完整参数确认后才进入校验、确认和执行。取消、失败请求和无完整调用不能留下悬挂的生成工具卡。
+
+此处“工具组”明确指现有 ToolActivityGroup 的工具活动区域，不是消息正文旁独立的 Loader 状态行。生成项按原叙事顺序与相邻工具合组；只有一项时保持现有直接展示，多个时使用现有折叠组。折叠标题也须带正在生成的工具名，不能只有字符数；展开后生成项保留“生成参数/尚未执行”及计数，不提供空参数/结果展开，不计入正式调用、编辑、命令或读取的次数。正式条目接管仍使用既有身份交接，不新增可执行 part、存储或事件。
+
+先核对已经实现的 provider → core → 投影/live 同步 → Desktop 消费路径及回归。如果此要求已有覆盖，只保留实现、运行针对性验证，不再重写 UI，不另建状态表或事件协议；有确定缺口才纳入最小修正。
+
+### 22.5 验收与排除
+
+1. 新文件在真实 QueryEngine + Write + 临时文件联测中，仅一次 Write 成功，不需要准备调用、引用 ID 或先读；返回的模型 schema 在历史变化前后保持同一参数形态。
+2. 完整覆盖必须明确 overwrite；错误 hash、权限拒绝、冲突路径和非普通文件仍不写。已有文件修改/批量匹配安全回归保留。
+3. 纯 args/parameters 包装能够按正式 schema 正常调用；混合包装不执行。混合包装中唯一完整正文失败后，下一轮只发明确路径、覆盖意图和 content_from，可以逐字节写出同一正文，正文只生成一次。
+4. 冲突正文、双包装分支、无完整 JSON、超深/循环、重复来源、跨工具、同批、未结算和历史丢失，不能绕过恢复或权限边界。
+5. 用受控暂停的参数流验证结束前工具生成事件已可见且没有落盘，并覆盖稳定生成项向正式工具的无重复交接、取消/失败清理；不以 loading 标签出现代替工具组出现。
+6. 先有效 RED 再最小实现，按范围测试/类型检查、文档检查及独立审核交付；不重复整个仓库测试套件。
+
+仍排除模型/供应商耗时对比、首次生成提速承诺、模型自动切换、新增匹配算法、Shell/AskUser/Browser 改造、真实收费调用、用户数据库/文件修改、部署、覆盖现有 out、重启、提交和 push。OpenCode 仓库仅作只读参考。
+
+证据使用新的忽略目录 `.superpowers/write-workflow-convergence/`；保留当前功能分支和此前未提交改动，按本轮起点副本审核实际增量。旧 §18–§21 是历史记录，不作为新实现验收要求。
+
+## 23. 文件工具收敛 Implementation Plan
+
+> **For agentic workers:** 使用 subagent-driven-development 按任务执行、审核；任务完成前必须有有效 RED/GREEN 或既有行为的新鲜验证。所有公开设计、计划与账本仍在本文件。
+
+**Goal:** 正常 Write 一次调用完成；错误包装不误执行，已有完整正文可安全复用；保留生成工具组和文件保护。
+
+**Architecture:** core 负责完整调用的归一、正文引用、校验及统一授权顺序；tools/file 负责路径、文件状态和落盘。删除仅服务强制准备的通用接口，不新增服务。展示沿用临时生成项向正式调用交接的现有路径。
+
+**Tech Stack:** TypeScript、现有 Vitest、Node 文件 API、现有 provider/投影/Desktop。
+
+**Spec:** 本文件 §22，已独立审核 Spec Approved；具体建议记录在忽略证据 spec-review.md，并纳入以下任务。
+
+### Global Constraints
+
+- Write 的模型参数保持平面、稳定：file_path、content、content_from、overwrite、expected_sha256。
+- 整文件替换是 Write 的合法用途；存在不同内容时仍须明确 overwrite=true。
+- 引用只复制正文；引用不继承权限、目标、覆盖和 hash；未知结果先检查实际文件。
+- 带平级字段的包装不自动合并、不丢字段、不授权执行。
+- 不自动重试、提前执行或写入半截参数；不新增缓存、数据库、草稿、自动重放或第三种引用。
+- 不改 matcher、Shell/AskUser/Browser，不调用真实模型或用户数据库，不覆盖 out、不重启、不提交/push。
+- 保留当前未提交的无关改动。只删本次明确取代的准备协议实现/测试，副本保留供恢复和审核。
+
+### Task 11: 恢复一次 Write，移除强制准备
+
+**Files:** core/engine/query-engine.ts、query-tool-preparation.ts、tool-registry.ts、types/tools.ts；tools/file/write.ts、read.ts 的原 prepare 指导一句；prompts/index.ts；core/engine/tool-input-reuse.ts 的原提示一句。更新 tools/file/__test__/file-workflow.integration.test.ts、write-content-reuse.integration.test.ts、native-file-policy.test.ts、write.test.ts；core/engine/tool-input-reuse.integration.test.ts 必要提示消费断言。删除 tools/file/write-preparation.ts、其两个专用测试、core/engine/query-tool-preparation.protocol.test.ts。
+
+**Consumes:** 现有 fileWriteTool、QueryEngine、resolveToolInputReuse、执行前授权及 fileOperationsFor。
+
+**Produces:** 静态平面 Write schema；core 不再有 inputPreparation/modelToolDefinition 的准备派生；旧字段和未知字段不能执行。下一任务沿用普通 object schema 和 inputReuse，不能添加顶层 oneOf/anyOf 导致归一失效。
+
+- [x] 11.1 先补真实 QueryEngine + fileWriteTool 的有效 RED：模型第一轮只提交完整路径与正文，新建成功、仅一个 Write、两轮模型请求；历史增加后模型仍看到相同的平面 schema。测试在模型请求消费默认 prompt，并实际检查最终文件而非 grep 文案。
+
+```ts
+yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "single-write", name: "Write", input: { file_path: target, content: body } } };
+expect(writeResults).toHaveLength(1);
+expect(writeResults[0].result.isError).not.toBe(true);
+expect(Buffer.from(await readFile(target))).toEqual(Buffer.from(body, "utf8"));
+expect(modelRequests).toHaveLength(2);
+expect(modelRequests[1].tools.find(t => t.name === "Write")!.inputSchema).toEqual(modelRequests[0].tools.find(t => t.name === "Write")!.inputSchema);
+```
+
+- [x] 11.2 运行 tools 的 workflow 文件确认上述行为 RED；依赖读取失败/命令配置错误不算 RED。最小删除准备入口、动态派生及其专用实现，不触碰其他已完成修复。Write schema 使用普通 object、required file_path、additionalProperties=false，正文二选一沿用 resolveToolInputReuse；直接 execute 保留必要输入拒绝，不把旧字段当兼容调用执行。
+- [x] 11.3 更新原两句 Write 系统指导与通用复用提示：正常明确路径与正文/引用，覆盖显式 true；Read.info_only 可选；复用重新授权/核对状态。既有失败正文、权限卡/preview/hook/失败指纹和安全回归改用一次平面调用，保留所有安全断言。旧历史不改写。
+- [x] 11.4 运行 Write/策略/workflow/reuse 范围、core 受影响 registry/reuse/能力快照范围及 core/tools/prompts 类型检查；提供起点增量、有效 RED/GREEN 和独立 Spec+质量审核。不开始 Task 12 直到重要问题修完。
+
+### Task 12: 有限包装归一与正文失败恢复
+
+**Files:** core/engine/tool-input-schema.ts、tool-input-reuse.ts 及其现有单测/集成；tools/file/__test__/write-content-reuse.integration.test.ts，必要联测放现有 workflow 文件。
+
+**Consumes:** Task 11 的普通 object Write schema；现有 normalizeToolInput/validateToolInput；inputReuse 及已结算历史。
+
+**Produces:** 纯 arguments/args/parameters 最多八层按 schema 解包；同一历史来源判断供提示和实际复用使用，可提取唯一完整正文，始终只复制正文，不修改失败原始输入。
+
+- [x] 12.1 先补 RED：Read/Glob 的纯 args/parameters 及 Write content/content_from 均可校验；schema 声明同名字段、混合平级参数、冲突别名、错误类型、组合 schema、九层和循环不猜测。继续运行原 schema 单测，不能改旧“混合包装不丢字段”断言来换取绿灯。
+- [x] 12.2 在已有归一入口仅扩大已知纯包装键，保持完整候选验证。正文来源读取单一路径最多八层，扫描整链后再判断完整字符串唯一性；空正文有效，发现不同候选/多包装分支/循环/超深/业务字段不可提供复用。根层与链中同值候选不应因格式位置不同而被当作不同正文。相关读取逻辑放原 reuse 文件，不新拆框架。
+- [x] 12.3 先补实际失败回放 RED，再实现最小恢复；首次精确复现混合输入，拒绝且文件字节未变。模型第二轮只从错误反馈读真实引用 ID，再明确给平面目标与覆盖选项，不重发正文。参考输入和独立字节断言：
+
+```ts
+const first = { arguments: { content: body, prepared_from: "obsolete-reference" }, file_path: target };
+const retry = { file_path: target, overwrite: true, content_from: retainedCallId };
+expect(firstResult).toMatchObject({ isError: true, executionState: "not_started" });
+expect(await readFile(target, "utf8")).toBe("old");
+expect(finalBytes).toEqual(Buffer.from(body, "utf8"));
+expect(bodySubmissions).toBe(1);
+```
+
+- [x] 12.4 同一用例覆盖权限拒绝/重新确认、optional hash 冲突，以及提示 ID 确实可消费；补拒绝重复 ID、跨工具、同批/未结算、历史缺失和解析错误的复用回归。纯合法 content_from 包装只展开正文，不继承源路径/hash/覆盖；不绕过重复失败或未知结果检查。按范围跑 core/tools 及类型，独立审核。
+
+### Task 13: 展示时序验证与完整交付
+
+**Files:** 已有 provider tool-generation-progress、core tool-workflow/model-retry、services agent-event-projector、Desktop tool-generation-presentation/agent-activity-message 测试；现有 Desktop session-subscription-service.coalescing.test.ts 补受控暂停案例。独立审核已确认组内缺口，最小生产修正限于 assistant-message.tsx 的生成项分组/呈现和必要原有 label/helper；对应 assistant-message.tool-details.test.tsx 与暂停案例补组内断言。不改 API、投影、生成项身份或数据库。
+
+**Consumes:** 真实工具生成事件、当前 run.metadata.toolGeneration、现有 Desktop 生成项/正式项交接。
+
+**Produces:** 参数流未结束时 Write 在工具组可见且未执行的证据；既有取消/失败/交接仍通过。没有第二套状态表或数据库 part。
+
+- [x] 13.1 读本轮 progress-audit.md，确定已有覆盖与唯一缺口。使用显式释放的暂停门，不用固定睡眠或等待完整流才检查。暂停时检查 generation progress（名称 Write）已到达展示输入、工具组有生成 Write、目标文件尚不存在；释放后正式项接管且只有一个结果。
+
+```ts
+const generation = await nextGenerationEvent; // 由真实受控流触发，不伪造最终成功结果。
+expect(generation.tools[0].toolName).toBe("Write");
+expect(generatedGroup.toolName).toBe("Write");
+expect(generatedGroup.toolUseId).toBeUndefined();
+expect(executions).toBe(0);
+releaseArguments();
+```
+
+- [x] 13.2 复用取消、模型失败重试、晚到 ID、多同名工具、终态和正式工具交接回归。若当前行为已满足，补证据/测试，不为了“有改动”重写生产 UI；不能以 loading 可见代替工具组。
+
+  已确认的 Task 13 修正：先补有效 UI RED，证明相邻已完成工具与生成 Write 位于同一工具活动区域、折叠标题仍看得到 Write；展开后生成行没有空详情、不计作已调用/编辑。复用 ToolActivityGroup，只移入既有生成行并删独立 tool-generation 内容分支；不新建组件/动画/状态管理。保留普通单工具直接展示、原展开状态、叙事/终端边界和正式结果。暂停测试必须断言真实组结构及内部 Write，而不是孤立文案；初始化 store/会话放入受保护 try/finally，关闭已创建的资源，临时目录只用本次 mkdtemp 的准确返回值。
+- [x] 13.3 主代理新鲜运行三个任务受影响测试和类型、文档/架构/diff 检查；必要 Desktop 独立构建到新的忽略目录，不覆盖已有 out。汇总删除/新增、正常与恢复调用次数、真实模型未验证等限制，再对本轮实际增量做最强独立整体审核。
+- [x] 13.4 在 §24 写审核、修正和交付证据；保留本轮基点和报告，不动其他任务证据，不提交/push/部署/重启。
+
+## 24. 文件工具收敛执行账本
+
+- [x] §22 Spec 子代理审核 Spec Approved；建议已明确写入 §23，未实现前不把设计批准当成功。
+- [x] §23 同文件计划与职责/接口自检。
+- [x] Task 11 实施及独立审核。
+- [x] Task 12 实施及独立审核。
+- [x] Task 13 时序验证、最终检查及整体审核。
+
+| 任务/关系 | 交界检查 | 结论 |
+|---|---|---|
+| Task 11 | schema 普通 object，执行只收有效平面输入，安全断言不删 | 与 §22 一致；不以直接 execute 新建成功替代引擎测试 |
+| Task 12 | 包装修正与失败正文读取各自验证；无自动混合合并 | 与 §22 一致；扫描整链后给引用，提示/使用共用判断 |
+| Task 13 | 实时展示和正式调用的现有交接；暂停门先断言再释放 | 与 §22 一致；不要求同一数据库 part |
+| 11 → 12 | schema/reuse/helper 共享两处文件与联测 | 串行实施；12 不恢复动态准备，不引入根级 oneOf |
+| 11/12 → 13 | 模型/工具完成边界与现有生成卡 | 只补缺失时序证据，生产 UI 默认保持 |
+
+工作区：codex/tool-workflow-audit-convergence，HEAD b7988381；本轮开始已有前轮未提交修改。沿用已约定 checkout，不另建 worktree、不自动提交；审核使用 `.superpowers/write-workflow-convergence/base/` 十九份本轮起点，不能用 HEAD diff 把前轮修改误算成本轮。技能 Bash 脚本会重定向写文件并默认使用旧统一文档目录，本轮用 apply_patch 实现相同的 brief/diff 包装规则，并使用独立证据目录。
+
+基线 core 参数/schema 与 reuse 两文件的首次命令仅因沙箱不能读取已安装 Vitest 依赖退出，不是行为 RED；原命令通过审批后重试。后续记录真实结果。
+
+基线复验：core/tool-input-schema.test.ts 45 与 query-tool-preparation.reuse.test.ts 21，共 66/66 通过，exit 0。Task 11 已交独立实施者，尚未审核；Task 12 未开始。生成展示只读审计确认现有生产路径满足设计、位于 HEAD，缺的是受控暂停的跨入口时序证据，不是已发现的展示实现故障。
+
+Task 11 范围补充：协调员只读确认 read.ts:121 的工具说明仍要求 Write action=prepare，明确纳入删去这一句的同步；不改 Read.info_only 数据与策略行为。实施者先补当前副本，仍按最小提示消费/文件安全回归验证。
+
+并发工作区事实：实施期间 HEAD 被外部更新为 aa36b9e9（Desktop 任务耗时与单次工具展示提交），包含部分当前 core 改动；协调员和实施者没有 Git 写操作。保留该提交和其他并发文件，本轮仍按起点副本生成增量，不用变化后的 HEAD 隐藏已经发生的修改。
+
+Task 11: review Needs fixes — Critical 0 / Important 1 / Minor 0。删除准备专用测试时同时删去 Write 入口的新建竞争者保护回归；生产排他创建逻辑仍在，协调员已核对旧副本，要求迁入 write.test.ts 的普通平面调用。先保存修正前测试副本，原实施者做限定测试修正；Task 12 仍未开始。
+
+Task 11: complete — 有效一次 Write 引擎回放 RED→GREEN；tools 48、core 72 与 index 29、prompts 48、Read+workflow 51（范围有重叠）及三包类型通过。I1 仅迁移旧竞争安全测试，新增用例 1/1、Write 全文件 29/29，实际原始终端输出在报告末尾；既有行为首次即绿，不伪称新 RED。限定复审 I1 ADDRESSED，无新问题，最终 Spec Compliant / Quality Approved。核心和工具调用现在是稳定平面参数、正常新建一个 Write，两次模型请求，无准备/先读。四个准备专用实现/测试移除，起点副本可恢复；并发 HEAD 保留。
+
+Task 12: in_progress — 七个新的任务起点副本已存 task-12-base，沿用普通 schema 和当前历史，只做有限纯包装解包与唯一完整正文恢复；不自动执行混合包装。
+
+Task 12: complete — 仅两个生产文件及三个现有测试。有效 RED 为 core 11 项、真实 mixed Write 缺引用提示 1 项；声明业务字段根正文另补 1 项 RED。GREEN 为 core 89/89、tools reuse/workflow 7/7，core/tools 类型通过。真实临时文件：mixed 首次 not_started 且未写；下一轮从失败正文取得 opaque 引用，平面参数重新确认后逐字节落盘，正文只提交一次。不同正文/多分支/业务字段/组合 schema 的内部/循环/九层拒绝；根层空串及同值候选保持兼容。独立 Spec Compliant / Quality Approved，无三档问题；没有参数混合自动执行、缓存或新引用形式。
+
+Task 11 格式收尾：竞争测试迁移后的 write.test.ts 多余 EOF 空行已由原实施者仅用 apply_patch 移除，单文件 diff check 从 1 转 0；没有改断言/生产代码，不重复 29/29 绿测。最终审核包含当前版本。
+
+Task 13: in_progress — 采用审计确认的既有生产路径；优先在 Desktop 主进程的现有订阅测试增加一个受控 OpenAI 原始流暂停的全链成功案例，临时隔离数据库和文件，不碰用户数据。不重建 UI、事件或状态表。
+
+Task 13: review Needs fixes — 真实 provider→IPC→Transcript 的暂停时序和一次落盘成立，但独立审核指出生成项仍由 assistant-message 的独立 tool-generation 分支渲染，未进入用户要求的 ToolActivityGroup。协调员核对源码及早先明确“loading 可见而 tool group 无 Write”的反馈后确认该缺口；不能把区域中的一条状态行解释为已经满足组内展示。§22.4 与本 Task 13 最小修正范围已澄清，保持现有风格、真实未执行事实和不重复交接。另一个测试资源初始化清理建议一并处理。此前60项绿测和构建只证明原状态行可见，不作为这一组内要求的最终完成证据；最终应对修正后的版本重新验证/构建到新目录。
+
+Task 13: fix round 1 addressed — 澄清 Spec 子审 Approved；有效 UI RED 为单生成项无组容器、Read组无Write，两项失败。仅 assistant-message.tsx 将既有生成行移入既有 ToolActivityGroup，删除独立内容分支；折叠标题含Write，展开没有空详情，统计只算正式项。两个既有测试文件补真实组内/全生成项断言和临时资源初始化清理，不加组件、状态、事件或依赖。相关七文件98/98、Desktop Node/Web类型、边界及检测器[]通过；限定复审 P1/P2 ADDRESSED、Spec Compliant / Quality Approved，无新阻断。13.3/13.4 尚待协调员最终验证与最强整体审核。
+
+整体增量起点：包含补存 Read 与两份首次 UI 修改前副本，共23个源码/测试变化文件（包括此前未跟踪准备专用文件的删除），增加516/删除956，净减440行；不含本文档、忽略证据、前轮Shell/AskUser/Edit反馈和用户并发任务耗时代码。空白 EOF 副本噪声已明确从审核包排除。当前完整包为 final-review-complete.diff，不用当前HEAD差异代替。
+
+Task 13: complete — 协调员独立新鲜验证：core171、tools140、prompts48、API23、runtime7、server投影13、修正后的Desktop98，共500项Vitest范围（不叠加实施者/早期60项重叠测试），全部exit0；另31项架构检查器契约通过。core/tools/prompts与Desktop Node/Web类型、371文档、architecture122、Desktop工作区边界、完整diff检查通过。最终构建使用已安装桌面构建器，输出到全新 desktop-build-reviewed/，main/preload/renderer三阶段exit0，main/index.js、main/host-entry.mjs、preload/index.js、renderer/index.html四入口存在。未覆盖out、启动应用或动当前任务。
+
+最终最强独立整体审核：23文件完整增量及跨任务消费边界，Spec Compliant / Quality Approved、Critical0、Important0、Minor1，可交付。非阻断Minor是测试等待事件永不到达时，Vitest外层超时不保证等待中的测试体进入finally，临时DB/Run可能保留至worker结束；属于测试清理韧性，当前正常/初始化异常清理和取消/重试回归通过，不增加生产恢复平台。报告与完整证据位于本轮忽略目录 final-review.md、final-verification.md。
+
+实际收敛：生产代码11文件（含准备实现删除）增加86/删除294，净减208行；测试12文件增加430/删除662，净减232行。正常新建一个Write/一次正文/两轮模型请求；混合包装恢复为首次拒绝、下一次明确参数引用正文，两个Write/一次正文，不再先准备。保留所有执行前权限及文件保护；UI生成项现在属于真实工具组，而非独立loading行，不计已执行/已编辑。
+
+交付边界：仅本地脚本化客户端和真实临时文件/数据库回放，未调用真实收费模型、比较供应商速度、做实际Electron窗口截图或使用用户数据库，不声称真实模型错误率或首次生成速度已经改善。原生供应商尚未给工具名/参数片段时不能提前显示Write，历史压缩仍可能使正文引用丢失。非致命构建提示保持原样（新outDir不自动清空、prompt混合动态静态导入、pet.test无Route），不为它们扩展此轮范围。保留并发aa36b9e9及当前功能分支；协调员/实施者未提交、push、合并、删除分支或重启。当前运行服务不因源代码更新自动刷新，需用户加载新版本后以新任务验证实际效果。

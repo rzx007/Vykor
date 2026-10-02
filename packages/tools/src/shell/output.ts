@@ -1,5 +1,39 @@
 export const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 
+const OMITTED_MIDDLE = "\n...[truncated: middle output omitted. If saved as a report, use Read; unsaved output cannot be recovered. Next time, explicitly redirect output to a file.]...\n";
+
+export function createBoundedOutputCollector() {
+  const headLimit = Math.ceil((DEFAULT_MAX_OUTPUT_CHARS - OMITTED_MIDDLE.length) / 2);
+  const tailLimit = DEFAULT_MAX_OUTPUT_CHARS - OMITTED_MIDDLE.length - headLimit;
+  let complete = "";
+  let head = "";
+  let tail = "";
+  let truncated = false;
+
+  return {
+    append(text: string) {
+      if (!text) return;
+      if (!truncated) {
+        if (complete.length + text.length <= DEFAULT_MAX_OUTPUT_CHARS) {
+          complete += text;
+          return;
+        }
+        truncated = true;
+        head = (complete + text.slice(0, headLimit)).slice(0, headLimit);
+        tail = text.length >= tailLimit
+          ? text.slice(-tailLimit)
+          : (complete.slice(-(tailLimit - text.length)) + text).slice(-tailLimit);
+        complete = "";
+        return;
+      }
+      tail = (tail + text.slice(-tailLimit)).slice(-tailLimit);
+    },
+    value() {
+      return truncated ? head + OMITTED_MIDDLE + tail : complete;
+    },
+  };
+}
+
 function normalize(raw: string): string {
   return raw.replace(/\r\n/g, "\n").trim();
 }

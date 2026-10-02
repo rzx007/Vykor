@@ -91,6 +91,21 @@ describe("Native environment file policy", () => {
     });
   });
 
+  it("checks the current Native read policy before reading an existing target", async () => {
+    await inNativeEnvironment(async (context, files) => {
+      const read = vi.spyOn(files, "readBytes");
+      const settings: Settings = { ...context.settings!, sandbox: { enabled: true,
+        filesystem: { allowRead: ["."], allowWrite: ["."], denyRead: ["visible.txt"] } } };
+      const expected_sha256 = createHash("sha256").update("old\n").digest("hex");
+      const committed = await fileWriteTool.execute({ file_path: "visible.txt", overwrite: true,
+        expected_sha256, content: "changed" }, { ...context, settings });
+      expect(committed).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+      expect(read).not.toHaveBeenCalled();
+      expect(JSON.stringify(committed)).not.toContain(expected_sha256);
+      expect(await readFile(join(context.cwd, "visible.txt"), "utf8")).toBe("old\n");
+    });
+  });
+
   const writeDenied: Array<[string, ToolDefinition, Record<string, unknown>]> = [
     ["Write", fileWriteTool, { file_path: "blocked/new.txt", content: "new" }],
     ["Edit", fileEditTool, { file_path: "blocked/existing.txt", old_string: "old", new_string: "changed" }],

@@ -118,7 +118,7 @@ export function suggestSimilarNames(target: string, entries: string[]): string[]
 export const fileReadTool: ToolDefinition = {
   name: "Read",
   description:
-    "Read a local text file, supported image, or directory. Use info_only=true before generating long file content: inspect target existence, type, raw-byte SHA-256 and overwrite conditions without returning its body or changing files; this does not authorize a write. Otherwise text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large files or directories. Lines longer than 2000 characters and text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
+    "Read a local text file, supported image, or directory. Use info_only=true to inspect target existence, type and raw-byte SHA-256 without returning its body or changing files; this does not authorize a write. Otherwise text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large files or directories. Lines longer than 2000 characters and text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
   inputSchema: {
     type: "object",
     properties: {

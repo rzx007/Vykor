@@ -102,26 +102,6 @@ export function AssistantMessage({
             </ContentEntrance>
           )
         }
-        if (block.type === "tool-generation") {
-          return (
-            <ContentEntrance
-              key={block.id}
-              animate={streaming && Boolean(initialPartIds && !initialPartIds.has(block.tool.id))}
-            >
-              <div className="text-ui-small flex h-7 min-w-0 items-center gap-2 text-ui-muted">
-                <LoaderCircle
-                  role="img"
-                  aria-label="正在生成参数，尚未执行"
-                  className="size-3.5 shrink-0 motion-safe:animate-spin"
-                  strokeWidth={1.7}
-                />
-                <span className="min-w-0 truncate">
-                  {block.tool.call.toolName} · {toolActivityLabel(block.tool.call)}
-                </span>
-              </div>
-            </ContentEntrance>
-          )
-        }
         if (block.type === "terminal") {
           return (
             <ContentEntrance
@@ -276,7 +256,6 @@ type ContentBlock =
   | { id: string; type: "unit"; unit: Exclude<AssistantContentUnit, ToolUnit> }
   | { id: string; type: "tool-group"; tools: ToolUnit[] }
   | { id: string; type: "terminal"; payload: TerminalToolPayload; tool: ToolUnit }
-  | { id: string; type: "tool-generation"; tool: ToolUnit }
 
 function isToolInFlight(tool: ToolUnit): boolean {
   return isToolActivityActive(tool.call, tool.result)
@@ -295,10 +274,6 @@ function groupToolUnits(units: AssistantContentUnit[]): ContentBlock[] {
   for (const unit of units) {
     if (unit.type !== "tool") {
       blocks.push({ id: unit.id, type: "unit", unit })
-      continue
-    }
-    if (isToolGenerationPresentation(unit.call)) {
-      blocks.push({ id: unit.id, type: "tool-generation", tool: unit })
       continue
     }
     const terminal = parseTerminalToolPayload(unit.call.output ?? unit.result?.output)
@@ -388,13 +363,14 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   const activityLabel = toolGroupActivityLabel(tools)
   const counts = { edits: 0, commands: 0, reads: 0 }
   for (const tool of tools) {
+    if (isToolGenerationPresentation(tool.call)) continue
     const name = tool.call.toolName ?? ""
     if (/bash|shell|terminal|exec|command/i.test(name)) counts.commands++
     else if (/write|edit|patch|create|delete/i.test(name)) counts.edits++
     else counts.reads++
   }
   const failures = tools.filter(
-    (tool) => toolCallStatus(tool.call, tool.result) === "failed"
+    (tool) => !isToolGenerationPresentation(tool.call) && toolCallStatus(tool.call, tool.result) === "failed"
   ).length
   const activityHeading = [
     counts.edits ? `文件编辑 ${counts.edits} 次` : "",
@@ -403,8 +379,13 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   ]
     .filter(Boolean)
     .join("，")
+  const generatingNames = [...new Set(tools
+    .filter(tool => isToolGenerationPresentation(tool.call))
+    .map(tool => tool.call.toolName ?? "工具"))]
+  const heading = [activityHeading, generatingNames.length ? `${generatingNames.join("、")} 生成参数` : ""]
+    .filter(Boolean).join(" · ")
   return (
-    <section className="text-ui-small text-ui-muted">
+    <section aria-label="工具活动组" className="text-ui-small text-ui-muted">
       {grouped ? (
         <button
           type="button"
@@ -417,9 +398,9 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
         >
           <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
           <span className="truncate">
-            {activityHeading || `工具调用 ${tools.length} 次`}
+            {heading || `工具调用 ${tools.length} 次`}
             {failures ? `（${failures} 次失败）` : ""}
-            {activityLabel ? ` · ${activityLabel}` : ""}
+            {activityLabel && !(generatingNames.length && activityLabel.startsWith("生成参数")) ? ` · ${activityLabel}` : ""}
           </span>
           <ChevronDown
             className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
@@ -429,6 +410,19 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
       {!grouped || open ? (
         <div className={cn("space-y-0.5", grouped && "mt-1 border-l border-border/70 pl-4")}>
           {tools.map((tool) => {
+            if (isToolGenerationPresentation(tool.call)) return (
+              <div key={tool.id} className="flex h-7 min-w-0 items-center gap-2 text-ui-muted">
+                <LoaderCircle
+                  role="img"
+                  aria-label="正在生成参数，尚未执行"
+                  className="size-3.5 shrink-0 motion-safe:animate-spin"
+                  strokeWidth={1.7}
+                />
+                <span className="min-w-0 truncate">
+                  {tool.call.toolName} · {toolActivityLabel(tool.call)}
+                </span>
+              </div>
+            )
             const summary = summarizeToolCall(tool.call)
             const active = activeId === tool.id
             const calling = isToolInFlight(tool)

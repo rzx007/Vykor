@@ -45,6 +45,24 @@ describe("fileWriteTool feedback", () => {
 });
 
 describe("fileWriteTool safety", () => {
+  it("keeps a concurrent new file if it appears after the last absent check", async () => {
+    await withTempDir(async dir => {
+      const target = join(dir, "target.txt");
+      class RacingFiles extends HostFileOperations {
+        async createTextExclusive(path: string, content: string) {
+          await writeFile(path, "competitor");
+          await super.createTextExclusive(path, content);
+        }
+      }
+      const result = await fileWriteTool.execute({ file_path: target, content: "new" }, {
+        cwd: dir,
+        environment: { files: new RacingFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) } },
+      } as never);
+      expect(result.isError).toBe(true);
+      expect(await readFile(target, "utf8")).toBe("competitor");
+    });
+  });
+
   it("does not overwrite bytes changed after the initial read", async () => {
     await withTempDir(async dir => {
       const file = join(dir, "a.txt");
@@ -70,6 +88,10 @@ describe("fileWriteTool safety", () => {
     { label: "missing content", input: { file_path: "value.txt" } },
     { label: "unresolved reference", input: { file_path: "value.txt", content_from: "source" } },
     { label: "content plus reference", input: { file_path: "value.txt", content: "body", content_from: "source" } },
+    { label: "legacy prepare", input: { action: "prepare", file_path: "value.txt", content: "body" } },
+    { label: "legacy prepared reference", input: { file_path: "value.txt", content: "body", prepared_from: "source" } },
+    { label: "legacy expected absence", input: { file_path: "value.txt", content: "body", expected_absent: true } },
+    { label: "unknown field", input: { file_path: "value.txt", content: "body", surprise: true } },
   ])("rejects $label before resolving a path", async ({ input }) => {
     const context = { cwd: "/work", environment: { paths: {
       resolve: async () => { throw new Error("must not access filesystem"); },

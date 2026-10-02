@@ -57,6 +57,47 @@ describe("normalizeToolInput", () => {
     expect(leaf).toEqual({ path: "src/a.ts", contents: "hello" });
   });
 
+  it.each([
+    ["Read", readSchema, { args: { file_path: "a.ts" } }, { file_path: "a.ts" }],
+    ["Glob", { type: "object", properties: { pattern: { type: "string" } }, required: ["pattern"], additionalProperties: false }, { parameters: { pattern: "**/*.ts" } }, { pattern: "**/*.ts" }],
+    ["Write body", { ...writeSchema, additionalProperties: false }, { args: { file_path: "a.ts", content: "" } }, { file_path: "a.ts", content: "" }],
+    ["Write reference", { type: "object", properties: { file_path: { type: "string" }, content_from: { type: "string" } }, required: ["file_path", "content_from"], additionalProperties: false }, { parameters: { file_path: "a.ts", content_from: "source" } }, { file_path: "a.ts", content_from: "source" }],
+  ] as const)("unwraps a pure %s wrapper into a complete valid candidate", (_label, schema, input, expected) => {
+    const normalized = normalizeToolInput(schema, input);
+    expect(normalized).toEqual(expected);
+    expect(validateToolInput(schema, normalized)).toBeNull();
+  });
+
+  it("accepts at most eight mixed known wrapper layers", () => {
+    let input: Record<string, unknown> = { file_path: "a.ts", content: "body" };
+    for (let i = 0; i < 8; i++) input = { [i % 2 ? "args" : "parameters"]: input };
+    const schema = { ...writeSchema, additionalProperties: false };
+    expect(normalizeToolInput(schema, input)).toEqual({ file_path: "a.ts", content: "body" });
+    const ninth = { arguments: input };
+    expect(normalizeToolInput(schema, ninth)).toBe(ninth);
+  });
+
+  it.each(["args", "parameters"])("preserves declared %s business fields", key => {
+    const schema = { type: "object", properties: { [key]: { type: "object" } }, required: [key], additionalProperties: false };
+    const input = { [key]: { file_path: "a.ts" } };
+    expect(normalizeToolInput(schema, input)).toBe(input);
+  });
+
+  it.each(["args", "parameters"])("rejects mixed or wrongly typed %s wrappers", key => {
+    const schema = { ...writeSchema, additionalProperties: false };
+    for (const input of [{ [key]: { file_path: "a.ts", content: "body" }, file_path: "b.ts" }, { [key]: "{\"file_path\":\"a.ts\"}" }]) {
+      expect(normalizeToolInput(schema, input)).toBe(input);
+      expect(validateToolInput(schema, input)).not.toBeNull();
+    }
+  });
+
+  it("does not unwrap conflicting aliases or composed schema", () => {
+    const input = { parameters: { file_path: "a.ts", path: "b.ts", content: "body" } };
+    expect(normalizeToolInput(writeSchema, input)).toBe(input);
+    expect(normalizeToolInput({ ...writeSchema, anyOf: [writeSchema] }, { args: { file_path: "a.ts", content: "body" } }))
+      .toEqual({ args: { file_path: "a.ts", content: "body" } });
+  });
+
   it("rejects nine layers without returning a partially unwrapped call", () => {
     const input = wrapArguments({ command: "Write-Output probe" }, 9);
     expect(normalizeToolInput(shellSchema, input)).toBe(input);

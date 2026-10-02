@@ -150,6 +150,58 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
     });
   });
 
+  it("shows the original spaced JSON id when an unspaced edit cannot match", async () => {
+    const body = `{"rows":[${JSON.stringify({ padding: "x".repeat(500) })},{ "id": "th-model", "width": 100 }]}`;
+    await fixture(body, async (file, dir) => {
+      const input = { file_path: file, old_string: '{"id":"th-model","width":104}', new_string: "replacement" };
+      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const text = result.content.filter(b => b.type === "text").map(b => b.text).join("\n");
+      expect(result.metadata?.editFailure).toMatchObject({ kind: "not_found", source: "original_file" });
+      expect(text).toContain('"id": "th-model"');
+      expect(text).toContain('"width": 100');
+      expect(await computeFileChange("Edit", input)).toBeNull();
+      expect(await readFile(file, "utf8")).toBe(body);
+    });
+  });
+
+  it("shows the second JSON id after a staged batch edit fails without writing", async () => {
+    const body = `{"rows":[{ "id": "th-model", "width": 100, "padding": "${"x".repeat(500)}" },{ "id": "th-product", "width": 100 }]}`;
+    await fixture(body, async (file, dir) => {
+      const input = { file_path: file, edits: [
+        { old_string: '"width": 100, "padding"', new_string: '"width": 101, "padding"' },
+        { old_string: '{"id":"th-product","width":104}', new_string: "replacement" },
+      ] };
+      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      const text = result.content.filter(b => b.type === "text").map(b => b.text).join("\n");
+      expect(result.metadata?.editFailure).toMatchObject({ editIndex: 2, source: "original_file" });
+      expect(text).toContain('"id": "th-product"');
+      expect(text).toContain('"width": 100');
+      expect(text).not.toContain('"width": 101');
+      expect(await computeFileChange("Edit", input)).toBeNull();
+      expect(await readFile(file, "utf8")).toBe(body);
+    });
+  });
+
+  it.each(['中文列', 'th-\\"quoted'])("locates a raw JSON string id without changing escaped content: %s", async id => {
+    const body = `{ "id": ${JSON.stringify(id)}, "width": 100 }`;
+    await fixture(body, async (file, dir) => {
+      const result = await fileEditTool.execute({ file_path: file,
+        old_string: `{"id":${JSON.stringify(id)},"width":104}`, new_string: "replacement" }, { cwd: dir, settings });
+      const text = result.content.filter(b => b.type === "text").map(b => b.text).join("\n");
+      expect(text).toContain(`"id": ${JSON.stringify(id)}`);
+      expect(await readFile(file, "utf8")).toBe(body);
+    });
+  });
+
+  it("suggests Read or Grep without a made-up offset when no anchor exists", async () => {
+    await fixture("actual content\n", async (file, dir) => {
+      const result = await fileEditTool.execute({ file_path: file, old_string: "missing content", new_string: "replacement" }, { cwd: dir, settings });
+      expect(result.metadata?.editFailure).toMatchObject({ windows: [] });
+      expect(result.recoveryHint).toMatch(/Read.*Grep|Grep.*Read/);
+      expect(result.recoveryHint).not.toMatch(/offset=/);
+    });
+  });
+
   it("keeps declaration-location hints within the existing diagnostic bounds", async () => {
     const body = Array.from({ length: 100 }, (_, i) => `--line-strong: value-${i};\n${"x".repeat(1000)}`).join("\n");
     await fixture(body, async (file, dir) => {

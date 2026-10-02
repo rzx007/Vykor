@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -9,16 +10,14 @@ import {
 import { fileWriteTool } from "../write.js";
 import { computeFileChange } from "../preview.js";
 
-async function scenario(options: { deny?: boolean; ask?: boolean; hash?: string; body?: string } = {}) {
+async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boolean; body?: string } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "oh-write-reuse-"));
   try {
     const file = join(dir, "index.html");
     const body = options.body ?? "<!DOCTYPE html>\n<p>完整内容</p>\n".repeat(1000);
     await writeFile(file, "old", "utf8");
-    const retry = {
-      file_path: file, content_from: "original-write", overwrite: true,
-      ...(options.hash ? { expected_sha256: options.hash } : {}),
-    };
+    const retry = { file_path: file, overwrite: true, content_from: "original-write",
+      ...(options.conflict ? { expected_sha256: createHash("sha256").update("snapshot before concurrent change").digest("hex") } : {}) };
     let request = 0;
     const modelHistory: Message[][] = [];
     const client = {
@@ -39,7 +38,7 @@ async function scenario(options: { deny?: boolean; ask?: boolean; hash?: string;
     const permissions: IPermissionChecker = { checkTool: async (_, input) => {
       checked.push({ ...input });
       previews.push(await computeFileChange("Write", input));
-      return { action: input.overwrite && options.deny ? "deny" : options.ask ? "ask" : "allow" };
+      return { action: options.deny && input.overwrite === true ? "deny" : options.ask ? "ask" : "allow" };
     } };
     const hooks: IHookExecutor = { register() {}, execute: async (event, context) => {
       if (event === "pre_tool_use") hooked.push({ ...context.input as Record<string, unknown> });
@@ -66,6 +65,47 @@ async function scenario(options: { deny?: boolean; ask?: boolean; hash?: string;
 }
 
 describe("Write content reuse with the real file tool", () => {
+  it("recovers one generated body using the failure text and a flat reference call", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-write-visible-body-reuse-"));
+    try {
+      const file = join(dir, "target.html"); await writeFile(file, "original");
+      const body = "<!doctype html>\n<p>body generated once</p>\n".repeat(1000);
+      let step = 0; let generatedBodies = 0; let contentFrom: string | undefined;
+      const first = { arguments: { content: body, prepared_from: "obsolete-reference" }, file_path: file };
+      const client = { streamMessage: async function* (params: { messages: Message[] }): AsyncIterable<StreamEvent> {
+        const turn = step++;
+        const texts = params.messages.filter(m => m.type === "tool_result").at(-1)?.content
+          .filter(c => c.type === "text").map(c => c.text) ?? [];
+        let input: Record<string, unknown> | undefined;
+        if (turn === 0) { input = first; generatedBodies++; }
+        if (turn === 1) {
+          const feedback = texts.join("\n");
+          expect(feedback).not.toContain("body generated once");
+          expect(feedback).not.toMatch(/regenerate|resend.*body/i);
+          const reference = feedback.match(/content_from=("(?:[^"\\]|\\.)*")/);
+          expect(reference).not.toBeNull();
+          contentFrom = JSON.parse(reference![1]!);
+          expect(await readFile(file, "utf8")).toBe("original");
+          input = { file_path: file, overwrite: true, content_from: contentFrom };
+        }
+        if (input) yield { type: "tool_use_start", toolUse: { type: "tool_use", id: randomUUID(), name: "Write", input } };
+        yield { type: "complete", stopReason: input ? "tool_calls" : "end_turn" };
+      } };
+      const registry = new ToolRegistry(); registry.register(fileWriteTool);
+      const engine = new QueryEngine(client, registry, { checkTool: async () => ({ action: "allow" }) },
+        { register() {}, execute: async () => ({ blocked: false }) }, { cwd: dir, trajectoryTrackerFactory: false });
+      const results: StreamEvent[] = []; for await (const event of engine.submitMessage("fixture")) results.push(event);
+      const ends = results.filter(e => e.type === "tool_use_end");
+      expect(ends).toHaveLength(2);
+      expect(ends[0]!.result).toMatchObject({ isError: true, executionState: "not_started" });
+      expect(first).toEqual({ arguments: { content: body, prepared_from: "obsolete-reference" }, file_path: file });
+      expect(contentFrom).toBe(ends[0]!.toolUseId);
+      expect(ends[1]!.result).toMatchObject({ executionState: "completed" });
+      expect(generatedBodies).toBe(1);
+      expect(await readFile(file)).toEqual(Buffer.from(body, "utf8"));
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
   it("applies a large body from a short reference through approval, preview and hooks", async () => {
     const result = await scenario({ ask: true });
     expect(result.text).toBe(result.body);
@@ -75,6 +115,8 @@ describe("Write content reuse with the real file tool", () => {
     expect(result.requested).toEqual(result.checked);
     expect(result.hooked).toEqual(result.checked);
     expect(result.previews[1]).toMatchObject({ before: "old", after: result.body });
+    expect(result.checked[1]).toHaveProperty("file_path");
+    expect(result.checked[1]).not.toHaveProperty("prepared_from");
     const feedback = result.modelHistory[1]!.filter(m => m.type === "tool_result");
     expect(JSON.stringify(feedback)).toContain("original-write");
     expect(JSON.stringify(feedback)).toContain("content_from");
@@ -82,7 +124,7 @@ describe("Write content reuse with the real file tool", () => {
   });
 
   it("keeps the current file when referenced overwrite fails the hash guard", async () => {
-    const result = await scenario({ hash: "0".repeat(64) });
+    const result = await scenario({ conflict: true });
     expect(result.text).toBe("old");
     expect(result.results.filter(e => e.type === "tool_use_end").at(-1)).toMatchObject({
       result: { isError: true, failureKind: "invalid_input", executionState: "not_started" },

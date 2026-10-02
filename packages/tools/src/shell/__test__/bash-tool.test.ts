@@ -64,6 +64,39 @@ describe("createBashTool", () => {
     expect(feedback.compactSummary ?? "").not.toContain("null");
   });
 
+  it("keeps the beginning and final diagnostic of a large environment report", async () => {
+    const report = '{"ok":false,"stage":"composition"}\n' + "x".repeat(16_000) + "\nlast diagnostic";
+    const feedback = await runEnvironmentChunks([new TextEncoder().encode(report)], [], 7);
+    const text = (feedback.content[0] as { text: string }).text;
+
+    expect(text).toContain('"stage":"composition"');
+    expect(text).toContain("last diagnostic");
+    expect(text).toMatch(/truncated|省略/i);
+    expect(text).toContain("Read");
+    expect(text).toContain("redirect");
+    expect(text.length).toBeLessThanOrEqual(12_000);
+    expect(feedback).toMatchObject({ isError: true, failureKind: "command", executionState: "completed" });
+    expect(feedback.metadata).toMatchObject({ exitCode: 7, status: "failed" });
+  });
+
+  it("preserves small environment output normalization", async () => {
+    const feedback = await runEnvironmentChunks([new TextEncoder().encode("  first\r\nsecond  \r\n")], [], 0);
+    expect(feedback.content[0]).toMatchObject({ text: "first\nsecond" });
+  });
+
+  it("decodes stdout and stderr UTF-8 independently across byte chunks", async () => {
+    const stdout = new TextEncoder().encode("中文输出");
+    const stderr = new TextEncoder().encode("错误诊断");
+    const feedback = await runEnvironmentChunks(
+      [stdout.slice(0, 1), stdout.slice(1, 4), stdout.slice(4)],
+      [stderr.slice(0, 2), stderr.slice(2, 5), stderr.slice(5)],
+      0,
+    );
+    const text = (feedback.content[0] as { text: string }).text;
+    expect(text).toBe("中错文输出误诊断");
+    expect(text).not.toContain("�");
+  });
+
   it("uses the actual exit code for a failed command without copying its command into the summary", async () => {
     const tool = createBashTool(fakeExecutor(result({ status: "failed", failureKind: "command", exitCode: 7, output: "diagnostic" })));
     const feedback = await tool.execute({ command: "echo SECRET_VALUE" }, { cwd: process.cwd() });
@@ -424,6 +457,30 @@ describe("createBashTool", () => {
     expect(toolResult.content[0]).toMatchObject({ text: expect.stringContaining("heredoc") });
   });
 });
+
+async function runEnvironmentChunks(stdout: Uint8Array[], stderr: Uint8Array[], exitCode: number) {
+  let onStdout: (chunk: Uint8Array) => void = () => {};
+  let onStderr: (chunk: Uint8Array) => void = () => {};
+  return createBashTool().execute({ command: "inspect" }, {
+    cwd: "/work",
+    environment: {
+      info: { shellDescriptor: { family: "posix", dialect: "posix-sh", executable: "/bin/sh", argsPrefix: [], displayName: "POSIX Shell", pathStyle: "posix", tempDir: "/tmp", capabilities: { conditionalAndOr: true, supportsLoginShell: true } } },
+      workspace: { executionRoot: "/work" },
+      paths: { resolve: async () => ({ executionPath: "/work" }) },
+      process: { execShell: async () => ({
+        onOutput(listener: (chunk: Uint8Array) => void) { onStdout = listener; return () => {}; },
+        onErrorOutput(listener: (chunk: Uint8Array) => void) { onStderr = listener; return () => {}; },
+        wait: async () => {
+          for (let index = 0; index < Math.max(stdout.length, stderr.length); index++) {
+            if (stdout[index]) onStdout(stdout[index]);
+            if (stderr[index]) onStderr(stderr[index]);
+          }
+          return { exitCode };
+        },
+      }) },
+    },
+  } as any);
+}
 
 function fakeExecutor(
   runResult: ShellRunResult,

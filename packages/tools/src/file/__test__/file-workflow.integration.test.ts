@@ -9,8 +9,61 @@ import { fileReadTool } from "../read.js";
 import { fileWriteTool } from "../write.js";
 import { fileEditTool } from "../edit.js";
 import { applyPatchTool } from "../apply-patch.js";
+import { buildRuntimeSystemPrompt } from "../../../../prompts/src/index.js";
+
+async function defaultPrompt(cwd: string) {
+  const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+  process.env.VYKOR_CONFIG_DIR = join(cwd, "fixture-config");
+  try { return await buildRuntimeSystemPrompt({ cwd }); }
+  finally {
+    if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+    else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+  }
+}
+
+// Assert at the consuming request boundary, independently of the prompt builder.
+function expectWriteGuidance(system: string | undefined) {
+  expect(system).toContain("To create a file, call Write once with file_path and complete content.");
+  expect(system).toContain("The reference copies only content; permission and file-state checks still apply.");
+}
 
 describe("one complete file workflow", () => {
+  it("creates a file with one Write while the model sees a stable flat schema", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-single-write-"));
+    try {
+      const target = join(dir, "new.html");
+      const body = "<p>one call</p>\n".repeat(1200);
+      const modelRequests: Array<{ tools: Array<{ name: string; inputSchema: Record<string, unknown> }>; system?: string }> = [];
+      const registry = new ToolRegistry();
+      registry.register(fileWriteTool, { kind: "builtin" });
+      const engine = new QueryEngine({
+        streamMessage: async function* (params: { tools: Array<{ name: string; inputSchema: Record<string, unknown> }>; system?: string }): AsyncIterable<StreamEvent> {
+          expectWriteGuidance(params.system);
+          modelRequests.push({ tools: params.tools, system: params.system });
+          if (modelRequests.length === 1) {
+            yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "single-write", name: "Write", input: { file_path: target, content: body } } };
+            yield { type: "complete", stopReason: "tool_calls" };
+          } else yield { type: "complete", stopReason: "end_turn" };
+        },
+      }, registry, { checkTool: async () => ({ action: "allow" }) },
+      { register() {}, execute: async () => ({ blocked: false }) }, {
+        cwd: dir, trajectoryTrackerFactory: false, systemPrompt: await defaultPrompt(dir),
+      });
+      const events: StreamEvent[] = [];
+      for await (const event of engine.submitMessage("create fixture")) events.push(event);
+      const writeResults = events.filter(e => e.type === "tool_use_end" && e.result.toolName === "Write");
+      expect(writeResults).toHaveLength(1);
+      expect(writeResults[0]!.result.isError).not.toBe(true);
+      expect(Buffer.from(await readFile(target))).toEqual(Buffer.from(body, "utf8"));
+      expect(modelRequests).toHaveLength(2);
+      const firstSchema = modelRequests[0]!.tools.find(t => t.name === "Write")!.inputSchema;
+      expect(firstSchema).toMatchObject({ type: "object", required: ["file_path"], additionalProperties: false });
+      expect(Object.keys(firstSchema.properties as object)).toEqual(["file_path", "content", "content_from", "overwrite", "expected_sha256"]);
+      expect(modelRequests[1]!.tools.find(t => t.name === "Write")!.inputSchema).toEqual(firstSchema);
+      expect(modelRequests[0]!.system).toContain("Write");
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
   it("checks first, displays generation, reuses a rejected body, then applies single-file and multi-file batches", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-file-workflow-"));
     try {
@@ -21,10 +74,12 @@ describe("one complete file workflow", () => {
       const approvals: Record<string, unknown>[] = [];
       const lifecycle: Array<{ name: string; phase?: string }> = [];
       const requests: Message[][] = [];
+      const systemPrompt = await defaultPrompt(dir);
       let step = 0;
       let inspectedHash: string | undefined;
       const client = {
-        streamMessage: async function* (params: { messages: Message[] }): AsyncIterable<StreamEvent> {
+        streamMessage: async function* (params: { messages: Message[]; system?: string }): AsyncIterable<StreamEvent> {
+          expectWriteGuidance(params.system);
           requests.push(structuredClone(params.messages));
           const turn = step++;
           let name: string;
@@ -41,8 +96,11 @@ describe("one complete file workflow", () => {
             yield { type: "tool_generation_progress", toolKey: "write-body", toolUseId: "write-body", toolName: "Write", receivedChars: body.length };
             name = "Write"; id = "write-body"; input = { file_path: target, content: body };
           } else if (turn === 2) {
+            const feedback = JSON.stringify(params.messages.filter(m => m.type === "tool_result" && m.toolUseId === "write-body"));
+            expect(feedback).toContain("Supply the explicit target and intent options in the new call.");
+            expect(feedback).toContain("Reusing data does not inherit authorization; normal permissions and state checks still apply.");
             name = "Write"; id = "reuse-body";
-            input = { file_path: target, content_from: "write-body", overwrite: true, expected_sha256: inspectedHash };
+            input = { file_path: target, overwrite: true, expected_sha256: inspectedHash, content_from: "write-body" };
           } else if (turn === 3) {
             name = "Edit"; id = "batch-edit"; input = { file_path: target, edits: [
               { old_string: "alpha", new_string: "ALPHA" }, { old_string: "beta", new_string: "BETA" },
@@ -68,7 +126,7 @@ describe("one complete file workflow", () => {
       } as unknown as AgentExecutionContext;
       const engine = new QueryEngine(client, registry, { checkTool: async name => ({ action: name === "Read" ? "allow" : "ask" }) },
         { register() {}, execute: async () => ({ blocked: false }) }, {
-          cwd: dir, trajectoryTrackerFactory: false,
+          cwd: dir, trajectoryTrackerFactory: false, systemPrompt,
           settings: { model: "fixture", apiFormat: "openai", maxTurns: 10, permission: { mode: "default" }, sandbox: { enabled: false } },
         });
       const events: StreamEvent[] = [];
@@ -84,6 +142,7 @@ describe("one complete file workflow", () => {
       expect(approvals[1]).toMatchObject({ content: body, overwrite: true, expected_sha256: inspectedHash });
       expect(approvals[1]).not.toHaveProperty("content_from");
       expect(rawRetry?.input.content).toBe(body);
+      expect(rawRetry?.input.file_path).toBe(target);
       expect(lifecycle.some(e => e.phase === "waiting_permission")).toBe(true);
       expect(lifecycle.some(e => e.phase === "running")).toBe(true);
       expect(await readFile(target, "utf8")).toBe("ALPHA\nBETA\n" + "generated-content".repeat(1500));
@@ -91,4 +150,5 @@ describe("one complete file workflow", () => {
       expect(await readFile(join(dir, "b.txt"), "utf8")).toBe("B\n");
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
+
 });

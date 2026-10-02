@@ -3,6 +3,7 @@ import type { Message, ToolDefinition, ToolUseBlock } from "../index.js";
 import { prepareToolCalls } from "./query-tool-preparation.js";
 import { ToolFailureMemory } from "./tool-failure-memory.js";
 import { ToolRegistry } from "./tool-registry.js";
+import { resolveToolInputReuse, withToolInputReuseHint } from "./tool-input-reuse.js";
 
 const definition = {
   name: "Write",
@@ -54,6 +55,86 @@ describe("tool input reuse before authorization", () => {
     const result = prepare({ file_path: "a.txt", content_from: "source" },
       pair(call("source", { file_path: "a.txt", content: "" })));
     expect(result.readyForPermission[0]?.toolUse.input).toEqual({ file_path: "a.txt", content: "" });
+  });
+
+  it("reuses a unique body inside one known wrapper chain and ignores source options", () => {
+    const source = call("source", { file_path: "old.txt", overwrite: false, expected_sha256: "old hash", arguments: {
+      args: { content: "complete body", prepared_from: "obsolete-reference" },
+    } });
+    const result = prepare({ parameters: { file_path: "new.txt", overwrite: true, content_from: "source" } }, pair(source));
+    expect(result.readyForPermission[0]?.toolUse.input).toEqual({ file_path: "new.txt", overwrite: true, content: "complete body" });
+    expect(source.input).toEqual({ file_path: "old.txt", overwrite: false, expected_sha256: "old hash", arguments: {
+      args: { content: "complete body", prepared_from: "obsolete-reference" },
+    } });
+  });
+
+  it("accepts matching root and nested body values but scans all deeper layers", () => {
+    const same = pair(call("source", { content: "same", args: { content: "same" } }));
+    expect(prepare({ file_path: "a.txt", content_from: "source" }, same).readyForPermission[0]?.toolUse.input)
+      .toEqual({ file_path: "a.txt", content: "same" });
+    const different = pair(call("source", { content: "first", args: { parameters: { content: "second" } } }));
+    expect(prepare({ file_path: "a.txt", content_from: "source" }, different).readyForPermission).toEqual([]);
+  });
+
+  it("uses the same source eligibility for the hint and the actual reference", () => {
+    const result = { content: [{ type: "text" as const, text: "invalid input" }], isError: true,
+      failureKind: "invalid_input" as const, executionState: "not_started" as const };
+    for (const input of [
+      { args: { content: "body" } },
+      { content: "", parameters: { content: "" } },
+    ]) {
+      const source = call("source", input);
+      const history = [{ type: "assistant" as const, content: "", toolUses: [source] }];
+      expect(JSON.stringify(withToolInputReuseHint(definition, source, result, history))).toContain("content_from");
+      expect(prepare({ file_path: "a.txt", content_from: "source" }, pair(source)).readyForPermission)
+        .toHaveLength(1);
+    }
+  });
+
+  it.each([
+    ["different body", { content: "first", args: { content: "second" } }],
+    ["two wrappers", { args: { content: "first" }, parameters: { content: "first" } }],
+    ["non-string body", { args: { content: 123 } }],
+    ["wrong wrapper type", { args: "body", content: "body" }],
+    ["nested business wrapper", { args: { content: "body" } }],
+  ] as const)("rejects unsafe reusable source: %s", (label, input) => {
+    const source = call("source", input);
+    const sourceDefinition = label === "nested business wrapper"
+      ? { ...definition, inputSchema: { type: "object", properties: { args: { type: "object" } } } }
+      : definition;
+    const history = pair(source);
+    if (sourceDefinition === definition) {
+      expect(prepare({ file_path: "a.txt", content_from: "source" }, history).readyForPermission).toEqual([]);
+    }
+    const result = { content: [], isError: true, failureKind: "invalid_input" as const,
+      executionState: "not_started" as const };
+    expect(withToolInputReuseHint(sourceDefinition, source, result, history.slice(0, 1))).toBe(result);
+  });
+
+  it("rejects cyclic and over-deep reusable source chains", () => {
+    const cycle: Record<string, unknown> = { content: "body" };
+    cycle.args = cycle;
+    let deep: Record<string, unknown> = { content: "body" };
+    for (let i = 0; i < 9; i++) deep = { args: deep };
+    for (const input of [cycle, deep]) {
+      const source = call("source", input);
+      expect(prepare({ file_path: "a.txt", content_from: "source" }, pair(source)).readyForPermission).toEqual([]);
+    }
+  });
+
+  it("treats declared or composed wrapper names as business fields while retaining a root body", () => {
+    for (const inputSchema of [
+      { type: "object", properties: { args: { type: "object" } } },
+      { type: "object", anyOf: [{ type: "object" }] },
+    ]) {
+      const tool = { ...definition, inputSchema } as ToolDefinition;
+      const source = call("source", { content: "root body", args: { content: "business data" } });
+      const retry = call("retry", { file_path: "a.txt", content_from: "source" });
+      expect(resolveToolInputReuse(tool, retry, pair(source), new Set(["retry"])))
+        .toEqual({ file_path: "a.txt", content: "root body" });
+      const nestedOnly = call("source", { args: { content: "business data" } });
+      expect(() => resolveToolInputReuse(tool, retry, pair(nestedOnly), new Set(["retry"]))).toThrow();
+    }
   });
 
   it.each([

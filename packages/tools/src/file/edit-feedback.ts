@@ -11,42 +11,65 @@ function declarationKey(line: string): string | undefined {
   return property ? `property:${property[1]}` : undefined;
 }
 
+/** Match only an explicit JSON object string id; values are location hints, never replacements. */
+function jsonIdKeys(line: string): Array<{ key: string; column: number }> {
+  const keys: Array<{ key: string; column: number }> = [];
+  for (const match of line.matchAll(/\{\s*"id"\s*:\s*("(?:\\.|[^"\\])*")/g)) {
+    try { keys.push({ key: `id:${JSON.parse(match[1]!) as string}`, column: match.index + match[0].indexOf('"id"') }); }
+    catch { /* A malformed string is not a stable id anchor. */ }
+  }
+  return keys;
+}
+
 /** Diagnose only the original snapshot: earlier batch steps have never reached disk. */
 export function editFailureResult(error: EditPlanError, original: string): ToolResult {
   const body = original.replace(/^\uFEFF/, "");
   const normalizedBody = body.replace(/\r\n/g, "\n");
   const lines = normalizedBody === "" ? [] : (normalizedBody.endsWith("\n") ? normalizedBody.slice(0, -1) : normalizedBody).split("\n");
-  const locations: number[] = [];
+  const locations: Array<{ line: number; column?: number }> = [];
   const diagnosable = error.match && error.match.kind !== "identical";
   const actualMatches = diagnosable && error.editIndex === 1 && error.match?.locations.length;
   if (actualMatches) {
-    for (const span of error.match!.locations) locations.push(body.slice(0, span.start).split("\n").length);
+    for (const span of error.match!.locations) locations.push({ line: body.slice(0, span.start).split("\n").length });
   } else if (diagnosable && error.edit) {
     const anchors = [...new Set(error.edit.old_string.split(/\r?\n/).map(line => line.trim()))]
       .filter(line => line.length >= 4).sort((a, b) => b.length - a.length).slice(0, 2);
     for (const [index, line] of lines.entries()) {
-      if (anchors.some(anchor => line.includes(anchor))) locations.push(index + 1);
+      if (anchors.some(anchor => line.includes(anchor))) locations.push({ line: index + 1 });
       if (locations.length >= 3) break;
     }
     if (!locations.length) {
       const keys = [...new Set(error.edit.old_string.split(/\r?\n/).map(declarationKey).filter((key): key is string => key !== undefined))].slice(0, 2);
       for (const [index, line] of lines.entries()) {
         const key = declarationKey(line);
-        if (key && keys.includes(key)) locations.push(index + 1);
+        if (key && keys.includes(key)) locations.push({ line: index + 1 });
+        if (locations.length >= 3) break;
+      }
+    }
+    if (!locations.length) {
+      const ids = new Set(error.edit.old_string.split(/\r?\n/).flatMap(line => jsonIdKeys(line).map(id => id.key)));
+      for (const [index, line] of lines.entries()) {
+        for (const id of jsonIdKeys(line)) {
+          if (ids.has(id.key)) locations.push({ line: index + 1, column: id.column });
+          if (locations.length >= 3) break;
+        }
         if (locations.length >= 3) break;
       }
     }
   }
-  const windows = [...new Map([...new Set(locations)].slice(0, 3).map(line => ({
-    startLine: Math.max(1, line - 2), endLine: Math.min(lines.length, Math.max(1, line - 2) + 6),
-  })).map(window => [window.startLine, window] as const)).values()];
+  const windows = [...new Map(locations.slice(0, 3).map(({ line, column }) => ({
+    startLine: Math.max(1, line - 2), endLine: Math.min(lines.length, Math.max(1, line - 2) + 6), column,
+  })).map(window => [`${window.startLine}:${window.column ?? ""}`, window] as const)).values()];
   const blocks = [error.message];
   if (error.editIndex !== undefined) blocks.push(`Edit ${error.editIndex} failed; no edits were written.`);
   if (windows.length) {
     blocks.push(actualMatches ? "Original file context at candidate matches:" : "Original file context near anchors (location hints, not replacement matches):");
     for (const window of windows) {
-      blocks.push(`Lines ${window.startLine}-${window.endLine}:`, ...lines.slice(window.startLine - 1, window.endLine).map((line, index) =>
-        `${window.startLine + index}: ${line.length > 400 ? line.slice(0, 400) + " … [line truncated]" : line}`));
+      blocks.push(`Lines ${window.startLine}-${window.endLine}:`, ...lines.slice(window.startLine - 1, window.endLine).map((line, index) => {
+        const start = window.column === undefined || line.length <= 400 ? 0 : Math.max(0, window.column - 40);
+        const excerpt = line.slice(start, start + 400);
+        return `${window.startLine + index}: ${start ? "… [earlier columns omitted] " : ""}${excerpt}${start + excerpt.length < line.length ? " … [line truncated]" : ""}`;
+      }));
     }
     blocks.push("Do not copy line-number prefixes or truncation markers into old_string.");
   } else if (diagnosable) blocks.push(`No useful original-file anchor found (${lines.length} lines). Use Read or Grep to locate current content.`);
@@ -55,11 +78,13 @@ export function editFailureResult(error: EditPlanError, original: string): ToolR
   return {
     content: [{ type: "text", text }], isError: true, failureKind: "invalid_input", executionState: "not_started",
     recoveryHint: error.match?.kind === "identical" ? "old_string 与 new_string 相同，没有修改；无需此编辑时直接继续，否则修正替换参数。" :
-      error.match ? `根据原文修正 old_string；可 Read offset=${windows[0]?.startLine ?? 1} limit=7 或 Grep 定位，不复制行号或截断标记。` : "修正编辑参数；本次未写入文件。",
+      error.match ? windows.length
+        ? `根据原文修正 old_string；可 Read offset=${windows[0]!.startLine} limit=7 或 Grep 定位，不复制行号或截断标记。`
+        : "根据原文修正 old_string；先用 Read 或 Grep 定位当前内容，不复制行号或截断标记。" : "修正编辑参数；本次未写入文件。",
     metadata: { editFailure: { kind: error.match?.kind ?? "invalid_input", editIndex: error.editIndex,
       source: "original_file", totalLines: lines.length, windows,
       ...(error.match && error.editIndex === 1 ? { matchCount: error.match.matchCount } : {}),
-      ...(actualMatches ? { matchLines: locations } : {}),
+      ...(actualMatches ? { matchLines: locations.map(location => location.line) } : {}),
     } },
   };
 }

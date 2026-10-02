@@ -60,7 +60,7 @@ export const fileWriteTool: ToolDefinition = {
   name: "Write",
   serialGroup: "file_mutation",
   description:
-    "Create a new UTF-8 text file. Before generating long content, use Read with info_only=true to check the target and overwrite conditions. Provide exactly one of content or content_from. To reuse a previous Write's complete content, pass its tool call ID as content_from instead of generating it again; supply the target and corrected options explicitly. Existing files are not overwritten unless overwrite=true. Prefer Edit for small changes and ApplyPatch for multi-file or multi-hunk changes.",
+    "Create or replace a complete UTF-8 file. Provide file_path and exactly one of content or content_from. Set overwrite=true to replace an existing file with different content; expected_sha256 optionally guards an existing file's raw bytes. content_from reuses a settled Write's retained complete body, including a failed call, but does not reuse its target or permission. Prefer Edit for small changes and ApplyPatch for multi-file or multi-hunk changes.",
   inputReuse: { property: "content", referenceProperty: "content_from" },
   inputSchema: {
     type: "object",
@@ -78,13 +78,15 @@ export const fileWriteTool: ToolDefinition = {
       },
     },
     required: ["file_path"],
+    additionalProperties: false,
   },
   async execute(input, context) {
-    if (Object.hasOwn(input, "content_from") || typeof input.content !== "string") {
+    if (Object.keys(input).some(key => !["file_path", "content", "overwrite", "expected_sha256"].includes(key))
+      || typeof input.file_path !== "string" || Object.hasOwn(input, "content_from") || typeof input.content !== "string") {
       return invalidInput("Write requires resolved string content; content_from must be resolved by the engine.");
     }
     const rawPath = input.file_path as string;
-    const content = input.content;
+    const content = input.content as string;
     const cwd = (context as { cwd?: string } | undefined)?.cwd ?? process.cwd();
     const expectedSha256Input = input.expected_sha256;
     const expectedSha256 = typeof expectedSha256Input === "string" ? expectedSha256Input : undefined;
@@ -97,7 +99,13 @@ export const fileWriteTool: ToolDefinition = {
 
     // Guard the raw input as well: a Windows-style system path stays recognizable
     // even on platforms whose path resolver would treat it as relative.
-    const filePath = await resolveToolPathInContext(rawPath, context, "write");
+    let filePath: string;
+    try {
+      const resolved = await resolveToolPathInContext(rawPath, context, "write");
+      filePath = resolved;
+    } catch (error) {
+      throw error;
+    }
 
     if (managedPersistencePathKind(filePath, cwd)) {
       return {

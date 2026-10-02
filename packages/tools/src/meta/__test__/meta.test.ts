@@ -463,6 +463,60 @@ describe("listSkillsTool", () => {
 });
 
 describe("askUserTool", () => {
+  it("shows object labels and descriptions through the existing string UI", async () => {
+    const prompts: string[] = [];
+    const result = await askUserTool.execute!({ questions: [
+      { question: "布局？", type: "radio", options: [
+        { label: "流程图+卡片", description: "展示主题关系" }, { label: "纯信息版面" },
+      ] },
+      { question: "细节？", type: "check", options: [" 保留字符串 ", { label: "说明", description: "" }] },
+    ] }, { cwd: process.cwd(), askUserPrompt: async (prompt: string) => {
+      prompts.push(prompt); return " 已选择 ";
+    } });
+    expect(result.isError).not.toBe(true);
+    expect(prompts).toHaveLength(1);
+    expect(JSON.parse(prompts[0]!)).toEqual({ kind: "question", questions: [
+      { question: "布局？", type: "radio", options: ["流程图+卡片 — 展示主题关系", "纯信息版面"] },
+      { question: "细节？", type: "check", options: [" 保留字符串 ", "说明"] },
+    ] });
+    expect(result.content).toEqual([{ type: "text", text: "已选择" }]);
+  });
+
+  it("supports one structured question with mixed string and object options", async () => {
+    let prompt = "";
+    const result = await askUserTool.execute!({ questions: [{ question: "Mode?", type: "radio", options: [
+      "Fast", { label: "Careful", description: "Review first" },
+    ] }] }, { cwd: process.cwd(), askUserPrompt: async (value: string) => { prompt = value; return "Fast"; } });
+    expect(result.isError).not.toBe(true);
+    expect(JSON.parse(prompt).questions).toEqual([
+      { question: "Mode?", type: "radio", options: ["Fast", "Careful — Review first"] },
+    ]);
+  });
+
+  it.each([
+    { label: "" }, { label: "   " }, { label: "A", description: 12 },
+    { label: "A", description: null }, { value: "A" },
+    { label: "A", extra: "unknown" }, null, ["A"],
+  ])("rejects invalid option %j before showing any question", async (option) => {
+    const prompts: string[] = [];
+    const result = await askUserTool.execute!({ questions: [
+      { question: "Valid first", options: [{ label: "A" }] },
+      { question: "Invalid later", options: [option] },
+    ] }, { cwd: process.cwd(), askUserPrompt: async (prompt: string) => { prompts.push(prompt); return "answer"; } });
+    expect(result.isError).toBe(true);
+    expect(prompts).toEqual([]);
+  });
+
+  it("declares strict label/description options alongside strings", () => {
+    const schema = askUserTool.inputSchema as any;
+    expect(schema.properties.questions.items.properties.options.items).toEqual({ oneOf: [
+      { type: "string" },
+      { type: "object", properties: {
+        label: { type: "string", minLength: 1, pattern: "\\S" }, description: { type: "string" },
+      }, required: ["label"], additionalProperties: false },
+    ] });
+  });
+
   it("returns error when no prompt function available", async () => {
     const result = await askUserTool.execute!({ question: "What?" }, { cwd: process.cwd() });
     expect(result.isError).toBe(true);

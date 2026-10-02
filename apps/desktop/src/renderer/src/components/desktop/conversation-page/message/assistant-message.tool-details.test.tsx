@@ -205,9 +205,13 @@ describe("tool parameter and result display", () => {
     expect(container.textContent).not.toContain("等待工具返回结果")
     expect(container.querySelector("button[aria-expanded]")).toBeNull()
     expect(container.querySelector("pre")).toBeNull()
+    const group = container.querySelector("section")
+    expect(group).not.toBeNull()
+    expect(group!.getAttribute("aria-label")).toBe("工具活动组")
+    expect(group!.textContent).toContain("Write")
   })
 
-  it("keeps real tool details expandable beside a non-expandable generation status", () => {
+  it("keeps completed Read and generating Write in one collapsible tool group", () => {
     render([
       part("Read", { file_path: "index.html" }, { output: "file content" }),
       part(
@@ -230,15 +234,44 @@ describe("tool parameter and result display", () => {
         }
       ),
     ])
-    click("读取文件")
-    expect(container.textContent?.match(/生成参数/g)).toHaveLength(1)
-    expect(
-      [...container.querySelectorAll("button")].some((button) =>
-        button.textContent?.includes("Write")
-      )
-    ).toBe(false)
-    expect(container.textContent).toContain("file content")
-    expect(container.querySelectorAll("pre")).toHaveLength(2)
+    const group = container.querySelector("section")
+    expect(group).not.toBeNull()
+    expect(group!.textContent).toContain("Write")
+    expect(group!.getAttribute("aria-label")).toBe("工具活动组")
+    const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
+    expect(heading?.getAttribute("aria-expanded")).toBe("false")
+    expect(heading?.textContent).toContain("工具查看 1 次")
+    expect(heading?.textContent).toContain("Write")
+    expect(heading?.textContent).not.toMatch(/文件编辑|工具调用 2 次/)
+    expect(group!.querySelectorAll("pre")).toHaveLength(0)
+    act(() => heading!.click())
+    const read = [...group!.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(button => button.textContent?.includes("读取文件"))
+    expect(read).toBeDefined()
+    expect(group!.textContent).toContain("Write")
+    expect(group!.textContent?.match(/生成参数/g)).toHaveLength(2)
+    expect([...group!.querySelectorAll("button[aria-expanded]")].filter(button => button !== heading)
+      .some(button => button.textContent?.includes("Write"))).toBe(false)
+    expect(group!.querySelectorAll("pre")).toHaveLength(0)
+    act(() => read!.click())
+    expect(group!.textContent).toContain("file content")
+    expect(group!.querySelectorAll("pre")).toHaveLength(2)
+  })
+
+  it("names an all-generating group without counting unsubmitted calls", () => {
+    const generated = part("Write", {}, { id: "ui-tool-generation:r:g:1:0", input: undefined,
+      toolUseId: undefined, status: "running", metadata: { uiToolGeneration: true,
+        toolProgress: { phase: "generating", receivedChars: 10, executionState: "not_started" } } })
+    render([generated, { ...generated, id: "ui-tool-generation:r:g:1:1", seq: 2, toolName: "Read" }])
+    const group = container.querySelector('section[aria-label="工具活动组"]')
+    expect(group).not.toBeNull()
+    const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
+    expect(heading?.textContent).toContain("Write")
+    expect(heading?.textContent).toContain("Read")
+    expect(heading?.textContent).not.toMatch(/工具调用|工具查看|文件编辑/)
+    act(() => heading!.click())
+    expect(group!.querySelectorAll('[role="img"][aria-label="正在生成参数，尚未执行"]')).toHaveLength(2)
+    expect(group!.querySelectorAll("button[aria-expanded]")).toHaveLength(1)
+    expect(group!.querySelector("pre")).toBeNull()
   })
 
   it("shows permission and queue phases in the collapsed heading and ignores stale terminal progress", () => {

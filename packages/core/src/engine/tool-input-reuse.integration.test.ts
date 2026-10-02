@@ -70,6 +70,8 @@ describe("content reuse in the normal engine execution flow", () => {
     expect(JSON.stringify(feedback)).not.toContain("PRIVATE-FILE-CONTENT");
     expect(JSON.stringify(feedback)).toMatch(/current retained history/i);
     expect(JSON.stringify(feedback)).toMatch(/restor.*compact.*invalid/i);
+    expect(JSON.stringify(feedback)).toContain("Supply the explicit target and intent options in the new call.");
+    expect(JSON.stringify(feedback)).toContain("Reusing data does not inherit authorization; normal permissions and state checks still apply.");
   });
 
   it("does not execute a referenced write denied by current permissions", async () => {

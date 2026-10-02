@@ -1,4 +1,4 @@
-import type { ContentBlock } from "./messages";
+import type { ContentBlock, Message, ToolUseBlock } from "./messages";
 import type { Settings } from "./settings";
 import type {
   AgentExecutionContext,

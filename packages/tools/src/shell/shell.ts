@@ -9,7 +9,7 @@ import {
   type HostShellLauncher,
 } from "@vykor/sandbox";
 import { defaultShellExecutor } from "./executor.js";
-import { formatOutput } from "./output.js";
+import { createBoundedOutputCollector, DEFAULT_MAX_OUTPUT_CHARS, formatOutput } from "./output.js";
 import type { ShellExecSpec, ShellExecutor } from "./types.js";
 
 export { decodeShellChunk, formatOutput, looksLikeUtf16Le } from "./output.js";
@@ -170,24 +170,29 @@ async function executeInEnvironment(
     timedOut = true;
     controller.abort();
   }, timeoutMs);
-  let output = "";
+  const output = createBoundedOutputCollector();
+  const stdoutDecoder = new TextDecoder("utf-8");
+  const stderrDecoder = new TextDecoder("utf-8");
   try {
     const process = await environment.process.execShell(command, {
       cwd: resolved.executionPath,
       signal: controller.signal,
     });
     const stopListening = process.onOutput((chunk) => {
-      output = (output + new TextDecoder().decode(chunk)).slice(-12_000);
+      output.append(stdoutDecoder.decode(chunk, { stream: true }));
     });
     const stopErrors = process.onErrorOutput?.((chunk) => {
-      output = (output + new TextDecoder().decode(chunk)).slice(-12_000);
+      output.append(stderrDecoder.decode(chunk, { stream: true }));
     });
     try {
       const result = await process.wait();
-      const formatted = formatOutput(output, 12_000);
+      output.append(stdoutDecoder.decode());
+      output.append(stderrDecoder.decode());
+      const rawOutput = output.value();
+      const formatted = formatOutput(rawOutput, DEFAULT_MAX_OUTPUT_CHARS);
       if (timedOut) {
         return {
-          content: [{ type: "text" as const, text: formatTimeoutOutput(output, timeoutMs, 12_000) }],
+          content: [{ type: "text" as const, text: formatTimeoutOutput(rawOutput, timeoutMs, DEFAULT_MAX_OUTPUT_CHARS) }],
           isError: true,
           failureKind: "timeout" as const,
           executionState: "unknown" as const,
@@ -196,7 +201,7 @@ async function executeInEnvironment(
       }
       if (context.abortSignal?.aborted) {
         return {
-          content: [{ type: "text" as const, text: formatInterruptedOutput(output, 12_000) }],
+          content: [{ type: "text" as const, text: formatInterruptedOutput(rawOutput, DEFAULT_MAX_OUTPUT_CHARS) }],
           isError: true,
           failureKind: "interrupted" as const,
           executionState: "unknown" as const,
