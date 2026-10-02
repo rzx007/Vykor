@@ -1,4 +1,5 @@
-import type { DesktopAttachmentSessionPart, DesktopSessionPart } from "@shared/session-types"
+import type { DesktopAttachmentSessionPart, DesktopSessionMessage, DesktopSessionPart, DesktopSessionRun } from "@shared/session-types"
+import { isToolGenerationPresentation } from "./tool-generation-presentation"
 
 export type AssistantContentUnit =
   | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }
@@ -87,6 +88,10 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
       continue
     }
     if (part.type === "tool") {
+      if (isToolGenerationPresentation(part)) {
+        units.push({ id: part.id, type: "tool", call: part })
+        continue
+      }
       if (part.toolName === "ImageGeneration") {
         const toolUseId = part.toolUseId ?? part.id
         units.push({
@@ -156,6 +161,7 @@ export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] 
   const changes = new Map<string, ChangedFile>()
   const results = toolResultsById(parts)
   for (const part of parts) {
+    if (isToolGenerationPresentation(part)) continue
     if (part.type !== "tool" || !mutationToolPattern.test(part.toolName ?? "")) continue
     if (
       toolCallStatus(part, part.toolUseId ? results.get(part.toolUseId) : undefined) !== "completed"
@@ -185,6 +191,65 @@ export function toolCallStatus(
   return result?.status ?? call.status
 }
 
+const toolPhaseLabels: Record<string, string> = {
+  preparing: "正在准备工具",
+  waiting_permission: "等待你的确认",
+  queued: "等待前一个工具",
+  running: "正在执行工具",
+  completed: "工具已返回，等待本轮结果",
+  failed: "工具失败，等待本轮结果",
+  unknown: "结果不确定",
+}
+
+export function toolActivityLabel(call: DesktopSessionPart, result?: DesktopSessionPart): string | undefined {
+  const status = toolCallStatus(call, result)
+  if (status === "failed") return "失败"
+  if (status === "interrupted") return "已中断"
+  if (status === "completed") return undefined
+  if (isToolGenerationPresentation(call)) {
+    const chars = recordValue(call.metadata.toolProgress)?.receivedChars
+    return `生成参数 · ${typeof chars === "number" ? chars.toLocaleString("en-US") : 0} 字符`
+  }
+  const phase = recordValue(call.metadata.toolProgress)?.phase
+  return (typeof phase === "string" ? toolPhaseLabels[phase] : undefined) ?? (status === "pending" ? "等待执行" : "运行中")
+}
+
+export function isToolActivityActive(call: DesktopSessionPart, result?: DesktopSessionPart): boolean {
+  const status = toolCallStatus(call, result)
+  if (status !== "running" && status !== "pending") return false
+  return !["completed", "failed", "unknown"].includes(String(recordValue(call.metadata.toolProgress)?.phase))
+}
+
+export function toolGroupActivityLabel(tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]): string | undefined {
+  const active = tools.filter(tool => ["running", "pending"].includes(toolCallStatus(tool.call, tool.result)))
+  for (const phase of ["waiting_permission", "running", "preparing", "queued", "generating", "unknown", "failed", "completed"]) {
+    const tool = active.find(tool => recordValue(tool.call.metadata.toolProgress)?.phase === phase)
+    if (tool) return toolActivityLabel(tool.call, tool.result)
+  }
+  return active[0] ? toolActivityLabel(active[0].call, active[0].result) : undefined
+}
+
+export function conversationActivityLabel(
+  runs: DesktopSessionRun[], messages: DesktopSessionMessage[], parts: DesktopSessionPart[]
+): string | undefined {
+  const activeRuns = runs.filter(run => run.status === "pending" || run.status === "running")
+  if (!activeRuns.length) return undefined
+  const activeIds = new Set(activeRuns.map(run => run.id))
+  const messageIds = new Set(messages.filter(message => message.runId && activeIds.has(message.runId)).map(message => message.id))
+  const currentParts = parts.filter(part => messageIds.has(part.messageId))
+  const results = toolResultsById(currentParts)
+  const tools = currentParts.filter(part => part.type === "tool").map(call => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
+  const toolLabel = toolGroupActivityLabel(tools)
+  if (toolLabel) return toolLabel === "运行中" ? "正在处理工具" : toolLabel
+  const generating = activeRuns.flatMap(run => Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration : [])
+    .filter(entry => recordValue(entry) && Number.isSafeInteger(entry.receivedChars) && entry.receivedChars >= 0)
+  if (generating.length) {
+    const chars = generating.reduce((total, entry) => total + entry.receivedChars, 0)
+    return `正在生成${generating.length > 1 ? ` ${generating.length} 个工具的` : "工具"}参数，已接收 ${chars.toLocaleString("en-US")} 个字符`
+  }
+  return "等待模型响应"
+}
+
 export function isTurnComplete(parts: DesktopSessionPart[]): boolean {
   const results = toolResultsById(parts)
   return parts.every((part) => {
@@ -206,6 +271,7 @@ function toolResultsById(parts: DesktopSessionPart[]): Map<string, DesktopSessio
 
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
   const rawName = part.toolName || "tool"
+  if (isToolGenerationPresentation(part)) return { name: rawName }
   const normalized = rawName.toLocaleLowerCase().replace(/[-_]/g, "")
   if (normalized === "imagetotext") return summarizeLocalOcr(part)
   const names: Array<[RegExp, string]> = [
@@ -220,7 +286,7 @@ export function summarizeToolCall(part: DesktopSessionPart): { name: string; det
     [/fetch|http|request/, "请求网络"],
   ]
   const name = names.find(([pattern]) => pattern.test(normalized))?.[1] ?? humanizeToolName(rawName)
-  return { name, detail: summarizeToolInput(part.input) }
+  return { name, detail: summarizeToolInput(part.input, /^(?:edit|editfile|replace)/.test(normalized)) }
 }
 
 export function toolDisplayName(call: DesktopSessionPart, result?: DesktopSessionPart): string {
@@ -295,7 +361,7 @@ function collectPaths(value: unknown): string[] {
   return paths
 }
 
-function summarizeToolInput(input: Record<string, unknown> | undefined): string | undefined {
+function summarizeToolInput(input: Record<string, unknown> | undefined, includeEditCount = false): string | undefined {
   if (!input) return undefined
   // Only unwrap the provider envelope, keeping mixed/business fields intact.
   const seen = new Set<Record<string, unknown>>()
@@ -318,7 +384,10 @@ function summarizeToolInput(input: Record<string, unknown> | undefined): string 
     "description",
   ]) {
     const value = input[key]
-    if (typeof value === "string" && value.trim()) return truncateSummary(value.trim())
+    if (typeof value === "string" && value.trim()) {
+      const count = includeEditCount && Array.isArray(input.edits) ? input.edits.length : 0
+      return `${truncateSummary(value.trim())}${count ? ` · ${count} 处修改` : ""}`
+    }
   }
   const primitive = Object.values(input).find(
     (value): value is string | number | boolean =>

@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ChevronDown,
   FileCode2,
+  LoaderCircle,
   PanelRightOpen,
   Pencil,
   TerminalSquare,
@@ -27,6 +28,9 @@ import {
   isTurnComplete,
   summarizeToolCall,
   toolCallStatus,
+  toolActivityLabel,
+  toolGroupActivityLabel,
+  isToolActivityActive,
   toolDisplayName,
   type AssistantContentUnit,
   type ChangedFile,
@@ -39,6 +43,7 @@ import { GeneratedImageGallery, ImageGenerationMessage } from "./image-generatio
 import { ContentEntrance } from "./content-entrance"
 import { AgentActivityMessage } from "./agent-activity-message"
 import { toolOutputText } from "./message-content"
+import { isToolGenerationPresentation } from "./tool-generation-presentation"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
 
@@ -94,6 +99,26 @@ export function AssistantMessage({
               }
             >
               <ToolActivityGroup tools={block.tools} />
+            </ContentEntrance>
+          )
+        }
+        if (block.type === "tool-generation") {
+          return (
+            <ContentEntrance
+              key={block.id}
+              animate={streaming && Boolean(initialPartIds && !initialPartIds.has(block.tool.id))}
+            >
+              <div className="text-ui-small flex h-7 min-w-0 items-center gap-2 text-ui-muted">
+                <LoaderCircle
+                  role="img"
+                  aria-label="正在生成参数，尚未执行"
+                  className="size-3.5 shrink-0 motion-safe:animate-spin"
+                  strokeWidth={1.7}
+                />
+                <span className="min-w-0 truncate">
+                  {block.tool.call.toolName} · {toolActivityLabel(block.tool.call)}
+                </span>
+              </div>
             </ContentEntrance>
           )
         }
@@ -251,10 +276,10 @@ type ContentBlock =
   | { id: string; type: "unit"; unit: Exclude<AssistantContentUnit, ToolUnit> }
   | { id: string; type: "tool-group"; tools: ToolUnit[] }
   | { id: string; type: "terminal"; payload: TerminalToolPayload; tool: ToolUnit }
+  | { id: string; type: "tool-generation"; tool: ToolUnit }
 
 function isToolInFlight(tool: ToolUnit): boolean {
-  const status = toolCallStatus(tool.call, tool.result)
-  return status === "pending" || status === "running"
+  return isToolActivityActive(tool.call, tool.result)
 }
 
 function isTerminalActivityActive(
@@ -270,6 +295,10 @@ function groupToolUnits(units: AssistantContentUnit[]): ContentBlock[] {
   for (const unit of units) {
     if (unit.type !== "tool") {
       blocks.push({ id: unit.id, type: "unit", unit })
+      continue
+    }
+    if (isToolGenerationPresentation(unit.call)) {
+      blocks.push({ id: unit.id, type: "tool-generation", tool: unit })
       continue
     }
     const terminal = parseTerminalToolPayload(unit.call.output ?? unit.result?.output)
@@ -355,6 +384,7 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const active = tools.some(isToolInFlight)
+  const activityLabel = toolGroupActivityLabel(tools)
   const counts = { edits: 0, commands: 0, reads: 0 }
   for (const tool of tools) {
     const name = tool.call.toolName ?? ""
@@ -392,6 +422,7 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
         <span className="truncate">
           {heading || `工具调用 ${tools.length} 次`}
           {failures ? `（${failures} 次失败）` : ""}
+          {activityLabel ? ` · ${activityLabel}` : ""}
         </span>
         <ChevronDown
           className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
@@ -420,16 +451,7 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                   : Object.keys(input).length === 0
                     ? "无参数"
                     : "查看参数")
-            const statusText =
-              status === "failed"
-                ? "失败"
-                : status === "interrupted"
-                  ? "已中断"
-                  : status === "pending"
-                    ? "等待执行"
-                    : calling
-                      ? "运行中"
-                      : undefined
+            const statusText = toolActivityLabel(tool.call, tool.result)
             return (
               <div key={tool.id}>
                 <button

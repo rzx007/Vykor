@@ -12,6 +12,12 @@ import {
 } from "../message-render-model"
 
 describe("message render model", () => {
+  it("shows the number of ordered edits in the existing tool summary", () => {
+    expect(summarizeToolCall(toolPart("Edit", { file_path: "a.ts", edits: [
+      { old_string: "a", new_string: "A" }, { old_string: "b", new_string: "B" },
+    ] }))).toMatchObject({ name: "编辑文件", detail: "a.ts · 2 处修改" });
+  });
+
   it.each([
     ["Edit", { arguments: { file_path: "C:/workspace/index.html", old_string: "old", new_string: "new" } }, "C:/workspace/index.html"],
     ["Shell", { arguments: { command: "Get-Content -LiteralPath index.html" } }, "Get-Content -LiteralPath index.html"],

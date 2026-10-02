@@ -47,6 +47,66 @@ function click(text: string) {
 }
 
 describe("tool parameter and result display", () => {
+  it.each(["Agent", "ImageGeneration", "BackgroundShellCreate", "ImageToText"])("shows %s generation as a compact non-expandable status", toolName => {
+    render([part(toolName, {}, {
+      id: "ui-tool-generation:r:g:1:0", input: undefined, toolUseId: undefined, status: "running",
+      metadata: { uiToolGeneration: true, toolProgress: { phase: "generating", receivedChars: 100, executionState: "not_started" } },
+    })])
+    expect(container.textContent).toContain(toolName)
+    expect(container.textContent).toContain("生成参数")
+    expect(container.textContent).toContain("100")
+    expect(container.textContent).not.toContain("未执行")
+    expect(container.textContent).not.toMatch(/文件编辑|工具查看|命令调用/)
+    expect(container.querySelector("button[aria-expanded]")).toBeNull()
+    expect(container.querySelector('[role="img"][aria-label="正在生成参数，尚未执行"]')).not.toBeNull()
+  })
+
+  it("shows a generating Write once without repeated status or empty detail panels", () => {
+    render([part("Write", {}, {
+      id: "ui-tool-generation:r:g:1:0", input: undefined, toolUseId: undefined, status: "running",
+      metadata: { uiToolGeneration: true, toolProgress: { phase: "generating", receivedChars: 9337, executionState: "not_started" } },
+    })])
+    expect(container.textContent).toContain("Write")
+    expect(container.textContent).toContain("9,337")
+    expect(container.textContent?.match(/生成参数/g)).toHaveLength(1)
+    expect(container.textContent?.match(/9,337/g)).toHaveLength(1)
+    expect(container.textContent).not.toContain("未执行")
+    expect(container.textContent).not.toMatch(/文件编辑|工具查看|命令调用/)
+    expect(container.textContent).not.toContain("参数尚未完整")
+    expect(container.textContent).not.toContain("工具尚未执行")
+    expect(container.textContent).not.toContain("等待工具返回结果")
+    expect(container.querySelector("button[aria-expanded]")).toBeNull()
+    expect(container.querySelector("pre")).toBeNull()
+  })
+
+  it("keeps real tool details expandable beside a non-expandable generation status", () => {
+    render([
+      part("Read", { file_path: "index.html" }, { output: "file content" }),
+      part("Write", {}, {
+        id: "ui-tool-generation:r:g:1:0", seq: 2, input: undefined, toolUseId: undefined, status: "running",
+        metadata: { uiToolGeneration: true, toolProgress: { phase: "generating", receivedChars: 100, executionState: "not_started" } },
+      }),
+    ])
+    click("工具查看 1 次")
+    expect(container.textContent?.match(/生成参数/g)).toHaveLength(1)
+    expect([...container.querySelectorAll("button")].some(button => button.textContent?.includes("Write"))).toBe(false)
+    click("读取文件")
+    expect(container.textContent).toContain("file content")
+    expect(container.querySelectorAll("pre")).toHaveLength(2)
+  })
+
+  it("shows permission and queue phases in the collapsed heading and ignores stale terminal progress", () => {
+    render([part("Write", { file_path: "a.ts" }, { status: "running", metadata: { toolProgress: { phase: "waiting_permission" } } })])
+    expect(container.textContent).toContain("等待你的确认")
+    render([part("Write", { file_path: "a.ts" }, { status: "failed", metadata: { toolProgress: { phase: "running" } } })])
+    expect(container.textContent).not.toContain("正在执行工具")
+    expect(container.querySelector(".shimmer")).toBeNull()
+  })
+  it("keeps a returned tool visible without pretending it is still executing", () => {
+    render([part("Write", { file_path: "a.ts" }, { status: "running", metadata: { toolProgress: { phase: "completed", executionState: "completed" } } })])
+    expect(container.textContent).toContain("工具已返回，等待本轮结果")
+    expect(container.querySelector(".shimmer")).toBeNull()
+  })
   it("counts a background command once without claiming a file edit", () => {
     render([part("BackgroundShellCreate", { command: "npm run dev" })])
     expect(container.textContent).toContain("命令调用 1 次")

@@ -13,6 +13,8 @@ import { visibleTranscriptParts } from "./transcript-visibility"
 import { planTurnBlocks } from "./turn-block-plan"
 import { selectRunNotices } from "./run-notices"
 import { LoadingState } from "@renderer/components/ui/loading-state"
+import { conversationActivityLabel } from "../message/message-render-model"
+import { isToolGenerationPresentation, withToolGenerationPresentation } from "../message/tool-generation-presentation"
 import { MessageScrollerItem } from "@renderer/components/ui/message-scroller"
 import type {
   DesktopSessionMessage,
@@ -64,9 +66,13 @@ export function ConversationTranscript({
     () => visibleTranscriptParts(parts, showReasoning),
     [parts, showReasoning]
   )
+  const presentation = useMemo(
+    () => running ? withToolGenerationPresentation(runs, messages, visibleParts) : { messages, parts: visibleParts },
+    [running, runs, messages, visibleParts]
+  )
   const entries = useMemo(
-    () => buildConversationEntries(messages, visibleParts, runs),
-    [messages, visibleParts, runs]
+    () => buildConversationEntries(presentation.messages, presentation.parts, runs),
+    [presentation, runs]
   )
   const lastTurn = [...entries].reverse().find((entry) => entry.type === "turn")
   const lastUserMessage = [...entries]
@@ -83,6 +89,7 @@ export function ConversationTranscript({
     }
     return undefined
   }, [runs])
+  const activityLabel = useMemo(() => conversationActivityLabel(runs, messages, visibleParts), [runs, messages, visibleParts])
 
   if (messages.length === 0 && !running && noticeRuns.length === 0) {
     return (
@@ -189,7 +196,7 @@ export function ConversationTranscript({
                     onOpenReview={onOpenReview}
                     onOpenTerminal={onOpenTerminal}
                   />
-                  {item.showActions ? (
+                  {item.showActions && !item.parts.some(isToolGenerationPresentation) ? (
                     <AssistantMessageActions
                       message={entry.turn.assistantMessages.at(-1)}
                       content={messageTextContent(entry.turn.assistantParts)}
@@ -234,9 +241,9 @@ export function ConversationTranscript({
           <ModelRetryNotice retry={modelRetry} />
         </MessageScrollerItem>
       ) : null}
-      {running ? (
+      {running && !modelRetry && activityLabel ? (
         <MessageScrollerItem messageId="conversation-running-status">
-          <LoadingState label="正在处理" variant="Dots" />
+          <LoadingState label={activityLabel} variant="Dots" />
         </MessageScrollerItem>
       ) : null}
     </>
