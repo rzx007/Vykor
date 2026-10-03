@@ -28,6 +28,45 @@ function expectWriteGuidance(system: string | undefined) {
 }
 
 describe("one complete file workflow", () => {
+  it("keeps wrong numeric Edit matches rejected and then accepts a complete Write without an extra flag", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-edit-write-recovery-"));
+    try {
+      const file = join(dir, "verify.cjs");
+      const original = "const todo = 23;\nconst done = 7;\n";
+      await writeFile(file, original);
+      let requests = 0;
+      const checked: string[] = [];
+      const registry = new ToolRegistry();
+      registry.register(fileEditTool); registry.register(fileWriteTool);
+      const engine = new QueryEngine({ async *streamMessage(): AsyncIterable<StreamEvent> {
+        const turn = ++requests;
+        if (turn <= 2) {
+          expect(await readFile(file, "utf8")).toBe(original);
+          yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "edit-" + turn, name: "Edit",
+            input: { file_path: file, old_string: "const todo = " + (turn === 1 ? 325 : 884) + ";", new_string: "const todo = 23;" } } };
+        } else if (turn === 3) {
+          expect(await readFile(file, "utf8")).toBe(original);
+          yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "write", name: "Write",
+            input: { file_path: file, content: "const todo = 23;\nconst done = 8;\n" } } };
+        }
+        yield { type: "complete", stopReason: turn <= 3 ? "tool_use" : "end_turn" };
+      } }, registry, { checkTool: async name => { checked.push(name); return { action: "allow" }; } },
+      { register() {}, execute: async () => ({ blocked: false }) }, { cwd: dir, trajectoryTrackerFactory: false });
+      const events: StreamEvent[] = [];
+      for await (const event of engine.submitMessage("fixture")) events.push(event);
+      const ends = events.filter(event => event.type === "tool_use_end");
+      expect(ends.slice(0, 2).map(e => e.result)).toEqual([
+        expect.objectContaining({ failureKind: "precondition", executionState: "not_started" }),
+        expect.objectContaining({ failureKind: "precondition", executionState: "not_started" }),
+      ]);
+      expect(JSON.stringify(ends[0]?.result.content)).toContain("const todo = 23;");
+      expect(ends[2]?.result).toMatchObject({ executionState: "completed" });
+      expect(ends[2]?.result.isError).not.toBe(true);
+      expect(checked).toEqual(["Edit", "Edit", "Write"]);
+      expect(requests).toBe(4);
+      expect(await readFile(file, "utf8")).toBe("const todo = 23;\nconst done = 8;\n");
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
   it("creates a file with one Write while the model sees a stable flat schema", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-single-write-"));
     try {
@@ -94,7 +133,7 @@ describe("one complete file workflow", () => {
             }
             yield { type: "tool_generation_progress", toolKey: "write-body", toolUseId: "write-body", toolName: "Write", receivedChars: 100 };
             yield { type: "tool_generation_progress", toolKey: "write-body", toolUseId: "write-body", toolName: "Write", receivedChars: body.length };
-            name = "Write"; id = "write-body"; input = { file_path: target, content: body };
+            name = "Write"; id = "write-body"; input = { file_path: target, content: body, expected_sha256: "0".repeat(64) };
           } else if (turn === 2) {
             const feedback = JSON.stringify(params.messages.filter(m => m.type === "tool_result" && m.toolUseId === "write-body"));
             expect(feedback).toContain("Supply the explicit target and intent options in the new call.");

@@ -16,7 +16,7 @@ import {
 import { convertToLineEnding, detectLineEnding, normalizeLineEndings } from "./edit-replacers.js";
 import { decodeUtf8Text, isBinaryContent } from "./text-content.js";
 
-export type PatchFailureKind = "invalid_input" | "policy";
+export type PatchFailureKind = "invalid_input" | "precondition" | "policy" | "command";
 
 /** ApplyPatch 内部的失败类型，避免靠 message 猜测错误种类。 */
 export class PatchToolError extends Error {
@@ -105,7 +105,9 @@ function classifyFile(file: ParsedDiff, style: PatchPathStyle): ClassifiedFile {
 function applyOne(body: string, file: ParsedDiff, label: string): string {
   const result = applyParsedPatch(body, file, { fuzzFactor: 0 });
   if (result === false) {
-    throw new PatchToolError("invalid_input", `Patch context does not match the current content: ${label}`);
+    // 新建补丁应适用于空正文；不成立时是补丁自身错误，不是磁盘内容冲突。
+    throw new PatchToolError(isDevNullPath(file.oldFileName ?? "") ? "invalid_input" : "precondition",
+      `Patch context does not match the current content: ${label}`);
   }
   return result;
 }
@@ -125,26 +127,25 @@ async function readExisting(
   executionPath: string,
   label: string,
 ): Promise<Uint8Array> {
-  let item: Awaited<ReturnType<FileOperations["stat"]>>;
   try {
-    item = await operations.stat(executionPath);
+    const item = await operations.stat(executionPath);
+    if (!item.isFile || item.isSymbolicLink) {
+      throw new PatchToolError("precondition", `Patch target is not a regular file: ${label}`);
+    }
+    return await operations.readBytes(executionPath);
   } catch (error) {
     if (isFileNotFoundError(error)) {
-      throw new PatchToolError("invalid_input", `Patch target does not exist: ${label}`);
+      throw new PatchToolError("precondition", `Patch target does not exist: ${label}`);
     }
     throw error;
   }
-  if (!item.isFile || item.isSymbolicLink) {
-    throw new PatchToolError("invalid_input", `Patch target is not a regular file: ${label}`);
-  }
-  return operations.readBytes(executionPath);
 }
 
 function decodeOrThrow(bytes: Uint8Array, label: string): string {
   try {
     return decodeUtf8Text(bytes);
   } catch {
-    throw new PatchToolError("invalid_input", `Patch target is not valid UTF-8 text: ${label}`);
+    throw new PatchToolError("precondition", `Patch target is not valid UTF-8 text: ${label}`);
   }
 }
 
@@ -181,7 +182,7 @@ async function planChange(item: ClassifiedFile, deps: PlanDependencies): Promise
 
   if (item.operation === "create") {
     if (await statExists(operations, executionPath)) {
-      throw new PatchToolError("invalid_input", `Cannot create a file that already exists: ${item.relativePath}`);
+      throw new PatchToolError("precondition", `Cannot create a file that already exists: ${item.relativePath}`);
     }
     return {
       operation: "create",
@@ -340,8 +341,8 @@ function patchPartialFailure(
   };
 }
 
-/** 把 ApplyPatch 的已知错误映射成稳定反馈；未知异常一律标为结果不确定。 */
-export function patchErrorResult(error: unknown): ToolResult {
+/** 计划／检查错误未写入；进入执行阶段的意外异常不能推断回滚。 */
+export function patchErrorResult(error: unknown, executionState: "not_started" | "unknown" = "unknown"): ToolResult {
   if (error instanceof PatchToolError) {
     return {
       content: [{ type: "text", text: `Error applying patch: ${error.message}` }],
@@ -354,9 +355,9 @@ export function patchErrorResult(error: unknown): ToolResult {
   return {
     content: [{ type: "text", text: `Error applying patch: ${error}` }],
     isError: true,
-    failureKind: "unknown_outcome",
-    executionState: "unknown",
-    recoveryHint: "补丁可能已部分生效；先检查工作区实际状态。",
+    failureKind: executionState === "not_started" ? "command" : "unknown_outcome",
+    executionState,
+    recoveryHint: executionState === "not_started" ? "本次未开始修改；检查路径、权限和目标当前状态。" : "补丁可能已部分生效；先检查工作区实际状态。",
   };
 }
 
@@ -371,20 +372,21 @@ export async function executePatchPlan(plan: PatchPlan, operations: FileOperatio
     try {
       const item = await operations.stat(change.executionPath);
       if (!item.isFile || item.isSymbolicLink) {
-        throw new PatchToolError("invalid_input", `Patch target is no longer a regular file: ${change.relativePath}`);
+        throw new PatchToolError("precondition", `Patch target is no longer a regular file: ${change.relativePath}`);
       }
       current = await operations.readBytes(change.executionPath);
     } catch (error) {
       if (isFileNotFoundError(error)) {
         throw new PatchToolError(
-          "invalid_input",
+          "precondition",
           `Patch target changed or disappeared before writing: ${change.relativePath}`,
         );
       }
-      throw error;
+      if (error instanceof PatchToolError) throw error;
+      throw new PatchToolError("command", `Patch preflight failed before writing: ${error}`);
     }
     if (sha256(current) !== change.beforeHash) {
-      throw new PatchToolError("invalid_input", `Patch target changed after planning: ${change.relativePath}`);
+      throw new PatchToolError("precondition", `Patch target changed after planning: ${change.relativePath}`);
     }
   }
 
@@ -419,11 +421,13 @@ export const applyPatchTool: ToolDefinition = {
     required: ["patch"],
   },
   async execute(input, context) {
+    let planning = true;
     try {
       const plan = await planPatch(input.patch as string, context);
+      planning = false;
       return await executePatchPlan(plan, fileOperationsFor(context));
     } catch (error) {
-      return patchErrorResult(error);
+      return patchErrorResult(error, planning ? "not_started" : "unknown");
     }
   },
 };

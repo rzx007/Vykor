@@ -38,45 +38,6 @@ function prepare(input: Record<string, unknown>, history: Message[] = pair(), me
 }
 
 describe("tool input reuse before authorization", () => {
-  it("adds tool-owned recovery text from isolated body-free options and failure facts", () => {
-    const source = call("source", { file_path: "a.txt", content: "PRIVATE-BODY", options: { value: "original" } });
-    const history = pair(source);
-    const result = { toolUseId: "source", toolName: "Write", content: [], isError: true,
-      failureKind: "invalid_input" as const, executionState: "not_started" as const, metadata: { facts: { value: "original" } } };
-    const original = structuredClone({ source, history, result });
-    const tool = { ...definition, inputReuse: { ...definition.inputReuse,
-      formatRecoveryHint: (input: any, reference: string, facts: any) => {
-        expect(input).not.toHaveProperty("content");
-        expect(facts).not.toHaveProperty("content");
-        input.options.value = "changed";
-        facts.metadata.facts.value = "changed";
-        facts.executionState = "completed";
-        return "Tool-owned correction for " + reference;
-      },
-    } } as ToolDefinition;
-    const feedback = withToolInputReuseHint(tool, source, result, history);
-    expect(JSON.stringify(feedback.content)).toContain("Tool-owned correction for source");
-    expect(JSON.stringify(feedback.content)).not.toContain("PRIVATE-BODY");
-    expect(feedback.executionState).toBe("not_started");
-    expect({ source, history, result }).toEqual(original);
-  });
-
-  it.each(["throw", "non-string", "oversized"] as const)("keeps the ordinary usable reference if the recovery formatter is %s", mode => {
-    const source = call("source", { file_path: "a.txt", content: "body" });
-    const result = { toolUseId: "source", toolName: "Write", content: [], isError: true,
-      failureKind: "invalid_input" as const, executionState: "not_started" as const };
-    const tool = { ...definition, inputReuse: { ...definition.inputReuse,
-      formatRecoveryHint: () => {
-        if (mode === "throw") throw new Error("optional formatting failed");
-        return mode === "non-string" ? {} : "OVERSIZED-CUSTOM-HINT".repeat(100);
-      },
-    } } as unknown as ToolDefinition;
-    const feedback = withToolInputReuseHint(tool, source, result, pair(source));
-    expect(feedback).toMatchObject({ isError: true, executionState: "not_started" });
-    expect(JSON.stringify(feedback.content)).toContain('content_from=\\"source\\"');
-    expect(JSON.stringify(feedback.content)).not.toContain("OVERSIZED-CUSTOM-HINT");
-  });
-
   it("copies only the requested content and leaves source and model input unchanged", () => {
     const history = pair();
     const modelInput = { file_path: "b.txt", content_from: "source", overwrite: true };

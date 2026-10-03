@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { ToolDefinition, ToolResult } from "@vykor/core";
 import { resolveToolPathInContext } from "./environment-path.js";
 import { sandboxPathError } from "./sandbox-guard.js";
-import { fileOperationsFor, fileSnapshotMatches } from "./operations.js";
+import { fileOperationsFor, fileSnapshotMatches, isFileNotFoundError } from "./operations.js";
 import { managedPersistencePathKind } from "./managed-persistence-path.js";
 import { isSystemPath } from "./file-mutation-guard.js";
 import { decodeUtf8Text } from "./text-content.js";
@@ -15,7 +15,7 @@ const replacementProperties = {
   replace_all: { type: "boolean", description: "Replace all occurrences." },
 };
 
-function refused(text: string, failureKind: "invalid_input" | "policy" = "invalid_input"): ToolResult {
+function refused(text: string, failureKind: "invalid_input" | "precondition" | "policy" = "invalid_input"): ToolResult {
   return { content: [{ type: "text", text }], isError: true, failureKind, executionState: "not_started" };
 }
 
@@ -54,21 +54,21 @@ export const fileEditTool: ToolDefinition = {
       }
       const operations = fileOperationsFor(context);
       const item = await operations.stat(filePath);
-      if (!item.isFile || item.isSymbolicLink) return refused("Edit requires a regular file, not a directory or symbolic link.");
+      if (!item.isFile || item.isSymbolicLink) return refused("Edit requires a regular file, not a directory or symbolic link.", "precondition");
       const beforeBytes = await operations.readBytes(filePath);
       if (typeof input.expected_sha256 === "string" && createHash("sha256").update(beforeBytes).digest("hex") !== input.expected_sha256.toLowerCase()) {
-        return refused("Edit conflict: the existing file no longer matches expected_sha256. Read the current file again.");
+        return refused("Edit conflict: the existing file no longer matches expected_sha256. Read the current file again.", "precondition");
       }
       let original: string;
       try { original = decodeUtf8Text(beforeBytes); }
-      catch { return refused("Edit requires valid UTF-8 text; binary or invalid content was not modified."); }
+      catch { return refused("Edit requires valid UTF-8 text; binary or invalid content was not modified.", "precondition"); }
       let plan: ReturnType<typeof planTextEdits>;
       try { plan = planTextEdits(original, input); }
       catch (error) {
         if (error instanceof EditPlanError) return editFailureResult(error, original);
         throw error;
       }
-      if (!await fileSnapshotMatches(operations, filePath, beforeBytes)) return refused("Edit conflict: the file changed after reading it. Read its current state before trying again.");
+      if (!await fileSnapshotMatches(operations, filePath, beforeBytes)) return refused("Edit conflict: the file changed after reading it. Read its current state before trying again.", "precondition");
       writeStarted = true;
       await operations.writeTextAtomic(filePath, plan.content);
       return {
@@ -77,6 +77,7 @@ export const fileEditTool: ToolDefinition = {
         metadata: { editCount: plan.editCount },
       };
     } catch (error) {
+      if (!writeStarted && isFileNotFoundError(error)) return refused("Edit target does not exist. Check the current path; use Write to create a new file.", "precondition");
       return {
         content: [{ type: "text", text: `Error editing file: ${error}` }], isError: true,
         failureKind: writeStarted ? "unknown_outcome" : "command",

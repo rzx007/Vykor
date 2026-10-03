@@ -948,7 +948,9 @@ describe("Integration: Full Agent Loop", () => {
 
     const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { maxTurns: 2 });
     const events: StreamEvent[] = [];
-    for await (const event of engine.submitMessage("generate a scene")) events.push(event);
+    await expect(async () => {
+      for await (const event of engine.submitMessage("generate a scene")) events.push(event);
+    }).rejects.toMatchObject({ name: "MaxTurnsExceeded" });
 
     expect(executions).toBe(1);
     const toolEnds = events.filter((event) => event.type === "tool_use_end") as any[];
@@ -1022,16 +1024,18 @@ describe("Integration: Full Agent Loop", () => {
 
     const engine = new QueryEngine(client as any, registry, allowAll(), noopHooks(), { maxTurns: 10 });
     const events: StreamEvent[] = [];
-    for await (const event of engine.submitMessage("generate a scene")) events.push(event);
+    await expect(async () => {
+      for await (const event of engine.submitMessage("generate a scene")) events.push(event);
+    }).rejects.toMatchObject({ name: "ToolRecoveryExceeded" });
 
     expect(generateExecutions).toBe(1);
     expect(searchExecutions).toBe(2);
-    expect(requests).toHaveLength(5);
-    expect(requests.at(-1).tools).toBeUndefined();
-    expect(requests.at(-1).system).toContain("Stop using tools");
+    expect(requests).toHaveLength(4);
+    expect(requests.every(request => request.tools?.length > 0)).toBe(true);
+    expect(events.filter(event => event.type === "tool_use_end")).toHaveLength(4);
     expect(events.some((event: any) =>
       event.type === "text_delta" && event.delta.includes("stopped retrying"),
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it("allows corrected input to succeed after three different failed calls", async () => {

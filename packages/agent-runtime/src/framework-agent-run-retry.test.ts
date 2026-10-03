@@ -31,25 +31,31 @@ function runWith(script: StreamEvent[], usage: { inputTokens: number; outputToke
 }
 
 describe("FrameworkAgentRun model retry projection", () => {
-  it("reports exhausted tool input corrections as a failed run with serialized actionable feedback", async () => {
+  it.each([
+    { kind: "invalid_input" as const, limit: 3, errorName: "ToolInputCorrectionsExceeded", hint: "修正参数格式。", sameInput: false, maxTurns: 20 },
+    { kind: "precondition" as const, limit: 5, errorName: "ToolPreconditionsExceeded", hint: "确认当前目标内容。", sameInput: false, maxTurns: 20 },
+    { kind: "precondition" as const, limit: 4, errorName: "ToolRecoveryExceeded", hint: "恢复额度", sameInput: true, maxTurns: 20 },
+    { kind: "precondition" as const, limit: 2, errorName: "MaxTurnsExceeded", hint: "Exceeded maximum agentic turns", sameInput: true, maxTurns: 2 },
+  ])("reports $errorName as a failed run with serialized actionable feedback", async ({ kind, limit, errorName, hint, sameInput, maxTurns }) => {
     let requests = 0;
+    let executions = 0;
     const registry = new ToolRegistry();
     registry.register({
       name: "Write", description: "in-memory input refusal",
       inputSchema: { type: "object", properties: { attempt: { type: "number" } } },
-      execute: async () => ({ content: [{ type: "text", text: "PRIVATE-BODY" }], isError: true,
-        failureKind: "invalid_input", executionState: "not_started", recoveryHint: "确认完整覆盖时传 overwrite=true。" }),
+      execute: async () => { executions++; return { content: [{ type: "text", text: "PRIVATE-BODY" }], isError: true,
+        failureKind: kind, executionState: "not_started", recoveryHint: hint }; },
     });
     const client = { async *streamMessage(): AsyncIterable<StreamEvent> {
       const attempt = ++requests;
-      if (attempt <= 3) yield { type: "tool_use_start", toolUse: {
-        type: "tool_use", id: "bad-" + attempt, name: "Write", input: { attempt },
+      if (attempt <= limit) yield { type: "tool_use_start", toolUse: {
+        type: "tool_use", id: "bad-" + attempt, name: "Write", input: { attempt: sameInput ? 1 : attempt },
       } };
       else yield { type: "text_delta", delta: "<｜DSML｜tool_calls>not executed</｜DSML｜tool_calls>" };
-      yield { type: "complete", stopReason: attempt <= 3 ? "tool_use" : "end_turn" };
+      yield { type: "complete", stopReason: attempt <= limit ? "tool_use" : "end_turn" };
     } };
     const engine = new QueryEngine(client, registry, { checkTool: async () => ({ action: "allow" }) },
-      { register() {}, execute: async () => ({ blocked: false }) }, { trajectoryTrackerFactory: false });
+      { register() {}, execute: async () => ({ blocked: false }) }, { trajectoryTrackerFactory: false, maxTurns });
     const events: AgentEventInput[] = [];
     const run = new FrameworkAgentRun({
       agentId: "a", ids: { inputId: "i", runId: "r", traceId: "t" }, content: "fixture", delivery: "queue",
@@ -59,13 +65,14 @@ describe("FrameworkAgentRun model retry projection", () => {
       runtime: { queryEngine: engine } as any, effects: {} as any,
       children: { cwd: process.cwd(), createController: () => ({}) } as any, onSettled: () => {},
     });
-    await expect(run.result).rejects.toMatchObject({ name: "ToolInputCorrectionsExceeded" });
-    expect(requests).toBe(3);
-    expect(events.filter(event => event.type === "tool.completed")).toHaveLength(3);
+    await expect(run.result).rejects.toMatchObject({ name: errorName });
+    expect(requests).toBe(limit);
+    expect(executions).toBe(sameInput ? 1 : limit);
+    expect(events.filter(event => event.type === "tool.completed")).toHaveLength(limit);
     expect(events.filter(event => event.type === "run.completed")).toHaveLength(0);
     const failed = events.find(event => event.type === "run.failed");
-    expect(failed).toMatchObject({ data: { error: { name: "ToolInputCorrectionsExceeded",
-      message: expect.stringContaining("overwrite=true") } } });
+    expect(failed).toMatchObject({ data: { error: { name: errorName,
+      message: expect.stringContaining(hint) } } });
     expect(JSON.stringify(failed)).not.toContain("PRIVATE-BODY");
   });
 

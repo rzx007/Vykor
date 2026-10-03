@@ -31,11 +31,11 @@ function writeSummary(
   return `${head}${displayPath}${tail}`;
 }
 
-function invalidInput(message: string, recoveryHint?: string): ToolResult {
+function refused(message: string, failureKind: "invalid_input" | "precondition" = "invalid_input", recoveryHint?: string): ToolResult {
   return {
     content: [{ type: "text", text: message }],
     isError: true,
-    failureKind: "invalid_input",
+    failureKind,
     executionState: "not_started",
     ...(recoveryHint ? { recoveryHint } : {}),
   };
@@ -60,17 +60,8 @@ export const fileWriteTool: ToolDefinition = {
   name: "Write",
   serialGroup: "file_mutation",
   description:
-    "Create or replace a complete UTF-8 file. Provide file_path and exactly one of content or content_from. Set overwrite=true to replace an existing file with different content; expected_sha256 optionally guards an existing file's raw bytes. content_from reuses a settled Write's retained complete body, including a failed call, but does not reuse its target or permission. Prefer Edit for small changes and ApplyPatch for multi-file or multi-hunk changes.",
-  inputReuse: {
-    property: "content", referenceProperty: "content_from",
-    formatRecoveryHint(input, sourceId, result) {
-      if (result.metadata?.writeFailure !== "overwrite_required" || result.failureKind !== "invalid_input"
-        || result.executionState !== "not_started" || input.overwrite === false || typeof input.file_path !== "string") return undefined;
-      const retry = { file_path: input.file_path, overwrite: true, content_from: sourceId,
-        ...(typeof input.expected_sha256 === "string" ? { expected_sha256: input.expected_sha256 } : {}) };
-      return "Only if complete replacement is intended, use this short Write call without regenerating unchanged content; otherwise use Edit.\nRetry example: " + JSON.stringify(retry);
-    },
-  },
+    "Create or fully replace a UTF-8 file with the supplied complete content, subject to current permissions and file-state checks. Provide file_path and exactly one of content or content_from. expected_sha256 optionally guards an existing file's raw bytes. content_from reuses a settled Write's retained complete body, including a failed call, but does not reuse its target or permission. Prefer Edit for small changes and ApplyPatch for multi-file or multi-hunk changes.",
+  inputReuse: { property: "content", referenceProperty: "content_from" },
   inputSchema: {
     type: "object",
     properties: {
@@ -79,7 +70,7 @@ export const fileWriteTool: ToolDefinition = {
       content_from: { type: "string", description: "Previous settled Write tool call ID whose complete content to reuse. Do not also pass content. Only works while that content remains in the current conversation history." },
       overwrite: {
         type: "boolean",
-        description: "Set true to replace an existing file with the complete content.",
+        description: "Optional compatibility guard: false forbids replacing different existing content. Omit for normal create or complete replacement.",
       },
       expected_sha256: {
         type: "string",
@@ -92,7 +83,10 @@ export const fileWriteTool: ToolDefinition = {
   async execute(input, context) {
     if (Object.keys(input).some(key => !["file_path", "content", "overwrite", "expected_sha256"].includes(key))
       || typeof input.file_path !== "string" || Object.hasOwn(input, "content_from") || typeof input.content !== "string") {
-      return invalidInput("Write requires resolved string content; content_from must be resolved by the engine.");
+      return refused("Write requires resolved string content; content_from must be resolved by the engine.");
+    }
+    if (input.overwrite !== undefined && typeof input.overwrite !== "boolean") {
+      return refused("overwrite must be boolean when provided.");
     }
     const rawPath = input.file_path as string;
     const content = input.content as string;
@@ -103,38 +97,31 @@ export const fileWriteTool: ToolDefinition = {
       expectedSha256Input !== undefined &&
       (expectedSha256 === undefined || !SHA256_PATTERN.test(expectedSha256))
     ) {
-      return invalidInput("expected_sha256 must be a 64-character hexadecimal SHA-256 value.");
+      return refused("expected_sha256 must be a 64-character hexadecimal SHA-256 value.");
     }
 
-    // Guard the raw input as well: a Windows-style system path stays recognizable
-    // even on platforms whose path resolver would treat it as relative.
-    let filePath: string;
+    let writeStarted = false;
     try {
-      const resolved = await resolveToolPathInContext(rawPath, context, "write");
-      filePath = resolved;
-    } catch (error) {
-      throw error;
-    }
+      const filePath = await resolveToolPathInContext(rawPath, context, "write");
+      if (managedPersistencePathKind(filePath, cwd)) {
+        return {
+          content: [{ type: "text", text: "Error: this is a managed persistence path. Use the Remember tool instead." }],
+          isError: true,
+          failureKind: "policy",
+          executionState: "not_started",
+        };
+      }
 
-    if (managedPersistencePathKind(filePath, cwd)) {
-      return {
-        content: [{ type: "text", text: "Error: this is a managed persistence path. Use the Remember tool instead." }],
-        isError: true,
-        failureKind: "policy",
-        executionState: "not_started",
-      };
-    }
+      // Guard raw Windows-style paths even when the resolver runs on another platform.
+      if (isSystemPath(rawPath) || isSystemPath(filePath)) {
+        return {
+          content: [{ type: "text", text: `Error: writing to system directory is not allowed: ${filePath}` }],
+          isError: true,
+          failureKind: "policy",
+          executionState: "not_started",
+        };
+      }
 
-    if (isSystemPath(rawPath) || isSystemPath(filePath)) {
-      return {
-        content: [{ type: "text", text: `Error: writing to system directory is not allowed: ${filePath}` }],
-        isError: true,
-        failureKind: "policy",
-        executionState: "not_started",
-      };
-    }
-
-    try {
       const sandboxError = await sandboxPathError(filePath, cwd, "write", context.settings, context.environment);
       if (sandboxError) {
         return {
@@ -146,12 +133,11 @@ export const fileWriteTool: ToolDefinition = {
         };
       }
 
-      const overwrite = input.overwrite === true;
       const operations = fileOperationsFor(context);
       let existing: Uint8Array | undefined;
       try {
         const item = await operations.stat(filePath);
-        if (!item.isFile || item.isSymbolicLink) return invalidInput(`Cannot write over a non-file path: ${filePath}`);
+        if (!item.isFile || item.isSymbolicLink) return refused(`Cannot write over a non-file path: ${filePath}`, "precondition");
         const readSandboxError = await sandboxPathError(filePath, cwd, "read", context.settings, context.environment);
         if (readSandboxError) {
           return {
@@ -168,8 +154,9 @@ export const fileWriteTool: ToolDefinition = {
 
       if (!existing) {
         if (expectedSha256 !== undefined) {
-          return invalidInput("expected_sha256 cannot be used when creating a new file.");
+          return refused("expected_sha256 cannot be used when creating a new file.", "precondition");
         }
+        writeStarted = true;
         await operations.createTextExclusive(filePath, content);
         return completed("created", filePath, content);
       }
@@ -179,29 +166,29 @@ export const fileWriteTool: ToolDefinition = {
         return completed("unchanged", filePath, content);
       }
       if (expectedSha256 !== undefined && sha256(existing) !== expectedSha256.toLowerCase()) {
-        return invalidInput(
+        return refused(
           "Write conflict: the existing file no longer matches expected_sha256.",
+          "precondition",
           "重新 Read 目标文件确认当前内容，再决定是否覆盖；不要绕过 hash 校验。",
         );
       }
-      if (!overwrite) {
-        return { ...invalidInput(
-          "File already exists with different content. Use Edit, ApplyPatch, or set overwrite=true for a complete replacement.",
-          "目标已有不同内容，本次未写入。确认完整替换时，在实际工具参数中传 overwrite=true；正文不变优先用可用的 content_from，不重发全文。局部修改用 Edit。",
-        ), metadata: { writeFailure: "overwrite_required" } };
+      if (input.overwrite === false) {
+        return refused("File already exists with different content; overwrite=false forbids replacement.", "precondition",
+          "本次明确禁止覆盖，未写入；确认目标和修改范围，不能自动反转此选项。");
       }
       if (!await fileSnapshotMatches(operations, filePath, existing)) {
-        return invalidInput("Write conflict: the file changed after reading it.", "重新 Read 当前文件后再决定修改；不要覆盖其他进程的新内容。");
+        return refused("Write conflict: the file changed after reading it.", "precondition", "重新 Read 当前文件后再决定修改；不要覆盖其他进程的新内容。");
       }
+      writeStarted = true;
       await operations.writeTextAtomic(filePath, content);
       return completed("overwrote", filePath, content);
     } catch (error) {
       return {
         content: [{ type: "text", text: `Error writing file: ${error}` }],
         isError: true,
-        failureKind: "unknown_outcome",
-        executionState: "unknown",
-        recoveryHint: "写入可能已部分生效；先检查目标文件实际状态。",
+        failureKind: writeStarted ? "unknown_outcome" : "command",
+        executionState: writeStarted ? "unknown" : "not_started",
+        recoveryHint: writeStarted ? "写入可能已部分生效；先检查目标文件实际状态。" : "本次未开始写入；检查路径、权限和目标当前状态。",
       };
     }
   },

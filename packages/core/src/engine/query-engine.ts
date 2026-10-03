@@ -52,7 +52,7 @@ import {
 const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
 const RECOVERY_TOOL_TURNS = 2;
-const TOOL_INPUT_CORRECTIONS = 2;
+const TOOL_CORRECTION_LIMITS = { invalid_input: 3, precondition: 5 } as const;
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =
@@ -123,14 +123,17 @@ export class MaxTurnsExceeded extends Error {
   }
 }
 
-class ToolInputCorrectionsExceeded extends Error {
-  constructor(turns: number, lastFailure?: ToolExecutionResult) {
+class ToolCorrectionsExceeded extends Error {
+  constructor(kind: keyof typeof TOOL_CORRECTION_LIMITS | "recovery_guard", turns: number, lastFailure?: ToolExecutionResult) {
     const toolName = lastFailure?.toolName ?? "未知工具";
     const displayName = toolName.length > 80 ? toolName.slice(0, 80) + "…" : toolName;
     const hint = lastFailure ? toolFeedbackFields(lastFailure).recoveryHint : undefined;
-    super("工具参数连续 " + turns + " 轮无效，本轮已停止自动纠错。最后失败工具：" + displayName
-      + "。" + (hint ?? "请根据工具反馈修正参数。") + " 此次停止不代表任务已完成。");
-    this.name = "ToolInputCorrectionsExceeded";
+    const reason = kind === "recovery_guard" ? "重复失败调用的恢复额度（" + turns + "轮）已耗尽"
+      : (kind === "invalid_input" ? "工具参数" : "文件条件") + "在未完全成功的工具批次中累计 " + turns + " 轮失败";
+    super(reason + "，本轮已停止自动纠错。最后失败工具：" + displayName
+      + "。" + (hint ?? "请根据工具反馈检查参数和目标状态。") + " 此次停止不代表任务已完成。");
+    this.name = kind === "recovery_guard" ? "ToolRecoveryExceeded"
+      : kind === "invalid_input" ? "ToolInputCorrectionsExceeded" : "ToolPreconditionsExceeded";
   }
 }
 
@@ -311,7 +314,7 @@ export class QueryEngine implements IQueryEngine {
         : (this.options.trajectoryTrackerFactory?.() ?? new DefaultTrajectoryTracker());
     const trajectoryControl = createTrajectoryLoopControl();
     let recoveryToolTurnsRemaining: number | null = null;
-    let consecutiveInvalidInputTurns = 0;
+    const correctionTurns = { invalid_input: 0, precondition: 0 };
     let forceFinalResponse = false;
     let childFinalizing = false;
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
@@ -658,12 +661,17 @@ export class QueryEngine implements IQueryEngine {
         // Evaluate the whole batch so a successful alternative cancels recovery
         // regardless of whether it appears before or after a rejected retry.
         if (results.some((result) => !result.isError)) recoveryToolTurnsRemaining = null;
-        // Count failed correction turns, even if raw arguments or sibling calls change.
-        const invalidResults = results.filter((result) => result.failureKind === "invalid_input");
-        consecutiveInvalidInputTurns = invalidResults.length ? consecutiveInvalidInputTurns + 1 : 0;
-        // 批次已完整结算；耗尽纠错后直接失败，避免无工具的额外模型收尾被误记为完成。
-        if (consecutiveInvalidInputTurns > TOOL_INPUT_CORRECTIONS) {
-          throw new ToolInputCorrectionsExceeded(consecutiveInvalidInputTurns, invalidResults.at(-1));
+        // Only a fully successful batch resets allowances; switching tools or failure kinds does not.
+        if (results.every(result => !result.isError)) {
+          correctionTurns.invalid_input = correctionTurns.precondition = 0;
+        }
+        for (const kind of ["invalid_input", "precondition"] as const) {
+          const failed = results.filter(result => result.isError && result.failureKind === kind);
+          if (failed.length) correctionTurns[kind]++;
+          // The entire batch is settled before stopping; no extra model finalization request.
+          if (correctionTurns[kind] >= TOOL_CORRECTION_LIMITS[kind]) {
+            throw new ToolCorrectionsExceeded(kind, correctionTurns[kind], failed.at(-1));
+          }
         }
         // Single removable integration point: commenting out this statement disables trajectory decisions.
         applyTrajectoryTracker(
@@ -680,7 +688,7 @@ export class QueryEngine implements IQueryEngine {
         if (recoveringAtTurnStart && recoveryToolTurnsRemaining !== null) {
           recoveryToolTurnsRemaining--;
           if (recoveryToolTurnsRemaining <= 0) {
-            forceFinalResponse = true;
+            throw new ToolCorrectionsExceeded("recovery_guard", RECOVERY_TOOL_TURNS, results.filter(result => result.isError).at(-1));
           }
         }
         turnCount++;
@@ -690,12 +698,6 @@ export class QueryEngine implements IQueryEngine {
         }
         if (turnCount >= maxTurnsLimit()) {
           options.execution?.closeSteering();
-          if (!forcedFinalTurn && (recoveryToolTurnsRemaining !== null
-            || (hardMaxTurns === undefined && consecutiveInvalidInputTurns > 0))) {
-            // Keep the root recovery path's existing blocker-report behavior.
-            forceFinalResponse = true;
-            continue;
-          }
           throw new MaxTurnsExceeded(
             maxTurnsLimit(),
             childFinalizing && assistantText ? assistantText : undefined,

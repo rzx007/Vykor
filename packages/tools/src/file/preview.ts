@@ -1,8 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { parseTextEdits, planTextEdits } from "./edit-plan.js";
 import { decodeUtf8Text } from "./text-content.js";
-import { HostFileOperations } from "./operations.js";
+import { HostFileOperations, isFileNotFoundError } from "./operations.js";
 
 /**
  * 一次文件改动的预览：路径 + 改动前内容 + 改动后内容。**不写盘**。
@@ -40,16 +39,24 @@ async function computeWriteChange(
 ): Promise<FileChangePreview | null> {
   const path = input.file_path;
   const content = input.content;
-  if (typeof path !== "string" || typeof content !== "string") return null;
+  if (typeof path !== "string" || typeof content !== "string"
+    || (input.overwrite !== undefined && typeof input.overwrite !== "boolean")
+    || (input.expected_sha256 !== undefined && (typeof input.expected_sha256 !== "string"
+      || !/^[a-f0-9]{64}$/i.test(input.expected_sha256)))) return null;
 
-  // 文件可能不存在（首次写）——此时 before 视为空串。
-  let before = "";
+  const operations = new HostFileOperations();
   try {
-    before = await readFile(path, "utf-8");
-  } catch {
-    before = "";
+    const item = await operations.stat(path);
+    if (!item.isFile || item.isSymbolicLink) return null;
+    const bytes = await operations.readBytes(path);
+    const before = decodeUtf8Text(bytes);
+    if (before !== content && (input.overwrite === false || (typeof input.expected_sha256 === "string"
+      && createHash("sha256").update(bytes).digest("hex") !== input.expected_sha256.toLowerCase()))) return null;
+    return { path, before, after: content };
+  } catch (error) {
+    // 只有不存在可视为新建；权限／编码／其他读取错误不能伪装成空文件。
+    return isFileNotFoundError(error) && input.expected_sha256 === undefined ? { path, before: "", after: content } : null;
   }
-  return { path, before, after: content };
 }
 
 async function computeEditChange(

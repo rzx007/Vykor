@@ -26,7 +26,7 @@ describe("fileEditTool", () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result).toMatchObject({ executionState: "not_started", failureKind: "invalid_input" });
+      expect(result).toMatchObject({ executionState: "not_started", failureKind: "precondition" });
       expect(result.metadata?.editFailure).toMatchObject({ kind: "ambiguous", source: "original_file", matchCount: 3, matchLines: [1, 3, 4] });
       expect((result.content[0] as { type: "text"; text: string }).text).toContain("1: same");
     } finally {

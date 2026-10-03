@@ -22,7 +22,7 @@ describe("one file edit plan for preview, batch execution and recovery", () => {
     const new_string = "/* WORK layers */\\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{";
     await fixture(body, async (file, dir) => {
       const failed = await fileEditTool.execute({ file_path: file, old_string, new_string }, { cwd: dir, settings });
-      expect(failed).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started",
+      expect(failed).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started",
         metadata: { editFailure: { kind: "disproportionate", matchCount: 1 } } });
       expect(failed.recoveryHint).toContain("实际换行");
       expect(failed.recoveryHint).toContain("new_string");

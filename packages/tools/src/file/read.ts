@@ -115,6 +115,16 @@ export function suggestSimilarNames(target: string, entries: string[]): string[]
     .slice(0, MAX_SUGGESTIONS);
 }
 
+/** 诊断是否可用只影响说明，不改变原始读取失败的事实。 */
+function readErrorResult(error: unknown): ToolResult {
+  const missing = isFileNotFoundError(error);
+  return {
+    content: [{ type: "text", text: `Error reading file: ${error}` }], isError: true,
+    failureKind: missing ? "precondition" : "unknown_outcome",
+    executionState: missing ? "not_started" : "unknown",
+  };
+}
+
 export const fileReadTool: ToolDefinition = {
   name: "Read",
   description:
@@ -167,20 +177,7 @@ export const fileReadTool: ToolDefinition = {
       try {
         fileStat = await operations.stat(filePath);
       } catch (statError) {
-        const parentSandboxError = await sandboxPathError(
-          readPathInfo(filePath).parent,
-          cwd,
-          "read",
-          context.settings,
-          context.environment,
-        );
-        if (parentSandboxError) {
-          return {
-            content: [{ type: "text", text: `Error reading file: ${statError}` }],
-            isError: true,
-          };
-        }
-        return await describeMissingPath(operations, filePath, statError);
+        return await describeMissingPath(operations, filePath, statError, context);
       }
       if (fileStat.isDirectory) {
         return await readDirectoryListing(operations, filePath, offset, limit);
@@ -214,7 +211,7 @@ export const fileReadTool: ToolDefinition = {
         return {
           content: [{ type: "text", text: `Cannot read binary file: ${filePath}` }],
           isError: true,
-          failureKind: "invalid_input",
+          failureKind: "precondition",
           executionState: "completed",
         };
       }
@@ -225,7 +222,7 @@ export const fileReadTool: ToolDefinition = {
         return {
           content: [{ type: "text", text: `Offset ${offset} is out of range for this file (${total} lines)` }],
           isError: true,
-          failureKind: "invalid_input",
+          failureKind: "precondition",
           executionState: "completed",
         };
       }
@@ -244,12 +241,7 @@ export const fileReadTool: ToolDefinition = {
         compactSummary: `Read completed: ${filePath}; lines=${offset}-${offset + slice.emitted - 1}; total=${total}`,
       };
     } catch (error) {
-      return {
-        content: [{ type: "text", text: `Error reading file: ${error}` }],
-        isError: true,
-        failureKind: "unknown_outcome",
-        executionState: "unknown",
-      };
+      return readErrorResult(error);
     }
   },
 };
@@ -298,7 +290,7 @@ async function inspectFileInfo(
     : item.isFile ? "file" : item.isDirectory ? "directory" : "other";
   const info: Record<string, unknown> = {
     path: filePath, exists: item !== undefined, kind, parentExists: item ? true : null,
-    note: "This is a read-only snapshot, not write authorization. Changed existing content requires explicit overwrite=true; writes recheck current state.",
+    note: "This is a read-only snapshot, not write authorization. Write creates or fully replaces content subject to current permissions; writes recheck current state.",
   };
   if (!item) {
     const parent = readPathInfo(filePath).parent;
@@ -342,7 +334,7 @@ async function readDirectoryListing(
     if (offset === 1) return { content: [{ type: "text", text: "(empty directory)" }], executionState: "completed", compactSummary: `Read completed: ${dir}; 0 entries` };
     return {
       content: [{ type: "text", text: `Offset ${offset} is out of range for this directory (0 entries)` }],
-      isError: true, failureKind: "invalid_input", executionState: "completed",
+      isError: true, failureKind: "precondition", executionState: "completed",
     };
   }
 
@@ -350,7 +342,7 @@ async function readDirectoryListing(
     return {
       content: [{ type: "text", text: `Offset ${offset} is out of range for this directory (${total} entries)` }],
       isError: true,
-      failureKind: "invalid_input",
+      failureKind: "precondition",
       executionState: "completed",
     };
   }
@@ -411,28 +403,26 @@ async function describeMissingPath(
   operations: FileOperations,
   filePath: string,
   statError: unknown,
+  context: import("@vykor/core").ToolContext,
 ): Promise<import("@vykor/core").ToolResult> {
   let entries: Awaited<ReturnType<FileOperations["listDir"]>>;
   const pathInfo = readPathInfo(filePath);
+  const failure = readErrorResult(statError);
+  const missing = failure.failureKind === "precondition";
   try {
+    const denied = await sandboxPathError(pathInfo.parent, context.cwd, "read", context.settings, context.environment);
+    if (denied) return failure;
     entries = await operations.listDir(pathInfo.parent);
   } catch {
-    return {
-      content: [{ type: "text", text: `Error reading file: ${statError}` }],
-      isError: true,
-      executionState: "unknown",
-    };
+    return failure;
   }
 
-  const missing = isFileNotFoundError(statError);
   return {
+    ...failure,
     content: [{
       type: "text",
       text: missing ? missingPathMessage(filePath, entries.map((entry) => entry.name), statError) : `Error reading file: ${statError}`,
     }],
-    isError: true,
-    failureKind: missing ? "invalid_input" : "unknown_outcome",
-    executionState: missing ? "not_started" : "unknown",
     recoveryHint: missing ? "检查父目录及文件名称；可根据候选名称重新指定路径。" : "检查路径和实际文件状态。",
   };
 }

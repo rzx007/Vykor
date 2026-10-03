@@ -3,7 +3,7 @@ import type { ToolExecutionResult, ToolFailureKind, ToolResult } from "../types/
 
 const FAILURE_KINDS: readonly ToolFailureKind[] = [
   "permission", "policy", "timeout", "command", "transport", "provider", "interrupted",
-  "unknown_outcome", "invalid_input", "authentication", "configuration",
+  "unknown_outcome", "invalid_input", "precondition", "authentication", "configuration",
 ];
 
 /** Read only explicit facts; legacy results must not acquire inferred success. */
@@ -33,6 +33,7 @@ export function defaultRecoveryHint(result: ToolExecutionResult): string {
     case "permission": return "需要用户批准受限操作；继续不受影响的只读工作，不能换工具绕过权限。";
     case "policy": return "此操作受到策略或前置检查限制；遵守限制，说明阻碍，不能换工具绕过。";
     case "invalid_input": return "按可用工具名称和参数要求修正调用。";
+    case "precondition": return "参数格式有效，但当前目标不满足修改或读取条件；先检查实际内容和状态，再选择合法操作。";
     case "authentication": return "先确认所需认证条件，勿在输出中暴露凭据。";
     case "configuration": return "先确认所需配置条件，再决定下一步。";
     default: return "检查实际结果和错误输出，确定原因后再决定下一步。";

@@ -192,26 +192,33 @@ describe("planPatch", () => {
     const files = new FakeFiles();
     files.seed("/repo/src/new.ts", "present\n");
     const patch = "--- /dev/null\n+++ b/src/new.ts\n@@ -0,0 +1 @@\n+created\n";
-    await expect(planPatch(patch, makeContext(files))).rejects.toBeInstanceOf(PatchToolError);
+    await expect(planPatch(patch, makeContext(files))).rejects.toMatchObject({ kind: "precondition" });
   });
 
   it("rejects updating a file that does not exist", async () => {
     const files = new FakeFiles();
-    await expect(planPatch(updatePatch(), makeContext(files))).rejects.toBeInstanceOf(PatchToolError);
+    await expect(planPatch(updatePatch(), makeContext(files))).rejects.toMatchObject({ kind: "precondition" });
   });
 
   it("rejects a symbolic link instead of replacing it", async () => {
     const files = new FakeFiles();
     files.seed("/repo/src/a.ts", "old\n");
     files.symbolicLinks.add("/repo/src/a.ts");
-    await expect(planPatch(updatePatch(), makeContext(files))).rejects.toMatchObject({ kind: "invalid_input" });
+    await expect(planPatch(updatePatch(), makeContext(files))).rejects.toMatchObject({ kind: "precondition" });
     expect(files.writeCalls).toEqual([]);
   });
 
   it("rejects a hunk that does not match", async () => {
     const files = new FakeFiles();
     files.seed("/repo/src/a.ts", "something-else\n");
-    await expect(planPatch(updatePatch(), makeContext(files))).rejects.toBeInstanceOf(PatchToolError);
+    await expect(planPatch(updatePatch(), makeContext(files))).rejects.toMatchObject({ kind: "precondition" });
+  });
+
+  it("classifies a create hunk containing impossible old content as malformed input, not a file conflict", async () => {
+    const files = new FakeFiles();
+    const patch = "--- /dev/null\n+++ b/new.ts\n@@ -1 +1 @@\n-missing\n+new\n";
+    await expect(planPatch(patch, makeContext(files))).rejects.toMatchObject({ kind: "invalid_input" });
+    expect(files.writeCalls).toEqual([]);
   });
 
   it.each([
@@ -303,6 +310,33 @@ describe("planPatch", () => {
 });
 
 describe("executePatchPlan", () => {
+  it.each(["plan", "preflight"])("reports %s read failures before any mutation as not started", async phase => {
+    class FailedReads extends FakeFiles {
+      reads = 0;
+      async readBytes(path: string) {
+        this.reads++;
+        if (phase === "plan" || this.reads === 2) throw Object.assign(new Error("read denied"), { code: "EACCES" });
+        return super.readBytes(path);
+      }
+    }
+    const files = new FailedReads(); files.seed("/repo/src/a.ts", "old\n");
+    const result = await applyPatchTool.execute({ patch: updatePatch() }, makeContext(files));
+    expect(result).toMatchObject({ isError: true, failureKind: "command", executionState: "not_started" });
+    expect(files.writeCalls).toEqual([]);
+    expect(new TextDecoder().decode(files.files.get("/repo/src/a.ts"))).toBe("old\n");
+    expect(result.recoveryHint ?? "").not.toContain("部分生效");
+  });
+
+  it("reports a target disappearing between stat and planning read as a file condition, not partial application", async () => {
+    class DisappearingFiles extends FakeFiles {
+      async readBytes(path: string) { this.files.delete(path); return super.readBytes(path); }
+    }
+    const files = new DisappearingFiles(); files.seed("/repo/src/a.ts", "old\n");
+    const result = await applyPatchTool.execute({ patch: updatePatch() }, makeContext(files));
+    expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
+    expect(files.writeCalls).toEqual([]);
+  });
+
   it("executes create, update and delete in stable path order", async () => {
     const files = new FakeFiles();
     files.seed("/repo/b.txt", "b-old\n");
@@ -472,6 +506,6 @@ describe("tool selection hints", () => {
     expect(applyPatchTool.description).toContain("unified diff");
     expect(applyPatchTool.description).toContain("multi-file");
     expect(fileEditTool.description).toContain("ApplyPatch");
-    expect(fileWriteTool.description).toContain("overwrite");
+    expect(fileWriteTool.description).toContain("ApplyPatch");
   });
 });

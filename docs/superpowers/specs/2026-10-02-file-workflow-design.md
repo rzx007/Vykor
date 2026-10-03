@@ -1668,3 +1668,123 @@ Spec 与最终增量均经独立审核，未发现 Critical／Important。审核
 - 不自动执行恢复示例；不保证真实模型从此不漏字段或不重发正文。未执行用户会话 DSML 中的命令、调用真实供应商、改用户任务文件、重建 out、重启应用或提交／push。原未提交 UI／原生插件等改动保留。生产仅五个既有文件，净增 43 行；无新依赖、运行状态、事件或数据库表。
 
 后续授权：用户要求提交本轮修复；范围仅为 §31–33 对应的五份生产文件、五份测试及本文档，共十一个文件。只提交当前功能分支，不 push、不合并主分支，不包含其他未提交改动。正常执行项目提交钩子，实际提交结果以 Git 为准。
+
+## 34. 文件调用规则收敛（2026-10-03）
+
+用户在了解整体替换语义会改变旧规则后，授权修改，并要求控制职责边界。本节替代前文“已有不同内容必须 overwrite=true”及“所有文件条件失败均属 invalid_input”的规定；前文保留作为历史记录。
+
+### 34.1 已核实的问题
+
+- 会话 50db7560 的最新运行最后三次失败依次是 Edit 原文不匹配、Edit 原文不匹配、首次 Write 缺覆盖标志；并非三次 Write。原计数在第三批结算后直接停止，模型没有机会消费 Write 新反馈。
+- 两次 Edit 的 old_string 包含与磁盘不同的数字。必须拒绝，不能忽略数字或根据模型叙述猜替换内容。原文窗口和明确位置继续提供；是否供应商生成数字有问题尚无原始流证据。
+- Write 在完整正文已经生成后再要求额外标志，制造了一种可消除的拒绝。仅加强提示不足以解决这项协议负担。
+
+### 34.2 Write：调用本身表示新建或完整替换
+
+- Write(file_path, content 或 content_from) 表示在权限允许时创建或完整替换；已有不同内容不再要求另传 overwrite=true。小修改仍推荐 Edit，多文件修改仍推荐 ApplyPatch，但不靠工具失败强制选择。
+- 保留 overwrite 字段兼容旧调用：省略或 true 都允许整体替换，显式 false 表示只新建／相同内容不写；已有不同内容必须拒绝，不自动反转 false。直接调用也校验它必须是布尔值。
+- 权限入口保持 normalize → 解析引用 → 参数检查 → 本次权限／用户确认／hook → 文件工具检查 → 写入。替换语义不是自动批准；默认权限没有放行规则时仍 ask，full_auto／已有自动批准规则的既有行为不变。
+- 文件工具保留写入／读取 sandbox、系统及托管目录保护、普通文件及非符号链接检查、可选原始字节 hash、写前快照比较、独占创建及原子替换。相同字节仍无写入；不会增加读取历史作为强制前置条件。
+- 宿主 preview 已支持缺省标志的完整替换，但不是授权，也没有证据表明所有产品入口都调用该 helper。不增加 UI 或跨环境预览机制；只对显式 false／hash 不符／非普通文件／读取失败返回无有效预览，不能展示与执行不一致的替换。允许不存在文件的新建预览，不把任意读取异常当文件不存在。
+- 删除仅服务于 overwrite_required 的失败原因、条件示例及 inputReuse.formatRecoveryHint 扩展。保留通用 content_from 和短引用说明，不创建新缓存、修复器、状态、事件或数据库表。
+
+### 34.3 失败分类与有限纠正
+
+- 本轮统一 Read 普通文件／目录与 Write／Edit／ApplyPatch 的失败分类：invalid_input 指 JSON、工具名称、类型、schema、无效引用及参数之间的格式约束。文件工具自行发现的参数组合错误也属于这一类。Read 不存在目标、二进制文本及 offset 超出当前内容属于 precondition；Shell 日志引用等其他工具协议不扩展。
+- 增加一个工具结果种类 precondition：参数有效，但当前目标不能应用操作，例如 Edit／ApplyPatch 原文不匹配、目标不存在／非文本／非普通文件、hash 或写前快照不符、显式 overwrite=false 不允许替换。文件工具说明具体原因；core 不解析错误正文猜类别。权限和策略失败保持原种类，未知写入结果保持 unknown_outcome／unknown。
+- 在现有 submitMessage 局部状态中维护两项有界计数，不新增恢复服务。参数错误最多三个失败批次；文件条件错误最多五个失败批次（让定位、纠正、改用合法工具有机会）。同一批某类失败只计一次；切换工具或类别不会清除另一类额度；含成功同伴的失败批次不重置。只有整个工具批次成功才清除两项计数。连续交替这两类失败，最多允许六个失败批次，第七批必触达某项上限；不能靠换工具名重置。
+- 计数耗尽先完整结算本批结果，再抛明确异常，参数错误与文件条件错误使用不同名称及通俗说明。仍沿用 run.failed，不增加模型收尾请求，不把停止记成完成。
+- 原完全相同调用的防重复机制、未知副作用检查、取消与 maxTurns 正整数总上限不变。成功 Read 可算新证据并重置计数，但读写交替仍受 maxTurns 限制；本轮不创建“哪些工具算真实进展”的新框架。
+
+### 34.4 验收与边界
+
+1. 真实文件回归重放两次错误数字 Edit，磁盘字节不变且反馈提供真实原文；随后缺省标志的 Write 完整替换成功，权限仍被检查，运行可继续而不是第三批误停。
+2. Write 缺省／true 替换成功，false 保持旧文件；错类型在访问路径前拒绝。hash、并发变化、符号链接、sandbox、系统及托管路径保持保护。引用失败后更正选项不重发正文，重新经过权限／预览／hook／当前状态检查。
+3. 参数和文件条件计数互不冒充；变换工具名、变换错误参数、混合成功同伴、交替类别都不绕过额度。全成功批次重置；耗尽不产生额外模型请求，所有工具先结算，结果进入已有 runtime／持久化失败投影。
+4. ApplyPatch 只改变当前文件条件类错误的分类，不改变解析规则、路径保护、部分生效或未知结果边界。Edit 不增加数字归一化或更激进的匹配。
+5. 只运行受影响的测试与类型检查，保留已有未提交的 UI／插件改动。无真实模型调用、供应商测速、用户任务文件操作、DB 写入、应用重启、提交、合并或 push。
+
+## 35. 规则收敛实施计划
+
+**Goal:** 消除完整 Write 的额外覆盖拒绝，让合法文件操作失败与参数格式失败分别得到有限的纠正机会。
+
+**Architecture:** 文件工具报告准确失败种类并保持安全检查；core 在既有结果分类和局部计数上处理停止，不理解文件路径或匹配正文。删除旧覆盖条件示例分支，保留既有正文引用。
+
+**Tech Stack:** TypeScript、Vitest、Node.js；无新依赖。
+
+**Spec:** 本文 §34。直接在已有 codex/file-workflow-followup 分支实施，仅独立代理负责只读审核，不并行改写共享文件。
+
+**Global Constraints:** 不放宽数字匹配；不绕过权限／sandbox／hash／快照；不改 UI、DB 或用户任务；不自动提交／push；只检查改动相关范围。
+
+### Task 24：工具协议及文件失败分类
+
+**Files:** tools/file/write.ts、edit.ts、edit-feedback.ts、apply-patch.ts、preview.ts、read.ts；prompts/index.ts；core/types/tools.ts、engine/tool-result-feedback.ts、tool-input-reuse.ts；对应文件测试。
+
+**Interfaces:** ToolFailureKind 增加 precondition；inputReuse 回到仅 property／referenceProperty。Write 保留旧可选 overwrite 字段，缺省整体替换，false 不替换不同内容。
+
+- [x] 先修改 Write 单测期望缺省替换，增加显式 false、错类型提前拒绝、hash／并发保护的分类断言。增加真实“错误数字 Edit 两次 → 缺省 Write 成功”的引擎回归；在 preview 测试中覆盖 false／hash 冲突／非文件与读取失败。
+
+    expect(await readFile(file, "utf8")).toBe("new"); // 未传 overwrite 的完整替换
+    expect(result).toMatchObject({ failureKind: "precondition", executionState: "not_started" }); // 有效参数不能应用
+
+- [x] 运行这些回归确认 RED 是缺省 Write 被拒绝或失败分类／无效预览缺失，不是依赖加载错误。
+- [x] 实施最小协议变更，删除 overwrite_required、formatRecoveryHint 的唯一实现及其过时测试；同步 Read 只读说明与运行时提示。匹配／hash／目标状态报告 precondition；相同替换字符串／无效 patch 格式仍 invalid_input；未知写入不改。
+
+    if (input.overwrite === false) return refused("Existing content differs; overwrite=false forbids replacement.", "precondition");
+    // 核对 hash 与写前快照后才执行原子写入；不补参数、不继承批准。
+
+- [x] 将正文复用场景的首次失败改为真实的过期 hash，而不是已经取消的缺覆盖标志；下一次短引用重新经过权限、hook 和 hash 检查。执行 tools 文件范围与通用正文复用回归，确认 GREEN。
+
+### Task 25：分别计数和明确停止
+
+**Files:** core/engine/query-engine.ts、tool-input-corrections.test.ts；runtime/framework-agent-run-retry.test.ts；core/tool-result-feedback.test.ts。
+
+**Interfaces:** 在结果分类上分别计数 invalid_input／precondition，ToolInputCorrectionsExceeded 与 ToolPreconditionsExceeded 的名称和 message 通过既有错误序列化进入 run.failed。
+
+- [x] 先补不同工具及输入的交替分类、第五次条件失败停止、混合成功同伴不清额度、全成功批次重置及 runtime failed 回归；有效 RED 要显示未停止或过早停止。
+
+    expect(requests).toBe(5);
+    expect(error).toMatchObject({ name: "ToolPreconditionsExceeded" });
+    expect(events.filter(e => e.type === "tool_use_end")).toHaveLength(5);
+
+- [x] 只在当前提交的局部计数维护两种失败，完整成功批次清零；本批结算后按达到额度的种类抛错，不请求第四／第六轮模型收尾。旧重复调用和总回合上限不变。
+- [x] 跑 core 参数／匹配恢复／失败记忆、runtime 失败映射、API 参数与 DSML 回归，以及 server 既有 failed 投影范围；不重复全仓测试。
+
+### Task 26：验收与独立审核
+
+- [x] tools／core／runtime／prompts 的定向测试和 TypeScript 检查通过；核对失败分类经过工具反馈及历史投影，不需要新存储结构。
+- [x] 独立审核限定本轮 diff 与 §34；修订重要问题，记录实际结果，不宣称未经实测的模型遵从率、数字生成或耗时已修复。
+
+## 36. 规则收敛验收结果
+
+- 有效 RED：两次真实数字不匹配的 Edit 后首次 Write 被第三批参数额度终止；缺省 Write 拒绝；目标条件混作参数错误；交替类别不再计数；runtime 将文件条件纠错耗尽记成 completed。逐项最小实现后，相应 GREEN 验证通过。
+- 独立审核先补清 Read 普通文件／目录的分类范围，再发现新建补丁不成立与目标冲突混淆、Read 列目录失败及 stat 后目标消失的分类遗漏。分别补回归并观察 RED → GREEN；新增空文件补丁不成立仍为 invalid_input，明确不存在为 precondition，其他 I/O 不推断成功。最终审核无待修复 Critical／Important。
+- 最新各范围、不重复累计：tools 十二文件 271、core 八文件 185、runtime 三文件 19、API 两文件 37、server 三个失败投影场景 3，共 515 项通过。最后修订涉及的 Read／ApplyPatch／文件流程及类型检查再次通过；并未运行全仓测试，§33 记录的既有完整服务器 projector 严格断言问题未改。
+- core／tools／runtime／prompts 四包 TypeScript noEmit 检查 exit 0；限定 diff 检查通过。生产只改十一份既有文件，合计净减少六行；删除旧覆盖专用格式化扩展，没有新增框架、依赖、缓存、运行状态、事件或 DB 表。
+- 真实回归证明错误数字不会被模糊匹配写入，接下来的缺省完整 Write 不再因缺额外标志拒绝；不能证明真实模型的数字生成、上游通道或三四分钟生成耗时已改善。未调用真实模型、操作用户任务文件／数据库、构建应用产物、重启应用、提交／合并／push。已有 UI／插件等工作区改动保留。
+
+## 37. 后续审核修订：停止出口与文件执行阶段
+
+用户授权继续处理审核发现；本节替代旧“重复失败恢复额度耗尽后额外请求模型收尾”的行为，其余权限、匹配、额度数值及副作用保护不变。
+
+- core 保留原完全相同调用的拒绝与两轮进一步恢复机会；额度耗尽后先结算本批全部结果，再用既有内部纠错异常出口报告 ToolRecoveryExceeded，不再发起无工具的模型总结请求。参数三批、文件条件五批额度保持。根任务达到 maxTurns 时同样明确失败，不额外请求模型；子任务原保留最后一轮部分总结、随后 MaxTurnsExceeded 的规则不变。
+- Write 负责准确标记第一项写入调用是否已经开始。路径解析、sandbox、stat／读取／快照检查异常在写入前报告 command／not_started；开始独占创建或原子替换后的异常报告 unknown_outcome／unknown，提示检查实际状态。不根据模糊错误文字猜结果，删除无作用的原样重抛 catch。
+- ApplyPatch 的计划阶段及落盘前检查必须报告未写入：明确 ENOENT 为 precondition，其他检查 I/O 异常为 command；在检查与读取之间消失也按同一规则。开始落盘后的部分失败仍由既有 patchPartialFailure 保留 unknown／已完成与待处理列表；意外的执行阶段异常仍按 unknown，不能声称回滚。
+- Read 用一个工具内部失败出口构建分类、状态和原始错误；是否允许父目录诊断、是否取得候选文件只改变内容说明，不能丢失明确不存在的事实，不扩大父目录权限。
+- 不新建恢复服务、跨工具参数修复器、状态／事件／DB 表；不改 UI、用户任务、应用产物或真实模型，不提交／合并／push。只在已有文件中修改。
+
+### 实施与验收顺序
+
+1. [x] 回归先 RED：相同文件失败被拒绝后的运行必须 failed，零次额外总结请求；低 maxTurns 同样失败；混合结果先结算，真实成功仍可退出恢复。
+2. [x] 回归先 RED：Write 写前 I/O／路径解析未写、写后异常不确定；ApplyPatch 计划及落盘前检查未写、stat 后目标消失是条件失败；Read 父目录诊断受限保留条件事实且不暴露候选文件。
+3. [x] 在既有 query-engine 停止出口及各工具执行阶段修订，Read 诊断分支复用同一结果构建；不动实际匹配、权限、原子落盘和部分生效行为。
+4. [x] 定向跑 core／tools／runtime 回归与相应类型检查，独立只读审核最后增量，记录实际证据。
+
+### 本轮验收
+
+- 有效 RED 已复现旧正常返回／runtime completed、Write 写前 unknown 或路径解析抛错、ApplyPatch 计划及检查期间 unknown、Read 回退丢失状态。Read 的可选父目录解析异常回归在纠正测试夹具语法后，另作有效 RED → GREEN，未把加载错误当行为证据。写入已经开始后的 create／replace 异常及补丁部分生效仍保留 unknown。
+- 最新定向测试：core 八文件 185、tools 十二文件 278、runtime 三文件 21、API 两文件 37、server 三个相关失败投影 3，共 524 项通过；重复执行不累加。core／tools／runtime 三包 TypeScript noEmit exit 0，限定 diff 检查通过；未运行全仓套件。
+- 独立审核另用八项纯内存诊断核对明确未写、进入写入后未知、补丁部分生效、Read 可选诊断失败、相同参数保护与总回合上限；没有待修复 Critical／Important。子任务原部分总结及取消／权限边界回归仍通过。
+- 本轮生产增量仅 query-engine.ts、write.ts、read.ts、apply-patch.ts 四份既有文件，相比上一轮工作树净减少 18 行。没有新恢复框架、依赖、状态／事件／DB 表；已有界面／插件改动保留。没有真实模型调用、供应商测速、用户任务／数据库写入、应用构建／重启、提交／合并／push。
+
+后续授权：用户要求提交代码；提交范围为 §34–37 对应的文件工具、核心恢复流程、提示、回归测试及本文档，共二十五份文件。仅提交当前 codex/file-workflow-followup 分支，不 push、不合并，不包含既有界面／插件／能力视图改动；执行正常提交钩子，提交结果以 Git 为准。

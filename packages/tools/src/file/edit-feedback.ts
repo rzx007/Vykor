@@ -84,7 +84,8 @@ export function editFailureResult(error: EditPlanError, original: string): ToolR
   let text = blocks.join("\n");
   if (text.length > 4096) text = text.slice(0, 4040) + "\n… [diagnostic truncated; use Read for complete lines]";
   return {
-    content: [{ type: "text", text }], isError: true, failureKind: "invalid_input", executionState: "not_started",
+    content: [{ type: "text", text }], isError: true,
+    failureKind: error.match && error.match.kind !== "identical" ? "precondition" : "invalid_input", executionState: "not_started",
     recoveryHint: escapedLineBreaks ? "old_string 中的字面量 \\n 与原文换行不同；使用原文的实际换行。new_string 按字面值写入，确需多行时才传实际换行，不复制行号或截断标记。" :
       error.match?.kind === "identical" ? "old_string 与 new_string 相同，没有修改；无需此编辑时直接继续，否则修正替换参数。" :
       error.match ? windows.length

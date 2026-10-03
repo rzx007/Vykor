@@ -141,7 +141,7 @@ export type ToolExecutionState = "not_started" | "completed" | "unknown";
 export type ToolFailureKind =
   | "permission" | "policy" | "timeout" | "command" | "transport"
   | "provider" | "interrupted" | "unknown_outcome"
-  | "invalid_input" | "authentication" | "configuration";
+  | "invalid_input" | "precondition" | "authentication" | "configuration";
 
 export interface ToolExecutionResult extends ToolResult {
   toolUseId: string;
@@ -164,12 +164,6 @@ export interface ToolDefinition {
   inputReuse?: {
     property: string;
     referenceProperty: string;
-    /** Optional presentation only; core supplies isolated options and failure facts after checking the reference. */
-    formatRecoveryHint?: (
-      input: Readonly<Record<string, unknown>>,
-      sourceId: string,
-      result: Readonly<Pick<ToolResult, "failureKind" | "executionState" | "metadata">>,
-    ) => string | undefined;
   };
   /** Automatic retry is forbidden unless this is explicitly true. */
   safeToRetry?: boolean;

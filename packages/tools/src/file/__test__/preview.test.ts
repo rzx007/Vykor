@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { computeFileChange } from "../preview.js";
 import { buildUnifiedDiff, computeToolDiff, truncateDiff } from "../diff.js";
+import { HostFileOperations } from "../operations.js";
 
 let dir: string;
 
@@ -39,6 +41,27 @@ describe("computeFileChange", () => {
   it("Write: returns null when fields missing", async () => {
     expect(await computeFileChange("Write", { file_path: 123 })).toBeNull();
     expect(await computeFileChange("Write", { content: "x" })).toBeNull();
+  });
+
+  it("Write: does not preview a replacement that explicit false or a stale hash forbids", async () => {
+    const file = join(dir, "guarded.txt");
+    await writeFile(file, "old");
+    expect(await computeFileChange("Write", { file_path: file, content: "new", overwrite: false })).toBeNull();
+    expect(await computeFileChange("Write", { file_path: file, content: "new",
+      expected_sha256: createHash("sha256").update("not old").digest("hex") })).toBeNull();
+    expect(await computeFileChange("Write", { file_path: file, content: "same", overwrite: "true" })).toBeNull();
+  });
+
+  it("Write: does not disguise a non-file or read failure as a new empty file", async () => {
+    const folder = join(dir, "folder");
+    await mkdir(folder);
+    expect(await computeFileChange("Write", { file_path: folder, content: "new" })).toBeNull();
+    const regularFile = join(dir, "data.txt");
+    await writeFile(regularFile, "old");
+    const read = vi.spyOn(HostFileOperations.prototype, "readBytes").mockRejectedValueOnce(Object.assign(new Error("read denied"), { code: "EACCES" }));
+    try { expect(await computeFileChange("Write", { file_path: regularFile, content: "new" })).toBeNull(); }
+    finally { read.mockRestore(); }
+    expect(await computeFileChange("Write", { file_path: join(dir, "new.txt"), content: "new", expected_sha256: "0".repeat(64) })).toBeNull();
   });
 
   it("Edit: computes after by single replacement", async () => {

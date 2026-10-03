@@ -16,7 +16,7 @@ function scenario(validTurns: number[] = [], companion?: "completed" | "unknown"
       return validTurns.includes(attempt)
         ? { content: [], executionState: "completed" }
         : { content: [{ type: "text", text: "SENSITIVE-RESULT-BODY" }], isError: true,
-          failureKind: "invalid_input", executionState: "not_started", recoveryHint: "确认完整替换时明确传 overwrite=true。" };
+          failureKind: "invalid_input", executionState: "not_started", recoveryHint: "修正调用参数格式。" };
     },
   });
   if (companion) registry.register({
@@ -51,6 +51,78 @@ function scenario(validTurns: number[] = [], companion?: "completed" | "unknown"
 }
 
 describe("terminal input correction failures", () => {
+  async function corrections(kinds: Array<"precondition" | "invalid_input" | "success" | "permission" | "unknown">, companion = false) {
+    const registry = new ToolRegistry();
+    let requests = 0;
+    const events: StreamEvent[] = [];
+    for (const name of ["Edit", "Write"]) registry.register({ name, description: "controlled file/input failures",
+      inputSchema: { type: "object", properties: { attempt: { type: "number" } } },
+      execute: async input => {
+        const kind = kinds[(input.attempt as number) - 1]!;
+        if (kind === "unknown") return { content: [], executionState: "unknown" };
+        return kind === "success" ? { content: [], executionState: "completed" } : {
+          content: [{ type: "text", text: "PRIVATE-ERROR-BODY" }], isError: true,
+          failureKind: kind, executionState: "not_started", recoveryHint: "检查当前目标，不要忽略真实数字。",
+        };
+      } });
+    registry.register({ name: "Read", description: "successful sibling", inputSchema: { type: "object" },
+      execute: async () => ({ content: [], executionState: "completed" }) });
+    const engine = new QueryEngine({ async *streamMessage(): AsyncIterable<StreamEvent> {
+      const attempt = ++requests;
+      if (attempt <= kinds.length) {
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "attempt-" + attempt,
+          name: attempt % 2 ? "Edit" : "Write", input: { attempt } } };
+        if (companion) yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "sibling-" + attempt, name: "Read", input: {} } };
+      }
+      yield { type: "complete", stopReason: attempt <= kinds.length ? "tool_use" : "end_turn" };
+    } }, registry, { checkTool: async () => ({ action: "allow" }) },
+    { register() {}, execute: async () => ({ blocked: false }) }, { maxTurns: 20, trajectoryTrackerFactory: false });
+    let error: unknown;
+    try { for await (const event of engine.submitMessage("fixture")) events.push(event); }
+    catch (failure) { error = failure; }
+    return { requests, events, error, history: engine.getHistory() };
+  }
+
+  it.each([false, true])("bounds changing file calls independently of successful siblings: %s", async companion => {
+    const fixture = await corrections(Array(5).fill("precondition"), companion);
+    expect(fixture.error).toMatchObject({ name: "ToolPreconditionsExceeded", message: expect.stringContaining("文件条件") });
+    expect(String(fixture.error)).not.toContain("PRIVATE-ERROR-BODY");
+    expect(fixture.requests).toBe(5);
+    expect(fixture.events.filter(e => e.type === "tool_use_end")).toHaveLength(companion ? 10 : 5);
+    expect(fixture.history.filter(m => m.type === "tool_result")).toHaveLength(companion ? 10 : 5);
+  });
+
+  it("does not reset parameter correction allowance by switching tools or failure categories", async () => {
+    const fixture = await corrections(["invalid_input", "precondition", "invalid_input", "precondition", "invalid_input"]);
+    expect(fixture.error).toMatchObject({ name: "ToolInputCorrectionsExceeded" });
+    expect(fixture.requests).toBe(5);
+  });
+
+  it("allows format correction separately but bounds alternating failure categories", async () => {
+    const fixture = await corrections(["precondition", "invalid_input", "precondition", "invalid_input", "precondition", "precondition", "precondition"]);
+    expect(fixture.error).toMatchObject({ name: "ToolPreconditionsExceeded" });
+    expect(fixture.requests).toBe(7);
+  });
+
+  it("resets both allowances only after an entirely successful batch", async () => {
+    const fixture = await corrections(["precondition", "precondition", "precondition", "precondition", "success",
+      "precondition", "precondition", "precondition", "precondition", "success"]);
+    expect(fixture.error).toBeUndefined();
+    expect(fixture.requests).toBe(11);
+  });
+
+  it("does not erase file failures with a permission-denied batch", async () => {
+    const fixture = await corrections(["precondition", "precondition", "precondition", "precondition", "permission", "precondition"]);
+    expect(fixture.error).toMatchObject({ name: "ToolPreconditionsExceeded" });
+    expect(fixture.requests).toBe(6);
+  });
+
+  it("does not treat an unknown outcome without isError as a successful reset", async () => {
+    const fixture = await corrections(["precondition", "precondition", "precondition", "precondition", "unknown", "precondition"]);
+    expect(fixture.error).toMatchObject({ name: "ToolPreconditionsExceeded" });
+    expect(fixture.requests).toBe(6);
+  });
+
   it.each([undefined, "completed", "unknown"] as const)(
     "settles the entire last batch and stops without a model finalization request (companion: %s)",
     async companion => {
@@ -60,7 +132,7 @@ describe("terminal input correction failures", () => {
       try { for await (const event of fixture.engine.submitMessage("fixture")) events.push(event); }
       catch (error) { failure = error; }
       expect(failure).toMatchObject({ name: "ToolInputCorrectionsExceeded",
-        message: expect.stringContaining("overwrite=true") });
+        message: expect.stringContaining("修正调用参数格式") });
       expect(String((failure as Error).message)).not.toContain("SENSITIVE-RESULT-BODY");
       expect(fixture.requests()).toBe(3);
       expect(fixture.executions).toEqual([1, 2, 3]);
