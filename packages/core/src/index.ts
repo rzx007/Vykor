@@ -219,6 +219,11 @@ export {
 } from "./agent-session";
 
 export { QueryEngine, MaxTurnsExceeded } from "./engine/query-engine";
+export {
+  executeCheckedTools,
+  type CheckedToolExecutionOptions,
+  type CheckedToolExecutionResult,
+} from "./engine/checked-tool-execution";
 export { ToolRegistry, ToolRegistrationError, resolveToolExecution } from "./engine/tool-registry";
 export { RuntimeBuilder } from "./engine/runtime-builder";
 export {

@@ -2,7 +2,7 @@ import type { StreamingMessageClient } from "./client";
 import type { AgentBackgroundShellHost, McpAuthHost, ShellOutputLogHost, ToolRegistry } from "./tools";
 import type { PermissionChecker } from "./permissions";
 import type { HookExecutor } from "./hooks";
-import type { ContentBlock, Message } from "./messages";
+import type { ContentBlock, Message, ToolUseBlock } from "./messages";
 import type { StreamEvent } from "./events";
 import type { Settings } from "./settings";
 import type { CompactContextProvider } from "../engine/compact-service";
@@ -280,6 +280,10 @@ export interface AgentRunHandle {
 }
 
 export interface QueryEngine {
+  executeTool(
+    toolUse: ToolUseBlock,
+    options: { signal?: AbortSignal; execution: AgentExecutionContext },
+  ): Promise<import("./tools").ToolExecutionResult>;
   submitMessage(
     content: string | ContentBlock[],
     options?: {

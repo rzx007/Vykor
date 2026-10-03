@@ -130,7 +130,16 @@ it.each([undefined, "another-plugin"])("blocks global MCP meta capabilities for 
     const capabilityView = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["another-plugin"]), mcpServers: [{
       ownerPluginId: "private-plugin", serverId: "plugin:private-plugin:mcp:private", serverName: "private", definition: config("plugin-secret"),
     }] }, pluginId);
-    const execution = { capabilityView, emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {} } as unknown as AgentExecutionContext;
+    const unexpectedChild = async (): Promise<never> => { throw new Error("Unexpected child operation"); };
+    const execution: AgentExecutionContext = {
+      capabilityView,
+      scope: { agentId: "a", sessionId: "s", runId: "r", inputId: "i", cwd: process.cwd(),
+        traceId: "t", signal: new AbortController().signal },
+      effects: { requestPermission: async () => ({ status: "denied" }) },
+      children: { hasChildAgent: () => false, spawnChildAgent: unexpectedChild,
+        sendChildInput: unexpectedChild, interruptChildAgent: unexpectedChild, awaitChildAgent: unexpectedChild },
+      emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {},
+    };
     const results = [];
     for await (const event of engine.submitMessage("go", { execution })) if (event.type === "tool_use_end") results.push(event.result);
     expect(results).toHaveLength(4);

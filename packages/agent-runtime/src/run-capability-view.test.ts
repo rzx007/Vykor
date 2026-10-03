@@ -145,14 +145,11 @@ describe("run capability execution boundary", () => {
     registry.register(tool("Selected", "replacement target"));
     registry.register(tool("OtherPlugin"), { kind: "plugin", id: "other" });
     const names: string[][] = [];
-    const execution = {
-      capabilityView: {
-        pluginId: "selected",
-        tools: new Map([["Selected", { definition: original, invoke: original.execute, ownerPluginId: "selected" }]]),
-        skills: new Map(), mcpServers: new Map(), agents: new Map(),
-      },
-      emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {},
-    } as unknown as AgentExecutionContext;
+    const execution = capturedExecution({
+      pluginId: "selected",
+      tools: new Map([["Selected", { definition: original, invoke: original.execute, ownerPluginId: "selected" }]]),
+      skills: new Map(), mcpServers: new Map(), agents: new Map(),
+    });
     let turn = 0;
     const engine = new QueryEngine({
       streamMessage: async function* (input: StreamMessageParams) {
@@ -180,7 +177,24 @@ function skill(name: string, ownerPluginId?: string) {
   } };
 }
 
-async function executeCapturedTool(registry: ToolRegistry, capabilityView: ReturnType<typeof createRunCapabilityView>, name: string, input: Record<string, unknown>, children?: unknown) {
+function capturedExecution(
+  capabilityView: NonNullable<AgentExecutionContext["capabilityView"]>,
+  children: Partial<AgentExecutionContext["children"]> = {},
+): AgentExecutionContext {
+  const unexpectedChild = async (): Promise<never> => { throw new Error("Unexpected child operation"); };
+  return {
+    capabilityView,
+    scope: { agentId: "a", sessionId: "s", runId: "r", inputId: "i", cwd: process.cwd(),
+      traceId: "t", signal: new AbortController().signal },
+    effects: { requestPermission: async () => ({ status: "denied" }) },
+    children: { hasChildAgent: () => false, spawnChildAgent: unexpectedChild,
+      sendChildInput: unexpectedChild, interruptChildAgent: unexpectedChild,
+      awaitChildAgent: unexpectedChild, ...children },
+    emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {},
+  };
+}
+
+async function executeCapturedTool(registry: ToolRegistry, capabilityView: ReturnType<typeof createRunCapabilityView>, name: string, input: Record<string, unknown>, children?: Partial<AgentExecutionContext["children"]>) {
   let turn = 0;
   const engine = new QueryEngine({ streamMessage: async function* () {
     if (turn++ === 0) {
@@ -188,7 +202,7 @@ async function executeCapturedTool(registry: ToolRegistry, capabilityView: Retur
       yield { type: "complete" as const, stopReason: "tool_use" };
     } else yield { type: "complete" as const, stopReason: "end_turn" };
   } }, registry, { checkTool: async () => ({ action: "allow" }) }, { execute: async () => ({ blocked: false }) } as IHookExecutor);
-  const execution = { capabilityView, children, emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {} } as unknown as AgentExecutionContext;
+  const execution = capturedExecution(capabilityView, children);
   const results = [];
   for await (const event of engine.submitMessage("go", { execution })) if (event.type === "tool_use_end") results.push(event.result);
   return results;

@@ -34,13 +34,12 @@ import {
 } from "./model-retry";
 import { streamBufferedModelWithRetry } from "./buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
-import { prepareToolCalls } from "./query-tool-preparation";
+import { executeCheckedTools } from "./checked-tool-execution";
 import { withToolInputReuseHint } from "./tool-input-reuse";
-import { authorizeToolCall, emitToolLifecycle } from "./query-tool-permissions";
 import { attemptFinishedEvent, createAttemptSignal, describeModelFailure } from "./query-model-attempt";
-import { applyToolOutputBudget, executeToolWithTimeout, ToolTimeoutError, toolExecutionTimeoutMs } from "./query-tool-limits";
+import { applyToolOutputBudget } from "./query-tool-limits";
 import { ToolFailureMemory } from "./tool-failure-memory";
-import { defaultRecoveryHint, externalToolMetadata, formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
+import { formatToolResultForModel, toolFeedbackFields } from "./tool-result-feedback";
 import { toolDefinitionIdentity } from "./tool-definition-identity";
 import { runToolRegistry as runToolRegistryForRun, toolRegistryView, visibleToolRegistry } from "./tool-registry";
 import {
@@ -910,161 +909,83 @@ export class QueryEngine implements IQueryEngine {
     toolRegistry: IToolRegistry = visibleToolRegistry(this.toolRegistry, this.allowedTools),
     internalTools: ReadonlySet<string> = new Set(),
   ): Promise<{ results: ToolExecutionResult[]; failure?: { error: unknown } }> {
-    const { results, readyForPermission } = prepareToolCalls(toolUses, failedToolCalls, toolRegistry, this.messages);
-    const batchController = new AbortController();
-    const startSignal = AbortSignal.any([
-      batchController.signal,
-      ...(signal ? [signal] : []),
-      ...(execution?.scope.signal ? [execution.scope.signal] : []),
-    ]);
-    let failure: { error: unknown } | undefined;
-    const failBatch = (error: unknown) => {
-      failure ??= { error };
-      batchController.abort(error);
-    };
-    // Only approval/start work sees batch cancellation. Running tools retain the original context.
-    const pendingExecution = execution ? {
-      ...execution,
-      scope: { ...execution.scope, signal: startSignal },
-      emit: async (event: Parameters<AgentExecutionContext["emit"]>[0]) => {
-        try { await execution.emit(event); }
-        catch (error) { failBatch(error); throw error; }
-      },
-    } : undefined;
-
-    const preparedByIndex = new Map(readyForPermission.map(call => [call.idx, call]));
-    const groupTails = new Map<string, Promise<ToolExecutionResult>>();
-    const executedIndexes = new Set<number>();
-    const timeoutMs = toolExecutionTimeoutMs(this.options.toolTimeoutMs);
-    const tasks = toolUses.map((toolUse, idx) => {
-      const group = toolRegistry.get(toolUse.name)?.serialGroup;
-      const previous = group ? groupTails.get(group) : undefined;
-      const task = (async (): Promise<ToolExecutionResult> => {
-        const toolAttemptId = `tool_attempt_${toolUse.id}_1`;
-        let started = false;
-        let result: ToolExecutionResult;
-        try {
-          if (previous) await emitToolLifecycle(pendingExecution, toolUse.id, "queued", "not_started");
-          const predecessor = await previous;
-          startSignal.throwIfAborted();
-          if (predecessor && (predecessor.isError || predecessor.executionState === "unknown")) {
-            result = {
-              toolUseId: toolUse.id, toolName: toolUse.name, toolAttemptId,
-              content: [{ type: "text", text: `Tool was not started because preceding call ${predecessor.toolUseId} in the same group failed or has an unknown outcome.` }],
-              isError: true, failureKind: "policy", executionState: "not_started",
-              metadata: { recoveryGuard: "serial_group_blocked" },
-            };
-          } else if (results[idx]) {
-            result = results[idx]!;
-          } else {
-            const prepared = preparedByIndex.get(idx)!;
-            const denied = await authorizeToolCall(
-              prepared, this.permissionChecker, this.hookExecutor, pendingExecution, internalTools, startSignal,
-            );
-            if (denied) {
-              result = denied;
-            } else {
-              const tool = prepared.tool;
-              const context: ToolContext = {
-                cwd: this.cwd,
-                ...(this.options.executionEnvironment ? { environment: this.options.executionEnvironment } : {}),
-                sessionId: this.sessionId,
-                shellOutputLogs: this.options.shellOutputLogs,
-                toolCallId: toolUse.id,
-                toolAttemptId,
-                runAbortSignal: signal,
-                settings: this.options.settings,
-                ...(requestConfiguration ? { requestConfiguration } : {}),
-                toolRegistry: toolRegistryView(toolRegistry),
-                capabilityView: execution?.capabilityView,
-                skillRegistry: this.skillRegistry,
-                // Global MCP meta APIs bypass captured tools; Runs with a View fail closed.
-                mcpManager: execution?.capabilityView ? undefined : this.mcpManager,
-                mcpAuth: execution?.capabilityView ? undefined : this.mcpAuth,
-                terminal: this.terminal,
-                jobs: this.jobs,
-                backgroundShell: this.backgroundShell,
-                schedules: this.schedules,
-                ...(execution?.effects?.askUserPrompt
-                  ? { askUserPrompt: (question: string) => execution.effects.askUserPrompt!(question, execution.scope) }
-                  : {}),
-                ...(execution?.effects?.requestPermission ? {
-                  requestPermission: (request) => execution.effects.requestPermission!(request, execution.scope),
-                } : {}),
-                agent: execution,
-              };
-              startSignal.throwIfAborted();
-              await emitToolLifecycle(pendingExecution, toolUse.id, "running");
-              startSignal.throwIfAborted();
-              started = true;
-              executedIndexes.add(idx);
-              const returned = await executeToolWithTimeout(tool, toolUse.input, context, timeoutMs, signal);
-              result = {
-                content: returned.content,
-                isError: returned.isError,
-                ...toolFeedbackFields(returned),
-                toolUseId: toolUse.id,
-                toolName: toolUse.name,
-                toolAttemptId,
-                metadata: externalToolMetadata(returned.metadata),
-                compactSummary: (toolRegistry.inspect(toolUse.name)?.source.kind === "builtin"
-                  || (toolRegistry.inspect(toolUse.name)?.source.kind === "agent"
-                    && this.isTrustedOverride(toolUse.name, tool, execution?.capabilityView)))
-                  ? toolFeedbackFields(returned).compactSummary : undefined,
-              };
-            }
-          }
-        } catch (error) {
-          // Reliable emits already recorded their error, including concurrent user cancellation.
-          // Exceptions from a running tool remain ordinary tool feedback.
-          if (!started && !startSignal.aborted) failBatch(error);
-          const failureKind =
-            (started ? signal?.aborted : startSignal.aborted) ? "interrupted" as const
-              : error instanceof ToolTimeoutError ? "timeout" as const : "unknown_outcome" as const;
-          result = {
-            toolUseId: toolUse.id,
-            toolName: toolUse.name,
-            toolAttemptId,
-            content: [{ type: "text", text: String(error) }],
-            isError: true,
-            failureKind,
-            executionState: started ? "unknown" : "not_started",
-          };
-        }
-        result.executionState ??= result.isError ? "unknown" : "completed";
-        if (result.executionState === "unknown") result.isError = true;
-        if (result.isError) {
-          result.failureKind ??= "unknown_outcome";
-          result.recoveryHint ??= defaultRecoveryHint(result);
-          result.compactSummary = `Tool feedback data: kind=${result.failureKind}; execution=${result.executionState}`;
-        }
-        results[idx] = result;
-        try {
-          await emitToolLifecycle(pendingExecution, toolUse.id,
-            result.executionState === "unknown" ? "unknown" : result.isError ? "failed" : "completed",
-            result.executionState);
-        } catch (error) {
-          failBatch(error);
-        }
-        return result;
-      })();
-      if (group) groupTails.set(group, task);
-      return task;
+    return executeCheckedTools({
+      toolUses, toolRegistry, messages: this.messages, permissionChecker: this.permissionChecker,
+      hookExecutor: this.hookExecutor, signal, execution, timeoutMs: this.options.toolTimeoutMs,
+      internalTools, failedToolCalls,
+      createToolContext: (toolUse, toolAttemptId) => this.createToolContext(
+        toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration,
+      ),
+      isTrustedSummary: (toolUse, definition) => this.isTrustedSummary(toolUse, definition, toolRegistry, execution),
     });
-    await Promise.all(tasks);
+  }
 
-    // Post hooks do not replace results already returned during cancellation.
-    for (const idx of executedIndexes) {
-      const result = results[idx]!;
-      if (signal?.aborted) break;
-      try {
-        await this.hookExecutor.execute("post_tool_use", { tool: result.toolName, result });
-      } catch (error) {
-        failBatch(error);
-      }
-    }
+  /** Executes one captured tool without requesting a model or changing conversation history. */
+  async executeTool(
+    toolUse: ToolUseBlock,
+    options: { signal?: AbortSignal; execution: AgentExecutionContext },
+  ): Promise<ToolExecutionResult> {
+    const { execution } = options;
+    // Empty allowlist fails closed when no captured view was supplied. Contributions do not widen this entry.
+    const toolRegistry = runToolRegistryForRun(this.toolRegistry, [], undefined, execution.capabilityView);
+    const signal = AbortSignal.any([execution.scope.signal, ...(options.signal ? [options.signal] : [])]);
+    const { results, failure } = await executeCheckedTools({
+      toolUses: [{ ...toolUse }], toolRegistry, messages: [], permissionChecker: this.permissionChecker,
+      hookExecutor: this.hookExecutor, signal, execution, timeoutMs: this.options.toolTimeoutMs,
+      createToolContext: (call, attemptId) => this.createToolContext(call, attemptId, toolRegistry, signal, execution),
+      isTrustedSummary: (call, definition) => this.isTrustedSummary(call, definition, toolRegistry, execution),
+    });
+    if (failure) throw failure.error;
+    return results[0]!;
+  }
 
-    return { results, failure };
+  private createToolContext(
+    toolUse: ToolUseBlock,
+    toolAttemptId: string,
+    toolRegistry: IToolRegistry,
+    signal?: AbortSignal,
+    execution?: AgentExecutionContext,
+    requestConfiguration?: ToolContext["requestConfiguration"],
+  ): ToolContext {
+    return {
+      cwd: this.cwd,
+      ...(this.options.executionEnvironment ? { environment: this.options.executionEnvironment } : {}),
+      sessionId: this.sessionId,
+      shellOutputLogs: this.options.shellOutputLogs,
+      toolCallId: toolUse.id,
+      toolAttemptId,
+      runAbortSignal: signal,
+      settings: this.options.settings,
+      ...(requestConfiguration ? { requestConfiguration } : {}),
+      toolRegistry: toolRegistryView(toolRegistry),
+      capabilityView: execution?.capabilityView,
+      skillRegistry: this.skillRegistry,
+      // Global MCP meta APIs bypass captured tools; Runs with a View fail closed.
+      mcpManager: execution?.capabilityView ? undefined : this.mcpManager,
+      mcpAuth: execution?.capabilityView ? undefined : this.mcpAuth,
+      terminal: this.terminal,
+      jobs: this.jobs,
+      backgroundShell: this.backgroundShell,
+      schedules: this.schedules,
+      ...(execution?.effects?.askUserPrompt
+        ? { askUserPrompt: (question: string) => execution.effects.askUserPrompt!(question, execution.scope) }
+        : {}),
+      ...(execution?.effects?.requestPermission ? {
+        requestPermission: (request) => execution.effects.requestPermission!(request, execution.scope),
+      } : {}),
+      agent: execution,
+    };
+  }
+
+  private isTrustedSummary(
+    toolUse: ToolUseBlock,
+    definition: ToolDefinition,
+    toolRegistry: IToolRegistry,
+    execution?: AgentExecutionContext,
+  ): boolean {
+    const source = toolRegistry.inspect(toolUse.name)?.source.kind;
+    return source === "builtin" || (source === "agent"
+      && this.isTrustedOverride(toolUse.name, definition, execution?.capabilityView));
   }
 
   private isTrustedOverride(name: string, tool: ToolDefinition, view?: AgentExecutionContext["capabilityView"]): boolean {
