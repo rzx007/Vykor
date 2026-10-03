@@ -22,6 +22,7 @@ beforeEach(() => {
   root = createRoot(container)
 })
 afterEach(() => {
+  vi.unstubAllEnvs()
   act(() => root.unmount())
   container.remove()
   delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
@@ -75,6 +76,91 @@ function click(text: string) {
 }
 
 describe("tool parameter and result display", () => {
+  it("keeps execution and permission feedback visible in production", () => {
+    vi.stubEnv("DEV", false)
+    render([
+      part(
+        "Shell",
+        { command: "first" },
+        { status: "running", metadata: { toolProgress: { phase: "waiting_permission" } } }
+      ),
+    ])
+    expect(container.textContent).toContain("等待你的确认")
+    render([
+      part(
+        "Shell",
+        { command: "first" },
+        { status: "running", metadata: { toolProgress: { phase: "running" } } }
+      ),
+    ])
+    expect(container.textContent).toContain("正在执行工具")
+  })
+  it.each([true, false])(
+    "shows diagnostic tool states only in dev=%s while preserving raw results",
+    (dev) => {
+      vi.stubEnv("DEV", dev)
+      render([
+        part(
+          "Shell",
+          { command: "exit 1" },
+          { status: "failed", isError: true, output: "exit code 1" }
+        ),
+      ])
+      expect(container.textContent).not.toContain("失败")
+      expect(Boolean(container.querySelector('[data-tool-diagnostic][aria-label="失败"]'))).toBe(
+        dev
+      )
+      expect(container.querySelector(".text-destructive")).toBeNull()
+      if (dev) {
+        const dot = container.querySelector<HTMLElement>("[data-tool-diagnostic]")!
+        expect(dot.textContent).toBe("")
+        expect(dot.title).toBe("失败")
+      }
+      click("运行命令")
+      expect(container.textContent).toContain("exit code 1")
+      render([
+        part("Shell", { command: "first" }, { status: "failed", isError: true }),
+        part(
+          "Shell",
+          { command: "second" },
+          {
+            id: "second",
+            toolUseId: "second",
+            seq: 2,
+            status: "running",
+            metadata: { executionState: "unknown" },
+          }
+        ),
+      ])
+      expect(container.textContent).not.toContain("次失败")
+      expect(container.textContent).not.toContain("结果不确定")
+      expect(Boolean(container.querySelector("[data-tool-diagnostic]"))).toBe(dev)
+      expect(container.querySelector(".shimmer")).toBeNull()
+      click("命令调用 2 次")
+      expect(container.textContent).not.toContain("结果不确定")
+      expect(
+        Boolean(container.querySelector('[data-tool-diagnostic][aria-label*="结果不确定"]'))
+      ).toBe(dev)
+      render([
+        part(
+          "Shell",
+          {},
+          {
+            id: "invalid",
+            toolUseId: "invalid",
+            status: "failed",
+            isError: true,
+            metadata: { toolInputError: { reason: "invalid_json" } },
+            output: "Invalid JSON",
+          }
+        ),
+      ])
+      expect(container.textContent).not.toContain("参数解析失败")
+      click("运行命令")
+      expect(container.textContent?.includes("参数解析失败")).toBe(dev)
+      expect(container.textContent).toContain("Invalid JSON")
+    }
+  )
   it("shows the first executing tool directly without a one-tool group", () => {
     render([part("Shell", { command: "npm run test" }, { status: "running" })], true)
     expect(container.textContent).toContain("运行命令")
@@ -245,12 +331,17 @@ describe("tool parameter and result display", () => {
     expect(heading?.textContent).not.toMatch(/文件编辑|工具调用 2 次/)
     expect(group!.querySelectorAll("pre")).toHaveLength(0)
     act(() => heading!.click())
-    const read = [...group!.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(button => button.textContent?.includes("读取文件"))
+    const read = [...group!.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(
+      (button) => button.textContent?.includes("读取文件")
+    )
     expect(read).toBeDefined()
     expect(group!.textContent).toContain("Write")
     expect(group!.textContent?.match(/生成参数/g)).toHaveLength(2)
-    expect([...group!.querySelectorAll("button[aria-expanded]")].filter(button => button !== heading)
-      .some(button => button.textContent?.includes("Write"))).toBe(false)
+    expect(
+      [...group!.querySelectorAll("button[aria-expanded]")]
+        .filter((button) => button !== heading)
+        .some((button) => button.textContent?.includes("Write"))
+    ).toBe(false)
     expect(group!.querySelectorAll("pre")).toHaveLength(0)
     act(() => read!.click())
     expect(group!.textContent).toContain("file content")
@@ -258,10 +349,24 @@ describe("tool parameter and result display", () => {
   })
 
   it("names an all-generating group without counting unsubmitted calls", () => {
-    const generated = part("Write", {}, { id: "ui-tool-generation:r:g:1:0", input: undefined,
-      toolUseId: undefined, status: "running", metadata: { uiToolGeneration: true,
-        toolProgress: { phase: "generating", receivedChars: 10, executionState: "not_started" } } })
-    render([generated, { ...generated, id: "ui-tool-generation:r:g:1:1", seq: 2, toolName: "Read" }])
+    const generated = part(
+      "Write",
+      {},
+      {
+        id: "ui-tool-generation:r:g:1:0",
+        input: undefined,
+        toolUseId: undefined,
+        status: "running",
+        metadata: {
+          uiToolGeneration: true,
+          toolProgress: { phase: "generating", receivedChars: 10, executionState: "not_started" },
+        },
+      }
+    )
+    render([
+      generated,
+      { ...generated, id: "ui-tool-generation:r:g:1:1", seq: 2, toolName: "Read" },
+    ])
     const group = container.querySelector('section[aria-label="工具活动组"]')
     expect(group).not.toBeNull()
     const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
@@ -269,7 +374,9 @@ describe("tool parameter and result display", () => {
     expect(heading?.textContent).toContain("Read")
     expect(heading?.textContent).not.toMatch(/工具调用|工具查看|文件编辑/)
     act(() => heading!.click())
-    expect(group!.querySelectorAll('[role="img"][aria-label="正在生成参数，尚未执行"]')).toHaveLength(2)
+    expect(
+      group!.querySelectorAll('[role="img"][aria-label="正在生成参数，尚未执行"]')
+    ).toHaveLength(2)
     expect(group!.querySelectorAll("button[aria-expanded]")).toHaveLength(1)
     expect(group!.querySelector("pre")).toBeNull()
   })
@@ -349,7 +456,7 @@ describe("tool parameter and result display", () => {
     const row = click("编辑文件")
     expect(row.getAttribute("aria-expanded")).toBe("true")
     expect(container.textContent).toContain("C:/workspace/index.html")
-    expect(container.textContent).toContain("失败")
+    expect(container.querySelector('[data-tool-diagnostic][aria-label="失败"]')).not.toBeNull()
     expect(container.textContent).toContain("参数")
     expect(container.textContent).toContain("结果")
     const blocks = [...container.querySelectorAll("pre")].map((element) => element.textContent)
@@ -426,7 +533,7 @@ describe("tool parameter and result display", () => {
       ),
     ])
     click("运行命令")
-    expect(container.textContent).toContain("失败")
+    expect(container.querySelector('[data-tool-diagnostic][aria-label="失败"]')).not.toBeNull()
     expect(container.querySelector(".shimmer")).toBeNull()
     expect(container.textContent).toContain("exit code 1")
     expect(container.textContent).toContain('"command": "exit 1"')

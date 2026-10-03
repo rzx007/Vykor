@@ -46,6 +46,7 @@ import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
+const diagnosticToolLabels = new Set(["失败", "已中断", "结果不确定", "工具失败，等待本轮结果"])
 
 type ChangedFileStats = {
   additions: number
@@ -355,6 +356,18 @@ function parseTerminalToolPayload(value: unknown): TerminalToolPayload | null {
   }
 }
 
+function ToolDiagnosticDot({ label }: { label: string }): React.JSX.Element {
+  return (
+    <span
+      data-tool-diagnostic
+      role="img"
+      aria-label={label}
+      title={label}
+      className="size-1.5 shrink-0 rounded-full bg-amber-500/60 dark:bg-amber-400/60"
+    />
+  )
+}
+
 function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -369,9 +382,13 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
     else if (/write|edit|patch|create|delete/i.test(name)) counts.edits++
     else counts.reads++
   }
-  const failures = tools.filter(
-    (tool) => !isToolGenerationPresentation(tool.call) && toolCallStatus(tool.call, tool.result) === "failed"
-  ).length
+  const failures = import.meta.env.DEV
+    ? tools.filter(
+        (tool) =>
+          !isToolGenerationPresentation(tool.call) &&
+          toolCallStatus(tool.call, tool.result) === "failed"
+      ).length
+    : 0
   const activityHeading = [
     counts.edits ? `文件编辑 ${counts.edits} 次` : "",
     counts.commands ? `命令调用 ${counts.commands} 次` : "",
@@ -379,11 +396,25 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   ]
     .filter(Boolean)
     .join("，")
-  const generatingNames = [...new Set(tools
-    .filter(tool => isToolGenerationPresentation(tool.call))
-    .map(tool => tool.call.toolName ?? "工具"))]
-  const heading = [activityHeading, generatingNames.length ? `${generatingNames.join("、")} 生成参数` : ""]
-    .filter(Boolean).join(" · ")
+  const generatingNames = [
+    ...new Set(
+      tools
+        .filter((tool) => isToolGenerationPresentation(tool.call))
+        .map((tool) => tool.call.toolName ?? "工具")
+    ),
+  ]
+  const heading = [
+    activityHeading,
+    generatingNames.length ? `${generatingNames.join("、")} 生成参数` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ")
+  const diagnosticLabel = [
+    failures ? `${failures} 次失败` : "",
+    activityLabel && diagnosticToolLabels.has(activityLabel) ? activityLabel : "",
+  ]
+    .filter(Boolean)
+    .join(" · ")
   return (
     <section aria-label="工具活动组" className="text-ui-small text-ui-muted">
       {grouped ? (
@@ -399,9 +430,13 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
           <Pencil className="size-3.5 shrink-0" strokeWidth={1.7} />
           <span className="truncate">
             {heading || `工具调用 ${tools.length} 次`}
-            {failures ? `（${failures} 次失败）` : ""}
-            {activityLabel && !(generatingNames.length && activityLabel.startsWith("生成参数")) ? ` · ${activityLabel}` : ""}
+            {activityLabel &&
+            !diagnosticToolLabels.has(activityLabel) &&
+            !(generatingNames.length && activityLabel.startsWith("生成参数"))
+              ? ` · ${activityLabel}`
+              : ""}
           </span>
+          {diagnosticLabel ? <ToolDiagnosticDot label={diagnosticLabel} /> : null}
           <ChevronDown
             className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
           />
@@ -410,23 +445,23 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
       {!grouped || open ? (
         <div className={cn("space-y-0.5", grouped && "mt-1 border-l border-border/70 pl-4")}>
           {tools.map((tool) => {
-            if (isToolGenerationPresentation(tool.call)) return (
-              <div key={tool.id} className="flex h-7 min-w-0 items-center gap-2 text-ui-muted">
-                <LoaderCircle
-                  role="img"
-                  aria-label="正在生成参数，尚未执行"
-                  className="size-3.5 shrink-0 motion-safe:animate-spin"
-                  strokeWidth={1.7}
-                />
-                <span className="min-w-0 truncate">
-                  {tool.call.toolName} · {toolActivityLabel(tool.call)}
-                </span>
-              </div>
-            )
+            if (isToolGenerationPresentation(tool.call))
+              return (
+                <div key={tool.id} className="flex h-7 min-w-0 items-center gap-2 text-ui-muted">
+                  <LoaderCircle
+                    role="img"
+                    aria-label="正在生成参数，尚未执行"
+                    className="size-3.5 shrink-0 motion-safe:animate-spin"
+                    strokeWidth={1.7}
+                  />
+                  <span className="min-w-0 truncate">
+                    {tool.call.toolName} · {toolActivityLabel(tool.call)}
+                  </span>
+                </div>
+              )
             const summary = summarizeToolCall(tool.call)
             const active = activeId === tool.id
             const calling = isToolInFlight(tool)
-            const status = toolCallStatus(tool.call, tool.result)
             const output = tool.result?.output ?? tool.call.output
             const input = tool.call.input
             const parseError =
@@ -437,7 +472,7 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
             const detail =
               summary.detail ??
               (unparsedInput
-                ? "参数解析失败"
+                ? "查看详情"
                 : input === undefined
                   ? "参数尚未提供"
                   : Object.keys(input).length === 0
@@ -465,14 +500,11 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                     <span className="ml-1.5 text-ui-muted/80">{detail}</span>
                   </span>
                   {statusText ? (
-                    <span
-                      className={cn(
-                        "shrink-0 text-xs",
-                        status === "failed" ? "text-destructive" : "text-ui-muted"
-                      )}
-                    >
-                      {statusText}
-                    </span>
+                    diagnosticToolLabels.has(statusText) ? (
+                      <ToolDiagnosticDot label={statusText} />
+                    ) : (
+                      <span className="shrink-0 text-xs text-ui-muted">{statusText}</span>
+                    )
                   ) : null}
                   <ChevronDown
                     className={cn("size-3.5 shrink-0 transition-transform", active && "rotate-180")}
@@ -486,7 +518,9 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
                     <div className="px-3 pt-2 text-xs font-medium">参数</div>
                     {unparsedInput ? (
                       <p className="px-3 py-2 text-xs text-ui-muted">
-                        参数解析失败，请查看下方错误结果。
+                        {import.meta.env.DEV
+                          ? "参数解析失败，请查看下方错误结果。"
+                          : "没有记录可展示的参数。"}
                       </p>
                     ) : input === undefined ? (
                       <p className="px-3 py-2 text-xs text-ui-muted">参数尚未提供</p>
