@@ -1,6 +1,6 @@
 # Native Plugin UI A2 验收证据
 
-> 状态：当前 A2 后台实现与回归记录；任务 1–7 已经任务审查，最终分支审查发现的关闭等待、读取维护边界和作者文档问题已修复并补充回归，待控制器独立复审。不是 Desktop 首版发布验收。
+> 状态：当前 A2 后台实现与回归记录；任务 1–7 已经任务审查，最终分支审查的三项原问题已修复，但独立修复复审确认新增普通 Run 关闭遗漏，最终验收未通过。保留现场，不能合并或发布。不是 Desktop 首版发布验收。
 > 日期：2026-10-03
 > 分支：`codex/plugin-ui-a1`；A2 基线 `1be4f0c7`，本次最终回归基线 `af5f9bc8`。
 
@@ -111,11 +111,35 @@ P2 的根因是生产当前事实 resolver 直接准备 AgentPool，绕过维护
 
 F2 文件：`src/application/control/__test__/daemon-operation-gate.test.ts`、`src/application/control/__test__/daemon-control-service.test.ts`、`src/application/agent/__test__/agent-pool.test.ts`、`src/application/session/__test__/session-operation-runner.test.ts`、`src/application/session/__test__/run-control-service.test.ts`、`src/application/session/__test__/session-run-engine.test.ts`、`src/application/session/__test__/session-run-executor.test.ts`、`src/application/session/__test__/session-plugin-ui-service.test.ts`、`src/application/session/__test__/session-plugin-ui-action.test.ts`、`src/application/recovery/startup-recovery-service.test.ts`、`src/http/routes/plugin-lifecycle.test.ts`。
 
-这些是修复者的实测证据，尚不能代替控制器安排的本轮独立复审。
+上述 F1 / F2 是修复者的实测证据。控制器还独立运行了 Core checked/workflow 45/45、实际 HTTP21 与 privacy4 共25/25、gate/control/run-control/run-engine37/37，以及提交后的权限等待/Native 调用关闭2/2；Server 类型检查 exit0。关闭2项是上述 HTTP 用例的重跑，不重复计数。这些通过结果不能覆盖下述复审新增的交错。
+
+## 独立修复复审：仍未通过
+
+全分支审查范围为 `4bafd311..dda3daff`；一次性修复提交为 `4ae7f72d`；独立修复复审范围为 `dda3daff..4ae7f72d`。原 P1（UI 关闭相互等待）、P2（UI 读取绕过维护）和作者指南 Minor 均判为 ADDRESSED，但修复新增一个 Important：关闭的取消快照可能漏掉已经进入准入、仍在准备技能内容的普通输入。
+
+实际交错：普通 `steer` 输入先持有运行入口并暂停在 `run-admission-work.ts` 的 `await materializeSteerInput`；关闭同步封入口，`stopAndDrain()` 只取消调用当时的 Run；技能读取随后完成，原输入没有再次检查关闭状态，继续创建并入队普通 Run；准入释放入口后，关闭直接清理 AgentPool 并返回，新 Run 却仍活动。`RunAdmissionService.prepareRunExecution` 同样没有停止检查。旧关闭顺序会在准入释放后捕获这个 Run，但直接恢复旧顺序又会重新触发 UI 权限等待死锁，不能作为修复。
+
+复审者做了一个有界、无文件修改的诊断，使用真实 `DaemonOperationGate`、`DaemonControlService`、`SessionOperationRunner`、`RunAdmissionService`、`RunControlService`、`SessionRunEngine`，搭配内存记录和等待取消的注入执行器。当前顺序输出：
+
+```json
+{"shutdownReturned":true,"poolClosed":true,"executorStarted":true,"aborted":false,"activeRunId":"r"}
+```
+
+相同交错在旧顺序输出：
+
+```json
+{"oldOrder":true,"shutdownReturned":true,"poolClosed":true,"executorStarted":true,"aborted":true,"activeRunId":null}
+```
+
+这证明关闭返回时执行已进入且没有收到取消；没有调用真实模型，不把此诊断宣称为实际模型请求或 SQLite 持久悬空验证。控制器按源码交叉确认，接受该问题为影响既有普通运行的真实回归，不作为无害问题推迟。
+
+下一步范围：阻止或安全结算关闭期间恢复的在途普通准入，并保证所有准入工作均取消、排空；保留立即取消已运行 UI 动作、完整执行保护和原子结果保存。新增真实普通输入技能准备与关闭交错回归，同时覆盖 UI 权限等待/Native 调用、普通关闭控制及异常路径。无需重做 UI 架构或提前实施 A3。
+
+本轮按 subagent-driven-development 的一次最终修复及一次复审上限收尾；没有第二轮修复，没有删除计划现场，也没有宣称最终验收通过。后续接着修复此明确问题。
 
 ## 尚未验收的范围
 
-A2 最终分支审查的上述问题已修复并完成范围内回归，尚待本轮独立复审。完整 daemon 的 source projection、独立动作、当前事实读取、startup、export 和下次普通输入摘要均有真实消费者覆盖，不能据此宣称所有管理组合已穷举。
+A2 原三项最终审查问题已修复并完成范围内回归，独立修复复审仍有上述普通 Run 关闭回归，最终验收未通过。完整 daemon 的 source projection、独立动作、当前事实读取、startup、export 和下次普通输入摘要均有真实消费者覆盖，不能据此宣称关闭无遗漏或所有管理组合已穷举。
 
 UI-17–UI-24 的 Desktop / SDK 部分没有实施或验收：本次浏览器构建是已有 VykorClient 的后台接口消费者，不是 iframe SDK。专用文档协议、隔离 frame / CSP / MessageChannel、mount 撤销、Desktop SSE 呈现、参考插件卡片/侧栏、焦点与键盘、宿主确认和真实 Electron 攻击夹具均不能标记通过。UI-25 任意插件日志、UI-26 完整首版交付也不由本次后台测试代替。
 

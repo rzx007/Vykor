@@ -1,7 +1,7 @@
 # Native Plugin UI A2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：任务 1–7 已实现并经任务审查；最终分支审查发现的关闭等待、读取维护边界和作者文档问题已修复并补充回归，待独立复审。验收证据见 [A2 验收记录](../reviews/2026-10-03-native-plugin-ui-a2-verification.md)。现有 codex/plugin-ui-a1 隔离工作区，基线为 1be4f0c7；不包含 A3 / A4。
+> 状态：任务 1–7 的实现已完成任务审查；最终分支审查的三项问题已修复，但修复复审确认新增普通 Run 关闭遗漏，最终验收未通过。下一步仅修复在途普通输入与关闭的交错，保留立即取消 UI 动作及完整结果保存保护。验收证据见 [A2 验收记录](../reviews/2026-10-03-native-plugin-ui-a2-verification.md)。现有 codex/plugin-ui-a1 隔离工作区，基线为 1be4f0c7；不包含 A3 / A4，不合并、不推送。
 
 **Goal:** 原生工具结果生成可信持久 UI 实例，用户操作通过同一受检工具流程执行，并经现有 HTTP / Client / SSE 查询和恢复。
 
