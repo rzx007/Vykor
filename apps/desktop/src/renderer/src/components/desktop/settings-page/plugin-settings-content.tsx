@@ -179,7 +179,7 @@ export function PluginDetailsDialog({
               <DetailRow label="静态校验" value={plugin.uiInventory.componentCount === null
                 ? "UI 定义数量暂不可确认"
                 : `已校验 ${plugin.uiInventory.validatedComponentCount} 个 UI 定义`} />
-              <p className="text-xs text-muted-foreground">交互界面尚未接入。</p>
+              <p className="text-xs text-muted-foreground">在工具结果中按需打开交互，是否可用以会话检查为准。</p>
             </DetailSection>
           ) : null}
           <DetailSection title="权限">

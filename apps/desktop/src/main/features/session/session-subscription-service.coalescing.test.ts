@@ -98,6 +98,25 @@ afterEach(() => {
 })
 
 describe("SessionSubscriptionService coalescing", () => {
+  it("observes a lifecycle generation before the renderer's coalesced update", async () => {
+    vi.useFakeTimers()
+    const client = clientWithStream(async function* () {
+      yield { ...sessionUpdated(2), payload: { session: { ...session, metadata: { ...session.metadata, pluginUiGeneration: "new-generation" } } } }
+      await new Promise<never>(() => undefined)
+    })
+    const { contents, sent } = webContents()
+    const service = new SessionSubscriptionService({ sessionUpdateIntervalMs: 50 })
+    const observed: unknown[] = []
+    service.onOwnerSnapshot((_id, view) => observed.push(view.session.metadata.pluginUiGeneration))
+    try {
+      await service.openSession(client as never, contents as never, "s1")
+      await vi.advanceTimersByTimeAsync(1)
+      expect(observed).toContain("new-generation")
+      expect(sent).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(51)
+      expect(sent).toHaveLength(1)
+    } finally { service.clearAll() }
+  })
   it("shows a real Write generation in the transcript while arguments are paused, then hands off once", async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(tmpdir(), "vykor-write-timing-"))

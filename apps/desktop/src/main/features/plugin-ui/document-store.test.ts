@@ -25,6 +25,16 @@ it("serves the verified memory document exactly once to its owning child frame",
   expect(f.store.authorizeRequest(f.request)).toBe(false);
   expect(f.store.isPluginFrame(42, 7)).toBe(true);
 });
+it("allows only a fragment of the loaded live document, never replay or retired navigation", () => {
+  const f = fixture();
+  expect(f.store.authorizeRequest(f.request)).toBe(true);
+  f.store.respond(new Request(f.mounted.url));
+  expect(f.store.allowNavigation(42, 7, f.mounted.url + "#details", false)).toBe(true);
+  expect(f.store.allowNavigation(42, 7, f.mounted.url, false)).toBe(false);
+  expect(f.store.allowNavigation(42, 7, f.mounted.url + "?x=1#details", false)).toBe(false);
+  f.store.revoke(f.mounted.mountId);
+  expect(f.store.allowNavigation(42, 7, f.mounted.url + "#details", false)).toBe(false);
+});
 
 it.each([
   { ownerId: 43 }, { resourceType: "mainFrame" }, { resourceType: "xhr" }, { method: "POST" },
@@ -58,6 +68,9 @@ it("revokes documents but remembers retired frame identities until they are dest
   expect(f.store.isPluginFrame(42, 7)).toBe(true);
   expect(f.store.allowNavigation(42, 7, "https://escape.invalid/", false)).toBe(false);
   f.store.revokeOwner(42);
+  expect(f.store.isPluginFrame(42, 7)).toBe(true);
+  expect(f.store.allowNavigation(42, 7, "file:///private", false)).toBe(false);
+  f.store.pruneFrames(42, []);
   expect(f.store.isPluginFrame(42, 7)).toBe(false);
 });
 

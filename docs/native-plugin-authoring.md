@@ -95,7 +95,7 @@ manifest 描述插件包，不保存启用状态、批准记录、用户配置�
 ## UI 定义与后台工具操作
 
 UI 定义的静态校验、安装授权和元数据加载，以及工具结果中的可信实例、持久工具操作和 HTTP / Client 接口已经接入。
-仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 已接入隔离 HTML、卡片、侧栏和宿主确认，并通过隐藏 Electron 的实际 SDK → 桌面入口 → Client 测试。管理变更时撤销旧页面的安全通知尚未完成，因此后台尚不公布 `pluginUiLifecycle`，普通用户连接当前后台时仍只显示原始文字结果；这不是完整 A3 或首版交付。阶段证据见 [A3 验证记录](superpowers/reviews/2026-10-03-native-plugin-ui-a3-verification.md)。
+仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 的隔离 HTML、卡片、侧栏、宿主确认和管理撤销已接入，实际 Electron → Client → Native Tool → SQLite → SSE 流程通过。Desktop 同时检查 backend 的 `pluginUi=1`、`pluginUiLifecycle=1` 和本地隔离能力；旧后台保留原文字。`plugins.uiEnabled=false` 只关闭界面，普通插件工具仍可用。证据和平台边界见 [A3 验证记录](superpowers/reviews/2026-10-03-native-plugin-ui-a3-verification.md)。正式首版样例及用户人工验收属于 A4，不能据此声称已经发布。
 下面的后台能力可以由受信宿主或测试通过 Client 使用；声明 UI 不会自动打开窗口，也不会阻塞普通文字结果。
 
 Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：
@@ -131,7 +131,7 @@ entry 和定义文件路径都相对于插件根目录，而不是相对于 ui/m
 
 只要声明 UI，安装授权自动包含 `ui:render` 和 `ui:invoke-own-tools`。它们分别允许显示隔离界面、请求组件声明的插件自身工具，不能代替工具参数和执行权限检查。旧安装记录不会自动得到新批准，缺少授权时需要重新导入并确认。后台只绑定同插件的实际 Native Tool；builtin、其他插件和 MCP 工具不能作为 UI 动作。目标工具参数格式取自实际注册的 inputSchema，UI manifest 不另存一份。
 
-安装预览和管理详情中的 uiInventory 分别记录定义文件数、组件数和静态有效组件数。无法校验组件时 componentCount 为 null，表示暂不可确认，不表示没有 UI。它们不证明某个窗口已经显示界面，管理页会明确提示“交互界面尚未接入”。
+安装预览和管理详情中的 uiInventory 分别记录定义文件数、组件数和静态有效组件数。无法校验组件时 componentCount 为 null，表示暂不可确认，不表示没有 UI。它们不证明某个窗口已经显示界面：实际界面从工具结果中按需打开，仍需通过会话和隔离能力检查。
 
 ### 工具结果如何产生实例
 

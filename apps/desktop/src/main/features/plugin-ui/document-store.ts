@@ -74,7 +74,11 @@ export class PluginUiDocumentStore {
   }
   allowNavigation(ownerId: number, frameTreeNodeId: number, url: string, isMainFrame: boolean): boolean {
     if (isMainFrame) return !url.startsWith(PLUGIN_UI_SCHEME + ":");
-    if (this.isPluginFrame(ownerId, frameTreeNodeId)) return false;
+    if (this.isPluginFrame(ownerId, frameTreeNodeId)) {
+      const id = this.frames.get(this.frameKey(ownerId, frameTreeNodeId));
+      const doc = id && this.documents.get(id);
+      return Boolean(doc && doc.phase === "served" && url.startsWith(doc.url + "#"));
+    }
     if (!url.startsWith(PLUGIN_UI_SCHEME + ":")) return true;
     const doc = this.byUrl(url);
     return Boolean(doc && doc.ownerId === ownerId && doc.phase === "registered" && url === doc.url);
@@ -95,7 +99,8 @@ export class PluginUiDocumentStore {
   }
   revokeOwner(ownerId: number): void {
     for (const doc of [...this.documents.values()]) if (doc.ownerId === ownerId) this.revoke(doc.mountId);
-    for (const key of this.frames.keys()) if (key.startsWith(ownerId + ":")) this.frames.delete(key);
+    // Revocation is not destruction: old author code may still run until DOM/SSE cleanup.
+    // Physical identities remain blocked until pruneFrames observes that they are gone.
   }
   clear(): void {
     for (const doc of [...this.documents.values()]) this.revoke(doc.mountId);

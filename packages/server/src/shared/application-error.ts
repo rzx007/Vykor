@@ -13,6 +13,7 @@ export type ApplicationErrorCode =
   | "plugin_ui_action_unknown"
   | "plugin_ui_permission_missing"
   | "plugin_ui_unavailable"
+  | "plugin_ui_lifecycle_mutating"
   | "plugin_ui_snapshot_changed"
   | "plugin_ui_invalid_definition"
   | "plugin_ui_action_not_allowed"
@@ -32,6 +33,7 @@ export const APPLICATION_ERROR_HTTP_STATUS: Record<ApplicationErrorCode, number>
   plugin_ui_action_unknown: 409,
   plugin_ui_permission_missing: 403,
   plugin_ui_unavailable: 503,
+  plugin_ui_lifecycle_mutating: 409,
   plugin_ui_snapshot_changed: 409,
   plugin_ui_invalid_definition: 409,
   plugin_ui_action_not_allowed: 403,

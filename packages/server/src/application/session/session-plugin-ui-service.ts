@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import type { RunCapabilityView, RunPluginUiBinding, ToolResult } from "@vykor/core";
 import { toolFeedbackFields } from "@vykor/core";
@@ -36,6 +37,12 @@ export interface SessionPluginUiServiceOptions {
   /** Production verifies captured files immediately before a source result transaction. */
   verifySourceBinding?(binding: RunPluginUiBinding): Promise<boolean>;
   diagnose?(diagnostic: { code: "plugin_ui_invalid_result"; sessionId: string; runId: string; partId: string }): void;
+  lifecycle?: {
+    interruptRun(sessionId: string, runId: string): unknown;
+    waitForRuns(runIds: string[]): Promise<void>;
+    checkpoint(): number;
+    publishSince(checkpoint: number): void;
+  };
   actions?: {
     operations: Pick<SessionOperationRunner, "run">;
     engine: Pick<SessionRunEngine, "enqueueHostWork" | "runtimeBridge">;
@@ -43,20 +50,69 @@ export interface SessionPluginUiServiceOptions {
     execute(runId: string, context: SessionRunWorkContext): Promise<void>;
   };
 }
+export type PluginUiLifecycleScope = { kind: "global"; pluginId?: string } | { kind: "cwd"; cwd: string; sessionId?: string };
 
 export class SessionPluginUiService {
   private readonly runViews = new Map<string, RunCapabilityView>();
   private readonly checkedSources = new Map<string, Map<string, RunPluginUiBinding>>();
+  private readonly mutations = new Set<PluginUiLifecycleScope>();
 
   constructor(private readonly options: SessionPluginUiServiceOptions) {}
 
   get backendReady(): boolean { return this.options.actions !== undefined && this.options.verifySourceBinding !== undefined; }
+  get lifecycleReady(): boolean { return this.backendReady && this.options.lifecycle !== undefined; }
+
+  private matches(scope: PluginUiLifecycleScope, session: SessionRecord, pluginId?: string): boolean {
+    return scope.kind === "cwd" ? resolve(scope.cwd) === resolve(session.cwd) && (!scope.sessionId || scope.sessionId === session.id)
+      : !scope.pluginId || scope.pluginId === pluginId;
+  }
+  private assertNotMutating(session: SessionRecord, instance: PluginUiInstanceRecord): void {
+    if ([...this.mutations].some(scope => this.matches(scope, session, instance.pluginId)))
+      throw new ApplicationError(409, "插件正在更新，请稍后重新打开", "plugin_ui_lifecycle_mutating");
+  }
+  async withPluginUiLifecycleMutation<T>(scope: PluginUiLifecycleScope, work: () => Promise<T>): Promise<T> {
+    const lifecycle = this.options.lifecycle;
+    if (!lifecycle) return work();
+    const owned = structuredClone(scope);
+    this.mutations.add(owned); // Before any await: preparation cannot slip into a maintenance window.
+    const related = () => this.options.store.sessions.list({ includeArchived: true }).filter(session =>
+      (owned.kind !== "cwd" || this.matches(owned, session))
+      && this.options.store.conversations.listMessageParts(session.id).some(part => {
+        const instance = readPluginUiInstance(part.metadata);
+        return instance && this.matches(owned, session, instance.pluginId);
+      }));
+    try {
+      const runs = related().flatMap(session => this.options.store.runs.listRuns(session.id)
+        .filter(run => {
+          const action = readPluginUiAction(run.metadata);
+          return action && this.matches(owned, session, action.pluginId) && (run.status === "pending" || run.status === "running");
+        }));
+      for (const run of runs) lifecycle.interruptRun(run.sessionId, run.id);
+      await lifecycle.waitForRuns(runs.map(run => run.id));
+      // A queued host action may be interrupted before its executor creates a Part.
+      for (const run of runs) this.settleAction(run.id, "interrupted", { error: "plugin_ui_lifecycle_changed" });
+      return await work();
+    } finally {
+      try {
+        const checkpoint = lifecycle.checkpoint();
+        this.options.store.transaction(() => {
+          for (const session of related()) {
+            if (session.status === "archived" || session.status === "closing") continue;
+            this.options.store.sessions.update(session.id, { metadata: { ...session.metadata, pluginUiGeneration: randomUUID() } });
+          }
+        });
+        lifecycle.publishSince(checkpoint);
+      } finally { this.mutations.delete(owned); }
+    }
+  }
 
   async getDocument(sessionId: string, instanceId: string): Promise<PluginUiDocumentResponse> {
     const { session, instance } = this.requireSource(sessionId, instanceId);
+    this.assertNotMutating(session, instance);
     let current: PluginUiCurrentState;
     try { current = await this.options.resolveCurrent(session, instance); }
     catch { throw new ApplicationError(503, "插件文档暂不可用", "plugin_ui_unavailable"); }
+    this.assertNotMutating(session, instance);
     const availability = this.availability(session, instance, current);
     if (!availability.canRender) this.throwUnavailable(availability);
     if (!current.document) throw new ApplicationError(503, "插件文档暂不可用", "plugin_ui_unavailable");
@@ -80,6 +136,7 @@ export class SessionPluginUiService {
     const fingerprint = hash(`{"actionId":${JSON.stringify(input.actionId)},"args":${argsJson},"expectedRevision":${input.expectedRevision}}`);
     const runId = actionRunId(sessionId, instanceId, input.requestId);
     const actions = this.requireActions();
+    const generation = this.requireSource(sessionId, instanceId).session.metadata.pluginUiGeneration;
     return actions.operations.run(sessionId, async () => {
       this.requireSource(sessionId, instanceId);
       const existing = this.options.store.runs.getRun(runId);
@@ -89,6 +146,10 @@ export class SessionPluginUiService {
         }
         return this.receipt(existing);
       }
+      const source = this.requireSource(sessionId, instanceId);
+      this.assertNotMutating(source.session, source.instance);
+      if (source.session.metadata.pluginUiGeneration !== generation)
+        throw new ApplicationError(409, "插件显示已失效，请重新打开", "plugin_ui_snapshot_changed");
       const prepared = await this.prepareAction(sessionId, instanceId, input.expectedRevision, input.actionId);
       this.assertActionState(sessionId, instanceId, input.expectedRevision);
       const metadata: PluginUiActionRunMetadata = {
@@ -152,7 +213,13 @@ export class SessionPluginUiService {
     store.transaction(() => {
       const run = store.runs.getRun(runId);
       const action = run && readPluginUiAction(run.metadata);
-      if (!run || !action || (run.status !== "pending" && run.status !== "running")) return;
+      if (!run || !action) return;
+      if (run.status !== "pending" && run.status !== "running"
+        && !(status === "interrupted" && run.status === "interrupted"
+          && store.conversations.listMessageParts(run.sessionId).some(part => {
+            const instance = readPluginUiInstance(part.metadata);
+            return instance?.instanceId === action.instanceId && instance.activeActionRunId === runId;
+          }))) return;
       const executionState = options.result?.executionState ?? action.executionState;
       const result = options.result;
       const toolPart = store.conversations.listMessageParts(run.sessionId).find(p => p.id === action.toolUseId);
@@ -223,7 +290,13 @@ export class SessionPluginUiService {
   /** Host-only preparation; revalidate after Agent acquisition and current-fact resolution. */
   async prepareAction(sessionId: string, instanceId: string, revision: number, actionId: string, ownerRunId?: string) {
     const actions = this.requireActions();
-    const check = () => this.assertActionState(sessionId, instanceId, revision, ownerRunId);
+    const generation = this.requireSource(sessionId, instanceId).session.metadata.pluginUiGeneration;
+    const check = () => {
+      const source = this.assertActionState(sessionId, instanceId, revision, ownerRunId);
+      if (source.session.metadata.pluginUiGeneration !== generation)
+        throw new ApplicationError(409, "插件显示已失效，请重新打开", "plugin_ui_snapshot_changed");
+      return source;
+    };
     let source = check();
     let agent: Awaited<ReturnType<typeof actions.acquireSession>>;
     try { agent = await actions.acquireSession(sessionId); }
@@ -252,6 +325,7 @@ export class SessionPluginUiService {
   /** Synchronous guard for the final await-to-write boundary and the actual invocation. */
   assertActionState(sessionId: string, instanceId: string, revision: number, ownerRunId?: string) {
     const source = this.requireSource(sessionId, instanceId);
+    this.assertNotMutating(source.session, source.instance);
     const runtime = this.requireActions().engine.runtimeBridge;
     if (source.session.status === "archived" || source.session.status === "closing") throw new ApplicationError(409, "会话不可修改", "plugin_ui_session_archived");
     if (source.instance.status !== "open") throw new ApplicationError(409, "插件交互已结束", "plugin_ui_closed");
@@ -376,6 +450,7 @@ export class SessionPluginUiService {
 
   async get(sessionId: string, instanceId: string): Promise<PluginUiInstanceResponse> {
     const { session, instance } = this.requireSource(sessionId, instanceId);
+    this.assertNotMutating(session, instance);
     let current: PluginUiCurrentState;
     try { current = await this.options.resolveCurrent(session, instance); }
     catch {

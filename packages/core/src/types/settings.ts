@@ -151,6 +151,8 @@ export interface Settings {
   plugins?: {
     /** Master switch for all installed Native Plugin contributions. Defaults to true. */
     enabled: boolean;
+    /** Render and invoke plugin UI only when enabled; ordinary tools remain available. */
+    uiEnabled?: boolean;
   };
   daemon?: DaemonConfig;
   autoReview?: AutoReviewSettings;

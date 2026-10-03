@@ -74,6 +74,7 @@ export async function installRuntimeIntegrations(
   });
   const pluginUi: RunPluginUiBinding[] = [];
   for (const plugin of options.discovery.plugins) {
+    if (options.settings.plugins?.uiEnabled === false) continue;
     const original = plugin.components.ui;
     if (original?.status !== "loaded" || !original.value?.length) continue;
     const pluginId = plugin.manifest.id;

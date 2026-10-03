@@ -11,7 +11,7 @@ export async function resolveSessionPluginUiCurrent(
   session: SessionRecord, instance: PluginUiInstanceRecord,
   options: { settings?: Settings; acquireSession(sessionId: string): Promise<Pick<VykorAgent, "createRunCapabilityView">> },
 ): Promise<PluginUiCurrentState> {
-  const current: PluginUiCurrentState = { enabled: false, uiEnabled: options.settings?.plugins?.enabled ?? true,
+  const current: PluginUiCurrentState = { enabled: false, uiEnabled: options.settings?.plugins?.enabled !== false && options.settings?.plugins?.uiEnabled !== false,
     permissionsApproved: false, snapshot: "missing", runtimeAvailable: false };
   if (!current.uiEnabled || readSessionRuntimeConfig(session).pluginsEnabled === false) return current;
   const { winners } = selectPluginInstallationWinners(await discoverInstalledNativePlugins({ cwd: session.cwd }));

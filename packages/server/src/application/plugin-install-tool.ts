@@ -10,6 +10,7 @@ const reply = (text: string, isError = false): ToolResult => ({
 export function createPluginInstallTool(
   plugins: PluginService,
   invalidateRuntimes: () => Promise<void>,
+  withMutation: <T>(work: () => Promise<T>) => Promise<T> = work => work(),
 ): ToolDefinition {
   return {
     name: "PluginInstall",
@@ -51,6 +52,7 @@ export function createPluginInstallTool(
         const answer = (await context.askUserPrompt(question)).trim();
         if (answer !== "确认安装") return reply("已取消插件安装。");
         const approvedPermissions = candidate.approvalRequired ? candidate.requestedPermissions : [];
+        return await withMutation(async () => {
         const result = source === "archive" && "archiveDigest" in candidate
           ? await plugins.installArchive!({
               cwd: context.cwd,
@@ -72,6 +74,7 @@ export function createPluginInstallTool(
         } catch (error) {
           return reply(`${result.message} 运行时刷新失败，请使用 /reload-plugins 后再使用新插件：${error instanceof Error ? error.message : String(error)}`);
         }
+        });
       } catch (error) {
         return reply(error instanceof Error ? error.message : String(error), true);
       }

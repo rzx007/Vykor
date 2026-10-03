@@ -15,6 +15,10 @@ const instance: PluginUiInstanceRecord = {
   title: "检查结果", surfaces: ["tool-result", "session-sidebar"], status: "open", revision: 1,
   data: { count: 1 }, createdAt: 1, updatedAt: 1,
 };
+const ownerView = (generation: string, present = true) => ({ cursor: 1, syncStatus: "connected",
+  session: { id: "session", status: "idle", metadata: { pluginUiGeneration: generation } },
+  parts: present ? [{ id: "part", metadata: { pluginUi: instance } }] : [], runs: [],
+});
 function fixture() {
   let currentSession: string | undefined = "session";
   let lifecycle = true;
@@ -23,6 +27,7 @@ function fixture() {
   const documentEntered = new Promise<void>(resolve => { enteredDocument = resolve; });
   let holdDocument = false;
   let drift = false; let documentRead = false;
+  let changeGeneration = false;
   const submissions: unknown[] = [];
   const html = "<p>private verified document</p>";
   const client = new VykorClient({ baseUrl: "http://127.0.0.1:4000", fetch: async (url, options) => {
@@ -36,7 +41,8 @@ function fixture() {
       if (holdDocument) await new Promise<void>(resolve => { releaseDocument = resolve; });
       body = { html, sha256: createHash("sha256").update(html).digest("hex") };
     } else if (path.endsWith("/state")) body = { cursor: 1,
-      session: { id: "session", cwd: "/test", title: "", model: "test", status: "idle", metadata: {}, createdAt: 1, updatedAt: 1 },
+      session: { id: "session", cwd: "/test", title: "", model: "test", status: "idle",
+        metadata: { pluginUiGeneration: changeGeneration && documentRead ? "next" : "first" }, createdAt: 1, updatedAt: 1 },
       inputs: [], messages: [], parts: [], runs: [], attempts: [], permissions: [] };
     else if (path.endsWith("/actions")) {
       submissions.push(JSON.parse(String(options?.body)));
@@ -60,6 +66,7 @@ function fixture() {
     withoutLifecycle: () => { lifecycle = false; },
     holdDocument: () => { holdDocument = true; },
     driftDocument: () => { drift = true; },
+    changeGeneration: () => { changeGeneration = true; },
     navigateOwner: () => { ownerUrl = "https://foreign.invalid/"; },
     releaseDocument: () => releaseDocument?.() };
 }
@@ -78,6 +85,21 @@ it("mounts only verified current data and invokes the declared action with the o
   f.service.unmount(42, { mountId: mount.mountId });
   expect(f.documents.owns(mount.mountId, 42)).toBe(false);
   expect(f.submissions).toHaveLength(1);
+});
+it.each(["generation", "source", "reconnecting"] as const)("revokes a mounted document on actual owner snapshot %s", async reason => {
+  const f = fixture(); f.service.observeSession(42, ownerView("first") as never);
+  const mounted = await f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" });
+  f.service.observeSession(42, { ...ownerView(reason === "generation" ? "next" : "first", reason !== "source"),
+    ...(reason === "reconnecting" ? { syncStatus: "reconnecting" } : {}) } as never);
+  expect(f.documents.owns(mounted.mountId, 42)).toBe(false);
+  await expect(f.service.invokeAction(42, { mountId: mounted.mountId, input: { requestId, expectedRevision: 1, actionId: "apply", args: {} } }))
+    .rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+  expect(f.submissions).toEqual([]);
+});
+it("rejects an in-flight document after a backend generation change even if SSE is late", async () => {
+  const f = fixture(); f.changeGeneration();
+  await expect(f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" }))
+    .rejects.toMatchObject({ code: "plugin_ui_snapshot_changed" });
 });
 
 it("refuses legacy capability, extra loader fields, foreign windows and wrong sessions", async () => {

@@ -13,6 +13,7 @@ import { VykorClient } from "../../../../client/src/index.js";
 import { VykorHttpServer } from "../server.js";
 import { createSystemRoutes } from "../routes/system.js";
 import { createDefaultPluginService } from "../../application/default-services/plugin-service.js";
+import { createDefaultSettingsService } from "../../application/default-services/settings-service.js";
 
 const cleanup: (() => void | Promise<void>)[] = [];
 let nativeLogs: ReturnType<typeof captureNativeUiLogs>;
@@ -66,6 +67,7 @@ async function harness(link = false) {
   if (installed.status !== "installed") throw new Error("Native UI fixture installation failed");
   const settings: Settings = { apiFormat: "openai", model: "never", maxTurns: 3,
     permission: { mode: "full_auto" }, sandbox: { enabled: false }, memory: { enabled: false } };
+  const settingsRef = { current: settings };
   let store = new SessionStore({ path: join(root, "session.db") });
   let modelCalls = 0;
   let nextInspection: { id: string; input: Record<string, unknown> } | undefined;
@@ -74,16 +76,19 @@ async function harness(link = false) {
   let agentLoads = 0;
   let beforeSettings: (() => Promise<void>) | undefined;
   let beforeCreate: (() => Promise<void>) | undefined;
+  let modelPause: ReturnType<typeof deferred> | undefined;
   const boot = (hostUnavailable = false) => {
     if (hostUnavailable) writeFileSync(join(root, "host-down"), "down");
-    return new VykorHttpServer({ store, settings, token: "secret-token", logger: event => logs.push(event),
-    services: { plugin: createDefaultPluginService({ current: settings }) },
-    getSettingsForCwd: async () => { await beforeSettings?.(); return settings; },
+    return new VykorHttpServer({ store, settings: settingsRef.current, getSettings: () => settingsRef.current,
+    token: "secret-token", logger: event => logs.push(event),
+    services: { plugin: createDefaultPluginService(settingsRef), settings: createDefaultSettingsService(settingsRef) },
+    getSettingsForCwd: async () => { await beforeSettings?.(); return settingsRef.current; },
     createAgent: async ({ options }) => {
       agentLoads++;
       await beforeCreate?.();
       return createDefaultNodeAgent({ ...options, capabilityOverrides: { ...options.capabilityOverrides, terminal: false, memory: false },
         client: { async *streamMessage(params) {
+          if (modelPause) { const paused = modelPause; modelPause = undefined; await paused.promise; }
           histories.push(JSON.stringify(params.messages));
           if (++modelCalls === 1 || nextInspection) {
             const inspection = nextInspection ?? { id: "source-call", input: {} }; nextInspection = undefined;
@@ -128,6 +133,7 @@ async function harness(link = false) {
       return store.runs.getRun(admitted.run!.id)!;
     },
     store: () => store, server: () => server,
+    pauseModel: () => { modelPause = deferred(); return modelPause; },
     effects: () => existsSync(join(root, "effects")) ? readFileSync(join(root, "effects"), "utf8") : "0",
     mutateInstall: async (work: (record: any) => void) => updateInstalledPluginStore(getInstalledPluginStorePath(), value => { Object.values(value.plugins).forEach(work); }),
     restart: async (hostUnavailable = false, beforeStartup?: (reopened: SessionStore) => void) => {
@@ -173,6 +179,97 @@ it("wires source capture, authenticated Client actions, durable retries, summari
   expect(dismissed.status).toBe("dismissed");
   expectNoPrivateUiData([h.logs, nativeLogs.values], ["secret-token", html, "approved", join(h.root, "config")]);
   expectNoPrivateUiData(await h.client().pluginUi.get(h.session.id, id), [h.root]);
+});
+
+it.each(["disable", "uninstall", "reload", "reinstall"] as const)("cancels only UI work and revokes its session before %s completes", async mutation => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  writeFileSync(join(h.root, "wait-action"), "wait");
+  const before = h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration;
+  const receipt = await h.client().pluginUi.invokeAction(h.session.id, id, {
+    requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: {},
+  });
+  await vi.waitFor(() => expect(h.effects()).toBe("1"), { timeout: 10000 });
+  const result = mutation === "disable" ? h.client().plugins.disable(pluginId, { cwd: h.root })
+    : mutation === "uninstall" ? h.client().plugins.uninstall(pluginId, { cwd: h.root })
+    : mutation === "reload" ? h.client().plugins.reload({ cwd: h.root })
+    : h.client().plugins.installLocal({ cwd: h.root, sourcePath: join(h.root, "source"), scope: "user",
+      approvedPermissions: ["ui:render", "ui:invoke-own-tools"] });
+  await expect(result).resolves.toBeDefined();
+  expect(h.store().runs.getRun(receipt.runId)).toMatchObject({ status: "interrupted", metadata: { uiAction: { executionState: "unknown" } } });
+  expect(h.instance()!.activeActionRunId).toBeUndefined();
+  expect(h.effects()).toBe("1");
+  expect(h.modelCalls()).toBe(2);
+  expect(h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration).toEqual(expect.any(String));
+  expect(h.store().sessions.get(h.session.id)!.metadata.pluginUiGeneration).not.toBe(before);
+});
+
+it("cancels a real UI permission wait before disabling, with no Native side effect", async () => {
+  const h = await harness(); h.settings.permission = { mode: "default" }; await h.restart();
+  const receipt = await h.client().pluginUi.invokeAction(h.session.id, h.instance()!.instanceId, {
+    requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: {},
+  });
+  await vi.waitFor(() => expect(h.store().permissions.list({ sessionId: h.session.id, status: "pending" })).toHaveLength(1), { timeout: 10000 });
+  await expect(h.client().plugins.disable(pluginId, { cwd: h.root })).resolves.toBeDefined();
+  expect(h.store().runs.getRun(receipt.runId)).toMatchObject({ status: "interrupted", metadata: { uiAction: { executionState: "not_started" } } });
+  expect(h.effects()).toBe("0");
+  expect(h.store().permissions.list({ sessionId: h.session.id, status: "pending" })).toHaveLength(0);
+});
+it("cancels UI before switching off its session plugin capability", async () => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  writeFileSync(join(h.root, "wait-action"), "wait");
+  const receipt = await h.client().pluginUi.invokeAction(h.session.id, id, {
+    requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: {},
+  });
+  await vi.waitFor(() => expect(h.effects()).toBe("1"), { timeout: 10000 });
+  await expect(h.client().sessions.update(h.session.id, { metadata: { runtime: { pluginsEnabled: false } } })).resolves.toBeDefined();
+  expect(h.store().runs.getRun(receipt.runId)).toMatchObject({ status: "interrupted" });
+  expect((await h.client().pluginUi.get(h.session.id, id)).availability.code).toBe("plugin-disabled");
+  expect(h.effects()).toBe("1");
+});
+it("turns off only plugin UI without disabling ordinary plugin tools", async () => {
+  const h = await harness();
+  h.settings.plugins = { enabled: true, uiEnabled: false };
+  expect((await h.client().pluginUi.get(h.session.id, h.instance()!.instanceId)).availability)
+    .toMatchObject({ code: "plugin-disabled", canRender: false, canInvoke: false });
+  await h.restart(); await h.inspectAgain(false);
+  expect(h.store().conversations.listMessageParts(h.session.id).find(part => part.id === "second-source-call")?.status).toBe("completed");
+  expect(readPluginUiInstance(h.store().conversations.listMessageParts(h.session.id).find(part => part.id === "second-source-call")?.metadata)).toBeUndefined();
+});
+it.each([{ plugins: { enabled: true, uiEnabled: false } }, { path: "plugins.enabled", value: "false" }])("cancels UI and revokes documents through settings patch $path", async patch => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  writeFileSync(join(h.root, "wait-action"), "wait");
+  const receipt = await h.client().pluginUi.invokeAction(h.session.id, id, {
+    requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: {},
+  });
+  await vi.waitFor(() => expect(h.effects()).toBe("1"), { timeout: 10000 });
+  await expect(h.client().system.patchSettings(patch)).resolves.toBeDefined();
+  expect(h.store().runs.getRun(receipt.runId)?.status).toBe("interrupted");
+  expect((await h.client().pluginUi.get(h.session.id, id)).availability.canRender).toBe(false);
+  expect(h.effects()).toBe("1");
+});
+it("keeps ordinary model work running and refuses maintenance with the existing 409 barrier", async () => {
+  const h = await harness(); const pause = h.pauseModel();
+  const ordinary = await h.server().application.interactions.admitPrompt(h.session.id, { items: [{ type: "text", text: "ordinary work" }] });
+  try {
+    await expect(h.client().plugins.disable(pluginId, { cwd: h.root })).rejects.toMatchObject({ status: 409 });
+    expect(h.store().runs.getRun(ordinary.run!.id)!.status).not.toBe("interrupted");
+    expect(h.effects()).toBe("0");
+  } finally { pause.resolve(); await h.server().application.runControl.waitForRuns([ordinary.run!.id]); }
+  expect(h.store().runs.getRun(ordinary.run!.id)!.status).toBe("completed");
+});
+it("blocks UI admission during maintenance and releases it after a failed mutation", async () => {
+  const h = await harness(); const id = h.instance()!.instanceId; const gate = deferred();
+  const work = h.server().application.pluginUi.withPluginUiLifecycleMutation({ kind: "global", pluginId }, async () => {
+    await gate.promise; throw new Error("fixture mutation failed");
+  });
+  const rejection = expect(work).rejects.toThrow("fixture mutation failed");
+  try {
+    await expect(h.client().pluginUi.invokeAction(h.session.id, id, { requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: {} }))
+      .rejects.toMatchObject({ status: 409, body: { code: "plugin_ui_lifecycle_mutating" } });
+    expect(h.effects()).toBe("0");
+  } finally { gate.resolve(); await rejection; }
+  expect((await h.client().pluginUi.get(h.session.id, id)).availability.canInvoke).toBe(true);
+  expect(h.instance()).toMatchObject({ revision: 1, status: "open" });
 });
 
 it.each(["permission", "native"] as const)("closes the daemon during a real UI %s wait and preserves durable cancellation without replay", async phase => {

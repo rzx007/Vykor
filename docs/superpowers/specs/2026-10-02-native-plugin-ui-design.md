@@ -1,6 +1,6 @@
 # 插件 UI 完整规格：工具结果卡片与会话侧栏
 
-> 状态：当前首版设计；A1 静态定义、加载、授权与管理反馈，以及 A2 可信实例、持久动作和 HTTP / Client 后台接口已实现。A2 审查遗留的普通 Run 关闭遗漏已修复并通过定向回归，本次未重复全分支独立审查；Desktop 隔离文档、消息接口和交互界面尚未实现。具体证据和未验收范围见 A2 验收记录。
+> 状态：A1 静态定义/授权、A2 持久实例/动作，以及 A3 Desktop隔离文档、SDK、卡片/侧栏、确认和撤销已实现；A3通过实际双窗口 Native/SQLite Electron验证及一次限定安全审查。具体证据和平台边界见 [A3验收记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)。A4正式参考插件、Converter交付与用户人工验收尚未交付，不能宣称整个首版已发布。
 > 日期：2026-10-02
 > 产品：OpenHarness；仓库包名和原生插件目录继续使用 Vykor / `@vykor/*` / `.vykor-plugin`。
 > 首版交付：Desktop 中的 Native Plugin UI，包括自定义 HTML、工具结果卡片、会话侧栏、受控工具操作和持久状态恢复。
@@ -845,9 +845,9 @@ feature `pluginUi` 只在完整后台能力接线后公布；Desktop 还需检�
 
 本规格区分拟议接口与已验证实现；未交付的交互接口不能宣传为当前 API。最终发布需要全部首版验收证据，而不是仅凭 feature 字段或插件数量证明完成。
 
-已实现入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)和[A2 实例与工具操作实施计划](../plans/2026-10-03-native-plugin-ui-a2.md)。A2 的真实 Native Tool、SQLite、Daemon / Hono / Client 证据见验收记录；A3 / A4 和真实 Electron 首版验收仍待实施。
+已实现入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)、[A2 实例与工具操作实施计划](../plans/2026-10-03-native-plugin-ui-a2.md)及[A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)。A3的真实 Native Tool、SQLite、Daemon/Hono/Client、Electron与双窗口证据见验收记录；A4正式参考插件和首版用户人工验收尚未交付。
 
-A3 的具体接线、批次与测试门槛见 [A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)。第一批 SDK 与文档隔离基础已有[真实验证记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)，有限 IPC、交互界面、完整生命周期和首版验收仍待后续批次；不将拟议接口宣传为已实现。
+A3的具体接线和测试门槛见 [A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)，完整阶段证据见[真实验证记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)。后端只在生命周期完整接线时声明可选 `pluginUiLifecycle=1`；旧能力和精确快照不可用时仍保留原结果，不扩大当前证据到尚未完成的 A4。
 
 A1 实际交付与验证：[2026-10-03 验收记录](../reviews/2026-10-03-native-plugin-ui-a1-verification.md)。
 

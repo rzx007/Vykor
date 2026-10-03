@@ -6,7 +6,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const scratch = resolve(root, ".superpowers/sdd/2026-10-03-native-plugin-ui-a3");
 const executable = process.env.VYKOR_UI_TEST_ELECTRON ?? resolve(scratch, "electron-runtime/electron.exe");
 if (!existsSync(executable)) throw new Error("Prepare the existing cached Electron runtime before running UI tests");
-const environment = { ...process.env, VYKOR_UI_TEST_ROOT: root };
+const environment = { ...process.env, VYKOR_UI_TEST_ROOT: root, VYKOR_UI_TEST_NODE: process.execPath };
 delete environment.ELECTRON_RUN_AS_NODE;
 const child = spawn(executable, ["--user-data-dir=" + resolve(scratch, "electron-profile"), resolve(scratch, "electron-build/main/main.cjs")], {
   env: environment, windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
@@ -15,7 +15,7 @@ let stderr = "";
 let stdout = "";
 child.stdout.on("data", chunk => { stdout += chunk; process.stdout.write(chunk); });
 child.stderr.on("data", chunk => { stderr += chunk; });
-const timeout = setTimeout(() => { child.kill(); process.exitCode = 2; }, 35_000);
+const timeout = setTimeout(() => { child.kill(); process.exitCode = 2; }, 90_000);
 child.on("error", error => { clearTimeout(timeout); console.error(error); process.exitCode = 1; });
 child.on("close", code => {
   clearTimeout(timeout);

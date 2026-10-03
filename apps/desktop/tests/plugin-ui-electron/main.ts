@@ -8,6 +8,8 @@ import { PluginUiDocumentStore, PLUGIN_UI_PERMISSIONS_POLICY } from "../../src/m
 import { installPluginUiDocumentProtocol, registerPluginUiScheme } from "../../src/main/features/plugin-ui/document-protocol";
 import { attachPluginUiWindowPolicy } from "../../src/main/features/plugin-ui/window-policy";
 import { checkDesktopUi } from "./desktop-ui-check";
+import { checkNativeUi } from "./native-ui-check";
+import { desktopPluginUiDocuments } from "../../src/main/features/plugin-ui/document-runtime";
 
 const root = process.env.VYKOR_UI_TEST_ROOT!;
 const profile = join(root, ".superpowers/sdd/2026-10-03-native-plugin-ui-a3/electron-profile");
@@ -15,7 +17,7 @@ mkdirSync(profile, { recursive: true });
 app.setPath("userData", profile); app.setPath("sessionData", profile); app.setAppLogsPath(join(profile, "logs"));
 app.commandLine.appendSwitch("disable-gpu");
 registerPluginUiScheme();
-const deadline = setTimeout(() => { console.error("plugin-ui Electron test timed out"); app.exit(2); }, 25_000);
+const deadline = setTimeout(() => { console.error("plugin-ui Electron test timed out"); app.exit(2); }, 80_000);
 const instanceId = "10000000-0000-4000-8000-000000000001";
 const snapshot = { instanceId, revision: 1, status: "open", data: { count: 1 }, actions: [],
   readOnly: true, theme: "light", locale: "zh-CN", surface: "tool-result" };
@@ -25,7 +27,7 @@ app.whenReady().then(async () => {
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   const external = "http://127.0.0.1:" + address.port + "/escape";
-  const store = new PluginUiDocumentStore();
+  const store = desktopPluginUiDocuments;
   installPluginUiDocumentProtocol(store, session.defaultSession);
   const preload = join(__dirname, "../preload/index.cjs");
   const owner = new BrowserWindow({ show: false, webPreferences: {
@@ -48,6 +50,12 @@ app.whenReady().then(async () => {
     "if(event.data==='attack'){window.attacksRan=true;window.open(" + JSON.stringify(external) + ");" +
     "fetch(" + JSON.stringify(external) + ").catch(()=>{});" +
     "const img=new Image();img.src=" + JSON.stringify(external) + ";document.body.append(img);" +
+    "const relax=document.createElement('meta');relax.httpEquiv='Content-Security-Policy';relax.content=\"default-src * 'unsafe-inline'\";document.head.append(relax);" +
+    "const script=document.createElement('script');script.src=" + JSON.stringify(external + "/script.js") + ";document.head.append(script);" +
+    "const style=document.createElement('style');style.textContent=\"@font-face{font-family:escape;src:url('" + external + "/font.woff2')}body{font-family:escape}\";document.head.append(style);" +
+    "fetch('file:///C:/Windows/win.ini').then(r=>r.text()).then(t=>window.fileData=t).catch(()=>{});" +
+    "try{const w=new Worker(URL.createObjectURL(new Blob(['postMessage(1)'],{type:'text/javascript'})));w.onmessage=()=>window.workerRan=true}catch{window.workerBlocked=true}" +
+    "const nested=document.createElement('iframe');nested.srcdoc='<script>parent.nestedRan=true<\\/script>';document.body.append(nested);" +
     "const link=document.createElement('a');link.href='data:text/plain,download';link.download='attack.txt';document.body.append(link);link.click();" +
     "}" +
     "if(event.data?.command==='navigate')location.href=event.data.url;" +
@@ -89,6 +97,8 @@ app.whenReady().then(async () => {
   await owner.webContents.executeJavaScript("document.querySelector('iframe').contentWindow.postMessage('attack','*')");
   await new Promise(resolve => setTimeout(resolve, 150));
   assert.equal(await frame.executeJavaScript("window.attacksRan"), true);
+  assert.deepEqual(await frame.executeJavaScript("({file:typeof window.fileData,worker:typeof window.workerRan,nested:typeof window.nestedRan})"),
+    { file: "undefined", worker: "undefined", nested: "undefined" });
   assert.equal(frame.url, original); assert.equal(requests, 0); assert.equal(popups, 0); assert.equal(downloads, 0);
   const targetHtml = "<p>another instance secret</p><script>window.foreign=1</script>";
   const target = store.register({ ownerId: owner.webContents.id, connection: {}, sessionId: "session",
@@ -107,17 +117,18 @@ app.whenReady().then(async () => {
     "inspect the actual child: opaque parent access alone would be a false-negative");
   await owner.webContents.executeJavaScript("const script=document.createElement('script');script.textContent='window.inlineEscaped=1';document.head.append(script)");
   assert.equal(await owner.webContents.executeJavaScript("typeof window.inlineEscaped"), "undefined");
-  store.revoke(mounted.mountId);
+  store.revokeOwner(owner.webContents.id);
   assert.equal(store.respond(new Request(mounted.url)).status, 404);
   await owner.webContents.executeJavaScript("document.querySelector('iframe').contentWindow.postMessage('retired','*')");
   await new Promise(resolve => setTimeout(resolve, 80));
   assert.equal(await frame.executeJavaScript("typeof window.escaped"), "undefined");
   assert.equal(requests, 0);
   const desktopUi = await checkDesktopUi(owner, store, root, sdk);
+  const nativeUi = await checkNativeUi(owner, store, root);
   console.log(JSON.stringify({ result: "passed", electron: process.versions.electron,
     checks: ["actual SDK/MessageChannel", "trusted preload present", "opaque parent/Node/preload isolation",
-      "network/navigation/popup/download denied", "other window denied", "main CSP unchanged", "retirement"],
-    requests, popups, downloads, ...desktopUi }));
+      "network/navigation/popup/download/file/script/font/worker/nested-frame denied", "other window denied", "main CSP unchanged", "live-owner retirement"],
+    requests, popups, downloads, ...desktopUi, ...nativeUi }));
   owner.destroy(); other.destroy();
   await new Promise<void>(resolve => server.close(() => resolve()));
   clearTimeout(deadline); app.exit(0);

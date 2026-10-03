@@ -193,7 +193,7 @@ describe("PluginManager archive import", () => {
     await render()
     await click("查看 Alpha 详情")
     expect(document.body.textContent).toContain("已校验 2 个 UI 定义")
-    expect(document.body.textContent).toContain("交互界面尚未接入")
+    expect(document.body.textContent).toContain("在工具结果中按需打开")
   })
 
   it("shows unverified component counts as unknown rather than zero", async () => {

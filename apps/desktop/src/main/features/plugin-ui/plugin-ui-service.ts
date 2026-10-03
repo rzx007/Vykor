@@ -6,6 +6,7 @@ import {
   type DismissPluginUiInput, type PluginUiSurface, type PluginUiViewSnapshot,
 } from "@vykor/client";
 import type { DesktopPluginUiMountResult, PluginUiHostState } from "../../../shared/plugin-ui-types";
+import type { DesktopSessionView } from "../../../shared/session-types";
 import { PluginUiDocumentStore } from "./document-store";
 
 interface Dependencies {
@@ -14,9 +15,9 @@ interface Dependencies {
   getOwnerSessionId(ownerId: number): string | undefined;
   localAvailable(owner: WebContents): boolean;
 }
-interface Owner { contents: WebContents; epoch: number; trustedUrl: string }
+interface Owner { contents: WebContents; epoch: number; trustedUrl: string; view?: { sessionId: string; generation: unknown; sources: Set<string> } }
 interface Scope { ownerId: number; owner: Owner; epoch: number; generation: number; sessionId: string; client: VykorClient }
-interface Mount { scope: Scope; instanceId: string; surface: PluginUiSurface; componentDigest: string }
+interface Mount { scope: Scope; instanceId: string; surface: PluginUiSurface; componentDigest: string; sessionGeneration: unknown }
 const uuid = (value: unknown): value is string => typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const fail = (code: string): never => { throw new PluginUiBridgeError(code); };
@@ -78,6 +79,19 @@ export class DesktopPluginUiService {
     this.generation++; this.client = undefined;
     for (const ownerId of this.owners.keys()) this.invalidateOwner(ownerId);
   }
+  observeSession(ownerId: number, view: DesktopSessionView): void {
+    const owner = this.owners.get(ownerId);
+    if (!owner) return;
+    const sources = new Set(view.parts.flatMap(part => {
+      const instance = readPluginUiInstance(part.metadata);
+      return instance && instance.sourcePartId === part.id ? [instance.instanceId] : [];
+    }));
+    const generation = view.session.metadata.pluginUiGeneration;
+    if (view.syncStatus !== "connected" || view.session.status === "archived" || view.session.status === "closing"
+      || owner.view && (owner.view.sessionId !== view.session.id || owner.view.generation !== generation
+        || [...owner.view.sources].some(id => !sources.has(id)))) this.invalidateOwner(ownerId);
+    owner.view = { sessionId: view.session.id, generation, sources };
+  }
   dispose(): void { this.invalidateConnection(); this.owners.clear(); }
   async capabilities(ownerId: number): Promise<{ available: boolean }> {
     const owner = this.owners.get(ownerId);
@@ -108,7 +122,7 @@ export class DesktopPluginUiService {
     this.client = client;
     return { ownerId, owner: owner!, epoch, generation, sessionId, client };
   }
-  private async state(scope: Scope, instanceId: string, surface: PluginUiSurface = "tool-result"): Promise<PluginUiHostState & { source: PluginUiInstanceRecord }> {
+  private async state(scope: Scope, instanceId: string, surface: PluginUiSurface = "tool-result"): Promise<PluginUiHostState & { source: PluginUiInstanceRecord; sourceSessionGeneration: unknown }> {
     const [response, session] = await Promise.all([
       scope.client.pluginUi.get(scope.sessionId, instanceId), scope.client.sessions.getState(scope.sessionId),
     ]);
@@ -142,7 +156,8 @@ export class DesktopPluginUiService {
       }
     }
     return {
-      source: actual, snapshot: parsePluginUiBridgeSnapshot(snapshot), plugin: { id: actual.pluginId, version: actual.pluginVersion },
+      source: actual, sourceSessionGeneration: session.session.metadata.pluginUiGeneration,
+      snapshot: parsePluginUiBridgeSnapshot(snapshot), plugin: { id: actual.pluginId, version: actual.pluginVersion },
       title: actual.title, surfaces: actual.surfaces, availability: response.availability,
       actions: response.actions.map(({ id, label, toolName, completion }) => ({ id, label, toolName, completion })),
     };
@@ -150,7 +165,7 @@ export class DesktopPluginUiService {
   async getState(ownerId: number, value: unknown): Promise<PluginUiHostState> {
     try {
       const t = target(input(value, ["sessionId", "instanceId"]));
-      const { source: _source, ...state } = await this.state(await this.capture(ownerId, t.sessionId), t.instanceId);
+      const { source: _source, sourceSessionGeneration: _generation, ...state } = await this.state(await this.capture(ownerId, t.sessionId), t.instanceId);
       return state;
     }
     catch (error) { return safe(error); }
@@ -163,24 +178,24 @@ export class DesktopPluginUiService {
       if (!this.dependencies.localAvailable(scope.owner.contents)) fail("plugin_ui_unavailable");
       const caps = await scope.client.protocol.capabilities(); this.check(scope);
       if (caps.features.pluginUi !== 1 || caps.features.pluginUiLifecycle !== 1) fail("plugin_ui_unavailable");
-      const { source, ...state } = await this.state(scope, t.instanceId, r.surface as PluginUiSurface);
+      const { source, sourceSessionGeneration, ...state } = await this.state(scope, t.instanceId, r.surface as PluginUiSurface);
       if (!state.availability.canRender || !state.surfaces.includes(r.surface as PluginUiSurface)) fail("plugin_ui_unavailable");
       const response = await scope.client.pluginUi.getDocument(t.sessionId, t.instanceId); this.check(scope);
-      const metadata = await scope.client.pluginUi.get(t.sessionId, t.instanceId); this.check(scope);
-      const after = readPluginUiInstance({ pluginUi: metadata.instance });
-      if (!after || !metadata.availability.canRender || after.sessionId !== t.sessionId || after.instanceId !== t.instanceId
+      const { source: after, sourceSessionGeneration: afterGeneration, ...latestState } = await this.state(scope, t.instanceId, r.surface as PluginUiSurface);
+      this.check(scope);
+      if (!after || afterGeneration !== sourceSessionGeneration || !latestState.availability.canRender || after.sessionId !== t.sessionId || after.instanceId !== t.instanceId
         || after.componentDigest !== source.componentDigest || after.pluginDigest !== source.pluginDigest
         || after.pluginVersion !== source.pluginVersion || after.sourcePartId !== source.sourcePartId)
         fail("plugin_ui_snapshot_changed");
       const mounted = this.dependencies.documents.register({ ownerId, connection: scope.client, ...t,
-        componentDigest: metadata.instance.componentDigest, surface: r.surface as PluginUiSurface,
+        componentDigest: after.componentDigest, surface: r.surface as PluginUiSurface,
         html: response.html, sha256: response.sha256 });
       for (const [id, old] of this.mounts) {
         if (!this.dependencies.documents.owns(id, old.scope.ownerId, old.scope.client)) this.mounts.delete(id);
       }
       this.mounts.set(mounted.mountId, { scope, instanceId: t.instanceId, surface: r.surface as PluginUiSurface,
-        componentDigest: metadata.instance.componentDigest });
-      return { mountId: mounted.mountId, url: mounted.url, state };
+        componentDigest: after.componentDigest, sessionGeneration: afterGeneration });
+      return { mountId: mounted.mountId, url: mounted.url, state: latestState };
     } catch (error) { return safe(error); }
   }
   private getMount(ownerId: number, mountId: unknown): Mount {
@@ -199,6 +214,8 @@ export class DesktopPluginUiService {
         params: { actionId: action.actionId, expectedRevision: action.expectedRevision, args: action.args } });
       const owned = structuredClone(action) as unknown as InvokePluginUiActionInput;
       const current = await this.state(mount.scope, mount.instanceId, mount.surface);
+      if (current.sourceSessionGeneration !== mount.sessionGeneration || current.source.componentDigest !== mount.componentDigest)
+        fail("plugin_ui_mount_closed");
       if (current.snapshot.readOnly) fail("plugin_ui_read_only");
       if (!current.actions.some(item => item.id === owned.actionId)) fail("plugin_ui_invalid_action");
       this.getMount(ownerId, r.mountId);

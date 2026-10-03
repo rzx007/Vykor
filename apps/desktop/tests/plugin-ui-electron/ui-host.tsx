@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client"
+import { readPluginUiInstance } from "@vykor/client"
 import { useDesktopSessionStore } from "../../src/renderer/src/stores/desktop-session"
 import { acceptActiveSessionView } from "../../src/renderer/src/stores/desktop-session/session-view-state"
 import { PluginUiProvider } from "../../src/renderer/src/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
@@ -36,18 +37,20 @@ useDesktopSessionStore.setState({
 })
 window.desktop.sessions.onUpdated((incoming) => {
   const current = useDesktopSessionStore.getState()
-  const next = acceptActiveSessionView(current.activeSessionId, current.sessionView, incoming)
-  if (next !== current.sessionView) useDesktopSessionStore.setState({ sessionView: next })
+  const next = acceptActiveSessionView(incoming.session.id, current.sessionView, incoming)
+  if (next !== current.sessionView) useDesktopSessionStore.setState({ activeSessionId: incoming.session.id, sessionView: next })
 })
 function Surface() {
   const view = useDesktopSessionStore((state) => state.sessionView)!
   const host = usePluginUiHost()!
   const sidebar = host.displays.find((display) => display.surface === "session-sidebar")
+  const source = view.parts.find(part => readPluginUiInstance(part.metadata))
+  const currentInstance = source && readPluginUiInstance(source.metadata)
   return (
     <main className="min-h-screen bg-background p-4 text-foreground">
       <div className="mx-auto max-w-2xl">
         <h1 className="mb-4 text-base font-medium">插件交互验证 · 本地测试数据</h1>
-        <PluginUiCard call={view.parts[0]!} instance={{ ...instance, revision: view.cursor }} />
+        {source && currentInstance && <PluginUiCard call={source} instance={currentInstance} />}
         {sidebar && (
           <aside className="mt-4 h-80 border">
             <PluginUiFrame key={sidebar.key} display={sidebar} />

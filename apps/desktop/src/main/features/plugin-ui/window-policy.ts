@@ -25,6 +25,7 @@ export function attachPluginUiWindowPolicy(contents: WebContents, store: PluginU
     contents.off("frame-created", created);
     browserSession.off("will-download", download);
     store.revokeOwner(ownerId);
+    if (contents.isDestroyed()) store.pruneFrames(ownerId, []);
   };
   contents.on("will-frame-navigate", navigate);
   contents.on("frame-created", created);

@@ -345,6 +345,8 @@ export class VykorHttpServer {
         attachmentLimits: this.application.attachments.limits,
         mcpOAuthInstanceId: this.application.mcpOAuthOperations?.oauthInstanceId,
         pluginUiReady: this.application.pluginUi?.backendReady === true,
+        pluginUiLifecycleReady: this.application.pluginUi?.lifecycleReady === true,
+        pluginUi: this.application.pluginUi,
       }),
     );
     this.app.route(
@@ -378,6 +380,7 @@ export class VykorHttpServer {
         outputStyleService: this.services.outputStyle,
         projectInitService: this.services.projectInit,
         pluginService: this.services.plugin,
+        pluginUi: this.application.pluginUi,
         skillService:
           this.services.skill ??
           createSkillManagementService({ projects: this.application.projects }),

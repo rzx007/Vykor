@@ -86,6 +86,7 @@ function startDesktopApplication(): void {
     setDesktopPluginUiService(pluginUi)
     desktopSessionService.connection.onInvalidated(() => pluginUi.invalidateConnection())
     desktopSessionService.subscriptions.onOwnerInvalidated(id => pluginUi.invalidateOwner(id))
+    desktopSessionService.subscriptions.onOwnerSnapshot((id, view) => pluginUi.observeSession(id, view))
 
     ipcRegistry = new IpcRegistry(ctx)
     updaterRuntime = startDesktopUpdater()

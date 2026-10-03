@@ -5,7 +5,7 @@ if (window.parent !== window) {
       document.querySelector("#status")!.textContent = String(snapshot.data.count ?? "");
     });
     document.querySelector("#apply")?.addEventListener("click", () => {
-      void client.requestAction("apply", { text: "<script>not html</script>" }).then(receipt => {
+      void client.requestAction("apply", { value: "<script>not html</script>" }).then(receipt => {
         document.querySelector("#result")!.textContent = receipt.runId;
       }).catch(error => { document.querySelector("#result")!.textContent = error.code; });
     });

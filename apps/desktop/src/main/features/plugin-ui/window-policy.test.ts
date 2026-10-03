@@ -10,6 +10,7 @@ it("blocks registered frame navigation but preserves normal host navigation and 
   const browserSession = new EventEmitter();
   let destroyed = false;
   const contents = Object.assign(new EventEmitter(), { id: 42,
+    isDestroyed: () => destroyed,
     mainFrame: { framesInSubtree: [{ frameTreeNodeId: 1 }, { frameTreeNodeId: 7 }] } });
   Object.defineProperty(contents, "session", { get: () => {
     if (destroyed) throw new Error("Object has been destroyed");

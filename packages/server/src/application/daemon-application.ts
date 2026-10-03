@@ -348,6 +348,12 @@ export class DaemonApplication implements DurableAgentApplication {
       this.pluginUi = new SessionPluginUiService({
         store,
         verifySourceBinding: async binding => await computePluginBehaviorDigest(binding.root) === binding.pluginDigest,
+        lifecycle: {
+          interruptRun: (sessionId, runId) => this.runControl.interruptRun(sessionId, runId, "plugin_ui_lifecycle_changed"),
+          waitForRuns: ids => this.runControl.waitForRuns(ids),
+          checkpoint: () => this.eventPublisher.checkpoint(),
+          publishSince: checkpoint => this.eventPublisher.publishSince(checkpoint),
+        },
         resolveCurrent: async (session, instance) => {
           this.assertReady();
           // Protect settings/install verification as well as Runtime preparation from maintenance.
@@ -521,6 +527,7 @@ export class DaemonApplication implements DurableAgentApplication {
                   createPluginInstallTool(
                     createDefaultPluginService({ current: pluginSettings }),
                     () => this.agentPool.invalidateWarmAgents(),
+                    work => this.pluginUi.withPluginUiLifecycleMutation({ kind: "global" }, work),
                   ),
                 ]
               : []),
@@ -829,6 +836,7 @@ export class DaemonApplication implements DurableAgentApplication {
         resolveSessionListTitle: (id) => store["resolveSessionListTitle"](id),
       });
       this.commands = new SessionCommandService({
+        pluginUi: this.pluginUi,
         validateRequestSelection: async ({ session, next, explicitEffort }) => {
           const settings = options.getSettingsForCwd
             ? await options.getSettingsForCwd(session.cwd)

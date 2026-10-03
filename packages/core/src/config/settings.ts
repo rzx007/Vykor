@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS: Settings = {
   outputTokenMax: DEFAULT_OUTPUT_TOKEN_MAX,
   maxTurns: 50,
   permission: { mode: "default" },
-  plugins: { enabled: true },
+  plugins: { enabled: true, uiEnabled: true },
   memory: {
     enabled: true,
     maxFiles: 5,
