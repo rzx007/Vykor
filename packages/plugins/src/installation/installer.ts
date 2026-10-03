@@ -19,6 +19,10 @@ export function requestedPluginPermissions(manifest: VykorPluginManifestV1): str
   for (const tool of manifest.components.tools ?? []) {
     if (typeof tool !== "string") for (const permission of tool.permissions ?? []) result.add(`tool:${permission}`);
   }
+  if (manifest.components.ui?.length) {
+    result.add("ui:render");
+    result.add("ui:invoke-own-tools");
+  }
   return [...result].sort();
 }
 

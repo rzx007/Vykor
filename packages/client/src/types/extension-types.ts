@@ -1,3 +1,6 @@
+import type { PluginUiInventory } from "@vykor/protocol";
+export type { PluginUiInventory } from "@vykor/protocol";
+
 export type PluginRuntimeStatus =
   | { state: "disabled"; message: string; action: "enable" }
   | { state: "pending_reload"; message: string; action: "reload" }
@@ -41,6 +44,7 @@ export interface PluginInfo {
   };
   runtimeStatus: PluginRuntimeStatus;
   inventory: Record<string, number>;
+  uiInventory?: PluginUiInventory;
   permissions: { requested: string[]; approved: string[]; missing: string[] };
   diagnostics: Array<{
     severity: "info" | "warning" | "error";
@@ -57,6 +61,7 @@ export interface PluginArchivePreview {
   requestedPermissions: string[];
   approvalRequired: boolean;
   inventory: Record<string, number>;
+  uiInventory?: PluginUiInventory;
   diagnostics: PluginInfo["diagnostics"];
 }
 
@@ -69,6 +74,7 @@ export interface PluginGitPreview {
   requestedPermissions: string[];
   approvalRequired: boolean;
   inventory: Record<string, number>;
+  uiInventory?: PluginUiInventory;
   diagnostics: PluginInfo["diagnostics"];
 }
 

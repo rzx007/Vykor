@@ -1,5 +1,5 @@
 import type { PluginDiagnostic } from "../diagnostics.js";
-import type { ValidatedNativePlugin } from "../types.js";
+import type { ValidatedNativePlugin, VykorPluginManifestV1 } from "../types.js";
 import { validateNativePlugin } from "../manifest/validate.js";
 import { assertRegularPluginCacheSnapshot, computePluginBehaviorDigest } from "./cache.js";
 import { requestedPluginPermissions } from "./installer.js";
@@ -7,7 +7,7 @@ import type { InstalledPluginRecord } from "./store.js";
 
 export type InstalledNativePluginVerification =
   | { status: "valid"; plugin: ValidatedNativePlugin; diagnostics: [] }
-  | { status: "invalid"; plugin?: ValidatedNativePlugin; diagnostics: PluginDiagnostic[] };
+  | { status: "invalid"; plugin?: ValidatedNativePlugin; rootManifest?: VykorPluginManifestV1; diagnostics: PluginDiagnostic[] };
 
 function samePermissions(left: readonly string[], right: readonly string[]): boolean {
   const normalizedLeft = [...new Set(left)].sort();
@@ -55,7 +55,10 @@ export async function verifyInstalledNativePlugin(
   }
 
   const validation = await validateNativePlugin(record.cachePath);
-  if (!validation.plugin) return { status: "invalid", diagnostics: validation.diagnostics };
+  if (validation.status !== "valid" || !validation.plugin) return {
+    status: "invalid", diagnostics: validation.diagnostics,
+    ...(validation.rootManifest ? { rootManifest: validation.rootManifest } : {}),
+  };
   const plugin = validation.plugin;
   const manifest = plugin.manifest;
   if (manifest.id !== record.id || manifest.version !== record.currentVersion) {

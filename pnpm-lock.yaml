@@ -883,6 +883,9 @@ importers:
       '@vykor/core':
         specifier: workspace:*
         version: link:../core
+      '@vykor/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@vykor/skills':
         specifier: workspace:*
         version: link:../skills

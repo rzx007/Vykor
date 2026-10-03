@@ -62,6 +62,11 @@ const permissionLabels: Record<string, string> = {
   process: "运行程序",
   secrets: "密钥访问",
   tool: "工具权限",
+  ui: "插件界面",
+}
+const uiPermissionLabels: Record<string, string> = {
+  "ui:render": "显示插件的隔离交互界面",
+  "ui:invoke-own-tools": "请求插件自身工具，执行前仍需确认",
 }
 const displayName = (plugin: DesktopPluginInfo): string =>
   plugin.identity.displayName ?? plugin.identity.name ?? plugin.identity.id
@@ -78,7 +83,8 @@ function groupPermissions(permissions: string[]): Array<{ label: string; values:
   for (const permission of permissions) {
     const prefix = permission.split(/[:/]/u, 1)[0]
     const label = permissionLabels[prefix] ?? "其他权限"
-    const suffix = permission.slice(prefix.length).replace(/^[:/]/u, "") || permission
+    const suffix = uiPermissionLabels[permission]
+      ?? (permission.slice(prefix.length).replace(/^[:/]/u, "") || permission)
     const values = groups.get(label) ?? []
     if (!values.includes(suffix)) values.push(suffix)
     groups.set(label, values)
@@ -553,6 +559,13 @@ export function PluginManager({
             <AlertDialogDescription>该插件需要以下权限才能正常工作。</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 text-sm">
+            {approval?.uiInventory ? (
+              <p className="text-muted-foreground">
+                {approval.uiInventory.componentCount === null
+                  ? "UI 定义数量暂不可确认"
+                  : `包含 ${approval.uiInventory.componentCount} 个 UI 定义。`}
+              </p>
+            ) : null}
             {groupPermissions(approval?.requestedPermissions ?? []).map((group) => (
               <div key={group.label} className="flex flex-col gap-1">
                 <p className="font-medium">{group.label}</p>

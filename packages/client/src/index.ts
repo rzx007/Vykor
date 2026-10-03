@@ -155,6 +155,7 @@ export type {
   PermissionRequestRecord,
   PermissionStatus,
   PluginInfo,
+  PluginUiInventory,
   PluginRuntimeStatus,
   SkillInfo,
   SkillProject,

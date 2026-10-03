@@ -10,6 +10,13 @@ const validManifest = {
 };
 
 describe("VykorPluginManifestV1Schema", () => {
+  it("bounds UI definition-file declarations before filesystem work", () => {
+    const ui = Array.from({ length: 8 }, (_, i) => `./ui/manifest-${i}.json`);
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest, components: { ui } }).success).toBe(true);
+    expect(VykorPluginManifestV1Schema.safeParse({ ...validManifest,
+      components: { ui: [...ui, "./ui/extra.json"] },
+    }).success).toBe(false);
+  });
   it("accepts a minimal Native Plugin v1 manifest", () => {
     expect(VykorPluginManifestV1Schema.parse(validManifest)).toEqual(validManifest);
   });

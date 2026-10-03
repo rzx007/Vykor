@@ -92,6 +92,49 @@ ID 使用稳定的点分名称；name 使用小写连字符名称。版本用于
 
 manifest 描述插件包，不保存启用状态、批准记录、用户配置或进程状态。不要修改已安装快照；更新时重新安装一个经过校验的源目录。
 
+## UI 定义：静态接口已接入
+
+UI 定义的静态校验、安装授权和元数据加载已经接入。
+当前阶段尚未显示自定义交互界面，也没有 UI 动作 API。
+UI 定义有效不等于组件已经运行；交互能力由后续 Desktop 接入阶段交付。
+
+Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "example.ui-viewer",
+  "name": "ui-viewer",
+  "version": "1.0.0",
+  "components": { "ui": ["./ui/manifest.json"] }
+}
+```
+
+定义文件单独使用 schemaVersion 1。纯展示组件必须显式写 actions 空数组：
+
+```json
+{
+  "schemaVersion": 1,
+  "components": [{
+    "id": "findings",
+    "title": "检查结果",
+    "entry": "./ui/findings.html",
+    "surfaces": ["tool-result", "session-sidebar"],
+    "actions": []
+  }]
+}
+```
+
+entry 和定义文件路径都相对于插件根目录，而不是相对于 ui/manifest.json。组件 ID 在插件内唯一，匹配 `^[a-z][a-z0-9-]{0,63}$`。组件与动作的字段严格校验，标签为非空纯文本且最多 80 个 Unicode 字符。一个定义文件至少包含一个组件；动作可以为空，声明动作时必须显式提供 id、label、精确 tool 注册名与 completion（keep-open / resolve），不在 UI 定义中复制 inputSchema。
+
+单插件最多 8 个定义文件、16 个组件，每组件最多 16 个动作；单个定义 JSON 最多 UTF-8 256 KiB，单个 HTML 最多 UTF-8 2 MiB。所有 UI 入口必须是普通 UTF-8 文件，禁止根目录外路径、文件 symlink 和目录 junction。HTML 应提前构建成单文件；校验和安装只读文件，不运行 HTML 或 Node Tool。
+
+只要声明 UI，安装授权自动包含 `ui:render` 和 `ui:invoke-own-tools`。它们分别允许显示隔离界面、请求组件声明的插件自身工具，不能代替工具参数和执行权限检查。旧安装记录不会自动得到新批准，缺少授权时需要重新导入并确认。A1 只校验动作定义字符串，工具实际归属和调用仍待后台交互阶段接入。
+
+安装预览和管理详情中的 uiInventory 分别记录定义文件数、组件数和静态有效组件数。无法校验组件时 componentCount 为 null，表示暂不可确认，不表示没有 UI。它们不证明某个窗口已经显示界面，管理页会明确提示“交互界面尚未接入”。
+
+完整范围与后续阶段见 [插件 UI Spec](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)和[A1 实施计划](./superpowers/plans/2026-10-02-native-plugin-ui-a1.md)。
+
 ## Node Tool 的公开接口
 
 开发期类型入口是 `@vykor/plugins/sdk`。使用 TypeScript 的 `import type` 或 JavaScript 的 JSDoc 类型引用；这个子路径没有运行期 API，不要在 `.mjs` 中普通 import 它。
@@ -243,7 +286,7 @@ MCP 名称不会自动加插件前缀，请使用独特名称，避免与其他�
 
 ## 诊断与验证
 
-`validate` 检查 manifest 和声明路径，不承诺所有组件都能激活。安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `vk plugin details` 返回的 Runtime 诊断为准。
+`validate` 检查 manifest 和声明路径；有 UI 时还校验定义内容、HTML 文件边界与大小，不执行前端代码。它不承诺所有组件都能激活。安装成功只代表 ZIP 或目录已经写入安装记录；运行状态以插件页和 `vk plugin details` 返回的 Runtime 诊断为准。
 
 `PluginInfo.runtimeStatus` 是面向展示的主状态，目前包含 `disabled`、`pending_reload`、`loaded`、`degraded` 和 `failed`。列表页只需要看这一个字段；`diagnostics` 和 `toolRuntime` 保留在详情里，用于作者排查具体原因。`list --verbose`、`details` 和 `/reload-plugins` 用于查看安装校验、组件诊断和 Tool Host 状态。
 
@@ -271,4 +314,4 @@ pnpm --filter @vykor/server exec vitest run src/http/routes/plugin-lifecycle.tes
 
 测试使用临时用户安装记录和真实 Tool Host，不写入开发者日常插件安装状态。样例目录参与相关测试和类型检查的 Turbo 缓存输入，修改样例后会重新验证。
 
-Output Styles、Themes、Monitors、Workflows、Channels、Providers、UI、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。阶段范围见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。
+Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。UI 当前只有静态接口，尚无交互显示和动作运行。阶段范围见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。

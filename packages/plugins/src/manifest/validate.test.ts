@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { validateNativePlugin } from "./validate.js";
+import { writeNativeUiFixture } from "../test-helpers/native-ui.js";
 
 let root: string;
 
@@ -21,6 +22,24 @@ afterEach(async () => {
 });
 
 describe("validateNativePlugin", () => {
+  it("rejects invalid UI contents before installation", async () => {
+    await writeNativeUiFixture(root);
+    await writeFile(join(root, "ui", "manifest.json"), "{");
+    const result = await validateNativePlugin(root);
+    expect(result.status).toBe("invalid");
+    expect(result.plugin).toBeUndefined();
+    expect(result.rootManifest?.components.ui).toEqual(["./ui/manifest.json"]);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ component: "ui", code: "plugin_ui_invalid_definition" }),
+    ]));
+  });
+
+  it("validates UI HTML as an ordinary bounded file", async () => {
+    await writeNativeUiFixture(root);
+    await rm(join(root, "ui", "findings.html"));
+    await mkdir(join(root, "ui", "findings.html"));
+    expect((await validateNativePlugin(root)).status).toBe("invalid");
+  });
   it("returns a validated plugin and no diagnostics for a valid artifact", async () => {
     await mkdir(join(root, "skills"));
     await writeManifest({

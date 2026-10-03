@@ -543,6 +543,10 @@
       "kind": "type-export"
     },
     {
+      "name": "PluginUiInventory",
+      "kind": "type-export"
+    },
+    {
       "name": "PresentationReadRequest",
       "kind": "type-export"
     },

@@ -11,6 +11,7 @@ import {
   type ValidatedNativePlugin,
 } from "../types.js";
 import { VykorPluginManifestV1Schema } from "./schema-v1.js";
+import { loadNativeUiMetadata } from "../components/ui.js";
 
 export type { NativePluginValidationResult } from "../types.js";
 
@@ -38,8 +39,8 @@ function getComponentSources(manifest: VykorPluginManifestV1): ComponentSource[]
   return sources;
 }
 
-function invalid(diagnostics: PluginDiagnostic[]): NativePluginValidationResult {
-  return { status: "invalid", diagnostics };
+function invalid(diagnostics: PluginDiagnostic[], rootManifest?: VykorPluginManifestV1): NativePluginValidationResult {
+  return { status: "invalid", ...(rootManifest ? { rootManifest } : {}), diagnostics };
 }
 
 /** 只接受 `.vykor-plugin/plugin.json`，并验证所有声明组件的真实路径边界。 */
@@ -150,12 +151,16 @@ export async function validateNativePlugin(root: string): Promise<NativePluginVa
     }
   }
 
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) return invalid(diagnostics);
+  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) return invalid(diagnostics, parsed.data);
 
   const plugin: ValidatedNativePlugin = {
     root: await realpath(root),
     manifestPath: await realpath(manifestPath),
     manifest: parsed.data,
   };
+  if (plugin.manifest.components.ui) {
+    const ui = await loadNativeUiMetadata(plugin);
+    if (ui.status !== "loaded") return invalid(ui.diagnostics, plugin.manifest);
+  }
   return { status: "valid", plugin, diagnostics };
 }

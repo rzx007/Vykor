@@ -141,6 +141,7 @@ export class DesktopPluginService {
       selectionId,
       pluginName,
       requestedPermissions: [...preview.requestedPermissions],
+      ...(preview.uiInventory ? { uiInventory: { ...preview.uiInventory } } : {}),
     }
   }
 
@@ -215,6 +216,7 @@ export class DesktopPluginService {
       selectionId,
       pluginName,
       requestedPermissions: [...preview.requestedPermissions],
+      ...(preview.uiInventory ? { uiInventory: { ...preview.uiInventory } } : {}),
     }
   }
 
