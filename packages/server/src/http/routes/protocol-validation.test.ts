@@ -36,6 +36,22 @@ function sessionRoutes(createSession = vi.fn(), updateSession = vi.fn()) {
 }
 
 describe("protocol validation at HTTP routes", () => {
+  it.each(["metadata", "runMetadata"])("keeps ordinary reserved %s errors at 400 with field-only details", async namespace => {
+    for (const name of ["pluginUi", "uiAction"]) {
+      const admitPrompt = vi.fn();
+      const app = createRunExecutionRoutes({
+        application: { admitPrompt, editLatestPrompt: vi.fn(), resumeRun: vi.fn(), interruptSession: vi.fn() },
+        traces: { get: vi.fn() },
+      });
+      const response = await app.request("/s1/prompts", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: "hello", [namespace]: { [name]: {} } }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual(invalidRequest(`${namespace}.${name}`));
+      expect(admitPrompt).not.toHaveBeenCalled();
+    }
+  });
   it.each(["POST", "PATCH"])("rejects old nested runtime config before %s session mutations", async (method) => {
     const mutation = vi.fn();
     const { app } = sessionRoutes(mutation, mutation);

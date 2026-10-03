@@ -32,10 +32,12 @@ export class ProtocolValidationError extends Error {
   readonly code = "invalid_request";
   readonly details?: Record<string, unknown>;
 
-  constructor(message: string, field?: string) {
+  constructor(message: string, field?: string, reason?: string) {
     super(message);
     this.name = "ProtocolValidationError";
-    this.details = field ? { field } : undefined;
+    this.details = field || reason !== undefined
+      ? { ...(field ? { field } : {}), ...(reason !== undefined ? { reason } : {}) }
+      : undefined;
   }
 
   toProtocolError(): ProtocolError {

@@ -131,11 +131,21 @@ export function isPluginUiRevision(value: unknown): value is number {
 
 /** Reject the whole payload; no data or identifiers are truncated. */
 export function isPluginUiJsonRecord(value: unknown, byteLimit: number): value is Record<string, JsonValue> {
-  if (!isPluginUiRecord(value)) return false;
+  return validatePluginUiJsonRecord(value, byteLimit).valid;
+}
+
+/** Stable failure reasons for request boundaries; serialization and byte counting happen once. */
+export function validatePluginUiJsonRecord(value: unknown, byteLimit: number):
+  | { valid: true; value: Record<string, JsonValue> }
+  | { valid: false; reason: "invalid_json" | "payload_too_large" } {
+  if (!isPluginUiRecord(value)) return { valid: false, reason: "invalid_json" };
   try {
-    return new TextEncoder().encode(stringifyPluginUiJson(value)).byteLength <= byteLimit;
+    if (new TextEncoder().encode(stringifyPluginUiJson(value)).byteLength > byteLimit) {
+      return { valid: false, reason: "payload_too_large" };
+    }
+    return { valid: true, value: value as Record<string, JsonValue> };
   } catch {
-    return false;
+    return { valid: false, reason: "invalid_json" };
   }
 }
 

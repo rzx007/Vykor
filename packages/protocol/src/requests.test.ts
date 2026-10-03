@@ -24,6 +24,19 @@ function expectInvalid(run: () => unknown, field?: string): void {
 }
 
 describe("HTTP request parsers", () => {
+  it("preserves an optional machine-readable reason when converting validation errors", () => {
+    const error = new ProtocolValidationError("too large", "args", "payload_too_large");
+    expect(error.toProtocolError()).toEqual({
+      code: "invalid_request", message: "too large", details: { field: "args", reason: "payload_too_large" },
+    });
+  });
+
+  it("keeps the existing default validation error shape", () => {
+    expect(new ProtocolValidationError("bad body").toProtocolError()).toEqual({ code: "invalid_request", message: "bad body" });
+    expect(new ProtocolValidationError("bad field", "content").toProtocolError()).toEqual({
+      code: "invalid_request", message: "bad field", details: { field: "content" },
+    });
+  });
   it.each(["metadata", "runMetadata"])("rejects reserved host names in Prompt %s", namespace => {
     for (const name of ["pluginUi", "uiAction"]) {
       expectInvalid(() => parseAdmitPromptRequest({ content: "hello", [namespace]: { [name]: {} } }), `${namespace}.${name}`);

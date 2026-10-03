@@ -3,6 +3,7 @@ import {
   parseDismissPluginUiInput, parseInvokePluginUiActionInput, ProtocolValidationError,
   readPluginUiAction, readPluginUiInstance,
   readPluginUiProposal,
+  isPluginUiJsonRecord, validatePluginUiJsonRecord,
 } from "./index.js";
 
 const requestId = "2a856850-90b6-420e-b7b3-50f6d5f4f41b";
@@ -44,6 +45,34 @@ describe("Plugin UI proposals", () => {
 });
 
 describe("Plugin UI action requests", () => {
+  it("exposes the shared JSON size failure without changing Boolean validation", () => {
+    const args = { text: "中".repeat(21841) + "xx" };
+    expect(validatePluginUiJsonRecord(args, 65536)).toEqual({ valid: true, value: args });
+    const oversized = { text: args.text + "x" };
+    expect(validatePluginUiJsonRecord(oversized, 65536)).toEqual({ valid: false, reason: "payload_too_large" });
+    expect(validatePluginUiJsonRecord({ value: Infinity }, 65536)).toEqual({ valid: false, reason: "invalid_json" });
+    expect(isPluginUiJsonRecord(args, 65536)).toBe(true);
+    expect(isPluginUiJsonRecord(oversized, 65536)).toBe(false);
+  });
+
+  it("distinguishes excessive args bytes from deep or invalid JSON in decoder errors", () => {
+    let deep: Record<string, unknown> = {};
+    for (let i = 0; i < 20; i++) deep = { nested: deep };
+    for (const [args, reason] of [
+      [{ text: "中".repeat(21841) + "xxx" }, "payload_too_large"],
+      [{ value: Infinity }, "invalid_json"],
+      [{ value: NaN }, "invalid_json"],
+      [deep, "invalid_json"],
+      [null, "invalid_json"],
+    ] as const) {
+      let caught: unknown;
+      try { parseInvokePluginUiActionInput({ ...validInput, args }); } catch (error) { caught = error; }
+      expect(caught).toBeInstanceOf(ProtocolValidationError);
+      expect(caught).toMatchObject({ code: "invalid_request", details: { field: "args", reason } });
+      expect((caught as ProtocolValidationError).toProtocolError().details).toEqual({ field: "args", reason });
+    }
+  });
+
   it("accepts only action and dismissal request fields", () => {
     expect(parseInvokePluginUiActionInput(validInput)).toEqual(validInput);
     expect(parseDismissPluginUiInput({ requestId, expectedRevision: 0 })).toEqual({ requestId, expectedRevision: 0 });

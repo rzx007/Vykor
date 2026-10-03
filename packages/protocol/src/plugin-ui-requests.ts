@@ -1,5 +1,5 @@
 import {
-  isPluginUiJsonRecord, isPluginUiRecord, isPluginUiRevision, isPluginUiUuid, PLUGIN_UI_LIMITS,
+  validatePluginUiJsonRecord, isPluginUiRecord, isPluginUiRevision, isPluginUiUuid, PLUGIN_UI_LIMITS,
   type DismissPluginUiInput, type InvokePluginUiActionInput,
 } from "./plugin-ui.js";
 import { ProtocolValidationError } from "./requests.js";
@@ -20,10 +20,11 @@ export function parseInvokePluginUiActionInput(value: unknown): InvokePluginUiAc
   if (typeof body.actionId !== "string" || !body.actionId.trim()) {
     throw new ProtocolValidationError("actionId must be a nonempty string", "actionId");
   }
-  if (!isPluginUiJsonRecord(body.args, PLUGIN_UI_LIMITS.actionArgsBytes)) {
-    throw new ProtocolValidationError("args must be finite JSON within Plugin UI size and depth limits", "args");
+  const args = validatePluginUiJsonRecord(body.args, PLUGIN_UI_LIMITS.actionArgsBytes);
+  if (!args.valid) {
+    throw new ProtocolValidationError("args must be finite JSON within Plugin UI size and depth limits", "args", args.reason);
   }
-  return { requestId: body.requestId as string, expectedRevision: body.expectedRevision as number, actionId: body.actionId, args: body.args };
+  return { requestId: body.requestId as string, expectedRevision: body.expectedRevision as number, actionId: body.actionId, args: args.value };
 }
 
 export function parseDismissPluginUiInput(value: unknown): DismissPluginUiInput {
