@@ -46,6 +46,7 @@ export interface DaemonConnectionServiceOptions {
 
 export class DaemonConnectionService {
   private clientPromise: Promise<VykorClient> | null = null
+  private readonly invalidationListeners = new Set<() => void>()
   private embeddedServer: VykorHttpServer | null = null
   private embeddedUrl: string | null = null
   private daemonStatus: DesktopDaemonStatus = createDaemonStatus("idle", "等待连接 daemon")
@@ -82,11 +83,13 @@ export class DaemonConnectionService {
   }
 
   refreshClient(): Promise<VykorClient> {
+    this.invalidateClient()
     this.clientPromise = null
     return this.getClient()
   }
 
   async dispose(): Promise<void> {
+    this.invalidateClient()
     const server = this.embeddedServer
     const embeddedUrl = this.embeddedUrl
     this.embeddedServer = null
@@ -101,6 +104,15 @@ export class DaemonConnectionService {
       clearDaemonRegistry()
     }
     await server.close()
+  }
+
+  onInvalidated(listener: () => void): () => void {
+    this.invalidationListeners.add(listener)
+    return () => { this.invalidationListeners.delete(listener) }
+  }
+
+  private invalidateClient(): void {
+    for (const listener of this.invalidationListeners) listener()
   }
 
   private async connect(): Promise<VykorClient> {

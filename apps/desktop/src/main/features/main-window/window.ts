@@ -16,6 +16,8 @@ import {
 import { attachWindowsMaterialRepaint } from "./window-material-repaint"
 import { desktopPluginUiDocuments } from "../plugin-ui/document-runtime"
 import { attachPluginUiWindowPolicy, isPluginUiExternalOpenBlocked } from "../plugin-ui/window-policy"
+import { getDesktopPluginUiService } from "../plugin-ui/service-runtime"
+import { pathToFileURL } from "node:url"
 import {
   getWindowMaterialPreference,
   setWindowMaterialPreference,
@@ -62,6 +64,7 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
       },
     },
     onCreated: (win) => {
+      getDesktopPluginUiService()?.registerOwner(win.webContents, ctx.paths.rendererUrl ?? pathToFileURL(ctx.paths.indexHtml).href)
       attachPluginUiWindowPolicy(win.webContents, desktopPluginUiDocuments)
       attachMainWindowBehavior(ctx, win)
       attachMainWindowDiagnostics(win)

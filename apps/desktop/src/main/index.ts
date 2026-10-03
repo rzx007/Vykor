@@ -19,6 +19,9 @@ import {
 import icon from "../../resources/icon.png?asset"
 import { registerPluginUiScheme, installPluginUiDocumentProtocol } from "./features/plugin-ui/document-protocol"
 import { desktopPluginUiDocuments } from "./features/plugin-ui/document-runtime"
+import { DesktopPluginUiService } from "./features/plugin-ui/plugin-ui-service"
+import { setDesktopPluginUiService, getDesktopPluginUiService } from "./features/plugin-ui/service-runtime"
+import { pluginUiDocumentProtocolAvailable } from "./features/plugin-ui/document-protocol"
 
 let ctx: AppContext | null = null
 let ipcRegistry: IpcRegistry | null = null
@@ -74,6 +77,16 @@ function startDesktopApplication(): void {
       createMainWindow: () => createMainWindow(requireContext()),
     })
 
+    const pluginUi = new DesktopPluginUiService({
+      documents: desktopPluginUiDocuments,
+      getClient: () => desktopSessionService.daemonClient(),
+      getOwnerSessionId: id => desktopSessionService.subscriptions.getOwnerSessionId(id),
+      localAvailable: contents => pluginUiDocumentProtocolAvailable(contents.session),
+    })
+    setDesktopPluginUiService(pluginUi)
+    desktopSessionService.connection.onInvalidated(() => pluginUi.invalidateConnection())
+    desktopSessionService.subscriptions.onOwnerInvalidated(id => pluginUi.invalidateOwner(id))
+
     ipcRegistry = new IpcRegistry(ctx)
     updaterRuntime = startDesktopUpdater()
     for (const contribution of [...allIpcContributions, updaterRuntime.contribution]) {
@@ -108,6 +121,7 @@ function startDesktopApplication(): void {
   })
 
   app.on("before-quit", () => {
+    getDesktopPluginUiService()?.dispose()
     desktopPluginUiDocuments.clear()
     updaterRuntime?.service.dispose()
     updaterRuntime = null

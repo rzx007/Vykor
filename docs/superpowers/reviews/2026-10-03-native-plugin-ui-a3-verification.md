@@ -1,6 +1,6 @@
 # Native Plugin UI A3 验证记录
 
-> 状态：第一批 SDK 与文档隔离基础已实现；Task 3–6 尚未实施，不是完整 A3 或首版发布验收。
+> 状态：SDK、文档隔离和 Task 3 后台入口已实现；Task 4–6 尚未完成，不是完整 A3 或首版发布验收。
 > 日期：2026-10-03；分支 `codex/plugin-ui-a1`；计划基线 `c3b3d411`。
 
 ## 已实现范围
@@ -10,6 +10,8 @@ Task 1 提供严格浏览器消息契约和 `@vykor/plugins/ui-sdk`：父窗口�
 Task 2 提供按窗口和实际 frame 身份登记的一次性内存文档、专用 scheme、响应 CSP / 权限策略、导航和窗口清理。main 启动与主窗口已接线；preload 明确只暴露给 mainFrame，主 CSP 仅增加 frame-src。尚无 renderer 插件交互入口或 main 后台动作 IPC，不能据此说用户已能使用卡片/侧栏。
 
 ## 实测命令
+
+Task 3 增加有限、类型化的 main IPC / preload、可信主窗口校验、实际 Client / 主会话归属和异步代次复验；文档只返回 URL。连接刷新、会话切换和窗口销毁会撤销挂载。动作使用原请求 ID，经 A2 调用；关闭显示不取消业务，宿主 dismiss 不要求 iframe。38 项聚焦测试通过（service8、IPC1、preload11、connection8、subscription10），Desktop node/web 类型均 exit0。两项订阅测试首次因 Electron 包没有默认安装路径在收集阶段失败，设置现有缓存的 ELECTRON_OVERRIDE_DIST_PATH 后10项全部通过；未修改依赖或下载运行时。
 
 所有 pnpm 命令使用 `pnpm --config.manage-package-manager-versions=false`，在隔离 worktree 使用现有本地依赖；没有安装新包、下载浏览器、请求真实模型或修改用户 daemon registry。
 

@@ -40,6 +40,8 @@ function auxiliarySubscriptionSlot(subscriptionId: string): string {
 
 export class SessionSubscriptionService {
   private readonly subscriptions = new SessionSubscriptionRegistry()
+  private readonly invalidationListeners = new Set<(ownerId: number) => void>()
+  private readonly primaryOwners = new Set<number>()
   private readonly sessionUpdateIntervalMs: number
 
   constructor(options: SessionSubscriptionServiceOptions = {}) {
@@ -51,11 +53,25 @@ export class SessionSubscriptionService {
     return sub?.sessionId === sessionId
   }
 
+  getOwnerSessionId(ownerId: number): string | undefined {
+    const subscription = this.subscriptions.get(ownerId, primarySubscriptionSlot)
+    return subscription && !subscription.controller.signal.aborted ? subscription.sessionId : undefined
+  }
+
+  onOwnerInvalidated(listener: (ownerId: number) => void): () => void {
+    this.invalidationListeners.add(listener)
+    return () => { this.invalidationListeners.delete(listener) }
+  }
+
   closeDeletedSessions(webContentsId: number, sessionIds: readonly string[]): void {
+    if (sessionIds.includes(this.getOwnerSessionId(webContentsId) ?? ""))
+      for (const listener of this.invalidationListeners) listener(webContentsId)
     this.subscriptions.deleteMatchingSessions(webContentsId, new Set(sessionIds))
   }
 
   closeSession(webContentsId: number): void {
+    for (const listener of this.invalidationListeners) listener(webContentsId)
+    this.primaryOwners.delete(webContentsId)
     this.subscriptions.clearOwner(webContentsId)
   }
 
@@ -65,6 +81,9 @@ export class SessionSubscriptionService {
   }
 
   clearAll(): void {
+    for (const ownerId of this.primaryOwners)
+      for (const listener of this.invalidationListeners) listener(ownerId)
+    this.primaryOwners.clear()
     this.subscriptions.clearAll()
   }
 
@@ -78,6 +97,7 @@ export class SessionSubscriptionService {
 
     const controller = new AbortController()
     const subscription = { controller, sessionId }
+    this.primaryOwners.add(webContents.id)
     webContents.once("destroyed", () => this.closeSession(webContents.id))
     const { snapshot, iterator } = await reserveSubscriptionSnapshot(
       this.subscriptions,

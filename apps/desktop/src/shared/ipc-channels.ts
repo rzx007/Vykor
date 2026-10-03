@@ -40,6 +40,7 @@ import type {
 } from "./session-types"
 import type { DesktopContextUsageSnapshot } from "./context-usage-types"
 import type { DesktopActivityUpdate } from "./activity-types"
+import type { DesktopPluginUiAPI } from "./plugin-ui-types"
 import type {
   WorkspaceListFilesInput,
   WorkspaceListFilesResult,
@@ -162,6 +163,13 @@ import type {
 } from "./window-material-types"
 
 export const IpcChannels = {
+  pluginUiCapabilities: "plugin-ui:capabilities",
+  pluginUiMount: "plugin-ui:mount",
+  pluginUiGetState: "plugin-ui:get-state",
+  pluginUiInvokeAction: "plugin-ui:invoke-action",
+  pluginUiGetAction: "plugin-ui:get-action",
+  pluginUiDismiss: "plugin-ui:dismiss",
+  pluginUiUnmount: "plugin-ui:unmount",
   appGetInfo: "app:get-info",
   appGetPlatform: "app:get-platform",
   appQuit: "app:quit",
@@ -352,6 +360,7 @@ export const IpcChannels = {
 } as const
 
 export const IpcEvents = {
+  pluginUiRevoked: "plugin-ui:revoked",
   trayNotificationClicked: "tray:notification-clicked",
   updateStateChanged: "update:state-changed",
   windowMaximizedChanged: "window:maximized-changed",
@@ -404,6 +413,13 @@ export interface PetState {
 }
 
 export interface IpcInvokeMap {
+  [IpcChannels.pluginUiCapabilities]: { args: []; result: Awaited<ReturnType<DesktopPluginUiAPI["capabilities"]>> }
+  [IpcChannels.pluginUiMount]: { args: Parameters<DesktopPluginUiAPI["mount"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["mount"]>> }
+  [IpcChannels.pluginUiGetState]: { args: Parameters<DesktopPluginUiAPI["getState"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["getState"]>> }
+  [IpcChannels.pluginUiInvokeAction]: { args: Parameters<DesktopPluginUiAPI["invokeAction"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["invokeAction"]>> }
+  [IpcChannels.pluginUiGetAction]: { args: Parameters<DesktopPluginUiAPI["getAction"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["getAction"]>> }
+  [IpcChannels.pluginUiDismiss]: { args: Parameters<DesktopPluginUiAPI["dismiss"]>; result: Awaited<ReturnType<DesktopPluginUiAPI["dismiss"]>> }
+  [IpcChannels.pluginUiUnmount]: { args: Parameters<DesktopPluginUiAPI["unmount"]>; result: void }
   [IpcChannels.appGetInfo]: { args: []; result: DesktopAppInfo }
   [IpcChannels.appGetPlatform]: { args: []; result: PlatformInfo }
   [IpcChannels.appQuit]: { args: []; result: void }
