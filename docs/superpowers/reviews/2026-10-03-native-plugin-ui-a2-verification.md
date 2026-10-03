@@ -1,6 +1,6 @@
 # Native Plugin UI A2 验收证据
 
-> 状态：当前 A2 后台实现与回归记录；任务 1–7 已经任务审查，最终分支审查的三项原问题已修复，但独立修复复审确认新增普通 Run 关闭遗漏，最终验收未通过。保留现场，不能合并或发布。不是 Desktop 首版发布验收。
+> 状态：当前 A2 后台实现与回归记录；任务 1–7 已经任务审查，最终审查的三项原问题及普通 Run 关闭遗漏均已修复。本次关闭修复完成 69 项定向回归和类型检查，由控制器直接实施与自查，没有重复全分支独立审查。不是 Desktop 首版发布验收；未合并、推送或发布。
 > 日期：2026-10-03
 > 分支：`codex/plugin-ui-a1`；A2 基线 `1be4f0c7`，本次最终回归基线 `af5f9bc8`。
 
@@ -113,7 +113,7 @@ F2 文件：`src/application/control/__test__/daemon-operation-gate.test.ts`、`
 
 上述 F1 / F2 是修复者的实测证据。控制器还独立运行了 Core checked/workflow 45/45、实际 HTTP21 与 privacy4 共25/25、gate/control/run-control/run-engine37/37，以及提交后的权限等待/Native 调用关闭2/2；Server 类型检查 exit0。关闭2项是上述 HTTP 用例的重跑，不重复计数。这些通过结果不能覆盖下述复审新增的交错。
 
-## 独立修复复审：仍未通过
+## 上一轮独立修复复审：遗留问题（下节已修复）
 
 全分支审查范围为 `4bafd311..dda3daff`；一次性修复提交为 `4ae7f72d`；独立修复复审范围为 `dda3daff..4ae7f72d`。原 P1（UI 关闭相互等待）、P2（UI 读取绕过维护）和作者指南 Minor 均判为 ADDRESSED，但修复新增一个 Important：关闭的取消快照可能漏掉已经进入准入、仍在准备技能内容的普通输入。
 
@@ -135,11 +135,30 @@ F2 文件：`src/application/control/__test__/daemon-operation-gate.test.ts`、`
 
 下一步范围：阻止或安全结算关闭期间恢复的在途普通准入，并保证所有准入工作均取消、排空；保留立即取消已运行 UI 动作、完整执行保护和原子结果保存。新增真实普通输入技能准备与关闭交错回归，同时覆盖 UI 权限等待/Native 调用、普通关闭控制及异常路径。无需重做 UI 架构或提前实施 A3。
 
-本轮按 subagent-driven-development 的一次最终修复及一次复审上限收尾；没有第二轮修复，没有删除计划现场，也没有宣称最终验收通过。后续接着修复此明确问题。
+上一轮按 subagent-driven-development 的一次最终修复及一次复审上限收尾；当时没有第二轮修复，没有删除计划现场，也没有宣称最终验收通过。用户随后明确要求修复，并要求提高效率，按下节完成单点修复。
+
+## 后续单点修复：关闭排空不遗漏晚入队任务
+
+本次以 `2ed0e722` 为基线，控制器直接修复，不重新执行已完成的 A2 任务或多轮分支审查。生产代码仅改两处：
+
+- `DaemonControlService.shutdown()` 保留立即封入口、取消活动 UI 的步骤；等原入口全部释放后，再扫描、取消并排空当时的任务，最后关闭 AgentPool。这包含技能准备完成后才入队的旧输入。
+- `RunControlService.stopAndDrain()` 只合并正在执行的排空请求，完成或失败后清掉该 Promise；后续调用必须重新扫描，不能复用已经完成的旧取消快照。权限等待、Native 调用和结果保存期间的完整运行保护不变，没有新增锁或队列。
+
+新增自动回归使用真实运行入口、会话准入、Run 控制、执行队列和 SQLite，暂停技能准备，让第一次取消扫描完成，再允许普通 Run 入队。断言清理 AgentPool 前已无活动 Run、执行收到取消、持久状态为 interrupted；关闭并重开 SQLite 后再次确认。执行器是等待取消的本地注入执行器，不调用实际模型。另一项用例验证最后一次排空失败仍清理运行环境并正确返回错误。
+
+改生产代码前，聚焦命令 `--filter @vykor/server exec vitest run src/application/control/__test__/daemon-control-service.test.ts -t 'normal run admitted|cancellation after admission'` 得到 **2 failed /8 skipped**：清理运行环境时仍有活动任务，以及最后排空的失败被漏掉。随后做最小修复；所有下列 pnpm 命令仍使用本文统一前缀、现有本地依赖，无网络。
+
+| 标记 | 命令（省略共同 pnpm 前缀） | 本次结果 |
+| --- | --- | --- |
+| G1 | `--filter @vykor/server exec vitest run src/application/control/__test__/daemon-control-service.test.ts src/application/control/__test__/daemon-operation-gate.test.ts src/application/session/__test__/run-control-service.test.ts src/application/session/__test__/run-admission-service.test.ts src/application/session/__test__/session-run-assembly.test.ts` | 5 files，60 passed /0 failed；包含新增真实关闭交错与错误清理 |
+| G2 | `--filter @vykor/server exec vitest run src/http/__test__/session-plugin-ui.test.ts -t 'closes the daemon during|blocks real UI reads|protects an in-flight|drains UI'` | 9 passed /12 skipped /0 failed；真实 UI 权限等待、Native 调用、维护、reload/uninstall 和读取关闭交错 |
+| G3 | `--filter @vykor/server check-types` | exit0 |
+
+本次 69 个不同测试通过。控制器自查确认：第一阶段取消仍在等待运行入口之前；第二阶段仅在入口关闭且旧入口已释放后扫描，晚入队任务会被取消并等待；两阶段错误都汇总，运行环境清理仍执行；原运行检查和持久结算没有被替换。按用户要求只验证影响范围，没有重跑无关全仓测试或新一轮全分支独立审查。
 
 ## 尚未验收的范围
 
-A2 原三项最终审查问题已修复并完成范围内回归，独立修复复审仍有上述普通 Run 关闭回归，最终验收未通过。完整 daemon 的 source projection、独立动作、当前事实读取、startup、export 和下次普通输入摘要均有真实消费者覆盖，不能据此宣称关闭无遗漏或所有管理组合已穷举。
+A2 已报告的原三项最终审查问题及普通 Run 关闭回归已修复并完成范围内回归；最后的单点修复由控制器自查，未另做独立全分支审查。完整 daemon 的 source projection、独立动作、当前事实读取、startup、export 和下次普通输入摘要均有真实消费者覆盖，不能据此宣称所有管理组合已穷举。
 
 UI-17–UI-24 的 Desktop / SDK 部分没有实施或验收：本次浏览器构建是已有 VykorClient 的后台接口消费者，不是 iframe SDK。专用文档协议、隔离 frame / CSP / MessageChannel、mount 撤销、Desktop SSE 呈现、参考插件卡片/侧栏、焦点与键盘、宿主确认和真实 Electron 攻击夹具均不能标记通过。UI-25 任意插件日志、UI-26 完整首版交付也不由本次后台测试代替。
 

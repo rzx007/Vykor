@@ -175,6 +175,12 @@ export class DaemonControlService {
       failures.push(error);
     }
     await drained;
+    // In-flight admission may have enqueued work after the first cancellation scan.
+    try {
+      await this.runControl.stopAndDrain();
+    } catch (error) {
+      failures.push(error);
+    }
     try {
       await this.context.agentPool.closeAll();
     } catch (error) {

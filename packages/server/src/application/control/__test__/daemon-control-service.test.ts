@@ -8,6 +8,9 @@ import { describe, expect, it, vi } from "vitest";
 import { DaemonControlService } from "../daemon-control-service.js";
 import { DaemonOperationGate } from "../daemon-operation-gate.js";
 import { DaemonApplication } from "../../daemon-application.js";
+import { SessionEventPublisher } from "../../session/session-event-publisher.js";
+import { SessionOperationRunner } from "../../session/session-operation-runner.js";
+import { assembleSessionRunServices } from "../../session/session-run-assembly.js";
 
 function createControl() {
   const sessions = [
@@ -75,6 +78,95 @@ function createControl() {
 }
 
 describe("DaemonControlService", () => {
+  it("cancels a normal run admitted after the initial shutdown cancellation scan", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-shutdown-late-admission-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    const session = store.sessions.create({ cwd: directory, model: "test" });
+    const operationGate = new DaemonOperationGate();
+    const events = new SessionEventPublisher(store.conversations, {
+      broadcastSince: () => undefined, broadcastEvent: () => undefined,
+    });
+    let materializing!: () => void;
+    const materializationStarted = new Promise<void>(resolve => { materializing = resolve; });
+    let finishMaterialization!: (text: string) => void;
+    const materialization = new Promise<string>(resolve => { finishMaterialization = resolve; });
+    let aborted = false;
+    let activeWhenPoolClosed = true;
+    const { agentPool, executionObservations } = createControl();
+    const services = assembleSessionRunServices({
+      store, goals: store.goals, agentPool: agentPool as never, events,
+      assertReady: () => undefined,
+      materializeSteerInput: async () => { materializing(); return await materialization; },
+      settleGoalRun: async () => undefined,
+      runExecutor: {
+        execute: async (input, context) => {
+          store.runs.updateRun(input.runId, { status: "running" });
+          await new Promise<void>(resolve => {
+            const cancel = () => { aborted = true; resolve(); };
+            if (context.signal.aborted) cancel();
+            else context.signal.addEventListener("abort", cancel, { once: true });
+          });
+          store.runs.updateRun(input.runId, { status: "interrupted" });
+        },
+      },
+    });
+    agentPool.closeAll.mockImplementation(async () => {
+      activeWhenPoolClosed = services.control.hasAnyActiveRuns();
+    });
+    const control = new DaemonControlService({
+      store, permissions: store.permissions, workflows: store.workflows,
+      executionObservations, runControl: services.control, agentPool: agentPool as never,
+      operationGate, startedAt: Date.now(), sseClientCount: () => 0,
+    });
+    const runner = new SessionOperationRunner({ sessions: store.sessions, operationGate, events });
+    // Observe the actual first drain to reproduce the empty cancellation snapshot deterministically.
+    const drain = vi.spyOn(services.control, "stopAndDrain");
+    const admission = runner.run(session.id, () => services.admission.admitPromptAndMaybeRun(session.id, {
+      id: "late-skill-input", delivery: "steer",
+      items: [{ type: "skill", name: "review", path: join(directory, "SKILL.md") }],
+    }));
+    let shutdown: Promise<void> | undefined;
+    let storeClosed = false;
+    try {
+      await materializationStarted;
+      shutdown = control.shutdown();
+      await drain.mock.results[0]!.value;
+      expect(operationGate.accepting).toBe(false);
+      finishMaterialization("prepared skill");
+      const admitted = await admission;
+      await shutdown;
+      expect(activeWhenPoolClosed).toBe(false);
+      expect(services.engine.runtimeBridge.activeRunId(session.id)).toBeUndefined();
+      expect(aborted).toBe(true);
+      expect(store.runs.getRun(admitted.run!.id)?.status).toBe("interrupted");
+      store.close();
+      storeClosed = true;
+      const reopened = new SessionStore({ path: join(directory, "sessions.db") });
+      try {
+        expect(reopened.runs.getRun(admitted.run!.id)?.status).toBe("interrupted");
+      } finally { reopened.close(); }
+    } finally {
+      finishMaterialization("cleanup");
+      await admission.catch(() => undefined);
+      if (!storeClosed) {
+        services.control.interruptSession(session.id, "test cleanup");
+        await services.engine.runtimeBridge.waitForRuns(store.runs.listRuns(session.id).map(run => run.id));
+      }
+      await shutdown;
+      drain.mockRestore();
+      if (!storeClosed) store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("still closes the pool if cancellation after admission drain fails", async () => {
+    const { control, runEngine, agentPool, operationGate } = createControl();
+    runEngine.stopAndDrain.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("late drain failed"));
+    await expect(control.shutdown()).rejects.toThrow("late drain failed");
+    expect(agentPool.closeAll).toHaveBeenCalledOnce();
+    expect(operationGate.accepting).toBe(false);
+  });
+
   it("uses the composed run lifecycle to stop admission before draining control", async () => {
     const { store, runEngine, agentPool, operationGate } = createControl();
     const runControl = {
@@ -96,7 +188,7 @@ describe("DaemonControlService", () => {
     await control.shutdown();
 
     expect(runEngine.stopAndDrain).not.toHaveBeenCalled();
-    expect(runControl.stopAndDrain).toHaveBeenCalledOnce();
+    expect(runControl.stopAndDrain).toHaveBeenCalledTimes(2);
   });
   it("uses the Workflow queries supplied by daemon composition for snapshots and run inspection", async () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-control-workflows-"));
@@ -199,7 +291,7 @@ describe("DaemonControlService", () => {
     const failure = await control.shutdown().catch((error) => error);
     expect(failure).toBeInstanceOf(AggregateError);
     expect((failure as AggregateError).errors).toEqual([drainError, poolError]);
-    expect(runEngine.stopAndDrain).toHaveBeenCalledOnce();
+    expect(runEngine.stopAndDrain).toHaveBeenCalledTimes(2);
     expect(agentPool.closeAll).toHaveBeenCalledOnce();
     expect(operationGate.accepting).toBe(false);
     expect(() => operationGate.enter({ sessionId: "s1", cwd: "/repo" })).toThrow("Daemon is closing");

@@ -457,7 +457,12 @@ export class RunControlService {
       await this.waitForRuns(runIds);
     })();
     this.stopPromise = stopping;
-    await stopping;
+    try {
+      await stopping;
+    } finally {
+      // Coalesce only an in-flight drain, not future scans of newly admitted work.
+      this.stopPromise = undefined;
+    }
   }
 
   pauseGoalForRun(runId: string | undefined): void {
