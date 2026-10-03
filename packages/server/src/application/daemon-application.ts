@@ -348,10 +348,23 @@ export class DaemonApplication implements DurableAgentApplication {
       this.pluginUi = new SessionPluginUiService({
         store,
         verifySourceBinding: async binding => await computePluginBehaviorDigest(binding.root) === binding.pluginDigest,
-        resolveCurrent: async (session, instance) => resolveSessionPluginUiCurrent(session, instance, {
-          settings: options.getSettingsForCwd ? await options.getSettingsForCwd(session.cwd) : (options.getSettings?.() ?? options.settings),
-          acquireSession: id => this.agentPool.acquireSession(id),
-        }),
+        resolveCurrent: async (session, instance) => {
+          this.assertReady();
+          // Protect settings/install verification as well as Runtime preparation from maintenance.
+          const lease = this.operationGate.enter({ sessionId: session.id, cwd: session.cwd });
+          try {
+            const current = await resolveSessionPluginUiCurrent(session, instance, {
+              settings: options.getSettingsForCwd ? await options.getSettingsForCwd(session.cwd) : (options.getSettings?.() ?? options.settings),
+              acquireSession: id => {
+                this.assertReady();
+                return this.agentPool.acquireSession(id);
+              },
+            });
+            // Shutdown can start at any await; it must not become a Host-failed read-only fallback.
+            this.assertReady();
+            return current;
+          } finally { lease.release(); }
+        },
         diagnose: diagnostic => options.log({ level: "warn", event: diagnostic.code,
           sessionId: diagnostic.sessionId, runId: diagnostic.runId }),
         actions: {

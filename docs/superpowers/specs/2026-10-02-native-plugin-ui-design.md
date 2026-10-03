@@ -1,6 +1,6 @@
 # 插件 UI 完整规格：工具结果卡片与会话侧栏
 
-> 状态：当前首版设计；A1 静态定义、加载、授权与管理反馈，以及 A2 可信实例、持久动作和 HTTP / Client 后台接口已实现。A2 最终独立分支审查待完成；Desktop 隔离文档、消息接口和交互界面尚未实现。
+> 状态：当前首版设计；A1 静态定义、加载、授权与管理反馈，以及 A2 可信实例、持久动作和 HTTP / Client 后台接口已实现。A2 最终分支审查发现的关闭等待、读取维护边界和作者文档问题已修复并补充回归，待独立复审；Desktop 隔离文档、消息接口和交互界面尚未实现。
 > 日期：2026-10-02
 > 产品：OpenHarness；仓库包名和原生插件目录继续使用 Vykor / `@vykor/*` / `.vykor-plugin`。
 > 首版交付：Desktop 中的 Native Plugin UI，包括自定义 HTML、工具结果卡片、会话侧栏、受控工具操作和持久状态恢复。
@@ -435,6 +435,8 @@ activeActionRunId 只表示有一项执行中的操作，不是新的业务状�
 可用性由当前插件和 Session 事实计算，不写成永久业务终态：
 
 返回值为 `{ code, canRender, canInvoke }`。canInvoke 为 true 必须同时满足 canRender、实例 open、会话可变、Runtime 准备成功和没有未知结果保护。plugin-disabled、permission-missing、snapshot-missing、snapshot-changed、invalid-definition 的 canRender / canInvoke 都为 false。Session 归档或 Tool Host 暂不可用但快照仍有效时，可以 canRender=true、canInvoke=false，以只读方式查看既有数据。
+
+后台读取设置、安装记录、文档与准备 Runtime 的整段流程使用现有 operation gate（运行与维护互斥入口）。reload、卸载或全局维护持有维护入口时，UI 读取不能重新创建 Runtime；daemon 尚未就绪或已开始关闭时也不准备 Runtime，不返回可显示的 HTML。已进入的读取在关闭时排空并清理，Host 真正启动失败的精确快照只读回退仅适用于 daemon 正常运行期间。关闭流程先封住新入口、取消并等待活动 Run 结算，再等待既有读取与执行租约释放；动作执行租约仍覆盖权限等待、工具调用和原子结算。
 
 实例查找只在请求所属会话的 Parts 内进行，不扫描其他会话。缺少组件、工具归属或 UI 运行端造成的诊断只限制 UI 能力，不作为所有业务工具的准备失败；整体插件权限缺失仍遵守既有安装校验规则。
 

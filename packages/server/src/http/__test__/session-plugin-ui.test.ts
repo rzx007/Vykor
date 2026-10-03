@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { captureNativeUiLogs, expectNoPrivateUiData } from "../../../../agent-runtime/test-helpers/native-ui-logs.js";
-import { createDefaultNodeAgent } from "@vykor/agent-runtime";
+import { createDefaultNodeAgent, getNativeToolRuntimeSnapshot } from "@vykor/agent-runtime";
 import { getInstalledPluginStorePath, type Settings } from "@vykor/core";
 import { installLocalNativePlugin, updateInstalledPluginStore } from "@vykor/plugins";
 import { CURRENT_PROTOCOL_VERSION, readPluginUiInstance } from "@vykor/protocol";
@@ -12,6 +12,7 @@ import { SessionStore } from "@vykor/services";
 import { VykorClient } from "../../../../client/src/index.js";
 import { VykorHttpServer } from "../server.js";
 import { createSystemRoutes } from "../routes/system.js";
+import { createDefaultPluginService } from "../../application/default-services/plugin-service.js";
 
 const cleanup: (() => void | Promise<void>)[] = [];
 let nativeLogs: ReturnType<typeof captureNativeUiLogs>;
@@ -21,6 +22,11 @@ beforeEach(() => { nativeLogs = captureNativeUiLogs({ pluginId: "test.ui-http", 
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); nativeLogs.verify(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 const pluginId = "test.ui-http";
 const html = "<!doctype html><p>Verified panel</p>";
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
 async function harness(link = false) {
   const root = mkdtempSync(join(tmpdir(), "vykor-ui-http-"));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
@@ -47,12 +53,17 @@ async function harness(link = false) {
       { name: "NativeAction", description: "apply", inputSchema: { type: "object", properties: { value: { type: "string" } }, additionalProperties: false },
         async invoke(input, context) { const file = join(context.cwd, "effects");
           writeFileSync(file, String((existsSync(file) ? Number(readFileSync(file, "utf8")) : 0) + 1));
+          if (existsSync(join(context.cwd, "wait-action"))) await new Promise((resolve, reject) => {
+            context.signal.throwIfAborted();
+            context.signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+          });
           return { content: [{ type: "text", text: "Applied " + (input.value ?? "once") }], metadata: { ui: { schemaVersion: 1, componentId: "panel", data: { count: 0 } } } };
         } }
     ]; }
   `);
   const installed = await installLocalNativePlugin({ sourcePath: source, cwd: root, scope: "user", link, approvedPermissions: ["ui:render", "ui:invoke-own-tools"] });
   expect(installed.status).toBe("installed");
+  if (installed.status !== "installed") throw new Error("Native UI fixture installation failed");
   const settings: Settings = { apiFormat: "openai", model: "never", maxTurns: 3,
     permission: { mode: "full_auto" }, sandbox: { enabled: false }, memory: { enabled: false } };
   let store = new SessionStore({ path: join(root, "session.db") });
@@ -60,10 +71,17 @@ async function harness(link = false) {
   let nextInspection: { id: string; input: Record<string, unknown> } | undefined;
   const histories: string[] = [];
   const logs: unknown[] = [];
+  let agentLoads = 0;
+  let beforeSettings: (() => Promise<void>) | undefined;
+  let beforeCreate: (() => Promise<void>) | undefined;
   const boot = (hostUnavailable = false) => {
     if (hostUnavailable) writeFileSync(join(root, "host-down"), "down");
     return new VykorHttpServer({ store, settings, token: "secret-token", logger: event => logs.push(event),
+    services: { plugin: createDefaultPluginService({ current: settings }) },
+    getSettingsForCwd: async () => { await beforeSettings?.(); return settings; },
     createAgent: async ({ options }) => {
+      agentLoads++;
+      await beforeCreate?.();
       return createDefaultNodeAgent({ ...options, capabilityOverrides: { ...options.capabilityOverrides, terminal: false, memory: false },
         client: { async *streamMessage(params) {
           histories.push(JSON.stringify(params.messages));
@@ -88,6 +106,19 @@ async function harness(link = false) {
   expect(store.runs.getRun(prompt.run!.id), JSON.stringify(logs)).toMatchObject({ status: "completed" });
   const instance = () => readPluginUiInstance(store.conversations.listMessageParts(session.id).find(p => p.id === "source-call")?.metadata);
   return { root, settings, session, instance, client, logs, histories, modelCalls: () => modelCalls,
+    agentLoads: () => agentLoads,
+    nativeRuntime: () => getNativeToolRuntimeSnapshot(installed.record.cachePath),
+    pauseRead: (phase: "settings" | "preparation") => {
+      const started = deferred(); const release = deferred();
+      const wait = async () => {
+        if (phase === "settings") beforeSettings = undefined;
+        else beforeCreate = undefined;
+        started.resolve(); await release.promise;
+      };
+      if (phase === "settings") beforeSettings = wait;
+      else beforeCreate = wait;
+      return { started: started.promise, release: release.resolve };
+    },
     inspectAgain: async (drift: boolean) => {
       nextInspection = { id: "second-source-call", input: { drift } };
       const admitted = await server.application.interactions.admitPrompt(session.id, { items: [
@@ -142,6 +173,129 @@ it("wires source capture, authenticated Client actions, durable retries, summari
   expect(dismissed.status).toBe("dismissed");
   expectNoPrivateUiData([h.logs, nativeLogs.values], ["secret-token", html, "approved", join(h.root, "config")]);
   expectNoPrivateUiData(await h.client().pluginUi.get(h.session.id, id), [h.root]);
+});
+
+it.each(["permission", "native"] as const)("closes the daemon during a real UI %s wait and preserves durable cancellation without replay", async phase => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  if (phase === "permission") { h.settings.permission = { mode: "default" }; await h.restart(); }
+  else writeFileSync(join(h.root, "wait-action"), "wait");
+  const input = { requestId: randomUUID(), expectedRevision: 1, actionId: "apply", args: {} };
+  const receipt = await h.client().pluginUi.invokeAction(h.session.id, id, input);
+  await vi.waitFor(() => {
+    if (phase === "permission") expect(h.store().permissions.list({ sessionId: h.session.id, status: "pending" })).toHaveLength(1);
+    else expect(h.effects()).toBe("1");
+  }, { timeout: 10000 });
+  // The executor must keep maintenance excluded until its atomic settlement finishes.
+  expect(h.server().application.control.acquireGlobalMutation()).toBeUndefined();
+  let closed = false;
+  const closing = h.server().close().then(() => { closed = true; });
+  try {
+    await expect(h.client().pluginUi.invokeAction(h.session.id, id, { ...input, requestId: randomUUID() }))
+      .rejects.toMatchObject({ status: 503 });
+    await vi.waitFor(() => expect(closed).toBe(true), { timeout: 3000 });
+  } finally {
+    // Rescue only a regressing implementation, so a failing test cannot hang its cleanup.
+    if (!closed) h.server().application.runControl.interruptRun(h.session.id, receipt.runId);
+    await closing;
+  }
+  expect(h.nativeRuntime()).toMatchObject({ hostCount: 0, registeredToolCount: 0 });
+  await h.restart(false, reopened => {
+    // Inspect before startup recovery: shutdown itself must have committed all three facts.
+    const executionState = phase === "permission" ? "not_started" : "unknown";
+    expect(reopened.runs.getRun(receipt.runId)).toMatchObject({ status: "interrupted", metadata: { uiAction: { executionState } } });
+    expect(reopened.conversations.listMessageParts(h.session.id).find(part => part.toolName === "NativeAction"))
+      .toMatchObject({ status: "interrupted", metadata: { executionState, toolProgress: null } });
+    expect(h.instance()).toMatchObject({ revision: 3, data: { count: 1 }, lastActionRunId: receipt.runId });
+    expect(h.instance()!.activeActionRunId).toBeUndefined();
+    expect(reopened.permissions.list({ sessionId: h.session.id, status: "pending" })).toHaveLength(0);
+  });
+  expect((await h.client().pluginUi.invokeAction(h.session.id, id, input)).status).toBe("interrupted");
+  if (phase === "native") {
+    await expect(h.client().pluginUi.invokeAction(h.session.id, id, { ...input, requestId: randomUUID(), expectedRevision: 3 }))
+      .rejects.toMatchObject({ status: 409, body: { code: "plugin_ui_action_unknown" } });
+  }
+  expect(h.effects()).toBe(phase === "permission" ? "0" : "1");
+  expect(h.modelCalls()).toBe(2);
+});
+
+it("blocks real UI reads throughout global maintenance after the pool has closed", async () => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  const control = h.server().application.control;
+  const barrier = control.acquireGlobalMutation()!; expect(barrier).toBeDefined();
+  try {
+    await control.closeAllRuntimes();
+    const loads = h.agentLoads();
+    expect((await h.client().pluginUi.get(h.session.id, id)).availability)
+      .toEqual({ code: "runtime-unavailable", canRender: false, canInvoke: false });
+    await expect(h.client().pluginUi.getDocument(h.session.id, id)).rejects.toMatchObject({ status: 503, body: { code: "plugin_ui_unavailable" } });
+    expect(h.agentLoads()).toBe(loads);
+    expect(control.runtimeSnapshot().warmAgentCount).toBe(0);
+    expect(h.nativeRuntime()).toMatchObject({ hostCount: 0, registeredToolCount: 0 });
+  } finally { barrier.release(); }
+  expect((await h.client().pluginUi.get(h.session.id, id)).availability.code).toBe("available");
+  expect(control.runtimeSnapshot().warmAgentCount).toBe(1);
+  expect(h.effects()).toBe("0");
+});
+
+it.each(["get", "document"] as const)("protects an in-flight UI %s installation read against actual reload and uninstall", async kind => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  const pause = h.pauseRead("settings");
+  const path = `/sessions/${h.session.id}/plugin-ui/${id}${kind === "document" ? "/document" : ""}`;
+  const reading = h.raw(path);
+  await pause.started;
+  try {
+    const reloadStatus = await h.client().plugins.reload({ cwd: h.root }).then(() => 200, error => error.status);
+    const uninstallStatus = await h.client().plugins.uninstall(pluginId, { cwd: h.root }).then(() => 200, error => error.status);
+    expect([reloadStatus, uninstallStatus]).toEqual([409, 409]);
+  } finally { pause.release(); await reading; }
+  const response = await reading; expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject(kind === "get" ? { availability: { code: "available" } } : { html });
+  await h.client().plugins.reload({ cwd: h.root });
+  expect(h.server().application.control.runtimeSnapshot().warmAgentCount).toBe(0);
+  expect((await h.client().pluginUi.get(h.session.id, id)).availability.code).toBe("available");
+  await h.client().plugins.uninstall(pluginId, { cwd: h.root });
+  const loads = h.agentLoads();
+  expect((await h.client().pluginUi.get(h.session.id, id)).availability.code).toBe("plugin-disabled");
+  await expect(h.client().pluginUi.getDocument(h.session.id, id)).rejects.toMatchObject({ status: 503 });
+  expect(h.agentLoads()).toBe(loads);
+  expect(h.server().application.control.runtimeSnapshot().warmAgentCount).toBe(0);
+  expect(h.nativeRuntime()).toMatchObject({ hostCount: 0, registeredToolCount: 0 });
+  expect(h.effects()).toBe("0");
+});
+
+it.each([
+  { kind: "get", phase: "settings" }, { kind: "document", phase: "settings" },
+  { kind: "get", phase: "preparation" }, { kind: "document", phase: "preparation" },
+] as const)("drains UI $kind during $phase on close without preparing after shutdown or returning stale availability", async ({ kind, phase }) => {
+  const h = await harness(); const id = h.instance()!.instanceId;
+  const control = h.server().application.control;
+  await control.closeAllRuntimes();
+  const pause = h.pauseRead(phase);
+  const path = `/sessions/${h.session.id}/plugin-ui/${id}${kind === "document" ? "/document" : ""}`;
+  const reading = h.raw(path);
+  await pause.started;
+  const loads = h.agentLoads();
+  let closed = false;
+  const closing = h.server().close().then(() => { closed = true; });
+  let refused: Response | undefined;
+  const refusing = h.raw(path).then(response => { refused = response; });
+  try {
+    await vi.waitFor(() => expect(refused).toBeDefined(), { timeout: 3000 });
+    if (kind === "get") expect(await refused!.json()).toMatchObject({ availability: { canRender: false, canInvoke: false } });
+    else expect(refused!.status).toBe(503);
+    expect(closed).toBe(false);
+  } finally { pause.release(); await reading; await refusing; await closing; }
+  const response = await reading;
+  if (kind === "get") expect(await response.json()).toMatchObject({ availability: { canRender: false, canInvoke: false } });
+  else expect(response.status).toBe(503);
+  expect(h.agentLoads()).toBe(loads);
+  expect(h.nativeRuntime()).toMatchObject({ hostCount: 0, registeredToolCount: 0 });
+  // The exact installed snapshot remains usable after a cold reopen, without replaying a tool.
+  await h.restart();
+  expect(h.server().application.control.runtimeSnapshot().warmAgentCount).toBe(0);
+  expect((await h.client().pluginUi.get(h.session.id, id)).availability.code).toBe("available");
+  expect(h.agentLoads()).toBe(loads + 1);
+  expect(h.effects()).toBe("0");
 });
 
 it("enforces auth, Origin, ownership, strict JSON and byte limits without invoking", async () => {

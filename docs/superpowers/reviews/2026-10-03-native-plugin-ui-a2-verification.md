@@ -1,6 +1,6 @@
 # Native Plugin UI A2 验收证据
 
-> 状态：当前 A2 后台实现与回归记录；任务 1–6 已经任务审查，任务 7 审查与独立全分支审查待控制器完成。不是 Desktop 首版发布验收。
+> 状态：当前 A2 后台实现与回归记录；任务 1–7 已经任务审查，最终分支审查发现的关闭等待、读取维护边界和作者文档问题已修复并补充回归，待控制器独立复审。不是 Desktop 首版发布验收。
 > 日期：2026-10-03
 > 分支：`codex/plugin-ui-a1`；A2 基线 `1be4f0c7`，本次最终回归基线 `af5f9bc8`。
 
@@ -78,7 +78,7 @@ src/http/routes/protocol-validation.test.ts
 | UI-14 | action `dismisses idempotently without tools, allowing unknown but rejecting changed revisions`、活动取消/禁止运行中 dismiss、`allows dismiss while a normal Run is busy and plugin rendering is disabled`；HTTP `retains admitted Native work after its HTTP caller aborts and safely retries` | R3 / R4，后台 dismiss 与 Run cancel 分开，客户端断开不撤销准入动作；renderer 关闭显示待 A3 |
 | UI-15 | action `preserves the real Native … result while guarding UI data updates`（valid / malformed / foreign / error），真实 resolve 成功、permission/arguments not_started、活动取消 unknown、final-save failure | R3 / R4，新四项均走实际 Native 子进程；非法更新保留旧 data，成功 keep-open / resolve 与失败状态准确；返回 isError 的已启动调用遵循共享执行器 unknown 语义 |
 | UI-16 | action `derives bounded external-data summaries from durable actions since the previous model Run`、`keeps same-millisecond summary boundaries and last-eight admission order after SQLite reopen`；HTTP 的下一次普通模型输入、fork/cold transcript/export；goalsSettled 为 0 | R3 / R4，最多八项/8000 Unicode 字符，明确外部数据，失败/unknown 不当成功；同毫秒真实 SQLite 重开稳定，模型 Run 阻断旧摘要 |
-| UI-21 后台部分 | Runtime 旧绑定/伪造 invoke 不重定向、定义替换撤回；service 当前版本/digest/权限/缺失及其他会话源拒绝；HTTP 真实 global/session 禁用、安装禁用/撤权/漂移、冷 Host 失败、重启 | R2 / R3 / R4，仅后台调用绑定与当前事实验证。实际卸载、重装、reload 后 UI 实例的全链路管理组合未另做专项演练；Desktop 切换挂载撤销不在本次验证范围 |
+| UI-21 后台部分 | Runtime 旧绑定/伪造 invoke 不重定向、定义替换撤回；service 当前版本/digest/权限/缺失及其他会话源拒绝；HTTP 真实 global/session 禁用、安装禁用/撤权/漂移、冷 Host 失败、重启；F1 新增 get/document 与全局维护、reload、卸载、关闭的交错 | R2 / R3 / R4 / F1，仅后台调用绑定与当前事实验证。真实 reload/卸载的读取竞争和清理已覆盖，重装及其他全链路管理组合未穷举；Desktop 切换挂载撤销不在本次验证范围 |
 | UI-22 后台部分 | service 原始 output 保留、无效 UI 不改成功；action readAction 原始 result、失败详情、export、重开/fork 的模型 transcript；HTTP 初始 Run 和后续摘要 | R3 / R4，原文字和持久动作结果可用，无 UI 等待；CLI/TUI 视觉呈现未做人工验收 |
 | UI-25 后台部分 | test-only native-ui-logs 逐条检查审计键集合、身份、summary、duration、status 和取消 errorCode；HTTP 按实际字符串值检查结构化 daemon 日志、解析后的 Native 审计及公开实例响应，不受 JSON 对 Windows 路径、引号或控制字符的转义影响；service resolver 失败的安全 unavailable 响应 | R3 / R4 / R5 与下述 privacy 修正证据，检查 token、HTML、参数正文、安装配置路径；预期诊断精确匹配，未知 stderr 继续显示并导致失败。未改生产 audit，既有审计 cwd 是操作目录，不是安装路径；不宣称任意插件自行输出的日志都自动脱敏 |
 | UI-26 后台部分 | HTTP `omits the feature for narrow HTTP assemblies without a full backend`、完整 daemon feature=1、真实禁用与 read-only；README、作者指南、Spec 明确 A2 / A3 范围 | R4 / R13 / R14 及文档检查；pluginUi:1 只说明后台可用，静态 inventory 不证明已打开 UI |
@@ -93,9 +93,29 @@ Task 3 /5 /6 的预期审计、取消和 Native UI 拒绝诊断现在由 test-on
 
 Task 7 审查指出旧 privacy 断言把裸安装路径与 JSON 字符串比较，Windows 转义后可能漏检，公开响应 root 和包含引号/控制字符的 HTML/参数也有同类问题。这是测试漏检，未发现生产泄露。现改为递归检查实际字符串值，并先解析 Native 审计 JSON。独立手写 Windows 安装路径、带引号/换行/制表符的 HTML 和参数分别注入结构化日志、Native 审计和公开响应；旧检测器 RED 为 3 failed /1 passed（错误地未抛错），修正后独立注入4/4、真实 HTTP12/12 均通过，见 R18。生产日志未修改。
 
+## 最终分支审查的生命周期修复
+
+修复基线为 `dda3daff`。P1 的根因是 `shutdown()` 等执行租约释放后才取消 Run，权限等待或 Native 调用因此无法自行结束。现在同步封住 operation gate 的新入口，先执行现有 `stopAndDrain()`，再等租约排空并关闭 Runtime。执行器的完整租约及 SQLite 原子结算未削弱。
+
+P2 的根因是生产当前事实 resolver 直接准备 AgentPool，绕过维护入口和 daemon 就绪状态。现在从读取设置前至完成安装、文档验证与 Agent 准备都持有同一个既有 gate；准备前和异步解析完成后重验 ready。维护或关闭期间的 GET 实例沿用安全 unavailable 数据，文档沿用 503 / `plugin_ui_unavailable`；正常运行时已验证快照遇到 Host 注册失败仍可只读。没有增加锁、队列或伪造 Native 绑定。作者指南末尾过时的“只有静态接口”说明也已修正。
+
+有效 RED：真实权限等待与 Native 调用中的关闭两项都在 3 秒断言时仍未完成，测试主动取消后才能清理；全局维护后 GET 错误返回 available；关闭期新 GET 返回可操作、文档返回 200，Runtime 准备中的新读取会继续等待；暂停 get/document 的设置读取时，实际 reload 与 uninstall 均返回 200，预期都是 409。初次管理夹具缺服务导致的 501，以及新测试误用客户端错误对象顶层 `code` 的断言不计为产品缺陷证据。
+
+| 标记 | 命令（仍使用本文统一 pnpm 前缀；本地提权，无网络） | 实测结果 |
+| --- | --- | --- |
+| F1 | `--filter @vykor/server exec vitest run src/http/__test__/session-plugin-ui.test.ts` | 21 passed / 0 failed；其中新增 9 项真实生命周期交错。保留原 Host 失败只读、源投影、重试、恢复、导出和模型摘要回归 |
+| F2 | `--filter @vykor/server exec vitest run` 后接下列 11 文件 | 170 passed / 0 failed；普通模型 Run、control、gate、AgentPool、UI service/action、startup 与真实插件管理回归 |
+| F3 | F1 命令加 `-t 'closes the daemon during\|blocks real UI reads\|protects an in-flight\|drains UI'` | 自查增加旧 Native Host 的 `hostCount=0` / `registeredToolCount=0` 后，9 passed / 12 skipped / 0 failed |
+| F4 | F1 命令加 `-t 'closes the daemon during'` | 在重开 SQLite、尚未运行 startup recovery 时核对 Run、工具 Part、源实例和权限已结算，2 passed / 19 skipped / 0 failed；副作用次数仍为 0 / 1，unknown 不重放 |
+| F5 | `--filter @vykor/server check-types`；`check-docs`；`git diff --check`（最后一项直接 Git） | 类型检查 exit 0；文档检查 376 文件通过；无空白错误 |
+
+F2 文件：`src/application/control/__test__/daemon-operation-gate.test.ts`、`src/application/control/__test__/daemon-control-service.test.ts`、`src/application/agent/__test__/agent-pool.test.ts`、`src/application/session/__test__/session-operation-runner.test.ts`、`src/application/session/__test__/run-control-service.test.ts`、`src/application/session/__test__/session-run-engine.test.ts`、`src/application/session/__test__/session-run-executor.test.ts`、`src/application/session/__test__/session-plugin-ui-service.test.ts`、`src/application/session/__test__/session-plugin-ui-action.test.ts`、`src/application/recovery/startup-recovery-service.test.ts`、`src/http/routes/plugin-lifecycle.test.ts`。
+
+这些是修复者的实测证据，尚不能代替控制器安排的本轮独立复审。
+
 ## 尚未验收的范围
 
-A2 尚待任务 7 独立审查与全分支独立审查。未发现需要补接的 A2 后台生产入口；完整 daemon 的 source projection、独立动作、当前事实读取、startup、export 和下次普通输入摘要均由真实消费者覆盖。
+A2 最终分支审查的上述问题已修复并完成范围内回归，尚待本轮独立复审。完整 daemon 的 source projection、独立动作、当前事实读取、startup、export 和下次普通输入摘要均有真实消费者覆盖，不能据此宣称所有管理组合已穷举。
 
 UI-17–UI-24 的 Desktop / SDK 部分没有实施或验收：本次浏览器构建是已有 VykorClient 的后台接口消费者，不是 iframe SDK。专用文档协议、隔离 frame / CSP / MessageChannel、mount 撤销、Desktop SSE 呈现、参考插件卡片/侧栏、焦点与键盘、宿主确认和真实 Electron 攻击夹具均不能标记通过。UI-25 任意插件日志、UI-26 完整首版交付也不由本次后台测试代替。
 

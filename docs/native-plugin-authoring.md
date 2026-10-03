@@ -335,4 +335,4 @@ pnpm --filter @vykor/server exec vitest run src/http/routes/plugin-lifecycle.tes
 
 测试使用临时用户安装记录和真实 Tool Host，不写入开发者日常插件安装状态。样例目录参与相关测试和类型检查的 Turbo 缓存输入，修改样例后会重新验证。
 
-Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。UI 当前只有静态接口，尚无交互显示和动作运行。阶段范围见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。
+Output Styles、Themes、Monitors、Workflows、Channels、Providers、LSP、Wasm 和受管理二进制仍以当前 Loader 诊断为准；不要把 schema 中预留的字段当作已经开放的能力。UI 已实现静态定义、可信持久实例和后台动作执行；Desktop 隔离文档与交互界面尚未实现。UI 阶段范围见 [Native Plugin UI 规格](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)；其他 Native 能力见 [开发设计](./superpowers/specs/2026-09-09-native-plugin-authoring-v1-design.md)与[实施计划](./superpowers/plans/2026-09-09-native-plugin-authoring-v1.md)。

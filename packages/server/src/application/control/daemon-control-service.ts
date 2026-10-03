@@ -166,13 +166,15 @@ export class DaemonControlService {
   }
 
   async shutdown(): Promise<void> {
-    await this.context.operationGate.beginShutdown();
+    // Seal admission synchronously, then cancel work that owns lifetime leases.
+    const drained = this.context.operationGate.beginShutdown();
     const failures: unknown[] = [];
     try {
       await this.runControl.stopAndDrain();
     } catch (error) {
       failures.push(error);
     }
+    await drained;
     try {
       await this.context.agentPool.closeAll();
     } catch (error) {
