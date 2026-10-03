@@ -10,6 +10,7 @@ import {
 } from "react-resizable-panels"
 
 import { ConversationPane } from "@renderer/components/desktop/conversation-page"
+import { PluginUiProvider } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
@@ -363,63 +364,65 @@ export function MainLayout(): React.JSX.Element {
   )
 
   return (
-    <main className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
-      <TitleBar
-        sidebarOpen={sidebarOpen}
-        panelOpen={panelOpen}
-        isMaximized={isMaximized}
-        hasActiveSession={Boolean(activeSessionId)}
-        canGoBack={router.history.canGoBack()}
-        canGoForward={historyIndex < router.history.length - 1}
-        canOpenPreviousSession={Boolean(previousSession)}
-        canOpenNextSession={Boolean(nextSession)}
-        zoomLevel={zoomLevel}
-        onGoBack={() => router.history.back()}
-        onGoForward={() => router.history.forward()}
-        onNewConversation={startNewConversationRoute}
-        onChooseProject={() => {
-          showCurrentConversation()
-          void chooseProject()
-        }}
-        onCloseConversation={startNewConversationRoute}
-        onOpenPreviousSession={openPreviousSession}
-        onOpenNextSession={openNextSession}
-        onToggleSidebar={toggleSidebar}
-        onTogglePanel={togglePanel}
-        onOpenUtilityTool={openUtilityTool}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onResetZoom={resetZoom}
-        onMinimize={minimize}
-        onToggleMaximize={toggleMaximize}
-        onClose={close}
-      />
-      {selectedProjectOperationError ? (
-        <div className="absolute inset-x-4 top-12 z-40 mx-auto w-full max-w-190">
-          <ScopedOperationError error={selectedProjectOperationError} />
-        </div>
-      ) : null}
-      <MainLayoutContext.Provider
-        value={{
-          conversationWorkspace: renderConversationWorkspace(),
-          startNewConversation: startNewConversationRoute,
-        }}
-      >
-        {renderPage(
-          <Sidebar
-            open={sidebarOpen}
-            onOpenScheduled={() => void navigate({ to: "/scheduled" })}
-            onOpenPlugins={() => void navigate({ to: "/plugins" })}
-            onOpenConversation={openConversationRoute}
-            onOpenSettings={() =>
-              void navigate({
-                to: "/settings/$section",
-                params: { section: defaultSettingsSection },
-              })
-            }
-          />
-        )}
-      </MainLayoutContext.Provider>
-    </main>
+    <PluginUiProvider onOpenSidebar={utilityPanel.restore}>
+      <main className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-shell text-foreground">
+        <TitleBar
+          sidebarOpen={sidebarOpen}
+          panelOpen={panelOpen}
+          isMaximized={isMaximized}
+          hasActiveSession={Boolean(activeSessionId)}
+          canGoBack={router.history.canGoBack()}
+          canGoForward={historyIndex < router.history.length - 1}
+          canOpenPreviousSession={Boolean(previousSession)}
+          canOpenNextSession={Boolean(nextSession)}
+          zoomLevel={zoomLevel}
+          onGoBack={() => router.history.back()}
+          onGoForward={() => router.history.forward()}
+          onNewConversation={startNewConversationRoute}
+          onChooseProject={() => {
+            showCurrentConversation()
+            void chooseProject()
+          }}
+          onCloseConversation={startNewConversationRoute}
+          onOpenPreviousSession={openPreviousSession}
+          onOpenNextSession={openNextSession}
+          onToggleSidebar={toggleSidebar}
+          onTogglePanel={togglePanel}
+          onOpenUtilityTool={openUtilityTool}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onResetZoom={resetZoom}
+          onMinimize={minimize}
+          onToggleMaximize={toggleMaximize}
+          onClose={close}
+        />
+        {selectedProjectOperationError ? (
+          <div className="absolute inset-x-4 top-12 z-40 mx-auto w-full max-w-190">
+            <ScopedOperationError error={selectedProjectOperationError} />
+          </div>
+        ) : null}
+        <MainLayoutContext.Provider
+          value={{
+            conversationWorkspace: renderConversationWorkspace(),
+            startNewConversation: startNewConversationRoute,
+          }}
+        >
+          {renderPage(
+            <Sidebar
+              open={sidebarOpen}
+              onOpenScheduled={() => void navigate({ to: "/scheduled" })}
+              onOpenPlugins={() => void navigate({ to: "/plugins" })}
+              onOpenConversation={openConversationRoute}
+              onOpenSettings={() =>
+                void navigate({
+                  to: "/settings/$section",
+                  params: { section: defaultSettingsSection },
+                })
+              }
+            />
+          )}
+        </MainLayoutContext.Provider>
+      </main>
+    </PluginUiProvider>
   )
 }

@@ -95,7 +95,7 @@ manifest 描述插件包，不保存启用状态、批准记录、用户配置�
 ## UI 定义与后台工具操作
 
 UI 定义的静态校验、安装授权和元数据加载，以及工具结果中的可信实例、持久工具操作和 HTTP / Client 接口已经接入。
-Desktop 自定义 HTML 界面、卡片、侧栏和窗口确认仍待 A3 接入，当前没有可供插件页面使用的浏览器消息 SDK。
+仓库现有浏览器入口为 `@vykor/plugins/ui-sdk`。A3 已接入隔离 HTML、卡片、侧栏和宿主确认，并通过隐藏 Electron 的实际 SDK → 桌面入口 → Client 测试。管理变更时撤销旧页面的安全通知尚未完成，因此后台尚不公布 `pluginUiLifecycle`，普通用户连接当前后台时仍只显示原始文字结果；这不是完整 A3 或首版交付。阶段证据见 [A3 验证记录](superpowers/reviews/2026-10-03-native-plugin-ui-a3-verification.md)。
 下面的后台能力可以由受信宿主或测试通过 Client 使用；声明 UI 不会自动打开窗口，也不会阻塞普通文字结果。
 
 Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：

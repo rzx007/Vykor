@@ -40,6 +40,8 @@ import {
   type UtilityTool,
 } from "./utility-panel-tabs"
 import { useUtilityPanelRuntime } from "./use-utility-panel-runtime"
+import { usePluginUiHost } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-provider"
+import { PluginUiFrame } from "@renderer/components/desktop/conversation-page/plugin-ui/plugin-ui-frame"
 
 type UtilityPanelProps = {
   scopeId: string
@@ -73,6 +75,15 @@ export function UtilityPanel({
   onOpenReview,
   onOpenTerminal,
 }: UtilityPanelProps): React.JSX.Element {
+  const pluginUi = usePluginUiHost()
+  const pluginSidebar = pluginUi?.displays.find((display) => display.surface === "session-sidebar")
+  const pluginTab: UtilityTab | null = pluginSidebar
+    ? {
+        id: "plugin-ui:" + pluginSidebar.key,
+        tool: "plugin-ui",
+        title: pluginSidebar.instance.title,
+      }
+    : null
   const {
     state: {
       tabs,
@@ -118,11 +129,12 @@ export function UtilityPanel({
   const visibleFileTabs = fileTabs.filter(
     (tab) => (tab.projectPath ?? null) === (selectedProjectPath ?? null)
   )
-  const visibleTabs = tabs.filter(
+  const storedVisibleTabs = tabs.filter(
     (tab) =>
       (!tab.projectPath || tab.projectPath === selectedProjectPath) &&
       (activeWorkspaceIsGit === true || tab.tool !== "review")
   )
+  const visibleTabs = pluginTab ? [...storedVisibleTabs, pluginTab] : storedVisibleTabs
   const visibleActiveFilePath =
     fileStateVisible || visibleTabs.some((tab) => tab.filePath === activeFilePath)
       ? activeFilePath
@@ -132,6 +144,12 @@ export function UtilityPanel({
       ? loadingFilePath
       : null
   const activeTab = visibleTabs.find((tab) => tab.id === activeTabId) ?? visibleTabs[0]
+  useEffect(() => {
+    if (pluginTab) setActiveTabId(pluginTab.id)
+  }, [pluginTab?.id, setActiveTabId])
+  useEffect(() => {
+    if (!open && pluginSidebar) pluginUi?.close(pluginSidebar.instance.instanceId)
+  }, [open, pluginSidebar?.key])
   const terminalCommand = terminalCommands[0] ?? null
   const pendingTerminal =
     Boolean(terminalOpenRequest) ||
@@ -306,6 +324,8 @@ export function UtilityPanel({
   const closeTabs = (tabIds: string[], preferredActiveTabId?: string): void => {
     const closingIds = new Set(tabIds)
     if (closingIds.size === 0) return
+    if (pluginTab && closingIds.has(pluginTab.id))
+      pluginUi?.close(pluginSidebar!.instance.instanceId)
 
     const closingTabs = tabs.filter((tab) => closingIds.has(tab.id))
     const closingFilePaths = new Set(
@@ -387,6 +407,11 @@ export function UtilityPanel({
   }
 
   const closeTab = (tabId: string): void => {
+    if (pluginTab?.id === tabId) {
+      pluginUi?.close(pluginSidebar!.instance.instanceId)
+      setActiveTabId(storedVisibleTabs[0]?.id ?? "")
+      return
+    }
     closeTabs([tabId])
   }
 
@@ -581,10 +606,16 @@ export function UtilityPanel({
           onCloseOtherTabs={closeOtherTabs}
           onCloseTabsToRight={closeTabsToRight}
           onToggleMaximized={onToggleMaximized}
-          onClosePanel={onClose}
+          onClosePanel={() => {
+            if (pluginSidebar) pluginUi?.close(pluginSidebar.instance.instanceId)
+            onClose()
+          }}
         />
 
         <div className="relative min-h-0 flex-1 bg-conversation">
+          {open && activeTab?.tool === "plugin-ui" && pluginSidebar && (
+            <PluginUiFrame key={pluginSidebar.key} display={pluginSidebar} />
+          )}
           {!activeTab && !pendingTerminal && (
             <EmptyUtilityPanelState availableTools={availableTools} onAdd={addTab} />
           )}

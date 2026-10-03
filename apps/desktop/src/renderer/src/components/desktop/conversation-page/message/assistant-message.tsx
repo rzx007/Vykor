@@ -44,6 +44,7 @@ import { ContentEntrance } from "./content-entrance"
 import { AgentActivityMessage } from "./agent-activity-message"
 import { toolOutputText } from "./message-content"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
+import { PluginUiCard } from "../plugin-ui/plugin-ui-card"
 
 const emptyAgentTasks: DesktopSessionTask[] = []
 
@@ -117,6 +118,16 @@ export function AssistantMessage({
           )
         }
         const unit = block.unit
+        if (unit.type === "plugin-ui") {
+          return (
+            <PluginUiCard
+              key={unit.id}
+              instance={unit.instance}
+              call={unit.call}
+              result={unit.result}
+            />
+          )
+        }
         if (unit.type === "agent") {
           return (
             <ContentEntrance
@@ -370,7 +381,9 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
     else counts.reads++
   }
   const failures = tools.filter(
-    (tool) => !isToolGenerationPresentation(tool.call) && toolCallStatus(tool.call, tool.result) === "failed"
+    (tool) =>
+      !isToolGenerationPresentation(tool.call) &&
+      toolCallStatus(tool.call, tool.result) === "failed"
   ).length
   const activityHeading = [
     counts.edits ? `文件编辑 ${counts.edits} 次` : "",
@@ -379,11 +392,19 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
   ]
     .filter(Boolean)
     .join("，")
-  const generatingNames = [...new Set(tools
-    .filter(tool => isToolGenerationPresentation(tool.call))
-    .map(tool => tool.call.toolName ?? "工具"))]
-  const heading = [activityHeading, generatingNames.length ? `${generatingNames.join("、")} 生成参数` : ""]
-    .filter(Boolean).join(" · ")
+  const generatingNames = [
+    ...new Set(
+      tools
+        .filter((tool) => isToolGenerationPresentation(tool.call))
+        .map((tool) => tool.call.toolName ?? "工具")
+    ),
+  ]
+  const heading = [
+    activityHeading,
+    generatingNames.length ? `${generatingNames.join("、")} 生成参数` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ")
   return (
     <section aria-label="工具活动组" className="text-ui-small text-ui-muted">
       {grouped ? (
@@ -400,7 +421,9 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
           <span className="truncate">
             {heading || `工具调用 ${tools.length} 次`}
             {failures ? `（${failures} 次失败）` : ""}
-            {activityLabel && !(generatingNames.length && activityLabel.startsWith("生成参数")) ? ` · ${activityLabel}` : ""}
+            {activityLabel && !(generatingNames.length && activityLabel.startsWith("生成参数"))
+              ? ` · ${activityLabel}`
+              : ""}
           </span>
           <ChevronDown
             className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
@@ -410,19 +433,20 @@ function ToolActivityGroup({ tools }: { tools: ToolUnit[] }): React.JSX.Element 
       {!grouped || open ? (
         <div className={cn("space-y-0.5", grouped && "mt-1 border-l border-border/70 pl-4")}>
           {tools.map((tool) => {
-            if (isToolGenerationPresentation(tool.call)) return (
-              <div key={tool.id} className="flex h-7 min-w-0 items-center gap-2 text-ui-muted">
-                <LoaderCircle
-                  role="img"
-                  aria-label="正在生成参数，尚未执行"
-                  className="size-3.5 shrink-0 motion-safe:animate-spin"
-                  strokeWidth={1.7}
-                />
-                <span className="min-w-0 truncate">
-                  {tool.call.toolName} · {toolActivityLabel(tool.call)}
-                </span>
-              </div>
-            )
+            if (isToolGenerationPresentation(tool.call))
+              return (
+                <div key={tool.id} className="flex h-7 min-w-0 items-center gap-2 text-ui-muted">
+                  <LoaderCircle
+                    role="img"
+                    aria-label="正在生成参数，尚未执行"
+                    className="size-3.5 shrink-0 motion-safe:animate-spin"
+                    strokeWidth={1.7}
+                  />
+                  <span className="min-w-0 truncate">
+                    {tool.call.toolName} · {toolActivityLabel(tool.call)}
+                  </span>
+                </div>
+              )
             const summary = summarizeToolCall(tool.call)
             const active = activeId === tool.id
             const calling = isToolInFlight(tool)

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { PluginUiDocumentStore, PLUGIN_UI_PERMISSIONS_POLICY } from "../../src/main/features/plugin-ui/document-store";
 import { installPluginUiDocumentProtocol, registerPluginUiScheme } from "../../src/main/features/plugin-ui/document-protocol";
 import { attachPluginUiWindowPolicy } from "../../src/main/features/plugin-ui/window-policy";
+import { checkDesktopUi } from "./desktop-ui-check";
 
 const root = process.env.VYKOR_UI_TEST_ROOT!;
 const profile = join(root, ".superpowers/sdd/2026-10-03-native-plugin-ui-a3/electron-profile");
@@ -28,7 +29,7 @@ app.whenReady().then(async () => {
   installPluginUiDocumentProtocol(store, session.defaultSession);
   const preload = join(__dirname, "../preload/index.cjs");
   const owner = new BrowserWindow({ show: false, webPreferences: {
-    preload, nodeIntegration: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: false,
+    preload, nodeIntegration: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: false, backgroundThrottling: false,
   } });
   const other = new BrowserWindow({ show: false, webPreferences: {
     preload, nodeIntegration: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: false,
@@ -112,10 +113,11 @@ app.whenReady().then(async () => {
   await new Promise(resolve => setTimeout(resolve, 80));
   assert.equal(await frame.executeJavaScript("typeof window.escaped"), "undefined");
   assert.equal(requests, 0);
+  const desktopUi = await checkDesktopUi(owner, store, root, sdk);
   console.log(JSON.stringify({ result: "passed", electron: process.versions.electron,
     checks: ["actual SDK/MessageChannel", "trusted preload present", "opaque parent/Node/preload isolation",
       "network/navigation/popup/download denied", "other window denied", "main CSP unchanged", "retirement"],
-    requests, popups, downloads }));
+    requests, popups, downloads, ...desktopUi }));
   owner.destroy(); other.destroy();
   await new Promise<void>(resolve => server.close(() => resolve()));
   clearTimeout(deadline); app.exit(0);

@@ -1,10 +1,23 @@
-import type { DesktopAttachmentSessionPart, DesktopSessionMessage, DesktopSessionPart, DesktopSessionRun } from "@shared/session-types"
+import type {
+  DesktopAttachmentSessionPart,
+  DesktopSessionMessage,
+  DesktopSessionPart,
+  DesktopSessionRun,
+} from "@shared/session-types"
+import { readPluginUiInstance, type PluginUiInstanceRecord } from "@vykor/client"
 import { isToolGenerationPresentation } from "./tool-generation-presentation"
 
 export type AssistantContentUnit =
   | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }
   | { id: string; type: "reasoning"; text: string }
   | { id: string; type: "tool"; call: DesktopSessionPart; result?: DesktopSessionPart }
+  | {
+      id: string
+      type: "plugin-ui"
+      call: DesktopSessionPart
+      result?: DesktopSessionPart
+      instance: PluginUiInstanceRecord
+    }
   | { id: string; type: "agent"; call: DesktopSessionPart; result?: DesktopSessionPart }
   | {
       id: string
@@ -92,6 +105,18 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
         units.push({ id: part.id, type: "tool", call: part })
         continue
       }
+      const result = part.toolUseId ? results.get(part.toolUseId) : undefined
+      const source = readPluginUiInstance(part.metadata) ?? readPluginUiInstance(result?.metadata)
+      if (
+        source &&
+        source.sessionId === part.sessionId &&
+        source.sourcePartId === part.id &&
+        source.sourceToolUseId === part.toolUseId &&
+        source.sourceToolName === part.toolName
+      ) {
+        units.push({ id: part.id, type: "plugin-ui", call: part, result, instance: source })
+        continue
+      }
       if (part.toolName === "ImageGeneration") {
         const toolUseId = part.toolUseId ?? part.id
         units.push({
@@ -166,10 +191,7 @@ export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] 
     const result = part.toolUseId ? results.get(part.toolUseId) : undefined
     const executionState = toolExecutionState(part, result)
     if (executionState === "not_started" || executionState === "unknown") continue
-    if (
-      toolCallStatus(part, result) !== "completed"
-    )
-      continue
+    if (toolCallStatus(part, result) !== "completed") continue
     const patch = findPatch(part.input)
     if (patch) collectPatchChanges(patch, changes)
     for (const path of collectPaths(part.input)) addChange(changes, path, 0, 0, false)
@@ -194,15 +216,24 @@ export function toolCallStatus(
   return result?.status ?? call.status
 }
 
-function toolExecutionState(call: DesktopSessionPart, result?: DesktopSessionPart): "not_started" | "completed" | "unknown" | undefined {
+function toolExecutionState(
+  call: DesktopSessionPart,
+  result?: DesktopSessionPart
+): "not_started" | "completed" | "unknown" | undefined {
   for (const source of [result, call]) {
-    const records = [source?.metadata, recordValue(source?.output)]
-      .filter((facts): facts is Record<string, unknown> => facts !== undefined)
+    const records = [source?.metadata, recordValue(source?.output)].filter(
+      (facts): facts is Record<string, unknown> => facts !== undefined
+    )
     for (const facts of records) {
       const state = facts.executionState
       if (state === "not_started" || state === "completed" || state === "unknown") return state
     }
-    if (records.some(facts => facts.failureKind === "unknown_outcome" || facts.outcome === "unknown")) return "unknown"
+    if (
+      records.some(
+        (facts) => facts.failureKind === "unknown_outcome" || facts.outcome === "unknown"
+      )
+    )
+      return "unknown"
   }
   return undefined
 }
@@ -217,7 +248,10 @@ const toolPhaseLabels: Record<string, string> = {
   unknown: "结果不确定",
 }
 
-export function toolActivityLabel(call: DesktopSessionPart, result?: DesktopSessionPart): string | undefined {
+export function toolActivityLabel(
+  call: DesktopSessionPart,
+  result?: DesktopSessionPart
+): string | undefined {
   if (toolExecutionState(call, result) === "unknown") return "结果不确定"
   const status = toolCallStatus(call, result)
   if (status === "failed") return "失败"
@@ -228,38 +262,75 @@ export function toolActivityLabel(call: DesktopSessionPart, result?: DesktopSess
     return `生成参数 · ${typeof chars === "number" ? chars.toLocaleString("en-US") : 0} 字符`
   }
   const phase = recordValue(call.metadata.toolProgress)?.phase
-  return (typeof phase === "string" ? toolPhaseLabels[phase] : undefined) ?? (status === "pending" ? "等待执行" : "运行中")
+  return (
+    (typeof phase === "string" ? toolPhaseLabels[phase] : undefined) ??
+    (status === "pending" ? "等待执行" : "运行中")
+  )
 }
 
-export function isToolActivityActive(call: DesktopSessionPart, result?: DesktopSessionPart): boolean {
+export function isToolActivityActive(
+  call: DesktopSessionPart,
+  result?: DesktopSessionPart
+): boolean {
   const status = toolCallStatus(call, result)
   if (status !== "running" && status !== "pending") return false
-  return !["completed", "failed", "unknown"].includes(String(recordValue(call.metadata.toolProgress)?.phase))
+  return !["completed", "failed", "unknown"].includes(
+    String(recordValue(call.metadata.toolProgress)?.phase)
+  )
 }
 
-export function toolGroupActivityLabel(tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]): string | undefined {
-  const active = tools.filter(tool => ["running", "pending"].includes(toolCallStatus(tool.call, tool.result)))
-  for (const phase of ["waiting_permission", "running", "preparing", "queued", "generating", "unknown", "failed", "completed"]) {
-    const tool = active.find(tool => recordValue(tool.call.metadata.toolProgress)?.phase === phase)
+export function toolGroupActivityLabel(
+  tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
+): string | undefined {
+  const active = tools.filter((tool) =>
+    ["running", "pending"].includes(toolCallStatus(tool.call, tool.result))
+  )
+  for (const phase of [
+    "waiting_permission",
+    "running",
+    "preparing",
+    "queued",
+    "generating",
+    "unknown",
+    "failed",
+    "completed",
+  ]) {
+    const tool = active.find(
+      (tool) => recordValue(tool.call.metadata.toolProgress)?.phase === phase
+    )
     if (tool) return toolActivityLabel(tool.call, tool.result)
   }
   return active[0] ? toolActivityLabel(active[0].call, active[0].result) : undefined
 }
 
 export function conversationActivityLabel(
-  runs: DesktopSessionRun[], messages: DesktopSessionMessage[], parts: DesktopSessionPart[]
+  runs: DesktopSessionRun[],
+  messages: DesktopSessionMessage[],
+  parts: DesktopSessionPart[]
 ): string | undefined {
-  const activeRuns = runs.filter(run => run.status === "pending" || run.status === "running")
+  const activeRuns = runs.filter((run) => run.status === "pending" || run.status === "running")
   if (!activeRuns.length) return undefined
-  const activeIds = new Set(activeRuns.map(run => run.id))
-  const messageIds = new Set(messages.filter(message => message.runId && activeIds.has(message.runId)).map(message => message.id))
-  const currentParts = parts.filter(part => messageIds.has(part.messageId))
+  const activeIds = new Set(activeRuns.map((run) => run.id))
+  const messageIds = new Set(
+    messages
+      .filter((message) => message.runId && activeIds.has(message.runId))
+      .map((message) => message.id)
+  )
+  const currentParts = parts.filter((part) => messageIds.has(part.messageId))
   const results = toolResultsById(currentParts)
-  const tools = currentParts.filter(part => part.type === "tool").map(call => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
+  const tools = currentParts
+    .filter((part) => part.type === "tool")
+    .map((call) => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
   const toolLabel = toolGroupActivityLabel(tools)
   if (toolLabel) return toolLabel === "运行中" ? "正在处理工具" : toolLabel
-  const generating = activeRuns.flatMap(run => Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration : [])
-    .filter(entry => recordValue(entry) && Number.isSafeInteger(entry.receivedChars) && entry.receivedChars >= 0)
+  const generating = activeRuns
+    .flatMap((run) =>
+      Array.isArray(run.metadata.toolGeneration) ? run.metadata.toolGeneration : []
+    )
+    .filter(
+      (entry) =>
+        recordValue(entry) && Number.isSafeInteger(entry.receivedChars) && entry.receivedChars >= 0
+    )
   if (generating.length) {
     const chars = generating.reduce((total, entry) => total + entry.receivedChars, 0)
     return `正在生成${generating.length > 1 ? ` ${generating.length} 个工具的` : "工具"}参数，已接收 ${chars.toLocaleString("en-US")} 个字符`
@@ -303,7 +374,10 @@ export function summarizeToolCall(part: DesktopSessionPart): { name: string; det
     [/fetch|http|request/, "请求网络"],
   ]
   const name = names.find(([pattern]) => pattern.test(normalized))?.[1] ?? humanizeToolName(rawName)
-  return { name, detail: summarizeToolInput(part.input, /^(?:edit|editfile|replace)/.test(normalized)) }
+  return {
+    name,
+    detail: summarizeToolInput(part.input, /^(?:edit|editfile|replace)/.test(normalized)),
+  }
 }
 
 export function toolDisplayName(call: DesktopSessionPart, result?: DesktopSessionPart): string {
@@ -378,7 +452,10 @@ function collectPaths(value: unknown): string[] {
   return paths
 }
 
-function summarizeToolInput(input: Record<string, unknown> | undefined, includeEditCount = false): string | undefined {
+function summarizeToolInput(
+  input: Record<string, unknown> | undefined,
+  includeEditCount = false
+): string | undefined {
   if (!input) return undefined
   // Only unwrap the provider envelope, keeping mixed/business fields intact.
   const seen = new Set<Record<string, unknown>>()

@@ -1,13 +1,15 @@
 # Native Plugin UI A3 验证记录
 
-> 状态：SDK、文档隔离和 Task 3 后台入口已实现；Task 4–6 尚未完成，不是完整 A3 或首版发布验收。
+> 状态：Task1–4 已实现；Task5/6 尚未完成，不是完整 A3 或首版发布验收。
 > 日期：2026-10-03；分支 `codex/plugin-ui-a1`；计划基线 `c3b3d411`。
 
 ## 已实现范围
 
 Task 1 提供严格浏览器消息契约和 `@vykor/plugins/ui-sdk`：父窗口一次初始化、真实 MessagePort、不可变参数、快照防回退、pending / 超时 / dispose 清理。请求和快照以有界 JSON 文本传输，先检查 UTF-8 大小，再解析；data / args 的20层限制不把消息封装层误计进去。只开放规格的五个方法，不把 Session ID、原始结果或工具表放进 iframe 快照。
 
-Task 2 提供按窗口和实际 frame 身份登记的一次性内存文档、专用 scheme、响应 CSP / 权限策略、导航和窗口清理。main 启动与主窗口已接线；preload 明确只暴露给 mainFrame，主 CSP 仅增加 frame-src。尚无 renderer 插件交互入口或 main 后台动作 IPC，不能据此说用户已能使用卡片/侧栏。
+Task 2 提供按窗口和实际 frame 身份登记的一次性内存文档、专用 scheme、响应 CSP / 权限策略、导航和窗口清理。main 启动与主窗口已接线；preload 明确只暴露给 mainFrame，主 CSP 仅增加 frame-src。
+
+Task 4 增加可信源工具独立卡片、按点击加载、受限 iframe、有限 MessagePort 桥接、宿主确认和现有工具面板的具体实例侧栏。保留原始文字，失败可重载；关闭显示只 unmount。确认冻结参数/版本/请求 UUID；提交超时查同一请求、不重新提交。已有会话更新推动快照，源删除、断线、会话改变和主进程撤销会关闭页面/确认；同窗口最多两个显示、一个侧栏，同实例搬移时销毁原 frame。主题和语言读取实际宿主，不新建轮询或连接。
 
 ## 实测命令
 
@@ -49,6 +51,10 @@ Electron 可能把拒绝导航的 URL 留在错误页状态。是否有外部内
 
 ## 尚未验证与下一批
 
-UI-17 的 SDK/浏览器部分及 UI-18/19/20 的上述基础已有证据，但 Task3有限 IPC、真实 A2 UI操作接线、Task4卡片/侧栏/宿主确认、Task5管理撤销信号与相关 Run 结算、Task6完整攻击与双窗口业务交错尚未完成。
+第二批实测：renderer 聚焦85项通过，含新 UI17项以及消息模型28、原工具详情20、面板16、会话合并4；包括仅侧栏组件不能显示无效卡片入口，以及实际 UtilityPanel 具体实例打开/关闭且不 dismiss 的回归。Desktop node/web 类型均 exit0；378篇文档检查和 whitespace 通过。既有面板测试仍有 jsdom canvas getContext 提示，7项通过，没有增加 canvas 依赖或隐藏提示。无效消息计入滚动限流、仅侧栏组件无效入口的测试均先失败，修复后通过；确认框始终在 iframe 外，取消/源删除不提交，确认后一次提交、旧 revision 不自动替换、超时查询原请求有真实 MessageChannel 测试。
 
-未验证全部 file/javascript/worker/font/nested-frame 攻击、真实动作确认/旧 revision/重连组合；未做独立安全审查、完整 Desktop build 或人工 GUI验收。仍不公布 pluginUiLifecycle；没有首版参考插件或完整 UI-24–UI-26 交付证据。不合并、不推送、不发布。
+扩展隐藏 Electron39.8.10 runner，构建生产 Card / Provider / Frame / 确认框 / bridge、实际 preload / 有限 main IPC / DesktopPluginUiService / VykorClient，以及实际浏览器 SDK。测试后台是手写 fetch 夹具，不是 Native Runtime / SQLite。实测打开→SDK 请求→宿主确认→取消零提交→再次确认一次提交→现有 sessionUpdated 入口刷新 data→关闭显示不再次提交；actionAdmissions=1、electronExitCode=0。原隔离检查仍通过，requests/popups/downloads=0，8行精确预期 Chromium 诊断，没有放宽 stderr 判断。
+
+视觉沿用现有 PRODUCT.md / DESIGN.md、AlertDialog / Button 和语义颜色，无新增依赖或样式系统。对1440宽浅色和390宽深色各检查卡片/确认框，4张实际图片保存在本计划忽略目录 ui-captures；已逐张查看，无横向溢出。首次截图被隐藏窗口的动画/绘制节流影响，不当作验收证据；关闭测试窗口的背景节流、仅测试截图禁用动效并等待两帧和确认框 opacity=1 后重新捕获。一次机械 UI 检查返回空问题列表。按用户顺序执行约定，本批仅在当前会话检查新增 UI，整体独立安全审查留在 Task6，不重复派遣逐任务审查；没有重写 DESIGN.md。
+
+Task5 管理撤销信号与相关 Run 结算、Task6 完整攻击与双窗口真实业务交错尚未完成。Electron 尚未覆盖全部 file/javascript/worker/font/nested-frame 攻击、真实 Native / SQLite 动作、管理操作/重连组合或实际 UtilityPanel 标签交互（标签新行为已有 jsdom 测试）；未做独立安全审查、完整 Desktop build 或人工 GUI验收。仍不公布 pluginUiLifecycle；普通后台连接继续保留原结果，没有首版参考插件或完整 UI-24–UI-26 交付证据。不合并、不推送、不发布。
