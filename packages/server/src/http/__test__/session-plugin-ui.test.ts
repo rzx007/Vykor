@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { captureNativeUiLogs } from "../../../../agent-runtime/test-helpers/native-ui-logs.js";
+import { captureNativeUiLogs, expectNoPrivateUiData } from "../../../../agent-runtime/test-helpers/native-ui-logs.js";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { getInstalledPluginStorePath, type Settings } from "@vykor/core";
 import { installLocalNativePlugin, updateInstalledPluginStore } from "@vykor/plugins";
@@ -140,11 +140,8 @@ it("wires source capture, authenticated Client actions, durable retries, summari
   expect(JSON.parse(readFileSync(exported.filepath, "utf8")).ui_actions[0]).toMatchObject({ runId: receipt.runId, status: "completed" });
   const dismissed = await h.client().pluginUi.dismiss(h.session.id, id, { requestId: randomUUID(), expectedRevision: 3 });
   expect(dismissed.status).toBe("dismissed");
-  expect(JSON.stringify(h.logs)).not.toContain("secret-token");
-  for (const secret of ["secret-token", html, "approved", join(h.root, "config")]) {
-    expect(JSON.stringify(h.logs) + nativeLogs.records.join("\n")).not.toContain(secret);
-  }
-  expect(JSON.stringify(await h.client().pluginUi.get(h.session.id, id))).not.toContain(h.root);
+  expectNoPrivateUiData([h.logs, nativeLogs.values], ["secret-token", html, "approved", join(h.root, "config")]);
+  expectNoPrivateUiData(await h.client().pluginUi.get(h.session.id, id), [h.root]);
 });
 
 it("enforces auth, Origin, ownership, strict JSON and byte limits without invoking", async () => {

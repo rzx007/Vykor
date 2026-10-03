@@ -33,6 +33,7 @@
 | R15 | `exec tsc --noEmit --skipLibCheck --module NodeNext --target ES2022 packages/agent-runtime/test-helpers/native-ui-logs.ts` | test-only 日志夹具类型 exit 0 |
 | R16 | `check-docs` | exit 0；Markdown 链接、当前文档入口、源码路径与废弃接口检查通过 |
 | R17 | `git diff --check`（非 pnpm 命令） | exit 0；Git LF/CRLF 通知是环境提示，非 UI 生产错误 |
+| R18 | `--filter @vykor/server exec vitest run src/http/__test__/plugin-ui-privacy.test.ts src/http/__test__/session-plugin-ui.test.ts` | Task 7 privacy 审查修正后 2 files，16 passed，0 failed（独立注入4、真实 HTTP12）；修改后的 R15 utility tsc 也 exit 0 |
 
 R3 的完整文件集合（均相对 `packages/server`）：
 
@@ -79,7 +80,7 @@ src/http/routes/protocol-validation.test.ts
 | UI-16 | action `derives bounded external-data summaries from durable actions since the previous model Run`、`keeps same-millisecond summary boundaries and last-eight admission order after SQLite reopen`；HTTP 的下一次普通模型输入、fork/cold transcript/export；goalsSettled 为 0 | R3 / R4，最多八项/8000 Unicode 字符，明确外部数据，失败/unknown 不当成功；同毫秒真实 SQLite 重开稳定，模型 Run 阻断旧摘要 |
 | UI-21 后台部分 | Runtime 旧绑定/伪造 invoke 不重定向、定义替换撤回；service 当前版本/digest/权限/缺失及其他会话源拒绝；HTTP 真实 global/session 禁用、安装禁用/撤权/漂移、冷 Host 失败、重启 | R2 / R3 / R4，仅后台调用绑定与当前事实验证。实际卸载、重装、reload 后 UI 实例的全链路管理组合未另做专项演练；Desktop 切换挂载撤销不在本次验证范围 |
 | UI-22 后台部分 | service 原始 output 保留、无效 UI 不改成功；action readAction 原始 result、失败详情、export、重开/fork 的模型 transcript；HTTP 初始 Run 和后续摘要 | R3 / R4，原文字和持久动作结果可用，无 UI 等待；CLI/TUI 视觉呈现未做人工验收 |
-| UI-25 后台部分 | test-only native-ui-logs 逐条检查审计键集合、身份、summary、duration、status 和取消 errorCode；HTTP 正常操作断言 daemon/Native 日志不含 token、HTML、参数正文、安装配置路径；service resolver 失败的安全 unavailable 响应 | R3 / R4 / R5，预期诊断精确匹配，未知 stderr 继续显示并导致失败；未改生产 audit，既有审计 cwd 是操作目录，不是安装路径。没有宣称任意插件自行输出的日志都自动脱敏 |
+| UI-25 后台部分 | test-only native-ui-logs 逐条检查审计键集合、身份、summary、duration、status 和取消 errorCode；HTTP 按实际字符串值检查结构化 daemon 日志、解析后的 Native 审计及公开实例响应，不受 JSON 对 Windows 路径、引号或控制字符的转义影响；service resolver 失败的安全 unavailable 响应 | R3 / R4 / R5 与下述 privacy 修正证据，检查 token、HTML、参数正文、安装配置路径；预期诊断精确匹配，未知 stderr 继续显示并导致失败。未改生产 audit，既有审计 cwd 是操作目录，不是安装路径；不宣称任意插件自行输出的日志都自动脱敏 |
 | UI-26 后台部分 | HTTP `omits the feature for narrow HTTP assemblies without a full backend`、完整 daemon feature=1、真实禁用与 read-only；README、作者指南、Spec 明确 A2 / A3 范围 | R4 / R13 / R14 及文档检查；pluginUi:1 只说明后台可用，静态 inventory 不证明已打开 UI |
 
 ## 测试债清理与反向验证
@@ -89,6 +90,8 @@ Task 6 报告中的旧 projector 断言已按实际完成行为修正：`updateR
 Task 3 /5 /6 的预期审计、取消和 Native UI 拒绝诊断现在由 test-only utility 捕获并验证。审计如果多出完整参数字段、身份或 summary 不匹配，测试会失败；未知 stderr 不会被静默吞掉。原生产日志和审计格式保持不变。
 
 同毫秒摘要回归先在原实现通过，再临时反转 Run 顺序证明 RED：预期八项 action ID，实际为空（1 failed /36 skipped）。真实 Native foreign 更新用例临时去掉 componentId 比较也 RED：旧 count=1 被错误写为 0（1 failed /40 skipped）。两项生产变异均原样撤回，最终 R4 全绿。没有为这些补充证据修改生产业务逻辑。
+
+Task 7 审查指出旧 privacy 断言把裸安装路径与 JSON 字符串比较，Windows 转义后可能漏检，公开响应 root 和包含引号/控制字符的 HTML/参数也有同类问题。这是测试漏检，未发现生产泄露。现改为递归检查实际字符串值，并先解析 Native 审计 JSON。独立手写 Windows 安装路径、带引号/换行/制表符的 HTML 和参数分别注入结构化日志、Native 审计和公开响应；旧检测器 RED 为 3 failed /1 passed（错误地未抛错），修正后独立注入4/4、真实 HTTP12/12 均通过，见 R18。生产日志未修改。
 
 ## 尚未验收的范围
 

@@ -1,5 +1,13 @@
 import { expect, vi } from "vitest";
 
+export function expectNoPrivateUiData(value: unknown, secrets: string[]) {
+  if (typeof value === "string") {
+    for (const secret of secrets) expect(value).not.toContain(secret);
+  } else if (value && typeof value === "object") {
+    for (const item of Object.values(value)) expectNoPrivateUiData(item, secrets);
+  }
+}
+
 /** Capture only the fixture's declared logs; keep unexpected stderr visible and fail. */
 export function captureNativeUiLogs(options: {
   pluginId: string;
@@ -26,6 +34,10 @@ export function captureNativeUiLogs(options: {
   });
   return {
     records,
+    get values(): unknown[] {
+      return records.map(text => text.startsWith("[native-tool:audit] ")
+        ? JSON.parse(text.slice("[native-tool:audit] ".length)) : text);
+    },
     verify() {
       spy.mockRestore();
       expect(unexpected, "Unexpected stderr remains visible above").toEqual([]);
