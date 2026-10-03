@@ -10,6 +10,7 @@
     "format": "prettier --write .",
     "lint": "eslint --cache .",
     "test": "vitest run && node --test scripts/verify-migration-artifact.test.mjs && node scripts/verify-update-packaging.mjs && node scripts/verify-workspace-boundaries.mjs",
+    "test:plugin-ui-electron": "electron-vite build --config tests/plugin-ui-electron/electron.vite.config.ts && node scripts/test-plugin-ui-electron.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",

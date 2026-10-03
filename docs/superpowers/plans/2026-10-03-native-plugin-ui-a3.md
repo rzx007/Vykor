@@ -1,7 +1,7 @@
 # Native Plugin UI A3 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：实施计划，尚未实现 A3。沿用已确认的首版规格，基线 `744ac6fa`；使用现有隔离工作区，不修改 main，不合并、推送或发布。优先本会话顺序执行、分批交付，仅运行受影响测试，不重复 A1 / A2 的全分支审查。
+> 状态：第一批 Task1/2（SDK与文档隔离基础）已实现并有真实 Electron 验证；Task3–6 尚未实施，不能标记完整 A3 已交付。见 [A3验证记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)。沿用已确认的首版规格，实现基线 `c3b3d411`；使用现有隔离工作区，不修改 main，不合并、推送或发布。本会话顺序执行、分批交付，仅运行受影响测试，不重复 A1 / A2 的全分支审查。
 
 **Goal:** Desktop 能按用户操作打开可信插件实例，插件通过隔离页面和有限消息接口请求操作，宿主确认后调用已完成的 A2 后台。
 

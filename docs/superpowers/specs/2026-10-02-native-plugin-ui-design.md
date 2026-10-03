@@ -847,7 +847,7 @@ feature `pluginUi` 只在完整后台能力接线后公布；Desktop 还需检�
 
 已实现入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)和[A2 实例与工具操作实施计划](../plans/2026-10-03-native-plugin-ui-a2.md)。A2 的真实 Native Tool、SQLite、Daemon / Hono / Client 证据见验收记录；A3 / A4 和真实 Electron 首版验收仍待实施。
 
-下一阶段的具体接线、批次与测试门槛见 [A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)，当前只完成计划，不将拟议接口宣传为已实现。
+A3 的具体接线、批次与测试门槛见 [A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)。第一批 SDK 与文档隔离基础已有[真实验证记录](../reviews/2026-10-03-native-plugin-ui-a3-verification.md)，有限 IPC、交互界面、完整生命周期和首版验收仍待后续批次；不将拟议接口宣传为已实现。
 
 A1 实际交付与验证：[2026-10-03 验收记录](../reviews/2026-10-03-native-plugin-ui-a1-verification.md)。
 
