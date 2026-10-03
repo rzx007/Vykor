@@ -3,15 +3,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AgentEventInput, type AgentRunScope, type Settings, type ToolDefinition } from "@vykor/core";
 import { installLocalNativePlugin } from "@vykor/plugins";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { captureNativeUiLogs } from "../test-helpers/native-ui-logs.js";
 import { createDefaultNodeAgent } from "./default-agent.js";
 import { type VykorAgent } from "./agent.js";
 
 const roots: string[] = [];
+let logs: ReturnType<typeof captureNativeUiLogs>;
+beforeEach(() => { logs = captureNativeUiLogs({ pluginId: "test.native-ui", sessionId: "session-ui",
+  toolNames: ["NativeAction"], inputSummaries: ["{}", "{wait:boolean}"], diagnostics: [
+    "Plugin UI installation changed since discovery.", "Plugin UI component 'panel' requires its own active Native tools.",
+  ] }); });
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  logs.verify();
 });
 const settings: Settings = {
   apiFormat: "openai", model: "never-requested", maxTurns: 1,
@@ -100,6 +107,7 @@ describe("captured Native UI and independent Agent tools", () => {
       const view = agent.createRunCapabilityView(pluginId);
       expect(view.tools.has("NativeAction")).toBe(true);
       expect(view.pluginUi?.size).toBe(0);
+      expect(logs.records).toContain("[plugins] test.native-ui: Plugin UI installation changed since discovery.\n");
     } finally { await agent.close(); }
   });
 
@@ -145,6 +153,7 @@ describe("captured Native UI and independent Agent tools", () => {
       expect(modelCalls).toEqual([]);
       expect(agent.getHistory()).toEqual([]);
       expect(agent.state).toBe("idle");
+      expect(logs.records.filter(record => record.startsWith("[native-tool:audit]"))).toHaveLength(1);
     } finally { await agent.close(); }
   });
 

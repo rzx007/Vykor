@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { captureNativeUiLogs } from "../../../../agent-runtime/test-helpers/native-ui-logs.js";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { getInstalledPluginStorePath, type Settings } from "@vykor/core";
 import { installLocalNativePlugin, updateInstalledPluginStore } from "@vykor/plugins";
@@ -13,7 +14,11 @@ import { VykorHttpServer } from "../server.js";
 import { createSystemRoutes } from "../routes/system.js";
 
 const cleanup: (() => void | Promise<void>)[] = [];
-afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+let nativeLogs: ReturnType<typeof captureNativeUiLogs>;
+beforeEach(() => { nativeLogs = captureNativeUiLogs({ pluginId: "test.ui-http", sessionId: "opaque-session",
+  toolNames: ["NativeInspect", "NativeAction"], inputSummaries: ["{}", "{value:string(8)}", "{drift:boolean}"],
+  diagnostics: ["Native Host registration unavailable", "Plugin UI component 'panel' requires its own active Native tools."] }); });
+afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); nativeLogs.verify(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 const pluginId = "test.ui-http";
 const html = "<!doctype html><p>Verified panel</p>";
 async function harness(link = false) {
@@ -136,6 +141,9 @@ it("wires source capture, authenticated Client actions, durable retries, summari
   const dismissed = await h.client().pluginUi.dismiss(h.session.id, id, { requestId: randomUUID(), expectedRevision: 3 });
   expect(dismissed.status).toBe("dismissed");
   expect(JSON.stringify(h.logs)).not.toContain("secret-token");
+  for (const secret of ["secret-token", html, "approved", join(h.root, "config")]) {
+    expect(JSON.stringify(h.logs) + nativeLogs.records.join("\n")).not.toContain(secret);
+  }
   expect(JSON.stringify(await h.client().pluginUi.get(h.session.id, id))).not.toContain(h.root);
 });
 

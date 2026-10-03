@@ -1,7 +1,7 @@
 # Native Plugin UI A2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：当前实施计划；在现有 codex/plugin-ui-a1 隔离工作区继续，基线为 1be4f0c7。
+> 状态：任务 1–6 已实现并经任务审查；任务 7 已补充跨层回归与文档，最终独立分支审查待完成。验收证据见 [A2 验收记录](../reviews/2026-10-03-native-plugin-ui-a2-verification.md)。现有 codex/plugin-ui-a1 隔离工作区，基线为 1be4f0c7；不包含 A3 / A4。
 
 **Goal:** 原生工具结果生成可信持久 UI 实例，用户操作通过同一受检工具流程执行，并经现有 HTTP / Client / SSE 查询和恢复。
 
@@ -180,12 +180,12 @@ HTTP 测试用 client 的 fetch 进入真实 Hono，底层使用真实 SessionSt
 
 ## Task 7: 跨层回归、独立审查与交付
 
-- [ ] 汇总 UI-05–UI-16 证据以及 A2 相关生命周期、无界面、日志和 feature 检查；所有字段和身份验证都有真实消费者。
-- [ ] protocol、core、agent-runtime、server、client 聚焦测试与 check-types；shared executor 改动必须覆盖原批次权限、取消、超时、重用和组序。
-- [ ] Agent Runtime 先 build，再检查 Server / Desktop 类型，避免缺 dist 声明被误认作业务错误。
-- [ ] 运行客户端 API 契约和浏览器构建、文档/whitespace 检查，验证没有浏览器入口引入 Node。
+- [x] 汇总 UI-05–UI-16 证据以及 A2 相关生命周期、无界面、日志和 feature 检查；所有字段和身份验证都有真实消费者。
+- [x] protocol、core、agent-runtime、server、client 聚焦测试与 check-types；shared executor 改动必须覆盖原批次权限、取消、超时、重用和组序。
+- [x] Agent Runtime 先 build，再检查 Server / Desktop 类型，避免缺 dist 声明被误认作业务错误。
+- [x] 运行客户端 API 契约和浏览器构建、文档/whitespace 检查，验证没有浏览器入口引入 Node。
 - [ ] 独立全分支审查，先复现真实反馈，再修正并重新审查；保存关键判定和测试证据。
-- [ ] 更新 Spec 阶段状态、当前作者指南、A2 验收记录并提交到现有隔离分支；不合并、不推送、不提前实施 A3。
+- [x] 更新 Spec 阶段状态、当前作者指南、A2 验收记录并提交到现有隔离分支；不合并、不推送、不提前实施 A3。
 
 ## 测试与执行约定
 

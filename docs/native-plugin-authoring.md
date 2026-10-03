@@ -92,11 +92,11 @@ ID 使用稳定的点分名称；name 使用小写连字符名称。版本用于
 
 manifest 描述插件包，不保存启用状态、批准记录、用户配置或进程状态。不要修改已安装快照；更新时重新安装一个经过校验的源目录。
 
-## UI 定义：静态接口已接入
+## UI 定义与后台工具操作
 
-UI 定义的静态校验、安装授权和元数据加载已经接入。
-当前阶段尚未显示自定义交互界面，也没有 UI 动作 API。
-UI 定义有效不等于组件已经运行；交互能力由后续 Desktop 接入阶段交付。
+UI 定义的静态校验、安装授权和元数据加载，以及工具结果中的可信实例、持久工具操作和 HTTP / Client 接口已经接入。
+Desktop 自定义 HTML 界面、卡片、侧栏和窗口确认仍待 A3 接入，当前没有可供插件页面使用的浏览器消息 SDK。
+下面的后台能力可以由受信宿主或测试通过 Client 使用；声明 UI 不会自动打开窗口，也不会阻塞普通文字结果。
 
 Native manifest 保持 schemaVersion 1，通过现有 components.ui 声明定义文件：
 
@@ -129,11 +129,32 @@ entry 和定义文件路径都相对于插件根目录，而不是相对于 ui/m
 
 单插件最多 8 个定义文件、16 个组件，每组件最多 16 个动作；单个定义 JSON 最多 UTF-8 256 KiB，单个 HTML 最多 UTF-8 2 MiB。所有 UI 入口必须是普通 UTF-8 文件，禁止根目录外路径、文件 symlink 和目录 junction。HTML 应提前构建成单文件；校验和安装只读文件，不运行 HTML 或 Node Tool。
 
-只要声明 UI，安装授权自动包含 `ui:render` 和 `ui:invoke-own-tools`。它们分别允许显示隔离界面、请求组件声明的插件自身工具，不能代替工具参数和执行权限检查。旧安装记录不会自动得到新批准，缺少授权时需要重新导入并确认。A1 只校验动作定义字符串，工具实际归属和调用仍待后台交互阶段接入。
+只要声明 UI，安装授权自动包含 `ui:render` 和 `ui:invoke-own-tools`。它们分别允许显示隔离界面、请求组件声明的插件自身工具，不能代替工具参数和执行权限检查。旧安装记录不会自动得到新批准，缺少授权时需要重新导入并确认。后台只绑定同插件的实际 Native Tool；builtin、其他插件和 MCP 工具不能作为 UI 动作。目标工具参数格式取自实际注册的 inputSchema，UI manifest 不另存一份。
 
 安装预览和管理详情中的 uiInventory 分别记录定义文件数、组件数和静态有效组件数。无法校验组件时 componentCount 为 null，表示暂不可确认，不表示没有 UI。它们不证明某个窗口已经显示界面，管理页会明确提示“交互界面尚未接入”。
 
-完整范围与后续阶段见 [插件 UI Spec](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)和[A1 实施计划](./superpowers/plans/2026-10-02-native-plugin-ui-a1.md)。
+### 工具结果如何产生实例
+
+成功的同插件 Native Tool 可以返回下列建议数据；宿主验证当前插件、组件和工具归属后，在原工具 Part 上保存一个可信实例。原始文字结果保持可用，建议无效时也不改变业务工具的成功结果。
+
+```js
+return {
+  content: [{ type: "text", text: "发现 1 项问题" }],
+  metadata: { ui: { schemaVersion: 1, componentId: "findings", data: { count: 1 } } }
+};
+```
+
+`data` 必须是有限的 JSON 对象，最多 UTF-8 256 KiB。`pluginUi`、`uiAction`、实例 ID、revision 和执行状态由宿主保存，插件返回的同名保留 metadata 会被移除，不能取得可信身份。初始 Run 未选择该插件、源 Part 未提交或组件快照发生漂移时，不会生成可信实例。
+
+### 已接入的 Client 后台接口
+
+`VykorClient.pluginUi` 提供 `get`、`getDocument`、`invokeAction`、`getAction` 和 `dismiss`。它们通过已有 daemon 认证访问当前会话的实例；调用方先读实例 revision，再为提交生成新的 UUID requestId。`invokeAction` 只接收声明的 actionId 和 JSON args（最多 UTF-8 64 KiB），不接收任意工具名称。重试必须沿用相同 requestId、revision 和参数；修改其中内容会返回冲突，同一请求跨 daemon 重启不会再次执行。
+
+动作使用原有参数检查、工具权限、Hook、超时和取消流程；它有自己的持久 Run，但不创建模型输入、不请求模型，也不唤醒 Goal。成功可按 completion 更新 data 或 resolve；失败保持准确结果，工具已经开始但无法确认结局时记为 unknown，恢复时不自动重放。下一次普通模型输入只获得有长度上限的外部工具结果摘要。
+
+`dismiss` 只保存关闭状态，和取消运行分开；已经运行的动作不能通过 dismiss 撤销。当前会话忙、revision 过期、归档或实例终态时不能提交新动作。每次读取文档和动作准入都会核对实际安装、授权、启用状态和摘要；精确静态快照在 Native Host 暂不可用时可只读返回文档，但没有可调用动作。
+
+feature `pluginUi: 1` 只表示 daemon 已装配这些后台接口，不表示 Desktop 交互界面已经交付。完整范围与证据见 [插件 UI Spec](./superpowers/specs/2026-10-02-native-plugin-ui-design.md)和[A2 验收记录](./superpowers/reviews/2026-10-03-native-plugin-ui-a2-verification.md)。
 
 ## Node Tool 的公开接口
 

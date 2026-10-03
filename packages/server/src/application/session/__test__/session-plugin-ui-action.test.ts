@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { captureNativeUiLogs } from "../../../../../agent-runtime/test-helpers/native-ui-logs.js";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { installLocalNativePlugin } from "@vykor/plugins";
 import { readPluginUiInstance } from "@vykor/protocol";
@@ -16,9 +17,12 @@ import { writeSessionExport } from "../../../session/export-session.js";
 import { SessionMaintenanceService } from "../session-maintenance-service.js";
 
 const cleanups: (() => void | Promise<void>)[] = [];
-afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+let logs: ReturnType<typeof captureNativeUiLogs>;
+beforeEach(() => { logs = captureNativeUiLogs({ pluginId: "test.ui-actions", sessionId: "session-ui",
+  toolNames: ["NativeAction"], inputSummaries: ["{}", "{wait:boolean}", "{value:string(3)}", "{value:string(8)}"] }); });
+afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); logs.verify(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 const pluginId = "test.ui-actions";
-async function harness(denyPermission = false) {
+async function harness(denyPermission = false, resultMode: "valid" | "malformed" | "foreign" | "error" = "valid") {
   const root = mkdtempSync(join(tmpdir(), "vykor-ui-actions-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));
@@ -45,7 +49,9 @@ async function harness(denyPermission = false) {
         writeFileSync(join(context.cwd, "args"), JSON.stringify(input));
         if (input.wait) await new Promise((resolve, reject) => context.signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true }));
         return { content: [{ type: "text", text: "Applied " + (input.value ?? "once") }],
-          metadata: { ui: { schemaVersion: 1, componentId: "panel", data: { count: 0 } } } };
+          ${resultMode === "error" ? 'isError: true,' : ""}
+          metadata: { ui: { schemaVersion: 1, componentId: ${JSON.stringify(resultMode === "foreign" ? "other-panel" : "panel")},
+            data: ${resultMode === "malformed" ? "[]" : "{ count: 0 }"} } } };
       }
     }]; }
   `);
@@ -76,18 +82,19 @@ async function harness(denyPermission = false) {
   const gate = new DaemonOperationGate();
   const events = { checkpoint: () => 0, publishSince: () => {} };
   let goalsSettled = 0;
+  const diagnostics: unknown[] = [];
   const engine = new SessionRunEngine({ events, runExecutor: { execute: async () => { throw new Error("Unexpected model executor"); } },
     execution: { prepareRunExecution: () => true, recoverRejectedSteer: () => "unexpected" }, settleGoalRun: async () => { goalsSettled++; } });
   const operations = new SessionOperationRunner({ sessions: store.sessions, operationGate: gate, events });
   let executor: { execute(runId: string, context: any): Promise<void> } | undefined;
   let acquire: (() => Promise<void>) | undefined;
-  const service = new SessionPluginUiService({ store, resolveCurrent: async () => current,
+  const service = new SessionPluginUiService({ store, resolveCurrent: async () => current, diagnose: diagnostic => { diagnostics.push(diagnostic); },
     actions: { operations, engine, acquireSession: async () => { await acquire?.(); return agent; }, execute: (id, context) => executor!.execute(id, context) } });
   service.registerRunView("source-run", view);
   const instance = service.createInstance({ sessionId: session.id, runId: "source-run", partId: part.id,
     toolUseId: part.toolUseId!, toolName: part.toolName!, result: output as any })!;
   store.conversations.upsertMessagePart({ ...part, metadata: { ...part.metadata, pluginUi: instance } });
-  return { root, session, service, store, engine, gate, agent, events, instance, output,
+  return { root, session, service, store, engine, gate, agent, events, instance, output, diagnostics,
     setCurrent: (patch: Partial<PluginUiCurrentState>) => { current = { ...current, ...patch }; },
     setExecutor: (value: typeof executor) => { executor = value; },
     onAcquire: (value: typeof acquire) => { acquire = value; },
@@ -236,6 +243,62 @@ describe("durable plugin UI actions", () => {
     h.store.runs.updateRun(current.id, { status: "completed" });
     h.store.runs.createRun({ id: "later-model", sessionId: h.session.id });
     expect(h.service.summarizeForInput(h.session.id, "later-model")).toBe("");
+  });
+
+  it("keeps same-millisecond summary boundaries and last-eight admission order after SQLite reopen", async () => {
+    const h = await harness(); h.setExecutor({ execute: async () => {} });
+    const admitted = await h.service.invokeAction(h.session.id, h.instance.instanceId, {
+      requestId: randomUUID(), expectedRevision: 1, actionId: "run", args: {},
+    });
+    await h.engine.runtimeBridge.waitForRun(admitted.runId);
+    h.service.settleAction(admitted.runId, "failed");
+    const template = h.store.runs.getRun(admitted.runId)!.metadata.uiAction as object;
+    vi.spyOn(Date, "now").mockReturnValue(2_000_000_000_000);
+    const addAction = (id: string) => {
+      h.store.runs.createRun({ id, sessionId: h.session.id, metadata: { uiAction: {
+        ...template, requestId: randomUUID(), toolUseId: `tool-${id}`, executionState: "completed",
+      } } });
+      h.store.runs.updateRun(id, { status: "completed" });
+    };
+    addAction("z-old-action");
+    h.store.runs.createRun({ id: "m-model-boundary", sessionId: h.session.id });
+    h.store.runs.updateRun("m-model-boundary", { status: "completed" });
+    const ids = ["z-new-0", "a-new-1", "y-new-2", "b-new-3", "x-new-4", "c-new-5", "w-new-6", "d-new-7", "v-new-8", "e-new-9"];
+    for (const id of ids) addAction(id);
+    h.store.runs.createRun({ id: "n-current-model", sessionId: h.session.id });
+    const reopened = h.reopen();
+    expect(reopened.runs.listRuns(h.session.id).filter(run => run.createdAt === 2_000_000_000_000)).toHaveLength(13);
+    const service = new SessionPluginUiService({ store: reopened, resolveCurrent: async () => { throw new Error("offline"); } });
+    const summary = service.summarizeForInput(h.session.id, "n-current-model");
+    expect(summary).not.toContain("z-old-action");
+    expect(summary.split("\n").slice(1).map(line => JSON.parse(line).runId))
+      .toEqual(["y-new-2", "b-new-3", "x-new-4", "c-new-5", "w-new-6", "d-new-7", "v-new-8", "e-new-9"]);
+  });
+
+  it.each(["valid", "malformed", "foreign", "error"] as const)("preserves the real Native %s result while guarding UI data updates", async mode => {
+    const h = await harness(false, mode);
+    const { SessionPluginUiActionExecutor } = await import("../session-plugin-ui-action-executor.js");
+    h.setExecutor(new SessionPluginUiActionExecutor({ store: h.store, service: h.service, operationGate: h.gate, events: h.events }));
+    const receipt = await h.service.invokeAction(h.session.id, h.instance.instanceId, {
+      requestId: randomUUID(), expectedRevision: 1, actionId: mode === "error" ? "resolve" : "run", args: {},
+    });
+    await h.engine.runtimeBridge.waitForRun(receipt.runId);
+    expect(h.effects()).toBe("1");
+    expect(h.store.runs.getRun(receipt.runId)).toMatchObject({ status: mode === "error" ? "failed" : "completed",
+      metadata: { uiAction: { executionState: mode === "error" ? "unknown" : "completed" } } });
+    expect(readPluginUiInstance(h.source().metadata)).toMatchObject({ status: "open", revision: 3,
+      data: { count: mode === "valid" ? 0 : 1 }, lastActionRunId: receipt.runId });
+    expect(readPluginUiInstance(h.source().metadata)?.activeActionRunId).toBeUndefined();
+    expect(h.service.readAction(h.session.id, h.instance.instanceId, receipt.requestId).result)
+      .toMatchObject({ content: [{ type: "text", text: "Applied once" }],
+        ...(mode === "error" ? { isError: true } : {}), metadata: { ui: {
+          schemaVersion: 1, componentId: mode === "foreign" ? "other-panel" : "panel",
+          data: mode === "malformed" ? [] : { count: 0 },
+        } } });
+    expect(h.diagnostics).toEqual(mode === "malformed" || mode === "foreign"
+      ? [{ code: "plugin_ui_invalid_result", sessionId: h.session.id, runId: receipt.runId,
+        partId: (h.store.runs.getRun(receipt.runId)!.metadata.uiAction as { toolUseId: string }).toolUseId }]
+      : []);
   });
 
   it("exports durable action state with raw results and redacts sensitive action args", async () => {
