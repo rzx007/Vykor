@@ -61,7 +61,16 @@ export const fileWriteTool: ToolDefinition = {
   serialGroup: "file_mutation",
   description:
     "Create or replace a complete UTF-8 file. Provide file_path and exactly one of content or content_from. Set overwrite=true to replace an existing file with different content; expected_sha256 optionally guards an existing file's raw bytes. content_from reuses a settled Write's retained complete body, including a failed call, but does not reuse its target or permission. Prefer Edit for small changes and ApplyPatch for multi-file or multi-hunk changes.",
-  inputReuse: { property: "content", referenceProperty: "content_from" },
+  inputReuse: {
+    property: "content", referenceProperty: "content_from",
+    formatRecoveryHint(input, sourceId, result) {
+      if (result.metadata?.writeFailure !== "overwrite_required" || result.failureKind !== "invalid_input"
+        || result.executionState !== "not_started" || input.overwrite === false || typeof input.file_path !== "string") return undefined;
+      const retry = { file_path: input.file_path, overwrite: true, content_from: sourceId,
+        ...(typeof input.expected_sha256 === "string" ? { expected_sha256: input.expected_sha256 } : {}) };
+      return "Only if complete replacement is intended, use this short Write call without regenerating unchanged content; otherwise use Edit.\nRetry example: " + JSON.stringify(retry);
+    },
+  },
   inputSchema: {
     type: "object",
     properties: {
@@ -176,10 +185,10 @@ export const fileWriteTool: ToolDefinition = {
         );
       }
       if (!overwrite) {
-        return invalidInput(
+        return { ...invalidInput(
           "File already exists with different content. Use Edit, ApplyPatch, or set overwrite=true for a complete replacement.",
-          "先 Read 现有内容；如确需整体替换，明确传 overwrite=true。",
-        );
+          "目标已有不同内容，本次未写入。确认完整替换时，在实际工具参数中传 overwrite=true；正文不变优先用可用的 content_from，不重发全文。局部修改用 Edit。",
+        ), metadata: { writeFailure: "overwrite_required" } };
       }
       if (!await fileSnapshotMatches(operations, filePath, existing)) {
         return invalidInput("Write conflict: the file changed after reading it.", "重新 Read 当前文件后再决定修改；不要覆盖其他进程的新内容。");

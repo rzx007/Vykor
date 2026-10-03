@@ -161,7 +161,16 @@ export interface ToolDefinition {
   description: string;
   inputSchema: Record<string, unknown>;
   /** Resolve one parameter from a settled same-tool call before validation and authorization. */
-  inputReuse?: { property: string; referenceProperty: string };
+  inputReuse?: {
+    property: string;
+    referenceProperty: string;
+    /** Optional presentation only; core supplies isolated options and failure facts after checking the reference. */
+    formatRecoveryHint?: (
+      input: Readonly<Record<string, unknown>>,
+      sourceId: string,
+      result: Readonly<Pick<ToolResult, "failureKind" | "executionState" | "metadata">>,
+    ) => string | undefined;
+  };
   /** Automatic retry is forbidden unless this is explicitly true. */
   safeToRetry?: boolean;
   /** Calls in the same response and group authorize and execute in model order. */

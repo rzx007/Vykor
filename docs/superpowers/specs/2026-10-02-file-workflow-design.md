@@ -1585,3 +1585,86 @@ Spec 与最终增量均经独立审核，未发现 Critical／Important。审核
 本轮只改变 Edit 的纠正说明，原非法输入仍拒绝，匹配和替换协议不变；Write 与 Shell 的运行机制没有改变。真实命令验收在当前 Windows 主机完成，其他平台仅有分支实现与既有测试，未做现场验收。未调用真实模型、读取用户数据库、重建 out 或重启应用；不能宣称真实模型已停止全文重发、错误率下降或正在运行的应用已加载本轮代码。功能分支 `codex/file-workflow-followup` 保留，本轮未提交／合并／push，已有无关改动保持原样。
 
 后续授权：用户要求提交并 push 本轮代码，覆盖此前“不提交／push”的交付边界。提交范围仅为本轮 Edit 反馈、三份验收测试及本文档，共五个文件；推送当前功能分支，不合并主分支、不创建 PR，不包含其他未提交改动。实际提交与远端状态以 Git 验证结果为准。
+
+## 31. 覆盖纠正与参数纠错耗尽 Spec（2026-10-03）
+
+用户已授权处理会话 50db7560 的连续漏传覆盖参数及不明确收尾。现有 DSML 解析器能解析该文本；问题链是连续三轮参数错误后引擎撤掉工具，却又请求模型收尾，模型在没有工具的请求中继续输出 DSML，运行被记录为 completed。本轮不扩大 DSML 恢复或覆盖权限。
+
+### 31.1 覆盖失败的短纠正示例
+
+- Write 在已有不同内容且缺少明确覆盖意图时，保留 invalid_input／not_started，增加工具自己的 writeFailure=overwrite_required 原因。不是合法 JSON、hash 冲突、权限拒绝等失败不能获得这类原因。
+- core 仍是正文引用可用性的唯一判断者。在既有 inputReuse 声明中加一个可选纯格式化函数 formatRecoveryHint(input, sourceId, result)，只负责工具特定的说明，不改变输入、结果状态或执行。它收到隔离的输入选项快照（去掉根层正文）及仅有 failureKind／executionState／metadata 的事实快照，签名只读；格式化异常、非字符串或总说明过长时沿用原说明。不创建通用参数修复器。
+- Write 提供的条件示例仅包含明确目标、overwrite=true、content_from，以及原调用已有的 expected_sha256。示例说明必须先确认整体替换意图；局部修改仍用 Edit。核心确认正文仍可复用后才展示真实引用，不回显正文、不自动提交示例、不继承旧许可。
+- 正文不变时系统短指导优先使用引用纠正选项；不能把模型说了要 overwrite 等同于实际工具参数。示例能被消费不代表真实模型一定遵从，真实任务效果仍需观察。
+
+### 31.2 参数纠错耗尽
+
+- 保留现有两次纠正额度：原始调用及两次纠正都出现 invalid_input 后，先结算完整工具批次及已执行结果，再抛出明确的 ToolInputCorrectionsExceeded。轮数、最后失败工具（有界显示）及最多 340 字符的 recoveryHint 放入异常 message，确保既有序列化及服务器投影可见；不从 result.content 拼接正文。
+- 不再为这一种停止额外发起模型收尾请求，所以不产生第四轮模型输出的 DSML，也不会执行额外工具。沿用 FrameworkAgentRun 的 run.failed 和服务器现有 failed 投影，不新增状态、事件或数据库表。
+- 计数继续沿用原规则：批内有任一 invalid_input 就递增，没有才归零；成功同伴不重置含参数错误的混合批次。第三批已有成功或 unknown 同伴仍完整执行、结算；停止的是后续轮次。原权限、防重复调用、未知副作用恢复、其他模型失败收尾、子代理硬上限与取消语义不改变。不能用提高次数限制或给 overwrite 设默认 true 掩盖失败。
+
+### 31.3 验收与边界
+
+1. 真实 Write 拒绝后，从模型实际收到的反馈提取 JSON 示例；正文只生成一次，模型明确采用示例后能写入，并重新经过权限和 hash 校验。初次失败不写，原输入不被自动加覆盖标志。
+2. hash／权限失败不提供整体覆盖示例；格式化失败或长字段不破坏已知结果及原正文引用说明。
+3. 三个不同的无效调用均结算为 not_started；第三批成功／unknown 同伴保留实际结果，没有第四次模型请求、后续工具不执行。检查序列化后的 runtime run.failed 及服务器既有 failed 投影，不能出现 run.completed。纯成功批次重置计数的恢复场景继续通过。
+4. 按风险运行 core／tools／runtime 相关测试及类型检查，保留既有未提交改动。不调用真实供应商、执行用户 DSML 命令、改用户任务目录、重启应用或自动提交／push。
+
+## 32. 覆盖纠正与参数纠错耗尽实施计划
+
+**Goal:** 覆盖失败提供安全的短引用示例，参数纠错耗尽明确失败，不请求模型继续输出伪工具调用。
+
+**Architecture:** Write 负责具体失败及条件说明，core 负责引用有效性与有界附加反馈；现有 QueryEngine 计数负责直接停止，runtime/server 复用既有错误投影。
+
+**Tech Stack:** 现有 TypeScript、Vitest、Node.js；无新依赖。
+
+**Spec:** 本文 §31，独立审核后已补齐混合批次结算、异常 message 和隔离快照约束。
+
+**Global Constraints:** 不自动覆盖、不改次数额度、不恢复未声明的 DSML、不新建状态／事件／DB 表、不碰用户工作区改动，不提交／push／启动应用或真实模型。
+
+### Task 21：覆盖原因与引用纠正示例
+
+**Files:** packages/core/src/types/tools.ts；engine/tool-input-reuse.ts；packages/tools/src/file/write.ts；packages/prompts/src/index.ts；对应复用及 Write 集成测试。
+
+**Interfaces:** 既有 inputReuse 增加可选 formatRecoveryHint，接收只读输入选项、sourceId 和只读失败事实，不传结果正文；Write 使用 metadata.writeFailure 的稳定原因。
+
+- [x] 先补真实 Write 反馈消费回归：首次请求提供正文与当前 hash，不带 overwrite；从返回的 Retry example JSON 取第二次参数，断言仅目标、true、引用与同一 hash，正文不再生成。有效 RED 为没有原因／示例。
+- [x] 实现隔离快照、1000 字符总说明额度和异常／非字符串／超预算回退；在 Write 中仅按 overwrite_required + invalid_input/not_started 产生条件示例，不反转调用者显式 false。
+
+    const retry = { file_path: input.file_path, overwrite: true, content_from: sourceId,
+      ...(typeof input.expected_sha256 === "string" ? { expected_sha256: input.expected_sha256 } : {}) };
+    // 只 JSON.stringify 到反馈；不调用 execute，不修改 input 或 result。
+
+- [x] 核对权限拒绝、hash 冲突、显式 false 不产生覆盖示例；可用引用、旧字段完整、不回显正文、原参数／结果／历史不变和格式化失败继续通过。短系统指导强调正文不变优先引用、意图必须在实际 JSON 参数中体现。
+
+### Task 22：纠错耗尽直接停止
+
+**Files:** packages/core/src/engine/query-engine.ts；新增同目录 tool-input-corrections.test.ts；packages/agent-runtime/src/framework-agent-run-retry.test.ts。
+
+**Interfaces:** 使用现有 ToolExecutionResult 与 runtime 异常序列化；内部异常 ToolInputCorrectionsExceeded 的 name/message 不依赖自定义字段。
+
+- [x] 先补 RED：三轮不同的 invalid_input 后无第四轮模型请求、全部 tool_use_end 先交付，再以明确异常结束；第三批成功／unknown 同伴保留事实，纯成功批次重置计数。
+- [x] 在现有致命错误／取消检查之后，收集该批无效结果并按原规则计数；超过原额度时直接抛错，不再设置参数错误的 forceFinalResponse。
+
+    const invalidResults = results.filter(result => result.failureKind === "invalid_input");
+    consecutiveInvalidInputTurns = invalidResults.length ? consecutiveInvalidInputTurns + 1 : 0;
+    if (consecutiveInvalidInputTurns > TOOL_INPUT_CORRECTIONS) {
+      throw new ToolInputCorrectionsExceeded(consecutiveInvalidInputTurns, invalidResults.at(-1));
+    }
+
+- [x] 用真实 QueryEngine 驱动 FrameworkAgentRun：检查序列化后的 run.failed 说明、没有 run.completed、所有失败工具已结算。不改 runtime/server 生产处理；运行既有服务器失败投影范围。
+
+### Task 23：验证与审核
+
+- [x] 跑 core 参数／复用／失败记忆／恢复／主循环范围，tools Write 与文件流程，runtime run 映射、服务器失败投影及 API DSML 范围；按涉及包检查类型，检查限定 diff。
+- [x] 独立审核仅本轮文件及 §31；测试只证明条件示例可被消费与状态正确，不宣称真实模型遵从率已提升。记录实际结果和未部署边界。
+
+## 33. 覆盖纠正与停止结果
+
+- 有效 RED：纠错终止三种批次都仍正常返回、runtime 返回 completed、工具自有格式化说明缺失、真实 Write 缺少可消费的条件示例。之后分别实施最小改动并观察 GREEN。
+- 最新定向验证：core 八文件 181、tools 三文件 41、runtime 三文件 18、API 两文件 37、服务器失败投影三个场景 3，共 280 项通过；同一测试重复阶段不累加。core／tools／runtime／prompts／API 五包 TypeScript 全部 exit 0，限定差异检查通过。
+- API 两条旧回归原本要求第三次参数失败后再请求一次模型收尾，已按本轮批准行为更新为明确异常和零次额外请求，并保留全部失败结果结算断言。新增主体及该调整均经独立审核，无 Critical／Important。
+- 扩展运行完整服务器 projector 文件为 25 passed／1 failed：既有 “projects child and run facts without returning execution handles” 第 911 行只期待 status=completed，但 HEAD 第 774 行起本来就同时清空 metadata.toolGeneration；该服务器源码及测试均无本轮差异。这是已确认的既有严格断言问题，保留不改，不宣称整个服务器范围全部通过。
+- 不自动执行恢复示例；不保证真实模型从此不漏字段或不重发正文。未执行用户会话 DSML 中的命令、调用真实供应商、改用户任务文件、重建 out、重启应用或提交／push。原未提交 UI／原生插件等改动保留。生产仅五个既有文件，净增 43 行；无新依赖、运行状态、事件或数据库表。
+
+后续授权：用户要求提交本轮修复；范围仅为 §31–33 对应的五份生产文件、五份测试及本文档，共十一个文件。只提交当前功能分支，不 push、不合并主分支，不包含其他未提交改动。正常执行项目提交钩子，实际提交结果以 Git 为准。

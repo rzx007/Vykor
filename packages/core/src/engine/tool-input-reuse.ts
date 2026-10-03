@@ -106,5 +106,16 @@ export function withToolInputReuseHint(
   const stateHint = result.executionState === "unknown" ? "Inspect the target state first; the previous outcome is unknown. " : "";
   const text = `${stateHint}${property} in the current retained history is available to ${tool.name} through ${referenceProperty}=${JSON.stringify(toolUse.id)} instead of resending it. Restoration or compaction may invalidate this reference. Supply the explicit target and intent options in the new call. Reusing data does not inherit authorization; normal permissions and state checks still apply.`;
   if (text.length > 1000) return result;
+  if (tool.inputReuse.formatRecoveryHint) {
+    try {
+      const options = { ...toolUse.input };
+      delete options[property];
+      const formatted = tool.inputReuse.formatRecoveryHint(structuredClone(options), toolUse.id,
+        structuredClone({ failureKind: result.failureKind, executionState: result.executionState, metadata: result.metadata }));
+      if (typeof formatted === "string" && formatted && formatted.length + text.length + 1 <= 1000) {
+        return { ...result, content: [...result.content, { type: "text", text: formatted }, { type: "text", text }] };
+      }
+    } catch { /* Optional presentation must not change a settled result or its usable reference. */ }
+  }
   return { ...result, content: [...result.content, { type: "text", text }] };
 }

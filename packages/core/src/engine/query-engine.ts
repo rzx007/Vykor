@@ -123,6 +123,17 @@ export class MaxTurnsExceeded extends Error {
   }
 }
 
+class ToolInputCorrectionsExceeded extends Error {
+  constructor(turns: number, lastFailure?: ToolExecutionResult) {
+    const toolName = lastFailure?.toolName ?? "未知工具";
+    const displayName = toolName.length > 80 ? toolName.slice(0, 80) + "…" : toolName;
+    const hint = lastFailure ? toolFeedbackFields(lastFailure).recoveryHint : undefined;
+    super("工具参数连续 " + turns + " 轮无效，本轮已停止自动纠错。最后失败工具：" + displayName
+      + "。" + (hint ?? "请根据工具反馈修正参数。") + " 此次停止不代表任务已完成。");
+    this.name = "ToolInputCorrectionsExceeded";
+  }
+}
+
 export interface SubmitMessageOptions {
   signal?: AbortSignal;
   execution?: AgentExecutionContext;
@@ -648,9 +659,12 @@ export class QueryEngine implements IQueryEngine {
         // regardless of whether it appears before or after a rejected retry.
         if (results.some((result) => !result.isError)) recoveryToolTurnsRemaining = null;
         // Count failed correction turns, even if raw arguments or sibling calls change.
-        consecutiveInvalidInputTurns = results.some((result) => result.failureKind === "invalid_input")
-          ? consecutiveInvalidInputTurns + 1 : 0;
-        if (consecutiveInvalidInputTurns > TOOL_INPUT_CORRECTIONS) forceFinalResponse = true;
+        const invalidResults = results.filter((result) => result.failureKind === "invalid_input");
+        consecutiveInvalidInputTurns = invalidResults.length ? consecutiveInvalidInputTurns + 1 : 0;
+        // 批次已完整结算；耗尽纠错后直接失败，避免无工具的额外模型收尾被误记为完成。
+        if (consecutiveInvalidInputTurns > TOOL_INPUT_CORRECTIONS) {
+          throw new ToolInputCorrectionsExceeded(consecutiveInvalidInputTurns, invalidResults.at(-1));
+        }
         // Single removable integration point: commenting out this statement disables trajectory decisions.
         applyTrajectoryTracker(
           trajectoryTracker,

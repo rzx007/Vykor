@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { FrameworkAgentRun } from "./framework-agent-run.js";
 import { AgentEventBus } from "./event-source.js";
 import type { AgentEventInput, StreamEvent } from "@vykor/core";
+import { QueryEngine, ToolRegistry } from "@vykor/core";
 
 function runWith(script: StreamEvent[], usage: { inputTokens: number; outputTokens: number } = { inputTokens: 0, outputTokens: 0 }) {
   const events: AgentEventInput[] = [];
@@ -30,6 +31,44 @@ function runWith(script: StreamEvent[], usage: { inputTokens: number; outputToke
 }
 
 describe("FrameworkAgentRun model retry projection", () => {
+  it("reports exhausted tool input corrections as a failed run with serialized actionable feedback", async () => {
+    let requests = 0;
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "Write", description: "in-memory input refusal",
+      inputSchema: { type: "object", properties: { attempt: { type: "number" } } },
+      execute: async () => ({ content: [{ type: "text", text: "PRIVATE-BODY" }], isError: true,
+        failureKind: "invalid_input", executionState: "not_started", recoveryHint: "确认完整覆盖时传 overwrite=true。" }),
+    });
+    const client = { async *streamMessage(): AsyncIterable<StreamEvent> {
+      const attempt = ++requests;
+      if (attempt <= 3) yield { type: "tool_use_start", toolUse: {
+        type: "tool_use", id: "bad-" + attempt, name: "Write", input: { attempt },
+      } };
+      else yield { type: "text_delta", delta: "<｜DSML｜tool_calls>not executed</｜DSML｜tool_calls>" };
+      yield { type: "complete", stopReason: attempt <= 3 ? "tool_use" : "end_turn" };
+    } };
+    const engine = new QueryEngine(client, registry, { checkTool: async () => ({ action: "allow" }) },
+      { register() {}, execute: async () => ({ blocked: false }) }, { trajectoryTrackerFactory: false });
+    const events: AgentEventInput[] = [];
+    const run = new FrameworkAgentRun({
+      agentId: "a", ids: { inputId: "i", runId: "r", traceId: "t" }, content: "fixture", delivery: "queue",
+      eventBus: new AgentEventBus(event => { events.push(event); }),
+      session: { id: "s", getHistory: () => engine.getHistory(),
+        submitMessage: (content: string, options: any) => engine.submitMessage(content, options) } as any,
+      runtime: { queryEngine: engine } as any, effects: {} as any,
+      children: { cwd: process.cwd(), createController: () => ({}) } as any, onSettled: () => {},
+    });
+    await expect(run.result).rejects.toMatchObject({ name: "ToolInputCorrectionsExceeded" });
+    expect(requests).toBe(3);
+    expect(events.filter(event => event.type === "tool.completed")).toHaveLength(3);
+    expect(events.filter(event => event.type === "run.completed")).toHaveLength(0);
+    const failed = events.find(event => event.type === "run.failed");
+    expect(failed).toMatchObject({ data: { error: { name: "ToolInputCorrectionsExceeded",
+      message: expect.stringContaining("overwrite=true") } } });
+    expect(JSON.stringify(failed)).not.toContain("PRIVATE-BODY");
+  });
+
   it("settles only committed calls after cancellation and preserves full returned results", async () => {
     const controller = new AbortController();
     const reason = new Error("cancel tools");

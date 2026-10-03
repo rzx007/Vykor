@@ -10,7 +10,7 @@ import {
 import { fileWriteTool } from "../write.js";
 import { computeFileChange } from "../preview.js";
 
-async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boolean; body?: string; changeBeforeRetry?: boolean } = {}) {
+async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boolean; body?: string; changeBeforeRetry?: boolean; initialOverwrite?: boolean } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "oh-write-reuse-"));
   try {
     const file = join(dir, "index.html");
@@ -28,7 +28,8 @@ async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boo
         if (step === 1 && options.changeBeforeRetry) await writeFile(file, "externally updated", "utf8");
         if (step < 2) yield { type: "tool_use_start", toolUse: {
           type: "tool_use", id: step === 0 ? "original-write" : "retry-write", name: "Write",
-          input: step === 0 ? { file_path: file, content: body } : retry,
+          input: step === 0 ? { file_path: file, content: body,
+            ...(options.initialOverwrite !== undefined ? { overwrite: options.initialOverwrite } : {}) } : retry,
         } };
         yield { type: "complete", stopReason: step < 2 ? "tool_calls" : "end_turn" };
       },
@@ -67,6 +68,65 @@ async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boo
 }
 
 describe("Write content reuse with the real file tool", () => {
+  it("offers a conditional short overwrite example that is actually consumed without generating the body again", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-overwrite-example-"));
+    try {
+      const file = join(dir, "target.html");
+      await writeFile(file, "old", "utf8");
+      const body = "<p>GENERATED-ONCE</p>\n".repeat(500);
+      const expected_sha256 = createHash("sha256").update("old").digest("hex");
+      const first = { file_path: file, content: body, expected_sha256 };
+      let step = 0;
+      let generatedBodies = 0;
+      let retry: Record<string, unknown> | undefined;
+      const checked: Record<string, unknown>[] = [];
+      const client = { async *streamMessage(params: { messages: Message[] }): AsyncIterable<StreamEvent> {
+        const turn = step++;
+        let input: Record<string, unknown> | undefined;
+        if (turn === 0) { generatedBodies++; input = first; }
+        if (turn === 1) {
+          const feedback = params.messages.filter(message => message.type === "tool_result").at(-1)?.content
+            .filter(block => block.type === "text").map(block => block.text).join("\n") ?? "";
+          const example = feedback.match(/Retry example: (\{[^\n]+\})/);
+          if (example) { retry = JSON.parse(example[1]!); input = retry; }
+        }
+        if (input) yield { type: "tool_use_start", toolUse: {
+          type: "tool_use", id: turn === 0 ? "source" : "corrected", name: "Write", input,
+        } };
+        yield { type: "complete", stopReason: input ? "tool_use" : "end_turn" };
+      } };
+      const registry = new ToolRegistry(); registry.register(fileWriteTool);
+      const engine = new QueryEngine(client, registry, { checkTool: async (_, input) => {
+        checked.push({ ...input }); return { action: "allow" };
+      } }, { register() {}, execute: async () => ({ blocked: false }) }, { cwd: dir, trajectoryTrackerFactory: false });
+      const events: StreamEvent[] = [];
+      for await (const event of engine.submitMessage("Replace the complete fixture file")) events.push(event);
+      const ends = events.filter(event => event.type === "tool_use_end");
+      expect(ends[0]?.result).toMatchObject({ isError: true, executionState: "not_started",
+        metadata: { writeFailure: "overwrite_required" } });
+      expect(retry).toEqual({ file_path: file, overwrite: true, content_from: "source", expected_sha256 });
+      expect(first).not.toHaveProperty("overwrite");
+      expect(retry).not.toHaveProperty("content");
+      expect(generatedBodies).toBe(1);
+      expect(checked[1]).toEqual({ file_path: file, overwrite: true, content: body, expected_sha256 });
+      expect(await readFile(file, "utf8")).toBe(body);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
+  it.each([{ conflict: true }, { deny: true }])("does not offer an overwrite example for a different failure: %j", async options => {
+    const result = await scenario(options);
+    const feedback = result.modelHistory[2]!.filter(message => message.type === "tool_result").at(-1);
+    expect(JSON.stringify(feedback?.content)).not.toContain("Retry example:");
+    expect(result.text).toBe("old");
+  });
+
+  it("does not suggest reversing an explicitly false overwrite choice", async () => {
+    const result = await scenario({ initialOverwrite: false });
+    const feedback = result.modelHistory[1]!.filter(message => message.type === "tool_result").at(-1);
+    expect(JSON.stringify(feedback?.content)).not.toContain("Retry example:");
+    expect(result.checked[0]?.overwrite).toBe(false);
+  });
+
   it("recovers one generated body using the failure text and a flat reference call", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-write-visible-body-reuse-"));
     try {

@@ -180,7 +180,7 @@ describe("native tool input recovery", () => {
     });
   });
 
-  it.each([3, 50])("stops asking for tool calls after two failed corrections (maxTurns=%s)", async (maxTurns) => {
+  it.each([3, 50])("fails after two corrections without requesting model finalization (maxTurns=%s)", async (maxTurns) => {
     let toolRequests = 0;
     let finalRequests = 0;
     const client = openAIClient((params) => {
@@ -196,9 +196,13 @@ describe("native tool input recovery", () => {
       { execute: async () => ({ blocked: false }) } as any,
       { trajectoryTrackerFactory: false, maxTurns },
     );
-    const events = await collect(engine.submitMessage("Build the page"));
+    const events: StreamEvent[] = [];
+    const consume = async () => {
+      for await (const event of engine.submitMessage("Build the page")) events.push(event);
+    };
+    await expect(consume()).rejects.toMatchObject({ name: "ToolInputCorrectionsExceeded" });
     expect(toolRequests).toBe(3);
-    expect(finalRequests).toBe(1);
+    expect(finalRequests).toBe(0);
     expect(events.filter((event) => event.type === "tool_use_end")).toHaveLength(3);
   });
 
@@ -278,18 +282,23 @@ describe("native tool input recovery", () => {
     ]);
   });
 
-  it("does not execute tools if the model ignores the finalization after failed corrections", async () => {
+  it("never asks the provider for another call after correction exhaustion", async () => {
     let executions = 0;
+    let requests = 0;
     const registry = new ToolRegistry();
     registry.register({ ...writeTool, execute: async () => { executions++; return { content: [] }; } });
-    const client = openAIClient((params) => [{ name: "Write", arguments: params.tools?.length
-      ? "broken" : '{"file_path":"unexpected.txt","content":"data"}' }]);
+    const client = openAIClient((params) => {
+      requests++;
+      return [{ name: "Write", arguments: params.tools?.length
+        ? "broken" : '{"file_path":"unexpected.txt","content":"data"}' }];
+    });
     const engine = new QueryEngine(client, registry,
       { checkTool: async () => ({ action: "allow" }) } as any,
       { execute: async () => ({ blocked: false }) } as any,
       { trajectoryTrackerFactory: false },
     );
-    await expect(collect(engine.submitMessage("Write"))).rejects.toThrow();
+    await expect(collect(engine.submitMessage("Write"))).rejects.toMatchObject({ name: "ToolInputCorrectionsExceeded" });
+    expect(requests).toBe(3);
     expect(executions).toBe(0);
   });
 });
