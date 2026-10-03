@@ -3,6 +3,7 @@ import type { ProtocolClient, SystemResource } from "@vykor/client"
 import {
   buildDesktopSettingsSnapshot,
   isDesktopNotificationMode,
+  isDesktopSoundId,
   isDesktopWorkStyle,
   normalizeDefaultOpenerId,
   normalizeDefaultTerminalShellId,
@@ -15,6 +16,7 @@ import type {
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
@@ -135,6 +137,22 @@ export class DesktopSettingsService {
     const defaultOpenerId = normalizeDefaultOpenerId(input.defaultOpenerId)
     if (!defaultOpenerId) throw new Error("打开方式不能为空。")
     const preferences = this.dependencies.patchPreferences({ defaultOpenerId })
+    return this.snapshotWithPreferences(preferences)
+  }
+
+  async updateNotificationSounds(
+    input: UpdateDesktopNotificationSoundsInput
+  ): Promise<DesktopSettingsSnapshot> {
+    const sounds = input?.notificationSounds
+    if (
+      !sounds ||
+      !isDesktopSoundId(sounds.completed) ||
+      !isDesktopSoundId(sounds.needs_input) ||
+      !isDesktopSoundId(sounds.failed)
+    ) {
+      throw new Error("请选择列表中的音效，或选择无声音。")
+    }
+    const preferences = this.dependencies.patchPreferences({ notificationSounds: sounds })
     return this.snapshotWithPreferences(preferences)
   }
 

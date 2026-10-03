@@ -16,6 +16,9 @@ describe("settings navigation", () => {
     expect(settingsSectionLabel("storage")).toBe("存储")
     expect(settingsSectionSlug("存储")).toBe("storage")
     expect(isSettingsSection("storage")).toBe(true)
+    expect(settingsSectionLabel("notifications")).toBe("通知")
+    expect(settingsSectionSlug("通知")).toBe("notifications")
+    expect(isSettingsSection("notifications")).toBe(true)
     expect(isSettingsSection("plugins")).toBe(false)
   })
 

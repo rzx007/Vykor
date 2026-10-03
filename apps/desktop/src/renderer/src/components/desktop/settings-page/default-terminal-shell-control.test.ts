@@ -135,6 +135,11 @@ function settingsSnapshot(defaultTerminalShellId: string | null): DesktopSetting
   return {
     workStyle: "practical",
     notificationMode: "when_unfocused",
+    notificationSounds: {
+      completed: "staplebops-01",
+      needs_input: "staplebops-02",
+      failed: "nope-03",
+    },
     agentEnvironment: "native",
     showReasoning: true,
     browserDeveloperMode: false,

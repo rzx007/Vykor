@@ -1,5 +1,7 @@
 import { create } from "zustand"
 import type { DesktopActivityUpdate } from "@shared/activity-types"
+import { playNotificationSound } from "@renderer/lib/notification-sound"
+import { normalizeNotificationSounds } from "@shared/settings-types"
 
 import { applyActivityUpdate as reduceActivity, markSessionRead } from "./activity-state"
 import { saveActivityPersistence } from "./activity-persistence"
@@ -60,7 +62,11 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
         get().activeSessionId !== null && removedSessions.has(get().activeSessionId!)
       const viewedSessionId =
         get().sessionView?.session.id === get().activeSessionId ? get().activeSessionId : null
-      const { state: activity, notifications } = reduceActivity(previous, update, viewedSessionId)
+      const {
+        state: activity,
+        notifications,
+        sounds,
+      } = reduceActivity(previous, update, viewedSessionId)
       if (activity === previous) return
       const acceptedSessions = update.sessions.flatMap((item) => {
         const session = activity.sessions[item.session.id]?.session
@@ -89,18 +95,29 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
       }))
       if (activeDeleted) clearPersistedActiveSessionId()
       saveActivityPersistence(activity)
-      for (const notification of notifications) {
-        if (notification.taskId && notification.taskId === get().selectedScheduledTaskId) continue
+      if (sounds.length || notifications.length) {
         void window.desktop.settings
           .snapshot()
           .then((settings) => {
+            const selectedSounds = normalizeNotificationSounds(settings.notificationSounds)
+            for (const { status } of sounds) {
+              if (status === "completed" || status === "needs_input" || status === "failed")
+                void playNotificationSound(selectedSounds[status])
+            }
             if (settings.notificationMode === "never") return
-            return window.desktop.tray.notify({
-              title: notification.title,
-              body: notification.body,
-              ...(notification.sessionId ? { sessionId: notification.sessionId } : {}),
-              ...(settings.notificationMode === "always" ? { showWhenFocused: true } : {}),
-            })
+            return Promise.all(
+              notifications.map((notification) => {
+                if (notification.taskId && notification.taskId === get().selectedScheduledTaskId)
+                  return
+                return window.desktop.tray.notify({
+                  title: notification.title,
+                  body: notification.body,
+                  silent: true,
+                  ...(notification.sessionId ? { sessionId: notification.sessionId } : {}),
+                  ...(settings.notificationMode === "always" ? { showWhenFocused: true } : {}),
+                })
+              })
+            )
           })
           .catch(() => undefined)
       }

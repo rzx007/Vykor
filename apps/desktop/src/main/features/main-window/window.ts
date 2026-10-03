@@ -54,6 +54,7 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
       }),
       webPreferences: {
         webviewTag: true,
+        autoplayPolicy: "no-user-gesture-required",
         // renderer 首帧就要知道玻璃是否真的生效，才能一次性画出正确的外壳底色。
         // 走 additionalArguments 而不是 IPC：IPC 只能异步，会在玻璃与不透明之间闪一帧。
         additionalArguments: windowMaterialArguments(materialState),

@@ -129,15 +129,15 @@ export function applyActivityUpdate(
   state: ActivityState,
   update: DesktopActivityUpdate,
   activeSessionId: string | null
-): { state: ActivityState; notifications: ActivityNotification[] } {
+): { state: ActivityState; notifications: ActivityNotification[]; sounds: ActivityNotification[] } {
   const mergeFirstBaseline =
     update.delivery === "baseline" && !state.initialized && update.cursor <= state.cursor
   if (update.cursor < state.cursor && !mergeFirstBaseline) {
-    return { state, notifications: [] }
+    return { state, notifications: [], sounds: [] }
   }
 
   if (state.initialized && update.cursor === state.cursor && update.delivery !== "baseline") {
-    return { state, notifications: [] }
+    return { state, notifications: [], sounds: [] }
   }
 
   const firstBaseline = update.delivery === "baseline" && !state.initialized && state.firstStartup
@@ -168,6 +168,7 @@ export function applyActivityUpdate(
   }
 
   const notifications: ActivityNotification[] = []
+  const sounds: ActivityNotification[] = []
 
   for (const activity of update.sessions) {
     const id = activity.session.id
@@ -203,13 +204,17 @@ export function applyActivityUpdate(
     if (
       update.delivery === "live" &&
       transition &&
-      (!active || activity.executionState === "needs_input") &&
+      !activity.session.parentId &&
       !activity.session.metadata["scheduledTask"] &&
       isResult(activity.executionState) &&
       activity.activitySeq > state.lastNotifiedCursor &&
-      (activity.executionState === "needs_input" || previous?.executionState === "running")
+      (activity.executionState === "needs_input" ||
+        previous?.executionState === "running" ||
+        previous?.executionState === "needs_input")
     ) {
-      notifications.push(sessionNotice(activity))
+      const notice = sessionNotice(activity)
+      sounds.push(notice)
+      if (!active || activity.executionState === "needs_input") notifications.push(notice)
     }
   }
 
@@ -230,7 +235,7 @@ export function applyActivityUpdate(
       isResult(activity.executionState) &&
       activity.activitySeq > state.lastNotifiedCursor
     ) {
-      notifications.push({
+      const notice: ActivityNotification = {
         seq: activity.activitySeq,
         taskId: activity.taskId,
         status: activity.executionState,
@@ -238,7 +243,9 @@ export function applyActivityUpdate(
         title: "Vykor 定时任务",
 
         body: `定时任务${activity.executionState === "completed" ? "已完成" : "需要处理"}。`,
-      })
+      }
+      notifications.push(notice)
+      sounds.push(notice)
     }
   }
 
@@ -259,12 +266,10 @@ export function applyActivityUpdate(
 
       lastObservedCursor: Math.max(state.lastObservedCursor, update.cursor),
 
-      lastNotifiedCursor: Math.max(
-        state.lastNotifiedCursor,
-        ...notifications.map(({ seq }) => seq)
-      ),
+      lastNotifiedCursor: Math.max(state.lastNotifiedCursor, ...sounds.map(({ seq }) => seq)),
     },
 
     notifications,
+    sounds,
   }
 }

@@ -7,6 +7,11 @@ import { DesktopSettingsService } from "./settings-service"
 const defaultSnapshot = {
   workStyle: "practical",
   notificationMode: "when_unfocused",
+  notificationSounds: {
+    completed: "staplebops-01",
+    needs_input: "staplebops-02",
+    failed: "nope-03",
+  },
   agentEnvironment: "native",
   showReasoning: true,
   browserDeveloperMode: false,
@@ -24,6 +29,26 @@ const preferences = () => ({
 })
 
 describe("buildDesktopSettingsSnapshot", () => {
+  it("enables all sounds by default and preserves individually disabled sounds", () => {
+    expect(buildDesktopSettingsSnapshot({})).toMatchObject({
+      notificationSounds: {
+        completed: "staplebops-01",
+        needs_input: "staplebops-02",
+        failed: "nope-03",
+      },
+    })
+    expect(
+      buildDesktopSettingsSnapshot(
+        {},
+        {
+          notificationSounds: { completed: false, needs_input: true, failed: false },
+        }
+      )
+    ).toMatchObject({
+      notificationSounds: { completed: "none", needs_input: "staplebops-02", failed: "none" },
+    })
+  })
+
   it("defaults safely", () => {
     expect(buildDesktopSettingsSnapshot({})).toEqual(defaultSnapshot)
   })

@@ -29,10 +29,40 @@ describe("desktop preferences", () => {
     )
   })
 
+  it("persists sound switches independently of notification mode and other preferences", async () => {
+    const { getDesktopPreferences, patchDesktopPreferences } = await import("./desktop-preferences")
+    patchDesktopPreferences({ notificationMode: "never", defaultOpenerId: "vscode" })
+    patchDesktopPreferences({
+      notificationSounds: { completed: "none", needs_input: "bip-bop-08", failed: "nope-03" },
+    })
+    patchDesktopPreferences({ notificationMode: "always" })
+    expect(getDesktopPreferences()).toMatchObject({
+      notificationMode: "always",
+      defaultOpenerId: "vscode",
+      notificationSounds: { completed: "none", needs_input: "bip-bop-08", failed: "nope-03" },
+    })
+  })
+
   it("defaults notification mode when the preferences file does not exist", async () => {
     const { getDesktopPreferences } = await import("./desktop-preferences")
 
     expect(getDesktopPreferences()).toEqual({ notificationMode: "when_unfocused" })
+  })
+
+  it("loads the previous boolean sound switches as named sounds without unmuting them", async () => {
+    await writeFile(
+      join(userDataPath, "desktop-preferences.json"),
+      JSON.stringify({
+        notificationMode: "never",
+        notificationSounds: { completed: false, needs_input: true, failed: false },
+      }),
+      "utf8"
+    )
+    const { getDesktopPreferences } = await import("./desktop-preferences")
+    expect(getDesktopPreferences()).toMatchObject({
+      notificationMode: "never",
+      notificationSounds: { completed: "none", needs_input: "staplebops-02", failed: "none" },
+    })
   })
 
   it("marks an empty user data directory as a new install with pending onboarding", async () => {

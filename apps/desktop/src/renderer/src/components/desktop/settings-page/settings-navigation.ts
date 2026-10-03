@@ -1,4 +1,5 @@
 import {
+  Bell,
   BrainCircuit,
   CircleUserRound,
   Code2,
@@ -22,6 +23,7 @@ export type SettingsNavigationItem = {
 
 export const personalSettingsNavigation: SettingsNavigationItem[] = [
   { label: "常规", slug: "general", icon: Settings2 },
+  { label: "通知", slug: "notifications", icon: Bell },
   { label: "个人资料", slug: "profile", icon: CircleUserRound },
   { label: "外观", slug: "appearance", icon: Palette },
   { label: "供应商", slug: "providers", icon: BrainCircuit },

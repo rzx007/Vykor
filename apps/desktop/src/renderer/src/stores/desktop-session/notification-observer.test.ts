@@ -14,6 +14,11 @@ describe("notifyForSessionViewChange", () => {
   const snapshot = vi.fn<() => Promise<DesktopSettingsSnapshot>>(async () => ({
     workStyle: "practical" as const,
     notificationMode: "when_unfocused" as const,
+    notificationSounds: {
+      completed: "staplebops-01",
+      needs_input: "staplebops-02",
+      failed: "nope-03",
+    },
     agentEnvironment: "native" as const,
     showReasoning: true,
     browserDeveloperMode: false,
@@ -87,6 +92,11 @@ describe("notifyForSessionViewChange", () => {
     snapshot.mockResolvedValueOnce({
       workStyle: "practical",
       notificationMode: "never",
+      notificationSounds: {
+        completed: "staplebops-01",
+        needs_input: "staplebops-02",
+        failed: "nope-03",
+      },
       agentEnvironment: "native",
       showReasoning: true,
       browserDeveloperMode: false,
@@ -110,6 +120,11 @@ describe("notifyForSessionViewChange", () => {
     snapshot.mockResolvedValueOnce({
       workStyle: "practical",
       notificationMode: "always",
+      notificationSounds: {
+        completed: "staplebops-01",
+        needs_input: "staplebops-02",
+        failed: "nope-03",
+      },
       agentEnvironment: "native",
       showReasoning: true,
       browserDeveloperMode: false,

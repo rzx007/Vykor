@@ -295,6 +295,9 @@ export const desktopAPI = {
     updateNotificationMode: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateNotificationMode]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateNotificationMode, input),
+    updateNotificationSounds: (
+      input: IpcInvokeMap[typeof IpcChannels.settingsUpdateNotificationSounds]["args"][0]
+    ) => invoke(IpcChannels.settingsUpdateNotificationSounds, input),
     updateAgentEnvironment: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateAgentEnvironment]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateAgentEnvironment, input),

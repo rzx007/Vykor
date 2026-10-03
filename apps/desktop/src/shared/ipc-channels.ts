@@ -112,6 +112,7 @@ import type {
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
@@ -340,6 +341,7 @@ export const IpcChannels = {
   settingsUpdateMemorySettings: "settings:update-memory-settings",
   settingsUpdateWorkStyle: "settings:update-work-style",
   settingsUpdateNotificationMode: "settings:update-notification-mode",
+  settingsUpdateNotificationSounds: "settings:update-notification-sounds",
   settingsUpdateAgentEnvironment: "settings:update-agent-environment",
   settingsUpdateReasoningVisibility: "settings:update-reasoning-visibility",
   settingsUpdateBrowserDeveloperMode: "settings:update-browser-developer-mode",
@@ -469,6 +471,10 @@ export interface IpcInvokeMap {
   }
   [IpcChannels.settingsUpdateNotificationMode]: {
     args: [input: UpdateDesktopNotificationModeInput]
+    result: DesktopSettingsSnapshot
+  }
+  [IpcChannels.settingsUpdateNotificationSounds]: {
+    args: [input: UpdateDesktopNotificationSoundsInput]
     result: DesktopSettingsSnapshot
   }
   [IpcChannels.settingsUpdateAgentEnvironment]: {

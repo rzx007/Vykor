@@ -121,6 +121,7 @@ import type {
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
   UpdateDesktopWorkStyleInput,
@@ -349,6 +350,9 @@ export type DesktopAPI = {
     updateWorkStyle: (input: UpdateDesktopWorkStyleInput) => Promise<DesktopSettingsSnapshot>
     updateNotificationMode: (
       input: UpdateDesktopNotificationModeInput
+    ) => Promise<DesktopSettingsSnapshot>
+    updateNotificationSounds: (
+      input: UpdateDesktopNotificationSoundsInput
     ) => Promise<DesktopSettingsSnapshot>
     updateAgentEnvironment: (
       input: UpdateDesktopAgentEnvironmentInput

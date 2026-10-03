@@ -5,6 +5,7 @@ import type {
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
   UpdateDesktopNotificationModeInput,
+  UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopReasoningVisibilityInput,
@@ -43,6 +44,13 @@ export const settingsIpcContribution: IpcContribution = {
         handler: (_event, input) =>
           desktopSettingsService.updateNotificationMode(
             input as UpdateDesktopNotificationModeInput
+          ),
+      },
+      {
+        channel: IpcChannels.settingsUpdateNotificationSounds,
+        handler: (_event, input) =>
+          desktopSettingsService.updateNotificationSounds(
+            input as UpdateDesktopNotificationSoundsInput
           ),
       },
       {

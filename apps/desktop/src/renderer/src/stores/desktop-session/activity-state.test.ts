@@ -40,6 +40,21 @@ const update = (
 ): DesktopActivityUpdate => ({ cursor, delivery, sessions, scheduled })
 
 describe("Activity state", () => {
+  it("alerts when a run fails while waiting for permission", () => {
+    const initial = applyActivityUpdate(
+      createActivityState(),
+      update(1, "baseline", [{ ...session("current", "needs_input", 1), permissionId: "p" }]),
+      "current"
+    ).state
+    const result = applyActivityUpdate(
+      initial,
+      update(2, "live", [session("current", "failed", 2)]),
+      "current"
+    )
+    expect(result.sounds).toMatchObject([{ status: "failed" }])
+    expect(result.notifications).toEqual([])
+  })
+
   it("does not notify an older pending approval again when another approval is resolved", () => {
     const initial = applyActivityUpdate(
       createActivityState(),

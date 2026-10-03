@@ -32,6 +32,7 @@ import { ConnectionsSettings } from "./connections-settings"
 import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings"
 import { ProfileSettings } from "./profile-settings"
 import { PersonalizationSettings } from "./personalization-settings"
+import { NotificationSoundSettings } from "./notification-sound-settings"
 import { isDesktopNotificationMode, isDesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopNotificationMode, DesktopWorkStyle } from "@shared/settings-types"
 import type { DesktopAppInfo } from "@shared/ipc-channels"
@@ -65,22 +66,26 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
           <p className="text-sm text-muted-foreground">
             {selectedSection === "常规"
               ? "调整 Vykor 的默认工作方式。工作风格会保存到全局配置，并用于后续任务。"
-              : selectedSection === "供应商"
-                ? "连接模型服务和开发工具订阅，选择 Vykor 默认使用的供应商。"
-                : selectedSection === "外观"
-                  ? "调整 Vykor 在当前设备上的显示方式。更改会立即预览并自动保存。"
-                  : selectedSection === "连接"
-                    ? "把飞书接入 Vykor：扫码或手填创建机器人，管理白名单，并查看真实连接状态。"
-                    : selectedSection === "键盘快捷键"
-                      ? "查找并修改常用操作的按键组合。按下 Esc 可取消录入。"
-                      : selectedSection === "存储"
-                        ? "查看并维护当前设备上的对话附件存储。"
-                        : `${selectedSection}页面将在后续迭代中接入。`}
+              : selectedSection === "通知"
+                ? "设置系统通知和音效。选择音效时会自动试听，更改后自动保存。"
+                : selectedSection === "供应商"
+                  ? "连接模型服务和开发工具订阅，选择 Vykor 默认使用的供应商。"
+                  : selectedSection === "外观"
+                    ? "调整 Vykor 在当前设备上的显示方式。更改会立即预览并自动保存。"
+                    : selectedSection === "连接"
+                      ? "把飞书接入 Vykor：扫码或手填创建机器人，管理白名单，并查看真实连接状态。"
+                      : selectedSection === "键盘快捷键"
+                        ? "查找并修改常用操作的按键组合。按下 Esc 可取消录入。"
+                        : selectedSection === "存储"
+                          ? "查看并维护当前设备上的对话附件存储。"
+                          : `${selectedSection}页面将在后续迭代中接入。`}
           </p>
         </header>
 
         {selectedSection === "常规" ? (
           <GeneralSettings />
+        ) : selectedSection === "通知" ? (
+          <NotificationSettings />
         ) : selectedSection === "供应商" ? (
           <ProviderSettings />
         ) : selectedSection === "外观" ? (
@@ -164,12 +169,6 @@ function GeneralSettings(): React.JSX.Element {
           title="思考过程"
           description="在对话中展示模型的思考过程（默认收起，点击展开）。"
           control={<ReasoningVisibilityControl />}
-        />
-        <Separator />
-        <SettingRow
-          title="通知"
-          description="选择任务完成、失败或需要你处理时是否发送系统通知。"
-          control={<NotificationModeControl />}
         />
         <Separator />
         <SettingRow
@@ -264,6 +263,26 @@ const notificationModeLabels = {
   when_unfocused: "仅失去焦点时",
   always: "始终",
 } satisfies Record<DesktopNotificationMode, string>
+
+function NotificationSettings(): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-10">
+      <SettingsSection title="系统通知">
+        <SettingRow
+          title="通知显示"
+          description="选择任务完成、失败或需要你处理时是否发送系统通知。"
+          control={<NotificationModeControl />}
+        />
+      </SettingsSection>
+      <SettingsSection title="音效">
+        <NotificationSoundSettings />
+      </SettingsSection>
+      <p className="text-xs text-muted-foreground">
+        音效独立于系统通知，查看当前会话时也会播放。选择“无声音”可关闭对应音效。
+      </p>
+    </div>
+  )
+}
 
 function WorkStyleControl(): React.JSX.Element {
   const [style, setStyle] = useState<DesktopWorkStyle>("practical")

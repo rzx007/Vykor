@@ -3,15 +3,18 @@ import { join } from "node:path"
 
 import {
   isDesktopNotificationMode,
+  normalizeNotificationSounds,
   normalizeDefaultOpenerId,
   normalizeDefaultTerminalShellId,
   type DesktopDaemonOnboardingState,
   type DesktopInstallIdentity,
   type DesktopNotificationMode,
+  type DesktopNotificationSounds,
 } from "../../../shared/settings-types"
 
 export interface DesktopPreferences {
   notificationMode: DesktopNotificationMode
+  notificationSounds?: DesktopNotificationSounds
   browserDeveloperMode?: boolean
   defaultOpenerId?: string
   defaultTerminalShellId?: string
@@ -19,7 +22,10 @@ export interface DesktopPreferences {
   daemonOnboardingState?: DesktopDaemonOnboardingState
 }
 
-export type DesktopPreferencesPatch = Omit<Partial<DesktopPreferences>, "defaultTerminalShellId"> & {
+export type DesktopPreferencesPatch = Omit<
+  Partial<DesktopPreferences>,
+  "defaultTerminalShellId"
+> & {
   defaultTerminalShellId?: string | null
 }
 
@@ -40,6 +46,9 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
       notificationMode: isDesktopNotificationMode(raw.notificationMode)
         ? raw.notificationMode
         : defaults.notificationMode,
+      ...(raw.notificationSounds !== undefined
+        ? { notificationSounds: normalizeNotificationSounds(raw.notificationSounds) }
+        : {}),
       ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
       ...(defaultOpenerId ? { defaultOpenerId } : {}),
       ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
@@ -62,6 +71,9 @@ export function patchDesktopPreferencesAt(
   const defaultTerminalShellId = normalizeDefaultTerminalShellId(next.defaultTerminalShellId)
   const persisted: DesktopPreferences = {
     notificationMode: next.notificationMode,
+    ...(next.notificationSounds !== undefined
+      ? { notificationSounds: normalizeNotificationSounds(next.notificationSounds) }
+      : {}),
     ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
     ...(defaultOpenerId ? { defaultOpenerId } : {}),
     ...(defaultTerminalShellId ? { defaultTerminalShellId } : {}),
@@ -70,7 +82,11 @@ export function patchDesktopPreferencesAt(
       ? { daemonOnboardingState: next.daemonOnboardingState }
       : {}),
   }
-  writeFileSync(resolveDesktopPreferencesPath(userDataDir), JSON.stringify(persisted, null, 2), "utf8")
+  writeFileSync(
+    resolveDesktopPreferencesPath(userDataDir),
+    JSON.stringify(persisted, null, 2),
+    "utf8"
+  )
   return persisted
 }
 
