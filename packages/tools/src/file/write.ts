@@ -68,10 +68,6 @@ export const fileWriteTool: ToolDefinition = {
       file_path: { type: "string", description: "Absolute path to write to." },
       content: { type: "string", description: "Content to write." },
       content_from: { type: "string", description: "Previous settled Write tool call ID whose complete content to reuse. Do not also pass content. Only works while that content remains in the current conversation history." },
-      overwrite: {
-        type: "boolean",
-        description: "Optional compatibility guard: false forbids replacing different existing content. Omit for normal create or complete replacement.",
-      },
       expected_sha256: {
         type: "string",
         description: "Optional SHA-256 of existing raw bytes for guarded overwrite.",
@@ -81,12 +77,9 @@ export const fileWriteTool: ToolDefinition = {
     additionalProperties: false,
   },
   async execute(input, context) {
-    if (Object.keys(input).some(key => !["file_path", "content", "overwrite", "expected_sha256"].includes(key))
+    if (Object.keys(input).some(key => !["file_path", "content", "expected_sha256"].includes(key))
       || typeof input.file_path !== "string" || Object.hasOwn(input, "content_from") || typeof input.content !== "string") {
       return refused("Write requires resolved string content; content_from must be resolved by the engine.");
-    }
-    if (input.overwrite !== undefined && typeof input.overwrite !== "boolean") {
-      return refused("overwrite must be boolean when provided.");
     }
     const rawPath = input.file_path as string;
     const content = input.content as string;
@@ -171,10 +164,6 @@ export const fileWriteTool: ToolDefinition = {
           "precondition",
           "重新 Read 目标文件确认当前内容，再决定是否覆盖；不要绕过 hash 校验。",
         );
-      }
-      if (input.overwrite === false) {
-        return refused("File already exists with different content; overwrite=false forbids replacement.", "precondition",
-          "本次明确禁止覆盖，未写入；确认目标和修改范围，不能自动反转此选项。");
       }
       if (!await fileSnapshotMatches(operations, filePath, existing)) {
         return refused("Write conflict: the file changed after reading it.", "precondition", "重新 Read 当前文件后再决定修改；不要覆盖其他进程的新内容。");

@@ -75,7 +75,7 @@ describe("fileWriteTool safety", () => {
           return bytes;
         }
       }
-      const result = await fileWriteTool.execute({ file_path: file, content: "replacement", overwrite: true }, {
+      const result = await fileWriteTool.execute({ file_path: file, content: "replacement" }, {
         cwd: dir,
         environment: { files: new ConcurrentFiles(), paths: { resolve: async (path: string) => ({ executionPath: path, mountMode: "rw" }) } },
       } as never);
@@ -194,28 +194,7 @@ describe("fileWriteTool safety", () => {
     });
   });
 
-  it("accepts the legacy overwrite=true option", async () => {
-    await withTempDir(async (dir) => {
-      const file = join(dir, "value.txt");
-      await writeFile(file, "old", "utf8");
-      const result = await fileWriteTool.execute({ file_path: file, content: "new", overwrite: true }, { cwd: dir });
-      expect(result).toMatchObject({ executionState: "completed" });
-      expect((result.content[0] as { text: string }).text).toContain("Overwrote");
-      expect(await readFile(file, "utf8")).toBe("new");
-    });
-  });
-
-  it("honors an explicit overwrite=false instead of inferring replacement intent", async () => {
-    await withTempDir(async dir => {
-      const file = join(dir, "value.txt");
-      await writeFile(file, "old");
-      const result = await fileWriteTool.execute({ file_path: file, content: "new", overwrite: false }, { cwd: dir });
-      expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
-      expect(await readFile(file, "utf8")).toBe("old");
-    });
-  });
-
-  it.each(["true", 1, null])("rejects a non-boolean overwrite option before accessing the path: %j", async overwrite => {
+  it.each([true, false, "true", 1, null])("rejects removed overwrite options before accessing the path: %j", async overwrite => {
     let resolves = 0;
     const result = await fileWriteTool.execute({ file_path: "value.txt", content: "new", overwrite }, {
       cwd: "/work", environment: { paths: { resolve: async () => { resolves++; throw new Error("must not resolve"); } } },
@@ -243,7 +222,7 @@ describe("fileWriteTool safety", () => {
       const file = join(dir, "value.txt");
       await writeFile(file, "old", "utf8");
       const result = await fileWriteTool.execute(
-        { file_path: file, content: "new", overwrite: true, expected_sha256: sha256("old") },
+        { file_path: file, content: "new", expected_sha256: sha256("old") },
         { cwd: dir },
       );
       expect(result).toMatchObject({ executionState: "completed" });
@@ -256,7 +235,7 @@ describe("fileWriteTool safety", () => {
       const file = join(dir, "value.txt");
       await writeFile(file, "old", "utf8");
       const result = await fileWriteTool.execute(
-        { file_path: file, content: "new", overwrite: true, expected_sha256: sha256("other") },
+        { file_path: file, content: "new", expected_sha256: sha256("other") },
         { cwd: dir },
       );
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
@@ -277,7 +256,7 @@ describe("fileWriteTool safety", () => {
     });
   });
 
-  it("rejects an invalid hash before resolving the path", async () => {
+  it.each(["invalid", "", null])("rejects an invalid hash before resolving the path: %j", async expected_sha256 => {
     let resolves = 0;
     const context = {
       cwd: "/workspace",
@@ -291,7 +270,7 @@ describe("fileWriteTool safety", () => {
       },
     } as never;
     const result = await fileWriteTool.execute(
-      { file_path: "value.txt", content: "new", expected_sha256: "invalid" },
+      { file_path: "value.txt", content: "new", expected_sha256 },
       context,
     );
     expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
@@ -345,7 +324,7 @@ describe("fileWriteTool safety", () => {
         throw error;
       }
       const result = await fileWriteTool.execute(
-        { file_path: link, content: "replacement", overwrite: true },
+        { file_path: link, content: "replacement" },
         { cwd: dir },
       );
       expect(result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "not_started" });
@@ -384,7 +363,7 @@ describe("fileWriteTool safety", () => {
       const file = join(dir, "secret.txt");
       await writeFile(file, "secret", "utf8");
       const result = await fileWriteTool.execute(
-        { file_path: file, content: "secret", overwrite: true },
+        { file_path: file, content: "secret" },
         {
           cwd: dir,
           settings: {

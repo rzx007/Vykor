@@ -43,13 +43,14 @@ describe("computeFileChange", () => {
     expect(await computeFileChange("Write", { content: "x" })).toBeNull();
   });
 
-  it("Write: does not preview a replacement that explicit false or a stale hash forbids", async () => {
+  it("Write: does not preview a replacement with removed options or a stale hash", async () => {
     const file = join(dir, "guarded.txt");
     await writeFile(file, "old");
     expect(await computeFileChange("Write", { file_path: file, content: "new", overwrite: false })).toBeNull();
     expect(await computeFileChange("Write", { file_path: file, content: "new",
       expected_sha256: createHash("sha256").update("not old").digest("hex") })).toBeNull();
     expect(await computeFileChange("Write", { file_path: file, content: "same", overwrite: "true" })).toBeNull();
+    expect(await computeFileChange("Write", { file_path: file, content: "new", overwrite: true })).toBeNull();
   });
 
   it("Write: does not disguise a non-file or read failure as a new empty file", async () => {

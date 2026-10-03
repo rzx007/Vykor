@@ -12,9 +12,20 @@ const shellDescriptor = {
 } as const;
 
 describe("BackgroundShellCreate", () => {
-  it.skipIf(resolveHostShellLauncher().kind !== "powershell")("checks the default host shell when no descriptor is supplied", async () => {
+  it.skipIf(resolveHostShellLauncher().kind !== "powershell")("does not reject valid quoting when no descriptor is supplied", async () => {
     let launches = 0;
     const result = await backgroundShellCreateTool.execute({ description: "install", command: 'powershell -Command "$s=1; npm install"' }, {
+      cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
+      backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
+    });
+    expect(result).toMatchObject({ executionState: "completed" });
+    expect(launches).toBe(1);
+  });
+
+  it.skipIf(process.platform !== "win32")("rejects actual syntax errors before launching a background PowerShell job", async () => {
+    let launches = 0;
+    const tool = createBackgroundShellTool(shellDescriptor);
+    const result = await tool.execute({ description: "install", command: "Write-Output (" }, {
       cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
       backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
     });
@@ -22,15 +33,17 @@ describe("BackgroundShellCreate", () => {
     expect(launches).toBe(0);
   });
 
-  it("rejects variable expansion mistakes before launching a background PowerShell job", async () => {
+  it("allows JavaScript logical operators inside a here-string before delegating to the host", async () => {
     let launches = 0;
     const tool = createBackgroundShellTool(shellDescriptor);
-    const result = await tool.execute({ description: "install", command: 'powershell -Command "$s=1; npm install"' }, {
-      cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
-      backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
+    const command = "@'\nconsole.log(true && false || true);\n'@ | node -";
+    const result = await tool.execute({ description: "fixture", command }, {
+      cwd: process.cwd(), sessionId: "fixture", toolCallId: "fixture",
+      backgroundShell: { create: async () => { launches++; return { jobId: "fixture", label: "fixture" }; } },
     });
-    expect(result).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
-    expect(launches).toBe(0);
+    expect(result).toMatchObject({ executionState: "completed" });
+    expect(result.isError).not.toBe(true);
+    expect(launches).toBe(1);
   });
 
   it("is discoverable for long-running bash or shell commands", () => {

@@ -1788,3 +1788,75 @@ Spec 与最终增量均经独立审核，未发现 Critical／Important。审核
 - 本轮生产增量仅 query-engine.ts、write.ts、read.ts、apply-patch.ts 四份既有文件，相比上一轮工作树净减少 18 行。没有新恢复框架、依赖、状态／事件／DB 表；已有界面／插件改动保留。没有真实模型调用、供应商测速、用户任务／数据库写入、应用构建／重启、提交／合并／push。
 
 后续授权：用户要求提交代码；提交范围为 §34–37 对应的文件工具、核心恢复流程、提示、回归测试及本文档，共二十五份文件。仅提交当前 codex/file-workflow-followup 分支，不 push、不合并，不包含既有界面／插件／能力视图改动；执行正常提交钩子，提交结果以 Git 为准。
+
+## 38. Codex 可选字段语义与移除 overwrite
+
+用户授权修复会话 01c2b9df 的协议问题，同时完整移除 Write 的 overwrite；本节替代前文保留该兼容字段及显式 false 分支的规定。
+
+- 已知事实：三次调用均有完整正文，以及 content_from=""、expected_sha256=""、overwrite=false；引用二选一检查在文件操作前拒绝。只删除空引用还会因空 hash 拒绝。Codex 适配层没有显式 strict，不能保证模型看到的可选字段与本地相同；没有保留上游规范化后的 schema，故不宣称已证明后台具体如何改写。
+- Codex 的 function 工具统一显式 strict=false，传递原始 required／properties，不重写可选字段为必填、不注入默认值、不删除空串／null／false。[OpenAI 官方说明](https://developers.openai.com/api/docs/guides/function-calling#strict-mode)说明 Responses 未指定 strict 时可能尝试规范化为严格模式；本轮选择保留现有可选参数协议。本地校验、引用解析、权限和冲突检查仍必须执行。
+- Write 只接受 file_path、content／content_from 二选一、可选 expected_sha256。模型 schema、执行入口、预览和系统提示中删除 overwrite。旧调用若携带该字段按未知参数拒绝，不能忽略明确 false 后执行覆盖；历史正文引用仍只取正文，不继承旧选项。
+- 普通完整 Write 无额外覆盖标志，权限／系统与托管路径／sandbox／目标类型／可选 hash／写前快照／独占创建／原子替换不变。空正文是合法的完整清空，不能当作缺值。不修改 core 规范化器、纠错次数或其他 provider。
+- 范围限于 codex.ts、write.ts、preview.ts、prompts/index.ts 及直接相关测试；不碰正在进行的侧边聊天等未提交改动，不调用真实供应商、用户任务或 DB 写接口，不构建／重启应用、提交／push。
+
+### 实施计划
+
+**Goal:** 消除 Codex 可选字段被强制填充的协议风险，Write 不再暴露覆盖开关。
+
+**Architecture:** provider 明确请求 schema 的解释方式；core 继续校验及引用解析；文件工具继续负责完整替换和安全检查。删除旧分支，不建参数默认值清洗器。
+
+**Tech Stack / Spec:** 现有 TypeScript、Vitest、Node；本文 §38，无新依赖。
+
+1. [x] 先 RED：捕获 Codex 发出的真实工具定义，断言 strict=false、可选 required 不扩展；真实 Write 的 schema 不含 overwrite，遗留 false／true 在访问路径前拒绝。
+2. [x] 最小实现：convertToolToCodex 增加 strict=false；移除 Write／preview／prompt 的 overwrite 分支。未知字段检查保留，不为旧调用加例外。
+3. [x] 离线端到端：用网络替身返回合法省略字段的 Codex SSE；真实 QueryEngine／Write 在临时文件上完整替换。首次 hash 失败后用短引用更正，第二次仍经过权限、hook、预览及 hash；断言未重发正文、未复用批准。
+
+    expect(sentTool.strict).toBe(false);
+    expect(Object.keys(sentTool.parameters.properties)).toEqual(["file_path", "content", "content_from", "expected_sha256"]);
+    expect(await readFile(file, "utf8")).toBe(body);
+
+4. [x] 跑相关 API／core 引用／tools 文件回归和类型检查，独立审核。离线测试不证明真实 Codex 后台一定遵从或数字生成已改善；交付时明确未实测的部分。
+
+### 验证记录
+
+- 有效 RED 为 Codex 发出的真实 function 对象缺少 strict、模型可见 schema 仍有 overwrite、旧布尔参数仍进入路径解析、preview 仍预演旧 true 调用。离线端到端两分支同样在 wire contract 断言上失败；实施后均通过，不以网络替身是否存在作结果断言。
+- 最新定向范围：API 三文件 46、tools 七文件 88、core 五文件 105，共 239 项通过；API／tools／prompts／core 四包 TypeScript noEmit exit 0。空 hash／null 仍在路径解析前拒绝；真实 Native 策略、权限拒绝、hash 冲突、并发快照、空正文及正文复用保持。
+- 本轮生产只有四份既有文件，净减少九行；无新框架、依赖、缓存、状态／事件／DB 表。通用 core 引用测试只更名伪造确认选项，不再模拟已经移除的真实覆盖协议，core 生产逻辑未改。
+- 独立审核无 Critical／Important；额外内存诊断确认旧参数各种值均拒绝、路径访问为零，旧历史的 false 不随正文引用继承，空正文仍能合法清空。请求模式及 schema 原样传递符合已核实的官方说明，未据此扩大订阅后台实测结论。
+- 未真实调用 Codex／供应商或运行用户会话；没有观察订阅后台规范化后的 schema，不能宣称 strict=false 已获该后台遵从、真实模型已不再填空值或数字错误已改善。网络替身仅替换传输，实际解析、核心准备与文件执行均走现有实现。未构建／重启应用、提交／push；并行侧边聊天等用户改动保留。
+
+## 39. Shell 语法检查与方言提示分离
+
+用户授权处理会话 16163afd 的两次误拦截，不处理浏览器组件或可执行文件安装。原检查将 here-string 内 JavaScript 的 &&／|| 当作 PowerShell 5.1 运算符；原生 5.1 ParseInput 对三段命令均返回零语法错误。
+
+- 前台 Shell、自动转后台、显式 BackgroundShellCreate 共用原入口，改为异步原生语法判断。PowerShell 使用实际已解析的解释器，通过 System.Management.Automation.Language.Parser.ParseInput 只解析输入，不执行候选命令。
+- 原生探测复用现有执行器与环境进程边界：前台环境用自己的 executor，旧宿主入口用相同 shell executable、cwd／policy。输入仅作为 UTF-8 Base64 数据解码，不插值到可执行脚本；不另写子进程管理框架、不新增常驻服务或命令缓存。
+- 探测使用三秒等待预算，覆盖路径解析、进程启动和结果等待；超时同时向现有执行器取消探测，迟到的路径／启动仍保留取消信号。输出有界，只返回至多五个错误 ID 和行列，不回显候选源代码。已确认原生语法错误为 invalid_input／not_started。若探测不可用／超时，不凭正则硬拒，交给实际解释器执行；用户取消必须继续传播，不能再启动用户命令。
+- 方言正则及双引号变量展开属于可能性提示，不再作为失败事实。只在实际短命令返回 command 失败时追加“非语法错误结论”的参考；成功及权限／策略拒绝不添加这类推测，不改变状态、退出码、日志引用或自动纠错额度。
+- 后台创建仍由既有 host 审批、登记和执行；解析通过不授予权限。非 PowerShell 环境不启动宿主 PowerShell 检查。权限、危险操作、sandbox、真实 shell 错误、取消与超时保持各自原职责。
+
+### 实施与验收计划
+
+**Goal:** 合法内嵌脚本不被 Shell 猜测规则拦截，真实 PowerShell 语法仍在用户命令开始前检查。
+
+**Architecture:** shell.ts 保留单一检查入口与现有执行器，background-shell-tools.ts 只 await 相同检查；不修改浏览器、任务保存或核心恢复框架。
+
+1. [x] 先 RED：单／双引号字符串、here-string 内 JS 运算符走到执行；有效 PowerShell 嵌套命令不因变量展开猜测被拒；cmd 风格参数等只作失败提示。真正的括号／here-string 头错误拒绝，后台真实语法错误也不调用 host。
+2. [x] 改检查入口并复用执行器进行原生只读探测；三条调用路线均接入，不在一个入口重复探测。正则只附加参考，不驱动执行拒绝。
+3. [x] 在受控临时目录实测解析不会执行写文件候选、合法 here-string 可运行 Node；检查 PS5.1 与 PS7 行为按实际版本区分，取消／探测失败后不改变安全边界。
+
+    expect(result).toMatchObject({ executionState: "completed" }); // JS 运算符只在字符串中
+    expect(await shellCommandSyntaxError("Write-Output (", powershell, context))
+      .toMatchObject({ failureKind: "invalid_input", executionState: "not_started" });
+
+4. [x] 按风险运行 Shell／后台／日志与权限相关定向测试、类型检查及独立审核。保留其他未提交工作，不运行会话中的启动／清理脚本、不写用户任务／DB、不提交／push 或重启应用。
+
+### 验证记录
+
+- 最初两文件有效 RED 为 11 项失败／21 项通过，复现旧规则对字符串内 JS 运算符、嵌套变量和合法路径参数的误拒，以及漏掉真实括号错误。修订后 32 项全部通过；并非仅删除一个运算符特例。
+- 独立审核发现旧执行器仅发取消信号、可能仍等待启动／结果，新增路径解析、启动、等待三个不配合取消的测试均有效 RED。探测入口补有界等待后 GREEN；没有改写执行器或另建进程框架。复审另验证迟到路径不启动进程、迟到错误不改变已返回结果、用户取消不执行候选命令，无待修复 Critical／Important。
+- 最终 Shell／后台／日志共九文件 111 项通过，tools TypeScript noEmit exit 0。真实 PS5.1 拒绝顶层 &&，本机 PS7 接受它并仍拒绝未闭合括号；候选 Set-Content 仅解析，临时目录未出现目标文件，真实 JS here-string 输出 42。内部探测不产生可补读日志；实际命令的长输出 Read／Grep／引擎预算回归保持。
+- 生产仅改 shell.ts 和 background-shell-tools.ts 两份既有文件，净增加 49 行；无新依赖、服务、缓存、运行状态或核心恢复补丁。每个 PowerShell 调用增加一次短暂的解析进程启动，不承诺首次生成或整体耗时下降；探测异常仍由实际解释器报告，语法通过也不代表可执行文件／参数／业务结果正确。
+- 未运行会话中的浏览器、进程清理或递归删除脚本，未操作用户任务文件／DB、调用真实模型、构建／重启应用或提交／push。前轮 Write／Codex 和并行侧边聊天等工作区改动保留。
+
+后续授权：用户要求提交代码。本次提交 §38–39 对应的 Write／Codex 调用契约、Shell 语法检查、直接相关测试及本文档，共十八份文件。提交前 tools 十四文件 190、API 一文件 23、core 两文件 34，共 247 项定向测试通过；正常提交钩子继续检查仓库类型。仅提交当前 codex/file-workflow-followup 分支，不 push、不合并，不包含并行侧边聊天、UI 或插件改动。

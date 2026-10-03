@@ -9,7 +9,7 @@ function use(id: string, input: Record<string, unknown>): StreamEvent {
 
 async function run(options: { denyRetry?: boolean; sameInput?: boolean } = {}) {
   const body = "PRIVATE-FILE-CONTENT\n".repeat(300);
-  const retryInput = { file_path: "a.txt", content_from: "source", ...(options.sameInput ? {} : { overwrite: true }) };
+  const retryInput = { file_path: "a.txt", content_from: "source", ...(options.sameInput ? {} : { confirmed: true }) };
   const executed: Record<string, unknown>[] = [];
   const checked: Record<string, unknown>[] = [];
   const hooked: Record<string, unknown>[] = [];
@@ -25,24 +25,24 @@ async function run(options: { denyRetry?: boolean; sameInput?: boolean } = {}) {
   };
   const registry = new ToolRegistry();
   registry.register({
-    name: "Write", description: "fixture", inputSchema: {
+    name: "Write", description: "generic reuse fixture requiring an explicit confirmation option", inputSchema: {
       type: "object", properties: {
         file_path: { type: "string" }, content: { type: "string" },
-        content_from: { type: "string" }, overwrite: { type: "boolean" },
+        content_from: { type: "string" }, confirmed: { type: "boolean" },
       }, required: ["file_path"],
     },
     inputReuse: { property: "content", referenceProperty: "content_from" },
     execute: async (input: Record<string, unknown>) => {
       executed.push({ ...input });
-      return input.overwrite === true
+      return input.confirmed === true
         ? { content: [], executionState: "completed" }
-        : { content: [{ type: "text", text: "explicit overwrite required" }], isError: true,
+        : { content: [{ type: "text", text: "fixture confirmation required" }], isError: true,
           failureKind: "invalid_input", executionState: "not_started" };
     },
   } as ToolDefinition, { kind: "builtin" });
   const permissions: IPermissionChecker = { checkTool: async (_, input) => {
     checked.push({ ...input });
-    return { action: options.denyRetry && input.overwrite === true ? "deny" : "allow" };
+    return { action: options.denyRetry && input.confirmed === true ? "deny" : "allow" };
   } };
   const hooks: IHookExecutor = { register() {}, execute: async (event, context) => {
     if (event === "pre_tool_use") hooked.push({ ...context.input as Record<string, unknown> });
@@ -60,7 +60,7 @@ describe("content reuse in the normal engine execution flow", () => {
     expect(result.retryInput).not.toHaveProperty("content");
     expect(result.executed).toEqual([
       { file_path: "a.txt", content: result.body },
-      { file_path: "a.txt", content: result.body, overwrite: true },
+      { file_path: "a.txt", content: result.body, confirmed: true },
     ]);
     expect(result.checked).toEqual(result.executed);
     expect(result.hooked).toEqual(result.executed);
@@ -77,7 +77,7 @@ describe("content reuse in the normal engine execution flow", () => {
   it("does not execute a referenced write denied by current permissions", async () => {
     const result = await run({ denyRetry: true });
     expect(result.executed).toHaveLength(1);
-    expect(result.checked[1]).toEqual({ file_path: "a.txt", content: result.body, overwrite: true });
+    expect(result.checked[1]).toEqual({ file_path: "a.txt", content: result.body, confirmed: true });
     expect(result.events.filter(e => e.type === "tool_use_end").at(-1)).toMatchObject({
       result: { failureKind: "permission", executionState: "not_started" },
     });

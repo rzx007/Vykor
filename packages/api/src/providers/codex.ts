@@ -369,6 +369,8 @@ function convertToolToCodex(tool: ToolDefinition): Record<string, unknown> {
     name: tool.name,
     description: tool.description,
     parameters: tool.inputSchema,
+    // Preserve optional fields; Responses may otherwise normalize them into strict required fields.
+    strict: false,
   };
 }
 

@@ -12,7 +12,7 @@ const definition = {
     type: "object",
     properties: {
       file_path: { type: "string" }, content: { type: "string" },
-      content_from: { type: "string" }, overwrite: { type: "boolean" },
+      content_from: { type: "string" }, confirmed: { type: "boolean" },
     },
     required: ["file_path"],
   },
@@ -24,7 +24,7 @@ function call(id: string, input: Record<string, unknown>, name = "Write"): ToolU
   return { type: "tool_use", id, name, input };
 }
 
-function pair(source = call("source", { file_path: "a.txt", content: "complete body", overwrite: false })): Message[] {
+function pair(source = call("source", { file_path: "a.txt", content: "complete body", confirmed: false })): Message[] {
   return [
     { type: "assistant", content: "", toolUses: [source] },
     { type: "tool_result", toolUseId: source.id, content: [], isError: true },
@@ -40,14 +40,14 @@ function prepare(input: Record<string, unknown>, history: Message[] = pair(), me
 describe("tool input reuse before authorization", () => {
   it("copies only the requested content and leaves source and model input unchanged", () => {
     const history = pair();
-    const modelInput = { file_path: "b.txt", content_from: "source", overwrite: true };
+    const modelInput = { file_path: "b.txt", content_from: "source", confirmed: true };
     const result = prepare(modelInput, history);
     expect(result.readyForPermission[0]?.toolUse.input).toEqual({
-      file_path: "b.txt", content: "complete body", overwrite: true,
+      file_path: "b.txt", content: "complete body", confirmed: true,
     });
-    expect(modelInput).toEqual({ file_path: "b.txt", content_from: "source", overwrite: true });
+    expect(modelInput).toEqual({ file_path: "b.txt", content_from: "source", confirmed: true });
     expect(history[0]).toMatchObject({ toolUses: [{ input: {
-      file_path: "a.txt", content: "complete body", overwrite: false,
+      file_path: "a.txt", content: "complete body", confirmed: false,
     } }] });
   });
 
@@ -58,12 +58,12 @@ describe("tool input reuse before authorization", () => {
   });
 
   it("reuses a unique body inside one known wrapper chain and ignores source options", () => {
-    const source = call("source", { file_path: "old.txt", overwrite: false, expected_sha256: "old hash", arguments: {
+    const source = call("source", { file_path: "old.txt", confirmed: false, expected_sha256: "old hash", arguments: {
       args: { content: "complete body", prepared_from: "obsolete-reference" },
     } });
-    const result = prepare({ parameters: { file_path: "new.txt", overwrite: true, content_from: "source" } }, pair(source));
-    expect(result.readyForPermission[0]?.toolUse.input).toEqual({ file_path: "new.txt", overwrite: true, content: "complete body" });
-    expect(source.input).toEqual({ file_path: "old.txt", overwrite: false, expected_sha256: "old hash", arguments: {
+    const result = prepare({ parameters: { file_path: "new.txt", confirmed: true, content_from: "source" } }, pair(source));
+    expect(result.readyForPermission[0]?.toolUse.input).toEqual({ file_path: "new.txt", confirmed: true, content: "complete body" });
+    expect(source.input).toEqual({ file_path: "old.txt", confirmed: false, expected_sha256: "old hash", arguments: {
       args: { content: "complete body", prepared_from: "obsolete-reference" },
     } });
   });
@@ -193,12 +193,12 @@ describe("tool input reuse before authorization", () => {
 
   it("retains wrapped reference support and schema validation", () => {
     const result = prepare({ arguments: { arguments: {
-      file_path: "a.txt", content_from: "source", overwrite: true,
+      file_path: "a.txt", content_from: "source", confirmed: true,
     } } });
     expect(result.readyForPermission[0]?.toolUse.input).toEqual({
-      file_path: "a.txt", content: "complete body", overwrite: true,
+      file_path: "a.txt", content: "complete body", confirmed: true,
     });
-    expect(prepare({ file_path: "a.txt", content_from: "source", overwrite: "true" }).readyForPermission).toEqual([]);
+    expect(prepare({ file_path: "a.txt", content_from: "source", confirmed: "true" }).readyForPermission).toEqual([]);
   });
 
   it("does not interpret reference fields for tools without a declaration", () => {

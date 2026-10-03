@@ -88,7 +88,7 @@ describe("Write content reuse with the real file tool", () => {
           expect(reference).not.toBeNull();
           contentFrom = JSON.parse(reference![1]!);
           expect(await readFile(file, "utf8")).toBe("original");
-          input = { file_path: file, overwrite: true, content_from: contentFrom };
+          input = { file_path: file, content_from: contentFrom };
         }
         if (input) yield { type: "tool_use_start", toolUse: { type: "tool_use", id: randomUUID(), name: "Write", input } };
         yield { type: "complete", stopReason: input ? "tool_calls" : "end_turn" };

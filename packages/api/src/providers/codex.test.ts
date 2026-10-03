@@ -40,6 +40,26 @@ describe("buildCodexHeaders", () => {
 describe("CodexSubscriptionClient phases", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("preserves optional function parameters instead of relying on Responses strict normalization", async () => {
+    const schema = { type: "object", properties: { file_path: { type: "string" },
+      content: { type: "string" }, content_from: { type: "string" }, expected_sha256: { type: "string" } },
+      required: ["file_path"], additionalProperties: false };
+    const original = structuredClone(schema);
+    let tools: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      tools = JSON.parse(String(init?.body)).tools;
+      return new Response('data: {"type":"response.completed"}\n\n', { headers: { "content-type": "text/event-stream" } });
+    });
+    const client = new CodexSubscriptionClient({ apiKey: jwt({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } }) });
+    for await (const _event of client.streamMessage({ model: "gpt-test", messages: [], tools: [{ name: "Write", description: "fixture",
+      inputSchema: schema, execute: async () => ({ content: [] }) }] })) { /* consume */ }
+    expect(tools[0]).toMatchObject({ type: "function", name: "Write", strict: false, parameters: {
+      required: ["file_path"], additionalProperties: false,
+    } });
+    expect(tools[0]?.parameters).toEqual(original);
+    expect(schema).toEqual(original);
+  });
+
   it("streams commentary phases and preserves them when replaying assistant messages", async () => {
     const token = jwt({
       "https://api.openai.com/auth": { chatgpt_account_id: "acct_123" },

@@ -12,19 +12,19 @@ import type {
 const posixShell: HostShellLauncher = { kind: "posix-sh" };
 
 describe("createBashTool", () => {
-  it.skipIf(resolveHostShellLauncher().kind !== "powershell")("checks the host shell before automatically creating a background job", async () => {
+  it.skipIf(resolveHostShellLauncher().kind !== "powershell")("does not block valid nested PowerShell before automatically creating a background job", async () => {
     let launches = 0;
     const tool = createBashTool(fakeExecutor(result()));
     const feedback = await tool.execute({ command: 'powershell -Command "$s=1; npm install"' }, {
       cwd: process.cwd(), sessionId: "session-1", toolCallId: "call-1",
       backgroundShell: { create: async () => { launches++; return { jobId: "job", label: "install" }; } },
     });
-    expect(feedback).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
-    expect(launches).toBe(0);
+    expect(feedback).toMatchObject({ executionState: "completed" });
+    expect(launches).toBe(1);
   });
 
-  it.each([
-    'powershell -Command "$s=1; Write-Output $s"',
+  it.skipIf(process.platform !== "win32").each([
+    "Write-Output (",
     "$code = @'print('hello')\n'@\n$code | python -",
   ])("rejects broken PowerShell syntax before executing: %s", async (command) => {
     let executions = 0;
@@ -35,6 +35,23 @@ describe("createBashTool", () => {
     const feedback = await createBashTool(executor).execute({ command }, { cwd: process.cwd() });
     expect(feedback).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
     expect(executions).toBe(0);
+  });
+
+  it.each([
+    "@'\nconst choice = true || false; if (choice && true) console.log('ok');\n'@ | node -",
+    'node -e "console.log(true && false || true)"',
+    'powershell -Command "$s=1; Write-Output $s"',
+  ])("does not reject quoted code or valid syntax based on dialect guesses: %s", async command => {
+    let executions = 0;
+    const executor: ShellExecutor = {
+      async resolve(request) { return spec({ command: request.command, hostShell: { kind: "powershell", bin: "powershell.exe" } }); },
+      async run() { executions++; return result({ output: "user command reached executor" }); },
+    };
+    const feedback = await createBashTool(executor).execute({ command }, { cwd: process.cwd() });
+    expect(feedback).toMatchObject({ executionState: "completed" });
+    expect(feedback.isError).not.toBe(true);
+    expect(executions).toBe(1);
+    expect(feedback.content[0]).toMatchObject({ text: "user command reached executor" });
   });
 
   it("keeps a legacy failed command with null exit code unknown", async () => {
@@ -165,9 +182,12 @@ describe("createBashTool", () => {
     });
   });
 
-  it("rejects cmd.exe syntax before executing in a PowerShell environment", async () => {
+  it("keeps dialect guesses as advisory after an actual failed PowerShell command", async () => {
     const legacy = fakeExecutor(result({ output: "host" }));
-    const execShell = vi.fn();
+    const execShell = vi.fn(async () => ({
+      onOutput: (listener: (chunk: Uint8Array) => void) => { listener(new TextEncoder().encode("actual command failure")); return () => {}; },
+      wait: async () => ({ exitCode: 1 }),
+    }));
     const tool = createBashTool(legacy);
 
     const toolResult = await tool.execute({ command: "dir /B 2>nul" }, {
@@ -205,12 +225,11 @@ describe("createBashTool", () => {
       },
     } as any);
 
-    expect(execShell).not.toHaveBeenCalled();
+    expect(execShell).toHaveBeenCalled();
     expect(toolResult.isError).toBe(true);
-    expect(toolResult.content[0]).toMatchObject({
-      type: "text",
-      text: expect.stringContaining("Shell dialect mismatch"),
-    });
+    expect(toolResult).toMatchObject({ failureKind: "command", executionState: "completed" });
+    expect(JSON.stringify(toolResult.content)).toContain("actual command failure");
+    expect(JSON.stringify(toolResult.content)).toContain("Possible shell compatibility hints");
     expect(toolResult.metadata).toMatchObject({
       shellFamily: "powershell",
       shellDialect: "windows-powershell",
@@ -416,7 +435,7 @@ describe("createBashTool", () => {
     });
   });
 
-  it("keeps host shell dialect diagnostics before execution", async () => {
+  it("does not refuse syntactically valid host commands based on path or flag guesses", async () => {
     const run = vi.fn(async () => result());
     const executor: ShellExecutor = {
       async resolve(request) {
@@ -431,15 +450,11 @@ describe("createBashTool", () => {
 
     const toolResult = await tool.execute({ command: "ls -la /tmp" }, { cwd: process.cwd() });
 
-    expect(run).not.toHaveBeenCalled();
-    expect(toolResult.isError).toBe(true);
-    expect(toolResult.content[0]).toMatchObject({
-      type: "text",
-      text: expect.stringContaining("Shell dialect mismatch"),
-    });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(toolResult.isError).not.toBe(true);
   });
 
-  it("rejects Bash heredoc before PowerShell executes it", async () => {
+  it.skipIf(process.platform !== "win32")("rejects Bash heredoc before PowerShell executes it", async () => {
     const run = vi.fn(async () => result());
     const executor: ShellExecutor = {
       async resolve(request) {
@@ -453,7 +468,7 @@ describe("createBashTool", () => {
 
     expect(run).not.toHaveBeenCalled();
     expect(toolResult.isError).toBe(true);
-    expect(toolResult.content[0]).toMatchObject({ text: expect.stringContaining("heredoc") });
+    expect(toolResult.content[0]).toMatchObject({ text: expect.stringContaining("PowerShell syntax error") });
   });
 });
 

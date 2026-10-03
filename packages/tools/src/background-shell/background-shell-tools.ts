@@ -30,13 +30,12 @@ return {
     if ("error" in description) return failed(description.error);
     const command = readRequiredString(input.command, "command");
     if ("error" in command) return failed(command.error);
-    const descriptor = context.environment?.info.shellDescriptor ?? shell;
-    const error = shellCommandSyntaxError(command.value, descriptor);
-    if (error) return error;
-
     if (!context.sessionId) return { ...failed("Background shell jobs require a durable session."), failureKind: "configuration" as const };
     if (!context.backgroundShell) return { ...failed("Background shell host is not configured."), failureKind: "configuration" as const };
     if (!context.toolCallId) return { ...failed("Background shell request identity is not configured."), failureKind: "configuration" as const };
+    const descriptor = context.environment?.info.shellDescriptor ?? shell;
+    const error = await shellCommandSyntaxError(command.value, descriptor, context);
+    if (error) return error;
 
     try {
       const created = await context.backgroundShell.create({

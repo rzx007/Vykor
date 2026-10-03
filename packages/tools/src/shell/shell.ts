@@ -1,16 +1,17 @@
-import type { ShellOutputLogStatus, ToolDefinition, ToolResult } from "@vykor/core";
+import type { ShellOutputLogStatus, ToolContext, ToolDefinition, ToolResult } from "@vykor/core";
 import {
   shellResultMetadata,
   type ShellDescriptor,
 } from "@vykor/environment";
 import {
+  createProcess,
   describeHostShellLauncher,
   resolveHostShellLauncher,
   type HostShellLauncher,
 } from "@vykor/sandbox";
-import { defaultShellExecutor } from "./executor.js";
+import { DefaultShellExecutor, defaultShellExecutor } from "./executor.js";
 import { createBoundedOutputCollector, DEFAULT_MAX_OUTPUT_CHARS, formatOutput } from "./output.js";
-import type { ShellExecSpec, ShellExecutor } from "./types.js";
+import type { ShellExecContext, ShellExecutor } from "./types.js";
 
 export { decodeShellChunk, formatOutput, looksLikeUtf16Le } from "./output.js";
 
@@ -43,11 +44,11 @@ export function createShellTool(
       const descriptor = context.environment?.info.shellDescriptor ?? shell;
       const hasExplicitTimeout = input.timeout !== undefined;
       const background = Boolean(command && !hasExplicitTimeout && shouldCreateBackgroundShell(command, context));
-      if (descriptor || background) {
-        const error = shellCommandSyntaxError(command, descriptor);
-        if (error) return error;
-      }
       if (background) {
+        const error = await shellCommandSyntaxError(command, descriptor, {
+          ...context, cwd: typeof input.workdir === "string" ? input.workdir : context.cwd,
+        });
+        if (error) return error;
         try {
           const requestedCwd = typeof input.workdir === "string" && input.workdir.trim()
             ? input.workdir.trim()
@@ -92,7 +93,11 @@ export function createShellTool(
         }
       }
       if (context.environment) {
-        return await executeInEnvironment(command, input, context);
+        const error = await shellCommandSyntaxError(command, descriptor, {
+          ...context, cwd: typeof input.workdir === "string" ? input.workdir : context.environment.workspace.executionRoot,
+        });
+        if (error) return error;
+        return withShellDialectHints(await executeInEnvironment(command, input, context), command, descriptorHostLauncher(descriptor!));
       }
 
       const spec = await effectiveExecutor.resolve({
@@ -104,15 +109,10 @@ export function createShellTool(
         sessionId: context.sessionId,
         settings: context.settings,
       });
-      const dialectMismatch = diagnoseShellCommand(spec);
-      if (dialectMismatch) {
-        return {
-          content: [{ type: "text", text: formatShellDialectMismatch(dialectMismatch) }],
-          isError: true,
-          failureKind: "invalid_input",
-          executionState: "not_started",
-        };
-      }
+      const error = await shellCommandSyntaxError(spec.command, spec.hostShell, {
+        ...context, cwd: spec.cwd, policy: spec.policy,
+      });
+      if (error) return error;
 
       const output = createBoundedOutputCollector();
       const capture = context.shellOutputLogs?.begin(context.sessionId, spec.maxOutputChars);
@@ -149,14 +149,14 @@ export function createShellTool(
           executionState: "unknown",
         };
       }
-      return {
+      return withShellDialectHints({
         content: blocks(formatOutput(rawOutput, spec.maxOutputChars)),
         isError: result.status === "failed" || result.exitCode === null,
         executionState: result.failureKind === "policy" ? "not_started" : result.exitCode === null || result.status === "failed" && result.failureKind !== "command" ? "unknown" : "completed",
         ...(result.status === "failed" || result.exitCode === null ? { failureKind: result.failureKind === "policy" ? "policy" as const : result.failureKind === "command" && result.exitCode !== null ? "command" as const : "unknown_outcome" as const } : {}),
         ...(result.status === "failed" && result.failureKind === "command" && result.exitCode !== null ? { recoveryHint: `命令退出码 ${result.exitCode}；检查输出后诊断原因。` } : {}),
         ...(result.status === "completed" && result.exitCode !== null ? { compactSummary: `Shell completed: exitCode=${result.exitCode}` } : {}),
-      };
+      }, spec.command, spec.hostShell);
     },
   };
 }
@@ -353,22 +353,78 @@ export interface ShellDialectProblem {
   suggestion: string;
 }
 
-export interface ShellDialectMismatch {
-  shell: HostShellLauncher;
-  problems: ShellDialectProblem[];
-}
-
-/** Shared by short commands and detached jobs; no process has started here. */
-export function shellCommandSyntaxError(command: string, descriptor?: ShellDescriptor): ToolResult | undefined {
-  const shell = descriptor ? descriptorHostLauncher(descriptor) : resolveHostShellLauncher();
-  const problems = diagnoseShellDialectMismatch(command, shell);
-  if (problems.length === 0) return undefined;
+/** Parse only, through the existing runner; the user's command never executes here. */
+export async function shellCommandSyntaxError(
+  command: string,
+  descriptor?: ShellDescriptor | HostShellLauncher,
+  context?: ToolContext & Pick<ShellExecContext, "policy">,
+): Promise<ToolResult | undefined> {
+  const interrupted = (): ToolResult => ({
+    content: [{ type: "text", text: "Shell interrupted before the command started." }],
+    isError: true, failureKind: "interrupted", executionState: "not_started",
+  });
+  if (context?.abortSignal?.aborted) return interrupted();
+  const shell = descriptor && "family" in descriptor ? descriptorHostLauncher(descriptor) : descriptor ?? resolveHostShellLauncher();
+  if (shell.kind !== "powershell" || !command.trim()) return undefined;
+  // Encode the source as data: quoting, here-strings and embedded programs are not rewritten.
+  const probe = [
+    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+    `$source = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(command, "utf8").toString("base64")}'))`,
+    "$tokens = $null; $errors = $null",
+    "$null = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)",
+    "@{errors = @($errors | Select-Object -First 5 | ForEach-Object { @{id = $_.ErrorId; line = $_.Extent.StartLineNumber; column = $_.Extent.StartColumnNumber} })} | ConvertTo-Json -Compress",
+  ].join("\n");
+  const controller = new AbortController();
+  const signal = context?.abortSignal ? AbortSignal.any([context.abortSignal, controller.signal]) : controller.signal;
+  const probeContext = { ...(context ?? { cwd: process.cwd() }), abortSignal: signal, shellOutputLogs: undefined };
+  let stopWaiting!: () => void;
+  const stopped = new Promise<undefined>(resolve => {
+    stopWaiting = () => resolve(undefined);
+    signal.addEventListener("abort", stopWaiting, { once: true });
+  });
+  // Bound path resolution and process startup as well as wait; late startup keeps the aborted signal.
+  const timer = setTimeout(() => controller.abort(), 3_000);
+  timer.unref?.();
+  const runProbe = async (): Promise<string | undefined> => {
+    if (probeContext.environment) {
+      const result = await executeInEnvironment(probe, { timeout: 3_000, workdir: probeContext.cwd }, probeContext);
+      if (!result.isError) return result.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
+    } else {
+      const executor = new DefaultShellExecutor({
+        resolveHostShell: () => shell,
+        createProcess: (script, options) => createProcess([shell.bin, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], options),
+      });
+      const spec = await executor.resolve({ command: probe, timeoutMs: 3_000, maxOutputChars: 4_096 }, probeContext);
+      const result = await executor.run(spec, signal);
+      if (result.status === "completed" && result.exitCode === 0 && !result.outputTruncated) return result.output;
+    }
+    return undefined;
+  };
+  let output: string | undefined;
+  try {
+    output = await Promise.race([runProbe(), stopped]);
+  } catch {
+    // Probe unavailable: let the real interpreter report errors, never fall back to regex rejection.
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stopWaiting);
+  }
+  if (context?.abortSignal?.aborted) return interrupted();
+  let errors: Array<{ id: string; line: number; column: number }>;
+  try {
+    const parsed = JSON.parse(output ?? "");
+    if (!Array.isArray(parsed.errors) || !parsed.errors.every((error: Record<string, unknown>) =>
+      error && typeof error.id === "string" && error.id.length <= 128
+      && Number.isInteger(error.line) && Number.isInteger(error.column))) return undefined;
+    errors = parsed.errors.slice(0, 5);
+  } catch { return undefined; }
+  if (!errors.length) return undefined;
   return {
-    content: [{ type: "text", text: formatShellDialectMismatch({ shell, problems }) }],
+    content: [{ type: "text", text: `PowerShell syntax error (${describeHostShellLauncher(shell)}):\n${errors.map((error) => `- line ${error.line}, column ${error.column}: ${error.id}`).join("\n")}\nCorrect the reported syntax before retrying.` }],
     isError: true,
     failureKind: "invalid_input",
     executionState: "not_started",
-    ...(descriptor ? { metadata: shellResultMetadata(descriptor, null, "failed") } : {}),
+    ...(descriptor && "family" in descriptor ? { metadata: shellResultMetadata(descriptor, null, "failed") } : {}),
   };
 }
 
@@ -533,25 +589,19 @@ function diagnosePowerShellQuoting(command: string): ShellDialectProblem[] {
   return problems;
 }
 
-function diagnoseShellCommand(
-  spec: ShellExecSpec,
-): ShellDialectMismatch | null {
-  const shell = spec.hostShell;
-  const problems = diagnoseShellDialectMismatch(spec.command, shell);
-  return problems.length > 0 ? { shell, problems } : null;
-}
-
-function formatShellDialectMismatch(mismatch: ShellDialectMismatch): string {
+function withShellDialectHints(result: ToolResult, command: string, shell: HostShellLauncher): ToolResult {
+  if (result.failureKind !== "command") return result;
+  const problems = diagnoseShellDialectMismatch(command, shell);
+  if (!problems.length) return result;
   const lines = [
-    `Shell dialect mismatch or syntax error: the active shell is ${describeHostShellLauncher(mismatch.shell)}.`,
+    `Possible shell compatibility hints (active shell: ${describeHostShellLauncher(shell)}).`,
+    "These are heuristic suggestions, not confirmed syntax errors; diagnose the actual command output first.",
     "",
-    "Problems:",
   ];
-  for (const problem of mismatch.problems) {
+  for (const problem of problems) {
     lines.push(`- ${problem.message} ${problem.suggestion}`);
   }
-  lines.push("", "Rewrite the command using the active shell syntax.");
-  return lines.join("\n");
+  return { ...result, content: [...result.content, { type: "text", text: lines.join("\n") }] };
 }
 
 function formatTimeoutOutput(raw: string, timeout: number, maxOutputChars: number): string {

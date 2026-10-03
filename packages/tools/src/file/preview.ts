@@ -39,8 +39,8 @@ async function computeWriteChange(
 ): Promise<FileChangePreview | null> {
   const path = input.file_path;
   const content = input.content;
-  if (typeof path !== "string" || typeof content !== "string"
-    || (input.overwrite !== undefined && typeof input.overwrite !== "boolean")
+  if (Object.keys(input).some(key => !["file_path", "content", "expected_sha256"].includes(key))
+    || typeof path !== "string" || typeof content !== "string"
     || (input.expected_sha256 !== undefined && (typeof input.expected_sha256 !== "string"
       || !/^[a-f0-9]{64}$/i.test(input.expected_sha256)))) return null;
 
@@ -50,8 +50,8 @@ async function computeWriteChange(
     if (!item.isFile || item.isSymbolicLink) return null;
     const bytes = await operations.readBytes(path);
     const before = decodeUtf8Text(bytes);
-    if (before !== content && (input.overwrite === false || (typeof input.expected_sha256 === "string"
-      && createHash("sha256").update(bytes).digest("hex") !== input.expected_sha256.toLowerCase()))) return null;
+    if (before !== content && typeof input.expected_sha256 === "string"
+      && createHash("sha256").update(bytes).digest("hex") !== input.expected_sha256.toLowerCase()) return null;
     return { path, before, after: content };
   } catch (error) {
     // 只有不存在可视为新建；权限／编码／其他读取错误不能伪装成空文件。

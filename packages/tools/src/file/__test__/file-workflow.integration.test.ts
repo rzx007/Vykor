@@ -1,7 +1,8 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   QueryEngine, ToolRegistry, type AgentExecutionContext, type Message, type StreamEvent,
 } from "@vykor/core";
@@ -10,6 +11,8 @@ import { fileWriteTool } from "../write.js";
 import { fileEditTool } from "../edit.js";
 import { applyPatchTool } from "../apply-patch.js";
 import { buildRuntimeSystemPrompt } from "../../../../prompts/src/index.js";
+import { CodexSubscriptionClient } from "../../../../api/src/providers/codex.js";
+import { computeFileChange } from "../preview.js";
 
 async function defaultPrompt(cwd: string) {
   const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
@@ -23,11 +26,75 @@ async function defaultPrompt(cwd: string) {
 
 // Assert at the consuming request boundary, independently of the prompt builder.
 function expectWriteGuidance(system: string | undefined) {
-  expect(system).toContain("To create a file, call Write once with file_path and complete content.");
+  expect(system).toContain("To create or fully replace a file, call Write once with file_path and complete content");
   expect(system).toContain("The reference copies only content; permission and file-state checks still apply.");
 }
 
 describe("one complete file workflow", () => {
+  it.each([false, true])("preserves optional Write fields through Codex, reuse and current permissions (deny retry: %s)", async denyRetry => {
+    const dir = await mkdtemp(join(tmpdir(), "oh-codex-write-contract-"));
+    try {
+      const file = join(dir, "target.txt"); await writeFile(file, "old");
+      const body = "complete generated body\n".repeat(200);
+      const hash = createHash("sha256").update("old").digest("hex");
+      const calls = [
+        { file_path: file, content: body, expected_sha256: "0".repeat(64) },
+        { file_path: file, content_from: "source", expected_sha256: hash },
+      ];
+      const requests: Array<{ tools: Array<{ name: string; strict?: boolean; parameters: Record<string, unknown> }> }> = [];
+      vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+        const turn = requests.length;
+        requests.push(JSON.parse(String(init?.body)));
+        const frames: Array<Record<string, unknown>> = [];
+        if (calls[turn]) frames.push({ type: "response.output_item.done", item: {
+          type: "function_call", id: "fc-" + turn, call_id: turn === 0 ? "source" : "retry", name: "Write",
+          arguments: JSON.stringify(calls[turn]),
+        } });
+        frames.push({ type: "response.completed", response: { usage: { input_tokens: 2, output_tokens: 1 } } });
+        return new Response(frames.map(frame => "data: " + JSON.stringify(frame) + "\n\n").join(""), {
+          headers: { "content-type": "text/event-stream" },
+        });
+      });
+      const token = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url") + "."
+        + Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url") + ".sig";
+      const checked: Record<string, unknown>[] = [];
+      const hooked: Record<string, unknown>[] = [];
+      const previews: Array<Awaited<ReturnType<typeof computeFileChange>>> = [];
+      const registry = new ToolRegistry(); registry.register(fileWriteTool);
+      const engine = new QueryEngine(new CodexSubscriptionClient({ apiKey: token }), registry, {
+        checkTool: async (_name, input) => {
+          checked.push({ ...input }); previews.push(await computeFileChange("Write", input));
+          return { action: denyRetry && checked.length === 2 ? "deny" : "allow" };
+        },
+      }, { register() {}, execute: async (event, context) => {
+        if (event === "pre_tool_use") hooked.push(context.input as Record<string, unknown>);
+        return { blocked: false };
+      } }, { cwd: dir, model: "gpt-test", trajectoryTrackerFactory: false,
+        settings: { model: "gpt-test", apiFormat: "codex", maxTurns: 10, permission: { mode: "default" }, sandbox: { enabled: false } } });
+      const events: StreamEvent[] = [];
+      for await (const event of engine.submitMessage("fixture")) events.push(event);
+      expect(requests).toHaveLength(3);
+      for (const request of requests) {
+        const tool = request.tools.find(tool => tool.name === "Write")!;
+        expect(tool.strict).toBe(false);
+        expect(tool.parameters.required).toEqual(["file_path"]);
+        expect(Object.keys(tool.parameters.properties as object)).toEqual(["file_path", "content", "content_from", "expected_sha256"]);
+      }
+      const ends = events.filter(event => event.type === "tool_use_end");
+      expect(ends[0]?.result).toMatchObject({ failureKind: "precondition", executionState: "not_started" });
+      expect(JSON.stringify(ends[0]?.result.content)).toContain("content_from");
+      expect(checked).toHaveLength(2);
+      expect(checked[1]).toEqual({ file_path: file, content: body, expected_sha256: hash });
+      expect(calls[1]).not.toHaveProperty("content");
+      expect(hooked).toHaveLength(denyRetry ? 1 : 2);
+      expect(previews[1]).toMatchObject({ before: "old", after: body });
+      expect(ends[1]?.result).toMatchObject(denyRetry
+        ? { isError: true, failureKind: "permission", executionState: "not_started" }
+        : { executionState: "completed" });
+      expect(await readFile(file, "utf8")).toBe(denyRetry ? "old" : body);
+    } finally { vi.unstubAllGlobals(); await rm(dir, { recursive: true, force: true }); }
+  });
+
   it("keeps wrong numeric Edit matches rejected and then accepts a complete Write without an extra flag", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-edit-write-recovery-"));
     try {
@@ -97,7 +164,7 @@ describe("one complete file workflow", () => {
       expect(modelRequests).toHaveLength(2);
       const firstSchema = modelRequests[0]!.tools.find(t => t.name === "Write")!.inputSchema;
       expect(firstSchema).toMatchObject({ type: "object", required: ["file_path"], additionalProperties: false });
-      expect(Object.keys(firstSchema.properties as object)).toEqual(["file_path", "content", "content_from", "overwrite", "expected_sha256"]);
+      expect(Object.keys(firstSchema.properties as object)).toEqual(["file_path", "content", "content_from", "expected_sha256"]);
       expect(modelRequests[1]!.tools.find(t => t.name === "Write")!.inputSchema).toEqual(firstSchema);
       expect(modelRequests[0]!.system).toContain("Write");
     } finally { await rm(dir, { recursive: true, force: true }); }
@@ -139,7 +206,7 @@ describe("one complete file workflow", () => {
             expect(feedback).toContain("Supply the explicit target and intent options in the new call.");
             expect(feedback).toContain("Reusing data does not inherit authorization; normal permissions and state checks still apply.");
             name = "Write"; id = "reuse-body";
-            input = { file_path: target, overwrite: true, expected_sha256: inspectedHash, content_from: "write-body" };
+            input = { file_path: target, expected_sha256: inspectedHash, content_from: "write-body" };
           } else if (turn === 3) {
             name = "Edit"; id = "batch-edit"; input = { file_path: target, edits: [
               { old_string: "alpha", new_string: "ALPHA" }, { old_string: "beta", new_string: "BETA" },
@@ -178,7 +245,7 @@ describe("one complete file workflow", () => {
       expect(ends.slice(2).every(e => !e.result.isError)).toBe(true);
       const rawRetry = requests[3]!.filter(m => m.type === "assistant").flatMap(m => m.toolUses ?? []).find(c => c.id === "reuse-body");
       // In-memory history expands the reference; the actual next model input did not resend a body.
-      expect(approvals[1]).toMatchObject({ content: body, overwrite: true, expected_sha256: inspectedHash });
+      expect(approvals[1]).toMatchObject({ content: body, expected_sha256: inspectedHash });
       expect(approvals[1]).not.toHaveProperty("content_from");
       expect(rawRetry?.input.content).toBe(body);
       expect(rawRetry?.input.file_path).toBe(target);

@@ -69,7 +69,7 @@ describe("Native environment file policy", () => {
   it("Write refuses a denied existing-file read without disclosing its body or hash", async () => {
     await inNativeEnvironment(async (context, files) => {
       const read = vi.spyOn(files, "readBytes");
-      const result = await fileWriteTool.execute({ file_path: "secret.txt", content: "changed", overwrite: true }, context);
+      const result = await fileWriteTool.execute({ file_path: "secret.txt", content: "changed" }, context);
       expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(read).not.toHaveBeenCalled();
       expect(JSON.stringify(result)).not.toContain(secret.trim());
@@ -97,7 +97,7 @@ describe("Native environment file policy", () => {
       const settings: Settings = { ...context.settings!, sandbox: { enabled: true,
         filesystem: { allowRead: ["."], allowWrite: ["."], denyRead: ["visible.txt"] } } };
       const expected_sha256 = createHash("sha256").update("old\n").digest("hex");
-      const committed = await fileWriteTool.execute({ file_path: "visible.txt", overwrite: true,
+      const committed = await fileWriteTool.execute({ file_path: "visible.txt",
         expected_sha256, content: "changed" }, { ...context, settings });
       expect(committed).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
       expect(read).not.toHaveBeenCalled();
