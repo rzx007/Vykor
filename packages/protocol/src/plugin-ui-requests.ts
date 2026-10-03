@@ -4,6 +4,13 @@ import {
 } from "./plugin-ui.js";
 import { ProtocolValidationError } from "./requests.js";
 
+export function parsePluginUiRouteIds(value: { sessionId: string; instanceId: string; requestId?: string }) {
+  if (!value.sessionId.trim()) throw new ProtocolValidationError("sessionId is required", "sessionId");
+  if (!isPluginUiUuid(value.instanceId)) throw new ProtocolValidationError("instanceId must be a UUID", "instanceId");
+  if (value.requestId !== undefined && !isPluginUiUuid(value.requestId)) throw new ProtocolValidationError("requestId must be a UUID", "requestId");
+  return value;
+}
+
 function request(value: unknown, fields: readonly string[]): Record<string, unknown> {
   if (!isPluginUiRecord(value)) throw new ProtocolValidationError("Request body must be a JSON object");
   const unknown = Object.keys(value).find(key => !fields.includes(key));

@@ -4,6 +4,7 @@ export type ApplicationErrorCode =
   | "conflict"
   | "not_supported"
   | "plugin_ui_not_found"
+  | "plugin_ui_payload_too_large"
   | "plugin_ui_request_conflict"
   | "plugin_ui_revision_conflict"
   | "plugin_ui_session_busy"
@@ -22,6 +23,7 @@ export const APPLICATION_ERROR_HTTP_STATUS: Record<ApplicationErrorCode, number>
   invalid_request: 400,
   not_found: 404,
   plugin_ui_not_found: 404,
+  plugin_ui_payload_too_large: 413,
   plugin_ui_request_conflict: 409,
   plugin_ui_revision_conflict: 409,
   plugin_ui_session_busy: 409,

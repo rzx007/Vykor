@@ -8,6 +8,7 @@ import {
   parseDismissPluginUiInput, parseInvokePluginUiActionInput, stringifyPluginUiJson,
   type DismissPluginUiInput,
   type InvokePluginUiActionInput, type PluginUiActionReceipt, type PluginUiActionRunMetadata,
+  type PluginUiDocumentResponse, type PluginUiActionResponse,
   type SessionMessagePartRecord, type SessionRecord, type SessionRunRecord,
 } from "@vykor/protocol";
 import type { SessionStore } from "@vykor/services";
@@ -23,12 +24,17 @@ export interface PluginUiCurrentState {
   permissionsApproved: boolean;
   snapshot: "valid" | "missing" | "changed";
   binding?: RunPluginUiBinding;
+  /** Verified static facts remain available when Native Host preparation fails. */
+  documentBinding?: Pick<RunPluginUiBinding, "pluginId" | "pluginVersion" | "pluginDigest" | "componentId" | "componentDigest" | "definition">;
+  document?: PluginUiDocumentResponse;
   runtimeAvailable: boolean;
 }
 
 export interface SessionPluginUiServiceOptions {
   store: Pick<SessionStore, "sessions" | "conversations" | "runs" | "transaction">;
   resolveCurrent(session: SessionRecord, instance: PluginUiInstanceRecord): Promise<PluginUiCurrentState>;
+  /** Production verifies captured files immediately before a source result transaction. */
+  verifySourceBinding?(binding: RunPluginUiBinding): Promise<boolean>;
   diagnose?(diagnostic: { code: "plugin_ui_invalid_result"; sessionId: string; runId: string; partId: string }): void;
   actions?: {
     operations: Pick<SessionOperationRunner, "run">;
@@ -40,8 +46,30 @@ export interface SessionPluginUiServiceOptions {
 
 export class SessionPluginUiService {
   private readonly runViews = new Map<string, RunCapabilityView>();
+  private readonly checkedSources = new Map<string, Map<string, RunPluginUiBinding>>();
 
   constructor(private readonly options: SessionPluginUiServiceOptions) {}
+
+  get backendReady(): boolean { return this.options.actions !== undefined && this.options.verifySourceBinding !== undefined; }
+
+  async getDocument(sessionId: string, instanceId: string): Promise<PluginUiDocumentResponse> {
+    const { session, instance } = this.requireSource(sessionId, instanceId);
+    let current: PluginUiCurrentState;
+    try { current = await this.options.resolveCurrent(session, instance); }
+    catch { throw new ApplicationError(503, "插件文档暂不可用", "plugin_ui_unavailable"); }
+    const availability = this.availability(session, instance, current);
+    if (!availability.canRender) this.throwUnavailable(availability);
+    if (!current.document) throw new ApplicationError(503, "插件文档暂不可用", "plugin_ui_unavailable");
+    return current.document;
+  }
+
+  readAction(sessionId: string, instanceId: string, requestId: string): PluginUiActionResponse {
+    const receipt = this.getAction(sessionId, instanceId, requestId);
+    const run = this.options.store.runs.getRun(receipt.runId)!;
+    const action = readPluginUiAction(run.metadata)!;
+    const part = this.options.store.conversations.listMessageParts(sessionId).find(p => p.id === action.toolUseId);
+    return { receipt, ...(part?.output === undefined ? {} : { result: structuredClone(part.output) }) };
+  }
 
   async invokeAction(sessionId: string, instanceId: string, value: InvokePluginUiActionInput): Promise<PluginUiActionReceipt> {
     // Own the JSON before the first await: callers cannot change what was approved.
@@ -197,16 +225,15 @@ export class SessionPluginUiService {
     const actions = this.requireActions();
     const check = () => this.assertActionState(sessionId, instanceId, revision, ownerRunId);
     let source = check();
-    const agent = await actions.acquireSession(sessionId);
+    let agent: Awaited<ReturnType<typeof actions.acquireSession>>;
+    try { agent = await actions.acquireSession(sessionId); }
+    catch { throw new ApplicationError(503, "插件运行环境暂不可用", "plugin_ui_unavailable"); }
     source = check();
     const current = await this.options.resolveCurrent(source.session, source.instance);
     source = check();
     const availability = this.availability(source.session, source.instance, current);
     if (availability.code !== "available") {
-      throw new ApplicationError(409, `插件界面不可执行: ${availability.code}`, availability.code === "permission-missing"
-        ? "plugin_ui_permission_missing" : availability.code === "action-unknown" ? "plugin_ui_action_unknown"
-        : availability.code === "snapshot-changed" || availability.code === "snapshot-missing" ? "plugin_ui_snapshot_changed"
-        : availability.code === "invalid-definition" ? "plugin_ui_invalid_definition" : "plugin_ui_unavailable");
+      this.throwUnavailable(availability);
     }
     const view = agent.createRunCapabilityView(source.instance.pluginId);
     const binding = view.pluginUi?.get(`${source.instance.pluginId}:${source.instance.componentId}`);
@@ -280,10 +307,30 @@ export class SessionPluginUiService {
   /** Host-only entry: pass the acquired Agent's captured view before submitMessage. */
   registerRunView(runId: string, view: RunCapabilityView): void {
     this.runViews.set(runId, view);
+    this.checkedSources.delete(runId);
   }
 
   releaseRunView(runId: string): void {
     this.runViews.delete(runId);
+    this.checkedSources.delete(runId);
+  }
+
+  /** Reliable event sink calls this just before entering the synchronous Part transaction. */
+  async preflightSource(input: { runId: string; toolUseId: string; toolName: string; result: ToolResult }): Promise<void> {
+    if (!this.options.verifySourceBinding) return;
+    this.checkedSources.get(input.runId)?.delete(input.toolUseId);
+    const proposal = readPluginUiProposal(input.result.metadata);
+    const view = this.runViews.get(input.runId);
+    const tool = view?.tools.get(input.toolName);
+    const pluginId = tool?.source?.kind === "plugin" ? tool.source.id : undefined;
+    const binding = pluginId && proposal ? view?.pluginUi?.get(`${pluginId}:${proposal.componentId}`) : undefined;
+    if (!binding || input.result.isError || input.result.executionState !== "completed") return;
+    try {
+      if (!await this.options.verifySourceBinding(binding) || this.runViews.get(input.runId) !== view) return;
+      const checked = this.checkedSources.get(input.runId) ?? new Map<string, RunPluginUiBinding>();
+      checked.set(input.toolUseId, binding);
+      this.checkedSources.set(input.runId, checked);
+    } catch { /* Invalid UI must never fail an otherwise successful business tool. */ }
   }
 
   /** Called synchronously after the source Part write, inside its existing transaction. */
@@ -306,6 +353,7 @@ export class SessionPluginUiService {
     const part = this.options.store.conversations.listMessageParts(input.sessionId).find(p => p.id === input.partId);
     if (!proposal || !pluginId || tool?.ownerPluginId !== pluginId || view?.pluginId !== pluginId
       || !binding || binding.pluginId !== pluginId || binding.componentId !== proposal.componentId
+      || (this.options.verifySourceBinding && this.checkedSources.get(input.runId)?.get(input.toolUseId) !== binding)
       || binding.definition.id !== proposal.componentId || !run || run.sessionId !== input.sessionId
       || run.metadata.pluginId !== pluginId || Object.hasOwn(run.metadata, "uiAction")
       || input.result.isError || input.result.executionState !== "completed"
@@ -335,7 +383,7 @@ export class SessionPluginUiService {
       return { instance, actions: [], availability: { code: "runtime-unavailable", canRender: false, canInvoke: false } };
     }
     const availability = this.availability(session, instance, current);
-    return { instance, availability, actions: availability.canRender
+    return { instance, availability, actions: availability.canRender && current.binding
       ? current.binding!.definition.actions.map(({ id, label, tool, completion }) => {
         const target = current.binding!.actionTools.find(binding => binding.definition.name === tool)!;
         return { id, label, completion, toolName: target.definition.name, inputSchema: structuredClone(target.definition.inputSchema) };
@@ -361,18 +409,28 @@ export class SessionPluginUiService {
     if (!current.enabled || !current.uiEnabled) return unavailable("plugin-disabled");
     if (!current.permissionsApproved) return unavailable("permission-missing");
     if (current.snapshot !== "valid") return unavailable(current.snapshot === "missing" ? "snapshot-missing" : "snapshot-changed");
-    const binding = current.binding;
+    const binding = current.documentBinding ?? current.binding;
     if (!binding || binding.pluginId !== instance.pluginId || binding.componentId !== instance.componentId
       || binding.definition.id !== instance.componentId) return unavailable("invalid-definition");
-    if (!binding.definition.actions.every(action => binding.actionTools.some(tool =>
+    if (current.binding && !binding.definition.actions.every(action => current.binding!.actionTools.some(tool =>
       tool.definition.name === action.tool && tool.source?.kind === "plugin"
       && tool.source.id === instance.pluginId && tool.ownerPluginId === instance.pluginId))) return unavailable("invalid-definition");
     if (binding.pluginVersion !== instance.pluginVersion || binding.pluginDigest !== instance.pluginDigest
       || binding.componentDigest !== instance.componentDigest) return unavailable("snapshot-changed");
+    if (current.binding && (current.binding.pluginId !== instance.pluginId || current.binding.componentId !== instance.componentId
+      || current.binding.pluginVersion !== instance.pluginVersion || current.binding.pluginDigest !== instance.pluginDigest
+      || current.binding.componentDigest !== instance.componentDigest)) return unavailable("snapshot-changed");
     if (this.lastActionUnknown(instance)) return unavailable("action-unknown", true);
     if (session.status === "archived" || session.status === "closing") return unavailable("session-archived", true);
-    if (!current.runtimeAvailable) return unavailable("runtime-unavailable", true);
+    if (!current.runtimeAvailable || !current.binding) return unavailable("runtime-unavailable", true);
     return { code: "available", canRender: true, canInvoke: instance.status === "open" && !instance.activeActionRunId };
+  }
+
+  private throwUnavailable(availability: PluginUiAvailability): never {
+    throw new ApplicationError(409, `插件界面不可用: ${availability.code}`, availability.code === "permission-missing"
+      ? "plugin_ui_permission_missing" : availability.code === "action-unknown" ? "plugin_ui_action_unknown"
+      : availability.code === "snapshot-changed" || availability.code === "snapshot-missing" ? "plugin_ui_snapshot_changed"
+      : availability.code === "invalid-definition" ? "plugin_ui_invalid_definition" : "plugin_ui_unavailable");
   }
 }
 

@@ -2,6 +2,17 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
+    { "name": "PluginUiResource", "kind": "runtime-export" },
+    { "name": "pluginUi", "kind": "client-resource" },
+    { "name": "DismissPluginUiInput", "kind": "type-export" },
+    { "name": "InvokePluginUiActionInput", "kind": "type-export" },
+    { "name": "PluginUiActionReceipt", "kind": "type-export" },
+    { "name": "PluginUiActionResponse", "kind": "type-export" },
+    { "name": "PluginUiActionDescription", "kind": "type-export" },
+    { "name": "PluginUiAvailability", "kind": "type-export" },
+    { "name": "PluginUiDocumentResponse", "kind": "type-export" },
+    { "name": "PluginUiInstanceRecord", "kind": "type-export" },
+    { "name": "PluginUiInstanceResponse", "kind": "type-export" },
     {
       "name": "AttachmentResource",
       "kind": "runtime-export"

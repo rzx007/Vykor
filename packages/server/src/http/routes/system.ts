@@ -28,6 +28,7 @@ import {
 import { settingsPatchRuntimeImpact } from "../../application/default-services/settings-service.js";
 
 export interface SystemRoutesContext {
+  pluginUiReady?: boolean;
   version?: string;
   commandCatalog?: CommandCatalogProvider;
   settingsService?: SettingsService;
@@ -73,6 +74,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               retention: 1,
               attachments: 1,
               pluginCapabilities: 1,
+              ...(context.pluginUiReady ? { pluginUi: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
             },

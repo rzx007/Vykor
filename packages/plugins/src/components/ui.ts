@@ -12,6 +12,15 @@ class UiReadError extends Error {
   }
 }
 
+/** Read only a previously validated component; verify the exact bytes again at delivery. */
+export async function readNativeUiDocument(root: string, component: NativeUiComponentMetadata): Promise<{ html: string; sha256: string }> {
+  const { bytes } = await readUiBytes(root, component.declaredEntry, PLUGIN_UI_LIMITS.htmlBytes);
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const digest = createHash("sha256").update(stringifyPluginUiJson(component.definition)).update(Buffer.from([0])).update(bytes).digest("hex");
+  if (sha256 !== component.htmlSha256 || digest !== component.componentDigest) throw new UiReadError("plugin_ui_invalid_definition");
+  return { html: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes), sha256 };
+}
+
 /** Read a bounded ordinary file without accepting in-root symlinks or junctions. */
 async function readUiBytes(root: string, declaredPath: string, limit: number): Promise<{ path: string; bytes: Buffer }> {
   const realRoot = await realpath(root);

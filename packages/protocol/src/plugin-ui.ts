@@ -107,6 +107,17 @@ export interface PluginUiActionReceipt {
   status: "pending" | "running" | "completed" | "failed" | "interrupted";
 }
 
+export interface PluginUiDocumentResponse {
+  html: string;
+  sha256: string;
+}
+
+export interface PluginUiActionResponse {
+  receipt: PluginUiActionReceipt;
+  /** Original persisted tool result, absent before tool settlement. */
+  result?: unknown;
+}
+
 export interface PluginUiActionRunMetadata {
   schemaVersion: 1;
   instanceId: string;

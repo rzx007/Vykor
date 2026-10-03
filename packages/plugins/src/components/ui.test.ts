@@ -4,13 +4,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { writeNativeUiFixture } from "../test-helpers/native-ui.js";
-import { loadNativeUiMetadata, summarizeNativeUi } from "./ui.js";
+import { loadNativeUiMetadata, readNativeUiDocument, summarizeNativeUi } from "./ui.js";
 
 let root: string;
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "vk-ui-metadata-")); });
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 describe("loadNativeUiMetadata", () => {
+  it.each(["changed-bytes", "changed-definition", "oversized", "junction"])("rechecks %s on document delivery", async mode => {
+    const plugin = await writeNativeUiFixture(root);
+    const component = (await loadNativeUiMetadata(plugin)).value![0]!;
+    const first = await readNativeUiDocument(root, component);
+    expect(first.sha256).toBe(createHash("sha256").update(first.html).digest("hex"));
+    if (mode === "changed-bytes") await writeFile(join(root, "ui/findings.html"), "changed");
+    if (mode === "changed-definition") component.definition.title = "Changed";
+    if (mode === "oversized") await writeFile(join(root, "ui/findings.html"), Buffer.alloc(2 * 1024 * 1024 + 1, 65));
+    if (mode === "junction") {
+      await symlink(join(root, "ui"), join(root, "alias"), process.platform === "win32" ? "junction" : "dir");
+      component.declaredEntry = "./alias/findings.html";
+    }
+    await expect(readNativeUiDocument(root, component)).rejects.toMatchObject({ code: mode === "oversized" ? "plugin_ui_payload_too_large" : "plugin_ui_invalid_definition" });
+  });
   it("loads files and hashes without executing HTML or Node", async () => {
     const plugin = await writeNativeUiFixture(root);
     const loaded = await loadNativeUiMetadata(plugin);

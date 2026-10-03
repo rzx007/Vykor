@@ -24,6 +24,7 @@ export {
   AuthResource,
   ProjectResource,
   PluginResource,
+  PluginUiResource,
   DevelopmentResource,
   SessionResource,
   AttachmentResource,
@@ -37,6 +38,15 @@ export {
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
 export type {
+  DismissPluginUiInput,
+  InvokePluginUiActionInput,
+  PluginUiActionReceipt,
+  PluginUiActionResponse,
+  PluginUiActionDescription,
+  PluginUiAvailability,
+  PluginUiDocumentResponse,
+  PluginUiInstanceRecord,
+  PluginUiInstanceResponse,
   PluginCatalogEntry,
   AgentEnvironmentCapabilities,
   AttachmentAssetRecord,

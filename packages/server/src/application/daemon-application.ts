@@ -4,6 +4,7 @@ import type { AgentBackgroundShellHost, Settings } from "@vykor/core";
 import type { ChannelConfigStore } from "@vykor/auth";
 import { createModelCatalogService } from "@vykor/api";
 import { fileReadTool } from "@vykor/tools";
+import { computePluginBehaviorDigest } from "@vykor/plugins";
 import {
   type ObservableJobProducer,
 } from "@vykor/agent-runtime";
@@ -84,6 +85,9 @@ import { createSessionRuntimeDiscovery } from "./session/session-runtime-discove
 import { RunAdmissionService } from "./session/run-admission-service.js";
 import { RunControlService } from "./session/run-control-service.js";
 import { SessionPluginCapabilityService } from "./session/session-plugin-capability-service.js";
+import { SessionPluginUiService } from "./session/session-plugin-ui-service.js";
+import { SessionPluginUiActionExecutor } from "./session/session-plugin-ui-action-executor.js";
+import { resolveSessionPluginUiCurrent } from "./session/session-plugin-ui-current.js";
 import { SessionPostRunMaintenance } from "./session/session-post-run-maintenance.js";
 import { SessionExecutionProjector } from "./session/session-execution-projector.js";
 import { BackgroundShellService } from "./session/background-shell-service.js";
@@ -156,6 +160,7 @@ export interface DaemonApplicationOptions {
  * daemon 对外暴露的能力面。HTTP 路由只调这些，不自己造 Agent、不自己写会话记录。
  */
 export interface DurableAgentApplication {
+  readonly pluginUi?: SessionPluginUiService;
   readonly store: SessionStore;
   readonly attachments: AttachmentService;
   readonly interactions: SessionInteractionService;
@@ -200,6 +205,7 @@ function failMissingSettings(): never {
  * → onEvent 进投影 → 写成会话记录 → events 推给窗口。
  */
 export class DaemonApplication implements DurableAgentApplication {
+  readonly pluginUi: SessionPluginUiService;
   readonly store: SessionStore;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
@@ -333,11 +339,37 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       // transcript：把模型吐出的字/工具块写成消息。
       // executionProjector：子 Agent、后台 shell 在会话里的那条「任务」记录。
+      this.operationRunner = new SessionOperationRunner({
+        sessions: store.sessions, operationGate: this.operationGate, events: this.eventPublisher,
+        assertReady: () => this.assertReady(),
+      });
+      let actionExecutor: SessionPluginUiActionExecutor;
+      const application = this;
+      this.pluginUi = new SessionPluginUiService({
+        store,
+        verifySourceBinding: async binding => await computePluginBehaviorDigest(binding.root) === binding.pluginDigest,
+        resolveCurrent: async (session, instance) => resolveSessionPluginUiCurrent(session, instance, {
+          settings: options.getSettingsForCwd ? await options.getSettingsForCwd(session.cwd) : (options.getSettings?.() ?? options.settings),
+          acquireSession: id => this.agentPool.acquireSession(id),
+        }),
+        diagnose: diagnostic => options.log({ level: "warn", event: diagnostic.code,
+          sessionId: diagnostic.sessionId, runId: diagnostic.runId }),
+        actions: {
+          operations: this.operationRunner,
+          // Resolve the existing engine after assembly; no second lane or coordinator.
+          engine: { enqueueHostWork: input => this.runEngine.enqueueHostWork(input),
+            get runtimeBridge() { return application.runEngine.runtimeBridge; } },
+          acquireSession: id => this.agentPool.acquireSession(id),
+          execute: (id, context) => actionExecutor.execute(id, context),
+        },
+      });
+      actionExecutor = new SessionPluginUiActionExecutor({ store, service: this.pluginUi,
+        operationGate: this.operationGate, events: this.eventPublisher });
       this.transcriptProjection = new SessionTranscriptProjection({
         conversations: store.conversations,
         incrementalOutput: store.incrementalOutput,
         runs: store.runs,
-      });
+      }, this.pluginUi);
       this.executionProjector = new SessionExecutionProjector({
         store,
         getChildAgentExecutionRegistry: (scope) => getChildAgentExecutionRegistry(scope),
@@ -563,6 +595,7 @@ export class DaemonApplication implements DurableAgentApplication {
             rootAgent: agent,
             store,
             transcriptProjection: this.transcriptProjection,
+            pluginUi: this.pluginUi,
             executionProjector: this.executionProjector,
             liveChildren: this.liveChildren,
             events: this.eventPublisher,
@@ -697,7 +730,7 @@ export class DaemonApplication implements DurableAgentApplication {
         agentPool: this.agentPool, events: this.eventPublisher, transcriptProjection: this.transcriptProjection,
         traceIdForRun: (runId) => this.traceIdForRun(runId), log: options.log, postRunMaintenance,
         attachmentResources: this.attachmentResources, attachmentOcrAvailable: true, contextUsageCache, refreshContextUsage,
-        resolveSessionSettings, autoReview,
+        resolveSessionSettings, autoReview, pluginUi: this.pluginUi,
       });
       const runExecutor = runExecution.executor;
       const materializeSteerInput = runExecution.materializeSteerInput;
@@ -751,6 +784,7 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       this.maintenance = new SessionMaintenanceService({
         data: {
+          runs: store.runs,
           conversations: store.conversations,
           conversationTransactions: store.conversationTransactions,
           sessions: store.sessions,
@@ -835,12 +869,6 @@ export class DaemonApplication implements DurableAgentApplication {
         operationGate: this.operationGate,
         events: this.eventPublisher,
         contextUsageCache,
-        assertReady: () => this.assertReady(),
-      });
-      this.operationRunner = new SessionOperationRunner({
-        sessions: store.sessions,
-        operationGate: this.operationGate,
-        events: this.eventPublisher,
         assertReady: () => this.assertReady(),
       });
       this.interactions = new SessionInteractionService({
@@ -938,6 +966,7 @@ export class DaemonApplication implements DurableAgentApplication {
        */
       // 构造可以立刻返回；workflow 恢复跑完才算 ready，避免一上来就对半截工作流动手。
       const recovery = new StartupRecoveryService({
+        recoverPluginUiActions: () => this.pluginUi.recover(),
         recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
         interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
         failIncompleteReviewsOnStartup: () => autoReview.failIncompleteReviewsOnStartup(),

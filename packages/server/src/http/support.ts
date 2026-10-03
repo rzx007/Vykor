@@ -146,6 +146,10 @@ export function applicationErrorResponse(
   fallbackStatus = 500,
 ): Response {
   if (isAttachmentError(error)) return attachmentErrorResponse(error);
+  if (error instanceof ApplicationError && error.code.startsWith("plugin_ui_")) {
+    return jsonResponse({ code: error.code, message: error.message } satisfies ProtocolError,
+      APPLICATION_ERROR_HTTP_STATUS[error.code]);
+  }
   const status =
     error instanceof ApplicationError
       ? APPLICATION_ERROR_HTTP_STATUS[error.code]
@@ -166,6 +170,9 @@ export function protocolValidationErrorResponse(error: unknown): Response {
           ? error.message
           : String(error),
     );
+  if (validationError.details?.field === "args" && validationError.details.reason === "payload_too_large") {
+    return jsonResponse({ ...validationError.toProtocolError(), code: "plugin_ui_payload_too_large" }, 413);
+  }
   return jsonResponse(validationError.toProtocolError() satisfies ProtocolError, 400);
 }
 
@@ -178,11 +185,11 @@ export function sessionMutationErrorStatus(error: unknown): number {
     : 404;
 }
 
-export async function readJson(c: Context): Promise<JsonRecord> {
+export async function readJson(c: Context, tooLargeError = new ProtocolValidationError("Request body too large")): Promise<JsonRecord> {
   const text = await c.req.text();
   if (!text.trim()) return {};
   if (new TextEncoder().encode(text).byteLength > 1024 * 1024) {
-    throw new ProtocolValidationError("Request body too large");
+    throw tooLargeError;
   }
   let parsed: unknown;
   try {

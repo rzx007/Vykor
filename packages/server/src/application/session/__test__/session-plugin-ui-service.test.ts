@@ -64,6 +64,23 @@ function harness() {
 }
 
 describe("trusted plugin UI source projection", () => {
+  it("renders verified static definitions without inventing Native action schemas", async () => {
+    const h = harness(); h.finish();
+    const { actionTools: _tools, ...documentBinding } = h.binding;
+    h.setCurrent({ binding: undefined, documentBinding, runtimeAvailable: false });
+    const instance = (await import("@vykor/protocol")).readPluginUiInstance(h.part().metadata)!;
+    expect(await h.service.get(h.session.id, instance.instanceId)).toMatchObject({
+      availability: { code: "runtime-unavailable", canRender: true, canInvoke: false }, actions: [],
+    });
+  });
+  it("does not authorize a runtime binding that differs from the verified document", async () => {
+    const h = harness(); h.finish();
+    const { actionTools: _tools, ...documentBinding } = h.binding;
+    h.setCurrent({ documentBinding, binding: { ...h.binding, pluginVersion: "2.0.0" } });
+    const instance = (await import("@vykor/protocol")).readPluginUiInstance(h.part().metadata)!;
+    expect((await h.service.get(h.session.id, instance.instanceId)).availability)
+      .toEqual({ code: "snapshot-changed", canRender: false, canInvoke: false });
+  });
   it("persists host identity in the source Part, preserving raw output, and reads after SQLite reopen", async () => {
     const h = harness();
     const original = result();
