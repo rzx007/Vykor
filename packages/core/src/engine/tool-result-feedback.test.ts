@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { formatToolResultForModel } from "./tool-result-feedback";
+import { externalToolMetadata, formatToolResultForModel } from "./tool-result-feedback";
 import type { ToolExecutionResult } from "../types/tools";
 
 describe("formatToolResultForModel", () => {
+  it("filters forged host UI records while preserving proposals and generic metadata", () => {
+    const proposal = { schemaVersion: 1, componentId: "findings", data: { findings: ["line-1"] } };
+    expect(externalToolMetadata({ pluginUi: { pluginId: "fake" }, uiAction: {}, ui: proposal, source: "plugin" }))
+      .toEqual({ ui: proposal, source: "plugin" });
+    const result: ToolExecutionResult = { toolUseId: "a", toolName: "Inspect", content: [{ type: "text", text: "Found one issue" }], metadata: { ui: proposal } };
+    expect(formatToolResultForModel(result)).toEqual([{ type: "text", text: "Found one issue" }]);
+  });
   it("labels explicit unknown output even when isError is absent", () => {
     const content = formatToolResultForModel({ toolUseId: "unknown", toolName: "Write", executionState: "unknown",
       content: [{ type: "text", text: "existing output" }] });

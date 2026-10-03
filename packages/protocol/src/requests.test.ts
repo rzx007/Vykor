@@ -24,6 +24,13 @@ function expectInvalid(run: () => unknown, field?: string): void {
 }
 
 describe("HTTP request parsers", () => {
+  it.each(["metadata", "runMetadata"])("rejects reserved host names in Prompt %s", namespace => {
+    for (const name of ["pluginUi", "uiAction"]) {
+      expectInvalid(() => parseAdmitPromptRequest({ content: "hello", [namespace]: { [name]: {} } }), `${namespace}.${name}`);
+    }
+    expect(parseAdmitPromptRequest({ content: "hello", metadata: { ui: { schemaVersion: 1, componentId: "findings", data: {} }, source: "desktop" } }).metadata)
+      .toEqual({ ui: { schemaVersion: 1, componentId: "findings", data: {} }, source: "desktop" });
+  });
   it("normalizes a session model into runtime metadata", () => {
     expect(
       parseCreateSessionRequest({

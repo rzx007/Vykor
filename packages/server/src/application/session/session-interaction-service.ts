@@ -5,6 +5,7 @@ import {
 } from "@vykor/services";
 import {
   sessionUserInputText,
+  assertPromptMetadataAllowed,
   type SessionInputRecord,
   type SessionRecord,
   type SessionRunRecord,
@@ -83,6 +84,7 @@ export class SessionInteractionService {
     sessionId: string,
     input: EditLatestPromptInput,
   ): Promise<AdmitPromptResult> {
+    assertPromptMetadataAllowed(input);
     return this.context.operationRunner.run(sessionId, async () => {
       const session = this.requireSession(sessionId);
       const items = inputItems(input);
@@ -170,6 +172,7 @@ export class SessionInteractionService {
   }
 
   async admitPrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult> {
+    assertPromptMetadataAllowed(input);
     return this.context.operationRunner.run(sessionId, () =>
       this.admitPromptWork(this.requireSession(sessionId), input),
     );

@@ -109,6 +109,16 @@ function createService(options: {
 }
 
 describe("SessionInteractionService", () => {
+  it.each(["metadata", "runMetadata"])("rejects reserved host names in %s before live-child delivery", async namespace => {
+    for (const name of ["pluginUi", "uiAction"]) {
+      const { service, liveChildren, runEngine, store } = createService({ live: true });
+      await expect(service.admitPrompt("s1", { content: "hello", [namespace]: { [name]: {} } }))
+        .rejects.toMatchObject({ code: "invalid_request" });
+      expect(liveChildren.send).not.toHaveBeenCalled();
+      expect(runEngine.admitPromptAndMaybeRun).not.toHaveBeenCalled();
+      expect(store.admitPrompt).not.toHaveBeenCalled();
+    }
+  });
   it("delivers validated Skill instructions to a live child while preserving original input items", async () => {
     const items = [{ type: "skill" as const, name: "review", path: "/review/SKILL.md" }];
     const run = { id: "live-run", sessionId: "s1", inputId: "live-input", status: "running" };

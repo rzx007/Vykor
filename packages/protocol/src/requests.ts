@@ -47,6 +47,20 @@ export class ProtocolValidationError extends Error {
   }
 }
 
+/** Ordinary Prompt inputs cannot claim host-created UI instances or action Runs. */
+export function assertPromptMetadataAllowed(input: { metadata?: unknown; runMetadata?: unknown }): void {
+  for (const namespace of ["metadata", "runMetadata"] as const) {
+    const metadata = input[namespace];
+    if (!metadata || typeof metadata !== "object") continue;
+    for (const name of ["pluginUi", "uiAction"]) {
+      if (Object.hasOwn(metadata, name)) {
+        const field = `${namespace}.${name}`;
+        throw new ProtocolValidationError(`${field} is reserved for the host`, field);
+      }
+    }
+  }
+}
+
 type JsonRecord = Record<string, unknown>;
 
 export type AdmitPromptRequest = Omit<AdmitPromptInput, "sessionId">;
@@ -205,6 +219,7 @@ export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
 
 export function parseAdmitPromptRequest(value: unknown): AdmitPromptRequest {
   const body = record(value);
+  assertPromptMetadataAllowed(body);
   const id = optionalString(body, "id");
   const delivery = optionalEnum(body, "delivery", ["queue", "steer"] as const);
   const metadata = optionalRecord(body, "metadata");
