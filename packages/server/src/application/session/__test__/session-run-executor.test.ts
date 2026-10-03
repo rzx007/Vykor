@@ -10,6 +10,23 @@ import {
 } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it("adds UI facts only to the submitted normal input without changing the durable user prompt", async () => {
+    const store = createStore();
+    let submitted = "";
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments, goals: store.goals,
+      pluginUi: { registerRunView: () => {}, releaseRunView: () => {}, summarizeForInput: () => "[外部工具数据] interrupted unknown" },
+      agentPool: { configured: true, acquireSession: async () => ({
+        submitMessage: (content: string) => { submitted = content; return completedHandle(); },
+      }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 1, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(submitted).toBe("hello\n\n[外部工具数据] interrupted unknown");
+    expect(store.spies.getInput().content).toBe("hello");
+  });
   it.each([false, true])("registers the host Run view before submission and releases it on settlement (failure=%s)", async (fail) => {
     const store = createStore();
     const view = createRunCapabilityView({ toolRegistry: new ToolRegistry() });

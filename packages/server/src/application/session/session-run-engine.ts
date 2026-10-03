@@ -1,6 +1,6 @@
 import type { SessionRunRecord } from "@vykor/protocol";
 
-import { SessionRunCoordinator } from "../../runtime/run-coordinator.js";
+import { SessionRunCoordinator, type EnqueueRunOptions } from "../../runtime/run-coordinator.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
 
@@ -36,6 +36,11 @@ export class SessionRunEngine {
   };
 
   constructor(private readonly context: SessionRunEngineContext) {}
+
+  /** Independent host work shares cancellation and ordering, without model/Goal settlement. */
+  enqueueHostWork(options: Pick<EnqueueRunOptions, "sessionId" | "runId" | "work">): "running" | "queued" {
+    return this.runCoordinator.enqueue({ ...options, acceptsSteers: false }).state;
+  }
 
   private enqueueRun(run: SessionRunRecord, inputId: string): "running" | "queued" {
     const enqueued = this.runCoordinator.enqueue({

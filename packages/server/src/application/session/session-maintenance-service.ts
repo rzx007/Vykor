@@ -29,7 +29,7 @@ export class SessionMaintenanceError extends ApplicationError {
 }
 
 export interface SessionMaintenanceServiceContext {
-  data: Pick<SessionStore, "conversations" | "conversationTransactions" | "sessions">;
+  data: Pick<SessionStore, "conversations" | "conversationTransactions" | "sessions"> & Partial<Pick<SessionStore, "runs">>;
   runControl: Pick<RunControlService, "hasActiveRunsForCwd" | "hasWork">;
   agentPool: AgentPool;
   liveChildren: Pick<LiveChildAgentDirectory, "has">;
@@ -99,6 +99,7 @@ export class SessionMaintenanceService {
       inputs: this.context.data.conversations.listInputs(sessionId),
       messages: this.context.data.conversations.listMessages(sessionId),
       parts: this.context.data.conversations.listMessageParts(sessionId),
+      runs: this.context.data.runs?.listRuns(sessionId),
       format: input.format,
       filename: input.filename,
     });

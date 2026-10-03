@@ -4,10 +4,12 @@ import { getDataDir } from "@vykor/core";
 
 import {
   isCommittedModelPart,
+  readPluginUiAction,
   type SessionInputRecord,
   type SessionMessagePartRecord,
   type SessionMessageRecord,
   type SessionRecord,
+  type SessionRunRecord,
 } from "@vykor/protocol";
 import { isCommittedPublicTextPart, publicTextFromParts } from "./transcript-text.js";
 
@@ -18,6 +20,7 @@ export interface BuildSessionExportInput {
   inputs: SessionInputRecord[];
   messages: SessionMessageRecord[];
   parts: SessionMessagePartRecord[];
+  runs?: SessionRunRecord[];
   format: SessionExportFormat;
   filename?: string;
 }
@@ -115,7 +118,18 @@ function buildMarkdown(input: BuildSessionExportInput): string {
     lines.push("---", "");
   }
 
+  const actions = uiActionFacts(input, sensitiveSession);
+  if (actions.length) lines.push("## Plugin UI actions", "", "```json", JSON.stringify(actions, null, 2), "```", "");
   return lines.join("\n");
+}
+
+function uiActionFacts(input: BuildSessionExportInput, sensitiveSession: boolean) {
+  return (input.runs ?? []).flatMap(run => {
+    const action = readPluginUiAction(run.metadata);
+    if (run.sessionId !== input.session.id || !action) return [];
+    return [{ runId: run.id, status: run.status, createdAt: run.createdAt, finishedAt: run.finishedAt,
+      uiAction: sensitiveSession ? { instanceId: action.instanceId, executionState: action.executionState, content: REDACTED_CONTENT } : action }];
+  });
 }
 
 function buildJson(input: BuildSessionExportInput): string {
@@ -132,6 +146,9 @@ function buildJson(input: BuildSessionExportInput): string {
       }
       return {
         role: "assistant",
+        ...(message.metadata.presentation && typeof message.metadata.presentation === "object"
+          && (message.metadata.presentation as { kind?: unknown }).kind === "plugin_ui_action"
+          ? { metadata: { presentation: { kind: "plugin_ui_action" } } } : {}),
         content: textFromParts(messageParts) || null,
         parts: messageParts,
         tool_uses: messageParts
@@ -158,6 +175,7 @@ function buildJson(input: BuildSessionExportInput): string {
           : item
       ),
       messages,
+      ui_actions: uiActionFacts(input, sensitiveSession),
     },
     null,
     2,
