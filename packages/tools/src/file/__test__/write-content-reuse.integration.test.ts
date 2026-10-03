@@ -10,13 +10,14 @@ import {
 import { fileWriteTool } from "../write.js";
 import { computeFileChange } from "../preview.js";
 
-async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boolean; body?: string } = {}) {
+async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boolean; body?: string; changeBeforeRetry?: boolean } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "oh-write-reuse-"));
   try {
     const file = join(dir, "index.html");
     const body = options.body ?? "<!DOCTYPE html>\n<p>完整内容</p>\n".repeat(1000);
     await writeFile(file, "old", "utf8");
     const retry = { file_path: file, overwrite: true, content_from: "original-write",
+      ...(options.changeBeforeRetry ? { expected_sha256: createHash("sha256").update("old").digest("hex") } : {}),
       ...(options.conflict ? { expected_sha256: createHash("sha256").update("snapshot before concurrent change").digest("hex") } : {}) };
     let request = 0;
     const modelHistory: Message[][] = [];
@@ -24,6 +25,7 @@ async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boo
       streamMessage: async function* (params: { messages: Message[] }): AsyncIterable<StreamEvent> {
         modelHistory.push(structuredClone(params.messages));
         const step = request++;
+        if (step === 1 && options.changeBeforeRetry) await writeFile(file, "externally updated", "utf8");
         if (step < 2) yield { type: "tool_use_start", toolUse: {
           type: "tool_use", id: step === 0 ? "original-write" : "retry-write", name: "Write",
           input: step === 0 ? { file_path: file, content: body } : retry,
@@ -126,6 +128,17 @@ describe("Write content reuse with the real file tool", () => {
   it("keeps the current file when referenced overwrite fails the hash guard", async () => {
     const result = await scenario({ conflict: true });
     expect(result.text).toBe("old");
+    expect(result.results.filter(e => e.type === "tool_use_end").at(-1)).toMatchObject({
+      result: { isError: true, failureKind: "invalid_input", executionState: "not_started" },
+    });
+  });
+
+  it("checks actual file changes between a failed Write and its content_from retry", async () => {
+    const result = await scenario({ changeBeforeRetry: true });
+    expect(result.retry).not.toHaveProperty("content");
+    expect(result.retry.content_from).toBe("original-write");
+    expect(result.checked[1]).toMatchObject({ content: result.body, overwrite: true });
+    expect(result.text).toBe("externally updated");
     expect(result.results.filter(e => e.type === "tool_use_end").at(-1)).toMatchObject({
       result: { isError: true, failureKind: "invalid_input", executionState: "not_started" },
     });

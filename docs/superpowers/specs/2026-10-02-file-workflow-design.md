@@ -1496,3 +1496,92 @@ Grep 通过 `path` 收取日志引用，保留 pattern 的正则表达式含义�
 交付限制：未调用真实模型、比较供应商耗时、读取用户数据库／日志、做真实 Electron 窗口验证或启动／重启应用；不能据此宣称实际模型错误率或首次生成速度下降。默认运行时已接入日志；直接自定义 ctx 未注入或缺 sid 会明确不可补读。前台最多前部 10 MiB，七天／64 份回收后不保证永久可读；后台仍是旧最新 tail 和进度 cursor，不承诺完整分页；普通 Read 仍按行。TOCTOU 对抗交换和主机断电耐久性不作保证，正常链接替换和新进程无 finish 退出恢复已测；历史整体压缩或工具外层超时可能使引用不可用，不为这些边界扩成永久恢复平台。
 
 Git 交付：当前保留 `codex/shell-output-retention`，本轮未提交／合并／push／删除分支；HEAD 的并发 `ac0f47e2` 仅提交此前用户 request-configuration.test.ts 上下文，不属于本轮，未撤销或混入审核。保留并发 docs／原生插件计划／两份能力测试；忽略证据目录不自动清理。未改变运行中的应用，用户加载新版本后才可观察实际体验。
+
+## 28. 文件工作流后续验收 Spec（2026-10-03）
+
+用户已经确认工具组会显示 Write 正在生成参数及接收字符数，本轮不改生成展示。模型／供应商耗时对比和首次生成提速继续排除。以现有实现为起点，修复有证据的问题，不重新引入准备协议、读取状态缓存或通用重试机制。
+
+### 28.1 已确认的事实与范围
+
+- Write 的 `content_from` 已能复用失败正文，重新检查权限和当前文件；现有范围测试通过。模型仍全文重发属于调用选择问题，不能把脚本化模型测试当作真实模型遵从率证据。本轮保留机制，增加两次调用间文件实际变化的安全验收，不自动猜测覆盖意图或重试。
+- 最近 Edit 失败的旧字符串含字面量 `\n`。既有 EscapeNormalized 匹配会找到实际多行原文，但跨度保护按未展开的一行输入比较，返回“匹配范围过大”。新字符串也含字面量 `\n`，不能仅放开保护或自动解码新字符串，否则可能写入错误内容或破坏合法源码转义。本轮准确诊断这个已确认场景，并保留拒绝和有界原文，让模型直接纠正参数。
+- Shell 已实现有限留存和引用补读。已有 tools 主链测试主要使用受控执行器；本轮补一项真实本机进程经默认 Shell 捕获，再由同会话 Read／Grep 补读的验收，不新建日志体系。
+
+### 28.2 职责与不变条件
+
+- Edit 的特殊说明只放在 `tools/file/edit-feedback.ts`。仅当 `disproportionate` 首步失败只有一个候选，且原文候选切片（按已有 BOM／CRLF 规则对齐）严格等于把旧字符串字面量 `\n` 展开后的文本时，说明换行输入问题；普通跨度异常、歧义及未匹配反馈不变。保留 `invalid_input/not_started` 和原有匹配诊断字段，不更改匹配算法或替换文本。
+- Write 仍由 core 展开正文、权限层重新授权、文件工具核对目标。复用引用不继承源路径、覆盖意图、hash 或许可，不复制失败正文到反馈。
+- Shell 仍由工具捕获、宿主保管日志，Read／Grep 使用原引用和会话约束。真实验收只在测试临时目录生成合成输出，不触碰用户任务目录或历史日志。
+- 不修改已确认工作的 UI、不新增依赖／工具／DB 表／事件／生产状态；保留无关工作区改动，不提交、push、重建 out 或重启应用。
+
+### 28.3 验收条件
+
+1. 复现最近的六行 Edit：字面量换行参数仍不写文件，但明确说明应使用实际换行，返回原文；修正为实际换行后下一次 Edit 成功。合法源码中的字面量转义不被自动改写；原歧义、跨度、批次原子性、BOM／CRLF 回归保留。
+2. 首次 Write 失败后，测试真实改变目标内容；下一次只给 `content_from`、显式覆盖和旧 hash，必须拒绝且保持新文件内容。正常短引用复用与重新授权继续通过。
+3. 一个真实本机命令只运行一次，产生超限输出后给出引用；首尾预览省略中间标记，Read 分页完整还原，Grep 找回标记，跨会话拒绝。失败退出的留存事实继续由已有范围测试验证。
+4. 仅运行受影响测试和类型检查；独立审核文档与最终增量。自动测试不等于真实模型错误率下降，也不证明正在运行的桌面进程已经加载本轮源码。
+
+## 29. 文件工作流后续实施计划（2026-10-03）
+
+**Goal:** 明确诊断已确认的换行参数问题，并补齐已有复用／补读机制的真实边界验收。
+
+**Architecture:** 只修改现有 Edit 反馈函数；预览、匹配、替换和授权路径保持不变。其余两项仅补测试，不创建新的运行机制。
+
+**Tech Stack:** 现有 TypeScript、Vitest、Node.js 文件及子进程能力，无新依赖。
+
+**Spec:** 本文 §28，独立审核已通过；采用现有功能分支，不创建依赖链接可能指回主工作区的 linked worktree。
+
+**Global Constraints:** 不改 UI／匹配算法／覆盖规则，不自动解码新字符串；不调用真实模型／用户数据库，不重启／构建 out／提交／push。
+
+### Task 17：换行参数诊断
+
+**Files:** `tools/file/edit-feedback.ts`；`tools/file/__test__/edit-batch.test.ts`。
+
+**Interfaces:** 消费现有 `EditPlanError`、首个原文候选和 `ToolResult.recoveryHint`；不新增字段或导出。
+
+- [x] 在既有临时文件 fixture 添加最近六行文本的字面量换行失败、纠正后成功，以及合法源码转义保持原样的回归。有效 RED 失败于缺少准确的换行纠正提示，不是加载错误。
+- [x] 最小实现按以下条件选择说明，保留原始错误种类、原文窗口、字节不变及下一次正常修改：
+
+```ts
+const escapedLineBreaks = error.editIndex === 1 && error.match?.kind === "disproportionate"
+  && error.match.matchCount === 1 && error.edit?.old_string.includes("\\n")
+  && error.match.locations.length === 1
+  && body.slice(error.match.locations[0]!.start, error.match.locations[0]!.end)
+    .replaceAll("\r\n", "\n") === error.edit.old_string.replaceAll("\\n", "\n");
+```
+
+- [x] 仅在此条件下说明 old_string 应使用实际原文换行，new_string 仍为字面替换，只有确需多行时才传实际换行；不解码字符串，不写失败步骤。
+- [x] 运行 `edit-batch.test.ts`、`edit.test.ts`、`edit-replacers.test.ts`，保留原歧义／跨度／两行转义契约。
+
+### Task 18：复用内容遇到真实目标变化
+
+**Files:** `tools/file/__test__/write-content-reuse.integration.test.ts`。
+
+**Interfaces:** 既有真实 QueryEngine／Write 和脚本化模型 fixture；新增选项只属于测试函数。
+
+- [x] 让场景在两轮调用之间实际 `writeFile(file, "externally updated")`，引用调用携带旧文件 `sha256("old")`。
+- [x] 断言新调用没有 content、只引用已生成正文，真实文件保持 `externally updated`，结果为 `invalid_input/not_started`。现实现通过，仅补验收，不改生产逻辑。
+- [x] 运行该文件及既有 `write.test.ts`、`file-workflow.integration.test.ts`。
+
+### Task 19：真实 Shell 进程补读
+
+**Files:** `tools/shell/__test__/shell-output-log.test.ts`。
+
+**Interfaces:** 默认 `createShellTool()`、现有日志工厂、真实 Read／Grep；不用自造执行器。
+
+- [x] 在测试临时目录写 Node 合成输出脚本：启动计数写入该目录，输出前后长中文段及唯一中间标记。Windows 使用 PowerShell 调用运算符和单引号参数，POSIX 使用标准单引号参数；不访问外部数据。
+- [x] 显式 timeout 走前台一次命令；断言首尾预览可见且无中间标记、引用可消费、Read 游标前进并完整拼接、Grep 找回标记、跨会话拒绝，以及启动计数为 1。
+- [x] 运行日志工具、真实引擎补读及 services 日志范围；现实现通过，仅补验收，不改生产逻辑。
+
+### Task 20：范围验证与独立审核
+
+- [x] 合并运行受影响 tools 范围，执行 tools TypeScript 检查和本轮 `git diff --check`；不重复完整工作区测试。
+- [x] 由未参与实现的审核员检查本轮限定增量与 §28，不混入已有无关改动；记录真实结果及未验证边界。
+
+## 30. 后续验收结果（2026-10-03）
+
+Spec 与最终增量均经独立审核，未发现 Critical／Important。审核建议补验真实 Shell 首尾预览，已补断言并复验。Edit 的有效 RED 为新增回归缺少准确换行说明；随后三文件 101 项通过。最终 tools 八文件 **158 项通过**，tools TypeScript exit 0；审核员另跑三变更测试文件 54 项通过，首尾断言补充后 Shell 文件 19 项通过。这些是同一批测试的不同阶段，不累加成额外覆盖数量。实施前另有 core 34／services 22 项既有复用及日志范围通过。
+
+本轮只改变 Edit 的纠正说明，原非法输入仍拒绝，匹配和替换协议不变；Write 与 Shell 的运行机制没有改变。真实命令验收在当前 Windows 主机完成，其他平台仅有分支实现与既有测试，未做现场验收。未调用真实模型、读取用户数据库、重建 out 或重启应用；不能宣称真实模型已停止全文重发、错误率下降或正在运行的应用已加载本轮代码。功能分支 `codex/file-workflow-followup` 保留，本轮未提交／合并／push，已有无关改动保持原样。
+
+后续授权：用户要求提交并 push 本轮代码，覆盖此前“不提交／push”的交付边界。提交范围仅为本轮 Edit 反馈、三份验收测试及本文档，共五个文件；推送当前功能分支，不合并主分支、不创建 PR，不包含其他未提交改动。实际提交与远端状态以 Git 验证结果为准。

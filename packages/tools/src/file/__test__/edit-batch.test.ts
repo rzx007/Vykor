@@ -16,6 +16,37 @@ async function fixture(body: string, run: (file: string, dir: string) => Promise
 }
 
 describe("one file edit plan for preview, batch execution and recovery", () => {
+  it("explains double-escaped line breaks without writing and accepts a corrected next call", async () => {
+    const body = "before\n  /* WORK layers */\n  const track=document.querySelector('.layer-track');\n  const panSpeed=[\n    [0,'-30%',30%]\n  ];\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{\nafter\n";
+    const old_string = "/* WORK layers */\\n  const track=document.querySelector('.layer-track');\\n  const panSpeed=[\\n    [0,'-30%',30%]\\n  ];\\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{";
+    const new_string = "/* WORK layers */\\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{";
+    await fixture(body, async (file, dir) => {
+      const failed = await fileEditTool.execute({ file_path: file, old_string, new_string }, { cwd: dir, settings });
+      expect(failed).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started",
+        metadata: { editFailure: { kind: "disproportionate", matchCount: 1 } } });
+      expect(failed.recoveryHint).toContain("实际换行");
+      expect(failed.recoveryHint).toContain("new_string");
+      expect(JSON.stringify(failed.content)).toContain("const panSpeed");
+      expect(await readFile(file, "utf8")).toBe(body);
+      expect(await computeFileChange("Edit", { file_path: file, old_string, new_string })).toBeNull();
+
+      const corrected = { file_path: file,
+        old_string: "/* WORK layers */\n  const track=document.querySelector('.layer-track');\n  const panSpeed=[\n    [0,'-30%',30%]\n  ];\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{",
+        new_string: "/* WORK layers */\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{" };
+      expect((await fileEditTool.execute(corrected, { cwd: dir, settings })).isError).toBeFalsy();
+      expect(await readFile(file, "utf8")).toBe("before\n  /* WORK layers */\n  document.querySelectorAll('.layer .pan').forEach((pan)=>{\nafter\n");
+    });
+  });
+
+  it("keeps intentional source-code escapes literal in an exact edit", async () => {
+    await fixture('const pattern = "\\n";\n', async (file, dir) => {
+      const input = { file_path: file, old_string: 'const pattern = "\\n";', new_string: 'const pattern = "\\t";' };
+      const result = await fileEditTool.execute(input, { cwd: dir, settings });
+      expect(result.isError).toBeFalsy();
+      expect(await readFile(file, "utf8")).toBe('const pattern = "\\t";\n');
+    });
+  });
+
   it.each([
     ["aaaa", "aa", "bb", "bbbb"],
     ["    let x = 1;\n", "  ", "\t", "\t\tlet x = 1;\n"],

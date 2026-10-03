@@ -25,6 +25,12 @@ function jsonIdKeys(line: string): Array<{ key: string; column: number }> {
 export function editFailureResult(error: EditPlanError, original: string): ToolResult {
   const body = original.replace(/^\uFEFF/, "");
   const normalizedBody = body.replace(/\r\n/g, "\n");
+  // 字面量换行展开后被跨度保护拒绝时，只解释已核实的输入差异，不解码替换文本。
+  const escapedLineBreaks = error.editIndex === 1 && error.match?.kind === "disproportionate"
+    && error.match.matchCount === 1 && error.edit?.old_string.includes("\\n")
+    && error.match.locations.length === 1
+    && body.slice(error.match.locations[0]!.start, error.match.locations[0]!.end)
+      .replaceAll("\r\n", "\n") === error.edit.old_string.replaceAll("\\n", "\n");
   const lines = normalizedBody === "" ? [] : (normalizedBody.endsWith("\n") ? normalizedBody.slice(0, -1) : normalizedBody).split("\n");
   const locations: Array<{ line: number; column?: number }> = [];
   const diagnosable = error.match && error.match.kind !== "identical";
@@ -60,7 +66,9 @@ export function editFailureResult(error: EditPlanError, original: string): ToolR
   const windows = [...new Map(locations.slice(0, 3).map(({ line, column }) => ({
     startLine: Math.max(1, line - 2), endLine: Math.min(lines.length, Math.max(1, line - 2) + 6), column,
   })).map(window => [`${window.startLine}:${window.column ?? ""}`, window] as const)).values()];
-  const blocks = [error.message];
+  const blocks = [escapedLineBreaks
+    ? "old_string contains literal \\n separators where the original file has actual line breaks. Copy the original multiline text. new_string is written literally; use actual line breaks only when a multiline replacement is intended."
+    : error.message];
   if (error.editIndex !== undefined) blocks.push(`Edit ${error.editIndex} failed; no edits were written.`);
   if (windows.length) {
     blocks.push(actualMatches ? "Original file context at candidate matches:" : "Original file context near anchors (location hints, not replacement matches):");
@@ -77,7 +85,8 @@ export function editFailureResult(error: EditPlanError, original: string): ToolR
   if (text.length > 4096) text = text.slice(0, 4040) + "\n… [diagnostic truncated; use Read for complete lines]";
   return {
     content: [{ type: "text", text }], isError: true, failureKind: "invalid_input", executionState: "not_started",
-    recoveryHint: error.match?.kind === "identical" ? "old_string 与 new_string 相同，没有修改；无需此编辑时直接继续，否则修正替换参数。" :
+    recoveryHint: escapedLineBreaks ? "old_string 中的字面量 \\n 与原文换行不同；使用原文的实际换行。new_string 按字面值写入，确需多行时才传实际换行，不复制行号或截断标记。" :
+      error.match?.kind === "identical" ? "old_string 与 new_string 相同，没有修改；无需此编辑时直接继续，否则修正替换参数。" :
       error.match ? windows.length
         ? `根据原文修正 old_string；可 Read offset=${windows[0]!.startLine} limit=7 或 Grep 定位，不复制行号或截断标记。`
         : "根据原文修正 old_string；先用 Read 或 Grep 定位当前内容，不复制行号或截断标记。" : "修正编辑参数；本次未写入文件。",

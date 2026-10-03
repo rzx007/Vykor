@@ -1,7 +1,8 @@
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createShellOutputLogHost } from "@vykor/services/executions";
+import { resolveHostShellLauncher, shellJoin } from "@vykor/sandbox";
 import { afterEach, describe, expect, it } from "vitest";
 import { fileReadTool } from "../../file/read.js";
 import { grepTool } from "../../search/grep.js";
@@ -24,6 +25,59 @@ const reference = (result: { content: Array<unknown> }) =>
   result.content.map((block) => (block as { text?: string }).text ?? "").join("\n").match(/shell-output:\/\/[0-9a-f-]{36}/)?.[0];
 
 describe("foreground Shell log consumption", () => {
+  it("recovers a real foreground process through Read and Grep without rerunning it", async () => {
+    const { logs, directory } = await host();
+    const script = join(directory, "emit.cjs");
+    const launches = join(directory, "launches.txt");
+    const report = "BEGIN\n" + "甲".repeat(7500) + "\nONLY_MIDDLE_SENTINEL\n" + "乙".repeat(7500) + "\nEND\n";
+    await writeFile(script, [
+      "const fs = require('node:fs');",
+      "fs.appendFileSync(" + JSON.stringify(launches) + ", 'started\\n');",
+      "process.stdout.write(" + JSON.stringify(report) + ");",
+    ].join("\n"), "utf8");
+    const argv = [process.execPath, script];
+    const launcher = resolveHostShellLauncher();
+    const command = launcher.kind === "powershell"
+      ? "& " + argv.map(arg => "'" + arg.replaceAll("'", "''") + "'").join(" ")
+      : launcher.kind === "cmd"
+        ? '"' + argv.map(arg => '"' + arg + '"').join(" ") + '"'
+        : shellJoin(argv);
+    const context = {
+      cwd: directory, sessionId: "s1", shellOutputLogs: logs,
+      settings: { model: "fixture", apiFormat: "openai" as const, maxTurns: 1,
+        permission: { mode: "default" as const }, sandbox: { enabled: false } },
+    };
+    const result = await createShellTool().execute({ command, timeout: 15000 }, context);
+    expect(result.isError).not.toBe(true);
+    expect(text(result)).toContain("BEGIN");
+    expect(text(result)).toContain("END");
+    expect(text(result)).not.toContain("ONLY_MIDDLE_SENTINEL");
+    const ref = reference(result)!;
+    expect(ref).toMatch(/^shell-output:\/\/[0-9a-f-]{36}$/);
+    let cursor = 0;
+    let restored = "";
+    let eof = false;
+    for (let pageIndex = 0; pageIndex < 12; pageIndex++) {
+      const page = await fileReadTool.execute({ file_path: ref, cursor }, context);
+      expect(page.isError).not.toBe(true);
+      const output = text(page);
+      restored += output.slice(output.indexOf("\n") + 1);
+      const next = Number(output.match(/nextCursor=(\d+)/)?.[1]);
+      expect(next).toBeGreaterThan(cursor);
+      cursor = next;
+      if (output.includes("eof=true")) { eof = true; break; }
+    }
+    expect(eof).toBe(true);
+    expect(restored).toBe(report);
+    expect(cursor).toBe(Buffer.byteLength(report, "utf8"));
+    const found = await grepTool.execute({ path: ref, pattern: "ONLY_MIDDLE_SENTINEL" }, context);
+    expect(found.isError).not.toBe(true);
+    expect(text(found)).toContain("ONLY_MIDDLE_SENTINEL");
+    const denied = await fileReadTool.execute({ file_path: ref }, { ...context, sessionId: "s2" });
+    expect(denied.isError).toBe(true);
+    expect(await readFile(launches, "utf8")).toBe("started\n");
+  }, 20000);
+
   it.each([
     ["invalid_pattern", "invalid_input", "unknown"],
     ["timeout", "timeout", "unknown"],
