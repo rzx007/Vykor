@@ -19,6 +19,7 @@
   "dependencies": {
     "@vykor/environment": "workspace:*",
     "@vykor/jobs": "workspace:*",
+    "@vykor/protocol": "workspace:*",
     "@vykor/terminal": "workspace:*"
   },
   "devDependencies": {

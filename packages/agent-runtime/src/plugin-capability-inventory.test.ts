@@ -54,6 +54,15 @@ function loaded(
 }
 
 describe("plugin capability inventory", () => {
+  it("retains the verified copied installation digest without treating a linked record digest as approval", () => {
+    const digest = "a".repeat(64);
+    const inventory = createPluginCapabilityInventory([
+      loaded(record("test.copied", "user", { behaviorDigest: digest }), {}),
+      loaded(record("test.linked", "user", { behaviorDigest: digest, linkedSourcePath: "/mutable" }), {}),
+    ]);
+    expect(inventory.plugins.get("test.copied")?.behaviorDigest).toBe(digest);
+    expect(inventory.plugins.get("test.linked")?.behaviorDigest).toBeUndefined();
+  });
   it("rejects every plugin sharing a bare MCP server name instead of choosing a last writer", () => {
     const component = { status: "loaded" as const, diagnostics: [], value: { shared: { type: "stdio" as const, command: "node" } } };
     const inventory = createPluginCapabilityInventory([

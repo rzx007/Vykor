@@ -9,6 +9,8 @@ export interface PluginCapabilityOwner {
   displayName: string;
   description: string;
   version: string;
+  /** Verified copied-install digest, or the discovery-time digest of an approved mutable root. */
+  behaviorDigest?: string;
   scope: InstalledPluginRecord["scope"];
   origin: InstalledPluginRecord["origin"];
   skillNames: readonly string[];
@@ -29,6 +31,7 @@ export interface PluginCapabilityInventory {
 export interface LoadedPluginInstallation {
   record: InstalledPluginRecord;
   plugin: LoadedNativePlugin;
+  behaviorDigest?: string;
 }
 
 export function pluginMcpServerId(pluginId: string, serverName: string): string {
@@ -99,7 +102,7 @@ export function createPluginCapabilityInventory(
   const nativeToolEntries = new Map<string, { pluginId: string }>();
   const agents = new Map<string, { pluginId: string }>();
 
-  for (const { record, plugin } of active) {
+  for (const { record, plugin, behaviorDigest } of active) {
     const pluginId = record.id;
     const skillNames = unique(plugin.components.skills?.value?.map((skill) => skill.name) ?? []);
     const mcpServerIds = Object.keys(plugin.components.mcpServers?.value ?? {})
@@ -113,6 +116,7 @@ export function createPluginCapabilityInventory(
       displayName: plugin.manifest.displayName ?? plugin.manifest.name,
       description: plugin.manifest.description ?? "",
       version: record.currentVersion,
+      behaviorDigest: record.scope === "user" && !record.linkedSourcePath ? record.behaviorDigest : behaviorDigest,
       scope: record.scope,
       origin: record.origin,
       skillNames,

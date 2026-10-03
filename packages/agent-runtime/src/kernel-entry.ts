@@ -9,6 +9,7 @@ export {
   type VykorAgent,
   type VykorAgentState,
   type VykorAgentSubmitOptions,
+  type VykorAgentRunToolOptions,
 } from "./agent.js";
 export type {
   VykorAgentConfiguration,

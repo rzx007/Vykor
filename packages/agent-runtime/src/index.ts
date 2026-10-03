@@ -8,6 +8,7 @@ export {
   type VykorAgentOptions,
   type VykorAgentState,
   type VykorAgentSubmitOptions,
+  type VykorAgentRunToolOptions,
 } from "./agent.js";
 export { createDefaultNodeAgent } from "./default-agent.js";
 export { createRunCapabilityView, PluginPreparationError, type RunCapabilitySources } from "./run-capability-view.js";

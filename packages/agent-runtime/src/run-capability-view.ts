@@ -1,4 +1,4 @@
-import { toolDefinitionIdentity, type IToolRegistry, type RunAgentBinding, type RunCapabilityView, type RunMcpServerBinding, type RunSkillBinding, type RunToolBinding } from "@vykor/core";
+import { toolDefinitionIdentity, type IToolRegistry, type RunAgentBinding, type RunCapabilityView, type RunMcpServerBinding, type RunPluginUiBinding, type RunSkillBinding, type RunToolBinding } from "@vykor/core";
 
 export interface RunCapabilitySources {
   toolRegistry: IToolRegistry;
@@ -7,6 +7,7 @@ export interface RunCapabilitySources {
   skills?: readonly RunSkillBinding[];
   agents?: readonly RunAgentBinding[];
   mcpServers?: readonly RunMcpServerBinding[];
+  pluginUi?: readonly RunPluginUiBinding[];
 }
 
 export class PluginPreparationError extends Error {
@@ -48,9 +49,20 @@ export function createRunCapabilityView(sources: RunCapabilitySources, pluginId?
       invoke: definition.execute.bind(definition),
     })]);
   }
+  const toolMap = readonlyMap(tools);
+  const pluginUi = (sources.pluginUi ?? []).filter(binding => binding.pluginId === pluginId
+    && binding.definition.actions.every(action => {
+      const captured = binding.actionTools.find(tool => tool.definition.name === action.tool);
+      const current = toolMap.get(action.tool);
+      return captured?.source?.kind === "plugin" && captured.source.id === pluginId
+        && captured.ownerPluginId === pluginId && current?.source?.kind === "plugin"
+        && current.ownerPluginId === pluginId && current.definitionIdentity === captured.definitionIdentity
+        && current.definition.execute === captured.definition.execute;
+    }));
   return Object.freeze({
     pluginId,
-    tools: readonlyMap(tools),
+    tools: toolMap,
+    pluginUi: readonlyMap(pluginUi.map(binding => [`${binding.pluginId}:${binding.componentId}`, frozenCopy(binding)])),
     skills: readonlyMap((sources.skills ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
     agents: readonlyMap((sources.agents ?? []).filter(visibleDefinition).map((binding) => [binding.definition.name, frozenCopy(binding)])),
     mcpServers: readonlyMap(servers.filter(visible).map((binding) => [binding.serverId, frozenCopy(binding)])),

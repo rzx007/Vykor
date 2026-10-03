@@ -3,6 +3,7 @@ import type { McpServerConfig, Settings } from "@vykor/core";
 import { getSkillsDir } from "@vykor/core";
 import {
   discoverInstalledNativePlugins,
+  computePluginBehaviorDigest,
   loadNativePlugin,
   verifyInstalledNativePlugin,
   type LoadedNativePlugin,
@@ -45,9 +46,18 @@ export async function discoverVykorExtensions(
     const verified = await verifyInstalledNativePlugin(record);
     warnings.push(...verified.diagnostics.map((item) => `${record.id}: ${item.message}`));
     if (verified.status !== "valid") continue;
+    let behaviorDigest: string | undefined;
+    if (verified.plugin.manifest.components.ui?.length) {
+      try {
+        behaviorDigest = record.scope === "user" && !record.linkedSourcePath
+          ? record.behaviorDigest : await computePluginBehaviorDigest(verified.plugin.root);
+      } catch {
+        warnings.push(`${record.id}: plugin_ui_snapshot_unavailable`);
+      }
+    }
     const loaded = await loadNativePlugin(verified.plugin);
     plugins.push(loaded);
-    loadedInstallations.push({ record, plugin: loaded });
+    loadedInstallations.push({ record, plugin: loaded, behaviorDigest });
     warnings.push(...loaded.diagnostics.map((item) => `${record.id}: ${item.message}`));
   }
 
