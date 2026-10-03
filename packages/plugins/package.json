@@ -11,11 +11,15 @@
     },
     "./sdk": {
       "types": "./src/sdk.ts"
+    },
+    "./ui-sdk": {
+      "types": "./src/ui-sdk.ts",
+      "import": "./src/ui-sdk.ts"
     }
   },
   "scripts": {
     "build": "exit 0",
-    "check-types": "tsc --noEmit && tsc -p tsconfig.sdk-tests.json && tsc -p tsconfig.sdk-examples.json",
+    "check-types": "tsc --noEmit && tsc -p tsconfig.sdk-tests.json && tsc -p tsconfig.sdk-examples.json && tsc -p tsconfig.ui-sdk.json",
     "test": "vitest run",
     "clean": "rimraf dist"
   },

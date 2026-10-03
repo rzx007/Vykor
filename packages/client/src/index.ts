@@ -37,7 +37,15 @@ export {
   McpResource,
 } from "./resources/index.js";
 export { parseCreateSessionGoalInput, parseUpdateSessionGoalInput, parseGoalActionInput } from "@vykor/protocol";
+export {
+  PLUGIN_UI_BRIDGE_LIMITS, PluginUiBridgeError, decodePluginUiBridgeMessage, encodePluginUiBridgeMessage,
+  parsePluginUiBridgeRequest, parsePluginUiBridgeSnapshot, parsePluginUiBridgeReceipt,
+  readPluginUiBridgeResponse, readPluginUiBridgeNotification, readPluginUiInstance, readPluginUiAction,
+} from "@vykor/protocol";
 export type {
+  JsonValue, PluginUiViewSnapshot, PluginUiSurface, PluginUiBridgeMethod,
+  PluginUiBridgeRequest, PluginUiBridgeResponse, PluginUiBridgeNotification,
+  PluginUiActionRunMetadata,
   DismissPluginUiInput,
   InvokePluginUiActionInput,
   PluginUiActionReceipt,
