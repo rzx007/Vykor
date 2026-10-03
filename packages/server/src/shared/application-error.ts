@@ -3,11 +3,13 @@ export type ApplicationErrorCode =
   | "not_found"
   | "conflict"
   | "not_supported"
+  | "plugin_ui_not_found"
   | "application_error";
 
 export const APPLICATION_ERROR_HTTP_STATUS: Record<ApplicationErrorCode, number> = {
   invalid_request: 400,
   not_found: 404,
+  plugin_ui_not_found: 404,
   conflict: 409,
   not_supported: 501,
   application_error: 500,

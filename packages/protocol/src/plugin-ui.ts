@@ -72,6 +72,28 @@ export interface InvokePluginUiActionInput {
   args: Record<string, JsonValue>;
 }
 
+export interface PluginUiAvailability {
+  code: "available" | "plugin-disabled" | "permission-missing" | "snapshot-missing" | "snapshot-changed"
+    | "runtime-unavailable" | "session-archived" | "action-unknown" | "invalid-definition";
+  canRender: boolean;
+  canInvoke: boolean;
+}
+
+export interface PluginUiActionDescription {
+  id: string;
+  label: string;
+  toolName: string;
+  inputSchema: Record<string, unknown>;
+  completion: "keep-open" | "resolve";
+}
+
+/** Safe presentation data. Host paths and captured functions stay internal. */
+export interface PluginUiInstanceResponse {
+  instance: PluginUiInstanceRecord;
+  availability: PluginUiAvailability;
+  actions: PluginUiActionDescription[];
+}
+
 export interface DismissPluginUiInput {
   requestId: string;
   expectedRevision: number;
