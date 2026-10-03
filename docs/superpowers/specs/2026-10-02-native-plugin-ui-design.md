@@ -457,6 +457,7 @@ activeActionRunId 只表示有一项执行中的操作，不是新的业务状�
 - 业务数据和实例状态：源 Part 的 `metadata.pluginUi`。
 - 动作参数、执行状态与结果：UI Run metadata 和该 Run 的工具 Part。
 - 当前挂载、MessagePort、文档 URL、pending Promise：只在 Desktop 内存中。
+- 挂载撤销通知：复用 Session metadata 的可选 pluginUiGeneration 和现有 session.updated；只通知重新核验，不是 UI 业务状态或授权凭据，不保存窗口/挂载身份。
 - 未提交表单内容、排序、滚动位置：插件前端临时状态，首版不承诺跨关闭保存。
 - 不提供通用 `state.set()`、任意文件写入或浏览器 localStorage 持久接口。
 
@@ -484,6 +485,8 @@ rewind / 替换 transcript 删除源 Part 时，相关挂载立即失效；保�
 
 首版新增可选能力 `features.pluginUi = 1`。保持当前基础协议形状，使用现有 Part/Run metadata 和事件，因而该功能自身不要求提升基础协议版本。实现时若实际改变必填 Snapshot 字段或既有请求形状，必须按协议契约提升版本，不能用 feature 掩盖破坏性改动。
 
+A3 另用可选 `features.pluginUiLifecycle = 1` 标识后台即时撤销与管理结算已完整接线。Desktop 同时要求这两项及本地隔离文档能力；不把旧 A2 daemon 的 pluginUi=1 误认为已经具备页面撤销能力。缺少时保留原文字结果，不增加新的必填基础字段。
+
 所有路由通过现有 daemon 认证和 Origin 检查，输入由 `@vykor/protocol` 的 decoder 严格读取。
 
 | 方法与路径 | 输入 | 返回 | 说明 |
@@ -504,7 +507,7 @@ rewind / 替换 transcript 删除源 Part 时，相关挂载立即失效；保�
 
 ### 14.1 SDK 入口
 
-在现有插件包增加浏览器安全子路径 `@vykor/plugins/ui-sdk`。它只依赖浏览器 API 和共享协议的类型，不运行 Node 模块，不创建新的 npm 包，也不要求作者使用特定前端框架。
+在现有插件包增加浏览器安全子路径 `@vykor/plugins/ui-sdk`。它只依赖浏览器 API，以及浏览器安全的共享协议类型、常量和校验代码，不运行 Node 模块，不创建新的 npm 包，也不要求作者使用特定前端框架。
 
 拟提供：
 
@@ -843,6 +846,8 @@ feature `pluginUi` 只在完整后台能力接线后公布；Desktop 还需检�
 本规格区分拟议接口与已验证实现；未交付的交互接口不能宣传为当前 API。最终发布需要全部首版验收证据，而不是仅凭 feature 字段或插件数量证明完成。
 
 已实现入口：[A1 定义、加载与授权实施计划](../plans/2026-10-02-native-plugin-ui-a1.md)和[A2 实例与工具操作实施计划](../plans/2026-10-03-native-plugin-ui-a2.md)。A2 的真实 Native Tool、SQLite、Daemon / Hono / Client 证据见验收记录；A3 / A4 和真实 Electron 首版验收仍待实施。
+
+下一阶段的具体接线、批次与测试门槛见 [A3 Desktop 与 SDK 实施计划](../plans/2026-10-03-native-plugin-ui-a3.md)，当前只完成计划，不将拟议接口宣传为已实现。
 
 A1 实际交付与验证：[2026-10-03 验收记录](../reviews/2026-10-03-native-plugin-ui-a1-verification.md)。
 
