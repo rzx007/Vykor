@@ -285,6 +285,8 @@ export function useUtilityPanelController({
 
   const toggleMaximized = useCallback((): void => {
     if (maximizedRef.current) {
+      // 先保留目标比例，防止展开时的中间 resize 回调覆盖持久化记录。
+      previousLayoutRef.current ??= lastOpenLayoutRef.current ?? defaultLayout
       maximizedRef.current = false
       persistActiveView({ maximized: false })
       setMaximized(false)
@@ -299,7 +301,7 @@ export function useUtilityPanelController({
     persistActiveView({ open: true, maximized: true })
     setOpen(true)
     setMaximized(true)
-  }, [persistActiveView, workspaceGroupRef])
+  }, [defaultLayout, persistActiveView, workspaceGroupRef])
 
   const openFile = useCallback(
     (path: string, line?: number): void => {
@@ -372,14 +374,19 @@ export function useUtilityPanelController({
         }
 
         conversationPanelRef.current?.expand()
-        const previousLayout = previousLayoutRef.current
-        if (previousLayout) {
-          group.setLayout(previousLayout)
-          previousLayoutRef.current = null
-        }
+        // 刷新或切换会话后没有本次最大化前的内存记录，回退到已保存的分栏比例。
+        group.setLayout(previousLayoutRef.current ?? lastOpenLayoutRef.current ?? defaultLayout)
+        previousLayoutRef.current = null
       })
     })
-  }, [conversationPanelRef, maximized, runAnimatedLayoutChange, utilityPanelRef, workspaceGroupRef])
+  }, [
+    conversationPanelRef,
+    defaultLayout,
+    maximized,
+    runAnimatedLayoutChange,
+    utilityPanelRef,
+    workspaceGroupRef,
+  ])
 
   const handleLayoutChanged = useCallback(
     (nextLayout: Layout): void => {

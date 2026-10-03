@@ -71,29 +71,10 @@ vi.mock("@renderer/components/desktop/layout/use-desktop-window-chrome", () => (
     close: vi.fn(),
   }),
 }))
-vi.mock("@renderer/components/desktop/layout/main-layout/utility-panel", () => ({
+vi.mock("@renderer/components/desktop/layout/main-layout/utility-panel", async () => ({
   UtilityPanel: () => null,
-  useUtilityPanelController: () => ({
-    open: false,
-    maximized: false,
-    visibleLayout: { conversation: 100, utility: 0 },
-    toggle: vi.fn(),
-    openFile: vi.fn(),
-    openReview: vi.fn(),
-    openTerminal: vi.fn(),
-    openTool: vi.fn(),
-    handleLayoutChanged: vi.fn(),
-    handlePanelResize: vi.fn(),
-    collapse: vi.fn(),
-    restore: vi.fn(),
-    toggleMaximized: vi.fn(),
-    instanceKey: "test",
-    scopeId: "test",
-    fileOpenRequest: null,
-    reviewOpenRequest: null,
-    terminalOpenRequest: null,
-    toolOpenRequest: null,
-  }),
+  useUtilityPanelController: (await import("./utility-panel/use-utility-panel-controller"))
+    .useUtilityPanelController,
 }))
 vi.mock("@renderer/stores/desktop-session", async () => {
   const actual = await vi.importActual<typeof import("@renderer/stores/desktop-session")>(
@@ -106,12 +87,17 @@ vi.mock("@renderer/stores/desktop-session", async () => {
 import { MainLayout } from "./main-layout"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { isSessionPinned } from "@renderer/stores/desktop-session/helpers"
+import {
+  readUtilityPanelViewStates,
+  writeUtilityPanelViewStates,
+} from "./utility-panel/utility-panel-repository"
 
 const initialStoreState = useDesktopSessionStore.getState()
 let mountedRoot: Root | null = null
 let mountedContainer: HTMLDivElement | null = null
 
 beforeEach(() => {
+  localStorage.removeItem("vykor.desktop.utility-panel-states")
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   Reflect.set(window, "desktop", {
     settings: { snapshot: vi.fn(async () => ({ showReasoning: false })) },
@@ -263,6 +249,84 @@ function mountLayout(state: DesktopSessionState): HTMLDivElement {
   return container
 }
 
+async function mountReadyLayout(state: DesktopSessionState): Promise<HTMLDivElement> {
+  let container!: HTMLDivElement
+  await act(async () => {
+    container = mountLayout(state)
+  })
+  return container
+}
+
+describe("maximized workbench chat status integration", () => {
+  it("restores the current chat from the status action without closing the workbench", async () => {
+    const view = sessionView("status-chat", "idle")
+    view.runs = [
+      {
+        id: "run",
+        sessionId: view.session.id,
+        status: "completed",
+        startedAt: 1_000,
+        finishedAt: 16_000,
+        metadata: {},
+        createdAt: 1_000,
+        updatedAt: 16_000,
+      },
+    ]
+    writeUtilityPanelViewStates({
+      "session:status-chat": {
+        open: true,
+        maximized: true,
+        layout: { conversation: 60, utility: 40 },
+      },
+    })
+    let container!: HTMLDivElement
+    await act(async () => {
+      container = mountLayout(
+        stateWith({ activeSessionId: view.session.id, sessionView: view, sessions: [view.session] })
+      )
+    })
+    expect(container.querySelector('[aria-label="当前会话状态"]')).not.toBeNull()
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="返回当前聊天"]')!.click())
+    expect(container.querySelector('[aria-label="当前会话状态"]')).toBeNull()
+    expect(readUtilityPanelViewStates()["session:status-chat"]).toEqual({
+      open: true,
+      maximized: false,
+      layout: { conversation: 60, utility: 40 },
+    })
+    expect(container.querySelector("#message-composer")).not.toBeNull()
+  })
+
+  it("does not duplicate chat status in an ordinary split layout", async () => {
+    const view = sessionView("status-chat", "idle")
+    view.runs = [
+      {
+        id: "run",
+        sessionId: view.session.id,
+        status: "completed",
+        startedAt: 1_000,
+        finishedAt: 16_000,
+        metadata: {},
+        createdAt: 1_000,
+        updatedAt: 16_000,
+      },
+    ]
+    writeUtilityPanelViewStates({
+      "session:status-chat": {
+        open: true,
+        maximized: false,
+        layout: { conversation: 60, utility: 40 },
+      },
+    })
+    let container!: HTMLDivElement
+    await act(async () => {
+      container = mountLayout(
+        stateWith({ activeSessionId: view.session.id, sessionView: view, sessions: [view.session] })
+      )
+    })
+    expect(container.querySelector('[aria-label="当前会话状态"]')).toBeNull()
+  })
+})
+
 describe("MainLayout selected project operation error owner", () => {
   it("replaces the independent agent shortcut with the current chat summary", async () => {
     const view = sessionView("session-active", "idle")
@@ -308,11 +372,11 @@ describe("MainLayout selected project operation error owner", () => {
     expect(container.querySelector('[aria-label="添加文件"]')).toBeNull()
   })
 
-  it("shows the selected project failure while the active conversation is archived", () => {
+  it("shows the selected project failure while the active conversation is archived", async () => {
     const error = "归档会话中的项目操作失败"
     const selectedProject = project("project-a", "项目 A")
     const archivedSession = session("session-archived", "archived")
-    const container = mountLayout(
+    const container = await mountReadyLayout(
       stateWith({
         activeSessionId: "session-archived",
         archivedSessions: [archivedSession],
@@ -337,11 +401,11 @@ describe("MainLayout selected project operation error owner", () => {
   it.each([
     ["an active conversation", "session-active"],
     ["a new conversation", null],
-  ])("shows a selected project failure once for %s", (_mode, activeSessionId) => {
+  ])("shows a selected project failure once for %s", async (_mode, activeSessionId) => {
     const error = "项目操作失败"
     const selectedProject = project("project-a", "项目 A")
     const activeSession = activeSessionId ? session(activeSessionId, "idle") : null
-    const container = mountLayout(
+    const container = await mountReadyLayout(
       stateWith({
         activeSessionId,
         projects: [selectedProject],

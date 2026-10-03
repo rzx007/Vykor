@@ -36,6 +36,7 @@ import {
 } from "./sidebar-width"
 import { Sidebar } from "./sidebar"
 import { UtilityPanel, useUtilityPanelController } from "./utility-panel"
+import { ConversationStatus } from "./conversation-status/conversation-status"
 
 const resizeTargetMinimumSize = { fine: 12, coarse: 28 }
 const conversationMinimumWidth = 350
@@ -297,7 +298,7 @@ export function MainLayout(): React.JSX.Element {
       groupRef={workspaceGroupRef}
       elementRef={innerGroupElementRef}
       orientation="horizontal"
-      className="h-full min-h-0 w-full"
+      className="relative h-full min-h-0 w-full"
       resizeTargetMinimumSize={resizeTargetMinimumSize}
       defaultLayout={
         utilityMaximized
@@ -359,6 +360,10 @@ export function MainLayout(): React.JSX.Element {
           onOpenTerminal={openTerminal}
         />
       </Panel>
+      <ConversationStatus
+        visible={panelOpen && utilityMaximized}
+        onRestore={utilityPanel.toggleMaximized}
+      />
     </Group>
   )
 
