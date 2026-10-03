@@ -199,7 +199,8 @@
   --scrollbar-thumb: color-mix(in oklab, var(--foreground) 8%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--foreground) 16%, transparent);
 
-  --shell: oklch(0.969 0.008 236);
+  --shell-solid: oklch(0.969 0.008 236);
+  --shell: var(--shell-solid);
   --chrome: var(--shell);
   --conversation: var(--background);
   --panel: var(--card);
@@ -257,7 +258,8 @@
   --scrollbar-thumb: color-mix(in oklab, var(--foreground) 10%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--foreground) 18%, transparent);
 
-  --shell: oklch(0.22 0.012 250);
+  --shell-solid: oklch(0.22 0.012 250);
+  --shell: var(--shell-solid);
   --chrome: var(--shell);
   --conversation: var(--background);
   --panel: var(--card);
@@ -314,6 +316,26 @@ html[data-window-shell="translucent"] {
 
 html.dark[data-window-shell="translucent"] {
   --shell: color-mix(in oklab, oklch(0.22 0.012 250) 64%, transparent);
+}
+
+/* Windows 在原生 Acrylic 上只铺一层雾面底色；其它平台保留原有材质。 */
+html[data-window-platform="win32"][data-window-shell="transparent"] {
+  --window-glass-tint-opacity: calc(100% - var(--window-glass-strength, 35%));
+  --shell: color-mix(in oklab, var(--shell-solid) var(--window-glass-tint-opacity), transparent);
+}
+html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
+  --window-glass-tint-opacity: calc(100% - var(--window-glass-strength, 35%) * 0.7);
+}
+/* 主题不一致时缩小透光范围，但滑杆的每一档仍有变化，保持文字清晰。 */
+@media (prefers-color-scheme: dark) {
+  html.light[data-window-platform="win32"][data-window-shell="transparent"] {
+    --window-glass-tint-opacity: calc(100% - var(--window-glass-strength, 35%) * 0.38);
+  }
+}
+@media (prefers-color-scheme: light) {
+  html.dark[data-window-platform="win32"][data-window-shell="transparent"] {
+    --window-glass-tint-opacity: calc(100% - var(--window-glass-strength, 35%) * 0.2);
+  }
 }
 
 @layer base {

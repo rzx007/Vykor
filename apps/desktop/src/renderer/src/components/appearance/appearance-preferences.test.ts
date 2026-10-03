@@ -17,6 +17,7 @@ describe("appearance preferences", () => {
       uiFontSize: 14,
       codeFontSize: 14,
       reducedMotion: "system",
+      glassStrength: 35,
     })
   })
 
@@ -43,6 +44,7 @@ describe("appearance preferences", () => {
       uiFontSize: 16,
       codeFontSize: 15,
       reducedMotion: "on",
+      glassStrength: 35,
     })
   })
 
@@ -69,6 +71,7 @@ describe("appearance preferences", () => {
       uiFontSize: 14,
       codeFontSize: 14,
       reducedMotion: "system",
+      glassStrength: 35,
     })
   })
 
@@ -80,6 +83,25 @@ describe("appearance preferences", () => {
     expect(
       parseAppearancePreferences('{"version":1,"uiFontSize":12.6,"codeFontSize":17.5}')
     ).toMatchObject({ uiFontSize: 13, codeFontSize: 18 })
+  })
+
+  it("restores and bounds glass strength without discarding an older theme preference", () => {
+    expect(
+      parseAppearancePreferences('{"version":1,"theme":"dark","glassStrength":80}')
+    ).toMatchObject({ theme: "dark", glassStrength: 80 })
+    expect(parseAppearancePreferences('{"version":1,"theme":"dark"}')).toMatchObject({
+      theme: "dark",
+      glassStrength: 35,
+    })
+    expect(parseAppearancePreferences('{"version":1,"glassStrength":999}')).toMatchObject({
+      glassStrength: 100,
+    })
+    expect(parseAppearancePreferences('{"version":1,"glassStrength":-1}')).toMatchObject({
+      glassStrength: 0,
+    })
+    expect(parseAppearancePreferences('{"version":1,"glassStrength":"80"}')).toMatchObject({
+      glassStrength: 35,
+    })
   })
 
   it.each([null, "not json", "[]", '"value"', '{"version":2}'])(

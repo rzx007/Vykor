@@ -16,6 +16,7 @@ export function applyStartupTheme(root: HTMLElement = document.documentElement):
       preferences.theme === "system" ? (prefersDark ? "dark" : "light") : preferences.theme
     root.classList.remove("light", "dark")
     root.classList.add(resolved)
+    root.style.setProperty("--window-glass-strength", `${preferences.glassStrength}%`)
   } catch {
     // Keep the CSS prefers-color-scheme fallback if storage or parsing fails.
   }
@@ -36,6 +37,9 @@ export function writeWindowMaterialAttributes(
 ): void {
   root.dataset.windowMaterial = isGlassWindowMaterial(state) ? "glass" : "opaque"
   root.dataset.windowShell = state.shell
+  const platform = typeof window !== "undefined" ? window.electron?.process?.platform : undefined
+  if (platform) root.dataset.windowPlatform = platform
+  else delete root.dataset.windowPlatform
 }
 
 /** 启动时按快照写属性；没有快照（宠物窗口）就清掉可能残留的属性。 */
@@ -44,6 +48,7 @@ export function applyWindowMaterialToRoot(root: HTMLElement = document.documentE
   if (!snapshot) {
     delete root.dataset.windowMaterial
     delete root.dataset.windowShell
+    delete root.dataset.windowPlatform
     return
   }
 

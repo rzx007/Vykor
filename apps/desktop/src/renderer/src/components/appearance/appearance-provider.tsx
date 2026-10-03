@@ -23,6 +23,7 @@ import {
 import { resolveAppearanceColors } from "./appearance-colors"
 import {
   APPEARANCE_STORAGE_KEY,
+  DEFAULT_APPEARANCE_PREFERENCES,
   parseAppearancePreferences,
   type AppearancePreferences,
 } from "./appearance-preferences"
@@ -111,6 +112,10 @@ function applyAppearanceToRoot(
   root.classList.remove("light", "dark")
   root.classList.add(resolvedTheme)
   root.dataset.reducedMotion = String(resolvedReducedMotion)
+  root.style.setProperty(
+    "--window-glass-strength",
+    `${preferences.glassStrength ?? DEFAULT_APPEARANCE_PREFERENCES.glassStrength}%`
+  )
   root.style.setProperty("--font-sans", findFontFamily(UI_FONT_OPTIONS, preferences.uiFont))
   root.style.setProperty("--font-mono", findFontFamily(CODE_FONT_OPTIONS, preferences.codeFont))
   root.style.setProperty("--ui-font-size", `${preferences.uiFontSize}px`)

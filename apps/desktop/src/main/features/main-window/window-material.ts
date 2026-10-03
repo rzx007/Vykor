@@ -59,7 +59,7 @@ export function resolveWindowMaterialState(input: {
     active: "glass",
     unavailableReason: null,
     // macOS 的 vibrancy 是稳定材质，外壳再叠一层半透明染色；
-    // Windows/Linux 必须把外壳全部让出来（transparent），否则系统材质会被不透明的壳层盖住。
+    // Windows/Linux 保持透明宿主；renderer 按平台控制透光底色，Windows 可叠加雾面染色。
     shell: input.platform === "darwin" ? "translucent" : "transparent",
   }
 }

@@ -43,6 +43,12 @@ describe("applyStartupTheme", () => {
     expect(document.documentElement.classList.contains("light")).toBe(false)
   })
 
+  it("restores glass strength before React mounts", () => {
+    localStorage.setItem(APPEARANCE_STORAGE_KEY, '{"version":1,"glassStrength":80}')
+    applyStartupTheme()
+    expect(document.documentElement.style.getPropertyValue("--window-glass-strength")).toBe("80%")
+  })
+
   it("applies a stored light theme even when the OS is dark", () => {
     stubMatchMedia(true)
     localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify({ version: 1, theme: "light" }))
@@ -100,6 +106,29 @@ describe("applyWindowMaterialToRoot", () => {
 
     expect(root.dataset.windowMaterial).toBe("glass")
     expect(root.dataset.windowShell).toBe("transparent")
+  })
+
+  it("tags Windows separately so its tint does not affect Linux or macOS", () => {
+    Object.defineProperty(window, "electron", {
+      configurable: true,
+      value: { process: { platform: "win32" } },
+    })
+    const root = document.createElement("html")
+    writeWindowMaterialAttributes(root, {
+      preference: "glass",
+      active: "glass",
+      unavailableReason: null,
+      shell: "transparent",
+    })
+    expect(root.dataset.windowPlatform).toBe("win32")
+    delete (window as unknown as { electron?: unknown }).electron
+    writeWindowMaterialAttributes(root, {
+      preference: "glass",
+      active: "glass",
+      unavailableReason: null,
+      shell: "translucent",
+    })
+    expect(root.dataset.windowPlatform).toBeUndefined()
   })
 
   it("不透明档写 opaque/solid", () => {

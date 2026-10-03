@@ -2,6 +2,7 @@ export const APPEARANCE_STORAGE_KEY = "vykor-desktop-appearance-v1"
 
 export const UI_FONT_SIZE_RANGE = { min: 12, max: 18 } as const
 export const CODE_FONT_SIZE_RANGE = { min: 11, max: 18 } as const
+export const GLASS_STRENGTH_RANGE = { min: 0, max: 100 } as const
 
 export type AppearanceTheme = "system" | "light" | "dark"
 export type AccentPresetId = "neutral" | "blue" | "violet" | "terracotta" | "green"
@@ -18,6 +19,7 @@ export type AppearancePreferences = {
   uiFontSize: number
   codeFontSize: number
   reducedMotion: ReducedMotionPreference
+  glassStrength: number
 }
 
 export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
@@ -29,6 +31,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   uiFontSize: 14,
   codeFontSize: 14,
   reducedMotion: "system",
+  glassStrength: 35,
 }
 
 const THEMES = new Set<AppearanceTheme>(["system", "light", "dark"])
@@ -52,7 +55,7 @@ function isSetMember<T extends string>(values: ReadonlySet<T>, value: unknown): 
   return typeof value === "string" && values.has(value as T)
 }
 
-function normalizeFontSize(
+function normalizeIntegerPreference(
   value: unknown,
   fallback: number,
   range: { min: number; max: number }
@@ -115,11 +118,20 @@ export function parseAppearancePreferences(raw: string | null): AppearancePrefer
     accent: parseAccent(value.accent),
     uiFont: isSetMember(UI_FONTS, value.uiFont) ? value.uiFont : defaults.uiFont,
     codeFont: isSetMember(CODE_FONTS, value.codeFont) ? value.codeFont : defaults.codeFont,
-    uiFontSize: normalizeFontSize(value.uiFontSize, defaults.uiFontSize, UI_FONT_SIZE_RANGE),
-    codeFontSize: normalizeFontSize(
+    uiFontSize: normalizeIntegerPreference(
+      value.uiFontSize,
+      defaults.uiFontSize,
+      UI_FONT_SIZE_RANGE
+    ),
+    codeFontSize: normalizeIntegerPreference(
       value.codeFontSize,
       defaults.codeFontSize,
       CODE_FONT_SIZE_RANGE
+    ),
+    glassStrength: normalizeIntegerPreference(
+      value.glassStrength,
+      defaults.glassStrength,
+      GLASS_STRENGTH_RANGE
     ),
     reducedMotion: isSetMember(REDUCED_MOTION_VALUES, value.reducedMotion)
       ? value.reducedMotion

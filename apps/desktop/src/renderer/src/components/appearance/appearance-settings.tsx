@@ -43,6 +43,8 @@ import { ACCENT_PRESET_COLORS } from "./appearance-colors"
 import { CODE_FONT_OPTIONS, UI_FONT_OPTIONS, type AppearanceFontOption } from "./appearance-fonts"
 import {
   CODE_FONT_SIZE_RANGE,
+  DEFAULT_APPEARANCE_PREFERENCES,
+  GLASS_STRENGTH_RANGE,
   UI_FONT_SIZE_RANGE,
   normalizeHexColor,
   type AccentPresetId,
@@ -90,6 +92,8 @@ export function AppearanceSettings(): React.JSX.Element {
     preferences.accent.kind === "custom"
       ? preferences.accent.value
       : ACCENT_PRESET_COLORS[preferences.accent.id]
+  const isWindows = typeof window !== "undefined" && window.electron?.process?.platform === "win32"
+  const glassStrength = preferences.glassStrength ?? DEFAULT_APPEARANCE_PREFERENCES.glassStrength
   const commitSingle = <T extends string>(
     values: readonly T[],
     commit: (value: T) => void
@@ -165,6 +169,41 @@ export function AppearanceSettings(): React.JSX.Element {
                 ))}
               </ToggleGroup>
             </Field>
+            {isWindows ? (
+              <Field orientation="responsive" data-disabled={windowMaterial.active !== "glass"}>
+                <FieldContent>
+                  <FieldTitle>透光强度</FieldTitle>
+                  <FieldDescription>
+                    {windowMaterial.active === "glass"
+                      ? "低一些更安静，高一些更透光。正文不受影响。"
+                      : windowMaterial.preference === "opaque"
+                        ? "开启透明磨玻璃后可调节。"
+                        : "系统透明效果可用时才能调节。"}
+                  </FieldDescription>
+                </FieldContent>
+                <div className="flex w-full max-w-72 items-center gap-3">
+                  <span className="text-xs text-muted-foreground">弱</span>
+                  <Slider
+                    aria-label="透光强度"
+                    min={GLASS_STRENGTH_RANGE.min}
+                    max={GLASS_STRENGTH_RANGE.max}
+                    step={5}
+                    value={glassStrength}
+                    disabled={windowMaterial.active !== "glass"}
+                    onValueChange={(value) => {
+                      const next = Array.isArray(value) ? value[0] : value
+                      if (typeof next === "number" && Number.isFinite(next))
+                        setPreference("glassStrength", next)
+                    }}
+                    className="min-w-32 flex-1"
+                  />
+                  <span className="text-xs text-muted-foreground">强</span>
+                  <output className="text-ui-caption w-9 shrink-0 text-right tabular-nums">
+                    {glassStrength}%
+                  </output>
+                </div>
+              </Field>
+            ) : null}
           </FieldGroup>
         </AppearanceSection>
       ) : null}

@@ -107,6 +107,20 @@ describe("AppearanceProvider", () => {
     })
   }
 
+  it("previews glass strength immediately and restores its saved value on remount", async () => {
+    await renderProvider()
+    act(() => latest!.setPreference("glassStrength", 80))
+    expect(document.documentElement.style.getPropertyValue("--window-glass-strength")).toBe("80%")
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_STORAGE_KEY)!)).toMatchObject({
+      glassStrength: 80,
+    })
+    act(() => root.unmount())
+    root = createRoot(container)
+    await renderProvider()
+    expect(latest?.preferences.glassStrength).toBe(80)
+    expect(document.documentElement.style.getPropertyValue("--window-glass-strength")).toBe("80%")
+  })
+
   it("ignores the removed theme storage key", async () => {
     localStorage.setItem("vykor-desktop-theme", "dark")
 

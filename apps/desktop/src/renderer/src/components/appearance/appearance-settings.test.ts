@@ -62,6 +62,7 @@ describe("AppearanceSettings", () => {
   })
 
   afterEach(() => {
+    delete (window as unknown as { electron?: unknown }).electron
     act(() => root.unmount())
     container.remove()
     document.querySelectorAll('[data-slot="alert-dialog-portal"]').forEach((node) => node.remove())
@@ -214,6 +215,59 @@ describe("AppearanceSettings", () => {
 
     act(() => opaque?.click())
     expect(setWindowMaterial).toHaveBeenCalledWith("opaque")
+  })
+
+  it("offers a keyboard-adjustable glass strength slider on Windows only", async () => {
+    Object.defineProperty(window, "electron", {
+      configurable: true,
+      value: { process: { platform: "win32" } },
+    })
+    await renderSettings()
+    const slider = container.querySelector<HTMLInputElement>(
+      'input[type="range"][aria-label="透光强度"]'
+    )
+    expect(slider).not.toBeNull()
+    expect(slider?.getAttribute("aria-valuenow")).toBe("35")
+    act(() =>
+      slider!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))
+    )
+    expect(setPreference).toHaveBeenCalledWith("glassStrength", 40)
+    Object.defineProperty(window, "electron", {
+      configurable: true,
+      value: { process: { platform: "darwin" } },
+    })
+    await renderSettings()
+    expect(container.querySelector('[aria-label="透光强度"]')).toBeNull()
+  })
+
+  it("disables glass strength when the window uses an opaque background", async () => {
+    Object.defineProperty(window, "electron", {
+      configurable: true,
+      value: { process: { platform: "win32" } },
+    })
+    mocks.useAppearance.mockReturnValue({
+      preferences: DEFAULT_APPEARANCE_PREFERENCES,
+      resolvedTheme: "light",
+      resolvedReducedMotion: false,
+      windowMaterial: {
+        ...WINDOW_MATERIAL_STATE,
+        active: "opaque",
+        preference: "opaque",
+        shell: "solid",
+      },
+      fontAvailability: {},
+      saveState: { status: "idle" },
+      setPreference,
+      setWindowMaterial,
+      resetAppearance,
+    })
+    await renderSettings()
+    const slider = container.querySelector<HTMLInputElement>(
+      'input[type="range"][aria-label="透光强度"]'
+    )
+    expect(slider?.disabled).toBe(true)
+    expect(slider?.value).toBe("35")
+    expect(container.textContent).toContain("开启透明磨玻璃后可调节")
   })
 
   it("hides the whole window section when the entry has no material snapshot", async () => {
