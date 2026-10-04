@@ -1,8 +1,15 @@
 import { randomUUID } from "node:crypto";
 
 import type { SessionGoal } from "@vykor/protocol";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";
+import {
+  sessionGoalAssessments,
+  sessionGoalContinuations,
+  sessionGoalRequests,
+  sessionGoals,
+} from "../session-runtime/schema.js";
 import {
   goalRequestFromRow,
   sessionGoalFromRow,
@@ -15,27 +22,37 @@ export class GoalRepository {
   constructor(private readonly storage: StorageContext) {}
 
   private get database() {
-    return this.storage.database.connection;
+    return this.storage.database.orm;
   }
 
   getGoal(id: string): SessionGoal | undefined {
     const row = this.database
-      .prepare("SELECT * FROM session_goal WHERE id = ?")
-      .get(id);
-    return row ? sessionGoalFromRow(row as Record<string, unknown>) : undefined;
+      .select()
+      .from(sessionGoals)
+      .where(eq(sessionGoals.id, id))
+      .get();
+    return row ? sessionGoalFromRow(row) : undefined;
   }
 
   getCurrentGoal(sessionId: string): SessionGoal | undefined {
     const row = this.database
-      .prepare(
-        `SELECT * FROM session_goal
-      WHERE session_id = ?
-        AND status IN ('active','waiting_user','blocked','paused')
-      ORDER BY updated_at DESC
-      LIMIT 1`,
+      .select()
+      .from(sessionGoals)
+      .where(
+        and(
+          eq(sessionGoals.sessionId, sessionId),
+          inArray(sessionGoals.status, [
+            "active",
+            "waiting_user",
+            "blocked",
+            "paused",
+          ]),
+        ),
       )
-      .get(sessionId);
-    return row ? sessionGoalFromRow(row as Record<string, unknown>) : undefined;
+      .orderBy(desc(sessionGoals.updatedAt))
+      .limit(1)
+      .get();
+    return row ? sessionGoalFromRow(row) : undefined;
   }
 
   insertGoal(input: CreateSessionGoalStoreInput): SessionGoal {
@@ -43,21 +60,22 @@ export class GoalRepository {
     const timestamp = Date.now();
     try {
       this.database
-        .prepare(
-          `INSERT INTO session_goal (
-        id, session_id, objective, plugin_id, revision, status, max_auto_turns,
-        auto_turns_used, no_progress_count, evidence_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, 0, 'active', ?, 0, 0, '[]', ?, ?)`,
-        )
-        .run(
+        .insert(sessionGoals)
+        .values({
           id,
-          input.sessionId,
-          input.objective,
-          input.pluginId ?? null,
-          input.maxAutoTurns,
-          timestamp,
-          timestamp,
-        );
+          sessionId: input.sessionId,
+          objective: input.objective,
+          pluginId: input.pluginId ?? null,
+          revision: 0,
+          status: "active",
+          maxAutoTurns: input.maxAutoTurns,
+          autoTurnsUsed: 0,
+          noProgressCount: 0,
+          evidenceJson: "[]",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .run();
     } catch (error) {
       if (String(error).includes("session_goal_session_open_unique")) {
         throw new Error(`Session already has an open goal: ${input.sessionId}`);
@@ -102,37 +120,40 @@ export class GoalRepository {
           : (input.assessment ?? undefined),
     };
     const result = this.database
-      .prepare(
-        `UPDATE session_goal SET objective = ?, plugin_id = ?, revision = ?, status = ?, max_auto_turns = ?,
-      auto_turns_used = ?, no_progress_count = ?, blocker_key = ?, current_run_id = ?, reason = ?, wait_json = ?, evidence_json = ?, last_assessment_json = ?, updated_at = ?
-      WHERE id = ? AND revision = ?`,
+      .update(sessionGoals)
+      .set({
+        objective: next.objective,
+        pluginId: next.pluginId ?? null,
+        revision: current.revision + 1,
+        status: next.status,
+        maxAutoTurns: next.maxAutoTurns,
+        autoTurnsUsed: next.autoTurnsUsed,
+        noProgressCount: next.noProgressCount,
+        blockerKey: next.blockerKey ?? null,
+        currentRunId: next.currentRunId ?? null,
+        reason: next.reason ?? null,
+        waitJson: next.wait ? JSON.stringify(next.wait) : null,
+        evidenceJson: JSON.stringify(next.evidence),
+        lastAssessmentJson: next.assessment ? JSON.stringify(next.assessment) : null,
+        updatedAt: Date.now(),
+      })
+      .where(
+        and(
+          eq(sessionGoals.id, id),
+          eq(sessionGoals.revision, input.expectedRevision),
+        ),
       )
-      .run(
-        next.objective,
-        next.pluginId ?? null,
-        current.revision + 1,
-        next.status,
-        next.maxAutoTurns,
-        next.autoTurnsUsed,
-        next.noProgressCount,
-        next.blockerKey ?? null,
-        next.currentRunId ?? null,
-        next.reason ?? null,
-        next.wait ? JSON.stringify(next.wait) : null,
-        JSON.stringify(next.evidence),
-        next.assessment ? JSON.stringify(next.assessment) : null,
-        Date.now(),
-        id,
-        input.expectedRevision,
-      );
+      .run();
     if (result.changes !== 1) throw new Error("session_goal_revision_conflict");
     return this.getGoal(id)!;
   }
 
   getRequest(requestId: string): SessionGoalRequestRecord | undefined {
     const row = this.database
-      .prepare("SELECT * FROM session_goal_request WHERE request_id = ?")
-      .get(requestId) as Record<string, unknown> | undefined;
+      .select()
+      .from(sessionGoalRequests)
+      .where(eq(sessionGoalRequests.requestId, requestId))
+      .get();
     return row ? goalRequestFromRow(row) : undefined;
   }
 
@@ -152,16 +173,16 @@ export class GoalRepository {
     }
     const timestamp = Date.now();
     this.database
-      .prepare(
-        "INSERT INTO session_goal_request (request_id, session_id, fingerprint, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)",
-      )
-      .run(
-        input.requestId,
-        input.sessionId,
-        input.fingerprint,
-        timestamp,
-        timestamp,
-      );
+      .insert(sessionGoalRequests)
+      .values({
+        requestId: input.requestId,
+        sessionId: input.sessionId,
+        fingerprint: input.fingerprint,
+        status: "pending",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
     return this.getRequest(input.requestId)!;
   }
 
@@ -175,17 +196,16 @@ export class GoalRepository {
     },
   ): SessionGoalRequestRecord {
     const result = this.database
-      .prepare(
-        "UPDATE session_goal_request SET status = ?, goal_id = ?, result_json = ?, error = ?, updated_at = ? WHERE request_id = ?",
-      )
-      .run(
-        input.status,
-        input.goalId ?? null,
-        input.result ? JSON.stringify(input.result) : null,
-        input.error ?? null,
-        Date.now(),
-        requestId,
-      );
+      .update(sessionGoalRequests)
+      .set({
+        status: input.status,
+        goalId: input.goalId ?? null,
+        resultJson: input.result ? JSON.stringify(input.result) : null,
+        error: input.error ?? null,
+        updatedAt: Date.now(),
+      })
+      .where(eq(sessionGoalRequests.requestId, requestId))
+      .run();
     if (result.changes !== 1)
       throw new Error(`Session goal request not found: ${requestId}`);
     return this.getRequest(requestId)!;
@@ -197,31 +217,37 @@ export class GoalRepository {
     runId: string;
     assessment: Record<string, unknown>;
   }): void {
+    const assessmentJson = JSON.stringify(input.assessment);
     this.database
-      .prepare(
-        `INSERT INTO session_goal_assessment (id, goal_id, revision, run_id, assessment_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(goal_id, revision, run_id) DO UPDATE SET assessment_json = excluded.assessment_json`,
-      )
-      .run(
-        randomUUID(),
-        input.goalId,
-        input.revision,
-        input.runId,
-        JSON.stringify(input.assessment),
-        Date.now(),
-      );
+      .insert(sessionGoalAssessments)
+      .values({
+        id: randomUUID(),
+        goalId: input.goalId,
+        revision: input.revision,
+        runId: input.runId,
+        assessmentJson,
+        createdAt: Date.now(),
+      })
+      .onConflictDoUpdate({
+        target: [
+          sessionGoalAssessments.goalId,
+          sessionGoalAssessments.revision,
+          sessionGoalAssessments.runId,
+        ],
+        set: { assessmentJson },
+      })
+      .run();
   }
 
   evidenceSignatures(goalId: string): string[] {
     const rows = this.database
-      .prepare(
-        "SELECT assessment_json FROM session_goal_assessment WHERE goal_id = ?",
-      )
-      .all(goalId) as { assessment_json: string }[];
+      .select({ assessmentJson: sessionGoalAssessments.assessmentJson })
+      .from(sessionGoalAssessments)
+      .where(eq(sessionGoalAssessments.goalId, goalId))
+      .all();
     return rows.flatMap(
       (row) =>
-        (JSON.parse(row.assessment_json) as { verifiedSignatures?: string[] })
+        (JSON.parse(row.assessmentJson) as { verifiedSignatures?: string[] })
           .verifiedSignatures ?? [],
     );
   }
@@ -234,72 +260,82 @@ export class GoalRepository {
     runId: string;
   }): boolean {
     const timestamp = Date.now();
-    return (
-      this.database
-        .prepare(
-          `INSERT OR IGNORE INTO session_goal_continuation
-      (id, goal_id, revision, previous_run_id, input_id, run_id, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
-        )
-        .run(
-          randomUUID(),
-          input.goalId,
-          input.revision,
-          input.previousRunId,
-          input.inputId,
-          input.runId,
-          timestamp,
-          timestamp,
-        ).changes === 1
-    );
+    try {
+      return this.database
+        .insert(sessionGoalContinuations)
+        .values({
+          id: randomUUID(),
+          goalId: input.goalId,
+          revision: input.revision,
+          previousRunId: input.previousRunId,
+          inputId: input.inputId,
+          runId: input.runId,
+          status: "pending",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .onConflictDoNothing()
+        .run().changes === 1;
+    } catch (error) {
+      // 保留原忽略约束违规的行为；外键、触发器等异常仍正常抛出。
+      if (error instanceof Error && "code" in error && (
+        error.code === "SQLITE_CONSTRAINT_NOTNULL" || error.code === "SQLITE_CONSTRAINT_CHECK"
+      )) return false;
+      throw error;
+    }
   }
 
   markContinuation(runId: string, status: "dispatched" | "cancelled"): void {
     this.database
-      .prepare(
-        "UPDATE session_goal_continuation SET status = ?, updated_at = ? WHERE run_id = ?",
-      )
-      .run(status, Date.now(), runId);
+      .update(sessionGoalContinuations)
+      .set({ status, updatedAt: Date.now() })
+      .where(eq(sessionGoalContinuations.runId, runId))
+      .run();
   }
 
   listActiveGoalIds(): string[] {
-    return (
-      this.database
-        .prepare("SELECT id FROM session_goal WHERE status = 'active'")
-        .all() as { id: string }[]
-    ).map((row) => row.id);
+    return this.database
+      .select({ id: sessionGoals.id })
+      .from(sessionGoals)
+      .where(eq(sessionGoals.status, "active"))
+      .all()
+      .map((row) => row.id);
   }
 
   listActiveExternalWaitGoals(): SessionGoal[] {
-    return (this.database
-      .prepare("SELECT * FROM session_goal WHERE status = 'active' AND wait_json IS NOT NULL")
-      .all() as Record<string, unknown>[])
+    return this.database
+      .select()
+      .from(sessionGoals)
+      .where(
+        and(eq(sessionGoals.status, "active"), isNotNull(sessionGoals.waitJson)),
+      )
+      .all()
       .map(sessionGoalFromRow)
       .filter((goal) => goal.wait?.kind === "external");
   }
 
   cancelPendingContinuations(): void {
     this.database
-      .prepare(
-        "UPDATE session_goal_continuation SET status = 'cancelled', updated_at = ? WHERE status = 'pending'",
-      )
-      .run(Date.now());
+      .update(sessionGoalContinuations)
+      .set({ status: "cancelled", updatedAt: Date.now() })
+      .where(eq(sessionGoalContinuations.status, "pending"))
+      .run();
   }
 
   findGoalIdByCurrentRun(runId: string): string | undefined {
-    return (
-      this.database
-        .prepare("SELECT id FROM session_goal WHERE current_run_id = ?")
-        .get(runId) as { id?: string } | undefined
-    )?.id;
+    return this.database
+      .select({ id: sessionGoals.id })
+      .from(sessionGoals)
+      .where(eq(sessionGoals.currentRunId, runId))
+      .get()?.id;
   }
 
   clearCurrentRun(id: string): void {
     this.database
-      .prepare(
-        "UPDATE session_goal SET current_run_id = NULL, updated_at = ? WHERE id = ?",
-      )
-      .run(Date.now(), id);
+      .update(sessionGoals)
+      .set({ currentRunId: null, updatedAt: Date.now() })
+      .where(eq(sessionGoals.id, id))
+      .run();
   }
 
   bindCurrentRun(
@@ -309,9 +345,13 @@ export class GoalRepository {
     automatic: boolean,
   ): void {
     this.database
-      .prepare(
-        "UPDATE session_goal SET current_run_id = ?, auto_turns_used = auto_turns_used + ?, updated_at = ? WHERE id = ? AND revision = ?",
-      )
-      .run(runId, automatic ? 1 : 0, Date.now(), goalId, revision);
+      .update(sessionGoals)
+      .set({
+        currentRunId: runId,
+        autoTurnsUsed: sql`${sessionGoals.autoTurnsUsed} + ${automatic ? 1 : 0}`,
+        updatedAt: Date.now(),
+      })
+      .where(and(eq(sessionGoals.id, goalId), eq(sessionGoals.revision, revision)))
+      .run();
   }
 }

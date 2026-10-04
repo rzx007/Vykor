@@ -336,6 +336,12 @@ describe("ScheduleRepository", () => {
     });
   });
 
+  it("rejects an invalid run limit instead of returning an unbounded list", () => {
+    withRepository((repository) => {
+      expect(() => repository.listRuns({ limit: Number.NaN })).toThrow("datatype mismatch");
+    });
+  });
+
   it("deletes a task and all of its runs", () => {
     withRepository((repository) => {
       const task = repository.createTask({

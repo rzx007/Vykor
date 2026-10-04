@@ -2,7 +2,9 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import Database from "better-sqlite3";
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
+import * as schema from "../session-runtime/schema.js";
 import { applySessionMigrations } from "./migrations.js";
 
 export interface SessionDatabaseOptions {
@@ -12,10 +14,12 @@ export interface SessionDatabaseOptions {
 export class SessionDatabase {
   readonly path: string;
   readonly connection: Database.Database;
+  readonly orm: BetterSQLite3Database<typeof schema>;
 
   private constructor(path: string, connection: Database.Database) {
     this.path = path;
     this.connection = connection;
+    this.orm = drizzle(connection, { schema });
   }
 
   static open(options: SessionDatabaseOptions): SessionDatabase {

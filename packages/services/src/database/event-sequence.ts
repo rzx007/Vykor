@@ -1,6 +1,8 @@
-import type Database from "better-sqlite3";
+import { eq } from "drizzle-orm";
 
 import type { SessionState } from "../session-runtime/store-state.js";
+import { sessionEventSequence } from "../session-runtime/schema.js";
+import type { SessionDatabase } from "./session-database.js";
 
 export const EVENT_SEQUENCE_BLOCK_SIZE = 1024;
 
@@ -11,21 +13,18 @@ export interface EventSequenceSnapshot {
 
 export class DurableEventSequence {
   private constructor(
-    private readonly database: Database.Database,
+    private readonly database: SessionDatabase["orm"],
     private readonly state: SessionState,
     private reservedThrough: number,
   ) {}
 
   static load(
-    database: Database.Database,
+    database: SessionDatabase["orm"],
     state: SessionState,
   ): DurableEventSequence {
-    const row = database
-      .prepare(
-        "SELECT reserved_through FROM session_event_sequence WHERE id = 1",
-      )
-      .get() as { reserved_through?: number } | undefined;
-    const reservedThrough = row?.reserved_through ?? 0;
+    const row = database.select().from(sessionEventSequence)
+      .where(eq(sessionEventSequence.id, 1)).get();
+    const reservedThrough = row?.reservedThrough ?? 0;
     state.nextEventSeq = Math.max(state.nextEventSeq, reservedThrough + 1);
     return new DurableEventSequence(database, state, reservedThrough);
   }
@@ -34,14 +33,8 @@ export class DurableEventSequence {
     if (this.state.nextEventSeq > this.reservedThrough) {
       const reservedThrough =
         this.state.nextEventSeq + EVENT_SEQUENCE_BLOCK_SIZE - 1;
-      this.database
-        .prepare(
-          `
-        INSERT INTO session_event_sequence (id, reserved_through) VALUES (1, ?)
-        ON CONFLICT(id) DO UPDATE SET reserved_through = excluded.reserved_through
-      `,
-        )
-        .run(reservedThrough);
+      this.database.insert(sessionEventSequence).values({ id: 1, reservedThrough })
+        .onConflictDoUpdate({ target: sessionEventSequence.id, set: { reservedThrough } }).run();
       this.reservedThrough = reservedThrough;
     }
     return this.state.nextEventSeq++;

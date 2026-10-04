@@ -1,3 +1,5 @@
+import type { workflowRuns } from "../session-runtime/schema.js";
+
 export interface StoredWorkflowRunInput {
   runId: string;
   ownerSessionId?: string;
@@ -41,19 +43,19 @@ export interface WorkflowRunClaim {
 }
 
 export function storedWorkflowRunFromRow(
-  row: Record<string, unknown>,
+  row: typeof workflowRuns.$inferSelect,
 ): StoredWorkflowRunRecord {
   return {
-    runId: row.run_id as string,
-    ...(row.owner_session_id
-      ? { ownerSessionId: row.owner_session_id as string }
+    runId: row.runId,
+    ...(row.ownerSessionId
+      ? { ownerSessionId: row.ownerSessionId }
       : {}),
-    ...(row.owner_input_id ? { ownerInputId: row.owner_input_id as string } : {}),
-    ...(row.owner_run_id ? { ownerRunId: row.owner_run_id as string } : {}),
-    status: row.status as string,
-    ...(row.termination ? { termination: row.termination as string } : {}),
-    snapshotJson: row.snapshot_json as string,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
+    ...(row.ownerInputId ? { ownerInputId: row.ownerInputId } : {}),
+    ...(row.ownerRunId ? { ownerRunId: row.ownerRunId } : {}),
+    status: row.status,
+    ...(row.termination ? { termination: row.termination } : {}),
+    snapshotJson: row.snapshotJson,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }

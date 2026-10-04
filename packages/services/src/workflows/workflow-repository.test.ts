@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SessionStore } from "../session-runtime/store.js";
 import { WorkflowRepository } from "./workflow-repository.js";
@@ -36,6 +36,35 @@ describe("WorkflowRepository", () => {
         snapshotJson: '{"runId":"workflow-1","status":"running"}',
       });
       expect(repository.listRuns({ status: "running" })).toHaveLength(1);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses the attempt insertion query when saving a large snapshot", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-workflow-batch-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      const database = (store as any).storage.database.connection;
+      const prepare = vi.spyOn(database, "prepare");
+      let preparations: number;
+      try {
+        store.workflows.saveRun({
+          runId: "batch", status: "running", snapshotJson: "{}", createdAt: 1, updatedAt: 2,
+          taskAttempts: Array.from({ length: 30 }, (_, index) => ({
+            taskId: `task-${index}`, attempt: 1, status: "done", payloadJson: JSON.stringify({ index }), startedAt: 1,
+          })),
+        });
+        preparations = prepare.mock.calls.length;
+      } finally {
+        prepare.mockRestore();
+      }
+      expect(preparations).toBe(3);
+      expect(database.prepare("SELECT count(*) AS count FROM workflow_task_attempt WHERE workflow_run_id = ?").get("batch"))
+        .toEqual({ count: 30 });
+      expect(database.prepare("SELECT payload_json, finished_at FROM workflow_task_attempt WHERE task_id = ?").get("task-29"))
+        .toEqual({ payload_json: '{"index":29}', finished_at: null });
     } finally {
       store.close();
       rmSync(directory, { recursive: true, force: true });

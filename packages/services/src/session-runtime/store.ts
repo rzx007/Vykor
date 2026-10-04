@@ -3,6 +3,9 @@ import { mkdirSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 
 import Database from "better-sqlite3";
+import { and, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { applicationOwners } from "./schema.js";
 import {
   DEFAULT_ATTACHMENT_LIMITS,
   normalizeSessionUserInputItems,
@@ -246,7 +249,7 @@ export class SessionStore {
     });
     try {
       const loaded = loadSessionReadModel(
-        database.connection,
+        database.orm,
         this.eventRegistry,
       );
       this.storage = {
@@ -254,7 +257,7 @@ export class SessionStore {
         state: loaded.state,
         mutations: createMutationBuffer(),
         eventSequence: DurableEventSequence.load(
-          database.connection,
+          database.orm,
           loaded.state,
         ),
         deltaCheckpoint,
@@ -357,7 +360,7 @@ export class SessionStore {
     const backup = new Database(path);
     try {
       // owner 是当前进程的活租约，不能带进恢复目录；Run/Workflow 保留给启动恢复收束。
-      backup.prepare("DELETE FROM application_owner").run();
+      drizzle(backup).delete(applicationOwners).run();
     } finally {
       backup.close();
     }
@@ -411,9 +414,8 @@ export class SessionStore {
   }): ApplicationOwnerLease {
     const timestamp = input.now ?? Date.now();
     const lease = this.database.transaction(() => {
-      const row = this.database
-        .prepare("SELECT * FROM application_owner WHERE key = 'application'")
-        .get() as Record<string, unknown> | undefined;
+      const row = this.orm.select().from(applicationOwners)
+        .where(eq(applicationOwners.key, "application")).get();
       const current = row ? applicationOwnerFromRow(row) : undefined;
       if (
         current &&
@@ -430,26 +432,8 @@ export class SessionStore {
         startedAt: timestamp,
         heartbeatAt: timestamp,
       };
-      this.database
-        .prepare(
-          `
-        INSERT INTO application_owner (key, owner_id, pid, generation, started_at, heartbeat_at)
-        VALUES ('application', ?, ?, ?, ?, ?)
-        ON CONFLICT(key) DO UPDATE SET
-          owner_id = excluded.owner_id,
-          pid = excluded.pid,
-          generation = excluded.generation,
-          started_at = excluded.started_at,
-          heartbeat_at = excluded.heartbeat_at
-      `,
-        )
-        .run(
-          next.ownerId,
-          next.pid,
-          next.generation,
-          next.startedAt,
-          next.heartbeatAt,
-        );
+      this.orm.insert(applicationOwners).values({ key: "application", ...next })
+        .onConflictDoUpdate({ target: applicationOwners.key, set: next }).run();
       return next;
     })();
     this.activeOwnerLease = lease;
@@ -460,14 +444,12 @@ export class SessionStore {
     lease: ApplicationOwnerLease,
     timestamp = Date.now(),
   ): ApplicationOwnerLease {
-    const result = this.database
-      .prepare(
-        `
-      UPDATE application_owner SET heartbeat_at = ?
-      WHERE key = 'application' AND owner_id = ? AND generation = ?
-    `,
-      )
-      .run(timestamp, lease.ownerId, lease.generation);
+    const result = this.orm.update(applicationOwners).set({ heartbeatAt: timestamp })
+      .where(and(
+        eq(applicationOwners.key, "application"),
+        eq(applicationOwners.ownerId, lease.ownerId),
+        eq(applicationOwners.generation, lease.generation),
+      )).run();
     if (result.changes !== 1) this.throwOwnerFenceError();
     const next = { ...lease, heartbeatAt: timestamp };
     this.activeOwnerLease = next;
@@ -475,14 +457,11 @@ export class SessionStore {
   }
 
   releaseApplicationOwner(lease: ApplicationOwnerLease): void {
-    this.database
-      .prepare(
-        `
-      DELETE FROM application_owner
-      WHERE key = 'application' AND owner_id = ? AND generation = ?
-    `,
-      )
-      .run(lease.ownerId, lease.generation);
+    this.orm.delete(applicationOwners).where(and(
+      eq(applicationOwners.key, "application"),
+      eq(applicationOwners.ownerId, lease.ownerId),
+      eq(applicationOwners.generation, lease.generation),
+    )).run();
     if (
       this.activeOwnerLease?.ownerId === lease.ownerId &&
       this.activeOwnerLease.generation === lease.generation
@@ -491,9 +470,8 @@ export class SessionStore {
   }
 
   assertApplicationOwner(lease: ApplicationOwnerLease): void {
-    const row = this.database
-      .prepare("SELECT * FROM application_owner WHERE key = 'application'")
-      .get() as Record<string, unknown> | undefined;
+    const row = this.orm.select().from(applicationOwners)
+        .where(eq(applicationOwners.key, "application")).get();
     if (!row) this.throwOwnerFenceError();
     const current = applicationOwnerFromRow(row!);
     if (
@@ -515,11 +493,11 @@ export class SessionStore {
     settlements: number;
   } {
     if (this.activeOwnerLease) this.assertApplicationOwner(this.activeOwnerLease);
-    return applyRetention(this.database, this.state, policy, timestamp);
+    return applyRetention(this.orm, this.state, policy, timestamp);
   }
 
   listRetentionAudits(): Array<Record<string, unknown>> {
-    return listRetentionAudits(this.database);
+    return listRetentionAudits(this.orm);
   }
 
   recordRetentionAudit(input: {
@@ -527,7 +505,7 @@ export class SessionStore {
     result: unknown;
     timestamp?: number;
   }): void {
-    recordRetentionAudit(this.database, input);
+    recordRetentionAudit(this.orm, input);
   }
 
   latestRetentionAudit(policy: string):
@@ -538,7 +516,7 @@ export class SessionStore {
         createdAt: number;
       }
     | undefined {
-    return latestRetentionAudit(this.database, policy);
+    return latestRetentionAudit(this.orm, policy);
   }
 
   claimWorkflowRun(
@@ -569,35 +547,35 @@ export class SessionStore {
 
   createProjectionSettlement(input: CreateProjectionSettlementInput): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return createProjectionSettlement(this.database, input);
+    return createProjectionSettlement(this.orm, input);
   }
 
   getProjectionSettlement(id: string): ProjectionSettlementRecord | undefined {
-    return getProjectionSettlement(this.database, id);
+    return getProjectionSettlement(this.orm, id);
   }
 
   listProjectionSettlements(options: ListProjectionSettlementsOptions = {}): ProjectionSettlementRecord[] {
-    return listProjectionSettlements(this.database, options);
+    return listProjectionSettlements(this.orm, options);
   }
 
   markProjectionSettlementRetrying(id: string): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return markProjectionSettlementRetrying(this.database, id);
+    return markProjectionSettlementRetrying(this.orm, id);
   }
 
   failProjectionSettlement(id: string, error: string, nextRetryAt?: number): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return failProjectionSettlement(this.database, id, error, nextRetryAt);
+    return failProjectionSettlement(this.orm, id, error, nextRetryAt);
   }
 
   resolveProjectionSettlement(id: string): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return resolveProjectionSettlement(this.database, id);
+    return resolveProjectionSettlement(this.orm, id);
   }
 
   abandonProjectionSettlement(id: string, error: string): ProjectionSettlementRecord {
     this.assertCurrentOwner();
-    return abandonProjectionSettlement(this.database, id, error);
+    return abandonProjectionSettlement(this.orm, id, error);
   }
 
   createSessionTask(input: CreateSessionTaskInput): SessionExecutionRecord {
@@ -775,8 +753,8 @@ export class SessionStore {
   }
 
   private load(): SessionState {
-    const loaded = loadSessionReadModel(this.database, this.eventRegistry);
-    this.eventSequence = DurableEventSequence.load(this.database, loaded.state);
+    const loaded = loadSessionReadModel(this.orm, this.eventRegistry);
+    this.eventSequence = DurableEventSequence.load(this.orm, loaded.state);
     return loaded.state;
   }
 
@@ -786,6 +764,10 @@ export class SessionStore {
 
   private get database(): Database.Database {
     return this.storage.database.connection;
+  }
+
+  private get orm(): SessionDatabase["orm"] {
+    return this.storage.database.orm;
   }
 
   private get state(): SessionState {
@@ -841,9 +823,8 @@ export class SessionStore {
   }
 
   private throwOwnerFenceError(): never {
-    const row = this.database
-      .prepare("SELECT * FROM application_owner WHERE key = 'application'")
-      .get() as Record<string, unknown> | undefined;
+    const row = this.orm.select().from(applicationOwners)
+        .where(eq(applicationOwners.key, "application")).get();
     if (row)
       throw new ApplicationOwnerConflictError(applicationOwnerFromRow(row));
     throw new Error("Application owner lease is no longer active");
@@ -855,14 +836,14 @@ export class SessionStore {
 }
 
 function applicationOwnerFromRow(
-  row: Record<string, unknown>,
+  row: typeof applicationOwners.$inferSelect,
 ): ApplicationOwnerLease {
   return {
-    ownerId: String(row.owner_id),
+    ownerId: String(row.ownerId),
     pid: Number(row.pid),
     generation: Number(row.generation),
-    startedAt: Number(row.started_at),
-    heartbeatAt: Number(row.heartbeat_at),
+    startedAt: Number(row.startedAt),
+    heartbeatAt: Number(row.heartbeatAt),
   };
 }
 

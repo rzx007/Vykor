@@ -4,6 +4,11 @@ import type {
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
 } from "@vykor/protocol";
+import type {
+  attachmentAssets,
+  attachmentLeases,
+  attachmentRepresentations,
+} from "../../session-runtime/schema.js";
 
 export interface CreateAttachmentRepresentationInput {
   id: string;
@@ -54,67 +59,67 @@ export interface ImportingAttachmentRecord extends AttachmentAssetRecord {
 }
 
 export function attachmentAssetFromRow(
-  row: Record<string, unknown>,
+  row: typeof attachmentAssets.$inferSelect,
 ): AttachmentAssetRecord {
   return parseAttachmentAssetRecord({
     id: row.id,
-    displayName: row.display_name,
-    ...(typeof row.declared_media_type === "string"
-      ? { declaredMediaType: row.declared_media_type }
+    displayName: row.displayName,
+    ...(typeof row.declaredMediaType === "string"
+      ? { declaredMediaType: row.declaredMediaType }
       : {}),
-    ...(typeof row.media_type === "string"
-      ? { mediaType: row.media_type }
+    ...(typeof row.mediaType === "string"
+      ? { mediaType: row.mediaType }
       : {}),
-    ...(typeof row.size_bytes === "number"
-      ? { sizeBytes: row.size_bytes }
+    ...(typeof row.sizeBytes === "number"
+      ? { sizeBytes: row.sizeBytes }
       : {}),
     ...(typeof row.sha256 === "string" ? { sha256: row.sha256 } : {}),
     status: row.status,
-    ...(typeof row.failure_code === "string"
-      ? { failureCode: row.failure_code }
+    ...(typeof row.failureCode === "string"
+      ? { failureCode: row.failureCode }
       : {}),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    ...(typeof row.deleted_at === "number"
-      ? { deletedAt: row.deleted_at }
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    ...(typeof row.deletedAt === "number"
+      ? { deletedAt: row.deletedAt }
       : {}),
   });
 }
 
 export function attachmentRepresentationFromRow(
-  row: Record<string, unknown>,
+  row: typeof attachmentRepresentations.$inferSelect,
 ): AttachmentRepresentationRecord {
   return {
     id: String(row.id),
-    assetId: String(row.asset_id),
+    assetId: String(row.assetId),
     kind: String(row.kind) as AttachmentRepresentationRecord["kind"],
     status: String(row.status) as AttachmentRepresentationRecord["status"],
     processor: String(row.processor),
-    processorVersion: String(row.processor_version),
-    cacheKey: String(row.cache_key),
-    mediaType: String(row.media_type),
+    processorVersion: String(row.processorVersion),
+    cacheKey: String(row.cacheKey),
+    mediaType: String(row.mediaType),
     ...(row.text !== null && row.text !== undefined
       ? { text: String(row.text) }
       : {}),
     ...(row.error !== null && row.error !== undefined
       ? { error: String(row.error) }
       : {}),
-    metadata: JSON.parse(String(row.metadata_json) || "{}"),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
+    metadata: JSON.parse(String(row.metadataJson) || "{}"),
+    createdAt: Number(row.createdAt),
+    updatedAt: Number(row.updatedAt),
   };
 }
 
 export function attachmentLeaseFromRow(
-  row: Record<string, unknown>,
+  row: typeof attachmentLeases.$inferSelect,
 ): AttachmentLeaseRecord {
   return {
     id: String(row.id),
-    assetId: String(row.asset_id),
-    ownerKind: String(row.owner_kind) as AttachmentLeaseRecord["ownerKind"],
-    ownerId: String(row.owner_id),
-    createdAt: Number(row.created_at),
-    renewedAt: Number(row.renewed_at),
-    expiresAt: Number(row.expires_at),
+    assetId: String(row.assetId),
+    ownerKind: String(row.ownerKind) as AttachmentLeaseRecord["ownerKind"],
+    ownerId: String(row.ownerId),
+    createdAt: Number(row.createdAt),
+    renewedAt: Number(row.renewedAt),
+    expiresAt: Number(row.expiresAt),
   };
 }

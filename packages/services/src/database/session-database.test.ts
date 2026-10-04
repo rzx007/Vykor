@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import Database from "better-sqlite3";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
+import { sessionEventSequence } from "../session-runtime/schema.js";
 import { SessionDatabase } from "./session-database.js";
 
 // Regenerated from the current migration chain (0000_current_schema + 0001_drop_application_storage_format).
@@ -40,6 +42,24 @@ function withTempPath(test: (path: string) => void): void {
 }
 
 describe("SessionDatabase", () => {
+  it("rolls schema-based writes back with the existing SQLite transaction", () => {
+    withTempPath((path) => {
+      const database = SessionDatabase.open({ path });
+      try {
+        expect(database.orm.select().from(sessionEventSequence).get()).toEqual({ id: 1, reservedThrough: 0 });
+        expect(() => database.connection.transaction(() => {
+          database.orm.update(sessionEventSequence).set({ reservedThrough: 42 })
+            .where(eq(sessionEventSequence.id, 1)).run();
+          expect(database.orm.select().from(sessionEventSequence).get()?.reservedThrough).toBe(42);
+          throw new Error("rollback typed write");
+        })()).toThrow("rollback typed write");
+        expect(database.orm.select().from(sessionEventSequence).get()?.reservedThrough).toBe(0);
+      } finally {
+        database.close();
+      }
+    });
+  });
+
   it("initializes an empty database with the current storage format and closes it", () => {
     withTempPath((path) => {
       const database = SessionDatabase.open({ path });

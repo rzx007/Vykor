@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 
 import type { ProjectRecord } from "@vykor/protocol";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import type { StorageContext } from "../database/storage-context.js";
+import { projectLocations, projects, sessions } from "../session-runtime/schema.js";
 import {
   defaultProjectName,
   normalizeProjectPath,
@@ -14,76 +16,85 @@ export class ProjectRepository {
   constructor(private readonly storage: StorageContext) {}
 
   list(options: { includeArchived?: boolean } = {}): ProjectRecord[] {
-    const where = options.includeArchived ? "" : "WHERE p.archived_at IS NULL";
-    return (
-      this.storage.database.connection
-        .prepare(
-          `SELECT p.*, l.path FROM project p JOIN project_location l ON l.project_id = p.id AND l.status = 'active' ${where} ORDER BY (p.pinned_at IS NULL), p.pinned_at DESC, p.created_at DESC`,
-        )
-        .all() as Array<Record<string, unknown>>
-    ).map(projectFromRow);
+    return this.storage.database.orm
+      .select({ project: projects, path: projectLocations.path })
+      .from(projects)
+      .innerJoin(
+        projectLocations,
+        and(eq(projectLocations.projectId, projects.id), eq(projectLocations.status, "active")),
+      )
+      .where(options.includeArchived ? undefined : isNull(projects.archivedAt))
+      .orderBy(isNull(projects.pinnedAt), desc(projects.pinnedAt), desc(projects.createdAt))
+      .all()
+      .map(({ project, path }) => projectFromRow(project, path));
   }
 
   get(projectId: string): ProjectRecord | undefined {
-    const row = this.storage.database.connection
-      .prepare(
-        "SELECT p.*, l.path FROM project p JOIN project_location l ON l.project_id = p.id AND l.status = 'active' WHERE p.id = ?",
+    const row = this.storage.database.orm
+      .select({ project: projects, path: projectLocations.path })
+      .from(projects)
+      .innerJoin(
+        projectLocations,
+        and(eq(projectLocations.projectId, projects.id), eq(projectLocations.status, "active")),
       )
-      .get(projectId) as Record<string, unknown> | undefined;
-    return row ? projectFromRow(row) : undefined;
+      .where(eq(projects.id, projectId))
+      .get();
+    return row ? projectFromRow(row.project, row.path) : undefined;
   }
 
   inspect(inputPath: string): ProjectRecord {
     const path = resolve(inputPath);
     const normalizedPath = normalizeProjectPath(path);
-    const row = this.storage.database.connection
-      .prepare(
-        "SELECT p.*, l.path FROM project p JOIN project_location l ON l.project_id = p.id AND l.status = 'active' WHERE l.normalized_path = ?",
+    const row = this.storage.database.orm
+      .select({ project: projects, path: projectLocations.path })
+      .from(projects)
+      .innerJoin(
+        projectLocations,
+        and(eq(projectLocations.projectId, projects.id), eq(projectLocations.status, "active")),
       )
-      .get(normalizedPath) as Record<string, unknown> | undefined;
+      .where(eq(projectLocations.normalizedPath, normalizedPath))
+      .get();
     const timestamp = Date.now();
     if (row) {
       return this.storage.atomic(() => {
         this.storage.assertWritable();
-        this.storage.database.connection
-          .prepare(
-            "UPDATE project SET archived_at = NULL, last_opened_at = ?, updated_at = ? WHERE id = ?",
+        this.storage.database.orm
+          .update(projects)
+          .set({ archivedAt: null, lastOpenedAt: timestamp, updatedAt: timestamp })
+          .where(eq(projects.id, row.project.id))
+          .run();
+        this.storage.database.orm
+          .update(projectLocations)
+          .set({ lastVerifiedAt: timestamp })
+          .where(
+            and(eq(projectLocations.projectId, row.project.id), eq(projectLocations.status, "active")),
           )
-          .run(timestamp, timestamp, row.id);
-        this.storage.database.connection
-          .prepare(
-            "UPDATE project_location SET last_verified_at = ? WHERE project_id = ? AND status = 'active'",
-          )
-          .run(timestamp, row.id);
-        return this.get(row.id as string)!;
+          .run();
+        return this.get(row.project.id)!;
       });
     }
     const projectId = randomUUID();
     return this.storage.atomic(() => {
       this.storage.assertWritable();
-      this.storage.database.connection
-        .prepare(
-          "INSERT INTO project (id, name, pinned_at, default_shell, last_opened_at, archived_at, created_at, updated_at) VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)",
-        )
-        .run(
-          projectId,
-          defaultProjectName(path),
-          timestamp,
-          timestamp,
-          timestamp,
-        );
-      this.storage.database.connection
-        .prepare(
-          "INSERT INTO project_location VALUES (?, ?, ?, ?, 'active', ?, ?)",
-        )
-        .run(
-          randomUUID(),
-          projectId,
-          path,
-          normalizedPath,
-          timestamp,
-          timestamp,
-        );
+      this.storage.database.orm.insert(projects).values({
+        id: projectId,
+        name: defaultProjectName(path),
+        pinnedAt: null,
+        defaultShell: null,
+        lastOpenedAt: timestamp,
+        archivedAt: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }).run();
+      this.storage.database.orm.insert(projectLocations).values({
+        id: randomUUID(),
+        projectId,
+        path,
+        normalizedPath,
+        status: "active",
+        boundAt: timestamp,
+        lastVerifiedAt: timestamp,
+      }).run();
       return this.get(projectId)!;
     });
   }
@@ -94,9 +105,11 @@ export class ProjectRepository {
       const value = name.replace(/\s+/g, " ").trim();
       if (!value) throw new Error("Project name is required");
       if (
-        this.storage.database.connection
-          .prepare("UPDATE project SET name = ?, updated_at = ? WHERE id = ?")
-          .run(value, Date.now(), projectId).changes === 0
+        this.storage.database.orm
+          .update(projects)
+          .set({ name: value, updatedAt: Date.now() })
+          .where(eq(projects.id, projectId))
+          .run().changes === 0
       )
         throw new Error(`Project not found: ${projectId}`);
       return this.get(projectId)!;
@@ -107,11 +120,11 @@ export class ProjectRepository {
     return this.storage.database.connection.transaction(() => {
       this.storage.assertWritable();
       if (
-        this.storage.database.connection
-          .prepare(
-            "UPDATE project SET pinned_at = ?, updated_at = ? WHERE id = ?",
-          )
-          .run(pinned ? Date.now() : null, Date.now(), projectId).changes === 0
+        this.storage.database.orm
+          .update(projects)
+          .set({ pinnedAt: pinned ? Date.now() : null, updatedAt: Date.now() })
+          .where(eq(projects.id, projectId))
+          .run().changes === 0
       )
         throw new Error(`Project not found: ${projectId}`);
       return this.get(projectId)!;
@@ -123,11 +136,11 @@ export class ProjectRepository {
       this.storage.assertWritable();
       const value = shell?.replace(/\s+/g, " ").trim() ?? "";
       if (
-        this.storage.database.connection
-          .prepare(
-            "UPDATE project SET default_shell = ?, updated_at = ? WHERE id = ?",
-          )
-          .run(value || null, Date.now(), projectId).changes === 0
+        this.storage.database.orm
+          .update(projects)
+          .set({ defaultShell: value || null, updatedAt: Date.now() })
+          .where(eq(projects.id, projectId))
+          .run().changes === 0
       )
         throw new Error(`Project not found: ${projectId}`);
       return this.get(projectId)!;
@@ -139,11 +152,11 @@ export class ProjectRepository {
       this.storage.assertWritable();
       const timestamp = Date.now();
       if (
-        this.storage.database.connection
-          .prepare(
-            "UPDATE project SET archived_at = ?, updated_at = ? WHERE id = ?",
-          )
-          .run(timestamp, timestamp, projectId).changes === 0
+        this.storage.database.orm
+          .update(projects)
+          .set({ archivedAt: timestamp, updatedAt: timestamp })
+          .where(eq(projects.id, projectId))
+          .run().changes === 0
       )
         throw new Error(`Project not found: ${projectId}`);
       return this.get(projectId)!;
@@ -154,44 +167,45 @@ export class ProjectRepository {
     if (!this.get(projectId)) throw new Error(`Project not found: ${projectId}`);
     const path = resolve(inputPath);
     const normalizedPath = normalizeProjectPath(path);
-    const conflict = this.storage.database.connection
-      .prepare(
-        "SELECT project_id FROM project_location WHERE normalized_path = ? AND status = 'active'",
+    const conflict = this.storage.database.orm
+      .select({ projectId: projectLocations.projectId })
+      .from(projectLocations)
+      .where(
+        and(eq(projectLocations.normalizedPath, normalizedPath), eq(projectLocations.status, "active")),
       )
-      .get(normalizedPath) as { project_id?: string } | undefined;
-    if (conflict?.project_id && conflict.project_id !== projectId)
+      .get();
+    if (conflict?.projectId && conflict.projectId !== projectId)
       throw new Error("Project directory is already bound to another project");
     const timestamp = Date.now();
     return this.storage.atomic(() => {
       this.storage.assertWritable();
-      this.storage.database.connection
-        .prepare(
-          "UPDATE project_location SET status = 'historical' WHERE project_id = ? AND status = 'active'",
-        )
-        .run(projectId);
-      this.storage.database.connection
-        .prepare(
-          "INSERT INTO project_location VALUES (?, ?, ?, ?, 'active', ?, ?)",
-        )
-        .run(
-          randomUUID(),
-          projectId,
-          path,
-          normalizedPath,
-          timestamp,
-          timestamp,
-        );
-      this.storage.database.connection
-        .prepare(
-          "UPDATE project SET archived_at = NULL, last_opened_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(timestamp, timestamp, projectId);
+      this.storage.database.orm
+        .update(projectLocations)
+        .set({ status: "historical" })
+        .where(and(eq(projectLocations.projectId, projectId), eq(projectLocations.status, "active")))
+        .run();
+      this.storage.database.orm.insert(projectLocations).values({
+        id: randomUUID(),
+        projectId,
+        path,
+        normalizedPath,
+        status: "active",
+        boundAt: timestamp,
+        lastVerifiedAt: timestamp,
+      }).run();
+      this.storage.database.orm
+        .update(projects)
+        .set({ archivedAt: null, lastOpenedAt: timestamp, updatedAt: timestamp })
+        .where(eq(projects.id, projectId))
+        .run();
       for (const session of Object.values(this.storage.state.sessions)) {
         if (session.projectId !== projectId) continue;
         session.cwd = resolve(path, session.cwdRelative ?? "");
-        this.storage.database.connection
-          .prepare("UPDATE session SET cwd = ? WHERE id = ?")
-          .run(session.cwd, session.id);
+        this.storage.database.orm
+          .update(sessions)
+          .set({ cwd: session.cwd })
+          .where(eq(sessions.id, session.id))
+          .run();
       }
       return this.get(projectId)!;
     });

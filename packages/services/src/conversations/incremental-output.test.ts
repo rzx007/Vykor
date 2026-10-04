@@ -65,8 +65,8 @@ describe("IncrementalOutput", () => {
         expect(event.seq).toBe(before + receivedChars);
       }
       expect(prepare.mock.calls).toHaveLength(2);
-      expect(prepare.mock.calls.every(([sql]) => String(sql).includes("INSERT INTO session_event_sequence"))).toBe(true);
       prepare.mockRestore();
+      expect(db.prepare("SELECT reserved_through FROM session_event_sequence WHERE id = 1").get()).toEqual({ reserved_through: 3072 });
       expect(storage.mutations.runs.size).toBe(0);
       expect(storage.mutations.sessions.size).toBe(0);
       expect(JSON.parse(db.prepare("SELECT metadata_json FROM session_run WHERE id='run'").get().metadata_json).toolGeneration).toBeUndefined();
@@ -240,6 +240,33 @@ describe("IncrementalOutput", () => {
       expect(text()).toBe("");
       store.incrementalOutput.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId: "p", field: "text", delta: "好" });
       expect(text()).toBe("你好");
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("reuses update queries while flushing many dirty message parts", () => {
+    const { dir, store } = setup();
+    try {
+      for (let index = 0; index < 30; index++) {
+        const partId = `batch-${index}`;
+        store.conversations.upsertMessagePart({ id: partId, sessionId: "s", messageId: "m", type: "text", text: "" });
+      }
+      for (let index = 0; index < 30; index++) {
+        const partId = `batch-${index}`;
+        store.incrementalOutput.appendMessagePartDelta({ sessionId: "s", messageId: "m", partId, field: "text", delta: `text-${index}` });
+      }
+      const database = (store as any).storage.database.connection;
+      const prepare = vi.spyOn(database, "prepare");
+      let preparations: number;
+      try {
+        store.incrementalOutput.flushMessagePartDeltas();
+        preparations = prepare.mock.calls.length;
+      } finally {
+        prepare.mockRestore();
+      }
+      expect(preparations).toBe(3);
+      expect(database.prepare("SELECT text FROM session_message_part WHERE id = ?").get("batch-29"))
+        .toEqual({ text: "text-29" });
+      expect((store as any).storage.deltaCheckpoint.dirtyPartIds()).toEqual([]);
     } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 

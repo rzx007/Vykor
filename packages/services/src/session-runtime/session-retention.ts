@@ -1,5 +1,17 @@
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
+import { and, desc, eq, inArray, isNotNull, lt, ne, notExists, notInArray, placeholder, sql } from "drizzle-orm";
+import type { SessionDatabase } from "../database/session-database.js";
+import {
+  projectionSettlements,
+  retentionAudits,
+  sessionEvents,
+  sessionRunAttempts,
+  sessionRuns,
+  sessions,
+  workflowEvents,
+  workflowExecutionClaims,
+  workflowRuns,
+} from "./schema.js";
 import { now, type SessionState } from "./store-state.js";
 
 export interface RetentionPolicy {
@@ -25,7 +37,7 @@ export const DEFAULT_RETENTION_POLICY: RetentionPolicy = {
 };
 
 export function applyRetention(
-  database: Database.Database,
+  database: SessionDatabase["orm"],
   state: SessionState,
   policy: RetentionPolicy = DEFAULT_RETENTION_POLICY,
   timestamp = Date.now(),
@@ -36,95 +48,89 @@ export function applyRetention(
   runAttempts: number;
   settlements: number;
 } {
-  const result = database.transaction(() => {
-    const workflowEvents = database
-      .prepare(
-        `
-      DELETE FROM workflow_event
-      WHERE created_at < ? AND workflow_run_id IN (
-        SELECT run_id FROM workflow_run WHERE status != 'running'
-      )
-    `,
-      )
-      .run(timestamp - policy.workflowEventMaxAgeMs).changes;
-    const workflows = database
-      .prepare(
-        `
-      DELETE FROM workflow_run
-      WHERE updated_at < ? AND status != 'running'
-        AND NOT EXISTS (
-          SELECT 1 FROM workflow_execution_claim c
-          WHERE c.workflow_run_id = workflow_run.run_id AND c.status = 'running'
-        )
-    `,
-      )
-      .run(timestamp - policy.workflowRunMaxAgeMs).changes;
-    const runAttempts = database
-      .prepare(
-        `
-      DELETE FROM session_run_attempt
-      WHERE updated_at < ? AND status NOT IN ('pending', 'running')
-    `,
-      )
-      .run(timestamp - policy.runAttemptMaxAgeMs).changes;
-    const settlements = database
-      .prepare(
-        `
-      DELETE FROM projection_settlement
-      WHERE updated_at < ? AND status IN ('resolved', 'abandoned')
-    `,
-      )
-      .run(timestamp - policy.projectionSettlementMaxAgeMs).changes;
-    const removableEvents = database
-      .prepare(
-        `
-      SELECT e.id FROM session_event e
-      LEFT JOIN session s ON s.id = e.session_id
-      WHERE e.created_at < ?
-        AND e.session_id IS NOT NULL
-        AND s.status = 'archived'
-        AND NOT EXISTS (
-          SELECT 1 FROM session_run r
-          WHERE r.session_id = e.session_id AND r.status IN ('pending', 'running')
-        )
-    `,
-      )
-      .all(timestamp - policy.durableEventMaxAgeMs) as Array<{ id: string }>;
+  const result = database.transaction((transaction) => {
+    const deletedWorkflowEvents = transaction
+      .delete(workflowEvents)
+      .where(and(
+        lt(workflowEvents.createdAt, timestamp - policy.workflowEventMaxAgeMs),
+        inArray(workflowEvents.workflowRunId, transaction
+          .select({ runId: workflowRuns.runId })
+          .from(workflowRuns)
+          .where(ne(workflowRuns.status, "running"))),
+      ))
+      .run().changes;
+    const workflows = transaction
+      .delete(workflowRuns)
+      .where(and(
+        lt(workflowRuns.updatedAt, timestamp - policy.workflowRunMaxAgeMs),
+        ne(workflowRuns.status, "running"),
+        notExists(transaction
+          .select({ runId: workflowExecutionClaims.workflowRunId })
+          .from(workflowExecutionClaims)
+          .where(and(
+            eq(workflowExecutionClaims.workflowRunId, workflowRuns.runId),
+            eq(workflowExecutionClaims.status, "running"),
+          ))),
+      ))
+      .run().changes;
+    const runAttempts = transaction
+      .delete(sessionRunAttempts)
+      .where(and(
+        lt(sessionRunAttempts.updatedAt, timestamp - policy.runAttemptMaxAgeMs),
+        notInArray(sessionRunAttempts.status, ["pending", "running"]),
+      ))
+      .run().changes;
+    const settlements = transaction
+      .delete(projectionSettlements)
+      .where(and(
+        lt(projectionSettlements.updatedAt, timestamp - policy.projectionSettlementMaxAgeMs),
+        inArray(projectionSettlements.status, ["resolved", "abandoned"]),
+      ))
+      .run().changes;
+    const removableEvents = transaction
+      .select({ id: sessionEvents.id })
+      .from(sessionEvents)
+      .leftJoin(sessions, eq(sessions.id, sessionEvents.sessionId))
+      .where(and(
+        lt(sessionEvents.createdAt, timestamp - policy.durableEventMaxAgeMs),
+        isNotNull(sessionEvents.sessionId),
+        eq(sessions.status, "archived"),
+        notExists(transaction
+          .select({ sessionId: sessionRuns.sessionId })
+          .from(sessionRuns)
+          .where(and(
+            eq(sessionRuns.sessionId, sessionEvents.sessionId),
+            inArray(sessionRuns.status, ["pending", "running"]),
+          ))),
+      ))
+      .all();
     if (removableEvents.length > 0) {
-      const remove = database.prepare(
-        "DELETE FROM session_event WHERE id = ?",
-      );
-      for (const event of removableEvents) remove.run(event.id);
+      const remove = transaction.delete(sessionEvents).where(eq(sessionEvents.id, placeholder("id"))).prepare();
+      for (const event of removableEvents) {
+        if (event.id !== null) remove.run({ id: event.id });
+      }
     }
     const retentionResult = {
       events: removableEvents.length,
-      workflowEvents,
+      workflowEvents: deletedWorkflowEvents,
       workflows,
       runAttempts,
       settlements,
     };
-    database
-      .prepare(
-        `
-      INSERT INTO retention_audit (id, policy, result_json, created_at)
-      VALUES (?, ?, ?, ?)
-    `,
-      )
-      .run(
-        randomUUID(),
-        JSON.stringify(policy),
-        JSON.stringify(retentionResult),
-        timestamp,
-      );
+    transaction
+      .insert(retentionAudits)
+      .values({
+        id: randomUUID(),
+        policy: JSON.stringify(policy),
+        resultJson: JSON.stringify(retentionResult),
+        createdAt: timestamp,
+      })
+      .run();
     return retentionResult;
-  })();
+  });
   if (result.events > 0) {
     const removed = new Set(
-      (
-        database.prepare("SELECT id FROM session_event").all() as Array<{
-          id: string;
-        }>
-      ).map((row) => row.id),
+      database.select({ id: sessionEvents.id }).from(sessionEvents).all().map((row) => row.id),
     );
     state.events = state.events.filter((event) =>
       removed.has(event.id),
@@ -133,31 +139,36 @@ export function applyRetention(
   return result;
 }
 
-export function listRetentionAudits(database: Database.Database): Array<Record<string, unknown>> {
+export function listRetentionAudits(database: SessionDatabase["orm"]): Array<Record<string, unknown>> {
   return database
-    .prepare("SELECT * FROM retention_audit ORDER BY created_at DESC")
-    .all() as Array<Record<string, unknown>>;
+    .select({
+      id: retentionAudits.id,
+      policy: retentionAudits.policy,
+      result_json: retentionAudits.resultJson,
+      created_at: retentionAudits.createdAt,
+    })
+    .from(retentionAudits)
+    .orderBy(desc(retentionAudits.createdAt))
+    .all();
 }
 
-export function recordRetentionAudit(database: Database.Database, input: {
+export function recordRetentionAudit(database: SessionDatabase["orm"], input: {
   policy: string;
   result: unknown;
   timestamp?: number;
 }): void {
   database
-    .prepare(
-      `INSERT INTO retention_audit (id, policy, result_json, created_at)
-     VALUES (?, ?, ?, ?)`,
-    )
-    .run(
-      randomUUID(),
-      input.policy,
-      JSON.stringify(input.result),
-      input.timestamp ?? now(),
-    );
+    .insert(retentionAudits)
+    .values({
+      id: randomUUID(),
+      policy: input.policy,
+      resultJson: JSON.stringify(input.result),
+      createdAt: input.timestamp ?? now(),
+    })
+    .run();
 }
 
-export function latestRetentionAudit(database: Database.Database, policy: string):
+export function latestRetentionAudit(database: SessionDatabase["orm"], policy: string):
   | {
       id: string;
       policy: string;
@@ -166,27 +177,18 @@ export function latestRetentionAudit(database: Database.Database, policy: string
     }
   | undefined {
   const row = database
-    .prepare(
-      `SELECT id, policy, result_json, created_at
-     FROM retention_audit
-     WHERE policy = ?
-     ORDER BY created_at DESC, rowid DESC
-     LIMIT 1`,
-    )
-    .get(policy) as
-    | {
-        id: string;
-        policy: string;
-        result_json: string;
-        created_at: number;
-      }
-    | undefined;
+    .select()
+    .from(retentionAudits)
+    .where(eq(retentionAudits.policy, policy))
+    .orderBy(desc(retentionAudits.createdAt), desc(sql`${retentionAudits}.rowid`))
+    .limit(1)
+    .get();
   return row
     ? {
         id: row.id,
         policy: row.policy,
-        result: JSON.parse(row.result_json) as unknown,
-        createdAt: row.created_at,
+        result: JSON.parse(row.resultJson) as unknown,
+        createdAt: row.createdAt,
       }
     : undefined;
 }

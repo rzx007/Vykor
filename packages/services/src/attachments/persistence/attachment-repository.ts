@@ -4,7 +4,13 @@ import type {
   AttachmentRepresentationRecord,
   AttachmentRepresentationKind,
 } from "@vykor/protocol";
+import { and, eq, gt, lte, ne } from "drizzle-orm";
 import type { StorageContext } from "../../database/storage-context.js";
+import {
+  attachmentAssets,
+  attachmentLeases,
+  attachmentRepresentations,
+} from "../../session-runtime/schema.js";
 import {
   attachmentAssetFromRow,
   attachmentRepresentationFromRow,
@@ -21,7 +27,7 @@ export class AttachmentRepository {
   constructor(private readonly storage: StorageContext) {}
 
   private get database() {
-    return this.storage.database.connection;
+    return this.storage.database.orm;
   }
 
   getAttachment(
@@ -29,21 +35,33 @@ export class AttachmentRepository {
     options: { includeDeleted?: boolean } = {},
   ): AttachmentAssetRecord | undefined {
     const row = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset WHERE id = ?${options.includeDeleted ? "" : " AND status != 'deleted'"}`,
+      .select()
+      .from(attachmentAssets)
+      .where(
+        and(
+          eq(attachmentAssets.id, id),
+          options.includeDeleted
+            ? undefined
+            : ne(attachmentAssets.status, "deleted"),
+        ),
       )
-      .get(id) as Record<string, unknown> | undefined;
+      .get();
     return row ? attachmentAssetFromRow(row) : undefined;
   }
 
   findReadyAttachmentByHash(sha256: string): AttachmentAssetRecord | undefined {
     const row = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset
-         WHERE sha256 = ? AND status = 'ready'
-         ORDER BY created_at, id LIMIT 1`,
+      .select()
+      .from(attachmentAssets)
+      .where(
+        and(
+          eq(attachmentAssets.sha256, sha256),
+          eq(attachmentAssets.status, "ready"),
+        ),
       )
-      .get(sha256) as Record<string, unknown> | undefined;
+      .orderBy(attachmentAssets.createdAt, attachmentAssets.id)
+      .limit(1)
+      .get();
     return row ? attachmentAssetFromRow(row) : undefined;
   }
 
@@ -51,24 +69,28 @@ export class AttachmentRepository {
     options: { includeDeleted?: boolean } = {},
   ): AttachmentAssetRecord[] {
     const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset${options.includeDeleted ? "" : " WHERE status != 'deleted'"} ORDER BY created_at, id`,
+      .select()
+      .from(attachmentAssets)
+      .where(
+        options.includeDeleted
+          ? undefined
+          : ne(attachmentAssets.status, "deleted"),
       )
-      .all() as Array<Record<string, unknown>>;
+      .orderBy(attachmentAssets.createdAt, attachmentAssets.id)
+      .all();
     return rows.map(attachmentAssetFromRow);
   }
 
   listImportingAttachments(): ImportingAttachmentRecord[] {
     const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_asset
-         WHERE status = 'importing'
-         ORDER BY created_at, id`,
-      )
-      .all() as Array<Record<string, unknown>>;
+      .select()
+      .from(attachmentAssets)
+      .where(eq(attachmentAssets.status, "importing"))
+      .orderBy(attachmentAssets.createdAt, attachmentAssets.id)
+      .all();
     return rows.map((row) => ({
       ...attachmentAssetFromRow(row),
-      stagingName: String(row.staging_name),
+      stagingName: String(row.stagingName),
     }));
   }
 
@@ -76,8 +98,10 @@ export class AttachmentRepository {
     id: string,
   ): AttachmentRepresentationRecord | undefined {
     const row = this.database
-      .prepare("SELECT * FROM attachment_representation WHERE id = ?")
-      .get(id) as Record<string, unknown> | undefined;
+      .select()
+      .from(attachmentRepresentations)
+      .where(eq(attachmentRepresentations.id, id))
+      .get();
     return row ? attachmentRepresentationFromRow(row) : undefined;
   }
 
@@ -85,33 +109,38 @@ export class AttachmentRepository {
     assetId: string,
   ): AttachmentRepresentationRecord[] {
     const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_representation
-       WHERE asset_id = ?
-       ORDER BY created_at, id`,
-      )
-      .all(assetId) as Array<Record<string, unknown>>;
+      .select()
+      .from(attachmentRepresentations)
+      .where(eq(attachmentRepresentations.assetId, assetId))
+      .orderBy(attachmentRepresentations.createdAt, attachmentRepresentations.id)
+      .all();
     return rows.map(attachmentRepresentationFromRow);
   }
 
   listActiveAttachmentLeases(timestamp = Date.now()): AttachmentLeaseRecord[] {
     const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_lease
-       WHERE expires_at > ?
-       ORDER BY asset_id, owner_kind, owner_id`,
+      .select()
+      .from(attachmentLeases)
+      .where(gt(attachmentLeases.expiresAt, timestamp))
+      .orderBy(
+        attachmentLeases.assetId,
+        attachmentLeases.ownerKind,
+        attachmentLeases.ownerId,
       )
-      .all(timestamp) as Array<Record<string, unknown>>;
+      .all();
     return rows.map(attachmentLeaseFromRow);
   }
 
   listAttachmentLeases(): AttachmentLeaseRecord[] {
     const rows = this.database
-      .prepare(
-        `SELECT * FROM attachment_lease
-       ORDER BY asset_id, owner_kind, owner_id`,
+      .select()
+      .from(attachmentLeases)
+      .orderBy(
+        attachmentLeases.assetId,
+        attachmentLeases.ownerKind,
+        attachmentLeases.ownerId,
       )
-      .all() as Array<Record<string, unknown>>;
+      .all();
     return rows.map(attachmentLeaseFromRow);
   }
 
@@ -121,12 +150,18 @@ export class AttachmentRepository {
     cacheKey: string,
   ): AttachmentRepresentationRecord | undefined {
     const row = this.database
-      .prepare(
-        `SELECT * FROM attachment_representation
-       WHERE asset_id = ? AND kind = ? AND cache_key = ? AND status = 'completed'
-       LIMIT 1`,
+      .select()
+      .from(attachmentRepresentations)
+      .where(
+        and(
+          eq(attachmentRepresentations.assetId, assetId),
+          eq(attachmentRepresentations.kind, kind),
+          eq(attachmentRepresentations.cacheKey, cacheKey),
+          eq(attachmentRepresentations.status, "completed"),
+        ),
       )
-      .get(assetId, kind, cacheKey) as Record<string, unknown> | undefined;
+      .limit(1)
+      .get();
     return row ? attachmentRepresentationFromRow(row) : undefined;
   }
 
@@ -135,20 +170,17 @@ export class AttachmentRepository {
   ): AttachmentAssetRecord {
     const timestamp = input.createdAt ?? Date.now();
     this.database
-      .prepare(
-        `INSERT INTO attachment_asset (
-          id, display_name, declared_media_type, status, staging_name,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, 'importing', ?, ?, ?)`,
-      )
-      .run(
-        input.id,
-        input.displayName,
-        input.declaredMediaType ?? null,
-        input.stagingName,
-        timestamp,
-        timestamp,
-      );
+      .insert(attachmentAssets)
+      .values({
+        id: input.id,
+        displayName: input.displayName,
+        declaredMediaType: input.declaredMediaType ?? null,
+        status: "importing",
+        stagingName: input.stagingName,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
     return this.getAttachment(input.id, { includeDeleted: true })!;
   }
 
@@ -157,23 +189,21 @@ export class AttachmentRepository {
   ): AttachmentRepresentationRecord {
     const createdAt = input.createdAt ?? Date.now();
     this.database
-      .prepare(
-        `INSERT INTO attachment_representation (
-        id, asset_id, kind, status, processor, processor_version, cache_key,
-        media_type, metadata_json, created_at, updated_at
-      ) VALUES (?, ?, ?, 'running', ?, ?, ?, ?, '{}', ?, ?)`,
-      )
-      .run(
-        input.id,
-        input.assetId,
-        input.kind,
-        input.processor,
-        input.processorVersion,
-        input.cacheKey,
-        input.mediaType,
+      .insert(attachmentRepresentations)
+      .values({
+        id: input.id,
+        assetId: input.assetId,
+        kind: input.kind,
+        status: "running",
+        processor: input.processor,
+        processorVersion: input.processorVersion,
+        cacheKey: input.cacheKey,
+        mediaType: input.mediaType,
+        metadataJson: "{}",
         createdAt,
-        createdAt,
-      );
+        updatedAt: createdAt,
+      })
+      .run();
     return this.getAttachmentRepresentation(input.id)!;
   }
 
@@ -184,18 +214,16 @@ export class AttachmentRepository {
     expiresAt: number;
   }): number {
     return this.database
-      .prepare(
-        `UPDATE attachment_lease
-       SET renewed_at = ?, expires_at = ?
-       WHERE owner_kind = ? AND owner_id = ? AND expires_at > ?`,
+      .update(attachmentLeases)
+      .set({ renewedAt: input.timestamp, expiresAt: input.expiresAt })
+      .where(
+        and(
+          eq(attachmentLeases.ownerKind, input.ownerKind),
+          eq(attachmentLeases.ownerId, input.ownerId),
+          gt(attachmentLeases.expiresAt, input.timestamp),
+        ),
       )
-      .run(
-        input.timestamp,
-        input.expiresAt,
-        input.ownerKind,
-        input.ownerId,
-        input.timestamp,
-      ).changes;
+      .run().changes;
   }
 
   releaseAttachmentLeases(
@@ -203,16 +231,21 @@ export class AttachmentRepository {
     ownerId: string,
   ): number {
     return this.database
-      .prepare(
-        "DELETE FROM attachment_lease WHERE owner_kind = ? AND owner_id = ?",
+      .delete(attachmentLeases)
+      .where(
+        and(
+          eq(attachmentLeases.ownerKind, ownerKind),
+          eq(attachmentLeases.ownerId, ownerId),
+        ),
       )
-      .run(ownerKind, ownerId).changes;
+      .run().changes;
   }
 
   deleteExpiredAttachmentLeases(timestamp = Date.now()): number {
     return this.database
-      .prepare("DELETE FROM attachment_lease WHERE expires_at <= ?")
-      .run(timestamp).changes;
+      .delete(attachmentLeases)
+      .where(lte(attachmentLeases.expiresAt, timestamp))
+      .run().changes;
   }
 
   markReady(
@@ -222,13 +255,20 @@ export class AttachmentRepository {
   ): boolean {
     return (
       this.database
-        .prepare(
-          `UPDATE attachment_asset
-      SET sha256 = ?, size_bytes = ?, media_type = ?, status = 'ready',
-          staging_name = NULL, failure_code = NULL, updated_at = ?
-      WHERE id = ? AND status = 'importing'`,
+        .update(attachmentAssets)
+        .set({
+          sha256: input.sha256,
+          sizeBytes: input.sizeBytes,
+          mediaType: input.mediaType,
+          status: "ready",
+          stagingName: null,
+          failureCode: null,
+          updatedAt,
+        })
+        .where(
+          and(eq(attachmentAssets.id, id), eq(attachmentAssets.status, "importing")),
         )
-        .run(input.sha256, input.sizeBytes, input.mediaType, updatedAt, id)
+        .run()
         .changes === 1
     );
   }
@@ -236,24 +276,24 @@ export class AttachmentRepository {
   failImport(id: string, failureCode: string, updatedAt: number): boolean {
     return (
       this.database
-        .prepare(
-          `UPDATE attachment_asset
-      SET status = 'failed', staging_name = NULL, failure_code = ?, updated_at = ?
-      WHERE id = ? AND status = 'importing'`,
+        .update(attachmentAssets)
+        .set({ status: "failed", stagingName: null, failureCode, updatedAt })
+        .where(
+          and(eq(attachmentAssets.id, id), eq(attachmentAssets.status, "importing")),
         )
-        .run(failureCode, updatedAt, id).changes === 1
+        .run().changes === 1
     );
   }
 
   softDelete(id: string, deletedAt: number): boolean {
     return (
       this.database
-        .prepare(
-          `UPDATE attachment_asset
-      SET status = 'deleted', deleted_at = ?, updated_at = ?
-      WHERE id = ? AND status = 'ready'`,
+        .update(attachmentAssets)
+        .set({ status: "deleted", deletedAt, updatedAt: deletedAt })
+        .where(
+          and(eq(attachmentAssets.id, id), eq(attachmentAssets.status, "ready")),
         )
-        .run(deletedAt, deletedAt, id).changes === 1
+        .run().changes === 1
     );
   }
 
@@ -264,12 +304,21 @@ export class AttachmentRepository {
   ): boolean {
     return (
       this.database
-        .prepare(
-          `UPDATE attachment_representation
-      SET status = 'completed', text = ?, error = NULL, metadata_json = ?, updated_at = ?
-      WHERE id = ? AND status = 'running'`,
+        .update(attachmentRepresentations)
+        .set({
+          status: "completed",
+          text: input.text,
+          error: null,
+          metadataJson: JSON.stringify(input.metadata ?? {}),
+          updatedAt,
+        })
+        .where(
+          and(
+            eq(attachmentRepresentations.id, id),
+            eq(attachmentRepresentations.status, "running"),
+          ),
         )
-        .run(input.text, JSON.stringify(input.metadata ?? {}), updatedAt, id)
+        .run()
         .changes === 1
     );
   }
@@ -277,12 +326,15 @@ export class AttachmentRepository {
   failRepresentation(id: string, error: string, updatedAt: number): boolean {
     return (
       this.database
-        .prepare(
-          `UPDATE attachment_representation
-      SET status = 'failed', error = ?, updated_at = ?
-      WHERE id = ? AND status = 'running'`,
+        .update(attachmentRepresentations)
+        .set({ status: "failed", error, updatedAt })
+        .where(
+          and(
+            eq(attachmentRepresentations.id, id),
+            eq(attachmentRepresentations.status, "running"),
+          ),
         )
-        .run(error, updatedAt, id).changes === 1
+        .run().changes === 1
     );
   }
 
@@ -291,47 +343,64 @@ export class AttachmentRepository {
     input: AcquireAttachmentLeasesInput,
   ): AttachmentLeaseRecord {
     this.database
-      .prepare(
-        `INSERT INTO attachment_lease (
-      id, asset_id, owner_kind, owner_id, created_at, renewed_at, expires_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(asset_id, owner_kind, owner_id) DO UPDATE SET
-      renewed_at = excluded.renewed_at, expires_at = excluded.expires_at`,
-      )
-      .run(
-        randomUUID(),
+      .insert(attachmentLeases)
+      .values({
+        id: randomUUID(),
         assetId,
-        input.ownerKind,
-        input.ownerId,
-        input.timestamp,
-        input.timestamp,
-        input.expiresAt,
-      );
+        ownerKind: input.ownerKind,
+        ownerId: input.ownerId,
+        createdAt: input.timestamp,
+        renewedAt: input.timestamp,
+        expiresAt: input.expiresAt,
+      })
+      .onConflictDoUpdate({
+        target: [
+          attachmentLeases.assetId,
+          attachmentLeases.ownerKind,
+          attachmentLeases.ownerId,
+        ],
+        set: { renewedAt: input.timestamp, expiresAt: input.expiresAt },
+      })
+      .run();
     const row = this.database
-      .prepare(
-        `SELECT * FROM attachment_lease
-      WHERE asset_id = ? AND owner_kind = ? AND owner_id = ?`,
+      .select()
+      .from(attachmentLeases)
+      .where(
+        and(
+          eq(attachmentLeases.assetId, assetId),
+          eq(attachmentLeases.ownerKind, input.ownerKind),
+          eq(attachmentLeases.ownerId, input.ownerId),
+        ),
       )
-      .get(assetId, input.ownerKind, input.ownerId) as Record<string, unknown>;
+      .get()!;
     return attachmentLeaseFromRow(row);
   }
 
   hasActiveLease(assetId: string, timestamp: number): boolean {
     return !!this.database
-      .prepare(
-        `SELECT 1 FROM attachment_lease
-      WHERE asset_id = ? AND expires_at > ? LIMIT 1`,
+      .select({ id: attachmentLeases.id })
+      .from(attachmentLeases)
+      .where(
+        and(
+          eq(attachmentLeases.assetId, assetId),
+          gt(attachmentLeases.expiresAt, timestamp),
+        ),
       )
-      .get(assetId, timestamp);
+      .limit(1)
+      .get();
   }
 
   purgeDeleted(assetId: string): boolean {
     return (
       this.database
-        .prepare(
-          "DELETE FROM attachment_asset WHERE id = ? AND status = 'deleted'",
+        .delete(attachmentAssets)
+        .where(
+          and(
+            eq(attachmentAssets.id, assetId),
+            eq(attachmentAssets.status, "deleted"),
+          ),
         )
-        .run(assetId).changes === 1
+        .run().changes === 1
     );
   }
 }

@@ -1,9 +1,15 @@
 import type { CreateSessionInput, SessionInputRecord, SessionRecord } from "@vykor/protocol";
+import { inArray, sql } from "drizzle-orm";
 import type { StorageContext } from "../database/storage-context.js";
 import type { SessionRepository } from "../sessions/session-repository.js";
 import { assertSession, clone } from "../session-runtime/store-state.js";
 import type { ConversationRepository } from "./conversation-repository.js";
 import type { AdmitPromptTransactionInput, ConversationTransactionTestHooks } from "./conversation-transactions.js";
+import {
+  sessions, sessionInputs, sessionMessages, sessionMessageParts, sessionRuns,
+  sessionRunAttempts, sessionTasks, sessionEvents, permissionRequests,
+  scheduledRuns, scheduledTasks,
+} from "../session-runtime/schema.js";
 
 interface TreeContext {
   storage: StorageContext;
@@ -133,21 +139,30 @@ export function deleteSessionTree(sessionId: string, context: TreeContext): stri
   );
 
   return context.storage.atomic(() => {
-    const placeholders = sessionIds.map(() => "?").join(", ");
-    const database = context.storage.database.connection;
+    const database = context.storage.database.orm;
     const timestamp = Date.now();
-    database.prepare(`UPDATE scheduled_run SET session_id = NULL, updated_at = ? WHERE session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
-    database.prepare(`UPDATE scheduled_task SET status = CASE WHEN destination = 'chat' THEN 'paused' ELSE status END, next_run_at = CASE WHEN destination = 'chat' THEN NULL ELSE next_run_at END, session_id = NULL, updated_at = ? WHERE session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
-    database.prepare(`UPDATE scheduled_task SET created_from_session_id = NULL, updated_at = ? WHERE created_from_session_id IN (${placeholders})`).run(timestamp, ...sessionIds);
-    database.prepare(`DELETE FROM permission_request WHERE session_id IN (${placeholders})`).run(...sessionIds);
-    database.prepare(`DELETE FROM session_task WHERE session_id IN (${placeholders})`).run(...sessionIds);
-    database.prepare(`DELETE FROM session_run_attempt WHERE run_id IN (SELECT id FROM session_run WHERE session_id IN (${placeholders}))`).run(...sessionIds);
-    database.prepare(`DELETE FROM session_run WHERE session_id IN (${placeholders})`).run(...sessionIds);
-    database.prepare(`DELETE FROM session_message_part WHERE session_id IN (${placeholders})`).run(...sessionIds);
-    database.prepare(`DELETE FROM session_message WHERE session_id IN (${placeholders})`).run(...sessionIds);
-    database.prepare(`DELETE FROM session_input WHERE session_id IN (${placeholders})`).run(...sessionIds);
-    database.prepare(`DELETE FROM session_event WHERE session_id IN (${placeholders})`).run(...sessionIds);
-    database.prepare(`DELETE FROM session WHERE id IN (${placeholders})`).run(...sessionIds);
+    database.update(scheduledRuns).set({ sessionId: null, updatedAt: timestamp })
+      .where(inArray(scheduledRuns.sessionId, sessionIds)).run();
+    database.update(scheduledTasks).set({
+      status: sql`CASE WHEN ${scheduledTasks.destination} = 'chat' THEN 'paused' ELSE ${scheduledTasks.status} END`,
+      nextRunAt: sql`CASE WHEN ${scheduledTasks.destination} = 'chat' THEN NULL ELSE ${scheduledTasks.nextRunAt} END`,
+      sessionId: null,
+      updatedAt: timestamp,
+    }).where(inArray(scheduledTasks.sessionId, sessionIds)).run();
+    database.update(scheduledTasks).set({ createdFromSessionId: null, updatedAt: timestamp })
+      .where(inArray(scheduledTasks.createdFromSessionId, sessionIds)).run();
+    database.delete(permissionRequests).where(inArray(permissionRequests.sessionId, sessionIds)).run();
+    database.delete(sessionTasks).where(inArray(sessionTasks.sessionId, sessionIds)).run();
+    database.delete(sessionRunAttempts).where(inArray(sessionRunAttempts.runId,
+      database.select({ id: sessionRuns.id }).from(sessionRuns)
+        .where(inArray(sessionRuns.sessionId, sessionIds)),
+    )).run();
+    database.delete(sessionRuns).where(inArray(sessionRuns.sessionId, sessionIds)).run();
+    database.delete(sessionMessageParts).where(inArray(sessionMessageParts.sessionId, sessionIds)).run();
+    database.delete(sessionMessages).where(inArray(sessionMessages.sessionId, sessionIds)).run();
+    database.delete(sessionInputs).where(inArray(sessionInputs.sessionId, sessionIds)).run();
+    database.delete(sessionEvents).where(inArray(sessionEvents.sessionId, sessionIds)).run();
+    database.delete(sessions).where(inArray(sessions.id, sessionIds)).run();
 
     for (const id of sessionIds) {
       delete context.storage.state.sessions[id];

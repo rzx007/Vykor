@@ -198,6 +198,31 @@ describe("GoalRepository", () => {
     });
   });
 
+  it("ignores invalid continuation values without swallowing foreign-key failures", () => {
+    withRepository((repository, store) => {
+      const goal = store.goals.createGoal({
+        id: "goal-invalid-continuation",
+        sessionId: "s1",
+        objective: "finish",
+        maxAutoTurns: 2,
+      });
+      const continuation = {
+        goalId: goal.id,
+        revision: goal.revision,
+        previousRunId: "previous-run",
+        inputId: "input-1",
+        runId: "run-2",
+      };
+
+      expect(repository.recordContinuation({ ...continuation, revision: Number.NaN })).toBe(false);
+      expect((store as any).storage.database.connection
+        .prepare("SELECT count(*) AS count FROM session_goal_continuation").get()).toEqual({ count: 0 });
+      expect(() => repository.recordContinuation({ ...continuation, goalId: "missing-goal" }))
+        .toThrow("FOREIGN KEY constraint failed");
+      expect(repository.recordContinuation(continuation)).toBe(true);
+    });
+  });
+
   it("upserts assessments and deduplicates continuations", () => {
     withRepository((repository, store) => {
       const goal = store.goals.createGoal({

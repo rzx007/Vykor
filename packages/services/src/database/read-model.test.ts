@@ -27,7 +27,7 @@ describe("loadSessionReadModel", () => {
       const database = SessionDatabase.open({ path });
       try {
         const loaded = loadSessionReadModel(
-          database.connection,
+          database.orm,
           defaultDurableEventRegistry,
         );
         expect(Object.keys(loaded.state.sessions)).toEqual(["s1"]);

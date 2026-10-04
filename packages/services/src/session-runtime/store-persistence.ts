@@ -1,327 +1,281 @@
+import type { RunResult } from "better-sqlite3";
+import { eq, sql, type SQL } from "drizzle-orm";
+import type { SQLiteInsertBase, SQLiteTable } from "drizzle-orm/sqlite-core";
+
 import type { StorageContext } from "../database/storage-context.js";
 import type { IncrementalOutput } from "../conversations/index.js";
+import {
+  sessions, sessionInputs, sessionInputAttachments, sessionMessages,
+  sessionMessageParts, sessionRuns, sessionRunAttempts, sessionTasks,
+  permissionRequests, sessionEvents,
+} from "./schema.js";
 import { encode, isDurableEvent } from "./store-state.js";
+
+type PreparedInsert<T extends SQLiteTable> = ReturnType<SQLiteInsertBase<T, "sync", RunResult>["prepare"]>;
+
+function namedPlaceholders<T extends Record<string, unknown>>(fields: T): { [K in keyof T]: SQL<T[K]> } {
+  return Object.fromEntries(Object.keys(fields).map((name) => [name, sql`${sql.placeholder(name)}`])) as {
+    [K in keyof T]: SQL<T[K]>;
+  };
+}
 
 export function persistSessionChanges(storage: StorageContext, output: Pick<IncrementalOutput, "flushMessagePartDeltas">): void {
   const dirtyPartIds = storage.deltaCheckpoint.dirtyPartIds();
   if (dirtyPartIds.length > 0) output.flushMessagePartDeltas();
 
-  const deleteInputAttachment = storage.database.connection.prepare(
-    "DELETE FROM session_input_attachment WHERE id = ?",
-  );
-  for (const id of storage.mutations.deletedInputAttachments) {
-    deleteInputAttachment.run(id);
+  const database = storage.database.orm;
+  if (storage.mutations.deletedInputAttachments.size > 0) {
+    const query = database.delete(sessionInputAttachments)
+      .where(eq(sessionInputAttachments.id, sql.placeholder("id"))).prepare();
+    for (const id of storage.mutations.deletedInputAttachments) query.run({ id });
   }
-  const deletePart = storage.database.connection.prepare(
-    "DELETE FROM session_message_part WHERE id = ?",
-  );
-  for (const id of storage.mutations.deletedParts) deletePart.run(id);
-  const deleteMessage = storage.database.connection.prepare(
-    "DELETE FROM session_message WHERE id = ?",
-  );
-  for (const id of storage.mutations.deletedMessages) deleteMessage.run(id);
-  const deleteAttempt = storage.database.connection.prepare(
-    "DELETE FROM session_run_attempt WHERE id = ?",
-  );
-  for (const id of storage.mutations.deletedAttempts) deleteAttempt.run(id);
-  const deleteRun = storage.database.connection.prepare(
-    "DELETE FROM session_run WHERE id = ?",
-  );
-  for (const id of storage.mutations.deletedRuns) deleteRun.run(id);
-  const deleteInput = storage.database.connection.prepare(
-    "DELETE FROM session_input WHERE id = ?",
-  );
-  for (const id of storage.mutations.deletedInputs) deleteInput.run(id);
+  if (storage.mutations.deletedParts.size > 0) {
+    const query = database.delete(sessionMessageParts)
+      .where(eq(sessionMessageParts.id, sql.placeholder("id"))).prepare();
+    for (const id of storage.mutations.deletedParts) query.run({ id });
+  }
+  if (storage.mutations.deletedMessages.size > 0) {
+    const query = database.delete(sessionMessages)
+      .where(eq(sessionMessages.id, sql.placeholder("id"))).prepare();
+    for (const id of storage.mutations.deletedMessages) query.run({ id });
+  }
+  if (storage.mutations.deletedAttempts.size > 0) {
+    const query = database.delete(sessionRunAttempts)
+      .where(eq(sessionRunAttempts.id, sql.placeholder("id"))).prepare();
+    for (const id of storage.mutations.deletedAttempts) query.run({ id });
+  }
+  if (storage.mutations.deletedRuns.size > 0) {
+    const query = database.delete(sessionRuns)
+      .where(eq(sessionRuns.id, sql.placeholder("id"))).prepare();
+    for (const id of storage.mutations.deletedRuns) query.run({ id });
+  }
+  if (storage.mutations.deletedInputs.size > 0) {
+    const query = database.delete(sessionInputs)
+      .where(eq(sessionInputs.id, sql.placeholder("id"))).prepare();
+    for (const id of storage.mutations.deletedInputs) query.run({ id });
+  }
 
-  const upsertSession = storage.database.connection.prepare(`
-    INSERT INTO session (
-      id, parent_id, cwd, title, model, agent, status, metadata_json,
-      created_at, updated_at, archived_at, project_id, cwd_relative
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET parent_id=excluded.parent_id, cwd=excluded.cwd,
-      project_id=excluded.project_id, cwd_relative=excluded.cwd_relative,
-      title=excluded.title, model=excluded.model, agent=excluded.agent, status=excluded.status,
-      metadata_json=excluded.metadata_json, created_at=excluded.created_at,
-      updated_at=excluded.updated_at, archived_at=excluded.archived_at
-  `);
+  // Reuse each Drizzle query within this flush; the outer transaction still owns commit/rollback.
+  let upsertSession: PreparedInsert<typeof sessions> | undefined;
   for (const id of storage.mutations.sessions) {
     const value = storage.state.sessions[id];
-    if (value)
-      upsertSession.run(
-        value.id,
-        value.parentId ?? null,
-        value.cwd,
-        value.title,
-        value.model,
-        value.agent ?? null,
-        value.status,
-        encode(value.metadata),
-        value.createdAt,
-        value.updatedAt,
-        value.archivedAt ?? null,
-        value.projectId ?? null,
-        value.cwdRelative ?? null,
-      );
+    if (!value) continue;
+    const fields = {
+      parentId: value.parentId ?? null,
+      cwd: value.cwd,
+      projectId: value.projectId ?? null,
+      cwdRelative: value.cwdRelative ?? null,
+      title: value.title,
+      model: value.model,
+      agent: value.agent ?? null,
+      status: value.status,
+      metadataJson: encode(value.metadata),
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+      archivedAt: value.archivedAt ?? null,
+    } satisfies Omit<typeof sessions.$inferInsert, "id">;
+    upsertSession ??= database.insert(sessions).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessions.id, set: namedPlaceholders(fields) }).prepare();
+    upsertSession.run({ id: value.id, ...fields });
   }
 
-  const upsertInput = storage.database.connection.prepare(`
-    INSERT INTO session_input (
-      id, session_id, seq, delivery, content, metadata_json, created_at,
-      items_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id, seq=excluded.seq,
-      delivery=excluded.delivery, content=excluded.content, metadata_json=excluded.metadata_json,
-      created_at=excluded.created_at, items_json=excluded.items_json
-  `);
+  let upsertInput: PreparedInsert<typeof sessionInputs> | undefined;
   for (const id of storage.mutations.inputs) {
     const value = storage.state.inputs[id];
-    if (value)
-      upsertInput.run(
-        value.id,
-        value.sessionId,
-        value.seq,
-        value.delivery,
-        value.content,
-        encode(value.metadata),
-        value.createdAt,
-        encode(value.items),
-      );
+    if (!value) continue;
+    const fields = {
+      sessionId: value.sessionId,
+      seq: value.seq,
+      delivery: value.delivery,
+      content: value.content,
+      metadataJson: encode(value.metadata),
+      createdAt: value.createdAt,
+      itemsJson: encode(value.items),
+    } satisfies Omit<typeof sessionInputs.$inferInsert, "id">;
+    upsertInput ??= database.insert(sessionInputs).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessionInputs.id, set: namedPlaceholders(fields) }).prepare();
+    upsertInput.run({ id: value.id, ...fields });
   }
 
-  const upsertInputAttachment = storage.database.connection.prepare(`
-    INSERT INTO session_input_attachment (
-      id, session_id, input_id, asset_id, seq, intent, display_name,
-      media_type, size_bytes, metadata_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id,
-      input_id=excluded.input_id, asset_id=excluded.asset_id, seq=excluded.seq,
-      intent=excluded.intent, display_name=excluded.display_name,
-      media_type=excluded.media_type, size_bytes=excluded.size_bytes,
-      metadata_json=excluded.metadata_json, created_at=excluded.created_at
-  `);
+  let upsertInputAttachment: PreparedInsert<typeof sessionInputAttachments> | undefined;
   for (const id of storage.mutations.inputAttachments) {
     const value = storage.state.inputAttachments[id];
-    if (value) {
-      upsertInputAttachment.run(
-        value.id,
-        value.sessionId,
-        value.inputId,
-        value.assetId,
-        value.seq,
-        value.intent,
-        value.displayName,
-        value.mediaType,
-        value.sizeBytes,
-        encode(value.metadata),
-        value.createdAt,
-      );
-    }
+    if (!value) continue;
+    const fields = {
+      sessionId: value.sessionId,
+      inputId: value.inputId,
+      assetId: value.assetId,
+      seq: value.seq,
+      intent: value.intent,
+      displayName: value.displayName,
+      mediaType: value.mediaType,
+      sizeBytes: value.sizeBytes,
+      metadataJson: encode(value.metadata),
+      createdAt: value.createdAt,
+    } satisfies Omit<typeof sessionInputAttachments.$inferInsert, "id">;
+    upsertInputAttachment ??= database.insert(sessionInputAttachments).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessionInputAttachments.id, set: namedPlaceholders(fields) }).prepare();
+    upsertInputAttachment.run({ id: value.id, ...fields });
   }
 
-  const upsertMessage = storage.database.connection.prepare(`
-    INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id, seq=excluded.seq,
-      role=excluded.role, run_id=excluded.run_id, input_id=excluded.input_id,
-      metadata_json=excluded.metadata_json, created_at=excluded.created_at, updated_at=excluded.updated_at
-  `);
+  let upsertMessage: PreparedInsert<typeof sessionMessages> | undefined;
   for (const id of storage.mutations.messages) {
     const value = storage.state.messages[id];
-    if (value)
-      upsertMessage.run(
-        value.id,
-        value.sessionId,
-        value.seq,
-        value.role,
-        value.runId ?? null,
-        value.inputId ?? null,
-        encode(value.metadata),
-        value.createdAt,
-        value.updatedAt,
-      );
+    if (!value) continue;
+    const fields = {
+      sessionId: value.sessionId,
+      seq: value.seq,
+      role: value.role,
+      runId: value.runId ?? null,
+      inputId: value.inputId ?? null,
+      metadataJson: encode(value.metadata),
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    } satisfies Omit<typeof sessionMessages.$inferInsert, "id">;
+    upsertMessage ??= database.insert(sessionMessages).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessionMessages.id, set: namedPlaceholders(fields) }).prepare();
+    upsertMessage.run({ id: value.id, ...fields });
   }
 
-  const upsertPart = storage.database.connection.prepare(`
-    INSERT INTO session_message_part (
-      id, session_id, message_id, seq, type, status, text, tool_use_id, tool_name,
-      input_json, output_json, is_error, asset_id, attachment_intent, display_name,
-      media_type, size_bytes, transformation_kind, representation_id, processor,
-      transformation_error, metadata_json, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id, message_id=excluded.message_id,
-      seq=excluded.seq, type=excluded.type, status=excluded.status, text=excluded.text,
-      tool_use_id=excluded.tool_use_id, tool_name=excluded.tool_name, input_json=excluded.input_json,
-      output_json=excluded.output_json, is_error=excluded.is_error, asset_id=excluded.asset_id,
-      attachment_intent=excluded.attachment_intent, display_name=excluded.display_name,
-      media_type=excluded.media_type, size_bytes=excluded.size_bytes,
-      transformation_kind=excluded.transformation_kind, representation_id=excluded.representation_id,
-      processor=excluded.processor, transformation_error=excluded.transformation_error,
-      metadata_json=excluded.metadata_json,
-      created_at=excluded.created_at, updated_at=excluded.updated_at
-  `);
+  let upsertPart: PreparedInsert<typeof sessionMessageParts> | undefined;
   for (const id of storage.mutations.parts) {
     const value = storage.state.parts[id];
-    if (value)
-      upsertPart.run(
-        value.id,
-        value.sessionId,
-        value.messageId,
-        value.seq,
-        value.type,
-        value.status,
-        value.text ?? null,
-        value.toolUseId ?? null,
-        value.toolName ?? null,
-        value.input === undefined ? null : encode(value.input),
-        value.output === undefined ? null : JSON.stringify(value.output),
-        value.isError === undefined ? null : Number(value.isError),
-        value.assetId ?? null,
-        value.intent ?? null,
-        value.displayName ?? null,
-        value.mediaType ?? null,
-        value.sizeBytes ?? null,
-        value.kind ?? null,
-        value.representationId ?? null,
-        value.processor ?? null,
-        value.transformationError ?? null,
-        encode(value.metadata),
-        value.createdAt,
-        value.updatedAt,
-      );
+    if (!value) continue;
+    const fields = {
+      sessionId: value.sessionId,
+      messageId: value.messageId,
+      seq: value.seq,
+      type: value.type,
+      status: value.status,
+      text: value.text ?? null,
+      toolUseId: value.toolUseId ?? null,
+      toolName: value.toolName ?? null,
+      inputJson: value.input === undefined ? null : encode(value.input),
+      outputJson: value.output === undefined ? null : JSON.stringify(value.output),
+      isError: value.isError === undefined ? null : Number(value.isError),
+      assetId: value.assetId ?? null,
+      attachmentIntent: value.intent ?? null,
+      displayName: value.displayName ?? null,
+      mediaType: value.mediaType ?? null,
+      sizeBytes: value.sizeBytes ?? null,
+      transformationKind: value.kind ?? null,
+      representationId: value.representationId ?? null,
+      processor: value.processor ?? null,
+      transformationError: value.transformationError ?? null,
+      metadataJson: encode(value.metadata),
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    } satisfies Omit<typeof sessionMessageParts.$inferInsert, "id">;
+    upsertPart ??= database.insert(sessionMessageParts).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessionMessageParts.id, set: namedPlaceholders(fields) }).prepare();
+    upsertPart.run({ id: value.id, ...fields });
   }
 
-  const upsertRun = storage.database.connection.prepare(`
-    INSERT INTO session_run VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id, input_id=excluded.input_id,
-      status=excluded.status, started_at=excluded.started_at, finished_at=excluded.finished_at,
-      error=excluded.error, metadata_json=excluded.metadata_json, created_at=excluded.created_at,
-      updated_at=excluded.updated_at
-  `);
+  let upsertRun: PreparedInsert<typeof sessionRuns> | undefined;
   for (const id of storage.mutations.runs) {
     const value = storage.state.runs[id];
-    if (value)
-      upsertRun.run(
-        value.id,
-        value.sessionId,
-        value.inputId ?? null,
-        value.status,
-        value.startedAt ?? null,
-        value.finishedAt ?? null,
-        value.error ?? null,
-        encode(value.metadata),
-        value.createdAt,
-        value.updatedAt,
-      );
+    if (!value) continue;
+    const fields = {
+      sessionId: value.sessionId,
+      inputId: value.inputId ?? null,
+      status: value.status,
+      startedAt: value.startedAt ?? null,
+      finishedAt: value.finishedAt ?? null,
+      error: value.error ?? null,
+      metadataJson: encode(value.metadata),
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    } satisfies Omit<typeof sessionRuns.$inferInsert, "id">;
+    upsertRun ??= database.insert(sessionRuns).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessionRuns.id, set: namedPlaceholders(fields) }).prepare();
+    upsertRun.run({ id: value.id, ...fields });
   }
 
-  const upsertAttempt = storage.database.connection.prepare(`
-    INSERT INTO session_run_attempt VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET run_id=excluded.run_id, sequence=excluded.sequence,
-      status=excluded.status, provider=excluded.provider, model=excluded.model,
-      retry_reason=excluded.retry_reason, error_kind=excluded.error_kind, error=excluded.error,
-      input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
-      started_at=excluded.started_at, finished_at=excluded.finished_at,
-      created_at=excluded.created_at, updated_at=excluded.updated_at
-  `);
+  let upsertAttempt: PreparedInsert<typeof sessionRunAttempts> | undefined;
   for (const id of storage.mutations.attempts) {
     const value = storage.state.attempts[id];
-    if (value)
-      upsertAttempt.run(
-        value.id,
-        value.runId,
-        value.sequence,
-        value.status,
-        value.provider ?? null,
-        value.model ?? null,
-        value.retryReason ?? null,
-        value.errorKind ?? null,
-        value.error ?? null,
-        value.inputTokens ?? null,
-        value.outputTokens ?? null,
-        value.startedAt ?? null,
-        value.finishedAt ?? null,
-        value.createdAt,
-        value.updatedAt,
-      );
+    if (!value) continue;
+    const fields = {
+      runId: value.runId,
+      sequence: value.sequence,
+      status: value.status,
+      provider: value.provider ?? null,
+      model: value.model ?? null,
+      retryReason: value.retryReason ?? null,
+      errorKind: value.errorKind ?? null,
+      error: value.error ?? null,
+      inputTokens: value.inputTokens ?? null,
+      outputTokens: value.outputTokens ?? null,
+      startedAt: value.startedAt ?? null,
+      finishedAt: value.finishedAt ?? null,
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    } satisfies Omit<typeof sessionRunAttempts.$inferInsert, "id">;
+    upsertAttempt ??= database.insert(sessionRunAttempts).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessionRunAttempts.id, set: namedPlaceholders(fields) }).prepare();
+    upsertAttempt.run({ id: value.id, ...fields });
   }
 
-  const upsertTask = storage.database.connection.prepare(`
-    INSERT INTO session_task (
-      id, session_id, request_namespace, request_id, child_session_id, run_id, type,
-      status, description, cwd, output, error, metadata_json, created_at, started_at,
-      finished_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id,
-      request_namespace=excluded.request_namespace, request_id=excluded.request_id,
-      child_session_id=excluded.child_session_id, run_id=excluded.run_id, type=excluded.type,
-      status=excluded.status, description=excluded.description, cwd=excluded.cwd,
-      output=excluded.output, error=excluded.error, metadata_json=excluded.metadata_json,
-      created_at=excluded.created_at, started_at=excluded.started_at,
-      finished_at=excluded.finished_at, updated_at=excluded.updated_at
-  `);
+  let upsertTask: PreparedInsert<typeof sessionTasks> | undefined;
   for (const id of storage.mutations.tasks) {
     const value = storage.state.tasks[id];
-    if (value)
-      upsertTask.run(
-        value.id,
-        value.sessionId,
-        value.requestNamespace ?? null,
-        value.requestId ?? null,
-        value.childSessionId ?? null,
-        value.runId ?? null,
-        value.type,
-        value.status,
-        value.description,
-        value.cwd,
-        value.output ?? null,
-        value.error ?? null,
-        encode(value.metadata),
-        value.createdAt,
-        value.startedAt ?? null,
-        value.finishedAt ?? null,
-        value.updatedAt,
-      );
+    if (!value) continue;
+    const fields = {
+      sessionId: value.sessionId,
+      requestNamespace: value.requestNamespace ?? null,
+      requestId: value.requestId ?? null,
+      childSessionId: value.childSessionId ?? null,
+      runId: value.runId ?? null,
+      type: value.type,
+      status: value.status,
+      description: value.description,
+      cwd: value.cwd,
+      output: value.output ?? null,
+      error: value.error ?? null,
+      metadataJson: encode(value.metadata),
+      createdAt: value.createdAt,
+      startedAt: value.startedAt ?? null,
+      finishedAt: value.finishedAt ?? null,
+      updatedAt: value.updatedAt,
+    } satisfies Omit<typeof sessionTasks.$inferInsert, "id">;
+    upsertTask ??= database.insert(sessionTasks).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: sessionTasks.id, set: namedPlaceholders(fields) }).prepare();
+    upsertTask.run({ id: value.id, ...fields });
   }
 
-  const upsertPermission = storage.database.connection.prepare(`
-    INSERT INTO permission_request VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id, run_id=excluded.run_id,
-      tool_name=excluded.tool_name, payload_json=excluded.payload_json, status=excluded.status,
-      decision=excluded.decision, decided_by_client_id=excluded.decided_by_client_id,
-      created_at=excluded.created_at, updated_at=excluded.updated_at
-  `);
+  let upsertPermission: PreparedInsert<typeof permissionRequests> | undefined;
   for (const id of storage.mutations.permissions) {
     const value = storage.state.permissions[id];
-    if (value)
-      upsertPermission.run(
-        value.id,
-        value.sessionId,
-        value.runId ?? null,
-        value.toolName,
-        encode(value.payload),
-        value.status,
-        value.decision ?? null,
-        value.decidedByClientId ?? null,
-        value.createdAt,
-        value.updatedAt,
-      );
+    if (!value) continue;
+    const fields = {
+      sessionId: value.sessionId,
+      runId: value.runId ?? null,
+      toolName: value.toolName,
+      payloadJson: encode(value.payload),
+      status: value.status,
+      decision: value.decision ?? null,
+      decidedByClientId: value.decidedByClientId ?? null,
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    } satisfies Omit<typeof permissionRequests.$inferInsert, "id">;
+    upsertPermission ??= database.insert(permissionRequests).values(namedPlaceholders({ id: value.id, ...fields }))
+      .onConflictDoUpdate({ target: permissionRequests.id, set: namedPlaceholders(fields) }).prepare();
+    upsertPermission.run({ id: value.id, ...fields });
   }
 
-  const insertEvent = storage.database.connection.prepare(`
-    INSERT INTO session_event
-      (id, seq, type, session_id, payload_json, created_at, schema_version)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+  let insertEvent: PreparedInsert<typeof sessionEvents> | undefined;
   for (const value of storage.state.events) {
-    if (!storage.mutations.events.has(value.id) || !isDurableEvent(value))
-      continue;
-    insertEvent.run(
-      value.id,
-      value.seq,
-      value.type,
-      value.sessionId ?? null,
-      encode(value.payload),
-      value.createdAt,
-      value.schemaVersion,
-    );
+    if (!storage.mutations.events.has(value.id) || !isDurableEvent(value)) continue;
+    const fields = {
+      id: value.id,
+      seq: value.seq,
+      type: value.type,
+      sessionId: value.sessionId ?? null,
+      payloadJson: encode(value.payload),
+      createdAt: value.createdAt,
+      schemaVersion: value.schemaVersion,
+    } satisfies typeof sessionEvents.$inferInsert;
+    insertEvent ??= database.insert(sessionEvents).values(namedPlaceholders(fields)).prepare();
+    insertEvent.run(fields);
   }
 }

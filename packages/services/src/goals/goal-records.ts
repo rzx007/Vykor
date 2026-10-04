@@ -4,6 +4,10 @@ import type {
   GoalWait,
   SessionGoal,
 } from "@vykor/protocol";
+import type {
+  sessionGoalRequests,
+  sessionGoals,
+} from "../session-runtime/schema.js";
 
 export interface CreateSessionGoalStoreInput {
   id?: string;
@@ -41,58 +45,60 @@ export interface SessionGoalRequestRecord {
   updatedAt: number;
 }
 
-export function sessionGoalFromRow(row: Record<string, unknown>): SessionGoal {
+export function sessionGoalFromRow(
+  row: typeof sessionGoals.$inferSelect,
+): SessionGoal {
   const wait =
-    typeof row.wait_json === "string"
-      ? (JSON.parse(row.wait_json) as GoalWait)
+    typeof row.waitJson === "string"
+      ? (JSON.parse(row.waitJson) as GoalWait)
       : undefined;
   const evidence =
-    typeof row.evidence_json === "string"
-      ? (JSON.parse(row.evidence_json) as string[])
+    typeof row.evidenceJson === "string"
+      ? (JSON.parse(row.evidenceJson) as string[])
       : [];
   const assessment =
-    typeof row.last_assessment_json === "string"
-      ? (JSON.parse(row.last_assessment_json) as GoalAssessment)
+    typeof row.lastAssessmentJson === "string"
+      ? (JSON.parse(row.lastAssessmentJson) as GoalAssessment)
       : undefined;
   return {
     id: String(row.id),
-    sessionId: String(row.session_id),
+    sessionId: String(row.sessionId),
     objective: String(row.objective),
-    ...(typeof row.plugin_id === "string" ? { pluginId: row.plugin_id } : {}),
+    ...(typeof row.pluginId === "string" ? { pluginId: row.pluginId } : {}),
     revision: Number(row.revision),
     status: String(row.status) as GoalStatus,
-    maxAutoTurns: Number(row.max_auto_turns),
-    autoTurnsUsed: Number(row.auto_turns_used),
-    noProgressCount: Number(row.no_progress_count),
-    ...(typeof row.blocker_key === "string"
-      ? { blockerKey: row.blocker_key }
+    maxAutoTurns: Number(row.maxAutoTurns),
+    autoTurnsUsed: Number(row.autoTurnsUsed),
+    noProgressCount: Number(row.noProgressCount),
+    ...(typeof row.blockerKey === "string"
+      ? { blockerKey: row.blockerKey }
       : {}),
-    ...(typeof row.current_run_id === "string"
-      ? { currentRunId: row.current_run_id }
+    ...(typeof row.currentRunId === "string"
+      ? { currentRunId: row.currentRunId }
       : {}),
     ...(typeof row.reason === "string" ? { reason: row.reason } : {}),
     ...(wait ? { wait } : {}),
     evidence,
     ...(assessment ? { assessment } : {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
+    createdAt: Number(row.createdAt),
+    updatedAt: Number(row.updatedAt),
   };
 }
 
 export function goalRequestFromRow(
-  row: Record<string, unknown>,
+  row: typeof sessionGoalRequests.$inferSelect,
 ): SessionGoalRequestRecord {
   return {
-    requestId: String(row.request_id),
-    sessionId: String(row.session_id),
+    requestId: String(row.requestId),
+    sessionId: String(row.sessionId),
     fingerprint: String(row.fingerprint),
     status: String(row.status) as SessionGoalRequestRecord["status"],
-    ...(typeof row.goal_id === "string" ? { goalId: row.goal_id } : {}),
-    ...(typeof row.result_json === "string"
-      ? { result: JSON.parse(row.result_json) as Record<string, unknown> }
+    ...(typeof row.goalId === "string" ? { goalId: row.goalId } : {}),
+    ...(typeof row.resultJson === "string"
+      ? { result: JSON.parse(row.resultJson) as Record<string, unknown> }
       : {}),
     ...(typeof row.error === "string" ? { error: row.error } : {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
+    createdAt: Number(row.createdAt),
+    updatedAt: Number(row.updatedAt),
   };
 }

@@ -1,7 +1,9 @@
 import { Buffer } from "node:buffer";
+import { eq, placeholder, sql } from "drizzle-orm";
 import type { AppendEventInput, AppendMessagePartDeltaInput, SessionEventRecord } from "@vykor/protocol";
 import type { StorageContext } from "../database/storage-context.js";
 import { assertMessage, assertSession, clone, now } from "../session-runtime/store-state.js";
+import { sessions, sessionMessages, sessionMessageParts } from "../session-runtime/schema.js";
 
 export interface IncrementalOutputOptions {
   storage: StorageContext;
@@ -74,19 +76,31 @@ export class IncrementalOutput {
 
   private persist(partIds: string[]): void {
     const { storage } = this.options;
-    const updatePart = storage.database.connection.prepare("UPDATE session_message_part SET text = ?, updated_at = ? WHERE id = ?");
-    const updateMessage = storage.database.connection.prepare("UPDATE session_message SET updated_at = ? WHERE id = ?");
-    const updateSession = storage.database.connection.prepare("UPDATE session SET updated_at = ? WHERE id = ?");
+    const database = storage.database.orm;
+    const updatePart = database.update(sessionMessageParts).set({
+      text: sql`${placeholder("text")}`,
+      updatedAt: sql`${placeholder("updatedAt")}`,
+    }).where(eq(sessionMessageParts.id, placeholder("id"))).prepare();
+    const updateMessage = database.update(sessionMessages).set({ updatedAt: sql`${placeholder("updatedAt")}` })
+      .where(eq(sessionMessages.id, placeholder("id"))).prepare();
+    const updateSession = database.update(sessions).set({ updatedAt: sql`${placeholder("updatedAt")}` })
+      .where(eq(sessions.id, placeholder("id"))).prepare();
     const messageIds = new Set<string>();
     const sessionIds = new Set<string>();
     for (const id of partIds) {
       const part = storage.state.parts[id];
       if (!part) continue;
-      updatePart.run(part.text ?? "", part.updatedAt, id);
+      updatePart.run({ text: part.text ?? "", updatedAt: part.updatedAt, id });
       messageIds.add(part.messageId);
       sessionIds.add(part.sessionId);
     }
-    for (const id of messageIds) { const row = storage.state.messages[id]; if (row) updateMessage.run(row.updatedAt, id); }
-    for (const id of sessionIds) { const row = storage.state.sessions[id]; if (row) updateSession.run(row.updatedAt, id); }
+    for (const id of messageIds) {
+      const row = storage.state.messages[id];
+      if (row) updateMessage.run({ updatedAt: row.updatedAt, id });
+    }
+    for (const id of sessionIds) {
+      const row = storage.state.sessions[id];
+      if (row) updateSession.run({ updatedAt: row.updatedAt, id });
+    }
   }
 }

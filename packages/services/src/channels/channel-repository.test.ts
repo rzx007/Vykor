@@ -234,6 +234,20 @@ describe("ChannelRepository", () => {
     }
   });
 
+  it("preserves SQLite validation for explicit conversation and delivery limits", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-channel-limit-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      for (const limit of [Number.NaN, -1.5]) {
+        expect(() => store.channels.listConversations({ limit })).toThrow("datatype mismatch");
+        expect(() => store.channels.listDeliveries({ limit })).toThrow("datatype mismatch");
+      }
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("handles non-serializable and malformed platformMeta without throwing", () => {
     expect(encodePlatformMeta(undefined)).toBeNull();
     expect(encodePlatformMeta({})).toBeNull();

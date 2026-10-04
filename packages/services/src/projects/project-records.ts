@@ -1,20 +1,22 @@
 import { basename, resolve } from "node:path";
 
 import type { ProjectRecord } from "@vykor/protocol";
+import type { projects } from "../session-runtime/schema.js";
 
 export function projectFromRow(
-  row: Record<string, unknown>,
+  row: typeof projects.$inferSelect,
+  path: string,
 ): ProjectRecord {
   return {
-    id: row.id as string,
-    name: row.name as string,
-    path: row.path as string,
-    ...(row.pinned_at ? { pinnedAt: row.pinned_at as number } : {}),
-    ...(row.default_shell ? { defaultShell: row.default_shell as string } : {}),
-    lastOpenedAt: row.last_opened_at as number,
-    ...(row.archived_at ? { archivedAt: row.archived_at as number } : {}),
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
+    id: row.id,
+    name: row.name,
+    path,
+    ...(row.pinnedAt ? { pinnedAt: row.pinnedAt } : {}),
+    ...(row.defaultShell ? { defaultShell: row.defaultShell } : {}),
+    lastOpenedAt: row.lastOpenedAt,
+    ...(row.archivedAt ? { archivedAt: row.archivedAt } : {}),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 

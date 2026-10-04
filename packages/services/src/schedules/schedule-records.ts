@@ -2,6 +2,7 @@ import type {
   ScheduledRunRecord,
   ScheduledTaskRecord,
 } from "@vykor/protocol";
+import type { scheduledRuns, scheduledTasks } from "../session-runtime/schema.js";
 
 export const encodeScheduleValue = (value: unknown): string =>
   JSON.stringify(value ?? {});
@@ -13,69 +14,69 @@ export function withoutUndefined<T extends object>(value: T): Partial<T> {
 }
 
 export function scheduledTaskFromRow(
-  row: Record<string, unknown>,
+  row: typeof scheduledTasks.$inferSelect,
 ): ScheduledTaskRecord {
   return {
-    id: row.id as string,
-    name: row.name as string,
-    ...(row.description ? { description: row.description as string } : {}),
-    prompt: row.prompt as string,
-    recurrence: row.recurrence as string,
+    id: row.id,
+    name: row.name,
+    ...(row.description ? { description: row.description } : {}),
+    prompt: row.prompt,
+    recurrence: row.recurrence,
     recurrenceFormat:
-      row.recurrence_format as ScheduledTaskRecord["recurrenceFormat"],
-    timezone: row.timezone as string,
+      row.recurrenceFormat as ScheduledTaskRecord["recurrenceFormat"],
+    timezone: row.timezone,
     status: row.status as ScheduledTaskRecord["status"],
     destination: row.destination as ScheduledTaskRecord["destination"],
-    ...(row.session_id ? { sessionId: row.session_id as string } : {}),
-    projectPaths: parseJson<string[]>(row.project_paths_json, []),
-    executionMode: row.execution_mode as ScheduledTaskRecord["executionMode"],
-    ...(row.model ? { model: row.model as string } : {}),
-    ...(row.effort ? { effort: row.effort as string } : {}),
-    skillNames: parseJson<string[]>(row.skill_names_json, []),
-    pluginNames: parseJson<string[]>(row.plugin_names_json, []),
+    ...(row.sessionId ? { sessionId: row.sessionId } : {}),
+    projectPaths: parseJson<string[]>(row.projectPathsJson, []),
+    executionMode: row.executionMode as ScheduledTaskRecord["executionMode"],
+    ...(row.model ? { model: row.model } : {}),
+    ...(row.effort ? { effort: row.effort } : {}),
+    skillNames: parseJson<string[]>(row.skillNamesJson, []),
+    pluginNames: parseJson<string[]>(row.pluginNamesJson, []),
     permissionProfile: parseJson<ScheduledTaskRecord["permissionProfile"]>(
-      row.permission_profile_json,
+      row.permissionProfileJson,
       { mode: "workspace_write" },
     ),
-    overlapPolicy: row.overlap_policy as ScheduledTaskRecord["overlapPolicy"],
+    overlapPolicy: row.overlapPolicy as ScheduledTaskRecord["overlapPolicy"],
     missedRunPolicy:
-      row.missed_run_policy as ScheduledTaskRecord["missedRunPolicy"],
-    ...(row.stop_policy_json
-      ? { stopPolicy: parseJson(row.stop_policy_json, {}) }
+      row.missedRunPolicy as ScheduledTaskRecord["missedRunPolicy"],
+    ...(row.stopPolicyJson
+      ? { stopPolicy: parseJson(row.stopPolicyJson, {}) }
       : {}),
-    createdBy: row.created_by as ScheduledTaskRecord["createdBy"],
-    ...(row.created_from_session_id
-      ? { createdFromSessionId: row.created_from_session_id as string }
+    createdBy: row.createdBy as ScheduledTaskRecord["createdBy"],
+    ...(row.createdFromSessionId
+      ? { createdFromSessionId: row.createdFromSessionId }
       : {}),
-    ...(row.last_run_at ? { lastRunAt: row.last_run_at as number } : {}),
-    ...(row.next_run_at ? { nextRunAt: row.next_run_at as number } : {}),
-    runCount: row.run_count as number,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
+    ...(row.lastRunAt ? { lastRunAt: row.lastRunAt } : {}),
+    ...(row.nextRunAt ? { nextRunAt: row.nextRunAt } : {}),
+    runCount: row.runCount,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
 export function scheduledRunFromRow(
-  row: Record<string, unknown>,
+  row: typeof scheduledRuns.$inferSelect,
 ): ScheduledRunRecord {
   return {
-    id: row.id as string,
-    taskId: row.task_id as string,
+    id: row.id,
+    taskId: row.taskId,
     cause: row.cause as ScheduledRunRecord["cause"],
     status: row.status as ScheduledRunRecord["status"],
-    scheduledFor: row.scheduled_for as number,
-    ...(row.session_id ? { sessionId: row.session_id as string } : {}),
-    ...(row.run_id ? { runId: row.run_id as string } : {}),
-    ...(row.summary ? { summary: row.summary as string } : {}),
-    ...(row.error ? { error: row.error as string } : {}),
+    scheduledFor: row.scheduledFor,
+    ...(row.sessionId ? { sessionId: row.sessionId } : {}),
+    ...(row.runId ? { runId: row.runId } : {}),
+    ...(row.summary ? { summary: row.summary } : {}),
+    ...(row.error ? { error: row.error } : {}),
     unread: row.unread === 1,
-    ...(row.attention_reason
-      ? { attentionReason: row.attention_reason as string }
+    ...(row.attentionReason
+      ? { attentionReason: row.attentionReason }
       : {}),
-    createdAt: row.created_at as number,
-    ...(row.started_at ? { startedAt: row.started_at as number } : {}),
-    ...(row.finished_at ? { finishedAt: row.finished_at as number } : {}),
-    updatedAt: row.updated_at as number,
+    createdAt: row.createdAt,
+    ...(row.startedAt ? { startedAt: row.startedAt } : {}),
+    ...(row.finishedAt ? { finishedAt: row.finishedAt } : {}),
+    updatedAt: row.updatedAt,
   };
 }
 

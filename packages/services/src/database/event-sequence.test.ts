@@ -15,7 +15,7 @@ describe("DurableEventSequence", () => {
     try {
       const database = SessionDatabase.open({ path });
       const state = emptyState();
-      const sequence = DurableEventSequence.load(database.connection, state);
+      const sequence = DurableEventSequence.load(database.orm, state);
       expect(sequence.allocate()).toBe(1);
       const snapshot = sequence.snapshot();
       expect(sequence.allocate()).toBe(2);
@@ -34,7 +34,7 @@ describe("DurableEventSequence", () => {
     const path = join(directory, "sessions.db");
     try {
       const firstDatabase = SessionDatabase.open({ path });
-      const first = DurableEventSequence.load(firstDatabase.connection, emptyState());
+      const first = DurableEventSequence.load(firstDatabase.orm, emptyState());
       expect(first.allocate()).toBe(1);
       expect(first.snapshot().reservedThrough).toBe(1024);
       firstDatabase.close();
@@ -42,7 +42,7 @@ describe("DurableEventSequence", () => {
       const secondDatabase = SessionDatabase.open({ path });
       const secondState = emptyState();
       const second = DurableEventSequence.load(
-        secondDatabase.connection,
+        secondDatabase.orm,
         secondState,
       );
       expect(second.allocate()).toBe(1025);

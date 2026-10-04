@@ -3,51 +3,52 @@ import type {
   ChannelDeliveryStatus,
   ExternalConversationRecord,
 } from "@vykor/protocol";
+import type { channelDeliveries, externalConversations } from "../session-runtime/schema.js";
 
 export function externalConversationFromRow(
-  row: Record<string, unknown>,
+  row: typeof externalConversations.$inferSelect,
 ): ExternalConversationRecord {
   return {
-    id: row.id as string,
-    connector: row.connector as string,
-    accountId: row.account_id as string,
-    ...(row.workspace_id ? { workspaceId: row.workspace_id as string } : {}),
-    chatId: row.chat_id as string,
-    ...(row.thread_id ? { threadId: row.thread_id as string } : {}),
-    sessionId: row.session_id as string,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
+    id: row.id,
+    connector: row.connector,
+    accountId: row.accountId,
+    ...(row.workspaceId ? { workspaceId: row.workspaceId } : {}),
+    chatId: row.chatId,
+    ...(row.threadId ? { threadId: row.threadId } : {}),
+    sessionId: row.sessionId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
 export function channelDeliveryFromRow(
-  row: Record<string, unknown>,
+  row: typeof channelDeliveries.$inferSelect,
 ): ChannelDeliveryRecord {
-  const platformMeta = row.platform_meta_json
-    ? decodePlatformMeta(row.platform_meta_json as string)
+  const platformMeta = row.platformMetaJson
+    ? decodePlatformMeta(row.platformMetaJson)
     : undefined;
   return {
-    id: row.id as string,
-    conversationId: row.conversation_id as string,
-    connector: row.connector as string,
-    accountId: row.account_id as string,
-    chatId: row.chat_id as string,
-    ...(row.thread_id ? { threadId: row.thread_id as string } : {}),
+    id: row.id,
+    conversationId: row.conversationId,
+    connector: row.connector,
+    accountId: row.accountId,
+    chatId: row.chatId,
+    ...(row.threadId ? { threadId: row.threadId } : {}),
     ...(platformMeta ? { platformMeta } : {}),
-    sessionId: row.session_id as string,
-    inputId: row.input_id as string,
-    runId: row.run_id as string,
-    externalMessageId: row.external_message_id as string,
-    content: row.content as string,
+    sessionId: row.sessionId,
+    inputId: row.inputId,
+    runId: row.runId,
+    externalMessageId: row.externalMessageId,
+    content: row.content,
     status: row.status as ChannelDeliveryStatus,
-    attemptCount: row.attempt_count as number,
-    ...(row.external_delivery_id
-      ? { externalDeliveryId: row.external_delivery_id as string }
+    attemptCount: row.attemptCount,
+    ...(row.externalDeliveryId
+      ? { externalDeliveryId: row.externalDeliveryId }
       : {}),
-    ...(row.error ? { error: row.error as string } : {}),
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-    ...(row.sent_at ? { sentAt: row.sent_at as number } : {}),
+    ...(row.error ? { error: row.error } : {}),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    ...(row.sentAt ? { sentAt: row.sentAt } : {}),
   };
 }
 

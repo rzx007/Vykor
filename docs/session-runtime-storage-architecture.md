@@ -1,6 +1,6 @@
 # Session Runtime 存储架构
 
-> 状态：当前实现的权威存储说明。最后核对：2026-09-17。
+> 状态：当前实现的权威存储说明。最后核对：2026-10-04。
 
 ## 一句话说明
 
@@ -15,14 +15,20 @@ Session Runtime 使用一份由 daemon 独占的 SQLite 数据库。`SessionStor
 ```text
 new SessionStore(options)
   -> SessionDatabase.open(path)
-  -> loadSessionReadModel(connection)
-  -> DurableEventSequence.load(connection, state)
+  -> loadSessionReadModel(database.orm)
+  -> DurableEventSequence.load(database.orm, state)
   -> TransactionCoordinator(storage)
   -> 构造各领域 Repository / Transaction
   -> 对 Server 暴露明确的领域属性和系统级能力
 ```
 
 所有领域入口使用同一个 `StorageContext`。这个上下文只携带数据库连接、当前 read model、待落盘 mutation、事件序号、delta checkpoint、事务入口和 owner 写保护，不依赖 Server、HTTP、Client 或 UI。
+
+`SessionDatabase.orm` 是在现有 SQLite 连接上创建的 Drizzle 查询入口。日常记录的查询、插入、更新和删除使用 schema 中的命名字段，查询结果由 Drizzle 转为对应的 TypeScript 字段；JSON 内容仍由领域记录转换函数编码和解码。内存状态加载、批量保存、流式正文 checkpoint、owner 和维护记录也使用这个入口。
+
+批量保存、流式正文保存、工作流任务快照和历史事件清理使用 Drizzle 生成的预编译查询：每个批次按记录类型准备一次，循环内绑定命名参数并执行，避免为每条记录重新编译查询。这里的 `.prepare()` 属于 Drizzle 查询构造器，不接收手写 SQL 字符串。
+
+SQLite 连接配置、备份与外层同步事务继续由现有连接负责，因此 Drizzle 写入参与同一事务，不会独立提交。SQL 迁移文件继续由 Drizzle Kit 管理。本阶段完成查询方式改造，持久化实现仍绑定 SQLite；可替换的存储接口属于下一阶段。
 
 ## 状态放在哪里
 
