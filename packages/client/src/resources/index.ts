@@ -9,6 +9,7 @@ export * from "./session-resource.js";
 export * from "./attachment-resource.js";
 export * from "./permission-resource.js";
 export * from "./schedule-resource.js";
+export * from "./note-resource.js";
 export * from "./job-resource.js";
 export * from "./terminal-resource.js";
 export * from "./channel-resource.js";

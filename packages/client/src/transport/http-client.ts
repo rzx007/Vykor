@@ -30,6 +30,7 @@ import {
   AttachmentResource,
   PermissionResource,
   ScheduleResource,
+  NoteResource,
   JobResource,
   TerminalResource,
   ChannelResource,
@@ -56,6 +57,7 @@ export {
   AttachmentResource,
   PermissionResource,
   ScheduleResource,
+  NoteResource,
   JobResource,
   TerminalResource,
   ChannelResource,
@@ -78,6 +80,7 @@ export class VykorClient {
   readonly attachments: AttachmentResource;
   readonly permissions: PermissionResource;
   readonly schedules: ScheduleResource;
+  readonly notes: NoteResource;
   readonly jobs: JobResource;
   readonly terminals: TerminalResource;
   readonly channels: ChannelResource;
@@ -99,6 +102,7 @@ export class VykorClient {
     this.attachments = new AttachmentResource(transport);
     this.permissions = new PermissionResource(transport);
     this.schedules = new ScheduleResource(transport);
+    this.notes = new NoteResource(transport);
     this.jobs = new JobResource(transport);
     this.terminals = new TerminalResource(transport, sse);
     this.channels = new ChannelResource(transport);

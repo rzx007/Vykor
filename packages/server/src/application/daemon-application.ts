@@ -27,6 +27,7 @@ import {
   sessionMemoryToCompactText,
   updateSessionMemoryFile,
   type SessionStore,
+  type NoteRepository,
   type ApplicationOwnerLease,
 } from "@vykor/services";
 
@@ -162,6 +163,7 @@ export interface DaemonApplicationOptions {
 export interface DurableAgentApplication {
   readonly pluginUi?: SessionPluginUiService;
   readonly store: SessionStore;
+  readonly notes: NoteRepository;
   readonly attachments: AttachmentService;
   readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
@@ -207,6 +209,7 @@ function failMissingSettings(): never {
 export class DaemonApplication implements DurableAgentApplication {
   readonly pluginUi: SessionPluginUiService;
   readonly store: SessionStore;
+  readonly notes: NoteRepository;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
   readonly backgroundShells: BackgroundShellService;
@@ -253,6 +256,7 @@ export class DaemonApplication implements DurableAgentApplication {
   constructor(private readonly options: DaemonApplicationOptions) {
     const { store } = options;
     this.store = store;
+    this.notes = store.notes;
     this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
     this.mcpOAuth = new McpOAuthApplicationService({ coordinator: this.mcpRuntimes });
     this.mcpOAuthOperations = new McpOAuthOperationService({ application: this.mcpOAuth });

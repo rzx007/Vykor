@@ -50,6 +50,7 @@ import { createBackgroundShellRoutes } from "./routes/background-shell.js";
 import { createChannelRoutes } from "./routes/channel.js";
 import { createChannelControlRoutes } from "./routes/channel-control.js";
 import { createScheduleRoutes } from "./routes/schedules.js";
+import { createNoteRoutes } from "./routes/notes.js";
 import { HttpEventHub } from "./routes/events.js";
 import { createGitRoutes } from "./routes/git.js";
 import { createJobRoutes } from "./routes/job.js";
@@ -415,6 +416,7 @@ export class VykorHttpServer {
       "/schedules",
       createScheduleRoutes({ schedules: this.application.schedules }),
     );
+    this.app.route("/notes", createNoteRoutes({ notes: this.application.notes }));
     this.app.route(
       "/background-shells",
       createBackgroundShellRoutes({
