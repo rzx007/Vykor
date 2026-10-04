@@ -74,7 +74,6 @@ export class SessionSubscriptionService {
     sessionIdInput: string
   ): Promise<DesktopSessionView> {
     const sessionId = requireString(sessionIdInput, "会话 ID")
-    this.closeSession(webContents.id)
 
     const controller = new AbortController()
     const subscription = { controller, sessionId }

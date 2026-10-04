@@ -1,4 +1,3 @@
-import { MessageCirclePlus } from "lucide-react"
 import type * as React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
@@ -11,7 +10,7 @@ import {
   mergeFileViewerTabs,
   type FileViewerTab,
 } from "@renderer/components/desktop/tools/file-viewer"
-import { PlaceholderTool } from "@renderer/components/desktop/tools/placeholder-tool"
+import { SideChatPanel } from "@renderer/components/desktop/tools/side-chat-panel"
 import { ReviewTool } from "@renderer/components/desktop/tools/review-tool"
 import type { DesktopGitReviewRequest } from "@shared/git-types"
 import { TerminalTool } from "@renderer/components/desktop/tools/terminal/terminal-tool"
@@ -631,16 +630,16 @@ export function UtilityPanel({
             />
           )}
           {activeTab?.tool === "review" && <ReviewTool openRequest={reviewOpenRequest} />}
-          {activeTab?.tool === "side-chat" && (
-            <PlaceholderTool
-              icon={MessageCirclePlus}
-              title="侧边聊天"
-              description="后续会承接当前会话上下文，用来和主对话并行沟通。"
-            />
-          )}
+          {activeSessionId && tabs.some((tab) => tab.tool === "side-chat") ? (
+            <SideChatPanel key={`side-chat:${activeSessionId}`} sourceId={activeSessionId}
+              active={open && activeTab?.tool === "side-chat"}
+              focusRequest={toolOpenRequest?.tool === "side-chat" ? toolOpenRequest.id : undefined}
+              onOpenFile={onOpenFile} canOpenReview={activeWorkspaceIsGit === true}
+              onOpenReview={onOpenReview} onOpenTerminal={onOpenTerminal} />
+          ) : null}
           {tabs.some((tab) => tab.tool === "agents") ? (
             <AgentsTool
-              key={activeSessionId ?? "no-session"}
+              key={`agents:${activeSessionId ?? "no-session"}`}
               openRequest={toolOpenRequest?.tool === "agents" ? toolOpenRequest : null}
               active={activeTab?.tool === "agents"}
               onOpenFile={onOpenFile}

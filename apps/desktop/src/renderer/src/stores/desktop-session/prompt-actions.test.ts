@@ -9,6 +9,7 @@ import { useDesktopSessionStore } from "./store"
 import { selectActiveSessionQueuedPromptActions, selectSessionSending } from "./selectors"
 import type { DesktopSessionRuntime } from "./types"
 import { composerDocument, emptyComposerDocument } from "./composer-document"
+import { readPersistedActiveSessionId, writePersistedActiveSessionId } from "./persistence"
 
 function viewContainingInput(
   sessionId: string,
@@ -518,6 +519,246 @@ function inputAttachment(
     createdAt: 1,
   }
 }
+
+describe("prompt actions with an explicit ordinary session target", () => {
+  beforeEach(() => {
+    resetDesktopSessionStore()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("sends ordered context, skill, plugin and attachments to B while A keeps running", async () => {
+    const received: SendDesktopPromptInput[] = []
+    let resolveSend!: () => void
+    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: (input: SendDesktopPromptInput) => {
+      received.push(input)
+      return new Promise<void>((resolve) => { resolveSend = resolve })
+    } } } })
+    const primary = emptySessionView("session-a", 5)
+    primary.session.status = "running"
+    primary.runs = [{ id: "run-a", sessionId: "session-a", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 }]
+    const document = composerDocument([
+      { type: "skill", name: "review", path: "D:/skills/review/SKILL.md" },
+      { type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" },
+      { type: "text", text: " review" },
+    ])
+    const primaryDocument = composerDocument([{ type: "text", text: "A draft" }])
+    const attachment = readyAttachment("draft-b", "asset-b")
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-a",
+      sessionView: primary,
+      composerDraftsByScope: {
+        "session:session-a": { document: primaryDocument, attachments: [] },
+        "session:session-b": { document, attachments: [attachment] },
+      },
+    })
+
+    const request = useDesktopSessionStore.getState().sendMessage("", {
+      target: { sessionId: "session-b", view: emptySessionView("session-b") },
+      contextItems: [{ type: "text", text: "[main context]\n" }],
+      document,
+      attachments: [attachment],
+    })
+
+    expect(received).toEqual([{
+      id: expect.any(String),
+      sessionId: "session-b",
+      items: [
+        { type: "text", text: "[main context]\n" },
+        { type: "skill", name: "review", path: "D:/skills/review/SKILL.md" },
+        { type: "capability", kind: "plugin", pluginId: "dev.quality", displayName: "Quality" },
+        { type: "text", text: " review" },
+      ],
+      attachments: [{ assetId: "asset-b", intent: "auto", displayName: "asset-b.png" }],
+    }])
+    expect(onlyPendingPromptSubmission("session-b")).toMatchObject({
+      content: "[main context]\n$review@Quality review",
+      items: received[0]!.items,
+      phase: "submitting",
+      placement: "transcript",
+    })
+    expect(sessionRuntime("session-a")).toEqual(createEmptySessionRuntime())
+    resolveSend()
+    await request
+    const state = useDesktopSessionStore.getState()
+    expect(state.activeSessionId).toBe("session-a")
+    expect(state.sessionView).toBe(primary)
+    expect(state.composerDraftsByScope["session:session-a"]?.document).toEqual(primaryDocument)
+    expect(state.composerDraftsByScope["session:session-b"]).toEqual({
+      document: emptyComposerDocument,
+      attachments: [],
+    })
+  })
+
+  it("uses B's visible run to place its submission in the queue", async () => {
+    let resolveSend!: () => void
+    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: () =>
+      new Promise<void>((resolve) => { resolveSend = resolve })
+    } } })
+    useDesktopSessionStore.setState({ activeSessionId: "session-a", sessionView: emptySessionView("session-a") })
+    const targetView = emptySessionView("session-b")
+    targetView.session.status = "running"
+    const request = useDesktopSessionStore.getState().sendMessage("queued B", {
+      target: { sessionId: "session-b", view: targetView },
+    })
+    expect(onlyPendingPromptSubmission("session-b")).toMatchObject({ placement: "queue" })
+    resolveSend()
+    await request
+  })
+
+  it("reuses B's failed structured input id with the same automatic context", async () => {
+    const received: SendDesktopPromptInput[] = []
+    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: async (input: SendDesktopPromptInput) => {
+      received.push(input)
+      if (received.length === 1) throw new Error("offline")
+    } } } })
+    useDesktopSessionStore.setState({ activeSessionId: "session-a" })
+    const options = {
+      target: { sessionId: "session-b", view: null },
+      contextItems: [{ type: "text" as const, text: "context\n" }],
+      document: composerDocument([{ type: "skill", name: "review", path: "D:/skills/review/SKILL.md" }]),
+    }
+    await expect(useDesktopSessionStore.getState().sendMessage("", options)).rejects.toThrow("offline")
+    expect(onlyPendingPromptSubmission("session-b")).toMatchObject({
+      content: "context\n$review", phase: "failed",
+      items: [{ type: "text", text: "context\n" }, { type: "skill", name: "review", path: "D:/skills/review/SKILL.md" }],
+    })
+    await useDesktopSessionStore.getState().sendMessage("", options)
+    expect(received[1]).toEqual(received[0])
+    expect(sessionRuntime("session-a")).toEqual(createEmptySessionRuntime())
+    expect(sessionRuntime("session-b").pendingPromptSubmissions).toEqual({})
+  })
+
+  it("preserves B's later draft edit when its earlier context-backed send succeeds", async () => {
+    let resolveSend!: () => void
+    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: () =>
+      new Promise<void>((resolve) => { resolveSend = resolve })
+    } } })
+    const document = composerDocument([{ type: "text", text: "old B draft" }])
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-a",
+      composerDraftsByScope: { "session:session-b": { document, attachments: [] } },
+    })
+    const request = useDesktopSessionStore.getState().sendMessage("", {
+      target: { sessionId: "session-b", view: null }, document,
+      contextItems: [{ type: "text", text: "context\n" }],
+    })
+    const nextDocument = composerDocument([{ type: "text", text: "new B draft" }])
+    useDesktopSessionStore.getState().setComposerDraftDocument("session:session-b", nextDocument)
+    resolveSend()
+    await request
+    expect(useDesktopSessionStore.getState().composerDraftsByScope["session:session-b"]?.document).toEqual(nextDocument)
+    expect(sessionRuntime("session-a")).toEqual(createEmptySessionRuntime())
+  })
+
+  it("accepts B's auxiliary input confirmation before a lost response without retry or failure", async () => {
+    const received: SendDesktopPromptInput[] = []
+    let rejectSend!: (error: Error) => void
+    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: (input: SendDesktopPromptInput) => {
+      received.push(input)
+      return new Promise<void>((_resolve, reject) => { rejectSend = reject })
+    } } } })
+    const primary = emptySessionView("session-a", 5)
+    const document = composerDocument([{ type: "text", text: "B draft" }])
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-a", sessionView: primary,
+      composerDraftsByScope: { "session:session-b": { document, attachments: [] } },
+    })
+    const request = useDesktopSessionStore.getState().sendMessage("", {
+      target: { sessionId: "session-b", view: null }, document,
+    })
+    const inputId = received[0]!.id
+    useDesktopSessionStore.getState().applySessionUpdate(viewContainingInput("session-b", inputId, 1))
+    expect(sessionRuntime("session-b").operations).toEqual({})
+    expect(sessionRuntime("session-b").pendingPromptSubmissions[inputId]).toMatchObject({ phase: "accepted" })
+    rejectSend(new Error("response lost"))
+    await expect(request).resolves.toBeUndefined()
+    expect(received).toHaveLength(1)
+    expect(sessionRuntime("session-b").pendingPromptSubmissions).toEqual({})
+    expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+    expect(useDesktopSessionStore.getState().composerDraftsByScope["session:session-b"]?.document).toEqual(emptyComposerDocument)
+  })
+
+  it("reconciles an auxiliary snapshot without changing A's selection, navigation or draft", () => {
+    const saved = new Map<string, string>()
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => saved.get(key) ?? null,
+      setItem: (key: string, value: string) => { saved.set(key, value) },
+      removeItem: (key: string) => { saved.delete(key) },
+    })
+    writePersistedActiveSessionId("session-a")
+    const primary = emptySessionView("session-a", 5)
+    const primaryDocument = composerDocument([{ type: "text", text: "A draft" }])
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-a", sessionView: primary,
+      selectedModel: "A-model", selectedProvider: "A-provider", selectedEffort: "high", selectedPermissionMode: "plan",
+      composerDraftsByScope: { "session:session-a": { document: primaryDocument, attachments: [] } },
+      sessionRuntimes: { "session-b": {
+        ...createEmptySessionRuntime(),
+        operations: { "input-b": { id: "input-b", kind: "send-prompt", sessionId: "session-b", phase: "pending", startedAt: 1 } },
+      } },
+    })
+    const auxiliary = viewContainingInput("session-b", "input-b", 1)
+    auxiliary.session.status = "archived"
+    useDesktopSessionStore.getState().applySessionUpdate(auxiliary)
+    expect(sessionRuntime("session-b").operations).toEqual({})
+    const state = useDesktopSessionStore.getState()
+    expect(state).toMatchObject({
+      activeSessionId: "session-a", sessionView: primary,
+      selectedModel: "A-model", selectedProvider: "A-provider", selectedEffort: "high", selectedPermissionMode: "plan",
+    })
+    expect(state.composerDraftsByScope["session:session-a"]?.document).toEqual(primaryDocument)
+    expect(readPersistedActiveSessionId()).toBe("session-a")
+    useDesktopSessionStore.getState().applySessionUpdate(emptySessionView("session-a", 4))
+    expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+  })
+
+  it("stops B's clicked run and ignores a late failure after B confirms it stopped", async () => {
+    let rejectInterrupt!: (error: Error) => void
+    const interrupt = vi.fn(() => new Promise<void>((_resolve, reject) => { rejectInterrupt = reject }))
+    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    const primary = emptySessionView("session-a")
+    primary.session.status = "running"
+    primary.runs = [{ id: "run-a", sessionId: "session-a", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 }]
+    const targetView = emptySessionView("session-b")
+    targetView.runs = [{ id: "run-b", sessionId: "session-b", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 }]
+    useDesktopSessionStore.setState({ activeSessionId: "session-a", sessionView: primary })
+    const request = useDesktopSessionStore.getState().interrupt({ sessionId: "session-b", view: targetView })
+    expect(interrupt).toHaveBeenCalledWith({ sessionId: "session-b", expectedRunId: "run-b" })
+    expect(Object.values(sessionRuntime("session-b").operations)).toEqual([
+      expect.objectContaining({ kind: "interrupt-run", target: "run-b", phase: "pending" }),
+    ])
+    useDesktopSessionStore.getState().applySessionUpdate({
+      ...targetView, cursor: 1, runs: [{ ...targetView.runs[0]!, status: "interrupted" }],
+    })
+    rejectInterrupt(new Error("response lost"))
+    await request
+    expect(sessionRuntime("session-b").operations).toEqual({})
+    expect(sessionRuntime("session-a")).toEqual(createEmptySessionRuntime())
+    expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+  })
+
+  it("approves B's permission once and reconciles its auxiliary approval", async () => {
+    let rejectReply!: (error: Error) => void
+    const replyPermission = vi.fn(() => new Promise<void>((_resolve, reject) => { rejectReply = reject }))
+    vi.stubGlobal("window", { desktop: { sessions: { replyPermission } } })
+    useDesktopSessionStore.setState({ activeSessionId: "session-a" })
+    const request = useDesktopSessionStore.getState().replyPermission("permission-b", "approved", "once", "yes", "session-b")
+    await useDesktopSessionStore.getState().replyPermission("permission-b", "denied", "once", undefined, "session-b")
+    expect(replyPermission).toHaveBeenCalledTimes(1)
+    expect(replyPermission).toHaveBeenCalledWith({ permissionId: "permission-b", status: "approved", decision: "once", answer: "yes" })
+    expect(sessionRuntime("session-b").operations["session-b:permission-b"]).toMatchObject({ phase: "pending", target: "permission-b" })
+    const targetView = emptySessionView("session-b", 1)
+    targetView.permissions = [{ id: "permission-b", sessionId: "session-b", toolName: "bash", payload: {}, status: "approved", createdAt: 1, updatedAt: 2 }]
+    useDesktopSessionStore.getState().applySessionUpdate(targetView)
+    rejectReply(new Error("response lost"))
+    await request
+    expect(sessionRuntime("session-b").operations).toEqual({})
+    expect(sessionRuntime("session-a")).toEqual(createEmptySessionRuntime())
+  })
+})
 
 describe("desktop session store prompt intent boundaries", () => {
   beforeEach(() => {

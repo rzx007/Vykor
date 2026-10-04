@@ -28,6 +28,19 @@ export function createApplySessionUpdate(
   return (view) => {
     const current = get().sessionView
 
+    if (get().activeSessionId !== view.session.id) {
+      set((state) => ({
+        sessionRuntimes: {
+          ...state.sessionRuntimes,
+          [view.session.id]: reconcileRuntimeWithView(
+            state.sessionRuntimes[view.session.id] ?? createEmptySessionRuntime(),
+            view
+          ),
+        },
+      }))
+      return
+    }
+
     if (acceptActiveSessionView(get().activeSessionId, current, view) !== view) return
 
     if (view.session.status === "archived") clearPersistedActiveSessionId()

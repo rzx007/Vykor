@@ -1,0 +1,1030 @@
+// @vitest-environment jsdom
+import { act, useRef, useState } from "react"
+import { createRoot, type Root } from "react-dom/client"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import {
+  emptySessionView,
+  resetDesktopSessionStore,
+} from "@renderer/stores/desktop-session/store-test-fixtures"
+import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { selectDraftText } from "@renderer/stores/desktop-session/composer-draft-state"
+import { MainLayoutContext } from "../layout/main-layout/main-layout-context"
+import type { DesktopAuxSessionUpdate, DesktopSessionView } from "@shared/session-types"
+import { SideChatPanel, appendSideChatQuote } from "./side-chat-panel"
+import { SideChatSelectionActions } from "./side-chat-selection-actions"
+import { UtilityPanel } from "../layout/main-layout/utility-panel/utility-panel"
+import {
+  readUtilityPanelRuntimeState,
+  writeUtilityPanelRuntimeState,
+} from "../layout/main-layout/utility-panel/utility-panel-repository"
+import { defaultUtilityPanelRuntimeState } from "../layout/main-layout/utility-panel/use-utility-panel-runtime"
+import {
+  useUtilityPanelController,
+  type UtilityPanelController,
+} from "../layout/main-layout/utility-panel/use-utility-panel-controller"
+import { getNearestEditorFromDOMNode, PASTE_COMMAND } from "lexical"
+vi.hoisted(() => {
+  // The native terminal's import probes Canvas; no terminal is used in these tests.
+  HTMLCanvasElement.prototype.getContext = (() =>
+    null) as typeof HTMLCanvasElement.prototype.getContext
+})
+
+let root: Root
+let container: HTMLDivElement
+let listeners: Set<(update: DesktopAuxSessionUpdate) => void>
+const sideView = (source = "main", cursor = 0): DesktopSessionView => ({
+  ...emptySessionView(`side-${source}`, cursor),
+  session: { ...emptySessionView(`side-${source}`).session, parentId: source },
+})
+const fork = vi.fn(async ({ sessionId }: { sessionId: string }) => sideView(sessionId).session)
+const openAux = vi.fn(async ({ sessionId }: { sessionId: string; subscriptionId: string }) =>
+  sideView(sessionId.replace("side-", ""))
+)
+const sendPrompt = vi.fn(async (_input: unknown) => undefined)
+const interrupt = vi.fn(async (_input: unknown) => undefined)
+const replyPermission = vi.fn(async (_input: unknown) => undefined)
+const closeAux = vi.fn(async (_input: unknown) => undefined)
+const callbacks = {
+  onOpenFile: () => {},
+  canOpenReview: false,
+  onOpenReview: () => {},
+  onOpenTerminal: () => {},
+}
+
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  )
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  }))
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+    window.setTimeout(() => callback(0), 0)
+  )
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => window.clearTimeout(id))
+  Range.prototype.getBoundingClientRect = () => ({
+    x: 20,
+    y: 40,
+    top: 40,
+    left: 20,
+    bottom: 60,
+    right: 80,
+    width: 60,
+    height: 20,
+    toJSON() {},
+  })
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList
+  HTMLElement.prototype.scrollTo = () => {}
+  HTMLElement.prototype.getAnimations = () => []
+  localStorage.clear()
+  listeners = new Set()
+  vi.clearAllMocks()
+  fork.mockImplementation(async ({ sessionId }) => sideView(sessionId).session)
+  openAux.mockImplementation(async ({ sessionId }) => sideView(sessionId.replace("side-", "")))
+  sendPrompt.mockImplementation(async () => undefined)
+  replyPermission.mockImplementation(async () => undefined)
+  Object.defineProperty(window, "desktop", {
+    configurable: true,
+    value: {
+      sessions: {
+        fork,
+        openAux,
+        closeAux,
+        sendPrompt,
+        interrupt,
+        replyPermission,
+        onAuxUpdated: (callback: (update: DesktopAuxSessionUpdate) => void) => {
+          listeners.add(callback)
+          return () => listeners.delete(callback)
+        },
+        listCommands: async () => [],
+        listContextPlugins: async () => [],
+      },
+      clipboard: { writeText: async () => {} },
+      settings: { snapshot: async () => ({ showReasoning: false }), onUpdated: () => () => {} },
+    },
+  })
+  resetDesktopSessionStore()
+  const main = emptySessionView("main")
+  useDesktopSessionStore.setState({
+    activeSessionId: "main",
+    sessionView: main,
+    sessions: [main.session],
+    loadStatus: "ready",
+  })
+  container = document.createElement("div")
+  document.body.append(container)
+  root = createRoot(container)
+})
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  window.getSelection()?.removeAllRanges()
+  vi.unstubAllGlobals()
+})
+async function mount(sourceId = "main", active = true) {
+  await act(async () =>
+    root.render(<SideChatPanel key={sourceId} sourceId={sourceId} active={active} {...callbacks} />)
+  )
+}
+async function submit() {
+  expect(container.querySelector("form"), "ordinary shared composer must be present").not.toBeNull()
+  await act(async () =>
+    container
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+  )
+}
+function draft(source: string, text: string) {
+  useDesktopSessionStore.getState().setComposerDraftText(`linked-chat:${source}`, text)
+}
+async function emit(
+  view: DesktopSessionView,
+  subscriptionId = openAux.mock.calls.at(-1)![0].subscriptionId
+) {
+  await act(async () => listeners.forEach((listener) => listener({ subscriptionId, view })))
+}
+
+it("opening and quoting uses the side draft without creating a session or changing the main draft", async () => {
+  useDesktopSessionStore.getState().setComposerDraftText("session:main", "main draft")
+  draft("main", "side draft")
+  appendSideChatQuote("main", "selected text")
+  await mount()
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain(
+    "selected text"
+  )
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main draft")
+  expect(fork).not.toHaveBeenCalled()
+  expect(sendPrompt).not.toHaveBeenCalled()
+})
+
+it("first send forks once, sends normal context, skill, plugin and attachment items, and leaves the primary view intact", async () => {
+  useDesktopSessionStore.getState().setComposerDraftDocument(
+    "linked-chat:main",
+    composerDocument([
+      { type: "text", text: "question" },
+      { type: "skill", name: "inspect", path: "/skill", displayName: "inspect" },
+      { type: "capability", kind: "plugin", pluginId: "plugin-1", displayName: "Plugin" },
+    ])
+  )
+  useDesktopSessionStore.setState({
+    composerDraftsByScope: {
+      ...useDesktopSessionStore.getState().composerDraftsByScope,
+      "linked-chat:main": {
+        ...useDesktopSessionStore.getState().composerDraftsByScope["linked-chat:main"]!,
+        attachments: [
+          {
+            draftId: "draft-1",
+            taskId: "upload-1",
+            displayName: "notes.txt",
+            declaredMediaType: "text/plain",
+            mediaType: "text/plain",
+            sizeBytes: 12,
+            status: "ready",
+            assetId: "asset-1",
+            bytesUploaded: 12,
+            progress: 1,
+          },
+        ],
+      },
+    },
+  })
+  const primary = useDesktopSessionStore.getState().sessionView
+  await mount()
+  await submit()
+  expect(fork).toHaveBeenCalledExactlyOnceWith({ sessionId: "main" })
+  expect(sendPrompt).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sessionId: "side-main",
+      items: [
+        { type: "context", kind: "conversation", id: "main", displayName: "主聊天" },
+        { type: "text", text: "question" },
+        { type: "skill", name: "inspect", path: "/skill", displayName: "inspect" },
+        { type: "capability", kind: "plugin", pluginId: "plugin-1", displayName: "Plugin" },
+      ],
+      attachments: [{ assetId: "asset-1", intent: "auto", displayName: "notes.txt" }],
+    })
+  )
+  expect(useDesktopSessionStore.getState().activeSessionId).toBe("main")
+  expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("")
+})
+
+it("failed send preserves the draft, fork ID and ordinary stable input ID across close and retry", async () => {
+  sendPrompt.mockRejectedValueOnce(new Error("offline"))
+  draft("main", "retry me")
+  await mount()
+  await submit()
+  expect(container.textContent).toContain("offline")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("retry me")
+  const first = sendPrompt.mock.calls[0]![0]
+  await act(async () => root.render(null))
+  await mount()
+  await submit()
+  expect(fork).toHaveBeenCalledTimes(1)
+  expect(sendPrompt.mock.calls[1]![0]).toEqual(first)
+})
+
+it("synchronously blocks duplicate first submits while the ordinary fork is pending", async () => {
+  let finish!: (value: ReturnType<typeof sideView>["session"]) => void
+  fork.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  draft("main", "once")
+  await mount()
+  await submit()
+  await submit()
+  expect(fork).toHaveBeenCalledTimes(1)
+  await act(async () => finish(sideView().session))
+  expect(sendPrompt).toHaveBeenCalledTimes(1)
+})
+
+it("accepts only its target and subscription without cursor rollback, reconciles runtime and stops only side", async () => {
+  draft("main", "hello")
+  await mount()
+  await submit()
+  const running: DesktopSessionView = {
+    ...sideView("main", 4),
+    runs: [
+      {
+        id: "side-run",
+        sessionId: "side-main",
+        status: "running",
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  }
+  await emit(running)
+  await emit(sideView("main", 2))
+  await emit(sideView("other", 99))
+  await emit(sideView("main", 99), "foreign")
+  expect(container.querySelector('[aria-label="停止生成"]')).not.toBeNull()
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="停止生成"]')!.click()
+  )
+  expect(interrupt).toHaveBeenCalledWith({ sessionId: "side-main", expectedRunId: "side-run" })
+  await mount("main", false)
+  expect(closeAux).toHaveBeenCalled()
+  expect(interrupt).toHaveBeenCalledTimes(1)
+})
+
+it("rejects a late open snapshot after a newer event", async () => {
+  let finish!: (view: DesktopSessionView) => void
+  openAux.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  draft("main", "question")
+  await mount()
+  await submit()
+  await emit({ ...sideView("main", 5), session: { ...sideView().session, status: "archived" } })
+  await act(async () => finish(sideView("main", 1)))
+  expect(container.textContent).toContain("归档")
+  expect(container.querySelector("form")).toBeNull()
+})
+
+it("keeps A and B drafts and routes quoted text to each correct side", async () => {
+  draft("main", "A")
+  draft("B", "B")
+  await mount()
+  await submit()
+  await mount("B")
+  await act(async () => appendSideChatQuote("main", "quote A"))
+  await act(async () => appendSideChatQuote("B", "quote B"))
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain("quote B")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toContain(
+    "quote A"
+  )
+  await mount("main")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
+    "quote A"
+  )
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("")
+  expect(fork).toHaveBeenCalledTimes(1)
+})
+
+it("normal authorization cards send approval to the side session and retain reply errors", async () => {
+  draft("main", "question")
+  await mount()
+  await submit()
+  const view = {
+    ...sideView("main", 1),
+    permissions: [
+      {
+        id: "p-1",
+        sessionId: "side-main",
+        runId: "run-1",
+        toolCallId: "call-1",
+        toolName: "shell",
+        reason: "run command",
+        status: "pending" as const,
+        payload: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  }
+  await emit(view)
+  replyPermission.mockRejectedValueOnce(new Error("permission offline"))
+  const allow = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent === "允许"
+  )!
+  await act(async () => allow.click())
+  expect(replyPermission).toHaveBeenCalledWith({
+    permissionId: "p-1",
+    status: "approved",
+    decision: "once",
+  })
+  expect(
+    Object.values(useDesktopSessionStore.getState().sessionRuntimes["side-main"]!.operations)
+  ).toContainEqual(
+    expect.objectContaining({ sessionId: "side-main", target: "p-1", phase: "failed" })
+  )
+  expect(container.textContent).toContain("permission offline")
+})
+
+function SelectionHarness({
+  revision = 0,
+  sourceId = "main",
+}: {
+  revision?: number
+  sourceId?: string
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null)
+  return (
+    <MainLayoutContext.Provider
+      value={{
+        conversationWorkspace: null,
+        startNewConversation() {},
+        openSideChat: (source, text) => appendSideChatQuote(source, text),
+      }}
+    >
+      <div ref={viewportRef}>
+        <p data-message tabIndex={0}>
+          select this
+        </p>
+        <span>{revision}</span>
+        <textarea defaultValue="exclude this" />
+      </div>
+      <SideChatSelectionActions sourceId={sourceId} viewportRef={viewportRef} />
+    </MainLayoutContext.Provider>
+  )
+}
+function selectText() {
+  const text = container.querySelector("[data-message]")!.firstChild!
+  const range = document.createRange()
+  range.selectNodeContents(text)
+  window.getSelection()!.removeAllRanges()
+  window.getSelection()!.addRange(range)
+  document.dispatchEvent(new Event("selectionchange"))
+}
+it("the complete drag, stream update, mouseup and click gesture leaves a clickable selection menu", async () => {
+  await act(async () => root.render(<SelectionHarness />))
+  const message = container.querySelector("[data-message]")!
+  await act(async () => message.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })))
+  await act(async () => selectText())
+  await act(async () => root.render(<SelectionHarness revision={1} />))
+  await act(async () => message.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })))
+  await act(async () => message.dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (item) => item.textContent === "在侧边聊天中提问"
+  )!
+  expect(button).toBeDefined()
+  await act(async () => {
+    button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))
+    button.click()
+  })
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toContain(
+    "select this"
+  )
+  expect(fork).not.toHaveBeenCalled()
+})
+it("keyboard selection opens without moving focus and a second outside click or Escape closes it", async () => {
+  await act(async () => root.render(<SelectionHarness />))
+  container.querySelector<HTMLElement>("[data-message]")!.focus()
+  const focused = document.activeElement
+  await act(async () => selectText())
+  const label = () =>
+    [...document.querySelectorAll("button")].find((item) => item.textContent === "在侧边聊天中提问")
+  expect(label()).toBeDefined()
+  expect(document.activeElement).toBe(focused)
+  await act(async () => document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })))
+  await act(async () => document.body.dispatchEvent(new MouseEvent("click", { bubbles: true })))
+  expect(label()).toBeUndefined()
+  await act(async () => selectText())
+  await act(async () =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  )
+  expect(label()).toBeUndefined()
+})
+
+it("a quotation added while fork is delayed stays in the ordinary draft and is not included in the older send", async () => {
+  let finish!: (value: ReturnType<typeof sideView>["session"]) => void
+  fork.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  draft("main", "old question")
+  await mount()
+  await submit()
+  await act(async () => appendSideChatQuote("main", "new quote"))
+  await act(async () => finish(sideView().session))
+  expect(sendPrompt).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: [
+        { type: "context", kind: "conversation", id: "main", displayName: "主聊天" },
+        { type: "text", text: "old question" },
+      ],
+    })
+  )
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
+    "new quote"
+  )
+})
+
+it("AskUser renders the normal answer card and records its reply only in the side runtime", async () => {
+  draft("main", "question")
+  await mount()
+  await submit()
+  await emit({
+    ...sideView("main", 2),
+    permissions: [
+      {
+        id: "ask-1",
+        sessionId: "side-main",
+        toolName: "AskUser",
+        status: "pending",
+        payload: {
+          input: {
+            kind: "question",
+            questions: [{ question: "Which option?", options: ["Alpha", "Beta"] }],
+          },
+        },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  })
+  expect(container.textContent).toContain("Which option?")
+  await act(async () =>
+    [...container.querySelectorAll<HTMLElement>("button,[role=radio]")]
+      .find((item) => item.textContent?.includes("Alpha"))!
+      .click()
+  )
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((item) => item.textContent?.includes("提交"))!
+      .click()
+  )
+  expect(replyPermission).toHaveBeenCalledWith({
+    permissionId: "ask-1",
+    status: "approved",
+    decision: "once",
+    answer: '{"selected":{"0":[0]},"custom":{"0":""}}',
+  })
+  expect(useDesktopSessionStore.getState().sessionRuntimes["main"]?.operations ?? {}).toEqual({})
+})
+
+it.each(["wrong parent", "wrong ID", "deleted"])(
+  "persisted target with %s cannot send or create a replacement",
+  async (kind) => {
+    localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+    useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "do not send")
+    if (kind === "deleted") openAux.mockRejectedValueOnce(new Error("session_not_found"))
+    else
+      openAux.mockResolvedValueOnce(
+        kind === "wrong ID"
+          ? sideView("other")
+          : { ...sideView(), session: { ...sideView().session, parentId: "other" } }
+      )
+    await mount()
+    await submit()
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+    expect(sendPrompt).not.toHaveBeenCalled()
+    expect(fork).not.toHaveBeenCalled()
+  }
+)
+
+it("discarding an A selection on a source switch prevents appending it to B", async () => {
+  await act(async () => root.render(<SelectionHarness />))
+  await act(async () => selectText())
+  await act(async () => root.render(<SelectionHarness sourceId="B" />))
+  expect(
+    [...document.querySelectorAll("button")].find((item) => item.textContent === "在侧边聊天中提问")
+  ).toBeUndefined()
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:B")).toBe("")
+})
+
+it("an existing utility tab yields to the selection entry and focuses the shared side composer", async () => {
+  const scope = "session:selection-integration"
+  writeUtilityPanelRuntimeState(scope, {
+    ...defaultUtilityPanelRuntimeState(),
+    tabs: [{ id: "agents-tab", tool: "agents", title: "子智能体" }],
+    activeTabId: "agents-tab",
+  })
+  function Workspace() {
+    const viewportRef = useRef<HTMLDivElement>(null)
+    const [request, setRequest] = useState<{ id: number; tool: "side-chat" } | null>(null)
+    return (
+      <MainLayoutContext.Provider
+        value={{
+          conversationWorkspace: null,
+          startNewConversation() {},
+          openSideChat(source, text) {
+            appendSideChatQuote(source, text)
+            setRequest({ id: 1, tool: "side-chat" })
+          },
+        }}
+      >
+        <div ref={viewportRef}>
+          <p data-message>select this</p>
+        </div>
+        <SideChatSelectionActions sourceId="main" viewportRef={viewportRef} />
+        <UtilityPanel
+          scopeId={scope}
+          open
+          maximized={false}
+          onToggleMaximized={() => {}}
+          onClose={() => {}}
+          fileOpenRequest={null}
+          reviewOpenRequest={null}
+          terminalOpenRequest={null}
+          toolOpenRequest={request}
+          {...callbacks}
+        />
+      </MainLayoutContext.Provider>
+    )
+  }
+  await act(async () => root.render(<Workspace />))
+  await act(async () => selectText())
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((item) => item.textContent === "在侧边聊天中提问")!
+      .click()
+  )
+  for (let index = 0; index < 3; index++)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  expect(readUtilityPanelRuntimeState(scope)?.activeTabId).toBe("side-chat-tab")
+  expect(document.activeElement?.id).toBe("side-chat-composer-main")
+  expect(document.activeElement?.getAttribute("contenteditable")).toBe("true")
+  expect(fork).not.toHaveBeenCalled()
+})
+
+it("picker, drop and paste use ordinary prefork uploads without creating a session", async () => {
+  const candidate = {
+    draftId: "pick-1",
+    sourceToken: "source-1",
+    displayName: "picked.txt",
+    declaredMediaType: "text/plain",
+    sizeBytes: 2,
+  }
+  const startUpload = vi.fn(async () => undefined)
+  const uploadClipboardImage = vi.fn(async () => undefined)
+  const stageDroppedFiles = vi.fn(async () => [
+    { ...candidate, draftId: "drop-1", displayName: "drop.txt" },
+  ])
+  Object.assign(window.desktop, {
+    attachments: {
+      pickFiles: async () => [candidate],
+      startUpload,
+      uploadClipboardImage,
+      stageDroppedFiles,
+    },
+  })
+  useDesktopSessionStore.setState({
+    attachmentSupport: {
+      daemonSupported: true,
+      interactionEnabled: true,
+      uploadModes: ["single"],
+      limits: null,
+    },
+  })
+  await mount()
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="添加上下文"]')!.click()
+  )
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('button,[role="option"]')]
+      .find((item) => item.textContent?.includes("文件和文件夹"))!
+      .click()
+  )
+  expect(startUpload).toHaveBeenCalledWith(
+    expect.objectContaining({ draftId: "pick-1", sourceToken: "source-1" })
+  )
+  const drop = new Event("drop", { bubbles: true, cancelable: true })
+  Object.defineProperty(drop, "dataTransfer", {
+    value: { files: [new File(["ok"], "drop.txt")], types: ["Files"] },
+  })
+  await act(async () => container.querySelector("form")!.dispatchEvent(drop))
+  expect(stageDroppedFiles).toHaveBeenCalledTimes(1)
+  const file = new File(["image"], "paste.png", { type: "image/png" })
+  Object.defineProperty(file, "arrayBuffer", { value: async () => new Uint8Array([1, 2]).buffer })
+  const paste = new Event("paste", { bubbles: true, cancelable: true })
+  Object.defineProperty(paste, "clipboardData", {
+    value: {
+      files: [file],
+      items: [{ kind: "file", type: "image/png", getAsFile: () => file }],
+      getData: () => "",
+    },
+  })
+  await act(async () =>
+    getNearestEditorFromDOMNode(container.querySelector('[role="textbox"]')!)!.dispatchCommand(
+      PASTE_COMMAND,
+      paste as ClipboardEvent
+    )
+  )
+  expect(uploadClipboardImage).toHaveBeenCalledWith(
+    expect.objectContaining({ displayName: "paste.png" })
+  )
+  expect(
+    useDesktopSessionStore.getState().composerDraftsByScope["linked-chat:main"]?.attachments
+  ).toHaveLength(3)
+  expect(fork).not.toHaveBeenCalled()
+})
+
+it("an ordinary click clearing selection closes an older menu", async () => {
+  await act(async () => root.render(<SelectionHarness />))
+  await act(async () => selectText())
+  const message = container.querySelector("[data-message]")!
+  await act(async () => message.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })))
+  await act(async () => {
+    window.getSelection()!.removeAllRanges()
+    document.dispatchEvent(new Event("selectionchange"))
+  })
+  await act(async () => {
+    message.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+    message.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+  expect(
+    [...document.querySelectorAll("button")].find((item) => item.textContent === "在侧边聊天中提问")
+  ).toBeUndefined()
+})
+
+it("a rare target draft collision preserves both drafts, reports it and reuses the target after resolution", async () => {
+  draft("main", "source draft")
+  useDesktopSessionStore
+    .getState()
+    .setComposerDraftText("session:side-main", "existing target draft")
+  await mount()
+  await submit()
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe(
+    "source draft"
+  )
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe(
+    "existing target draft"
+  )
+  expect(container.textContent).toContain("两份草稿")
+  expect(sendPrompt).not.toHaveBeenCalled()
+  await act(async () => useDesktopSessionStore.getState().resetComposerDraft("session:side-main"))
+  await submit()
+  expect(fork).toHaveBeenCalledTimes(1)
+  expect(sendPrompt).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sessionId: "side-main",
+      items: [
+        { type: "context", kind: "conversation", id: "main", displayName: "主聊天" },
+        { type: "text", text: "source draft" },
+      ],
+    })
+  )
+})
+
+it("side configuration reflects accepted session settings and rolls back a rejected permission change", async () => {
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  const updatePermissionMode = vi.fn().mockRejectedValueOnce(new Error("config offline"))
+  Object.assign(window.desktop.sessions, { updatePermissionMode })
+  await mount()
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((item) => item.textContent === "手动批准")!
+      .click()
+  )
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+      .find((item) => item.textContent?.includes("自动批准"))!
+      .click()
+  )
+  expect(updatePermissionMode).toHaveBeenCalledWith({
+    sessionId: "side-main",
+    permissionMode: "full_auto",
+  })
+  expect(container.textContent).toContain("config offline")
+  expect(container.textContent).toContain("手动批准")
+  await emit({
+    ...sideView("main", 3),
+    session: { ...sideView().session, metadata: { runtime: { permissionMode: "plan" } } },
+  })
+  expect(
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "计划模式"
+    )
+  ).toBeDefined()
+  expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("default")
+})
+
+it("a newer auxiliary configuration replaces a successfully changed side permission while keeping immediate RPC feedback", async () => {
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  const updatePermissionMode = vi.fn(async () => ({
+    ...sideView().session,
+    metadata: { runtime: { permissionMode: "full_auto" } },
+  }))
+  Object.assign(window.desktop.sessions, { updatePermissionMode })
+  await mount()
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((item) => item.textContent === "手动批准")!
+      .click()
+  )
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+      .find((item) => item.textContent?.includes("自动批准"))!
+      .click()
+  )
+  expect(updatePermissionMode).toHaveBeenCalledWith({
+    sessionId: "side-main",
+    permissionMode: "full_auto",
+  })
+  // The normal RPC fixture has the same timestamp as the initial auxiliary snapshot.
+  expect(
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "自动批准"
+    )
+  ).toBeDefined()
+  await emit({
+    ...sideView("main", 3),
+    session: {
+      ...sideView().session,
+      updatedAt: 2,
+      metadata: { runtime: { permissionMode: "plan" } },
+    },
+  })
+  expect(
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "计划模式"
+    )
+  ).toBeDefined()
+  expect(useDesktopSessionStore.getState().selectedPermissionMode).toBe("default")
+})
+
+it("quotes stay in this window's visible side draft if another window changes the saved association", async () => {
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  await mount()
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "other-fork" }))
+  await act(async () => appendSideChatQuote("main", "visible quote"))
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain(
+    "visible quote"
+  )
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:other-fork")).toBe("")
+})
+
+it("closing and reopening during the first fork reuses it without duplicating the pending question", async () => {
+  let finish!: (value: ReturnType<typeof sideView>["session"]) => void
+  fork.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  draft("main", "only once")
+  await mount()
+  await submit()
+  await act(async () => root.render(null))
+  await mount()
+  await submit()
+  await act(async () => finish(sideView().session))
+  expect(fork).toHaveBeenCalledTimes(1)
+  expect(sendPrompt).toHaveBeenCalledTimes(1)
+  expect(useDesktopSessionStore.getState().activeSessionId).toBe("main")
+})
+
+it("a side event reconciles its pending ordinary send without changing the primary view", async () => {
+  let finish!: () => void
+  sendPrompt.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve(undefined)
+      })
+  )
+  draft("main", "event confirmed")
+  const primary = useDesktopSessionStore.getState().sessionView
+  await mount()
+  await submit()
+  const request = sendPrompt.mock.calls[0]![0] as { id: string }
+  await emit({
+    ...sideView("main", 2),
+    inputs: [
+      {
+        id: request.id,
+        sessionId: "side-main",
+        seq: 1,
+        delivery: "queue",
+        items: [{ type: "text", text: "event confirmed" }],
+        content: "event confirmed",
+        attachments: [],
+        metadata: {},
+        createdAt: 1,
+      },
+    ],
+  })
+  expect(
+    useDesktopSessionStore.getState().sessionRuntimes["side-main"]!.pendingPromptSubmissions[
+      request.id
+    ]?.phase
+  ).toBe("accepted")
+  expect(useDesktopSessionStore.getState().sessionView).toBe(primary)
+  await act(async () => finish())
+})
+
+it("model and effort selections update the explicit side session and leave primary settings alone", async () => {
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  const original = {
+    id: "test-model",
+    label: "Original",
+    provider: "Test",
+    providerName: "test",
+    reasoningEfforts: ["low", "high"],
+  }
+  const alternate = { ...original, id: "alternate", label: "Alternate" }
+  useDesktopSessionStore.setState({ models: [original, alternate] })
+  const updateModel = vi.fn(async () => ({
+    ...sideView().session,
+    model: "alternate",
+    metadata: { runtime: { provider: "test" } },
+  }))
+  const updateEffort = vi.fn(async () => ({
+    ...sideView().session,
+    model: "alternate",
+    metadata: { runtime: { provider: "test", effort: "high" } },
+  }))
+  Object.assign(window.desktop.sessions, { updateModel, updateEffort })
+  await mount()
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((item) => item.textContent === "Original")!
+      .click()
+  )
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+      .find((item) => item.textContent === "Alternate")!
+      .click()
+  )
+  expect(updateModel).toHaveBeenCalledWith({
+    sessionId: "side-main",
+    model: "alternate",
+    provider: "test",
+  })
+  expect(container.textContent).toContain("Alternate")
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="推理强度"]')!.click()
+  )
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+      .find((item) => item.textContent === "高high")!
+      .click()
+  )
+  expect(updateEffort).toHaveBeenCalledWith({ sessionId: "side-main", effort: "high" })
+  expect(useDesktopSessionStore.getState().selectedModel).not.toBe("alternate")
+  expect(useDesktopSessionStore.getState().selectedEffort).toBeNull()
+})
+
+it.each(["self", "wrong-parent"])(
+  "an unverified %s association cannot receive a quote in the main or another chat draft",
+  async (kind) => {
+    const target = kind === "self" ? "main" : "foreign"
+    localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: target }))
+    const state = useDesktopSessionStore.getState()
+    state.setComposerDraftText("session:main", "main remains")
+    state.setComposerDraftText("session:foreign", "foreign remains")
+    openAux.mockResolvedValueOnce({
+      ...emptySessionView(target),
+      session: {
+        ...emptySessionView(target).session,
+        parentId: kind === "self" ? "main" : "other",
+      },
+    })
+    appendSideChatQuote("main", "quote before validation")
+    expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main remains")
+    expect(selectDraftText(useDesktopSessionStore.getState(), "session:foreign")).toBe(
+      "foreign remains"
+    )
+    expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toContain(
+      "quote before validation"
+    )
+    await mount()
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+    await act(async () => appendSideChatQuote("main", "quote after rejection"))
+    expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main remains")
+    expect(selectDraftText(useDesktopSessionStore.getState(), "session:foreign")).toBe(
+      "foreign remains"
+    )
+    expect(sendPrompt).not.toHaveBeenCalled()
+  }
+)
+
+it("quotes wait in the source scope and migrate only after a saved ordinary target is verified", async () => {
+  let finish!: (view: DesktopSessionView) => void
+  localStorage.setItem("vykor.desktop.linked-chat-targets", JSON.stringify({ main: "side-main" }))
+  openAux.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  appendSideChatQuote("main", "waiting quote")
+  await mount()
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("")
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toContain(
+    "waiting quote"
+  )
+  await act(async () => finish(sideView()))
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
+    "waiting quote"
+  )
+  await act(async () => appendSideChatQuote("main", "verified quote"))
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toContain(
+    "verified quote"
+  )
+  expect(fork).not.toHaveBeenCalled()
+})
+
+it("a new side request activates its retained tab after settings unmounts and remounts the controller", async () => {
+  const scope = "session:main"
+  writeUtilityPanelRuntimeState(scope, {
+    ...defaultUtilityPanelRuntimeState(),
+    tabs: [{ id: "agents-tab", tool: "agents", title: "子智能体" }],
+    activeTabId: "agents-tab",
+  })
+  let controller!: UtilityPanelController
+  const options = {
+    activeSessionId: "main",
+    selectedProjectId: null,
+    sessionIds: ["main"],
+    defaultLayout: { conversation: 50, utility: 50 },
+    collapsedLayout: { conversation: 100, utility: 0 },
+    conversationPanelRef: { current: null },
+    utilityPanelRef: { current: null },
+    workspaceGroupRef: { current: null },
+    groupElementRef: { current: null },
+    onCollapseSidebar() {},
+  }
+  function Workspace() {
+    controller = useUtilityPanelController(options)
+    return (
+      <UtilityPanel
+        scopeId={controller.scopeId}
+        open={controller.open}
+        maximized={controller.maximized}
+        onToggleMaximized={controller.toggleMaximized}
+        onClose={controller.collapse}
+        fileOpenRequest={null}
+        reviewOpenRequest={null}
+        terminalOpenRequest={null}
+        toolOpenRequest={controller.toolOpenRequest}
+        {...callbacks}
+      />
+    )
+  }
+  const settle = async () => {
+    for (let index = 0; index < 3; index++)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+  }
+  await act(async () => root.render(<Workspace />))
+  await act(async () => controller.openTool("side-chat"))
+  await settle()
+  const firstId = controller.toolOpenRequest!.id
+  expect(readUtilityPanelRuntimeState(scope)?.activeTabId).toBe("side-chat-tab")
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button[title="子智能体"]')!.click()
+  )
+  expect(readUtilityPanelRuntimeState(scope)?.activeTabId).toBe("agents-tab")
+  await act(async () => root.render(<div>settings</div>))
+  await act(async () => root.render(<Workspace />))
+  await act(async () => controller.openTool("side-chat"))
+  await settle()
+  expect(controller.toolOpenRequest!.id).toBeGreaterThan(firstId)
+  expect(readUtilityPanelRuntimeState(scope)?.activeTabId).toBe("side-chat-tab")
+  expect(document.activeElement?.id).toBe("side-chat-composer-main")
+})

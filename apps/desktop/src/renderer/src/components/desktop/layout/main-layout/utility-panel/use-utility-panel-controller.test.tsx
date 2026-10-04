@@ -81,7 +81,7 @@ function mount(maximized: boolean, initialLayout: Layout) {
     return null
   }
   act(() => root.render(<Workspace />))
-  return { toggle: () => act(() => controller.toggleMaximized()), layout: () => layout }
+  return { toggle: () => act(() => controller.toggleMaximized()), layout: () => layout, controller: () => controller }
 }
 
 it("restores the saved split after reopening an already maximized workbench", () => {
@@ -96,4 +96,25 @@ it("keeps the live pre-maximize split instead of replacing it with the saved fal
   expect(workspace.layout()).toEqual({ conversation: 0, utility: 100 })
   workspace.toggle()
   expect(workspace.layout()).toEqual({ conversation: 55, utility: 45 })
+})
+
+it("repeated side chat requests activate a new request even within the same clock tick", () => {
+  const workspace = mount(false, { conversation: 55, utility: 45 })
+  vi.spyOn(Date, "now").mockReturnValue(100)
+  act(() => workspace.controller().openTool("side-chat"))
+  const first = workspace.controller().toolOpenRequest!
+  act(() => workspace.controller().openTool("side-chat"))
+  expect(workspace.controller().toolOpenRequest?.tool).toBe("side-chat")
+  expect(workspace.controller().toolOpenRequest?.id).toBeGreaterThan(first.id)
+  vi.restoreAllMocks()
+})
+
+it("does not reuse a tool request ID when the same scope controller is remounted", () => {
+  const first = mount(false, { conversation: 55, utility: 45 })
+  act(() => first.controller().openTool("side-chat"))
+  const firstId = first.controller().toolOpenRequest!.id
+  act(() => root.render(null))
+  const reopened = mount(false, { conversation: 55, utility: 45 })
+  act(() => reopened.controller().openTool("side-chat"))
+  expect(reopened.controller().toolOpenRequest!.id).toBeGreaterThan(firstId)
 })

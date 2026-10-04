@@ -23,6 +23,26 @@ const serverCode = `
 `;
 const config = (version: string): McpServerConfig => ({ type: "stdio", command: process.execPath, args: ["-e", serverCode, version] });
 
+function createExecutionContext(capabilityView: AgentExecutionContext["capabilityView"]): AgentExecutionContext {
+  return {
+    scope: {
+      agentId: "agent-test", sessionId: "session-test", inputId: "input-test",
+      runId: "run-test", traceId: "trace-test", cwd: process.cwd(),
+      signal: new AbortController().signal,
+    },
+    capabilityView,
+    effects: { requestPermission: async () => ({ status: "denied" }) },
+    children: {
+      hasChildAgent: () => false,
+      spawnChildAgent: async () => { throw new Error("not implemented in this test"); },
+      sendChildInput: async () => { throw new Error("not implemented in this test"); },
+      interruptChildAgent: async () => {},
+      awaitChildAgent: async () => { throw new Error("not implemented in this test"); },
+    },
+    emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {},
+  };
+}
+
 it("never redirects a captured MCP Tool to a reconnected client", async () => {
   const manager = new McpClientManager();
   try {
@@ -130,7 +150,7 @@ it.each([undefined, "another-plugin"])("blocks global MCP meta capabilities for 
     const capabilityView = createRunCapabilityView({ toolRegistry: registry, pluginIds: new Set(["another-plugin"]), mcpServers: [{
       ownerPluginId: "private-plugin", serverId: "plugin:private-plugin:mcp:private", serverName: "private", definition: config("plugin-secret"),
     }] }, pluginId);
-    const execution = { capabilityView, emit: async () => {}, takeSteeredInputs: async () => [], closeSteering: () => {} } as unknown as AgentExecutionContext;
+    const execution = createExecutionContext(capabilityView);
     const results = [];
     for await (const event of engine.submitMessage("go", { execution })) if (event.type === "tool_use_end") results.push(event.result);
     expect(results).toHaveLength(4);

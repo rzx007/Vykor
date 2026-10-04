@@ -28,6 +28,8 @@ export type LoadStatus = "idle" | "loading" | "ready" | "error"
 export interface SubmitPromptOptions {
   document?: ComposerDocument
   attachments?: readonly DesktopAttachmentDraft[]
+  target?: { sessionId: string; view: DesktopSessionView | null }
+  contextItems?: readonly SessionUserInputItem[]
 }
 
 export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachmentInput {
@@ -188,12 +190,13 @@ export interface PromptActions {
     content: string,
     document?: ComposerDocument
   ) => Promise<void>
-  interrupt: () => Promise<void>
+  interrupt: (target?: SubmitPromptOptions["target"]) => Promise<void>
   replyPermission: (
     permissionId: string,
     status: "approved" | "denied",
     decision?: "once" | "session",
-    answer?: string
+    answer?: string,
+    sessionId?: string
   ) => Promise<void>
 }
 

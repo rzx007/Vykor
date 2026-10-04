@@ -57,9 +57,9 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
     },
     async sendMessage(content, options) {
       const document = options?.document ?? composerDocument([{ type: "text", text: content }])
-      const items = document.items
-      const prompt = selectComposerDocumentText(document)
-      const sessionId = get().activeSessionId
+      const items = [...(options?.contextItems ?? []), ...document.items]
+      const prompt = selectComposerDocumentText({ ...document, items })
+      const sessionId = options?.target?.sessionId ?? get().activeSessionId
       const attachmentDrafts = [...(options?.attachments ?? [])]
       if (!sessionId || attachmentDrafts.some((attachment) => attachment.status !== "ready")) return
       const attachments = attachmentDrafts.flatMap((attachment) =>
@@ -101,7 +101,11 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
             attachments,
             createdAt: Date.now(),
             phase: "submitting",
-            placement: classifyPromptPlacement(current.sessionView, runtime, sessionId),
+            placement: classifyPromptPlacement(
+              options?.target ? options.target.view : current.sessionView,
+              runtime,
+              sessionId
+            ),
           }
 
       replaceRuntime(sessionId, (currentRuntime) =>
@@ -281,10 +285,10 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       }
     },
 
-    async interrupt() {
-      const sessionId = get().activeSessionId
+    async interrupt(target) {
+      const sessionId = target?.sessionId ?? get().activeSessionId
       if (!sessionId) return
-      const view = get().sessionView
+      const view = target ? target.view : get().sessionView
       const expectedRunId =
         view?.session.id === sessionId
           ? (view.runs.find((run) => run.status === "running")?.id ??
@@ -317,8 +321,8 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       }
     },
 
-    async replyPermission(permissionId, status, decision = "once", answer) {
-      const sessionId = get().activeSessionId
+    async replyPermission(permissionId, status, decision = "once", answer, targetSessionId) {
+      const sessionId = targetSessionId ?? get().activeSessionId
       if (!sessionId || !permissionId) return
       const operationId = `${sessionId}:${permissionId}`
       if (getSessionRuntime(get(), sessionId).operations[operationId]?.phase === "pending") return

@@ -77,6 +77,9 @@ export type UtilityPanelController = {
   handlePanelResize: (sizeInPixels: number) => void
 }
 
+// Keep IDs alive for as long as the module-scoped utility runtime remembers them.
+let toolRequestSequence = 0
+
 function isOpenLayout(layout: Layout | null | undefined): layout is Layout {
   return Number(layout?.conversation) > 5 && Number(layout?.utility) > 5
 }
@@ -331,7 +334,7 @@ export function useUtilityPanelController({
     (tool: UtilityToolRequest, taskId?: string): void => {
       restore()
       setToolRequest({
-        id: Date.now(),
+        id: ++toolRequestSequence,
         scopeId: activeScopeIdRef.current,
         tool,
         ...(tool === "agents" && taskId ? { taskId } : {}),

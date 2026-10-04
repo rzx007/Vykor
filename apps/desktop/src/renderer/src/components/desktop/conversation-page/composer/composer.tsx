@@ -236,7 +236,7 @@ export function Composer({
         onSubmit={submit}
         onCommand={executeCommand}
         onPasteFiles={attachmentInteractionEnabled && !sending ? onPasteFiles : undefined}
-        contextItems={contextItems}
+        contextItems={onGoalModeChange ? contextItems : contextItems.filter((item) => item.action.kind !== "goal")}
         contextPickerRequest={contextPickerRequest}
         contextPickerOpen={contextPickerOpen}
         onContextPickerOpenChange={setContextPickerOpen}

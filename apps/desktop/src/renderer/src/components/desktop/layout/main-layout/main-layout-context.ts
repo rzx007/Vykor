@@ -3,6 +3,7 @@ import { createContext, useContext, type ReactNode } from "react"
 export type MainLayoutContextValue = {
   conversationWorkspace: ReactNode
   startNewConversation: () => void
+  openSideChat: (sourceId: string, text: string) => void
 }
 
 export const MainLayoutContext = createContext<MainLayoutContextValue | null>(null)

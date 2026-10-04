@@ -103,7 +103,11 @@ export function NotificationSoundSettings(): React.JSX.Element {
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent align="end" className="max-h-72 min-w-44">
+              <SelectContent
+                align="end"
+                alignItemWithTrigger={false}
+                className="max-h-[min(18rem,var(--available-height))] min-w-44"
+              >
                 <SelectGroup>
                   {DESKTOP_SOUND_OPTIONS.map(({ value, label }) => (
                     <SelectItem key={value} value={value}>

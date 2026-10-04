@@ -10,6 +10,7 @@ import {
 } from "react-resizable-panels"
 
 import { ConversationPane } from "@renderer/components/desktop/conversation-page"
+import { appendSideChatQuote } from "@renderer/components/desktop/tools/side-chat-panel"
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { defaultSettingsSection } from "@renderer/components/desktop/settings-page/settings-navigation"
 import { useDesktopShortcuts } from "@renderer/components/desktop/use-desktop-shortcuts"
@@ -408,6 +409,11 @@ export function MainLayout(): React.JSX.Element {
         value={{
           conversationWorkspace: renderConversationWorkspace(),
           startNewConversation: startNewConversationRoute,
+          openSideChat: (sourceId, text) => {
+            if (sourceId !== activeSessionId) return
+            appendSideChatQuote(sourceId, text)
+            openUtilityTool("side-chat")
+          },
         }}
       >
         {renderPage(

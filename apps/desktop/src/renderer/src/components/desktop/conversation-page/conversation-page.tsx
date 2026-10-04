@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
+import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat-selection-actions"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -658,6 +659,7 @@ function ConversationPane({
               key={activeSessionId}
               loading={openingSession && !sessionView}
             />
+            <SideChatSelectionActions sourceId={activeSessionId} viewportRef={messageViewportRef} />
           </div>
 
           {!archived && pendingPermissions.length > 0 ? (
