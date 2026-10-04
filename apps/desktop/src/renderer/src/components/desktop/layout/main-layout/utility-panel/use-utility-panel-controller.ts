@@ -224,6 +224,7 @@ export function useUtilityPanelController({
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
+      if (groupElementRef.current?.hasAttribute("data-panel-animating")) return
       const utilitySize = utilityPanelRef.current?.getSize()
       if (!utilitySize) return
       setOpen((current) => {
@@ -232,7 +233,7 @@ export function useUtilityPanelController({
       })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [utilityPanelRef])
+  }, [groupElementRef, utilityPanelRef])
 
   const restore = useCallback((): void => {
     if (window.innerWidth < 1180) onCollapseSidebar()
@@ -401,10 +402,15 @@ export function useUtilityPanelController({
     [maximized, persistActiveView]
   )
 
-  const handlePanelResize = useCallback((sizeInPixels: number): void => {
-    const nextOpen = sizeInPixels > 1
-    setOpen((current) => (current === nextOpen ? current : nextOpen))
-  }, [])
+  const handlePanelResize = useCallback(
+    (sizeInPixels: number): void => {
+      // Widths during an explicit open/close are animation frames, not user intent.
+      if (groupElementRef.current?.hasAttribute("data-panel-animating")) return
+      const nextOpen = sizeInPixels > 1
+      setOpen((current) => (current === nextOpen ? current : nextOpen))
+    },
+    [groupElementRef]
+  )
 
   return {
     scopeId,

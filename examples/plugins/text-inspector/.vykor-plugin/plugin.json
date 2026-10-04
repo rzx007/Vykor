@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "example.text-inspector",
   "name": "text-inspector",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "检查文本格式问题，通过交互界面选择修复并预览；不写入文件。",
   "components": {
     "agents": ["./agents/reviewer.md"],

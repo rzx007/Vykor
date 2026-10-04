@@ -27,7 +27,12 @@ interface Host {
   view: DesktopSessionView | null
   displays: PluginUiDisplay[]
   isCurrent(instanceId: string): boolean
-  open(instance: PluginUiInstanceRecord, surface: PluginUiSurface, opener?: HTMLElement): void
+  open(
+    instance: PluginUiInstanceRecord,
+    surface: PluginUiSurface,
+    opener?: HTMLElement,
+    forceReload?: boolean
+  ): void
   close(instanceId: string, focus?: boolean): void
   confirm(details: PluginUiConfirmationDetails, signal: AbortSignal): Promise<void>
 }
@@ -86,7 +91,12 @@ export function PluginUiProvider({
     }
   }, [])
   const open = useCallback(
-    (instance: PluginUiInstanceRecord, surface: PluginUiSurface, opener?: HTMLElement) => {
+    (
+      instance: PluginUiInstanceRecord,
+      surface: PluginUiSurface,
+      opener?: HTMLElement,
+      forceReload = false
+    ) => {
       if (
         !availableRef.current ||
         !isCurrent(instance.instanceId) ||
@@ -96,6 +106,14 @@ export function PluginUiProvider({
       pending.current?.instanceId === instance.instanceId && pending.current.decide(false)
       if (opener) openers.current.set(instance.instanceId, opener)
       setDisplays((current) => {
+        const existing = current.find(
+          (display) =>
+            display.instance.instanceId === instance.instanceId && display.surface === surface
+        )
+        if (existing && !forceReload)
+          return current.map((display) =>
+            display === existing ? { ...display, instance } : display
+          )
         let next = current.filter(
           (display) =>
             display.instance.instanceId !== instance.instanceId &&

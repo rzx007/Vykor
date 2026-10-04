@@ -6,6 +6,7 @@ const button = document.querySelector("#preview-button");
 const status = document.querySelector("#status");
 const sidebar = document.querySelector("#sidebar");
 const dismiss = document.querySelector("#dismiss");
+const selectionCount = document.querySelector("#selection-count");
 const selected = new Set();
 let snapshot;
 let pending = false;
@@ -24,6 +25,7 @@ function report(error) {
 function controls() {
   const locked = pending || snapshot?.readOnly || !!snapshot?.activeAction;
   button.disabled = locked || selected.size === 0;
+  selectionCount.textContent = selected.size ? "已选 " + selected.size + " 项" : "请选择要修复的问题";
   for (const input of list.querySelectorAll("input")) input.disabled = !!locked;
   sidebar.disabled = pending;
   dismiss.disabled = pending || snapshot?.status !== "open" || !!snapshot?.activeAction;
@@ -31,6 +33,7 @@ function controls() {
 function render(value) {
   const changed = value.revision !== revision;
   snapshot = value;
+  sidebar.hidden = value.surface !== "tool-result";
   document.documentElement.dataset.theme = value.theme;
   if (changed) {
     revision = value.revision;
@@ -79,7 +82,7 @@ try {
   });
   sidebar.addEventListener("click", () => { client.openSidebar().catch(report); });
   dismiss.addEventListener("click", () => { client.dismiss().catch(report); });
-  client.resize(520).catch(report);
+  if (snapshot.surface === "tool-result") client.resize(520).catch(report);
   window.addEventListener("pagehide", () => client.dispose(), { once: true });
 } catch (error) {
   sidebar.disabled = true; dismiss.disabled = true; report(error);

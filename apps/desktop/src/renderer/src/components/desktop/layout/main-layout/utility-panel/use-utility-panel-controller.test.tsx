@@ -28,7 +28,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount(maximized: boolean, initialLayout: Layout) {
+function mount(maximized: boolean, initialLayout: Layout, groupElement: HTMLDivElement | null = null) {
   writeUtilityPanelViewStates({
     "session:chat": { open: true, maximized, layout: { conversation: 60, utility: 40 } },
   })
@@ -63,7 +63,7 @@ function mount(maximized: boolean, initialLayout: Layout) {
   }
   const conversation = panel("conversation")
   const utility = panel("utility")
-  const element = { current: null }
+  const element = { current: groupElement }
   const options = {
     activeSessionId: "chat",
     selectedProjectId: null,
@@ -81,7 +81,11 @@ function mount(maximized: boolean, initialLayout: Layout) {
     return null
   }
   act(() => root.render(<Workspace />))
-  return { toggle: () => act(() => controller.toggleMaximized()), layout: () => layout, controller: () => controller }
+  return {
+    toggle: () => act(() => controller.toggleMaximized()),
+    layout: () => layout,
+    controller: () => controller,
+  }
 }
 
 it("restores the saved split after reopening an already maximized workbench", () => {
@@ -117,4 +121,24 @@ it("does not reuse a tool request ID when the same scope controller is remounted
   const reopened = mount(false, { conversation: 55, utility: 45 })
   act(() => reopened.controller().openTool("side-chat"))
   expect(reopened.controller().toolOpenRequest!.id).toBeGreaterThan(firstId)
+})
+
+it("does not reverse an explicit open or close when animation reports an intermediate width", () => {
+  const element = document.createElement("div")
+  const workspace = mount(false, { conversation: 100, utility: 0 }, element)
+  act(() => workspace.controller().restore())
+  expect(workspace.controller().open).toBe(true)
+  act(() => workspace.controller().handlePanelResize(0))
+  expect(workspace.controller().open).toBe(true)
+
+  act(() => workspace.controller().collapse())
+  act(() => workspace.controller().handlePanelResize(180))
+  expect(workspace.controller().open).toBe(false)
+
+  // A real drag after the animation must still update the open state.
+  element.removeAttribute("data-panel-animating")
+  act(() => workspace.controller().handlePanelResize(180))
+  expect(workspace.controller().open).toBe(true)
+  act(() => workspace.controller().handlePanelResize(0))
+  expect(workspace.controller().open).toBe(false)
 })

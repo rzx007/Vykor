@@ -145,7 +145,7 @@ export function UtilityPanel({
   const activeTab = visibleTabs.find((tab) => tab.id === activeTabId) ?? visibleTabs[0]
   useEffect(() => {
     if (pluginTab) setActiveTabId(pluginTab.id)
-  }, [pluginTab?.id, setActiveTabId])
+  }, [pluginSidebar, setActiveTabId])
   useEffect(() => {
     if (!open && pluginSidebar) pluginUi?.close(pluginSidebar.instance.instanceId)
   }, [open, pluginSidebar?.key])

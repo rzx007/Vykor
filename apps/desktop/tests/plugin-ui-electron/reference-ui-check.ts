@@ -216,6 +216,12 @@ export async function checkReferenceUi(
   )
   const screenshots = join(root, ".superpowers/sdd/2026-10-04-native-plugin-ui-a4/screenshots")
   mkdirSync(screenshots, { recursive: true })
+  await wait(() => evaluate("document.querySelector('[data-slot=alert-dialog-overlay]')===null"))
+  await frame.executeJavaScript("document.querySelector('input').click()")
+  assert.equal(
+    await frame.executeJavaScript("document.querySelector('#preview-button').disabled"),
+    false
+  )
   for (const [width, theme, filename] of [
     [1000, "light", "wide-light.png"],
     [420, "light", "narrow-light.png"],
@@ -235,7 +241,7 @@ export async function checkReferenceUi(
       filename + " has no horizontal overflow"
     )
     await evaluate("window.scrollTo(0,0)")
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))")
     writeFileSync(join(screenshots, filename), (await owner.webContents.capturePage()).toPNG())
   }
   console.log(JSON.stringify({ stage: "reference sidebar click" }))
@@ -247,6 +253,33 @@ export async function checkReferenceUi(
   console.log(JSON.stringify({ stage: "reference sidebar mounted" }))
   frame = await frameReady()
   console.log(JSON.stringify({ stage: "reference sidebar frame ready" }))
+  assert.equal(
+    await frame.executeJavaScript("getComputedStyle(document.querySelector('#sidebar')).display"),
+    "none",
+    "sidebar must not offer a second sidebar-opening action"
+  )
+  assert.equal(
+    await frame.executeJavaScript(
+      "document.querySelector('#status').textContent.includes('操作未完成')"
+    ),
+    false,
+    "sidebar initialization must not request an unsupported card resize"
+  )
+  for (const theme of ["light", "dark"]) {
+    await evaluate(
+      "document.documentElement.classList.toggle('dark'," + String(theme === "dark") + ")"
+    )
+    await wait(() =>
+      frame.executeJavaScript("document.documentElement.dataset.theme===" + JSON.stringify(theme))
+    )
+    await evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))")
+    // A newly mounted off-screen child can suspend its own animation frames.
+    await owner.webContents.capturePage()
+    writeFileSync(
+      join(screenshots, "sidebar-" + theme + ".png"),
+      (await owner.webContents.capturePage()).toPNG()
+    )
+  }
   assert.equal(
     await frame.executeJavaScript("document.querySelector('#preview').value"),
     "ok\n\titem\n"

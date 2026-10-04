@@ -52,6 +52,7 @@ function safe(error: unknown): never {
 export class DesktopPluginUiService {
   private readonly owners = new Map<number, Owner>();
   private readonly mounts = new Map<string, Mount>();
+  private readonly opening = new Map<string, symbol>();
   private generation = 0;
   private client?: VykorClient;
   constructor(private readonly dependencies: Dependencies) {}
@@ -171,9 +172,16 @@ export class DesktopPluginUiService {
     catch (error) { return safe(error); }
   }
   async mount(ownerId: number, value: unknown): Promise<DesktopPluginUiMountResult> {
+    const attempt = Symbol();
+    let slots: string[] = [];
     try {
       const r = input(value, ["sessionId", "instanceId", "surface"]); const t = target(r);
       if (r.surface !== "tool-result" && r.surface !== "session-sidebar") fail("plugin_ui_invalid_message");
+      // Match the document store's replacement rules. An older asynchronous load
+      // must never retire a newer display of this instance or the sidebar slot.
+      slots = [ownerId + ":" + t.instanceId];
+      if (r.surface === "session-sidebar") slots.push(ownerId + ":sidebar");
+      for (const slot of slots) this.opening.set(slot, attempt);
       const scope = await this.capture(ownerId, t.sessionId);
       if (!this.dependencies.localAvailable(scope.owner.contents)) fail("plugin_ui_unavailable");
       const caps = await scope.client.protocol.capabilities(); this.check(scope);
@@ -187,6 +195,7 @@ export class DesktopPluginUiService {
         || after.componentDigest !== source.componentDigest || after.pluginDigest !== source.pluginDigest
         || after.pluginVersion !== source.pluginVersion || after.sourcePartId !== source.sourcePartId)
         fail("plugin_ui_snapshot_changed");
+      if (slots.some(slot => this.opening.get(slot) !== attempt)) fail("plugin_ui_mount_closed");
       const mounted = this.dependencies.documents.register({ ownerId, connection: scope.client, ...t,
         componentDigest: after.componentDigest, surface: r.surface as PluginUiSurface,
         html: response.html, sha256: response.sha256 });
@@ -197,6 +206,9 @@ export class DesktopPluginUiService {
         componentDigest: after.componentDigest, sessionGeneration: afterGeneration });
       return { mountId: mounted.mountId, url: mounted.url, state: latestState };
     } catch (error) { return safe(error); }
+    finally {
+      for (const slot of slots) if (this.opening.get(slot) === attempt) this.opening.delete(slot);
+    }
   }
   private getMount(ownerId: number, mountId: unknown): Mount {
     if (!uuid(mountId)) fail("plugin_ui_invalid_message");

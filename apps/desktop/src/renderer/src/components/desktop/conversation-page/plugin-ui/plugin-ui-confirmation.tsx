@@ -59,7 +59,10 @@ export function PluginUiConfirmation({
           <AlertDialogCancel ref={cancelButton} onClick={() => decide(false)}>
             返回
           </AlertDialogCancel>
-          <AlertDialogAction onClick={() => decide(true)}>
+          <AlertDialogAction
+            variant={details?.dismiss ? "destructive" : "default"}
+            onClick={() => decide(true)}
+          >
             {details?.dismiss ? "确认取消" : "确认执行"}
           </AlertDialogAction>
         </AlertDialogFooter>

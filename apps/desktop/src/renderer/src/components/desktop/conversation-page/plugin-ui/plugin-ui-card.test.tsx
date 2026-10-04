@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { act } from "react"
+import { act, StrictMode } from "react"
 import { MessageChannel } from "node:worker_threads"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { instance, snapshot, sourcePart } from "./plugin-ui-fixtures.test-support"
 import { PluginUiProvider } from "./plugin-ui-provider"
 import { PluginUiCard } from "./plugin-ui-card"
-import { submitPluginUiAction } from "./plugin-ui-frame"
+import { PluginUiFrame, submitPluginUiAction } from "./plugin-ui-frame"
 import { usePluginUiHost } from "./plugin-ui-provider"
 const fixture = vi.hoisted(() => ({ view: null as any }))
 vi.mock("@renderer/stores/desktop-session", () => ({
@@ -79,6 +79,8 @@ it("keeps a collapsed card lazy and retains original output when loading fails",
   expect(container.textContent).toContain("原始结果，不应消失")
   expect(container.textContent).toContain("重新加载")
   expect(container.querySelector("iframe")).toBeNull()
+  await click("重新加载")
+  expect(api.mount).toHaveBeenCalledTimes(2)
 })
 it("does not read documents or expose an opening button without isolation/lifecycle support", async () => {
   api.capabilities.mockResolvedValue({ available: false })
@@ -121,6 +123,63 @@ it("cancels a pending confirmation when the source part disappears", async () =>
   expect(document.body.textContent).not.toContain("确认取消")
   expect(api.dismiss).not.toHaveBeenCalled()
 })
+it.each(["tool-result", "session-sidebar"] as const)(
+  "opens %s on the first click without competing mounts during effect replay",
+  async (surface) => {
+    vi.stubGlobal("MessageChannel", MessageChannel)
+    const mountId = "20000000-0000-4000-8000-000000000001"
+    api.mount.mockResolvedValue({
+      mountId,
+      url: "vykor-plugin-ui://frame/" + mountId,
+      state: await api.getState(),
+    })
+    function Sidebar() {
+      const host = usePluginUiHost()!
+      const display = host.displays.find((item) => item.surface === "session-sidebar")
+      return (
+        <>
+          <button onClick={() => host.open(instance, surface)}>再次查看</button>
+          <button onClick={() => host.close(instance.instanceId)}>关闭交互显示</button>
+          {display && <PluginUiFrame key={display.key} display={display} />}
+        </>
+      )
+    }
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <PluginUiProvider onOpenSidebar={() => {}}>
+            <PluginUiCard instance={instance} call={sourcePart} />
+            <Sidebar />
+          </PluginUiProvider>
+        </StrictMode>
+      )
+    )
+    await click(surface === "tool-result" ? "打开交互" : "在侧栏打开")
+    expect(container.querySelector("iframe")?.getAttribute("src")).toBe(
+      "vykor-plugin-ui://frame/" + mountId
+    )
+    // Each registration retires the previous document for this instance. A replayed
+    // effect must not send a second mount that can retire the frame being displayed.
+    expect(api.mount).toHaveBeenCalledTimes(1)
+    expect(api.mount).toHaveBeenCalledWith({
+      sessionId: instance.sessionId,
+      instanceId: instance.instanceId,
+      surface,
+    })
+    expect(container.textContent).not.toContain("正在加载交互页面")
+    const frame = container.querySelector("iframe")
+    await click("再次查看")
+    await click("再次查看")
+    expect(container.querySelector("iframe")).toBe(frame)
+    expect(api.mount).toHaveBeenCalledTimes(1)
+    await click("关闭交互显示")
+    expect(container.querySelector("iframe")).toBeNull()
+    await click(surface === "tool-result" ? "打开交互" : "在侧栏打开")
+    expect(container.querySelector("iframe")).not.toBeNull()
+    expect(container.querySelector("iframe")).not.toBe(frame)
+    expect(api.mount).toHaveBeenCalledTimes(2)
+  }
+)
 async function connectedFrame() {
   vi.stubGlobal("MessageChannel", MessageChannel)
   const mountId = "20000000-0000-4000-8000-000000000001"

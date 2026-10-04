@@ -68,9 +68,11 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
     let active = true
     live.current = true
     const api = window.desktop.pluginUi
-    void api
-      .mount({ ...target, surface: display.surface })
-      .then((result) => {
+    void Promise.resolve()
+      .then(async () => {
+        // Effect replay can retire this setup before it starts a document load.
+        if (!active) return
+        const result = await api.mount({ ...target, surface: display.surface })
         if (!active || !hostRef.current.isCurrent(target.instanceId)) {
           void api.unmount({ mountId: result.mountId })
           return
@@ -240,7 +242,7 @@ export function PluginUiFrame({ display }: { display: PluginUiDisplay }) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => host.open(display.instance, display.surface)}
+          onClick={() => host.open(display.instance, display.surface, undefined, true)}
         >
           重新加载
         </Button>

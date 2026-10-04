@@ -82,15 +82,20 @@ export function PluginUiCard({
       )}
       {display && <PluginUiFrame key={display.key} display={display} />}
       {host?.available && (
-        <footer className="flex flex-wrap gap-1 border-t px-2 py-1">
+        <footer className="flex flex-wrap items-center gap-2 border-t px-3 py-2">
           {instance.surfaces.includes("tool-result") &&
             (display ? (
-              <Button variant="ghost" size="sm" onClick={() => host.close(instance.instanceId)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                title="只收起界面，结果保留，可重新打开"
+                onClick={() => host.close(instance.instanceId)}
+              >
                 关闭显示
               </Button>
             ) : (
               <Button
-                variant="ghost"
+                variant="default"
                 size="sm"
                 onClick={(event) => host.open(instance, "tool-result", event.currentTarget)}
               >
@@ -101,6 +106,7 @@ export function PluginUiCard({
             <Button
               variant="ghost"
               size="sm"
+              title="只改变显示位置，不执行插件工具"
               onClick={(event) => host.open(instance, "session-sidebar", event.currentTarget)}
             >
               在侧栏打开
@@ -108,8 +114,10 @@ export function PluginUiCard({
           )}
           {canDismiss && (
             <Button
-              variant="ghost"
+              variant="destructive"
               size="sm"
+              className="ml-auto"
+              title="确认后结束交互，保留原始结果"
               onClick={() => {
                 void dismiss()
               }}
@@ -119,7 +127,7 @@ export function PluginUiCard({
           )}
           {activeAction && (
             <Button
-              variant="ghost"
+              variant="destructive"
               size="sm"
               onClick={() => {
                 void window.desktop.sessions

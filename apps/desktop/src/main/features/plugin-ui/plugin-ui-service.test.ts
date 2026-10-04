@@ -19,6 +19,7 @@ const ownerView = (generation: string, present = true) => ({ cursor: 1, syncStat
   session: { id: "session", status: "idle", metadata: { pluginUiGeneration: generation } },
   parts: present ? [{ id: "part", metadata: { pluginUi: instance } }] : [], runs: [],
 });
+const otherInstance = { ...instance, instanceId: "10000000-0000-4000-8000-000000000002", sourcePartId: "other-part" };
 function fixture() {
   let currentSession: string | undefined = "session";
   let lifecycle = true;
@@ -38,7 +39,10 @@ function fixture() {
     else if (path.endsWith("/document")) {
       documentRead = true;
       enteredDocument();
-      if (holdDocument) await new Promise<void>(resolve => { releaseDocument = resolve; });
+      if (holdDocument) {
+        holdDocument = false;
+        await new Promise<void>(resolve => { releaseDocument = resolve; });
+      }
       body = { html, sha256: createHash("sha256").update(html).digest("hex") };
     } else if (path.endsWith("/state")) body = { cursor: 1,
       session: { id: "session", cwd: "/test", title: "", model: "test", status: "idle",
@@ -48,9 +52,12 @@ function fixture() {
       submissions.push(JSON.parse(String(options?.body)));
       body = { receipt: { instanceId, requestId, runId: "ui_run_once", revision: 2, status: "pending" } };
     } else if (path.endsWith("/dismiss")) { submissions.push("dismiss"); body = { instance: { ...instance, status: "dismissed", revision: 2 } }; }
-    else body = { instance: drift && documentRead ? { ...instance, componentDigest: "c".repeat(64) } : instance,
+    else {
+      const current = path.endsWith("/" + otherInstance.instanceId) ? otherInstance : instance;
+      body = { instance: drift && documentRead ? { ...current, componentDigest: "c".repeat(64) } : current,
       availability: { code: "available", canRender: true, canInvoke: true },
       actions: [{ id: "apply", label: "应用", toolName: "Inspect", inputSchema: {}, completion: "keep-open" }] };
+    }
     return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
   } });
   let ownerUrl = "file:///trusted.html";
@@ -85,6 +92,40 @@ it("mounts only verified current data and invokes the declared action with the o
   f.service.unmount(42, { mountId: mount.mountId });
   expect(f.documents.owns(mount.mountId, 42)).toBe(false);
   expect(f.submissions).toHaveLength(1);
+});
+it.each([
+  ["tool-result", "tool-result"], ["session-sidebar", "session-sidebar"],
+  ["tool-result", "session-sidebar"], ["session-sidebar", "tool-result"],
+] as const)(
+  "does not let a delayed %s load revoke the newer %s display", async (surface, nextSurface) => {
+    const f = fixture(); f.holdDocument();
+    const first = f.service.mount(42, { sessionId: "session", instanceId, surface });
+    const rejected = expect(first).rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+    await f.documentEntered;
+    const current = await f.service.mount(42, { sessionId: "session", instanceId, surface: nextSurface });
+    f.releaseDocument();
+    await rejected;
+    expect(f.documents.owns(current.mountId, 42)).toBe(true);
+    expect(f.documents.allowNavigation(42, 99, current.url, false)).toBe(true);
+  }
+);
+it("keeps the newest sidebar when a different instance's earlier load returns late", async () => {
+  const f = fixture(); f.holdDocument();
+  const first = f.service.mount(42, { sessionId: "session", instanceId, surface: "session-sidebar" });
+  const rejected = expect(first).rejects.toMatchObject({ code: "plugin_ui_mount_closed" });
+  await f.documentEntered;
+  const current = await f.service.mount(42, { sessionId: "session", instanceId: otherInstance.instanceId, surface: "session-sidebar" });
+  f.releaseDocument(); await rejected;
+  expect(f.documents.owns(current.mountId, 42)).toBe(true);
+});
+it("still allows independent inline instances to finish loading in either order", async () => {
+  const f = fixture(); f.holdDocument();
+  const first = f.service.mount(42, { sessionId: "session", instanceId, surface: "tool-result" });
+  await f.documentEntered;
+  const second = await f.service.mount(42, { sessionId: "session", instanceId: otherInstance.instanceId, surface: "tool-result" });
+  f.releaseDocument();
+  expect(f.documents.owns((await first).mountId, 42)).toBe(true);
+  expect(f.documents.owns(second.mountId, 42)).toBe(true);
 });
 it.each(["generation", "source", "reconnecting"] as const)("revokes a mounted document on actual owner snapshot %s", async reason => {
   const f = fixture(); f.service.observeSession(42, ownerView("first") as never);

@@ -1,6 +1,6 @@
 # Text Inspector 原生插件样例
 
-这个样例演示完整流程：Skill 或 Plugin Agent 将文本交给 Node Tool；Desktop 在原文字结果旁显示交互入口；用户选择问题，经宿主确认后生成修复文本预览。插件 ID 为 `example.text-inspector`，版本为 `1.1.0`。安装需批准 `ui:render` 和 `ui:invoke-own-tools`，不申请文件、网络或剪贴板权限。
+这个样例演示完整流程：Skill 或 Plugin Agent 将文本交给 Node Tool；Desktop 在原文字结果旁显示交互入口；用户选择问题，经宿主确认后生成修复文本预览。插件 ID 为 `example.text-inspector`，版本为 `1.1.1`。安装需批准 `ui:render` 和 `ui:invoke-own-tools`，不申请文件、网络或剪贴板权限。
 
 入口由 `.vykor-plugin/plugin.json` 显式声明：`skills/check-text/SKILL.md` 提供调用指引，`agents/reviewer.md` 提供插件 Agent `example.text-inspector:reviewer`，`references/rules.md` 解释检查规则，`tools/index.mjs` 提供全局工具名 `TextInspectorCheck`。
 
